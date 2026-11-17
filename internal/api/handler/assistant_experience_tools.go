@@ -46,7 +46,8 @@ func (h *assistantHandlers) assistantExperienceTools(sessionID uuid.UUID) []assi
 		h.experienceEmploymentsTool(),
 		h.experienceAddTool(sessionID),
 		h.experienceUpdateTool(sessionID),
-		h.experienceMergeTool(),
+		h.experienceMergeTool(sessionID),
+		h.requestConfirmationTool(),
 		h.experienceSetRequireContextTool(),
 	}
 }
@@ -400,11 +401,13 @@ func (h *assistantHandlers) experienceUpdateTool(sessionID uuid.UUID) assistant.
 
 // experienceMergeTool folds two near-duplicate achievements into one. The owner
 // confirms the pair in chat; the service chooses the richer keep.
-func (h *assistantHandlers) experienceMergeTool() assistant.Tool {
+func (h *assistantHandlers) experienceMergeTool(sessionID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name: "experience_merge",
 		Description: "Merge TWO achievements that are the same work into one richer atom. " +
-			"Ask the candidate first. The system keeps the richer id, unions metrics and skills, " +
+			"First call returns a confirmation claim without changing anything. Show it with request_confirmation " +
+			"and wait for the candidate's next turn before calling again with the same ids. " +
+			"The system keeps the richer id, unions metrics and skills, " +
 			"keeps the better context, and deletes the other. Both must be unplaced or share a role. " +
 			"Returns the kept atom and the deleted id.",
 		Schema: map[string]any{
@@ -438,6 +441,38 @@ func (h *assistantHandlers) experienceMergeTool() assistant.Tool {
 			b, err := uuid.Parse(strings.TrimSpace(in.IDs[1]))
 			if err != nil {
 				return nil, errors.New("ids must be atom ids from experience_search")
+			}
+			if a == b {
+				return nil, experience.ErrInvalidMerge
+			}
+			if a.String() > b.String() {
+				a, b = b, a
+			}
+			first, err := h.experience.GetAtom(ctx, a, userID)
+			if err != nil {
+				return nil, err
+			}
+			second, err := h.experience.GetAtom(ctx, b, userID)
+			if err != nil {
+				return nil, err
+			}
+			claim := fmt.Sprintf("Merge these two achievements:\n1. %s\n2. %s", first.Claim, second.Claim)
+			confirmed := false
+			if h.store != nil {
+				if _, err := h.store.Session(ctx, sessionID, userID); err != nil {
+					return nil, err
+				}
+				messages, err := h.store.RecentTranscript(ctx, sessionID, 100)
+				if err != nil {
+					return nil, err
+				}
+				confirmed = assistant.UserConfirmed(messages, claim)
+			}
+			if !confirmed {
+				return map[string]any{
+					"status": "awaiting_candidate_response", "claim": claim,
+					"next": "Call request_confirmation with this exact claim, then wait for the candidate. Nothing was merged.",
+				}, nil
 			}
 			kept, err := h.experience.MergeAtoms(ctx, userID, a, b)
 			if err != nil {

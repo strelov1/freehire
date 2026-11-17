@@ -68,6 +68,9 @@
         <p class="ml-5 text-xs text-muted-foreground">
           {meta.label}{row.note ? ` — ${row.note}` : ''}
         </p>
+        {#if row.unverified}
+          <p class="ml-5 text-xs text-muted-foreground">Still unverified: {row.unverified}</p>
+        {/if}
       </li>
     {/each}
   </ul>

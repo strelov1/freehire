@@ -143,18 +143,15 @@ func TestCVEditToolWithNoRequirementLeavesTheReportUntouched(t *testing.T) {
 	}
 }
 
-// requirement_status only makes sense as an outcome the edit just produced — open and
-// not_reached describe requirements NOT closed, so cv_edit (which only ever closes one) must
-// not advertise or accept them; a model that could send "open" here could silently reopen a
-// requirement tailor_report already closed, through a call that carries no report review.
-func TestCVEditToolRequirementStatusOffersOnlyClosingOutcomes(t *testing.T) {
+// An edit can support all or part of a requirement. Open and not_reached belong to tailor_report.
+func TestCVEditToolRequirementStatusOffersEvidenceOutcomes(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	props, _ := tool.Schema["properties"].(map[string]any)
 	status, _ := props["requirement_status"].(map[string]any)
 	got, _ := status["enum"].([]string)
 
-	want := []string{string(cv.AutopilotClosedBank), string(cv.AutopilotClosedCandidate)}
+	want := []string{string(cv.AutopilotClosedBank), string(cv.AutopilotClosedCandidate), string(cv.AutopilotPartial)}
 	if len(got) != len(want) {
 		t.Fatalf("requirement_status enum = %v, want %v", got, want)
 	}
@@ -185,5 +182,43 @@ func TestCVEditToolRequirementWithoutStatusIsRefused(t *testing.T) {
 	}
 	if repo.report != nil {
 		t.Errorf("report = %s, want it untouched when the call is refused", repo.report)
+	}
+}
+
+func TestCVToolsPreserveUnverifiedRequirementsAndReturnAccurateCounts(t *testing.T) {
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Built a RAG service", Provenance: experience.ProvenanceStatedInChat})
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
+	tools := a.assistantCVTools(testCVID, &testJobID, uuid.New())
+	_, err := toolByName(t, tools, "cv_edit").Run(context.Background(), 3, json.RawMessage(
+		`{"ops":[{"kind":"set","path":"summary","value":"Built a RAG service","evidence_id":"`+atom.ID.String()+`"}],`+
+			`"requirement":"Azure AI Search","requirement_status":"closed_bank","unverified":"Azure AI Search was not confirmed"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report []cv.AutopilotEntry
+	if err := json.Unmarshal(repo.report, &report); err != nil {
+		t.Fatal(err)
+	}
+	if len(report) != 1 || report[0].Status != cv.AutopilotPartial || report[0].Unverified == "" {
+		t.Fatalf("edit falsely closed requirement: %+v", report)
+	}
+	result, err := toolByName(t, tools, "tailor_report").Run(context.Background(), 3, json.RawMessage(
+		`{"items":[{"requirement":"Azure AI Search","status":"closed_bank","unverified":"Named tool not confirmed"},`+
+			`{"requirement":"RAG","status":"closed_bank","unverified":""},`+
+			`{"requirement":"Terraform","status":"open","unverified":"No evidence"},`+
+			`{"requirement":"Leadership","status":"not_reached","unverified":"Not reviewed"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts, ok := result.(map[string]int)
+	if !ok || counts["saved"] != 4 || counts["closed"] != 1 || counts["partial"] != 1 || counts["open"] != 1 || counts["not_reached"] != 1 {
+		t.Fatalf("report receipt = %+v", result)
+	}
+	if err := json.Unmarshal(repo.report, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report[0].Status != cv.AutopilotPartial || report[0].Unverified != "Named tool not confirmed" {
+		t.Fatalf("report lost remaining gap: %+v", report)
 	}
 }

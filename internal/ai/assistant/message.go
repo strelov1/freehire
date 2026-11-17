@@ -197,9 +197,13 @@ var negationCues = []string{
 // purpose (a paraphrase is what is being guarded against), and negation is checked because
 // "I have NOT worked with Kubernetes" contains "worked with Kubernetes".
 func UserSaid(transcript []Message, quote string) bool {
+	original := quote
 	quote = collapseSpace(quote)
 	if quote == "" || len(strings.Fields(quote)) < minQuoteWords {
 		return false
+	}
+	if UserConfirmed(transcript, original) {
+		return true
 	}
 	for _, m := range transcript {
 		if m.Role != RoleUser {

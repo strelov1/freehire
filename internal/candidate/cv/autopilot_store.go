@@ -61,16 +61,24 @@ func sanitizeAutopilotEntry(e AutopilotEntry) (AutopilotEntry, error) {
 		return AutopilotEntry{}, fmt.Errorf("has status %q; valid statuses are %s",
 			e.Status, strings.Join(AutopilotStatuses, ", "))
 	}
+	unverified := llm.TrimTruncateRunes(e.Unverified, maxAutopilotNote)
+	if unverified != "" && (e.Status == AutopilotClosedBank || e.Status == AutopilotClosedCandidate) {
+		e.Status = AutopilotPartial
+	}
+	if e.Status == AutopilotPartial && unverified == "" {
+		return AutopilotEntry{}, errors.New("has partial evidence but names no unverified part")
+	}
 	return AutopilotEntry{
 		Requirement: llm.TrimTruncateRunes(requirement, maxAutopilotRequirement),
 		Status:      e.Status,
 		Note:        llm.TrimTruncateRunes(e.Note, maxAutopilotNote),
+		Unverified:  unverified,
 	}, nil
 }
 
 func validAutopilotStatus(s AutopilotStatus) bool {
 	switch s {
-	case AutopilotClosedBank, AutopilotClosedCandidate, AutopilotOpen, AutopilotNotReached:
+	case AutopilotClosedBank, AutopilotClosedCandidate, AutopilotPartial, AutopilotOpen, AutopilotNotReached:
 		return true
 	}
 	return false

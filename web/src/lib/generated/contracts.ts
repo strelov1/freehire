@@ -1146,6 +1146,10 @@ export const AutopilotClosedBank: AutopilotStatus = "closed_bank";
  */
 export const AutopilotClosedCandidate: AutopilotStatus = "closed_candidate";
 /**
+ * AutopilotPartial means related evidence exists, but part of the requirement is unverified.
+ */
+export const AutopilotPartial: AutopilotStatus = "partial";
+/**
  * AutopilotOpen: the bank holds nothing for it. This is the remainder worth asking about.
  */
 export const AutopilotOpen: AutopilotStatus = "open";
@@ -1160,6 +1164,7 @@ export interface AutopilotEntry {
   requirement: string;
   status: AutopilotStatus;
   note?: string;
+  unverified?: string;
 }
 
 //////////

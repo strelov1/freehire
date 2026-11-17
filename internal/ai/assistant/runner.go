@@ -35,6 +35,7 @@ const (
 const (
 	StopEndTurn   = "end_turn"
 	StopMaxSteps  = "max_steps"
+	StopToolLoop  = "tool_loop"
 	StopCancelled = "cancelled"
 	StopError     = "error"
 )
@@ -242,6 +243,8 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 		maxSteps = turn.MaxSteps
 	}
 
+	failures := make(map[string]Result)
+	stopReason := StopMaxSteps
 	for step := 0; step < maxSteps; step++ {
 		if ctx.Err() != nil {
 			return end(emit, StopCancelled)
@@ -268,15 +271,20 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 			return end(emit, StopEndTurn)
 		}
 
-		history = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, emit)
+		var repeated bool
+		history, repeated = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, failures, emit)
 
 		// Cancelled mid-round: finished tools are persisted; stop before another model call.
 		if ctx.Err() != nil {
 			return end(emit, StopCancelled)
 		}
+		if repeated {
+			stopReason = StopToolLoop
+			break
+		}
 	}
 
-	// Cap reached: ask once more for text only. The tools stay in the request so the provider's
+	// Cap or repeated failure: ask once more for text only. The tools stay in the request so the provider's
 	// cached prefix (tools, system, history) still matches; llm.WithoutToolCalls forbids calling
 	// them. A provider may emit tool calls anyway (Haiku on Bedrock did with no tools at all);
 	// run them so no tool_use is left dangling, then stop.
@@ -289,14 +297,18 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 	}
 	history = r.appendAssistant(ctx, sess.ID, history, choice)
 	if len(choice.ToolCalls) > 0 {
-		log.Printf("assistant: max_steps wrap-up returned %d tool call(s); running them before stop", len(choice.ToolCalls))
-		history = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, emit)
+		log.Printf("assistant: %s wrap-up returned %d tool call(s); running them before stop", stopReason, len(choice.ToolCalls))
+		history, _ = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, failures, emit)
 	}
 	if strings.TrimSpace(choice.Content) == "" {
-		r.noteEmptyReply(ctx, sess.ID, stepLimitNote, &history, emit)
+		note := stepLimitNote
+		if stopReason == StopToolLoop {
+			note = "I stopped after the same tool call failed again. The rejected operation was not applied."
+		}
+		r.noteEmptyReply(ctx, sess.ID, note, &history, emit)
 	}
 	emitUsage(emit, choice)
-	return end(emit, StopMaxSteps)
+	return end(emit, stopReason)
 }
 
 // end closes a turn with its terminal event. Every loop exit goes through here or fail.
@@ -363,7 +375,8 @@ func (r *Runner) recordPrompt(ctx context.Context, sess Session, prompt string, 
 
 // runToolCalls executes one round of tool calls, emitting and persisting each, and returns
 // the history with the results appended.
-func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, history []llms.MessageContent, calls []llms.ToolCall, emit func(Event)) []llms.MessageContent {
+func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, history []llms.MessageContent, calls []llms.ToolCall, failures map[string]Result, emit func(Event)) ([]llms.MessageContent, bool) {
+	repeated := false
 	for _, call := range calls {
 		if call.FunctionCall == nil {
 			continue
@@ -381,7 +394,21 @@ func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, 
 		}
 		emit(Event{Kind: EventToolUse, Name: name, Input: validJSON(args)})
 
-		res := reg.Call(ctx, sess.UserID, name, args)
+		key := rejectedCallKey(name, args)
+		res, seen := failures[key]
+		if seen {
+			repeated = true
+			res = failed("This call already failed with the same arguments: " + res.Content +
+				". It was not executed again. Explain what remains unfinished; do not claim it succeeded.")
+		} else {
+			res = reg.Call(ctx, sess.UserID, name, args)
+			if res.Failed {
+				failures[key] = res
+			} else {
+				// A successful tool may have changed the state that caused the refusal.
+				clear(failures)
+			}
+		}
 		emit(Event{Kind: EventToolResult, Name: name, Result: res.Content, IsError: res.Failed})
 
 		msg, err := EncodeToolResult(call.ID, name, res.Content)
@@ -399,7 +426,19 @@ func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, 
 		}
 		history = append(history, decoded)
 	}
-	return history
+	return history, repeated
+}
+
+func rejectedCallKey(name string, args []byte) string {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(args, &fields) != nil {
+		return name + "\x00" + string(args)
+	}
+	if name == "cv_edit" {
+		delete(fields, "note")
+	}
+	canonical, _ := json.Marshal(fields)
+	return name + "\x00" + string(canonical)
 }
 
 // appendAssistant persists one model turn and appends it to the working history.

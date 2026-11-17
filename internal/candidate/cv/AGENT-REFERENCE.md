@@ -248,13 +248,14 @@ what stops the client seeing rules that are ours to enforce.
 
 Two rules the code encodes rather than documents:
 
-- **Nothing is coerced.** A status outside `closed_bank` / `closed_candidate` / `open` /
-  `not_reached` is refused with the valid ones named, because that message is the model's only
-  route to correcting itself inside the turn. Text is trimmed and truncated silently — those
-  are display concerns.
-- **A report is replaced whole.** There is no partial update: a requirement closed later from
-  the candidate's own words arrives as the same list with one entry changed, so the stored
-  value is always the current truth and there is one write path instead of two.
+- **Unknown statuses are refused.** The vocabulary is `closed_bank`, `closed_candidate`,
+  `partial`, `open`, `not_reached`. A nonempty `unverified` field demotes a closed status to
+  `partial`; a partial entry must name that remaining gap. Text is trimmed and truncated.
+  Semantic coverage remains the model's responsibility.
+- **`tailor_report` replaces the report whole.** `cv_edit` also merges its named requirement
+  after a successful commit, preserving unrelated entries. Both paths sanitize the entry
+  before persistence; a report-write failure after a committed edit does not pretend the
+  edit failed.
 
 Undoing a run is undoing the revisions it made (see below), not restoring a snapshot. The
 `autopilot_undo` column that used to hold one is retired: it could only answer "put the whole
