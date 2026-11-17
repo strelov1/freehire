@@ -75,6 +75,52 @@ func queryLimit(node *yaml.Node, field string) (int, error) {
 	return value, nil
 }
 
+// matrixEntry is a compact block of the worklist: every keyword searched in every location, with one
+// shared budget. Explicit queries come first, so an explicit entry keeps its own budget when a
+// matrix repeats its keyword and market.
+type matrixEntry struct {
+	Keywords  []string
+	Locations []string
+	Pages     int
+	JobAge    int
+}
+
+func (m *matrixEntry) UnmarshalYAML(node *yaml.Node) error {
+	var raw struct {
+		Keywords  []string  `yaml:"keywords"`
+		Locations []string  `yaml:"locations"`
+		JobAge    yaml.Node `yaml:"jobage"`
+		Pages     yaml.Node `yaml:"pages"`
+	}
+	if err := node.Decode(&raw); err != nil {
+		return err
+	}
+	if len(raw.Keywords) == 0 || len(raw.Locations) == 0 {
+		return fmt.Errorf("matrix entry requires keywords and locations")
+	}
+	pages, err := queryLimit(&raw.Pages, "pages")
+	if err != nil {
+		return err
+	}
+	jobAge, err := queryLimit(&raw.JobAge, "jobage")
+	if err != nil {
+		return err
+	}
+	*m = matrixEntry{Keywords: raw.Keywords, Locations: raw.Locations, Pages: pages, JobAge: jobAge}
+	return nil
+}
+
+// queries expands the block keyword-major, the order the worklist's explicit sections use.
+func (m matrixEntry) queries() []query {
+	out := make([]query, 0, len(m.Keywords)*len(m.Locations))
+	for _, k := range m.Keywords {
+		for _, l := range m.Locations {
+			out = append(out, query{Keywords: k, Location: l, Pages: m.Pages, JobAge: m.JobAge})
+		}
+	}
+	return out
+}
+
 // loadQueries reads the worklist, applying the bounded defaults. A query naming no market is a usage
 // error: an unbounded market turns a bounded harvest into an unbounded crawl.
 func loadQueries(path string) ([]query, error) {
@@ -83,10 +129,14 @@ func loadQueries(path string) ([]query, error) {
 		return nil, fmt.Errorf("read worklist %s: %w", path, err)
 	}
 	var doc struct {
-		Queries []query `yaml:"queries"`
+		Queries []query       `yaml:"queries"`
+		Matrix  []matrixEntry `yaml:"matrix"`
 	}
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse worklist %s: %w", path, err)
+	}
+	for _, m := range doc.Matrix {
+		doc.Queries = append(doc.Queries, m.queries()...)
 	}
 	queries, err := normalizeQueries(doc.Queries)
 	if err != nil {

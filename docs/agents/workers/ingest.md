@@ -6,7 +6,8 @@ Part of the [worker index](../workers.md): what each `cmd/<name>` worker does, w
   `harvest-linkedin <queries.yml> [company-slugs.txt]` exports candidate companies for
   `harvest-ats resolve`. `harvest-linkedin --register-searches <queries.yml>` previews
   validated keyword/market searches without network or DB access; add `--apply` to
-  insert pending `linkedin` boards through the catalogue. Repeated application skips
+  insert pending `linkedin` boards through the catalogue. Besides explicit `queries`, the worklist accepts `matrix`
+  blocks (`keywords: [...]`, `locations: [...]`), expanded after the explicit entries. Repeated application skips
   existing live identities and preserves operator labels and limits. Registration-only
   `--pages=10 --jobage=30` overrides budgets for newly registered searches; omitted
   or zero flags keep the worklist values. `pages` and `jobage`
