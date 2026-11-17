@@ -18,9 +18,9 @@
 // A second pass reads internal/application/agentview's day files under AGENT_VIEW_LOG_DIR
 // (postings served to agents) into job_daily_views.agent_uniques and jobs.view_count.
 //
-// Last, with MEILI_MASTER_KEY set, it writes the new view_count of every touched job
-// straight into the search index (pushViewCounts), not through search-drain: it only
-// backs the "Most viewed" sort.
+// Last, with MEILI_MASTER_KEY set, it writes the new view_count straight into the search
+// index (pushViewCounts), not through search-drain: it only backs the "Most viewed" sort,
+// so only a job whose count crossed into a new step (viewStep) is written.
 package main
 
 import (
@@ -108,15 +108,15 @@ func run() int {
 	// shortcut: a failed push is not retried; those documents keep their old figure until
 	// the job is viewed again or the drain rewrites it. Persist the pending ids if the
 	// "Most viewed" sort ever needs to be exact.
-	if len(touchedJobs) > 0 && cfg.MeiliKey != "" {
+	if len(viewDeltas) > 0 && cfg.MeiliKey != "" {
 		done := worker.Stage("search view counts")
-		n, err := pushViewCounts(ctx, db.New(pool), search.NewClient(cfg.MeiliURL, cfg.MeiliKey), touchedJobs)
+		n, err := pushViewCounts(ctx, db.New(pool), search.NewClient(cfg.MeiliURL, cfg.MeiliKey), viewDeltas)
 		done()
 		if err != nil {
-			log.Printf("search view counts: wrote %d of %d: %v", n, len(touchedJobs), err)
+			log.Printf("search view counts: wrote %d, then failed (%d jobs touched): %v", n, len(viewDeltas), err)
 			exit = 1
 		} else {
-			log.Printf("rollup-views: wrote view_count of %d job(s) to the search index", n)
+			log.Printf("rollup-views: wrote view_count of %d of %d touched job(s) to the search index", n, len(viewDeltas))
 		}
 	}
 	return exit

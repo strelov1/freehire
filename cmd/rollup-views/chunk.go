@@ -18,9 +18,9 @@ import (
 // crawl fleet. A var only so tests can shrink it.
 var applyChunkRows = 1000
 
-// touchedJobs collects every job whose view_count a committed chunk moved, for the index
-// write at the end of the run (pushViewCounts). Package state is fine for a run-once worker.
-var touchedJobs = map[int64]struct{}{}
+// viewDeltas is how much this run's committed chunks moved each job's view_count, for the
+// index write at the end of the run (pushViewCounts). Package state is fine for a run-once worker.
+var viewDeltas = map[int64]int64{}
 
 // errAlreadyApplied reports a file another run has applied, or is applying.
 var errAlreadyApplied = errors.New("view log file already applied")
@@ -87,7 +87,7 @@ func applyChunked[P any](
 		}
 		for _, p := range chunk {
 			applied += views(p)
-			touchedJobs[key(p).jobID] = struct{}{}
+			viewDeltas[key(p).jobID] += int64(views(p))
 		}
 		prev = &last
 		params = params[len(chunk):]
