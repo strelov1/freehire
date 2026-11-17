@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { page } from '$app/state';
   import { untrack } from 'svelte';
   import { ArrowRight, SquarePen } from '@lucide/svelte';
   import JobActionStrip from './JobActionStrip.svelte';
@@ -11,7 +9,7 @@
   import { ApiError, api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
-  import { promptSignIn, signinUrl } from '#lib/signin.js';
+  import { promptLogin, promptSignIn } from '#lib/signin.js';
   import { markViewed } from '#lib/viewedJobs.svelte.js';
   import { markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
   import {
@@ -213,19 +211,17 @@
     if (!applied) showApplyPrompt = true;
   }
 
-  // Gate — "Sign up" opens /signin's register form and returns to this posting (the
-  // layout routes a new account through /onboarding once, and that page can skip
-  // straight back here); "View without signing in" opens the posting in a new tab (the
-  // navigation the click was holding back).
+  // Gate — "Sign up" enters /onboarding first, which returns to this posting (it can be
+  // skipped straight to the sign-up form); "Sign in" is the explicit sign-in form; "View
+  // without signing in" opens the posting in a new tab (the navigation the click was holding back).
   function signUpFromGate() {
     showSignInPrompt = false;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
-    void goto(signinUrl({ returnTo: page.url.pathname + page.url.search }));
+    promptSignIn();
   }
 
   function signInFromGate() {
     showSignInPrompt = false;
-    promptSignIn();
+    promptLogin();
   }
 
   // A vacancy taking applications here has no outside page: Apply opens the form instead

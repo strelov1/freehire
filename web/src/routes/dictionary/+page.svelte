@@ -11,7 +11,7 @@
   import { ApiError, api } from '#lib/api.js';
   import { dynamicOptions } from '#lib/facetOptions.js';
   import { filtersToParams } from '#lib/filters.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { promptLogin } from '#lib/signin.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
   import {
     lookupIndustry,
@@ -78,7 +78,7 @@
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         await rememberTerm(kind, term);
-        promptSignIn();
+        promptLogin();
         return;
       }
       if (err instanceof ApiError && err.status === 409) asked[k] = 'known';

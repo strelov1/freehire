@@ -370,6 +370,14 @@
     void gotoPath(returnTo ?? resolve('/'));
   }
 
+  /** A guest who wants an account without a CV (to save a job, tailor, follow) goes straight to
+   *  the sign-up form and comes back to where they were headed. Marked first: the new account has
+   *  been through this page, so the layout must not route it back (see `skipAsGuest`). */
+  function skipToSignUp() {
+    onboardingGate.skipAsGuest();
+    void gotoPath(signinUrl({ returnTo: returnTo ?? resolve('/') }));
+  }
+
   let left = false;
   onDestroy(() => (left = true));
 
@@ -497,9 +505,17 @@
             <!-- eslint-disable svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query -->
             <a
               href={signinUrl({ returnTo: returnTo ?? resolve('/'), mode: 'login' })}
+              onclick={() => onboardingGate.skipAsGuest()}
               class="font-medium text-foreground underline-offset-4 hover:underline">Sign in</a
             ><!-- eslint-enable svelte/no-navigation-without-resolve -->
           </p>
+          <button
+            type="button"
+            onclick={skipToSignUp}
+            class="self-start text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Skip the CV and create an account
+          </button>
         {/if}
       </FlowStep>
     {:else}

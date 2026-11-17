@@ -2,7 +2,7 @@
   import { ThumbsUp, ThumbsDown } from '@lucide/svelte';
   import { api, ApiError } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { promptLogin, promptSignIn } from '#lib/signin.js';
   import type { VoteResult } from '#lib/types.js';
 
   // Shared thumbs up/down control for a job or a company. The aggregate counters
@@ -63,7 +63,7 @@
     } catch (e) {
       // A failed vote leaves the displayed counts untouched (they were never
       // optimistically changed). Re-prompt sign-in if the session lapsed.
-      if (e instanceof ApiError && e.status === 401) promptSignIn();
+      if (e instanceof ApiError && e.status === 401) promptLogin();
     } finally {
       busy = false;
     }

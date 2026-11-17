@@ -4,7 +4,7 @@
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { errorMessage } from '#lib/utils.js';
-  import { signinUrl } from '#lib/signin.js';
+  import { promptSignInFor } from '#lib/signin.js';
   import { Button } from '#lib/ui/index.js';
   import type { Mentor, MentorSlot } from '#lib/types.js';
 
@@ -19,13 +19,11 @@
   let booking = $state(false);
   let bookingError = $state('');
 
-  // Not promptSignIn(): that reads `page.url.search`, which lags our shallow writes, so a
+  // promptSignInFor(), not promptSignIn(): that reads `page.url.search`, which lags our shallow writes, so a
   // visitor would return from signing in with the slot no longer chosen — the one thing
   // putting it in the URL was for. Read the address bar, which is current.
   function signInAndComeBack() {
-    const returnTo = location.pathname + location.search;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
-    void goto(signinUrl({ returnTo, mode: 'login' }));
+    promptSignInFor(location.pathname + location.search);
   }
 
   async function book() {
