@@ -2,8 +2,8 @@ package sources
 
 import (
 	"context"
+	"embed"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 
@@ -23,9 +23,13 @@ import (
 //   - radware_block: Radware's bot wall (validate.perfdrive.com), where a datacenter IP is
 //     redirected, recorded from the crawl host 2026-11-17 and cut to its title and CAPTCHA
 //     notice, without the per-request tokens and the client's address.
+//
+//go:embed testdata/njoyn
+var njoynFixtures embed.FS
+
 func njoynFixture(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile("testdata/njoyn/" + name)
+	b, err := njoynFixtures.ReadFile("testdata/njoyn/" + name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,6 +52,7 @@ func testNjoyn(c HTMLGetter) njoyn { return njoyn{http: c, maxNewPerBoard: njoyn
 
 // cgiBoard routes the two listing pages.
 func cgiBoard(t *testing.T) *routedHTTP {
+	t.Helper()
 	return (&routedHTTP{}).
 		route("Page=joblisting&lang=1&pn=1", njoynFixture(t, "cgi_listing_page1.html")).
 		route("Page=joblisting&lang=1&pn=2", njoynFixture(t, "cgi_listing_page2.html"))
