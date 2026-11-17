@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   document: { summary: 'seed' } as Record<string, unknown>,
   style: null as null | { style: { font_size: number } },
   order: [] as string[],
+  updateCv: (async () => {}) as () => Promise<unknown>,
 }));
 
 vi.mock('$app/state', () => ({
@@ -51,6 +52,7 @@ vi.mock('#lib/api.js', () => {
       listCvFonts: async () => [],
       updateCv: async () => {
         mocks.order.push('save');
+        await mocks.updateCv();
         return {};
       },
     },
@@ -94,6 +96,7 @@ beforeEach(() => {
   mocks.chat = null;
   mocks.style = null;
   mocks.order.length = 0;
+  mocks.updateCv = async () => {};
   mocks.dialogs.length = 0;
   mocks.document = { summary: 'seed' };
   mocks.track.mockClear();
@@ -281,4 +284,47 @@ it('holds a PDF with unfilled gaps behind the confirmation and reports only afte
   if (!gaps) throw new Error('the gaps dialog was not rendered');
   gaps.onConfirm();
   await waitFor(() => expect(outcomeCalls()).toHaveLength(1));
+});
+
+/** Types into the Design tab and lets the 800ms autosave timer fire, so the save is in flight. */
+async function typeAndFireAutosave() {
+  if (!mocks.style) throw new Error('the style control was not rendered');
+  mocks.style.style = { ...mocks.style.style, font_size: 12 };
+  await tick();
+  await waitFor(() => expect(mocks.order).toEqual(['save']), { timeout: 3000 });
+}
+
+it('waits for a save already in flight before it fetches the PDF', async () => {
+  let finish!: () => void;
+  mocks.updateCv = () => new Promise<void>((resolve) => (finish = resolve));
+  const fetcher = vi.fn(async () => pdfResponse());
+  vi.stubGlobal('fetch', fetcher);
+  const { getByText } = await open();
+  await typeAndFireAutosave();
+
+  await fireEvent.click(getByText('Download PDF'));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(fetcher).not.toHaveBeenCalled();
+
+  finish();
+  await waitFor(() => expect(outcomeCalls()).toHaveLength(1));
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it('stops the export with its error when the save it waited on failed', async () => {
+  mocks.updateCv = async () => {
+    throw new Error('save failed');
+  };
+  const fetcher = vi.fn(async () => pdfResponse());
+  vi.stubGlobal('fetch', fetcher);
+  const { getByText, findAllByRole } = await open();
+  await typeAndFireAutosave();
+
+  await fireEvent.click(getByText('Download PDF'));
+
+  const alerts = await findAllByRole('alert');
+  expect(alerts.some((a) => /could not download/i.test(a.textContent ?? ''))).toBe(true);
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(savedPdf).not.toHaveBeenCalled();
+  expect(outcomeCalls()).toEqual([]);
 });

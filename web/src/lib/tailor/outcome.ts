@@ -29,14 +29,13 @@ export interface OutcomeDeps {
   emit: (event: string, props: Record<string, unknown>) => void;
 }
 
+/** What one turn started from and whether a cv_edit succeeded in it (see `endTurn`). */
+export type EndedTurn = { before: string | null; edited: boolean };
+
 export class TailorOutcomes {
   readonly #d: OutcomeDeps;
   #before: string | null = null;
   #edited = false;
-  // Turns that ended and await their turnEnded(): the host's end handler is async, and a queued
-  // message can start the next turn before it runs, resetting the live fields above.
-  readonly #ended: { before: string | null; edited: boolean }[] = [];
-
   constructor(deps: OutcomeDeps) {
     this.#d = { store: browserStore(), ...deps };
   }
@@ -44,7 +43,6 @@ export class TailorOutcomes {
   /** The chat's turn-active signal: a turn beginning is where the baseline is taken. */
   turnState(active: boolean) {
     if (active) this.turnStarted();
-    else this.#ended.push({ before: this.#before, edited: this.#edited });
   }
 
   /** An agent turn began: remember the document it started from. */
@@ -58,13 +56,20 @@ export class TailorOutcomes {
     this.#edited = true;
   }
 
-  /** The turn ended and the workspace re-read the persisted document. `completed` is true only
-   *  for a turn the server finished cleanly (not cut off, refused, errored or only caught up on
-   *  after a dropped stream). Emits `tailor_result` at most once per CV. */
-  turnEnded(completed: boolean) {
-    const { before, edited } = this.#ended.shift() ?? { before: this.#before, edited: this.#edited };
+  /** Take the ending turn's baseline and edit flag, and clear them for the next turn. Call it
+   *  synchronously when the turn ends, before any await: a queued message starts the next turn
+   *  right after, and the refresh that follows may finish out of order with other turns'. */
+  endTurn(): EndedTurn {
+    const ended = { before: this.#before, edited: this.#edited };
     this.#before = null;
     this.#edited = false;
+    return ended;
+  }
+
+  /** The workspace re-read the persisted document after the turn `ended`. `completed` is true
+   *  only for a turn the server finished cleanly (not cut off, refused, errored or only caught
+   *  up on after a dropped stream). Emits `tailor_result` at most once per CV. */
+  turnEnded({ before, edited }: EndedTurn, completed: boolean) {
     const slug = this.#d.slug();
     if (!completed || !edited || before === null || slug === undefined) return;
     if (JSON.stringify(this.#d.document()) === before) return;

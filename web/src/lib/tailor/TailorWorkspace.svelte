@@ -189,7 +189,7 @@
 
   const pdf = new PdfExport({
     url: () => pdfUrl,
-    flush: () => flushPendingSave(),
+    flush: flushForExport,
     onExported: () => outcomes.pdfExported(),
     hasGaps: () => placeholders.length > 0,
   });
@@ -356,7 +356,18 @@
   let lastSnapshot = '';
   const snapshot = () => JSON.stringify({ title, templateId, doc });
 
-  async function persist() {
+  // The save in flight, so a flush (agent turn, PDF export) can wait for it: the timer is already
+  // cleared by then, and the server would still hold the old document.
+  let inflight: Promise<void> | null = null;
+  function persist() {
+    const p: Promise<void> = write().finally(() => {
+      if (inflight === p) inflight = null;
+    });
+    inflight = p;
+    return p;
+  }
+
+  async function write() {
     const snap = snapshot(); // capture NOW; edits during the round-trip re-trigger the effect
     saveState = 'saving';
     try {
@@ -411,11 +422,13 @@
   // After an agent turn the CV may have changed server-side: flush any pending human edit, then
   // refetch and replace the shared document so the Editor and preview reflect it.
   async function onTurnComplete(turn: { completed: boolean }) {
+    // Before any await: the chat starts a queued turn right after this returns its promise.
+    const ended = outcomes.endTurn();
     await flushPendingSave();
     try {
       await loadCv();
       // Judged on the document just re-read from the server.
-      outcomes.turnEnded(turn.completed);
+      outcomes.turnEnded(ended, turn.completed);
       pdfVersion += 1;
       void history.load(true);
       void refreshAtsDelta();
@@ -428,7 +441,7 @@
         analysis = (await api.getMatchAnalysis(slug).catch(() => null))?.analysis ?? null;
       }
     } catch {
-      outcomes.turnEnded(false); // saved document unconfirmed
+      outcomes.turnEnded(ended, false); // saved document unconfirmed
       /* best-effort refresh; the next edit or reload will reconcile */
     }
   }
@@ -436,10 +449,18 @@
   // Write a pending human edit NOW rather than 800ms from now. Anything that changes the CV
   // server-side has to do this first, or the debounce fires afterwards and overwrites it.
   async function flushPendingSave() {
+    if (inflight) await inflight;
     if (!saveTimer) return;
     clearTimeout(saveTimer);
     saveTimer = null;
     if (snapshot() !== lastSnapshot) await persist();
+  }
+
+  // The PDF is rendered from the saved CV, so a save that failed must stop the export rather
+  // than let it download the old one. Ordinary autosave failures keep showing in the save state.
+  async function flushForExport() {
+    await flushPendingSave();
+    if (saveState === 'error') throw new Error(saveError);
   }
 
   // A template switch is persisted by the gallery via setCvTemplate; mirror the new id into the

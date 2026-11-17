@@ -22,14 +22,14 @@ describe('TailorOutcomes tailoring result', () => {
     outcomes.turnStarted();
     outcomes.documentEdited();
     cv.doc = { summary: 'tailored to the vacancy' };
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
     expect(emit).toHaveBeenCalledExactlyOnceWith('tailor_result', { slug: 'acme-engineer' });
   });
 
   it('stays silent for a turn that made no edit (a seed, a plain answer)', () => {
     const { outcomes, emit } = setup();
     outcomes.turnStarted();
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
     expect(emit).not.toHaveBeenCalled();
   });
 
@@ -37,7 +37,7 @@ describe('TailorOutcomes tailoring result', () => {
     const { outcomes, emit } = setup();
     outcomes.turnStarted();
     outcomes.documentEdited();
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
     expect(emit).not.toHaveBeenCalled();
   });
 
@@ -46,7 +46,7 @@ describe('TailorOutcomes tailoring result', () => {
     outcomes.turnStarted();
     outcomes.documentEdited();
     cv.doc = { summary: 'half done' };
-    outcomes.turnEnded(false);
+    outcomes.turnEnded(outcomes.endTurn(), false);
     expect(emit).not.toHaveBeenCalled();
   });
 
@@ -54,29 +54,41 @@ describe('TailorOutcomes tailoring result', () => {
     const { outcomes, emit, cv } = setup();
     outcomes.turnStarted();
     cv.doc = { summary: 'typed by hand' };
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it('still counts a turn whose end is handled after a queued message started the next turn', () => {
+  it('judges each turn on its own snapshot when their refreshes finish out of order', () => {
     const { outcomes, emit, cv } = setup();
-    outcomes.turnState(true);
+    outcomes.turnState(true); // turn A: an edit, but it ends incomplete
+    outcomes.documentEdited();
+    cv.doc = { summary: 'half way' };
+    const a = outcomes.endTurn();
+    outcomes.turnState(true); // queued turn B: completes with no edit
+    const b = outcomes.endTurn();
+    outcomes.turnEnded(b, true); // B's refresh returns first
+    outcomes.turnEnded(a, false);
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('still counts a completed turn that started before an earlier turn finished refreshing', () => {
+    const { outcomes, emit, cv } = setup();
+    outcomes.turnState(true); // turn A: no edit
+    const a = outcomes.endTurn();
+    outcomes.turnState(true); // queued turn B starts while A's refresh is pending
     outcomes.documentEdited();
     cv.doc = { summary: 'tailored to the vacancy' };
-    outcomes.turnState(false);
-    outcomes.turnState(true); // drainQueue() runs before the host's async end handler
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(a, true); // must not wipe B's live state
+    const b = outcomes.endTurn();
+    outcomes.turnEnded(b, true);
     expect(emit).toHaveBeenCalledExactlyOnceWith('tailor_result', { slug: 'acme-engineer' });
-    outcomes.turnState(false);
-    outcomes.turnEnded(true); // the second turn made no edit
-    expect(emit).toHaveBeenCalledTimes(1);
   });
 
   it('stays silent for a turn end that never saw its start (catch-up after a reload)', () => {
     const { outcomes, emit, cv } = setup();
     outcomes.documentEdited();
     cv.doc = { summary: 'changed' };
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
     expect(emit).not.toHaveBeenCalled();
   });
 
@@ -85,12 +97,12 @@ describe('TailorOutcomes tailoring result', () => {
     outcomes.turnStarted();
     outcomes.documentEdited();
     cv.doc = { summary: 'one' };
-    outcomes.turnEnded(true);
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
     outcomes.turnStarted();
     outcomes.documentEdited();
     cv.doc = { summary: 'two' };
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
     expect(emit).toHaveBeenCalledTimes(1);
   });
 
@@ -99,7 +111,7 @@ describe('TailorOutcomes tailoring result', () => {
     first.outcomes.turnStarted();
     first.outcomes.documentEdited();
     first.cv.doc = { summary: 'one' };
-    first.outcomes.turnEnded(true);
+    first.outcomes.turnEnded(first.outcomes.endTurn(), true);
 
     const turn = (cvId: string) => {
       const doc = { current: { summary: 'before' } };
@@ -113,7 +125,7 @@ describe('TailorOutcomes tailoring result', () => {
       remount.turnStarted();
       remount.documentEdited();
       doc.current = { summary: 'after' };
-      remount.turnEnded(true);
+      remount.turnEnded(remount.endTurn(), true);
     };
     turn('cv-1');
     expect(first.emit).toHaveBeenCalledTimes(1);
@@ -126,7 +138,7 @@ describe('TailorOutcomes tailoring result', () => {
     outcomes.turnStarted();
     outcomes.documentEdited();
     cv.doc = { summary: 'base edit' };
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
     expect(emit).not.toHaveBeenCalled();
   });
 
@@ -143,7 +155,7 @@ describe('TailorOutcomes tailoring result', () => {
     outcomes.turnStarted();
     outcomes.documentEdited();
     cv.doc = { a: 2 };
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
     expect(emit).not.toHaveBeenCalled();
   });
 });
@@ -167,7 +179,7 @@ describe('TailorOutcomes pdf export', () => {
     outcomes.turnStarted();
     outcomes.documentEdited();
     cv.doc = { summary: 'tailored' };
-    outcomes.turnEnded(true);
+    outcomes.turnEnded(outcomes.endTurn(), true);
     expect(emit.mock.calls.map((c) => c[0])).toEqual(['cv_pdf_export', 'tailor_result']);
   });
 });
