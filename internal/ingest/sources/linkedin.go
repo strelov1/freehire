@@ -72,6 +72,10 @@ func (linkedIn) aggregator()      {}
 func (linkedIn) livenessProbed()  {}
 func (linkedIn) probeClosing()    {}
 
+// LinkedInPostingURL is the canonical public URL of a numeric posting id, the one spelling
+// every adapter path and the pipeline's identity rule share.
+func LinkedInPostingURL(id string) string { return "https://www.linkedin.com/jobs/view/" + id + "/" }
+
 var linkedInID = regexp.MustCompile(`(?:^|-)\d+$`)
 
 // LinkedInPostingID returns the native numeric ID of a public LinkedIn job URL.
@@ -115,7 +119,7 @@ func LinkedInPosting(root *html.Node, finalURL, id string) (Job, error) {
 		}
 		return strings.Join(strings.Fields(textContent(n)), " ")
 	}
-	j := Job{ExternalID: id, URL: "https://www.linkedin.com/jobs/view/" + id + "/", Title: text("top-card-layout__title"), Company: text("topcard__org-name-link")}
+	j := Job{ExternalID: id, URL: LinkedInPostingURL(id), Title: text("top-card-layout__title"), Company: text("topcard__org-name-link")}
 	if org := firstByClass(card, "topcard__org-name-link"); org != nil {
 		if u, err := url.Parse(Attr(org, "href")); err == nil && u.Scheme == "https" && linkedInHost(u.Hostname()) && strings.HasPrefix(u.Path, "/company/") && u.User == nil && u.Port() == "" {
 			u.RawQuery, u.Fragment = "", ""
@@ -166,7 +170,22 @@ func (s linkedIn) get(ctx context.Context, raw string) (*html.Node, string, erro
 	}
 }
 
+// Fetch is the list-only fallback used when the pipeline supplies no seen-set: every listed
+// posting's detail is read.
 func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return s.fetch(ctx, e, nil)
+}
+
+// FetchNew reads the detail only of listed postings the catalogue does not hold. A seen
+// posting is emitted as an identity-only SeenRefresh (no detail request), which the pipeline
+// turns into a liveness touch. The pipeline's seen-set withholds rows whose body is older
+// than BODY_REFRESH_DAYS, so a stored posting is re-read (and its application method
+// re-checked) only that often instead of on every crawl.
+func (s linkedIn) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	return s.fetch(ctx, e, seen)
+}
+
+func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	if s.configErr != nil {
 		return nil, s.configErr
 	}
@@ -179,12 +198,12 @@ func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 	var jobs []Job
 	ids := make(map[string]bool)
-	listed, read := 0, 0
+	listed, read, refreshed := 0, 0, 0
 	// The buffered pipeline discards every job returned alongside an error. Once any
 	// posting was read, preserve progress on a later failure; no unseen sweep can act
 	// on this partial listing, so stopping successfully cannot falsely close anything.
 	stop := func(err error) ([]Job, error) {
-		if read > 0 {
+		if read+refreshed > 0 {
 			log.Printf("linkedin: keeping %d postings after partial crawl: %v", len(jobs), err)
 			return jobs, nil
 		}
@@ -210,14 +229,14 @@ func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			}
 			id := strings.TrimPrefix(urn, "urn:li:jobPosting:")
 			pageSize++
-			if id == "" || LinkedInPostingID("https://www.linkedin.com/jobs/view/"+id+"/") != id || ids[id] {
+			if id == "" || LinkedInPostingID(LinkedInPostingURL(id)) != id || ids[id] {
 				return false
 			}
 			title, company := firstByClass(n, "base-search-card__title"), firstByClass(n, "base-search-card__subtitle")
 			if title == nil || company == nil {
 				return false
 			}
-			j := Job{ExternalID: id, URL: "https://www.linkedin.com/jobs/view/" + id + "/", Title: strings.TrimSpace(textContent(title)), Company: strings.TrimSpace(textContent(company))}
+			j := Job{ExternalID: id, URL: LinkedInPostingURL(id), Title: strings.TrimSpace(textContent(title)), Company: strings.TrimSpace(textContent(company))}
 			if j.Title != "" && j.Company != "" {
 				ids[id] = true
 				cards = append(cards, j)
@@ -233,6 +252,12 @@ func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 		for _, card := range cards {
 			listed++
+			if seen != nil && seen(card.ExternalID) {
+				card.SeenRefresh = true
+				refreshed++
+				jobs = append(jobs, card)
+				continue
+			}
 			j, err := s.Posting(ctx, card.URL)
 			var status *StatusError
 			if errors.As(err, &status) && (status.Code == 403 || status.Code == 429 || status.Code == 999) {
@@ -249,10 +274,10 @@ func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			}
 		}
 	}
-	if listed > 0 && read == 0 {
+	if listed > 0 && read+refreshed == 0 {
 		return jobs, fmt.Errorf("linkedin: none of %d listed postings could be read", listed)
 	}
-	jobs = append(jobs, s.related(ctx, jobs, ids)...)
-	log.Printf("linkedin: search keyword=%q region=%q page_limit=%d jobage_days=%d listed=%d read=%d returned=%d", e.Board, e.Region, pageLimit, jobAgeDays, listed, read, len(jobs))
+	jobs = append(jobs, s.related(ctx, jobs, ids, seen)...)
+	log.Printf("linkedin: search keyword=%q region=%q page_limit=%d jobage_days=%d listed=%d read=%d refreshed=%d returned=%d", e.Board, e.Region, pageLimit, jobAgeDays, listed, read, refreshed, len(jobs))
 	return jobs, nil
 }

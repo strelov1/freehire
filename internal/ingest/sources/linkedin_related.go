@@ -12,7 +12,7 @@ import (
 
 // related supplements a completed search with one public page's recommendations.
 // Guest detail fragments omit this section. Recommendations never seed another page.
-func (s linkedIn) related(ctx context.Context, jobs []Job, seen map[string]bool) []Job {
+func (s linkedIn) related(ctx context.Context, jobs []Job, ids map[string]bool, known func(string) bool) []Job {
 	var seed Job
 	for _, j := range jobs {
 		if !j.Unreadable && !j.Removed {
@@ -55,9 +55,14 @@ func (s linkedIn) related(ctx context.Context, jobs []Job, seen map[string]bool)
 		return nil
 	}
 	var related []Job
-	for _, card := range linkedInRelatedCards(root, seen) {
+	for _, card := range linkedInRelatedCards(root, ids) {
 		if ctx.Err() != nil {
 			break
+		}
+		if known != nil && known(card.ExternalID) {
+			card.SeenRefresh = true
+			related = append(related, card)
+			continue
 		}
 		j, err := s.Posting(ctx, card.URL)
 		var status *StatusError
@@ -92,7 +97,7 @@ func linkedInRelatedCards(root *html.Node, seen map[string]bool) []Job {
 			return true
 		}
 		id := strings.TrimPrefix(urn, "urn:li:jobPosting:")
-		if id == "" || id == "0" || seen[id] || LinkedInPostingID("https://www.linkedin.com/jobs/view/"+id+"/") != id {
+		if id == "" || id == "0" || seen[id] || LinkedInPostingID(LinkedInPostingURL(id)) != id {
 			return false
 		}
 		a := firstByClass(n, "base-card__full-link")
@@ -108,7 +113,7 @@ func linkedInRelatedCards(root *html.Node, seen map[string]bool) []Job {
 		if title == nil || company == nil {
 			return false
 		}
-		j := Job{ExternalID: id, URL: "https://www.linkedin.com/jobs/view/" + id + "/", Title: strings.TrimSpace(textContent(title)), Company: strings.TrimSpace(textContent(company))}
+		j := Job{ExternalID: id, URL: LinkedInPostingURL(id), Title: strings.TrimSpace(textContent(title)), Company: strings.TrimSpace(textContent(company))}
 		if j.Title != "" && j.Company != "" {
 			seen[id] = true
 			cards = append(cards, j)

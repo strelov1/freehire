@@ -102,7 +102,9 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 		t.refreshIDs = append(t.refreshIDs, externalID)
 		return
 	}
-	if e.Provider == "linkedin" && j.ApplyMethod != sources.ApplyOnSite {
+	// A SeenRefresh carries identity only and never proves an application method, so it is
+	// not a non-native discovery: it falls through to the touch below, never to ATS resolution.
+	if e.Provider == "linkedin" && !j.SeenRefresh && j.ApplyMethod != sources.ApplyOnSite {
 		if _, err := normalizeJob(e, j, canon, false); err != nil {
 			t.st.Skipped++
 			if t.firstErr == nil {

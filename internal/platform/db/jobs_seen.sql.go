@@ -431,10 +431,11 @@ func (q *Queries) RefreshCoveredJobs(ctx context.Context, arg RefreshCoveredJobs
 
 const touchJob = `-- name: TouchJob :one
 WITH existing AS MATERIALIZED (
-    SELECT j.id, j.closed_at, j.is_private, j.duplicate_of, a.last_seen_at, j.application_deadline AS previous_deadline,
+    SELECT j.id, j.company_slug, j.closed_at, j.closed_reason, j.is_private, j.duplicate_of, a.last_seen_at, j.application_deadline AS previous_deadline,
            COALESCE($1::date, j.application_deadline) AS deadline,
            -- The touch would reopen this row: closed, and its deadline (if any) not passed.
-           (j.closed_at IS NOT NULL AND (COALESCE($1::date, j.application_deadline) IS NULL
+           -- A row withheld as native_source_pending is never reopened by a touch (see below).
+           (j.closed_at IS NOT NULL AND j.closed_reason <> 'native_source_pending' AND (COALESCE($1::date, j.application_deadline) IS NULL
                                          OR COALESCE($1::date, j.application_deadline) >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
     FROM jobs j
     JOIN job_activity a ON a.job_id = j.id
@@ -454,7 +455,12 @@ WITH existing AS MATERIALIZED (
             OR jobs.application_deadline IS DISTINCT FROM e.deadline
             THEN now() ELSE updated_at END
     FROM existing e
-    WHERE jobs.id = e.id AND ($4::boolean OR NOT e.would_reopen)
+    -- native_source_pending is a publication withhold, not a liveness closure: the posting's
+    -- application method is external or unknown, so only a fresh detail read that proves
+    -- on-site Apply (the ordinary upsert) may publish it. A mere re-listing proves nothing,
+    -- so a touch leaves such a row exactly as it is, whatever allow_reopen says.
+    WHERE jobs.id = e.id AND e.closed_reason <> 'native_source_pending'
+      AND ($4::boolean OR NOT e.would_reopen)
     RETURNING jobs.id, jobs.company_slug, jobs.closed_at,
               jobs.application_deadline, COALESCE(jobs.posted_at, jobs.created_at) AS job_posted_at
 ), queued AS (
@@ -475,8 +481,8 @@ WITH existing AS MATERIALIZED (
     ON CONFLICT (job_id) DO UPDATE
         SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )
-SELECT e.id, COALESCE(t.company_slug, '')::text AS company_slug,
-       (t.id IS NULL)::boolean AS deferred,
+SELECT e.id, COALESCE(t.company_slug, e.company_slug)::text AS company_slug,
+       (t.id IS NULL AND e.would_reopen)::boolean AS deferred,
        (t.id IS NOT NULL AND t.closed_at IS NULL AND e.closed_at IS NOT NULL)::boolean AS reopened,
        (t.id IS NOT NULL AND e.closed_at IS NOT NULL)::boolean AS reset_strikes
 FROM existing e LEFT JOIN touched t ON t.id = e.id
