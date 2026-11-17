@@ -91,7 +91,16 @@ var platformLabelsByApex = map[string][]string{
 	// greytHR's marketing site, community forum, help centres, status page and campaign pages.
 	"greythr.com":  {"www", "community", "admin-help", "ess-help", "status", "campaign"},
 	"hirehive.com": {"www", "assets", "static", "hirehive-testing-account"},
+	// Recruitee's analytics host and its fallback host (career.recruitee.com redirects to
+	// recruitee.com/careers_not_hosted), both linked from employer career pages.
+	"recruitee.com": {"tagging-server", "career"},
+	// The cookie-banner script host iCIMS tenants embed on their own career sites (404).
+	"icims.com": {"cookie-policy-scripts"},
 }
+
+// smartrecruitersPortalPaths are SmartRecruiters' own candidate pages under its portal hosts,
+// linked from employer career sites; the path-portal rule would read each as a company.
+var smartrecruitersPortalPaths = map[string]bool{"my-applications": true}
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —
 // either a label no multi-tenant ATS gives a tenant, or one this platform in particular keeps.

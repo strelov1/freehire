@@ -51,3 +51,10 @@ The first 80-search harvest run (2026-11-17) logged ten detail 429s in 25 minute
 Scrapling proxy; each ended its search after 7-64 of ~100 listed postings while neighbouring
 requests were served. The adapter now retries a 429 twice after growing pauses before treating
 it as a refusal. 403/999 and a persistent 429 still stop the board; pacing is unchanged.
+
+## Vendor hosts from LinkedIn employer discovery — 2026-11-17
+
+The first 80-search LinkedIn harvest onboarded three vendor addresses as employer boards from
+career-page links: iCIMS's cookie-script host, Recruitee's analytics and careers_not_hosted
+fallback hosts, and SmartRecruiters' candidate portal path. Each was probed (404, empty, redirect,
+0 postings); the recognizer now reserves them. qa.recruitee.com is a live tenant and stays.
