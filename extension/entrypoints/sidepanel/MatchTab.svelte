@@ -58,11 +58,7 @@
   <div class="match-scroll">
     {#if user}
       {#if asksApplied && appliedCandidate}
-        <AppliedPrompt
-          job={appliedCandidate}
-          {onNotice}
-          onDone={() => (appliedCandidate = null)}
-        />
+        <AppliedPrompt job={appliedCandidate} {onNotice} onDone={() => (appliedCandidate = null)} />
       {/if}
       <MatchStatusView
         status={pageMatch.status}
