@@ -11,7 +11,10 @@
   logs its configured page limit/age, primary listed/read counts and returned count including
   bounded recommendations; these are not publication or unique-growth figures.
   One limiter across the adapter's boards and both request paths allows one request
-  every two seconds. This is an initial conservative budget, not a measured sustained limit.
+  every two seconds by default; `LINKEDIN_REQUEST_INTERVAL` (100ms..10s, set in
+  `ingest-env/linkedin.env`) changes it, and a bad value fails the crawl. Requests leave
+  through the rotating proxy, a new exit IP each, so lower it in steps while watching
+  403/429/999 refusals.
 - Listing URNs identify postings; `/jobs-guest/jobs/api/jobPosting/<id>` supplies employer, title, location and
   sanitized body (verified 2026-11-14; canonical numeric URLs returned 999). Every listed posting is re-read, including previously seen identities: its application method can change. Missing details emit
   `Unreadable`; a wholly unreadable board fails. A 429 on any request is retried twice after

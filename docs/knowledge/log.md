@@ -58,3 +58,10 @@ The first 80-search LinkedIn harvest onboarded three vendor addresses as employe
 career-page links: iCIMS's cookie-script host, Recruitee's analytics and careers_not_hosted
 fallback hosts, and SmartRecruiters' candidate portal path. Each was probed (404, empty, redirect,
 0 postings); the recognizer now reserves them. qa.recruitee.com is a live tenant and stays.
+
+## LinkedIn request interval — 2026-11-17
+
+The LinkedIn limiter's 2s spacing became `LINKEDIN_REQUEST_INTERVAL` (default unchanged,
+100ms..10s, invalid fails the crawl). Requests already leave through the rotating proxy with a
+new exit IP each, and 158 searches after the 429 retry met no refusal at 2s, so the per-process
+spacing, not LinkedIn, was the throughput bound. Ops lowers it in steps.

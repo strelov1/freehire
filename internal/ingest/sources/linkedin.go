@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,13 +22,39 @@ type linkedIn struct {
 	http    HTMLResolvedGetter
 	pace    waiter
 	backoff time.Duration
+	// configErr is a bad LINKEDIN_REQUEST_INTERVAL; Fetch reports it instead of crawling.
+	configErr error
 }
 
 const linkedInSearchURL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
 
 // NewLinkedIn shares one request budget across all boards and their detail requests.
 func NewLinkedIn(c HTMLResolvedGetter) Source {
-	return linkedIn{http: c, pace: rate.NewLimiter(rate.Every(2*time.Second), 1), backoff: linkedInThrottleBackoff}
+	interval, err := linkedInRequestInterval(os.Getenv(linkedInIntervalEnv))
+	return linkedIn{http: c, pace: rate.NewLimiter(rate.Every(interval), 1), backoff: linkedInThrottleBackoff, configErr: err}
+}
+
+// LINKEDIN_REQUEST_INTERVAL sets the shared limiter's spacing (default 2s). Requests leave
+// through the Scrapling tier's rotating proxy, a new exit IP each, so LinkedIn's per-IP limit
+// does not see the process's rate; after the 429 retry, 158 searches at 2s met no refusal
+// (2026-11-17). The bounds keep a typo from becoming a flood or a stall; a bad value fails
+// the crawl rather than silently keeping the default.
+const (
+	linkedInIntervalEnv     = "LINKEDIN_REQUEST_INTERVAL"
+	linkedInDefaultInterval = 2 * time.Second
+	linkedInMinInterval     = 100 * time.Millisecond
+	linkedInMaxInterval     = 10 * time.Second
+)
+
+func linkedInRequestInterval(raw string) (time.Duration, error) {
+	if raw = strings.TrimSpace(raw); raw == "" {
+		return linkedInDefaultInterval, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d < linkedInMinInterval || d > linkedInMaxInterval {
+		return linkedInDefaultInterval, fmt.Errorf("linkedin: %s=%q must be a duration between %s and %s", linkedInIntervalEnv, raw, linkedInMinInterval, linkedInMaxInterval)
+	}
+	return d, nil
 }
 
 // A 429 through the rotating proxy usually names one throttled exit, not the whole crawl:
@@ -140,6 +167,9 @@ func (s linkedIn) get(ctx context.Context, raw string) (*html.Node, string, erro
 }
 
 func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	if s.configErr != nil {
+		return nil, s.configErr
+	}
 	if strings.TrimSpace(e.Board) == "" || strings.TrimSpace(e.Region) == "" {
 		return nil, fmt.Errorf("linkedin: board keyword and region location are required")
 	}
