@@ -132,7 +132,7 @@ func relatedTestPage(cards string) string {
 func runRelatedTest(t *testing.T, site *linkedInRelatedSite) []Job {
 	t.Helper()
 	source := NewLinkedIn(site).(linkedIn)
-	source.pace = &recordingWaiter{}
+	source.pace, source.backoff = &recordingWaiter{}, 0
 	jobs, err := source.Fetch(context.Background(), CompanyEntry{Board: "software engineer", Region: "Netherlands"})
 	if err != nil {
 		t.Fatal(err)
@@ -231,7 +231,12 @@ func TestLinkedInRelatedRefusalsPreserveEarlierJobsAndStopTheBranch(t *testing.T
 		t.Run(fmt.Sprint(code), func(t *testing.T) {
 			site := &linkedInRelatedSite{listings: map[string]string{"0": linkedInRelatedListing("123")}, companion: relatedTestPage(cards), detailError: map[string]error{"789": &StatusError{Code: code}}}
 			jobs := runRelatedTest(t, site)
-			if len(jobs) != 2 || jobs[1].ExternalID != "456" || len(site.requests) != 6 {
+			// A 429 is retried before it counts as a refusal; 403 and 999 stop at once.
+			want := 6
+			if code == 429 {
+				want += linkedInThrottleRetries
+			}
+			if len(jobs) != 2 || jobs[1].ExternalID != "456" || len(site.requests) != want {
 				t.Fatalf("refusal discarded progress or fetched later cards: jobs=%+v requests=%v", jobs, site.requests)
 			}
 		})

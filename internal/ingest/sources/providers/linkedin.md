@@ -14,7 +14,10 @@
   every two seconds. This is an initial conservative budget, not a measured sustained limit.
 - Listing URNs identify postings; `/jobs-guest/jobs/api/jobPosting/<id>` supplies employer, title, location and
   sanitized body (verified 2026-11-14; canonical numeric URLs returned 999). Every listed posting is re-read, including previously seen identities: its application method can change. Missing details emit
-  `Unreadable`; a wholly unreadable board fails. A detail refusal stops the board.
+  `Unreadable`; a wholly unreadable board fails. A 429 on any request is retried twice after
+  10s and 20s pauses (the rotating proxy usually throttled one exit: on 2026-11-17 refusals
+  clustered within seconds and stopping on the first ended searches after 7-64 of ~100 postings);
+  a persistent 429, a 403 or a 999 stops the board.
 - The bounded listing never supplies a quiet-board fingerprint, including on partial
   progress after later-page errors; an unchanged prefix must not delay its next crawl.
 - The listing is incomplete even for employers it names: `probeClosing` excludes ALL unseen

@@ -18,16 +18,27 @@ import (
 // linkedIn reads a bounded recent search, never an authoritative live catalogue.
 // Board is the keyword query; Region is the location passed to LinkedIn search.
 type linkedIn struct {
-	http HTMLResolvedGetter
-	pace waiter
+	http    HTMLResolvedGetter
+	pace    waiter
+	backoff time.Duration
 }
 
 const linkedInSearchURL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
 
 // NewLinkedIn shares one request budget across all boards and their detail requests.
 func NewLinkedIn(c HTMLResolvedGetter) Source {
-	return linkedIn{http: c, pace: rate.NewLimiter(rate.Every(2*time.Second), 1)}
+	return linkedIn{http: c, pace: rate.NewLimiter(rate.Every(2*time.Second), 1), backoff: linkedInThrottleBackoff}
 }
+
+// A 429 through the rotating proxy usually names one throttled exit, not the whole crawl:
+// in the 2026-11-17 run, refusals clustered within seconds while the next requests were
+// served, and stopping on the first one ended searches after 7-64 of ~100 postings. Retry it
+// a bounded number of times after a growing pause; a persistent 429 still stops the board.
+// 403 and 999 remain immediate refusals.
+const (
+	linkedInThrottleRetries = 2
+	linkedInThrottleBackoff = 10 * time.Second
+)
 
 func (linkedIn) Provider() string { return "linkedin" }
 func (linkedIn) aggregator()      {}
@@ -110,10 +121,22 @@ func LinkedInPosting(root *html.Node, finalURL, id string) (Job, error) {
 }
 
 func (s linkedIn) get(ctx context.Context, raw string) (*html.Node, string, error) {
-	if err := s.pace.Wait(ctx); err != nil {
-		return nil, "", err
+	for attempt := 0; ; attempt++ {
+		if err := s.pace.Wait(ctx); err != nil {
+			return nil, "", err
+		}
+		root, final, err := s.http.GetHTMLResolved(ctx, raw)
+		var status *StatusError
+		throttled := errors.As(err, &status) && status.Code == 429
+		if !throttled || attempt == linkedInThrottleRetries {
+			return root, final, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
+		case <-time.After(time.Duration(attempt+1) * s.backoff):
+		}
 	}
-	return s.http.GetHTMLResolved(ctx, raw)
 }
 
 func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
