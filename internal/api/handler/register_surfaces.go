@@ -4,6 +4,8 @@ import (
 	"log"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/candidate/resume"
@@ -116,4 +118,27 @@ func newEmployerSurfaces(cfg Config, queries *db.Queries, accountsSvc *accounts.
 	}
 	employerSvc.WithTeam(employerRepo, teamInvites, strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/employer/join")
 	return employerSvc, newEmployerHandlers(queries, employerSvc)
+}
+
+// wireOptional hands the agent the services that may be unconfigured. Each is assigned
+// only when present: a nil value in an interface field is non-nil, so "no voice mode" or
+// "no support mail" would become a panic on first use.
+func (h *assistantHandlers) wireOptional(cfg Config, store *assistant.Store, answerBank *answerbank.Store, reportsH *reportHandlers, mailClient *emailnotify.Client) {
+	if cfg.Realtime != nil {
+		h.realtime = cfg.Realtime
+	}
+	if p := newInngestEventPublisher(cfg.InngestEventAPIURL, cfg.InngestEventKey); p != nil {
+		h.events = p
+	}
+	h.answerBank = answerBank
+	h.support.pool = cfg.Pool
+	if cfg.SupportLLM != nil {
+		supportLLM := cfg.SupportLLM.WithTimeout(assistantLLMTimeout)
+		h.support.llm = supportLLM
+		h.support.runner = assistant.NewRunner(supportLLM, store, assistant.RunnerConfig{MaxSteps: supportMaxSteps})
+	}
+	h.reports = reportsH
+	if mailClient != nil && cfg.SupportReplyTo != "" {
+		h.support.mail = supportMail{sender: mailClient, from: emailnotify.From("freehire", cfg.NotifyEmailFrom), to: cfg.SupportReplyTo}
+	}
 }

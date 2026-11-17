@@ -2,9 +2,6 @@ package handler
 
 import (
 	"cmp"
-	"context"
-	"log"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -14,7 +11,6 @@ import (
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/api/atsapply"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/application/mailrecall"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
@@ -31,23 +27,17 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
 	"github.com/strelov1/freehire/internal/engage/changehook"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
-	"github.com/strelov1/freehire/internal/engage/emailnotify"
-	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/problemreport"
 	"github.com/strelov1/freehire/internal/engage/processreport"
-	"github.com/strelov1/freehire/internal/engage/referral"
 	"github.com/strelov1/freehire/internal/engage/reminder"
-	"github.com/strelov1/freehire/internal/engage/report"
 	"github.com/strelov1/freehire/internal/engage/webhooknotify"
 	"github.com/strelov1/freehire/internal/identity/accountdelete"
-	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/ingest/boardresolve"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
-	"github.com/strelov1/freehire/internal/ingest/directapply"
 	"github.com/strelov1/freehire/internal/ingest/jdresolve"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/moderation"
@@ -235,41 +225,12 @@ func Register(app *fiber.App, cfg Config) {
 	accountDeletion := accountdelete.New(accountdelete.NewQueriesRepository(queries), cfg.Blob, inboxH.revokeGmailGrant).
 		WithAppleGrants(authH.mobileAuth.ReleaseAppleGrantsForDeletion)
 	authH.withAccountDeletion(accountDeletion, queries)
-	// Assign only when configured: a nil *search.Client in an interface is non-nil and defeats the nil check.
-	var jobSearch searcher
-	var facets facetCounter
-	var companySearch companySearcher
-	// Both sitemaps page an index, so they are wired here.
-	var sitemapJobs, sitemapCompanies sitemapLister
-	var sitemapFreshJobs freshSitemapLister
-	if cfg.Search != nil {
-		jobSearch = cfg.Search
-		facets = cfg.Search
-		companySearch = cfg.Search
-		sitemapJobs = cfg.Search
-		sitemapCompanies = companySitemapIndex{c: cfg.Search}
-		sitemapFreshJobs = cfg.Search
-	}
-	sitemapH := newSitemapHandlers(sitemapJobs, sitemapCompanies, sitemapFreshJobs)
+	sb := newSearchBackends(cfg)
+	jobSearch, facets, companySearch := sb.jobs, sb.facets, sb.companies
+	sitemapH := newSitemapHandlers(sb.sitemapJobs, sb.sitemapCompanies, sb.sitemapFreshJobs)
 	searchH := newSearchHandlers(jobSearch, facets, queries, cfg.Cache, profileSvc)
 	searchH.agentViews = cfg.AgentViews
-	// The OJCP read surface shares the search backend and store, so an agent's question and a
-	// browser's reach the same catalogue.
-	ojcpH := newOJCPHandlers(jobSearch, queries, cfg.FrontendOrigin, atsapply.SubmittableProviders())
-	ojcpH.signer = cfg.OJCPSigner
-	ojcpH.agentViews = cfg.AgentViews
-	// The ChatGPT app's MCP surface: a SECOND MCP server beside OJCP, over the same search
-	// backend and store. OJCP renders a foreign schema for agents that branch on error codes;
-	// this one renders ours for a model reading prose.
-	mcpappH := newMCPAppHandlers(
-		jobSearch,
-		companySearch,
-		queries,
-		cfg.FrontendOrigin,
-	)
-	mcpappH.facets = facets
-	mcpappH.cache = cfg.Cache
-	mcpappH.agentViews = cfg.AgentViews
+	ojcpH, mcpappH := newAgentSurfaces(cfg, queries, sb)
 	// The completion dictionary. Left nil when search is unconfigured: a nil *suggest.Service
 	// in the interface would pass the handler's "not configured" check and then dereference nil.
 	suggestH := &suggestHandlers{}
@@ -331,22 +292,6 @@ func Register(app *fiber.App, cfg Config) {
 		letterDeps,
 		billingSvc.PublicPrices,
 	)
-	// Same nil-interface trap as stt: assign only when cfg.Realtime is non-nil, or "no voice
-	// mode" becomes a panic on the first mint.
-	if cfg.Realtime != nil {
-		assistantH.realtime = cfg.Realtime
-	}
-	if p := newInngestEventPublisher(cfg.InngestEventAPIURL, cfg.InngestEventKey); p != nil {
-		assistantH.events = p
-	}
-	assistantH.answerBank = answerBank
-	assistantH.support.pool = cfg.Pool
-	if cfg.SupportLLM != nil {
-		supportLLM := cfg.SupportLLM.WithTimeout(assistantLLMTimeout)
-		assistantH.support.llm = supportLLM
-		assistantH.support.runner = assistant.NewRunner(supportLLM, assistantStore, assistant.RunnerConfig{MaxSteps: supportMaxSteps})
-	}
-	assistantH.reports = reportsH
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	// The autofill planner is one cheap structured call per run, so it keeps the shared
@@ -357,83 +302,12 @@ func Register(app *fiber.App, cfg Config) {
 	usageH := newUsageHandlers(cfg.LLMKeys, llmKeys)
 	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 
-	// Referral notifications reuse the SES transport and the Telegram bot when linked. Each
-	// channel is wrapped only when configured (typed-nil trap, see above); a referrer with no
-	// reachable channel still sees the request in-cabinet.
-	var referralEmail emailnotify.Sender
-	// mailLinks signs the unsubscribe URL every non-essential mail carries; one instance for
-	// every API sender keeps footer tokens the same shape.
-	mailLinks := emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin)
-	// mailPrefs serves the preference routes and answers "has this account turned that group
-	// off" for the report notice and referral ping, which have no selection query to gate.
-	// One instance, so the footer switch and the sender's check are the same switch.
-	mailPrefs := emailprefs.NewService(queries, cfg.JWTSecret)
-	// The same client as its CONCRETE type, because mentorship is composed separately below;
-	// its own pointer rather than a type assertion on referralEmail (typed-nil trap).
-	var mailClient *emailnotify.Client
-	// employerH is constructed unconditionally (its routes register either way), but its
-	// employer.Service needs a claim mailer that exists only once an SES client does.
-	var employerClaimMailer *emailnotify.AuthMailer
-	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
-		if ec, err := emailnotify.NewClient(context.Background(), cfg.AWSRegion); err != nil {
-			log.Printf("referral: email pinger disabled: %v", err)
-		} else {
-			referralEmail = ec
-			mailClient = ec
-			// One AuthMailer carries the account mails (verification, password reset) AND the
-			// employer-claim code. Without it the accounts service still registers and
-			// authenticates (code-backed flows 503), and employer.Service.Claim reports
-			// ErrMailUnavailable before reserving a company slug it could not mail a code for.
-			employerClaimMailer = emailnotify.NewAuthMailer(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
-			authH.accounts.WithCodes(accounts.NewQueriesCodeStore(queries, cfg.Pool), employerClaimMailer)
-			// Also tells a reporter what a moderator decided; without it each decision reports
-			// that nobody was notified.
-			reportsH.report.WithNotifier(report.NewMailNotifier(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin, mailLinks, mailPrefs))
-		}
-	} else {
-		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
-	}
-	if mailClient != nil && cfg.SupportReplyTo != "" {
-		assistantH.support.mail = supportMail{sender: mailClient, from: emailnotify.From("freehire", cfg.NotifyEmailFrom), to: cfg.SupportReplyTo}
-	}
-	employerSvc, employerH := newEmployerSurfaces(cfg, queries, authH.accounts, employerClaimMailer, mailClient, moderationSvc)
-	// Applying on freehire needs a CV renderer and a mail transport; without either the
-	// routes answer 501 rather than record an application that is never delivered.
-	directApplyH := &directApplyHandlers{}
-	var applicationMailer *emailnotify.ApplicationMailer
-	if mailClient != nil {
-		applicationMailer = emailnotify.NewApplicationMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
-		// The inbox needs no CV renderer — it serves the CV each application kept — but it
-		// does need mail: moving an application may email the candidate.
-		employerH.inbox = directapply.NewInbox(
-			directapply.NewQueriesRepository(queries),
-			employerSvc,
-			directApplyStatusMailer{mailer: applicationMailer, origin: cfg.FrontendOrigin},
-			directapply.NewApplicationMoves(queries, cfg.Pool),
-		)
-	}
-	if cvRenderer != nil && mailClient != nil {
-		directApplyH.svc = directapply.New(
-			directapply.NewQueriesRepository(queries),
-			employerSvc,
-			directApplyCVs{pdf: cvPDF, resumes: resumeStore},
-			directApplyMailer{mailer: applicationMailer, origin: cfg.FrontendOrigin},
-			directApplyTracker{tracking: tracking},
-			answerBank,
-			cfg.DirectApplyDailyLimit,
-		)
-	} else {
-		log.Print("directapply: no CV renderer or no mail transport — applications on freehire are unavailable")
-	}
-	var referralTelegram referral.TelegramSender
-	if telegramH.telegramBot != nil {
-		referralTelegram = telegramH.telegramBot
-	}
-	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram, cfg.FrontendOrigin, mailLinks, mailPrefs)
-	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals/incoming"
-	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
-		referral.Config{CabinetURL: referralCabinetURL})
-	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore, queries, resumeStore)
+	mail := newAPIMail(cfg, queries, authH.accounts, reportsH)
+	mailClient := mail.client
+	assistantH.wireOptional(cfg, assistantStore, answerBank, reportsH, mailClient)
+	employerSvc, employerH := newEmployerSurfaces(cfg, queries, authH.accounts, mail.claimMailer, mailClient, moderationSvc)
+	directApplyH := newDirectApplySurface(cfg, queries, mailClient, cvRenderer, cvPDF, resumeStore, employerSvc, employerH, tracking, answerBank)
+	referralsH := newReferralSurface(cfg, queries, mail, telegramH, cvRenderer, cvStore, photoStore, resumeStore)
 	conversationH, buddyH := newBuddySurfaces(cfg, queries, mailClient)
 	assistantH.buddies = buddyH
 
@@ -452,7 +326,7 @@ func Register(app *fiber.App, cfg Config) {
 	// person holding one of our mails must be able to turn it off without an account, so the
 	// signed token stands in for a session. The two /me routes are the same switches for a
 	// cookie-authenticated caller.
-	emailPrefsH := newEmailPrefsHandlers(mailPrefs)
+	emailPrefsH := newEmailPrefsHandlers(mail.prefs)
 	agentPermissionsH := &agentPermissionHandlers{queries: queries}
 	userModerationH := newUserModerationHandlers(queries)
 	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
