@@ -8,16 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
+	sweeppolicy "github.com/strelov1/freehire/internal/ingest/sweep"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 var _ pipeline.PostingReadRecorder = (*dbStore)(nil)
 
 const (
-	// linkedInReadDefaultWindow is how long a non-native read suppresses a re-read when
-	// BODY_REFRESH_DAYS is unset. It matches the 3 days recommended for linkedin.env, so the
-	// cache behaves the same before and after ops sets the knob.
-	linkedInReadDefaultWindow = 3 * 24 * time.Hour
 	// linkedInReadRetention is when a cache row is deleted: far past any window, so pruning
 	// never races a live entry. The seen-set lookup prunes, so no worker owns the table.
 	linkedInReadRetention = 30 * 24 * time.Hour
@@ -31,12 +28,13 @@ func (s *dbStore) RecordLinkedInRead(ctx context.Context, postingID, applyMethod
 
 // linkedInReadCutoff is the age bound of a usable cache row: the store's body-refresh cutoff
 // when BODY_REFRESH_DAYS is set, so the cache and the stored rows are re-read on one cadence,
-// else the default window.
+// else the built-in LinkedIn window (the store is normally configured with it already; this
+// covers a store built without it), the one constant the seen-set default uses.
 func (s *dbStore) linkedInReadCutoff(now time.Time) time.Time {
 	if s.seen.bodies.Enabled() {
 		return s.seen.bodies.Cutoff
 	}
-	return now.Add(-linkedInReadDefaultWindow)
+	return now.AddDate(0, 0, -sweeppolicy.LinkedInBodyRefreshDays)
 }
 
 // addLinkedInReads marks every posting read as non-native inside the window as seen, so the
