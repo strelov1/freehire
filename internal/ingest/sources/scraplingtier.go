@@ -135,6 +135,11 @@ var scraplingProviders = map[string]scraplingProvider{
 	"jobteaser": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewJobTeaser(NewClient(), f)
 	}},
+	// 403 to the crawl host's direct IP, to the plain proxy and to Scrapling http without a
+	// proxy; http over the proxy serves the listing and the detail pages. Still paced.
+	"levtech": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewLevtech(pacedHTMLGetter(f, levtechRequestInterval, levtechRequestBurst))
+	}},
 	// The crawl host's IP times out; the impersonating fetcher through the proxy is served.
 	"kontur": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewKontur(f)

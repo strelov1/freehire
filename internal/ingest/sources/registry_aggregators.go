@@ -380,6 +380,10 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// window is walked; posting pages carry a schema.org JobPosting. Coverage-gated and
 		// paced, see builtinRequestInterval.
 		NewBuiltIn(pacedHTMLGetter(c, builtinRequestInterval, builtinRequestBurst)),
+		// Levtech Freelance: a Japanese IT freelance project board, boardless. The whole open
+		// catalogue is the search's leading ~63 pages (closed projects follow it); each new
+		// posting's body is read from its page's schema.org JobPosting. Paced, see levtech.go.
+		NewLevtech(pacedHTMLGetter(c, levtechRequestInterval, levtechRequestBurst)),
 		// EDJOIN: California's K-12 education board, multi-company aggregator enumerated by
 		// job type (board) over one central index, hydrating bodies from each posting page's
 		// schema.org block. The board is a job type and not a district on purpose — see
