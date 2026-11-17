@@ -121,7 +121,8 @@
       </div>
     </div>
 
-    <div class="mt-4 overflow-x-auto rounded-lg border border-border">
+    <!-- relative: the cells' absolute sr-only spans must be clipped by this scroller, or they widen the page on mobile -->
+    <div class="relative mt-4 overflow-x-auto rounded-lg border border-border">
       <table class="w-full border-collapse text-sm tabular-nums">
         <caption class="sr-only"> Open roles per role and country, each with its change over 30 days </caption>
         <thead>
