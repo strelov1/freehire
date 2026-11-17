@@ -57,3 +57,21 @@ func TestLinkedInFetchWithoutSeenSetReadsEverything(t *testing.T) {
 		t.Fatalf("Fetch: %+v, %v", jobs, err)
 	}
 }
+
+// A stored seed whose companion page shows the closed notice must not be touched this crawl:
+// the touch would refresh last_seen_at on a row this crawl just saw closed.
+func TestLinkedInFetchNewWithholdsTouchOfSeedShownClosed(t *testing.T) {
+	closed := strings.Replace(linkedInOpenPage, `<button data-modal="job-details-topcard-apply-modal">Apply</button>`, `<figcaption class="closed-job__flavor--closed">No longer accepting applications</figcaption>`, 1)
+	fake := (&routedHTTP{}).
+		route("start=0", linkedInCard("123")).route("start=1", "").
+		route("/jobs/view/123/", closed)
+	s := NewLinkedIn(fake).(linkedIn)
+	s.pace = &recordingWaiter{}
+	jobs, err := s.FetchNew(context.Background(), CompanyEntry{Board: "Go", Region: "UK"}, func(string) bool { return true })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("closed-shown stored seed still emitted: %+v", jobs)
+	}
+}

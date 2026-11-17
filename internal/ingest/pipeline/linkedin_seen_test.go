@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -45,7 +46,7 @@ func TestLinkedInSeenRefreshIsTouchedNotDiscovered(t *testing.T) {
 	if len(outbound.jobs) != 0 || st.Total().Discovered != 0 || len(store.saved) != 0 {
 		t.Errorf("seen postings reached discovery/save: outbound=%d discovered=%d saved=%d", len(outbound.jobs), st.Total().Discovered, len(store.saved))
 	}
-	if len(store.touched) != 2 || store.touched[0] != [2]string{"linkedin", "4490679811"} {
+	if len(store.touched) != 2 || !slices.Contains(store.touched, [2]string{"linkedin", "4490679811"}) || !slices.Contains(store.touched, [2]string{"linkedin", "4490679812"}) {
 		t.Errorf("touched = %v, want both stored postings touched by bare id", store.touched)
 	}
 }

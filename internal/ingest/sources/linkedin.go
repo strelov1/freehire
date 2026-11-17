@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -277,7 +278,11 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 	if listed > 0 && read+refreshed == 0 {
 		return jobs, fmt.Errorf("linkedin: none of %d listed postings could be read", listed)
 	}
-	jobs = append(jobs, s.related(ctx, jobs, ids, seen)...)
+	recs, closedSeed := s.related(ctx, jobs, ids, seen)
+	if closedSeed != "" {
+		jobs = slices.DeleteFunc(jobs, func(j Job) bool { return j.SeenRefresh && j.ExternalID == closedSeed })
+	}
+	jobs = append(jobs, recs...)
 	log.Printf("linkedin: search keyword=%q region=%q page_limit=%d jobage_days=%d listed=%d read=%d refreshed=%d returned=%d", e.Board, e.Region, pageLimit, jobAgeDays, listed, read, refreshed, len(jobs))
 	return jobs, nil
 }
