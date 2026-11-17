@@ -1,5 +1,16 @@
 import { createServer } from 'node:http';
-import { catalogScale, company, COMPANY_SLUG, facetCounts, job, JOB_SLUG, plans } from './fixtures.ts';
+import {
+  catalogScale,
+  company,
+  COMPANY_SLUG,
+  facetCounts,
+  insightRoles,
+  job,
+  JOB_SLUG,
+  plans,
+  roleCountries,
+  sources,
+} from './fixtures.ts';
 import { STUB_PORT } from './ports.ts';
 
 // A loopback stand-in for the Go API, just wide enough for the pages the a11y spec
@@ -33,6 +44,12 @@ function answer(pathname: string): unknown | undefined {
       return list([]);
     case `/api/v1/jobs/${JOB_SLUG}/similar`:
       return { data: [] };
+    case '/api/v1/insights/roles':
+      return { data: insightRoles };
+    case '/api/v1/insights/role-countries':
+      return roleCountries;
+    case '/api/v1/sources':
+      return { data: sources };
     case `/api/v1/companies/${COMPANY_SLUG}`:
       return { data: { company, jobs: [job], referral_available: false } };
     default:

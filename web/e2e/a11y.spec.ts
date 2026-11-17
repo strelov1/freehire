@@ -69,12 +69,19 @@ for (const { name, path, content } of PAGES) {
 // A page wider than the phone makes mobile Safari zoom the whole page out. The usual
 // causes: a flex/grid child without min-w-0, or an absolute sr-only span escaping an
 // overflow-x-auto box that is not `relative`.
-for (const path of [...PAGES.map((p) => p.path), '/cli']) {
+const NARROW_PAGES = [
+  ...PAGES,
+  { path: '/cli', content: /plugin install/ },
+  { path: '/insights', content: /Where each role is hiring/ },
+  { path: '/sources', content: /Job104/ },
+];
+for (const { path, content } of NARROW_PAGES) {
   test(`${path} is no wider than a 390px phone`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await forwardApi(page);
     expect((await page.goto(path))?.status()).toBe(200);
     await page.waitForLoadState('networkidle');
+    await expect(page.locator('main').first()).toContainText(content);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   });
 }
