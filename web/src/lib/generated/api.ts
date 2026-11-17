@@ -453,7 +453,7 @@ export interface paths {
          *     it is reduced to a lowercase host without `www.`, port or trailing dot, and compared
          *     with the same reduction of the company's site. Every match is returned (two companies
          *     can share a site), including companies with `job_count` 0. Up to 100 domains. Then read
-         *     the postings with `GET /jobs?company_slug=<slug>`.
+         *     the postings with `GET /jobs/search?company_slug=<slug>`.
          */
         get: operations["companiesByDomain"];
         put?: never;

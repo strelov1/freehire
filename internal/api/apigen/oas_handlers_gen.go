@@ -4987,7 +4987,7 @@ func (s *Server) handleCloseThreadRequest(args [1]string, argsEscaped bool, w ht
 // reduced to a lowercase host without `www.`, port or trailing dot, and compared with the same
 // reduction of the company's site. Every match is returned (two companies can share a site), including
 // companies with `job_count` 0. Up to 100 domains. Then read the postings with
-// `GET /jobs?company_slug=<slug>`.
+// `GET /jobs/search?company_slug=<slug>`.
 //
 // GET /companies/by-domain
 func (s *Server) handleCompaniesByDomainRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {

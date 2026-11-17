@@ -115,7 +115,7 @@ Closed postings never appear in `GET /jobs`, in search or in a company's open po
 
 ### Finding companies by domain
 
-If you hold a list of company web domains, `GET /companies/by-domain?domain=stripe.com&domain=https://www.acme.io/careers` (repeatable or comma-joined, up to 100) returns `{"data": [{"domain", "slug", "name", "job_count", "website"}], "meta": {"unmatched": [...]}}`. Domains are compared by host (lowercase, no `www.`, port or trailing dot) against each company's site; every match is returned, including companies with `job_count` 0, and domains with no match are listed in `meta.unmatched`. Then read a company's postings with `GET /jobs?company_slug=<slug>`.
+If you hold a list of company web domains, `GET /companies/by-domain?domain=stripe.com&domain=https://www.acme.io/careers` (repeatable or comma-joined, up to 100) returns `{"data": [{"domain", "slug", "name", "job_count", "website"}], "meta": {"unmatched": [...]}}`. Domains are compared by host (lowercase, no `www.`, port or trailing dot) against each company's site; every match is returned, including companies with `job_count` 0, and domains with no match are listed in `meta.unmatched`. Then read a company's postings with `GET /jobs/search?company_slug=<slug>` (repeatable), or subscribe a change webhook with `company_slugs` to have only their changes pushed.
 
 ### Keeping a mirror in sync
 
@@ -1017,7 +1017,7 @@ Resolves company web domains to companies. Each `domain` is a bare domain or a f
 it is reduced to a lowercase host without `www.`, port or trailing dot, and compared
 with the same reduction of the company's site. Every match is returned (two companies
 can share a site), including companies with `job_count` 0. Up to 100 domains. Then read
-the postings with `GET /jobs?company_slug=<slug>`.
+the postings with `GET /jobs/search?company_slug=<slug>`.
 
 **Query parameters**
 
