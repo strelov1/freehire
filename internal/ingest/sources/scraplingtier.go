@@ -220,6 +220,14 @@ var scraplingProviders = map[string]scraplingProvider{
 	"clearedjobs": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewClearedJobs(f)
 	}},
+	// 403 to a plain client's TLS fingerprint (the SRP and robots.txt included). The
+	// impersonating fetcher is served from a residential IP with no proxy (2026-11-17, ~0.55 s a
+	// request), but from the crawl host's datacenter IP it draws a 403 without the proxy and is
+	// served through it (measured the same day on the prod service), hence the proxy. Both JSON
+	// endpoints answer 400 without a foundit Referer, which the adapter sends.
+	"foundit": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewFoundit(pacedFounditGetter(f))
+	}},
 }
 
 // A browser fetch that meets a challenge on its first page can take ~110 s, and the service
