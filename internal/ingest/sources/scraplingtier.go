@@ -111,6 +111,15 @@ var scraplingProviders = map[string]scraplingProvider{
 	"cleverstaff": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewCleverstaff(f)
 	}},
+	// Cloudflare answers 403 to a plain client for the posting pages and the API. The sitemap and
+	// RSS answered 200 plain from a residential IP, but they share the protected host and the
+	// datacenter IP is unmeasured, so the one sitemap request rides the tier too. The
+	// impersonating fetcher without a proxy served 48 of 50 posting pages (the other two were the
+	// site's own 404s), measured 2026-11-17 from a RESIDENTIAL IP and NOT from the crawl host: if
+	// it draws challenges there, the next step is the proxy, then the browser mode.
+	"cryptojobslist": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewCryptoJobsList(f, f)
+	}},
 	// Only the posting pages: Akamai bot management holds a plain request open without
 	// answering, and the impersonating fetcher is served from the crawl host's own IP. The
 	// active-offers sitemap is not behind it and stays on a plain client.
@@ -134,6 +143,11 @@ var scraplingProviders = map[string]scraplingProvider{
 	// sitemaps sit on a CDN with no challenge and stay on a plain client.
 	"jobteaser": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewJobTeaser(NewClient(), f)
+	}},
+	// 403 to the crawl host's direct IP, to the plain proxy and to Scrapling http without a
+	// proxy; http over the proxy serves the listing and the detail pages. Still paced.
+	"levtech": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewLevtech(pacedHTMLGetter(f, levtechRequestInterval, levtechRequestBurst))
 	}},
 	// The crawl host's IP times out; the impersonating fetcher through the proxy is served.
 	"kontur": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
@@ -195,8 +209,37 @@ var scraplingProviders = map[string]scraplingProvider{
 	"viterbit": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewViterbit(f)
 	}},
+	// 403 to a plain request; the impersonating fetcher is served, ~1-2 s a page, sitemaps and
+	// posting pages alike (measured 2026-11-17 from a residential IP with no proxy — the crawl
+	// host's datacenter range is unmeasured).
+	"glints": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewGlints(f)
+	}},
 	"instahyre": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return pacedInstahyre(NewClient(), f)
+	}},
+	// 403 to a plain Go client on every path, sitemap and robots.txt included; the impersonating
+	// fetcher is served 200, sitemap, newest-postings page and posting pages alike (measured
+	// 2026-11-17, ~1.9 s a posting page, 39 of 39 pages answered). Measured from a residential IP
+	// with NO proxy; the crawl host is a datacenter IP and has not been measured, so if its egress is
+	// refused the first lever is the proxy (`true`), then the browser.
+	"clearedjobs": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewClearedJobs(f)
+	}},
+	// 403 to a plain client's TLS fingerprint (the SRP and robots.txt included). The
+	// impersonating fetcher is served from a residential IP with no proxy (2026-11-17, ~0.55 s a
+	// request), but from the crawl host's datacenter IP it draws a 403 without the proxy and is
+	// served through it (measured the same day on the prod service), hence the proxy. Both JSON
+	// endpoints answer 400 without a foundit Referer, which the adapter sends.
+	"foundit": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewFoundit(pacedFounditGetter(f))
+	}},
+	// The search gateway answers an HTML 403 to a plain client on the posting API, and the
+	// impersonating fetcher is served on both it and the search (measured 2026-11-17 from a
+	// residential IP through the local service, no proxy). The crawl host is a datacenter IP and
+	// was not measured: the proxy decision is open until the first live run.
+	"kariyernet": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return pacedKariyerNet(f)
 	}},
 }
 

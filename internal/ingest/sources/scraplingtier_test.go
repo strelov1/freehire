@@ -33,7 +33,7 @@ func TestScraplingTierCarriesTheMeasuredProviders(t *testing.T) {
 		got = append(got, name)
 	}
 	sort.Strings(got)
-	want := []string{"bayt", "cadremploi", "cleverstaff", "clinch", "echojobs", "epreselec", "gradcracker", "gulftalent", "hh", "infojobs", "infojobsbr", "instahyre", "job104", "jobteaser", "kontur", "linkedin", "neogov", "occ", "pageup", "pracuj", "rwb", "senior", "spainjobs", "startupjobs", "turijobs", "vagas", "viterbit", "wantapply", "wellfound", "wuzzuf"}
+	want := []string{"bayt", "cadremploi", "clearedjobs", "cleverstaff", "clinch", "cryptojobslist", "echojobs", "epreselec", "foundit", "glints", "gradcracker", "gulftalent", "hh", "infojobs", "infojobsbr", "instahyre", "job104", "jobteaser", "kariyernet", "kontur", "levtech", "linkedin", "neogov", "occ", "pageup", "pracuj", "rwb", "senior", "spainjobs", "startupjobs", "turijobs", "vagas", "viterbit", "wantapply", "wellfound", "wuzzuf"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("scraplingProviders = %v, want %v", got, want)
 	}
@@ -84,36 +84,42 @@ func TestApplyScraplingEgressRewiresOnlyRegisteredProviders(t *testing.T) {
 // down a path that is refused (gulftalent's sitemap to http+proxy got a challenge).
 func TestScraplingRoutesAreTheMeasuredOnes(t *testing.T) {
 	want := map[string]scraplingRoute{
-		"clinch":      {scraplingfetch.ModeHTTP, true},
-		"pageup":      {scraplingfetch.ModeHTTP, true},
-		"rwb":         {scraplingfetch.ModeBrowser, false},
-		"senior":      {scraplingfetch.ModeHTTP, true},
-		"gradcracker": {scraplingfetch.ModeHTTP, false},
-		"infojobsbr":  {scraplingfetch.ModeHTTP, true},
-		"spainjobs":   {scraplingfetch.ModeHTTP, true},
-		"infojobs":    {scraplingfetch.ModeBrowser, true},
-		"bayt":        {scraplingfetch.ModeBrowser, false},
-		"gulftalent":  {scraplingfetch.ModeBrowser, false},
-		"wantapply":   {scraplingfetch.ModeBrowser, false},
-		"wellfound":   {scraplingfetch.ModeHTTP, true},
-		"hh":          {scraplingfetch.ModeHTTP, false},
-		"startupjobs": {scraplingfetch.ModeBrowser, false},
-		"cleverstaff": {scraplingfetch.ModeHTTP, false},
-		"kontur":      {scraplingfetch.ModeHTTP, true},
-		"neogov":      {scraplingfetch.ModeHTTP, true},
-		"linkedin":    {scraplingfetch.ModeHTTP, true},
-		"echojobs":    {scraplingfetch.ModeBrowser, true},
-		"wuzzuf":      {scraplingfetch.ModeBrowser, false},
-		"occ":         {scraplingfetch.ModeBrowser, false},
-		"vagas":       {scraplingfetch.ModeHTTP, true},
-		"instahyre":   {scraplingfetch.ModeHTTP, false},
-		"epreselec":   {scraplingfetch.ModeHTTP, true},
-		"turijobs":    {scraplingfetch.ModeHTTP, false},
-		"cadremploi":  {scraplingfetch.ModeHTTP, false},
-		"pracuj":      {scraplingfetch.ModeHTTP, false},
-		"jobteaser":   {scraplingfetch.ModeBrowser, false},
-		"viterbit":    {scraplingfetch.ModeHTTP, false},
-		"job104":      {scraplingfetch.ModeHTTP, true},
+		"clinch":         {scraplingfetch.ModeHTTP, true},
+		"pageup":         {scraplingfetch.ModeHTTP, true},
+		"rwb":            {scraplingfetch.ModeBrowser, false},
+		"senior":         {scraplingfetch.ModeHTTP, true},
+		"gradcracker":    {scraplingfetch.ModeHTTP, false},
+		"infojobsbr":     {scraplingfetch.ModeHTTP, true},
+		"spainjobs":      {scraplingfetch.ModeHTTP, true},
+		"infojobs":       {scraplingfetch.ModeBrowser, true},
+		"bayt":           {scraplingfetch.ModeBrowser, false},
+		"gulftalent":     {scraplingfetch.ModeBrowser, false},
+		"wantapply":      {scraplingfetch.ModeBrowser, false},
+		"wellfound":      {scraplingfetch.ModeHTTP, true},
+		"hh":             {scraplingfetch.ModeHTTP, false},
+		"startupjobs":    {scraplingfetch.ModeBrowser, false},
+		"cleverstaff":    {scraplingfetch.ModeHTTP, false},
+		"kontur":         {scraplingfetch.ModeHTTP, true},
+		"neogov":         {scraplingfetch.ModeHTTP, true},
+		"linkedin":       {scraplingfetch.ModeHTTP, true},
+		"echojobs":       {scraplingfetch.ModeBrowser, true},
+		"wuzzuf":         {scraplingfetch.ModeBrowser, false},
+		"occ":            {scraplingfetch.ModeBrowser, false},
+		"vagas":          {scraplingfetch.ModeHTTP, true},
+		"instahyre":      {scraplingfetch.ModeHTTP, false},
+		"epreselec":      {scraplingfetch.ModeHTTP, true},
+		"turijobs":       {scraplingfetch.ModeHTTP, false},
+		"cadremploi":     {scraplingfetch.ModeHTTP, false},
+		"clearedjobs":    {scraplingfetch.ModeHTTP, false},
+		"pracuj":         {scraplingfetch.ModeHTTP, false},
+		"jobteaser":      {scraplingfetch.ModeBrowser, false},
+		"viterbit":       {scraplingfetch.ModeHTTP, false},
+		"cryptojobslist": {scraplingfetch.ModeHTTP, false},
+		"levtech":        {scraplingfetch.ModeHTTP, true},
+		"foundit":        {scraplingfetch.ModeHTTP, true},
+		"glints":         {scraplingfetch.ModeHTTP, false},
+		"kariyernet":     {scraplingfetch.ModeHTTP, false},
+		"job104":         {scraplingfetch.ModeHTTP, true},
 	}
 	for name, p := range scraplingProviders {
 		if p.route != want[name] {
