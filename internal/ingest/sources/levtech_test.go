@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -105,13 +107,22 @@ type levtechFake struct {
 	mu    sync.Mutex
 	pages map[string]string
 	fail  map[string]bool
-	asked []string
+	// refuse holds how many more times a URL answers 403 before it is served.
+	refuse map[string]int
+	asked  []string
 }
 
 func (f *levtechFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
 	f.mu.Lock()
 	f.asked = append(f.asked, u)
+	refused := f.refuse[u] > 0
+	if refused {
+		f.refuse[u]--
+	}
 	f.mu.Unlock()
+	if refused {
+		return nil, &StatusError{Method: "GET", Code: 403, URL: u}
+	}
 	if f.fail[u] {
 		return nil, &StatusError{Method: "GET", Code: 503, URL: u}
 	}
@@ -136,7 +147,8 @@ func (f *levtechFake) details() int {
 
 func newLevtechFake() *levtechFake {
 	return &levtechFake{
-		fail: map[string]bool{},
+		fail:   map[string]bool{},
+		refuse: map[string]int{},
 		pages: map[string]string{
 			levtechPageURL(1): levtechListPage(
 				levtechProj{ID: 101, Name: "【AWS】AWS環境構築", Remote: 1, Station: "名古屋", Pref: "愛知県"},
@@ -277,5 +289,26 @@ func TestLevtechIsBoardlessAggregator(t *testing.T) {
 	}
 	if _, ok := s.(aggregator); !ok {
 		t.Error("levtech must be an aggregator")
+	}
+}
+
+func TestLevtechAsksARefusedExitAgain(t *testing.T) {
+	f := newLevtechFake()
+	f.refuse[levtechPageURL(2)] = 3
+	f.refuse[levtechDetailURL("101")] = 2
+	src := levtech{http: f, spent: new(atomic.Int64), refusedBackoff: time.Millisecond}
+	jobs, err := src.Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("a 403 from one rotating exit must be asked again, got %v", err)
+	}
+	if got := levtechByID(jobs); len(got) != 3 || got["101"].Description == "" {
+		t.Fatalf("jobs = %+v, want all 3 with 101's body read after its refusals", jobs)
+	}
+
+	f = newLevtechFake()
+	f.refuse[levtechPageURL(2)] = levtechRefusedRetries + 1
+	src = levtech{http: f, spent: new(atomic.Int64), refusedBackoff: time.Millisecond}
+	if _, err := src.Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Error("a page refused on every retry must still fail the crawl")
 	}
 }

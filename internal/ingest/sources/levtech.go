@@ -35,6 +35,8 @@ type levtech struct {
 	// spent counts the detail requests claimed this run (the adapter is a value type, so the
 	// counter is shared by pointer).
 	spent *atomic.Int64
+	// refusedBackoff overrides levtechRefusedBackoff (tests); zero keeps the default.
+	refusedBackoff time.Duration
 }
 
 const (
@@ -54,14 +56,43 @@ const (
 	// postings, and at the pace above the backlog drains over a few runs while later runs buy
 	// only the day's new postings.
 	levtechDetailBudget = 600
+	// levtechRefusedRetries bounds how often a 403 is asked again. The origin refuses the crawl
+	// host's own IP, so requests go through the Scrapling tier's ROTATING proxy, which leaves
+	// from a new exit IP each time; measured from the crawl host on 2026-11-17, roughly half of
+	// those exits are refused (8 of 15 listing requests answered 200). Ten more tries leaves one
+	// page in ~2,000 unread, so a ~63-page walk almost never fails on an unlucky exit.
+	levtechRefusedRetries = 10
+	levtechRefusedBackoff = 500 * time.Millisecond
 )
 
 // NewLevtech builds the Levtech Freelance adapter over the given HTML client.
 func NewLevtech(c HTMLGetter) Source { return levtech{http: c, spent: new(atomic.Int64)} }
 
 func (levtech) Provider() string { return "levtech" }
-func (levtech) boardless()       {}
-func (levtech) aggregator()      {}
+
+// get reads one page, asking again while the exit IP the request left from is refused (403).
+func (s levtech) get(ctx context.Context, url string) (*html.Node, error) {
+	var root *html.Node
+	err := retryWhile(ctx, levtechRefusedRetries, s.backoff(), levtechRefused, func() (err error) {
+		root, err = s.http.GetHTML(ctx, url)
+		return err
+	})
+	return root, err
+}
+
+func (s levtech) backoff() time.Duration {
+	if s.refusedBackoff > 0 {
+		return s.refusedBackoff
+	}
+	return levtechRefusedBackoff
+}
+
+func levtechRefused(err error) bool {
+	var se *StatusError
+	return errors.As(err, &se) && se.Code == http.StatusForbidden
+}
+func (levtech) boardless()  {}
+func (levtech) aggregator() {}
 
 func (s levtech) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return s.FetchNew(ctx, e, func(string) bool { return false })
@@ -110,7 +141,7 @@ func (s levtech) list(ctx context.Context) ([]levtechCard, error) {
 	var out []levtechCard
 	ids := map[int64]bool{}
 	for page := 1; page <= levtechMaxPages; page++ {
-		root, err := s.http.GetHTML(ctx, levtechPageURL(page))
+		root, err := s.get(ctx, levtechPageURL(page))
 		if err != nil {
 			return nil, fmt.Errorf("levtech: listing page %d: %w", page, err)
 		}
@@ -288,7 +319,7 @@ type levtechPosting struct {
 // including projects listed years ago, so it states when the page was rendered, not when the
 // project was posted.
 func (s levtech) withDetail(ctx context.Context, base Job) (Job, bool, error) {
-	root, err := s.http.GetHTML(ctx, base.URL)
+	root, err := s.get(ctx, base.URL)
 	if err != nil {
 		var se *StatusError
 		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
