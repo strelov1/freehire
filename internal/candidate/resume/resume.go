@@ -16,16 +16,11 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/dict/location"
@@ -33,17 +28,6 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/observability"
 )
-
-// pdftotextBin is the poppler binary used to extract résumé PDF text, overridable via
-// PDFTOTEXT_BIN (default "pdftotext"). A package var so tests can point it at a stub.
-var pdftotextBin = envOr("PDFTOTEXT_BIN", "pdftotext")
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
 
 var (
 	// ErrStorageDisabled is returned when object storage is unconfigured, so no résumé
@@ -514,162 +498,6 @@ func metaFromPointer(ptr db.GetUserResumeRow) Meta {
 	return m
 }
 
-// extractText derives plain text from a stored résumé: a PDF (magic number "%PDF") is
-// parsed, anything else is read as UTF-8 text (the pasted-text path). Sniffing the bytes
-// keeps the blobstore interface a pure key→bytes abstraction, free of content-type
-// plumbing.
-func extractText(data []byte) (string, error) {
-	if bytes.HasPrefix(data, []byte("%PDF")) {
-		return ExtractPDFText(data)
-	}
-	return string(data), nil
-}
-
-// pdfExtractTimeout bounds a single pdftotext run so a pathological PDF can never hang a
-// request; extracting a normal résumé is well under a second.
-const pdfExtractTimeout = 15 * time.Second
-
-// maxPDFTextBytes bounds the text one extraction retains. A PDF's text layer is not bounded by
-// the file size, and the string travels on to structured extraction and the embedder. Two
-// megabytes is far past any real résumé, so only a pathological document is truncated.
-const maxPDFTextBytes = 2 << 20
-
-// ExtractPDFText extracts plain text from PDF bytes, shared by the résumé store and the upload
-// handler (which wraps an error into a 400). It shells out to poppler's pdftotext, which decodes
-// CID/Identity-H fonts through their ToUnicode CMap (as Canva produces) where a pure-Go parser
-// returned empty text. The bytes go to a temp file (never argv); at most maxPDFTextBytes is read
-// from stdout. A non-zero exit is an error; a clean run with no text (an image-only PDF) returns
-// ("", nil), which the handler renders as the "scan or image" rejection.
-func ExtractPDFText(data []byte) (string, error) {
-	dir, err := os.MkdirTemp("", "resume-pdf-*")
-	if err != nil {
-		return "", err
-	}
-	defer os.RemoveAll(dir)
-
-	inPath := filepath.Join(dir, "in.pdf")
-	if err := os.WriteFile(inPath, data, 0o600); err != nil {
-		return "", err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pdfExtractTimeout)
-	defer cancel()
-
-	// Only fixed flags and a temp path reach argv: -q silences warnings on slightly
-	// malformed but readable PDFs; "-" writes the extracted text to stdout.
-	cmd := exec.CommandContext(ctx, pdftotextBin, "-q", "-nopgbrk", inPath, "-")
-	out := cappedBuffer{max: maxPDFTextBytes}
-	// stderr only becomes part of an error message, so a few kilobytes is plenty.
-	errBuf := cappedBuffer{max: 8 << 10}
-	cmd.Stdout = &out
-	cmd.Stderr = &errBuf
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("resume: invalid PDF: %w: %s", err, strings.TrimSpace(errBuf.String()))
-	}
-	return trimPartialRune(out.String()), nil
-}
-
-// cappedBuffer accumulates at most max bytes and discards the rest, so a subprocess writing
-// an unbounded amount of output cannot grow this process's heap with it.
-//
-// It reports the discarded bytes as written on purpose: an error or short count would break the
-// child's pipe and turn an enormous document into an extraction error. The timeout bounds the
-// child's runtime.
-type cappedBuffer struct {
-	buf bytes.Buffer
-	max int
-}
-
-func (c *cappedBuffer) Write(p []byte) (int, error) {
-	if room := c.max - c.buf.Len(); room > 0 {
-		c.buf.Write(p[:min(room, len(p))])
-	}
-	return len(p), nil
-}
-
-func (c *cappedBuffer) String() string { return c.buf.String() }
-
-// trimPartialRune drops a trailing incomplete UTF-8 sequence, which truncating at a byte cap
-// leaves behind when the cap falls inside a multi-byte rune; the text goes into JSON, prompts
-// and an embedder. A genuine U+FFFD decodes with size 3 and is left alone.
-func trimPartialRune(s string) string {
-	for s != "" {
-		if r, size := utf8.DecodeLastRuneInString(s); r == utf8.RuneError && size <= 1 {
-			s = s[:len(s)-1]
-			continue
-		}
-		break
-	}
-	return s
-}
-
-// QueriesRepository adapts *db.Queries to Repository, mapping the pointer to the nullable
-// users columns. pool is what WithUploadLock opens its transaction on.
-type QueriesRepository struct {
-	q    *db.Queries
-	pool *pgxpool.Pool
-}
-
-// NewQueriesRepository wraps *db.Queries as a Repository.
-func NewQueriesRepository(q *db.Queries) *QueriesRepository { return &QueriesRepository{q: q} }
-
-// WithUploadLocks gives the repository the pool WithUploadLock needs. Every wiring that
-// stores CVs must set it; one that only reads them (a worker) has nothing to serialise.
-func (r *QueriesRepository) WithUploadLocks(pool *pgxpool.Pool) *QueriesRepository {
-	r.pool = pool
-	return r
-}
-
-// WithUploadLock runs fn in a transaction holding the user's upload lock, with a repository
-// bound to that transaction. Without a pool it runs fn unlocked.
-func (r *QueriesRepository) WithUploadLock(ctx context.Context, userID int64, fn func(Repository) error) error {
-	if r.pool == nil {
-		return fn(r)
-	}
-	return pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
-		q := r.q.WithTx(tx)
-		if err := q.LockUserResumeUpload(ctx, userID); err != nil {
-			return err
-		}
-		return fn(&QueriesRepository{q: q})
-	})
-}
-
-func (r *QueriesRepository) Get(ctx context.Context, userID int64) (db.GetUserResumeRow, error) {
-	return r.q.GetUserResume(ctx, userID)
-}
-
-func (r *QueriesRepository) Set(ctx context.Context, userID int64, key string) error {
-	return r.q.SetUserResume(ctx, db.SetUserResumeParams{
-		ID:              userID,
-		ResumeObjectKey: pgtype.Text{String: key, Valid: true},
-	})
-}
-
-func (r *QueriesRepository) Clear(ctx context.Context, userID int64) error {
-	return r.q.ClearUserResume(ctx, userID)
-}
-
-func (r *QueriesRepository) SetStructured(ctx context.Context, w StructuredWrite) (bool, error) {
-	rows, err := r.q.SetUserResumeStructured(ctx, db.SetUserResumeStructuredParams{
-		ID:                         w.UserID,
-		ResumeStructured:           w.Blob,
-		ResumeStructuredModel:      pgtype.Text{String: w.Model, Valid: w.Model != ""},
-		ResumeStructuredUploadedAt: pgtype.Timestamptz{Time: w.UploadedAt, Valid: true},
-		ResumeCountries:            w.Countries,
-		ResumeRegions:              w.Regions,
-		ResumeCities:               w.Cities,
-	})
-	if err != nil {
-		return false, err
-	}
-	return rows > 0, nil
-}
-
-func (r *QueriesRepository) GetStructured(ctx context.Context, userID int64) (db.GetUserResumeStructuredRow, error) {
-	return r.q.GetUserResumeStructured(ctx, userID)
-}
-
 // Geography returns the candidate geography derived from the user's CV, under the SAME
 // freshness rule as Structured: served only while its stamp equals the upload time. ok is false
 // (with no error) when none is stored or the stamp is stale.
@@ -686,34 +514,4 @@ func (s *Store) Geography(ctx context.Context, userID int64) (Geography, bool, e
 		Regions:   row.ResumeRegions,
 		Cities:    row.ResumeCities,
 	}, true, nil
-}
-
-func (r *QueriesRepository) GetGeography(ctx context.Context, userID int64) (db.GetUserResumeGeographyRow, error) {
-	return r.q.GetUserResumeGeography(ctx, userID)
-}
-
-func (r *QueriesRepository) GetCandidateContacts(ctx context.Context, userID int64) ([]byte, error) {
-	return r.q.GetUserCandidateContacts(ctx, userID)
-}
-
-func (r *QueriesRepository) SetCandidateContacts(ctx context.Context, userID int64, blob []byte) error {
-	return r.q.SetUserCandidateContacts(ctx, db.SetUserCandidateContactsParams{
-		ID:                userID,
-		CandidateContacts: blob,
-	})
-}
-
-func (r *QueriesRepository) SetExtractFailed(ctx context.Context, userID int64, detail string, uploadedAt time.Time) error {
-	return r.q.SetUserResumeExtractFailed(ctx, db.SetUserResumeExtractFailedParams{
-		ID:                  userID,
-		ResumeExtractDetail: pgtype.Text{String: detail, Valid: detail != ""},
-		ResumeExtractFor:    pgtype.Timestamptz{Time: uploadedAt, Valid: true},
-	})
-}
-
-func (r *QueriesRepository) SetExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error {
-	return r.q.SetUserResumeExtractPending(ctx, db.SetUserResumeExtractPendingParams{
-		ID:               userID,
-		ResumeExtractFor: pgtype.Timestamptz{Time: uploadedAt, Valid: true},
-	})
 }
