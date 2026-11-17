@@ -190,6 +190,7 @@ it('reports a PDF export only after the file arrived and was handed to the brows
   await fireEvent.click(getByText('Download PDF'));
   expect(outcomeCalls()).toEqual([]); // the click alone is not a result
 
+  await waitFor(() => expect(deliver).toBeTypeOf('function')); // the export waits on the save queue first
   deliver(pdfResponse());
   await waitFor(() => expect(outcomeCalls()).toEqual([['cv_pdf_export', { kind: 'tailored', slug: 'acme-engineer' }]]));
   expect(savedPdf).toHaveBeenCalledWith('cv.pdf');
@@ -364,4 +365,27 @@ it('starts the next autosave only after the one in flight has landed', async () 
   mocks.updateCv = async () => {};
   finish();
   await waitFor(() => expect(mocks.order).toEqual(['save', 'save']));
+});
+
+it('lands the save a closed workspace left behind before the reopened one saves', async () => {
+  let finish!: () => void;
+  mocks.updateCv = () => new Promise<void>((resolve) => (finish = resolve));
+  const first = await open();
+  await typeAndFireAutosave();
+  // Leave with that save on the wire and one more edit still on the timer.
+  if (!mocks.style) throw new Error('the style control was not rendered');
+  mocks.style.style = { ...mocks.style.style, font_size: 13 };
+  await tick();
+  first.unmount();
+  mocks.updateCv = async () => {};
+
+  await open();
+  if (!mocks.style) throw new Error('the style control was not rendered');
+  mocks.style.style = { ...mocks.style.style, font_size: 14 };
+  await tick();
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  expect(mocks.order).toEqual(['save']);
+
+  finish();
+  await waitFor(() => expect(mocks.order).toEqual(['save', 'save', 'save']));
 });

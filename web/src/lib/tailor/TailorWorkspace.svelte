@@ -19,6 +19,7 @@
   import EditorPanel from './EditorPanel.svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
+  import { cvSavesSettled, queueCvSave } from './cvSaveQueue.js';
   import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '#lib/cvRefreshOffer.js';
   import { askCvRefresh } from '#lib/cvRefreshDialog.svelte.js';
   import { track } from '#lib/analytics.js';
@@ -356,18 +357,10 @@
   let lastSnapshot = '';
   const snapshot = () => JSON.stringify({ title, templateId, doc });
 
-  // The save in flight, so a flush (agent turn, PDF export) can wait for it: the timer is already
-  // cleared by then, and the server would still hold the old document. Saves queue behind it
-  // rather than overlap: two writes on the wire can land out of order and leave the older
-  // document on the server while the page says saved. write() never rejects.
-  let inflight: Promise<void> | null = null;
-  function persist() {
-    const p: Promise<void> = (inflight ?? Promise.resolve()).then(write).finally(() => {
-      if (inflight === p) inflight = null;
-    });
-    inflight = p;
-    return p;
-  }
+  // Saves go through the tab-wide queue (see cvSaveQueue), so a flush (agent turn, PDF export)
+  // can wait for the one in flight: the timer is already cleared by then, and the server would
+  // still hold the old document. write() never rejects.
+  const persist = () => queueCvSave(write);
 
   async function write() {
     const snap = snapshot(); // capture NOW; edits during the round-trip re-trigger the effect
@@ -404,8 +397,7 @@
     if (saveTimer) clearTimeout(saveTimer);
     if (cvLoaded && snapshot() !== lastSnapshot) {
       const body = { title, template_id: templateId, document: doc };
-      // Behind any save still in flight, for the same reason persist() queues.
-      void (inflight ?? Promise.resolve()).then(() => api.updateCv(cvId, body)).catch(() => {});
+      void queueCvSave(() => api.updateCv(cvId, body)).catch(() => {});
     }
   });
 
@@ -453,7 +445,7 @@
   // Write a pending human edit NOW rather than 800ms from now. Anything that changes the CV
   // server-side has to do this first, or the debounce fires afterwards and overwrites it.
   async function flushPendingSave() {
-    if (inflight) await inflight;
+    await cvSavesSettled();
     if (!saveTimer) return;
     clearTimeout(saveTimer);
     saveTimer = null;
