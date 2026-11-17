@@ -520,6 +520,7 @@ describe('/onboarding', () => {
     finish(undefined);
     await new Promise((r) => setTimeout(r, 20));
     expect(h.gotoPath.mock.calls.map((c) => c[0])).toEqual(['/']);
+    expect(h.draft.clear).toHaveBeenCalled();
   });
 
   it('goes back where the visitor was headed after saving', async () => {

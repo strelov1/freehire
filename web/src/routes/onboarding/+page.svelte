@@ -387,7 +387,9 @@
    *  never started a sign-up from here never carries one (see `arrivalAction`). */
   async function signUp() {
     await persist(Date.now());
-    if (!left) await gotoPath(signinUrl({ returnTo: here }));
+    // Left mid-save (skipped or navigated away): drop the mark so no later sign-up carries it.
+    if (left) await onboardingDraft.clear();
+    else await gotoPath(signinUrl({ returnTo: here }));
   }
 
   async function startOver() {
