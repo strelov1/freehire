@@ -20,6 +20,9 @@
 -- list is repeated here, and an integration test in internal/api/handler fails when the
 -- two disagree. Adding a key there means a new migration replacing this function.
 --
+-- An HTML-escaped separator (`&amp;`, as a url scraped out of markup can carry) is read as
+-- the `&` it stands for, so it does not turn the next parameter into an `amp;<key>`.
+--
 -- The aggregate sorts under COLLATE "C" so the key does not depend on the database's
 -- collation (or a glibc upgrade changing it), which an expression index must not.
 --
@@ -41,7 +44,7 @@ CREATE OR REPLACE FUNCTION public.normalize_job_url(text) RETURNS text
                          'refid', 'source', 'src', 'trackingid', 'trk', 'ttclid', 'yclid'
                      ])
                ), '')
-        FROM (SELECT lower(regexp_replace($1, '#.*$', '')) AS u) AS s
+        FROM (SELECT replace(lower(regexp_replace($1, '#.*$', '')), '&amp;', '&') AS u) AS s
     $$;
 
 -- Every index over the function holds keys computed by the old body, so each is rebuilt.
@@ -49,9 +52,15 @@ CREATE OR REPLACE FUNCTION public.normalize_job_url(text) RETURNS text
 -- indexed under the old, query-less key — a miss, never a wrong match. A URL with no
 -- identifying query keys alike under both bodies.
 --
--- CONCURRENTLY, hence the marker: jobs is written by every ingest run. A rebuild killed
--- midway leaves an invalid <index>_ccnew behind; DROP INDEX it and re-run this file, which
--- is idempotent (the function is replaced with the same body, the indexes rebuilt again).
+-- CONCURRENTLY, hence the marker: jobs is written by every ingest run. The file is
+-- idempotent (the function is replaced with the same body, the indexes rebuilt again).
+-- A rebuild killed midway (the runner's lock_timeout aborting its wait on a long ingest
+-- transaction, a dropped session) leaves an invalid <index>_ccnew behind, which every write
+-- still maintains. Each rebuild therefore first drops its own carcass, so re-running this
+-- file is the whole recovery; the runner's invalid-index check cannot see a _ccnew name.
+DROP INDEX CONCURRENTLY IF EXISTS public.jobs_normalized_url_idx_ccnew;
 REINDEX INDEX CONCURRENTLY public.jobs_normalized_url_idx;
+DROP INDEX CONCURRENTLY IF EXISTS public.jobs_normalized_url_open_idx_ccnew;
 REINDEX INDEX CONCURRENTLY public.jobs_normalized_url_open_idx;
+DROP INDEX CONCURRENTLY IF EXISTS public.jobs_linkedin_normalized_url_idx_ccnew;
 REINDEX INDEX CONCURRENTLY public.jobs_linkedin_normalized_url_idx;

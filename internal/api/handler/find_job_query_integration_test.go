@@ -5,6 +5,8 @@ package handler
 import (
 	"context"
 	"net/url"
+	"regexp"
+	"slices"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -67,6 +69,25 @@ func TestNormalizeJobURLDropsExactlyLinksourceTrackingParams(t *testing.T) {
 			t.Errorf("SQL kept tracking param %q: %q, want %q", k, got, want)
 		}
 	}
+	// And nothing beyond them: the function's own list, read back from the catalogue, must
+	// be exactly linksource's, or a key removed in Go would go on being dropped in SQL.
+	var body string
+	if err := pool.QueryRow(ctx, "SELECT prosrc FROM pg_proc WHERE proname = 'normalize_job_url'").Scan(&body); err != nil {
+		t.Fatalf("read normalize_job_url: %v", err)
+	}
+	list := regexp.MustCompile(`(?s)ARRAY\[(.*?)\]`).FindStringSubmatch(body)
+	if list == nil {
+		t.Fatalf("normalize_job_url carries no ARRAY[...] tracking list:\n%s", body)
+	}
+	var sqlNames []string
+	for _, m := range regexp.MustCompile(`'([^']*)'`).FindAllStringSubmatch(list[1], -1) {
+		sqlNames = append(sqlNames, m[1])
+	}
+	slices.Sort(sqlNames)
+	if goNames := linksource.TrackingParamNames(); !slices.Equal(sqlNames, goNames) {
+		t.Errorf("tracking lists disagree:\n  sql: %v\n  go:  %v", sqlNames, goNames)
+	}
+
 	// Parameters that name a posting on some platform must survive.
 	for _, k := range []string{"id", "jobid", "gh_jid", "jk", "oid", "token", "page"} {
 		if got := normalize(page + "&" + k + "=x"); got == want {

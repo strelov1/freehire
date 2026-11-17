@@ -343,3 +343,22 @@ func TestFindOpenJobByURL_AnswersOnlyThePageTheQueryNames(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeJobURL_QueryEdgeCases(t *testing.T) {
+	pool := startPostgres(t)
+	bare := normalize(t, pool, himalayasPosting)
+	for raw, want := range map[string]string{
+		himalayasPosting + "?":                        bare,
+		himalayasPosting + "?&&":                      bare,
+		himalayasPosting + "#top?jobid=1":             bare,
+		himalayasPosting + "?ref":                     bare,
+		himalayasPosting + "?utmx=1":                  bare + "?utmx=1",
+		himalayasPosting + "?b=2&a=1&a=0":             bare + "?a=0&a=1&b=2",
+		himalayasPosting + "?jobid=7&amp;page=detail": bare + "?jobid=7&page=detail",
+		"https://www.":                                "",
+	} {
+		if got := normalize(t, pool, raw); got != want {
+			t.Errorf("normalize_job_url(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}
