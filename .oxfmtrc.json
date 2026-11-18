@@ -13,7 +13,7 @@
   // installed beside it (every package has it).
   "svelte": true,
   "ignorePatterns": [
-    // Written by cmd/gen-contracts, and the `contracts` CI job fails when a regeneration
+    // Written by tools/gen-contracts, and the `contracts` CI job fails when a regeneration
     // differs from what is committed, so a formatter would make that job red.
     "**/generated/**",
     // Everything else oxfmt knows how to format. The brief is TypeScript, JavaScript and

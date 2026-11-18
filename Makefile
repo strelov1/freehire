@@ -61,13 +61,13 @@ api-contract: ## Compile typespec/ to openapi/api.openapi.json, then generate in
 		rsync -rc --delete $$tmp/ internal/api/apigen/; status=$$?; rm -rf $$tmp; rm -f $$in; exit $$status
 
 gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contracts
-	go run ./cmd/gen-contracts
+	cd tools && go run ./gen-contracts
 
 gen-cities: ## Regenerate internal/location/cities1000.tsv from the GeoNames dump
 	go run ./cmd/gen-cities
 
 gen-metros: ## Regenerate internal/dict/location/metros.tsv from GeoNames + GHS-FUA
-	go run ./cmd/gen-metros
+	cd tools && go run ./gen-metros
 
 # Prints to stdout on purpose — the shipped text is reviewed, so a human pipes this into
 # internal/dict/skilltag/descriptions.tsv and edits every line before committing. LIMIT

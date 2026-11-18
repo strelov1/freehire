@@ -16,6 +16,15 @@ updates:
     commit-message:
       prefix: "build(deps)"
     open-pull-requests-limit: 5
+  - package-ecosystem: gomod
+    directory: /tools
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "build(deps)"
+    open-pull-requests-limit: 5
 
   - package-ecosystem: npm
     directory: /web
