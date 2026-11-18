@@ -87,9 +87,6 @@ var privatePredicateExemptions = map[string]string{
 	"MarkFuzzyDuplicatesForCompany":     "writes duplicate_of_fuzzy for one company's candidates",
 	"DuplicateClosureGeoAll":            "unions a closure's geography into its owner's facets — country/region/city codes, no posting",
 	"DuplicateClosureGeoFor":            "the same union, for named owners",
-
-	// --- Answers only about content the caller already holds. ---
-	"FindOpenJobByURL": "matches on the URL the caller supplied, and a private posting carries a URL only when it was created BY scraping that page (a pasted-text one has none), so the slug it can return always points at content the caller had the address for",
 }
 
 // TestEveryOpenCatalogueReadExcludesPrivateJobs pins a rule that only a comment would

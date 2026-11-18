@@ -218,17 +218,24 @@ LEFT JOIN job_activity a ON a.job_id = j.id
 WHERE normalize_job_url(j.url) = normalize_job_url(@url)
   AND normalize_job_url(@url) <> ''
   AND j.closed_at IS NULL
+  -- A private posting is one user's scraped page: answering with its slug told anyone
+  -- holding the same URL where it lives (#4763), and could shadow the public posting.
+  AND NOT j.is_private
 ORDER BY (j.duplicate_of IS NULL) DESC, a.last_seen_at DESC, j.id DESC
 LIMIT 1;
 
 -- name: GetJobIDBySlug :one
--- Slim slug->id lookup for the view/apply interaction path, which needs only the
--- internal id (the user_jobs FK) and must not drag the wide description/enrichment
--- columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
--- public detail handler that renders the whole row.
+-- Slim slug->id lookup for the write paths that name a job by slug (vote, report,
+-- inbox link, referral, community thread), which need only the internal id and must
+-- not drag the wide description/enrichment columns over the wire. GetJobBySlug
+-- (SELECT *) stays for the public detail handler that renders the whole row.
+-- A private posting resolves only for its creator (caller_id; 0 for nobody), the
+-- same rule jobVisibleToCaller applies to reads: a write keyed to another user's
+-- private job left a user_jobs row that put it on the writer's tracking board (#4763).
 SELECT id
 FROM jobs
-WHERE public_slug = $1;
+WHERE public_slug = sqlc.arg(public_slug)
+  AND (NOT is_private OR created_by = sqlc.arg(caller_id)::bigint);
 
 -- name: GetJobDescriptionsByIDs :many
 -- Batch-load full descriptions by internal id when the agent search endpoint

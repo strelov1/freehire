@@ -89,7 +89,7 @@ func (f *fakeQueries) GetInterviewInvitation(context.Context, db.GetInterviewInv
 	return f.invitation, f.invitationErr
 }
 
-func (f *fakeQueries) GetJobIDBySlug(context.Context, string) (int64, error) {
+func (f *fakeQueries) GetJobIDBySlug(context.Context, db.GetJobIDBySlugParams) (int64, error) {
 	return f.jobID, f.jobErr
 }
 

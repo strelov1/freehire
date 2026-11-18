@@ -57,7 +57,7 @@ func (s *Service) CreateThread(ctx context.Context, in CreateThreadInput) (Threa
 		return Thread{}, ErrEmptyBody
 	}
 
-	exists, err := s.subjects.SubjectExists(ctx, in.SubjectType, in.SubjectSlug)
+	exists, err := s.subjects.SubjectExists(ctx, in.UserID, in.SubjectType, in.SubjectSlug)
 	if err != nil {
 		return Thread{}, err
 	}

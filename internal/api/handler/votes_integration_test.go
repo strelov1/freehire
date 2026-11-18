@@ -10,6 +10,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -156,5 +157,123 @@ func TestVoteEndpoints(t *testing.T) {
 	}
 	if resp := post(t, "/api/v1/companies/ghost/vote", `{"vote":"up"}`, true); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown company: want 404, got %d", resp.StatusCode)
+	}
+}
+
+// TestVotePrivateJobNonOwner reproduces #4763: another user's private posting must not
+// resolve through /jobs/find, must 404 on vote without writing a user_jobs row, and must
+// not list on the tracking board even when such a row already exists.
+func TestVotePrivateJobNonOwner(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	queries := db.New(pool)
+
+	var owner, other int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('owner@example.test') RETURNING id`).Scan(&owner); err != nil {
+		t.Fatalf("seed owner: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('other@example.test') RETURNING id`).Scan(&other); err != nil {
+		t.Fatalf("seed other: %v", err)
+	}
+	const slug = "secret-role-secret-co-y6n25ddy"
+	var jobID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, company, public_slug, is_private, created_by)
+		 VALUES ('weblink', 'private-1', 'https://example.com/jobs/123', 'Secret Role', 'Secret Co', $1, true, $2)
+		 RETURNING id`, slug, owner).Scan(&jobID); err != nil {
+		t.Fatalf("seed private job: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &voteHandlers{votes: vote.New(queries, pool)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
+	app.Post("/api/v1/jobs/:slug/vote", keyAuth, newContract(contractHandlers{voteHandlers: h}))
+	app.Delete("/api/v1/jobs/:slug/vote", keyAuth, newContract(contractHandlers{voteHandlers: h}))
+	mountJobsContract(app, &jobsHandlers{queries: queries}, middleware{})
+
+	// do returns the status and body, closing the response.
+	do := func(t *testing.T, method, path, body string, userID int64) (int, []byte) {
+		t.Helper()
+		req := httptest.NewRequestWithContext(ctx, method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if userID != 0 {
+			cookie, err := iss.Issue(userID, testTokenVersion)
+			if err != nil {
+				t.Fatalf("issue token: %v", err)
+			}
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		}
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		defer resp.Body.Close()
+		out, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		return resp.StatusCode, out
+	}
+
+	_, body := do(t, http.MethodGet, "/api/v1/jobs/find?url=https%3A%2F%2Fexample.com%2Fjobs%2F123", "", 0)
+	var found struct {
+		Data *struct {
+			PublicSlug string `json:"public_slug"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &found); err != nil {
+		t.Fatalf("decode find: %v", err)
+	}
+	if found.Data != nil {
+		t.Fatalf("/jobs/find answered with private slug %q", found.Data.PublicSlug)
+	}
+
+	const path = "/api/v1/jobs/" + slug + "/vote"
+	if code, _ := do(t, http.MethodPost, path, `{"vote":"up"}`, other); code != http.StatusNotFound {
+		t.Fatalf("non-owner vote: want 404, got %d", code)
+	}
+	if code, _ := do(t, http.MethodDelete, path, "", other); code != http.StatusNotFound {
+		t.Fatalf("non-owner clear: want 404, got %d", code)
+	}
+	var rows int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_jobs WHERE job_id = $1`, jobID).Scan(&rows); err != nil {
+		t.Fatalf("count user_jobs: %v", err)
+	}
+	if rows != 0 {
+		t.Fatalf("non-owner vote left %d user_jobs rows", rows)
+	}
+
+	// The owner still votes on their own posting.
+	if code, _ := do(t, http.MethodPost, path, `{"vote":"up"}`, owner); code != http.StatusOK {
+		t.Fatalf("owner vote: want 200, got %d", code)
+	}
+
+	// A row written before the fix must not surface the card or count on a tab.
+	if _, err := pool.Exec(ctx, `INSERT INTO user_jobs (user_id, job_id, vote) VALUES ($1, $2, 1)`, other, jobID); err != nil {
+		t.Fatalf("seed leaked row: %v", err)
+	}
+	list, err := queries.ListUserJobs(ctx, db.ListUserJobsParams{UserID: other, Filter: "all", Limit: 50})
+	if err != nil {
+		t.Fatalf("ListUserJobs: %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("ListUserJobs listed another user's private job: %+v", list)
+	}
+	counts, err := queries.CountUserJobs(ctx, other)
+	if err != nil {
+		t.Fatalf("CountUserJobs: %v", err)
+	}
+	if counts.All != 0 {
+		t.Fatalf("CountUserJobs all = %d, want 0", counts.All)
+	}
+	ownList, err := queries.ListUserJobs(ctx, db.ListUserJobsParams{UserID: owner, Filter: "all", Limit: 50})
+	if err != nil {
+		t.Fatalf("ListUserJobs owner: %v", err)
+	}
+	if len(ownList) != 1 {
+		t.Fatalf("owner's own private job: want 1 row, got %d", len(ownList))
 	}
 }

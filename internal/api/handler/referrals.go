@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/engage/referral"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // referralHandlers serves the employee-referral use cases (offer to refer, request a
@@ -40,7 +41,7 @@ type referralHandlers struct {
 
 // jobIDBySlug resolves a vacancy's public slug to its id. *db.Queries satisfies it.
 type jobIDBySlug interface {
-	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	GetJobIDBySlug(ctx context.Context, arg db.GetJobIDBySlugParams) (int64, error)
 }
 
 func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRenderer cv.Renderer, cvStore *cv.Store, photos *headshot.Store, jobs jobIDBySlug, resumes *resume.Store) *referralHandlers {
@@ -50,11 +51,11 @@ func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRen
 // requestJobID is the vacancy a request is about: job_slug when the page names one, else
 // the legacy numeric job_id. An unknown slug is a 404 — the vacancy the seeker was looking
 // at no longer exists — rather than a request silently detached from it.
-func (h *referralHandlers) requestJobID(ctx context.Context, slug string, id *int64) (*int64, error) {
+func (h *referralHandlers) requestJobID(ctx context.Context, userID int64, slug string, id *int64) (*int64, error) {
 	if slug == "" {
 		return id, nil
 	}
-	jobID, err := h.jobs.GetJobIDBySlug(ctx, slug)
+	jobID, err := h.jobs.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: slug, CallerID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fiber.NewError(fiber.StatusNotFound, "vacancy not found")
 	}
@@ -191,7 +192,7 @@ func (h *referralHandlers) CreateReferralRequest(ctx context.Context, req *apige
 	if err != nil {
 		return nil, err
 	}
-	jobID, err := h.requestJobID(ctx, req.JobSlug.Or(""), ptrOf(req.JobID.Get))
+	jobID, err := h.requestJobID(ctx, userID, req.JobSlug.Or(""), ptrOf(req.JobID.Get))
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +225,7 @@ func (h *referralHandlers) ListReferralCVOptions(ctx context.Context, params api
 	if company == "" {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "company_slug is required")
 	}
-	jobID, err := h.requestJobID(ctx, params.JobSlug.Or(""), nil)
+	jobID, err := h.requestJobID(ctx, userID, params.JobSlug.Or(""), nil)
 	if err != nil {
 		return nil, err
 	}
