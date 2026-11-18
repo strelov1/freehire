@@ -80,19 +80,25 @@ func (h *jobsHandlers) FindJob(ctx context.Context, params apigen.FindJobParams)
 	return &apigen.JobFindResult{Data: apigen.NewNilJobFoundPosting(apigen.JobFoundPosting{PublicSlug: slug})}, nil
 }
 
-// catalogSlugForRef looks a recovered identity up, and on a miss once more under the board the
-// catalogue holds for another spelling of the same identity: a Njoyn link on the generic
-// clients host names the client's board by clid alone, so its literal key is never stored.
+// catalogSlugForRef looks a recovered identity up under the board the catalogue resolves it to
+// first, then under its literal key. The two differ when the link spells a live board another
+// way — a Njoyn link on the generic clients host names the client's board by clid alone — and
+// the literal key may then still hold a closed duplicate from a retired second name, which
+// must not win over the live posting.
 func catalogSlugForRef(ctx context.Context, queries *db.Queries, ref sources.PostingRef) (string, error) {
-	slug, err := slugBySourceExternalID(ctx, queries, ref.Source, ref.ExternalID)
-	if err != nil || slug != "" || ref.Board == "" {
-		return slug, err
+	if ref.Board != "" {
+		stored, found, err := boardcatalog.NewQueriesRepository(queries).Entry(ctx, ref.Source, ref.Board)
+		if err != nil {
+			return "", err
+		}
+		if found && !strings.EqualFold(stored.Board, ref.Board) {
+			slug, err := slugBySourceExternalID(ctx, queries, ref.Source, externalid.Namespace(stored.Board, ref.PostingID))
+			if err != nil || slug != "" {
+				return slug, err
+			}
+		}
 	}
-	stored, found, err := boardcatalog.NewQueriesRepository(queries).Entry(ctx, ref.Source, ref.Board)
-	if err != nil || !found || strings.EqualFold(stored.Board, ref.Board) {
-		return "", err
-	}
-	return slugBySourceExternalID(ctx, queries, ref.Source, externalid.Namespace(stored.Board, ref.PostingID))
+	return slugBySourceExternalID(ctx, queries, ref.Source, ref.ExternalID)
 }
 
 func slugBySourceExternalID(ctx context.Context, queries *db.Queries, source, externalID string) (string, error) {

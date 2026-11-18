@@ -292,6 +292,14 @@ func (r *QueriesRepository) Entry(ctx context.Context, provider, board string) (
 	if err != nil {
 		return sources.CompanyEntry{}, false, err
 	}
+	// A retired spelling answers only when no live board holds the same identity: once a
+	// second name has been retired in favour of the board a crawl stores under (Njoyn's
+	// clients/corp/21001 for cgi/corp/21001), a link by it must land on the live one.
+	if b.Status == StatusRetired {
+		if live, found, err := r.liveSpelling(ctx, provider, board); err != nil || found {
+			return live, found, err
+		}
+	}
 	return b.CompanyEntry(), true, nil
 }
 
