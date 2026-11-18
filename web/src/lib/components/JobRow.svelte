@@ -6,13 +6,12 @@
   import JobMatchBar from './JobMatchBar.svelte';
   import SourceBadge from './SourceBadge.svelte';
   import { api } from '#lib/api.js';
-  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
-  import { promptLogin, promptSignIn } from '#lib/signin.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
   import { track } from '#lib/analytics.js';
-  import { cardTags, cardTagsFromCard, formatSalary, regionLabel, workArrangement } from '#lib/enrichment.js';
+  import { cardTags, cardTagsFromCard } from '#lib/enrichment.js';
   import { computeClientMatch, resolveMatchState } from '#lib/jobMatch.js';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { foreignContentLang, metaDescription } from '#lib/seo.js';
+  import { foreignContentLang } from '#lib/seo.js';
   import { EntityLogo } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { ghostBadge, supersedesReality } from '#lib/ghost.js';
@@ -23,6 +22,7 @@
   import { directApplyTooltip } from './DirectApplyBadge.svelte';
   import { appliedCompanyTooltip } from './AppliedCompanyBadge.svelte';
   import JobRowApplyGate from './JobRowApplyGate.svelte';
+  import { JobCardActions } from './jobCardActions.svelte';
   import JobRowCornerActions from './JobRowCornerActions.svelte';
   import JobRowBadges from './JobRowBadges.svelte';
   import JobRowGeo from './JobRowGeo.svelte';
@@ -30,16 +30,24 @@
   import JobRowSavedNote from './JobRowSavedNote.svelte';
   import JobRowSkills from './JobRowSkills.svelte';
   import JobRowMetaLine from './JobRowMetaLine.svelte';
+  import {
+    rowBlurb,
+    rowEquity,
+    rowGeoTags,
+    rowMetaFacts,
+    rowQuestions,
+    rowRegionTag,
+    rowSalary,
+    rowViews,
+  } from './jobRowFacts';
   import type { JobRowProps } from './JobRow.props';
   import { countryLabel, skillLabel } from '#lib/facets.js';
   import { backerBadges } from '#lib/backers.js';
-  import { formatCount, timeAgo } from '#lib/utils.js';
-  import { applyQuestionsLabel, equityLabel } from '#lib/jobFacts.js';
+  import { timeAgo } from '#lib/utils.js';
   import { cardFreshnessBadges } from '#lib/freshness.js';
   import { hasViewed } from '#lib/viewedJobs.svelte.js';
-  import { ensureSavedLoaded, isSaved, markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
+  import { ensureSavedLoaded, isSaved } from '#lib/savedJobs.svelte.js';
   import { hasAppliedToCompany } from '#lib/appliedCompanies.svelte.js';
-  import { markDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
 
   // Single source of truth for how a job appears in any list (jobs list and
   // company detail). The whole card is a link to the job detail. The props, and what
@@ -72,25 +80,11 @@
   // behind "+N", so the caption must still name it.
   const MAX_FLAGS = 5;
   const place = $derived(cardLocation(job.location, job.countries?.slice(0, MAX_FLAGS)));
-  // A one-line blurb under the title so a card conveys what the job is without
-  // opening it. Prefer the clean model-written summary, but only tech jobs are
-  // enriched — fall back to a plain-text snippet of the raw (HTML) posting so
-  // non-tech jobs still show a description. metaDescription strips the tags.
-  const blurb = $derived(
-    'enrichment' in job
-      ? job.enrichment?.summary || metaDescription(job.description ?? '', 220)
-      : metaDescription(job.blurb ?? '', 220),
-  );
-  // Salary lives in the enrichment, which a card does not carry: the tracking lists never
-  // showed it (their rows came from the same listing) and a row without one simply omits it.
-  const salary = $derived('enrichment' in job && job.enrichment ? formatSalary(job.enrichment) : null);
-  // Two facts only the catalogue's full posting carries, each absent when unknown — and
-  // absent renders nothing: "no equity" and "a long form" are claims we cannot make.
-  const equity = $derived('equity' in job ? equityLabel(job.equity) : null);
-  // A closed posting takes no applications, so what its form asks is beside the point.
-  const questions = $derived(
-    'apply_questions' in job && !job.closed_at ? applyQuestionsLabel(job.apply_questions) : null,
-  );
+  // The card's descriptive lines (see jobRowFacts.ts for what each omits and why).
+  const blurb = $derived(rowBlurb(job));
+  const salary = $derived(rowSalary(job));
+  const equity = $derived(rowEquity(job));
+  const questions = $derived(rowQuestions(job));
   // Top-level `skills` is the served (deterministic-dictionary) facet; the raw
   // `enrichment.skills` is kept in the JSONB and NOT served, so it's always absent
   // here — read the dictionary field so the card's skill chips actually populate.
@@ -102,12 +96,7 @@
   const ghost = $derived('ghost' in job ? job.ghost : undefined);
   // How recently it was posted is a key signal, so it leads the header.
   const posted = $derived(timeAgo(job.posted_at, locale()));
-  // How many people have opened the posting — the materialized counter, maintained
-  // offline from the access logs (never counted on this read). A card projection does
-  // not carry it, so the `in` narrowing is what lets those rows simply omit it, the
-  // same way they omit salary. Zero renders nothing at all: "0 views" reads as a dead
-  // figure rather than as information.
-  const views = $derived('view_count' in job ? job.view_count : 0);
+  const views = $derived(rowViews(job));
   // The direct-apply shortcut in the action row below. Only `jobview.Job` carries the
   // outbound `url` (and the `source` the apply-intent event reports) — `jobview.Card`
   // (saved / lists / tracking board) does not, so those surfaces render no button
@@ -128,18 +117,8 @@
   const freshness = $derived(cardFreshnessBadges(job.posted_at, reality, job.closed_at));
 
   const MAX_SKILLS = 5;
-  // The region is dropped when the flags already name the country ("UK · 🇬🇧 United
-  // Kingdom" said one place twice); with no country it is the only geography and stays.
-  const regionTag = $derived(job.countries?.length ? regionLabel({ regions: job.regions ?? [] }) : null);
-  // Where the role can be done from — the arrangement ("Remote") and, when no flag names a
-  // country, the region — reads as one thought with the flags and the city, so the three
-  // take a line of their own under the facts instead of being scattered across the end of it.
-  const geoTags = $derived(
-    [
-      workArrangement({ work_mode: job.work_mode ?? '' }),
-      job.countries?.length ? null : regionLabel({ regions: job.regions ?? [] }),
-    ].filter((t): t is string => !!t && tags.includes(t)),
-  );
+  const regionTag = $derived(rowRegionTag(job));
+  const geoTags = $derived(rowGeoTags(job, tags));
   // On the employer's own page the rail (logo, name, date) is not drawn, so the date leads
   // the meta line instead — the same place a reader finds it relative to the title elsewhere.
   // On touch, Apply and Hide never hide, so the corner cluster is wide; the date then
@@ -147,19 +126,7 @@
   const touchActions = $derived(!compact && Boolean(applyJob || directApply));
   const touchPosted = $derived(touchActions && !hideCompany ? posted : null);
   const metaFacts = $derived(
-    [
-      // With no rail on the employer's own page, its date, views and deadline lead this line.
-      ...(hideCompany
-        ? [
-            posted,
-            views > 0 ? `${formatCount(views)} ${views === 1 ? 'view' : 'views'}` : null,
-            job.application_deadline ? `Apply by ${job.application_deadline}` : null,
-          ]
-        : []),
-      ...tags.filter((t) => t !== regionTag && !geoTags.includes(t)),
-      equity,
-      questions,
-    ].filter((f): f is string => Boolean(f)),
+    rowMetaFacts({ job, hideCompany, posted, views, tags, regionTag, geoTags, equity, questions }),
   );
   // The meta line continues whatever plain text precedes it — a freshness label, or the
   // reality age ("Open 87d") when it renders as text rather than a warning pill — so it
@@ -211,79 +178,14 @@
   $effect(() => {
     if (isAuthenticated()) void ensureSavedLoaded();
   });
-  // Guards against a double-click racing two requests for the same job.
-  let saving = $state(false);
-  // Set by a save made from THIS card, so the "view it on your board" strip answers
-  // the click that just happened rather than decorating every saved card in a feed.
-  let justSaved = $state(false);
   let showApplyGate = $state(false);
 
-  // Toggle the save mark. Optimistic: flip the shared set first so the bookmark
-  // fills instantly, then confirm with the server and roll back on failure. A
-  // signed-out click routes to sign-in instead (no auto-save afterwards). The
-  // button is an overlay sibling of the card link — not a descendant — so this
-  // never triggers the card's navigation.
-  async function toggleSave() {
-    if (!isAuthenticated()) {
-      promptSignIn();
-      return;
-    }
-    if (saving) return;
-    saving = true;
-    const userID = currentUser()?.id;
-    let wasSaved = saved;
-    let changed = false;
-    try {
-      // Read the final set before changing it: a late initial load must never undo
-      // the user's toggle, and a handoff to another account cancels this action.
-      await ensureSavedLoaded();
-      if (currentUser()?.id !== userID) return;
-      wasSaved = isSaved(job.public_slug);
-      justSaved = false;
-      if (wasSaved) markUnsaved(job.public_slug);
-      else markSaved(job.public_slug);
-      changed = true;
-      if (wasSaved) {
-        await unsave(job.public_slug);
-      } else {
-        await api.saveJob(job.public_slug);
-        justSaved = true;
-      }
-    } catch {
-      if (changed && currentUser()?.id === userID) {
-        if (wasSaved) markSaved(job.public_slug);
-        else markUnsaved(job.public_slug);
-      }
-    } finally {
-      saving = false;
-    }
-  }
-
-  // Guards against a double-click firing two dismiss requests for the same job.
-  let hiding = $state(false);
-
-  // Hide (dismiss) the job from the feed. Optimistic: mark it hidden in the shared
-  // set first so the feed drops the card instantly, then confirm with the server and
-  // roll back on failure. A signed-out click routes to sign-in instead. On success we
-  // hand the slug to the feed (onHide) so it can surface an undo affordance. Like the
-  // save button, this is an overlay sibling of the card link, so it never navigates.
-  async function hide() {
-    if (!isAuthenticated()) {
-      promptSignIn();
-      return;
-    }
-    if (hiding) return;
-    hiding = true;
-    markDismissed(job.public_slug);
-    try {
-      await api.dismissJob(job.public_slug);
-      onHide?.(job.public_slug);
-    } catch {
-      markUndismissed(job.public_slug);
-    } finally {
-      hiding = false;
-    }
-  }
+  // The save and hide buttons (see JobCardActions).
+  const actions = new JobCardActions(
+    () => job.public_slug,
+    () => unsave,
+    () => onHide,
+  );
 
   // Only the title is inside the link. Its name starts with the visible title;
   // company disambiguates repeated roles, and the description carries key metadata.
@@ -335,22 +237,6 @@
       e.preventDefault();
       showApplyGate = true;
     }
-  }
-
-  function signUpFromApplyGate() {
-    showApplyGate = false;
-    // Onboarding first, then back to this list; that page can skip straight to the sign-up form.
-    promptSignIn();
-  }
-
-  function signInFromApplyGate() {
-    showApplyGate = false;
-    promptLogin();
-  }
-
-  function viewApplyWithoutSigningIn() {
-    showApplyGate = false;
-    if (applyJob) window.open(applyJob.url, '_blank', 'noopener,noreferrer');
   }
 </script>
 
@@ -536,8 +422,8 @@
   {#if compact}
     <button
       type="button"
-      onclick={toggleSave}
-      disabled={saving}
+      onclick={actions.toggleSave}
+      disabled={actions.saving}
       aria-pressed={saved}
       aria-label={saved ? 'Remove from your board' : 'Save to your board'}
       title={saved ? 'On your board' : 'Save to board'}
@@ -555,11 +441,11 @@
       {directApply}
       applyUrl={applyJob?.url ?? null}
       {onApplyClick}
-      onHide={onHide ? hide : undefined}
-      {hiding}
+      onHide={onHide ? actions.hide : undefined}
+      hiding={actions.hiding}
       {saved}
-      {saving}
-      onToggleSave={toggleSave}
+      saving={actions.saving}
+      onToggleSave={actions.toggleSave}
     />
 
     <!-- The caller's own controls, when it passes any, get the one row under the content. -->
@@ -570,15 +456,14 @@
     {/if}
   {/if}
 
-  {#if justSaved && saved && !compact}
+  {#if actions.justSaved && saved && !compact}
     <JobRowSavedNote slug={job.public_slug} />
   {/if}
 
   <JobRowApplyGate
     show={showApplyGate && !!applyJob}
     title={job.title}
-    onSignIn={signInFromApplyGate}
-    onSignUp={signUpFromApplyGate}
-    onContinue={viewApplyWithoutSigningIn}
+    url={applyJob?.url ?? ''}
+    onclose={() => (showApplyGate = false)}
   />
 </div>
