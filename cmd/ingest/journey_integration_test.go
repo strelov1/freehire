@@ -4,7 +4,8 @@ package main
 
 // The data path a posting takes, end to end (#4587): a crawled board, the ingest write,
 // the search outbox, the drain into Meilisearch, the projection the API serves, a saved
-// search's alert and the email it sends. Every unit on that path has its own test; this
+// search's alert and the email it sends, then a save through the tracking writer and the
+// reminder email it produces. Every unit on that path has its own test; this
 // one exists for the seams between them, where every failure the catalogue actually had
 // lived (a salary stored but never served, a row searchable in Postgres and absent from
 // the index). Only external I/O is stubbed: the board is an httptest server replaying a
@@ -27,9 +28,11 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
+	"github.com/strelov1/freehire/internal/engage/reminder"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
@@ -44,7 +47,7 @@ func TestJourneyCrawledBoardToDeliveredAlert(t *testing.T) {
 	ctx := context.Background()
 	pool := testdb.Pool(t)
 	q := db.New(pool)
-	meili := startJourneyMeili(t)
+	meili, meiliURL := startJourneyMeili(t)
 	if err := meili.EnsureIndex(ctx); err != nil {
 		t.Fatalf("ensure index: %v", err)
 	}
@@ -57,7 +60,9 @@ func TestJourneyCrawledBoardToDeliveredAlert(t *testing.T) {
 		t.Fatal(err)
 	}
 	// instant is a paid frequency: deliver on this pass rather than at the daily digest time.
-	if _, err := pool.Exec(ctx, `INSERT INTO notification_settings (user_id, digest_frequency) VALUES ($1, 'instant')`, user); err != nil {
+	// enabled turns on the saved-job reminders of step 6.
+	if _, err := pool.Exec(ctx, `INSERT INTO notification_settings (user_id, digest_frequency, enabled, channels)
+		VALUES ($1, 'instant', true, '{email}')`, user); err != nil {
 		t.Fatal(err)
 	}
 	var saved int64
@@ -157,13 +162,14 @@ func TestJourneyCrawledBoardToDeliveredAlert(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	compareServed(t, projected, docs[id])
+	compareServed(t, projected, docs[id], rawDocument(t, meiliURL, id))
 
 	// 5. Alert: the real notify engine matches the saved search against the index and
 	// delivers through the real email renderer.
 	mailer := &journeyMailer{}
 	const origin = "https://freehire.test"
-	router := notify.Router{notify.ChannelEmail: emailnotify.NewNotifier(mailer, "alerts@freehire.test", origin, emailprefs.NewLinks("journey-test-secret-at-least-32-bytes", origin))}
+	links := emailprefs.NewLinks("journey-test-secret-at-least-32-bytes", origin)
+	router := notify.Router{notify.ChannelEmail: emailnotify.NewNotifier(mailer, "alerts@freehire.test", origin, links)}
 	notified, err := notify.New(q, meili, router, notify.DefaultConfig()).Run(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -184,13 +190,38 @@ func TestJourneyCrawledBoardToDeliveredAlert(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_notifications WHERE user_id = $1`, user).Scan(&recorded); err != nil || recorded != 1 {
 		t.Errorf("in-app notifications = %d (%v), want the delivered digest recorded", recorded, err)
 	}
+
+	// 6. Save: the real tracking writer schedules the come-back reminder, and the reminder
+	// engine delivers it by email once due.
+	tracking := jobtracking.New(jobtracking.NewQueriesRepository(q, pool), jobtracking.WithReminders(reminder.New(reminder.NewQueriesRepository(q))))
+	if _, err := tracking.SaveJob(ctx, user, row.PublicSlug); err != nil {
+		t.Fatal(err)
+	}
+	// It fires days out; bring it due.
+	if tag, err := pool.Exec(ctx, `UPDATE job_reminders SET fire_at = now() - interval '1 minute' WHERE user_id = $1 AND job_id = $2`, user, id); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("saved job scheduled %d reminders (%v), want 1", tag.RowsAffected(), err)
+	}
+	mailer.sent = nil
+	reminders := reminder.Router{notify.ChannelEmail: reminder.NewEmailNotifier(mailer, "alerts@freehire.test", origin, links)}
+	if _, err := reminder.NewRunner(q, reminders, reminder.DefaultConfig()).Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(mailer.sent) != 1 || !strings.Contains(mailer.sent[0].Text, row.Title) || !strings.Contains(mailer.sent[0].Text, origin+"/jobs/"+row.PublicSlug) {
+		t.Fatalf("reminder emails = %+v, want one linking the saved posting", mailer.sent)
+	}
 }
 
 // compareServed fails on any JSON field the projection and the index document disagree
-// on, a key one serves and the other omits included.
-func compareServed(t *testing.T, projected, indexed jobview.Job) {
+// on, a key one serves and the other omits included. Decoding the document zero-fills a
+// field it lacks, so presence is checked on the raw stored document.
+func compareServed(t *testing.T, projected, indexed jobview.Job, raw map[string]json.RawMessage) {
 	t.Helper()
 	p, x := jsonFields(t, projected), jsonFields(t, indexed)
+	for _, k := range slices.Sorted(maps.Keys(p)) {
+		if _, ok := raw[k]; !ok {
+			t.Errorf("%s: projection serves %s, the stored index document lacks it", k, p[k])
+		}
+	}
 	keys := slices.Sorted(maps.Keys(p))
 	for k := range x {
 		if _, ok := p[k]; !ok {
@@ -224,6 +255,29 @@ func readJob(t *testing.T, q *db.Queries, id int64) db.Job {
 		t.Fatalf("read job %d: %v (%d rows)", id, err, len(rows))
 	}
 	return rows[0]
+}
+
+// journeyMeiliKey is the throwaway container's master key.
+const journeyMeiliKey = "test-master-key"
+
+// rawDocument reads job id's document from the jobs index as stored, without decoding it.
+func rawDocument(t *testing.T, endpoint string, id int64) map[string]json.RawMessage {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("%s/indexes/jobs/documents/%d", endpoint, id), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+journeyMeiliKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var doc map[string]json.RawMessage
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&doc) != nil {
+		t.Fatalf("raw document %d: status %d", id, resp.StatusCode)
+	}
+	return doc
 }
 
 // boardGetter is the adapter's HTTP client pointed at the recorded board: same path and
@@ -310,15 +364,14 @@ func (m *journeyMailer) Send(_ context.Context, msg emailnotify.Message) error {
 	return nil
 }
 
-func startJourneyMeili(t *testing.T) *search.Client {
+func startJourneyMeili(t *testing.T) (*search.Client, string) {
 	t.Helper()
 	ctx := context.Background()
-	const key = "test-master-key"
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        "getmeili/meilisearch:v1.49.0", // the version prod runs (docker-compose.yml)
 			ExposedPorts: []string{"7700/tcp"},
-			Env:          map[string]string{"MEILI_MASTER_KEY": key, "MEILI_ENV": "development"},
+			Env:          map[string]string{"MEILI_MASTER_KEY": journeyMeiliKey, "MEILI_ENV": "development"},
 			WaitingFor:   wait.ForHTTP("/health").WithPort("7700/tcp").WithStartupTimeout(60 * time.Second),
 		},
 		Started: true,
@@ -331,5 +384,5 @@ func startJourneyMeili(t *testing.T) *search.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return search.NewClient(endpoint, key)
+	return search.NewClient(endpoint, journeyMeiliKey), endpoint
 }
