@@ -13411,39 +13411,6 @@
         ]
       }
     },
-    "/me/referrals/incoming/{id}/cv": {
-      "get": {
-        "summary": "View the candidate's CV for one incoming request.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The request id.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ],
-        "tags": [
-          "Referrals"
-        ]
-      }
-    },
     "/me/cvs/{id}/pdf": {
       "get": {
         "summary": "Render the CV to PDF.",
@@ -14686,6 +14653,39 @@
             }
           }
         }
+      }
+    },
+    "/me/referrals/incoming/{id}/cv": {
+      "get": {
+        "summary": "View the candidate's CV for one incoming request.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The request id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Referrals"
+        ]
       }
     }
   },

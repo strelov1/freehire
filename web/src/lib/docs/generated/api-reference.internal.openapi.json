@@ -10491,37 +10491,6 @@
         ]
       }
     },
-    "/referrals/offers/{id}/proof": {
-      "get": {
-        "summary": "View an offer's proof document.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The offer id.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          }
-        ],
-        "tags": [
-          "Referrals"
-        ],
-        "x-audience": "moderator"
-      }
-    },
     "/me/photo": {
       "get": {
         "summary": "Whether you have a stored headshot, and when it was uploaded.",
@@ -10775,6 +10744,37 @@
         "tags": [
           "Auth"
         ]
+      }
+    },
+    "/referrals/offers/{id}/proof": {
+      "get": {
+        "summary": "View an offer's proof document.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The offer id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Referrals"
+        ],
+        "x-audience": "moderator"
       }
     }
   },
