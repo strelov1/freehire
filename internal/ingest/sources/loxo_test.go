@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -190,7 +191,7 @@ func TestLoxoThrottle_CancelledWaitReturnsAndUnlocks(t *testing.T) {
 	go func() { _, err := th.GetHTML(ctx, "https://"+loxoSharedHost+"/x"); done <- err }()
 	select {
 	case err := <-done:
-		if err != context.Canceled {
+		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("err = %v, want context.Canceled", err)
 		}
 	case <-time.After(5 * time.Second):
