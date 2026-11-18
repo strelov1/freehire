@@ -126,6 +126,28 @@ func TestNjoynClientsLinkFoldsIntoTheClientsBoard(t *testing.T) {
 	}
 }
 
+// A second name that was once live and then retired (what production holds for
+// clients/corp/21001) must not win a lookup over the live board with the same identity:
+// GetBoardForResolve answers a retired row by its exact name, and a link import would
+// otherwise write the posting back into the retired namespace.
+func TestEntryPrefersTheLiveBoardOverARetiredSpelling(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Pool(t)
+	repo := NewQueriesRepository(db.New(pool))
+	for _, b := range []string{"cgi/corp/21001", "clients/corp/21001"} {
+		if _, err := pool.Exec(ctx, `INSERT INTO boards (provider, board, company, status) VALUES ('njoyn', $1, 'CGI', 'active')`, b); err != nil {
+			t.Fatalf("seed %s: %v", b, err)
+		}
+	}
+	if _, err := repo.Retire(ctx, "njoyn", "clients/corp/21001", ""); err != nil {
+		t.Fatalf("retire: %v", err)
+	}
+	e, found, err := repo.Entry(ctx, "njoyn", "clients/corp/21001")
+	if err != nil || !found || e.Board != "cgi/corp/21001" {
+		t.Fatalf("Entry(retired clients/corp/21001) = %+v, %v, %v; want the live cgi/corp/21001", e, found, err)
+	}
+}
+
 // A rejected row (a validation failure) does not claim the identity: correcting the
 // mistake and resubmitting must succeed, not collide with the earlier bad attempt.
 func TestInsertAcceptsResubmissionAfterRejection(t *testing.T) {
