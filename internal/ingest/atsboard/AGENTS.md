@@ -53,7 +53,9 @@ nothing but the URL. No network, no database.
   each live on one of several `*.paradox.ai` instance hosts), `njoyn` (`<tenant>/<site>/<clid>`,
   lower-cased, from `<tenant>.njoyn.com/<site>/xweb/xweb.asp?clid=<digits>` — one classic-ASP
   script serves every page, so the subdomain, the site segment and the case-blind `clid`
-  parameter together name the board, and a link missing any of them is declined), `pathpattern` (the one capture
+  parameter together name the board, and a link missing any of them is declined; a link on the
+  generic `clients.njoyn.com` is still recognised, and `boardcatalog` folds it into the client's
+  own board by clid or refuses it), `pathpattern` (the one capture
   group of a per-host path pattern in `pathPatternBoards`, which fixes the board's position AND
   its shape behind the platform's own words — Comeet's `/jobs/<slug>/<uid>`, NEOGOV's
   `/careers/<agency>` prefixed with its domain, Paycom's `/v4/ats/web.php/portal/<key>` with a

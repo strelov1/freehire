@@ -301,6 +301,11 @@ type CompanyDescriber interface {
 // still require a board) or aggregate many (see aggregator).
 type boardless interface{ boardless() }
 
+// boardValidator is an adapter that can tell, from the board id alone, that a board is not one
+// it may be handed: a spelling that only ever names some other board. Config.Validate asks it,
+// so the catalogue stores such a candidate as rejected with the reason instead of crawling it.
+type boardValidator interface{ validateBoard(board string) error }
+
 // aggregator marks a boardless adapter that aggregates postings from many companies
 // (e.g. jobstash) rather than serving a single company. It keeps such an adapter in
 // the source facet: a single-company boardless platform is redundant with the company

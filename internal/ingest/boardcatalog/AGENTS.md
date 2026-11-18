@@ -38,8 +38,13 @@ absorbed the recognized half of `internal/ingest/contribution`'s lifecycle.
 It cannot fold the FORM of a board id, because the fold is Go: iCIMS writes one board as
 both `vet` and `careers-vet.icims.com`; Dayforce's optional culture segment names one site
 twice; Gusto resolves an old and a new employer slug to one uuid; UKG Ready serves one
-tenant from several pod hosts. `sources.BoardDedupeKey` folds all four, and `Insert`
-compares it against the provider's live boards before writing.
+tenant from several pod hosts; Njoyn's `clients.njoyn.com` serves every client by clid,
+so `clients/corp/<clid>` is the client's own `<tenant>/corp/<clid>`. `sources.BoardDedupeKey`
+folds them all, and `Insert` compares it against the provider's live boards before writing —
+BEFORE validation, because a spelling valid only as another board's second name (Njoyn's
+generic host, refused by its adapter's `validateBoard`) is a duplicate when that board is
+live and rejected only when it is not. `Entry` answers a lookup by such a spelling with the
+live board, so a link import writes the posting under the namespace a crawl stores it in.
 
 The cost of missing it is not a wasted crawl. The pipeline namespaces `external_id` with
 the LITERAL board string, so two spellings store the same postings twice under one
