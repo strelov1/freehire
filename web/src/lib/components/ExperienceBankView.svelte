@@ -28,10 +28,11 @@
   import UnconfirmedNotice from './UnconfirmedNotice.svelte';
   import NewJobForm from './NewJobForm.svelte';
   import NewProjectForm from './NewProjectForm.svelte';
-  import { profileKickoff } from '#lib/assistant/presets.js';
+  import { InterviewDock } from './interviewDock.svelte';
   import { findFirstUnconfirmed, isUnconfirmed, sortNeedsAttentionFirst } from '#lib/experienceBank.js';
   import { experienceBankStore } from '#lib/experienceBank.svelte.js';
-  import { nextResumePollDelayMs, type CvParseState } from '#lib/onboardingResumeWait.js';
+  import { ResumeParseStatus } from './resumeParseStatus.svelte';
+  import { atomRemovalFocus, employmentRemovalFocus } from './removalFocus';
   import type {
     ExperienceAtom,
     ExperienceBank,
@@ -66,6 +67,25 @@
     actionError.clear();
     announce(message);
   }
+
+  /** One write to the bank, holding `busy` while it runs: then the bank reloads, the host
+   *  hears of it and `done` is announced; a failure shows `failed`. Returns whether it
+   *  succeeded, for the callers whose row leaves its form only then. */
+  async function mutate(write: () => Promise<unknown>, done: string, failed: string): Promise<boolean> {
+    busy = true;
+    try {
+      await write();
+      await reloadAfterMutation();
+      onBankMutated?.();
+      succeed(done);
+      return true;
+    } catch (e) {
+      actionError.fail(e, failed);
+      return false;
+    } finally {
+      busy = false;
+    }
+  }
   /** Selected achievement ids for merge / tailor. Order is click order. */
   let selected = $state<string[]>([]);
   // Deliberately separate from the job form below: "Add project" and "Add experience" are
@@ -94,20 +114,8 @@
     bannerTarget = findFirstUnconfirmed(bank);
   }
 
-  // The interviewer, docked beside the bank. `launch.id` is a remount token, not a
-  // session id: aiming the chat at a different set of achievements means a new
-  // conversation, and a mounted chat cannot be re-aimed (see the panel).
-  let panelOpen = $state(false);
-  let launch = $state({ id: 0, kickoff: profileKickoff([]) });
-  // A turn in flight would be abandoned mid-answer by a relaunch, so the entries close
-  // while one is running.
-  let turnActive = $state(false);
-
-  function launchInterview(ids: string[]) {
-    if (turnActive) return;
-    launch = { id: launch.id + 1, kickoff: profileKickoff(ids) };
-    panelOpen = true;
-  }
+  // The interviewer, docked beside the bank (see InterviewDock).
+  const dock = new InterviewDock();
 
   /** A read the candidate asked for. Clears the selection, which their action consumed. */
   async function load() {
@@ -150,24 +158,6 @@
     if (run) void tick().then(run);
   });
 
-  /** The first of `selectors` still in the page, focused. */
-  function focusFirst(...selectors: (string | null)[]) {
-    for (const selector of selectors) {
-      if (!selector) continue;
-      const el = document.querySelector<HTMLElement>(selector);
-      if (el) {
-        el.focus();
-        return;
-      }
-    }
-  }
-
-  /** The neighbour a removed item hands focus to: the next one, else the previous. */
-  function neighbours(el: Element | null, attr: string): [string | null, string | null] {
-    const read = (n: Element | null | undefined) => n?.getAttribute(attr) ?? null;
-    return [read(el?.nextElementSibling), read(el?.previousElementSibling)];
-  }
-
   /**
    * A read the CONVERSATION caused. Deliberately different from `load`: it never blanks the
    * list to a spinner under an open panel, and it keeps the selection rather than clearing
@@ -177,10 +167,7 @@
    */
   async function refreshBank() {
     try {
-      const next = await readBank();
-      bank = next;
-      const alive = new Set([...next.employments.flatMap((e) => e.atoms), ...next.unplaced].map((a) => a.id));
-      selected = selected.filter((id) => alive.has(id));
+      await reloadAfterMutation();
     } catch {
       // The transcript beside it already says what happened; a failed background refetch
       // must not replace a list that is merely stale with an error.
@@ -189,86 +176,12 @@
 
   $effect(() => {
     void load();
-    void loadResumeStatus();
+    void resumeParse.load();
   });
 
-  /** Whether the candidate's résumé failed to parse — the bank's own answer to the question
-   *  an empty-looking bank raises, surfaced here (and in Tailor's Experience tab, which
-   *  mounts this same component) rather than only once, during onboarding. */
-  let resumeParse = $state<CvParseState>('idle');
-  // Supersedes an in-flight wait the same way onboarding's own `waitToken` does: a newer
-  // retry, or the component going away, must stop a stale poll from overwriting a fresher
-  // state.
-  let resumeWaitToken = 0;
-
-  onDestroy(() => {
-    resumeWaitToken++;
-  });
-
-  /** The bank's reading of the server's `parse_status`. */
-  function parseState(status: string | undefined): CvParseState {
-    return status === 'failed' ? 'failed' : 'idle';
-  }
-
-  async function loadResumeStatus() {
-    try {
-      const resume = await api.getResume();
-      if (!resume.enabled || !resume.present) {
-        resumeParse = 'idle';
-        return;
-      }
-      resumeParse = parseState(resume.parse_status);
-    } catch {
-      // A failed status read is not evidence of a failed parse — leave whatever state was
-      // already shown rather than flashing a banner that was never confirmed.
-    }
-  }
-
-  /** Re-derives the structured résumé from what is already stored (no re-upload), then polls
-   *  the same way onboarding's `waitForResumeStructure` does — the backoff table it uses
-   *  (`nextResumePollDelayMs`) is shared; what happens with each state is not, since this
-   *  reloads the bank instead of filling wizard fields. */
-  async function retryResumeExtraction() {
-    const token = ++resumeWaitToken;
-    resumeParse = 'waiting';
-    try {
-      await api.retryResumeExtract();
-    } catch {
-      if (token !== resumeWaitToken) return;
-      resumeParse = 'failed';
-      return;
-    }
-    for (let attempt = 0; ; attempt++) {
-      if (token !== resumeWaitToken) return;
-      const delay = nextResumePollDelayMs(attempt);
-      if (delay === null) {
-        // Giving up is not the same as failing (see onboardingResumeWait.ts's own doc
-        // comment): the retry may still land after we stop asking. Showing 'failed' here
-        // would claim an outcome we never actually confirmed; the next time this view loads,
-        // loadResumeStatus() reads whatever the server eventually settled on.
-        resumeParse = 'idle';
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      if (token !== resumeWaitToken) return;
-      let status: string | undefined;
-      try {
-        const resume = await api.getResume();
-        status = resume.parse_status;
-      } catch {
-        continue; // treated as still pending, same as onboarding's own read failure
-      }
-      if (token !== resumeWaitToken) return;
-      if (status === 'pending') continue;
-      if (status === 'failed') {
-        resumeParse = 'failed';
-        return;
-      }
-      resumeParse = 'idle';
-      await refreshBank();
-      return;
-    }
-  }
+  // Whether the résumé failed to parse, and the retry (see ResumeParseStatus).
+  const resumeParse = new ResumeParseStatus(() => refreshBank());
+  onDestroy(resumeParse.stop);
 
   const allAtoms = $derived(bank ? [...bank.employments.flatMap((e) => e.atoms), ...bank.unplaced] : []);
   const jobs = $derived(bank?.employments.filter((e) => e.kind === 'job') ?? []);
@@ -305,19 +218,7 @@
     body: Partial<ExperienceEmployment>,
   ): Promise<boolean> {
     if (busy) return false;
-    busy = true;
-    try {
-      await api.updateExperienceEmployment(employment.id, body);
-      await reloadAfterMutation();
-      onBankMutated?.();
-      succeed('Saved');
-      return true;
-    } catch (e) {
-      actionError.fail(e, 'Could not update.');
-      return false;
-    } finally {
-      busy = false;
-    }
+    return mutate(() => api.updateExperienceEmployment(employment.id, body), 'Saved', 'Could not update.');
   }
 
   let removeEmploymentTarget = $state<ExperienceEmployment | null>(null);
@@ -332,67 +233,44 @@
   async function removeEmployment() {
     const employment = removeEmploymentTarget;
     if (!employment) return;
-    const card = document.querySelector(`[data-employment-id="${employment.id}"]`);
-    const [next, prev] = neighbours(card, 'data-employment-id');
-    const heading = `#experience-section-${employment.kind}`;
-    busy = true;
-    try {
-      await api.deleteExperienceEmployment(employment.id);
-      await reloadAfterMutation();
-      onBankMutated?.();
-      succeed('Removed');
-      afterDialog = () =>
-        focusFirst(
-          next && `[data-employment-id="${next}"] [data-row-action="edit"]`,
-          prev && `[data-employment-id="${prev}"] [data-row-action="edit"]`,
-          heading,
-        );
-    } catch (e) {
-      actionError.fail(e, 'Could not remove that entry.');
-    } finally {
-      busy = false;
-    }
+    const refocus = employmentRemovalFocus(employment);
+    if (await mutate(() => api.deleteExperienceEmployment(employment.id), 'Removed', 'Could not remove that entry.'))
+      afterDialog = refocus;
   }
 
   async function createProject() {
     if (busy || !projName.trim()) return;
-    busy = true;
-    try {
-      await api.createExperienceEmployment({
-        kind: 'project',
-        name: projName.trim(),
-        link: projLink.trim() || undefined,
-        start: projStart,
-        end: projEnd,
-      });
+    const input = {
+      kind: 'project' as const,
+      name: projName.trim(),
+      link: projLink.trim() || undefined,
+      start: projStart,
+      end: projEnd,
+    };
+    const write = async () => {
+      await api.createExperienceEmployment(input);
       addingProject = false;
       projName = '';
       projLink = '';
       projStart = undefined;
       projEnd = undefined;
-      await reloadAfterMutation();
-      onBankMutated?.();
-      succeed('Project added');
-    } catch (e) {
-      actionError.fail(e, 'Could not create project.');
-    } finally {
-      busy = false;
-    }
+    };
+    await mutate(write, 'Project added', 'Could not create project.');
   }
 
   async function createJob() {
     if (busy || !jobCompany.trim()) return;
-    busy = true;
-    try {
-      await api.createExperienceEmployment({
-        kind: 'job',
-        company: jobCompany.trim(),
-        role: jobRole.trim() || undefined,
-        location: jobLocation.trim() || undefined,
-        start: jobStart,
-        end: jobCurrent ? undefined : jobEnd,
-        current: jobCurrent,
-      });
+    const input = {
+      kind: 'job' as const,
+      company: jobCompany.trim(),
+      role: jobRole.trim() || undefined,
+      location: jobLocation.trim() || undefined,
+      start: jobStart,
+      end: jobCurrent ? undefined : jobEnd,
+      current: jobCurrent,
+    };
+    const write = async () => {
+      await api.createExperienceEmployment(input);
       addingJob = false;
       jobCompany = '';
       jobRole = '';
@@ -400,14 +278,8 @@
       jobStart = undefined;
       jobEnd = undefined;
       jobCurrent = false;
-      await reloadAfterMutation();
-      onBankMutated?.();
-      succeed('Experience added');
-    } catch (e) {
-      actionError.fail(e, 'Could not create experience.');
-    } finally {
-      busy = false;
-    }
+    };
+    await mutate(write, 'Experience added', 'Could not create experience.');
   }
 
   function parseMetrics(raw: string): string[] {
@@ -427,26 +299,15 @@
     metricsRaw: string,
   ): Promise<boolean> {
     if (busy) return false;
-    busy = true;
-    try {
-      // List-only flags must not round-trip; send only writable fields.
-      await api.updateExperienceAtom(atom.id, {
-        claim,
-        context: context || undefined,
-        metrics: parseMetrics(metricsRaw),
-        skills: atom.skills,
-        employment_id: atom.employment_id,
-      });
-      await reloadAfterMutation();
-      onBankMutated?.();
-      succeed('Saved');
-      return true;
-    } catch (e) {
-      actionError.fail(e, 'Could not save that change.');
-      return false;
-    } finally {
-      busy = false;
-    }
+    // List-only flags must not round-trip; send only writable fields.
+    const body = {
+      claim,
+      context: context || undefined,
+      metrics: parseMetrics(metricsRaw),
+      skills: atom.skills,
+      employment_id: atom.employment_id,
+    };
+    return mutate(() => api.updateExperienceAtom(atom.id, body), 'Saved', 'Could not save that change.');
   }
 
   let confirmMergeOpen = $state(false);
@@ -465,73 +326,39 @@
 
   async function mergeSelected() {
     if (selected.length !== 2) return;
-    busy = true;
-    try {
-      await api.mergeExperienceAtoms([must(selected[0]), must(selected[1])]);
-      await reloadAfterMutation();
+    const pair: [string, string] = [must(selected[0]), must(selected[1])];
+    const write = async () => {
+      await api.mergeExperienceAtoms(pair);
       // The merge consumed the selection; the survivor staying ticked would invite a
       // second merge nobody asked for.
       selected = [];
-      onBankMutated?.();
-      succeed('Merged');
-    } catch (e) {
-      actionError.fail(e, 'Could not merge those achievements.');
-    } finally {
-      busy = false;
-    }
+    };
+    await mutate(write, 'Merged', 'Could not merge those achievements.');
   }
 
   /** Confirms an unconfirmed atom without opening the edit field: re-submits its own claim
    *  unchanged, which the server re-stamps to `manual` provenance the same as any edit does. */
   async function confirmAtom(atom: ExperienceAtom) {
     if (busy) return;
-    busy = true;
-    try {
-      await api.updateExperienceAtom(atom.id, {
-        claim: atom.claim,
-        context: atom.context,
-        metrics: atom.metrics,
-        skills: atom.skills,
-        employment_id: atom.employment_id,
-      });
-      await reloadAfterMutation();
-      onBankMutated?.();
-      succeed('Confirmed');
-    } catch (e) {
-      actionError.fail(e, 'Could not confirm that achievement.');
-    } finally {
-      busy = false;
-    }
+    const { claim, context, metrics, skills, employment_id } = atom;
+    const body = { claim, context, metrics, skills, employment_id };
+    await mutate(() => api.updateExperienceAtom(atom.id, body), 'Confirmed', 'Could not confirm that achievement.');
   }
 
   /** Create a project employment and attach this unplaced achievement to it. Returns
    *  whether it succeeded, so the row knows whether to leave the promote form. */
   async function savePromoteToProject(atom: ExperienceAtom, name: string, link: string): Promise<boolean> {
     if (busy || !name.trim()) return false;
-    busy = true;
-    try {
+    const write = async () => {
       const created = await api.createExperienceEmployment({
         kind: 'project',
         name: name.trim(),
         link: link.trim() || undefined,
       });
-      await api.updateExperienceAtom(atom.id, {
-        claim: atom.claim,
-        context: atom.context,
-        metrics: atom.metrics,
-        skills: atom.skills,
-        employment_id: created.id,
-      });
-      await reloadAfterMutation();
-      onBankMutated?.();
-      succeed('Saved as project');
-      return true;
-    } catch (e) {
-      actionError.fail(e, 'Could not save as project.');
-      return false;
-    } finally {
-      busy = false;
-    }
+      const { claim, context, metrics, skills } = atom;
+      await api.updateExperienceAtom(atom.id, { claim, context, metrics, skills, employment_id: created.id });
+    };
+    return mutate(write, 'Saved as project', 'Could not save as project.');
   }
 
   let removeTarget = $state<ExperienceAtom | null>(null);
@@ -546,32 +373,9 @@
   async function removeAtom() {
     const atom = removeTarget;
     if (!atom) return;
-    const row = document.querySelector(`[data-atom-id="${atom.id}"]`);
-    const [next, prev] = neighbours(row, 'data-atom-id');
-    // The list the row sat in is gone with its last achievement, so the fallback is the
-    // heading above it: the card's own, or for an untied achievement the Projects section
-    // it would be saved into.
-    const heading = atom.employment_id
-      ? `[data-employment-id="${atom.employment_id}"] [data-row-heading]`
-      : '#experience-section-unplaced';
-    busy = true;
-    try {
-      await api.deleteExperienceAtom(atom.id);
-      await reloadAfterMutation();
-      onBankMutated?.();
-      succeed('Removed');
-      afterDialog = () =>
-        focusFirst(
-          next && `[data-atom-id="${next}"] [data-row-action="edit"]`,
-          prev && `[data-atom-id="${prev}"] [data-row-action="edit"]`,
-          heading,
-          '#experience-section-project',
-        );
-    } catch (e) {
-      actionError.fail(e, 'Could not remove that achievement.');
-    } finally {
-      busy = false;
-    }
+    const refocus = atomRemovalFocus(atom);
+    if (await mutate(() => api.deleteExperienceAtom(atom.id), 'Removed', 'Could not remove that achievement.'))
+      afterDialog = refocus;
   }
 </script>
 
@@ -579,11 +383,11 @@
      not laid out here despite being owned here — the bank keeps the full column it had
      rather than splitting it with the conversation about it. -->
 <ExperienceAssistantPanel
-  open={panelOpen}
-  {launch}
-  onClose={() => (panelOpen = false)}
+  open={dock.open}
+  launch={dock.launch}
+  onClose={dock.close}
   onBankChanged={refreshBank}
-  onTurnStateChange={(active) => (turnActive = active)}
+  onTurnStateChange={(active) => (dock.turnActive = active)}
 />
 
 <ConfirmDialog
@@ -612,7 +416,7 @@
 />
 
 <div class="min-w-0">
-  <CvParseBanner state={resumeParse} onRetry={() => void retryResumeExtraction()} />
+  <CvParseBanner state={resumeParse.state} onRetry={() => void resumeParse.retry()} />
   {#if loading}
     <States state="loading" />
   {:else if loadError}
@@ -654,7 +458,7 @@
             {selected.length} selected
           </span>
           <Button size="sm" disabled={!mergeReady || busy} onclick={requestMerge}>Merge</Button>
-          <Button size="sm" variant="secondary" disabled={turnActive} onclick={() => launchInterview(selected)}>
+          <Button size="sm" variant="secondary" disabled={dock.turnActive} onclick={() => dock.launchFor(selected)}>
             <Bot class="size-3.5" />Tailor with assistant
           </Button>
           <Button size="sm" variant="ghost" onclick={() => (selected = [])}>Clear</Button>
@@ -753,7 +557,7 @@
                 {atom}
                 selected={selected.includes(atom.id)}
                 {busy}
-                {turnActive}
+                turnActive={dock.turnActive}
                 scrollToAtomId={bannerTarget?.employmentId === null ? bannerTarget.atomId : undefined}
                 onToggleSelect={toggleSelect}
                 onConfirm={confirmAtom}
@@ -775,7 +579,7 @@
     {employment}
     selectedIds={selected}
     {busy}
-    {turnActive}
+    turnActive={dock.turnActive}
     forceExpanded={isBannerTarget}
     scrollToAtomId={isBannerTarget ? bannerTarget?.atomId : undefined}
     onToggleSelect={toggleSelect}
@@ -825,7 +629,7 @@
      It opens the panel rather than navigating: the bank is what the conversation is
      about, and leaving it to reach the agent is what this replaced. -->
 {#snippet interviewEntry()}
-  <Button size="sm" variant="secondary" disabled={turnActive} onclick={() => launchInterview([])}>
+  <Button size="sm" variant="secondary" disabled={dock.turnActive} onclick={() => dock.launchFor([])}>
     <Bot class="size-3.5" />Tailor your experience
   </Button>
 {/snippet}
