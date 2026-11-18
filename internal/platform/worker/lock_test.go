@@ -19,7 +19,7 @@ import (
 func TestHoldHeavyIndexLock_ReportsWhenAnotherHolderHasIt(t *testing.T) {
 	taken := &stubLocker{locked: false}
 
-	release, ok, err := holdHeavyIndexLock(context.Background(), taken)
+	release, ok, err := holdLock(context.Background(), taken, HeavyIndexLockKey)
 
 	if err != nil {
 		t.Fatalf("a lock already held is an ordinary answer, not an error: %v", err)
@@ -35,7 +35,7 @@ func TestHoldHeavyIndexLock_ReportsWhenAnotherHolderHasIt(t *testing.T) {
 func TestHoldHeavyIndexLock_HandsBackAReleaseWhenItWins(t *testing.T) {
 	free := &stubLocker{locked: true}
 
-	release, ok, err := holdHeavyIndexLock(context.Background(), free)
+	release, ok, err := holdLock(context.Background(), free, HeavyIndexLockKey)
 
 	if err != nil || !ok {
 		t.Fatalf("holdHeavyIndexLock = (_, %v, %v), want it to win a free lock", ok, err)
@@ -54,7 +54,7 @@ func TestHoldHeavyIndexLock_HandsBackAReleaseWhenItWins(t *testing.T) {
 func TestHoldHeavyIndexLock_DoesNotTreatAFailureAsPermission(t *testing.T) {
 	broken := &stubLocker{err: errors.New("connection refused")}
 
-	_, ok, err := holdHeavyIndexLock(context.Background(), broken)
+	_, ok, err := holdLock(context.Background(), broken, HeavyIndexLockKey)
 
 	if err == nil {
 		t.Error("a failed lock attempt was reported as success")

@@ -103,10 +103,6 @@ func run() int {
 	return worker.ExitCode(failures, 0)
 }
 
-// rewardLockKey serializes the referral pass across processes. Registered in the list in
-// internal/platform/migrate; "fhrw" as bytes.
-const rewardLockKey int64 = 0x66687277
-
 // settleRewardsLocked runs the referral pass under an advisory lock, or skips it.
 //
 // The lock is what makes the per-referrer ceiling a BOUND. A count read in one statement and
@@ -118,15 +114,8 @@ const rewardLockKey int64 = 0x66687277
 // Non-blocking: this pass is hourly and idempotent, so a second run gives up rather than
 // queueing, and a queued run holds a Type=oneshot unit open, which systemd shows as a hang.
 func settleRewardsLocked(ctx context.Context, pool *pgxpool.Pool, provider rewardProvider, queries *db.Queries, max int32) int {
-	conn, err := pool.Acquire(ctx)
+	release, held, err := worker.TryLock(ctx, pool, worker.RewardLockKey)
 	if err != nil {
-		log.Printf("billing-sync: referrals: acquiring a connection: %v", err)
-		return 1
-	}
-	defer conn.Release()
-
-	var held bool
-	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", rewardLockKey).Scan(&held); err != nil {
 		log.Printf("billing-sync: referrals: taking the lock: %v", err)
 		return 1
 	}
@@ -134,13 +123,7 @@ func settleRewardsLocked(ctx context.Context, pool *pgxpool.Pool, provider rewar
 		log.Print("billing-sync: referrals: another run holds the lock, skipping")
 		return 0
 	}
-	defer func() {
-		// context.Background(), because the release must happen even when the run's context is
-		// cancelled; a held lock would skip every later pass until the connection is reaped.
-		if _, err := conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", rewardLockKey); err != nil {
-			log.Printf("billing-sync: referrals: releasing the lock: %v", err)
-		}
-	}()
+	defer release()
 
 	return settleRewards(ctx, provider, queries, max)
 }

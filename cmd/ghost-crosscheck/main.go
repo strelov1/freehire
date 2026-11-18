@@ -31,9 +31,6 @@ import (
 const (
 	// pageSize bounds one keyset page of candidate postings.
 	pageSize = 2000
-	// lockKey serializes runs: concurrent runs would double the read load and interleave
-	// reports. A run that cannot take the lock exits cleanly.
-	lockKey = 0x66686763 // "fhgc" — freehire ghost crosscheck; the key list lives in internal/platform/migrate
 	// sampleSize is how many stamped titles a dry run prints; a reader needs examples, not a count.
 	sampleSize = 25
 )
@@ -53,14 +50,9 @@ func run() int {
 	defer cleanup()
 	queries := db.New(pool)
 
-	lockConn, err := pool.Acquire(ctx)
+	// A run that cannot take the lock exits cleanly.
+	release, locked, err := worker.TryLock(ctx, pool, worker.GhostCrosscheckLockKey)
 	if err != nil {
-		log.Printf("acquire lock connection: %v", err)
-		return 1
-	}
-	defer lockConn.Release()
-	var locked bool
-	if err := lockConn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", int64(lockKey)).Scan(&locked); err != nil {
 		log.Printf("crosscheck lock: %v", err)
 		return 1
 	}
@@ -68,7 +60,7 @@ func run() int {
 		log.Print("ghost-crosscheck: another run holds the lock — exiting")
 		return 0
 	}
-	defer func() { _, _ = lockConn.Exec(ctx, "SELECT pg_advisory_unlock($1)", int64(lockKey)) }()
+	defer release()
 
 	// The provider taxonomy lives in Go adapter markers (sources.ProviderKind), so
 	// the two source lists are derived here rather than restated in SQL.
