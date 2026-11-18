@@ -22,6 +22,7 @@ func TestRedirectURIAllowed(t *testing.T) {
 		{"loopback, different path", "http://127.0.0.1:51739/other", false},
 		{"ipv6 loopback form not registered", "http://[::1]:51739/callback", false},
 		{"unregistered host", "https://evil.example.com/callback", false},
+		{"loopback, extra query", "http://127.0.0.1:5000/callback?next=evil", false},
 		{"query string appended", "https://app.example.com/oauth/callback?x=1", false},
 	}
 	for _, tc := range cases {
@@ -30,6 +31,13 @@ func TestRedirectURIAllowed(t *testing.T) {
 				t.Errorf("RedirectURIAllowed(%v, %q) = %v, want %v", registered, tc.candidate, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestRedirectURIAllowedRegisteredQuery(t *testing.T) {
+	registered := []string{"http://127.0.0.1/cb?a=1"}
+	if oauth2server.RedirectURIAllowed(registered, "http://127.0.0.1:5000/cb?a=1") {
+		t.Error("loopback match admitted a registered query with a different port")
 	}
 }
 
@@ -48,6 +56,10 @@ func TestValidateRedirectURI(t *testing.T) {
 		{"javascript scheme", "javascript:alert(1)", true},
 		{"data scheme", "data:text/html,hi", true},
 		{"file scheme", "file:///etc/passwd", true},
+		{"vbscript scheme", "vbscript:msgbox(1)", true},
+		{"blob scheme", "blob:https://app.example/x", true},
+		{"about scheme", "about:blank", true},
+		{"empty fragment", "https://app.example/cb#", true},
 		{"relative", "/callback", true},
 		{"fragment", "https://app.example.com/cb#frag", true},
 		{"https without host", "https:///cb", true},

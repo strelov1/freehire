@@ -113,3 +113,47 @@ func TestBrowserOriginsIncludesExactServedHosts(t *testing.T) {
 		}
 	}
 }
+
+// hasAttrs fails unless every wanted attribute is present in the Set-Cookie header.
+func hasAttrs(t *testing.T, what, header string, want ...string) {
+	t.Helper()
+	low := strings.ToLower(header)
+	for _, w := range want {
+		if !strings.Contains(low, w) {
+			t.Errorf("%s %q lacks %q", what, header, w)
+		}
+	}
+}
+
+// The session JWT cookie's only XSS/CSRF defence is HttpOnly + SameSite=Lax (+ Secure
+// in prod); pin them on the set and on both logout clears.
+func TestSessionCookieAttributes(t *testing.T) {
+	hasAttrs(t, "session cookie", setCookieHeader(t, ".freehire.me"), "httponly", "samesite=lax", "secure", "path=/")
+	for _, sc := range clearCookieHeaders(t, ".freehire.me") {
+		hasAttrs(t, "clear cookie", sc, "httponly", "samesite=lax", "secure", "path=/")
+	}
+
+	// Dev http path: no Secure on the set or the clear.
+	app := fiber.New()
+	app.Get("/set", func(c *fiber.Ctx) error {
+		SetTokenCookie(c, "tok", time.Hour, false, "")
+		return nil
+	})
+	app.Get("/clear", func(c *fiber.Ctx) error {
+		ClearTokenCookie(c, false, ".freehire.me")
+		return nil
+	})
+	for _, path := range []string{"/set", "/clear"} {
+		resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", path, nil))
+		if err != nil {
+			t.Fatalf("test request failed: %v", err)
+		}
+		_ = resp.Body.Close()
+		for _, sc := range resp.Header.Values("Set-Cookie") {
+			hasAttrs(t, "insecure "+path, sc, "httponly", "samesite=lax")
+			if strings.Contains(strings.ToLower(sc), "secure") {
+				t.Errorf("insecure %s cookie %q carries Secure", path, sc)
+			}
+		}
+	}
+}
