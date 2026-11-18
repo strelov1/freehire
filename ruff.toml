@@ -15,7 +15,7 @@ src = ["services/scrapling-fetch", "scripts", ".github/scripts"]
 
 [lint]
 # Ruff's classic default selection (E4, E7, E9, F) written out, plus import sorting (I),
-# bugbear (B) and pyupgrade (UP). Spelled out because the built-in default of recent
+# bugbear (B), pyupgrade (UP), Ruff-specific (RUF), simplify (SIM) pathlib (PTH) and return (RET). Spelled out because the built-in default of recent
 # releases is ~500 rules, security and style families included, and a version bump must
 # not widen what the gates enforce.
-select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "RUF", "SIM", "PTH", "RET"]
