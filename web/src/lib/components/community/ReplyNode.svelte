@@ -77,7 +77,7 @@
   <p class="node__body">{reply.body}</p>
 
   {#if !closed}
-    <button class="node__reply-btn" onclick={onReplyClick}>{replying ? 'Cancel' : 'Reply'}</button>
+    <button type="button" class="node__reply-btn" onclick={onReplyClick}>{replying ? 'Cancel' : 'Reply'}</button>
   {/if}
 
   {#if replying}
