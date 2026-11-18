@@ -92,6 +92,7 @@ export const ALLOWED_DUPLICATE_COUNTS = {
   '0251': 3,
   '0258': 2,
   '0259': 3,
+  '0283': 2,
 };
 
 export function checkMigrationNumbers(filenames, allowlist) {
