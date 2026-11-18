@@ -44,7 +44,7 @@ func TestPushViewCountsWritesOnlyNewSteps(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closed); err != nil {
 		t.Fatalf("close job: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE jobs SET duplicate_of = $1 WHERE id = $2`, crossed, dup); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2`, crossed, dup); err != nil {
 		t.Fatalf("mark duplicate: %v", err)
 	}
 	q := db.New(pool)
