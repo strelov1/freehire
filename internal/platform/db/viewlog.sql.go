@@ -48,7 +48,9 @@ func (q *Queries) AdvanceViewLogCursor(ctx context.Context, arg AdvanceViewLogCu
 }
 
 const getJobViewCounts = `-- name: GetJobViewCounts :many
-SELECT id, view_count FROM jobs WHERE id = ANY($1::bigint[])
+SELECT id, view_count FROM jobs
+WHERE id = ANY($1::bigint[])
+  AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 `
 
 type GetJobViewCountsRow struct {
@@ -57,7 +59,9 @@ type GetJobViewCountsRow struct {
 }
 
 // The current view_count of the jobs a rollup run touched, for the index write that
-// replaces the old per-view search_outbox enqueue.
+// replaces the old per-view search_outbox enqueue. Only jobs public search can return:
+// closed and duplicate documents are filtered out of every query, so writing their count
+// only costs index time, and a reopened job is rewritten whole by the drain.
 func (q *Queries) GetJobViewCounts(ctx context.Context, ids []int64) ([]GetJobViewCountsRow, error) {
 	rows, err := q.db.Query(ctx, getJobViewCounts, ids)
 	if err != nil {

@@ -68,6 +68,13 @@ func run() int {
 		return 1
 	}
 	defer analytics.Close()
+	// The catalogue-scale snapshot goes FIRST: it reads nothing the rollups write, and behind
+	// their long transaction one slow or failed rebuild left the public figures hours stale.
+	// It is a separate concern with its own failure mode and never changes this run's exit code.
+	done := worker.Stage("catalogue snapshot")
+	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(analytics), db.New(pool))
+	done()
+
 	// A failed rollup still fails the run, but does not take the snapshots below with
 	// it: they read other data, and skipping them lets the public figures expire.
 	exit := 0
@@ -75,12 +82,6 @@ func run() int {
 		log.Printf("rebuild rollups: %v", err)
 		exit = 1
 	}
-
-	// The catalogue-scale snapshot is a separate concern with its own failure mode, so
-	// it neither joins the rollups' transaction nor changes this run's exit code.
-	done := worker.Stage("catalogue snapshot")
-	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(analytics), db.New(pool))
-	done()
 
 	// So does the per-source snapshot behind the public /sources page, for the same
 	// reason and on the same terms.
