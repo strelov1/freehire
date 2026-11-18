@@ -124,10 +124,8 @@ class WorkflowSelectionTests(unittest.TestCase):
     def test_job_gates_consume_declared_outputs(self):
         workflows = Path(__file__).resolve().parents[1] / "workflows"
         for filename, jobs in {
-            "ci.yml": {
-                "scrapling-fetch": "scrapling_fetch",
-                "design-system": "design_system",
-            },
+            "lint.yml": {"scrapling-fetch": "scrapling_fetch"},
+            "design-system.yml": {"design-system": "design_system"},
             "codegen.yml": {
                 "migrations": "migrations",
                 "sqlc": "sqlc",

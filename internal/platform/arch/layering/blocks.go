@@ -92,7 +92,7 @@ var blocks = map[string][]string{
 		// fitanalysis orchestrates matchanalysis (cache, staleness, the credit rule,
 		// coalescing); matchanalysis stays the prompt chain and the Analysis type.
 		"fitanalysis",
-		"hardconstraint", "hardconstraint/credentials", "headshot", "jobmatch",
+		"hardconstraint", "hardconstraint/credentials", "headshot", "jevrank", "jobmatch",
 		"matchanalysis", "perioddate", "resume", "resumeextract",
 		// survey holds the candidate's self-reported segmentation answers. It states what a
 		// candidate IS, so it sits here; engage (layer 7) may import it, not the reverse.

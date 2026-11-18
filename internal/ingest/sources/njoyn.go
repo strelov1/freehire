@@ -91,6 +91,35 @@ func parseNjoynBoard(board string) (njoynBoard, error) {
 	return njoynBoard{tenant: m[1], site: m[2], clid: m[3]}, nil
 }
 
+// njoynGenericTenant is the host Njoyn serves EVERY client's career site from, by clid: a
+// board on it is another client's board under a second name, never a client of its own.
+const njoynGenericTenant = "clients"
+
+// njoynClientID is a board's identity, its clid: "cgi/corp/21001" and "clients/corp/21001"
+// fold to "21001". A board that does not parse folds to itself.
+func njoynClientID(board string) string {
+	b, err := parseNjoynBoard(board)
+	if err != nil {
+		return board
+	}
+	return b.clid
+}
+
+// validateBoard refuses a board on the generic clients host: it names a client the catalogue
+// can only hold under that client's own career host, which a link alone does not say. A link
+// on the generic host is still recognised (atsboard), so a client the catalogue already has
+// resolves to that board through njoynClientID instead of reaching here as a new one.
+func (njoyn) validateBoard(board string) error {
+	b, err := parseNjoynBoard(board)
+	if err != nil {
+		return err
+	}
+	if b.tenant == njoynGenericTenant {
+		return fmt.Errorf("%s.njoyn.com serves every client; add the client under its own career host (<tenant>/%s/%s)", njoynGenericTenant, b.site, b.clid)
+	}
+	return nil
+}
+
 func (b njoynBoard) script() string {
 	return fmt.Sprintf("https://%s.njoyn.com/%s/xweb/xweb.asp", b.tenant, b.site)
 }

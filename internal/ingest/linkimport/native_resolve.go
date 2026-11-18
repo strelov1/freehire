@@ -60,10 +60,14 @@ func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw, employer
 	}
 	known := false
 	if catalog != nil {
-		var err error
-		_, known, err = catalog.Entry(ctx, source, board)
+		stored, found, err := catalog.Entry(ctx, source, board)
 		if err != nil {
 			return NativeDestination{}, err
+		}
+		// The catalogue may hold this board under another spelling of the same identity (a
+		// Njoyn link on the generic clients host); the posting belongs under the stored one.
+		if found {
+			known, board = true, stored.Board
 		}
 	}
 	if !known {

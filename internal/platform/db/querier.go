@@ -1343,8 +1343,9 @@ type Querier interface {
 	// health), board_retired, moderated or source_misattributed (our own decisions), or ''
 	// (closed before reasons were recorded). A close dated before existence is left out, as
 	// ComputeInsightsCompanyLifetime does.
-	// INFLOW counts postings whose existence date falls in the last 30 days — the header's
-	// rule, applied to "new" instead of "open at the start" — and deliberately has NO earlier
+	// INFLOW counts postings whose existence date, LEAST(posted_at, created_at) (insights.sql's
+	// header), falls in the last 30 days — so a posting published before the window but found
+	// during it is not "new" — and deliberately has NO earlier
 	// window. Measured 2026-10-30, the comparison was dominated by our own coverage growth:
 	// a board first crawled this month shows its earlier postings only if they were still
 	// open when we found it, so healthcare read +155% while stable-coverage categories
@@ -3332,7 +3333,7 @@ type Querier interface {
 	// the user has at least one registered push device (the push channel's live
 	// deliverability check, same soft-skip role as the Telegram link), the user's
 	// webhook destination (URL, NULL or disabled → the worker soft-skips webhook
-	// delivery the same way), and the delivery-timing context
+	// delivery the same way; its secret signs the delivery), and the delivery-timing context
 	// (live, not snapshotted, same as the channel checks above) — the account's
 	// timezone and its saved-search digest frequency settings, read via
 	// internal/application/deliverywindow before a digest is sent.
@@ -3617,8 +3618,8 @@ type Querier interface {
 	//
 	// The window is ten minutes, and that is a measured choice rather than a round number.
 	// Measured on prod 2026-09-16: 24h costs 20,818ms, 60m costs 837ms, 15m costs 328ms, and
-	// 10m costs 22ms -- the same order as ProviderIngestHealth's 54ms, which is the bar this
-	// file's header sets. Ten minutes is also sufficient: the duplication appears BETWEEN
+	// 10m costs 22ms -- the same order as ProviderIngestHealth's 54ms, which is the once-a-minute bar
+	// this file's header sets. Ten minutes is also sufficient: the duplication appears BETWEEN
 	// boards, never within one crawl (a board that fetches the global catalogue writes each of
 	// its postings once), so the gap opens as soon as two boards of the same source land in one
 	// window. apploi would have had roughly forty per window. A source whose boards crawl more
@@ -4460,6 +4461,9 @@ type Querier interface {
 	// internal/api/handler/companies.go) — rating is not (yet) a Meili-sortable
 	// attribute, so routing there would silently drop the requested order.
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
+	// Every company whose site (company_info website, else homepage) reduces to one of the
+	// given hosts, job_count 0 included. Rides companies_site_host_idx.
+	ListCompaniesBySiteHost(ctx context.Context, hosts []string) ([]ListCompaniesBySiteHostRow, error)
 	// The merge worker's input: every company slug the JOBS table actually holds, with the display
 	// name and the open-job count that elects the winner of its folded group.
 	//
@@ -6472,6 +6476,9 @@ type Querier interface {
 	// (apploi's 5,833, retired 2026-09-15) would otherwise read "down" forever for a crawl
 	// nobody runs any more. Each health identity must match an active catalog identity.
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
+	// Ingest-health aggregates behind cmd/queue-metrics, split out of metrics.sql for size. Its
+	// header's bar holds here too: every query is read-only, takes no locks, and runs once a
+	// minute alongside ingest, so none may scan `jobs` (8M rows) or make another worker wait.
 	// Per-provider ingest health: when the provider's most recent board crawl succeeded, and
 	// how its boards split across four mutually exclusive states. It is also the ONLY source of
 	// the fleet-wide freehire_boards_total, which cmd/queue-metrics sums from these rows, so the
@@ -6527,7 +6534,7 @@ type Querier interface {
 	// parallel hash join of the two tables, against 37ms for the board_health-only form it
 	// replaces. It also replaces BoardHealthMetrics, the fleet-wide twin it now feeds, so the
 	// net cost is one query of this size a minute. Neither table is jobs, whose 8M-row scan is
-	// what this file's header exists to forbid.
+	// what this file's header forbids.
 	ProviderIngestHealth(ctx context.Context) ([]ProviderIngestHealthRow, error)
 	// Removes a token the Expo Push API reported as permanently undeliverable
 	// (DeviceNotRegistered). No owner check: the token is dead regardless of
@@ -8932,7 +8939,10 @@ type Querier interface {
 	// disabled_at, since submitting the form is an explicit re-commitment to
 	// the endpoint. consecutive_failures resets too: a new URL (or the same one
 	// re-saved) gets a fresh run at the auto-disable threshold, not whatever
-	// count the old destination left behind.
+	// count the old destination left behind. The secret is set only on insert: changing
+	// the URL keeps the secret the receiver already verifies with.
+	// Only onto the row whose secret signed the caller's probe: a destination deleted and
+	// recreated (or created twice at once) in between has another secret, and then no row comes back.
 	UpsertWebhookConfig(ctx context.Context, arg UpsertWebhookConfigParams) (WebhookConfig, error)
 	// Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
 	// reference row (is_reference = true) with no jobs; an existing slug (job-backed or a

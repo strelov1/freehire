@@ -1,0 +1,137 @@
+name: Design system
+
+# Builds, tests and checks the shared design-system package and its Storybook. Split
+# out of ci.yml for size; it does not feed the `backend` or `web` gates there.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: design-system-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_tasks: ${{ steps.scope.outputs.backend_tasks }}
+      web: ${{ steps.scope.outputs.web }}
+      backend: ${{ steps.scope.outputs.backend }}
+      scrapling_fetch: ${{ steps.scope.outputs.scrapling_fetch }}
+      extension: ${{ steps.scope.outputs.extension }}
+      docs: ${{ steps.scope.outputs.docs }}
+      migrations: ${{ steps.scope.outputs.migrations }}
+      contracts: ${{ steps.scope.outputs.contracts }}
+      sqlc: ${{ steps.scope.outputs.sqlc }}
+      design_system: ${{ steps.scope.outputs.design_system }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test CI scripts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
+      - name: Select required checks
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 .github/scripts/ci_changes.py --base "$BASE_SHA" --head "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+  design-system:
+    needs: changes
+    if: needs.changes.outputs.design_system == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: design-system
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: design-system/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Check formatting
+        run: pnpm run format:check
+
+      - name: Build
+        run: pnpm build
+
+      # dist/tokens-*.css is committed and generated, and until now nothing
+      # compared the two: a token edited without a rebuild shipped the old CSS
+      # and every job stayed green. Style Dictionary writes no timestamp, so a
+      # rebuild of unchanged sources is byte-identical and this diff is real.
+      - name: Check dist matches the token sources
+        run: pnpm check:dist
+
+      # The primitives live in the package, so web's svelte-check and vitest
+      # never see them — both skip node_modules, which is where web resolves
+      # them from.
+      - name: Check
+        run: pnpm check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Validate docs
+        run: pnpm validate:docs
+
+      # A hex, a `p-[7px]` or a `text-amber-600` is a value the theme cannot move
+      # and the `.dark` selector cannot override, and nothing else here would
+      # notice: all three are valid input to their compilers and the build stays
+      # green. Two radii — zero in the package, a held count in web/src.
+      - name: Check token coverage
+        run: pnpm check:tokens
+
+      # This job proves the package builds and the `web` job proves the app
+      # builds, and both are true whether or not they are connected — which is
+      # how eleven primitives stayed unreachable from app code for three phases
+      # with everything green. This is the only step that reads both halves.
+      - name: Check adoption
+        run: pnpm check:adoption
+
+      - name: Build Storybook
+        run: pnpm build-storybook
+
+      # Tailwind v4 discards classes it cannot find a source for, silently — a
+      # preview that lost its Tailwind entry or its @source scan still builds
+      # green and just renders every primitive unstyled. So assert the output
+      # positively: `animate-pulse` reaches the CSS only by way of the scan over
+      # src/*.svelte (Skeleton is its sole user), and a class selector count
+      # catches a Tailwind entry that vanished entirely.
+      - name: Assert Storybook emitted the primitives' utilities
+        run: |
+          if [ -z "$(find storybook-static/assets -name '*.css' -print -quit)" ]; then
+            echo "No stylesheet in storybook-static/assets."
+            exit 1
+          fi
+          if ! grep -rqF '.animate-pulse' --include='*.css' storybook-static/assets; then
+            echo "Storybook CSS carries no utility from design-system/src/*.svelte."
+            echo "The preview lost its Tailwind entry or theme.css's @source scan."
+            exit 1
+          fi

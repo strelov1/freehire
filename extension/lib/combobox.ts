@@ -11,15 +11,8 @@
  */
 
 import type { ComboboxReply, ComboboxStep } from './protocol';
-import {
-  collectQuestions,
-  comboListbox,
-  comboOptionNodes,
-  displayedValues,
-  isComboWidget,
-  isOnScreen,
-  shownText,
-} from './form';
+import { collectQuestions } from './form';
+import { comboListbox, comboOptionNodes, displayedValues, isComboWidget, isOnScreen, shownText } from './comboWidget';
 import { normalizeLabel } from './fieldKeys';
 import { assertNever } from './utils';
 
