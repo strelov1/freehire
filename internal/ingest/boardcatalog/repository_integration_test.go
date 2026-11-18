@@ -92,6 +92,62 @@ func TestInserterCatchesASecondSpellingWithinOneRun(t *testing.T) {
 	}
 }
 
+// Njoyn's clients.njoyn.com serves every client by clid, so a link there (LinkedIn's employer
+// discovery finds them) names a client the catalogue holds under its own career host. With
+// that board live it is a duplicate, and a lookup by it answers with the live board, so the
+// pair is ONE board; with no such board it is refused, never added.
+func TestNjoynClientsLinkFoldsIntoTheClientsBoard(t *testing.T) {
+	repo := newRepo(t)
+	ctx := context.Background()
+	ins := NewInserter(repo, sources.Taxonomy())
+
+	generic := InsertInput{Provider: "njoyn", Board: "clients/corp/21001", Company: "CGI"}
+	alone, err := ins.Insert(ctx, generic, StatusPending)
+	if err != nil {
+		t.Fatalf("generic board alone: %v", err)
+	}
+	if alone.Status != StatusRejected {
+		t.Fatalf("generic board alone stored as %q, want rejected", alone.Status)
+	}
+
+	if _, err := ins.Insert(ctx, InsertInput{Provider: "njoyn", Board: "cgi/corp/21001", Company: "CGI"}, StatusActive); err != nil {
+		t.Fatalf("client's own board: %v", err)
+	}
+	if _, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, generic, StatusPending); !errors.Is(err, ErrDuplicateBoard) {
+		t.Fatalf("generic board beside the client's own: err = %v, want ErrDuplicateBoard", err)
+	}
+	e, found, err := repo.Entry(ctx, "njoyn", "clients/corp/21001")
+	if err != nil || !found || e.Board != "cgi/corp/21001" {
+		t.Fatalf("Entry(clients/corp/21001) = %+v, %v, %v; want the live cgi/corp/21001", e, found, err)
+	}
+	live, err := repo.ListActiveForProvider(ctx, "njoyn")
+	if err != nil || len(live) != 1 {
+		t.Fatalf("live njoyn boards = %d (%v), want exactly one", len(live), err)
+	}
+}
+
+// A second name that was once live and then retired (what production holds for
+// clients/corp/21001) must not win a lookup over the live board with the same identity:
+// GetBoardForResolve answers a retired row by its exact name, and a link import would
+// otherwise write the posting back into the retired namespace.
+func TestEntryPrefersTheLiveBoardOverARetiredSpelling(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Pool(t)
+	repo := NewQueriesRepository(db.New(pool))
+	for _, b := range []string{"cgi/corp/21001", "clients/corp/21001"} {
+		if _, err := pool.Exec(ctx, `INSERT INTO boards (provider, board, company, status) VALUES ('njoyn', $1, 'CGI', 'active')`, b); err != nil {
+			t.Fatalf("seed %s: %v", b, err)
+		}
+	}
+	if _, err := repo.Retire(ctx, "njoyn", "clients/corp/21001", ""); err != nil {
+		t.Fatalf("retire: %v", err)
+	}
+	e, found, err := repo.Entry(ctx, "njoyn", "clients/corp/21001")
+	if err != nil || !found || e.Board != "cgi/corp/21001" {
+		t.Fatalf("Entry(retired clients/corp/21001) = %+v, %v, %v; want the live cgi/corp/21001", e, found, err)
+	}
+}
+
 // A rejected row (a validation failure) does not claim the identity: correcting the
 // mistake and resubmitting must succeed, not collide with the earlier bad attempt.
 func TestInsertAcceptsResubmissionAfterRejection(t *testing.T) {

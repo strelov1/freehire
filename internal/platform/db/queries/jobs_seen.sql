@@ -152,10 +152,11 @@ WHERE NOT EXISTS (SELECT 1 FROM touched);
 -- its absence as an error as well). This is the FULL touch: the ordinary re-listing of an open,
 -- unexpired posting takes TouchOpenJob and never reaches the jobs tuple at all.
 WITH existing AS MATERIALIZED (
-    SELECT j.id, j.closed_at, j.is_private, j.duplicate_of, a.last_seen_at, j.application_deadline AS previous_deadline,
+    SELECT j.id, j.company_slug, j.closed_at, j.closed_reason, j.is_private, j.duplicate_of, a.last_seen_at, j.application_deadline AS previous_deadline,
            COALESCE(sqlc.narg(application_deadline)::date, j.application_deadline) AS deadline,
            -- The touch would reopen this row: closed, and its deadline (if any) not passed.
-           (j.closed_at IS NOT NULL AND (COALESCE(sqlc.narg(application_deadline)::date, j.application_deadline) IS NULL
+           -- A row withheld as native_source_pending is never reopened by a touch (see below).
+           (j.closed_at IS NOT NULL AND j.closed_reason <> 'native_source_pending' AND (COALESCE(sqlc.narg(application_deadline)::date, j.application_deadline) IS NULL
                                          OR COALESCE(sqlc.narg(application_deadline)::date, j.application_deadline) >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
     FROM jobs j
     JOIN job_activity a ON a.job_id = j.id
@@ -175,7 +176,12 @@ WITH existing AS MATERIALIZED (
             OR jobs.application_deadline IS DISTINCT FROM e.deadline
             THEN now() ELSE updated_at END
     FROM existing e
-    WHERE jobs.id = e.id AND (sqlc.arg(allow_reopen)::boolean OR NOT e.would_reopen)
+    -- native_source_pending is a publication withhold, not a liveness closure: the posting's
+    -- application method is external or unknown, so only a fresh detail read that proves
+    -- on-site Apply (the ordinary upsert) may publish it. A mere re-listing proves nothing,
+    -- so a touch leaves such a row exactly as it is, whatever allow_reopen says.
+    WHERE jobs.id = e.id AND e.closed_reason <> 'native_source_pending'
+      AND (sqlc.arg(allow_reopen)::boolean OR NOT e.would_reopen)
     RETURNING jobs.id, jobs.company_slug, jobs.closed_at,
               jobs.application_deadline, COALESCE(jobs.posted_at, jobs.created_at) AS job_posted_at
 ), queued AS (
@@ -207,8 +213,8 @@ WITH existing AS MATERIALIZED (
 -- the lock order is jobs then activity, and not when the touch was deferred. reset_strikes says
 -- whether that stamp must also clear the strike count: the old row was closed. A reopen is reset
 -- by the state trigger already; this covers the posting an expired deadline leaves closed.
-SELECT e.id, COALESCE(t.company_slug, '')::text AS company_slug,
-       (t.id IS NULL)::boolean AS deferred,
+SELECT e.id, COALESCE(t.company_slug, e.company_slug)::text AS company_slug,
+       (t.id IS NULL AND e.would_reopen)::boolean AS deferred,
        (t.id IS NOT NULL AND t.closed_at IS NULL AND e.closed_at IS NOT NULL)::boolean AS reopened,
        (t.id IS NOT NULL AND e.closed_at IS NOT NULL)::boolean AS reset_strikes
 FROM existing e LEFT JOIN touched t ON t.id = e.id;
