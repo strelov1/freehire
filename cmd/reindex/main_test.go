@@ -75,24 +75,32 @@ func TestSplitJobs_PrivateJobsAreDeletedNotIndexed(t *testing.T) {
 	}
 }
 
-// A job whose category neither the title dictionary nor the LLM ever resolved must not
-// be indexed, and is deleted so a stale pre-rule copy leaves the index (see
-// search.CategoryUnresolved and internal/search/AGENTS.md).
-func TestSplitJobs_CategoryUnresolvedDeletedNotIndexed(t *testing.T) {
-	categorized := db.Job{ID: 1, Title: "Backend Engineer", PublicSlug: "backend-x", Category: "backend", Description: "<p>Build things.</p>"}
-	unresolved := db.Job{ID: 2, Title: "Overnight Stocking", PublicSlug: "stocking-x"}
-	llmOther := db.Job{ID: 3, Title: "Mystery Role", PublicSlug: "mystery-x",
+// A job no category resolved is indexed under the residual "other" bucket (#4412); a resolved
+// category is kept, and a job with no body is still withheld.
+func TestSplitJobs_UncategorizedIndexedAsOther(t *testing.T) {
+	body := "<p>Stock shelves overnight.</p>"
+	categorized := db.Job{ID: 1, Title: "Electrician", PublicSlug: "elec-x", Category: "skilled_trades", Description: body}
+	unresolved := db.Job{ID: 2, Title: "Overnight Stocking", PublicSlug: "stocking-x", Description: body}
+	llmOther := db.Job{ID: 3, Title: "Mystery Role", PublicSlug: "mystery-x", Description: body,
 		Enrichment: []byte(`{"category":"other"}`)}
+	techNoCategory := db.Job{ID: 4, Title: "Platform Wrangler", PublicSlug: "wrangler-x", Description: body,
+		IsTech: pgtype.Bool{Valid: true, Bool: true}}
+	bodiless := db.Job{ID: 5, Title: "Overnight Stocking", PublicSlug: "stocking-y"}
 
-	docs, deleteIDs, err := splitJobs([]db.Job{categorized, unresolved, llmOther}, nil, nil, time.Now())
+	docs, deleteIDs, err := splitJobs([]db.Job{categorized, unresolved, llmOther, techNoCategory, bodiless}, nil, nil, time.Now())
 	if err != nil {
 		t.Fatalf("splitJobs: %v", err)
 	}
-	if len(docs) != 1 || docs[0].ID != 1 {
-		t.Fatalf("docs = %+v, want only the categorized job", docs)
+	got := map[int64]string{}
+	for _, d := range docs {
+		got[d.ID] = d.Enrichment.Category
 	}
-	if got, want := deleteIDs, []int64{2, 3}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("deleteIDs = %v, want %v", got, want)
+	want := map[int64]string{1: "skilled_trades", 2: "other", 3: "other", 4: "other"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("indexed categories = %v, want %v", got, want)
+	}
+	if !reflect.DeepEqual(deleteIDs, []int64{5}) {
+		t.Fatalf("deleteIDs = %v, want [5] (no body)", deleteIDs)
 	}
 }
 

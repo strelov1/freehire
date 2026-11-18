@@ -156,9 +156,9 @@ func TestListCompaniesOrdersByJobCount(t *testing.T) {
 
 // The bug this closes. companies.job_count gates the companies search index, which
 // gates the sitemap; the company PAGE lists what the JOB search index holds. The two
-// scopes differed by three predicates — is_private, no body, unresolved category —
-// so a company hiring only for roles the category dictionary never classified shipped
-// a sitemap URL whose page rendered a heading, "0 open jobs" and nothing else.
+// scopes differed by the predicates search applies (is_private, no body), so a company
+// whose every open role search dropped shipped a sitemap URL whose page rendered a
+// heading, "0 open jobs" and nothing else.
 // Measured on prod before the fix: 17 of 25 sampled company pages, and 294,021
 // company URLs in the sitemap against 442,153 rows counted here.
 func TestRefreshCompanyFacetsCountsOnlySearchableJobs(t *testing.T) {
@@ -177,18 +177,17 @@ func TestRefreshCompanyFacetsCountsOnlySearchableJobs(t *testing.T) {
 	insertJobForCompany(t, pool, "mixed:2", "mixed-co")
 	insertUnsearchableJob(t, pool, "mixed:private", "mixed-co", "private")
 	insertUnsearchableJob(t, pool, "mixed:nobody", "mixed-co", "no-body")
-	insertUnsearchableJob(t, pool, "mixed:uncat", "mixed-co", "uncategorized")
 
-	// The clinic is the shape that reached the sitemap: open roles, none classifiable.
-	insertUnsearchableJob(t, pool, "clinic:1", "clinic", "uncategorized")
-	insertUnsearchableJob(t, pool, "clinic:2", "clinic", "uncategorized")
+	// The clinic is the shape that reached the sitemap: open roles, none findable.
+	insertUnsearchableJob(t, pool, "clinic:1", "clinic", "no-body")
+	insertUnsearchableJob(t, pool, "clinic:2", "clinic", "private")
 
 	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 		t.Fatalf("recount: %v", err)
 	}
 
 	if got := companyJobCount(t, pool, "mixed-co"); got != 2 {
-		t.Errorf("mixed-co job_count = %d, want 2 (the private, body-less and uncategorized rows excluded)", got)
+		t.Errorf("mixed-co job_count = %d, want 2 (the private and body-less rows excluded)", got)
 	}
 	// Zero is what keeps it out of ListCompaniesForReindex, and so out of the sitemap.
 	if got := companyJobCount(t, pool, "clinic"); got != 0 {
@@ -196,12 +195,10 @@ func TestRefreshCompanyFacetsCountsOnlySearchableJobs(t *testing.T) {
 	}
 }
 
-// TestRefreshCompanyFacetsCountsWhatSearchKeepsUncategorized pins the two ways an
-// uncategorized posting still reaches search (search.CategoryUnresolved), which the count
-// must follow or the company drops out of the companies index while its jobs stay live
-// (#4503): a title the Go dictionaries keep (passed in as kept_ids) and a vacancy a verified
-// employer published (employer_source).
-func TestRefreshCompanyFacetsCountsWhatSearchKeepsUncategorized(t *testing.T) {
+// TestRefreshCompanyFacetsCountsUncategorizedPostings: search indexes a posting no category
+// resolved under "other" (#4412), so a company whose only open postings are uncategorized
+// counts them all.
+func TestRefreshCompanyFacetsCountsUncategorizedPostings(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -209,28 +206,20 @@ func TestRefreshCompanyFacetsCountsWhatSearchKeepsUncategorized(t *testing.T) {
 	if _, err := pool.Exec(ctx, "TRUNCATE companies, jobs RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	insertCompany(t, pool, "kolektor-sisteh", "Kolektor Sisteh d.o.o.")
-	insertCompany(t, pool, "employer-co", "Employer Co")
 	insertCompany(t, pool, "clinic", "Some Clinic")
-	insertUnsearchableJob(t, pool, "kolektor:1", "kolektor-sisteh", "uncategorized")
-	insertUnsearchableJob(t, pool, "employer:1", "employer-co", "uncategorized")
-	insertUnsearchableJob(t, pool, "clinic:1", "clinic", "uncategorized")
-	if _, err := pool.Exec(ctx, "UPDATE jobs SET source = 'employer' WHERE external_id = 'employer:1'"); err != nil {
-		t.Fatal(err)
-	}
-	var kept int64
-	if err := pool.QueryRow(ctx, "SELECT id FROM jobs WHERE external_id = 'kolektor:1'").Scan(&kept); err != nil {
-		t.Fatal(err)
+	for _, id := range []string{"clinic:1", "clinic:2"} {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, description, category, enrichment)
+			 VALUES ('test', $1, 'http://example.test', 'Barista', 'job-' || $1, 'clinic', 'We are hiring.', '', '{"category":"other"}'::jsonb)`,
+			id); err != nil {
+			t.Fatalf("insert %s: %v", id, err)
+		}
 	}
 
-	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{
-		KeptIds: []int64{kept}, EmployerSource: "employer",
-	}); err != nil {
+	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
 		t.Fatalf("recount: %v", err)
 	}
-	for slug, want := range map[string]int{"kolektor-sisteh": 1, "employer-co": 1, "clinic": 0} {
-		if got := companyJobCount(t, pool, slug); got != want {
-			t.Errorf("%s job_count = %d, want %d", slug, got, want)
-		}
+	if got := companyJobCount(t, pool, "clinic"); got != 2 {
+		t.Errorf("clinic job_count = %d, want 2", got)
 	}
 }

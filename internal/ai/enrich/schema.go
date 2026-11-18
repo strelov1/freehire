@@ -17,11 +17,13 @@ const (
 
 // unaskedFields are contract fields the prompt does not request, so the schema must not
 // either: under strict mode every property is required. They come from the deterministic
-// dictionaries (`internal/job/jobderive`).
+// dictionaries (`internal/job/jobderive`). category is asked: the title dictionary leaves
+// ~2.7M open postings unfiled, and search reads the model's answer when the column is empty
+// (#4412).
 var unaskedFields = []string{
 	"work_mode", "employment_type",
 	"seniority", "english_level", "education_level",
-	"category", "experience_years_min", "posting_language",
+	"experience_years_min", "posting_language",
 }
 
 // geoFields are dropped when the dictionary already pinned geography; `geoFacet` discards
@@ -38,6 +40,7 @@ func constrainedEnums() []llmschema.Override {
 		llmschema.Enum("domains", vocab.DomainValues),
 		llmschema.Enum("company_type", vocab.CompanyTypeValues),
 		llmschema.Enum("company_size", vocab.CompanySizeValues),
+		llmschema.Enum("category", vocab.CategoryValues),
 	}
 }
 

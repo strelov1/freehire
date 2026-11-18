@@ -180,6 +180,11 @@ export const CATEGORY_LABELS: Record<string, string> = {
   other: 'Other',
 } satisfies Record<Category, string>;
 
+/** CATEGORY_LABELS as a job reads it: search files every posting no category resolved
+ *  under `other` (#4412), so on a job that bucket is "Unclassified". Candidate
+ *  specializations keep "Other". */
+export const JOB_CATEGORY_LABELS: Record<string, string> = { ...CATEGORY_LABELS, other: 'Unclassified' };
+
 /** Display label for a category code (e.g. ml_ai → "ML / AI"), shared by the filter
  *  panel, the profile view and the /insights pages. The map above is exhaustive over
  *  the vocabulary, so the fallback only fires for a code the SPA has not been taught. */

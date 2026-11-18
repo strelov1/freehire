@@ -98,3 +98,13 @@ describe('openingActions', () => {
     }
   });
 });
+
+it('keeps partially evidenced requirements open and labels the remaining gap', () => {
+  expect(summarizeRun([{ requirement: 'Azure AI Search', status: 'partial' }])).toEqual({
+    closed: 0,
+    open: 1,
+    notReached: 0,
+    total: 1,
+  });
+  expect(statusMeta('partial')).toEqual({ label: 'Partially supported', tone: 'open' });
+});

@@ -1,10 +1,28 @@
 # Knowledge update history
 
+## 2026-11-17
+
+Documented the optional LinkedIn Easy Apply listing pass (`tenants.easyapply_pages`). Evidence is a
+live guest-API measurement today: 6 of 6 Easy Apply cards had an on-site apply control against 1 of
+8 without the filter; the detail page still decides publication. No production rollout is asserted.
+
+Documented the LinkedIn non-native read cache (`linkedin_postings_read`): external and unknown
+postings are re-read only after the body-refresh window. Evidence is the implementation and its
+tests; no production rollout is asserted.
+
+Documented that the LinkedIn adapter re-reads a stored posting only every `BODY_REFRESH_DAYS`
+through the seen-set (provider-wide, keyed by bare posting id), and that a liveness touch never
+reopens a `native_source_pending` row. Evidence is the implementation and its tests; the
+`ingest-env/linkedin.env` setting is applied separately.
+
 ## 2026-11-16
 
 Documented independent WantApply global/Cyprus inventories and the original-postings
 exception to company-wide coverage. Evidence is the adapter, coverage implementation,
 and regression tests; production recovery is checked separately.
+
+Linked assistant merge consent and requirement-report ownership to their current package
+references. Evidence is the local working tree and regression tests, not a production rollout.
 
 Documented native ATS ownership for external LinkedIn discoveries, identity-preserving
 transfer, board discovery and scheduler ownership. Evidence is the implementation and
@@ -58,3 +76,24 @@ integration suite; production verification is separate.
 Preserved independently verified native employer metadata across a later posting-read
 failure. The regression covers pending-board naming and a successful native retry with
 an adapter that labels jobs from its board entry; no unverified posting is published.
+
+## LinkedIn throttle retries — 2026-11-17
+
+The first 80-search harvest run (2026-11-17) logged ten detail 429s in 25 minutes through the
+Scrapling proxy; each ended its search after 7-64 of ~100 listed postings while neighbouring
+requests were served. The adapter now retries a 429 twice after growing pauses before treating
+it as a refusal. 403/999 and a persistent 429 still stop the board; pacing is unchanged.
+
+## Vendor hosts from LinkedIn employer discovery — 2026-11-17
+
+The first 80-search LinkedIn harvest onboarded three vendor addresses as employer boards from
+career-page links: iCIMS's cookie-script host, Recruitee's analytics and careers_not_hosted
+fallback hosts, and SmartRecruiters' candidate portal path. Each was probed (404, empty, redirect,
+0 postings); the recognizer now reserves them. qa.recruitee.com is a live tenant and stays.
+
+## LinkedIn request interval — 2026-11-17
+
+The LinkedIn limiter's 2s spacing became `LINKEDIN_REQUEST_INTERVAL` (default unchanged,
+100ms..10s, invalid fails the crawl). Requests already leave through the rotating proxy with a
+new exit IP each, and 158 searches after the 429 retry met no refusal at 2s, so the per-process
+spacing, not LinkedIn, was the throughput bound. Ops lowers it in steps.

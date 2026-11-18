@@ -2,16 +2,16 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-  <img src="docs/assets/logo-light.svg" alt="freehire" width="84" height="84">
+  <img src="docs/assets/logo-light.svg" alt="freehire.me" width="84" height="84">
 </picture>
 
-# freehire
+# [**freehire.me**](https://freehire.me/?utm_source=github&utm_medium=readme&utm_campaign=hero)
 
 <!-- The tagline is a deliberate subtitle under the title, so it skips a heading level. -->
 <!-- rumdl-disable-next-line MD001 -->
 ### Every tech job, straight from the source — for you and your agent.
 
-**4.9M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
+**5M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
 [**Try it live →**](https://freehire.me/?utm_source=github&utm_medium=readme&utm_campaign=hero) · [Features](docs/features.md) · [Architecture](docs/architecture.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
@@ -39,6 +39,10 @@
   </picture>
 </a>
 <a href="https://trendshift.io/repositories/55060?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-55060" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/55060" alt="strelov1%2Ffreehire | Trendshift" width="250" height="55"/></a>
+
+<!-- Datacircle's own badge, hotlinked so it always shows the current rank; scaled down
+     from 240x162 so it does not tower over the two badges beside it. -->
+<a href="https://datacircle.dev/best-full-job-posting-api"><img src="https://datacircle.dev/badge/best-full-job-posting-api/freehire.svg" alt="Datacircle's ranking of the best full job posting API providers" width="160" height="108"></a>
 
 <br>
 

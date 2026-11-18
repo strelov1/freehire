@@ -124,7 +124,7 @@ var nonCorroboratingPhrases = func() map[string]bool {
 	// Not covered, because neither is a phrase: the EHS platforms (Enablon, Cority are products you
 	// administer, like "Ahrefs") and the word aliases osha/epa/nfpa/rcra/hazop, where a regulator's
 	// name is not English prose. Both stay corroborating.
-	for _, p := range slices.Concat(occupationalSafetyPhraseAliases, industrialMaintenancePhraseAliases) {
+	for _, p := range slices.Concat(occupationalSafetyPhraseAliases, industrialMaintenancePhraseAliases, procurementPhraseAliases) {
 		out[p.canonical] = true
 	}
 	return out
@@ -141,6 +141,8 @@ var sharedAcronyms = map[string]string{
 	"MTBF": "mtbf",
 	"MTTR": "mttr",
 	"HVAC": "hvac",
+	// Request for quotation / proposal. "RFI" is absent: radio-frequency interference.
+	"RFQ": "rfx", "RFQs": "rfx", "RFP": "rfx", "RFPs": "rfx", "RFx": "rfx",
 }
 
 // resumeAcronyms resolve ONLY when parsing résumés (Parse with WithResumeAcronyms).
@@ -176,6 +178,8 @@ var categoryScopedAcronyms = map[string]categoryScopedAcronym{
 	"APM": {canonical: "asset-performance-management", allowedCategories: industrialMaintenanceCategories},
 	"ППР": {canonical: "preventive-maintenance", allowedCategories: industrialMaintenanceCategories},
 	"RAG": {canonical: "rag", allowedCategories: map[string]bool{"ai_engineering": true, "ml_ai": true}},
+	// MRP is a maximum retail price in an Indian retail posting and a review panel in a medical one.
+	"MRP": {canonical: "mrp", allowedCategories: procurementCategories},
 	// Each collides with another meaning in general job text (CSM with Customer Success Manager,
 	// PSM/PMP are short enough to be noise, bare SAFe is an English word), but within a posting
 	// already classified project_management the collision is negligible.

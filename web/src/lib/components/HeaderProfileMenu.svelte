@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { CircleUser, SquarePlus, ShieldCheck, LogOut, LogIn } from '@lucide/svelte';
   import { isAuthenticated, currentUser, logout as doLogout } from '#lib/auth.svelte.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { promptLogin } from '#lib/signin.js';
   import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
   import { cn } from '#lib/ui/index.js';
   import { menuNav } from '#lib/actions/menuNav.js';
@@ -55,7 +55,7 @@
   }
 
   function signIn() {
-    promptSignIn();
+    promptLogin();
   }
 
   function logout() {

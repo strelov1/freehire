@@ -62,3 +62,34 @@ describe('/pricing — the API plans', () => {
     expect(screen.queryByText('For builders')).toBeNull();
   });
 });
+
+describe('/pricing — saved-search alert frequency', () => {
+  it('says free alerts are daily and that faster ones are a paid benefit', async () => {
+    renderPricing();
+    expect(await screen.findByText('Daily saved-search alerts by email, Telegram and push')).toBeTruthy();
+    expect(screen.getByText('Instant or batched saved-search alerts, not only a daily digest')).toBeTruthy();
+    expect(screen.queryByText('Alerts by email, Telegram and push')).toBeNull();
+  });
+});
+
+describe('/pricing — the headline', () => {
+  it('states the offer with the Pro price the backend sells', async () => {
+    renderPricing();
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Free to find a job. $5 a month for the AI that applies with you.',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('names the plan instead of a price when no monthly Pro price is sold', async () => {
+    renderPricing({ ...plans, prices: [price('ultra', 'price_ultra')] });
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Free to find a job. Pro for the AI that applies with you.',
+      }),
+    ).toBeTruthy();
+  });
+});

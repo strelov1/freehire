@@ -20,8 +20,8 @@
   import { onDestroy, untrack } from 'svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ArrowRight, FileUp, MessageCircleQuestionMark, RotateCcw, Search, UserRound } from '@lucide/svelte';
-  import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
+  import { ArrowRight, MessageCircleQuestionMark, RotateCcw, Search, UserRound } from '@lucide/svelte';
+  import { api, ApiError } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { filtersToParams } from '#lib/facetModel.js';
   import { filtersFromProfile } from '#lib/profileFilters.js';
@@ -57,6 +57,7 @@
   import type { CatalogScale, OnboardingMatch, OnboardingParse } from '#lib/types.js';
   import { Button, Card, Chip } from '#lib/ui/index.js';
   import FlowStep from '#lib/components/onboarding/FlowStep.svelte';
+  import CvDropStep from '#lib/components/onboarding/CvDropStep.svelte';
   import OnboardingQuestions from '#lib/components/onboarding/OnboardingQuestions.svelte';
   import OnboardingResults from '#lib/components/onboarding/OnboardingResults.svelte';
   import CompanyLogoStack from '#lib/components/CompanyLogoStack.svelte';
@@ -143,8 +144,6 @@
 
   // ---- the CV ----
 
-  let fileInput = $state<HTMLInputElement>();
-  let dragActive = $state(false);
   let dropError = $state<string | null>(null);
   let limited = $state(false);
   let readGen = 0;
@@ -180,20 +179,6 @@
           : "We couldn't read that file. Try a PDF with selectable text.";
       step('failed');
     }
-  }
-
-  function onPick(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const f = input.files?.[0];
-    input.value = ''; // the same file can be picked again after an error
-    if (f) void read(f);
-  }
-
-  function onDrop(e: DragEvent) {
-    e.preventDefault();
-    dragActive = false;
-    const f = e.dataTransfer?.files?.[0];
-    if (f && phase === 'drop') void read(f);
   }
 
   const cvTitle = $derived(parse?.first_name ? `Read ${parse.first_name}'s CV` : 'Read your CV');
@@ -364,10 +349,21 @@
     await gotoPath(`${resolve('/jobs')}${query ? `?${query}` : ''}`);
   }
 
-  /** A signed-in visitor who has nothing to drop goes where they were headed. */
-  function skip() {
+  /** Leaving the flow at any step goes where the visitor was headed. */
+  async function skip() {
+    left = true; // a save still in flight must not navigate after this
     onboardingGate.dismiss();
-    void gotoPath(returnTo ?? resolve('/'));
+    // Queued after any save in flight, and awaited: a full-page navigation would unload first.
+    await onboardingDraft.clear();
+    await gotoPath(returnTo ?? resolve('/'));
+  }
+
+  /** A guest who wants an account without a CV (to save a job, tailor, follow) goes straight to
+   *  the sign-up form and comes back to where they were headed. Marked first: the new account has
+   *  been through this page, so the layout must not route it back (see `skipAsGuest`). */
+  function skipToSignUp() {
+    onboardingGate.skipAsGuest();
+    void gotoPath(signinUrl({ returnTo: returnTo ?? resolve('/') }));
   }
 
   let left = false;
@@ -378,7 +374,7 @@
    *  never started a sign-up from here never carries one (see `arrivalAction`). */
   async function signUp() {
     await persist(Date.now());
-    await gotoPath(signinUrl({ returnTo: here }));
+    if (!left) await gotoPath(signinUrl({ returnTo: here }));
   }
 
   async function startOver() {
@@ -442,66 +438,7 @@
 
   <Card class="p-5 sm:p-6">
     {#if phase === 'drop'}
-      <FlowStep
-        icon={FileUp}
-        title="Start with your CV"
-        subtitle="We read it and show you what we found. Nothing is stored until you save it."
-      >
-        <input type="file" accept="application/pdf,.pdf" class="hidden" bind:this={fileInput} onchange={onPick} />
-        <!-- A drop target over the button inside, which is fully keyboard-accessible alone. -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          data-testid="onboarding-dropzone"
-          ondragover={(e) => {
-            e.preventDefault();
-            dragActive = true;
-          }}
-          ondragleave={(e) => {
-            e.preventDefault();
-            dragActive = false;
-          }}
-          ondrop={onDrop}
-          class={[
-            'flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors sm:px-6 sm:py-10',
-            dragActive ? 'border-brand bg-brand-muted' : 'border-border',
-          ]}
-        >
-          <p class="text-sm font-medium pointer-coarse:hidden">Drop your CV here, or</p>
-          <Button variant="primary" onclick={() => fileInput?.click()}>Choose a PDF</Button>
-          <p class="text-xs text-muted-foreground">PDF with selectable text, up to {RESUME_MAX_MB}&nbsp;MB.</p>
-        </div>
-        {#if dropError}
-          <div class="flex flex-col gap-2 text-sm" role="alert">
-            <p class="text-destructive">{dropError}</p>
-            {#if limited && !isAuthenticated()}
-              <p class="text-muted-foreground">Signed in, there is no daily limit — sign in and drop it again.</p>
-              <Button variant="outline" size="sm" class="self-start" href={signinUrl({ returnTo: here })}>
-                Sign in or create an account
-              </Button>
-            {/if}
-          </div>
-        {/if}
-        {#if isAuthenticated()}
-          <button
-            type="button"
-            onclick={skip}
-            class="self-start text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-          >
-            Skip for now
-          </button>
-        {:else}
-          <!-- Someone who already has an account came to sign in, not to be onboarded: their
-               profile and CV are already stored, so the flow has nothing to add for them. -->
-          <p class="text-sm text-muted-foreground">
-            Already have an account?
-            <!-- eslint-disable svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query -->
-            <a
-              href={signinUrl({ returnTo: returnTo ?? resolve('/'), mode: 'login' })}
-              class="font-medium text-foreground underline-offset-4 hover:underline">Sign in</a
-            ><!-- eslint-enable svelte/no-navigation-without-resolve -->
-          </p>
-        {/if}
-      </FlowStep>
+      <CvDropStep {dropError} {limited} {here} {returnTo} onfile={(f) => void read(f)} onskip={skipToSignUp} />
     {:else}
       <FlowStep icon={UserRound} title={cvTitle} subtitle={cvLine} state={parse ? 'done' : 'working'}>
         {#if !parse}
@@ -620,4 +557,14 @@
       {/if}
     {/if}
   </Card>
+
+  {#if phase !== 'carrying'}
+    <button
+      type="button"
+      onclick={() => void skip()}
+      class="self-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+    >
+      Skip for now
+    </button>
+  {/if}
 </div>

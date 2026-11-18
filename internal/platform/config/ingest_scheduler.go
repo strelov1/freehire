@@ -29,6 +29,10 @@ type IngestScheduler struct {
 	WorkingDir   string
 	EnvFile      string
 	RunAs        string
+
+	// Slice is the systemd slice launched runs are placed in; empty keeps system.slice. Setting
+	// it to the static crawl units' slice lets one CPU quota bound the whole crawl fleet.
+	Slice string
 }
 
 // LoadIngestScheduler reads the scheduler's environment.
@@ -42,6 +46,7 @@ func LoadIngestScheduler() IngestScheduler {
 		WorkingDir:   env("INGEST_SCHEDULER_WORKDIR", "/opt/freehire/src/hire-current"),
 		EnvFile:      env("INGEST_SCHEDULER_ENV_FILE", "/opt/freehire/.env"),
 		RunAs:        env("INGEST_SCHEDULER_RUN_AS", "freehire"),
+		Slice:        os.Getenv("INGEST_SCHEDULER_SLICE"),
 	}
 	// A non-positive cap would read every tick as saturated and silently stop the fleet; floor it.
 	if c.Cap < 1 {

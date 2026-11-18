@@ -227,9 +227,7 @@ func (s mojposao) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(e
 			jobs = append(jobs, base)
 			continue
 		}
-		// Only coverage is judged before the body is bought. The catalogue filter is not: the
-		// search result lacks the root position that sets IsTechHint, so a technical posting
-		// with a terse title would be turned away on the card that the posting itself admits.
+		// Only coverage is judged before the body is bought.
 		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue

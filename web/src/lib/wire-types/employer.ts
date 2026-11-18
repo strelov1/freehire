@@ -6,6 +6,8 @@ import type { components } from '#lib/generated/api.js';
  *  to be active, unlike every write below. */
 export type EmployerAccount = components['schemas']['EmployerAccount'];
 
+export type EmployerPendingClaim = components['schemas']['EmployerPendingClaim'];
+
 /** The account plus the company's current curated profile — everything GET /employer/company
  *  returns once there is a companies row to read. Curated fields are all optional: a
  *  brand-new claim's company row may not exist yet, and any individual field may simply be

@@ -60,7 +60,7 @@ func TestSystemPromptIncludesRegionVocabulary(t *testing.T) {
 func TestSystemPromptOmitsDictBackedFacets(t *testing.T) {
 	p := buildSystemPrompt(true)
 	for _, f := range []string{
-		"work_mode", "seniority", "category",
+		"work_mode", "seniority",
 		"employment_type", "education_level", "english_level",
 		"posting_language", "experience_years_min",
 	} {
@@ -183,5 +183,22 @@ func TestGeoPinned(t *testing.T) {
 		if got := GeoPinned(c.countries, c.regions); got != c.wantPinned {
 			t.Errorf("%s: GeoPinned(%v,%v)=%v, want %v", c.name, c.countries, c.regions, got, c.wantPinned)
 		}
+	}
+}
+
+// category is asked, pinned to the vocabulary and exempt from the null rule: the title
+// dictionary leaves ~2.7M open postings unfiled, and search reads the model's answer (#4412).
+func TestSystemPromptAsksCategory(t *testing.T) {
+	p := buildSystemPrompt(true)
+	if !strings.Contains(p, `ALWAYS fill "category"`) {
+		t.Error("prompt must exempt category from the null rule")
+	}
+	for _, v := range vocab.CategoryValues {
+		if !strings.Contains(p, v) {
+			t.Errorf("prompt must list category value %q", v)
+		}
+	}
+	if strings.Contains(p, "IT job posting") {
+		t.Error("prompt must not frame every posting as IT: non-technical postings are enriched too")
 	}
 }

@@ -146,22 +146,6 @@ func TestMynaviSeenPostingsCostNoDetailRequest(t *testing.T) {
 	}
 }
 
-func TestMynaviGatedPostingsAreYieldedBodyless(t *testing.T) {
-	f := newMynaviFake(t)
-	gate := DetailGate{Rejected: func(j Job) bool { return true }}
-	jobs, err := NewMynavi(f).(CoverageGated).FetchNewGated(context.Background(), CompanyEntry{Board: "o16"},
-		func(string) bool { return false }, gate)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n := f.count(mynaviBase + "/jobinfo-"); n != 0 {
-		t.Errorf("detail requests = %d, want 0", n)
-	}
-	if len(jobs) != 3 {
-		t.Errorf("jobs = %d, want 3 body-less postings for the pipeline to count", len(jobs))
-	}
-}
-
 func TestMynaviRejectsAnUnknownBoard(t *testing.T) {
 	if _, err := NewMynavi(newMynaviFake(t)).Fetch(context.Background(), CompanyEntry{Board: "o11"}); err == nil {
 		t.Error("want an error for a code the engineer edition does not serve")

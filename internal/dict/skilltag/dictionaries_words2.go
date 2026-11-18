@@ -316,8 +316,9 @@ var wordAliases2 = map[string]string{
 	//
 	// Everything here is a product name or a coined acronym with no ordinary reading.
 	// Three groups are deliberately NOT here:
-	//   - Office and business vocabulary (excel, powerpoint, customer_service): skilltag
-	//     is tech-only.
+	//   - Office and business vocabulary (excel, powerpoint, customer_service): the bare word
+	//     is an English verb or noun. Excel resolves only through its qualified phrases
+	//     (procurementPhraseAliases).
 	//   - Tokens whose bare form is an ordinary English word (bootstrap, hibernate,
 	//     unity, eclipse, slack, zoom, notion, asana, puppet, bicep, athena, aurora,
 	//     bedrock, parquet, loki, prefect, flux, ros) — those are gated in

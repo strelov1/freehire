@@ -7,7 +7,7 @@
   import { NOTIFICATIONS_FAQ } from '#lib/notificationsFaq.js';
 
   const triggers = [
-    { key: 'match', text: 'A new match: instantly, or once a day at a time you pick.' },
+    { key: 'match', text: 'A new match: once a day at a time you pick, or sooner with Pro or Ultra.' },
     { key: 'saved', text: "A saved job you haven't applied to, 3 days after saving it." },
     {
       key: 'silent',
@@ -41,9 +41,9 @@
         You don't refresh the feed. It comes to you.
       </h1>
       <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-        Save a search once and freehire watches it for you — instantly, or as a daily digest. The same settings also
-        carry your tracking nudges, so a new match and a stalled application both reach you the same way: email,
-        Telegram, or push.
+        Save a search once and freehire watches it for you and sends a daily digest at a time you pick; Pro and Ultra
+        can get matches sooner. The same settings also carry your tracking nudges, so a new match and a stalled
+        application both reach you the same way: email, Telegram, or push.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
         <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
@@ -110,7 +110,7 @@
         <h3 class="text-lg font-semibold tracking-tight">A job that just appeared</h3>
         <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
           Save a search — stack, seniority, region, salary — and freehire matches new postings against it as they're
-          added. Get told instantly, or once a day at a time you pick.
+          added. Get a daily digest at a time you pick; Pro and Ultra can choose instant or batched alerts.
         </p>
         <a
           href={resolve('/my/notifications/searches')}

@@ -15,9 +15,7 @@
 // whose only resolved word was "manager". A manager title now resolves the craft it names
 // through internal/dict/classify; the generic people-managing titles that name no craft
 // (General Manager, Assistant Manager, Store/Branch/District/Plant Manager, the Russian
-// начальник/заведующий/директор) are reached by this facet alone. So search keeps a posting
-// this package marks even when no category files it (search.CategoryUnresolved), and the ingest
-// filter does not refuse one (classify.ConfirmedNonTech). A search for the retired
+// начальник/заведующий/директор) are reached by this facet alone. A search for the retired
 // `category=management` is answered with role_type=people_manager.
 package roletype
 

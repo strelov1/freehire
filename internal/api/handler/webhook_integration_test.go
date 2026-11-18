@@ -14,10 +14,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -86,6 +88,7 @@ func TestWebhookEndToEnd(t *testing.T) {
 	var created struct {
 		Data struct {
 			URL     string `json:"url"`
+			Secret  string `json:"secret"`
 			Enabled bool   `json:"enabled"`
 		} `json:"data"`
 	}
@@ -94,6 +97,9 @@ func TestWebhookEndToEnd(t *testing.T) {
 	}
 	if created.Data.URL != "https://example.test/hook" || !created.Data.Enabled {
 		t.Errorf("created = %+v, want the given URL and enabled=true", created.Data)
+	}
+	if !strings.HasPrefix(created.Data.Secret, "whsec_") {
+		t.Errorf("created secret = %q, want a whsec_ signing secret", created.Data.Secret)
 	}
 
 	// Disable, then re-enable.
@@ -139,7 +145,8 @@ func TestWebhookEndToEnd(t *testing.T) {
 	defer updateResp.Body.Close()
 	var updated struct {
 		Data struct {
-			URL string `json:"url"`
+			URL    string `json:"url"`
+			Secret string `json:"secret"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(updateResp.Body).Decode(&updated); err != nil {
@@ -147,6 +154,10 @@ func TestWebhookEndToEnd(t *testing.T) {
 	}
 	if updated.Data.URL != "https://example.test/hook-2" {
 		t.Errorf("updated url = %q, want the new URL", updated.Data.URL)
+	}
+	// The receiver already verifies with the secret, so a new URL must not rotate it.
+	if updated.Data.Secret != created.Data.Secret {
+		t.Error("updating the URL changed the signing secret")
 	}
 
 	// Delete removes it; a second delete 404s.
@@ -193,7 +204,7 @@ func TestRecordWebhookDeliverySuccessStampsLastSuccessAt(t *testing.T) {
 	}
 	queries := db.New(pool)
 	if _, err := queries.UpsertWebhookConfig(ctx, db.UpsertWebhookConfigParams{
-		UserID: userID, URL: "https://example.test/hook",
+		UserID: userID, URL: "https://example.test/hook", Secret: "whsec_test",
 	}); err != nil {
 		t.Fatalf("create webhook config: %v", err)
 	}
@@ -258,7 +269,7 @@ func TestWebhookTestEndpoint(t *testing.T) {
 	}
 
 	if _, err := queries.UpsertWebhookConfig(ctx, db.UpsertWebhookConfigParams{
-		UserID: userID, URL: "https://example.test/hook",
+		UserID: userID, URL: "https://example.test/hook", Secret: "whsec_test",
 	}); err != nil {
 		t.Fatalf("create webhook config: %v", err)
 	}
@@ -284,5 +295,43 @@ func TestWebhookTestEndpoint(t *testing.T) {
 	}
 	if got.Data.LastSuccessAt == nil {
 		t.Error("a passing probe must return the destination with last_success_at set")
+	}
+}
+
+// A URL whose probe fails is refused before anything is stored, and the refusal names what
+// the destination answered so the user can fix it.
+func TestCreateOrUpdateWebhook_RejectsURLWhoseProbeFails(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	var userID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email, email_verified) VALUES ('webhook-refused@example.test', true) RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
+	queries := db.New(pool)
+	h := newWebhookHandlers(queries, failingWebhookTester{errors.New("webhooknotify: destination responded 404")})
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Post("/api/v1/me/webhook", auth.RequireAuth(iss, testVersions), h.CreateOrUpdateWebhook)
+
+	req := httptest.NewRequestWithContext(ctx, fiber.MethodPost, "/api/v1/me/webhook", strings.NewReader(`{"url":"https://example.com/hook"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422 when the probe fails", resp.StatusCode)
+	}
+	var got struct{ Error string }
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if got.Error != "webhook test failed: destination responded 404" {
+		t.Errorf("error = %q, want the destination's answer without the package prefix", got.Error)
+	}
+	if _, err := queries.GetWebhookConfig(ctx, userID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Errorf("after a refused probe: GetWebhookConfig err = %v, want no destination stored", err)
 	}
 }

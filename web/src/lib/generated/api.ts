@@ -440,6 +440,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/by-domain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find companies by web domain.
+         * @description Resolves company web domains to companies. Each `domain` is a bare domain or a full URL;
+         *     it is reduced to a lowercase host without `www.`, port or trailing dot, and compared
+         *     with the same reduction of the company's site. Every match is returned (two companies
+         *     can share a site), including companies with `job_count` 0. Up to 100 domains. Then read
+         *     the postings with `GET /jobs/search?company_slug=<slug>`.
+         */
+        get: operations["companiesByDomain"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/subindustries": {
         parameters: {
             query?: never;
@@ -6997,6 +7021,28 @@ export interface components {
             /** Format: int64 */
             limit: number;
         };
+        /** @description One company whose site matches a requested domain. */
+        CompanyByDomain: {
+            /** @description The normalized domain it matched. */
+            domain: string;
+            slug: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description Open postings; 0 when the company is not hiring now.
+             */
+            job_count: number;
+            /** @description The site as stored (`website`, else `homepage`). */
+            website: string;
+        };
+        CompanyByDomainMeta: {
+            /** @description Requested domains that matched no company, normalized. */
+            unmatched: string[];
+        };
+        CompanyByDomainPage: {
+            data: components["schemas"]["CompanyByDomain"][];
+            meta: components["schemas"]["CompanyByDomainMeta"];
+        };
         /** @description The company summary plus the profile fields served only on the detail endpoint. */
         CompanyDetail: {
             slug: string;
@@ -7665,6 +7711,8 @@ export interface components {
             company_name?: string;
             work_email?: string;
         };
+        /** @enum {string} */
+        EmployerClaimReviewReason: "unknown_website" | "domain_mismatch" | "academic_domain" | "manual_review";
         EmployerClosed: {
             closed: boolean;
         };
@@ -7708,6 +7756,27 @@ export interface components {
         };
         EmployerConfirm: {
             code?: string;
+        };
+        /** @description A pending claim with the current domain check, not a stored historical failure reason. */
+        EmployerPendingClaim: {
+            /** Format: int64 */
+            user_id: number;
+            company_slug: string;
+            company_name: string;
+            work_email: string;
+            status: components["schemas"]["EmployerAccountStatus"];
+            /** Format: date-time */
+            verified_at?: string;
+            /** @description Whether the claimant still owes the mailed code or is waiting on a moderator. */
+            email_confirmed: boolean;
+            /** @description True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
+            member: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** @description The catalogue's current website, empty when unknown. */
+            website: string;
+            /** @description manual_review means the domains now match but the claim still awaits a moderator. */
+            review_reason: components["schemas"]["EmployerClaimReviewReason"];
         };
         /** @description `type` is "text", "boolean" or "select"; `options` are a select's choices. */
         EmployerQuestion: {
@@ -8960,7 +9029,17 @@ export interface components {
             inbox_digest_enabled: boolean;
             enabled: boolean;
             channels: string[];
+            /**
+             * @description The saved preference. A Free account that kept `instant` or `interval` is sent a daily
+             *     digest regardless (see `faster_alerts_available`); the preference is kept so a renewal restores it.
+             */
             digest_frequency: string;
+            /**
+             * @description Whether the account may choose saved-search alerts faster than daily: a live Pro or Ultra
+             *     plan. When false only `daily` takes effect, and asking for another frequency is refused
+             *     with 402.
+             */
+            faster_alerts_available: boolean;
             /** @description `HH:MM`. */
             digest_time: string | null;
             /** Format: int64 */
@@ -11365,6 +11444,56 @@ export interface operations {
             };
         };
     };
+    companiesByDomain: {
+        parameters: {
+            query: {
+                /** @description Company domain or URL; repeatable or comma-joined, at most 100. (e.g. `acme.io`) */
+                domain: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "domain": "acme.io",
+                     *           "slug": "acme",
+                     *           "name": "Acme",
+                     *           "job_count": 12,
+                     *           "website": "https://www.acme.io/"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "unmatched": [
+                     *           "nope.example"
+                     *         ]
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CompanyByDomainPage"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     companySubindustries: {
         parameters: {
             query?: never;
@@ -12579,7 +12708,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["EmployerAccount"][];
+                        data: components["schemas"]["EmployerPendingClaim"][];
                     };
                 };
             };
@@ -21097,6 +21226,7 @@ export interface operations {
                      *           "email"
                      *         ],
                      *         "digest_frequency": "daily",
+                     *         "faster_alerts_available": false,
                      *         "digest_time": null,
                      *         "digest_interval_hours": 1,
                      *         "quiet_hours_start": null,
@@ -21149,6 +21279,7 @@ export interface operations {
                      *           "email"
                      *         ],
                      *         "digest_frequency": "daily",
+                     *         "faster_alerts_available": false,
                      *         "digest_time": null,
                      *         "digest_interval_hours": 1,
                      *         "quiet_hours_start": null,

@@ -33,7 +33,7 @@ type phraseAlias struct {
 // phraseAliases is every phrase the engine matches — the engineering vocabulary plus
 // the non-engineering professional one. The two are declared separately for the reader
 // only; Parse treats them identically.
-var phraseAliases = slices.Concat(engineeringPhraseAliases, professionalPhraseAliases, occupationalSafetyPhraseAliases, industrialMaintenancePhraseAliases)
+var phraseAliases = slices.Concat(engineeringPhraseAliases, professionalPhraseAliases, occupationalSafetyPhraseAliases, industrialMaintenancePhraseAliases, procurementPhraseAliases)
 
 // engineeringPhraseAliases covers terms the word pass cannot see because they contain
 // non-alphanumeric characters or spaces, including the ONLY routes by which an ambiguous

@@ -31,11 +31,6 @@ func (r Runner) save(ctx context.Context, dj job.Job, form *applyform.Form) erro
 // id the same way the write path does, so it matches the stored external_id. A seen-set lookup
 // error fails OPEN (empty set → every posting treated as new), so a health hiccup never skips the
 // board.
-//
-// It returns the seen-set alongside the postings: it maps each stored external_id to that row's
-// tech evidence, which the caller needs to judge a liveness refresh against the same rule as a
-// write. A non-hydrating board has no seen-set and returns nil, which reads as "no evidence" for
-// every lookup — harmless, because such a board yields no refreshes.
 func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) (fetchedBoard, error) {
 	if r.recent() {
 		rs, ok := src.(sources.RecentSource)
@@ -51,7 +46,7 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 		jobs, err := src.Fetch(ctx, e)
 		return fetchedBoard{jobs: jobs}, err
 	}
-	set, err := sl.ExistingExternalIDs(ctx, e.Provider, e.Board)
+	set, err := sl.ExistingExternalIDs(ctx, e.Provider, seenScope(e))
 	seenUnknown := err != nil
 	if seenUnknown {
 		log.Printf("ingest: %s board %q seen-set lookup failed, hydrating every posting as new and withholding its closes: %v",
@@ -64,7 +59,7 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 	var askedMu sync.Mutex
 	askedNew := map[string]bool{}
 	seen := func(externalID string) bool {
-		_, ok := set[externalid.Namespace(e.Board, externalID)]
+		_, ok := set[seenKey(e, externalID)]
 		if !ok {
 			askedMu.Lock()
 			askedNew[externalID] = true
@@ -87,12 +82,30 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 		return false
 	}
 	if cg, ok := src.(sources.CoverageGated); ok {
-		gate := sources.DetailGate{Covered: func([]string) map[string]bool { return nil }, Rejected: listingRejected(e)}
+		gate := sources.DetailGate{Covered: func([]string) map[string]bool { return nil }}
 		jobs, err := cg.FetchNewGated(ctx, e, seen, gate)
-		return fetchedBoard{jobs: jobs, seen: set, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
+		return fetchedBoard{jobs: jobs, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
 	}
 	jobs, err := hs.FetchNew(ctx, e, seen)
-	return fetchedBoard{jobs: jobs, seen: set, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
+	return fetchedBoard{jobs: jobs, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
+}
+
+// seenScope is the board argument of the seen-set lookup: the namespace the provider's rows are
+// stored under. LinkedIn rows are keyed by the global posting id, not board:id (jobIdentity), so
+// no board pattern matches them and the lookup is provider-wide.
+func seenScope(e sources.CompanyEntry) string {
+	if e.Provider == "linkedin" {
+		return ""
+	}
+	return e.Board
+}
+
+// seenKey is the stored external_id an adapter's raw posting id maps to, derived from jobIdentity
+// so the seen-set is keyed exactly as the write path stores. An id with no valid identity maps to
+// "" and so reads as unseen.
+func seenKey(e sources.CompanyEntry, externalID string) string {
+	_, id := jobIdentity(e, sources.Job{ExternalID: externalID, URL: sources.LinkedInPostingURL(externalID)})
+	return id
 }
 
 // fetchedBoard is what fetchBoard read from one board. deferred reports that a hydrating adapter
@@ -101,7 +114,6 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 // posting read as new (see Stats.SeenUnknown).
 type fetchedBoard struct {
 	jobs        []sources.Job
-	seen        map[string]bool
 	deferred    bool
 	seenUnknown bool
 	// cut reports that the fetch's context ended under it (Runner.WriteReserve).

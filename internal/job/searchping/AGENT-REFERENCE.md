@@ -53,8 +53,8 @@ the divergence is named rather than left to be discovered.
 ## Every indexed posting is eligible; technical ones go first
 
 A posting is eligible when the search index would hold it: open, canonical, public, with
-a body and a resolved category (`search.CategoryUnresolved`, `search.DescriptionMissing`)
-— **technical or not**. The catalogue is broader than IT on purpose; a healthcare or
+a body (`search.DescriptionMissing`) — **technical or not, categorized or not** (an
+uncategorized posting is indexed under `other`, #4412). The catalogue is broader than IT on purpose; a healthcare or
 logistics posting with a category is a page the site claims, sits in the sitemap, and
 carries the same `JobPosting` markup, so it is as legitimate a page to announce.
 

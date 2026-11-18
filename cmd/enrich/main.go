@@ -61,7 +61,7 @@ func run() int {
 		publishProgress(promDir, progress.Completed())
 	}()
 
-	runner := enrich.Runner{Provider: provider, Store: newDBStore(pool), Progress: progress}
+	runner := enrich.Runner{Provider: provider, Store: newDBStore(pool, ecfg.IncludeNonTech), Progress: progress}
 
 	stats, err := runner.Run(ctx, enrich.RunOptions{
 		TargetVersion:     enrich.Version,

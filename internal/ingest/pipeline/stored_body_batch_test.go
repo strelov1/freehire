@@ -38,7 +38,7 @@ func TestBufferedBodiesKeepStoredEvidenceAndProvenance(t *testing.T) {
 	raw := []sources.Job{{ExternalID: "1", Title: "Engineering Manager", Company: "Acme", URL: "https://example.com/1"}, {ExternalID: "2", Title: "Software Engineer", Company: "Covered", URL: "https://example.com/2"}}
 	s := &batchBodyStore{bodies: map[string]string{":1": "Build Python services on PostgreSQL."}}
 	r := Runner{Store: s}
-	got := r.writeBoard(context.Background(), e, raw, nil, nil)
+	got := r.writeBoard(context.Background(), e, raw, nil)
 	if got.st.Ingested != 2 || got.st.Skipped != 0 {
 		t.Fatalf("stats=%+v", got.st)
 	}
@@ -65,7 +65,7 @@ func TestBufferedBodiesBoundQueriesAndFallBackOnFailure(t *testing.T) {
 			if fail {
 				s.batchErr = errors.New("batch unavailable")
 			}
-			got := (Runner{Store: s}).writeBoard(context.Background(), sources.CompanyEntry{Provider: "spainjobs"}, raw, nil, nil)
+			got := (Runner{Store: s}).writeBoard(context.Background(), sources.CompanyEntry{Provider: "spainjobs"}, raw, nil)
 			if got.st.Ingested != 1001 || got.st.Skipped != 0 {
 				t.Fatalf("stats=%+v", got.st)
 			}
@@ -89,7 +89,7 @@ func TestBufferedDuplicateIdentitiesReadTheCurrentBody(t *testing.T) {
 		{ExternalID: "repeat", Title: "Software Engineer", Company: "Acme", Description: "Build Python services.", URL: "https://example.com/job"},
 		{ExternalID: "repeat", Title: "Software Engineer", Company: "Acme", URL: "https://example.com/job"},
 	}
-	got := (Runner{Store: s}).writeBoard(context.Background(), sources.CompanyEntry{Provider: "spainjobs"}, raw, nil, nil)
+	got := (Runner{Store: s}).writeBoard(context.Background(), sources.CompanyEntry{Provider: "spainjobs"}, raw, nil)
 	if got.st.Ingested != 2 || s.singles != 1 || len(s.batches) != 0 {
 		t.Fatalf("stats=%+v singles=%d batches=%v", got.st, s.singles, s.batches)
 	}

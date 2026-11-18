@@ -142,10 +142,23 @@ func employerAccountOut(a employer.Account) apigen.EmployerAccount {
 	return out
 }
 
-func employerAccountsOut(rows []employer.Account) []apigen.EmployerAccount {
-	out := make([]apigen.EmployerAccount, len(rows))
+func employerPendingClaimsOut(rows []employer.PendingClaim) []apigen.EmployerPendingClaim {
+	out := make([]apigen.EmployerPendingClaim, len(rows))
 	for i, r := range rows {
-		out[i] = employerAccountOut(r)
+		a := employerAccountOut(r.Account)
+		out[i] = apigen.EmployerPendingClaim{
+			UserID:         a.UserID,
+			CompanySlug:    a.CompanySlug,
+			CompanyName:    a.CompanyName,
+			WorkEmail:      a.WorkEmail,
+			Status:         a.Status,
+			VerifiedAt:     a.VerifiedAt,
+			EmailConfirmed: a.EmailConfirmed,
+			Member:         a.Member,
+			CreatedAt:      a.CreatedAt,
+			Website:        r.Website,
+			ReviewReason:   apigen.EmployerClaimReviewReason(r.ReviewReason),
+		}
 	}
 	return out
 }
@@ -447,7 +460,7 @@ func (h *employerHandlers) ListEmployerPendingClaims(ctx context.Context) (*apig
 	if err != nil {
 		return nil, err
 	}
-	return &apigen.ListEmployerPendingClaimsOK{Data: employerAccountsOut(rows)}, nil
+	return &apigen.ListEmployerPendingClaimsOK{Data: employerPendingClaimsOut(rows)}, nil
 }
 
 // employerUserID parses the "user_id" route param — the moderator/admin routes address a

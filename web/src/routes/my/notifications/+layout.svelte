@@ -32,7 +32,7 @@
 </script>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-4 lg:gap-6">
   <!-- The section's title belongs to the layout, above the strip, the way /my/activity
        and /my/tracking title theirs — in the History pane it was the only one of the
        three routes that had a heading at all. -->

@@ -9,7 +9,7 @@
   import { ApiError, api, isPlanRefusal } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { cvContext, planParams } from '#lib/aiFilter.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { promptLogin } from '#lib/signin.js';
   import { errorMessage } from '#lib/utils.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, plural, t } from '#lib/i18n/t.js';
@@ -449,7 +449,7 @@
                 {:else if m.action === 'plan-limit'}
                   <PlanLimitLink />
                 {:else if m.action === 'sign-in'}
-                  <Button variant="primary" onclick={promptSignIn}>{s.signIn}</Button>
+                  <Button variant="primary" onclick={promptLogin}>{s.signIn}</Button>
                 {/if}
               </div>
             {/if}

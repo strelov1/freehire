@@ -27,7 +27,7 @@ func TestDeleteIneligibleEnrichmentOutboxReapsWhatClaimCanNeverTake(t *testing.T
 	repost := insertJob(t, pool, "repost")
 	deadLettered := insertJob(t, pool, "dead")
 
-	if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+	if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
 
@@ -95,7 +95,7 @@ func TestDeleteIneligibleEnrichmentOutboxRespectsItsBound(t *testing.T) {
 
 	for _, name := range []string{"a", "b", "c"} {
 		id := insertJob(t, pool, name)
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatalf("enqueue %s: %v", name, err)
 		}
 		if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, id); err != nil {

@@ -28,6 +28,9 @@ const DefaultNotificationHour = 9 * time.Hour
 var (
 	// ErrPlanUnavailable means paid access could not be checked (mapped to 503).
 	ErrPlanUnavailable = errors.New("reminder: cannot verify inbox digest plan")
+	// ErrFasterAlertsNeedPaidPlan is a Free account newly asking for saved-search alerts
+	// faster than daily (mapped to 402). It wraps plan.ErrPaymentRequired.
+	ErrFasterAlertsNeedPaidPlan = fmt.Errorf("%w: saved-search alerts faster than daily", plan.ErrPaymentRequired)
 	// ErrInvalidChannel is an unsupported delivery channel (mapped to 400).
 	ErrInvalidChannel = errors.New("reminder: unsupported channel")
 	// ErrNoChannels is an enabled rule with no channels to deliver over (mapped to 400).
@@ -156,6 +159,11 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 		return Settings{}, err
 	}
 	in.DigestIntervalHours = hours
+	if in.DigestFrequency != notify.FrequencyDaily {
+		if err := s.checkFasterAlerts(ctx, userID, in); err != nil {
+			return Settings{}, err
+		}
+	}
 	if (in.QuietHoursStart == nil) != (in.QuietHoursEnd == nil) {
 		return Settings{}, ErrIncompleteQuietHours
 	}
@@ -169,9 +177,9 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 		}
 		// Keep an existing preference editable after expiry; delivery checks the live plan.
 		if (in.InboxDigestEnabled && !current.InboxDigestEnabled) || (in.ApplicationDigestEnabled && !current.ApplicationDigestEnabled) {
-			paid, err := s.repo.HasPaidPlan(ctx, userID)
+			paid, err := s.HasFasterAlerts(ctx, userID)
 			if err != nil {
-				return Settings{}, fmt.Errorf("%w: %w", ErrPlanUnavailable, err)
+				return Settings{}, err
 			}
 			if !paid {
 				return Settings{}, plan.ErrPaymentRequired
@@ -179,6 +187,41 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 		}
 	}
 	return s.repo.UpsertSettings(ctx, userID, in)
+}
+
+// checkFasterAlerts refuses a faster-than-daily saved-search frequency to an account
+// without a live Pro or Ultra plan. Only a CHANGE is a request: the settings page sends
+// the whole rule back, so a Free account that kept a historical instant or interval
+// preference may save unrelated edits, and the preference stays stored for a renewal.
+// Delivery reads the live plan too (ClaimSubscriptionMatches and friends), so the stored
+// value never buys speed. A plan that cannot be read fails closed.
+func (s *Service) checkFasterAlerts(ctx context.Context, userID int64, in Settings) error {
+	current, err := s.repo.GetSettings(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if current.DigestFrequency == in.DigestFrequency &&
+		(in.DigestFrequency != notify.FrequencyInterval || storedIntervalHours(current) == in.DigestIntervalHours) {
+		return nil
+	}
+	paid, err := s.HasFasterAlerts(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !paid {
+		return ErrFasterAlertsNeedPaidPlan
+	}
+	return nil
+}
+
+// HasFasterAlerts reports whether the account may choose a saved-search frequency
+// faster than daily: a live Pro or Ultra entitlement from any source.
+func (s *Service) HasFasterAlerts(ctx context.Context, userID int64) (bool, error) {
+	paid, err := s.repo.HasPaidPlan(ctx, userID)
+	if err != nil {
+		return false, fmt.Errorf("%w: %w", ErrPlanUnavailable, err)
+	}
+	return paid, nil
 }
 
 // resolveIntervalHours decides the interval to store. The sent value is read only
@@ -197,10 +240,16 @@ func (s *Service) resolveIntervalHours(ctx context.Context, userID int64, in Set
 	if err != nil {
 		return 0, err
 	}
-	if current.DigestIntervalHours < notify.MinIntervalHours || current.DigestIntervalHours > notify.MaxIntervalHours {
-		return notify.DefaultIntervalHours, nil
+	return storedIntervalHours(current), nil
+}
+
+// storedIntervalHours is the account's interval as the service reads it: one outside the
+// bounds (never stored, since the column CHECKs it) reads as the default.
+func storedIntervalHours(s Settings) int {
+	if s.DigestIntervalHours < notify.MinIntervalHours || s.DigestIntervalHours > notify.MaxIntervalHours {
+		return notify.DefaultIntervalHours
 	}
-	return current.DigestIntervalHours, nil
+	return s.DigestIntervalHours
 }
 
 // checkPushDevice refuses push when it is being added and the account has no

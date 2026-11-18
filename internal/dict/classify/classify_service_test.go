@@ -20,8 +20,8 @@ import (
 // retail-sales postings were being enqueued for LLM enrichment as engineering.
 //
 // The negative half matters more than the positive one: a wrong category is not merely a
-// wrong facet, it is the thing that puts a posting in the index at all
-// (search.CategoryUnresolved returns false the moment a category exists).
+// wrong facet, it lifts the posting out of the "other" bucket search files the
+// uncategorized under.
 func TestParse_MobileIsAPlatformNotAnErrand(t *testing.T) {
 	// Software. These must keep the category — they are what the alias is FOR.
 	for _, title := range []string{

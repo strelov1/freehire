@@ -13,7 +13,7 @@ import {
   SENIORITY_LABELS,
   EMPLOYMENT_LABELS,
   WORK_MODE_LABELS,
-  CATEGORY_LABELS,
+  JOB_CATEGORY_LABELS,
   DOMAIN_LABELS,
   COMPANY_TYPE_LABELS,
   ENGLISH_LEVEL_LABELS,
@@ -223,7 +223,7 @@ export function summaryFacets(job: Job): Facet[] {
   // english_level carries a 'none' sentinel that must not render as a facet.
   const english = e.english_level && e.english_level !== 'none' ? e.english_level : null;
   link('English', 'english_level', english, ENGLISH_LEVEL_LABELS);
-  link('Category', 'category', e.category, CATEGORY_LABELS);
+  link('Category', 'category', e.category, JOB_CATEGORY_LABELS);
   links('Country', 'countries', job.countries, countryLabel, true);
   link('Relocation', 'relocation', e.relocation, RELOCATION_LABELS);
   if (e.visa_sponsorship === true) {

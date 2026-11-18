@@ -45,7 +45,7 @@ var professionalPhraseAliases = []phraseAlias{
 	{"financial reporting", "financial-reporting"},
 	{"quickbooks", "quickbooks"}, {"netsuite", "netsuite"}, {"xero", "xero"},
 	// legal
-	{"contract negotiation", "contract-negotiation"},
+	{"contract negotiation", "contract-negotiation"}, {"contract negotiations", "contract-negotiation"},
 	{"contract drafting", "contract-drafting"},
 	{"contract lifecycle management", "contract-lifecycle-management"},
 	{"legal research", "legal-research"},
@@ -57,6 +57,9 @@ var professionalPhraseAliases = []phraseAlias{
 	// operations
 	{"process improvement", "process-improvement"},
 	{"vendor management", "vendor-management"},
+	{"supplier management", "vendor-management"},
+	{"supplier relationship management", "vendor-management"},
+	{"vendor relationship management", "vendor-management"},
 	{"sla management", "sla-management"},
 	{"program management", "program-management"},
 	{"strategic planning", "strategic-planning"},

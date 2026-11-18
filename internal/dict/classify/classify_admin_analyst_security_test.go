@@ -119,6 +119,8 @@ func TestParse_AnalystIsQualifiedOrNothing(t *testing.T) {
 		{"Финансовый аналитик", "finance"},
 		{"SOC Analyst L2", "security"},
 		{"Vulnerability Analyst", "security"},
+		{"Procurement Analyst", "operations"}, // "purchasing" qualifies it like "procurement" does
+		{"Purchasing Analyst", "operations"},
 
 		// "credit analyst" CONTAINS "it analyst" as a substring. The word-boundary match
 		// is what stops 982 live credit analysts being called IT staff, so it is pinned.
@@ -127,7 +129,6 @@ func TestParse_AnalystIsQualifiedOrNothing(t *testing.T) {
 		// The bare noun resolves to nothing in every sense the catalogue carries.
 		{"Analyst", ""},
 		{"Board Certified Behavior Analyst (BCBA)", "healthcare"}, // the clinical ABA seat, not an analyst
-		{"Purchasing Analyst", ""},
 		{"Investment Analyst", ""},
 		{"Global Tax Analyst", ""},
 		{"Senior Policy Analyst (DES)", ""},

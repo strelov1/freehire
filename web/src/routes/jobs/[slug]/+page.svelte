@@ -114,30 +114,26 @@
     <JobRelated {similar} copies={data.copies} copiesTotal={data.copiesTotal} slug={data.job.public_slug} />
   </div>
 
-  <!-- The rest stays in the posting's content column from lg (the 20rem rail plus the
-       grid's 1.5rem gap). -->
-  <div class="lg:pl-86">
-    <!-- Below the related postings and right above "See also" on every width: at the top
-         of the page it sat far from the title/apply button on a phone, and it stole space
-         from the match card and provenance line above the title on a wide screen too. -->
-    <Breadcrumbs items={visibleBreadcrumbItems} class="my-4" />
+  <!-- Below the related postings and right above "See also" on every width: at the top
+       of the page it sat far from the title/apply button on a phone, and it stole space
+       from the match card and provenance line above the title on a wide screen too. -->
+  <Breadcrumbs items={visibleBreadcrumbItems} class="my-4" />
 
-    <JobSeeAlso cards={data.seeAlso} />
+  <JobSeeAlso cards={data.seeAlso} />
 
-    <!-- The bridge from a posting to the market pages. Costs nothing to render: the
-         category is already on the job, and the category table needs no gate check
-         (see categoryLandingLink). Without this the /roles tree is reachable only from
-         the footer and the sitemap, which is how a page ends up crawled but not
-         weighted. -->
-    {#if marketLink}
-      <p class="mt-8 text-sm">
-        <a
-          href={resolve('/roles/[category]', { category: marketLink.slug })}
-          class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
-        >
-          {marketLink.label} jobs by country — openings, pay and top skills →
-        </a>
-      </p>
-    {/if}
-  </div>
+  <!-- The bridge from a posting to the market pages. Costs nothing to render: the
+       category is already on the job, and the category table needs no gate check
+       (see categoryLandingLink). Without this the /roles tree is reachable only from
+       the footer and the sitemap, which is how a page ends up crawled but not
+       weighted. -->
+  {#if marketLink}
+    <p class="mt-8 text-sm">
+      <a
+        href={resolve('/roles/[category]', { category: marketLink.slug })}
+        class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+      >
+        {marketLink.label} jobs by country — openings, pay and top skills →
+      </a>
+    </p>
+  {/if}
 </div>

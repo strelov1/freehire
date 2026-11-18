@@ -1,23 +1,9 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import {
-    createSession,
-    listSessions,
-    getSession,
-    deleteSession,
-    SessionNotFound,
-    SUPPORT_BASE,
-  } from '#lib/assistant/api.js';
+  import { createSession, listSessions, getSession, deleteSession } from '#lib/assistant/api.js';
   import { track } from '#lib/analytics.js';
-  import {
-    TurnRefused,
-    startTurnFor,
-    StreamInterrupted,
-    type Attachment,
-    type Turn,
-    type TurnStart,
-  } from '#lib/assistant/client.js';
-  import { chatFromTranscript, initChat, reduceTurnEvent, turnBegins, type ChatState } from '#lib/assistant/chat.js';
+  import type { Attachment, TurnStart } from '#lib/assistant/client.js';
+  import { chatFromTranscript, initChat, reduceTurnEvent, type ChatState } from '#lib/assistant/chat.js';
   import SessionRail from '#lib/assistant/SessionRail.svelte';
   import ChatInputArea from './ChatInputArea.svelte';
   import ChatGone from './ChatGone.svelte';
@@ -27,11 +13,13 @@
   import { PaneFollow } from './paneFollow.svelte';
   import { ApplicationSync } from './applicationSync';
   import { MessageQueue } from './messageQueue.svelte';
-  import { addressStep, autostartTurn, type Arrival } from './chatRouting';
+  import { addressStep, autostartTurn, bootTarget, openFirst, type Arrival } from './chatRouting';
   import { ChatAlerts } from './chatAlerts.svelte';
   import AssistantAlerts from './AssistantAlerts.svelte';
   import type { AssistantChatProps } from './AssistantChat.props';
   import ChatSessionBar from './ChatSessionBar.svelte';
+  import { ChatTurns } from './chatTurns.svelte';
+  import { TranscriptCatchUp } from './transcriptCatchUp';
   import {
     fromSummary,
     upsertSession,
@@ -85,9 +73,8 @@
   // disables the composer and list while a session load is in flight.
   let sessions = $state<SessionItem[]>([]);
   let activeId = $state<string | null>(null);
-  // A plain chat with nothing to resume opens blank, with no session behind it yet: the first
-  // message creates one. Minting it on page open left most chat sessions empty — new accounts
-  // land here and leave without typing (2026-11-09: 143 of 152 a week).
+  // A plain chat with nothing to resume opens blank, with no session yet: the first message
+  // creates one (minting on open left most sessions empty).
   let deferredNew = $state(false);
   // The open conversation's preset, as the SERVER records it — not the one this arrival
   // asked for. A rehearsal is reached by its own address as often as it is created, and
@@ -104,10 +91,6 @@
   // Documents read for the next message. Held here beside the draft, and handed back with it
   // when a turn never starts, for the same reason: the composer cleared them on send.
   let attachments = $state<Attachment[]>([]);
-  let turnActive = $state(false);
-  // The turn in flight, so it can be cancelled. Cancelling asks the server to stop the work;
-  // aborting the fetch only stops this client reading it.
-  let turn: Turn | null = null;
 
   let sidebarOpen = $state(true);
   // Whether the transcript follows the stream (see PaneFollow).
@@ -120,7 +103,7 @@
 
   function closeVoiceCall() {
     voiceCallOpen = false;
-    if (activeId) void reloadTranscript(activeId);
+    if (activeId) void catchUp.reload(activeId);
   }
 
   const NEW_CHAT_LABEL = $derived(s.newChat);
@@ -129,11 +112,27 @@
   const arrival: Arrival = { preset, kickoff };
   const isSupport = untrack(() => preset) === 'support';
 
-  // Whether the turn in flight is an unattended run rather than a reply to something typed.
-  let runActive = $state(false);
+  // The open conversation's turn (see ChatTurns).
+  const turns: ChatTurns = new ChatTurns({
+    isSupport,
+    alerts,
+    activeId: () => activeId,
+    disposed: () => disposed,
+    text: () => s,
+    event: (id, event) => onEvent(id, event),
+    reduce: (event) => (chat = reduceTurnEvent(chat, event)),
+    reload: (id) => catchUp.reload(id),
+    giveBack: (start) => giveBack(start),
+    ended: () => endTurn(),
+    followBottom: () => void follow.toBottom(true),
+    beforeTurn: () => beforeTurn,
+    onTurnStateChange: () => onTurnStateChange,
+    onRunStateChange: () => onRunStateChange,
+  });
 
   /** Whether a turn may be started right now: the pane is settled and nothing is running. */
-  const canStartTurn = () => phase === 'ready' && !turnActive && !switching && !creating && (!!activeId || deferredNew);
+  const canStartTurn = () =>
+    phase === 'ready' && !turns.active && !switching && !creating && (!!activeId || deferredNew);
   function startTurn(start: TurnStart) {
     if (canStartTurn()) void dispatch(start);
   }
@@ -182,29 +181,20 @@
       if (disposed) return;
       sessions = summaries.map((summary) => fromSummary(summary, NEW_CHAT_LABEL));
 
-      // Open the requested session (the host prop), else the newest, else a fresh
-      // chat. A host (the /tailor route) seeds `session` + `sessionLabel`.
-      //
-      // An explicitly-asked-for preset overrides "resume the newest": arriving at
-      // ?preset=profile is a request to START an experience interview, not to reopen
-      // whatever was last discussed. Without this the link did nothing at all for anyone
-      // who already had a chat, which is everyone after their first visit.
-      if (!session && arrival.preset !== 'chat') {
+      // What to open first (see bootTarget).
+      const target = bootTarget(session, arrival.preset);
+      if (target === 'create') {
         await createAndOpen();
-      } else if (session) {
+      } else if (target === 'newest') {
+        if (!(await openNewestOpenable())) startBlankChat();
+      } else {
         // The tailoring host opens a conversation the rail never lists, so seed it
         // into the local list to give it a name; the chat host's sessions all come
         // from the list already.
         if (!showSessionRail) {
-          sessions = upsertSession(sessions, {
-            id: session,
-            label: sessionLabel ?? NEW_CHAT_LABEL,
-            preset: 'tailor',
-          });
+          sessions = upsertSession(sessions, { id: target, label: sessionLabel ?? NEW_CHAT_LABEL, preset: 'tailor' });
         }
-        await openSession(session);
-      } else if (!(await openNewestOpenable())) {
-        startBlankChat();
+        await openSession(target);
       }
       if (disposed) return;
       phase = 'ready';
@@ -219,7 +209,7 @@
       if (auto?.kind === 'message') arrival.kickoff = undefined;
       if (auto) void dispatch(auto);
     } catch (err) {
-      report(err, s.assistantUnreachable);
+      alerts.report(err, s.assistantUnreachable);
       phase = 'ready';
     }
   }
@@ -245,18 +235,8 @@
       alerts.notFound = false;
       void boot();
     } else if (step.action === 'open' && requested) {
-      openSession(requested, true).catch((err: unknown) => report(err, s.openChatFailed));
+      openSession(requested, true).catch((err: unknown) => alerts.report(err, s.openChatFailed));
     }
-  }
-
-  /** Surface a failure. A conversation the caller cannot open is a dead link, not
-   *  a broken assistant, so it gets the explanation panel rather than an error. */
-  function report(err: unknown, fallback: string) {
-    if (err instanceof SessionNotFound) {
-      alerts.notFound = true;
-      return;
-    }
-    alerts.fail(err instanceof Error ? err.message : fallback);
   }
 
   // The discard dialog a switch waits on while messages are queued (see ChatSwitchConfirm).
@@ -330,26 +310,17 @@
     void follow.toBottom(true);
   }
 
-  /**
-   * Open the most recent conversation that will actually open, newest first.
-   *
-   * Nobody asked for a SPECIFIC chat here — we picked one on their behalf — so a chat
-   * that will not open is our problem to route around, not a dead link to report. Saying
-   * "this chat no longer exists" for a pick they never made replaces the rail with a
-   * panel, and its only way out lands on this same code, which picks the same chat: a
-   * loop with no exit but a manual URL.
-   *
-   * Returns false when the caller has nothing openable, so boot() can start them a chat.
-   */
-  async function openNewestOpenable(): Promise<boolean> {
-    for (const candidate of sessions) {
-      // Sequential on purpose: we want the FIRST one that opens, and opening them in
-      // parallel would race several transcripts into the same pane.
-      await openSession(candidate.id);
-      if (!alerts.notFound) return true;
-      alerts.notFound = false;
-    }
-    return false;
+  /** Open the most recent conversation that will actually open, newest first (see openFirst). */
+  function openNewestOpenable(): Promise<boolean> {
+    return openFirst(
+      sessions.map((c) => c.id),
+      async (id) => {
+        await openSession(id);
+        if (!alerts.notFound) return true;
+        alerts.notFound = false;
+        return false;
+      },
+    );
   }
 
   function startBlankChat() {
@@ -396,7 +367,7 @@
     try {
       await openSession(id);
     } catch (err) {
-      report(err, s.openChatFailed);
+      alerts.report(err, s.openChatFailed);
     }
   }
 
@@ -436,16 +407,10 @@
   }
 
   // End the current turn and drain the next queued message, if any.
-  function endTurn() {
-    turnActive = false;
-    turn = null;
-    onTurnStateChange?.(false);
-    if (runActive) {
-      runActive = false;
-      onRunStateChange?.(false);
-    }
+  function endTurn(completed = false) {
+    turns.finish();
     // A completed turn may have edited an artifact (e.g. the tailored CV) — let the host refresh.
-    onTurnComplete?.();
+    onTurnComplete?.({ completed });
     drainQueue();
   }
 
@@ -454,18 +419,14 @@
   // the meantime could start work that confirming the switch can no longer take back.
   // Declining the switch drains it (see the effect beside confirmSwitch).
   function drainQueue() {
-    if (confirmSwitchOpen || turnActive || queue.length === 0) return;
+    if (confirmSwitchOpen || turns.active || queue.length === 0) return;
     const next = queue.shift();
     if (next) void dispatch({ kind: 'message', text: next.text, attachments: next.attachments });
   }
 
-  /** Stop an in-flight turn: ask the server to stop the work, and stop reading it here. The
-   *  backend no longer infers the first from the second — it could not tell a deliberate stop
-   *  apart from a phone locking its screen. */
+  /** Stop an in-flight turn (see ChatTurns.cancel). */
   function cancelTurn() {
-    turn?.cancel();
-    turn = null;
-    turnActive = false;
+    turns.cancel();
   }
 
   function onEvent(sessionId: string, event: TurnEvent) {
@@ -482,7 +443,7 @@
     }
     chat = reduceTurnEvent(chat, event);
     if (event.type === 'result') {
-      endTurn();
+      endTurn(event.stop_reason === 'end_turn' && !event.is_error);
     }
     void follow.toBottom();
   }
@@ -499,7 +460,7 @@
     track('assistant_message');
     draft = '';
     attachments = [];
-    if (turnActive || queue.length > 0) {
+    if (turns.active || queue.length > 0) {
       queue.add(text, docs);
       void follow.toBottom(true);
       return;
@@ -534,7 +495,7 @@
       } catch (err) {
         // The session exists and is active, so a resend goes to it; only this send is lost.
         giveBack(start);
-        report(err, s.openChatFailed);
+        alerts.report(err, s.openChatFailed);
         return;
       }
       if (activeId !== created.id) {
@@ -544,82 +505,7 @@
     }
     const id = activeId;
     if (!id || disposed) return;
-    if (!alerts.error?.cutOff) alerts.error = null;
-    turnActive = true;
-    onTurnStateChange?.(true);
-    // Before anything reaches the server: the host may be holding an edit on a timer, and
-    // the run is about to snapshot and rewrite the very document that edit belongs to.
-    if (beforeTurn) {
-      try {
-        await beforeTurn();
-      } catch {
-        /* the host reports its own save failures; a turn is still worth starting */
-      }
-    }
-    if (disposed) return;
-    // Whether the turn ever began. A message can queue behind the session's running turn and
-    // then never start — the wait runs out, or it is stopped — and the composer cleared the
-    // draft the moment it was sent. Without this the user's words would simply vanish.
-    // A retry never emits user_prompt (that is the point), so "began" is not meaningful for it.
-    let began = start.kind === 'retry';
-    const watch = (event: TurnEvent) => {
-      if (turnBegins(event)) began = true;
-      onEvent(id, event);
-    };
-
-    if (start.kind === 'autopilot') {
-      runActive = true;
-      onRunStateChange?.(true);
-    }
-    const started = startTurnFor(id, start, watch, isSupport ? SUPPORT_BASE : undefined);
-    turn = started;
-    void follow.toBottom(true);
-    try {
-      await started.done;
-      if (!began && start.kind === 'message' && id === activeId) {
-        // The turn never ran, so the message was never recorded. Give it back rather than
-        // losing it, and say why — the composer is empty and nothing else would explain it.
-        giveBack(start);
-        alerts.fail(s.messageNotSent);
-      }
-    } catch (err) {
-      if (err instanceof StreamInterrupted) {
-        // The stream broke, not the turn: it runs on the server under its own bounds and
-        // stores everything it does. Marking the message as failed would tell the user
-        // their CV edits were lost when they were not — so we re-read the session and show
-        // whatever the agent has managed so far. A support session cannot be re-read that
-        // way, so the rest of its answer is lost: say so rather than leave a silent cut. The
-        // open answer is closed as an ordinary one (not errored — the server turn did not
-        // fail), so it stops showing as streaming.
-        if (isSupport && id === activeId) {
-          chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'end_turn' });
-          alerts.cutOff(s.supportInterrupted);
-        } else await reloadTranscript(id);
-        endTurn();
-        return;
-      }
-      if (err instanceof TurnRefused) {
-        // Neither remedy below ever started the turn, so the message was never recorded —
-        // give it back to the composer rather than losing it while the candidate decides
-        // what to do next.
-        giveBack(start);
-        if (err.canExtend) {
-          // The session can be continued right now by spending another of the day's
-          // tailoring sessions.
-          alerts.refusal = err;
-        } else {
-          // A spent daily allowance: Retry would only repeat the same refusal, and there is
-          // no assistant frame to mark errored (the turn never started), so this skips the
-          // generic error result entirely rather than fabricating a dead-end Retry button.
-          alerts.limit(err.message);
-        }
-        endTurn();
-        return;
-      }
-      alerts.fail(err instanceof Error ? err.message : s.sendFailed);
-      chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'error', is_error: true });
-      endTurn();
-    }
+    await turns.run(id, start);
   }
 
   /** Return an unsent message to the composer — its text when the draft is empty, and its
@@ -632,14 +518,10 @@
 
   // An apply conversation catches up on its application while it is shown.
   const appSync = new ApplicationSync({
-    busy: () => turnActive || turn !== null,
-    began: (started) => {
-      turnActive = true;
-      turn = started;
-      onTurnStateChange?.(true);
-    },
+    busy: () => turns.busy,
+    began: (started) => turns.adopt(started),
     event: onEvent,
-    reload: reloadTranscript,
+    reload: (id) => catchUp.reload(id),
     ended: () => {
       endTurn();
       void follow.toBottom(true);
@@ -651,34 +533,20 @@
     return appSync.watch(activeId);
   });
 
-  /** Re-read a session's stored transcript into the view. The server holds the truth about a
-   *  turn whose stream we lost, so this is how a returning client catches up. */
-  async function reloadTranscript(id: string) {
-    if (isSupport || id !== activeId) return;
-    try {
-      const { messages: transcriptMessages } = await getSession(id);
-      const next = chatFromTranscript(transcriptMessages);
-      if (id === activeId) chat = next;
-    } catch {
-      /* the transcript stays as it is; the next visit will catch up */
-    }
-  }
-
-  /** Catch up when the tab comes back. A phone freezes a backgrounded tab, which breaks the
-   *  stream while the turn keeps running on the server — so what is on screen when the user
-   *  returns is whatever arrived before the freeze, and the session holds the rest. Nothing
-   *  is re-read while a turn is streaming: that stream is already the newer truth. */
-  function catchUpOnReturn() {
-    if (document.visibilityState !== 'visible' || turnActive || !activeId) return;
-    void reloadTranscript(activeId);
-  }
+  // Re-reading the stored transcript, and on returning to the tab (see TranscriptCatchUp).
+  const catchUp: TranscriptCatchUp = new TranscriptCatchUp({
+    isSupport,
+    activeId: () => activeId,
+    streaming: () => turns.active,
+    show: (next) => (chat = next),
+  });
 
   onMount(() => {
     void boot();
-    document.addEventListener('visibilitychange', catchUpOnReturn);
+    const stopListening = catchUp.listen();
     return () => {
       disposed = true;
-      document.removeEventListener('visibilitychange', catchUpOnReturn);
+      stopListening();
       cancelTurn();
     };
   });
@@ -731,7 +599,7 @@
           {openingActions}
           {autoRun}
           {activePreset}
-          {turnActive}
+          turnActive={turns.active}
           {switching}
           canStart={canStartTurn}
           onsubmit={submitText}
@@ -746,7 +614,7 @@
           bind:voiceCallOpen
           sessionId={activeId}
           queue={queue.items}
-          {turnActive}
+          turnActive={turns.active}
           support={isSupport}
           disabled={phase !== 'ready' || switching}
           interview={activePreset === 'interview'}
@@ -764,7 +632,7 @@
   bind:this={switchConfirm}
   bind:open={confirmSwitchOpen}
   onConfirm={(target) =>
-    openSession(target.id, target.fromAddress, true).catch((err: unknown) => report(err, s.openChatFailed))}
+    openSession(target.id, target.fromAddress, true).catch((err: unknown) => alerts.report(err, s.openChatFailed))}
   onDecline={declineSwitch}
 />
 

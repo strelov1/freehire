@@ -56,6 +56,10 @@ type SystemdLauncher struct {
 	EnvFile      string
 	// RunAs is the unprivileged account the crawl drops to.
 	RunAs string
+	// Slice, when set, places every run in that systemd slice, so a CPU quota on the slice
+	// bounds scheduler runs together with the static per-provider units. Empty keeps the
+	// systemd default (system.slice), where no slice-level quota reaches them.
+	Slice string
 
 	// exec is the seam the tests use. nil means really run the command.
 	exec func(ctx context.Context, name string, args ...string) error
@@ -134,9 +138,11 @@ func (l SystemdLauncher) Launch(ctx context.Context, run Run) error {
 		// itself be optional ("-/path"); its marker is not part of the directory.
 		"--property=EnvironmentFile=-" + filepath.Join(filepath.Dir(strings.TrimPrefix(l.EnvFile, "-")), "ingest-env", run.Provider+".env"),
 		"--uid=" + l.RunAs,
-		l.IngestBinary,
-		run.Provider,
 	}
+	if l.Slice != "" {
+		args = append(args, "--slice="+l.Slice)
+	}
+	args = append(args, l.IngestBinary, run.Provider)
 	if run.Shards > 1 {
 		// An unsharded provider gets NO selector rather than --shard=1/1: cmd/ingest
 		// already reads a missing selector as "crawl everything", and two spellings of

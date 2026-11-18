@@ -127,7 +127,7 @@ func TestLinkedInDetailFailuresPreserveUncertainty(t *testing.T) {
 				fake.routeErr("/jobs-guest/jobs/api/jobPosting/123", tc.err)
 			}
 			s := NewLinkedIn(fake).(linkedIn)
-			s.pace = &recordingWaiter{}
+			s.pace, s.backoff = &recordingWaiter{}, 0
 			jobs, err := s.Fetch(context.Background(), CompanyEntry{Board: "Go", Region: "London"})
 			if err == nil {
 				t.Fatal("all-unreadable crawl reported success")
@@ -211,7 +211,7 @@ func TestLinkedInPreservesProgressWhenLaterRequestsFail(t *testing.T) {
 				fake.routeErr("start=1", context.DeadlineExceeded)
 			}
 			s := NewLinkedIn(fake).(linkedIn)
-			s.pace = &recordingWaiter{}
+			s.pace, s.backoff = &recordingWaiter{}, 0
 			jobs, err := s.Fetch(context.Background(), CompanyEntry{Board: "Go", Region: "London"})
 			if err != nil || len(jobs) != 1 || jobs[0].ExternalID != "123" || jobs[0].Description == "" {
 				t.Fatalf("lost readable posting: jobs=%+v error=%v", jobs, err)

@@ -1,20 +1,18 @@
 <script lang="ts">
-  import { onMount, untrack, type Snippet } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { browser } from '$app/env';
   import { goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { api, type Slice } from '#lib/api.js';
+  import { api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { PUBLIC_OPEN_WITHIN } from '$app/env/public';
   import { openWithinEnabled } from '#lib/features.js';
-  import { computeClientMatch } from '#lib/jobMatch.js';
   import { ensureViewedLoaded } from '#lib/viewedJobs.svelte.js';
   import { ensureSavedLoaded } from '#lib/savedJobs.svelte.js';
   import { ensureAppliedCompaniesLoaded } from '#lib/appliedCompanies.svelte.js';
-  import { ensureDismissedLoaded, isDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
-  import { latestOnly } from '#lib/latestOnly.js';
+  import { ensureDismissedLoaded, isDismissed } from '#lib/dismissedJobs.svelte.js';
   import { Paginator } from '#lib/paginated.svelte.js';
   import { pageCount, pageOffset, resumePage } from '#lib/pagination.js';
   import Pagination from './Pagination.svelte';
@@ -40,54 +38,19 @@
   import { syncOnNavigation } from '#lib/urlSynced.svelte.js';
   import { setListSearchTarget } from '#lib/listSearch.svelte.js';
   import { track } from '#lib/analytics.js';
-  import type { Job, FacetCounts } from '#lib/types.js';
+  import type { Job } from '#lib/types.js';
   import FilterModal from './filters/FilterModal.svelte';
   import ListToolbar from './ListToolbar.svelte';
   import States from './States.svelte';
   import JobSearchError from './JobSearchError.svelte';
   import JobRowSkeleton from './JobRowSkeleton.svelte';
   import HiddenToast from './HiddenToast.svelte';
+  import type { JobsViewProps } from './JobsView.props';
+  import { clientMatchesOf, visibleFeed } from './feedVisibility';
+  import { FeedCounts } from './feedCounts.svelte';
+  import { HiddenJobUndo } from './hiddenJobUndo.svelte';
 
-  // Filters live in the URL; the route `load` searches by them and returns the
-  // first page as `initial`, so the rows are in the initial HTML for SSR/share/
-  // reload. After hydration the view is client-driven: FilterStore writes the URL
-  // synchronously and exposes a debounced `applied` snapshot; a filter change
-  // reloads the list + counts client-side off `applied` (no navigation), and
-  // infinite scroll pages the rest.
-  //
-  // `scope` pins extra search params that the user can't change (e.g. the company
-  // page passes `{ company_slug }`): they're merged into every search but kept out
-  // of `filters`/the URL, so they're not user-selectable facets. `excludeFacets`
-  // hides facets that are redundant under that scope (e.g. Source on a company).
-  // `sidebarTop` renders above the filter summary in the desktop sidebar (e.g. the
-  // company page's facts card); the standalone /jobs list omits it.
-  //
-  // `initialParams` overrides the seed below with the exact param string the
-  // route's `load` searched with (page.url.searchParams minus `page`, see
-  // +page.server.ts): the client must seed off that same string, not the raw
-  // URL, or the two would disagree and the mount effect would immediately
-  // discard the SSR page and refetch.
-  //
-  // `currentPage` is the `?page=N` the route's `load` served, and it is REQUIRED:
-  // page links are now the only way through the results, so a route that mounts
-  // this without honouring `?page=N` would render a nav whose every link leads
-  // back to the page already on screen. Required rather than optional so that
-  // mistake is a type error instead of a listing that silently stops at twenty.
-  let {
-    initial,
-    scope = {},
-    excludeFacets = [],
-    sidebarTop,
-    initialParams,
-    currentPage,
-  }: {
-    initial: Slice<Job>;
-    scope?: Record<string, string>;
-    excludeFacets?: string[];
-    sidebarTop?: Snippet;
-    initialParams?: string;
-    currentPage: number;
-  } = $props();
+  let { initial, scope = {}, excludeFacets = [], sidebarTop, initialParams, currentPage }: JobsViewProps = $props();
 
   // Standalone /jobs (no fixed scope) hands its text search to the header; an
   // embedded, scoped instance (e.g. a company page) keeps its own inline input.
@@ -156,33 +119,14 @@
     () => (holdover = jobs.items),
   );
 
-  // The live facet distribution (value → count per facet), feeding the dynamic
-  // selects (skills, countries) so the user sees which values exist and how many
-  // jobs each has under the current filters. A failed fetch leaves the prior
-  // counts — the selects degrade to plain (countless) options, never break.
-  // latestOnly stops a slow earlier response overwriting a newer one.
-  let catalogCounts = $state.raw<FacetCounts | null>(null);
+  // The live facet distribution (see FeedCounts).
+  const feedCounts = new FeedCounts(scopedParams);
   // Facet counts cannot apply the former-employer constraint.
-  const counts = $derived(filters.value.formerEmployers || filters.value.watchlist ? null : catalogCounts);
+  const counts = $derived(filters.value.formerEmployers || filters.value.watchlist ? null : feedCounts.catalog);
   // The map dialog reads and writes `filters` itself, so a click on the map narrows the
   // list behind it. Its module (the land outline among it) loads on the first open only.
   let mapOpen = $state(false);
   let mapLoaded = $state(false);
-
-  // The role distribution the header's suggestions are ranked and filtered by. A scope
-  // of its own, deliberately: `counts` above is scoped by the text query, and a
-  // suggestion list keyed off that would rank by "jobs matching what you have typed so
-  // far", lag it by one debounce, and drop roles in and out mid-word. Same filters, no
-  // `q` — so the figure still answers what a click would give.
-  let facetsError = $state.raw<unknown>(null);
-  const refreshCounts = latestOnly(
-    () => api.facetCounts(scopedParams()),
-    (facets) => {
-      catalogCounts = facets;
-      facetsError = null;
-    },
-    (error) => (facetsError = error),
-  );
 
   // Minimum profile-match slider: a client-only post-filter over the already-fetched
   // page — the match percent depends on the viewer's own profile skills, which the
@@ -258,16 +202,7 @@
     if (relaxTarget) filters.clearFacet(relaxTarget);
   }
 
-  // Live disjunctive facet counts for the staged filter set (built by the modal),
-  // merged with the fixed scope params (e.g. company_slug) so every control's counts —
-  // and the "Show N jobs" total — match the list. Disjunctive so a selected facet
-  // still shows its siblings' counts.
-  const stagedCounts = (params: URLSearchParams) => {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: built, mutated, passed to the API once; not reactive state
-    const p = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(scope)) p.set(k, v);
-    return api.facetCounts(p, { disjunctive: true });
-  };
+  const stagedCounts = (params: URLSearchParams) => feedCounts.staged(params, scope);
 
   // The server-rendered `initial` was searched for `page.url`. After a back/forward
   // onto a shallow-routing entry that lags page.url behind the address bar, `initial`
@@ -312,7 +247,7 @@
   }
 
   function retrySearch() {
-    refreshCounts();
+    feedCounts.refresh();
     if (jobs.status === 'error') reloadList(pageOffset(activePage));
   }
 
@@ -343,59 +278,15 @@
   // is what put "No matching jobs." over a list that was merely reloading.
   const displayItems = $derived(holdingOver ? holdover : jobs.items);
 
-  // The feed minus the signed-in user's hidden jobs, and (when the match slider is
-  // active) minus jobs below the chosen match threshold. Dismissal is cross-referenced
-  // client-side against the shared dismissed set (loaded on mount), mirroring the
-  // viewed/saved sets — the server search is untouched. Re-derives when the page
-  // changes, when a hide/undo mutates the dismissed set, or when the slider moves, so
-  // a hidden or filtered-out card drops (and an undone one returns) instantly. A job
-  // with no skills has no percent to test (see computeClientMatch) and stays, matching
-  // the card's own `no-skills` state, which shows no match at all rather than a false 0%.
-  const clientMatches = $derived(
-    new Map(displayItems.map((job) => [job.public_slug, computeClientMatch(job.skills ?? [], profileSkills)])),
-  );
+  // What the feed shows of the fetched page, and the total beside it (see feedVisibility.ts).
+  const clientMatches = $derived(clientMatchesOf(displayItems, profileSkills));
+  // The threshold the browser applies itself: only off best match, where the server does.
+  const clientMinMatch = $derived(!serverMatch && matchFilterAvailable ? minMatch : null);
+  const visibleJobs = $derived(visibleFeed(displayItems, clientMatches, clientMinMatch, isDismissed));
+  const listTotal = $derived(clientMinMatch != null ? visibleJobs.length : jobs.total);
 
-  const visibleJobs = $derived(
-    displayItems.filter((j) => {
-      if (isDismissed(j.public_slug)) return false;
-      if (!serverMatch && matchFilterAvailable && minMatch != null && (j.skills ?? []).length > 0) {
-        return (clientMatches.get(j.public_slug)?.percent ?? 0) >= minMatch;
-      }
-      return true;
-    }),
-  );
-
-  // `jobs.total` is the server's raw count for the query — accurate for every facet,
-  // which all narrow the actual search, but not for the match slider, which only
-  // trims the already-fetched page client-side. Showing the raw total next to a
-  // shrunk list would read as a lie ("500 open jobs" over three visible cards), so
-  // swap in what's actually on screen while the threshold is active.
-  const listTotal = $derived(
-    !serverMatch && matchFilterAvailable && minMatch != null ? visibleJobs.length : jobs.total,
-  );
-
-  // The pending "Job hidden — Undo" toast, or null. Set when a card is hidden; the
-  // toast owns its auto-dismiss. Undo clears the slug's hidden mark (card returns via
-  // visibleJobs) and confirms with the server; a failed undo is swallowed — the
-  // durable recovery path is Activity → Hidden.
-  let hiddenToast = $state<{ slug: string } | null>(null);
-
-  function onHide(slug: string) {
-    hiddenToast = { slug };
-  }
-
-  async function undoHide() {
-    const pending = hiddenToast;
-    if (!pending) return;
-    markUndismissed(pending.slug);
-    hiddenToast = null;
-    try {
-      await api.undismissJob(pending.slug);
-    } catch {
-      // Swallow: the job is already back in the feed optimistically, and Activity →
-      // Hidden remains the durable way to manage hidden jobs.
-    }
-  }
+  // The "Job hidden — Undo" toast (see HiddenJobUndo).
+  const hidden = new HiddenJobUndo();
 
   // Enter swipe mode carrying the current filters + query (same param shape the
   // list uses), so the deck reflects exactly what's on screen. `scope` params are
@@ -421,7 +312,7 @@
     // thing that ever will for a visitor whose guess came back empty.
     if (geo.pending) return;
     untrack(() => {
-      refreshCounts();
+      feedCounts.refresh();
     });
   });
 
@@ -550,7 +441,7 @@
       {matchNeedsSkills}
     />
 
-    <JobSearchError error={jobs.status === 'error' ? null : facetsError} onlyRateLimit onRetry={retrySearch} />
+    <JobSearchError error={jobs.status === 'error' ? null : feedCounts.error} onlyRateLimit onRetry={retrySearch} />
 
     {#if jobs.status === 'loading' && !holdingOver}
       <States state="loading">
@@ -572,7 +463,7 @@
         {minMatch}
         {serverMatch}
         {holdingOver}
-        {onHide}
+        onHide={hidden.onHide}
         hideCompany={!!scope.company_slug}
       />
 
@@ -600,9 +491,9 @@
 <!-- Undo affordance for the hide gesture. Keyed by slug so hiding a second job while
      a toast is up restarts the countdown for the newer one. A hide-then-forget is
      still recoverable in Activity → Hidden. -->
-{#if hiddenToast}
-  {#key hiddenToast.slug}
-    <HiddenToast onUndo={undoHide} onClose={() => (hiddenToast = null)} />
+{#if hidden.pending}
+  {#key hidden.pending.slug}
+    <HiddenToast onUndo={hidden.undo} onClose={hidden.close} />
   {/key}
 {/if}
 

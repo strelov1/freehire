@@ -65,8 +65,7 @@ func (s potok) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 // FetchNew fetches a posting page only for a posting the catalogue does not already have. A seen
 // posting yields its list-only job flagged SeenRefresh, so the pipeline refreshes liveness without
-// a request or a rewrite of the body hydrated when it was new. The title travels with it so the
-// refresh path can re-apply the catalogue filter.
+// a request or a rewrite of the body hydrated when it was new.
 func (s potok) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	postings, err := s.list(ctx, e)
 	if err != nil {

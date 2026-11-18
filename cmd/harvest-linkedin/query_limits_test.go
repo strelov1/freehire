@@ -39,7 +39,7 @@ func TestLoadQueriesRetainsOmittedAndExplicitZeroDefaults(t *testing.T) {
 
 func TestLoadQueriesAcceptsTheCheckedInHarvestWorklist(t *testing.T) {
 	queries, err := loadQueries(filepath.Join("..", "..", "harvest", "linkedin-queries.yml"))
-	if err != nil || len(queries) != 75 {
+	if err != nil || len(queries) != 729 {
 		t.Fatalf("checked-in harvest: searches=%d, %v", len(queries), err)
 	}
 }

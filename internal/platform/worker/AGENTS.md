@@ -15,15 +15,15 @@ Read [Always true](AGENT-REFERENCE.md#always-true) before work involving this to
 
 ## The pause switch
 
-Read [The pause switch](AGENT-REFERENCE.md#the-pause-switch) before work involving this topic.
+Read [The pause switch](AGENT-REFERENCE-PAUSE.md#the-pause-switch) before work involving this topic.
 
 ### Holding outbound mail by class
 
-Read [Holding outbound mail by class](AGENT-REFERENCE.md#holding-outbound-mail-by-class) before work involving this topic.
+Read [Holding outbound mail by class](AGENT-REFERENCE-PAUSE.md#holding-outbound-mail-by-class) before work involving this topic.
 
 ### The SES circuit breaker
 
-Read [The SES circuit breaker](AGENT-REFERENCE.md#the-ses-circuit-breaker) before work involving this topic.
+Read [The SES circuit breaker](AGENT-REFERENCE-PAUSE.md#the-ses-circuit-breaker) before work involving this topic.
 
 ## Prometheus metrics
 

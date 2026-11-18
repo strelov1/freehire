@@ -171,7 +171,7 @@ func (s infojobsBR) FetchNewGated(ctx context.Context, e CompanyEntry, seen func
 		case seen(c.ID):
 			base.SeenRefresh = true
 			refreshed = append(refreshed, base)
-		case covered[c.Company] || (gate.Rejected != nil && gate.Rejected(base)):
+		case covered[c.Company]:
 			skipped = append(skipped, base)
 		case len(unseen) < s.maxNewPerBoard:
 			unseen = append(unseen, c)

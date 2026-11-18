@@ -93,7 +93,7 @@ func (builtin) aggregator()               {}
 func (builtin) sweepGrace() time.Duration { return builtinSweepGrace }
 
 // builtinCard is what a listing card states about a posting: enough for identity, for the
-// coverage gate (employer) and for the catalogue filter (title).
+// coverage gate (employer).
 type builtinCard struct {
 	ID       string
 	URL      string
@@ -132,7 +132,7 @@ func (s builtin) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externa
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrate(ctx, cards, seen, nil, func(Job) bool { return false })
+	return s.hydrate(ctx, cards, seen, nil)
 }
 
 // FetchNewGated is FetchNew told what the pipeline is going to discard. On Built In that is
@@ -148,7 +148,7 @@ func (s builtin) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ex
 	for _, c := range cards {
 		names = append(names, c.Company)
 	}
-	return s.hydrate(ctx, cards, seen, gate.Covered(names), gate.Rejected)
+	return s.hydrate(ctx, cards, seen, gate.Covered(names))
 }
 
 // list walks every category's window and returns its cards, each posting once. A category's
@@ -274,7 +274,7 @@ func builtinIconText(card *xhtml.Node, icon string) string {
 // run's hydration is deferred too: the refusal is about the IP, and every further request would
 // be refused alike and only prolong it.
 func (s builtin) hydrate(ctx context.Context, cards []builtinCard, seen func(string) bool,
-	covered map[string]bool, rejected func(Job) bool) ([]Job, error) {
+	covered map[string]bool) ([]Job, error) {
 	var out, toHydrate []Job
 	deferred := 0
 	for _, c := range cards {
@@ -283,7 +283,7 @@ func (s builtin) hydrate(ctx context.Context, cards []builtinCard, seen func(str
 		case seen(c.ID):
 			base.SeenRefresh = true
 			out = append(out, base)
-		case covered[c.Company] || rejected(base):
+		case covered[c.Company]:
 			out = append(out, base)
 		case len(toHydrate) < s.maxNewPerRun:
 			toHydrate = append(toHydrate, base)

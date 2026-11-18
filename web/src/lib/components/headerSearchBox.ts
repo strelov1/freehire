@@ -1,6 +1,12 @@
-// The header search box's frame: how it is drawn, and how a press on it reaches the field.
+// The header search box's frame: how it is drawn, how a press on it reaches the field, and
+// what its keys do.
 
 import { cn } from '#lib/ui/index.js';
+
+/** Tailwind's `sm`. Two things in HeaderSearch ask it — whether to place the caret on mount,
+ *  and how the box's panel is drawn — and they must get one answer, since the markup they
+ *  are reasoning about switches on the same breakpoint. */
+export const WIDE_QUERY = '(min-width: 640px)';
 
 export function searchBoxClass(hero: boolean, autoFocused: boolean): string {
   return cn(
@@ -31,4 +37,43 @@ export function focusFieldFromBox(e: PointerEvent, input: HTMLInputElement | nul
   if ((e.target as HTMLElement | null)?.closest('button, input, a')) return;
   e.preventDefault();
   input?.focus();
+}
+
+/**
+ * What a key in the box does: `enter` searches (or activates the highlighted row), `close`
+ * puts the dropdown away, `down`/`up` move the highlight, null leaves the key alone.
+ *
+ * Mid-composition (CJK/IME) Enter CONFIRMS a candidate and the arrows move through them;
+ * the browser must keep those. `oninput` has already fired by then, so the draft holds
+ * pre-conversion text — searching it would search a half-typed word.
+ *
+ * Enter is handled whether or not the dropdown is open — it is the only way typing reaches
+ * the list now, so it cannot sit behind the dropdown's guard. Every other key belongs to the
+ * dropdown, so with it closed nothing else is claimed — which keeps the input behaving as it
+ * does where no suggestions exist. Escape keeps the typed text; only the dropdown closes.
+ */
+export function boxKey(e: KeyboardEvent, open: boolean): 'enter' | 'close' | 'down' | 'up' | null {
+  if (e.isComposing) return null;
+  if (e.key === 'Enter') return 'enter';
+  if (!open) return null;
+  if (e.key === 'Escape') return 'close';
+  if (e.key === 'ArrowDown') return 'down';
+  if (e.key === 'ArrowUp') return 'up';
+  return null;
+}
+
+/** The highlight after an arrow, wrapping at either end of `count` rows. */
+export function stepIndex(index: number, count: number, dir: 'down' | 'up'): number {
+  if (dir === 'down') return index < count - 1 ? index + 1 : 0;
+  return index > 0 ? index - 1 : count - 1;
+}
+
+/** Same global hotkeys as the launcher: Cmd/Ctrl+K always, `/` unless typing. */
+export function isFocusHotkey(e: KeyboardEvent): boolean {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') return true;
+  if (e.key === '/' && !e.metaKey && !e.ctrlKey) {
+    const tag = (document.activeElement as HTMLElement | null)?.tagName;
+    return tag !== 'INPUT' && tag !== 'TEXTAREA';
+  }
+  return false;
 }

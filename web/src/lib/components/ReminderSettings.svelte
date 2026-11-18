@@ -33,6 +33,11 @@
 
   // The server's default is a daily digest at 09:00 (migration 0246).
   let digestFrequency = $state('daily');
+  // Faster than daily is a Pro/Ultra benefit. A Free account may still carry an older instant or
+  // batched preference: it is kept (and sent back unchanged, so an unrelated edit never rewrites it),
+  // but what takes effect is daily.
+  let fasterAlerts = $state(false);
+  const effectiveFrequency = $derived(fasterAlerts ? digestFrequency : 'daily');
   let digestTime = $state('09:00');
   let inboxDigestEnabled = $state(false);
   let applicationDigestEnabled = $state(false);
@@ -90,6 +95,7 @@
       pushAvailable = pushDevice;
       digestPaid = plan?.plan === 'pro' || plan?.plan === 'ultra';
       digestFrequency = settings.digest_frequency || 'daily';
+      fasterAlerts = settings.faster_alerts_available ?? false;
       digestTime = settings.digest_time ?? '09:00';
       inboxDigestEnabled = settings.inbox_digest_enabled ?? false;
       applicationDigestEnabled = settings.application_digest_enabled ?? false;
@@ -125,7 +131,8 @@
         enabled,
         channels,
         digest_frequency: digestFrequency,
-        digest_time: digestFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled ? digestTime : null,
+        digest_time:
+          effectiveFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled ? digestTime : null,
         inbox_digest_enabled: inboxDigestEnabled,
         application_digest_enabled: applicationDigestEnabled,
         digest_interval_hours: digestIntervalHours,
@@ -160,6 +167,11 @@
   }
 
   function setDigestFrequency(freq: string) {
+    // Free accounts see every option; a faster one leads to the plans instead of a refused save.
+    if (freq !== 'daily' && !fasterAlerts) {
+      void goto(resolve('/pricing'));
+      return;
+    }
     digestFrequency = freq;
     persist();
   }
@@ -276,26 +288,26 @@
 
       <div class="flex flex-col gap-2 border-t border-border pt-4">
         <span class={sectionLabel}>Timing</span>
-        <dl class="flex flex-col gap-1.5 text-xs text-muted-foreground">
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Apply reminder —</dt>
+        <dl class="flex flex-col gap-3 text-xs text-muted-foreground">
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Apply reminder</dt>
             <dd>3 days after you save a job you haven't applied to yet.</dd>
           </div>
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Follow-up —</dt>
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Follow-up</dt>
             <dd>
-              once an application goes quiet: 21 days after applying, 18 in screening, 15 after a reply, 12 once
+              Once an application goes quiet: 21 days after applying, 18 in screening, 15 after a reply, 12 once
               interviewing, 5 with an offer out.
             </dd>
           </div>
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Interview prep —</dt>
-            <dd>right when you move a card to Interview.</dd>
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Interview prep</dt>
+            <dd>Right when you move a card to Interview.</dd>
           </div>
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Listing closed —</dt>
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Listing closed</dt>
             <dd>
-              right when a job you're still actively tracking closes — the card also moves to Expired on your board.
+              Right when a job you're still actively tracking closes — the card also moves to Expired on your board.
             </dd>
           </div>
         </dl>
@@ -407,22 +419,24 @@
         <button
           type="button"
           onclick={() => setDigestFrequency('instant')}
-          aria-pressed={digestFrequency === 'instant'}
-          class={pill(digestFrequency === 'instant')}
+          aria-pressed={effectiveFrequency === 'instant'}
+          class={pill(effectiveFrequency === 'instant')}
         >
-          {#if digestFrequency === 'instant'}<Check class="size-3.5" aria-hidden="true" />{/if}
+          {#if effectiveFrequency === 'instant'}<Check class="size-3.5" aria-hidden="true" />{/if}
           Instant
+          {#if !fasterAlerts}<Badge variant="brand">Pro</Badge>{/if}
         </button>
         <button
           type="button"
           onclick={() => setDigestFrequency('interval')}
-          aria-pressed={digestFrequency === 'interval'}
-          class={pill(digestFrequency === 'interval')}
+          aria-pressed={effectiveFrequency === 'interval'}
+          class={pill(effectiveFrequency === 'interval')}
         >
-          {#if digestFrequency === 'interval'}<Check class="size-3.5" aria-hidden="true" />{/if}
+          {#if effectiveFrequency === 'interval'}<Check class="size-3.5" aria-hidden="true" />{/if}
           Batched
+          {#if !fasterAlerts}<Badge variant="brand">Pro</Badge>{/if}
         </button>
-        {#if digestFrequency === 'interval'}
+        {#if effectiveFrequency === 'interval'}
           <select
             bind:value={digestIntervalHours}
             onchange={persist}
@@ -437,13 +451,13 @@
         <button
           type="button"
           onclick={() => setDigestFrequency('daily')}
-          aria-pressed={digestFrequency === 'daily'}
-          class={pill(digestFrequency === 'daily')}
+          aria-pressed={effectiveFrequency === 'daily'}
+          class={pill(effectiveFrequency === 'daily')}
         >
-          {#if digestFrequency === 'daily'}<Check class="size-3.5" aria-hidden="true" />{/if}
+          {#if effectiveFrequency === 'daily'}<Check class="size-3.5" aria-hidden="true" />{/if}
           Daily digest
         </button>
-        {#if digestFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled}
+        {#if effectiveFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled}
           <input
             type="time"
             bind:value={digestTime}
@@ -453,12 +467,28 @@
           />
         {/if}
       </div>
-      <p class="text-xs text-muted-foreground">
-        Instant sends new matches as soon as we find them; Batched collects them into one message per alert at most that
-        often. Frequency applies only to saved-search alerts. The inbox and weekly application summaries share the
-        chosen time; reminders and application nudges above deliver as they happen.
-      </p>
-      {#if (digestFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled) && !hasTimezone}
+      {#if fasterAlerts}
+        <p class="text-xs text-muted-foreground">
+          Instant sends new matches when the next check finds them (checks run every few minutes, outside quiet hours);
+          Batched collects them into one message at most that often. Frequency applies only to saved-search alerts. The
+          inbox and weekly application summaries share the chosen time; reminders and application nudges above deliver
+          as they happen.
+        </p>
+      {:else}
+        <p class="text-xs text-muted-foreground">
+          Free accounts get new matches in one daily digest at the time you choose. Search stays free; Instant and
+          Batched alerts come with Pro and Ultra. <a
+            href={resolve('/pricing')}
+            class="font-medium text-brand-strong hover:underline">View plans</a
+          >
+          {#if digestFrequency !== 'daily'}
+            Your saved {digestFrequency === 'instant' ? 'Instant' : 'Batched'} choice returns if you subscribe again.
+          {/if}
+          The inbox and weekly application summaries share this time; reminders and application nudges above deliver as they
+          happen.
+        </p>
+      {/if}
+      {#if (effectiveFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled) && !hasTimezone}
         <p class="text-xs text-muted-foreground">
           <!-- eslint-disable svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
           Set your

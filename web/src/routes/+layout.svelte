@@ -2,10 +2,11 @@
   import { navigating, page, updated } from '$app/state';
   import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import { api } from '#lib/api.js';
   import { initTheme } from '#lib/theme.svelte.js';
   import { adoptBrowserTimezone, currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { confirmTailorDialog, settleConfirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
-  import { onboardingGate, onboardingUrl } from '#lib/onboardingGate.svelte.js';
+  import { onboardingGate, routeAccount } from '#lib/onboardingGate.svelte.js';
   import { isAccountArea, isFullBleedRoute } from '#lib/shellLayout.js';
   import { resetUserStores } from '#lib/userResource.svelte.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
@@ -113,19 +114,13 @@
   // session read picks the marker up.
   const needsOnboarding = $derived(currentUser()?.onboarding_completed_at == null);
   $effect(() => {
-    // Not on /signin: it navigates to its own returnTo the moment the session flips, and a
-    // redirect fired in between races that navigation. The flow, opened for an instant,
-    // would record itself as shown and the visitor would never see it.
-    const path = page.url.pathname;
-    if (
-      isAuthenticated() &&
-      needsOnboarding &&
-      !onboardingGate.dismissed &&
-      path !== '/onboarding' &&
-      path !== '/signin'
-    ) {
-      // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
-      void goto(onboardingUrl(page.url.pathname + page.url.search));
+    // The path guards (/onboarding, /signin) and a guest's skip live in routeAccount.
+    if (isAuthenticated()) {
+      routeAccount(page.url.pathname, page.url.search, needsOnboarding, {
+        complete: () => api.completeOnboarding(),
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
+        go: (url) => void goto(url),
+      });
     }
   });
 
@@ -159,11 +154,16 @@
   // a new per-user store participates automatically (no list here to forget). Fired
   // from the always-mounted root layout so it covers every route; idempotent while
   // signed out.
+  // The guest's skip mark is cleared only on a real sign-out: a guest moving from /onboarding to
+  // /signin re-runs this effect while signed out, and must keep the mark for the new account.
+  let wasAuthenticated = false;
   $effect(() => {
-    if (!isAuthenticated()) {
+    const authenticated = isAuthenticated();
+    if (!authenticated) {
       resetUserStores();
-      onboardingGate.reset();
+      if (wasAuthenticated) onboardingGate.reset();
     }
+    wasAuthenticated = authenticated;
   });
 
   // A tab open across a deploy still holds the old build's route manifest, naming

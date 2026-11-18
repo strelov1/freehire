@@ -5606,6 +5606,111 @@ func (s *CompaniesMeta) SetLimit(val int64) {
 	s.Limit = val
 }
 
+// One company whose site matches a requested domain.
+// Ref: #/components/schemas/CompanyByDomain
+type CompanyByDomain struct {
+	// The normalized domain it matched.
+	Domain string `json:"domain"`
+	Slug   string `json:"slug"`
+	Name   string `json:"name"`
+	// Open postings; 0 when the company is not hiring now.
+	JobCount int64 `json:"job_count"`
+	// The site as stored (`website`, else `homepage`).
+	Website string `json:"website"`
+}
+
+// GetDomain returns the value of Domain.
+func (s *CompanyByDomain) GetDomain() string {
+	return s.Domain
+}
+
+// GetSlug returns the value of Slug.
+func (s *CompanyByDomain) GetSlug() string {
+	return s.Slug
+}
+
+// GetName returns the value of Name.
+func (s *CompanyByDomain) GetName() string {
+	return s.Name
+}
+
+// GetJobCount returns the value of JobCount.
+func (s *CompanyByDomain) GetJobCount() int64 {
+	return s.JobCount
+}
+
+// GetWebsite returns the value of Website.
+func (s *CompanyByDomain) GetWebsite() string {
+	return s.Website
+}
+
+// SetDomain sets the value of Domain.
+func (s *CompanyByDomain) SetDomain(val string) {
+	s.Domain = val
+}
+
+// SetSlug sets the value of Slug.
+func (s *CompanyByDomain) SetSlug(val string) {
+	s.Slug = val
+}
+
+// SetName sets the value of Name.
+func (s *CompanyByDomain) SetName(val string) {
+	s.Name = val
+}
+
+// SetJobCount sets the value of JobCount.
+func (s *CompanyByDomain) SetJobCount(val int64) {
+	s.JobCount = val
+}
+
+// SetWebsite sets the value of Website.
+func (s *CompanyByDomain) SetWebsite(val string) {
+	s.Website = val
+}
+
+// Ref: #/components/schemas/CompanyByDomainMeta
+type CompanyByDomainMeta struct {
+	// Requested domains that matched no company, normalized.
+	Unmatched []string `json:"unmatched"`
+}
+
+// GetUnmatched returns the value of Unmatched.
+func (s *CompanyByDomainMeta) GetUnmatched() []string {
+	return s.Unmatched
+}
+
+// SetUnmatched sets the value of Unmatched.
+func (s *CompanyByDomainMeta) SetUnmatched(val []string) {
+	s.Unmatched = val
+}
+
+// Ref: #/components/schemas/CompanyByDomainPage
+type CompanyByDomainPage struct {
+	Data []CompanyByDomain   `json:"data"`
+	Meta CompanyByDomainMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *CompanyByDomainPage) GetData() []CompanyByDomain {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *CompanyByDomainPage) GetMeta() CompanyByDomainMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *CompanyByDomainPage) SetData(val []CompanyByDomain) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *CompanyByDomainPage) SetMeta(val CompanyByDomainMeta) {
+	s.Meta = val
+}
+
 // One review. The persona handle is the only author identity ever sent.
 // Ref: #/components/schemas/CompanyFeedback
 type CompanyFeedback struct {
@@ -10058,6 +10163,62 @@ func (s *EmployerClaim) SetWorkEmail(val OptString) {
 	s.WorkEmail = val
 }
 
+// Ref: #/components/schemas/EmployerClaimReviewReason
+type EmployerClaimReviewReason string
+
+const (
+	EmployerClaimReviewReasonUnknownWebsite EmployerClaimReviewReason = "unknown_website"
+	EmployerClaimReviewReasonDomainMismatch EmployerClaimReviewReason = "domain_mismatch"
+	EmployerClaimReviewReasonAcademicDomain EmployerClaimReviewReason = "academic_domain"
+	EmployerClaimReviewReasonManualReview   EmployerClaimReviewReason = "manual_review"
+)
+
+// AllValues returns all EmployerClaimReviewReason values.
+func (EmployerClaimReviewReason) AllValues() []EmployerClaimReviewReason {
+	return []EmployerClaimReviewReason{
+		EmployerClaimReviewReasonUnknownWebsite,
+		EmployerClaimReviewReasonDomainMismatch,
+		EmployerClaimReviewReasonAcademicDomain,
+		EmployerClaimReviewReasonManualReview,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s EmployerClaimReviewReason) MarshalText() ([]byte, error) {
+	switch s {
+	case EmployerClaimReviewReasonUnknownWebsite:
+		return []byte(s), nil
+	case EmployerClaimReviewReasonDomainMismatch:
+		return []byte(s), nil
+	case EmployerClaimReviewReasonAcademicDomain:
+		return []byte(s), nil
+	case EmployerClaimReviewReasonManualReview:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *EmployerClaimReviewReason) UnmarshalText(data []byte) error {
+	switch EmployerClaimReviewReason(data) {
+	case EmployerClaimReviewReasonUnknownWebsite:
+		*s = EmployerClaimReviewReasonUnknownWebsite
+		return nil
+	case EmployerClaimReviewReasonDomainMismatch:
+		*s = EmployerClaimReviewReasonDomainMismatch
+		return nil
+	case EmployerClaimReviewReasonAcademicDomain:
+		*s = EmployerClaimReviewReasonAcademicDomain
+		return nil
+	case EmployerClaimReviewReasonManualReview:
+		*s = EmployerClaimReviewReasonManualReview
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 // Ref: #/components/schemas/EmployerClosed
 type EmployerClosed struct {
 	Closed bool `json:"closed"`
@@ -10374,6 +10535,137 @@ func (s *EmployerConfirm) GetCode() OptString {
 // SetCode sets the value of Code.
 func (s *EmployerConfirm) SetCode(val OptString) {
 	s.Code = val
+}
+
+// A pending claim with the current domain check, not a stored historical failure reason.
+// Ref: #/components/schemas/EmployerPendingClaim
+type EmployerPendingClaim struct {
+	UserID      int64                 `json:"user_id"`
+	CompanySlug string                `json:"company_slug"`
+	CompanyName string                `json:"company_name"`
+	WorkEmail   string                `json:"work_email"`
+	Status      EmployerAccountStatus `json:"status"`
+	VerifiedAt  OptDateTime           `json:"verified_at"`
+	// Whether the claimant still owes the mailed code or is waiting on a moderator.
+	EmailConfirmed bool `json:"email_confirmed"`
+	// True when the caller acts for the company as a member of its team rather than as its claimant;
+	// `work_email` is then the caller's own.
+	Member    bool      `json:"member"`
+	CreatedAt time.Time `json:"created_at"`
+	// The catalogue's current website, empty when unknown.
+	Website string `json:"website"`
+	// Manual_review means the domains now match but the claim still awaits a moderator.
+	ReviewReason EmployerClaimReviewReason `json:"review_reason"`
+}
+
+// GetUserID returns the value of UserID.
+func (s *EmployerPendingClaim) GetUserID() int64 {
+	return s.UserID
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *EmployerPendingClaim) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *EmployerPendingClaim) GetCompanyName() string {
+	return s.CompanyName
+}
+
+// GetWorkEmail returns the value of WorkEmail.
+func (s *EmployerPendingClaim) GetWorkEmail() string {
+	return s.WorkEmail
+}
+
+// GetStatus returns the value of Status.
+func (s *EmployerPendingClaim) GetStatus() EmployerAccountStatus {
+	return s.Status
+}
+
+// GetVerifiedAt returns the value of VerifiedAt.
+func (s *EmployerPendingClaim) GetVerifiedAt() OptDateTime {
+	return s.VerifiedAt
+}
+
+// GetEmailConfirmed returns the value of EmailConfirmed.
+func (s *EmployerPendingClaim) GetEmailConfirmed() bool {
+	return s.EmailConfirmed
+}
+
+// GetMember returns the value of Member.
+func (s *EmployerPendingClaim) GetMember() bool {
+	return s.Member
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *EmployerPendingClaim) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetWebsite returns the value of Website.
+func (s *EmployerPendingClaim) GetWebsite() string {
+	return s.Website
+}
+
+// GetReviewReason returns the value of ReviewReason.
+func (s *EmployerPendingClaim) GetReviewReason() EmployerClaimReviewReason {
+	return s.ReviewReason
+}
+
+// SetUserID sets the value of UserID.
+func (s *EmployerPendingClaim) SetUserID(val int64) {
+	s.UserID = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *EmployerPendingClaim) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *EmployerPendingClaim) SetCompanyName(val string) {
+	s.CompanyName = val
+}
+
+// SetWorkEmail sets the value of WorkEmail.
+func (s *EmployerPendingClaim) SetWorkEmail(val string) {
+	s.WorkEmail = val
+}
+
+// SetStatus sets the value of Status.
+func (s *EmployerPendingClaim) SetStatus(val EmployerAccountStatus) {
+	s.Status = val
+}
+
+// SetVerifiedAt sets the value of VerifiedAt.
+func (s *EmployerPendingClaim) SetVerifiedAt(val OptDateTime) {
+	s.VerifiedAt = val
+}
+
+// SetEmailConfirmed sets the value of EmailConfirmed.
+func (s *EmployerPendingClaim) SetEmailConfirmed(val bool) {
+	s.EmailConfirmed = val
+}
+
+// SetMember sets the value of Member.
+func (s *EmployerPendingClaim) SetMember(val bool) {
+	s.Member = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *EmployerPendingClaim) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetWebsite sets the value of Website.
+func (s *EmployerPendingClaim) SetWebsite(val string) {
+	s.Website = val
+}
+
+// SetReviewReason sets the value of ReviewReason.
+func (s *EmployerPendingClaim) SetReviewReason(val EmployerClaimReviewReason) {
+	s.ReviewReason = val
 }
 
 // `type` is "text", "boolean" or "select"; `options` are a select's choices.
@@ -15815,16 +16107,16 @@ func (s *ListDismissedSlugsOK) SetData(val []string) {
 
 // A single item: `{"data": ...}`.
 type ListEmployerPendingClaimsOK struct {
-	Data []EmployerAccount `json:"data"`
+	Data []EmployerPendingClaim `json:"data"`
 }
 
 // GetData returns the value of Data.
-func (s *ListEmployerPendingClaimsOK) GetData() []EmployerAccount {
+func (s *ListEmployerPendingClaimsOK) GetData() []EmployerPendingClaim {
 	return s.Data
 }
 
 // SetData sets the value of Data.
-func (s *ListEmployerPendingClaimsOK) SetData(val []EmployerAccount) {
+func (s *ListEmployerPendingClaimsOK) SetData(val []EmployerPendingClaim) {
 	s.Data = val
 }
 
@@ -19720,7 +20012,12 @@ type NotificationSettings struct {
 	InboxDigestEnabled bool     `json:"inbox_digest_enabled"`
 	Enabled            bool     `json:"enabled"`
 	Channels           []string `json:"channels"`
-	DigestFrequency    string   `json:"digest_frequency"`
+	// The saved preference. A Free account that kept `instant` or `interval` is sent a daily digest
+	// regardless (see `faster_alerts_available`); the preference is kept so a renewal restores it.
+	DigestFrequency string `json:"digest_frequency"`
+	// Whether the account may choose saved-search alerts faster than daily: a live Pro or Ultra plan. When
+	// false only `daily` takes effect, and asking for another frequency is refused with 402.
+	FasterAlertsAvailable bool `json:"faster_alerts_available"`
 	// `HH:MM`.
 	DigestTime          NilString `json:"digest_time"`
 	DigestIntervalHours int64     `json:"digest_interval_hours"`
@@ -19751,6 +20048,11 @@ func (s *NotificationSettings) GetChannels() []string {
 // GetDigestFrequency returns the value of DigestFrequency.
 func (s *NotificationSettings) GetDigestFrequency() string {
 	return s.DigestFrequency
+}
+
+// GetFasterAlertsAvailable returns the value of FasterAlertsAvailable.
+func (s *NotificationSettings) GetFasterAlertsAvailable() bool {
+	return s.FasterAlertsAvailable
 }
 
 // GetDigestTime returns the value of DigestTime.
@@ -19796,6 +20098,11 @@ func (s *NotificationSettings) SetChannels(val []string) {
 // SetDigestFrequency sets the value of DigestFrequency.
 func (s *NotificationSettings) SetDigestFrequency(val string) {
 	s.DigestFrequency = val
+}
+
+// SetFasterAlertsAvailable sets the value of FasterAlertsAvailable.
+func (s *NotificationSettings) SetFasterAlertsAvailable(val bool) {
+	s.FasterAlertsAvailable = val
 }
 
 // SetDigestTime sets the value of DigestTime.

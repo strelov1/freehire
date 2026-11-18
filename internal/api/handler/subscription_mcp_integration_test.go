@@ -252,3 +252,38 @@ func TestMCPAccount_CallerRefusalsReachTheAgentVerbatim(t *testing.T) {
 		}
 	}
 }
+
+// The schedule shown beside the alerts is the one that takes effect: a Free account that
+// kept instant or interval is daily (faster is a paid benefit), at its stored time.
+func TestSubscriptionMCP_DeliveryScheduleIsTheEffectiveOne(t *testing.T) {
+	pool, h := newSubscriptionMCPFixture(t)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name, grant, freq string
+		want, wantTime    string
+	}{
+		{"free instant", "", "instant", "daily", "07:30"},
+		{"free interval", "", "interval", "daily", "07:30"},
+		{"paid instant", "pro_until_granted = now() + interval '1 day'", "instant", "instant", ""},
+		{"paid interval", "ultra_until_revenuecat = now() + interval '1 day'", "interval", "interval", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			userID := seedOAuthUser(t, pool, strings.ReplaceAll(tc.name, " ", "-")+"@example.test")
+			if _, err := pool.Exec(ctx, `INSERT INTO notification_settings (user_id, digest_frequency, digest_time, digest_interval_hours) VALUES ($1, $2, '07:30', 3)`, userID, tc.freq); err != nil {
+				t.Fatalf("settings: %v", err)
+			}
+			if tc.grant != "" {
+				if _, err := pool.Exec(ctx, `UPDATE users SET `+tc.grant+` WHERE id = $1`, userID); err != nil {
+					t.Fatalf("grant: %v", err)
+				}
+			}
+			got, err := h.deliverySchedule(ctx, userID, testMCPOrigin)
+			if err != nil {
+				t.Fatalf("deliverySchedule: %v", err)
+			}
+			if got.DigestFrequency != tc.want || got.DigestTime != tc.wantTime || (tc.want != "interval") != (got.DigestIntervalHours == 0) {
+				t.Fatalf("schedule = %+v, want %s at %q", got, tc.want, tc.wantTime)
+			}
+		})
+	}
+}

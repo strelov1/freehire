@@ -77,9 +77,14 @@ func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw, employer
 		}
 	}
 	c := destinationCatalog{stored: catalog, fallback: sources.CompanyEntry{Provider: source, Board: board, Company: row.Company, Region: atsboard.Region(canonical)}}
-	_, known, err := c.storedEntry(ctx, source, board)
+	stored, known, err := c.storedEntry(ctx, source, board)
 	if err != nil {
 		return NativeDestination{}, err
+	}
+	// The catalogue may hold this board under another spelling of the same identity (a
+	// Njoyn link on the generic clients host); the posting belongs under the stored one.
+	if known {
+		board = stored.Board
 	}
 	if !known {
 		employerWebsite, err = im.verifyEmployerBoard(ctx, row, source, board, c.fallback.Region, employerWebsite)

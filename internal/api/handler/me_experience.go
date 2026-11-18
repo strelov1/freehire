@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	moejson "github.com/MoeForge/moego/json"
 	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -186,7 +187,8 @@ func atomsOut(views []atomView) []apigen.ExperienceAtom {
 func marshalRaws[T any](vs []T) ([]jx.Raw, error) {
 	out := make([]jx.Raw, 0, len(vs))
 	for _, v := range vs {
-		raw, err := json.Marshal(v)
+		// Faster drop-in for encoding our own values; request bodies stay on encoding/json.
+		raw, err := moejson.Marshal(v)
 		if err != nil {
 			return nil, err
 		}

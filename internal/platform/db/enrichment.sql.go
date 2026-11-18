@@ -181,10 +181,15 @@ FROM jobs
 WHERE closed_at IS NULL
   AND duplicate_of IS NULL
   AND (enriched_at IS NULL OR enrichment_version < $1::int)
-  AND is_tech IS TRUE
+  AND (is_tech IS TRUE OR $2::boolean)
   AND description <> ''
 ON CONFLICT (job_id, target_version) DO NOTHING
 `
+
+type EnqueuePendingJobsParams struct {
+	TargetVersion  int32 `json:"target_version"`
+	IncludeNonTech bool  `json:"include_non_tech"`
+}
 
 // Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 // schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
@@ -196,8 +201,13 @@ ON CONFLICT (job_id, target_version) DO NOTHING
 // so a version bump or a fresh backfill run re-evaluates the whole catalogue under the
 // identical rule, not a looser one. ON CONFLICT keeps exactly one entry per (job_id,
 // target_version), so running this every command invocation never duplicates work.
-func (q *Queries) EnqueuePendingJobs(ctx context.Context, targetVersion int32) (int64, error) {
-	result, err := q.db.Exec(ctx, enqueuePendingJobs, targetVersion)
+//
+// include_non_tech (ENRICH_INCLUDE_NON_TECH, off by default) lifts the is_tech gate for this
+// backfill only, so every open posting with a body is enriched and its category asked of the
+// model (#4412). The ingest-time EnqueueJobEnrichment stays tech-only: it is the fast path for
+// a new technical posting, and the next enrich run's backfill picks up the rest.
+func (q *Queries) EnqueuePendingJobs(ctx context.Context, arg EnqueuePendingJobsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, enqueuePendingJobs, arg.TargetVersion, arg.IncludeNonTech)
 	if err != nil {
 		return 0, err
 	}

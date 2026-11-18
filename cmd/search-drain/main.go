@@ -54,8 +54,10 @@ func run() int {
 		log.Printf("config: %v", err)
 		return 1
 	}
+	store := newDBStore(pool)
+	store.reapDue = reapDue(cfg.RedisURL)
 	runner := searchdrain.Runner{
-		Store:   newDBStore(pool),
+		Store:   store,
 		Indexer: searchIndexer{client: client, q: q, mirror: facetd.mirror()},
 	}
 

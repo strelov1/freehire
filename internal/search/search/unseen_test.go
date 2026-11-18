@@ -63,8 +63,8 @@ func TestWithheld(t *testing.T) {
 	uncategorised := showable
 	uncategorised.Category = ""
 	uncategorised.Title = "Shelf Stocker"
-	if !Withheld(uncategorised, now, windows) {
-		t.Errorf("a job with no category was not withheld")
+	if Withheld(uncategorised, now, windows) {
+		t.Errorf("a job with no category was withheld; it is indexed under \"other\" (#4412)")
 	}
 
 	if Withheld(stale, now, nil) {
@@ -83,8 +83,8 @@ func TestWithheld(t *testing.T) {
 		{"showable", showable, ""},
 		{"stale", stale, WithheldUnseen},
 		{"bodiless", bodiless, WithheldNoDescription},
-		{"uncategorised", uncategorised, WithheldNoCategory},
-		{"uncategorised and bodiless", both, WithheldNoCategory},
+		{"uncategorised", uncategorised, ""},
+		{"uncategorised and bodiless", both, WithheldNoDescription},
 	} {
 		if got := WithheldBy(c.job, now, windows); got != c.want {
 			t.Errorf("%s: WithheldBy = %q, want %q", c.name, got, c.want)

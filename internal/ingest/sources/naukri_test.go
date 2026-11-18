@@ -538,48 +538,6 @@ func TestWithUserAgentOverridesOnlyTheCopy(t *testing.T) {
 	}
 }
 
-// A posting whose employer is already covered, or whose title the catalogue filter rejects, is
-// yielded body-less without a detail request. Without the gate the budget went to exactly those
-// postings: never stored, so never seen, so bought again every run (2026-10-25).
-func TestNaukriGateSkipsTheDetailOfADiscardedPosting(t *testing.T) {
-	f := naukriFixtures(t)
-	keep := naukriFixtureIDs[0]
-	gate := DetailGate{
-		Covered:  func(cs []string) map[string]bool { return map[string]bool{} },
-		Rejected: func(j Job) bool { return j.ExternalID != keep },
-	}
-	jobs, err := NewNaukri(f).(CoverageGated).FetchNewGated(context.Background(), CompanyEntry{Board: "5"}, func(string) bool { return false }, gate)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := f.detailCalls(); !slices.Equal(got, []string{keep}) {
-		t.Fatalf("detail calls = %v, want only %s", got, keep)
-	}
-	if len(jobs) != len(naukriFixtureIDs) {
-		t.Fatalf("got %d jobs, want every listed posting yielded", len(jobs))
-	}
-	for _, j := range jobs {
-		if (j.Description != "") != (j.ExternalID == keep) {
-			t.Errorf("%s: body %d chars", j.ExternalID, len(j.Description))
-		}
-	}
-
-	f = naukriFixtures(t)
-	all := DetailGate{Covered: func(cs []string) map[string]bool {
-		out := map[string]bool{}
-		for _, c := range cs {
-			out[c] = true
-		}
-		return out
-	}}
-	if _, err := NewNaukri(f).(CoverageGated).FetchNewGated(context.Background(), CompanyEntry{Board: "5"}, func(string) bool { return false }, all); err != nil {
-		t.Fatal(err)
-	}
-	if n := len(f.detailCalls()); n != 0 {
-		t.Errorf("covered employers cost %d detail requests", n)
-	}
-}
-
 // Through the rotating gateway a refusal is one bad exit: fewer than naukriRefusalLimit of them
 // must not end the run's hydration (on 2026-10-25 a single 406 ended two runs' hydration).
 func TestNaukriFewRefusalsDoNotEndTheRun(t *testing.T) {

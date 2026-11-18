@@ -86,44 +86,27 @@ func TestFromJob_RoleTypeDerivedButIndexOnly(t *testing.T) {
 	}
 }
 
-func TestCategoryUnresolved(t *testing.T) {
-	tests := []struct {
+// A posting no category resolved carries the residual "other" bucket (#4412); a resolved
+// category is never overwritten.
+func TestFromJobDefaultsCategoryToOther(t *testing.T) {
+	for _, tt := range []struct {
 		name string
 		job  db.Job
-		want bool
+		want string
 	}{
-		{"dict resolved category wins regardless of enrichment", db.Job{Category: "backend"}, false},
-		// A vacancy a verified employer published here is never hidden for an unrecognised
-		// title: the employer pressed Publish, and a silent absence from search is a control
-		// that lies. The filter exists for crawled rows nobody vouched for.
-		{"employer-published, title no dictionary knows", db.Job{Source: "employer", Title: "Wizard of Things"}, false},
-		{"dict empty, no enrichment at all", db.Job{}, true},
-		{"dict empty, enrichment present but no category", db.Job{Enrichment: []byte(`{"summary":"x"}`)}, true},
-		{"dict empty, LLM also says other", db.Job{Enrichment: []byte(`{"category":"other"}`)}, true},
-		{"dict empty, LLM found a real category", db.Job{Enrichment: []byte(`{"category":"hardware"}`)}, false},
-		{"dict empty, malformed enrichment JSON", db.Job{Enrichment: []byte(`not json`)}, true},
-		{"dict empty, no enrichment, is_tech unknown", db.Job{IsTech: pgtype.Bool{}}, true},
-		{"dict empty, no enrichment, is_tech false", db.Job{IsTech: pgtype.Bool{Valid: true, Bool: false}}, true},
-		{"dict empty, no enrichment, is_tech true → confirmed technical, stays searchable", db.Job{IsTech: pgtype.Bool{Valid: true, Bool: true}}, false},
-		{"dict empty, LLM also says other, is_tech true → still stays searchable", db.Job{Enrichment: []byte(`{"category":"other"}`), IsTech: pgtype.Bool{Valid: true, Bool: true}}, false},
-		{"dict resolved category wins even with is_tech false", db.Job{Category: "backend", IsTech: pgtype.Bool{Valid: true, Bool: false}}, false},
-		// The role_type facet is a placement of its own: a General Manager names no
-		// craft, but the facet reaches it, so it stays searchable.
-		{"no category, but the title names a people manager", db.Job{Title: "General Manager", IsTech: pgtype.Bool{Valid: true, Bool: false}}, false},
-		{"no category, Russian head of department", db.Job{Title: "Начальник отдела кадров"}, false},
-		// A manager title with no marker and no craft is reached by no facet, but it is
-		// kept for keyword search (classify.NamesManager).
-		{"no category, manager title with no people marker", db.Job{Title: "Case Manager", IsTech: pgtype.Bool{Valid: true, Bool: false}}, false},
-		{"no category, bare manager", db.Job{Title: "Manager"}, false},
-		{"no category, bare Russian manager", db.Job{Title: "Менеджер"}, false},
-		{"no category, the word inside another word is not a manager", db.Job{Title: "Managerial Accountant Trainee"}, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := CategoryUnresolved(tt.job); got != tt.want {
-				t.Errorf("CategoryUnresolved(%+v) = %v, want %v", tt.job, got, tt.want)
-			}
-		})
+		{"resolved", db.Job{Category: "skilled_trades"}, "skilled_trades"},
+		{"unresolved", db.Job{}, "other"},
+		{"LLM said other", db.Job{Enrichment: []byte(`{"category":"other"}`)}, "other"},
+		{"LLM category, empty column", db.Job{Enrichment: []byte(`{"category":"logistics"}`)}, "logistics"},
+		{"tech, no category", db.Job{IsTech: pgtype.Bool{Valid: true, Bool: true}}, "other"},
+	} {
+		doc, err := FromJob(tt.job, "")
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if got := doc.Enrichment.Category; got != tt.want {
+			t.Errorf("%s: category = %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }
 
@@ -430,14 +413,17 @@ func TestFromJob_DuplicateStatusIsInternal(t *testing.T) {
 	}
 }
 
-func TestTitleKeepsUncategorized(t *testing.T) {
-	for title, want := range map[string]bool{
-		"General Manager":  true,
-		"Property Manager": true,
-		"Barista":          false,
-	} {
-		if got := TitleKeepsUncategorized(title); got != want {
-			t.Errorf("TitleKeepsUncategorized(%q) = %v, want %v", title, got, want)
-		}
+// The archetype follows the category the document publishes: a posting the model filed under
+// an AI category, with an empty dictionary column, still gets its archetype (#4412).
+func TestFromJobDerivesArchetypeFromThePublishedCategory(t *testing.T) {
+	doc, err := FromJob(db.Job{
+		Skills:     []string{"pytorch", "tensorflow"},
+		Enrichment: []byte(`{"category":"ai_engineering"}`),
+	}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.AIArchetype != "ml_trainer_researcher" {
+		t.Errorf("archetype = %q, want ml_trainer_researcher", doc.AIArchetype)
 	}
 }

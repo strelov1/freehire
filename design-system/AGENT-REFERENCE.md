@@ -191,8 +191,9 @@ actual variants with nothing to catch it. `Button`'s list already did, losing `d
 
 `docs/dsds/*.json` describes the system as entities a docs site can render: `foundation.json`
 (one entity per token family, each listing its token names), `theme.json` (the dark mode and
-its `.dark` selector), `components.json` (one entity per primitive — props, defaults, and
-links to its source and story).
+its `.dark` selector), `components.json` and `components-composite.json` (one entity per
+primitive — props, defaults, and links to its source and story; the composites, from
+`Avatar` on, in the second file).
 
 `pnpm validate:docs` (`scripts/validate-docs.mjs`, run in CI) checks structure — every entity
 carries `id`, `type`, `name` — and then the two things that actually rot: every `source.file`

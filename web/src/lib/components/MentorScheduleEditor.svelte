@@ -10,7 +10,7 @@
     weekDraft,
     weekRows,
     weekdayLabel,
-  } from '#lib/mentorship.js';
+  } from '#lib/mentorshipCalendar.js';
   import type { AvailabilityApi, MentorAvailabilityRule } from '#lib/types.js';
 
   let {

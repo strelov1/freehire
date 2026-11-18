@@ -4,6 +4,7 @@
 package jobview
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/dict/location"
+	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/job/salaryextract"
@@ -188,10 +190,13 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 
 	countries, regions := geoFacet(f.Countries, f.Regions, e.Countries, e.Regions)
 	workMode := f.WorkMode
-	// Seniority/category and the synthetic facets are always the dictionary column value,
-	// kept nested under enrichment.
+	// Seniority and the synthetic facets are always the dictionary column value, kept nested
+	// under enrichment. Category is the column too, unless the column is empty: then the
+	// model's answer files the posting, when it names a real category (#4412).
 	e.Seniority = f.Seniority
-	e.Category = f.Category
+	if f.Category != "" || e.Category == "other" || !slices.Contains(vocab.CategoryValues, e.Category) {
+		e.Category = f.Category
+	}
 	e.PostingLanguage = f.PostingLanguage
 	e.EmploymentType = f.EmploymentType
 	e.EducationLevel = f.EducationLevel

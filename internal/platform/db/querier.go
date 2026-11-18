@@ -1343,8 +1343,9 @@ type Querier interface {
 	// health), board_retired, moderated or source_misattributed (our own decisions), or ''
 	// (closed before reasons were recorded). A close dated before existence is left out, as
 	// ComputeInsightsCompanyLifetime does.
-	// INFLOW counts postings whose existence date falls in the last 30 days — the header's
-	// rule, applied to "new" instead of "open at the start" — and deliberately has NO earlier
+	// INFLOW counts postings whose existence date, LEAST(posted_at, created_at) (insights.sql's
+	// header), falls in the last 30 days — so a posting published before the window but found
+	// during it is not "new" — and deliberately has NO earlier
 	// window. Measured 2026-10-30, the comparison was dominated by our own coverage growth:
 	// a board first crawled this month shows its earlier postings only if they were still
 	// open when we found it, so healthcare read +155% while stable-coverage categories
@@ -2382,16 +2383,20 @@ type Querier interface {
 	// so a version bump or a fresh backfill run re-evaluates the whole catalogue under the
 	// identical rule, not a looser one. ON CONFLICT keeps exactly one entry per (job_id,
 	// target_version), so running this every command invocation never duplicates work.
-	EnqueuePendingJobs(ctx context.Context, targetVersion int32) (int64, error)
+	//
+	// include_non_tech (ENRICH_INCLUDE_NON_TECH, off by default) lifts the is_tech gate for this
+	// backfill only, so every open posting with a body is enriched and its category asked of the
+	// model (#4412). The ingest-time EnqueueJobEnrichment stays tech-only: it is the fast path for
+	// a new technical posting, and the next enrich run's backfill picks up the rest.
+	EnqueuePendingJobs(ctx context.Context, arg EnqueuePendingJobsParams) (int64, error)
 	// Idempotent backfill for the incremental semantic-embedding queue. Enqueues two
 	// kinds of outstanding work at the target embedder model:
 	//   1. OPEN jobs whose stored vector is missing, content-stale, or model-stale —
 	//      i.e. semantic_embedded_model differs from the target OR semantic_embedded_hash
 	//      differs from the job's current content_hash — AND confirmed technical
 	//      (is_tech IS TRUE), the same gate EnqueueJobEnrichment/EnqueuePendingJobs use
-	//      (jobs.sql, enrichment.sql) so embed spend is not wasted on postings that will
-	//      never surface via keyword/category search either (see search.CategoryUnresolved,
-	//      internal/search/document.go). Before this the gate was category-based
+	//      (jobs.sql, enrichment.sql) so embed spend is not wasted on the undifferentiated
+	//      bulk of broad crawls (which search indexes only under category "other"). Before this the gate was category-based
 	//      (category <> ALL(NonTechCategories)), a deliberate "category-gated, not
 	//      tech-only" design — measured 2026-07-22 at only 35% of the (now-removed)
 	//      jobs_semantic Meili index's ~2.05M docs carrying an is_tech tag, i.e. the same
@@ -2685,9 +2690,11 @@ type Querier interface {
 	FindOpenJobByApplicationURL(ctx context.Context, url string) (string, error)
 	// Resolve a job page URL to the posting stored under it — the second tier of
 	// /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
-	// URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
-	// by scheme, www., tracking query, fragment, case or trailing slash still matches; the
-	// same expression backs jobs_normalized_url_idx, so this is an index lookup.
+	// URL. Both sides go through normalize_job_url (migrations 0042, 0284), so a link differing
+	// only by scheme, www., tracking parameters, query-parameter order, fragment, case or
+	// trailing slash still matches, while one whose identifying query names another posting
+	// (Njoyn's ?Jobid=) does not; the same expression backs jobs_normalized_url_open_idx, so
+	// this is an index lookup.
 	// Scoped to open rows: a closed posting is not one to show a match card for.
 	//
 	// Duplicates ARE matched, and answer with the posting they duplicate. One in five open
@@ -3162,7 +3169,9 @@ type Querier interface {
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
 	// The current view_count of the jobs a rollup run touched, for the index write that
-	// replaces the old per-view search_outbox enqueue.
+	// replaces the old per-view search_outbox enqueue. Only jobs public search can return:
+	// closed and duplicate documents are filtered out of every query, so writing their count
+	// only costs index time, and a reopened job is rewritten whole by the drain.
 	GetJobViewCounts(ctx context.Context, ids []int64) ([]GetJobViewCountsRow, error)
 	// The caller's current vote for a job (0 when none), for my_vote on auth-aware
 	// detail reads. Always returns one row via the COALESCE'd scalar subquery.
@@ -3326,7 +3335,7 @@ type Querier interface {
 	// the user has at least one registered push device (the push channel's live
 	// deliverability check, same soft-skip role as the Telegram link), the user's
 	// webhook destination (URL, NULL or disabled → the worker soft-skips webhook
-	// delivery the same way), and the delivery-timing context
+	// delivery the same way; its secret signs the delivery), and the delivery-timing context
 	// (live, not snapshotted, same as the channel checks above) — the account's
 	// timezone and its saved-search digest frequency settings, read via
 	// internal/application/deliverywindow before a digest is sent.
@@ -3611,8 +3620,8 @@ type Querier interface {
 	//
 	// The window is ten minutes, and that is a measured choice rather than a round number.
 	// Measured on prod 2026-09-16: 24h costs 20,818ms, 60m costs 837ms, 15m costs 328ms, and
-	// 10m costs 22ms -- the same order as ProviderIngestHealth's 54ms, which is the bar this
-	// file's header sets. Ten minutes is also sufficient: the duplication appears BETWEEN
+	// 10m costs 22ms -- the same order as ProviderIngestHealth's 54ms, which is the once-a-minute bar
+	// this file's header sets. Ten minutes is also sufficient: the duplication appears BETWEEN
 	// boards, never within one crawl (a board that fetches the global catalogue writes each of
 	// its postings once), so the gap opens as soon as two boards of the same source land in one
 	// window. apploi would have had roughly forty per window. A source whose boards crawl more
@@ -3980,6 +3989,9 @@ type Querier interface {
 	// Manually link (or relink) an email to a chosen application, overriding any
 	// auto-link or suggestion.
 	LinkEmailToJob(ctx context.Context, arg LinkEmailToJobParams) (int64, error)
+	// Postings read and found non-native since the cutoff: the negative half of the LinkedIn
+	// seen-set. An older row is not returned, so the posting is read again.
+	LinkedInPostingsReadSince(ctx context.Context, readSince pgtype.Timestamptz) ([]string, error)
 	// A user's API keys, newest first. Metadata only — never the token_hash. scope is
 	// included so a user can see what each credential is allowed to do.
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAPIKeysByUserRow, error)
@@ -4453,6 +4465,9 @@ type Querier interface {
 	// internal/api/handler/companies.go) — rating is not (yet) a Meili-sortable
 	// attribute, so routing there would silently drop the requested order.
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
+	// Every company whose site (company_info website, else homepage) reduces to one of the
+	// given hosts, job_count 0 included. Rides companies_site_host_idx.
+	ListCompaniesBySiteHost(ctx context.Context, hosts []string) ([]ListCompaniesBySiteHostRow, error)
 	// The merge worker's input: every company slug the JOBS table actually holds, with the display
 	// name and the open-job count that elects the winner of its folded group.
 	//
@@ -5062,16 +5077,15 @@ type Querier interface {
 	ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourceAfterParams) ([]Job, error)
 	// The newest eligible postings of ONE tier this engine has not been told about yet, for
 	// cmd/search-ping. The gate is what the search index admits (cmd/reindex's splitJobs):
-	// open, canonical, public, carrying a body (search.DescriptionMissing), and with a
-	// resolved category (search.CategoryUnresolved — the column answers, or enrichment does
-	// with something other than "other", or is_tech is confidently true). A URL worth
+	// open, canonical, public, and carrying a body (search.DescriptionMissing); an uncategorized
+	// posting is indexed under "other" (#4412), so category does not gate. A URL worth
 	// announcing is a URL the site itself claims, and the sitemap claims exactly what the
 	// index holds. The body test is the raw column, not the stripped text the index tests;
 	// a body that is only empty markup is the same small residual company_facets.sql names.
 	//
 	// `technical` picks the tier, and the two tiers partition the gate: true is the
-	// is_tech postings, false is every other posting with a resolved category — the
-	// catalogue beyond IT. The split is not an eligibility rule, it is a PRIORITY one: an
+	// is_tech postings, false is every other posting — the catalogue beyond IT, uncategorized
+	// included. The split is not an eligibility rule, it is a PRIORITY one: an
 	// engine with a scarce daily budget (Google, 200/day) asks for the technical tier
 	// first and offers the rest only what that left, while an unbounded engine takes a
 	// batch of each (see passes in internal/job/searchping). Two calls of one query rather
@@ -5304,7 +5318,7 @@ type Querier interface {
 	// mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 	// whose code was never entered is not reviewable — nobody has shown they can read that
 	// address — so it stays out of the queue (migration 0181).
-	ListPendingCompanyAccounts(ctx context.Context) ([]CompanyAccount, error)
+	ListPendingCompanyAccounts(ctx context.Context) ([]ListPendingCompanyAccountsRow, error)
 	// The moderator queue, oldest first, with both companies' current names and open-job counts
 	// so the decision can be made without opening two pages. LEFT JOIN because a company may have
 	// lost its last posting since the proposal. The approval then refuses it, and the queue
@@ -5677,12 +5691,6 @@ type Querier interface {
 	// Go type across every query here. Matching the nullable foreign key instead makes sqlc infer a
 	// nullable UUID, and the handler would carry two spellings of one id.
 	ListTracerLinkStats(ctx context.Context, arg ListTracerLinkStatsParams) ([]ListTracerLinkStatsRow, error)
-	// Keyset page (by id) of the open, canonical, public, bodied postings RefreshCompanyFacets'
-	// category predicate would drop: no column category, no enrichment answer, not confirmed
-	// technical. cmd/recount-companies runs search.TitleKeepsUncategorized over their titles and
-	// hands the ids it keeps back as kept_ids, so the count follows search on the one branch
-	// this SQL cannot derive (#4503). Paged so a run never holds the whole set at once.
-	ListUncategorizedOpenJobTitles(ctx context.Context, arg ListUncategorizedOpenJobTitlesParams) ([]ListUncategorizedOpenJobTitlesRow, error)
 	// The worst $1 boards currently failing or cooled down, worst first — the source of the
 	// per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is
 	// evaluated over the whole filtered set, before the LIMIT, so the caller reports how many
@@ -6472,6 +6480,9 @@ type Querier interface {
 	// (apploi's 5,833, retired 2026-09-15) would otherwise read "down" forever for a crawl
 	// nobody runs any more. Each health identity must match an active catalog identity.
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
+	// Ingest-health aggregates behind cmd/queue-metrics, split out of metrics.sql for size. Its
+	// header's bar holds here too: every query is read-only, takes no locks, and runs once a
+	// minute alongside ingest, so none may scan `jobs` (8M rows) or make another worker wait.
 	// Per-provider ingest health: when the provider's most recent board crawl succeeded, and
 	// how its boards split across four mutually exclusive states. It is also the ONLY source of
 	// the fleet-wide freehire_boards_total, which cmd/queue-metrics sums from these rows, so the
@@ -6527,7 +6538,7 @@ type Querier interface {
 	// parallel hash join of the two tables, against 37ms for the board_health-only form it
 	// replaces. It also replaces BoardHealthMetrics, the fleet-wide twin it now feeds, so the
 	// net cost is one query of this size a minute. Neither table is jobs, whose 8M-row scan is
-	// what this file's header exists to forbid.
+	// what this file's header forbids.
 	ProviderIngestHealth(ctx context.Context) ([]ProviderIngestHealthRow, error)
 	// Removes a token the Expo Push API reported as permanently undeliverable
 	// (DeviceNotRegistered). No owner check: the token is dead regardless of
@@ -6538,6 +6549,8 @@ type Querier interface {
 	// Drops snapshot rows older than the retention window (~26 weeks), keeping
 	// the table bounded.
 	PruneInsightsSkillHistory(ctx context.Context, cutoff pgtype.Date) (int64, error)
+	// Drop rows no seen-set can use any more; the caller passes a cutoff well past the window.
+	PruneLinkedInPostingsRead(ctx context.Context, olderThan pgtype.Timestamptz) error
 	// Claims only matter for the day they were taken; a week of them is kept for the
 	// one-letter-a-day report and the rest is dropped.
 	PruneMailDayClaims(ctx context.Context) (int64, error)
@@ -7044,7 +7057,7 @@ type Querier interface {
 	// the wider table scope did all three: 294,021 company URLs in the sitemap of which
 	// most rendered "0 open jobs", `remote_regions` offering regions whose jobs the click
 	// through could not find, and Stripe listed at 570 on /companies against 444 on its
-	// own page. The four predicates below (private, body, category, unseen) are the ones
+	// own page. The three predicates below (private, body, unseen) are the ones
 	// cmd/reindex's splitJobs applies on top of closed/duplicate; keep the two in step.
 	//
 	// industries_derived (see derived_eligible/derived_ind below) is a SECOND-ORDER
@@ -8821,6 +8834,9 @@ type Querier interface {
 	// same transaction via RecountJobVotes; a CTE cannot, since a data-modifying CTE's
 	// effect is invisible to sibling sub-statements.
 	UpsertJobVote(ctx context.Context, arg UpsertJobVoteParams) (int16, error)
+	// Record that a LinkedIn posting's detail was just read and was not on-site (see migration
+	// 0283). Idempotent: a re-read moves read_at forward and may change the method.
+	UpsertLinkedInPostingRead(ctx context.Context, arg UpsertLinkedInPostingReadParams) error
 	// Moderator-authored write: the hand-curated analogue of UpsertJob. source is the
 	// posting's real origin (e.g. 'workatastartup'), supplied by the moderator and
 	// defaulting to 'manual'; the dedup key is (source, external_id = url), so re-POSTing
@@ -8927,7 +8943,10 @@ type Querier interface {
 	// disabled_at, since submitting the form is an explicit re-commitment to
 	// the endpoint. consecutive_failures resets too: a new URL (or the same one
 	// re-saved) gets a fresh run at the auto-disable threshold, not whatever
-	// count the old destination left behind.
+	// count the old destination left behind. The secret is set only on insert: changing
+	// the URL keeps the secret the receiver already verifies with.
+	// Only onto the row whose secret signed the caller's probe: a destination deleted and
+	// recreated (or created twice at once) in between has another secret, and then no row comes back.
 	UpsertWebhookConfig(ctx context.Context, arg UpsertWebhookConfigParams) (WebhookConfig, error)
 	// Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
 	// reference row (is_reference = true) with no jobs; an existing slug (job-backed or a

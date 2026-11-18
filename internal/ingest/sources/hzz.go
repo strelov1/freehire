@@ -130,10 +130,6 @@ func (s hzz) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(extern
 			jobs = append(jobs, base)
 			continue
 		}
-		if base.Title != "" && gate.Rejected != nil && gate.Rejected(base) {
-			jobs = append(jobs, base)
-			continue
-		}
 		if len(unseen) >= s.maxNewPerRun {
 			deferred++
 			continue

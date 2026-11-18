@@ -123,7 +123,7 @@ func (s netempregos) FetchNew(ctx context.Context, e CompanyEntry, seen func(ext
 
 // FetchNewGated lists every posting the feeds name, refreshes the ones already stored, and reads
 // up to maxNewPerRun of the rest, newest id first. A posting the pipeline will discard anyway —
-// its employer already covered by a non-aggregator source, or its title rejected — is judged on
+// its employer already covered by a non-aggregator source — is judged on
 // what the RSS says and yielded body-less without a request; one the RSS shows with a hidden
 // employer is not yielded at all. A posting whose page cannot be read is not yielded; a later run
 // tries again.
@@ -155,7 +155,7 @@ func (s netempregos) FetchNewGated(ctx context.Context, _ CompanyEntry, seen fun
 		if strings.EqualFold(p.company, netempregosHidden) {
 			continue
 		}
-		if covered[p.company] || (p.title != "" && gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[p.company] {
 			jobs = append(jobs, base)
 			continue
 		}

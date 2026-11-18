@@ -13,11 +13,17 @@ import (
 	"github.com/strelov1/freehire/internal/engage/reminder"
 )
 
-// notificationSettingsOut is the public shape of the account's shared notification rule
-// (saved-job reminders + both lifecycle nudges) plus delivery timing (digest
-// frequency/time/interval, quiet hours). No user_id; channels is always an array so the SPA
-// can bind checkboxes without a null guard. Times are "HH:MM" strings, null when unset.
-func notificationSettingsOut(s reminder.Settings) apigen.NotificationSettings {
+// notificationSettingsOut is the public shape of the account's shared
+// notification rule (saved-job reminders + both lifecycle nudges), plus the
+// delivery-timing controls (digest frequency/time/interval, quiet hours). It carries no
+// user_id (the caller is the user) and always emits channels as an array so the
+// SPA can bind checkboxes without a null guard. Times are "HH:MM" strings (null
+// when unset), matching an HTML time input and readable without a client-side
+// duration library.
+//
+// DigestFrequency is the STORED preference: a Free account that kept a faster one is still
+// sent daily, and fasterAlerts (a live Pro or Ultra plan) is what tells the client so.
+func notificationSettingsOut(s reminder.Settings, fasterAlerts bool) apigen.NotificationSettings {
 	ch := s.Channels
 	if ch == nil {
 		ch = []string{}
@@ -32,6 +38,7 @@ func notificationSettingsOut(s reminder.Settings) apigen.NotificationSettings {
 		ApplicationDigestEnabled: s.ApplicationDigestEnabled,
 		Channels:                 ch,
 		DigestFrequency:          freq,
+		FasterAlertsAvailable:    fasterAlerts,
 		DigestTime:               nilString(formatHHMM(s.DigestTime)),
 		DigestIntervalHours:      int64(s.DigestIntervalHours),
 		QuietHoursStart:          nilString(formatHHMM(s.QuietHoursStart)),
@@ -68,6 +75,9 @@ func parseHHMM(s *string) (*time.Duration, error) {
 // 409. Anything else is a 500.
 func reminderError(err error) error {
 	switch {
+	case errors.Is(err, reminder.ErrFasterAlertsNeedPaidPlan):
+		return fiber.NewError(fiber.StatusPaymentRequired,
+			"Saved-search alerts faster than daily need Pro or Ultra. Daily alerts stay free")
 	case errors.Is(err, plan.ErrPaymentRequired):
 		return fiber.NewError(fiber.StatusPaymentRequired, "Daily inbox summaries require Pro or Ultra")
 	case errors.Is(err, reminder.ErrPlanUnavailable):
@@ -103,7 +113,11 @@ func (h *trackingHandlers) GetNotificationSettings(ctx context.Context) (*apigen
 	if err != nil {
 		return nil, err
 	}
-	return &apigen.GetNotificationSettingsOK{Data: notificationSettingsOut(s)}, nil
+	faster, err := h.reminder.HasFasterAlerts(ctx, userID)
+	if err != nil {
+		return nil, reminderError(err)
+	}
+	return &apigen.GetNotificationSettingsOK{Data: notificationSettingsOut(s, faster)}, nil
 }
 
 // UpdateNotificationSettings validates and stores the caller's rule. An enabled rule needs
@@ -157,5 +171,9 @@ func (h *trackingHandlers) UpdateNotificationSettings(ctx context.Context, req *
 	if err != nil {
 		return nil, reminderError(err)
 	}
-	return &apigen.UpdateNotificationSettingsOK{Data: notificationSettingsOut(s)}, nil
+	faster, err := h.reminder.HasFasterAlerts(ctx, userID)
+	if err != nil {
+		return nil, reminderError(err)
+	}
+	return &apigen.UpdateNotificationSettingsOK{Data: notificationSettingsOut(s, faster)}, nil
 }

@@ -13,8 +13,7 @@ import (
 
 // ingestBoard fetches and saves one board, returning that board's contribution to the
 // run stats: Ingested counts saved jobs, Failed is 1 when the board itself errored,
-// Skipped counts jobs that fetched fine but failed to persist, Rejected counts postings
-// the catalogue filter turned away, and Cooled is 1 when the board was skipped for
+// Skipped counts jobs that fetched fine but failed to persist, and Cooled is 1 when the board was skipped for
 // cooldown. A missing adapter or a fetch error fails the board; a per-job save error
 // skips that job without failing the board, but is counted and logged so it is never
 // silently swallowed. A board in cooldown is skipped before its adapter is touched, and
@@ -54,11 +53,8 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 	if ss, streaming := src.(sources.StreamingSource); streaming && !r.recent() {
 		st, listed := r.ingestStream(ctx, e, ss)
 		// A streaming board that made no progress at all AND failed is a true outage;
-		// partial progress is a success signal, not a board failure. A rejected posting is
-		// progress: the crawl reached it and the filter turned it away. Without that, a
-		// mid-crawl error on an all-rejected board — the normal case on the non-tech-heavy
-		// national feeds — would count as a failure and cool a healthy board for hours.
-		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 {
+		// partial progress is a success signal, not a board failure.
+		if st.Failed > 0 && st.Ingested == 0 {
 			r.recordFailure(ctx, e, errors.New("streaming board failed with no progress"))
 		} else {
 			r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st), r.completeListingFingerprint(ctx, src, listed, st))
@@ -141,10 +137,10 @@ func (r Runner) fillCompanyDescription(ctx context.Context, e sources.CompanyEnt
 // quiet; one crawled without its seen-set (fetchedBoard.seenUnknown) is no evidence of what is
 // gone, so its close scopes are withheld.
 func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, fetched fetchedBoard) Stats {
-	raw, seen := fetched.jobs, fetched.seen
+	raw := fetched.jobs
 	canon := r.resolveCompanyAliases(ctx, e, raw)
-	t := r.writeBoard(ctx, e, raw, seen, canon)
-	st, rej, firstErr := t.st, t.rej, t.firstErr
+	t := r.writeBoard(ctx, e, raw, canon)
+	st, firstErr := t.st, t.firstErr
 	if fetched.cut {
 		st.Interrupted = 1 // before the fingerprint below, which a cut board must not record
 	}
@@ -157,17 +153,8 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, fetch
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on construct or save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, st.Skipped, len(raw), firstErr)
 	}
-	rej.log(e)
-	st.Rejected = rej.rejected
 	// The board was reachable (Fetch succeeded), so it is healthy regardless of per-job
 	// save skips — those are stats.Skipped, not a board outage.
-	//
-	// Deliberately AFTER st.Rejected is filled in above, not before: boardReachedPostings
-	// counts a rejected posting as a posting the crawl reached, and reading st a line earlier
-	// would see Rejected == 0 and report an all-rejected board as having yielded nothing —
-	// which on a national feed heavy with non-tech postings is the ordinary outcome, not an
-	// empty feed. The whole board would then age into the empty-feed net and have its jobs
-	// closed under a diagnosis that was never true of it.
 	listed := make([]string, len(raw))
 	for i, j := range raw {
 		listed[i] = j.ExternalID

@@ -24,7 +24,7 @@ func queueEntry(t *testing.T, pool *pgxpool.Pool, q *Queries, externalID string)
 	ctx := context.Background()
 	truncate(t, pool)
 	insertJob(t, pool, externalID)
-	if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+	if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
 	claimed, err := q.ClaimEnrichmentBatch(ctx, ClaimEnrichmentBatchParams{LeaseSeconds: 3600, BatchSize: 10})

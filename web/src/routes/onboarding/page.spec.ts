@@ -2,8 +2,6 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Job, OnboardingParse } from '#lib/types.js';
-
 const session = new SvelteMap<string, number | null>();
 vi.mock('$app/env', () => ({ browser: false, PUBLIC_OPEN_WITHIN: '' }));
 const pageState = vi.hoisted(() => ({
@@ -75,63 +73,7 @@ vi.mock('#lib/gotoPath.js', () => ({ gotoPath: h.gotoPath }));
 import { ApiError } from '#lib/api.js';
 import { onboardingGate } from '#lib/onboardingGate.svelte.js';
 import Page from './+page.svelte';
-
-const parse: OnboardingParse = {
-  structured_available: true,
-  first_name: 'Ana',
-  headline: 'Backend engineer',
-  country: 'br',
-  total_years: 9,
-  companies: ['Nubank', 'Stone'],
-  skills: ['go', 'kubernetes'],
-  categories: ['backend'],
-  seniority: 'senior',
-  report: {
-    overall: 64,
-    potential: 88,
-    reviewed: false,
-    strong_keywords: [],
-    recommended_keywords: [],
-    categories: [
-      {
-        id: 'impact',
-        label: 'Impact',
-        score: 5,
-        max: 20,
-        items: [{ points: 0, text: 'Quantify results', status: 'fail' }],
-      },
-    ],
-  },
-};
-
-const job = (n: number, company = 'Acme') =>
-  ({
-    public_slug: `job-${n}`,
-    title: `Platform Engineer ${n}`,
-    company,
-    work_mode: 'remote',
-    countries: ['br'],
-    skills: ['go', 'kubernetes'],
-  }) as unknown as Job;
-
-// Seven top matches at five employers, out of 526 the search found.
-const COMPANIES = ['Magnit Tech', 'Placements24', 'Magnit Tech', 'Acme', 'Globex', 'Initech', 'Umbrella'];
-const topMatches = COMPANIES.map((c, i) => ({ job: job(i + 1, c), match_percent: 92 - i }));
-
-const pdf = () => new File(['%PDF'], 'cv.pdf', { type: 'application/pdf' });
-
-async function dropCv() {
-  const input = document.querySelector('input[type=file]') as HTMLInputElement;
-  await fireEvent.change(input, { target: { files: [pdf()] } });
-}
-
-async function answerAll(challenges: string[] = []) {
-  await fireEvent.click(await screen.findByRole('button', { name: 'Remote' }));
-  await fireEvent.click(await screen.findByRole('button', { name: /^Senior Backend/ }));
-  await screen.findByRole('heading', { name: "What's in your way right now?" });
-  for (const label of challenges) await fireEvent.click(screen.getByRole('button', { name: label }));
-  await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-}
+import { answerAll, dropCv, job, parse, topMatches } from './onboardingSpecFixtures';
 
 beforeEach(() => {
   session.set('id', null);
@@ -140,6 +82,7 @@ beforeEach(() => {
   auth.createdAt = null;
   pageState.url = new URL('http://localhost/onboarding');
   onboardingGate.reset();
+  sessionStorage.clear();
   h.api.onboardingParseCv.mockResolvedValue(parse);
   h.api.facetCounts.mockResolvedValue({ total: 900, facets: { category: { backend: 600, devops: 300 } }, stats: {} });
   h.api.updateSurvey.mockResolvedValue({});
@@ -297,6 +240,51 @@ describe('/onboarding', () => {
     expect(new URLSearchParams(wide).get('posted_within_days')).toBe('30');
   });
 
+  it('lets a guest skip the CV and create an account, returning to where they were headed', async () => {
+    pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip the CV and create an account' }));
+    const target = new URL(h.gotoPath.mock.calls.at(-1)?.[0] as string, 'http://x');
+    expect(target.pathname).toBe('/signin');
+    expect(target.searchParams.get('returnTo')).toBe('/jobs/job-1');
+    expect(target.searchParams.get('mode')).toBeNull(); // the register form, not the login one
+    expect(h.draft.save).not.toHaveBeenCalled();
+  });
+
+  it('marks the skip so the new account is not sent back into onboarding', async () => {
+    pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip the CV and create an account' }));
+    expect(onboardingGate.takeGuestSkip()).toBe(true); // what survives an OAuth round trip
+  });
+
+  it('skips to the home page when no destination was given', async () => {
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip the CV and create an account' }));
+    const target = new URL(h.gotoPath.mock.calls.at(-1)?.[0] as string, 'http://x');
+    expect(target.searchParams.get('returnTo')).toBe('/');
+  });
+
+  it('keeps the existing-account sign-in direct, returning to the destination, and marks it too', async () => {
+    pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
+    render(Page);
+    const link = screen.getByRole('link', { name: 'Sign in' });
+    const url = new URL(link.getAttribute('href') ?? '', 'http://x');
+    expect(url.pathname).toBe('/signin');
+    expect(url.searchParams.get('mode')).toBe('login');
+    expect(url.searchParams.get('returnTo')).toBe('/jobs/job-1');
+    await fireEvent.click(link);
+    expect(onboardingGate.takeGuestSkip()).toBe(true);
+  });
+
+  it('drops an unsafe destination instead of following it out of the site', async () => {
+    pageState.url = new URL('http://localhost/onboarding?returnTo=https%3A%2F%2Fevil.example%2F');
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip the CV and create an account' }));
+    const target = new URL(h.gotoPath.mock.calls.at(-1)?.[0] as string, 'http://x');
+    expect(target.searchParams.get('returnTo')).toBe('/');
+  });
+
   it('says the daily limit is reached and offers sign-in on a 429', async () => {
     h.api.onboardingParseCv.mockRejectedValue(new ApiError(429, "You've hit today's limit for anonymous CV reads."));
     render(Page);
@@ -333,173 +321,6 @@ describe('/onboarding', () => {
     expect(h.gotoPath).not.toHaveBeenCalled();
   });
 
-  const draftOf = (over: Record<string, unknown> = {}) => ({
-    file: new Blob(['%PDF'], { type: 'application/pdf' }),
-    fileName: 'cv.pdf',
-    parse,
-    answers: { where: 'remote', role: 'backend', challenge: [] },
-    savedAt: Date.now(),
-    ...over,
-  });
-
   // Migration 0207 cleared onboarding_completed_at for accounts that existed then: such an
   // account signing in from the results is not new and must be asked, not overwritten.
-  it('asks before saving into an old account that was never marked onboarded', async () => {
-    session.set('id', 7);
-    auth.createdAt = '2025-06-01T00:00:00Z';
-    h.draft.load.mockResolvedValue(draftOf({ pendingSignupAt: Date.now() - 60_000 }));
-    render(Page);
-    expect(await screen.findByRole('button', { name: /Save and go to my feed/ })).toBeTruthy();
-    expect(h.api.putResume).not.toHaveBeenCalled();
-    expect(h.profileStore.save).not.toHaveBeenCalled();
-  });
-
-  it('carries a draft into the account a sign-up from it just created', async () => {
-    session.set('id', 7);
-    h.draft.load.mockResolvedValue(draftOf({ pendingSignupAt: Date.now() - 60_000 }));
-    render(Page);
-    await waitFor(() => expect(h.gotoPath).toHaveBeenCalled());
-    expect(h.api.putResume).toHaveBeenCalled();
-    expect(h.api.onboardingParseCv).not.toHaveBeenCalled();
-  });
-
-  // Visitor A left the sign-in page without signing up; B, at the same browser, signs up
-  // later. A's draft is read back (and deleted) on A's return, so nothing reaches B.
-  it('reads back a sign-up left on the sign-in page once, and keeps nothing for later', async () => {
-    h.draft.load.mockResolvedValue(draftOf({ pendingSignupAt: Date.now() - 60_000 }));
-    render(Page);
-    expect(await screen.findByText(/Ana/)).toBeTruthy();
-    expect(h.draft.clear).toHaveBeenCalled();
-    expect(h.draft.save).not.toHaveBeenCalled();
-    expect(h.api.putResume).not.toHaveBeenCalled();
-  });
-
-  // A shared browser: somebody ran the flow signed out, then somebody else signed in.
-  it('never carries or shows a draft no sign-up was started from', async () => {
-    session.set('id', 7);
-    h.draft.load.mockResolvedValue(draftOf());
-    render(Page);
-    await waitFor(() => expect(h.draft.clear).toHaveBeenCalled());
-    expect(h.api.putResume).not.toHaveBeenCalled();
-    expect(h.profileStore.save).not.toHaveBeenCalled();
-    expect(h.enableProfileAlert).not.toHaveBeenCalled();
-    expect(screen.queryByText(/Ana/)).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Start with your CV' })).toBeTruthy();
-  });
-
-  it('only offers to save a fresh sign-up into an account that existed before', async () => {
-    session.set('id', 7);
-    auth.completedAt = '2026-01-01T00:00:00Z';
-    auth.createdAt = '2025-06-01T00:00:00Z';
-    h.draft.load.mockResolvedValue(draftOf({ pendingSignupAt: Date.now() - 60_000 }));
-    render(Page);
-    expect(await screen.findByRole('button', { name: 'Save and go to my feed' })).toBeTruthy();
-    expect(h.api.putResume).not.toHaveBeenCalled();
-  });
-
-  it('keeps every draft it saves storable — IndexedDB refuses a reactive proxy', async () => {
-    render(Page);
-    await dropCv();
-    await answerAll(['Getting visa sponsorship']);
-    await fireEvent.click(await screen.findByRole('button', { name: 'Save my matches' }));
-    await waitFor(() => expect(h.gotoPath).toHaveBeenCalled());
-    // structuredClone is the algorithm IndexedDB stores with: a Svelte $state proxy in the
-    // draft makes it throw DataCloneError, and the save (with its sign-up mark) is lost.
-    for (const [draft] of h.draft.save.mock.calls) expect(() => structuredClone(draft)).not.toThrow();
-    const marked = h.draft.save.mock.calls.at(-1)?.[0] as { answers: { challenge?: string[] } };
-    expect(marked.answers.challenge).toEqual(['visa_sponsorship']);
-  });
-
-  it('marks the draft and sends the visitor to the sign-in page, which brings them back', async () => {
-    render(Page);
-    await dropCv();
-    await answerAll();
-    await fireEvent.click(await screen.findByRole('button', { name: 'Save my matches' }));
-    await waitFor(() => expect(h.gotoPath).toHaveBeenCalled());
-    const marked = h.draft.save.mock.calls.at(-1)?.[0] as { pendingSignupAt?: number };
-    expect(marked.pendingSignupAt).toBeTypeOf('number');
-    const target = new URL(h.gotoPath.mock.calls.at(-1)?.[0] as string, 'http://x');
-    expect(target.pathname).toBe('/signin');
-    expect(target.searchParams.get('returnTo')).toBe('/onboarding');
-    expect(h.api.putResume).not.toHaveBeenCalled();
-  });
-
-  it('clears the draft and dismisses the gate once every step was tried, even with a failure', async () => {
-    session.set('id', 7);
-    h.enableProfileAlert.mockRejectedValue(new Error('subscribe failed'));
-    render(Page);
-    await dropCv();
-    await answerAll();
-    await fireEvent.click(await screen.findByRole('button', { name: 'Save and go to my feed' }));
-    expect(await screen.findByText(/couldn't save the email alert/)).toBeTruthy();
-    expect(h.draft.clear).toHaveBeenCalled();
-    expect(onboardingGate.dismissed).toBe(true);
-    expect(screen.queryByRole('button', { name: /Change answers/ })).toBeNull();
-  });
-
-  it('reports the CV as not saved when storing it fails', async () => {
-    session.set('id', 7);
-    h.api.putResume.mockRejectedValue(new ApiError(501, 'résumé storage is not available'));
-    render(Page);
-    await dropCv();
-    await answerAll();
-    await fireEvent.click(await screen.findByRole('button', { name: 'Save and go to my feed' }));
-    expect(await screen.findByText("Your account is ready, but we couldn't save your CV.")).toBeTruthy();
-    expect(h.gotoPath).not.toHaveBeenCalled();
-  });
-
-  it('lets a signed-in visitor skip to where they were headed', async () => {
-    session.set('id', 7);
-    pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
-    render(Page);
-    await fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
-    expect(h.gotoPath).toHaveBeenCalledWith('/jobs/job-1');
-  });
-
-  it('goes back where the visitor was headed after saving', async () => {
-    session.set('id', 7);
-    pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
-    render(Page);
-    await dropCv();
-    await answerAll();
-    await fireEvent.click(await screen.findByRole('button', { name: 'Save and go to my feed' }));
-    await waitFor(() => expect(h.gotoPath).toHaveBeenCalledWith('/jobs/job-1'));
-  });
-
-  it('keeps where the visitor was headed through the sign-in page', async () => {
-    pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
-    render(Page);
-    await dropCv();
-    await answerAll();
-    await fireEvent.click(await screen.findByRole('button', { name: 'Save my matches' }));
-    await waitFor(() => expect(h.gotoPath).toHaveBeenCalled());
-    const signin = new URL(h.gotoPath.mock.calls.at(-1)?.[0] as string, 'http://x');
-    const back = new URL(signin.searchParams.get('returnTo') ?? '', 'http://x');
-    expect(back.pathname).toBe('/onboarding');
-    expect(back.searchParams.get('returnTo')).toBe('/jobs/job-1');
-  });
-
-  it('stays where the visitor went if they leave while saving', async () => {
-    session.set('id', 7);
-    let finish: (v: unknown) => void = () => {};
-    h.api.putResume.mockReturnValue(new Promise((r) => (finish = r)));
-    const { unmount } = render(Page);
-    await dropCv();
-    await answerAll();
-    await fireEvent.click(await screen.findByRole('button', { name: 'Save and go to my feed' }));
-    unmount();
-    finish({ enabled: true, present: true });
-    await new Promise((r) => setTimeout(r, 20));
-    expect(h.gotoPath).not.toHaveBeenCalled();
-  });
-
-  it('shows no match figures for a CV with no recognised skills', async () => {
-    h.api.onboardingParseCv.mockResolvedValue({ ...parse, skills: [] });
-    render(Page);
-    await dropCv();
-    await answerAll();
-    expect(await screen.findByText('526 open jobs for your answers')).toBeTruthy();
-    expect(screen.queryByText('92%')).toBeNull();
-    expect(screen.getByText(/Matching jobs to your answers/)).toBeTruthy();
-  });
 });

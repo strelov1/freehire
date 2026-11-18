@@ -9,7 +9,7 @@
 -- the user has at least one registered push device (the push channel's live
 -- deliverability check, same soft-skip role as the Telegram link), the user's
 -- webhook destination (URL, NULL or disabled → the worker soft-skips webhook
--- delivery the same way), and the delivery-timing context
+-- delivery the same way; its secret signs the delivery), and the delivery-timing context
 -- (live, not snapshotted, same as the channel checks above) — the account's
 -- timezone and its saved-search digest frequency settings, read via
 -- internal/application/deliverywindow before a digest is sent.
@@ -22,7 +22,10 @@ SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_dige
        (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id))::boolean AS has_push_device,
        wc.url AS webhook_url,
        COALESCE(wc.enabled, false) AS webhook_enabled,
-       COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
+       wc.secret AS webhook_secret,
+       (CASE WHEN s.channel = 'webhook'
+                  OR COALESCE(u.pro_until > now(), false) OR COALESCE(u.ultra_until > now(), false)
+             THEN COALESCE(ns.digest_frequency, 'daily') ELSE 'daily' END)::text AS digest_frequency, -- effective, see ListActiveSubscriptions
        COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end,
@@ -57,7 +60,10 @@ SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_dige
        (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id))::boolean AS has_push_device,
        wc.url AS webhook_url,
        COALESCE(wc.enabled, false) AS webhook_enabled,
-       COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
+       wc.secret AS webhook_secret,
+       (CASE WHEN s.channel = 'webhook'
+                  OR COALESCE(u.pro_until > now(), false) OR COALESCE(u.ultra_until > now(), false)
+             THEN COALESCE(ns.digest_frequency, 'daily') ELSE 'daily' END)::text AS digest_frequency, -- effective, see ListActiveSubscriptions
        COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end,

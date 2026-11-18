@@ -4,7 +4,7 @@
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { formatMinorUnits } from '#lib/money.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { promptLogin } from '#lib/signin.js';
   import type { ApiPlan, PublicPrice } from '#lib/types.js';
 
   // `buttonVariant`: the API's own page sells the API, so its buttons are the page's CTA;
@@ -126,7 +126,7 @@
             <button
               type="button"
               class={cn(buttonVariants({ variant: buttonVariant, size: 'lg' }), 'mt-auto')}
-              onclick={promptSignIn}>Sign in to subscribe</button
+              onclick={promptLogin}>Sign in to subscribe</button
             >
           {/if}
         </section>

@@ -176,7 +176,7 @@ func (s wttj) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrate(ctx, hits, seen, nil, nil), nil
+	return s.hydrate(ctx, hits, seen, nil), nil
 }
 
 // FetchNewGated is FetchNew told which postings the pipeline will discard anyway. A large share
@@ -196,22 +196,21 @@ func (s wttj) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(exter
 		}
 		covered = gate.Covered(names)
 	}
-	return s.hydrate(ctx, hits, seen, covered, gate.Rejected), nil
+	return s.hydrate(ctx, hits, seen, covered), nil
 }
 
 // hydrate maps the listed hits to Jobs. A seen posting is a liveness refresh with no request; a
-// posting the pipeline will discard — its employer covered, or its title rejected as
-// non-technical — is yielded body-less for the pipeline to count; every other posting costs one
+// posting the pipeline will discard — its employer covered — is yielded body-less for the pipeline to count; every other posting costs one
 // posting-API request.
 func (s wttj) hydrate(ctx context.Context, hits []wttjHit, seen func(string) bool,
-	covered map[string]bool, rejected func(Job) bool) []Job {
+	covered map[string]bool) []Job {
 	return fetchDetails(hits, defaultDetailWorkers, func(h wttjHit) (Job, bool) {
 		base := h.toJob()
 		if seen(h.ObjectID) {
 			base.SeenRefresh = true
 			return base, true
 		}
-		if covered[h.Organization.Name] || (rejected != nil && rejected(base)) {
+		if covered[h.Organization.Name] {
 			return base, true
 		}
 		return s.withDetail(ctx, h, base)

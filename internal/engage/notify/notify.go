@@ -60,6 +60,10 @@ func ValidChannel(c string) bool {
 //
 // FrequencyDaily at DefaultDigestTime is the default for an account with no settings
 // row (migration 0246). An unknown stored value reads as FrequencyInterval.
+//
+// Anything faster than daily is a Pro/Ultra benefit: the queries that feed this package
+// return the EFFECTIVE frequency (daily for an account without a live plan, webhook
+// excepted), so a stored preference never buys speed by itself.
 const (
 	FrequencyInstant  = "instant"
 	FrequencyDaily    = "daily"
@@ -150,8 +154,11 @@ func (d Digest) SearchPath(utmSource string) string {
 type Message struct {
 	// UserID is whose message this is. Only the email channel reads it, to sign that
 	// recipient's unsubscribe link.
-	UserID  int64
-	Digests []Digest
+	UserID int64
+	// WebhookSecret signs a webhook delivery (see internal/engage/webhooknotify). Only
+	// the webhook channel reads it.
+	WebhookSecret string
+	Digests       []Digest
 }
 
 // Total is how many matches the message announces across its digests.

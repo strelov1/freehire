@@ -10,7 +10,7 @@ const { completeness } = vi.hoisted(() => ({ completeness: { current: null as un
 
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/my/profile') } }));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
-vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true, currentUser: () => null }));
 vi.mock('#lib/profile.svelte.js', () => ({
   profileStore: { profile: { skills: [] }, loaded: true, ensureLoaded: () => Promise.resolve() },
 }));

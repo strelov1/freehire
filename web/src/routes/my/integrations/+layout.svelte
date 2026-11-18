@@ -32,7 +32,7 @@
 </script>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-4 lg:gap-6">
   <div class="flex flex-col gap-1">
     <AccountPageHeading>{s.title}</AccountPageHeading>
     <p class="text-sm text-muted-foreground max-lg:sr-only">{s.description}</p>

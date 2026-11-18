@@ -302,7 +302,7 @@ func TestWorkstreamFetchNewSkipsDetailForASeenPosting(t *testing.T) {
 	if jobs[0].Description != "" {
 		t.Errorf("a refresh must carry no content, got %q", jobs[0].Description)
 	}
-	// The title travels so the refresh path can re-apply the catalogue filter to it.
+	// The title travels with the refresh.
 	if jobs[0].Title != "Line Cook" {
 		t.Errorf("Title = %q", jobs[0].Title)
 	}

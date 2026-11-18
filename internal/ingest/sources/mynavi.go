@@ -232,7 +232,7 @@ func (s mynavi) hydrate(ctx context.Context, cards []mynaviCard, tech bool, seen
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}

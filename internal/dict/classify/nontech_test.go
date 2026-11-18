@@ -70,14 +70,14 @@ func TestIsNonTech(t *testing.T) {
 	}
 }
 
-// A title the category dictionary places in engineering_design must never be refused
-// on the non-tech dictionary's word match. The two vocabularies overlap by design —
+// A title the category dictionary places in engineering_design must resolve that category
+// despite the non-tech dictionary's word match. The two vocabularies overlap by design —
 // the physical trades the non-tech list anchors ("hvac", "sheet metal", "machinist")
 // are the same trades that post draughting work — and engineering_design is a
 // deliberate placement, not the absence of a signal. Without this veto, splitting the
 // category out of `design` (where TechCategories supplied the veto for free) turns an
 // "HVAC Designer" away at ingest.
-func TestConfirmedNonTech_EngineeringDesignIsVetoed(t *testing.T) {
+func TestNonTechEngineeringDesignResolvesACategory(t *testing.T) {
 	vetoed := []string{
 		"HVAC Design Engineer",
 		"HVAC Designer",
@@ -90,17 +90,16 @@ func TestConfirmedNonTech_EngineeringDesignIsVetoed(t *testing.T) {
 		if !IsNonTech(title) {
 			t.Fatalf("precondition: %q must match the non-tech dictionary for this test to mean anything", title)
 		}
-		if ConfirmedNonTech(title, false) {
-			t.Errorf("ConfirmedNonTech(%q, false) = true, want false (engineering_design vetoes deletion)", title)
+		if Parse(title).Category == "" {
+			t.Errorf("Parse(%q) resolved no category, want one (engineering_design vetoes deletion)", title)
 		}
 	}
 
 }
 
-// The catalogue is broader than IT, so ANY resolved category vetoes the refusal — the
-// consumer and service categories as much as the craft ones. A title the dictionary
-// files is kept under its facet; only a non-technical title it cannot file is refused.
-func TestConfirmedNonTech_AnyCategoryVetoes(t *testing.T) {
+// The catalogue is broader than IT: a non-technical title the dictionary files is kept
+// under its facet — the consumer and service categories as much as the craft ones.
+func TestNonTechTitlesResolveACategory(t *testing.T) {
 	for _, title := range []string{
 		"Registered Nurse", "Line Cook", "Cashier", "HVAC Technician",
 		"Warehouse Janitorial Cleaner", "Pharmacist", "Administrative Assistant",
@@ -109,56 +108,20 @@ func TestConfirmedNonTech_AnyCategoryVetoes(t *testing.T) {
 		if !IsNonTech(title) {
 			t.Fatalf("precondition: %q must match the non-tech dictionary for this test to mean anything", title)
 		}
-		if ConfirmedNonTech(title, false) {
-			t.Errorf("ConfirmedNonTech(%q, false) = true, want false (category %q vetoes the refusal)", title, Parse(title).Category)
+		if Parse(title).Category == "" {
+			t.Errorf("Parse(%q) resolved no category, want one", title)
 		}
 	}
 
-	// A non-technical title no category files is still refused. Every term in the
-	// non-tech list now names a category of its own, so what reaches the refusal is a
-	// title an earlier categoryNone pin claims: the pin files it nowhere, and the term
-	// still says it is not technical.
-	for _, title := range []string{"Trust & Safety Specialist / Social Worker"} {
-		if Parse(title).Category != "" {
-			t.Fatalf("precondition: %q must resolve no category, got %q", title, Parse(title).Category)
-		}
-		if !ConfirmedNonTech(title, false) {
-			t.Errorf("ConfirmedNonTech(%q, false) = false, want true — an unfiled non-tech title is still refused", title)
-		}
-	}
-}
-
-// The role_type facet is a placement too, and vetoes the refusal the way a category
-// does: search keeps a people manager no category files (search.CategoryUnresolved), so
-// refusing one here would turn away a posting search would have shown. No live title
-// in the measured corpora reaches this branch today — the gates are kept equal so that
-// a future pin cannot make them disagree — so the titles are built the way the refused
-// fixtures are: a categoryNone pin first, a non-tech term after it, and a marker.
-func TestConfirmedNonTech_PeopleManagerVetoes(t *testing.T) {
-	for _, title := range []string{
-		"General Manager, Trust & Safety Specialist / Social Worker",
-		"Trust & Safety Director / Social Worker",
-	} {
-		if !IsNonTech(title) {
-			t.Fatalf("precondition: %q must match the non-tech dictionary", title)
-		}
-		if Parse(title).Category != "" {
-			t.Fatalf("precondition: %q must resolve no category, got %q", title, Parse(title).Category)
-		}
-		if ConfirmedNonTech(title, false) {
-			t.Errorf("ConfirmedNonTech(%q, false) = true, want false — role_type places it", title)
-		}
-	}
 }
 
 // The same veto, reached from the other direction and with a sharper edge. The non-tech
 // term list carries "охрана труда"/"охране труда" — the Russian name of the
 // occupational-safety profession — so before this category existed every Russian HSE
-// title was turned away by the ingest catalogue filter, which funnels through
-// ConfirmedNonTech. A facet no posting can
+// title was turned away by the (since removed, #4412) ingest catalogue filter. A facet no posting can
 // reach is not a facet, which is why this test guards the category rather than the
 // dictionary entry.
-func TestConfirmedNonTech_OccupationalSafetyIsVetoed(t *testing.T) {
+func TestNonTechOccupationalSafetyResolvesACategory(t *testing.T) {
 	for _, title := range []string{
 		"Инженер по охране труда",
 		"Специалист по охране труда",
@@ -166,8 +129,8 @@ func TestConfirmedNonTech_OccupationalSafetyIsVetoed(t *testing.T) {
 		if !IsNonTech(title) {
 			t.Fatalf("precondition: %q must match the non-tech dictionary for this test to mean anything", title)
 		}
-		if ConfirmedNonTech(title, false) {
-			t.Errorf("ConfirmedNonTech(%q, false) = true, want false (occupational_safety vetoes deletion)", title)
+		if Parse(title).Category == "" {
+			t.Errorf("Parse(%q) resolved no category, want one (occupational_safety vetoes deletion)", title)
 		}
 	}
 
@@ -175,8 +138,8 @@ func TestConfirmedNonTech_OccupationalSafetyIsVetoed(t *testing.T) {
 	// at risk from this path. Asserted anyway: the veto must hold for the whole category,
 	// not only for the spellings that happen to collide today.
 	for _, title := range []string{"EHS Specialist", "HSE Manager", "Safety Coordinator"} {
-		if ConfirmedNonTech(title, false) {
-			t.Errorf("ConfirmedNonTech(%q, false) = true, want false", title)
+		if Parse(title).Category == "" {
+			t.Errorf("Parse(%q) resolved no category, want one", title)
 		}
 	}
 }

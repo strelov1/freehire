@@ -17,7 +17,7 @@
 <div class="max-w-4xl">
   <!-- The title sits here rather than inside InboxView so it is present while the view
        is still loading, the way every other /my/* section titles itself. -->
-  <div class="mb-6 flex flex-col gap-1">
+  <div class="mb-4 flex flex-col gap-1 lg:mb-6">
     <AccountPageHeading>{s.title}</AccountPageHeading>
     <p class="text-sm text-muted-foreground max-lg:sr-only">
       {s.description}

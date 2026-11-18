@@ -1146,6 +1146,10 @@ export const AutopilotClosedBank: AutopilotStatus = "closed_bank";
  */
 export const AutopilotClosedCandidate: AutopilotStatus = "closed_candidate";
 /**
+ * AutopilotPartial means related evidence exists, but part of the requirement is unverified.
+ */
+export const AutopilotPartial: AutopilotStatus = "partial";
+/**
  * AutopilotOpen: the bank holds nothing for it. This is the remainder worth asking about.
  */
 export const AutopilotOpen: AutopilotStatus = "open";
@@ -1160,6 +1164,7 @@ export interface AutopilotEntry {
   requirement: string;
   status: AutopilotStatus;
   note?: string;
+  unverified?: string;
 }
 
 //////////
@@ -1571,7 +1576,7 @@ export interface CatalogueMember {
   has_photo: boolean;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'academictransfer', 'adp', 'adpmyjobs', 'adzuna', 'aijobs', 'applicantpro', 'applicantstack', 'applitrack', 'appone', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'beehire', 'beesite', 'berlinstartupjobs', 'betterteam', 'bizneo', 'brassring', 'breezy', 'briefhq', 'builtin', 'bullhorn', 'bumeran', 'cadremploi', 'cake', 'careerplug', 'careerspage', 'catho', 'catsone', 'cbop', 'civilservicejobs', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'computrabajo', 'concludis', 'cornerstone', 'coveto', 'crelate', 'cryptocurrencyjobs', 'cutshort', 'cvwarehouse', 'darwinbox', 'dayforce', 'deel', 'devglobaljobs', 'digitalrecruiters', 'djinni', 'dover', 'dualoo', 'dvinci', 'earcu', 'easycruit', 'echojobs', 'edjoin', 'eightfold', 'emply', 'empregos', 'energyjobline', 'engage', 'enlizt', 'epam', 'eploy', 'epreselec', 'erecruiter', 'ess', 'eures', 'factorial', 'feinaactiva', 'feishujobs', 'firefish', 'flatchr', 'francetravail', 'freework', 'freshteam', 'friendwork', 'functionalworks', 'geekhunter', 'geekjob', 'gem', 'gemeentebanen', 'gethired', 'getinit', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'gohire', 'golangjobs', 'gr8people', 'gradcracker', 'greenhouse', 'greythr', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hackernews', 'harri', 'hcshiring', 'helixjobs', 'herkey', 'herp', 'hh', 'hibob', 'higherme', 'himalayas', 'hireclick', 'hirehive', 'hireology', 'hiringroom', 'hiringthing', 'hirist', 'homerun', 'hrmanager', 'hrmdirect', 'hrmos', 'hroffice', 'hrsmart', 'humanbit', 'huntflow', 'hurma', 'hzz', 'icims', 'idealtraits', 'iimjobs', 'infoempleo', 'infojobs', 'infojobsbr', 'infostud', 'inhire', 'inploi', 'instaffo', 'instahyre', 'intervieweb', 'ismartrecruit', 'isolvedhire', 'itechart', 'itjobs', 'itviec', 'japandev', 'jazzhr', 'jibe', 'job104', 'jobappnetwork', 'jobboardly', 'jobdanmark', 'jobicy', 'jobindex', 'jobleads', 'jobnet', 'jobsch', 'jobscore', 'jobspage', 'jobspresso', 'jobstash', 'jobstreet', 'jobteaser', 'jobtech', 'jobvite', 'jobylon', 'join', 'joppy', 'jumpit', 'justjoin', 'kalibrr', 'keka', 'kenjo', 'landingjobs', 'lever', 'likeit', 'linkedin', 'livehire', 'loxo', 'luxoft', 'manatal', 'meincheckin', 'mindsight', 'mojedelo', 'mojposao', 'mokahr', 'mycareersfuture', 'mynavi', 'naukri', 'neogov', 'netempregos', 'nodesk', 'nofluffjobs', 'northstone', 'nsz', 'occ', 'odoo', 'onapply', 'onlyfy', 'oorwin', 'opencats', 'optius', 'oracle', 'pageup', 'pandape', 'pandapelatam', 'paradox', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'peoplesoft', 'personio', 'phenom', 'pinpoint', 'polymer', 'posaohr', 'potok', 'powertofly', 'pracuj', 'profession', 'prospective', 'pyjamahr', 'pythonorg', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruiter_co_kr', 'recruiterflow', 'recruitify', 'recruitingsolutions', 'recrutei', 'reed', 'refline', 'remotedotcom', 'remotive', 'remotli', 'rexx', 'rippling', 'rocketjobs', 'sapoemprego', 'scalis', 'schoolspring', 'seamlesshiring', 'seek', 'selfrecruit', 'senior', 'servicepublic', 'shine', 'sitemapldjson', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spainjobs', 'spark', 'speedrun', 'startupandvc', 'startupjobs', 'successfactors', 'swissdevjobs', 'taleez', 'talentadore', 'talentbrew', 'talentclue', 'talenthr', 'talentlyft', 'talentsoft', 'talentstorm', 'taleo', 'taleobe', 'teamex', 'teamtailor', 'techinasia', 'techtree', 'tecla', 'tenstreet', 'thehub', 'themuse', 'topco', 'torre', 'traffit', 'trakstar', 'trinethire', 'trudvsem', 'turijobs', 'tyomarkkinatori', 'ukg', 'ukgready', 'umantis', 'usajobs', 'vagas', 'velorahr', 'vention', 'viterbit', 'vouch', 'wantapply', 'wantapply-cy', 'wellfound', 'werecruit', 'werkenvoornederland', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-cr', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-do', 'whatjobs-dz', 'whatjobs-ec', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-gt', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-ma', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-ng', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pa', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pr', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-ru', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-tz', 'whatjobs-ug', 'whatjobs-uk', 'whatjobs-uy', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'work180', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'workwise', 'wpyoast', 'wttj', 'wuzzuf', 'xing', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'academictransfer', 'adp', 'adpmyjobs', 'adzuna', 'aijobs', 'applicantpro', 'applicantstack', 'applitrack', 'appone', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'beehire', 'beesite', 'berlinstartupjobs', 'betterteam', 'bizneo', 'brassring', 'breezy', 'briefhq', 'builtin', 'bullhorn', 'bumeran', 'cadremploi', 'cake', 'careerplug', 'careerspage', 'catho', 'catsone', 'cbop', 'civilservicejobs', 'clearedjobs', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'computrabajo', 'concludis', 'cornerstone', 'coveto', 'crelate', 'cryptocurrencyjobs', 'cryptojobslist', 'cutshort', 'cvwarehouse', 'darwinbox', 'dayforce', 'deel', 'devglobaljobs', 'dice', 'digitalrecruiters', 'djinni', 'dover', 'dualoo', 'dvinci', 'dynamitejobs', 'earcu', 'easycruit', 'echojobs', 'edjoin', 'eightfold', 'emply', 'empregos', 'energyjobline', 'engage', 'enlizt', 'epam', 'eploy', 'epreselec', 'erecruiter', 'ess', 'eures', 'factorial', 'feinaactiva', 'feishujobs', 'firefish', 'flatchr', 'foundit', 'francetravail', 'freework', 'freshteam', 'friendwork', 'functionalworks', 'geekhunter', 'geekjob', 'gem', 'gemeentebanen', 'gethired', 'getinit', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'glints', 'gohire', 'golangjobs', 'gr8people', 'gradcracker', 'greenhouse', 'greythr', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hackernews', 'harri', 'hcshiring', 'helixjobs', 'herkey', 'herp', 'hh', 'hibob', 'higherme', 'himalayas', 'hireclick', 'hirehive', 'hireology', 'hiringroom', 'hiringthing', 'hirist', 'homerun', 'hrmanager', 'hrmdirect', 'hrmos', 'hroffice', 'hrsmart', 'humanbit', 'huntflow', 'hurma', 'hzz', 'icims', 'idealtraits', 'iimjobs', 'infoempleo', 'infojobs', 'infojobsbr', 'infostud', 'inhire', 'inploi', 'instaffo', 'instahyre', 'intervieweb', 'ismartrecruit', 'isolvedhire', 'itechart', 'itjobs', 'itviec', 'japandev', 'jazzhr', 'jibe', 'job104', 'jobappnetwork', 'jobboardly', 'jobdanmark', 'jobicy', 'jobindex', 'jobleads', 'jobnet', 'jobsch', 'jobscore', 'jobspage', 'jobspresso', 'jobstash', 'jobstreet', 'jobteaser', 'jobtech', 'jobvite', 'jobylon', 'join', 'joppy', 'jumpit', 'justjoin', 'justremote', 'kalibrr', 'kariyernet', 'keka', 'kenjo', 'landingjobs', 'lever', 'levtech', 'likeit', 'linkedin', 'livehire', 'loxo', 'luxoft', 'manatal', 'meincheckin', 'mindsight', 'mojedelo', 'mojposao', 'mokahr', 'mycareersfuture', 'mynavi', 'naukri', 'neogov', 'netempregos', 'njoyn', 'nodesk', 'nofluffjobs', 'northstone', 'nsz', 'occ', 'odoo', 'onapply', 'onlyfy', 'oorwin', 'opencats', 'optius', 'oracle', 'pageup', 'pandape', 'pandapelatam', 'paradox', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'peoplesoft', 'personio', 'phenom', 'pinpoint', 'polymer', 'posaohr', 'potok', 'powertofly', 'pracuj', 'profession', 'prospective', 'pyjamahr', 'pythonorg', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruiter_co_kr', 'recruiterflow', 'recruitify', 'recruitingsolutions', 'recrutei', 'reed', 'refline', 'remotedotcom', 'remotive', 'remotli', 'rexx', 'rippling', 'rocketjobs', 'sapoemprego', 'scalis', 'schoolspring', 'seamlesshiring', 'seek', 'selfrecruit', 'senior', 'servicepublic', 'shine', 'sitemapldjson', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spainjobs', 'spark', 'speedrun', 'startupandvc', 'startupjobs', 'successfactors', 'swissdevjobs', 'taleez', 'talentadore', 'talentbrew', 'talentclue', 'talenthr', 'talentlyft', 'talentsoft', 'talentstorm', 'taleo', 'taleobe', 'teamex', 'teamtailor', 'techinasia', 'techtree', 'tecla', 'tenstreet', 'thehub', 'themuse', 'topco', 'torre', 'traffit', 'trakstar', 'trinethire', 'trudvsem', 'turijobs', 'tyomarkkinatori', 'ukg', 'ukgready', 'umantis', 'usajobs', 'vagas', 'velorahr', 'vention', 'viterbit', 'vouch', 'wantapply', 'wantapply-cy', 'wellfound', 'werecruit', 'werkenvoornederland', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-cr', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-do', 'whatjobs-dz', 'whatjobs-ec', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-gt', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-ma', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-ng', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pa', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pr', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-ru', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-tz', 'whatjobs-ug', 'whatjobs-uk', 'whatjobs-uy', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'work180', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'workwise', 'wpyoast', 'wttj', 'wuzzuf', 'xing', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['preparing', 'applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn', 'expired'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
@@ -2143,6 +2148,7 @@ export const SKILL_LABELS = {
   'canva': 'Canva',
   'capcut': 'Capcut',
   'cassandra': 'Cassandra',
+  'category-management': 'Category Management',
   'catia': 'CATIA',
   'causal-inference': 'Causal Inference',
   'ccna': 'Ccna',
@@ -2356,6 +2362,7 @@ export const SKILL_LABELS = {
   'evm': 'EVM',
   'evpn': 'EVPN',
   'exact-online': 'Exact Online',
+  'excel': 'Excel',
   'express': 'Express.js',
   'faiss': 'FAISS',
   'fall-protection': 'Fall Protection',
@@ -2486,6 +2493,7 @@ export const SKILL_LABELS = {
   'interaction-design': 'Interaction Design',
   'intrusion-detection': 'Intrusion Detection',
   'intune': 'Intune',
+  'inventory-management': 'Inventory Management',
   'invision': 'InVision',
   'ionic': 'Ionic',
   'ios': 'iOS',
@@ -2650,6 +2658,7 @@ export const SKILL_LABELS = {
   'motion-graphics': 'Motion Graphics',
   'mpls': 'MPLS',
   'mqtt': 'MQTT',
+  'mrp': 'MRP',
   'mtbf': 'MTBF',
   'mttr': 'MTTR',
   'mulesoft': 'Mulesoft',
@@ -2795,6 +2804,7 @@ export const SKILL_LABELS = {
   'pulumi': 'Pulumi',
   'puppet': 'Puppet',
   'puppeteer': 'Puppeteer',
+  'purchase-order-management': 'Purchase Order Management',
   'pydantic': 'Pydantic',
   'pyspark': 'PySpark',
   'pytest': 'pytest',
@@ -2839,6 +2849,7 @@ export const SKILL_LABELS = {
   'revenue-recognition': 'Revenue Recognition',
   'reverse-engineering': 'Reverse Engineering',
   'revit': 'Revit',
+  'rfx': 'RFx (RFQ/RFP/RFI)',
   'rhel': 'RHEL',
   'rhino': 'Rhino',
   'risk-assessment': 'Risk Assessment',
@@ -2954,6 +2965,7 @@ export const SKILL_LABELS = {
   'sourcegraph': 'Sourcegraph',
   'spacy': 'spaCy',
   'spark': 'Spark',
+  'spend-analysis': 'Spend Analysis',
   'sphera': 'Sphera',
   'splunk': 'Splunk',
   'spring': 'Spring',
@@ -2978,6 +2990,7 @@ export const SKILL_LABELS = {
   'storyboarding': 'Storyboarding',
   'storybook': 'Storybook',
   'strategic-planning': 'Strategic Planning',
+  'strategic-sourcing': 'Strategic Sourcing',
   'streamlit': 'Streamlit',
   'stripe': 'Stripe',
   'structured-authoring': 'Structured Authoring',
@@ -2988,6 +3001,7 @@ export const SKILL_LABELS = {
   'succession-planning': 'Succession Planning',
   'supabase': 'Supabase',
   'superset': 'Superset',
+  'supply-chain-management': 'Supply Chain Management',
   'svelte': 'Svelte',
   'svn': 'SVN',
   'swagger': 'Swagger',
@@ -3195,7 +3209,7 @@ export const FACET_ALIASES = {
   'mobile': ['android', 'androidエンジニア', 'android客户端', 'android工程', 'android应用', 'android开发', 'android研发', 'android系统', 'android软件', 'android開發', 'app工程', 'app开发', 'app開發', 'flutterエンジニア', 'ios', 'iosエンジニア', 'ios客户端', 'ios工程', 'ios开发', 'ios研发', 'ios開發', 'mobilalkalmazás fejlesztő', 'mobilalkalmazás-fejlesztő', 'mobile app', 'mobile application', 'mobile applications', 'mobile apps', 'mobile architect', 'mobile automation', 'mobile developer', 'mobile engineer', 'mobile platform', 'mobile qa', 'mobile software', 'react native developer', 'xamarin', 'мобильная разработка', 'мобильное приложение', 'мобильной разработки', 'мобильный разработчик', 'мобильных приложений', 'アプリエンジニア', 'スマホアプリ', 'ネイティブアプリ', 'モバイルエンジニア', '安卓', '移动端', '鸿蒙'],
   'network_engineering': ['hálózati mérnök', 'hálózati rendszermérnök', 'network administrator', 'network analyst', 'network design engineer', 'network engineer', 'network engineering', 'network specialist', 'network technician', 'netzwerkadministrator', 'netzwerktechniker', 'počítačových sietí', 'počítačových sítí', 'strokovni sodelavec za omrežje', 'мережевий інженер', 'сетевой администратор', 'сетевой инженер', 'ネットワークエンジニア', 'ネットワーク構築', 'ネットワーク設計', 'ネットワーク運用', '網管', '網路工程師', '網路管理', '网管', '网络工程师'],
   'occupational_safety': ['bhp', 'bzr', 'diplomirani inženir tehniške varnosti', 'director of safety', 'eh&s', 'ehs', 'ehs专员', 'ehs專員', 'ehs岗', 'ehs工程', 'ehs管理', 'environmental manager', 'head of safety', 'health & safety', 'health and safety', 'hse', 'hse risk', 'hseq', 'hsse', 'industrial hygiene', 'industrial hygienist', 'koordinator za varnost in zdravje', 'ochrony środowiska', 'organizator zdravstveno higienskega režima', 'qhse', 'risk control consultant', 'safety & health officer', 'safety administrator', 'safety advisor', 'safety and health officer', 'safety coordinator', 'safety director', 'safety engineer', 'safety inspector', 'safety intern', 'safety lead', 'safety manager', 'safety officer', 'safety professional', 'safety representative', 'safety risk', 'safety specialist', 'safety supervisor', 'safety technician', 'safety trainer', 'sanitarni inženir', 'sanitarni inžinir', 'she advisor', 'she coordinator', 'she manager', 'she officer', 'she specialist', 'sheq', 'shes', 'sodelavec za varnost', 'strokovni delavec za varnost in zdravje', 'varnostni inženir', 'workplace safety & health', 'workplace safety and health', 'zaštite na radu', 'zaštite od požara', 'охорони праці', 'охрана труда', 'охране труда', 'охраны труда', 'пожежної безпеки', '勞安', '安全员', '安全管理', '安全衛生', '工安', '環保人員', '環保專責', '環安', '职业安全', '職安', '職業安全'],
-  'operations': ['beszerzési', 'beszerző', 'biz ops', 'business operations', 'buyer', 'buyers', 'category manager', 'chief of staff', 'chief operating officer', 'commodity manager', 'coo', 'facilities coordinator', 'facilities manager', 'facility manager', 'head of operations', 'nabavci', 'nabave', 'nabavi', 'nabavke', 'nabavni inženir', 'nabavni referent', 'nabavni specialist', 'nabavnik', 'nabavu', 'nákupu', 'office manager', 'operation manager', 'operations analyst', 'operations controller', 'operations coordinator', 'operations manager', 'operations specialist', 'ops manager', 'procurement', 'procurement manager', 'purchasing manager', 'purchasing specialist', 'referent za javna naročila', 'referent za nabavo', 'sodelavec v naročanju', 'sourcing manager', 'strategic sourcing', 'strokovni sodelavec vii/2 - javna naročila', 'strokovnjak za javna naročila', 'svetovalec za javna naročila', 'vodja nabavne službe', 'vodja pisarne', 'zakupów', 'госзакупкам', 'закупкам', 'закупщик', 'закупівель', 'категорийный менеджер', 'менеджер по мто', 'операционный директор', 'операционный менеджер', 'офис-менеджер', 'специалист по закупкам', 'バイヤー', '採購', '營運', '生产计划', '生產管理', '生管', '調達', '購買', '运营', '運營', '采购'],
+  'operations': ['beszerzési', 'beszerző', 'biz ops', 'business operations', 'buyer', 'buyers', 'category manager', 'chief of staff', 'chief operating officer', 'commodity manager', 'coo', 'facilities coordinator', 'facilities manager', 'facility manager', 'head of operations', 'nabavci', 'nabave', 'nabavi', 'nabavke', 'nabavni inženir', 'nabavni referent', 'nabavni specialist', 'nabavnik', 'nabavu', 'nákupu', 'office manager', 'operation manager', 'operations analyst', 'operations controller', 'operations coordinator', 'operations manager', 'operations specialist', 'ops manager', 'procurement', 'procurement manager', 'purchasing agent', 'purchasing analyst', 'purchasing coordinator', 'purchasing manager', 'purchasing specialist', 'referent za javna naročila', 'referent za nabavo', 'sodelavec v naročanju', 'sourcing manager', 'strategic sourcing', 'strokovni sodelavec vii/2 - javna naročila', 'strokovnjak za javna naročila', 'svetovalec za javna naročila', 'vodja nabavne službe', 'vodja pisarne', 'zakupów', 'госзакупкам', 'закупкам', 'закупщик', 'закупівель', 'категорийный менеджер', 'менеджер по мто', 'операционный директор', 'операционный менеджер', 'офис-менеджер', 'специалист по закупкам', 'バイヤー', '採購', '營運', '生产计划', '生產管理', '生管', '調達', '購買', '运营', '運營', '采购'],
   'personal_services': ['aesthetician', 'auxiliar de limpeza', 'babá', 'barber', 'beauty therapist', 'caretaker', 'cleaner', 'cosmetologist', 'custodial', 'custodian', 'dadilja', 'day porter', 'delavec v avtopralnici', 'delavec v pralnici', 'delavec za ravnanje z odpadki', 'domar', 'environmental services', 'esthetician', 'faxineiro', 'fitness manager', 'frizer', 'frizerka', 'gospodinja', 'gospodinjec', 'grobar', 'groundskeeper', 'hairstylist', 'higijeničar', 'higijeničarka', 'hišnik', 'housekeeper', 'housekeeping', 'izvajalec ddd', 'janitor', 'janitorial', 'jardineiro', 'kontrolor čiščenja in vzdrževanja', 'kozmetičar', 'kozmetičarka', 'manicurist', 'manikerka', 'maser', 'maserka', 'massage therapist', 'master stylist', 'nail technician', 'negovalec delovnih oblačil', 'oskrbnik', 'pediker', 'pedikerka', 'perač automobila', 'personal trainer', 'pobiralec odpadkov', 'pogrebni delavec', 'pogrebnik', 'porteiro', 'portir', 'poslovodja čistilnega servisa', 'pralec v avtopralnici', 'pralec vozil', 'razkuževalec', 'skrbnik hotelske okolice', 'skrbnik objekta', 'smetar', 'snažilec', 'sodelavec za higieno in čistočo', 'spa manager', 'spa therapist', 'spremač', 'spremačica', 'stylist', 'takarító', 'trener personalny', 'trenerka personalna', 'vodja enostavnejšega gospodinjstva', 'vodja gospodinjstva', 'vratar', 'vzdrževalec perila', 'zelador', 'čistač', 'čistačica', 'čistelec', 'čistilec', 'čistilka', 'čiščenje', 'вахтер', 'вахтёр', 'дворник', 'консьерж', 'косметолог', 'культорганизатор', 'маникюрша', 'няня', 'парикмахер', 'рабочий зеленого хозяйства', 'рабочий зелёного хозяйства', 'садовник', 'сиделка', 'уборщик', 'уборщица', 'エステティシャン', 'ネイリスト', 'マッサージ', 'メイクアップアーティスト', 'リラクゼーション', '保洁', '保潔', '健身教練', '寵物', '按摩', '染髮', '汽車美容', '洗滌', '清掃', '清潔', '美发', '美容人員', '美容助理', '美容师', '美容師', '美容服務', '美容芳療', '美容諮詢', '美容部員', '美容顧問', '美容顾问', '美甲', '美髮', '芳療'],
   'principal': ['principal'],
   'product': ['asistent produktnega vodje', 'koordinator produkta in sistemov', 'product manager', 'product owner', 'produktni specialist', 'produktni vodja', 'vodja produktne linije', 'продакт', 'продукт-менеджер', 'プロダクトマネジャー', 'プロダクトマネージャ', '产品总监', '产品策划', '产品经理', '產品企劃', '產品經理', '產品總監'],

@@ -1382,6 +1382,12 @@ type LearnedAtsDomain struct {
 	OtherHits     int64              `json:"other_hits"`
 }
 
+type LinkedinPostingsRead struct {
+	PostingID   string             `json:"posting_id"`
+	ApplyMethod string             `json:"apply_method"`
+	ReadAt      pgtype.Timestamptz `json:"read_at"`
+}
+
 // The shared one-optional-letter-a-day claim. PK (user_id, day), day in UTC; source says who took it.
 type MailDayClaim struct {
 	UserID    int64              `json:"user_id"`
@@ -2132,4 +2138,5 @@ type WebhookConfig struct {
 	LastSuccessAt       pgtype.Timestamptz `json:"last_success_at"`
 	DisabledAt          pgtype.Timestamptz `json:"disabled_at"`
 	ConsecutiveFailures int64              `json:"consecutive_failures"`
+	Secret              string             `json:"secret"`
 }

@@ -122,8 +122,7 @@ func (s spainjobs) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 
 // FetchNewGated lists every posting the job sitemaps name, refreshes the ones already stored, and
 // reads up to maxNewPerRun of the rest, most recently modified first. A posting the pipeline will
-// discard anyway — its employer already covered by a non-aggregator source, or its title rejected
-// — is judged on what its URL spells and yielded body-less without a request. A posting whose
+// discard anyway — its employer already covered by a non-aggregator source — is judged on what its URL spells and yielded body-less without a request. A posting whose
 // page cannot be read is not yielded; a later run tries again.
 func (s spainjobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	postings, err := s.list(ctx)
@@ -148,7 +147,7 @@ func (s spainjobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[p.company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[p.company] {
 			jobs = append(jobs, base)
 			continue
 		}

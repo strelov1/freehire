@@ -16,7 +16,6 @@ type boardTally struct {
 	// bodies is a successful batch lookup; nil retains the per-posting fallback.
 	bodies   map[string]string
 	st       Stats
-	rej      rejections
 	firstErr error
 	// refreshIDs holds listed identities needing an open-only liveness refresh.
 	refreshIDs []string
@@ -25,7 +24,7 @@ type boardTally struct {
 // writeBoard writes raw through saveConcurrency workers, each tallying into its own
 // boardTally, and merges them. Everything a write touches is safe to share: the Store already
 // serves boards concurrently, and canon is a read-only lookup built up front.
-func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool, canon companyCanonical) boardTally {
+func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, canon companyCanonical) boardTally {
 	var merged boardTally
 	// Repeated identities must see any body written by an earlier entry, not a cached miss.
 	counts := make(map[string]int, len(raw))
@@ -67,7 +66,7 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 			go func(t *boardTally) {
 				defer wg.Done()
 				for j := range jobs {
-					r.ingestOne(ctx, e, j, seen, canon, t)
+					r.ingestOne(ctx, e, j, canon, t)
 				}
 			}(&tallies[i])
 		}
@@ -82,7 +81,6 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 			merged.st.Skipped += t.st.Skipped
 			merged.st.Discovered += t.st.Discovered
 			merged.st.Unreadable += t.st.Unreadable
-			merged.rej.merge(t.rej)
 			if merged.firstErr == nil {
 				merged.firstErr = t.firstErr
 			}
@@ -94,29 +92,24 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 
 // ingestOne applies one fetched posting: counts an unreadable one, refreshes a re-listed one,
 // and saves the rest, tallying the outcome into t.
-func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, seen map[string]bool, canon companyCanonical, t *boardTally) {
+func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, canon companyCanonical, t *boardTally) {
 	// A posting the listing named but whose detail could not be read. There is nothing to
 	// write, but a stored row must retain the listing's liveness evidence. Count it
-	// as unreadable even after refreshing: the sweep still has incomplete evidence. Handled ahead of the filter so it never enters the rejection denominator,
-	// exactly like the SeenRefresh branch below.
+	// as unreadable even after refreshing: the sweep still has incomplete evidence.
 	if j.Unreadable {
 		t.st.Unreadable++
 		_, externalID := jobIdentity(e, j)
 		t.refreshIDs = append(t.refreshIDs, externalID)
 		return
 	}
-	if e.Provider == "linkedin" && j.ApplyMethod != sources.ApplyOnSite {
-		dj, err := normalizeJob(e, j, canon, false)
-		if err != nil {
+	// A SeenRefresh carries identity only and never proves an application method, so it is
+	// not a non-native discovery: it falls through to the touch below, never to ATS resolution.
+	if e.Provider == "linkedin" && !j.SeenRefresh && j.ApplyMethod != sources.ApplyOnSite {
+		if _, err := normalizeJob(e, j, canon, false); err != nil {
 			t.st.Skipped++
 			if t.firstErr == nil {
 				t.firstErr = err
 			}
-			return
-		}
-		t.rej.candidate()
-		if outOfCatalogue(dj) {
-			t.rej.reject(dj.Fields().Title)
 			return
 		}
 		if r.Outbound != nil {
@@ -129,24 +122,13 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 			}
 		}
 		t.st.Discovered++
+		r.recordNonNativeRead(ctx, e, j)
 		return
 	}
 	// A HydratingSource marks an already-ingested posting it re-listed but did not
 	// re-fetch: refresh its liveness by identity instead of re-upserting content-less
 	// (which would wipe the description/facets hydrated when it was new).
 	if j.SeenRefresh {
-		// A refresh faces the same catalogue filter as a write, so a posting the
-		// dictionary turns away ages out of the catalogue instead of being kept alive
-		// by its own re-listing. Judged on the STORED tech evidence, not on the
-		// content-less listing: the dictionary matches its terms anywhere in a title,
-		// and a title alone would condemn engineering roles whose evidence lives in
-		// the description they were hydrated from.
-		t.rej.candidate()
-		_, externalID := jobIdentity(e, j)
-		if outOfCatalogueTitle(j.Title, seen[externalID]) {
-			t.rej.reject(j.Title)
-			return
-		}
 		slug, err := r.touch(ctx, e, j)
 		if err != nil {
 			t.st.Skipped++
@@ -165,8 +147,30 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 	r.saveOne(ctx, e, j, canon, t)
 }
 
-// saveOne normalizes one posting, puts it through the catalogue filter, and saves what
-// survives, tallying the outcome into t and keeping the first error for the board's
+// recordNonNativeRead remembers a LinkedIn posting whose detail was read and is not on-site, so
+// the seen-set stops the next crawls re-reading it until the body-refresh window passes. It runs
+// only AFTER native resolution succeeded: a failed resolution leaves the posting unrecorded and
+// therefore retried by the next crawl. The record is best-effort: a failure costs one repeated
+// read, never the posting, so it is logged rather than counted as a skip.
+func (r Runner) recordNonNativeRead(ctx context.Context, e sources.CompanyEntry, j sources.Job) {
+	rec, ok := r.Store.(PostingReadRecorder)
+	if !ok {
+		return
+	}
+	_, id := jobIdentity(e, j)
+	if id == "" {
+		return
+	}
+	method := string(j.ApplyMethod)
+	if method == "" {
+		method = "unknown"
+	}
+	if err := rec.RecordLinkedInRead(ctx, id, method); err != nil {
+		log.Printf("ingest: linkedin %s: recording non-native read: %v", id, err)
+	}
+}
+
+// saveOne normalizes one posting and saves it, tallying the outcome into t and keeping the first error for the board's
 // skip-summary log line. Both the buffered (ingestBoard) and the streaming (ingestStream)
 // save loops share it so the normalize→filter→save→count step behaves identically; the
 // SeenRefresh and Removed branches stay on the caller, which is why neither reaches the
@@ -203,11 +207,6 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 		if t.firstErr == nil {
 			t.firstErr = err
 		}
-		return
-	}
-	t.rej.candidate()
-	if outOfCatalogue(dj) {
-		t.rej.reject(dj.Fields().Title)
 		return
 	}
 	if err := r.save(ctx, dj, j.ApplyForm); err != nil {

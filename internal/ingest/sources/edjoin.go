@@ -137,9 +137,7 @@ func (s edjoin) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // FetchNew fetches a posting page only for a posting the catalogue does not already have —
 // seen reports whether an id is already ingested. A seen posting yields its list-only job
 // flagged SeenRefresh, so the pipeline refreshes liveness without spending a request or
-// overwriting the body hydrated when the posting was new. The title travels with that refresh
-// on purpose: the refresh path re-applies the catalogue filter to it, which is how a stored
-// posting the dictionary now turns away ages out instead of being kept alive by its re-listing.
+// overwriting the body hydrated when the posting was new.
 func (s edjoin) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	postings, err := s.list(ctx, e)
 	if err != nil {

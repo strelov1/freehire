@@ -83,7 +83,7 @@
   type Perk = { text: string; href: string };
   const FREE_FEATURES: Perk[] = [
     { text: 'Every job, every filter, and AI search', href: resolve('/features/advanced-search') },
-    { text: 'Alerts by email, Telegram and push', href: resolve('/features/notifications') },
+    { text: 'Daily saved-search alerts by email, Telegram and push', href: resolve('/features/notifications') },
     { text: 'Application tracking board', href: resolve('/features/tracking') },
     { text: 'Inbox that sorts employer replies into your applications', href: resolve('/features/inbox') },
     { text: 'Ghost-job warnings on every posting', href: resolve('/features/ghost-jobs') },
@@ -194,7 +194,11 @@
 
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-12 sm:py-16">
   <header class="flex flex-col items-center gap-3 text-center">
-    <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Simple plans</h1>
+    <!-- The headline states the offer, with the Pro price read from the plans the backend
+         sells, so it can never quote a price checkout does not charge. -->
+    <h1 class="max-w-3xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+      Free to find a job. {monthly ? `${money(monthly)} a month` : 'Pro'} for the AI that applies with you.
+    </h1>
     <p class="max-w-2xl text-balance text-muted-foreground">
       Finding and tracking jobs is free, for good — on the site, in your AI agent and from the CLI. Pro adds the AI that
       does the applying with you; the Jobs API is for building on the catalogue.
@@ -313,7 +317,7 @@
       {#if !isAuthenticated()}
         <button
           type="button"
-          class="mt-auto rounded-md border border-border px-4 py-2.5 text-sm font-medium"
+          class={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'mt-auto')}
           onclick={promptSignIn}>Sign up free</button
         >
       {/if}
@@ -359,7 +363,7 @@
               />
               <button
                 type="button"
-                class="shrink-0 rounded-md border border-border px-3 py-2 text-sm disabled:opacity-60"
+                class={cn(buttonVariants({ variant: 'outline' }), 'h-auto shrink-0 py-2')}
                 disabled={checking || !code.trim()}
                 onclick={checkCode}
               >
@@ -375,12 +379,7 @@
               <p class="text-sm text-destructive">{codeError}</p>
             {/if}
           </div>
-          <button
-            type="button"
-            class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'disabled:opacity-60')}
-            disabled={busy}
-            onclick={buy}
-          >
+          <button type="button" class={buttonVariants({ variant: 'cta', size: 'lg' })} disabled={busy} onclick={buy}>
             {busy ? 'Opening checkout…' : 'Upgrade to Pro'}
           </button>
         {:else}
@@ -422,7 +421,7 @@
         {#if isAuthenticated()}
           <button
             type="button"
-            class="mt-auto rounded-md border border-primary px-4 py-2.5 text-sm font-medium disabled:opacity-60"
+            class={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'mt-auto')}
             disabled={busy}
             onclick={buyUltra}
           >
@@ -431,7 +430,7 @@
         {:else}
           <button
             type="button"
-            class="mt-auto rounded-md border border-primary px-4 py-2.5 text-sm font-medium"
+            class={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'mt-auto')}
             onclick={promptSignIn}>Sign in to upgrade</button
           >
         {/if}

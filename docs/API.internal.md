@@ -112,6 +112,10 @@ How often a posting is re-checked is set by each source's crawl schedule, and it
 
 Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.
 
+### Finding companies by domain
+
+If you hold a list of company web domains, `GET /companies/by-domain?domain=stripe.com&domain=https://www.acme.io/careers` (repeatable or comma-joined, up to 100) returns `{"data": [{"domain", "slug", "name", "job_count", "website"}], "meta": {"unmatched": [...]}}`. Domains are compared by host (lowercase, no `www.`, port or trailing dot) against each company's site; every match is returned, including companies with `job_count` 0, and domains with no match are listed in `meta.unmatched`. Then read a company's postings with `GET /jobs/search?company_slug=<slug>` (repeatable), or subscribe a change webhook with `company_slugs` to have only their changes pushed.
+
 ### Keeping a mirror in sync
 
 `GET /jobs/changes` is the feed of every opening, closing and reopening of a public, canonical posting. To keep a copy of the catalogue current:
@@ -746,6 +750,7 @@ curl "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
       "email"
     ],
     "digest_frequency": "daily",
+    "faster_alerts_available": false,
     "digest_time": null,
     "digest_interval_hours": 1,
     "quiet_hours_start": null,
@@ -790,6 +795,7 @@ curl -X PUT "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
       "email"
     ],
     "digest_frequency": "daily",
+    "faster_alerts_available": false,
     "digest_time": null,
     "digest_interval_hours": 1,
     "quiet_hours_start": null,
@@ -2348,6 +2354,7 @@ curl "https://freehire.me/api/v1/me/webhook" -b cookies.txt
 {
   "data": {
     "url": "https://example.com/hook",
+    "secret": "whsec_example_secret",
     "enabled": true,
     "created_at": "2026-09-04T12:00:00Z",
     "last_success_at": null,
@@ -2362,7 +2369,7 @@ curl "https://freehire.me/api/v1/me/webhook" -b cookies.txt
 
 Create your webhook destination, or update its URL if one already exists.
 
-There is exactly one destination per account. Deliveries are plain, unsigned HTTP POSTs — subscribe a saved search to the `webhook` channel (see `POST /me/subscriptions`) to receive its matches here. Before the URL is stored it receives a test delivery (`saved_search_name` "freehire webhook test", an empty `jobs` list); a URL that does not answer it with a 2xx is refused with 422, naming what it answered.
+There is exactly one destination per account. Subscribe a saved search to the `webhook` channel (see `POST /me/subscriptions`) to receive its matches here. Every delivery is a signed HTTP POST, the same way change webhooks are: `X-Freehire-Timestamp` (unix seconds), `X-Freehire-Signature` = `v1=` + hex HMAC-SHA256(`secret`, timestamp + "." + raw body), and `X-Freehire-Event` (`saved_search.digest`, or `webhook.test` for a test). Compare the signature in constant time and refuse a timestamp more than 5 minutes off. The `secret` is created with the destination, shown in every response here, and kept when the URL changes. Before the URL is stored it receives a signed test delivery (`saved_search_name` "freehire webhook test", an empty `jobs` list); a URL that does not answer it with a 2xx is refused with 422, naming what it answered. On the very first save your endpoint does not know the secret yet, so let it answer the test event with a 2xx.
 
 **Body**
 
@@ -2378,6 +2385,7 @@ curl -X POST "https://freehire.me/api/v1/me/webhook" -b cookies.txt
 {
   "data": {
     "url": "https://example.com/hook",
+    "secret": "whsec_example_secret",
     "enabled": true,
     "created_at": "2026-09-04T12:00:00Z",
     "last_success_at": null,
@@ -2406,6 +2414,7 @@ curl -X PATCH "https://freehire.me/api/v1/me/webhook" -b cookies.txt
 {
   "data": {
     "url": "https://example.com/hook",
+    "secret": "whsec_example_secret",
     "enabled": false,
     "created_at": "2026-09-04T12:00:00Z",
     "last_success_at": null,
@@ -2440,6 +2449,7 @@ curl -X POST "https://freehire.me/api/v1/me/webhook/test" -b cookies.txt
 {
   "data": {
     "url": "https://example.com/hook",
+    "secret": "whsec_example_secret",
     "enabled": true,
     "created_at": "2026-09-04T12:00:00Z",
     "last_success_at": "2026-09-04T13:00:00Z",

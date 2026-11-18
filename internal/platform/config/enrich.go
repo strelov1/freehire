@@ -16,6 +16,15 @@ type Enrich struct {
 	// unreachable database) by how long the entry has been queued, not by MaxAttempts: a claimed
 	// entry is re-claimable after its lease, so attempts burn fast while the gateway is down.
 	UpstreamGraceDays int
+
+	// IncludeNonTech lifts the is_tech gate on the backfill enqueue (ENRICH_INCLUDE_NON_TECH=true),
+	// so non-technical and unfiled postings are enriched too. Off by default: it multiplies LLM
+	// spend, so it is switched on only after a sample run measured its yield (#4412).
+	//
+	// Raise ENRICH_UPSTREAM_GRACE_DAYS above the expected drain time when switching it on: the
+	// grace clock counts queue age, so a multi-week backlog would dead-letter its oldest entries
+	// on their first upstream failure.
+	IncludeNonTech bool
 }
 
 // LoadEnrich reads enrichment configuration from the environment. It fails fast,
@@ -28,6 +37,7 @@ func LoadEnrich() (Enrich, error) {
 		MaxAttempts:  envInt("ENRICH_MAX_ATTEMPTS", 3),
 		// Wide margin for a multi-day outage, while still stopping an entry the gateway never accepts.
 		UpstreamGraceDays: envInt("ENRICH_UPSTREAM_GRACE_DAYS", 14),
+		IncludeNonTech:    env("ENRICH_INCLUDE_NON_TECH", "") == "true",
 	}
 
 	// A non-positive concurrency would make the claim's LIMIT 0 or negative; floor it.

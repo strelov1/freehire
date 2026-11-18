@@ -183,7 +183,7 @@ func (s jobteaser) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(
 			jobs = append(jobs, base)
 			continue
 		}
-		if (p.employer != "" && covered[p.employer]) || (gate.Rejected != nil && gate.Rejected(base)) {
+		if p.employer != "" && covered[p.employer] {
 			jobs = append(jobs, base)
 			continue
 		}

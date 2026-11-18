@@ -55,6 +55,7 @@ func runArgs(args []string) int {
 	apply := flags.Bool("apply", false, "write search registrations; requires --register-searches")
 	pages := flags.Int("pages", 0, "page budget for newly registered searches, 1..100 (0 keeps worklist values); requires --register-searches")
 	jobAge := flags.Int("jobage", 0, "age window in days for newly registered searches, 1..30 (0 keeps worklist values); requires --register-searches")
+	easyApply := flags.Int("easyapply-pages", 0, "page budget of the extra Easy Apply listing for newly registered searches, 1..100 (0 omits it); requires --register-searches")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -64,16 +65,16 @@ func runArgs(args []string) int {
 	args = flags.Args()
 	budgetSpecified := false
 	flags.Visit(func(f *flag.Flag) {
-		if f.Name == "pages" || f.Name == "jobage" {
+		if f.Name == "pages" || f.Name == "jobage" || f.Name == "easyapply-pages" {
 			budgetSpecified = true
 		}
 	})
 	if budgetSpecified && !*register {
-		log.Print("harvest-linkedin: --pages and --jobage require --register-searches")
+		log.Print("harvest-linkedin: --pages, --jobage and --easyapply-pages require --register-searches")
 		return 2
 	}
-	if *pages < 0 || *pages > maxPages || *jobAge < 0 || *jobAge > maxJobAge {
-		log.Printf("harvest-linkedin: --pages must be 1..%d and --jobage must be 1..%d, or 0 to keep worklist values", maxPages, maxJobAge)
+	if *pages < 0 || *pages > maxPages || *jobAge < 0 || *jobAge > maxJobAge || *easyApply < 0 || *easyApply > maxPages {
+		log.Printf("harvest-linkedin: --pages must be 1..%d and --jobage must be 1..%d, and --easyapply-pages 1..%d; 0 keeps worklist values or omits the option", maxPages, maxJobAge, maxPages)
 		return 2
 	}
 	if *apply && !*register {
@@ -106,6 +107,7 @@ func runArgs(args []string) int {
 			if *jobAge > 0 {
 				queries[i].JobAge = *jobAge
 			}
+			queries[i].EasyApplyPages = *easyApply
 		}
 		return runRegisterSearches(queries, *apply)
 	}

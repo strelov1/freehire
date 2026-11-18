@@ -13,6 +13,8 @@ import (
 type dbStore struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
+	// reapDue, when set, decides whether Reap runs at all (see reapgate.go); nil reaps every call.
+	reapDue func(context.Context) bool
 }
 
 func newDBStore(pool *pgxpool.Pool) *dbStore {
@@ -47,6 +49,9 @@ func (s *dbStore) Complete(ctx context.Context, entries []searchdrain.Claimed) e
 }
 
 func (s *dbStore) Reap(ctx context.Context, maxRows int) (int64, error) {
+	if s.reapDue != nil && !s.reapDue(ctx) {
+		return 0, nil
+	}
 	return s.q.DeleteIneligibleSearchOutbox(ctx, int32(maxRows))
 }
 

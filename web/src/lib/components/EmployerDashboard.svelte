@@ -22,6 +22,7 @@
   import EmployerApplications from './EmployerApplications.svelte';
   import EmployerQuestionsEditor from './EmployerQuestionsEditor.svelte';
   import EmployerTeam from './EmployerTeam.svelte';
+  import EmployerVacancyRow from './EmployerVacancyRow.svelte';
   import TokenInput from './facets/TokenInput.svelte';
 
   // `tab` is the route: /my/employer is the profile, /my/employer/vacancies the vacancies.
@@ -507,60 +508,18 @@
           {:else}
             <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
               {#each vacanciesData.value as job (job.public_slug)}
-                <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div class="flex min-w-0 flex-col gap-0.5">
-                    <span class="flex items-center gap-2 truncate text-sm font-medium">
-                      <a
-                        href={resolve('/jobs/[slug]', { slug: job.public_slug })}
-                        title={s.viewVacancy}
-                        class="truncate underline-offset-2 hover:underline">{job.title}</a
-                      >
-                      {#if job.direct_apply}
-                        <span class="rounded-full bg-brand-muted px-2 py-0.5 text-xs font-medium text-brand-strong">
-                          {s.onSiteLabel}
-                        </span>
-                      {/if}
-                      {#if job.closed_at}
-                        <span
-                          class="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground"
-                        >
-                          {s.closedLabel}
-                        </span>
-                      {/if}
-                    </span>
-                    <span class="truncate text-xs text-muted-foreground">
-                      {job.location}{job.work_mode === 'remote' ? ` · ${s.fieldRemote}` : ''}
-                    </span>
-                  </div>
-                  <div class="flex shrink-0 gap-2">
-                    <Button variant="ghost" size="sm" onclick={() => openEdit(job)}>{s.editVacancy}</Button>
-                    {#if !job.closed_at}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={closingSlug === job.public_slug}
-                        onclick={() => {
-                          closeTarget = job;
-                          confirmOpen = true;
-                        }}
-                      >
-                        {closingSlug === job.public_slug ? s.closing : s.closeVacancy}
-                      </Button>
-                    {:else}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={reopeningSlug === job.public_slug}
-                        onclick={() => reopenVacancy(job)}
-                      >
-                        {reopeningSlug === job.public_slug ? s.reopening : s.reopenVacancy}
-                      </Button>
-                    {/if}
-                  </div>
-                  {#if reopenError?.slug === job.public_slug}
-                    <p class="text-sm text-destructive">{reopenError.message}</p>
-                  {/if}
-                </li>
+                <EmployerVacancyRow
+                  {job}
+                  closing={closingSlug === job.public_slug}
+                  reopening={reopeningSlug === job.public_slug}
+                  reopenError={reopenError?.slug === job.public_slug ? reopenError.message : null}
+                  onEdit={() => openEdit(job)}
+                  onClose={() => {
+                    closeTarget = job;
+                    confirmOpen = true;
+                  }}
+                  onReopen={() => reopenVacancy(job)}
+                />
               {/each}
             </ul>
           {/if}

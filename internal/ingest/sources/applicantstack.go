@@ -73,8 +73,7 @@ func (s applicantstack) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error
 
 // FetchNew fetches a posting page only for a posting the catalogue does not already have. A seen
 // posting yields the listing row alone, flagged SeenRefresh, so the pipeline refreshes liveness
-// without spending a request or overwriting the stored body. The title travels with the refresh
-// so the catalogue filter can re-judge it.
+// without spending a request or overwriting the stored body.
 func (s applicantstack) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	get := pacedHTMLGetter(s.http, s.crawlDelay, 1)
 	postings, err := applicantstackList(ctx, get, e.Board)

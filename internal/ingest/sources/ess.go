@@ -211,7 +211,7 @@ func (s ess) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(extern
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}
