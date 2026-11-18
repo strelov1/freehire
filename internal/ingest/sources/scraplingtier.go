@@ -65,6 +65,13 @@ var scraplingProviders = map[string]scraplingProvider{
 		f.httpClient.Jar = jar
 		return NewInfoJobsBR(f)
 	}},
+	// Njoyn (CGI): Radware walls the crawl host's IP and the site refuses an IP it decides is
+	// crawling too fast (XWP10022) — the fixed proxy exit drew that ban within one run. HTTP + proxy
+	// leaves through the rotating gateway and served the listing and posting pages (2026-11-18).
+	// The adapter keeps its own 5 s pace. proxiedProviders stays the fallback without the tier.
+	"njoyn": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewNjoyn(f)
+	}},
 	// Cloudflare refuses direct egress; HTTP + proxy serves the sitemaps and posting bodies.
 	"spainjobs": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewSpainJobs(f)
@@ -111,6 +118,15 @@ var scraplingProviders = map[string]scraplingProvider{
 	"cleverstaff": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewCleverstaff(f)
 	}},
+	// Cloudflare answers 403 to a plain client for the posting pages and the API. The sitemap and
+	// RSS answered 200 plain from a residential IP, but they share the protected host and the
+	// datacenter IP is unmeasured, so the one sitemap request rides the tier too. The
+	// impersonating fetcher without a proxy served 48 of 50 posting pages (the other two were the
+	// site's own 404s), measured 2026-11-17 from a RESIDENTIAL IP and NOT from the crawl host: if
+	// it draws challenges there, the next step is the proxy, then the browser mode.
+	"cryptojobslist": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewCryptoJobsList(f, f)
+	}},
 	// Only the posting pages: Akamai bot management holds a plain request open without
 	// answering, and the impersonating fetcher is served from the crawl host's own IP. The
 	// active-offers sitemap is not behind it and stays on a plain client.
@@ -134,6 +150,11 @@ var scraplingProviders = map[string]scraplingProvider{
 	// sitemaps sit on a CDN with no challenge and stay on a plain client.
 	"jobteaser": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewJobTeaser(NewClient(), f)
+	}},
+	// 403 to the crawl host's direct IP, to the plain proxy and to Scrapling http without a
+	// proxy; http over the proxy serves the listing and the detail pages. Still paced.
+	"levtech": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewLevtech(pacedHTMLGetter(f, levtechRequestInterval, levtechRequestBurst))
 	}},
 	// The crawl host's IP times out; the impersonating fetcher through the proxy is served.
 	"kontur": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
@@ -195,8 +216,39 @@ var scraplingProviders = map[string]scraplingProvider{
 	"viterbit": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewViterbit(f)
 	}},
+	// 403 to a plain request; the impersonating fetcher is served, ~1-2 s a page, sitemaps and
+	// posting pages alike (measured 2026-11-17 from a residential IP with no proxy — the crawl
+	// host's datacenter range is unmeasured).
+	"glints": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewGlints(f)
+	}},
 	"instahyre": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return pacedInstahyre(NewClient(), f)
+	}},
+	// 403 to a plain Go client on every path, sitemap and robots.txt included; the impersonating
+	// fetcher is served 200, sitemap, newest-postings page and posting pages alike (measured
+	// 2026-11-17, ~1.9 s a posting page, 39 of 39 pages answered from a residential IP). From the
+	// crawl host the first production run drew 403 on 295 posting pages without the proxy; the same
+	// pages through it answered 8 of 8 (measured the same day), hence the proxy.
+	"clearedjobs": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewClearedJobs(f)
+	}},
+	// Akamai answers 403 to a plain client on every path, the sitemaps and robots.txt included.
+	// From the prod crawl host the impersonating fetcher is refused without the proxy and served
+	// through it (the search page, measured 2026-11-17). The posting PAGES through the proxy are
+	// UNMEASURED: from a residential IP with no proxy the same fetcher drew 403 on every page and
+	// a headless browser passed about one in three. Re-measure the first live run and move the
+	// row to the browser if the pages stay refused.
+	"foundit": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewFoundit(f)
+	}},
+	// Only the posting pages. The first live run (2026-11-17, crawl host) was refused 1,460 of 1,500
+	// reads of the gateway's /job on every route (the Scrapling fetcher with and without the
+	// proxy, plain, plain over the proxy), while the posting page answers 200 through the fetcher
+	// over the proxy and 403 without it; the page carries the same posting in its server-rendered
+	// state. The search answers a plain client, so it stays on one.
+	"kariyernet": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return pacedKariyerNet(NewClient(), f)
 	}},
 }
 

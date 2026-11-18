@@ -268,3 +268,127 @@ func TestFindOpenJobByURL_EmptyNeverMatches(t *testing.T) {
 		}
 	}
 }
+
+// normalize runs normalize_job_url in the database.
+func normalize(t *testing.T, pool interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, raw string) string {
+	t.Helper()
+	var got string
+	if err := pool.QueryRow(context.Background(), "SELECT normalize_job_url($1)", raw).Scan(&got); err != nil {
+		t.Fatalf("normalize %q: %v", raw, err)
+	}
+	return got
+}
+
+// The posting freehire#4821 reported: a CGI vacancy whose stored url is a Njoyn page, where
+// the query — not the path — names the posting.
+const njoynPosting = "https://cgi.njoyn.com/corp/xweb/xweb.asp?clid=21001&page=jobdetails&jobid=J1026-1962&BRID=1342736&utm_source=freehire.me"
+
+func TestNormalizeJobURL_KeepsTheQueryThatNamesThePosting(t *testing.T) {
+	pool := startPostgres(t)
+	want := normalize(t, pool, njoynPosting)
+	if want != "cgi.njoyn.com/corp/xweb/xweb.asp?brid=1342736&clid=21001&jobid=j1026-1962&page=jobdetails" {
+		t.Errorf("normalize_job_url(njoyn) = %q", want)
+	}
+
+	// Parameter order, case, tracking tags, a fragment, www. and the scheme are noise.
+	for _, v := range []string{
+		"http://www.cgi.njoyn.com/CORP/xweb/xweb.asp?Jobid=J1026-1962&Page=JobDetails&CLID=21001&BRID=1342736",
+		"https://cgi.njoyn.com/corp/xweb/xweb.asp?gclid=abc&clid=21001&page=jobdetails&jobid=J1026-1962&BRID=1342736&fbclid=x#apply",
+		"https://cgi.njoyn.com/corp/xweb/xweb.asp/?clid=21001&page=jobdetails&jobid=J1026-1962&BRID=1342736&utm_campaign=y&",
+	} {
+		if got := normalize(t, pool, v); got != want {
+			t.Errorf("normalize_job_url(%q) = %q, want %q", v, got, want)
+		}
+	}
+
+	// A different posting, the listing, and the bare script are different pages.
+	for _, v := range []string{
+		"https://cgi.njoyn.com/corp/xweb/xweb.asp?clid=21001&page=jobdetails&jobid=J1126-1603&BRID=1342736",
+		"https://cgi.njoyn.com/CORP/xweb/xweb.asp?CLID=21001&page=joblisting",
+		"https://cgi.njoyn.com/corp/xweb/xweb.asp",
+	} {
+		if got := normalize(t, pool, v); got == want {
+			t.Errorf("normalize_job_url(%q) collapsed into the posting's key %q", v, got)
+		}
+	}
+
+	// A query of nothing but tracking tags leaves no query at all.
+	if got, bare := normalize(t, pool, himalayasPosting+"?utm_source=a&ref=b&gclid=c"), normalize(t, pool, himalayasPosting); got != bare || strings.Contains(got, "?") {
+		t.Errorf("tracking-only query normalized to %q, want %q", got, bare)
+	}
+}
+
+func TestFindOpenJobByURL_AnswersOnlyThePageTheQueryNames(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncate(t, pool)
+
+	p := urlJob("wttj:cgi-fullstack", njoynPosting)
+	p.Source = "wttj"
+	mustUpsert(t, q, p)
+
+	slug, err := findByURL(t, q, "https://cgi.njoyn.com/CORP/xweb/xweb.asp?Jobid=J1026-1962&Page=JobDetails&CLID=21001&BRID=1342736")
+	if err != nil || slug != "pslug-wttj:cgi-fullstack" {
+		t.Errorf("own page resolved to %q (err %v), want the posting", slug, err)
+	}
+	for _, other := range []string{
+		"https://cgi.njoyn.com/CORP/xweb/xweb.asp?CLID=21001&page=joblisting",
+		"https://cgi.njoyn.com/corp/xweb/xweb.asp?NTKN=c&clid=21001&Page=JobDetails&Jobid=J1126-1603&BRID=1350470&lang=1",
+		"https://cgi.njoyn.com/corp/xweb/xweb.asp",
+	} {
+		if slug, err := findByURL(t, q, other); !errors.Is(err, pgx.ErrNoRows) {
+			t.Errorf("find %q = %q (err %v), want no rows", other, slug, err)
+		}
+	}
+}
+
+func TestNormalizeJobURL_QueryEdgeCases(t *testing.T) {
+	pool := startPostgres(t)
+	bare := normalize(t, pool, himalayasPosting)
+	for raw, want := range map[string]string{
+		himalayasPosting + "?":                        bare,
+		himalayasPosting + "?&&":                      bare,
+		himalayasPosting + "#top?jobid=1":             bare,
+		himalayasPosting + "?ref":                     bare,
+		himalayasPosting + "?utmx=1":                  bare + "?utmx=1",
+		himalayasPosting + "?b=2&a=1&a=0":             bare + "?a=0&a=1&b=2",
+		himalayasPosting + "?jobid=7&amp;page=detail": bare + "?jobid=7&page=detail",
+		"https://www.":                                "",
+	} {
+		if got := normalize(t, pool, raw); got != want {
+			t.Errorf("normalize_job_url(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}
+
+// A kept query can be long; the key must still fit a B-tree entry, or the rebuild and every
+// write of the posting fail. Oversized keys are hashed, and equality stays exact.
+func TestNormalizeJobURL_BoundsALongKey(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncate(t, pool)
+
+	long := himalayasPosting + "?token=" + strings.Repeat("ab12", 3000)
+	key := normalize(t, pool, long)
+	if len(key) > 2000 {
+		t.Errorf("key is %d bytes, want at most 2000", len(key))
+	}
+	if normalize(t, pool, long+"&utm_source=x") != key {
+		t.Error("a tracking tag changed a bounded key")
+	}
+	if normalize(t, pool, long+"0") == key {
+		t.Error("two different long URLs share a bounded key")
+	}
+	// Cyrillic is two bytes a character: the bound is in bytes, not characters.
+	if k := normalize(t, pool, "https://hh.ru/vacancy?q="+strings.Repeat("я", 3000)); len(k) > 2000 {
+		t.Errorf("multibyte key is %d bytes, want at most 2000", len(k))
+	}
+
+	// The posting is writable through every index over the function, and still found.
+	mustUpsert(t, q, urlJob("himalayas:long", long))
+	if slug, err := findByURL(t, q, long); err != nil || slug != "pslug-himalayas:long" {
+		t.Errorf("long URL resolved to %q (err %v)", slug, err)
+	}
+}

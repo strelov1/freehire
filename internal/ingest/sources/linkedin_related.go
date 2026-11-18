@@ -12,7 +12,12 @@ import (
 
 // related supplements a completed search with one public page's recommendations.
 // Guest detail fragments omit this section. Recommendations never seed another page.
-func (s linkedIn) related(ctx context.Context, jobs []Job, seen map[string]bool) []Job {
+//
+// closedSeed names the seed when its full page shows the closed notice. A stored seed was
+// emitted as an identity-only SeenRefresh, which the pipeline would turn into a liveness
+// touch; the caller withholds that touch so this crawl's closed evidence is not overwritten.
+// Closure itself stays cmd/liveness's two-strike job.
+func (s linkedIn) related(ctx context.Context, jobs []Job, ids map[string]bool, known func(string) bool) (related []Job, closedSeed string) {
 	var seed Job
 	for _, j := range jobs {
 		if !j.Unreadable && !j.Removed {
@@ -21,20 +26,23 @@ func (s linkedIn) related(ctx context.Context, jobs []Job, seen map[string]bool)
 		}
 	}
 	if seed.ExternalID == "" {
-		return nil
+		return nil, ""
 	}
 	root, final, err := s.get(ctx, seed.URL)
 	if err != nil {
 		log.Printf("linkedin: recommendations unavailable for %s: %v", seed.ExternalID, err)
-		return nil
+		return nil, ""
 	}
 	verified, err := LinkedInPosting(root, final, seed.ExternalID)
-	if err != nil || verified.Removed {
-		return nil
+	if err == nil && verified.Removed {
+		return nil, seed.ExternalID
+	}
+	if err != nil {
+		return nil, ""
 	}
 	finalURL, err := url.Parse(final)
 	if err != nil || finalURL.User != nil {
-		return nil
+		return nil, ""
 	}
 	validCanonical := true
 	walk(root, func(n *html.Node) bool {
@@ -52,12 +60,16 @@ func (s linkedIn) related(ctx context.Context, jobs []Job, seen map[string]bool)
 		return true
 	})
 	if !validCanonical {
-		return nil
+		return nil, ""
 	}
-	var related []Job
-	for _, card := range linkedInRelatedCards(root, seen) {
+	for _, card := range linkedInRelatedCards(root, ids) {
 		if ctx.Err() != nil {
 			break
+		}
+		if known != nil && known(card.ExternalID) {
+			card.SeenRefresh = true
+			related = append(related, card)
+			continue
 		}
 		j, err := s.Posting(ctx, card.URL)
 		var status *StatusError
@@ -74,7 +86,7 @@ func (s linkedIn) related(ctx context.Context, jobs []Job, seen map[string]bool)
 			related = append(related, j)
 		}
 	}
-	return related
+	return related, ""
 }
 
 func linkedInRelatedCards(root *html.Node, seen map[string]bool) []Job {
@@ -92,7 +104,7 @@ func linkedInRelatedCards(root *html.Node, seen map[string]bool) []Job {
 			return true
 		}
 		id := strings.TrimPrefix(urn, "urn:li:jobPosting:")
-		if id == "" || id == "0" || seen[id] || LinkedInPostingID("https://www.linkedin.com/jobs/view/"+id+"/") != id {
+		if id == "" || id == "0" || seen[id] || LinkedInPostingID(LinkedInPostingURL(id)) != id {
 			return false
 		}
 		a := firstByClass(n, "base-card__full-link")
@@ -108,7 +120,7 @@ func linkedInRelatedCards(root *html.Node, seen map[string]bool) []Job {
 		if title == nil || company == nil {
 			return false
 		}
-		j := Job{ExternalID: id, URL: "https://www.linkedin.com/jobs/view/" + id + "/", Title: strings.TrimSpace(textContent(title)), Company: strings.TrimSpace(textContent(company))}
+		j := Job{ExternalID: id, URL: LinkedInPostingURL(id), Title: strings.TrimSpace(textContent(title)), Company: strings.TrimSpace(textContent(company))}
 		if j.Title != "" && j.Company != "" {
 			seen[id] = true
 			cards = append(cards, j)
