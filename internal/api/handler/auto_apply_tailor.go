@@ -241,7 +241,8 @@ const autoApplyTailorFailedNotification = "auto_apply_tailoring_failed"
 // The error text is a stored diagnostic, never shown to the candidate (ResolvedAttempt has
 // no field for it); they see the status and the notification.
 func (h *assistantHandlers) recordTailoringFailure(c *fiber.Ctx, queueID int64, cause error) {
-	ctx := context.WithoutCancel(c.Context())
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Context()), 10*time.Second)
+	defer cancel()
 
 	row, err := h.queries.MarkAutoApplyTailorFailed(ctx, db.MarkAutoApplyTailorFailedParams{
 		ID: queueID, LastError: cause.Error(),

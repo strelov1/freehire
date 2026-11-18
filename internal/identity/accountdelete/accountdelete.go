@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/strelov1/freehire/internal/platform/blobstore"
 )
@@ -118,7 +119,8 @@ func (s *Service) sweepCVObjects(ctx context.Context, userID int64) {
 	if s.blobs == nil {
 		return
 	}
-	ctx = context.WithoutCancel(ctx)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer cancel()
 	keys, err := s.blobs.List(ctx, blobstore.ResumeUploadPrefix(userID))
 	if err != nil {
 		log.Printf("accountdelete: re-list CV objects for user %d: %v", userID, err)
