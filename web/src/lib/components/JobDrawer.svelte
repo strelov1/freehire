@@ -6,25 +6,20 @@
   import { Trash2 } from '@lucide/svelte';
   import { askConfirmTailor, confirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
   import { tailorHref } from '#lib/tailorHref.js';
-  import { groupedStages, humanizeStage } from '#lib/stages.js';
+  import { humanizeStage } from '#lib/stages.js';
   import { canFollowUp } from '#lib/followup.js';
-  import { CLOSED_OUTCOMES, type ClosedOutcome } from '#lib/board.js';
+  import type { ClosedOutcome } from '#lib/board.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { timeAgo, errorMessage } from '#lib/utils.js';
+  import { errorMessage } from '#lib/utils.js';
   import { tablist } from '#lib/actions/tablist.js';
   import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
   import { cardTagsFromCard } from '#lib/enrichment.js';
-  import JobDescription from './JobDescription.svelte';
   import JobMatch from './JobMatch.svelte';
-  import NoteEditor from './NoteEditor.svelte';
   import { api } from '#lib/api.js';
   import JobDrawerMailRecall from './JobDrawerMailRecall.svelte';
   import JobDrawerEmailList from './JobDrawerEmailList.svelte';
   import JobDrawerAutoApply from './JobDrawerAutoApply.svelte';
   import { currentUser } from '#lib/auth.svelte.js';
-  import { statusLabel } from '#lib/emailStatus.js';
-  import { eventLabel, eventTone } from '#lib/events.js';
-  import SkillChip from './SkillChip.svelte';
   import type {
     Job,
     MyJob,
@@ -39,6 +34,10 @@
   import JobDrawerLoadState from './JobDrawerLoadState.svelte';
   import JobDrawerTitle from './JobDrawerTitle.svelte';
   import JobDrawerActions from './JobDrawerActions.svelte';
+  import JobDrawerApplication from './JobDrawerApplication.svelte';
+  import JobDrawerHistory from './JobDrawerHistory.svelte';
+  import JobDrawerDescription from './JobDrawerDescription.svelte';
+  import JobDrawerStageSuggestion from './JobDrawerStageSuggestion.svelte';
   import { format, t } from '#lib/i18n/t.js';
 
   let {
@@ -313,7 +312,6 @@
       'min-h-11 shrink-0 border-b-2 px-1 py-2 text-xs font-medium transition-colors sm:px-2 sm:text-sm',
       active ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
     );
-  const sectionLabel = 'text-sm font-medium text-muted-foreground';
 </script>
 
 <!-- The confirmation is stacked above the panel too: its Escape closes it, not both. -->
@@ -408,75 +406,21 @@
         </div>
       {/if}
       {#if tab === 'application'}
-        <div class="flex flex-col gap-4">
-          {#if pendingOutcome}
-            <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
-              <p class="text-sm font-medium">{s.howDidItClose}</p>
-              <div class="flex flex-wrap gap-2">
-                {#each CLOSED_OUTCOMES as o (o)}
-                  <Button variant="outline" onclick={() => onchooseoutcome(o)}>{humanizeStage(o, locale())}</Button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          <label class="flex flex-col gap-1 text-sm">
-            <span class="font-medium">{s.stage}</span>
-            <select
-              value={item.stage ?? ''}
-              onchange={(e) => onsetstage(e.currentTarget.value)}
-              class="min-h-11 rounded-md border border-input bg-transparent px-2 py-1.5 text-base sm:min-h-0 sm:text-sm"
-            >
-              <option value="">{s.noStage}</option>
-              <!-- Grouped so `Closed` reads as a heading over its three outcomes rather than
-                   as a fifth state competing with them — the same four groups the board's
-                   columns use, from the same generated table. -->
-              {#each groupedStages(locale()) as g (g.id)}
-                <optgroup label={g.label}>
-                  {#each g.options as s (s.value)}
-                    <option value={s.value}>{s.label}</option>
-                  {/each}
-                </optgroup>
-              {/each}
-            </select>
-          </label>
-
-          <div class="flex flex-col gap-1 text-sm">
-            <span class="font-medium">{s.notes}</span>
-            <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} label={s.notes} showSaveState />
-          </div>
-        </div>
+        <JobDrawerApplication
+          stage={item.stage ?? ''}
+          notes={item.notes ?? ''}
+          {pendingOutcome}
+          {onchooseoutcome}
+          {onsetstage}
+          {onsavenotes}
+        />
       {:else if tab === 'history'}
         {#if !item.job}
           <p class="text-sm text-muted-foreground">{s.historyUnavailable}</p>
         {:else if emailsLoading || emailsError}
           <JobDrawerLoadState loading={emailsLoading} error={emailsError} onretry={() => loadEmails(true)} />
         {:else}
-          {#if events.length}
-            <div class="flex flex-col gap-1 text-sm">
-              <ol class="flex flex-col gap-1.5">
-                {#each events as e (e.id)}
-                  <!-- The event first and its age beneath it on a phone, where a fixed time
-                       column wrapped "11 секунд назад" onto two lines beside a one-line
-                       event; side by side from sm up, the age kept whole on the right. -->
-                  <li class="flex items-baseline gap-2">
-                    <span class="shrink-0 text-xs {eventTone(e.kind)}" aria-hidden="true">●</span>
-                    <div class="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-                      <span class="min-w-0 text-sm">{eventLabel(e, locale())}</span>
-                      <time
-                        datetime={e.occurred_at}
-                        class="text-xs text-muted-foreground sm:shrink-0 sm:whitespace-nowrap"
-                      >
-                        {timeAgo(e.occurred_at, locale())}
-                      </time>
-                    </div>
-                  </li>
-                {/each}
-              </ol>
-            </div>
-          {:else}
-            <p class="text-sm text-muted-foreground">{s.noHistory}</p>
-          {/if}
+          <JobDrawerHistory {events} />
         {/if}
       {:else if tab === 'auto_apply' && (emails === null || emailsError)}
         <JobDrawerLoadState
@@ -510,40 +454,16 @@
         </div>
       {:else if tab === 'emails'}
         <div class="flex flex-col gap-2">
-          <!-- The mail says one thing, the stage says another, and nothing moved it. That is
-               the rule working — mail never settles an application — so the resolution is
-               offered rather than applied, and it goes through the ordinary stage change so
-               the ledger records the candidate as its source. -->
           {#if stageSuggestion}
-            <div
-              class="flex flex-wrap items-center gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2"
-            >
-              <span class="min-w-0 flex-1 text-sm">
-                {format(s.looksLike, {
-                  signal: statusLabel(stageSuggestion.signal, locale()).toLowerCase(),
-                  stage: item.stage ? humanizeStage(item.stage, locale()) : s.stageUnset,
-                })}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                class="shrink-0"
-                onclick={() => {
-                  const stage = stageSuggestion?.stage;
-                  stageSuggestion = null;
-                  if (stage) onsetstage(stage);
-                }}
-              >
-                {format(s.moveTo, { stage: humanizeStage(stageSuggestion.stage, locale()) })}
-              </Button>
-              <button
-                type="button"
-                class="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
-                onclick={() => (stageSuggestion = null)}
-              >
-                {s.dismiss}
-              </button>
-            </div>
+            <JobDrawerStageSuggestion
+              suggestion={stageSuggestion}
+              currentStage={item.stage}
+              onmove={(stage) => {
+                stageSuggestion = null;
+                if (stage) onsetstage(stage);
+              }}
+              ondismiss={() => (stageSuggestion = null)}
+            />
           {/if}
           <div class="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" href={resolve('/my/inbox')} class="h-9">
@@ -565,34 +485,7 @@
           {/if}
         </div>
       {:else if tab === 'description'}
-        <div class="flex flex-col gap-5">
-          {#if !item.job}
-            <!-- The posting was removed from the catalogue. What it said is genuinely
-                 gone; saying so is better than an empty tab that reads as a bug. -->
-            <p class="text-sm text-muted-foreground">
-              {s.postingRemoved}
-            </p>
-          {:else if posting?.description}
-            <JobDescription html={posting.description} />
-          {:else if !posting}
-            <p class="text-sm text-muted-foreground">{s.loading}</p>
-          {:else}
-            <p class="text-sm text-muted-foreground">{s.noDescription}</p>
-          {/if}
-
-          {#if posting?.skills?.length}
-            <div class="flex flex-col gap-2 border-t border-border pt-5">
-              <p class={sectionLabel}>{s.skills}</p>
-              <div class="flex flex-wrap gap-1.5">
-                <!-- Unlinked: the drawer is a reading surface over a posting, and a
-                     filter link would navigate out of it. -->
-                {#each posting.skills as skill (skill)}
-                  <SkillChip slug={skill} linked={false} />
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </div>
+        <JobDrawerDescription removed={!item.job} {posting} />
       {/if}
     </div>
   </div>

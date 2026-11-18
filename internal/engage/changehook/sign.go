@@ -4,7 +4,7 @@
 // cmd/changes-webhook runs the delivery loop.
 //
 // It is separate from webhooknotify and notify, which deliver saved-search digests to one
-// unsigned URL per account on that engine's own retry rules.
+// URL per account on that engine's own retry rules (signed with Sign, like these).
 package changehook
 
 import (

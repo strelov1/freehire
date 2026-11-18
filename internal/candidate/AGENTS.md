@@ -29,4 +29,4 @@ CV document, so an edit made with `cv_edit` does not show there. The packages ke
 
 ## Packages
 
-`atscheck` `cv` `cvedit` `cvmatch` `cvsection` `experience` `fitanalysis` `hardconstraint` `hardconstraint/credentials` `headshot` `jobmatch` `matchanalysis` `resume` `resumeextract`
+`atscheck` `cv` `cvedit` `cvmatch` `cvsection` `experience` `fitanalysis` `hardconstraint` `hardconstraint/credentials` `headshot` `jevrank` `jobmatch` `matchanalysis` `resume` `resumeextract`

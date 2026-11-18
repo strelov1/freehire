@@ -19,6 +19,8 @@ export type CreatedApiKey = components['schemas']['ApiKeyCreated'];
  *  destination or the user turned it off. */
 export interface WebhookConfig {
   url: string;
+  /** Signs every delivery (X-Freehire-Signature); see /me/webhook in the API docs. */
+  secret: string;
   enabled: boolean;
   created_at: string | null;
   last_success_at: string | null;

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
-  import { SvelteURLSearchParams } from 'svelte/reactivity';
-  import { pushState, replaceState } from '$app/navigation';
   import { page } from '$app/state';
+  import { BoardDrawer } from './boardDrawer.svelte';
+  import { BOARD_FILTERS, emptyColumns, listOrder, placeOnBoard, shownColumns } from './boardView';
   import { resolve } from '$app/paths';
   import { X as XIcon } from '@lucide/svelte';
   import { refreshAppliedCompanies } from '#lib/appliedCompanies.svelte.js';
@@ -20,9 +20,6 @@
     matchesQuery,
     matchesStage,
     needsAttention,
-    sortBoardItems,
-    parseBoardSort,
-    type BoardSort,
     type BoardColumnId,
     type BoardItem,
     type ClosedOutcome,
@@ -71,10 +68,6 @@
   const columnLabel = (col: { id: BoardColumnId; label: string }) =>
     col.id === 'unstaged' ? s.noStage : stageGroupLabel(col.id, locale());
 
-  function emptyColumns(): Record<BoardColumnId, BoardItem[]> {
-    return { unstaged: [], preparing: [], applied: [], interview: [], offer: [], closed: [] };
-  }
-
   // Per-column arrays are the source of truth once loaded; svelte-dnd-action
   // moves BoardItem objects between them. cardCol tracks each card's persisted
   // column so a finalize can tell which card actually moved into a zone.
@@ -82,17 +75,11 @@
   let cardCol = $state<Record<string, BoardColumnId>>({});
   let status = $state<'loading' | 'ready' | 'error'>('loading');
 
-  // Drawer state. A Closed drop opens the drawer requiring an outcome choice.
-  let openItem = $state.raw<BoardItem | null>(null);
-  let pendingOutcome = $state(false);
-  // Whether the open drawer has its own history entry (pushed by openDrawer). Only then
-  // does Back close it, and only then does closing it go back rather than forward. A
-  // drawer opened by a Closed drop has no entry, and a deep-linked one IS the entry the
-  // visitor arrived on — Back from either leaves the page, as it should.
-  let drawerInHistory = false;
-  // Set while the drawer is the one a deep link (/my/tracking/[id]) opened, so closing
-  // it can swap that URL for the board's own instead of leaving it in the address bar.
-  let onDeepLink = $state(false);
+  // The drawer (see BoardDrawer); load() reverts a Closed drop it closes on.
+  const drawer = new BoardDrawer(
+    () => view,
+    () => load(),
+  );
   // The follow-up dialog is its own overlay, not a drawer tab: it is reached from
   // the card's silence badge and closes back to the board.
   let followUpItem = $state.raw<BoardItem | null>(null);
@@ -105,29 +92,10 @@
   let searchInput = $state<HTMLInputElement>();
   let emptyState = $state<HTMLDivElement>();
 
-  // Lay the fetched rows out into the columns and open the deep-linked drawer once.
-  // The 'board' filter returns saved ∪ applied ∪ stage, and a saved-only row lands in
-  // the no-stage inbox (see columnOf) rather than being dropped here — saving a job is
-  // taking it on, so the board is where it belongs.
-  //
-  // Those rows always counted toward the 500 cap; showing them makes an existing
-  // consequence visible rather than creating it. A user with hundreds of bookmarks can
-  // push older active applications outside the fetched window, and now sees a wide
-  // inbox column while it happens. Still acceptable at this scale; the fix if it
-  // bites is the same one as before — a server-side filter that pages the board's
-  // columns separately, so a long backlog cannot crowd out the live applications.
+  // Lay the fetched rows out into the columns (see placeOnBoard) and open the deep-linked
+  // drawer once.
   function build(rows: MyJob[]) {
-    const next = emptyColumns();
-    const cols: Record<string, BoardColumnId> = {};
-    for (const row of rows) {
-      const item: BoardItem = { ...row, id: row.id };
-      const col = columnOf(item);
-      if (!col) continue; // neither saved nor tracked — nothing to place
-      next[col].push(item);
-      cols[item.id] = col;
-    }
-    columns = next;
-    cardCol = cols;
+    ({ columns, cardCol } = placeOnBoard(rows));
     status = 'ready';
     // Deep link: open the requested application's drawer once, after the board is
     // built. A slug that isn't on the board — one the user has neither saved nor
@@ -143,9 +111,7 @@
   function openInitial(item: MyJob) {
     if (openedInitial || item.id !== initialId || columnOf(item) === null) return;
     openedInitial = true;
-    openItem = item;
-    pendingOutcome = false;
-    onDeepLink = true;
+    drawer.openDeepLinked(item);
   }
 
   async function load() {
@@ -153,7 +119,7 @@
     try {
       const slice = await api.listMyJobs('board', 500, 0, { compact: true });
       let rows = slice.items;
-      const target = openItem;
+      const target = drawer.item;
       if (target?.job && !rows.some((row) => row.id === target.id)) {
         try {
           const application = await api.getTrackedApplication(target.job.public_slug);
@@ -163,12 +129,12 @@
         }
       }
       build(rows);
-      if (target && openItem?.id === target.id) {
+      if (target && drawer.item?.id === target.id) {
         const fresh = Object.values(columns)
           .flat()
           .find((row) => row.id === target.id);
-        if (fresh) openItem = fresh;
-        else closeDrawer();
+        if (fresh) drawer.item = fresh;
+        else drawer.close();
       }
     } catch {
       status = 'error';
@@ -197,34 +163,8 @@
     if (!preloaded && isAuthenticated()) void load();
   });
 
-  // Search, the "needs attention" toggle and the stage filter, mirrored into
-  // `?q=`/`?attention=1`/`?stage=` so a shared or reloaded link shows the same rows.
-  // One UrlSyncedState over all three — not separate ones — because each instance's
-  // write replaces the WHOLE query string with its own serialization; independent
-  // states on the same page would each erase the others' params on every change. It writes the
-  // URL synchronously on every keystroke/click (the structural fix for the
-  // dropped-character race) and seeds from location.search rather than page.url,
-  // which lags after a shallow-routing back/forward. Filtering is local and
-  // instant, so there is nothing to debounce — setNow writes and applies
-  // together, and the view reads `value`.
-  const filters = new UrlSyncedState<{ q: string; attention: boolean; stage: string; sort: BoardSort }>(
-    new URLSearchParams(page.url.search),
-    {
-      parse: (p) => ({
-        q: p.get('q') ?? '',
-        attention: p.get('attention') === '1',
-        stage: p.get('stage') ?? '',
-        sort: parseBoardSort(p.get('sort')),
-      }),
-      serialize: (v) =>
-        new URLSearchParams({
-          ...(v.q ? { q: v.q } : {}),
-          ...(v.attention ? { attention: '1' } : {}),
-          ...(v.stage ? { stage: v.stage } : {}),
-          ...(v.sort !== 'default' ? { sort: v.sort } : {}),
-        }),
-    },
-  );
+  // Search, attention and stage, mirrored into the URL (see BOARD_FILTERS).
+  const filters = new UrlSyncedState(new URLSearchParams(page.url.search), BOARD_FILTERS);
   syncOnNavigation(filters);
   const query = $derived(filters.value.q);
   const attentionOnly = $derived(filters.value.attention);
@@ -238,21 +178,8 @@
   const filtering = $derived(searching || attentionOnly || stageFilter !== '');
   const matchesFilters = (i: BoardItem) =>
     matchesQuery(i, query) && (!attentionOnly || needsAttention(i)) && matchesStage(i, stageFilter);
-  const shown = $derived<Record<BoardColumnId, BoardItem[]>>(
-    Object.fromEntries(
-      BOARD_COLUMNS.map((c) => [
-        c.id,
-        sortBoardItems(filtering ? columns[c.id].filter(matchesFilters) : columns[c.id], sort),
-      ]),
-    ) as Record<BoardColumnId, BoardItem[]>,
-  );
-  const listItems = $derived(
-    sort === 'default'
-      ? Object.values(shown)
-          .flat()
-          .sort((a, b) => (b.last_activity_at ?? '').localeCompare(a.last_activity_at ?? ''))
-      : sortBoardItems(Object.values(shown).flat(), sort),
-  );
+  const shown = $derived(shownColumns(columns, filtering ? matchesFilters : null, sort));
+  const listItems = $derived(listOrder(shown, sort));
   const total = $derived(Object.values(columns).flat().length);
   const matched = $derived(Object.values(shown).flat().length);
 
@@ -317,11 +244,11 @@
     );
     // The drawer still holds the object the reload replaced; point it at the fresh one so it
     // shows the stage the server kept rather than the one that failed.
-    if (openItem?.id === item.id) {
+    if (drawer.item?.id === item.id) {
       const fresh = Object.values(columns)
         .flat()
         .find((i) => i.id === item.id);
-      if (fresh) openItem = fresh;
+      if (fresh) drawer.item = fresh;
     }
   }
 
@@ -336,25 +263,15 @@
           if (!item.saved_at) await load();
           break;
         case 'preparing':
-          item.stage = 'preparing';
-          await api.trackApplication(item.id, { stage: 'preparing' });
-          break;
         case 'applied':
-          item.stage = 'applied';
-          await api.trackApplication(item.id, { stage: 'applied' });
-          break;
         case 'interview':
-          item.stage = 'interview';
-          await api.trackApplication(item.id, { stage: 'interview' });
-          break;
         case 'offer':
-          item.stage = 'offer';
-          await api.trackApplication(item.id, { stage: 'offer' });
+          item.stage = to;
+          await api.trackApplication(item.id, { stage: to });
           break;
         case 'closed':
           // Outcome unknown until the user picks: open the drawer, require a choice.
-          openItem = item;
-          pendingOutcome = true;
+          drawer.askOutcome(item);
           return;
         default:
           assertNever(to);
@@ -366,10 +283,10 @@
   }
 
   async function chooseOutcome(outcome: ClosedOutcome) {
-    if (!openItem) return;
-    const item = openItem;
+    if (!drawer.item) return;
+    const item = drawer.item;
     item.stage = outcome;
-    pendingOutcome = false;
+    drawer.pendingOutcome = false;
     try {
       await api.trackApplication(item.id, { stage: outcome });
       announceMove(item, stageName(outcome));
@@ -381,14 +298,14 @@
   // The drawer acts on whatever is open; a list row acts on itself. Same write either
   // way, so the panel just names the open application.
   async function setStage(stage: string) {
-    if (openItem) await applyStage(openItem, stage);
+    if (drawer.item) await applyStage(drawer.item, stage);
   }
 
   // The drawer makes the actual review call itself (it alone holds the queue id, loaded
   // via getTrackedApplication) and calls this only to report the outcome — the mutation on
-  // openItem belongs here, the same division applyStage/setStage already draw for stage.
+  // drawer.item belongs here, the same division applyStage/setStage already draw for stage.
   function applyAutoApplyReview(decision: 'approved' | 'declined') {
-    if (openItem) openItem.auto_apply_status = decision;
+    if (drawer.item) drawer.item.auto_apply_status = decision;
   }
 
   async function applyStage(item: BoardItem, stage: string) {
@@ -407,7 +324,7 @@
         columns[prevCol] = columns[prevCol].filter((i) => i.id !== item.id);
         Reflect.deleteProperty(cardCol, item.id);
       }
-      closeDrawer();
+      drawer.close();
     } else if (prevCol && nextCol !== prevCol) {
       columns[prevCol] = columns[prevCol].filter((i) => i.id !== item.id);
       columns[nextCol] = [item, ...columns[nextCol]];
@@ -447,14 +364,14 @@
   // The row is written only once the server has it — writing it first would push the old
   // value back into the editor on a rollback and lose what the user typed.
   //
-  // Bound to the item rather than read from openItem: the editor also saves on teardown,
-  // which on a close runs after openItem is already null.
+  // Bound to the item rather than read from drawer.item: the editor also saves on teardown,
+  // which on a close runs after drawer.item is already null.
   async function saveNotes(item: BoardItem, notes: string) {
     try {
       await api.trackApplication(item.id, { notes });
     } catch (e) {
       // Saved on the way out (Escape, Back): the editor is gone, so the board says it.
-      if (openItem?.id !== item.id) showError(format(s.notesFailed, { job: jobName(item) }));
+      if (drawer.item?.id !== item.id) showError(format(s.notesFailed, { job: jobName(item) }));
       throw e;
     }
     item.notes = notes;
@@ -474,7 +391,7 @@
       columns[col] = columns[col].filter((i) => i.id !== item.id);
       Reflect.deleteProperty(cardCol, item.id);
     }
-    if (openItem?.id === item.id) closeDrawer();
+    if (drawer.item?.id === item.id) drawer.close();
     announce(format(s.removed, { job: jobName(item) }));
     // The card that opened the drawer is gone, so the drawer's own focus return would land
     // on <body>. The search field is the board's first control and is there in both views.
@@ -484,7 +401,7 @@
   }
 
   async function remove() {
-    if (openItem) await removeItem(openItem);
+    if (drawer.item) await removeItem(drawer.item);
   }
 
   let removing = $state<string[]>([]);
@@ -542,57 +459,16 @@
     syncVisibleColumn();
   }
 
-  // Close the drawer without touching the URL — Back has already moved it.
-  function dismissDrawer() {
-    if (pendingOutcome) {
-      // Closing without choosing an outcome reverts the Closed drop.
-      pendingOutcome = false;
-      void load();
-    }
-    openItem = null;
-  }
-
-  function closeDrawer() {
-    const hadEntry = drawerInHistory;
-    drawerInHistory = false;
-    dismissDrawer();
-    if (hadEntry) {
-      // Undo openDrawer's push rather than pushing the list URL on top of it: a second
-      // entry is what left Back walking through closed drawers, and going back also
-      // returns to the exact view and filters the drawer was opened from.
-      history.back();
-    } else if (onDeepLink) {
-      // Arrived on a deep link: swap the per-application URL for the board's own.
-      onDeepLink = false;
-      const params = new SvelteURLSearchParams(location.search);
-      params.delete('application');
-      const base = view === 'list' ? resolve('/my/tracking/list') : resolve('/my/tracking');
-      // eslint-disable-next-line svelte/no-navigation-without-resolve -- both possible base routes above are resolved
-      replaceState(base + (params.size ? `?${params}` : ''), {});
-    }
-  }
-
-  // Back and Forward over the drawer's history entry. SvelteKit restores page.state
-  // with the entry, so the open application is read from it rather than kept only in
-  // this component — a URL that changed while the drawer stayed put was the bug.
+  // Back and Forward over the drawer's history entry (see BoardDrawer.follow).
   $effect(() => {
     const id = page.state.trackingItem;
-    untrack(() => {
-      if (id) {
-        if (openItem?.id !== id) {
-          const found = Object.values(columns)
-            .flat()
-            .find((i) => i.id === id);
-          if (!found) return;
-          openItem = found;
-          pendingOutcome = false;
-        }
-        drawerInHistory = true;
-      } else if (drawerInHistory) {
-        drawerInHistory = false;
-        dismissDrawer();
-      }
-    });
+    untrack(() =>
+      drawer.follow(id, (want) =>
+        Object.values(columns)
+          .flat()
+          .find((i) => i.id === want),
+      ),
+    );
   });
 
   function openFollowUp(item: MyJob) {
@@ -604,25 +480,6 @@
   // the same optimistic treatment stage moves already get.
   function markChased(at: string) {
     if (followUpItem) followUpItem.followed_up_at = at;
-  }
-
-  function openDrawer(item: MyJob) {
-    openItem = item as BoardItem;
-    pendingOutcome = false;
-    // Give the open application its own shareable URL without a full navigation.
-    // Keyed by the row id, so an application whose posting was removed gets one too.
-    // The query rides along so the filtered rows behind the drawer stay filtered.
-    const id = (item as BoardItem).id;
-    drawerInHistory = true;
-    if (view === 'list') {
-      const params = new SvelteURLSearchParams(location.search);
-      params.set('application', id);
-      // eslint-disable-next-line svelte/no-navigation-without-resolve -- the route is resolved before its query is added
-      pushState(resolve('/my/tracking/list') + `?${params}`, { trackingItem: id });
-    } else {
-      // eslint-disable-next-line svelte/no-navigation-without-resolve -- the route is resolved before its query is added
-      pushState(resolve('/my/tracking/[id]', { id }) + location.search, { trackingItem: id });
-    }
   }
 </script>
 
@@ -674,7 +531,13 @@
          rows a page at a time, and a cleared filter would otherwise redraw every row a
          long scroll had reached, in one update. -->
     {#key `${query}|${attentionOnly}|${stageFilter}|${sort}`}
-      <BoardList items={listItems} onopen={openDrawer} onsetstage={applyStage} onremove={quickRemove} {removing} />
+      <BoardList
+        items={listItems}
+        onopen={(item) => drawer.open(item)}
+        onsetstage={applyStage}
+        onremove={quickRemove}
+        {removing}
+      />
     {/key}
   {:else}
     <div
@@ -697,7 +560,7 @@
           dragDisabled={filtering || sort !== 'default'}
           {onconsider}
           {onfinalize}
-          onopen={openDrawer}
+          onopen={(item) => drawer.open(item)}
           onremove={quickRemove}
           {removing}
         />
@@ -723,19 +586,19 @@
   </div>
 {/if}
 
-{#if openItem}
-  {#key openItem.id}
-    {@const item = openItem}
+{#if drawer.item}
+  {#key drawer.item.id}
+    {@const item = drawer.item}
     <JobDrawer
-      initialTab={onDeepLink && initialAutoApply ? 'auto_apply' : 'application'}
+      initialTab={drawer.onDeepLink && initialAutoApply ? 'auto_apply' : 'application'}
       {item}
-      {pendingOutcome}
+      pendingOutcome={drawer.pendingOutcome}
       onsetstage={setStage}
       onsavenotes={(notes) => saveNotes(item, notes)}
       onchooseoutcome={chooseOutcome}
       onautoapplyreview={applyAutoApplyReview}
       onremove={remove}
-      onclose={closeDrawer}
+      onclose={drawer.close}
       onfollowup={openFollowUp}
       blocked={!!followUpItem}
     />

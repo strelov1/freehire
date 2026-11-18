@@ -65,9 +65,11 @@ func run() int {
 	}()
 
 	cfg := config.LoadIngestScheduler()
+	launcher := ingestsched.NewSystemdLauncher(cfg.IngestBinary, cfg.WorkingDir, cfg.EnvFile, cfg.RunAs)
+	launcher.Slice = cfg.Slice
 	scheduler := ingestsched.Scheduler{
 		Repo:     ingestsched.NewQueriesRepository(db.New(pool)),
-		Launcher: ingestsched.NewSystemdLauncher(cfg.IngestBinary, cfg.WorkingDir, cfg.EnvFile, cfg.RunAs),
+		Launcher: launcher,
 		Cap:      cfg.Cap,
 		HeavyCap: cfg.HeavyCap,
 		Grace:    cfg.Grace,

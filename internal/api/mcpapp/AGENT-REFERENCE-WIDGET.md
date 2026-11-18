@@ -4,7 +4,8 @@ Part of [AGENT-REFERENCE.md](AGENT-REFERENCE.md): sections moved out of it for s
 
 ## The widget
 
-`search_jobs` and `get_job` render in an MCP Apps widget (`widget.go`, `widget/jobs.html`):
+`search_jobs` and `get_job` render in an MCP Apps widget (`widget.go`, `widget/jobs.html`,
+its script in `widget/jobs.js`, which `widget.go` inlines at embed time):
 one self-contained page an MCP Apps host — ChatGPT, Claude — draws the result in as cards,
 instead of the model retelling it as prose. The tools' contracts are untouched; a client
 that ignores `_meta.ui` sees exactly what it saw before.

@@ -1,5 +1,5 @@
 import { SPECIALIZATION_ALIASES } from './specializationAliases';
-import { WORK_MODE_OPTIONS, REGION_OPTIONS, countryLabel } from './locationOptions';
+import { WORK_MODE_OPTIONS, REGION_OPTIONS } from './locationOptions';
 export { WORK_MODE_OPTIONS, REGION_OPTIONS, countryLabel } from './locationOptions';
 // The job-search facets, as a data-driven registry. Each entry declares its
 // query param (matching the backend search API), section label, the control to
@@ -16,7 +16,8 @@ export { WORK_MODE_OPTIONS, REGION_OPTIONS, countryLabel } from './locationOptio
 // options come from the live distribution (any detected language), labelled via
 // languageLabel.
 
-import { metroLabel } from './metro';
+export { languageFlag, cityLabel, skillLabel, dynamicLabel } from './facetLabels';
+export { ISO_COUNTRY_CODES, COUNTRY_OPTIONS } from './facetCountries';
 import {
   SENIORITY_VALUES,
   CATEGORY_VALUES,
@@ -27,7 +28,6 @@ import {
   DOMAIN_VALUES,
   INDUSTRY_VALUES,
   AI_ARCHETYPE_VALUES,
-  SKILL_LABELS,
   INDUSTRY_LABELS,
   ROLE_TYPE_VALUES,
   SOURCE_TYPE_VALUES,
@@ -57,7 +57,6 @@ import {
 import { COLLECTIONS } from './collections';
 import { TIMEZONE_REGIONS } from './talentFacetModel';
 import { backerBadges } from './backers';
-import { sourceLabel } from './sourceLabels';
 import { companySearch } from './companySearch';
 
 export interface FacetOption {
@@ -162,96 +161,6 @@ export interface FacetDef {
    */
   entityLogos?: boolean;
 }
-
-// Resolve an ISO 639-1 code (en, pt, ru, …) to an English language name via
-// platform Intl data (no hand-maintained table); fall back to the upper-cased
-// code. Mirrors countryLabel — the posting-language facet is dynamic, so any
-// code the language detector emits gets a readable label.
-const languageNames = (() => {
-  try {
-    return new Intl.DisplayNames(['en'], { type: 'language' });
-  } catch {
-    return null;
-  }
-})();
-
-/** A representative country flag code for an ISO 639-1 language (en → gb), or
- *  undefined when none is clear. A flag only decorates a language; it never decides
- *  which languages exist. */
-export function languageFlag(code: string): string | undefined {
-  let region: string | undefined;
-  try {
-    region = code === 'en' ? 'GB' : code === 'pt' ? 'PT' : new Intl.Locale(code).maximize().region;
-  } catch {
-    return undefined;
-  }
-  return region && /^[A-Z]{2}$/.test(region) ? region.toLowerCase() : undefined;
-}
-
-function languageLabel(code: string): string {
-  if (!code) return code;
-  try {
-    return languageNames?.of(code) ?? code.toUpperCase();
-  } catch {
-    return code.toUpperCase();
-  }
-}
-
-// Company facet values are slugs (group-ib, epam); the live distribution carries
-// no display name, so title-case the slug for a readable label. Imperfect for
-// acronyms (group-ib → "Group Ib") but consistent with the other facets — a real
-// slug→name lookup would need a per-company fetch, which this facet forgoes.
-function companyLabel(slug: string): string {
-  return titleCase(slug.replace(/-/g, '_'));
-}
-
-// Skill facet values are canonical slugs (postgresql, ci-cd, nodejs); the live
-// distribution carries no display name, so map them through the generated SKILL_LABELS
-// catalog (the skilltag dictionary is the source of truth). The fallback title-cases the
-// slug the way companyLabel does, so a value that outlived a dictionary edit still reads
-// as words rather than as data.
-/** Display label for a normalised city slug: `new-york` reads as `New York`.
- *
- *  Title-casing the slug rather than looking the city up: `users.resume_cities` stores
- *  the normalisation, and the dictionary's own spellings (internal/dict/location's
- *  CityMatch.Name) are reachable only through a search API keyed by query text, not by
- *  slug. THE SEAM: a city whose real name is not its title-cased slug — 's-Hertogenbosch,
- *  Rio de Janeiro — is spelled wrong here, and fixing it means exposing a slug lookup
- *  from that dictionary rather than adding a second list of exceptions.
- *
- *  Worth having anyway: without it a card reads "berlin" beside the timezone's own
- *  "Berlin", which looks like a bug in the half that is correct. */
-export function cityLabel(slug: string): string {
-  return slug
-    .split('-')
-    .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
-    .join(' ');
-}
-
-export function skillLabel(slug: string): string {
-  return (SKILL_LABELS as Record<string, string>)[slug] ?? titleCase(slug.replace(/-/g, '_'));
-}
-
-/** Display label for a dynamic facet value: country code → name, company slug →
- *  title-cased name, else the value. */
-export function dynamicLabel(param: string, value: string): string {
-  if (param === 'countries') return countryLabel(value);
-  if (param === 'metros') return metroLabel(value);
-  if (param === 'posting_language') return languageLabel(value);
-  if (param === 'company_slug') return companyLabel(value);
-  if (param === 'source') return sourceLabel(value);
-  // Skills have no static option list, so every surface naming a SELECTED skill — the
-  // filter summary chips above all — arrives here. Without this it fell through to the
-  // raw slug, and one skill was spelled two ways on one screen: "ci-cd" in the summary,
-  // "CI/CD" in the panel beside it.
-  if (param === 'skills') return skillLabel(value);
-  return value;
-}
-
-// Role slugs carry an optional seniority grade prefix (senior_backend); the
-// related-role map is keyed by the ungraded base (backend), so one entry serves
-// every grade. Longest prefix first is unnecessary — the grades share no
-// prefix among themselves — but drawing them from SENIORITY_VALUES keeps this in
 
 /** Build facet options from generated values, overriding labels where given. */
 export function options(values: readonly string[], labels: Record<string, string> = {}): FacetOption[] {
@@ -450,275 +359,6 @@ export const JOB_COLLECTION: FacetOption[] = COLLECTION.filter((o) => o.group !=
 export const EMPLOYER_CREDENTIALS: FacetOption[] = COLLECTION.filter((o) => o.group === 'Employer credentials').map(
   ({ group: _group, ...o }) => o,
 );
-
-// The ISO 3166-1 alpha-2 code set — the country vocabulary the location dictionary
-// draws from — plus 'xk', Kosovo's user-assigned code: ISO has not assigned it, but
-// the location dictionary emits it and Intl names it, so leaving it out made Kosovo
-// the one country a posting could carry and no picker could select (freehire#3847). The company country facet is a static searchable select over this
-// (labelled via countryLabel), not a live distribution: the companies list is plain
-// SQL with no facet-count endpoint yet, so options carry no counts.
-export const ISO_COUNTRY_CODES = [
-  'ad',
-  'ae',
-  'af',
-  'ag',
-  'ai',
-  'al',
-  'am',
-  'ao',
-  'aq',
-  'ar',
-  'as',
-  'at',
-  'au',
-  'aw',
-  'ax',
-  'az',
-  'ba',
-  'bb',
-  'bd',
-  'be',
-  'bf',
-  'bg',
-  'bh',
-  'bi',
-  'bj',
-  'bl',
-  'bm',
-  'bn',
-  'bo',
-  'bq',
-  'br',
-  'bs',
-  'bt',
-  'bv',
-  'bw',
-  'by',
-  'bz',
-  'ca',
-  'cc',
-  'cd',
-  'cf',
-  'cg',
-  'ch',
-  'ci',
-  'ck',
-  'cl',
-  'cm',
-  'cn',
-  'co',
-  'cr',
-  'cu',
-  'cv',
-  'cw',
-  'cx',
-  'cy',
-  'cz',
-  'de',
-  'dj',
-  'dk',
-  'dm',
-  'do',
-  'dz',
-  'ec',
-  'ee',
-  'eg',
-  'eh',
-  'er',
-  'es',
-  'et',
-  'fi',
-  'fj',
-  'fk',
-  'fm',
-  'fo',
-  'fr',
-  'ga',
-  'gb',
-  'gd',
-  'ge',
-  'gf',
-  'gg',
-  'gh',
-  'gi',
-  'gl',
-  'gm',
-  'gn',
-  'gp',
-  'gq',
-  'gr',
-  'gs',
-  'gt',
-  'gu',
-  'gw',
-  'gy',
-  'hk',
-  'hm',
-  'hn',
-  'hr',
-  'ht',
-  'hu',
-  'id',
-  'ie',
-  'il',
-  'im',
-  'in',
-  'io',
-  'iq',
-  'ir',
-  'is',
-  'it',
-  'je',
-  'jm',
-  'jo',
-  'jp',
-  'ke',
-  'kg',
-  'kh',
-  'ki',
-  'km',
-  'kn',
-  'kp',
-  'kr',
-  'kw',
-  'ky',
-  'kz',
-  'la',
-  'lb',
-  'lc',
-  'li',
-  'lk',
-  'lr',
-  'ls',
-  'lt',
-  'lu',
-  'lv',
-  'ly',
-  'ma',
-  'mc',
-  'md',
-  'me',
-  'mf',
-  'mg',
-  'mh',
-  'mk',
-  'ml',
-  'mm',
-  'mn',
-  'mo',
-  'mp',
-  'mq',
-  'mr',
-  'ms',
-  'mt',
-  'mu',
-  'mv',
-  'mw',
-  'mx',
-  'my',
-  'mz',
-  'na',
-  'nc',
-  'ne',
-  'nf',
-  'ng',
-  'ni',
-  'nl',
-  'no',
-  'np',
-  'nr',
-  'nu',
-  'nz',
-  'om',
-  'pa',
-  'pe',
-  'pf',
-  'pg',
-  'ph',
-  'pk',
-  'pl',
-  'pm',
-  'pn',
-  'pr',
-  'ps',
-  'pt',
-  'pw',
-  'py',
-  'qa',
-  're',
-  'ro',
-  'rs',
-  'ru',
-  'rw',
-  'sa',
-  'sb',
-  'sc',
-  'sd',
-  'se',
-  'sg',
-  'sh',
-  'si',
-  'sj',
-  'sk',
-  'sl',
-  'sm',
-  'sn',
-  'so',
-  'sr',
-  'ss',
-  'st',
-  'sv',
-  'sx',
-  'sy',
-  'sz',
-  'tc',
-  'td',
-  'tf',
-  'tg',
-  'th',
-  'tj',
-  'tk',
-  'tl',
-  'tm',
-  'tn',
-  'to',
-  'tr',
-  'tt',
-  'tv',
-  'tw',
-  'tz',
-  'ua',
-  'ug',
-  'um',
-  'us',
-  'uy',
-  'uz',
-  'va',
-  'vc',
-  've',
-  'vg',
-  'vi',
-  'vn',
-  'vu',
-  'wf',
-  'ws',
-  'xk',
-  'ye',
-  'yt',
-  'za',
-  'zm',
-  'zw',
-];
-
-const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
-  value,
-  label: countryLabel(value),
-  flag: value,
-})).sort((a, b) => a.label.localeCompare(b.label));
-
-// The full ISO country select, exported for the profile's location editor (base +
-// remote/relocation countries) so it reuses the same list/labels as the company facet.
-export const COUNTRY_OPTIONS: FacetOption[] = COUNTRY;
 
 export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
