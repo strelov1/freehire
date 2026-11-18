@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -49,7 +48,7 @@ func Join(ctx context.Context, store JoinStore, userID int64) error {
 		}
 		_, err = store.SetTalentHandleIfUnset(ctx, db.SetTalentHandleIfUnsetParams{
 			ID:           userID,
-			TalentHandle: pgtype.Text{String: handle, Valid: true},
+			TalentHandle: pgconv.TextValid(handle),
 		})
 		switch {
 		case err == nil:

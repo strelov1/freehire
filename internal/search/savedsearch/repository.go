@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -71,8 +70,8 @@ func (r *QueriesRepository) Update(ctx context.Context, id, userID int64, name, 
 	row, err := r.q.UpdateSavedSearch(ctx, db.UpdateSavedSearchParams{
 		ID:     id,
 		UserID: userID,
-		Name:   textPtr(name),
-		Query:  textPtr(query),
+		Name:   pgconv.TextFromPtr(name),
+		Query:  pgconv.TextFromPtr(query),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SavedSearch{}, ErrNotFound
@@ -108,13 +107,4 @@ func fromRow(row db.SavedSearch) SavedSearch {
 		CreatedAt:          pgconv.TimePtr(row.CreatedAt),
 		UpdatedAt:          pgconv.TimePtr(row.UpdatedAt),
 	}
-}
-
-// textPtr maps an optional string to the pgtype a partial update expects: nil is NULL (leave
-// unchanged), and an empty string stays a valid value because it is a real "show all" query.
-func textPtr(s *string) pgtype.Text {
-	if s == nil {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: *s, Valid: true}
 }

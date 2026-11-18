@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/application/maillink"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // domainLearner adapts the gmailsync self-learning cache to maillink.Learner: a
@@ -127,10 +128,10 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 	if err := qtx.SetEmailClassification(ctx, db.SetEmailClassificationParams{
 		JobID:           int8OrNull(r.JobID),
 		SuggestedJobID:  int8OrNull(r.SuggestedJobID),
-		LinkSource:      textOrNull(r.LinkSource),
+		LinkSource:      pgconv.Text(r.LinkSource),
 		MatchConfidence: pgtype.Float4{Float32: float32(r.Confidence), Valid: matched},
-		StatusSignal:    textOrNull(string(r.Signal)),
-		Model:           pgtype.Text{String: model, Valid: true},
+		StatusSignal:    pgconv.Text(string(r.Signal)),
+		Model:           pgconv.TextValid(model),
 		ID:              r.EmailID,
 		UserID:          userID,
 	}); err != nil {
@@ -182,8 +183,4 @@ func (s *dbStore) Fail(ctx context.Context, outboxID int64, cause string, policy
 
 func int8OrNull(v int64) pgtype.Int8 {
 	return pgtype.Int8{Int64: v, Valid: v != 0}
-}
-
-func textOrNull(s string) pgtype.Text {
-	return pgtype.Text{String: s, Valid: s != ""}
 }

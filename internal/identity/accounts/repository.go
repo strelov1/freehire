@@ -146,7 +146,7 @@ func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash 
 	}
 	row, err := r.q.CreateUser(ctx, db.CreateUserParams{
 		Email:         email,
-		PasswordHash:  pgtype.Text{String: passwordHash, Valid: true},
+		PasswordHash:  pgconv.TextValid(passwordHash),
 		EmailVerified: emailVerified,
 		Timezone:      pgconv.Text(tz),
 	})
@@ -214,7 +214,7 @@ func (r *QueriesRepository) PasswordHash(ctx context.Context, userID int64) (str
 func (r *QueriesRepository) SetPassword(ctx context.Context, userID int64, passwordHash string) (int32, error) {
 	return r.q.SetUserPassword(ctx, db.SetUserPasswordParams{
 		ID:           userID,
-		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
+		PasswordHash: pgconv.TextValid(passwordHash),
 	})
 }
 
@@ -223,7 +223,7 @@ func (r *QueriesRepository) SetPassword(ctx context.Context, userID int64, passw
 func (r *QueriesRepository) ResetPassword(ctx context.Context, userID int64, passwordHash string) (int32, error) {
 	return r.q.ResetUserPassword(ctx, db.ResetUserPasswordParams{
 		ID:           userID,
-		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
+		PasswordHash: pgconv.TextValid(passwordHash),
 	})
 }
 

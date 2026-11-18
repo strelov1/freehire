@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // BrowsableCounts is Meilisearch's de-duplicated open-posting count per source — what
@@ -99,7 +100,7 @@ func Rows(registry []string, agg []db.AggregateOpenJobsBySourceRow, previous []d
 			Source:         source,
 			OpenJobs:       got.OpenJobs,
 			AtsMatchedJobs: got.AtsMatchedJobs,
-			MeasuredAt:     pgtype.Timestamptz{Time: measuredAt, Valid: true},
+			MeasuredAt:     pgconv.Instant(measuredAt),
 
 			MissingWorkModeJobs: got.MissingWorkModeJobs,
 			MissingGeoJobs:      got.MissingGeoJobs,

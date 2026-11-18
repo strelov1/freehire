@@ -11,11 +11,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/ga4mp"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // signupAttributionRequest is the POST /me/attribution body: the visit that led to
@@ -52,8 +51,6 @@ func cleanText(s string, max int) string {
 	}
 	return strings.TrimSpace(s)
 }
-
-func textOrNull(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} }
 
 // normalizeReferrerHost accepts a bare host or a full URL and keeps the host only.
 // Anything that is not a plausible hostname is dropped, never stored.
@@ -92,13 +89,13 @@ func normalizeLandingPath(s string) string {
 func (in signupAttributionRequest) params(userID int64) db.InsertSignupAttributionParams {
 	return db.InsertSignupAttributionParams{
 		UserID:       userID,
-		UtmSource:    textOrNull(strings.ToLower(cleanText(in.UTMSource, 100))),
-		UtmMedium:    textOrNull(strings.ToLower(cleanText(in.UTMMedium, 100))),
-		UtmCampaign:  textOrNull(cleanText(in.UTMCampaign, 200)),
-		UtmContent:   textOrNull(cleanText(in.UTMContent, 200)),
-		UtmTerm:      textOrNull(cleanText(in.UTMTerm, 200)),
-		ReferrerHost: textOrNull(normalizeReferrerHost(in.ReferrerHost)),
-		LandingPath:  textOrNull(normalizeLandingPath(in.LandingPath)),
+		UtmSource:    pgconv.Text(strings.ToLower(cleanText(in.UTMSource, 100))),
+		UtmMedium:    pgconv.Text(strings.ToLower(cleanText(in.UTMMedium, 100))),
+		UtmCampaign:  pgconv.Text(cleanText(in.UTMCampaign, 200)),
+		UtmContent:   pgconv.Text(cleanText(in.UTMContent, 200)),
+		UtmTerm:      pgconv.Text(cleanText(in.UTMTerm, 200)),
+		ReferrerHost: pgconv.Text(normalizeReferrerHost(in.ReferrerHost)),
+		LandingPath:  pgconv.Text(normalizeLandingPath(in.LandingPath)),
 	}
 }
 

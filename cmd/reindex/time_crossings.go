@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobreality"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -72,8 +72,8 @@ func enqueueTimeCrossings(ctx context.Context, q timeCrossingsStore, now time.Ti
 		UnseenSeconds: secs,
 		AgeDays:       jobreality.AgeCrossingDays(),
 		PostedAgeDays: jobreality.PostedAgeCrossingDays(),
-		Since:         pgtype.Timestamptz{Time: since, Valid: true},
-		Until:         pgtype.Timestamptz{Time: now, Valid: true},
+		Since:         pgconv.Instant(since),
+		Until:         pgconv.Instant(now),
 	})
 	if err != nil {
 		return fmt.Errorf("enqueue: %w", err)

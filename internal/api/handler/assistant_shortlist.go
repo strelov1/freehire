@@ -13,13 +13,13 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -171,7 +171,7 @@ func (h *assistantHandlers) createShortlistSession(ctx context.Context, userID i
 	if err != nil || id == uuid.Nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "a search session requires a valid request_id")
 	}
-	_, err = h.queries.CreateAssistantSearchSession(ctx, db.CreateAssistantSearchSessionParams{ID: id, UserID: userID, SearchQuery: pgtype.Text{String: query, Valid: true}})
+	_, err = h.queries.CreateAssistantSearchSession(ctx, db.CreateAssistantSearchSessionParams{ID: id, UserID: userID, SearchQuery: pgconv.TextValid(query)})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // ProviderReport is one line of the schedule as an operator reads it: what the provider is
@@ -82,11 +83,11 @@ func (r *QueriesRepository) SaveOverride(ctx context.Context, in OverrideInput) 
 		Shards:         int4Ptr(in.Shards),
 		CadenceSec:     int4Seconds(in.Cadence),
 		TimeoutSec:     int4Seconds(in.RunTimeout),
-		Enabled:        boolPtr(in.Enabled),
-		DisabledReason: textPtr(in.DisabledReason),
-		Notes:          textPtr(in.Notes),
-		Managed:        boolPtr(in.Managed),
-		Heavy:          boolPtr(in.Heavy),
+		Enabled:        pgconv.Bool(in.Enabled),
+		DisabledReason: pgconv.TextFromPtr(in.DisabledReason),
+		Notes:          pgconv.TextFromPtr(in.Notes),
+		Managed:        pgconv.Bool(in.Managed),
+		Heavy:          pgconv.Bool(in.Heavy),
 		// What a field the caller did not name falls back to on a NEW row. Supplied here
 		// rather than written into the query, so this package's constants are the one
 		// place the fleet's shape is stated. Note that Go will happily compile this call
@@ -122,18 +123,4 @@ func int4Seconds(d *time.Duration) pgtype.Int4 {
 		return pgtype.Int4{}
 	}
 	return pgtype.Int4{Int32: seconds(*d), Valid: true}
-}
-
-func boolPtr(v *bool) pgtype.Bool {
-	if v == nil {
-		return pgtype.Bool{}
-	}
-	return pgtype.Bool{Bool: *v, Valid: true}
-}
-
-func textPtr(v *string) pgtype.Text {
-	if v == nil {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: *v, Valid: true}
 }

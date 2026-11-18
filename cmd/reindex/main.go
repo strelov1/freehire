@@ -17,7 +17,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
@@ -25,6 +24,7 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/worker"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -218,7 +218,7 @@ func run() int {
 	}
 
 	// Best-effort: the reindex already succeeded, so a purge failure just leaves those rows for the next cycle.
-	if n, err := q.DeleteSearchOutboxCreatedBefore(ctx, pgtype.Timestamptz{Time: startedAt, Valid: true}); err != nil {
+	if n, err := q.DeleteSearchOutboxCreatedBefore(ctx, pgconv.Instant(startedAt)); err != nil {
 		log.Printf("reindex: purge stale search_outbox entries: %v", err)
 	} else if n > 0 {
 		log.Printf("reindex: purged %d stale search_outbox entries queued before this run", n)

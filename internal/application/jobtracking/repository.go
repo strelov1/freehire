@@ -73,7 +73,7 @@ func (r *QueriesRepository) MarkApplied(ctx context.Context, userID, jobID int64
 // MarkAppliedAt records an application dated by `at` rather than now(), for one
 // reconstructed from employer mail. It shares MarkApplied's locked transaction.
 func (r *QueriesRepository) MarkAppliedAt(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error) {
-	return r.markApplied(ctx, userID, jobID, pgtype.Timestamptz{Time: at, Valid: true}, source)
+	return r.markApplied(ctx, userID, jobID, pgconv.Instant(at), source)
 }
 
 // MarkAppliedOn records an application on a day the candidate stated, overwriting a date
@@ -86,7 +86,7 @@ func (r *QueriesRepository) MarkAppliedAt(ctx context.Context, userID, jobID int
 // RedateApplication returns no row for an application with no date. MarkJobApplied has just
 // set one, so the miss should not happen here, and it is treated as an error, not silence.
 func (r *QueriesRepository) MarkAppliedOn(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error) {
-	stated := pgtype.Timestamptz{Time: at, Valid: true}
+	stated := pgconv.Instant(at)
 
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -200,8 +200,8 @@ func (r *QueriesRepository) TrackJob(
 	row, err := r.q.TrackJob(ctx, db.TrackJobParams{
 		UserID:      userID,
 		JobID:       jobID,
-		Stage:       textFromPtr(stage),
-		Notes:       textFromPtr(notes),
+		Stage:       pgconv.TextFromPtr(stage),
+		Notes:       pgconv.TextFromPtr(notes),
 		EventSource: source,
 	})
 	if err != nil {
@@ -239,8 +239,8 @@ func (r *QueriesRepository) TrackApplication(
 	row, err := r.q.TrackApplicationByID(ctx, db.TrackApplicationByIDParams{
 		ID:          appID,
 		UserID:      userID,
-		Stage:       textFromPtr(stage),
-		Notes:       textFromPtr(notes),
+		Stage:       pgconv.TextFromPtr(stage),
+		Notes:       pgconv.TextFromPtr(notes),
 		EventSource: source,
 	})
 	if err != nil {
@@ -284,8 +284,8 @@ func applicationInteraction(jobID pgtype.Int8, appliedAt pgtype.Timestamptz, sta
 	return Interaction{
 		JobID:     jobID.Int64, // 0 once the posting is gone
 		AppliedAt: pgconv.TimePtr(appliedAt),
-		Stage:     textPtr(stage),
-		Notes:     textPtr(notes),
+		Stage:     pgconv.TextPtr(stage),
+		Notes:     pgconv.TextPtr(notes),
 	}
 }
 
@@ -351,8 +351,8 @@ func (r *QueriesRepository) ListInteractions(
 				ViewedAt:  pgconv.TimePtr(row.ViewedAt),
 				SavedAt:   pgconv.TimePtr(row.SavedAt),
 				AppliedAt: pgconv.TimePtr(row.AppliedAt),
-				Stage:     textPtr(row.Stage),
-				Notes:     textPtr(row.Notes),
+				Stage:     pgconv.TextPtr(row.Stage),
+				Notes:     pgconv.TextPtr(row.Notes),
 			},
 			EmailCount:           int(row.EmailCount),
 			LastActivityAt:       pgconv.TimePtr(row.LastActivityAt),
@@ -437,8 +437,8 @@ func orphanedTracked(orphans []db.ListOrphanedApplicationsRow) []TrackedJob {
 			RoleTitle:      o.RoleTitle,
 			Interaction: Interaction{
 				AppliedAt: pgconv.TimePtr(o.AppliedAt),
-				Stage:     textPtr(o.Stage),
-				Notes:     textPtr(o.Notes),
+				Stage:     pgconv.TextPtr(o.Stage),
+				Notes:     pgconv.TextPtr(o.Notes),
 			},
 			EmailCount:     int(o.EmailCount),
 			LastActivityAt: pgconv.TimePtr(o.LastActivityAt),
@@ -573,18 +573,9 @@ func toInteraction(r assembledRow) Interaction {
 		AppliedAt:   pgconv.TimePtr(r.AppliedAt),
 		SavedAt:     pgconv.TimePtr(r.SavedAt),
 		DismissedAt: pgconv.TimePtr(r.DismissedAt),
-		Stage:       textPtr(r.Stage),
-		Notes:       textPtr(r.Notes),
+		Stage:       pgconv.TextPtr(r.Stage),
+		Notes:       pgconv.TextPtr(r.Notes),
 	}
-}
-
-// textPtr converts a pgtype.Text to *string (nil when NULL).
-func textPtr(t pgtype.Text) *string {
-	if !t.Valid {
-		return nil
-	}
-	v := t.String
-	return &v
 }
 
 // autoApplyStatusFor derives a board row's own auto-apply status from ListUserJobs's raw
@@ -604,13 +595,4 @@ func autoApplyStatusFor(hasAttempt bool, tailoredCVID *uuid.UUID, hasPreview boo
 		TailorFailed: tailorFailedAt.Valid,
 	})
 	return &status
-}
-
-// textFromPtr converts a *string to pgtype.Text. A nil pointer produces an
-// invalid (NULL) Text so the SQL COALESCE leaves the column unchanged.
-func textFromPtr(s *string) pgtype.Text {
-	if s == nil {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: *s, Valid: true}
 }

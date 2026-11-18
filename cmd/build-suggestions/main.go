@@ -22,10 +22,9 @@ import (
 	"math"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/worker"
 	"github.com/strelov1/freehire/internal/search/search"
 	"github.com/strelov1/freehire/internal/search/suggest"
@@ -102,7 +101,7 @@ func run() int {
 const demandRetention = 90 * 24 * time.Hour
 
 func pruneDemand(ctx context.Context, q *db.Queries) {
-	n, err := q.PruneSearchQueries(ctx, pgtype.Timestamptz{Time: time.Now().Add(-demandRetention), Valid: true})
+	n, err := q.PruneSearchQueries(ctx, pgconv.Instant(time.Now().Add(-demandRetention)))
 	if err != nil {
 		log.Printf("prune demand: %v", err)
 		return

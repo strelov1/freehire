@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -188,7 +189,7 @@ func (s *Store) LabelSession(ctx context.Context, id uuid.UUID, userID int64, la
 	err := s.q.SetAssistantSessionLabel(ctx, db.SetAssistantSessionLabelParams{
 		ID:     id,
 		UserID: userID,
-		Label:  pgtype.Text{String: label, Valid: label != ""},
+		Label:  pgconv.Text(label),
 	})
 	if err != nil {
 		return fmt.Errorf("assistant: label session: %w", err)

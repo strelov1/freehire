@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // DBStore adapts *db.Queries to the service's Store.
@@ -22,8 +21,8 @@ func NewDBStore(q *db.Queries) *DBStore { return &DBStore{q: q} }
 func (s *DBStore) ListForRecall(ctx context.Context, userID int64, since, until time.Time, limit int32) ([]Message, error) {
 	rows, err := s.q.ListEmailsForRecall(ctx, db.ListEmailsForRecallParams{
 		UserID: userID,
-		Since:  pgtype.Timestamptz{Time: since, Valid: true},
-		Until:  pgtype.Timestamptz{Time: until, Valid: true},
+		Since:  pgconv.Instant(since),
+		Until:  pgconv.Instant(until),
 		Lim:    limit,
 	})
 	if err != nil {

@@ -19,6 +19,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // This file holds the queue-scoped tailoring trigger and the candidate's review decision
@@ -262,7 +263,7 @@ func (h *assistantHandlers) recordTailoringFailure(c *fiber.Ctx, queueID int64, 
 		Title:  "We couldn't prepare your application",
 		Body: fmt.Sprintf("Tailoring your CV for %s at %s didn't finish. Nothing was sent, and the job is still on your board.",
 			row.Title, row.Company),
-		PublicSlug: pgtype.Text{String: row.PublicSlug, Valid: true},
+		PublicSlug: pgconv.TextValid(row.PublicSlug),
 	}); err != nil {
 		// Best-effort, the same convention every other RecordNotification call follows.
 		log.Printf("auto-apply: notifying the tailoring failure for queue entry %d: %v", queueID, err)

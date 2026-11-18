@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -93,7 +92,7 @@ func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64,
 		ExcludedCompanies:   excludedCompanies,
 		JobLanguages:        jobLanguages,
 		LocationPreferences: locationPreferences,
-		UpdatedAt:           pgtype.Timestamptz{Time: expectedUpdatedAt, Valid: true},
+		UpdatedAt:           pgconv.Instant(expectedUpdatedAt),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Profile{}, ErrConflict

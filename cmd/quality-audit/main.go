@@ -30,12 +30,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/job/qualityaudit"
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/safehttp"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -150,7 +149,7 @@ func run() int {
 		return 1
 	}
 
-	tally, err := q.TallyRemoteAuditJudgements(ctx, pgtype.Timestamptz{Time: time.Now().Add(-remoteWindow), Valid: true})
+	tally, err := q.TallyRemoteAuditJudgements(ctx, pgconv.Instant(time.Now().Add(-remoteWindow)))
 	if err != nil {
 		log.Printf("quality-audit: tally: %v", err)
 		return 1
