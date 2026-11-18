@@ -40,6 +40,10 @@
 </a>
 <a href="https://trendshift.io/repositories/55060?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-55060" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/55060" alt="strelov1%2Ffreehire | Trendshift" width="250" height="55"/></a>
 
+<!-- Datacircle's own badge, hotlinked so it always shows the current rank; scaled down
+     from 240x162 so it does not tower over the two badges beside it. -->
+<a href="https://datacircle.dev/best-full-job-posting-api"><img src="https://datacircle.dev/badge/best-full-job-posting-api/freehire.svg" alt="Datacircle's ranking of the best full job posting API providers" width="160" height="108"></a>
+
 <br>
 
 <img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 4.9M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
