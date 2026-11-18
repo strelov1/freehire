@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 const (
