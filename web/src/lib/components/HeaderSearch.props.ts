@@ -1,7 +1,26 @@
 import type { SearchPlaceholder } from '#lib/typedPlaceholder.svelte.js';
 import type { FacetCounts } from '#lib/types.js';
 
-/** HeaderSearch's props; what the component does with them is told beside its `$props()`. */
+/**
+ * The header's search box — the ONE of them, on every page.
+ *
+ * There were two: this, which filtered the list under it, and a launcher on every
+ * other page, which navigated to the feed. They shared the debounce, the stale-answer
+ * guard, the arrow keys, the hotkeys, the dismissal and the row rendering, in two
+ * copies, and differed in exactly one thing: what a pick DOES. So
+ * that one thing is a target now (HeaderSearch's `target`), and everything else is
+ * written once.
+ *
+ * Typing does NOT run the search. What you type is a draft; Enter or choosing a row
+ * commits it. The box used to push every keystroke into the store, so the feed
+ * refetched while the visitor was still composing — and the half-typed word it
+ * searched for was rarely the one they meant.
+ *
+ * `size` and `autofocus` are presentation. The homepage renders this same box, at
+ * hero size, as the whole of its content (see HomeLandingView) — it registers no
+ * list, so it gets the browse target (LauncherTarget) and every pick becomes a link to the
+ * feed. A hero-sized second copy of this component is how the two would drift.
+ */
 export interface HeaderSearchProps {
   /** What an empty box shows.
    *

@@ -3,12 +3,12 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Search, X } from '@lucide/svelte';
-  import { api } from '#lib/api.js';
-  import { browseQuery, planForSuggestion } from '#lib/browseTarget.js';
+  import { Search } from '@lucide/svelte';
+  import { LauncherTarget } from './launcherTarget.svelte';
+  import HeaderSearchClear from './HeaderSearchClear.svelte';
+  import { WIDE_QUERY, boxKey, isFocusHotkey, stepIndex } from './headerSearchBox';
   import { displayQuery } from '#lib/filters.js';
   import { dropdownRows } from '#lib/dropdownRows.js';
-  import type { FacetCounts } from '#lib/types.js';
   import { listSearchTarget, type ListSearchTarget } from '#lib/listSearch.svelte.js';
   import { headerFilterTrigger } from '#lib/headerFilterTrigger.js';
   import { trackKeyboardFit } from '#lib/keyboardFitTracker.svelte.js';
@@ -29,6 +29,7 @@
     companiesLimit,
     completionsLimit,
     jobsLimit,
+    panelSuggestions,
   } from './headerSearchLimits';
   import {
     activeOperator,
@@ -47,24 +48,7 @@
   import HeaderSuggestionList from './HeaderSuggestionList.svelte';
   import LinkIntakeRow from './LinkIntakeRow.svelte';
 
-  // The header's search box — the ONE of them, on every page.
-  //
-  // There were two: this, which filtered the list under it, and a launcher on every
-  // other page, which navigated to the feed. They shared the debounce, the stale-answer
-  // guard, the arrow keys, the hotkeys, the dismissal and the row rendering, in two
-  // copies, and differed in exactly one thing: what a pick DOES. So
-  // that one thing is a target now (see `target` below), and everything else is
-  // written once.
-  //
-  // Typing does NOT run the search. What you type is a draft; Enter or choosing a row
-  // commits it. The box used to push every keystroke into the store, so the feed
-  // refetched while the visitor was still composing — and the half-typed word it
-  // searched for was rarely the one they meant.
-  //
-  // `size` and `autofocus` are presentation. The homepage renders this same box, at
-  // hero size, as the whole of its content (see HomeLandingView) — it registers no
-  // list, so it gets the browse target above and every pick becomes a link to the
-  // feed. A hero-sized second copy of this component is how the two would drift.
+  // The header's search box — the ONE of them, on every page (see HeaderSearchProps).
   let {
     placeholder,
     label,
@@ -92,11 +76,6 @@
 
   let inputEl = $state<HTMLInputElement | null>(null);
   let wrapEl = $state<HTMLDivElement | null>(null);
-
-  /** Tailwind's `sm`. Two things below ask it — whether to place the caret on mount, and
-   *  how this box's panel is drawn — and they must get one answer, since the markup they
-   *  are reasoning about switches on the same breakpoint. */
-  const WIDE_QUERY = '(min-width: 640px)';
 
   // True while the caret sits where the page put it, before the visitor touched anything:
   // the focus ring is for focus somebody moved, and drawn on load it framed the homepage's
@@ -132,53 +111,18 @@
   // The draft and caret as of the last pause — what the fetches below answer.
   let settled = $state.raw({ text: '', caret: 0 });
 
-  // The distribution behind the empty box on a page with no list of its own. Fetched
-  // once, lazily, the first time somebody focuses the box — a page that nobody searches
-  // from should not pay for it, and a page that has a list already has the numbers.
-  let browseCounts = $state.raw<FacetCounts | null>(null);
-  let browseCountsAsked = false;
-
-  function loadBrowseCounts() {
-    // Already measured by the page that rendered us — asking again would fetch the
-    // identical unfiltered distribution a second time.
-    if (counts) return;
-    if (browseCountsAsked) return;
-    browseCountsAsked = true;
-    void api
-      .facetCounts(new URLSearchParams(), { facets: ['category'] })
-      .then((c) => (browseCounts = c))
-      // A missing distribution is not an error here: the empty box simply offers
-      // nothing, which is what it did on these pages before.
-      .catch(() => {});
-  }
-
-  /** Open the feed with a filter. What a pick does off a list page — the ONE thing the
-   *  launcher ever did differently, and the reason there were two of these components. */
-  function browse(plan: ApplyPlan) {
-    const query = browseQuery(plan);
-    // A plan that names nothing navigates nowhere: landing on an unfiltered feed is
-    // not what "search for nothing" should do.
-    if (query === '') return;
-    close();
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path
-    void goto(`${resolve('/jobs')}?${query}`);
-  }
+  // The navigating target off a list page (see LauncherTarget).
+  const launcher = new LauncherTarget(
+    () => counts,
+    () => close(),
+  );
 
   // The list page's own store, or — on every other page — a target that navigates to
   // the feed instead of filtering in place. Never null, so nothing below has to ask
   // which kind of page it is on.
   const registered = $derived(listSearchTarget());
-  const target = $derived<ListSearchTarget>(
-    registered ?? {
-      value: { q: '' },
-      commitQuery: (q) => browse({ facets: [], q }),
-      suggest: {
-        counts: () => counts ?? browseCounts,
-        apply: (s) => browse(planForSuggestion(s)),
-        applyParts: browse,
-      },
-    },
-  );
+  const target = $derived<ListSearchTarget>(registered ?? launcher.target);
+
   // Fall back to the URL's `q` before the view registers (SSR + first paint), so a
   // shared /jobs?q=… link shows its query immediately.
   const q = $derived(displayQuery(target.value.q || (page.url.searchParams.get('q') ?? '')));
@@ -229,22 +173,7 @@
   // would ask every endpoint for the word "company:google".
   const settledQuery = $derived(parseOperators(settled.text).text);
 
-  // A box with nothing to complete offers the catalogue's shape; a typed one offers
-  // what matches.
-  //
-  // The first case is the whole point of opening on focus, and it is answered LOCALLY:
-  // the curated group order lives in the filter modal's own grouping, checked there
-  // against the category vocabulary at compile time, so asking a server for it would
-  // be a second copy of that order. The typed case is the endpoint's — it completes a
-  // phrase against the catalogue's real vocabulary, which no dictionary shipped to the
-  // browser can do.
-  //
-  // The threshold is SUGGEST_MIN_CHARS, the same one the fetch below gates on, and
-  // deliberately not a separate `=== ''`. Two thresholds opened a state nobody designed:
-  // at exactly one character the box was past "empty" but short of "asked", so it showed
-  // neither the starters nor completions it had not fetched — a ten-row panel collapsing
-  // to the single free-text row, then refilling on the next keystroke. One predicate
-  // answers "is there a query yet", so there is no gap for a state to fall into.
+  // The empty box's starting points, or what matches the typed text (see panelSuggestions).
   const starters = $derived(suggest ? starterSuggestions(suggest.counts()) : []);
   // Completions, postings and companies for the typed text (see TypedSuggestions).
   const typed = new TypedSuggestions(
@@ -258,7 +187,7 @@
       minChars: SUGGEST_MIN_CHARS,
     },
   );
-  const suggestions = $derived(settled.text.trim().length < SUGGEST_MIN_CHARS ? starters : typed.completions);
+  const suggestions = $derived(panelSuggestions(settled.text, starters, typed.completions));
 
   // ── Field operators ───────────────────────────────────────────────────────
   //
@@ -453,57 +382,32 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    // Mid-composition (CJK/IME) Enter CONFIRMS a candidate and the arrows move through
-    // them; the browser must keep those. `oninput` has already fired by then, so the
-    // draft holds pre-conversion text — searching it would search a half-typed word.
-    if (e.isComposing) return;
-    // Enter is handled whether or not the dropdown is open — it is the only way typing
-    // reaches the list now, so it cannot sit behind the dropdown's guard. A highlighted
-    // ROLE row applies its facet; anything else (nothing highlighted, or the last row,
-    // which is the free-text one) searches the text.
-    if (e.key === 'Enter') {
-      e.preventDefault();
+    const key = boxKey(e, suggestOpen);
+    if (key === null) return;
+    e.preventDefault();
+    if (key === 'enter') {
       if (suggestOpen && activeIndex >= 0) choose(activeIndex);
       else runSearch();
-      return;
-    }
-    // Every other key belongs to the dropdown, so with it closed this handler owns
-    // nothing — which keeps the input behaving as it does where no suggestions exist.
-    if (!suggestOpen) return;
-    if (e.key === 'Escape') {
-      e.preventDefault(); // keep the typed text; only the dropdown closes
-      close();
-      return;
-    }
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      activeIndex = activeIndex < rowCount - 1 ? activeIndex + 1 : 0;
-      return;
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      activeIndex = activeIndex > 0 ? activeIndex - 1 : rowCount - 1;
-      return;
-    }
+    } else if (key === 'close') close();
+    else activeIndex = stepIndex(activeIndex, rowCount, key);
+  }
+
+  /** The visitor is at the box again: the dropdown reopens, unhighlighted, and the typed
+   *  placeholder stops. */
+  function reopen() {
+    dismissed = false;
+    activeIndex = -1;
+    typedHint.stop();
   }
 
   function onWindowClick(e: MouseEvent) {
     if (suggestOpen && wrapEl && !wrapEl.contains(e.target as Node)) close();
   }
 
-  // Same global hotkeys as the launcher: Cmd/Ctrl+K always, `/` unless typing.
   function onWindowKeydown(e: KeyboardEvent) {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    if (isFocusHotkey(e)) {
       e.preventDefault();
       inputEl?.focus();
-      return;
-    }
-    if (e.key === '/' && !e.metaKey && !e.ctrlKey) {
-      const tag = (document.activeElement as HTMLElement | null)?.tagName;
-      if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
-        e.preventDefault();
-        inputEl?.focus();
-      }
     }
   }
 </script>
@@ -547,14 +451,10 @@
       onpointerdown={() => {
         // A click on an already-focused box fires no `focus` event, so without this an
         // autofocused hero would stay silent when its own field is clicked.
-        dismissed = false;
-        activeIndex = -1;
-        typedHint.stop();
+        reopen();
       }}
       oninput={(e) => {
-        dismissed = false;
-        activeIndex = -1;
-        typedHint.stop();
+        reopen();
         // Editing the text asks a different question, so the last link's answer goes
         // with it — otherwise a half-corrected URL sits under a verdict on the old one.
         intake.step = null;
@@ -570,16 +470,14 @@
         caret = e.currentTarget.selectionStart ?? caret;
         // Off a list page nothing has measured the catalogue for us, so the empty
         // box's starting points are fetched here — on the first focus, never on load.
-        if (!registered) loadBrowseCounts();
+        if (!registered) launcher.loadCounts();
         // Reached without a click by `/` and Cmd+K, which is the case the popover's own
         // click-away handler cannot see.
         locationOpen = false;
         // Focus is the question "what can I put here", so it reopens the dropdown —
         // including after a click-away dismissed it, which would otherwise leave the
         // box permanently silent for the rest of the visit.
-        dismissed = false;
-        activeIndex = -1;
-        typedHint.stop();
+        reopen();
       }}
       onkeydown={onKeydown}
       type="text"
@@ -596,24 +494,13 @@
         !hero && 'placeholder:text-sm',
       )}
     />
-    {#if draft.text}
-      <!-- Clearing is an explicit act, not typing, so it commits at once: the visitor
-           asked for the unfiltered list, not for an empty box over the old results. -->
-      <button
-        type="button"
-        onclick={() => {
-          draft = edit(draft, '');
-          runSearch();
-        }}
-        aria-label="Clear search"
-        class="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <!-- 24px box around the 16px glyph: the glyph alone was the whole target. -->
-        <X class="size-4" aria-hidden="true" />
-      </button>
-    {:else}
-      <kbd class="hidden shrink-0 rounded border border-border px-1.5 text-xs text-muted-foreground sm:inline">/</kbd>
-    {/if}
+    <HeaderSearchClear
+      empty={!draft.text}
+      onclear={() => {
+        draft = edit(draft, '');
+        runSearch();
+      }}
+    />
     <HeaderFilterTrigger open={filterTrigger.open} count={filterTrigger.count} />
   </div>
 

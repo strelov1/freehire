@@ -1,11 +1,10 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
   import { PUBLIC_OPEN_WITHIN } from '$app/env/public';
   import { openWithinEnabled } from '#lib/features.js';
   import { Bell, Info, UserRound } from '@lucide/svelte';
   import { Tooltip } from '#lib/ui/index.js';
-  import { EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION } from '#lib/facets.js';
+  import { FACETS, JOB_COLLECTION } from '#lib/facets.js';
   import { companySearch } from '#lib/companySearch.js';
   import { searchCities } from '#lib/facetOptions.js';
   import { FILTER_SEARCH_MIN_QUERY, jobFilterSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
@@ -13,7 +12,7 @@
   import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
-  import { emptyFilters, queryNarrows, savedSearchQuery, type FilterStore, type JobFilters } from '#lib/filters.js';
+  import { emptyFilters, queryNarrows, savedSearchQuery } from '#lib/filters.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
   import { SHORT_APPLICATION_MAX } from '#lib/jobFacts.js';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '#lib/filterSections.js';
@@ -28,16 +27,13 @@
   import RelocationPane from './RelocationPane.svelte';
   import LocationPane from './LocationPane.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
+  import { railEntryCount, selCount } from './railCounts';
+  import { searchHitSelection, splitAction } from './searchHitAction';
+  import type { FilterModalProps } from './FilterModal.props';
   import AiFilterButton from './AiFilterButton.svelte';
   import SavedSearches from '../SavedSearches.svelte';
 
-  // The job-search filter modal: a thin wrapper over FilterModalShell that supplies the
-  // job rail, the staged job filters, and the pane controls. The shell owns the chrome
-  // (rail, footer, deferred apply); this file owns only what's job-specific.
-  //
-  // Reusable beyond the standalone list: `railKeys` restricts which rail panes show
-  // (e.g. Specialization + Skills for a profile); `applyLabel`/`onApply` give the footer
-  // a custom label and action (e.g. "Save" → persist a profile); `canApply` gates it.
+  // The job-search filter modal (see FilterModalProps).
   let {
     store,
     seed,
@@ -59,42 +55,7 @@
     stagedCounts,
     extra,
     matchAvailable = false,
-  }: {
-    store?: FilterStore;
-    seed?: JobFilters;
-    counts?: FacetCounts | null;
-    exclude?: string[];
-    railKeys?: string[];
-    // Show the "My filters" (saved searches) tab. Opt-in: the standalone job list enables
-    // it; reuse like the profile comparison modal leaves it off.
-    savedSearches?: boolean;
-    /** Personal company filter: enabled only by a feed whose search uses the session. */
-    formerEmployersAvailable?: boolean;
-    /** Personal watchlist filter: enabled by the same feeds as the former-employers one. */
-    watchlistAvailable?: boolean;
-    hideSeenAvailable?: boolean;
-    title?: string;
-    applyLabel?: string;
-    onApply?: (staged: StagedFilters) => void | Promise<void>;
-    canApply?: (f: JobFilters) => boolean;
-    // Plain-select reuse (e.g. the profile editor): drop the search-only exclude/match
-    // toggles so a facet value reads as a plain choice, not a filter.
-    plain?: boolean;
-    open?: boolean;
-    onClose: () => void;
-    previewCount?: (params: URLSearchParams) => Promise<number>;
-    // Live disjunctive facet counts for the staged selection — when supplied, every
-    // control shows counts that recompute as you pick (the job list). Absent for the
-    // analytics/swipe reuse, which keep the applied `counts` + total-only preview.
-    stagedCounts?: (params: URLSearchParams) => Promise<FacetCounts>;
-    // Extra content rendered above the pane, handed the staged store so it can edit it
-    // (e.g. the profile editor's "import skills from CV").
-    extra?: Snippet<[StagedFilters]>;
-    // The "Minimum skill match" slider atop the Skills pane: a threshold over the
-    // viewer's own profile skills (`minSkillMatch` in JobFilters, applied by the server under
-    // best match, in the browser by JobsView under any other ordering). Hidden unless the caller has a real percent to filter on.
-    matchAvailable?: boolean;
-  } = $props();
+  }: FilterModalProps = $props();
 
   const staged = new StagedFilters();
 
@@ -157,64 +118,8 @@
     ...RAIL.filter((e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam))),
   ]);
 
-  const jobCollectionValues = JOB_COLLECTION.map((o) => o.value);
-  const employerCredentialValues = EMPLOYER_CREDENTIALS.map((o) => o.value);
-
-  // Values selected for one facet — included plus excluded — so the rail count reflects
-  // any staged selection regardless of sign. `values`, when passed, scopes the count to
-  // just that subset — for a param split across two panes (see ChipFacet's `options`
-  // override), so a badge doesn't count values shown under a different tab.
-  function selCount(f: JobFilters, param: string, values?: string[]): number {
-    const st = f.facets[param];
-    if (!st) return 0;
-    if (!values) return st.include.length + st.exclude.length;
-    const allowed = new Set(values);
-    return st.include.filter((v) => allowed.has(v)).length + st.exclude.filter((v) => allowed.has(v)).length;
-  }
-
   function entryCount(e: RailEntry): number {
-    const f = staged.value;
-    if (e.kind === 'category') return selCount(f, 'category') + selCount(f, 'ai_archetype');
-    if (e.kind === 'experience')
-      return selCount(f, 'seniority') + selCount(f, 'role_type') + (f.experienceYearsMax != null ? 1 : 0);
-    if (e.kind === 'location')
-      return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'metros') + selCount(f, 'cities');
-    if (e.kind === 'salary')
-      return (
-        selCount(f, 'salary_currency') + (f.salaryMin != null || f.salaryMax != null ? 1 : 0) + selCount(f, 'equity')
-      );
-    if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type') + selCount(f, 'engagement');
-    if (e.kind === 'industry')
-      return selCount(f, 'domains') + selCount(f, 'company_type') + selCount(f, 'collections', jobCollectionValues);
-    if (e.kind === 'language') return selCount(f, 'english_level') + selCount(f, 'posting_language');
-    if (e.kind === 'relocation')
-      return (
-        selCount(f, 'relocation') +
-        (f.visa ? 1 : 0) +
-        (f.hideAIInterview ? 1 : 0) +
-        (f.autoApplyAvailable ? 1 : 0) +
-        (f.applyQuestionsMax != null ? 1 : 0) +
-        selCount(f, 'clearance_levels') +
-        selCount(f, 'collections', employerCredentialValues)
-      );
-    if (e.kind === 'posted')
-      return (
-        (f.postedWithinDays != null ? 1 : 0) +
-        (f.openWithinDays != null ? 1 : 0) +
-        (showHideSeen && f.hideSeen ? 1 : 0) +
-        selCount(f, 'reality')
-      );
-    // The Minimum skill match threshold lives at the top of the Skills pane, so it
-    // counts toward that tab's badge alongside the skills facet selections.
-    if (e.key === 'skills') return selCount(f, 'skills') + (matchAvailable && f.minSkillMatch != null ? 1 : 0);
-    if (e.key === 'company_slug')
-      return (
-        selCount(f, 'company_slug') +
-        (showFormerEmployers && f.formerEmployers ? 1 : 0) +
-        (showWatchlist && f.watchlist ? 1 : 0)
-      );
-    if (e.key === 'source') return selCount(f, 'source_type') + selCount(f, 'source');
-    return selCount(f, e.facetParam ?? e.key);
+    return railEntryCount(e, staged.value, { showHideSeen, matchAvailable, showFormerEmployers, showWatchlist });
   }
 
   const englishDef = FACETS.find((d) => d.param === 'english_level');
@@ -325,62 +230,7 @@
     };
   });
 
-  function splitAction(action: string | undefined): { kind: string; rest: string } | null {
-    if (!action) return null;
-    const colon = action.indexOf(':');
-    if (colon < 0) {
-      if (
-        action === 'visa' ||
-        action === 'hide-ai' ||
-        action === 'auto-apply' ||
-        action === 'short-apply' ||
-        action === 'former-employers' ||
-        action === 'watchlist' ||
-        action === 'hide-seen'
-      )
-        return { kind: action, rest: '' };
-      return null;
-    }
-    const kind = action.slice(0, colon);
-    if (kind === 'posted' || kind === 'open' || kind === 'experience') {
-      return { kind, rest: action.slice(colon + 1) };
-    }
-    return null;
-  }
-
-  function searchSelection(hit: FilterSearchHit) {
-    const off = { included: false, excluded: false, excludable: false };
-    const action = splitAction(hit.action);
-    switch (action?.kind) {
-      case 'former-employers':
-        return { ...off, included: staged.value.formerEmployers };
-      case 'watchlist':
-        return { ...off, included: staged.value.watchlist };
-      case 'hide-seen':
-        return { ...off, included: staged.value.hideSeen };
-      case 'visa':
-        return { ...off, included: staged.value.visa };
-      case 'hide-ai':
-        return { ...off, included: staged.value.hideAIInterview };
-      case 'auto-apply':
-        return { ...off, included: staged.value.autoApplyAvailable };
-      case 'short-apply':
-        return { ...off, included: staged.value.applyQuestionsMax != null };
-      case 'posted':
-        return { ...off, included: staged.value.postedWithinDays === Number(action.rest) };
-      case 'open':
-        return { ...off, included: staged.value.openWithinDays === Number(action.rest) };
-      case 'experience':
-        return { ...off, included: staged.value.experienceYearsMax === Number(action.rest) };
-    }
-    if (!hit.param || hit.value == null) return off;
-    const selected = staged.facet(hit.param);
-    return {
-      included: selected.include.includes(hit.value),
-      excluded: selected.exclude.includes(hit.value),
-      excludable: !plain && (FACETS.find((d) => d.param === hit.param)?.excludable ?? false),
-    };
-  }
+  const searchSelection = (hit: FilterSearchHit) => searchHitSelection(hit, staged.value, plain);
 
   function onSearchToggle(hit: FilterSearchHit) {
     const action = splitAction(hit.action);
