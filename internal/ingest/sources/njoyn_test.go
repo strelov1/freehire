@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 )
 
 // The fixtures under testdata/njoyn were recorded from CGI's site (cgi.njoyn.com, clid 21001) on
@@ -70,6 +72,9 @@ func TestNjoynProvider(t *testing.T) {
 	}
 	if _, ok := proxiedProviders["njoyn"]; !ok {
 		t.Error("njoyn must be in proxiedProviders (Radware walls the prod datacenter IP)")
+	}
+	if r, ok := scraplingProviders["njoyn"]; !ok || r.route.mode != scraplingfetch.ModeHTTP || !r.route.proxy {
+		t.Error("njoyn must ride the Scrapling tier over HTTP + proxy (the fixed proxy exit drew XWP10022)")
 	}
 }
 
