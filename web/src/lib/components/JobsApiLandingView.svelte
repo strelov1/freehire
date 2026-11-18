@@ -283,8 +283,11 @@
             </li>
           {/each}
         </ul>
-        <!-- Datacircle's own embed, verbatim: the SVG is served live and shows our current
-             rank on their benchmark, so it can never claim a place we no longer hold. -->
+        <!-- Datacircle's own badge, re-laid out wide and short (static/brands/datacircle-ranked.svg):
+             their live SVG is a fixed 240x162 card, too tall beside the hero copy.
+             shortcut: the rank is frozen in that file (their glyph paths, "freehire" dropped)
+             and typed in the footer;
+             rebuild it from the live SVG if the ranking moves. -->
         <!-- eslint-disable svelte/no-navigation-without-resolve -- external ranking page opened in a new tab; not an internal route -->
         <a
           href="https://datacircle.dev/best-full-job-posting-api"
@@ -293,11 +296,12 @@
           class="mt-8 inline-block rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <img
-            src="https://datacircle.dev/badge/best-full-job-posting-api/freehire.svg"
-            alt="Datacircle's ranking of the best full job posting API providers"
-            width="240"
-            height="162"
+            src="/brands/datacircle-ranked.svg"
+            alt="Ranked #1 Best Overall job postings API by Datacircle"
+            width="397"
+            height="64"
             loading="lazy"
+            class="h-auto max-w-full"
           />
         </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
       </div>
@@ -307,7 +311,7 @@
 
     {#if figures.length > 0}
       <dl
-        class="mt-14 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3"
+        class="mt-14 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:auto-cols-fr sm:grid-flow-col"
       >
         {#each figures as f (f.label)}
           <div class="bg-background p-5">
