@@ -18,6 +18,12 @@ func TestTryLockExcludesASecondHolderUntilReleased(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("first TryLock = (%v, %v), want it to win a free lock", ok, err)
 	}
+	released := false
+	t.Cleanup(func() {
+		if !released {
+			release()
+		}
+	})
 	if rel2, ok, err := TryLock(ctx, pool, key); err != nil || ok {
 		if ok {
 			rel2()
@@ -26,6 +32,7 @@ func TestTryLockExcludesASecondHolderUntilReleased(t *testing.T) {
 	}
 
 	release()
+	released = true
 	rel3, ok, err := TryLock(ctx, pool, key)
 	if err != nil || !ok {
 		t.Fatalf("TryLock after release = (%v, %v), want it to win", ok, err)
