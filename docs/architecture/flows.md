@@ -6,7 +6,7 @@ Part of [freehire architecture](../architecture.md): how a request travels when 
 
 The search path is the most-travelled code in the system, and its defining property is that a result page is served **without touching Postgres for the payload**. The Meilisearch document *is* the public wire shape of a job, so the index answers the whole query.
 
-<img src="diagrams/flow-finding-a-job.svg" alt="A search request served without touching Postgres for the payload: the reader's search request is translated to a Meilisearch filter and answered from the index; Postgres is queried only afterward, best-effort, for the ghost-job signal on that page.">
+<img src="../diagrams/flow-finding-a-job.svg" alt="A search request served without touching Postgres for the payload: the reader's search request is translated to a Meilisearch filter and answered from the index; Postgres is queried only afterward, best-effort, for the ghost-job signal on that page.">
 
 A few things are load-bearing here.
 
@@ -26,7 +26,7 @@ Deeper: [`internal/search`](../../internal/search/AGENTS.md) · [`internal/job/j
 
 The CV workspace is built on a rule that shapes every part of it: **the agent may not write a claim the candidate has not made.** Enforcement is not a prompt instruction — it is an evidence gate in the write path, and the evidence comes from a durable store called the experience bank.
 
-<img src="diagrams/flow-tailoring-a-cv.svg" alt="A tailoring turn cites the experience bank for every edit it writes: the candidate's CV is imported additively into the experience bank; a tailoring turn loops per vacancy requirement, searching the bank for scored evidence and writing each CV edit through the evidence-gated editor, then renders the result with Typst.">
+<img src="../diagrams/flow-tailoring-a-cv.svg" alt="A tailoring turn cites the experience bank for every edit it writes: the candidate's CV is imported additively into the experience bank; a tailoring turn loops per vacancy requirement, searching the bank for scored evidence and writing each CV edit through the evidence-gated editor, then renders the result with Typst.">
 
 *The upload-time `resumeextract` call is drawn as a self-message on `API` rather than its own lifeline.*
 
@@ -44,7 +44,7 @@ Deeper: [`internal/candidate/experience`](../../internal/candidate/experience/AG
 
 The assistant runs **in this process**. There is no external agent runtime, no shell, and no credential minted for it: a tool receives the session owner's user id and calls the same Go service the HTTP handler calls. Anything the agent must not reach is simply a tool that does not exist.
 
-<img src="diagrams/flow-asking-the-assistant.svg" alt="A bounded tool-calling loop that always ends in exactly one terminal event: the Runner calls the LLM gateway on the caller's own credential each round, then either calls a tool and streams the result back or streams a final answer; every path ends in exactly one terminal SSE event.">
+<img src="../diagrams/flow-asking-the-assistant.svg" alt="A bounded tool-calling loop that always ends in exactly one terminal event: the Runner calls the LLM gateway on the caller's own credential each round, then either calls a tool and streams the result back or streams a final answer; every path ends in exactly one terminal SSE event.">
 
 *The `≤ MaxSteps` iteration is drawn as an annotation rather than a wrapping `loop` frame, to keep the diagram to one combined fragment (the `alt` on tool-calls vs. answer text).*
 
