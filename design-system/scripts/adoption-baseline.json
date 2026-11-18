@@ -11,7 +11,7 @@
   "CountryFlag": 17,
   "Dialog": 17,
   "EmptyState": 9,
-  "EntityLogo": 34,
+  "EntityLogo": 35,
   "FormField": 10,
   "Input": 36,
   "LoadMore": 12,
@@ -19,11 +19,11 @@
   "NumberedGrid": 7,
   "Pager": 0,
   "ProviderIcon": 17,
-  "SectionLabel": 25,
+  "SectionLabel": 24,
   "SettingRow": 3,
   "Skeleton": 5,
   "Table": 8,
   "Tabs": 2,
-  "TabStrip": 20,
+  "TabStrip": 21,
   "Tooltip": 3
 }

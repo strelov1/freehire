@@ -156,9 +156,21 @@ var turkishTechTerms = []aliasEntry{
 // German or Polish title carries none, so a table word like "sap" or "erp" cannot reach it.
 var turkishCues = []string{
 	"uzman", "uzmani", "uzmanlari", "sorumlu", "sorumlusu", "muhendis", "danisman", "yonetici", "yonetmen",
-	"mudur", "eleman", "personel", "gelistir", "stajyer", "kidemli", "destek", "teknisyen", "yazilim", //nolint:misspell // Turkish, not English
+	"mudur", "eleman", "personel", "gelistir", "stajyer", "kidemli", "destek", "teknisyen", "yazilim",
 	"bilgi", "islem", "guvenlik", "guvenlig", "yapay", "zeka", "veri", "analisti", "mimari", "yrd",
 	"yardimcisi", "ogrenme", "lider", "yonetim", "ekip", "bilisim", "bulut", "altyapi",
+	// The non-IT roles and fields (turkish_general.go). Each is a Turkish word no English title
+	// carries; "operator" and "market" are deliberately not cues, being English words too.
+	"satis", "magaza", "muhasebe", "finans", "insan", "kaynaklari", "ozluk", "pazarlama", "uretim", "depo",
+	"lojistik", "sevkiyat", "kalite", "temizlik", "garson", "asci", "kasiyer", "sekreter", "resepsiyon",
+	"sofor", "surucu", "hemsire", "hekim", "doktor", "eczaci", "ogretmen", "egitmen", "avukat", "hukuk",
+	"usta", "tezgahtar", "kuafor", "berber", "reyon", "gorevli", "operatoru", "isci", "sigorta", "gayrimenkul",
+	"emlak", "musteri", "cagri", "idari", "ofis", "bakim", "onarim", "elemani", "temsilci", "teknikeri",
+	"mutfak", "bordro", "tahsilat", "butce", "satin", "ithalat", "ihracat", "gumruk", "kurye", "nakliye",
+	"tibbi", "hasta", "saglik", "guvenlik", "ressam", "teknik", "santiye", "planlama", "otomasyon", "stok", "otel",
+	"misafir", "mimar", "musavir", "kaynakci", "tercuman", "tesisatci", "boyaci", "marangoz", "elektrikci",
+	"tamirci", "barmen", "bulasikci", "fizyoterapist", "diyetisyen", "psikolog", "laboratuvar", "kimyager",
+	"biyolog", "grafiker", "masor", "makyoz", "estetisyen", "restoran", "komi", "ebe", "ceviri", "fotograf",
 }
 
 // foldTurkish prepares a lowercased title for the Turkish tables: the diacritics are dropped
@@ -227,7 +239,11 @@ func turkishWords(lower string) []string {
 // matchTurkishCategory resolves the category of a lowercased title the other tables left
 // unresolved. A blind alias answers categoryNone.
 func matchTurkishCategory(lower string) string {
-	c, _ := matchTurkish(turkishWords(lower), turkishCategoryTable)
+	words := turkishWords(lower)
+	if c, ok := matchTurkish(words, turkishCategoryTable); ok {
+		return c
+	}
+	c, _ := matchTurkish(words, turkishGeneralCategoryTable)
 	return c
 }
 

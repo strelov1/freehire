@@ -93,16 +93,11 @@ func TestTurkishFoldsTheDottedCapital(t *testing.T) {
 // Turkish title outside IT keeps resolving nothing technical.
 func TestTurkishTablesNeverGuess(t *testing.T) {
 	for _, title := range []string{
-		"Teknik Destek Uzmanı",            // technical support of anything
-		"Kalite Sistem Yönetim Sorumlusu", // a quality system, not a sysadmin
-		"Kalite Sistem Uzmanı",
-		"Yapay Zeka Uzmanı", // the English twin "AI Specialist" resolves nothing either
-		"Sistem Mühendisi",  // the English "System Engineer" is software_engineering
+		"Teknik Destek Uzmanı", // technical support of anything
+		"Yapay Zeka Uzmanı",    // the English twin "AI Specialist" resolves nothing either
+		"Sistem Mühendisi",     // the English "System Engineer" is software_engineering
 		"Veri Tabanı Uzmanı",
 		"Saha Uzmanı",
-		"Satış Uzmanı",
-		"Resepsiyon Sorumlusu",
-		"Şirket Şoförü",
 	} {
 		if got := Parse(title).Category; got != "" {
 			t.Errorf("Parse(%q).Category = %q, want none", title, got)
