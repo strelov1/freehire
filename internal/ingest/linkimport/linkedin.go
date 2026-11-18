@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 
@@ -86,7 +87,7 @@ func (im *Importer) PrepareLinkedIn(ctx context.Context, raw string) (LinkedInRe
 		out.Board = Board{Source: native.Entry.Provider, Board: native.Entry.Board}
 		return out, nil
 	}
-	board, canonical, err := im.LinkedInEmployerBoard(ctx, j)
+	board, canonical, err := im.LinkedInEmployerBoard(ctx, normalize.CompanySlug(j.Company), j)
 	out.Board, out.BoardURL = board, canonical
 	return out, err
 }
@@ -94,10 +95,12 @@ func (im *Importer) PrepareLinkedIn(ctx context.Context, raw string) (LinkedInRe
 // LinkedInEmployerBoard discovers observed employer career links without inventing
 // a posting or fetching an entire ATS board. It is shared by scheduled discovery
 // and on-demand intake; provider pause checks remain in the ordinary write path.
-func (im *Importer) LinkedInEmployerBoard(ctx context.Context, j sources.Job) (Board, string, error) {
+// companySlug is the catalogue slug to read a stored website under: discovery passes the
+// existing job's slug, which may differ from the LinkedIn spelling of the name.
+func (im *Importer) LinkedInEmployerBoard(ctx context.Context, companySlug string, j sources.Job) (Board, string, error) {
 	website := j.CompanyWebsite
 	if website == "" && im.q != nil {
-		company, err := im.q.GetCompany(ctx, normalize.CompanySlug(j.Company))
+		company, err := im.q.GetCompany(ctx, companySlug)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return Board{}, "", err
 		}
@@ -121,7 +124,8 @@ func (im *Importer) LinkedInEmployerBoard(ctx context.Context, j sources.Job) (B
 			var err error
 			website, err = reader.CompanyWebsite(ctx, j.CompanyProfileURL)
 			if err != nil {
-				return Board{}, "", err
+				// A transient profile read is a missing website, not a failed resolution.
+				log.Printf("linkimport: employer website unavailable for LinkedIn posting %s: %v", j.ExternalID, err)
 			}
 		}
 	}

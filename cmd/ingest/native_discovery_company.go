@@ -53,7 +53,7 @@ func (d *nativeDiscovery) resolveCompany(ctx context.Context, discovered sources
 }
 
 func (d *nativeDiscovery) discoverCompanyBoard(ctx context.Context, slug string, discovered sources.Job) (bool, error) {
-	destination, canonical, err := d.importer.LinkedInEmployerBoard(ctx, discovered)
+	destination, canonical, err := d.importer.LinkedInEmployerBoard(ctx, slug, discovered)
 	if err != nil {
 		return false, err
 	}
