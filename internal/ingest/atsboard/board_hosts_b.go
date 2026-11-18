@@ -196,6 +196,9 @@ var atsBoardsB = []struct{ host, source, mode string }{
 	// --- pathjob: board = the first path segment of a POSTING url, on the apex host only.
 	{"harri.com", "harri", modePathJob},
 
+	// --- njoyn: board = "<tenant>/<site>/<clid>" from <tenant>.njoyn.com/<site>/xweb/xweb.asp?clid=… ---
+	{"njoyn.com", "njoyn", modeNjoyn},
+
 	// --- encodedcareers: board = the base64-encoded numeric id in "/<slug>/<id>/careers" ---
 	{"app.idealtraits.com", "idealtraits", modeEncodedCareers},
 

@@ -1,5 +1,20 @@
 # Knowledge update history
 
+## 2026-11-17
+
+Documented the optional LinkedIn Easy Apply listing pass (`tenants.easyapply_pages`). Evidence is a
+live guest-API measurement today: 6 of 6 Easy Apply cards had an on-site apply control against 1 of
+8 without the filter; the detail page still decides publication. No production rollout is asserted.
+
+Documented the LinkedIn non-native read cache (`linkedin_postings_read`): external and unknown
+postings are re-read only after the body-refresh window. Evidence is the implementation and its
+tests; no production rollout is asserted.
+
+Documented that the LinkedIn adapter re-reads a stored posting only every `BODY_REFRESH_DAYS`
+through the seen-set (provider-wide, keyed by bare posting id), and that a liveness touch never
+reopens a `native_source_pending` row. Evidence is the implementation and its tests; the
+`ingest-env/linkedin.env` setting is applied separately.
+
 ## 2026-11-16
 
 Documented independent WantApply global/Cyprus inventories and the original-postings
@@ -58,3 +73,10 @@ The first 80-search LinkedIn harvest onboarded three vendor addresses as employe
 career-page links: iCIMS's cookie-script host, Recruitee's analytics and careers_not_hosted
 fallback hosts, and SmartRecruiters' candidate portal path. Each was probed (404, empty, redirect,
 0 postings); the recognizer now reserves them. qa.recruitee.com is a live tenant and stays.
+
+## LinkedIn request interval — 2026-11-17
+
+The LinkedIn limiter's 2s spacing became `LINKEDIN_REQUEST_INTERVAL` (default unchanged,
+100ms..10s, invalid fails the crawl). Requests already leave through the rotating proxy with a
+new exit IP each, and 158 searches after the 429 retry met no refusal at 2s, so the per-process
+spacing, not LinkedIn, was the throughput bound. Ops lowers it in steps.

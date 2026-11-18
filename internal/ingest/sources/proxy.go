@@ -82,6 +82,10 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// User-Agent, so it is IP reputation, not a bot tell), while the residential proxy IP is served.
 	// NewEnlizt takes an HTMLGetter, which HTTPClient satisfies.
 	"enlizt": func(c HTTPClient) Source { return NewEnlizt(c) },
+	// njoyn.com (CGI's careers site) redirects the crawl host's datacenter IP to Radware's bot wall
+	// (validate.perfdrive.com, a CAPTCHA page) on the first request, while a residential IP is
+	// served. The adapter paces itself per board, so the proxied path is paced too.
+	"njoyn": func(c HTTPClient) Source { return NewNjoyn(c) },
 	// tenshoku.mynavi.jp's origin answers 403 to both crawl hosts' datacenter IPs (IP reputation
 	// rather than a bot tell), while the proxy is served. Paced on the proxy as on the direct path.
 	"mynavi": func(c HTTPClient) Source {

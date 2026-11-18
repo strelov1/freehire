@@ -57,6 +57,9 @@ var keyedSegmentBoards = map[string]struct {
 // businessID is the shape of a decoded modeEncodedCareers board: a decimal id with no leading zero.
 var businessID = regexp.MustCompile(`^[1-9][0-9]*$`)
 
+// njoynClientID is the shape of a modeNjoyn client id: all digits (CGI's is 21001).
+var njoynClientID = regexp.MustCompile(`^[0-9]+$`)
+
 // queryBoards holds, per matched host entry in modeQuery, the query parameter that names the
 // board, the shape its value must have to BE one, and the path the board's listing is served
 // from. The canonical collapses to that listing, so a posting URL and the board's own career
