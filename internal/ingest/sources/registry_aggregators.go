@@ -171,6 +171,10 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// rate-paced (pacedHTMLGetter, see energyjoblineRequestInterval); the sitemap does
 		// not, so it stays on the shared client.
 		NewEnergyJobline(c, pacedHTMLGetter(newCrawlerUAClient(), energyjoblineRequestInterval, energyjoblineRequestBurst)),
+		// Dynamite Jobs: remote-only, every function. The listing API is robots-disallowed, so
+		// the sitemaps enumerate postings and each page's JobPosting ld+json carries the body.
+		// Pages are rate-paced; the sitemaps stay on the shared client. See dynamitejobs.go.
+		NewDynamiteJobs(c, pacedHTMLGetter(c, dynamitejobsRequestInterval, dynamitejobsRequestBurst)),
 		// JettyCloud: its postings exist only on its own careers site — the employer runs no
 		// ATS a crawl can reach, so this adapter is the only way the catalogue can carry it.
 		NewJettyCloud(c),
@@ -300,6 +304,11 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// are refused by Cloudflare, so production reaches it through the Scrapling tier
 		// (scraplingtier.go). See job104.go.
 		NewJob104(c, c),
+		// Glints: the Southeast Asian job platform (Indonesia, Vietnam, Singapore, Malaysia),
+		// enumerated from its job sitemaps and scoped to the technical postings by title; each new
+		// posting's page carries the rest. The site refuses a plain client, so production reaches
+		// it through the Scrapling tier (scraplingtier.go). See glints.go.
+		NewGlints(c),
 		// XING Jobs: the DACH professional network's job board, enumerated from its gzip job
 		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
 		// See xing.go.
@@ -381,6 +390,14 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// window is walked; posting pages carry a schema.org JobPosting. Coverage-gated and
 		// paced, see builtinRequestInterval.
 		NewBuiltIn(pacedHTMLGetter(c, builtinRequestInterval, builtinRequestBurst)),
+		// Dice: US job board over many employers. The last-24h window of its own search page is
+		// cut into slices under the search's 750-result ceiling; posting pages carry a schema.org
+		// JobPosting. Coverage-gated and paced, see diceRequestInterval and dice.go.
+		NewDice(pacedHTMLGetter(c, diceRequestInterval, diceRequestBurst)),
+		// Levtech Freelance: a Japanese IT freelance project board, boardless. The whole open
+		// catalogue is the search's leading ~63 pages (closed projects follow it); each new
+		// posting's body is read from its page's schema.org JobPosting. Paced, see levtech.go.
+		NewLevtech(pacedHTMLGetter(c, levtechRequestInterval, levtechRequestBurst)),
 		// EDJOIN: California's K-12 education board, multi-company aggregator enumerated by
 		// job type (board) over one central index, hydrating bodies from each posting page's
 		// schema.org block. The board is a job type and not a district on purpose — see
