@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -114,23 +115,30 @@ func TestBrowserOriginsIncludesExactServedHosts(t *testing.T) {
 	}
 }
 
-// hasAttrs fails unless every wanted attribute is present in the Set-Cookie header.
-func hasAttrs(t *testing.T, what, header string, want ...string) {
+// checkAttrs parses a Set-Cookie header and fails unless it is the session cookie with
+// HttpOnly, SameSite=Lax, Path "/" exactly, and Secure equal to secure.
+func checkAttrs(t *testing.T, what, header string, secure bool) {
 	t.Helper()
-	low := strings.ToLower(header)
-	for _, w := range want {
-		if !strings.Contains(low, w) {
-			t.Errorf("%s %q lacks %q", what, header, w)
-		}
+	c, err := http.ParseSetCookie(header)
+	if err != nil {
+		t.Errorf("%s %q: %v", what, header, err)
+		return
+	}
+	if c.Name != CookieName || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" || c.Secure != secure {
+		t.Errorf("%s %q: want %s HttpOnly SameSite=Lax Path=/ Secure=%v", what, header, CookieName, secure)
 	}
 }
 
 // The session JWT cookie's only XSS/CSRF defence is HttpOnly + SameSite=Lax (+ Secure
-// in prod); pin them on the set and on both logout clears.
+// in prod); pin them on the set and on both logout clears, with and without secure.
 func TestSessionCookieAttributes(t *testing.T) {
-	hasAttrs(t, "session cookie", setCookieHeader(t, ".freehire.me"), "httponly", "samesite=lax", "secure", "path=/")
-	for _, sc := range clearCookieHeaders(t, ".freehire.me") {
-		hasAttrs(t, "clear cookie", sc, "httponly", "samesite=lax", "secure", "path=/")
+	checkAttrs(t, "session cookie", setCookieHeader(t, ".freehire.me"), true)
+	clears := clearCookieHeaders(t, ".freehire.me")
+	if len(clears) != 2 {
+		t.Fatalf("expected 2 clears, got %q", clears)
+	}
+	for _, sc := range clears {
+		checkAttrs(t, "clear cookie", sc, true)
 	}
 
 	// Dev http path: no Secure on the set or the clear.
@@ -143,17 +151,18 @@ func TestSessionCookieAttributes(t *testing.T) {
 		ClearTokenCookie(c, false, ".freehire.me")
 		return nil
 	})
-	for _, path := range []string{"/set", "/clear"} {
+	for path, n := range map[string]int{"/set": 1, "/clear": 2} {
 		resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", path, nil))
 		if err != nil {
 			t.Fatalf("test request failed: %v", err)
 		}
 		_ = resp.Body.Close()
-		for _, sc := range resp.Header.Values("Set-Cookie") {
-			hasAttrs(t, "insecure "+path, sc, "httponly", "samesite=lax")
-			if strings.Contains(strings.ToLower(sc), "secure") {
-				t.Errorf("insecure %s cookie %q carries Secure", path, sc)
-			}
+		scs := resp.Header.Values("Set-Cookie")
+		if len(scs) != n {
+			t.Fatalf("insecure %s: expected %d Set-Cookie headers, got %q", path, n, scs)
+		}
+		for _, sc := range scs {
+			checkAttrs(t, "insecure "+path, sc, false)
 		}
 	}
 }
