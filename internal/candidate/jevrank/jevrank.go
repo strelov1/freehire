@@ -40,6 +40,9 @@ const (
 	// maxJobRunes bounds the description one question sends; the opening names the stack
 	// and the level, which is what the question reads.
 	maxJobRunes = 3000
+	// maxCVRunes keeps a long CV inside one question's context; the opening (summary,
+	// skills, latest roles) carries most of the signal.
+	maxCVRunes = 12000
 
 	instructions = "How well does this candidate's CV fit this job? Judge the title and level, " +
 		"the core skills and the years of relevant experience. Never credit a skill the CV does not state."
@@ -105,6 +108,9 @@ func (r *Ranker) Rank(ctx context.Context, cvText string, jobs []Job) []Result {
 
 func (r *Ranker) judge(ctx context.Context, cvText string, j Job) Result {
 	fail := Result{Slug: j.Slug}
+	if ctx.Err() != nil {
+		return fail
+	}
 	answers, err := r.client.Ask(ctx, map[string]string{"cv": cvText, "job": jobText(j)}, map[string]jev.Question{
 		questionKey: {Type: "choice", Instructions: instructions, Criteria: criteria},
 	})
@@ -112,21 +118,27 @@ func (r *Ranker) judge(ctx context.Context, cvText string, j Job) Result {
 		return fail
 	}
 	p := answers[questionKey].Probabilities
-	strong, ok := p[LabelStrong]
+	strong, okS := p[LabelStrong]
+	partial, okP := p[LabelPartial]
 	label := answers[questionKey].Choice
-	if _, known := criteria[label]; !ok || !known {
+	if _, known := criteria[label]; !known || !okS || !okP || !prob(strong) || !prob(partial) {
 		return fail
 	}
-	return Result{Slug: j.Slug, Score: strong + 0.5*p[LabelPartial], Label: label, OK: true}
+	return Result{Slug: j.Slug, Score: strong + 0.5*partial, Label: label, OK: true}
 }
 
+func prob(v float64) bool { return v >= 0 && v <= 1 }
+
 func jobText(j Job) string {
-	desc := []rune(htmltext.ToTextFull(j.Description))
-	if len(desc) > maxJobRunes {
-		desc = desc[:maxJobRunes]
-	}
 	return fmt.Sprintf("%s at %s\nSeniority: %s\nSkills: %s\n\n%s",
-		j.Title, j.Company, j.Seniority, strings.Join(j.Skills, ", "), string(desc))
+		j.Title, j.Company, j.Seniority, strings.Join(j.Skills, ", "), truncate(htmltext.ToTextFull(j.Description), maxJobRunes))
+}
+
+func truncate(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
 }
 
 // CVText renders the document as plain text for a question. The contact block is left out
@@ -162,8 +174,11 @@ func CVText(d cv.Document) string {
 	for _, e := range d.Education {
 		line("Education: %s %s, %s", e.Degree, e.Field, e.Institution)
 	}
+	for _, c := range d.Certifications {
+		line("Certification: %s, %s", c.Name, c.Issuer)
+	}
 	for _, l := range d.Languages {
 		line("Language: %s %s", l.Name, l.Level)
 	}
-	return b.String()
+	return truncate(b.String(), maxCVRunes)
 }
