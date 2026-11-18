@@ -4458,6 +4458,9 @@ type Querier interface {
 	// internal/api/handler/companies.go) — rating is not (yet) a Meili-sortable
 	// attribute, so routing there would silently drop the requested order.
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
+	// Every company whose site (company_info website, else homepage) reduces to one of the
+	// given hosts, job_count 0 included. Rides companies_site_host_idx.
+	ListCompaniesBySiteHost(ctx context.Context, hosts []string) ([]ListCompaniesBySiteHostRow, error)
 	// The merge worker's input: every company slug the JOBS table actually holds, with the display
 	// name and the open-job count that elects the winner of its folded group.
 	//

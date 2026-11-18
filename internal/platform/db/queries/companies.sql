@@ -423,3 +423,13 @@ SELECT c.slug, c.countries
 FROM companies c
 WHERE c.slug = ANY(@slugs::text[])
   AND c.job_count > 0;
+
+-- name: ListCompaniesBySiteHost :many
+-- Every company whose site (company_info website, else homepage) reduces to one of the
+-- given hosts, job_count 0 included. Rides companies_site_host_idx.
+SELECT company_site_host(company_info)::text AS domain,
+       slug, name, job_count,
+       COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''))::text AS website
+FROM companies
+WHERE company_site_host(company_info) = ANY(sqlc.arg(hosts)::text[])
+ORDER BY domain, job_count DESC, slug;

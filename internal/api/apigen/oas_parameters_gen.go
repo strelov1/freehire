@@ -3062,6 +3062,64 @@ func decodeCloseThreadParams(args [1]string, argsEscaped bool, r *http.Request) 
 	return params, nil
 }
 
+// CompaniesByDomainParams is parameters of companiesByDomain operation.
+type CompaniesByDomainParams struct {
+	// Company domain or URL; repeatable or comma-joined, at most 100. (e.g. `acme.io`).
+	Domain string
+}
+
+func unpackCompaniesByDomainParams(packed middleware.Parameters) (params CompaniesByDomainParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "domain",
+			In:   "query",
+		}
+		params.Domain = packed[key].(string)
+	}
+	return params
+}
+
+func decodeCompaniesByDomainParams(args [0]string, argsEscaped bool, r *http.Request) (params CompaniesByDomainParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: domain.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "domain",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Domain = c
+				return nil
+			}); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "domain",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // ConfirmEmailLinkParams is parameters of confirmEmailLink operation.
 type ConfirmEmailLinkParams struct {
 	// The message id.

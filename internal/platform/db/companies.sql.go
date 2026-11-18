@@ -453,6 +453,51 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 	return items, nil
 }
 
+const listCompaniesBySiteHost = `-- name: ListCompaniesBySiteHost :many
+SELECT company_site_host(company_info)::text AS domain,
+       slug, name, job_count,
+       COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''))::text AS website
+FROM companies
+WHERE company_site_host(company_info) = ANY($1::text[])
+ORDER BY domain, job_count DESC, slug
+`
+
+type ListCompaniesBySiteHostRow struct {
+	Domain   string `json:"domain"`
+	Slug     string `json:"slug"`
+	Name     string `json:"name"`
+	JobCount int32  `json:"job_count"`
+	Website  string `json:"website"`
+}
+
+// Every company whose site (company_info website, else homepage) reduces to one of the
+// given hosts, job_count 0 included. Rides companies_site_host_idx.
+func (q *Queries) ListCompaniesBySiteHost(ctx context.Context, hosts []string) ([]ListCompaniesBySiteHostRow, error) {
+	rows, err := q.db.Query(ctx, listCompaniesBySiteHost, hosts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompaniesBySiteHostRow{}
+	for rows.Next() {
+		var i ListCompaniesBySiteHostRow
+		if err := rows.Scan(
+			&i.Domain,
+			&i.Slug,
+			&i.Name,
+			&i.JobCount,
+			&i.Website,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCompaniesForReindex = `-- name: ListCompaniesForReindex :many
 SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived, company_info_wikipedia_checked_at, ai_interview_reports, company_description_checked_at
 FROM companies

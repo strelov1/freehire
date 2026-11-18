@@ -59,6 +59,7 @@ const (
 	ClearStageOperation                     OperationName = "ClearStage"
 	CloseEmployerVacancyOperation           OperationName = "CloseEmployerVacancy"
 	CloseThreadOperation                    OperationName = "CloseThread"
+	CompaniesByDomainOperation              OperationName = "CompaniesByDomain"
 	CompanySubindustriesOperation           OperationName = "CompanySubindustries"
 	CompleteOnboardingOperation             OperationName = "CompleteOnboarding"
 	ConfirmEmailLinkOperation               OperationName = "ConfirmEmailLink"

@@ -4981,6 +4981,105 @@ func (s *Server) handleCloseThreadRequest(args [1]string, argsEscaped bool, w ht
 	}
 }
 
+// handleCompaniesByDomainRequest handles companiesByDomain operation.
+//
+// Resolves company web domains to companies. Each `domain` is a bare domain or a full URL; it is
+// reduced to a lowercase host without `www.`, port or trailing dot, and compared with the same
+// reduction of the company's site. Every match is returned (two companies can share a site), including
+// companies with `job_count` 0. Up to 100 domains. Then read the postings with
+// `GET /jobs/search?company_slug=<slug>`.
+//
+// GET /companies/by-domain
+func (s *Server) handleCompaniesByDomainRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: CompaniesByDomainOperation,
+			ID:   "companiesByDomain",
+		}
+	)
+	params, err := decodeCompaniesByDomainParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *CompanyByDomainPage
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    CompaniesByDomainOperation,
+			OperationSummary: "Find companies by web domain.",
+			OperationID:      "companiesByDomain",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "domain",
+					In:   "query",
+				}: params.Domain,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = CompaniesByDomainParams
+			Response = *CompanyByDomainPage
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackCompaniesByDomainParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.CompaniesByDomain(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.CompaniesByDomain(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeCompaniesByDomainResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleCompanySubindustriesRequest handles companySubindustries operation.
 //
 // Backs the searchable “Industry” facet’s option list, most common first. Counts are
