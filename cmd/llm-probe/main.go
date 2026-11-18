@@ -58,8 +58,8 @@ func run() int {
 		return worker.Skip("LLM_BASE_URL+LLM_API_KEY+LLM_MODEL")
 	}
 
-	// Every alias the deployment routes through; cmd/server reads these through cmp.Or too.
-	aliases := probedAliases(cfg.Model, os.Getenv("ASSISTANT_MODEL"), os.Getenv("SEARCH_INTENT_MODEL"))
+	// Every alias the deployment routes through; cmd/server builds a client for each of these through cmp.Or too.
+	aliases := probedAliases(cfg.Model, config.LLMFeatureModels()...)
 
 	snaps := make([]snapshot, 0, len(aliases))
 	for _, alias := range aliases {
