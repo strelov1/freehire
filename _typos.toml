@@ -58,6 +58,7 @@ hace = "hace"
 varios = "varios"
 vas = "vas"
 importante = "importante"
+sistem = "sistem"   # Turkish "system", a kariyer.net work area.
 comercial = "comercial"
 confidencial = "confidencial"
 informacion = "informacion"

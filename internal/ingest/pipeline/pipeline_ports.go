@@ -91,6 +91,14 @@ type SeenLookup interface {
 	ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error)
 }
 
+// PostingReadRecorder is the optional Store capability behind the LinkedIn negative cache: a
+// posting whose detail was read and found not on-site is never stored as a row, so without a
+// record the next crawl would read it again. The Store's seen-set lookup reads the record back
+// within the body-refresh window. A Store without it (test fakes) simply re-reads.
+type PostingReadRecorder interface {
+	RecordLinkedInRead(ctx context.Context, postingID, applyMethod string) error
+}
+
 // StoredBodyLookup is the optional Store capability behind an empty posting body: the body the
 // catalogue already holds for that identity ("" when none). A detail fetch that fails yields
 // an empty description, and UpsertJob keeps the stored one — so deriving the facets, the
