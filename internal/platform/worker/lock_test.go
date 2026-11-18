@@ -19,7 +19,7 @@ import (
 func TestHoldHeavyIndexLock_ReportsWhenAnotherHolderHasIt(t *testing.T) {
 	taken := &stubLocker{locked: false}
 
-	release, ok, err := holdHeavyIndexLock(context.Background(), taken)
+	release, ok, err := holdLock(context.Background(), taken, HeavyIndexLockKey)
 
 	if err != nil {
 		t.Fatalf("a lock already held is an ordinary answer, not an error: %v", err)
@@ -35,7 +35,7 @@ func TestHoldHeavyIndexLock_ReportsWhenAnotherHolderHasIt(t *testing.T) {
 func TestHoldHeavyIndexLock_HandsBackAReleaseWhenItWins(t *testing.T) {
 	free := &stubLocker{locked: true}
 
-	release, ok, err := holdHeavyIndexLock(context.Background(), free)
+	release, ok, err := holdLock(context.Background(), free, HeavyIndexLockKey)
 
 	if err != nil || !ok {
 		t.Fatalf("holdHeavyIndexLock = (_, %v, %v), want it to win a free lock", ok, err)
@@ -49,12 +49,34 @@ func TestHoldHeavyIndexLock_HandsBackAReleaseWhenItWins(t *testing.T) {
 	}
 }
 
+// The run's context is usually cancelled by the time it lets go, and the unlock must still be
+// sent, for the key that was taken, with a deadline of its own.
+func TestHoldLock_UnlocksTheTakenKeyAfterCancellationWithinADeadline(t *testing.T) {
+	const key int64 = 0x1234
+	stub := &stubLocker{locked: true}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	release, ok, err := holdLock(ctx, stub, key)
+	if err != nil || !ok {
+		t.Fatalf("holdLock = (_, %v, %v), want a won lock", ok, err)
+	}
+	cancel()
+	release()
+
+	if stub.lockKey != key || stub.unlockKey != key {
+		t.Errorf("locked %#x, unlocked %#x, want both %#x", stub.lockKey, stub.unlockKey, key)
+	}
+	if _, has := stub.unlockCtx.Deadline(); !has {
+		t.Error("the unlock has no deadline; a stalled connection would block shutdown")
+	}
+}
+
 // A database that cannot answer is not a free lock. Reporting "go ahead" there is how two
 // rebuilds end up running at once — the failure this whole thing exists to prevent.
 func TestHoldHeavyIndexLock_DoesNotTreatAFailureAsPermission(t *testing.T) {
 	broken := &stubLocker{err: errors.New("connection refused")}
 
-	_, ok, err := holdHeavyIndexLock(context.Background(), broken)
+	_, ok, err := holdLock(context.Background(), broken, HeavyIndexLockKey)
 
 	if err == nil {
 		t.Error("a failed lock attempt was reported as success")
@@ -89,17 +111,21 @@ type stubLocker struct {
 	locked   bool
 	released bool
 	err      error
+	// What holdLock passed to tryLock and unlock.
+	lockKey, unlockKey int64
+	unlockCtx          context.Context
 }
 
-func (s *stubLocker) tryLock(context.Context, int64) (bool, error) {
+func (s *stubLocker) tryLock(_ context.Context, key int64) (bool, error) {
+	s.lockKey = key
 	if s.err != nil {
 		return false, s.err
 	}
 	return s.locked, nil
 }
 
-func (s *stubLocker) unlock(context.Context, int64) {
-	s.released = true
+func (s *stubLocker) unlock(ctx context.Context, key int64) {
+	s.released, s.unlockKey, s.unlockCtx = true, key, ctx
 }
 
 // The key has to be unique among the project's advisory-lock users, and migrate.go's comment

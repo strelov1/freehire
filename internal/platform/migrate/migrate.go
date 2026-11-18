@@ -33,7 +33,9 @@ import (
 const noTxMarker = "migrate: no-transaction"
 
 // advisoryLockKey serializes concurrent migrate runs. It must not collide with the project's
-// other advisory-lock users; read this list before picking a new key:
+// other advisory-lock users; read this list before picking a new key. The non-blocking keys of
+// the cron workers are constants in internal/platform/worker/lock.go, taken through
+// worker.TryLock:
 //
 //	728391      internal/platform/migrate     — this one, a blocking pg_advisory_lock
 //	0x66686c76  cmd/liveness         — "fhlv", a non-blocking pg_try_advisory_lock

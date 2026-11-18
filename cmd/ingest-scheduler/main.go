@@ -22,10 +22,6 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// lockKey serializes scheduler ticks across processes. The project's advisory-lock key
-// list lives in internal/platform/migrate.
-const lockKey = 0x66687363 // "fhsc" — freehire scheduler
-
 func main() {
 	worker.Main(run)
 }
@@ -42,15 +38,8 @@ func run() int {
 	// claim `cap - that`), so two overlapping runs would each claim the whole cap. Type=oneshot
 	// does not stop a hand-run invocation. A run that cannot take the lock exits cleanly; all
 	// state is in the database.
-	lockConn, err := pool.Acquire(ctx)
+	release, locked, err := worker.TryLock(ctx, pool, worker.SchedulerLockKey)
 	if err != nil {
-		log.Printf("acquire lock connection: %v", err)
-		return 1
-	}
-	defer lockConn.Release()
-
-	var locked bool
-	if err := lockConn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", int64(lockKey)).Scan(&locked); err != nil {
 		log.Printf("scheduler lock: %v", err)
 		return 1
 	}
@@ -58,11 +47,7 @@ func run() int {
 		log.Print("scheduler: another tick holds the lock; skipping this one")
 		return 0
 	}
-	defer func() {
-		if _, err := lockConn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", int64(lockKey)); err != nil {
-			log.Printf("scheduler unlock: %v", err)
-		}
-	}()
+	defer release()
 
 	cfg := config.LoadIngestScheduler()
 	launcher := ingestsched.NewSystemdLauncher(cfg.IngestBinary, cfg.WorkingDir, cfg.EnvFile, cfg.RunAs)
