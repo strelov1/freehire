@@ -87,6 +87,7 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// as a bare JS variable on the page, detail comes from the page's ld+json block.
 		NewRecruiterflow(c),
 		NewMyCareersFuture(c),
+		NewCareersGov(c),
 		NewWorkingNomads(c),
 		NewPowerToFly(c),
 		NewHimalayas(c),
