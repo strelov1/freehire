@@ -310,7 +310,7 @@ type boardState struct {
 // freehire_provider_boards) publish them; the vocabulary lives here once so they cannot drift.
 //
 // The precedence behind the counts (uncrawled when no health row exists, then cooled over
-// failing) is ProviderIngestHealth's in queries/metrics.sql. uncrawled is last so the three
+// failing) is ProviderIngestHealth's in queries/metrics_ingest.sql. uncrawled is last so the three
 // older series keep their place on a graph.
 func (p providerHealth) boardStates() [4]boardState {
 	return [4]boardState{

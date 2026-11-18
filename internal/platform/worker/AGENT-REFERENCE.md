@@ -186,7 +186,7 @@ boards). The last-success sample is ABSENT for a provider no live board of which
 succeeded; first-listed is the fallback for that case — the oldest live board's
 `created_at`, never the newest, or adding a board would restart a failing provider's clock
 — so a rule writes `time() - (last_success or first_listed)` and gets an honest silence for
-every provider. See `ProviderIngestHealth` in `internal/platform/db/queries/metrics.sql`.
+every provider. See `ProviderIngestHealth` in `internal/platform/db/queries/metrics_ingest.sql`.
 
 **Per source, by the same worker** — `freehire_ingest_{rows_written,distinct_postings}`
 labelled by `provider`, over a ten-minute window. Every family above answers *is something
