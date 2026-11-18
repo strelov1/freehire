@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { afterEach, describe, expect, it } from 'vitest';
 
-const page = readFileSync(new URL('../../internal/api/mcpapp/widget/jobs.html', import.meta.url), 'utf8');
+// The page a host receives: the shell with its script inlined, as widget.go assembles it.
+const shell = readFileSync(new URL('../../internal/api/mcpapp/widget/jobs.html', import.meta.url), 'utf8');
+const script = readFileSync(new URL('../../internal/api/mcpapp/widget/jobs.js', import.meta.url), 'utf8');
+const page = shell.replace('/* widget/jobs.js */\n', () => script);
 const instances = [];
 const job = {
   slug: 'senior-go-engineer-acme-abc123',

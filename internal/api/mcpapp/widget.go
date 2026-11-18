@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -18,7 +19,17 @@ import (
 // with every check green.
 
 //go:embed widget/jobs.html
-var widgetPage []byte
+var widgetShell string
+
+// The page's script, kept in its own file so each stays a reviewable size. Inlined at
+// widgetScriptSlot: the host still receives one self-contained page.
+//
+//go:embed widget/jobs.js
+var widgetScript string
+
+const widgetScriptSlot = "/* widget/jobs.js */\n"
+
+var widgetPage = []byte(strings.Replace(widgetShell, widgetScriptSlot, widgetScript, 1))
 
 // widgetMIMEType is the MCP Apps profile. A host renders a ui:// resource only under it.
 const widgetMIMEType = "text/html;profile=mcp-app"

@@ -7,12 +7,10 @@ import (
 	"log"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/sync/singleflight"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -45,6 +43,7 @@ func newCompaniesHandlers(queries *db.Queries, companySearch companySearcher) *c
 func (h *companiesHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	api.Get("/companies", contract)
 	api.Get("/companies/subindustries", contract)
+	api.Get("/companies/by-domain", contract)
 	api.Get("/companies/:slug", mw.optional, h.GetCompany)
 	api.Get("/companies/:slug/hiring", h.CompanyHiring)
 	api.Get("/companies/:slug/closed-jobs", h.CompanyClosedJobs)
@@ -293,95 +292,6 @@ func isCompanyFilter(search string, facets ...[]string) bool {
 	return false
 }
 
-// subindustryFacet is one option in the company subindustry vocabulary: a clean YC
-// subindustry leaf and the number of companies carrying it.
-type subindustryFacet struct {
-	Value string `json:"value"`
-	Count int64  `json:"count"`
-}
-
-// CompanySubindustries serves the distinct subindustry vocabulary with company counts, most common first, for the
-// "Industry" facet's options. Counts ignore other active list filters.
-func (h *companiesHandlers) CompanySubindustries(ctx context.Context) (*apigen.CompanySubindustriesOK, error) {
-	facets, err := h.subindustries.get(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]apigen.CompanySubindustry, len(facets))
-	for i, f := range facets {
-		out[i] = apigen.CompanySubindustry{Value: f.Value, Count: f.Count}
-	}
-	return &apigen.CompanySubindustriesOK{Data: out}, nil
-}
-
-// subindustryCacheTTL is how long one count of the vocabulary is served. The query is a full scan of companies, and uncached
-// calls at a few req/s exhausted the connection pool. The vocabulary moves with ingest, so ten-minute-old counts are fine.
-const subindustryCacheTTL = 10 * time.Minute
-
-// subindustryCache keeps the vocabulary in process for subindustryCacheTTL. Concurrent misses share one query through
-// flight. A failed query is not stored.
-type subindustryCache struct {
-	load func(context.Context) ([]db.CompanySubindustriesRow, error)
-	// now is injectable so expiry is testable without sleeping.
-	now func() time.Time
-
-	flight  singleflight.Group
-	mu      sync.Mutex
-	facets  []subindustryFacet
-	expires time.Time
-}
-
-// get returns the cached vocabulary, loading it when absent or expired. The slice is shared and must not be modified.
-func (s *subindustryCache) get(ctx context.Context) ([]subindustryFacet, error) {
-	if facets, ok := s.fresh(); ok {
-		return facets, nil
-	}
-	v, err, _ := s.flight.Do("", func() (any, error) {
-		// A flight that finished between our miss and this call has already stored it.
-		if facets, ok := s.fresh(); ok {
-			return facets, nil
-		}
-		rows, err := s.load(ctx)
-		if err != nil {
-			return nil, err
-		}
-		facets := make([]subindustryFacet, 0, len(rows))
-		for _, r := range rows {
-			facets = append(facets, subindustryFacet{Value: r.Value.String, Count: r.Count})
-		}
-		s.mu.Lock()
-		s.facets, s.expires = facets, s.now().Add(subindustryCacheTTL)
-		s.mu.Unlock()
-		return facets, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return v.([]subindustryFacet), nil
-}
-
-func (s *subindustryCache) fresh() ([]subindustryFacet, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.facets, s.facets != nil && s.now().Before(s.expires)
-}
-
-// facetValues reads the repeatable values of one facet query param, dropping empty entries and always returning a
-// non-nil slice (pgx encodes '{}', keeping the SQL cardinality() short-circuit true).
-func facetValues(vals url.Values, key string) []string {
-	out := make([]string, 0, len(vals[key]))
-	for _, v := range vals[key] {
-		// Comma-joined and repeated must mean the same thing, as in the Meilisearch path (search.CompanyFilterFromValues)
-		// and the job search. Treating `countries=DE,BR` as ONE literal value answered zero companies instead of an error.
-		for _, part := range strings.Split(v, ",") {
-			if part != "" {
-				out = append(out, part)
-			}
-		}
-	}
-	return out
-}
-
 // lookupCompany reads the company a :slug route names. A slug a merge retired keeps working: the 301 to the canonical
 // slug is already written and redirected is true. The alias lookup runs only AFTER the miss, so a live company
 // always wins over a stale alias. An unknown slug returns pgx.ErrNoRows, which RenderError maps to 404.
@@ -530,72 +440,6 @@ func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query strin
 		items[i] = companyListItemFromDoc(h)
 	}
 	return items, res.Total, nil
-}
-
-// companyListItemFromRow projects the Postgres read onto the wire shape. The row already carries
-// null-ness, so the two nullable columns pass through as-is.
-func companyListItemFromRow(r db.ListCompaniesRow) apigen.CompanyListItem {
-	return apigen.CompanyListItem{
-		Slug:               r.Slug,
-		Name:               r.Name,
-		JobCount:           int64(r.JobCount),
-		Tagline:            nilString(pgconv.TextPtr(r.Tagline)),
-		Industries:         r.Industries,
-		HqCountry:          nilString(pgconv.TextPtr(r.HqCountry)),
-		Collections:        r.Collections,
-		FeedbackCount:      int64(r.FeedbackCount),
-		FeedbackRatingAvg:  nilFloat32Ptr(pgconv.Float4Ptr(r.FeedbackRatingAvg)),
-		AiInterviewReports: optInt64(int64(r.AiInterviewReports)),
-	}
-}
-
-// companyListItemFromDoc projects a search document onto the same shape. An absent scalar is stored as the empty string and
-// must serialize as null like Postgres NULL; an absent array arrives nil and must serialize as [], or the backer marks
-// (driven by collections) disappear on search.
-func companyListItemFromDoc(d search.CompanyDocument) apigen.CompanyListItem {
-	return apigen.CompanyListItem{
-		Slug:              d.Slug,
-		Name:              d.Name,
-		JobCount:          int64(d.JobCount),
-		Tagline:           nilString(presentOrNil(d.Tagline)),
-		Industries:        orEmpty(d.Industries),
-		HqCountry:         nilString(presentOrNil(d.HqCountry)),
-		Collections:       orEmpty(d.Collections),
-		FeedbackCount:     int64(d.FeedbackCount),
-		FeedbackRatingAvg: nilFloat32Ptr(presentOrNilFloat(d.FeedbackRatingAvg)),
-	}
-}
-
-func nilFloat32Ptr(p *float32) apigen.NilFloat32 {
-	if p == nil {
-		return apigen.NilFloat32{Null: true}
-	}
-	return apigen.NewNilFloat32(*p)
-}
-
-// presentOrNilFloat treats 0 as absent — CompanyDocument's "no rating" sentinel
-// (see its doc comment): a real average is never 0, since ratings are 1-5.
-func presentOrNilFloat(f float32) *float32 {
-	if f == 0 {
-		return nil
-	}
-	return &f
-}
-
-// presentOrNil treats the empty string as absent — the search document's way of spelling NULL.
-func presentOrNil(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-// orEmpty normalizes a nil array so it serializes as [] rather than null.
-func orEmpty(v []string) []string {
-	if v == nil {
-		return []string{}
-	}
-	return v
 }
 
 // companiesParams are the listing's own params: the name query, the sort

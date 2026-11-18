@@ -22,3 +22,24 @@ export const completionsLimit = 5;
 export const companiesLimit = 3;
 // Asked for, before the relevance filter takes its cut.
 export const companiesFetch = 12;
+
+/**
+ * What the dropdown's first section offers: a box with nothing to complete offers the
+ * catalogue's shape (`starters`); a typed one offers what matches (`completions`).
+ *
+ * The first case is the whole point of opening on focus, and it is answered LOCALLY: the
+ * curated group order lives in the filter modal's own grouping, checked there against the
+ * category vocabulary at compile time, so asking a server for it would be a second copy of
+ * that order. The typed case is the endpoint's — it completes a phrase against the
+ * catalogue's real vocabulary, which no dictionary shipped to the browser can do.
+ *
+ * The threshold is SUGGEST_MIN_CHARS, the same one the fetch gates on, and deliberately not
+ * a separate `=== ''`. Two thresholds opened a state nobody designed: at exactly one
+ * character the box was past "empty" but short of "asked", so it showed neither the
+ * starters nor completions it had not fetched — a ten-row panel collapsing to the single
+ * free-text row, then refilling on the next keystroke. One predicate answers "is there a
+ * query yet", so there is no gap for a state to fall into.
+ */
+export function panelSuggestions<T>(settledText: string, starters: T[], completions: T[]): T[] {
+  return settledText.trim().length < SUGGEST_MIN_CHARS ? starters : completions;
+}

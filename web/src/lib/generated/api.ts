@@ -440,6 +440,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/by-domain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find companies by web domain.
+         * @description Resolves company web domains to companies. Each `domain` is a bare domain or a full URL;
+         *     it is reduced to a lowercase host without `www.`, port or trailing dot, and compared
+         *     with the same reduction of the company's site. Every match is returned (two companies
+         *     can share a site), including companies with `job_count` 0. Up to 100 domains. Then read
+         *     the postings with `GET /jobs/search?company_slug=<slug>`.
+         */
+        get: operations["companiesByDomain"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/subindustries": {
         parameters: {
             query?: never;
@@ -6997,6 +7021,28 @@ export interface components {
             /** Format: int64 */
             limit: number;
         };
+        /** @description One company whose site matches a requested domain. */
+        CompanyByDomain: {
+            /** @description The normalized domain it matched. */
+            domain: string;
+            slug: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description Open postings; 0 when the company is not hiring now.
+             */
+            job_count: number;
+            /** @description The site as stored (`website`, else `homepage`). */
+            website: string;
+        };
+        CompanyByDomainMeta: {
+            /** @description Requested domains that matched no company, normalized. */
+            unmatched: string[];
+        };
+        CompanyByDomainPage: {
+            data: components["schemas"]["CompanyByDomain"][];
+            meta: components["schemas"]["CompanyByDomainMeta"];
+        };
         /** @description The company summary plus the profile fields served only on the detail endpoint. */
         CompanyDetail: {
             slug: string;
@@ -11385,6 +11431,56 @@ export interface operations {
                         data: components["schemas"]["CompanyListItem"][];
                         meta: components["schemas"]["ListMeta"];
                     };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    companiesByDomain: {
+        parameters: {
+            query: {
+                /** @description Company domain or URL; repeatable or comma-joined, at most 100. (e.g. `acme.io`) */
+                domain: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "domain": "acme.io",
+                     *           "slug": "acme",
+                     *           "name": "Acme",
+                     *           "job_count": 12,
+                     *           "website": "https://www.acme.io/"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "unmatched": [
+                     *           "nope.example"
+                     *         ]
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CompanyByDomainPage"];
                 };
             };
             /** @description An unexpected error response. */

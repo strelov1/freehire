@@ -154,8 +154,11 @@ func (d Digest) SearchPath(utmSource string) string {
 type Message struct {
 	// UserID is whose message this is. Only the email channel reads it, to sign that
 	// recipient's unsubscribe link.
-	UserID  int64
-	Digests []Digest
+	UserID int64
+	// WebhookSecret signs a webhook delivery (see internal/engage/webhooknotify). Only
+	// the webhook channel reads it.
+	WebhookSecret string
+	Digests       []Digest
 }
 
 // Total is how many matches the message announces across its digests.

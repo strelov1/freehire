@@ -1,4 +1,5 @@
 import { bulletCapUserMessage } from '#lib/assistant/bulletCapAlert.js';
+import { SessionNotFound } from '#lib/assistant/api.js';
 import type { TurnRefused } from '#lib/assistant/client.js';
 import type { TurnEvent } from '#lib/assistant/wire.js';
 
@@ -26,6 +27,16 @@ export class ChatAlerts {
   /** Every ordinary failure goes through here. */
   fail(message: string) {
     this.error = { message, planLimitReached: false };
+  }
+
+  /** Surface a failure. A conversation the caller cannot open is a dead link, not a broken
+   *  assistant, so it gets the explanation panel rather than an error. */
+  report(err: unknown, fallback: string) {
+    if (err instanceof SessionNotFound) {
+      this.notFound = true;
+      return;
+    }
+    this.fail(err instanceof Error ? err.message : fallback);
   }
 
   /** A spent daily allowance: the banner links to the plan. */

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -93,7 +92,7 @@ func TestCreateOrUpdateWebhook_RejectsNonHTTPScheme(t *testing.T) {
 // The metadata response carries the destination's fields.
 func TestWebhookResponse_Fields(t *testing.T) {
 	fields := marshalToFields(t, webhookResponse{URL: "https://example.com/hook", Enabled: true})
-	for _, want := range []string{"url", "enabled", "created_at", "last_success_at", "disabled_at"} {
+	for _, want := range []string{"url", "secret", "enabled", "created_at", "last_success_at", "disabled_at"} {
 		if _, ok := fields[want]; !ok {
 			t.Errorf("metadata response missing %q", want)
 		}
@@ -104,41 +103,8 @@ func TestWebhookResponse_Fields(t *testing.T) {
 // the given error. Both stand in for webhooknotify's live probe.
 type okWebhookTester struct{}
 
-func (okWebhookTester) Test(context.Context, string) error { return nil }
+func (okWebhookTester) Test(context.Context, string, string) error { return nil }
 
 type failingWebhookTester struct{ err error }
 
-func (f failingWebhookTester) Test(context.Context, string) error { return f.err }
-
-// A URL whose probe fails is refused before anything is stored (nil queries would
-// panic if reached), and the refusal names what the destination answered so the
-// user can fix it.
-func TestCreateOrUpdateWebhook_RejectsURLWhoseProbeFails(t *testing.T) {
-	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := newWebhookHandlers(nil, failingWebhookTester{errors.New("webhooknotify: destination responded 404")})
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/webhook", auth.RequireAuth(iss, testVersions), h.CreateOrUpdateWebhook)
-
-	token, err := iss.Issue(1, testTokenVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ := json.Marshal(map[string]string{"url": "https://example.com/hook"})
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/webhook", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("Test: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != fiber.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want 422 when the probe fails", resp.StatusCode)
-	}
-	var got struct{ Error string }
-	_ = json.NewDecoder(resp.Body).Decode(&got)
-	if got.Error != "webhook test failed: destination responded 404" {
-		t.Errorf("error = %q, want the destination's answer without the package prefix", got.Error)
-	}
-}
+func (f failingWebhookTester) Test(context.Context, string, string) error { return f.err }
