@@ -187,6 +187,12 @@ func TestRefFromURL_Njoyn(t *testing.T) {
 			}
 		})
 	}
+	// The generic clients host names no tenant of its own: the ref keeps the literal key and
+	// hands back its halves, so a caller can look the client's stored board up by clid.
+	ref, ok := sources.RefFromURL("https://clients.njoyn.com/corp/xweb/xweb.asp?NTKN=c&clid=21001&Page=JobDetails&Jobid=J1126-1603&lang=1")
+	if !ok || ref.Board != "clients/corp/21001" || ref.PostingID != "J1126-1603" {
+		t.Errorf("clients host ref = %+v, %v; want board clients/corp/21001 and posting J1126-1603", ref, ok)
+	}
 	for _, url := range []string{
 		"https://cgi.njoyn.com/corp/xweb/xweb.asp?NTKN=c&clid=21001&Page=joblisting&lang=1",
 		"https://cgi.njoyn.com/corp/xweb/xweb.asp?Page=JobDetails&Jobid=J1126-1603",

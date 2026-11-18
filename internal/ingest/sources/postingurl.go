@@ -18,6 +18,12 @@ import (
 type PostingRef struct {
 	Source     string
 	ExternalID string
+	// Board and PostingID are the two halves ExternalID is namespaced from. A caller that misses
+	// on ExternalID may look the board up under another spelling of the same identity (a Njoyn
+	// link on the generic clients host names the client's board by clid alone) and rebuild the
+	// key from PostingID.
+	Board     string
+	PostingID string
 }
 
 // greenhouseJobPath matches the job-detail form, /<board>/jobs/<id>.
@@ -74,7 +80,7 @@ func njoynRef(u *url.URL, tenant string) (PostingRef, bool) {
 		return PostingRef{}, false
 	}
 	board := b.tenant + "/" + b.site + "/" + b.clid
-	return PostingRef{Source: "njoyn", ExternalID: externalid.Namespace(board, jobID)}, true
+	return PostingRef{Source: "njoyn", ExternalID: externalid.Namespace(board, jobID), Board: board, PostingID: jobID}, true
 }
 
 // greenhouseRef reads a Greenhouse link in either of its two shapes: the
@@ -99,7 +105,7 @@ func greenhousePosting(board, jobID string) (PostingRef, bool) {
 	if board == "" || jobID == "" || !isDigits(jobID) {
 		return PostingRef{}, false
 	}
-	return PostingRef{Source: "greenhouse", ExternalID: externalid.Namespace(board, jobID)}, true
+	return PostingRef{Source: "greenhouse", ExternalID: externalid.Namespace(board, jobID), Board: board, PostingID: jobID}, true
 }
 
 func isDigits(s string) bool {
