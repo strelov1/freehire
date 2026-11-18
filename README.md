@@ -42,7 +42,7 @@
 
 <!-- Datacircle's own badge, hotlinked so it always shows the current rank; scaled down
      from 240x162 so it does not tower over the two badges beside it. -->
-<a href="https://datacircle.dev/best-full-job-posting-api"><img src="https://datacircle.dev/badge/best-full-job-posting-api/freehire.svg" alt="freehire: ranked #1 job postings API provider by Datacircle" width="160" height="108"></a>
+<a href="https://datacircle.dev/best-full-job-posting-api"><img src="https://datacircle.dev/badge/best-full-job-posting-api/freehire.svg" alt="Datacircle's ranking of the best full job posting API providers" width="160" height="108"></a>
 
 <br>
 

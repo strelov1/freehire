@@ -294,7 +294,7 @@
         >
           <img
             src="https://datacircle.dev/badge/best-full-job-posting-api/freehire.svg"
-            alt="freehire: ranked #1 job postings API provider by Datacircle"
+            alt="Datacircle's ranking of the best full job posting API providers"
             width="240"
             height="162"
             loading="lazy"
