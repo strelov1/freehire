@@ -84,6 +84,10 @@ def execute(commands):
     for command in commands:
         print(f"RUN {shlex.join(command)}", flush=True)
         try:
+            # A machine-wide heavy slot per command (scripts/heavy.sh); the hooks queue their
+            # own heavy commands, and a slot held around them would let them all run at once.
+            if command[0] != "lefthook":
+                command = ["sh", "scripts/heavy.sh", *command]
             result = subprocess.run(command, cwd=ROOT, check=False)
             code = result.returncode
         except OSError as error:
