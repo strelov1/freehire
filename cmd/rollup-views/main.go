@@ -24,6 +24,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -61,8 +62,8 @@ func run() int {
 	}
 	defer cleanup()
 
-	dir := envOr("VIEW_LOG_DIR", "/var/log/nginx")
-	base := envOr("VIEW_LOG_BASE", "access.log")
+	dir := cmp.Or(os.Getenv("VIEW_LOG_DIR"), "/var/log/nginx")
+	base := cmp.Or(os.Getenv("VIEW_LOG_BASE"), "access.log")
 
 	// A failed nginx pass still fails the run, but only after the agent pass: it fails the
 	// same way on every run, and returning here would hold the agent days back.
@@ -311,11 +312,4 @@ func uncompressed(files []viewlog.LogFile) []viewlog.LogFile {
 		}
 	}
 	return out
-}
-
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }
