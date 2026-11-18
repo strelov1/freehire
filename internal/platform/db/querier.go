@@ -3166,7 +3166,9 @@ type Querier interface {
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
 	// The current view_count of the jobs a rollup run touched, for the index write that
-	// replaces the old per-view search_outbox enqueue.
+	// replaces the old per-view search_outbox enqueue. Only jobs public search can return:
+	// closed and duplicate documents are filtered out of every query, so writing their count
+	// only costs index time, and a reopened job is rewritten whole by the drain.
 	GetJobViewCounts(ctx context.Context, ids []int64) ([]GetJobViewCountsRow, error)
 	// The caller's current vote for a job (0 when none), for my_vote on auth-aware
 	// detail reads. Always returns one row via the COALESCE'd scalar subquery.
