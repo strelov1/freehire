@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -98,9 +99,17 @@ func holdLock(ctx context.Context, l locker, key int64) (func(), bool, error) {
 	if !got {
 		return nil, false, nil
 	}
-	// The caller's ctx may be cancelled by the time the run ends; the unlock must still go out.
-	return func() { l.unlock(context.WithoutCancel(ctx), key) }, true, nil
+	return func() {
+		// The caller's ctx may be cancelled by the time the run ends; the unlock must still go
+		// out, but bounded, so a stalled connection cannot hold shutdown open.
+		uctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), unlockTimeout)
+		defer cancel()
+		l.unlock(uctx, key)
+	}, true, nil
 }
+
+// unlockTimeout bounds the unlock statement; the session's end drops the lock anyway.
+const unlockTimeout = 5 * time.Second
 
 type poolLocker struct{ conn *pgxpool.Conn }
 
