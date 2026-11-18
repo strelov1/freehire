@@ -87,5 +87,9 @@ ON CONFLICT (signature) DO UPDATE
 
 -- name: GetJobViewCounts :many
 -- The current view_count of the jobs a rollup run touched, for the index write that
--- replaces the old per-view search_outbox enqueue.
-SELECT id, view_count FROM jobs WHERE id = ANY(sqlc.arg('ids')::bigint[]);
+-- replaces the old per-view search_outbox enqueue. Only jobs public search can return:
+-- closed and duplicate documents are filtered out of every query, so writing their count
+-- only costs index time, and a reopened job is rewritten whole by the drain.
+SELECT id, view_count FROM jobs
+WHERE id = ANY(sqlc.arg('ids')::bigint[])
+  AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private;
