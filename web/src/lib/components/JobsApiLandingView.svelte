@@ -283,6 +283,23 @@
             </li>
           {/each}
         </ul>
+        <!-- Datacircle's own embed, verbatim: the SVG is served live and shows our current
+             rank on their benchmark, so it can never claim a place we no longer hold. -->
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- external ranking page opened in a new tab; not an internal route -->
+        <a
+          href="https://datacircle.dev/best-full-job-posting-api"
+          target="_blank"
+          rel="noopener"
+          class="mt-8 inline-block rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <img
+            src="https://datacircle.dev/badge/best-full-job-posting-api/freehire.svg"
+            alt="freehire: ranked #1 job postings API provider by Datacircle"
+            width="240"
+            height="162"
+            loading="lazy"
+          />
+        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
       </div>
 
       <JobsApiPlayground />

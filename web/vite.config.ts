@@ -107,6 +107,8 @@ export default defineConfig({
           // utilities that inline an SVG.
           // api.producthunt.com serves the Product Hunt "featured" badge embedded in
           // the footer (Footer.svelte) — a single static SVG per theme.
+          // datacircle.dev serves its "ranked #N" badge on /jobs-api, one static SVG per
+          // ranking page; hotlinked rather than copied so it always shows the current rank.
           // avatars.githubusercontent.com is GitHub's avatar CDN, read by the contributor
           // showcase and profile pages. Adding a host here widens what the assistant's
           // markdown could point an <img> at if the sanitizer ever regressed, so it is
@@ -125,6 +127,7 @@ export default defineConfig({
             'data:',
             'https://logo.freehire.me',
             'https://api.producthunt.com',
+            'https://datacircle.dev',
             'https://avatars.githubusercontent.com',
             'https://www.googletagmanager.com',
           ],

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { APP_STORE_URL } from '#lib/appLinks.js';
   import { resolve } from '$app/paths';
+  import { Trophy } from '@lucide/svelte';
   import { reopen } from '#lib/consent.svelte.js';
   import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
   import { POPULAR_COLLECTIONS } from '#lib/popularCollections.js';
@@ -102,6 +103,7 @@
   const compactLinks = [
     { label: 'Jobs', href: resolve('/jobs') },
     { label: 'Pricing', href: resolve('/pricing') },
+    { label: 'Jobs API', href: resolve('/jobs-api') },
     { label: 'Support', href: resolve('/support') },
     { label: 'Status', href: resolve('/status') },
     { label: 'Privacy', href: resolve('/privacy') },
@@ -240,6 +242,24 @@
             loading="lazy"
             class="hidden size-full object-contain dark:block"
           />
+        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
+
+        <!-- Datacircle's benchmark ranking, drawn like the store buttons: their own badge
+             is a 240x162 card that does not fit this strip. shortcut: "#1" is typed here,
+             not read from their live badge — change it if the ranking moves
+             (/jobs-api shows the live one). -->
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- external ranking page opened in a new tab; not an internal route -->
+        <a
+          href="https://datacircle.dev/best-full-job-posting-api"
+          target="_blank"
+          rel="noopener"
+          class="inline-flex h-14 w-64 shrink-0 snap-start items-center gap-3 rounded-lg border border-border px-4 text-foreground transition-colors hover:bg-muted"
+        >
+          <Trophy class="size-7 shrink-0" aria-hidden="true" />
+          <span class="flex flex-col leading-tight">
+            <span class="text-xs text-muted-foreground">Ranked by Datacircle</span>
+            <span class="text-sm font-semibold">#1 Job Postings API</span>
+          </span>
         </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 
         {#each stores as store (store.href)}
