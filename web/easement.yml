@@ -26,6 +26,7 @@ components:
       - src/lib/components/CompanyView.svelte
       - src/lib/components/ExperienceAssistantPanel.svelte
       - src/lib/components/ExperienceBankView.svelte
+      - src/lib/components/interviewDock.svelte.ts
       - src/lib/components/HomeLandingView.svelte
       - src/lib/components/JobBoard.svelte
       - src/lib/components/JobDrawer.svelte
