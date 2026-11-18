@@ -4,21 +4,16 @@
   import { page } from '$app/state';
   import { Badge, Card, Skeleton } from '#lib/ui/index.js';
   import {
-    addMonths,
     browserTimezone,
     daysWithSlots,
     firstOpenMonth,
     groupSlotsByLocalDay,
-    monthGrid,
-    monthOf,
     openingSlotWindow,
     slotLocalTime,
     slotWindowForMonth,
-    todayIn,
-    weekdayOrder,
-    weekdayShortLabel,
     withSearchParams,
   } from '#lib/mentorship.js';
+  import { addMonths, monthGrid, monthOf, todayIn, weekdayOrder, weekdayShortLabel } from '#lib/mentorshipCalendar.js';
   import type { MentorSlot, MentorSlots } from '#lib/types.js';
 
   // A month of open slots and the day's hours, for whoever offers them: a mentor on their

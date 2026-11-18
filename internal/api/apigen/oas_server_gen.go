@@ -281,6 +281,16 @@ type Handler interface {
 	//
 	// POST /threads/{id}/close
 	CloseThread(ctx context.Context, params CloseThreadParams) (*CloseThreadOK, error)
+	// CompaniesByDomain implements companiesByDomain operation.
+	//
+	// Resolves company web domains to companies. Each `domain` is a bare domain or a full URL; it is
+	// reduced to a lowercase host without `www.`, port or trailing dot, and compared with the same
+	// reduction of the company's site. Every match is returned (two companies can share a site), including
+	// companies with `job_count` 0. Up to 100 domains. Then read the postings with
+	// `GET /jobs/search?company_slug=<slug>`.
+	//
+	// GET /companies/by-domain
+	CompaniesByDomain(ctx context.Context, params CompaniesByDomainParams) (*CompanyByDomainPage, error)
 	// CompanySubindustries implements companySubindustries operation.
 	//
 	// Backs the searchable “Industry” facet’s option list, most common first. Counts are

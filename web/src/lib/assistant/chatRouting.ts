@@ -75,3 +75,41 @@ export function addressStep(
   }
   return { clearGuard, action: requested === pane.activeId ? 'none' : 'open' };
 }
+
+/**
+ * What a boot opens first: the requested session (the host prop), else the newest, else a
+ * fresh chat. A host (the /tailor route) seeds `session` + `sessionLabel`.
+ *
+ * An explicitly-asked-for preset overrides "resume the newest": arriving at ?preset=profile
+ * is a request to START an experience interview, not to reopen whatever was last
+ * discussed. Without this the link did nothing at all for anyone who already had a chat,
+ * which is everyone after their first visit.
+ *
+ * Returns the session id to open, 'create' for a new session of the arrival's preset, or
+ * 'newest' for the newest openable chat (a blank one when there is none).
+ */
+export function bootTarget(session: string | undefined, arrivalPreset: ChatPreset): string | 'create' | 'newest' {
+  if (!session && arrivalPreset !== 'chat') return 'create';
+  return session ?? 'newest';
+}
+
+/**
+ * Open the first of `ids` (newest first) that will actually open; `tryOpen` says whether one
+ * did.
+ *
+ * Nobody asked for a SPECIFIC chat here — the chat picked one on their behalf — so a chat
+ * that will not open is ours to route around, not a dead link to report. Saying "this chat
+ * no longer exists" for a pick they never made replaces the rail with a panel, and its only
+ * way out lands on this same code, which picks the same chat: a loop with no exit but a
+ * manual URL.
+ *
+ * Returns false when nothing opens, so boot() can start the caller a chat.
+ */
+export async function openFirst(ids: string[], tryOpen: (id: string) => Promise<boolean>): Promise<boolean> {
+  for (const id of ids) {
+    // Sequential on purpose: we want the FIRST one that opens, and opening them in
+    // parallel would race several transcripts into the same pane.
+    if (await tryOpen(id)) return true;
+  }
+  return false;
+}

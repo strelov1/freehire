@@ -293,7 +293,7 @@ export function accountApi({ call, request, requestData }: Http) {
   //
   // The account's single webhook destination for saved-search matches (the
   // `webhook` subscription channel). Management is cookie-only. Deliveries
-  // are plain, unsigned POSTs.
+  // are POSTs signed with the destination's secret.
 
   /** The current user's webhook destination, or null if none is configured. */
   async function getWebhook(): Promise<WebhookConfig | null> {

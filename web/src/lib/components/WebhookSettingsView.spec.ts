@@ -36,6 +36,7 @@ vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
 
 const webhook: WebhookConfig = {
   url: 'https://example.com/hook',
+  secret: 'whsec_test',
   enabled: true,
   created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
   last_success_at: null,

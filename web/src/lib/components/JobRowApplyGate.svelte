@@ -1,15 +1,27 @@
 <script lang="ts">
+  import { promptLogin, promptSignIn } from '#lib/signin.js';
   import { Button } from '#lib/ui/index.js';
 
   // The sign-in offer a signed-out reader meets on a job card's Apply (`show`): sign in, sign
-  // up, or open the posting anyway. The live region announces it for the job `title`.
-  let {
-    show,
-    title,
-    onSignIn,
-    onSignUp,
-    onContinue,
-  }: { show: boolean; title: string; onSignIn: () => void; onSignUp: () => void; onContinue: () => void } = $props();
+  // up, or open the posting (`url`) anyway. The live region announces it for the job `title`.
+  // Every choice closes it through `onclose`.
+  let { show, title, url, onclose }: { show: boolean; title: string; url: string; onclose: () => void } = $props();
+
+  function signUp() {
+    onclose();
+    // Onboarding first, then back to this list; that page can skip straight to the sign-up form.
+    promptSignIn();
+  }
+
+  function signIn() {
+    onclose();
+    promptLogin();
+  }
+
+  function continueToPosting() {
+    onclose();
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  }
 </script>
 
 <div class="sr-only" aria-live="polite" aria-atomic="true">
@@ -26,9 +38,9 @@
     <!-- Two equal buttons over a full-width escape on a phone, where three in a wrapping
        row left the last one stranded on a line of its own; one row from sm up. -->
     <div class="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:items-center">
-      <Button variant="primary" onclick={onSignIn}>Sign in</Button>
-      <Button variant="outline" onclick={onSignUp}>Sign up</Button>
-      <Button variant="ghost" class="col-span-2" onclick={onContinue}>Continue without signing in</Button>
+      <Button variant="primary" onclick={signIn}>Sign in</Button>
+      <Button variant="outline" onclick={signUp}>Sign up</Button>
+      <Button variant="ghost" class="col-span-2" onclick={continueToPosting}>Continue without signing in</Button>
     </div>
   </div>
 {/if}

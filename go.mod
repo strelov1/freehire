@@ -6,6 +6,7 @@ toolchain go1.27.4
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
+	github.com/MoeForge/moego v0.1.0-alpha.4
 	github.com/RoaringBitmap/roaring/v2 v2.30.0
 	github.com/abadojack/whatlanggo v1.0.1
 	github.com/alicebob/miniredis/v2 v2.40.0

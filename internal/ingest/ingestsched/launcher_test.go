@@ -333,3 +333,33 @@ func TestLaunchProviderEnvironmentFileIgnoresAnOptionalSharedFileMarker(t *testi
 		t.Errorf("provider environment file not derived from the unmarked path: %q", rec.args)
 	}
 }
+
+// Without a slice the run lands in system.slice, outside any quota set on the static crawl
+// units' slice; with one, systemd-run must be told so, before the command it runs.
+func TestLaunchPlacesRunInConfiguredSlice(t *testing.T) {
+	run := Run{Provider: "greenhouse", Shard: 1, Shards: 2, RunTimeout: 3000 * time.Second}
+
+	rec := &recordedExec{}
+	if err := newTestLauncher(rec).Launch(context.Background(), run); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	if got, ok := argValue(rec.args, "--slice"); ok {
+		t.Errorf("unset Slice passed --slice=%q, want no flag", got)
+	}
+
+	rec = &recordedExec{}
+	l := newTestLauncher(rec)
+	l.Slice = "system-freehire\\x2dingest.slice"
+	if err := l.Launch(context.Background(), run); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	got, ok := argValue(rec.args, "--slice")
+	if !ok || got != l.Slice {
+		t.Errorf("--slice = %q (found=%v), want %q", got, ok, l.Slice)
+	}
+	sliceAt := slices.Index(rec.args, "--slice="+l.Slice)
+	binaryAt := slices.Index(rec.args, l.IngestBinary)
+	if binaryAt < 0 || sliceAt > binaryAt {
+		t.Errorf("--slice at %d, binary at %d in %v: systemd-run options must precede the command", sliceAt, binaryAt, rec.args)
+	}
+}

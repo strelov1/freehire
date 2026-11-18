@@ -10,6 +10,10 @@
   // The page owns the CV document in memory so the Editor and the centre preview share one object:
   // typing re-renders the preview instantly, autosave persists in the background, and an agent turn
   // refetches and replaces the document.
+  import type { TailorWorkspaceProps } from './TailorWorkspace.props';
+  import WorkspaceStatus from './WorkspaceStatus.svelte';
+  import { CvReset } from './cvReset.svelte';
+  import { CvAutosave } from './cvAutosave.svelte';
   import { onMount, onDestroy, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -17,11 +21,7 @@
   import CollapsedPanelRail from './CollapsedPanelRail.svelte';
   import DesignPanel from './DesignPanel.svelte';
   import EditorPanel from './EditorPanel.svelte';
-  import { announce } from '#lib/announce.svelte.js';
-  import { api, ApiError } from '#lib/api.js';
-  import { cvSavesSettled, queueCvSave } from './cvSaveQueue.js';
-  import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '#lib/cvRefreshOffer.js';
-  import { askCvRefresh } from '#lib/cvRefreshDialog.svelte.js';
+  import { api } from '#lib/api.js';
   import { track } from '#lib/analytics.js';
   import AssistantChat from '#lib/assistant/AssistantChat.svelte';
   import ArtifactPanel from '#lib/tailor/ArtifactPanel.svelte';
@@ -45,7 +45,7 @@
   import PanelSplitter from './PanelSplitter.svelte';
   import PreviewToolbar from './PreviewToolbar.svelte';
   import TailorMobileTabs from './TailorMobileTabs.svelte';
-  import { undoRun, openingActions, baseOpeningActions } from '#lib/tailor/autopilot.js';
+  import { openingActions, baseOpeningActions } from '#lib/tailor/autopilot.js';
   import { findPlaceholders } from '#lib/tailor/readiness.js';
   import { fillViewport } from '#lib/actions/fillViewport.js';
   import {
@@ -60,13 +60,8 @@
   import type { Analysis, AutopilotEntry, Document } from '#lib/generated/contracts.js';
   import type { Job } from '#lib/types.js';
 
-  // Two modes, one component. With `slug` it is the tailoring workspace for a vacancy. With
-  // `baseCvId` it is the BASE mode: the candidate's general CV, with no vacancy — so none of the
-  // vacancy panes (job, match analysis, ATS delta against the base, cover letter, the autopilot
-  // run) — while the preview, the section editor, template/style/margins, the experience bank,
-  // the revision history with undo and the agent chat stay. The agent there runs under the `base`
-  // preset: the same CV tools and evidence gate, a prompt that edits the general CV.
-  let { slug = '', baseCvId = undefined }: { slug?: string; baseCvId?: string } = $props();
+  // Two modes, one component (see TailorWorkspaceProps).
+  let { slug = '', baseCvId = undefined }: TailorWorkspaceProps = $props();
   const baseMode = $derived(baseCvId !== undefined);
 
   const cvParam = $derived(page.url.searchParams.get('cv'));
@@ -97,12 +92,20 @@
   // Settings picker needs its label, so both read this one list rather than hard-coding it.
   let fonts = $state<CvFont[]>([]);
   let cvLoaded = $state(false);
-  // Autosave lifecycle mirrors the old standalone editor: 'idle' before the first change, then
-  // saving → saved (or error).
-  let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  let saveError = $state('');
   // Bumped on every persisted change (autosave, agent turn, template switch) to cache-bust the PDF.
   let pdfVersion = $state(0);
+  const autosave = new CvAutosave(
+    () => cvId,
+    () => ({ title, template_id: templateId, document: doc }),
+    () => cvLoaded,
+    () => {
+      pdfVersion += 1;
+      void history.load();
+      // Chained off the SAVE, not off the effect that schedules it: read any earlier and the
+      // score would describe the document as it was before this edit landed.
+      void refreshJobMatch();
+    },
+  );
 
   // The last unattended run: its per-requirement log, whether it can still be undone, and
   // whether one is in flight. A run holds the editor closed — it rewrites the same document
@@ -190,7 +193,7 @@
 
   const pdf = new PdfExport({
     url: () => pdfUrl,
-    flush: flushForExport,
+    flush: autosave.flushForExport,
     onExported: () => outcomes.pdfExported(),
     hasGaps: () => placeholders.length > 0,
   });
@@ -211,7 +214,7 @@
     doc = toEditable(rec.document);
     autopilotReport = rec.autopilot_report;
     tracerLinksEnabled = rec.tracer_links_enabled;
-    lastSnapshot = snapshot();
+    autosave.accept();
     cvLoaded = true;
   }
   const loadCv = async () => hydrate(await api.getCv(cvId));
@@ -287,119 +290,34 @@
   // ---- Revision history ---- (see CvRevisions)
   const history = new CvRevisions(
     () => cvId,
-    () => flushPendingSave(),
+    () => autosave.flushPending(),
     () => afterUndo(),
   );
 
   async function afterUndo() {
     await loadCv();
+    afterServerWrite();
+  }
+
+  /** The document changed server-side: re-read everything that hangs off it. */
+  function afterServerWrite() {
     pdfVersion += 1;
     void history.load();
     void refreshAtsDelta();
     void refreshJobMatch();
   }
 
-  let resetBusy = $state(false);
-  let resetError = $state('');
-  // The one condition that forbids replacing the whole document: another reset already in
-  // flight, or any agent turn. All three write the same document, so a second writer loses
-  // one side's work silently. Every entry point to a reset reads this, so none can drift.
-  const resetLocked = $derived(resetBusy || turnActive || runActive);
+  // Resetting the CV to a fresh seed (see CvReset).
+  const reset = new CvReset(
+    () => cvId,
+    () => turnActive || runActive,
+    autosave.flushPending,
+    hydrate,
+    afterServerWrite,
+  );
 
-  async function applyReseed() {
-    resetBusy = true;
-    resetError = '';
-    try {
-      await undoRun({
-        flush: flushPendingSave,
-        undo: async () => {
-          const rec = await api.reseedCv(cvId);
-          hydrate(rec);
-        },
-        refetch: async () => {
-          pdfVersion += 1;
-          void history.load();
-          void refreshAtsDelta();
-          void refreshJobMatch();
-        },
-      });
-      announce('Changes reset');
-    } catch (e) {
-      resetError = e instanceof ApiError ? e.message : 'Could not reset changes.';
-      // Shown in two places (the History tab and the Experience tab), spoken once here.
-      announce(resetError, 'assertive');
-    } finally {
-      resetBusy = false;
-    }
-  }
-
-  let confirmResetOpen = $state(false);
-
-  async function reseed() {
-    confirmResetOpen = true;
-  }
-
-  // A bank edit offers the same whole-document reset the History tab's control offers, so it
-  // answers to the same guard. While that guard is up the offer is skipped rather than shown:
-  // asking and then doing nothing reads as a broken control, and the next bank edit asks again.
-  function offerRefreshAfterBankEdit() {
-    if (resetLocked) return;
-    void offerCvRefresh({
-      message: TAILOR_REFRESH_MESSAGE,
-      apply: applyReseed,
-      confirm: askCvRefresh,
-    });
-  }
-
-  // ---- Autosave (folded in from the old standalone CvEditor) ----
-  // A JSON snapshot of the last-persisted state; the effect compares against it to detect real
-  // edits (and skip the initial load), and persist() advances it on success.
-  let lastSnapshot = '';
-  const snapshot = () => JSON.stringify({ title, templateId, doc });
-
-  // Saves go through this CV's queue (see cvSaveQueue), so a flush (agent turn, PDF export)
-  // can wait for the one in flight: the timer is already cleared by then, and the server would
-  // still hold the old document. write() never rejects.
-  const persist = () => queueCvSave(cvId, write);
-
-  async function write() {
-    const snap = snapshot(); // capture NOW; edits during the round-trip re-trigger the effect
-    saveState = 'saving';
-    try {
-      await api.updateCv(cvId, { title, template_id: templateId, document: doc });
-      lastSnapshot = snap;
-      saveState = 'saved';
-      pdfVersion += 1;
-      void history.load();
-      // Chained off the SAVE, not off the effect that schedules it: read any earlier and the
-      // score would describe the document as it was before this edit landed.
-      void refreshJobMatch();
-    } catch (e) {
-      saveState = 'error';
-      saveError = e instanceof ApiError ? e.message : 'Could not save. Please try again.';
-    }
-  }
-
-  // Debounced autosave: any edit schedules a save 800ms later, resetting the timer on each
-  // keystroke. There are no Save buttons — the CV persists on its own.
-  let saveTimer: ReturnType<typeof setTimeout> | null = null;
-  $effect(() => {
-    if (!cvLoaded) return;
-    if (snapshot() === lastSnapshot) return; // subscribes to title/templateId/doc
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      saveTimer = null;
-      void persist();
-    }, 800);
-  });
-
-  onDestroy(() => {
-    if (saveTimer) clearTimeout(saveTimer);
-    if (cvLoaded && snapshot() !== lastSnapshot) {
-      const body = { title, template_id: templateId, document: doc };
-      void queueCvSave(cvId, () => api.updateCv(cvId, body)).catch(() => {});
-    }
-  });
+  // ---- Autosave ---- (see CvAutosave)
+  onDestroy(() => autosave.destroy());
 
   // Refreshes just the document, live, as a run's cv_edit calls resolve — so the preview fills
   // in while the run is still going instead of waiting for it to finish. Deliberately lighter
@@ -420,7 +338,7 @@
   async function onTurnComplete(turn: { completed: boolean }) {
     // Before any await: the chat starts a queued turn right after this returns its promise.
     const ended = outcomes.endTurn();
-    await flushPendingSave();
+    await autosave.flushPending();
     try {
       await loadCv();
       // Judged on the document just re-read from the server.
@@ -442,33 +360,11 @@
     }
   }
 
-  // Write a pending human edit NOW rather than 800ms from now. Anything that changes the CV
-  // server-side has to do this first, or the debounce fires afterwards and overwrites it.
-  // The pending edit is queued before the wait, not after it: a debounce left running would
-  // queue its save during the wait and the flush would return before that save landed.
-  async function flushPendingSave() {
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = null;
-      if (snapshot() !== lastSnapshot) void persist();
-    }
-    await cvSavesSettled(cvId);
-  }
-
-  // The PDF is rendered from the saved CV, so a save that failed must stop the export rather
-  // than let it download the old one. Ordinary autosave failures keep showing in the save state.
-  async function flushForExport() {
-    await flushPendingSave();
-    // A failed or overtaken save leaves the document unsaved: write it again before the fetch.
-    if (snapshot() !== lastSnapshot) await persist();
-    if (snapshot() !== lastSnapshot) throw new Error(saveError);
-  }
-
   // A template switch is persisted by the gallery via setCvTemplate; mirror the new id into the
   // page's own state so the next autosave (which also writes template_id) doesn't revert it.
   function onTemplateSelected(id: string) {
     templateId = id;
-    lastSnapshot = snapshot();
+    autosave.accept();
     pdfVersion += 1;
   }
 </script>
@@ -483,23 +379,8 @@
      the Agent page brings the account sections back. It stays put across every state. -->
 <div use:fillViewport class="flex h-[calc(100dvh-3.5rem)]">
   <AccountNavRail collapsible bind:open={navOpen} />
-  {#if status === 'loading'}
-    <div class="flex min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
-      {baseMode
-        ? 'Opening your CV…'
-        : resuming
-          ? 'Re-opening your tailoring session…'
-          : 'Preparing your tailoring session…'}
-    </div>
-  {:else if status === 'error'}
-    <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-      <p class="max-w-md text-sm text-destructive">{errorMsg}</p>
-      {#if baseMode}
-        <a href={resolve('/my/cvs')} class="text-sm text-brand hover:underline">Back to your CVs</a>
-      {:else}
-        <a href={resolve('/jobs/[slug]', { slug })} class="text-sm text-brand hover:underline">Back to the role</a>
-      {/if}
-    </div>
+  {#if status !== 'ready'}
+    <WorkspaceStatus {status} {baseMode} {resuming} {errorMsg} {slug} />
   {:else}
     <div class="flex min-w-0 flex-1 flex-col lg:flex-row">
       <TailorMobileTabs tabs={mobileTabs} current={mobileView} bind:navOpen onPick={pickMobile} />
@@ -523,8 +404,8 @@
         <LeftPanelBar
           tabs={leftTabs}
           bind:current={leftTab}
-          {saveState}
-          {saveError}
+          saveState={autosave.state}
+          saveError={autosave.error}
           oncollapse={() => (leftCollapsed = true)}
         />
         <div id="tailor-left-panel" role="tabpanel" aria-labelledby="tailor-left-tab-{leftTab}" class="min-h-0 flex-1">
@@ -535,7 +416,7 @@
                checking, confirming, or editing what the assistant knows never means leaving the
                workspace. -->
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'experience'}>
-            <ExperiencePanel {resetError} onBankMutated={offerRefreshAfterBankEdit} />
+            <ExperiencePanel resetError={reset.error} onBankMutated={reset.offerAfterBankEdit} />
           </div>
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'design'}>
             <DesignPanel {cvId} bind:doc {fonts} bind:tracerLinksEnabled {onTemplateSelected} />
@@ -559,7 +440,7 @@
               {onDocumentEdited}
               onRunStateChange={(running) => (runActive = running)}
               onTurnStateChange={(active) => ((turnActive = active), outcomes.turnState(active))}
-              beforeTurn={flushPendingSave}
+              beforeTurn={autosave.flushPending}
             />
           </div>
         </div>
@@ -616,9 +497,9 @@
         }}
         onUndoRevision={history.undo}
         onUndoRevisionRun={history.undoRun}
-        onReseed={reseed}
-        resetBusy={resetLocked}
-        {resetError}
+        onReseed={reset.ask}
+        resetBusy={reset.locked}
+        resetError={reset.error}
         {cvId}
         bind:tab={artifactTab}
         mobileVisible={mobileView === 'jd' ||
@@ -634,7 +515,7 @@
   {/if}
 </div>
 
-<ResetCvDialog bind:open={confirmResetOpen} {baseMode} onConfirm={applyReseed} />
+<ResetCvDialog bind:open={reset.confirmOpen} {baseMode} onConfirm={reset.apply} />
 
 <GapsDownloadDialog
   bind:open={pdf.confirmOpen}

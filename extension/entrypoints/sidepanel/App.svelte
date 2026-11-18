@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { browser } from 'wxt/browser';
   import { type RuntimeMessage } from '../../lib/protocol';
-  import { TOP_FRAME } from '../../lib/tools/attachCv';
   import { createSession, getSession, SessionNotFound } from '../../lib/assistant/api';
   import { sendTurn, type Turn } from '../../lib/assistant/client';
   import { PlanRefused } from '../../lib/planRefused';
@@ -13,22 +12,18 @@
   import { pageIdentity, readStablePageKey } from '../../lib/assistant/pageIdentity';
   import { track } from '../../lib/analytics';
   import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
-  import { type FreehireJob, type JobMatch } from '../../lib/freehire';
-  import { contributePageUrl, matchPage } from '../../lib/pageMatch';
+  import { type FreehireJob } from '../../lib/freehire';
   import { normalizeLabel } from '../../lib/fieldKeys';
   import { leftAnApplication, type PlanItem } from '../../lib/applyPlan';
   import type { WalkHooks } from '../../lib/formWalk';
   import { agentAutofill, saveChosenAnswers, type FillPanel } from '../../lib/formFill';
   import { ToolChannel } from '../../lib/tools/client';
   import { activeTabPage } from '../../lib/tools/page';
-  import MatchStatusView from './MatchStatusView.svelte';
-  import AutofillFooter from './AutofillFooter.svelte';
-  import FormPlanView from './FormPlanView.svelte';
   import { FormPlan } from './formPlan.svelte';
-  import AppliedPrompt from './AppliedPrompt.svelte';
-  import PlanRefusalAlert from './PlanRefusalAlert.svelte';
+  import { PageMatch } from './pageMatch.svelte';
   import { answersToOffer, type AnswerOffer } from '../../lib/answerOffer';
   import ChatPanel from './ChatPanel.svelte';
+  import MatchTab from './MatchTab.svelte';
   import PanelHeader from './PanelHeader.svelte';
   import { TabStrip, tabStripId } from 'freehire-design-system';
 
@@ -95,14 +90,7 @@
     }
   });
 
-  type MatchStatus = 'idle' | 'loading' | 'ready' | 'error' | 'empty';
-  let matchStatus = $state<MatchStatus>('idle');
-  let matchJob = $state<FreehireJob | null>(null);
-  let match = $state<JobMatch | null>(null);
-  let matchError = $state('');
-  // Whether the empty state offers "Add this job": only on a page that is plausibly a
-  // vacancy (lib/addJob.ts), decided alongside the miss that put the panel there.
-  let canAddJob = $state(false);
+  const pageMatch = new PageMatch((notice) => notices.push(notice));
 
   // "Match" carries the current page's job info and its page-scoped actions
   // (Autofill, Add to freehire); "Chat" carries the conversation. Split into tabs
@@ -195,7 +183,7 @@
       void restoreConversation(getToken(), key);
     }
     chatPageKey = key;
-    void loadMatch();
+    void pageMatch.load();
     void refreshPlan();
   }
 
@@ -217,7 +205,7 @@
     // initial conversation page must already be known.
     user = restoredUser;
     tools.start(token);
-    void loadMatch();
+    void pageMatch.load();
     void refreshPlan();
     void restoreConversation(token, key);
   }
@@ -238,80 +226,6 @@
    */
   async function restoreConversation(token: string | Promise<string | null>, key: string) {
     await conversationRestore.run(token, key);
-  }
-
-  // Bumped at the start of every loadMatch() call; a stale call checks its own
-  // captured id against the current one before writing shared state, so an
-  // earlier in-flight load (e.g. a slow ad-hoc text match) can never clobber a
-  // newer one's result after the user has already tabbed or navigated again.
-  let matchRequestId = 0;
-
-  async function loadMatch() {
-    const requestId = ++matchRequestId;
-    const token = await getToken();
-    if (requestId !== matchRequestId) return;
-    if (!token) {
-      matchStatus = 'empty';
-      canAddJob = false;
-      matchJob = null;
-      match = null;
-      return;
-    }
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    if (requestId !== matchRequestId) return;
-    const url = tab?.url ?? '';
-
-    matchStatus = 'loading';
-    matchError = '';
-    try {
-      const result = await matchPage(url, token, () => requestId !== matchRequestId);
-      if (!result) return;
-      if (result.status === 'ready') {
-        matchJob = result.job;
-        match = result.match;
-      } else {
-        canAddJob = result.canAddJob;
-      }
-      matchStatus = result.status;
-    } catch (err) {
-      if (requestId !== matchRequestId) return;
-      matchError = err instanceof Error ? err.message : 'Could not load match';
-      matchStatus = 'error';
-    }
-  }
-
-  let contributing = $state(false);
-
-  /**
-   * Hands the current page to freehire. The server imports the vacancy when a link-source
-   * adapter can read the page and queues the link for a maintainer when none can; either
-   * way the panel says what happened, and a resolved slug re-runs the match so the curated
-   * card replaces the ad-hoc one.
-   */
-  async function contributePage() {
-    // Claimed before the first await: `disabled` only follows the flag, so a second
-    // activation landing while the token is being read would otherwise pass the guard
-    // too and post the page twice — two imports, and two charges against the rate limit
-    // the endpoint carries.
-    if (contributing) return;
-    contributing = true;
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-      const url = tab?.url ?? '';
-      if (!url) {
-        notices.push('No page to add.');
-        return;
-      }
-      const resolved = await contributePageUrl(url, token);
-      notices.push(resolved.notice);
-      if (resolved.slug) await loadMatch();
-    } catch (err) {
-      notices.push(`Could not add this page: ${err instanceof Error ? err.message : 'error'}`);
-    } finally {
-      contributing = false;
-    }
   }
 
   async function handleSignIn() {
@@ -337,7 +251,7 @@
         user = signedInUser;
         track('sign_in');
         tools.start(token);
-        void loadMatch();
+        void pageMatch.load();
         void refreshPlan();
       }
     } catch (err) {
@@ -502,7 +416,7 @@
    */
   function noteApplication() {
     if (leftAnApplication(form.plan)) {
-      if (matchJob?.public_slug) startedJob = matchJob;
+      if (pageMatch.job?.public_slug) startedJob = pageMatch.job;
       return;
     }
     if (!form.plan && startedJob) {
@@ -612,61 +526,25 @@
 
   <div class="tab-panel" role="tabpanel" id={PANEL_ID} aria-labelledby={tabStripId(PANEL_ID, activeTab)}>
     {#if activeTab === 'match'}
-      <div class="match-panel">
-        <div class="match-scroll">
-          {#if user}
-            {#if asksApplied && appliedCandidate}
-              <AppliedPrompt
-                job={appliedCandidate}
-                onNotice={(text) => notices.push(text)}
-                onDone={() => (appliedCandidate = null)}
-              />
-            {/if}
-            <MatchStatusView
-              status={matchStatus}
-              job={matchJob}
-              {match}
-              hasUploadField={form.uploads.some((u) => u.frame === TOP_FRAME)}
-              error={matchError}
-              onRetry={loadMatch}
-              {canAddJob}
-              {contributing}
-              onAdd={contributePage}
-            />
-
-            <FormPlanView
-              plan={form.plan}
-              planError={form.planError}
-              questionsSeen={form.questionsSeen}
-              fillingLabel={form.fillingLabel}
-              {autofilling}
-              onReveal={revealItem}
-              onCancel={() => (walkStop = true)}
-              {answerOffers}
-              {savingAnswers}
-              onSave={saveAnswers}
-            />
-
-            {#if autofillRefusal}
-              <PlanRefusalAlert refusal={autofillRefusal} />
-            {/if}
-            {#each notices as notice, i (i)}
-              <div class="message system">{notice}</div>
-            {/each}
-            {#if overrideFill}
-              <div class="message system">
-                <button class="link" onclick={runOverrideFill} disabled={autofilling}>Fill it anyway</button>
-              </div>
-            {/if}
-          {:else}
-            <p class="empty">Sign in to see your match for this page.</p>
-          {/if}
-        </div>
-
-        {#if user && matchStatus === 'ready' && matchJob && matchJob.public_slug !== ''}
-          <AutofillFooter {autofilling} bind:walkStop onAutofill={autofill} />
-        {/if}
-      </div>
+      <MatchTab
+        {user}
+        {pageMatch}
+        {form}
+        {notices}
+        {asksApplied}
+        bind:appliedCandidate
+        {autofilling}
+        bind:walkStop
+        {answerOffers}
+        {savingAnswers}
+        {autofillRefusal}
+        hasOverrideFill={overrideFill !== null}
+        onNotice={(text) => notices.push(text)}
+        onReveal={revealItem}
+        onSave={saveAnswers}
+        onOverrideFill={runOverrideFill}
+        onAutofill={autofill}
+      />
     {:else}
       <ChatPanel
         {user}
@@ -691,16 +569,6 @@
     height: 100vh;
     overflow: hidden;
     font-size: 14px;
-  }
-
-  .link {
-    border: none;
-    background: none;
-    color: var(--brand-strong);
-    cursor: pointer;
-    font: inherit;
-    font-size: 12px;
-    padding: 0;
   }
 
   /* :global — `class="tab-strip"` is forwarded onto TabStrip's own root element,
@@ -732,59 +600,5 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-  }
-
-  /* Plain flex wrapper, same shape as .chat-panel: .match-scroll is the part
-   * that scrolls, .match-footer (the Autofill button) stays pinned below it,
-   * same split as .messages/.composer on the Chat tab. */
-  .match-panel {
-    flex: 1;
-    min-height: 0;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .match-scroll {
-    flex: 1;
-    min-height: 0;
-    min-width: 0;
-    overflow-y: auto;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  /* :global — a direct child can be a component's own root (MatchCard's card),
-   * which carries that component's own scope hash, not this one; see the
-   * .tab-strip note above for the same reason. Without this, a flex column with
-   * `overflow-y: auto` still shrinks its children to fit before it scrolls —
-   * content taller than the visible area (a fully loaded MatchCard, well over a
-   * short skeleton) proportionally squashed every child's height. `flex-shrink:
-   * 0` makes .match-scroll actually scroll instead of squeezing its children. */
-  .match-scroll > :global(*) {
-    flex-shrink: 0;
-  }
-
-  .empty {
-    color: var(--muted-foreground);
-    text-align: center;
-    margin-top: 40px;
-  }
-
-  .message {
-    padding: 8px 10px;
-    border-radius: 8px;
-    max-width: 85%;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  .message.system {
-    align-self: center;
-    background: var(--warning-muted);
-    font-size: 12px;
-    color: var(--warning-strong);
   }
 </style>

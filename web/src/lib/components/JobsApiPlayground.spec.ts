@@ -5,15 +5,13 @@ import JobsApiPlayground from './JobsApiPlayground.svelte';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('JobsApiPlayground', () => {
-  it('shows a sample until run, and the code for the current inputs in each language', async () => {
+  it('shows a sample until run, and the curl command for the current inputs', async () => {
     render(JobsApiPlayground);
     expect(screen.getByText(/Sample response/)).toBeTruthy();
     expect(
       screen.getByText(/curl "https:\/\/freehire\.me\/api\/v1\/jobs\/search\?q=golang&countries=de&limit=3"/),
     ).toBeTruthy();
-
-    await fireEvent.click(screen.getByRole('tab', { name: 'Python' }));
-    expect(screen.getByText(/import requests/)).toBeTruthy();
+    expect(screen.queryByRole('tab')).toBeNull();
   });
 
   it('runs a keyless request against the live endpoint and prints the trimmed answer', async () => {

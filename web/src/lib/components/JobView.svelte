@@ -6,21 +6,15 @@
   import JobAsides from './JobAsides.svelte';
   import JobTitle from './JobTitle.svelte';
   import JobTabPanels from './JobTabPanels.svelte';
-  import { ApiError, api } from '#lib/api.js';
-  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import { api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
-  import { promptLogin, promptSignIn } from '#lib/signin.js';
-  import { markViewed } from '#lib/viewedJobs.svelte.js';
-  import { markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
-  import {
-    ensureAppliedCompaniesLoaded,
-    hasAppliedToCompany,
-    markAppliedToCompany,
-  } from '#lib/appliedCompanies.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
+  import { ensureAppliedCompaniesLoaded, hasAppliedToCompany } from '#lib/appliedCompanies.svelte.js';
   import { track } from '#lib/analytics.js';
   import { foreignContentLang } from '#lib/seo.js';
   import type { Display } from '#lib/generated/contracts.js';
-  import type { Job, PlanState, UserJob } from '#lib/types.js';
+  import type { Job } from '#lib/types.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { Button, TabStrip } from '#lib/ui/index.js';
   import JobFactsCard from './JobFactsCard.svelte';
@@ -28,6 +22,9 @@
   import JobApplyNotices from './JobApplyNotices.svelte';
   import JobSignInGate from './JobSignInGate.svelte';
   import { JobTailor } from '#lib/jobTailor.svelte.js';
+  import { LazyDialog } from '#lib/lazyDialog.svelte.js';
+  import { JobAutoApply } from './jobAutoApply.svelte';
+  import { JobInteraction } from './jobInteraction.svelte';
   import { JobContentTabs } from './jobContentTabs.svelte';
   import JobPeopleLinks from './JobPeopleLinks.svelte';
   import JobPostingMeta from './JobPostingMeta.svelte';
@@ -60,18 +57,8 @@
   // stays `en` regardless.
   const contentLang = $derived(foreignContentLang(job));
 
-  // The signed-in user's interaction with this job (null when signed out or not
-  // yet loaded). `showApplyPrompt` is the post-click "Did you apply?" question.
-  let interaction = $state.raw<UserJob | null>(null);
-  let showApplyPrompt = $state(false);
-  // The signed-in user's own plan (null when signed out or not yet loaded), fetched
-  // alongside `interaction` below — auto-apply is the one caller-scoped feature on this
-  // page whose visibility (not just its outcome) depends on the plan tier.
-  let userPlan = $state.raw<PlanState | null>(null);
-  const isPro = $derived(userPlan?.plan === 'pro' || userPlan?.plan === 'ultra');
-  // Set after the user confirms "Yes" on the apply prompt: surfaces a one-tap
-  // link to the Tracking board where the job now sits. Reset when the job changes.
-  let justApplied = $state(false);
+  // The signed-in user's interaction with this job (see JobInteraction).
+  const tracking = new JobInteraction(() => job);
   // Signed-out gate: the "Apply" click offers sign-in before opening the posting.
   let showSignInPrompt = $state(false);
   let mobileSignInFeedback: HTMLDivElement | undefined = $state();
@@ -80,46 +67,27 @@
   // The application form of a vacancy its employer publishes here (job.direct_apply). The
   // dialog is imported on the click that opens it, like ReferralBlock's modal: only those
   // few vacancies ever show it, so it stays out of every other job page's module graph.
-  type DirectApplyDialogComponent = typeof import('./DirectApplyDialog.svelte').default;
-  let DirectApplyDialog = $state.raw<DirectApplyDialogComponent | null>(null);
-  let showDirectApply = $state(false);
-  let loadingDirectApply = $state(false);
-  type ReferralMessageDialogComponent = typeof import('./ReferralMessageDialog.svelte').default;
-  let ReferralMessageDialog = $state.raw<ReferralMessageDialogComponent | null>(null);
-  let showReferralMessage = $state(false);
-  let loadingReferralMessage = $state(false);
-  let referralMessageLoadError = $state(false);
+  const directApply = new LazyDialog(() => import('./DirectApplyDialog.svelte'));
+  const referralMessage = new LazyDialog(() => import('./ReferralMessageDialog.svelte'));
 
   /** Load the drafting dialog only when a signed-in seeker opens it. */
-  async function openReferralMessage() {
+  function openReferralMessage() {
     if (!isAuthenticated()) {
       promptSignIn();
       return;
     }
-    referralMessageLoadError = false;
-    if (!ReferralMessageDialog) {
-      loadingReferralMessage = true;
-      try {
-        ReferralMessageDialog = (await import('./ReferralMessageDialog.svelte')).default;
-      } catch {
-        referralMessageLoadError = true;
-        return;
-      } finally {
-        loadingReferralMessage = false;
-      }
-    }
-    showReferralMessage = true;
+    void referralMessage.show();
   }
   // Whether THIS candidate's application reached the employer — read from the application
   // itself, never from tracking: a vacancy marked applied by hand must still take the
   // application, and a delivered one must not offer Apply again if tracking lagged.
   let directApplied = $state(false);
-  const applied = $derived(interaction?.applied_at != null);
+  const applied = $derived(tracking.current?.applied_at != null);
   // The reader applied to this EMPLOYER before, through any of its postings. The title row
   // shows it only when this posting is not itself applied to: "Applied" already says more,
   // and both chips side by side would state one fact twice.
   const appliedToCompany = $derived(hasAppliedToCompany(job.company_slug));
-  const saved = $derived(interaction?.saved_at != null);
+  const saved = $derived(tracking.current?.saved_at != null);
 
   // The content tabs: Description, Company, Application, Discussion (see JobContentTabs).
   const tabs = new JobContentTabs(
@@ -139,38 +107,16 @@
     track('job_view', { slug, source: job.source });
   });
 
-  // The caller's plan, fetched once per signed-in session rather than per job: unlike
-  // `interaction` below it does not depend on `job.public_slug`, so navigating between job
-  // pages does not re-fetch or flicker it back to null while a plan that has not changed
-  // reloads. A failed fetch leaves it null, which the auto-apply gate above already treats
-  // the same as "not Pro" — a safe, if conservative, default rather than a broken page.
-  $effect(() => {
-    if (!isAuthenticated()) {
-      userPlan = null;
-      return;
-    }
-    let alive = true;
-    api
-      .myPlan()
-      .then((p) => alive && (userPlan = p))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  });
-
   // Record a view for signed-in users once the page hydrates (browser only).
   // Silent history that also tells us whether they
   // already applied; a failed view must not break the page. Re-runs on client
   // navigation to another job, resetting the per-user state first.
   $effect(() => {
     const slug = job.public_slug; // track the current job
-    interaction = null;
-    showApplyPrompt = false;
-    justApplied = false;
+    tracking.reset();
     showSignInPrompt = false;
-    showDirectApply = false;
-    showReferralMessage = false;
+    directApply.close();
+    referralMessage.close();
     directApplied = false;
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
     untrack(ensureAppliedCompaniesLoaded);
@@ -185,14 +131,7 @@
     // The Avoid control below reads the profile's excluded_sources; without this its mark
     // would be wrong on a first load until something else happened to fetch the profile.
     untrack(() => profileStore.ensureLoaded());
-    api
-      .recordJobView(slug)
-      .then((rec) => {
-        // Mark it locally so its card dims on back-navigation without a reload.
-        markViewed(slug);
-        if (job.public_slug === slug) interaction = rec;
-      })
-      .catch(() => {});
+    tracking.record(slug);
   });
 
   // The Apply link opens the external posting; once the user has gone to apply,
@@ -208,20 +147,7 @@
       showSignInPrompt = true;
       return;
     }
-    if (!applied) showApplyPrompt = true;
-  }
-
-  // Gate — "Sign up" enters /onboarding first, which returns to this posting (it can be
-  // skipped straight to the sign-up form); "Sign in" is the explicit sign-in form; "View
-  // without signing in" opens the posting in a new tab (the navigation the click was holding back).
-  function signUpFromGate() {
-    showSignInPrompt = false;
-    promptSignIn();
-  }
-
-  function signInFromGate() {
-    showSignInPrompt = false;
-    promptLogin();
+    if (!applied) tracking.askApplied = true;
   }
 
   // A vacancy taking applications here has no outside page: Apply opens the form instead
@@ -233,62 +159,8 @@
       showSignInPrompt = true;
       return;
     }
-    if (!DirectApplyDialog) {
-      // Disabled while the chunk loads: a click that looks ignored invites a second one.
-      loadingDirectApply = true;
-      try {
-        DirectApplyDialog = (await import('./DirectApplyDialog.svelte')).default;
-      } catch {
-        // Offline or a deploy swap — leave the button live so a retry works.
-        return;
-      } finally {
-        loadingDirectApply = false;
-      }
-    }
-    showDirectApply = true;
-  }
-
-  // Build the callback from this posting before the dialog starts an asynchronous send.
-  function directAppliedCallback({ public_slug: slug, company_slug: company }: Job) {
-    const userID = currentUser()?.id;
-    return () => {
-      if (currentUser()?.id !== userID) return;
-      markAppliedToCompany(company);
-      track('job_track', { slug, stage: 'applied' });
-      if (job.public_slug !== slug) return;
-      directApplied = true;
-      if (interaction) interaction = { ...interaction, applied_at: interaction.applied_at ?? new Date().toISOString() };
-      justApplied = true;
-    };
-  }
-
-  function viewWithoutSignIn() {
-    showSignInPrompt = false;
-    window.open(job.url, '_blank', 'noopener,noreferrer');
-  }
-
-  async function confirmApplied() {
-    const { public_slug: slug, company_slug: company } = job;
-    const userID = currentUser()?.id;
-    let result: UserJob;
-    try {
-      result = await api.markJobApplied(slug);
-    } catch {
-      // Leave the prompt up so the user can retry; nothing else to do.
-      return;
-    }
-    if (currentUser()?.id !== userID) return;
-    markAppliedToCompany(company);
-    track('job_track', { slug, stage: 'applied' });
-    if (job.public_slug !== slug) return;
-    interaction = result;
-    showApplyPrompt = false;
-    justApplied = true;
-  }
-
-  // "No": purely local — the job must not enter the tracker.
-  function dismissApplyPrompt() {
-    showApplyPrompt = false;
+    // Offline or a deploy swap leaves it closed and the button live, so a retry works.
+    await directApply.show();
   }
 
   // Saving requires an account.
@@ -297,7 +169,7 @@
       promptSignIn();
       return;
     }
-    toggleSave();
+    void tracking.toggleSave();
   }
 
   // Reporting also requires an account (the report is attributed to the user).
@@ -309,32 +181,18 @@
     showReport = true;
   }
 
-  // The toggle flips on the server's answer, not optimistically: both endpoints
-  // return the full interaction, so the button can never drift from the truth.
-  async function toggleSave() {
-    try {
-      interaction = saved ? await api.unsaveJob(job.public_slug) : await api.saveJob(job.public_slug);
-      // Keep the shared saved set in sync so a browse card's bookmark reflects this
-      // on back-navigation without a reload (mirrors markViewed above).
-      if (interaction?.saved_at != null) {
-        markSaved(job.public_slug);
-        track('job_save', { slug: job.public_slug });
-      } else markUnsaved(job.public_slug);
-    } catch {
-      // Leave the current state; the user can retry.
-    }
-  }
-
   // Auto-apply (openspec/changes/auto-apply-submit-trigger): Pro (or above) and one of the
-  // ATS providers auto-apply can queue against — both are gated on VISIBILITY (isPro above),
-  // not just what happens on click. Base-CV existence is the one eligibility fact still not
-  // known client-side — the backend's own 409 is what tells a caller with no base CV why,
-  // surfaced below rather than pre-empted here.
-  let autoApplyOverrideStatus = $state<string | null>(null);
-  let autoApplySubmitting = $state(false);
-  let autoApplyError = $state<string | null>(null);
+  // ATS providers auto-apply can queue against — both are gated on VISIBILITY (the plan JobAutoApply reads),
+  // not just what happens on click.
+  const autoApplyQueue = new JobAutoApply(() => job);
   const autoApplyState = $derived(
-    autoApplyButtonState(job.source, autoApplyOverrideStatus ?? job.auto_apply_status, applied, isPro, closed),
+    autoApplyButtonState(
+      job.source,
+      autoApplyQueue.overrideStatus ?? job.auto_apply_status,
+      applied,
+      autoApplyQueue.isPro,
+      closed,
+    ),
   );
   // How loud each of the two CTAs is, and what they say. The table and the rule it keeps
   // ("never two primaries; one wherever an action remains") live in autoApplyButton.ts,
@@ -352,22 +210,12 @@
   // Tailoring: the cached fit analysis, whether there is a CV, and the start (see JobTailor).
   const tailor = new JobTailor(() => job);
 
-  async function onAutoApplyClick() {
+  function onAutoApplyClick() {
     if (!isAuthenticated()) {
       promptSignIn();
       return;
     }
-    autoApplyError = null;
-    autoApplySubmitting = true;
-    try {
-      await api.autoApplyJob(job.public_slug);
-      autoApplyOverrideStatus = 'queued';
-      track('job_auto_apply', { slug: job.public_slug });
-    } catch (err) {
-      autoApplyError = err instanceof ApiError ? err.message : 'Something went wrong — please try again.';
-    } finally {
-      autoApplySubmitting = false;
-    }
+    void autoApplyQueue.start();
   }
 </script>
 
@@ -395,7 +243,7 @@
       variant="outline"
       {size}
       onclick={onDirectApplyClick}
-      disabled={directApplied || loadingDirectApply}
+      disabled={directApplied || directApply.loading}
       class={className}
     >
       {directApplied ? 'Application sent' : external.label}
@@ -419,12 +267,7 @@
 
 {#snippet signInFeedback()}
   {#if showSignInPrompt}
-    <JobSignInGate
-      directApply={!!job.direct_apply}
-      onsignin={signInFromGate}
-      onsignup={signUpFromGate}
-      oncontinue={viewWithoutSignIn}
-    />
+    <JobSignInGate directApply={!!job.direct_apply} url={job.url} onclose={() => (showSignInPrompt = false)} />
   {/if}
 {/snippet}
 
@@ -465,7 +308,7 @@
     <Button
       variant="secondary"
       {size}
-      disabled={autoApply.disabled || autoApplySubmitting}
+      disabled={autoApply.disabled || autoApplyQueue.submitting}
       onclick={onAutoApplyClick}
       class={className}
     >
@@ -574,34 +417,34 @@
           slug={job.public_slug}
           company={job.company.trim()}
           {closed}
-          loading={loadingReferralMessage}
+          loading={referralMessage.loading}
           ondraft={() => void openReferralMessage()}
         />
       {/if}
     </div>
 
-    {#if job.company?.trim() && !closed && referralMessageLoadError}
+    {#if job.company?.trim() && !closed && referralMessage.failed}
       <span role="alert" class="text-sm text-destructive">Could not open the draft form. Please try again.</span>
     {/if}
 
     <JobApplyNotices
-      askApplied={showApplyPrompt && !applied}
-      {justApplied}
+      askApplied={tracking.askApplied && !applied}
+      justApplied={tracking.justApplied}
       queued={autoApplyState.kind === 'queued'}
       slug={job.public_slug}
-      error={autoApplyError}
-      onconfirm={confirmApplied}
-      ondismiss={dismissApplyPrompt}
+      error={autoApplyQueue.error}
+      onconfirm={tracking.confirmApplied}
+      ondismiss={tracking.dismiss}
     />
 
-    {#if showDirectApply && DirectApplyDialog}
-      <DirectApplyDialog
+    {#if directApply.open && directApply.component}
+      <directApply.component
         slug={job.public_slug}
         title={job.title}
-        onClose={() => (showDirectApply = false)}
-        onSent={directAppliedCallback(job)}
+        onClose={directApply.close}
+        onSent={tracking.sentCallback(() => (directApplied = true))}
         onTailor={() => {
-          showDirectApply = false;
+          directApply.close();
           void tailor.start();
         }}
       />
@@ -653,8 +496,8 @@
   <ReportDialog slug={job.public_slug} companySlug={job.company_slug} onClose={() => (showReport = false)} />
 {/if}
 
-{#if showReferralMessage && ReferralMessageDialog}
-  <ReferralMessageDialog slug={job.public_slug} company={job.company} onClose={() => (showReferralMessage = false)} />
+{#if referralMessage.open && referralMessage.component}
+  <referralMessage.component slug={job.public_slug} company={job.company} onClose={referralMessage.close} />
 {/if}
 
 <JobScrollPadding {closed} signInPrompt={showSignInPrompt} feedbackEl={mobileSignInFeedback} />

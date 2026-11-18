@@ -1,6 +1,7 @@
 <script lang="ts">
   import { APP_STORE_URL } from '#lib/appLinks.js';
   import { resolve } from '$app/paths';
+  import { Trophy } from '@lucide/svelte';
   import { reopen } from '#lib/consent.svelte.js';
   import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
   import { POPULAR_COLLECTIONS } from '#lib/popularCollections.js';
@@ -102,6 +103,7 @@
   const compactLinks = [
     { label: 'Jobs', href: resolve('/jobs') },
     { label: 'Pricing', href: resolve('/pricing') },
+    { label: 'Jobs API', href: resolve('/jobs-api') },
     { label: 'Support', href: resolve('/support') },
     { label: 'Status', href: resolve('/status') },
     { label: 'Privacy', href: resolve('/privacy') },
@@ -210,11 +212,11 @@
 
       <!-- The badge and the store buttons are one size, w-64 h-14 (256x56): the
            badge is a 250x54 image, so object-contain scales it to the box instead
-           of an arbitrary h-[54px], which check:tokens refuses. A wide viewport wraps
-           them; a narrow one scrolls them sideways as a carousel, bleeding to the
-           screen edge, so no button is squeezed or stacked into a tall column. -->
+           of an arbitrary h-[54px], which check:tokens refuses. They never wrap: a wide
+           viewport splits one row into five equal columns; a narrower one scrolls them
+           sideways as a carousel, bleeding to the screen edge. -->
       <div
-        class="-mx-4 mt-8 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+        class="-mx-4 mt-8 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 xl:mx-0 xl:grid xl:grid-cols-5 xl:overflow-visible xl:px-0"
       >
         <!-- Greyed until hovered: in full colour the red badge was the loudest thing in the footer. -->
         <!-- eslint-disable svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
@@ -222,7 +224,7 @@
           href={productHunt.href}
           target="_blank"
           rel="noopener noreferrer"
-          class="h-14 w-64 shrink-0 snap-start opacity-70 grayscale transition hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0"
+          class="h-14 w-64 shrink-0 xl:w-auto snap-start opacity-70 grayscale transition hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0"
         >
           <img
             src={productHunt.light}
@@ -242,13 +244,31 @@
           />
         </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 
+        <!-- Datacircle's benchmark ranking, drawn like the store buttons: their own badge
+             is a 240x162 card that does not fit this strip. shortcut: "#1" is typed here
+             (as in /jobs-api's static/brands/datacircle-ranked.svg); change both if the
+             ranking moves. -->
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- external ranking page opened in a new tab; not an internal route -->
+        <a
+          href="https://datacircle.dev/best-full-job-posting-api"
+          target="_blank"
+          rel="noopener"
+          class="inline-flex h-14 w-64 shrink-0 xl:w-auto snap-start items-center gap-3 rounded-lg border border-border px-4 text-foreground transition-colors hover:bg-muted"
+        >
+          <Trophy class="size-7 shrink-0" aria-hidden="true" />
+          <span class="flex flex-col leading-tight">
+            <span class="text-xs text-muted-foreground">Ranked by Datacircle</span>
+            <span class="text-sm font-semibold">#1 Job Postings API</span>
+          </span>
+        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
+
         {#each stores as store (store.href)}
           <!-- eslint-disable svelte/no-navigation-without-resolve -- external store listing opened in a new tab; not an internal route -->
           <a
             href={store.href}
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex h-14 w-64 shrink-0 snap-start items-center gap-3 rounded-lg border border-border px-4 text-foreground transition-colors hover:bg-muted"
+            class="inline-flex h-14 w-64 shrink-0 xl:w-auto snap-start items-center gap-3 rounded-lg border border-border px-4 text-foreground transition-colors hover:bg-muted"
           >
             <ProviderIcon provider={store.provider} class="size-7 shrink-0" />
             <span class="flex flex-col leading-tight">

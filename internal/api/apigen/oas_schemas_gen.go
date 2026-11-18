@@ -5606,6 +5606,111 @@ func (s *CompaniesMeta) SetLimit(val int64) {
 	s.Limit = val
 }
 
+// One company whose site matches a requested domain.
+// Ref: #/components/schemas/CompanyByDomain
+type CompanyByDomain struct {
+	// The normalized domain it matched.
+	Domain string `json:"domain"`
+	Slug   string `json:"slug"`
+	Name   string `json:"name"`
+	// Open postings; 0 when the company is not hiring now.
+	JobCount int64 `json:"job_count"`
+	// The site as stored (`website`, else `homepage`).
+	Website string `json:"website"`
+}
+
+// GetDomain returns the value of Domain.
+func (s *CompanyByDomain) GetDomain() string {
+	return s.Domain
+}
+
+// GetSlug returns the value of Slug.
+func (s *CompanyByDomain) GetSlug() string {
+	return s.Slug
+}
+
+// GetName returns the value of Name.
+func (s *CompanyByDomain) GetName() string {
+	return s.Name
+}
+
+// GetJobCount returns the value of JobCount.
+func (s *CompanyByDomain) GetJobCount() int64 {
+	return s.JobCount
+}
+
+// GetWebsite returns the value of Website.
+func (s *CompanyByDomain) GetWebsite() string {
+	return s.Website
+}
+
+// SetDomain sets the value of Domain.
+func (s *CompanyByDomain) SetDomain(val string) {
+	s.Domain = val
+}
+
+// SetSlug sets the value of Slug.
+func (s *CompanyByDomain) SetSlug(val string) {
+	s.Slug = val
+}
+
+// SetName sets the value of Name.
+func (s *CompanyByDomain) SetName(val string) {
+	s.Name = val
+}
+
+// SetJobCount sets the value of JobCount.
+func (s *CompanyByDomain) SetJobCount(val int64) {
+	s.JobCount = val
+}
+
+// SetWebsite sets the value of Website.
+func (s *CompanyByDomain) SetWebsite(val string) {
+	s.Website = val
+}
+
+// Ref: #/components/schemas/CompanyByDomainMeta
+type CompanyByDomainMeta struct {
+	// Requested domains that matched no company, normalized.
+	Unmatched []string `json:"unmatched"`
+}
+
+// GetUnmatched returns the value of Unmatched.
+func (s *CompanyByDomainMeta) GetUnmatched() []string {
+	return s.Unmatched
+}
+
+// SetUnmatched sets the value of Unmatched.
+func (s *CompanyByDomainMeta) SetUnmatched(val []string) {
+	s.Unmatched = val
+}
+
+// Ref: #/components/schemas/CompanyByDomainPage
+type CompanyByDomainPage struct {
+	Data []CompanyByDomain   `json:"data"`
+	Meta CompanyByDomainMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *CompanyByDomainPage) GetData() []CompanyByDomain {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *CompanyByDomainPage) GetMeta() CompanyByDomainMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *CompanyByDomainPage) SetData(val []CompanyByDomain) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *CompanyByDomainPage) SetMeta(val CompanyByDomainMeta) {
+	s.Meta = val
+}
+
 // One review. The persona handle is the only author identity ever sent.
 // Ref: #/components/schemas/CompanyFeedback
 type CompanyFeedback struct {

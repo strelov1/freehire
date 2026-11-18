@@ -225,3 +225,43 @@ jobs:
           node scripts/check-gitignore.mjs --self-test
           node scripts/check-gitignore.mjs
           pnpm check:migration-numbers
+
+  # The public API's contract against main: read scripts/check-openapi-breaking.sh for
+  # what counts as breaking and the `API-Break:` trailer that lets a deliberate break
+  # through. Its own job because it needs the whole history (the merge base) and the
+  # jobs beside it are shallow on purpose.
+  api-breaking:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Tool archives come from a cache: see "Cache tool archives" in ci.yml's backend-jobs for why.
+      - name: Cache tool archives
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ci-tools
+          key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/codegen.yml') }}
+          restore-keys: ci-tools-${{ github.job }}-
+
+      # Pinned by a digest written here, the same argument as agnix in `docs`.
+      - name: Install oasdiff
+        env:
+          OASDIFF_VERSION: 1.34.1
+          OASDIFF_SHA256: 75775f65b0adebd26a8e013af51a799342dfdc6262d89efa9e3b7bdf89657d90
+        run: |
+          f=~/.cache/ci-tools/oasdiff-${OASDIFF_VERSION}.tar.gz
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs -o "$f" \
+            "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
+          echo "${OASDIFF_SHA256}  $f" | sha256sum -c -
+          tar -xzf "$f" -C /tmp oasdiff
+
+      - name: Check for breaking API changes
+        env:
+          OASDIFF: /tmp/oasdiff
+        run: scripts/check-openapi-breaking.sh

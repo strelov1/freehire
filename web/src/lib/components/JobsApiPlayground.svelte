@@ -2,7 +2,6 @@
   import { Check, Copy, LoaderCircle, Play } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { countryLabel } from '#lib/facets.js';
-  import { TabStrip, tabStripId } from '#lib/ui/index.js';
 
   // The hero's live demo: a real, keyless request to the public search endpoint, built from
   // two inputs and shown as the code that makes it and the answer it got. The read API
@@ -18,18 +17,8 @@
     code,
     name: code ? countryLabel(code) : 'Anywhere',
   }));
-  const CODE_PANEL = 'jobs-api-playground-code';
-
-  type Lang = 'curl' | 'python' | 'javascript';
-  const LANGS: { id: Lang; label: string }[] = [
-    { id: 'curl', label: 'cURL' },
-    { id: 'python', label: 'Python' },
-    { id: 'javascript', label: 'JavaScript' },
-  ];
-
   let q = $state('golang');
   let country = $state('de');
-  let lang = $state<Lang>('curl');
   let running = $state(false);
   let copied = $state(false);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -43,30 +32,9 @@
   );
   const path = $derived(`/api/v1/jobs/search?${query}`);
 
-  const code = $derived.by(() => {
-    const url = `${ORIGIN}${path}`;
-    switch (lang) {
-      case 'python':
-        return `import requests
-
-r = requests.get(
-    "${url}",
-    # headers={"Authorization": f"Bearer {API_KEY}"},  # with a plan
-)
-for job in r.json()["data"]:
-    print(job["title"], "—", job["company"], job["url"])`;
-      case 'javascript':
-        return `const res = await fetch(
-  "${url}",
-  // { headers: { Authorization: \`Bearer \${API_KEY}\` } }, // with a plan
-);
-const { data, meta } = await res.json();
-console.log(meta.total, data.map((j) => j.title));`;
-      default:
-        return `curl "${url}"
-# with a plan: -H "Authorization: Bearer $FREEHIRE_API_KEY"`;
-    }
-  });
+  // curl only: it reads the same in every stack, and the API reference has the rest.
+  const code = $derived(`curl "${ORIGIN}${path}"
+# with a plan: -H "Authorization: Bearer $FREEHIRE_API_KEY"`);
 
   const SAMPLE = `{
   "data": [{
@@ -205,21 +173,18 @@ console.log(meta.total, data.map((j) => j.title));`;
     </button>
   </form>
 
-  <div class="flex items-center justify-between border-b border-border px-2">
-    <TabStrip tabs={LANGS} active={lang} onSelect={(id) => (lang = id)} label="Request language" panelId={CODE_PANEL} />
+  <div class="flex items-start gap-2 border-b border-border">
+    <pre class="min-w-0 flex-1 overflow-x-auto py-3 pl-4 font-mono text-xs leading-relaxed">{code}</pre>
     <button
       type="button"
       onclick={copy}
-      class="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="m-2 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {#if copied}<Check class="size-3.5" aria-hidden="true" /> Copied{:else}<Copy
           class="size-3.5"
           aria-hidden="true"
         /> Copy{/if}
     </button>
-  </div>
-  <div id={CODE_PANEL} role="tabpanel" aria-labelledby={tabStripId(CODE_PANEL, lang)}>
-    <pre class="overflow-x-auto border-b border-border px-4 py-3 font-mono text-xs leading-relaxed">{code}</pre>
   </div>
 
   <div class="flex items-center justify-between px-4 pt-3 font-mono text-xs text-muted-foreground" aria-live="polite">

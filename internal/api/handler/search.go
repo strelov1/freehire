@@ -73,12 +73,6 @@ type searchHandlers struct {
 	removals pendingRemovals
 }
 
-// pendingRemovals names the jobs, among those given, whose removal from the index is
-// queued but not yet applied. *db.Queries satisfies it.
-type pendingRemovals interface {
-	ListPendingSearchRemovals(ctx context.Context, jobIds []int64) ([]int64, error)
-}
-
 // profileReader loads a caller's profile. *userprofile.Service satisfies it; tests
 // inject a fake. Only the skills are read here — the match sort has no opinion on
 // location preferences or specializations.
@@ -129,67 +123,6 @@ type searcher interface {
 }
 
 // The pagination guard the search endpoints apply is maxPageWindow (api.go). It is decoupled from the index's maxTotalHits (which only caps the reported total), so the total can read the true filtered count while deep offset paging stays refused.
-
-// searchParams are the query params the search endpoints read themselves rather
-// than hand to the filter: the query text, the sort directive and the pagination
-// window. search.UnknownParams owns the filter vocabulary and nothing else, so
-// each endpoint declares its own transport params beside itself (see
-// facetsParams in facets.go, companiesParams in companies.go).
-var searchParams = []string{"q", "sort", "order", "limit", "offset"}
-
-// jobSearchParams is searchParams plus q_fields and q_prefix, the field-scoping and
-// prefix-matching parameters only the two job-search endpoints (not the swipe deck,
-// which shares searchParams but reads neither) understand.
-var jobSearchParams = slices.Concat(searchParams, []string{"q_fields", qPrefixParam})
-
-// qPrefixParam asks for q's last word to match as the start of a longer word, for a box
-// suggesting results while someone is still typing. Off by default: see
-// search.SearchParams.Prefix for what the prefix match costs.
-const qPrefixParam = "q_prefix"
-
-// publicJobSearchParams is what /jobs/search itself reads beyond the filter vocabulary.
-var publicJobSearchParams = slices.Concat(jobSearchParams, []string{hideSeenParam, hideAppliedCompaniesParam, minSkillMatchParam})
-
-// agentSearchParams is jobSearchParams plus the agent endpoint's own two: the
-// response-format selector and the opt-in semantic search.
-var agentSearchParams = slices.Concat(jobSearchParams, []string{"description_format", "semantic"})
-
-// ignoredParams reports the query params of this request that neither the filter
-// nor the endpoint itself reads. They are echoed in the response meta instead of
-// being refused: rejecting them would break saved searches and shared links that
-// still carry retired params, while staying silent is what let a mistyped
-// `country=it` pass for a search of Italy.
-func ignoredParams(vals url.Values, own []string) []search.UnknownParam {
-	return search.UnknownParams(vals, own)
-}
-
-// mergedJobSearchIgnored combines runJobSearch's value-level ignored-param report
-// (q_fields naming a field outside the searchable vocabulary, filter params the
-// Meilisearch-rejection degrade dropped) with the name-level ignoredParams(vals, own)
-// report, into one sorted, capped list. Shared so both job-search endpoints apply it
-// identically.
-func mergedJobSearchIgnored(vals url.Values, own []string, fromSearch []search.UnknownParam) []search.UnknownParam {
-	return search.SortAndCap(append(fromSearch, ignoredParams(vals, own)...))
-}
-
-// searchSortable is the allowlist of sort params mapped to their index attribute;
-// anything else is ignored so a bad param cannot make Meilisearch reject the query.
-var searchSortable = map[string]string{
-	"created_at": "created_at",
-	"posted_at":  "posted_at",
-	// The "Most viewed" ordering. This entry must NEVER ship ahead of the live index declaring
-	// view_count sortable (see search.facetSettings and "Adding a sortable attribute" in
-	// internal/search/search/AGENTS.md): Meilisearch rejects the whole query for an undeclared
-	// sort attribute and that package maps it to a 500.
-	"view_count": "view_count",
-	"salary_min": "enrichment.salary_min",
-	"salary_max": "enrichment.salary_max",
-}
-
-// sortMatch is the profile-match sort. Unlike every value in searchSortable it names
-// no index attribute: it ranks by cosine against the caller's own skill vector, so it
-// is resolved from the request rather than looked up in that table.
-const sortMatch = "match"
 
 // matchVector builds the caller's skill vector for ?sort=match, or nil when the sort
 // was not asked for or cannot be served.
@@ -468,48 +401,6 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 	}, nil
 }
 
-// pendingRemovalsTimeout bounds the lookup dropPendingRemovals makes (a primary-key read over one page of ids).
-const pendingRemovalsTimeout = 300 * time.Millisecond
-
-// dropPendingRemovals takes out of a page the postings that have closed but are still in the index: the drain applies closures asynchronously and a facet rebuild pauses it for hours. It asks the queue (search_delete_outbox) about the page's own ids, since the index cannot exclude a six-figure id list.
-//
-// Unlike hide_applied_companies this drops hits after the query, but a dropped hit is by definition not a result, so the total is lowered by the same count; the backlog on later pages stays over-counted until the drain catches up.
-//
-// Best-effort: a failed lookup logs and serves the page as the index has it.
-func (h *searchHandlers) dropPendingRemovals(ctx context.Context, res search.SearchResult) search.SearchResult {
-	if h.removals == nil || len(res.Hits) == 0 {
-		return res
-	}
-	ids := make([]int64, len(res.Hits))
-	for i, hit := range res.Hits {
-		ids[i] = hit.ID
-	}
-	// An optional check must not hold the search behind a saturated pool or a stalled query.
-	ctx, cancel := context.WithTimeout(ctx, pendingRemovalsTimeout)
-	defer cancel()
-	gone, err := h.removals.ListPendingSearchRemovals(ctx, ids)
-	if err != nil {
-		log.Printf("search: read pending removals: %v", err)
-		return res
-	}
-	if len(gone) == 0 {
-		return res
-	}
-	closed := make(map[int64]struct{}, len(gone))
-	for _, id := range gone {
-		closed[id] = struct{}{}
-	}
-	kept := make([]search.JobDocument, 0, len(res.Hits))
-	for _, hit := range res.Hits {
-		if _, ok := closed[hit.ID]; !ok {
-			kept = append(kept, hit)
-		}
-	}
-	res.Total = max(res.Total-int64(len(res.Hits)-len(kept)), 0)
-	res.Hits = kept
-	return res
-}
-
 // recordQuery notes what the catalogue was asked for, so the suggestion dictionary can
 // rank by demand rather than only by supply.
 //
@@ -545,34 +436,6 @@ func demandKey(raw string) string {
 		raw = raw[1 : len(raw)-1]
 	}
 	return suggest.Title(raw)
-}
-
-// defaultSort is the order when the caller names none: an empty query has no relevance to
-// rank by, so the freshest first; a text query keeps relevance order (nil).
-func defaultSort(query string) []string {
-	if query == "" {
-		return []string{"posted_at:desc"}
-	}
-	return nil
-}
-
-// searchSortValues builds the Meilisearch sort directive from ?sort=<field>&order=<dir>.
-// Without a valid sort, a no-text browse sorts freshest first (posted_at desc) and a text query keeps relevance order (nil).
-//
-// ranked reports that the request carries a match vector: an explicit sort directive would take precedence over vector ranking and silently discard the match order.
-func searchSortValues(vals url.Values, ranked bool) []string {
-	if ranked {
-		return nil
-	}
-	attr, ok := searchSortable[vals.Get("sort")]
-	if !ok {
-		return defaultSort(vals.Get("q"))
-	}
-	order := vals.Get("order")
-	if order != "asc" && order != "desc" {
-		order = "desc"
-	}
-	return []string{attr + ":" + order}
 }
 
 // buildSearchFilter turns the request's facet query params into a Meilisearch

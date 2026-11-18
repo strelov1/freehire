@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
-  import { RefreshCw, FileText, Check, Loader, TriangleAlert } from '@lucide/svelte';
+  import { RefreshCw, FileText, TriangleAlert } from '@lucide/svelte';
   import { notInPlan, refuses, resetsAtLabel } from '#lib/allowance.js';
   import { api } from '#lib/api.js';
   import { track } from '#lib/analytics.js';
@@ -20,6 +20,7 @@
   import { Button } from '#lib/ui/index.js';
   import PlanLimitLink from '#lib/components/PlanLimitLink.svelte';
   import MatchRequirements from './MatchRequirements.svelte';
+  import MatchAnalysisProgress from './MatchAnalysisProgress.svelte';
 
   // The full AI match report + live SSE stream. Caller: `ArtifactPanel`'s Job Match tab, with
   // `autoRun` wired to the tailoring workspace's own `coldStartRunning` — a cold start opens
@@ -45,7 +46,6 @@
     autoRun?: boolean;
     stacked?: boolean;
   } = $props();
-  const thinkingId = $props.id();
 
   let fit = $state<MatchAnalysisResponse | null>(initial);
 
@@ -72,12 +72,6 @@
   let recovering = $state(false);
   let destroyed = false;
   let es: EventSource | null = null;
-  // The thinking panel tails the model's reasoning: keep it pinned to the newest tokens.
-  let thinkingEl = $state<HTMLElement | null>(null);
-  $effect(() => {
-    void stream.thinking; // track new reasoning
-    if (thinkingEl) thinkingEl.scrollTop = thinkingEl.scrollHeight;
-  });
 
   const analysis = $derived(stream.analysis);
   const isStale = $derived(fit?.stale ?? false);
@@ -361,68 +355,7 @@
          it, which looked like Extract & Match / Recruiter verdict were hung. Show an explicit
          Run when idle. -->
     {#if !blockedNew && (streaming || recovering)}
-      <section class="rounded-2xl border border-border bg-card p-6 sm:px-8">
-        <!-- Stage stepper: evenly-spaced nodes over a single connecting rail. -->
-        <div class="relative flex">
-          <div class="absolute inset-x-[16.67%] top-4 h-px bg-border" aria-hidden="true"></div>
-          {#each stream.stages as st (st.n)}
-            <div class="relative z-10 flex flex-1 flex-col items-center gap-2">
-              <span
-                class="flex size-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors
-                {st.state === 'done'
-                  ? 'border-brand bg-brand text-brand-foreground'
-                  : st.state === 'active'
-                    ? 'border-brand bg-card text-primary'
-                    : 'border-border bg-card text-muted-foreground'}"
-              >
-                {#if st.state === 'done'}<Check class="size-4" />
-                {:else if st.state === 'active'}<Loader class="size-4 animate-spin" />
-                {:else}{st.n}{/if}
-              </span>
-              <span
-                class="max-w-[7rem] text-center text-xs font-medium leading-tight sm:text-sm {st.state === 'pending'
-                  ? 'text-muted-foreground'
-                  : 'text-foreground'}">{st.label}</span
-              >
-            </div>
-          {/each}
-        </div>
-
-        {#if recovering}
-          <p
-            class="mt-6 flex items-center justify-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground"
-          >
-            <Loader class="size-3.5 animate-spin" aria-hidden="true" /> Connection dropped — waiting for your result…
-          </p>
-        {/if}
-
-        {#if stream.thinking}
-          <div class="mt-6 border-t border-border pt-4">
-            <button
-              type="button"
-              class="flex items-center gap-2 text-xs font-semibold text-muted-foreground"
-              onclick={() => (showThinking = !showThinking)}
-              aria-expanded={showThinking}
-              aria-controls={thinkingId}
-            >
-              <span class="relative flex size-2" aria-hidden="true">
-                <span class="absolute inline-flex size-full motion-safe:animate-ping rounded-full bg-brand/60"></span>
-                <span class="relative inline-flex size-2 rounded-full bg-brand"></span>
-              </span>
-              Thinking <span aria-hidden="true">{showThinking ? '▾' : '▸'}</span>
-            </button>
-            {#if showThinking}
-              <p
-                id={thinkingId}
-                bind:this={thinkingEl}
-                class="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground"
-              >
-                {stream.thinking}
-              </p>
-            {/if}
-          </div>
-        {/if}
-      </section>
+      <MatchAnalysisProgress stages={stream.stages} thinking={stream.thinking} {recovering} bind:showThinking />
     {:else if !blockedNew && !analysis && !stream.error}
       <div
         class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card p-8 text-center"
