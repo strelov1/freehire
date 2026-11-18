@@ -2,6 +2,7 @@ package resume
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -14,14 +15,7 @@ import (
 
 // pdftotextBin is the poppler binary used to extract résumé PDF text, overridable via
 // PDFTOTEXT_BIN (default "pdftotext"). A package var so tests can point it at a stub.
-var pdftotextBin = envOr("PDFTOTEXT_BIN", "pdftotext")
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
+var pdftotextBin = cmp.Or(os.Getenv("PDFTOTEXT_BIN"), "pdftotext")
 
 // extractText derives plain text from a stored résumé: a PDF (magic number "%PDF") is
 // parsed, anything else is read as UTF-8 text (the pasted-text path). Sniffing the bytes

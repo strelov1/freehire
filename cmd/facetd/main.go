@@ -10,6 +10,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log"
@@ -23,7 +24,7 @@ import (
 func main() { os.Exit(run()) }
 
 func run() int {
-	addr := envOr("FACETD_ADDR", "127.0.0.1:8095")
+	addr := cmp.Or(os.Getenv("FACETD_ADDR"), "127.0.0.1:8095")
 	interval := 5 * time.Minute
 	if v := os.Getenv("FACETD_SNAPSHOT_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
@@ -81,11 +82,4 @@ func run() int {
 		code = 1
 	}
 	return code
-}
-
-func envOr(k, d string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return d
 }
