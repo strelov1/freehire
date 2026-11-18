@@ -36,7 +36,7 @@
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@wxt-dev/module-svelte": "^2.0.5",
-    "eslint": "^10.8.0",
+    "eslint": "^10.14.0",
     "eslint-plugin-oxlint": "^1.77.0",
     "eslint-plugin-svelte": "^3.22.0",
     "globals": "^17.8.0",
