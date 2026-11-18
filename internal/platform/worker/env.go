@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -44,4 +45,17 @@ func EnvInt32(name string, fallback int32) (int32, error) {
 		return 0, fmt.Errorf("%s=%q: want a positive integer", name, raw)
 	}
 	return int32(v), nil
+}
+
+// EnvInt32OrDefault is EnvInt32 for a recurring unattended worker's per-run bound: a set but
+// unreadable value (not a positive number that fits an int32) logs and keeps fallback instead
+// of failing, because failing hard would stop the whole job over a batch-size typo. One-off
+// passes an operator watches use EnvInt32 and fail.
+func EnvInt32OrDefault(name string, fallback int32) int32 {
+	v, err := EnvInt32(name, fallback)
+	if err != nil {
+		log.Printf("%v — keeping %d", err, fallback)
+		return fallback
+	}
+	return v
 }

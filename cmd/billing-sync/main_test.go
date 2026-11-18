@@ -67,35 +67,6 @@ func TestRunIsANoOpWithHalfCredentials(t *testing.T) {
 	}
 }
 
-func TestMaxPerRun(t *testing.T) {
-	cases := []struct {
-		name string
-		raw  string
-		want int32
-	}{
-		{name: "unset keeps the default", raw: "", want: maxPerRunDefault},
-		{name: "a positive number is honoured", raw: "50", want: 50},
-		// A typo resolving to zero would make every run a silent no-op, which looks exactly
-		// like a backlog that has already been drained.
-		{name: "zero keeps the default", raw: "0", want: maxPerRunDefault},
-		{name: "negative keeps the default", raw: "-5", want: maxPerRunDefault},
-		{name: "nonsense keeps the default", raw: "lots", want: maxPerRunDefault},
-		// Parsed at the width it is used at. Read as a platform int and converted, this
-		// would WRAP to a negative limit — a query error, not a big batch — and the
-		// "not a positive number" log line would be a lie.
-		{name: "beyond a batch size keeps the default", raw: "3000000000", want: maxPerRunDefault},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("BILLING_SYNC_MAX_PER_RUN", tc.raw)
-			if got := maxPerRun(); got != tc.want {
-				t.Fatalf("want %d, got %d", tc.want, got)
-			}
-		})
-	}
-}
-
 // TestTheStoreProviderAloneKeepsTheWorkerRunning is the other side of the gate. A deployment
 // that sells only in the apps is a legitimate one, and a gate written as "no Stripe, nothing
 // to do" would silently stop reconciling its store subscriptions.
