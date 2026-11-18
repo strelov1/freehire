@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/net/html"
@@ -212,28 +211,32 @@ const loxoSharedHostGap = 350 * time.Millisecond
 type loxoThrottle struct {
 	inner HTMLGetter
 	gap   time.Duration
-	mu    sync.Mutex
+	sem   chan struct{} // capacity 1: a mutex a queued caller can leave when its ctx ends
 	last  time.Time
 }
 
 func newLoxoThrottle(inner HTMLGetter, gap time.Duration) *loxoThrottle {
-	return &loxoThrottle{inner: inner, gap: gap}
+	return &loxoThrottle{inner: inner, gap: gap, sem: make(chan struct{}, 1)}
 }
 
 func (t *loxoThrottle) GetHTML(ctx context.Context, u string) (*html.Node, error) {
 	if loxoIsSharedHost(u) {
-		// Hold the lock across the sleep so shared-host requests run one at a time, gap apart.
-		t.mu.Lock()
+		// Hold admission across the sleep so shared-host requests run one at a time, gap apart.
+		select {
+		case t.sem <- struct{}{}:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 		if d := loxoNextDelay(t.last, time.Now(), t.gap); d > 0 {
 			select {
 			case <-time.After(d):
 			case <-ctx.Done():
-				t.mu.Unlock()
+				<-t.sem
 				return nil, ctx.Err()
 			}
 		}
 		t.last = time.Now()
-		t.mu.Unlock()
+		<-t.sem
 	}
 	return t.inner.GetHTML(ctx, u)
 }

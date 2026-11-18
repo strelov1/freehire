@@ -197,7 +197,24 @@ func TestLoxoThrottle_CancelledWaitReturnsAndUnlocks(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("GetHTML kept sleeping after the context was cancelled")
 	}
-	if !th.mu.TryLock() {
-		t.Fatal("throttle mutex still held after cancelled wait")
+	if len(th.sem) != 0 {
+		t.Fatal("throttle admission still held after cancelled wait")
+	}
+}
+
+func TestLoxoThrottle_QueuedCallerLeavesOnCancel(t *testing.T) {
+	th := newLoxoThrottle(nil, time.Hour)
+	th.sem <- struct{}{} // another call holds admission
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { _, err := th.GetHTML(ctx, "https://"+loxoSharedHost+"/x"); done <- err }()
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("queued GetHTML stayed blocked after its context was cancelled")
 	}
 }
