@@ -156,6 +156,16 @@ func CVText(d cv.Document) string {
 	for _, g := range d.Skills {
 		line("Skills %s: %s", g.Group, strings.Join(g.Items, ", "))
 	}
+	// Short qualifications go before experience, so the cap trims experience, not them.
+	for _, e := range d.Education {
+		line("Education: %s %s, %s", e.Degree, e.Field, e.Institution)
+	}
+	for _, c := range d.Certifications {
+		line("Certification: %s, %s", c.Name, c.Issuer)
+	}
+	for _, l := range d.Languages {
+		line("Language: %s %s", l.Name, l.Level)
+	}
 	for _, e := range d.Experience {
 		line("Experience: %s at %s (%s) %s", e.Role, e.Company, perioddate.FormatRange(e.Start, e.End, e.Current), e.Summary)
 		for _, bullet := range e.Bullets {
@@ -170,15 +180,6 @@ func CVText(d cv.Document) string {
 		for _, bullet := range p.Bullets {
 			line("- %s", bullet)
 		}
-	}
-	for _, e := range d.Education {
-		line("Education: %s %s, %s", e.Degree, e.Field, e.Institution)
-	}
-	for _, c := range d.Certifications {
-		line("Certification: %s, %s", c.Name, c.Issuer)
-	}
-	for _, l := range d.Languages {
-		line("Language: %s %s", l.Name, l.Level)
 	}
 	return truncate(b.String(), maxCVRunes)
 }

@@ -26,8 +26,8 @@ func server(t *testing.T) *httptest.Server {
 			t.Errorf("question = %+v", req.Questions)
 		}
 		job := req.State["job"]
-		if len([]rune(job)) > maxJobRunes+200 {
-			t.Errorf("job text not truncated: %d runes", len([]rune(job)))
+		if _, desc, _ := strings.Cut(job, "\n\n"); len([]rune(desc)) > maxJobRunes || (strings.HasPrefix(job, "strong") && len([]rune(desc)) != maxJobRunes) {
+			t.Errorf("description = %d runes, want the long one cut to %d", len([]rune(desc)), maxJobRunes)
 		}
 		probs := map[string]float64{"strong": 0.1, "partial": 0.2, "weak": 0.7}
 		choice := "weak"
@@ -85,6 +85,11 @@ func TestCVTextOmitsContactBlock(t *testing.T) {
 		if strings.Contains(text, bad) {
 			t.Errorf("CV text leaks %q: %s", bad, text)
 		}
+	}
+	long := cv.Document{Experience: []cv.ExperienceItem{{Role: "Dev", Bullets: []string{strings.Repeat("y", maxCVRunes)}}},
+		Certifications: []cv.Certification{{Name: "AWS SAA"}}}
+	if lt := CVText(long); len([]rune(lt)) != maxCVRunes || !strings.Contains(lt, "AWS SAA") {
+		t.Errorf("long CV: %d runes, certification kept = %v", len([]rune(lt)), strings.Contains(lt, "AWS SAA"))
 	}
 	for _, good := range []string{"London", "Engineer", "Dev at Acme", "Built Go services", "AWS SAA, Amazon"} {
 		if !strings.Contains(text, good) {
