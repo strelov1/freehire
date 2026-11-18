@@ -65,6 +65,13 @@ var scraplingProviders = map[string]scraplingProvider{
 		f.httpClient.Jar = jar
 		return NewInfoJobsBR(f)
 	}},
+	// Njoyn (CGI): Radware walls the crawl host's IP and the site refuses an IP it decides is
+	// crawling too fast (XWP10022) — the fixed proxy exit drew that ban within one run. HTTP + proxy
+	// leaves through the rotating gateway and served the listing and posting pages (2026-11-18).
+	// The adapter keeps its own 5 s pace. proxiedProviders stays the fallback without the tier.
+	"njoyn": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewNjoyn(f)
+	}},
 	// Cloudflare refuses direct egress; HTTP + proxy serves the sitemaps and posting bodies.
 	"spainjobs": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewSpainJobs(f)
