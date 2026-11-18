@@ -1,0 +1,5 @@
+# Build and dev tooling only (Vite, Vitest, tinyglobby/fdir, unplugin, WXT, knip); globs come from repository config.
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+reason = "No patched picomatch release (affects <=4.0.7). Only build, test and lint tools match globs, and every pattern comes from checked-in config, never from request input, so the extglob ReDoS is unreachable in production."
+effectiveUntil = 2026-12-18
