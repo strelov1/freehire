@@ -27,7 +27,7 @@ reindex: ## Reindex jobs into Meilisearch (requires running Postgres + Meilisear
 	go run ./cmd/reindex
 
 build: ## Build the binary
-	go build -o bin/hire ./cmd/server
+	sh scripts/heavy.sh go build -o bin/hire ./cmd/server
 
 tidy: ## Tidy up dependencies
 	go mod tidy
@@ -96,7 +96,7 @@ psql: ## Open psql at DATABASE_URL (use mise for this checkout's DB)
 
 cover: ## Unit tests with coverage profile → coverage/unit.out
 	@mkdir -p $(COVERAGE_DIR)
-	go test ./... -coverprofile=$(COVER_UNIT) -covermode=atomic
+	sh scripts/heavy.sh go test ./... -coverprofile=$(COVER_UNIT) -covermode=atomic
 	@go tool cover -func=$(COVER_UNIT) | tail -1
 
 cover-html: ## HTML report from coverage/unit.out → coverage/unit.html
@@ -106,7 +106,7 @@ cover-html: ## HTML report from coverage/unit.out → coverage/unit.html
 
 cover-integration: ## Integration-tagged tests with coverage (needs Docker for testcontainers)
 	@mkdir -p $(COVERAGE_DIR)
-	go test -tags=integration ./... -coverprofile=$(COVER_INTEGRATION) -covermode=atomic
+	sh scripts/heavy.sh go test -tags=integration ./... -coverprofile=$(COVER_INTEGRATION) -covermode=atomic
 	@go tool cover -func=$(COVER_INTEGRATION) | tail -1
 	@echo "profile: $(COVER_INTEGRATION)"
 
