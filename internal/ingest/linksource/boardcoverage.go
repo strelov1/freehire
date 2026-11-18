@@ -271,14 +271,28 @@ func queryMatches(raw, posting string, linkMustCarry bool) bool {
 // trackingParams are the query parameters that say how a link travelled rather than what it
 // points at, besides the utm_ family trackingParam matches by prefix. A stored posting URL can
 // carry them too (micro1 stores its utm_ referral values), so they must never veto a match.
+//
+// The database repeats this vocabulary in normalize_job_url (migration 0284), which drops
+// these parameters from both sides of /jobs/find's URL comparison; an integration test in
+// internal/api/handler holds the two together, so a key added here fails it until the
+// function is migrated too. Keys are lower case: trackingParam lowercases before looking up.
 var trackingParams = map[string]bool{
 	"gclid": true, "fbclid": true, "msclkid": true, "trk": true, "gh_src": true,
 	"ref": true, "src": true, "source": true,
+	"lever-source": true, "lever-origin": true, "refid": true, "trackingid": true,
+	"mc_cid": true, "mc_eid": true, "_hsenc": true, "_hsmi": true,
+	"yclid": true, "ttclid": true, "li_fat_id": true,
 }
 
 func trackingParam(k string) bool {
 	k = strings.ToLower(k)
 	return strings.HasPrefix(k, "utm_") || trackingParams[k]
+}
+
+// TrackingParamNames returns the listed tracking parameter names, sorted. The utm_ family
+// is matched by prefix and is not among them.
+func TrackingParamNames() []string {
+	return slices.Sorted(maps.Keys(trackingParams))
 }
 
 // normalizeURL reduces a posting URL to what identifies it: scheme-less, lowercased host with

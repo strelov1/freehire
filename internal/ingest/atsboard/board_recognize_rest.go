@@ -224,6 +224,31 @@ func recognizeRest(u *url.URL, host, src, mode, apex string) (source, board, can
 		u.RawQuery, u.Fragment = "", ""
 		u.Path = "/" + board
 		return src, board, u.String(), true
+	case modeNjoyn:
+		// Njoyn: <tenant>.njoyn.com/<site>/xweb/xweb.asp?clid=<digits>&… → "<tenant>/<site>/<clid>".
+		// The fixed script path is what proves the link is a career-site page at all, and the
+		// client id is what picks the client; a link missing either names no board. The canonical
+		// is the board's listing page, so a posting and the listing collapse to one board.
+		tenant := subdomainLabel(host, apex)
+		segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if tenant == "" || platformHost(host, apex) || len(segs) != 3 || segs[0] == "" ||
+			!strings.EqualFold(segs[1], "xweb") || !strings.EqualFold(segs[2], "xweb.asp") {
+			return "", "", "", false
+		}
+		clid := ""
+		for k, v := range u.Query() {
+			if strings.EqualFold(k, "clid") && len(v) > 0 {
+				clid = strings.TrimSpace(v[0])
+			}
+		}
+		if !njoynClientID.MatchString(clid) {
+			return "", "", "", false
+		}
+		site := strings.ToLower(segs[0])
+		u.Fragment = ""
+		u.Path = "/" + site + "/xweb/xweb.asp"
+		u.RawQuery = url.Values{"NTKN": {"c"}, "clid": {clid}, "Page": {"joblisting"}, "lang": {"1"}}.Encode()
+		return src, strings.ToLower(tenant + "/" + site + "/" + clid), u.String(), true
 	case modeEncodedCareers:
 		// IdealTraits: /<slug>/<base64 id>/careers → board = the decoded id. The decoded value
 		// must be a plain decimal number: base64 decodes plenty of other paths into bytes, and

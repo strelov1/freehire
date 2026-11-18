@@ -46,7 +46,7 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 		jobs, err := src.Fetch(ctx, e)
 		return fetchedBoard{jobs: jobs}, err
 	}
-	set, err := sl.ExistingExternalIDs(ctx, e.Provider, e.Board)
+	set, err := sl.ExistingExternalIDs(ctx, e.Provider, seenScope(e))
 	seenUnknown := err != nil
 	if seenUnknown {
 		log.Printf("ingest: %s board %q seen-set lookup failed, hydrating every posting as new and withholding its closes: %v",
@@ -59,7 +59,7 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 	var askedMu sync.Mutex
 	askedNew := map[string]bool{}
 	seen := func(externalID string) bool {
-		_, ok := set[externalid.Namespace(e.Board, externalID)]
+		_, ok := set[seenKey(e, externalID)]
 		if !ok {
 			askedMu.Lock()
 			askedNew[externalID] = true
@@ -88,6 +88,24 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 	}
 	jobs, err := hs.FetchNew(ctx, e, seen)
 	return fetchedBoard{jobs: jobs, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
+}
+
+// seenScope is the board argument of the seen-set lookup: the namespace the provider's rows are
+// stored under. LinkedIn rows are keyed by the global posting id, not board:id (jobIdentity), so
+// no board pattern matches them and the lookup is provider-wide.
+func seenScope(e sources.CompanyEntry) string {
+	if e.Provider == "linkedin" {
+		return ""
+	}
+	return e.Board
+}
+
+// seenKey is the stored external_id an adapter's raw posting id maps to, derived from jobIdentity
+// so the seen-set is keyed exactly as the write path stores. An id with no valid identity maps to
+// "" and so reads as unseen.
+func seenKey(e sources.CompanyEntry, externalID string) string {
+	_, id := jobIdentity(e, sources.Job{ExternalID: externalID, URL: sources.LinkedInPostingURL(externalID)})
+	return id
 }
 
 // fetchedBoard is what fetchBoard read from one board. deferred reports that a hydrating adapter
