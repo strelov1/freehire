@@ -317,7 +317,7 @@ func TestCreateOrUpdateWebhook_RejectsURLWhoseProbeFails(t *testing.T) {
 
 	req := httptest.NewRequestWithContext(ctx, fiber.MethodPost, "/api/v1/me/webhook", strings.NewReader(`{"url":"https://example.com/hook"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
