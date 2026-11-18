@@ -50,7 +50,7 @@ SET enabled = true,
     consecutive_failures = 0,
     updated_at = now()
 WHERE user_id = $1
-RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures
+RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures, secret
 `
 
 // Re-enables a user-disabled (or auto-disabled) webhook destination without
@@ -69,12 +69,13 @@ func (q *Queries) EnableWebhookConfig(ctx context.Context, userID int64) (Webhoo
 		&i.LastSuccessAt,
 		&i.DisabledAt,
 		&i.ConsecutiveFailures,
+		&i.Secret,
 	)
 	return i, err
 }
 
 const getWebhookConfig = `-- name: GetWebhookConfig :one
-SELECT user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures
+SELECT user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures, secret
 FROM webhook_configs
 WHERE user_id = $1
 `
@@ -94,6 +95,7 @@ func (q *Queries) GetWebhookConfig(ctx context.Context, userID int64) (WebhookCo
 		&i.LastSuccessAt,
 		&i.DisabledAt,
 		&i.ConsecutiveFailures,
+		&i.Secret,
 	)
 	return i, err
 }
@@ -150,20 +152,22 @@ func (q *Queries) RecordWebhookDeliverySuccess(ctx context.Context, userID int64
 }
 
 const upsertWebhookConfig = `-- name: UpsertWebhookConfig :one
-INSERT INTO webhook_configs (user_id, url, enabled, updated_at, disabled_at)
-VALUES ($1, $2, true, now(), NULL)
+INSERT INTO webhook_configs (user_id, url, enabled, updated_at, disabled_at, secret)
+VALUES ($1, $2, true, now(), NULL, $3)
 ON CONFLICT (user_id) DO UPDATE
 SET url = EXCLUDED.url,
     enabled = true,
     disabled_at = NULL,
     consecutive_failures = 0,
     updated_at = now()
-RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures
+WHERE webhook_configs.secret = EXCLUDED.secret
+RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures, secret
 `
 
 type UpsertWebhookConfigParams struct {
 	UserID int64  `json:"user_id"`
 	URL    string `json:"url"`
+	Secret string `json:"secret"`
 }
 
 // Creates the account's webhook destination, or updates its URL if one
@@ -172,9 +176,12 @@ type UpsertWebhookConfigParams struct {
 // disabled_at, since submitting the form is an explicit re-commitment to
 // the endpoint. consecutive_failures resets too: a new URL (or the same one
 // re-saved) gets a fresh run at the auto-disable threshold, not whatever
-// count the old destination left behind.
+// count the old destination left behind. The secret is set only on insert: changing
+// the URL keeps the secret the receiver already verifies with.
+// Only onto the row whose secret signed the caller's probe: a destination deleted and
+// recreated (or created twice at once) in between has another secret, and then no row comes back.
 func (q *Queries) UpsertWebhookConfig(ctx context.Context, arg UpsertWebhookConfigParams) (WebhookConfig, error) {
-	row := q.db.QueryRow(ctx, upsertWebhookConfig, arg.UserID, arg.URL)
+	row := q.db.QueryRow(ctx, upsertWebhookConfig, arg.UserID, arg.URL, arg.Secret)
 	var i WebhookConfig
 	err := row.Scan(
 		&i.UserID,
@@ -185,6 +192,7 @@ func (q *Queries) UpsertWebhookConfig(ctx context.Context, arg UpsertWebhookConf
 		&i.LastSuccessAt,
 		&i.DisabledAt,
 		&i.ConsecutiveFailures,
+		&i.Secret,
 	)
 	return i, err
 }

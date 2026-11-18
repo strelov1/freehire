@@ -8,7 +8,10 @@ package db
 
 import (
 	"context"
+	"errors"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // A destination that fails exactly maxFailures times in a row gets disabled on
@@ -23,7 +26,7 @@ func TestRecordWebhookDeliveryFailure_DisablesAtThreshold(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	uid := insertUser(t, pool, "webhook-threshold@example.test")
-	if _, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/hook"}); err != nil {
+	if _, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/hook", Secret: "whsec_test"}); err != nil {
 		t.Fatalf("seed webhook config: %v", err)
 	}
 
@@ -65,7 +68,7 @@ func TestRecordWebhookDeliveryFailure_SuccessResetsStreak(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	uid := insertUser(t, pool, "webhook-reset@example.test")
-	if _, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/hook"}); err != nil {
+	if _, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/hook", Secret: "whsec_test"}); err != nil {
 		t.Fatalf("seed webhook config: %v", err)
 	}
 
@@ -88,5 +91,38 @@ func TestRecordWebhookDeliveryFailure_SuccessResetsStreak(t *testing.T) {
 	}
 	if !row.Enabled {
 		t.Error("Enabled = false right after a reset, want true — the streak restarted, not continued")
+	}
+}
+
+// An update lands only on the row whose secret signed the caller's probe: a save that probed
+// with another secret (a concurrent create or delete-and-recreate) gets no row back and changes
+// nothing, while a save with the stored secret updates the URL and keeps the secret.
+func TestUpsertWebhookConfig_UpdatesOnlyWithTheStoredSecret(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx, "TRUNCATE webhook_configs, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	uid := insertUser(t, pool, "webhook-secret@example.test")
+	if _, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/a", Secret: "whsec_first"}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	_, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/b", Secret: "whsec_other"})
+	if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("upsert with another secret: err = %v, want pgx.ErrNoRows", err)
+	}
+	if row, _ := q.GetWebhookConfig(ctx, uid); row.URL != "https://example.test/a" {
+		t.Errorf("a refused upsert changed the url to %q", row.URL)
+	}
+
+	row, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/c", Secret: "whsec_first"})
+	if err != nil {
+		t.Fatalf("upsert with the stored secret: %v", err)
+	}
+	if row.URL != "https://example.test/c" || row.Secret != "whsec_first" {
+		t.Errorf("after update: url %q secret %q, want the new url and the first secret", row.URL, row.Secret)
 	}
 }

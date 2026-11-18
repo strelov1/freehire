@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/strelov1/freehire/internal/engage/changehook"
 	"github.com/strelov1/freehire/internal/engage/notify"
 )
 
@@ -123,7 +125,7 @@ func TestTest_PostsSampleAndReportsStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if err := newNotifier(srv.Client()).Test(context.Background(), srv.URL); err != nil {
+	if err := newNotifier(srv.Client()).Test(context.Background(), srv.URL, testSecret); err != nil {
 		t.Fatalf("Test returned error: %v", err)
 	}
 	if got["saved_search_name"] != TestSearchName {
@@ -140,7 +142,7 @@ func TestTest_Non2xxIsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := newNotifier(srv.Client()).Test(context.Background(), srv.URL)
+	err := newNotifier(srv.Client()).Test(context.Background(), srv.URL, testSecret)
 	if err == nil {
 		t.Fatal("Test: want an error for a 404")
 	}
@@ -148,5 +150,56 @@ func TestTest_Non2xxIsError(t *testing.T) {
 
 // msgOf wraps one digest as the single-digest message every case here sends.
 func msgOf(d notify.Digest) notify.Message {
-	return notify.Message{Digests: []notify.Digest{d}}
+	return notify.Message{WebhookSecret: testSecret, Digests: []notify.Digest{d}}
+}
+
+const testSecret = "whsec_test"
+
+// A receiver verifies a digest with the same check change webhooks document
+// (changehook.Verify), and tells a probe from a digest by X-Freehire-Event.
+func TestSend_SignsTheBody(t *testing.T) {
+	var got []*http.Request
+	var bodies [][]byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got, bodies = append(got, r), append(bodies, b)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	n := newNotifier(srv.Client())
+
+	if err := n.Send(context.Background(), notify.ChannelWebhook, srv.URL, msgOf(notify.Digest{SavedSearchName: "Go"})); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if err := n.Test(context.Background(), srv.URL, testSecret); err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	for i, want := range []string{EventDigest, EventTest} {
+		r := got[i]
+		if ev := r.Header.Get(changehook.HeaderEvent); ev != want {
+			t.Errorf("request %d: event = %q, want %q", i, ev, want)
+		}
+		err := changehook.Verify(testSecret, r.Header.Get(changehook.HeaderTimestamp), r.Header.Get(changehook.HeaderSignature),
+			bodies[i], time.Now(), changehook.DefaultTolerance)
+		if err != nil {
+			t.Errorf("request %d: Verify: %v", i, err)
+		}
+		if changehook.Verify("whsec_other", r.Header.Get(changehook.HeaderTimestamp), r.Header.Get(changehook.HeaderSignature),
+			bodies[i], time.Now(), changehook.DefaultTolerance) == nil {
+			t.Errorf("request %d: verified with the wrong secret", i)
+		}
+	}
+}
+
+func TestSend_RefusesWithoutSecret(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("an unsigned delivery reached the destination")
+	}))
+	defer srv.Close()
+
+	m := msgOf(notify.Digest{})
+	m.WebhookSecret = ""
+	if err := newNotifier(srv.Client()).Send(context.Background(), notify.ChannelWebhook, srv.URL, m); err == nil {
+		t.Fatal("Send without a secret: want an error")
+	}
 }
