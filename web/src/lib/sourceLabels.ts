@@ -35,6 +35,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   landingjobs: 'Landing.Jobs',
   getonbrd: 'Get on Board',
   mycareersfuture: 'My Careers Future',
+  careersgov: 'Careers@Gov',
   nofluffjobs: 'No Fluff Jobs',
   powertofly: 'PowerToFly',
   // Vendor brands, spelled the way the vendor spells them. Title-casing a slug yields

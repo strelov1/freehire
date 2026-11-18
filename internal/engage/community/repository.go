@@ -234,13 +234,13 @@ func (r *QueriesRepository) ListReplies(ctx context.Context, threadID int64, cur
 	return out, nil
 }
 
-// SubjectExists reports whether slug names an existing company or job.
-func (r *QueriesRepository) SubjectExists(ctx context.Context, subjectType, slug string) (bool, error) {
+// SubjectExists reports whether slug names an existing company or a job userID may see.
+func (r *QueriesRepository) SubjectExists(ctx context.Context, userID int64, subjectType, slug string) (bool, error) {
 	switch subjectType {
 	case SubjectCompany:
 		return r.q.CompanyExists(ctx, slug)
 	case SubjectJob:
-		_, err := r.q.GetJobIDBySlug(ctx, slug)
+		_, err := r.q.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: slug, CallerID: userID})
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return false, nil

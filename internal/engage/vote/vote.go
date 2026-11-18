@@ -71,7 +71,7 @@ func New(q *db.Queries, pool *pgxpool.Pool) *Service {
 // direction clears it; the opposite replaces it) and returns the resulting
 // counters and caller vote.
 func (s *Service) VoteJob(ctx context.Context, userID int64, slug string, dir Direction) (Result, error) {
-	jobID, err := s.jobIDBySlug(ctx, slug)
+	jobID, err := s.jobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Result{}, err
 	}
@@ -89,7 +89,7 @@ func (s *Service) VoteJob(ctx context.Context, userID int64, slug string, dir Di
 // ClearJob removes the caller's vote on a job (no-op when none) and returns the
 // resulting counters with my_vote = 0.
 func (s *Service) ClearJob(ctx context.Context, userID int64, slug string) (Result, error) {
-	jobID, err := s.jobIDBySlug(ctx, slug)
+	jobID, err := s.jobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Result{}, err
 	}
@@ -190,8 +190,8 @@ func (s *Service) inTx(ctx context.Context, fn func(*db.Queries) (Result, error)
 	return res, nil
 }
 
-func (s *Service) jobIDBySlug(ctx context.Context, slug string) (int64, error) {
-	id, err := s.q.GetJobIDBySlug(ctx, slug)
+func (s *Service) jobIDBySlug(ctx context.Context, userID int64, slug string) (int64, error) {
+	id, err := s.q.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: slug, CallerID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, ErrNotFound
 	}

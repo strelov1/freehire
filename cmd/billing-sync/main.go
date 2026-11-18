@@ -27,7 +27,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"os"
 	"strconv"
 	"time"
 
@@ -69,7 +68,7 @@ func run() int {
 	defer cleanup()
 
 	queries := db.New(pool)
-	max := maxPerRun()
+	max := worker.EnvInt32OrDefault("BILLING_SYNC_MAX_PER_RUN", maxPerRunDefault)
 
 	// Named so every log line says which provider it is about.
 	passes := []struct {
@@ -256,22 +255,4 @@ func refreshNearExpiry(ctx context.Context, name string, svc reconcilable, max i
 		refreshed++
 	}
 	return refreshed, failed
-}
-
-// maxPerRun reads the per-run bound. An unreadable value keeps the default and says so: a typo
-// resolving to zero would make every run a silent no-op.
-//
-// ParseInt at 32 bits because the value becomes the int32 LIMIT; Atoi at platform width would
-// let a figure above MaxInt32 wrap to a negative limit, a query error rather than a rejection.
-func maxPerRun() int32 {
-	raw := os.Getenv("BILLING_SYNC_MAX_PER_RUN")
-	if raw == "" {
-		return maxPerRunDefault
-	}
-	n, err := strconv.ParseInt(raw, 10, 32)
-	if err != nil || n <= 0 {
-		log.Printf("billing-sync: BILLING_SYNC_MAX_PER_RUN=%q is not a positive number that fits a batch size — keeping %d", raw, maxPerRunDefault)
-		return maxPerRunDefault
-	}
-	return int32(n)
 }

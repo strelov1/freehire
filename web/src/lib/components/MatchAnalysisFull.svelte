@@ -379,6 +379,7 @@
         </span>
         <p class="text-sm font-medium text-foreground">{msg}.</p>
         <button
+          type="button"
           class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
           onclick={start}
         >

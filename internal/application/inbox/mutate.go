@@ -43,7 +43,7 @@ func (s *Service) Triage(ctx context.Context, userID, id int64, v Verdict) (Mess
 	// Resolve the slug before writing: an unknown one changes nothing.
 	var jobID pgtype.Int8
 	if v.Slug != "" {
-		resolved, err := s.q.GetJobIDBySlug(ctx, v.Slug)
+		resolved, err := s.q.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: v.Slug, CallerID: userID})
 		if err != nil {
 			return Message{}, err
 		}
@@ -83,7 +83,7 @@ func (s *Service) Link(ctx context.Context, userID, id int64, slug string) (Mess
 	if slug == "" {
 		return Message{}, ErrSlugRequired
 	}
-	jobID, err := s.q.GetJobIDBySlug(ctx, slug)
+	jobID, err := s.q.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: slug, CallerID: userID})
 	if err != nil {
 		return Message{}, err
 	}
@@ -137,7 +137,7 @@ func (s *Service) RecordApplication(ctx context.Context, userID, id int64, slug 
 	if email.SuggestedJobID.Valid && !email.JobID.Valid {
 		return Message{}, ErrPendingSuggestion
 	}
-	jobID, err := s.q.GetJobIDBySlug(ctx, slug)
+	jobID, err := s.q.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: slug, CallerID: userID})
 	if err != nil {
 		return Message{}, err
 	}

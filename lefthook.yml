@@ -12,7 +12,7 @@ pre-commit:
         fi
     go-vet:
       glob: "*.go"
-      run: go vet ./...
+      run: sh scripts/heavy.sh go vet ./...
     # Ratchet mode: only fails on issues in lines this commit touches, not
     # the pre-existing backlog. Same policy as CI (see .golangci.yml).
     golangci-lint:
@@ -33,7 +33,7 @@ pre-commit:
           echo "govulncheck not installed (mise install) - skipping"
           exit 0
         fi
-        govulncheck ./...
+        sh scripts/heavy.sh govulncheck ./...
     # Spelling over every staged file; _typos.toml decides what is checked, and
     # --force-exclude makes it honour that for files named explicitly. Steps aside when the
     # binary is missing: the docs CI job is the gate.
@@ -247,10 +247,10 @@ pre-commit:
     # here.
     web-check:
       glob: "{web/*.{svelte,ts},web/**/*.{svelte,ts},web/tsconfig.json}"
-      run: pnpm --dir web run check
+      run: sh scripts/heavy.sh pnpm --dir web run check
     extension-check:
       glob: "{extension/*.{svelte,ts},extension/**/*.{svelte,ts},extension/tsconfig.json}"
-      run: pnpm --dir extension run check
+      run: sh scripts/heavy.sh pnpm --dir extension run check
     web-lint:
       root: "web/"
       glob:
@@ -299,7 +299,7 @@ pre-commit:
         - "design-system/**/*.{js,ts,svelte}"
         - "design-system/*.{js,ts,svelte}"
         - "design-system/.oxlintrc.json"
-      run: pnpm run lint
+      run: sh ../scripts/heavy.sh pnpm run lint
     # svelte.config.js and vitest.setup.ts are read by `svelte-kit sync`, which is the
     # first thing `check` runs, so a change to either can only be caught here.
     design-system-check:
@@ -308,13 +308,13 @@ pre-commit:
         - "design-system/**/*.{svelte,ts}"
         - "design-system/*.{svelte,ts}"
         - "design-system/{tsconfig.json,svelte.config.js}"
-      run: pnpm run check
+      run: sh ../scripts/heavy.sh pnpm run check
     design-system-test:
       root: "design-system/"
       glob:
         - "design-system/src/**"
         - "design-system/scripts/**"
-      run: pnpm run test
+      run: sh ../scripts/heavy.sh pnpm run test
     # check:dist rebuilds tokens/*.json -> dist/ and diffs — catches a token
     # edited without `pnpm build`, which otherwise ships stale CSS with every
     # check green.

@@ -49,7 +49,7 @@ func (h *ghostReportHandlers) CreateGhostReport(ctx context.Context, req *apigen
 	if err != nil {
 		return nil, err
 	}
-	jobID, err := h.queries.GetJobIDBySlug(ctx, params.Slug)
+	jobID, err := h.queries.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: params.Slug, CallerID: userID})
 	if err != nil {
 		return nil, err // pgx.ErrNoRows → 404 in classify
 	}
@@ -76,7 +76,7 @@ func (h *ghostReportHandlers) RetractGhostReport(ctx context.Context, params api
 	if err != nil {
 		return err
 	}
-	jobID, err := h.queries.GetJobIDBySlug(ctx, params.Slug)
+	jobID, err := h.queries.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: params.Slug, CallerID: userID})
 	if err != nil {
 		return err
 	}

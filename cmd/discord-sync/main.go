@@ -20,8 +20,6 @@ package main
 import (
 	"context"
 	"log"
-	"os"
-	"strconv"
 
 	"github.com/strelov1/freehire/internal/engage/discordlink"
 	"github.com/strelov1/freehire/internal/platform/config"
@@ -60,7 +58,7 @@ func run() int {
 		return 1
 	}
 
-	stats, err := svc.Sync(ctx, maxPerRun())
+	stats, err := svc.Sync(ctx, worker.EnvInt32OrDefault("DISCORD_SYNC_MAX_PER_RUN", maxPerRunDefault))
 	if err != nil {
 		log.Printf("discord-sync: %v", err)
 		return 1
@@ -68,20 +66,4 @@ func run() int {
 	log.Printf("discord-sync: examined=%d granted=%d revoked=%d failed=%d",
 		stats.Examined, stats.Granted, stats.Revoked, stats.Failed)
 	return 0
-}
-
-// maxPerRun reads the per-run bound. A set-but-unreadable value falls back with a log line
-// rather than failing: this runs hourly unattended, where failing hard would stop every role
-// reconciliation over a batch-size typo. cmd/billing-sync makes the same choice.
-func maxPerRun() int32 {
-	raw := os.Getenv("DISCORD_SYNC_MAX_PER_RUN")
-	if raw == "" {
-		return maxPerRunDefault
-	}
-	n, err := strconv.ParseInt(raw, 10, 32)
-	if err != nil || n <= 0 {
-		log.Printf("discord-sync: DISCORD_SYNC_MAX_PER_RUN=%q is not a positive number that fits a batch size — keeping %d", raw, maxPerRunDefault)
-		return maxPerRunDefault
-	}
-	return int32(n)
 }

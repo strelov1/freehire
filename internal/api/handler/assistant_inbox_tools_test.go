@@ -46,7 +46,7 @@ func (m *mailStore) GetEmail(context.Context, db.GetEmailParams) (db.GetEmailRow
 func (m *mailStore) GetInterviewInvitation(context.Context, db.GetInterviewInvitationParams) (db.GetInterviewInvitationRow, error) {
 	return db.GetInterviewInvitationRow{}, pgx.ErrNoRows
 }
-func (m *mailStore) GetJobIDBySlug(context.Context, string) (int64, error) {
+func (m *mailStore) GetJobIDBySlug(context.Context, db.GetJobIDBySlugParams) (int64, error) {
 	return 42, nil
 }
 func (m *mailStore) AgentTriageEmail(context.Context, db.AgentTriageEmailParams) (int64, error) {

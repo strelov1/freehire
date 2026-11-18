@@ -85,8 +85,13 @@ class LocalChecks(unittest.TestCase):
                 subprocess.CompletedProcess([], 0),
             ],
         ) as run:
-            self.assertEqual(helper.execute([["first"], ["second"]]), 1)
+            self.assertEqual(helper.execute([["first"], ["lefthook", "run"]]), 1)
             self.assertEqual(run.call_count, 2)
+        # Ordinary commands queue for a heavy slot; lefthook's hooks queue themselves.
+        self.assertEqual(
+            run.call_args_list[0].args[0], ["sh", "scripts/heavy.sh", "first"]
+        )
+        self.assertEqual(run.call_args_list[1].args[0], ["lefthook", "run"])
 
 
 if __name__ == "__main__":

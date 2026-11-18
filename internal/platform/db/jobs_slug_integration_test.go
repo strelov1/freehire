@@ -98,7 +98,7 @@ func TestGetJobIDBySlug(t *testing.T) {
 		t.Fatalf("upsert: %v", err)
 	}
 
-	id, err := q.GetJobIDBySlug(ctx, slug)
+	id, err := q.GetJobIDBySlug(ctx, GetJobIDBySlugParams{PublicSlug: slug})
 	if err != nil {
 		t.Fatalf("GetJobIDBySlug: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestGetJobIDBySlug(t *testing.T) {
 		t.Errorf("GetJobIDBySlug = %d, want %d", id, job.ID)
 	}
 
-	if _, err := q.GetJobIDBySlug(ctx, "no-such-slug"); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := q.GetJobIDBySlug(ctx, GetJobIDBySlugParams{PublicSlug: "no-such-slug"}); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("GetJobIDBySlug(unknown) error = %v, want pgx.ErrNoRows", err)
 	}
 }

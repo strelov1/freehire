@@ -3163,11 +3163,14 @@ type Querier interface {
 	// is itself suppressed. Match ListJobCopies' depth bound; a cycle/missing chain
 	// yields zero, so related-jobs reads can decline to recommend their own posting.
 	GetJobDuplicateOwner(ctx context.Context, jobID int64) (int64, error)
-	// Slim slug->id lookup for the view/apply interaction path, which needs only the
-	// internal id (the user_jobs FK) and must not drag the wide description/enrichment
-	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
-	// public detail handler that renders the whole row.
-	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	// Slim slug->id lookup for the write paths that name a job by slug (vote, report,
+	// inbox link, referral, community thread), which need only the internal id and must
+	// not drag the wide description/enrichment columns over the wire. GetJobBySlug
+	// (SELECT *) stays for the public detail handler that renders the whole row.
+	// A private posting resolves only for its creator (caller_id; 0 for nobody), the
+	// same rule jobVisibleToCaller applies to reads: a write keyed to another user's
+	// private job left a user_jobs row that put it on the writer's tracking board (#4763).
+	GetJobIDBySlug(ctx context.Context, arg GetJobIDBySlugParams) (int64, error)
 	// The current view_count of the jobs a rollup run touched, for the index write that
 	// replaces the old per-view search_outbox enqueue. Only jobs public search can return:
 	// closed and duplicate documents are filtered out of every query, so writing their count

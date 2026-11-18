@@ -171,7 +171,7 @@ func (f *fakeRepo) ListReplies(_ context.Context, threadID int64, _ Cursor, _ in
 // fakeSubjects answers existence from a fixed set of "type/slug" keys.
 type fakeSubjects struct{ known map[string]bool }
 
-func (s fakeSubjects) SubjectExists(_ context.Context, st, slug string) (bool, error) {
+func (s fakeSubjects) SubjectExists(_ context.Context, _ int64, st, slug string) (bool, error) {
 	return s.known[st+"/"+slug], nil
 }
 

@@ -138,6 +138,11 @@ func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs
 	return refreshed, nil
 }
 
+// refreshCoveredJobFn is a seam so a test can make the state fence refuse every attempt.
+var refreshCoveredJobFn = func(ctx context.Context, q *db.Queries, p db.RefreshCoveredJobParams) (db.RefreshCoveredJobRow, error) {
+	return q.RefreshCoveredJob(ctx, p)
+}
+
 // refreshCoveredOne refreshes one listed row the bulk statement left unwritten, waiting for the
 // writer that held it. ok=false is a row that is closed, private or absent now: a no-op, as the
 // refresh always was. A statement the state fence refused after waiting has ended, so the retry is
@@ -145,7 +150,7 @@ func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs
 // counts it as a failed refresh and the board never proves coverage with a listed row unrefreshed.
 func (s *dbStore) refreshCoveredOne(ctx context.Context, source, externalID string) (slug string, ok bool, err error) {
 	for attempt := 1; attempt <= maxFencedAttempts; attempt++ {
-		row, err := s.q.RefreshCoveredJob(ctx, db.RefreshCoveredJobParams{Source: source, ExternalID: externalID})
+		row, err := refreshCoveredJobFn(ctx, s.q, db.RefreshCoveredJobParams{Source: source, ExternalID: externalID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", false, nil
 		}

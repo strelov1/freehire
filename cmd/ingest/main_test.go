@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -129,5 +130,93 @@ func TestSweepDoesNothingInRecentMode(t *testing.T) {
 	stats := pipeline.RunStats{"adzuna": {Ingested: 5, QualifyingBoards: []pipeline.BoardRef{{Board: "it-jobs", Region: "gb"}}}}
 	if failed := sweep(t.Context(), nil, nil, stats, newCrawledSet(), nil, false, true); failed != 0 {
 		t.Fatalf("failed = %d, want 0", failed)
+	}
+}
+
+func noEnv(string) string { return "" }
+
+func TestParseArgs_RejectsWhatTodayRunsAsAFullCrawl(t *testing.T) {
+	for _, args := range [][]string{
+		{"greenhouse", "--boad=acme"},
+		{"greenhouse", "-board=acme"},
+		{"greenhouse", "--shardd=2/6"},
+		{"linkedin", "--reconcile-linkedn"},
+		{"greenhouse", "lever"},
+		{"--board=x"},                 // no provider
+		{"--boad=acme", "greenhouse"}, // flag before the provider
+	} {
+		if _, err := parseArgs(args, noEnv); err == nil {
+			t.Errorf("parseArgs(%q) accepted, want an error", args)
+		}
+	}
+}
+
+func TestParseArgs_AcceptsEveryExistingForm(t *testing.T) {
+	cases := []struct {
+		args []string
+		env  map[string]string
+		want cliArgs
+	}{
+		{[]string{"greenhouse"}, nil, cliArgs{provider: "greenhouse"}},
+		{[]string{"greenhouse", "--shard=2/6"}, nil, cliArgs{provider: "greenhouse", shardSpec: "2/6"}},
+		{[]string{"x", "--board=X", "--region=IT"}, nil, cliArgs{provider: "x", boardFilter: "X", regionFilter: "IT"}},
+		{[]string{"linkedin", "--reconcile-linkedin", "--reconcile-after=5"}, nil, cliArgs{provider: "linkedin", reconcileLinkedIn: true, reconcileAfter: 5}},
+		{nil, map[string]string{"INGEST_PROVIDER": "lever", "SHARD": "1/3"}, cliArgs{provider: "lever", shardSpec: "1/3"}},
+	}
+	for _, tc := range cases {
+		got, err := parseArgs(tc.args, func(k string) string { return tc.env[k] })
+		if err != nil || got != tc.want {
+			t.Errorf("parseArgs(%q) = %+v, %v; want %+v", tc.args, got, err, tc.want)
+		}
+	}
+}
+
+// Rule (a): a reconcile flag without its partner, or reconcile with a filter, is exit 2.
+func TestParseArgs_ReconcileCombinationsExitTwo(t *testing.T) {
+	for _, args := range [][]string{
+		{"linkedin", "--reconcile-after=5"},
+		{"linkedin", "--reconcile-linkedin", "--board=x"},
+		{"linkedin", "--reconcile-linkedin", "--region=IT"},
+		{"linkedin", "--reconcile-linkedin", "--shard=1/2"},
+		{"greenhouse", "--reconcile-linkedin"},
+		{"linkedin", "--reconcile-linkedin", "--reconcile-after=-1"},
+	} {
+		_, err := parseArgs(args, noEnv)
+		if err == nil || argsExitCode(err) != 2 {
+			t.Errorf("parseArgs(%q) err=%v code=%d, want an error with exit 2", args, err, argsExitCode(err))
+		}
+	}
+	if _, err := parseArgs([]string{"greenhouse", "--boad=x"}, noEnv); argsExitCode(err) != 1 {
+		t.Errorf("unknown flag exit = %d, want 1", argsExitCode(err))
+	}
+}
+
+// Rules (b) and (c): an unfinished reconciliation batch and a deadline-cut crawl are failures.
+func TestExitCodes(t *testing.T) {
+	clean := pipeline.Stats{Ingested: 10}
+	for _, tc := range []struct {
+		name        string
+		total       pipeline.Stats
+		truncated   bool
+		sweepFailed int
+		want        int
+	}{
+		{"clean", clean, false, 0, 0},
+		{"truncated but every board clean", clean, true, 0, 1},
+		{"sweep failure", clean, false, 1, 1},
+		{"reached nothing", pipeline.Stats{Failed: 3}, false, 0, 1},
+	} {
+		if got := runExitCode(tc.total, tc.truncated, tc.sweepFailed); got != tc.want {
+			t.Errorf("%s: runExitCode = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+	if got := reconcileExitCode(ownershipReport{More: true}, nil); got != 1 {
+		t.Errorf("More batch exit = %d, want 1", got)
+	}
+	if got := reconcileExitCode(ownershipReport{}, errors.New("x")); got != 1 {
+		t.Errorf("error exit = %d, want 1", got)
+	}
+	if got := reconcileExitCode(ownershipReport{}, nil); got != 0 {
+		t.Errorf("done exit = %d, want 0", got)
 	}
 }

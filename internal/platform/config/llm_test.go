@@ -127,3 +127,13 @@ func TestLLMTemperatureFromEnvironmentReachesGateway(t *testing.T) {
 		t.Errorf("wire temperature = %v, want 1", got)
 	}
 }
+
+func TestLLMFeatureModelsCoversEveryServerClient(t *testing.T) {
+	t.Setenv("ASSISTANT_MODEL", "a")
+	t.Setenv("SEARCH_INTENT_MODEL", "s")
+	t.Setenv("RESUME_EXTRACT_MODEL", "r")
+	t.Setenv("SUPPORT_MODEL", "u")
+	if got := strings.Join(LLMFeatureModels(), ","); got != "a,s,r,u" {
+		t.Errorf("LLMFeatureModels = %s, want a,s,r,u", got)
+	}
+}
