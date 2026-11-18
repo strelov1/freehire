@@ -413,3 +413,54 @@ jobs:
             exit 1
           fi
           echo 'No unreachable functions.'
+
+  scrapling-fetch:
+    needs: changes
+    if: needs.changes.outputs.scrapling_fetch == 'true'
+    # services/scrapling-fetch: the self-hosted fetch tier on host2. Its tests fake both
+    # Scrapling fetchers, so they run on plain Python without a browser.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/scrapling-fetch
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r requirements-test.txt
+
+      - name: Test
+        run: python -m pytest -q
+
+  python-scripts:
+    # These tests have their own runner; unittest discovery would run no tests.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install source-search dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ripgrep
+
+      - name: Test scripts
+        run: |
+          for f in scripts/test_*.py; do
+            python3 "$f" || exit 1
+          done
