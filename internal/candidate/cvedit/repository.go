@@ -8,11 +8,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // queriesRepository is the Repository over the generated queries. It owns the transaction
@@ -149,10 +149,10 @@ func (t *queriesTx) Insert(ctx context.Context, rev Revision) (Revision, error) 
 		Origin:      string(rev.Origin),
 		BatchID:     optionalUUID(rev.BatchID),
 		Title:       rev.Title,
-		Note:        pgtype.Text{String: rev.Note, Valid: rev.Note != ""},
+		Note:        pgconv.Text(rev.Note),
 		Ops:         ops,
 		Inverse:     inverse,
-		BaseVersion: pgtype.Timestamptz{Time: rev.BaseVersion, Valid: true},
+		BaseVersion: pgconv.Instant(rev.BaseVersion),
 		RevertsID:   optionalUUID(rev.RevertsID),
 	})
 	if err != nil {
@@ -168,7 +168,7 @@ func (t *queriesTx) Amend(ctx context.Context, id uuid.UUID, ops []Op, title, no
 	}
 	row, err := t.q.AmendCVRevision(ctx, db.AmendCVRevisionParams{
 		ID: id, UserID: t.userID, Ops: blob, Title: title,
-		Note: pgtype.Text{String: note, Valid: note != ""},
+		Note: pgconv.Text(note),
 	})
 	if err != nil {
 		return Revision{}, err

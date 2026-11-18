@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // ErrRefused is returned by Consume when the action may not proceed. The caller renders
@@ -158,7 +159,7 @@ func (s *Store) RecordPaywallHit(ctx context.Context, userID int64, feature stri
 	return s.q.RecordPaywallHit(ctx, db.RecordPaywallHitParams{
 		UserID:    userID,
 		Feature:   feature,
-		JobSlug:   pgtype.Text{String: job.Slug, Valid: job.Slug != ""},
+		JobSlug:   pgconv.Text(job.Slug),
 		CvID:      pgUUID(job.CVID),
 		SessionID: pgUUID(job.SessionID),
 		Day:       pgDay(s.now()),

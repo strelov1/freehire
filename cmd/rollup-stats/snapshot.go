@@ -10,15 +10,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/isoweek"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
 // rebuildRollups computes on the reader before opening the primary publication transaction.
 func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) error {
 	reader := db.New(readerPool)
-	asOf := pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}
-	prevTs := pgtype.Timestamptz{Time: asOf.Time.AddDate(0, 0, -growthWindowDays), Valid: true}
-	priorTs := pgtype.Timestamptz{Time: prevTs.Time.AddDate(0, 0, -growthWindowDays), Valid: true}
+	asOf := pgconv.Instant(time.Now().UTC())
+	prevTs := pgconv.Instant(asOf.Time.AddDate(0, 0, -growthWindowDays))
+	priorTs := pgconv.Instant(prevTs.Time.AddDate(0, 0, -growthWindowDays))
 	minRoleSkillSample, err := worker.EnvInt32("ROLE_SKILL_MIN_SAMPLE", defaultMinRoleSkillSample)
 	if err != nil {
 		return err

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -47,13 +46,13 @@ func (s *DBStore) InsertMessage(ctx context.Context, m HostedMessage) error {
 	return s.q.InsertHostedMessage(ctx, db.InsertHostedMessageParams{
 		UserID:     m.UserID,
 		ExternalID: m.ExternalID,
-		S3Key:      pgtype.Text{String: m.S3Key, Valid: m.S3Key != ""},
+		S3Key:      pgconv.Text(m.S3Key),
 		FromAddr:   m.FromAddr,
 		FromName:   m.FromName,
 		Subject:    m.Subject,
 		BodyText:   m.BodyText,
 		BodyHtml:   m.BodyHTML,
-		ReceivedAt: pgtype.Timestamptz{Time: m.ReceivedAt, Valid: true},
+		ReceivedAt: pgconv.Instant(m.ReceivedAt),
 		IcalUid:    m.CalendarUID,
 	})
 }

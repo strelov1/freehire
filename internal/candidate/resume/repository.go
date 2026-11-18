@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // QueriesRepository adapts *db.Queries to Repository, mapping the pointer to the nullable
@@ -49,7 +49,7 @@ func (r *QueriesRepository) Get(ctx context.Context, userID int64) (db.GetUserRe
 func (r *QueriesRepository) Set(ctx context.Context, userID int64, key string) error {
 	return r.q.SetUserResume(ctx, db.SetUserResumeParams{
 		ID:              userID,
-		ResumeObjectKey: pgtype.Text{String: key, Valid: true},
+		ResumeObjectKey: pgconv.TextValid(key),
 	})
 }
 
@@ -61,8 +61,8 @@ func (r *QueriesRepository) SetStructured(ctx context.Context, w StructuredWrite
 	rows, err := r.q.SetUserResumeStructured(ctx, db.SetUserResumeStructuredParams{
 		ID:                         w.UserID,
 		ResumeStructured:           w.Blob,
-		ResumeStructuredModel:      pgtype.Text{String: w.Model, Valid: w.Model != ""},
-		ResumeStructuredUploadedAt: pgtype.Timestamptz{Time: w.UploadedAt, Valid: true},
+		ResumeStructuredModel:      pgconv.Text(w.Model),
+		ResumeStructuredUploadedAt: pgconv.Instant(w.UploadedAt),
 		ResumeCountries:            w.Countries,
 		ResumeRegions:              w.Regions,
 		ResumeCities:               w.Cities,
@@ -95,14 +95,14 @@ func (r *QueriesRepository) SetCandidateContacts(ctx context.Context, userID int
 func (r *QueriesRepository) SetExtractFailed(ctx context.Context, userID int64, detail string, uploadedAt time.Time) error {
 	return r.q.SetUserResumeExtractFailed(ctx, db.SetUserResumeExtractFailedParams{
 		ID:                  userID,
-		ResumeExtractDetail: pgtype.Text{String: detail, Valid: detail != ""},
-		ResumeExtractFor:    pgtype.Timestamptz{Time: uploadedAt, Valid: true},
+		ResumeExtractDetail: pgconv.Text(detail),
+		ResumeExtractFor:    pgconv.Instant(uploadedAt),
 	})
 }
 
 func (r *QueriesRepository) SetExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error {
 	return r.q.SetUserResumeExtractPending(ctx, db.SetUserResumeExtractPendingParams{
 		ID:               userID,
-		ResumeExtractFor: pgtype.Timestamptz{Time: uploadedAt, Valid: true},
+		ResumeExtractFor: pgconv.Instant(uploadedAt),
 	})
 }

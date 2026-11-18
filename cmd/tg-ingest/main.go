@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/ingest/telegram"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
@@ -67,7 +68,7 @@ type postStore struct {
 func (s *postStore) Insert(ctx context.Context, channel string, p telegram.Post, done bool) (bool, error) {
 	var extractedAt pgtype.Timestamptz
 	if done {
-		extractedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+		extractedAt = pgconv.Instant(time.Now())
 	}
 	links := []byte("[]")
 	if len(p.Links) > 0 {
@@ -82,7 +83,7 @@ func (s *postStore) Insert(ctx context.Context, channel string, p telegram.Post,
 		MsgID:       p.MsgID,
 		Text:        p.Text,
 		Links:       links,
-		PostedAt:    pgtype.Timestamptz{Time: p.PostedAt, Valid: true},
+		PostedAt:    pgconv.Instant(p.PostedAt),
 		ExtractedAt: extractedAt,
 	})
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
@@ -201,12 +200,12 @@ func (r *QueriesRepository) UpdateCompanyProfile(ctx context.Context, slug strin
 
 	if err := r.q.SetCompanyAccountProfile(ctx, db.SetCompanyAccountProfileParams{
 		Slug:             slug,
-		Tagline:          nullableText(patch.Tagline),
+		Tagline:          pgconv.TextFromPtr(patch.Tagline),
 		CompanyInfoPatch: infoJSON,
 		YearFounded:      pgconv.Int4(patch.YearFounded),
 		EmployeeCount:    pgconv.Int4(patch.EmployeeCount),
-		HqCountry:        nullableText(patch.HqCountry),
-		Subindustry:      nullableText(patch.Subindustry),
+		HqCountry:        pgconv.TextFromPtr(patch.HqCountry),
+		Subindustry:      pgconv.TextFromPtr(patch.Subindustry),
 	}); err != nil {
 		return err
 	}
@@ -348,19 +347,6 @@ func fromRow(row db.CompanyAccount) Account {
 		EmailConfirmedAt: pgconv.TimePtr(row.EmailConfirmedAt),
 		CreatedAt:        row.CreatedAt.Time,
 	}
-}
-
-// nullableText maps a CompanyProfilePatch field's *string ("the request did not supply
-// this" = nil) to the pgtype SetCompanyAccountProfile's COALESCE guard expects: invalid
-// means "leave the stored value alone." The inverse of pgconv.TextPtr, which this package
-// does not otherwise need — internal/platform/pgconv has no *string-typed write-side
-// adapter today, since every existing nullable-text write path has a natural "" zero value
-// (pgconv.Text) rather than a real nil/unset distinction like a PATCH's own fields have.
-func nullableText(s *string) pgtype.Text {
-	if s == nil {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: *s, Valid: true}
 }
 
 // websiteOf reads company_info's "website" key, "" when absent, blank, or the JSON is

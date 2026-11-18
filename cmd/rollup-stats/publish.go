@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/telegram"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -34,7 +35,7 @@ func publishSnapshot(ctx context.Context, counts catalogstats.ExactCounter, c ca
 	if err := history.RecordCatalogSize(ctx, db.RecordCatalogSizeParams{
 		Day:        pgtype.Date{Time: snapshot.ComputedAt.Truncate(24 * time.Hour), Valid: true},
 		OpenJobs:   snapshot.OpenJobs,
-		ComputedAt: pgtype.Timestamptz{Time: snapshot.ComputedAt, Valid: true},
+		ComputedAt: pgconv.Instant(snapshot.ComputedAt),
 	}); err != nil {
 		return fmt.Errorf("the snapshot is published, but recording the day's catalogue size failed: %w", err)
 	}

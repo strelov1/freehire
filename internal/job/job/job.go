@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/job/jobderive"
@@ -293,8 +291,8 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 // identity and excludes posted_at/url/slug, so a reposted role clusters with its original.
 // requirements_derived is a pure function of the raw fields, not enrichment (no model call).
 func withDerived(p db.UpsertJobParams) db.UpsertJobParams {
-	p.ContentHash = pgtype.Text{String: jobhash.Of(p), Valid: true}
-	p.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(p), Valid: true}
+	p.ContentHash = pgconv.TextValid(jobhash.Of(p))
+	p.RoleFingerprint = pgconv.TextValid(jobhash.RoleFingerprint(p))
 	p.RequirementsDerived = reqextract.DeriveJSON(p.Description)
 	return p
 }

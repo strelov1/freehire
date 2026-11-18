@@ -41,6 +41,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/job/liveness"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -156,7 +157,7 @@ func run() int {
 
 // run probes one sample of the route's source and returns how many verdicts it could not write.
 func (r route) run(ctx context.Context, queries *db.Queries, client *http.Client, maxRows int32) int {
-	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-unseenFor), Valid: true}
+	cutoff := pgconv.Instant(time.Now().Add(-unseenFor))
 	candidates, err := queries.SelectScraplingLivenessCandidates(ctx, db.SelectScraplingLivenessCandidatesParams{
 		Source:  r.source,
 		Cutoff:  cutoff,
