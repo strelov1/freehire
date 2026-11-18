@@ -19,7 +19,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
@@ -48,55 +47,14 @@ func run() int {
 	// provider too big for one timeout (workday) over several runs. --board=<id> (optionally
 	// narrowed by --region=<code>) is the operator's hand-run: resync one company/keyword
 	// without disturbing the rest of the crawl.
-	var provider, shardSpec, boardFilter, regionFilter string
-	var reconcileLinkedIn bool
-	var reconcileAfter int64
-	for _, a := range os.Args[1:] {
-		switch {
-		case a == "--reconcile-linkedin":
-			reconcileLinkedIn = true
-		case strings.HasPrefix(a, "--reconcile-after="):
-			var err error
-			reconcileAfter, err = strconv.ParseInt(strings.TrimPrefix(a, "--reconcile-after="), 10, 64)
-			if err != nil || reconcileAfter < 0 {
-				log.Print("config: --reconcile-after needs a non-negative posting id")
-				return 2
-			}
-		case strings.HasPrefix(a, "--shard="):
-			shardSpec = strings.TrimPrefix(a, "--shard=")
-		case a == "--shard":
-			// The value must be attached (--shard=i/n); a space-separated form would swallow
-			// the provider name as the selector's value.
-			log.Print("config: --shard needs an attached value, e.g. --shard=2/6")
-			return 1
-		case strings.HasPrefix(a, "--board="):
-			boardFilter = strings.TrimPrefix(a, "--board=")
-		case a == "--board":
-			log.Print(`config: --board needs an attached value, e.g. --board="Frontend Developer"`)
-			return 1
-		case strings.HasPrefix(a, "--region="):
-			regionFilter = strings.TrimPrefix(a, "--region=")
-		case a == "--region":
-			log.Print("config: --region needs an attached value, e.g. --region=IT")
-			return 1
-		case a != "" && !strings.HasPrefix(a, "-") && provider == "":
-			provider = a
-		}
+	args, err := parseArgs(os.Args[1:], os.Getenv)
+	if err != nil {
+		log.Printf("config: %v", err)
+		return argsExitCode(err)
 	}
-	if provider == "" {
-		provider = os.Getenv("INGEST_PROVIDER")
-	}
-	if shardSpec == "" {
-		shardSpec = os.Getenv("SHARD")
-	}
-	if provider == "" {
-		log.Print("config: no provider given (pass it as an argument or set INGEST_PROVIDER)")
-		return 1
-	}
-	if (reconcileLinkedIn && (provider != "linkedin" || shardSpec != "" || boardFilter != "" || regionFilter != "")) || (!reconcileLinkedIn && reconcileAfter != 0) {
-		log.Print("config: ownership reconciliation requires linkedin without board, region or shard filters")
-		return 2
-	}
+	provider, shardSpec, boardFilter, regionFilter := args.provider, args.shardSpec, args.boardFilter, args.regionFilter
+	reconcileAfter := args.reconcileAfter
+	reconcileLinkedIn := args.reconcileLinkedIn
 
 	registry := sources.All(sources.NewClient())
 	// Route IP-blocklisted providers through SOURCES_PROXY_URL when set; a set-but-invalid
@@ -262,16 +220,6 @@ func run() int {
 		log.Printf("ingest writes: provider=%s %s", provider, s)
 	}
 
-	// The exit code says whether the RUN is broken, not whether a board is: see crawlReachedNothing.
-	var failed int
-	if crawlReachedNothing(total) {
-		failed++
-	}
-	// A truncated run did not crawl what it was asked to: degraded however cleanly it stopped.
-	if truncated {
-		failed++
-	}
-
 	// Post-run sweep (job-lifecycle spec): per provider, close open jobs unseen for the whole
 	// grace window, only for companies this run crawled (crawled.slugs). Per provider so one
 	// run never closes another's jobs; only providers that ingested a job, so a total outage
@@ -288,12 +236,13 @@ func run() int {
 	// unreached boards' postings run after run. The board scope closes only within a board read
 	// to completion (pipeline.boardQualifies, which an interrupted board fails).
 	queries := db.New(pool)
-	failed += sweep(sweepCtx, queries, registry, runStats, crawled, crossShardAmbiguousBoards, truncated, recentWindow > 0)
+	sweepFailed := sweep(sweepCtx, queries, registry, runStats, crawled, crossShardAmbiguousBoards, truncated, recentWindow > 0)
 
 	// One line naming failing/cooled boards, their failure count and next eligibility. After
 	// the sweep: the closes are what the reserve is for.
 	logUnhealthyBoards(sweepCtx, queries)
 	logChronicBoards(sweepCtx, queries)
 
-	return worker.ExitCode(failed, 0)
+	// The exit code says whether the RUN is broken, not whether a board is: see crawlReachedNothing.
+	return runExitCode(total, truncated, sweepFailed)
 }
