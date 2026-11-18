@@ -2,28 +2,24 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
-  import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import type { GmailStatus, MailboxStatus, InboxSource, InboxMessage, EmailBody } from '#lib/api.js';
   import type { EmailLinking } from '#lib/types.js';
-  import StatusChip from '#lib/components/StatusChip.svelte';
-  import { inboxLinkState, type LastUnlinked } from '#lib/inboxLink.js';
+  import type { LastUnlinked } from '#lib/inboxLink.js';
   import { Paginator } from '#lib/paginated.svelte.js';
   import InboxSettings from './InboxSettings.svelte';
-  import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
-  import ReplyDraft from './ReplyDraft.svelte';
-  import { Mail, ChevronLeft, Trash2, Inbox, Settings, X } from '@lucide/svelte';
+  import { Mail, ChevronLeft, Inbox, Settings, X } from '@lucide/svelte';
   import { Alert, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { ActionError } from '#lib/actionError.svelte.js';
   import States from './States.svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { timeAgo, errorMessage, must } from '#lib/utils.js';
-  import { avatarInitials, avatarColor } from '#lib/avatar.js';
+  import { errorMessage, must } from '#lib/utils.js';
   import { messages } from './InboxView.messages';
   import InboxToolbar from './InboxToolbar.svelte';
   import InboxMessageRow from './InboxMessageRow.svelte';
+  import InboxReadingPane from './InboxReadingPane.svelte';
   import { format, plural, t } from '#lib/i18n/t.js';
 
   const PAGE_SIZE = 7;
@@ -571,125 +567,19 @@
                   <p class="text-sm text-muted-foreground">{s.selectMessage}</p>
                 </div>
               {:else}
-                {@const msg = selected}
-                <div class="flex shrink-0 items-start gap-3">
-                  <div
-                    class="flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full text-sm font-semibold text-white"
-                    style="background-color: {avatarColor(msg.from_addr || msg.from_name)}"
-                  >
-                    {avatarInitials(msg.from_name, msg.from_addr)}
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <h2 class="text-base font-semibold leading-snug tracking-tight">{msg.subject || s.noSubject}</h2>
-                    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                      <span class="font-medium text-foreground/80">{msg.from_name || msg.from_addr}</span>
-                      {#if msg.from_name}
-                        <span aria-hidden="true">·</span>
-                        <span class="truncate">{msg.from_addr}</span>
-                      {/if}
-                      {#if msg.direction === 'outgoing'}<span>{s.sent}</span>{/if}
-                      <span class="ml-auto shrink-0">{timeAgo(msg.received_at, locale())}</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onclick={deleteSelected}
-                    title={s.deleteTitle}
-                    aria-label={s.deleteMessageAria}
-                    class="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 class="h-4 w-4" />
-                  </button>
-                </div>
-
-                {#if msg.to_addrs}<div class="mt-2 break-words text-xs text-muted-foreground">
-                    {s.to}: {msg.to_addrs}
-                  </div>{/if}
-                {#if msg.cc_addrs}<div class="mt-1 break-words text-xs text-muted-foreground">
-                    {s.cc}: {msg.cc_addrs}
-                  </div>{/if}
-                {@const linkState = inboxLinkState(msg, lastUnlinked)}
-                <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
-                  {#if msg.direction !== 'outgoing'}<StatusChip signal={msg.status_signal} /><ReplyDraft
-                      emailId={msg.id}
-                    />{/if}
-                  {#if linkState === 'linked' && msg.linked_slug}
-                    <a
-                      href={resolve('/my/tracking/[id]', { id: msg.linked_slug })}
-                      class="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
-                    >
-                      {format(s.linkedTo, { company: msg.linked_company || s.linkedFallback })} ↗
-                    </a>
-                    <button
-                      type="button"
-                      onclick={unlink}
-                      class="relative text-xs text-muted-foreground after:absolute after:-inset-1 hover:text-destructive"
-                      >{s.unlink}</button
-                    >
-                  {:else if linkState === 'suggested'}
-                    <span
-                      class="inline-flex items-center gap-2 rounded-full border border-brand-ring/50 bg-brand-muted/40 px-2.5 py-0.5 text-xs"
-                    >
-                      {s.looksLike} <span class="font-medium">{msg.suggested_company || s.suggestedFallback}</span>
-                      <button
-                        type="button"
-                        onclick={confirmLink}
-                        class="relative font-medium text-brand-strong after:absolute after:-inset-1 hover:underline"
-                        >{s.link}</button
-                      >
-                      <span aria-hidden="true">·</span>
-                      <button
-                        type="button"
-                        onclick={rejectLink}
-                        class="relative text-muted-foreground after:absolute after:-inset-1 hover:text-foreground"
-                        >{s.notThis}</button
-                      >
-                    </span>
-                  {:else}
-                    {#if linkState === 'undo'}
-                      <span class="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                        {s.unlinked}
-                        <span aria-hidden="true">·</span>
-                        <button
-                          type="button"
-                          onclick={undoUnlink}
-                          class="relative font-medium text-brand-strong after:absolute after:-inset-1 hover:underline"
-                          >{s.undo}</button
-                        >
-                      </span>
-                    {/if}
-                    <ApplicationLinkPicker applications={trackedApps} loading={trackedLoading} onpick={linkTo} />
-                  {/if}
-                </div>
-
-                {#if msg.source === 'gmail'}
-                  <div class="mt-2 flex shrink-0 justify-end">
-                    <!-- eslint-disable svelte/no-navigation-without-resolve -- external Gmail deep-link, not an internal route -->
-                    <a
-                      href={gmailUrl(msg.external_id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="text-xs font-medium text-brand-strong hover:underline"
-                      ><!-- eslint-enable svelte/no-navigation-without-resolve -->
-                      {s.openInGmail} ↗
-                    </a>
-                  </div>
-                {/if}
-
-                <hr class="my-4 shrink-0 border-border" />
-
-                {#if msg.body_html}
-                  <!-- Untrusted sender HTML isolated in a sandboxed iframe (no scripts/forms/navigation). -->
-                  <iframe
-                    title={s.messageBodyTitle}
-                    sandbox=""
-                    srcdoc={msg.body_html}
-                    class="min-h-0 w-full flex-1 rounded-md border border-border bg-white"
-                  ></iframe>
-                {:else}
-                  <pre
-                    class="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{msg.body_text}</pre>
-                {/if}
+                <InboxReadingPane
+                  msg={selected}
+                  {lastUnlinked}
+                  {trackedApps}
+                  {trackedLoading}
+                  gmailUrl={gmailUrl(selected.external_id)}
+                  ondelete={deleteSelected}
+                  onunlink={unlink}
+                  onconfirm={confirmLink}
+                  onreject={rejectLink}
+                  onundo={undoUnlink}
+                  onpick={linkTo}
+                />
               {/if}
             </div>
           </div>
