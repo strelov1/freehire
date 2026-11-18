@@ -1,0 +1,26 @@
+{
+  "jobs": [
+    {
+      "id": "6f1c2d1e-4a52-4b8e-9d1a-2c7f0e5b9a10",
+      "title": "Senior Site Reliability Engineer",
+      "location": "Berlin, Germany",
+      "jobUrl": "https://jobs.ashbyhq.com/acme/6f1c2d1e-4a52-4b8e-9d1a-2c7f0e5b9a10",
+      "publishedAt": "2026-11-17T09:00:00.000Z",
+      "descriptionHtml": "<p>Keep our Kubernetes platform reliable. You will own on-call, observability with Prometheus and the Go services behind our public API.</p><p>We expect five years of production operations experience.</p>",
+      "isRemote": true,
+      "workplaceType": "Hybrid",
+      "employmentType": "FullTime",
+      "department": "Engineering",
+      "team": "Platform",
+      "address": {"postalAddress": {"addressCountry": "DE"}},
+      "compensation": {
+        "compensationTiers": [{
+          "components": [
+            {"compensationType": "Salary", "interval": "1 YEAR", "currencyCode": "EUR", "minValue": 90000, "maxValue": 120000},
+            {"compensationType": "EquityPercentage", "interval": "NONE", "currencyCode": null, "minValue": 0.05, "maxValue": 0.1}
+          ]
+        }]
+      }
+    }
+  ]
+}

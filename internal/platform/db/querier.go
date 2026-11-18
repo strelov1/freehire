@@ -3179,9 +3179,12 @@ type Querier interface {
 	// worker then retries the batch one id at a time to isolate and dead-letter the bad
 	// row), and the /similar handler projects them to the public job wire shape.
 	GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error)
-	// The display fields for the jobs in a digest, freshest first. Salary fields are
-	// projected out of the enrichment JSONB (absent keys → NULL) so a card can render
-	// a compensation line only when one is known.
+	// The display fields for the jobs in a digest, freshest first. Salary is the range the
+	// job page serves (jobview.FromDomain): manual beats the ATS's own range beats the
+	// model's, a stated layer replacing the whole range. Reading only the enrichment JSONB
+	// left the ATS range out of every alert on a posting the model had not reached yet
+	// (#4587). Zero / empty means unknown, so a card renders compensation only when known.
+	// The description's pay line, the projection's last fallback, is Go-only and not read here.
 	GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJobsForDigestRow, error)
 	// Existence check: does this account have a hosted mailbox at all. address is not
 	// selected — it is retired in favor of the derived <users.username>@<domain> address
