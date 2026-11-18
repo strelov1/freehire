@@ -10,7 +10,7 @@ import { syncProfileAlert } from '#lib/profileAlertSync.js';
 import { resumeStore } from '#lib/resume.svelte.js';
 
 // Fired after any Role/Skills/Location change, wherever it happens now (ProfileForm's
-// batched Save during set-up, or a section's own per-field autosave).
+// CV import, or a section's own per-field autosave).
 export function handleSaved() {
   void syncProfileAlert();
 }

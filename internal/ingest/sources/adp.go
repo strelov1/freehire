@@ -8,11 +8,10 @@ import (
 	"golang.org/x/net/html"
 )
 
-// adp adapts ADP Workforce Now public career boards (workforcenow.adp.com). A board is
-// identified by the tenant's cid + ccId pair (both carried in the recruitment.html URL),
-// stored as "cid:ccId". The public staffing API is keyless JSON: a paged requisition list
-// (id/title/date/location, no description) plus a per-requisition detail carrying the full
-// HTML description — the same list-then-detail shape as aviasales.
+// adp adapts ADP Workforce Now public career boards (workforcenow.adp.com). A board is the
+// tenant's cid + ccId pair (from the recruitment.html URL), stored as "cid:ccId". The staffing API
+// is keyless JSON: a paged requisition list (no description) plus a per-requisition detail
+// carrying the full HTML description.
 type adp struct {
 	http JSONGetter
 }

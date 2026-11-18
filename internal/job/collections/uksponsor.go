@@ -9,13 +9,12 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // The GOV.UK register of licensed sponsors. The CSV is republished each month at a
-// fresh URL carrying the snapshot date, so the address is discovered per run rather
-// than pinned: the Content API is asked first, and the publication page is scraped
-// if that fails. Two mechanisms because they break independently — the API can
-// change shape while the page still renders, and vice versa.
+// fresh URL carrying the snapshot date, so the address is discovered per run: the Content API
+// first, then the publication page. Two mechanisms because they break independently.
 const (
 	ukSponsorAPIURL  = "https://www.gov.uk/api/content/government/publications/register-of-licensed-sponsors-workers"
 	ukSponsorPageURL = "https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers"
@@ -96,8 +95,7 @@ func ResolveUKSponsorCSV(ctx context.Context, client *http.Client) (string, erro
 // ParseUKSponsors reads the register CSV into one record per organisation-route
 // row, carrying the town (the identity field that tells two same-named
 // organisations apart), the licence rating, and the sponsorship route the gate
-// reads. Every route is kept, including the temporary and study routes the gate
-// then refuses — retaining them keeps the parse honest about what the register says.
+// reads. Every route is kept, including those the gate later refuses.
 func ParseUKSponsors(data []byte) ([]Record, error) {
 	rows, err := csvColumns(data, ',', "Organisation Name", "Town/City", "Type & Rating", "Route")
 	if err != nil {
@@ -119,19 +117,43 @@ func ParseUKSponsors(data []byte) ([]Record, error) {
 	return records, nil
 }
 
-// get fetches a URL and returns its body, treating any non-200 as an error.
+// rateLimitWait is the pause before the first retry of a 429; it doubles per retry.
+// open.canada.ca answers a quick burst of requests with 429s.
+var rateLimitWait = 2 * time.Second
+
+const rateLimitAttempts = 4
+
+// get fetches a URL and returns its body, treating any non-200 as an error. A 429 is
+// retried after a growing pause, since it says "later", not "no".
 func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
+	wait := rateLimitWait
+	for attempt := 1; ; attempt++ {
+		body, status, err := getOnce(ctx, client, url)
+		if status != http.StatusTooManyRequests || attempt == rateLimitAttempts {
+			return body, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(wait):
+		}
+		wait *= 2
+	}
+}
+
+func getOnce(ctx context.Context, client *http.Client, url string) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s: status %d", url, resp.StatusCode)
+		return nil, resp.StatusCode, fmt.Errorf("%s: status %d", url, resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	return body, resp.StatusCode, err
 }

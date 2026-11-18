@@ -93,3 +93,55 @@ func TestRoleKey_ParenthesisStripNeverEmptiesATitle(t *testing.T) {
 		t.Error("stripping parentheses collapsed two different roles")
 	}
 }
+
+func intersects(a, b []string) bool {
+	for _, x := range a {
+		for _, y := range b {
+			if x == y {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Aggregators drop the board's punctuation. RoleKey stripped " - Fraud" as a trailing
+// clause on the board side only, so the same Plaid role read as two, and the
+// cross-check accused Plaid of advertising a role it had (measured 2026-11-01).
+func TestTitleKeys_MatchAcrossDroppedPunctuation(t *testing.T) {
+	for _, pair := range [][2]string{
+		{"Account Executive - Fraud", "Account Executive Fraud"},
+		{"Engineering Manager - Dashboard Foundations", "Engineering Manager Dashboard Foundations"},
+		{"Senior Product Manager, Financial Management", "Senior Product Manager Financial Management"},
+		{"Front-End Developer", "Front End Developer"},
+		{"Senior Backend Engineer, Krakow", "Senior Backend Engineer"},
+		{"Data Engineer (Semi Senior)", "Data Engineer Semi Senior"},
+	} {
+		if !intersects(TitleKeys(pair[0]), TitleKeys(pair[1])) {
+			t.Errorf("TitleKeys(%q) = %q and TitleKeys(%q) = %q share no key",
+				pair[0], TitleKeys(pair[0]), pair[1], TitleKeys(pair[1]))
+		}
+	}
+}
+
+// Folding punctuation must not fold words: two different roles stay two.
+func TestTitleKeys_KeepDifferentRolesApart(t *testing.T) {
+	if intersects(TitleKeys("Go Developer"), TitleKeys("Rust Developer")) {
+		t.Error("two different roles share a key")
+	}
+}
+
+// A script that writes vowels as combining marks keeps its words whole.
+func TestTitleKeys_KeepCombiningMarks(t *testing.T) {
+	if got := TitleKeys("डेवलपर"); len(got) != 1 || got[0] != "डेवलपर" {
+		t.Errorf("TitleKeys(डेवलपर) = %q, want the word unsplit", got)
+	}
+}
+
+func TestTitleKeys_BlankTitleHasNoKeys(t *testing.T) {
+	for _, title := range []string{"", "   ", " - , | "} {
+		if got := TitleKeys(title); len(got) != 0 {
+			t.Errorf("TitleKeys(%q) = %q, want none", title, got)
+		}
+	}
+}

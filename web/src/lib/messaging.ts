@@ -20,7 +20,8 @@ export function conversationStatusLabel(status: ConversationStatus): string {
  *  the persona they speak as. An unreachable counterpart carries no name at all. */
 export function counterpartName(counterpart: Counterpart): string {
   switch (counterpart.persona) {
-    case 'buddy': return counterpart.reachable ? counterpart.detail.handle : 'Former member';
+    case 'buddy':
+      return counterpart.reachable ? counterpart.detail.handle : 'Former member';
   }
 }
 
@@ -38,7 +39,8 @@ const KIND_COPY = {
   buddy: {
     closed: 'This conversation closed when one of you left interview buddies.',
     gone: 'This member is no longer in interview buddies, so the conversation is closed.',
-    block: 'The conversation closes for good, and you stop seeing each other in lists, the feed and invitations. This cannot be undone.',
+    block:
+      'The conversation closes for good, and you stop seeing each other in lists, the feed and invitations. This cannot be undone.',
   },
 } as const satisfies Record<Conversation['kind'], KindCopy>;
 
@@ -97,7 +99,9 @@ export function messageJobSlugs(body: string): string[] {
 
 /** Messages under the viewer's local calendar day they were sent, in log order — the
  *  chat's day separators. */
-export function messageDays<T extends { created_at: string }>(messages: readonly T[]): { day: string; messages: T[] }[] {
+export function messageDays<T extends { created_at: string }>(
+  messages: readonly T[],
+): { day: string; messages: T[] }[] {
   const out: { day: string; messages: T[] }[] = [];
   for (const m of messages) {
     const day = localDay(new Date(m.created_at));

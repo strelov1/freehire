@@ -6,10 +6,7 @@ import (
 )
 
 // polishWorkModePhrases is the Polish counterpart of frenchWorkModePhrases, built from the
-// Polish-language crawl (erecruiter, traffit, nofluffjobs, solidjobs, smartrecruiters,
-// teamtailor, recruitee, eures, whatjobs-pl: 9,835 open postings on 2026-10-29, of which
-// three quarters carried no structured work mode and 0.5% stated one any reader
-// understood).
+// Polish-language crawl.
 //
 // Polish states the model in a labelled line more often than not ("Tryb pracy: zdalny",
 // "Model pracy: hybrydowy", "Lokalizacja: 100% zdalnie"), and one applicant-tracking
@@ -28,7 +25,7 @@ import (
 //     "rekrutacja zdalna" and "onboarding prowadzony jest zdalnie" are the hiring process,
 //     "zdalne wsparcie techniczne" is the product. Only the labelled and totality forms count.
 //   - bare "stacjonarnie"/"stacjonarny": a tutoring platform's "lekcje online lub
-//     stacjonarnie" (~300 postings), "szkolenia stacjonarne", "sprzedaż stacjonarna" (shops,
+//     stacjonarnie", "szkolenia stacjonarne", "sprzedaż stacjonarna" (shops,
 //     not offices), "spotkanie online/stacjonarne" (the interview).
 //   - bare "hybrydowy/hybrydowe": "środowiska on-premises i hybrydowe" (a cloud), hybrid
 //     cars. "hybrydowo" stays: the adverb only describes how someone works.

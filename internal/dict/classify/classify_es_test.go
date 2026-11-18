@@ -86,7 +86,7 @@ func TestSpanishHeadsAndFields(t *testing.T) {
 		{"Analista de datos BI", "data_analytics", ""},
 		{"Científico de Datos", "data_science", ""},
 		{"Analista funcional", "business_analysis", ""},
-		{"Administrador/a de Sistemas Unix/Linux", "devops", ""},
+		{"Administrador/a de Sistemas Unix/Linux", "system_administration", ""},
 		{"Técnico/a informático/a", "it_support", ""},
 		{"Técnico/a de Soporte IT  - Oficinas Sevilla", "it_support", ""},
 		{"Técnico/a de Redes", "network_engineering", ""},

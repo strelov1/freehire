@@ -77,6 +77,11 @@ type queriesTx struct {
 	updatedAt time.Time
 }
 
+func (t *queriesTx) MarkHandEdited(ctx context.Context) error {
+	_, err := t.q.MarkCVHandEdited(ctx, db.MarkCVHandEditedParams{ID: t.cvID, UserID: t.userID})
+	return err
+}
+
 func (t *queriesTx) State(context.Context) (State, time.Time, error) {
 	return t.state, t.updatedAt, nil
 }

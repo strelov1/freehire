@@ -181,7 +181,7 @@ func (s x5) detail(ctx context.Context, e CompanyEntry, it x5Item) (Job, bool) {
 }
 
 // x5Company is the vacancy's own business unit, else the configured entry. Every live vacancy
-// names exactly one (measured 2026-10-14, 425 of 425).
+// names exactly one.
 func x5Company(e CompanyEntry, it x5Item) string {
 	for _, bu := range it.BusinessUnits {
 		if name := strings.TrimSpace(bu.BusinessUnit.Name); name != "" {

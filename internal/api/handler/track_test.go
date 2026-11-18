@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,7 +22,7 @@ import (
 // the validation order ever regresses and a request unexpectedly reaches them).
 type stubTrackingRepo struct{}
 
-func (stubTrackingRepo) JobIDBySlug(context.Context, string) (int64, error) { return 1, nil }
+func (stubTrackingRepo) JobIDBySlug(context.Context, int64, string) (int64, error) { return 1, nil }
 func (stubTrackingRepo) RecordView(context.Context, int64, int64) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }
@@ -94,7 +95,7 @@ func trackApp() (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &trackingHandlers{tracking: jobtracking.New(stubTrackingRepo{})}
 	app := fiber.New()
-	app.Patch("/jobs/:slug/track", auth.RequireAuth(iss, testVersions), h.TrackJob)
+	app.Patch("/api/v1/jobs/:slug/track", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 	return app, iss
 }
 
@@ -109,7 +110,7 @@ func TestTrackJob_RejectsEmptyAndUnknownStage(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(tc.body))
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/api/v1/jobs/go-dev/track", strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
 			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 			resp, err := app.Test(req)
@@ -126,7 +127,7 @@ func TestTrackJob_RejectsEmptyAndUnknownStage(t *testing.T) {
 
 func TestTrackJob_RequiresAuth(t *testing.T) {
 	app, _ := trackApp()
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(`{"stage":"interview"}`))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/api/v1/jobs/go-dev/track", strings.NewReader(`{"stage":"interview"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -168,7 +169,7 @@ func TestInteractionResponse_HasStageAndNotes(t *testing.T) {
 func TestTrackJob_AcceptsExpired(t *testing.T) {
 	app, iss := trackApp()
 	token, _ := iss.Issue(7, testTokenVersion)
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(`{"stage":"expired"}`))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/api/v1/jobs/go-dev/track", strings.NewReader(`{"stage":"expired"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
@@ -178,5 +179,42 @@ func TestTrackJob_AcceptsExpired(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
+// benchmarkRepo answers a reply-rate sample that clears the gate on both sides.
+type benchmarkRepo struct{ stubTrackingRepo }
+
+func (benchmarkRepo) ReplyRateCounts(context.Context, int64) (userjob.ReplyRateSide, userjob.ReplyRateSide, error) {
+	return userjob.ReplyRateSide{Applications: 12, Answered: 5}, userjob.ReplyRateSide{Applications: 40, Answered: 9}, nil
+}
+
+func TestTrackingPipeline_ServesReplyRateBenchmark(t *testing.T) {
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &trackingHandlers{tracking: jobtracking.New(benchmarkRepo{})}
+	app := fiber.New()
+	app.Get("/api/v1/me/tracking/pipeline", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
+	token, _ := iss.Issue(7, testTokenVersion)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/me/tracking/pipeline", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Data struct {
+			ReplyRate userjob.ReplyRateBenchmark `json:"reply_rate"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := userjob.ReplyRateBenchmark{
+		You:    userjob.ReplyRateSide{Applications: 12, Answered: 5},
+		Global: userjob.ReplyRateSide{Applications: 40, Answered: 9},
+	}
+	if out.Data.ReplyRate != want {
+		t.Errorf("reply_rate = %+v, want %+v", out.Data.ReplyRate, want)
 	}
 }

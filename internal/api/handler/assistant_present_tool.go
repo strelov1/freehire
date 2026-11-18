@@ -11,33 +11,27 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// presentJobsMaxEntries bounds one deck. A recommendation longer than this stops
-// being a recommendation, and the model has already paid for every rationale it
-// writes.
+// presentJobsMaxEntries bounds one deck: a longer recommendation stops being one, and the model has
+// already paid for every rationale it writes.
 const presentJobsMaxEntries = 10
 
-// presentJobsMaxWhyFits and presentJobsMaxConcerns bound the two rationale lists.
-// Both are small on purpose: they render as chips beside the note, and a long
-// list is a sign the model is padding rather than selecting.
+// presentJobsMaxWhyFits and presentJobsMaxConcerns bound the two rationale lists. They render as chips,
+// and a long list means the model is padding rather than selecting.
 const (
 	presentJobsMaxWhyFits  = 4
 	presentJobsMaxConcerns = 3
 )
 
-// jobSlugResolver answers which of a set of public slugs exist. It is one method
-// so the tool can be unit-tested without a database — `assistantHandlers.queries`
-// is a concrete *db.Queries, and a tool that called it directly would need
-// Postgres to test at all.
-//
-// There is deliberately no nil guard on the implementation: `*db.Queries` arrives
-// here as a typed nil, which no `== nil` check would catch, and every other tool
-// relies on the same invariant that handlers are built with real queries.
+// jobSlugResolver answers which of a set of public slugs exist. One method so the tool is testable
+// without Postgres (`assistantHandlers.queries` is a concrete *db.Queries). There is deliberately no nil
+// guard: `*db.Queries` arrives as a typed nil that no `== nil` check would catch, and every other tool
+// relies on handlers being built with real queries.
 type jobSlugResolver interface {
 	ResolveSlugsToJobIDs(ctx context.Context, slugs []string) ([]db.ResolveSlugsToJobIDsRow, error)
 }
 
-// presentJobsEntry is one vacancy the model chose to show, carrying only what the
-// model knows that the catalogue does not: why this vacancy, for this user.
+// presentJobsEntry is one vacancy the model chose to show, carrying only what the catalogue does not:
+// why this vacancy, for this user.
 type presentJobsEntry struct {
 	Slug     string   `json:"slug"`
 	Note     string   `json:"note"`
@@ -57,22 +51,19 @@ type presentJobsDropped struct {
 	Reason string `json:"reason"`
 }
 
-// presentJobsResult is a receipt, not a payload. It goes back into the model's
-// history and stays there for the rest of the session, so it carries slugs and
-// reasons and nothing else — the vacancies themselves are already in history from
-// the search that found them, and the client fetches them by slug to render.
+// presentJobsResult is a receipt, not a payload. It stays in history for the rest of the session, so it
+// carries slugs and reasons only; the client fetches the vacancies by slug to render.
 type presentJobsResult struct {
 	Presented []string             `json:"presented"`
 	Dropped   []presentJobsDropped `json:"dropped"`
 }
 
-// presentJobsToolName is named once so the signed-in MCP server, which cannot
-// render what this tool presents, can leave it out (see mcpAccountTools).
+// presentJobsToolName is named once so the signed-in MCP server, which cannot render this tool's
+// output, can leave it out (see mcpAccountTools).
 const presentJobsToolName = "present_jobs"
 
-// presentJobsTool is how a vacancy reaches the user's screen. It is the one tool
-// whose purpose is presentation: it writes no state and reads only enough to
-// refuse a slug that does not exist.
+// presentJobsTool is how a vacancy reaches the user's screen. It writes no state and reads only enough
+// to refuse a slug that does not exist.
 func presentJobsTool(resolver jobSlugResolver) assistant.Tool {
 	return assistant.Tool{
 		Name:   presentJobsToolName,
@@ -139,9 +130,8 @@ func presentJobsTool(resolver jobSlugResolver) assistant.Tool {
 			if err := in.validate(); err != nil {
 				return nil, err
 			}
-			// Trimmed, and stored back, so a slug the model padded with whitespace
-			// resolves instead of being reported as nonexistent — and so the receipt
-			// names the same string the client will look up.
+			// Trimmed and stored back, so a whitespace-padded slug resolves and the receipt names the string the
+			// client will look up.
 			slugs := make([]string, len(in.Jobs))
 			for i := range in.Jobs {
 				in.Jobs[i].Slug = strings.TrimSpace(in.Jobs[i].Slug)
@@ -156,8 +146,7 @@ func presentJobsTool(resolver jobSlugResolver) assistant.Tool {
 				live[row.PublicSlug] = true
 			}
 
-			// Built in the model's order: the deck renders as its ranking, and a map
-			// iteration would scramble it.
+			// Built in the model's order: the deck renders as its ranking, and map iteration would scramble it.
 			res := presentJobsResult{Presented: []string{}, Dropped: []presentJobsDropped{}}
 			for _, job := range in.Jobs {
 				if live[job.Slug] {
@@ -178,8 +167,8 @@ func presentJobsTool(resolver jobSlugResolver) assistant.Tool {
 	}
 }
 
-// validate rejects a deck the renderer could not draw, naming what is wrong so
-// the model can fix it within the same turn.
+// validate rejects a deck the renderer could not draw, naming what is wrong so the model can fix it
+// in the same turn.
 func (a presentJobsArgs) validate() error {
 	if len(a.Jobs) == 0 {
 		return fmt.Errorf("jobs must contain at least one vacancy to show")
@@ -188,9 +177,8 @@ func (a presentJobsArgs) validate() error {
 		return fmt.Errorf("jobs has %d entries; show at most %d in one call, and use a second call for a further group",
 			len(a.Jobs), presentJobsMaxEntries)
 	}
-	// A slug shown twice is a card shown twice, and the client keys its cards by
-	// slug — a repeat there is a render error, not a cosmetic duplicate. Refusing
-	// it here is what keeps one out of the transcript in the first place.
+	// A slug shown twice is a card shown twice, and the client keys cards by slug, so a repeat is a render
+	// error. Refusing it here keeps one out of the transcript.
 	seen := make(map[string]bool, len(a.Jobs))
 	for i, job := range a.Jobs {
 		slug := strings.TrimSpace(job.Slug)

@@ -4,8 +4,7 @@
 package handler
 
 import (
-	"context"
-	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -18,22 +17,15 @@ import (
 // handler would answer (200 when both succeeded).
 func parseFilters(t *testing.T, rawQuery string) (inbox.Query, int) {
 	t.Helper()
-	var got inbox.Query
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/f", func(c *fiber.Ctx) error {
-		q := parseInboxQuery(c)
-		if err := q.Validate(); err != nil {
-			return err
-		}
-		got = q
-		return c.SendStatus(fiber.StatusOK)
-	})
-	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/f?"+rawQuery, nil), -1)
+	values, err := url.ParseQuery(rawQuery)
 	if err != nil {
-		t.Fatalf("request ?%s: %v", rawQuery, err)
+		t.Fatalf("query ?%s: %v", rawQuery, err)
 	}
-	defer resp.Body.Close()
-	return got, resp.StatusCode
+	q := parseInboxQuery(values)
+	if err := q.Validate(); err != nil {
+		return inbox.Query{}, fiber.StatusBadRequest
+	}
+	return q, fiber.StatusOK
 }
 
 // Each of the three link states parses to itself, and an absent filter parses to

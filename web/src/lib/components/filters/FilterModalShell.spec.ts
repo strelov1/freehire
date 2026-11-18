@@ -61,12 +61,10 @@ describe('FilterModalShell', () => {
     expect(screen.getByText('1,234 jobs match').getAttribute('aria-live')).toBe('polite');
   });
 
-  it('runs onClear after resetting the staged copy', async () => {
-    const onClear = vi.fn();
-    const { staged } = setup({ onClear });
+  it('resets the staged copy on Clear all', async () => {
+    const { staged } = setup({});
     await fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
     expect(staged.clear).toHaveBeenCalledOnce();
-    expect(onClear).toHaveBeenCalledOnce();
   });
 
   it('leaves an Escape another handler claimed', async () => {

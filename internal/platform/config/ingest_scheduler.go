@@ -7,38 +7,32 @@ import (
 
 // IngestScheduler is cmd/ingest-scheduler's configuration.
 type IngestScheduler struct {
-	// Apply false is SHADOW MODE and is the DEFAULT. The first deployment lands under a
-	// fleet still driven by ~279 static timers, so a scheduler that launched on install
-	// would double-crawl every provider at once. Turning launches on is a deliberate
-	// operator act, never a side effect of shipping.
+	// Apply false is shadow mode and the default: a scheduler that launched on install would
+	// double-crawl providers still driven by static timers. Turning launches on is an operator act.
 	Apply bool
 
-	// Cap bounds concurrent runs across the whole fleet. It replaces ingest-slot.sh's
-	// flock semaphore, whose 10 was calibrated against this fleet after 8 measured short.
+	// Cap bounds concurrent runs across the whole fleet (replaces ingest-slot.sh's flock semaphore).
 	Cap int
 
-	// HeavyCap reserves how many of Cap's slots the heavy pool may hold; 0 means "use
-	// ingestsched.DefaultHeavyCap", the convention Scheduler.HeavyCap itself documents.
-	//
-	// It is read from the environment because the two numbers must be tuned TOGETHER and
-	// this one had no reader at all: on 2026-09-18 the host set INGEST_SCHEDULER_CAP=4
-	// against a DefaultHeavyCap of 5, the heavy reservation was clamped to the whole cap,
-	// and the light pool was budgeted zero slots for three days. Every tick reported
-	// saturated=false and launched=0, so the unit stayed green while 78 providers stopped
-	// crawling. Lowering the fleet cap must not be a way to switch half the fleet off.
+	// HeavyCap reserves how many of Cap's slots the heavy pool may hold; 0 means
+	// ingestsched.DefaultHeavyCap. Read from the environment because it must be tuned together with
+	// Cap: a Cap below the default clamped the reservation to the whole cap and starved the light pool.
 	HeavyCap int
 
 	// Grace extends a claim's life past its own timeout before it is treated as dead,
 	// covering systemd's teardown of a run it killed at TimeoutStartSec.
 	Grace time.Duration
 
-	// Where a launched run finds its binary, its working directory and its environment —
-	// the same three the per-provider units carried. IngestBinary points at the ACTIVE
-	// blue/green release, not at a fixed colour.
+	// Where a launched run finds its binary, working directory and environment. IngestBinary
+	// points at the active blue/green release.
 	IngestBinary string
 	WorkingDir   string
 	EnvFile      string
 	RunAs        string
+
+	// Slice is the systemd slice launched runs are placed in; empty keeps system.slice. Setting
+	// it to the static crawl units' slice lets one CPU quota bound the whole crawl fleet.
+	Slice string
 }
 
 // LoadIngestScheduler reads the scheduler's environment.
@@ -52,23 +46,18 @@ func LoadIngestScheduler() IngestScheduler {
 		WorkingDir:   env("INGEST_SCHEDULER_WORKDIR", "/opt/freehire/src/hire-current"),
 		EnvFile:      env("INGEST_SCHEDULER_ENV_FILE", "/opt/freehire/.env"),
 		RunAs:        env("INGEST_SCHEDULER_RUN_AS", "freehire"),
+		Slice:        os.Getenv("INGEST_SCHEDULER_SLICE"),
 	}
-	// A non-positive cap would make every tick read as saturated and the fleet would stop
-	// crawling while every check stayed green — the failure mode this whole change exists
-	// to make impossible. Floor it rather than trusting a typo.
+	// A non-positive cap would read every tick as saturated and silently stop the fleet; floor it.
 	if c.Cap < 1 {
 		c.Cap = 1
 	}
-	// A negative reservation is a typo; 0 keeps its documented meaning ("use the default")
-	// and is resolved in Scheduler, which owns that default. The upper bound is NOT floored
-	// here for the same reason: a HeavyCap of 0 read as "unset" cannot be compared against
-	// Cap until the default behind it is known.
+	// A negative reservation is a typo; 0 means "use the default", resolved in Scheduler, so the
+	// upper bound is not clamped here.
 	if c.HeavyCap < 0 {
 		c.HeavyCap = 0
 	}
-	// Floored at one second, not at zero. Scheduler.grace() reads a zero Grace as "use
-	// DefaultGrace", so returning 0 here would silently hand back two minutes and make
-	// INGEST_SCHEDULER_GRACE_SECONDS=0 mean the opposite of what it says.
+	// Floored at one second: Scheduler.grace() reads 0 as DefaultGrace, which would invert a 0 setting.
 	if c.Grace < time.Second {
 		c.Grace = time.Second
 	}

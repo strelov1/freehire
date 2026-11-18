@@ -11,6 +11,11 @@ import (
 // the adapter.
 const doverSlugResp = `{"id":"72c2afbf-36e4-4eec-8d78-5d2600498018","slug":"qompyl","name":"Qompyl"}`
 
+// doverDeepspatialSlugResp is the Deepspatial slug resolution as the live API answered it
+// 2026-11-05: client id 1aeeba55-…, the company behind the submitted jobs.dover.com link —
+// whose link uuid (a5546acf-…) is a POSTING id, not this client id.
+const doverDeepspatialSlugResp = `{"id":"1aeeba55-65e0-4803-b70f-fac7ca8a20c7","slug":"deepspatial","name":"Deepspatial"}`
+
 func doverListingPage(jobsJSON, next string) string {
 	nextField := "null"
 	if next != "" {
@@ -253,5 +258,46 @@ func TestDoverNoExtraTextWithoutEquityOrVisa(t *testing.T) {
 	job := doverFetchOne(t, doverDetail("f9fd123e-e7ff-4bcc-a16a-bb8c47e591b5"))
 	if strings.Contains(job.Description, "equity") || strings.Contains(job.Description, "visa") {
 		t.Errorf("Description = %q, want no equity/visa text when neither fact is stated", job.Description)
+	}
+}
+
+// TestDoverFetchNewJobsDoverBoardCrawlsThroughSlug pins the jobs.dover.com board shape: the
+// recognizer files such links under the Org slug alone (the uuid in the link may be a posting
+// id — on the submitted Deepspatial link it is — so the slug lookup is the adapter's one
+// supported address path, and it doubles as the existence check the host's marketing shell
+// cannot provide). A board spelled by a jobs.dover.com link must crawl exactly like an
+// app.dover.com board, yielding /apply/<slug>/<jobId> URLs.
+func TestDoverFetchNewJobsDoverBoardCrawlsThroughSlug(t *testing.T) {
+	fake := &routedHTTP{}
+	fake.route("careers-page-slug/Deepspatial", doverDeepspatialSlugResp)
+	fake.route("careers-page/1aeeba55-65e0-4803-b70f-fac7ca8a20c7/jobs", doverListingPage(doverJobPublished, ""))
+	fake.route("inbound/application-portal-job/f9fd123e-e7ff-4bcc-a16a-bb8c47e591b5", doverDetail("f9fd123e-e7ff-4bcc-a16a-bb8c47e591b5"))
+
+	jobs, err := NewDover(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "Deepspatial", Company: "Deepspatial"}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 job, got %d: %+v", len(jobs), jobs)
+	}
+	if want := "https://app.dover.com/apply/Deepspatial/f9fd123e-e7ff-4bcc-a16a-bb8c47e591b5"; jobs[0].URL != want {
+		t.Errorf("URL = %q, want %q", jobs[0].URL, want)
+	}
+}
+
+// TestDoverFetchNewPlainSlugStillResolves pins the app.dover.com board shape: the slug lookup
+// is the adapter's resolve step and stays untouched by the jobs.dover.com support.
+func TestDoverFetchNewPlainSlugStillResolves(t *testing.T) {
+	fake := &routedHTTP{}
+	fake.route("careers-page-slug/qompyl", doverSlugResp)
+	fake.route("careers-page/72c2afbf-36e4-4eec-8d78-5d2600498018/jobs", doverListingPage(doverJobPublished, ""))
+	fake.route("inbound/application-portal-job/f9fd123e-e7ff-4bcc-a16a-bb8c47e591b5", doverDetail("f9fd123e-e7ff-4bcc-a16a-bb8c47e591b5"))
+
+	jobs, err := NewDover(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "qompyl", Company: "Qompyl"}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 job, got %d: %+v", len(jobs), jobs)
 	}
 }

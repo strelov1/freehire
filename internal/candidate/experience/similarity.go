@@ -7,10 +7,9 @@ import (
 )
 
 // softDupThreshold is the Jaccard similarity on claim meaningful-tokens at which
-// two atoms are treated as soft-duplicates. Tuned so the motivating near-paraphrase
-// pair (two assistant readings of one Chromium/faster-whisper plugin, ~0.44) clusters,
-// while distinct claims that differ in numbers (~0.33) or share mostly stopwords (~0.25)
-// do not. Merge still requires an explicit owner confirm.
+// two atoms are treated as soft-duplicates. Set so near-paraphrases cluster while distinct
+// claims that differ in numbers or share mostly stopwords do not. Merge still requires an
+// explicit owner confirm.
 const softDupThreshold = 0.40
 
 // SoftDuplicateClusters groups an owner's atoms into near-paraphrase clusters

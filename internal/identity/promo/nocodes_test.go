@@ -59,6 +59,10 @@ var discountSources = []string{
 	"internal/identity/billing/discount.go",
 	"internal/identity/billing/discount_test.go",
 	"internal/identity/billing/credit_integration_test.go",
+	// The CV letters offer a code from the environment; the package that reads it is a
+	// place one would be pasted, and the shared claim package sits beside it.
+	"internal/engage/cvlifecycle",
+	"internal/engage/maildaily",
 	"internal/api/handler/promo.go",
 	"internal/api/handler/promo_test.go",
 	"web/src/routes/pricing",

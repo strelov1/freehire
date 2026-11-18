@@ -72,3 +72,54 @@ func TestCrawlRegistryOmitsUnconfiguredProviders(t *testing.T) {
 		}
 	}
 }
+
+func TestTaxonomyCacheOwnership(t *testing.T) {
+	first := Taxonomy()
+	delete(first, "hh")
+	if _, ok := Taxonomy()["hh"]; !ok {
+		t.Fatal("caller changed cached taxonomy")
+	}
+	providers := TaxonomyAggregatorProviders()
+	want := AggregatorProviders(Taxonomy())
+	if !slices.Equal(providers, want) {
+		t.Fatal("cached aggregator classification differs")
+	}
+	providers[0] = "changed"
+	if !slices.Equal(TaxonomyAggregatorProviders(), want) {
+		t.Fatal("caller changed cached aggregators")
+	}
+}
+
+func TestTaxonomyReadAllocations(t *testing.T) {
+	Taxonomy()
+	TaxonomyAggregatorProviders()
+	if got := testing.AllocsPerRun(100, func() { Taxonomy() }); got > 10 {
+		t.Fatalf("taxonomy read allocated %g times; full registry must not be rebuilt", got)
+	}
+	if got := testing.AllocsPerRun(100, func() { TaxonomyAggregatorProviders() }); got > 1 {
+		t.Fatalf("aggregator read allocated %g times", got)
+	}
+}
+
+func BenchmarkTaxonomy(b *testing.B) {
+	Taxonomy()
+	b.ReportAllocs()
+	for b.Loop() {
+		Taxonomy()
+	}
+}
+
+func BenchmarkTaxonomyAggregatorProviders(b *testing.B) {
+	TaxonomyAggregatorProviders()
+	b.ReportAllocs()
+	for b.Loop() {
+		TaxonomyAggregatorProviders()
+	}
+}
+
+func BenchmarkTaxonomyUncached(b *testing.B) {
+	b.ReportAllocs()
+	for b.Loop() {
+		All(nil)
+	}
+}

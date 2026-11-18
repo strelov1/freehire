@@ -3,8 +3,8 @@
   // one place — every "sign in" entry point in the app funnels here rather than
   // opening a dialog over whatever page it was clicked from. Reached via `signinUrl()`
   // (#lib/signin), which every caller uses so the query params below can't drift:
-  // /onboarding's own gate (an anonymous visitor there is bounced straight here,
-  // `returnTo` carrying the onboarding URL); every guarded route's server-side load
+  // the onboarding flow's "Save my matches" (`returnTo` /onboarding, which carries the
+  // visitor's draft into the new account); every guarded route's server-side load
   // (`redirect(302, ...)` when signed out); TopBar's global handler for a failed OAuth
   // callback (`?error=oauth`, appended by the backend to whatever `returnTo` an OAuth
   // attempt started with — see below); and explicit "Sign in" links/buttons.
@@ -20,7 +20,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { X } from '@lucide/svelte';
-  import { api, ApiError } from '#lib/api.js';
+  import { api, ApiError, isCrossSiteRefusal } from '#lib/api.js';
   import { credentialErrorMessage } from '#lib/credentialErrorMessage.js';
   import { login, register } from '#lib/auth.svelte.js';
   import { loadOAuthProviders, PROVIDER_LABELS } from '#lib/oauthProviders.js';
@@ -36,12 +36,9 @@
   const returnTo = $derived(safeRedirect(page.url.searchParams.get('returnTo')) ?? '/');
 
   // Where the close button (and Escape) go — deliberately a SEPARATE param from
-  // `returnTo`. When /onboarding sends a visitor here, `returnTo` is /onboarding's
-  // own URL (so a successful sign-in/register lands back there and the wizard
-  // continues); closing without authenticating must NOT reuse that, or it bounces
-  // back to /onboarding, which immediately redirects here again — a loop. Falls
-  // back to `returnTo` for any caller that only ever had one destination to begin
-  // with (nothing else to skip past).
+  // `returnTo`, for a caller whose success destination is not where a visitor who gives
+  // up should land. Falls back to `returnTo` for any caller that only ever had one
+  // destination (closing the page from the onboarding flow returns to its results).
   const cancelTo = $derived(safeRedirect(page.url.searchParams.get('cancelTo')) ?? returnTo);
 
   type Mode = 'register' | 'login' | 'forgot' | 'reset';
@@ -106,7 +103,7 @@
   const isRecovery = $derived(mode === 'forgot' || mode === 'reset');
 
   function subtitleFor(m: Mode): string {
-    if (m === 'register') return "We'll ask for your CV and a few details next.";
+    if (m === 'register') return 'Free. Your CV, matches and alerts in one place.';
     if (m === 'login') return 'Welcome back.';
     if (m === 'reset') return notice ?? 'Enter the code we sent and a new password.';
     return "We'll email you a code to reset your password.";
@@ -119,6 +116,13 @@
       if (e.status === 429) return 'A code was just sent — check your inbox.';
       if (e.status === 503) return 'Email delivery is unavailable right now.';
       if (isRecovery && e.status === 400) return 'That code is not valid or has expired, or the password is too short.';
+      // The server refuses any sign-in that names another site in Origin/Referer — or
+      // whose own Sec-Fetch-Site header says cross-site — before it reads the
+      // credentials (login-CSRF defence). A person can only hit this from a stale tab
+      // on a foreign origin or a blocked privacy extension, so say where to sign in
+      // from instead of apologizing for a fault.
+      if (isCrossSiteRefusal(e))
+        return 'For safety, authentication requests from other sites are refused. Open freehire in its own tab and try again.';
     }
     return credentialErrorMessage(e) ?? 'Something went wrong. Please try again.';
   }
@@ -271,13 +275,7 @@
       <form class="flex flex-col gap-3" onsubmit={submit}>
         <label class="flex flex-col gap-1 text-sm">
           <span class="text-muted-foreground">Email</span>
-          <input
-            type="email"
-            bind:value={email}
-            required
-            autocomplete="email"
-            class={inputClass}
-          />
+          <input type="email" bind:value={email} required autocomplete="email" class={inputClass} />
         </label>
 
         {#if mode === 'reset'}
@@ -323,7 +321,11 @@
 
       {#if mode === 'login'}
         <p class="text-center text-sm">
-          <button type="button" onclick={() => switchMode('forgot')} class="text-muted-foreground underline-offset-4 hover:underline">
+          <button
+            type="button"
+            onclick={() => switchMode('forgot')}
+            class="text-muted-foreground underline-offset-4 hover:underline"
+          >
             Forgot your password?
           </button>
         </p>

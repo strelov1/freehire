@@ -3,15 +3,8 @@ package location
 import "strings"
 
 // Croatian, Serbian, Bosnian and Montenegrin location lines name places in their own
-// languages, and the parser read few of those names. Measured 2026-10-29 over the open
-// postings placed in hr/rs/ba/me (talentlyft, eures, zohorecruit, smartrecruiters,
-// teamtailor, workday and the rest, ~5,800 lines), and over the lines the new
-// Serbian and Croatian boards write (infostud, hzz, mojposao): "Srbija", "Crna Gora",
-// "Bosna i Hercegovina" and "BiH" stated no country; an infostud posting abroad
-// ("Nemačka - Hanover", "Austrija") stated none either, so the board's own fallback
-// country would have filed it in Serbia; Workday's ISO-3 export ("SERBIA VIRTUAL, SRB")
-// and a Croatian county ("Splitsko-dalmatinska županija") placed nothing; and "Kosovo"
-// named the town of Kosovo Polje as the city.
+// languages. A posting abroad ("Nemačka - Hanover") must state its country, or a board's
+// fallback country would file it in Serbia.
 //
 // bcsCountryNames are the country names in the BCS languages, in both standards
 // (Njemačka/Nemačka, Švicarska/Švajcarska), written with and without diacritics, and in

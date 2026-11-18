@@ -9,28 +9,19 @@ import (
 
 // usOnlyPhrases are anchored, US-specific eligibility statements that mark a role
 // as restricted to the United States. Like descriptionWorkModePhrases, they are
-// tuned for PRECISION over recall in long prose: only phrases that essentially
-// never appear outside a genuinely US-restricted posting are listed, so a bare
-// "citizen", "secret", or "security" token cannot misfire. Citizenship phrases are
-// unambiguous; the clearance phrases are US-specific terms of art ("Secret
-// clearance", "TS/SCI") that other countries' vetting schemes do not use (the UK
-// says "SC"/"DV", not "Secret clearance"), so generic "security clearance" is
-// deliberately excluded to avoid mislabeling a UK/AU role as US.
-// The work-authorization phrasings were the largest gap: "authorized to work in
-// the United States" alone matches ~950 postings catalogue-wide, and in a sampled
-// 53 of them 15 carried no resolved geography at all — exactly the bucket this
-// rescue exists for. They read as requirements, not as the protected-characteristic
-// lists in equal-opportunity boilerplate, which say "citizenship status" without
-// naming a nationality and so cannot match these.
+// tuned for PRECISION over recall in long prose, so a bare "citizen", "secret" or
+// "security" token cannot misfire. The clearance phrases are US-specific terms of
+// art ("Secret clearance", "TS/SCI"; the UK says "SC"/"DV"), so generic "security
+// clearance" is excluded to avoid mislabeling a UK/AU role as US. The
+// work-authorization phrasings read as requirements, not as the equal-opportunity
+// boilerplate ("citizenship status"), which names no nationality and cannot match.
 var usOnlyPhrases = []string{
 	"u.s. citizen", "us citizen", "united states citizen", "citizen of the united states",
 	"u.s. citizenship", "us citizenship", "united states citizenship",
 	"authorized to work in the united states", "authorised to work in the united states",
 	"authorization to work in the united states",
-	// "for any employer in the u.s./us" is Roadie's ATS-standard work-authorization
-	// wording (freehire job_reports #32) — distinct enough from the general "authorized
-	// to work in the United States" form to need its own entry (it names an employer
-	// scope, not just a place), but the same unambiguous work-authorization signal.
+	// "for any employer in the u.s./us" is Roadie's ATS-standard wording; it names an
+	// employer scope, not just a place, so it needs its own entry.
 	"authorized to work for any employer in the u.s.", "authorized to work for any employer in the us",
 	"secret clearance", "ts/sci",
 }
@@ -41,12 +32,10 @@ var usOnlyPhrases = []string{
 // enumerating 27 countries into the `countries` facet would claim a precision the
 // text does not carry.
 //
-// This list is deliberately short because the catalogue barely uses these phrasings:
-// a full-text sweep put "right to work in the EU" at 45 hits, of which exactly ONE
-// carried the phrase verbatim. EU-restricted postings overwhelmingly state a member
-// state instead, which the location dictionary already pins. Note that "no visa
-// sponsorship" does NOT belong here — it says the employer will not file paperwork,
-// not that only EU nationals may apply, and it has its own `visa_sponsorship` facet.
+// The list is short because EU-restricted postings overwhelmingly name a member state
+// instead, which the location dictionary already pins. "No visa sponsorship" does NOT
+// belong here: it says the employer files no paperwork, not that only EU nationals
+// may apply, and it has its own `visa_sponsorship` facet.
 var euOnlyPhrases = []string{
 	"right to work in the eu", "right to work in the european union",
 	"eu work authorisation", "eu work authorization",
@@ -56,35 +45,26 @@ var euOnlyPhrases = []string{
 // ukOnlyPhrases mark a role as restricted to the United Kingdom. This pins a country
 // as well as a region, because the UK is one.
 //
-// "right to work in the UK" is the dominant form (~435 catalogue-wide). A sample of 35
-// verbatim matches named no second area — no "UK or EU" phrasings — so pinning the UK
-// alone does not quietly narrow a posting that was open wider.
+// "right to work in the UK" is the dominant form and names no second area, so pinning
+// the UK alone does not quietly narrow a posting that was open wider.
 //
 // The UK's own clearance vocabulary ("SC", "DV", "BPSS") is deliberately absent: those
-// are short tokens that collide with ordinary words and unrelated initialisms, and no
-// longer anchoring form of them appeared often enough to earn a place.
+// are short tokens that collide with ordinary words and unrelated initialisms.
 var ukOnlyPhrases = []string{
 	"right to work in the uk", "right to work in the united kingdom",
 	"eligible to work in the uk", "authorised to work in the uk",
 	"british citizen", "british citizenship",
 }
 
-// auOnlyPhrases mark a role as restricted to Australia. Australian government and
-// defence contracts drive this: a sample of 44 verbatim matches had 16 with no resolved
-// geography, the highest unpinned share of any area measured.
-//
-// Both noun forms are listed. Matching is whole-word (with a plural "s" allowed), so the
-// shorter entry does NOT reach inside the longer one — that is what stops "uk" matching
-// "Ukraine", and it costs an explicit variant here.
+// auOnlyPhrases mark a role as restricted to Australia (government and defence
+// contracts). Both noun forms are listed: matching is whole-word (plural "s" allowed),
+// so the shorter entry does NOT reach inside the longer one.
 var auOnlyPhrases = []string{
 	"australian citizen", "australian citizenship",
 }
 
-// caOnlyPhrases mark a role as restricted to Canada. Both forms are clean in the
-// catalogue — 38 of 38 sampled "eligible to work in Canada" matches carried the phrase
-// verbatim — though few of them are geographically unpinned, so this rule rescues less
-// than the others. It is here because the phrasings are unambiguous, not because the
-// volume is large.
+// caOnlyPhrases mark a role as restricted to Canada. The phrasings are unambiguous,
+// though few such postings are geographically unpinned.
 var caOnlyPhrases = []string{
 	"canadian citizen", "canadian citizenship", "eligible to work in canada",
 }
@@ -99,9 +79,8 @@ type eligibilityRule struct {
 	phrases   []string
 }
 
-// eligibilityRules is the full set, consulted in order. Order carries no priority —
-// EligibilityFromDescription unions every rule that matches — but a stable list keeps
-// its test table readable.
+// eligibilityRules is the full set. Order carries no priority:
+// EligibilityFromDescription unions every rule that matches.
 var eligibilityRules = []eligibilityRule{
 	{countries: []string{"us"}, regions: []string{"north_america"}, phrases: usOnlyPhrases},
 	{regions: []string{"eu"}, phrases: euOnlyPhrases},
@@ -117,16 +96,12 @@ var eligibilityRules = []eligibilityRule{
 // requires US citizenship is US-restricted, not open-anywhere. It never guesses — no
 // asserted phrase yields two empty slices.
 //
-// Matching rules are UNIONED rather than resolved by priority. A posting saying "you
-// must be authorized to work in the US or Canada" is genuinely open to both, and
-// picking one would be a coin flip. Unioning is safe precisely because these are
-// anchored eligibility statements and not place names: prose that merely lists offices
-// in three countries asserts eligibility in none of them.
+// Matching rules are UNIONED, not resolved by priority: "authorized to work in the US
+// or Canada" is open to both. That is safe because these are anchored eligibility
+// statements, not place names; prose listing offices in three countries asserts none.
 //
-// A phrase found in a sentence that also denies it ("does not require US citizenship",
-// "no US citizenship required") is not a match: an unanchored Contains would read the
-// denial as the assertion, which is the opposite mistake this function exists to avoid —
-// the same precision-over-recall rule the phrase lists themselves follow.
+// A phrase in a sentence that also denies it ("does not require US citizenship") is
+// not a match.
 func EligibilityFromDescription(desc string) (countries, regions []string) {
 	lower := strings.ToLower(desc)
 	countrySet := make(map[string]struct{})
@@ -161,19 +136,16 @@ func ruleAsserted(lower string, rule eligibilityRule) bool {
 const negationWindow = 80
 
 // sponsorshipTail matches "without sponsorship" and its common expansions. "without" is
-// a negation word everywhere else, but in this construction it STRENGTHENS the
-// eligibility requirement rather than denying it — "authorized to work in the US without
-// sponsorship" is more restrictive, not less. The tail is stripped before the negation
-// scan because the dominant US work-authorization phrasing in the catalogue carries it
-// verbatim ("...without the need for current or future sponsorship"), so leaving it in
-// would silently suppress the single highest-volume signal this file has.
+// a negation word everywhere else, but here it STRENGTHENS the requirement ("authorized
+// to work in the US without sponsorship" is more restrictive). The tail is stripped
+// before the negation scan, or the dominant US work-authorization phrasing would be
+// suppressed.
 var sponsorshipTail = regexp.MustCompile(
 	`without\s+(?:the\s+need\s+for\s+|any\s+|requiring\s+)?(?:current\s+or\s+future\s+)?(?:visa\s+|employment\s+|immigration\s+)?sponsor\w*`)
 
 // negationWords cancel the eligibility signal a phrase would otherwise assert. Checked as
 // whole words (or, for "n't"/"non-", as a suffix/prefix of one) against the sentence the
-// phrase sits in, not the phrase itself — "does not require US citizenship" denies the
-// signal from three words away.
+// phrase sits in, not the phrase itself ("does not require US citizenship").
 var negationWords = map[string]bool{
 	"not": true, "no": true, "cannot": true, "never": true,
 	"without": true, "except": true, "unless": true, "excluding": true,
@@ -197,14 +169,11 @@ func phraseAsserted(lower, p string) bool {
 	}
 }
 
-// wholeWordMatch reports whether lower[start:end] sits on word boundaries, so a phrase
-// cannot match inside a longer word. Without it "right to work in the uk" matches "right
-// to work in the Ukraine" and files a Ukrainian posting under the United Kingdom.
+// wholeWordMatch reports whether lower[start:end] sits on word boundaries, so "right to
+// work in the uk" cannot match "right to work in the Ukraine".
 //
-// A single trailing "s" is allowed, because the plural is how these statements are
-// usually written ("United States citizens", "Australian citizens") and the phrase lists
-// carry the singular. Nothing longer is: "us citizen" must NOT swallow "US citizenship",
-// which is a separate list entry that matches itself exactly.
+// A single trailing "s" is allowed (the plural, "United States citizens"). Nothing
+// longer is: "us citizen" must NOT swallow "US citizenship", a separate entry.
 func wholeWordMatch(lower string, start, end int) bool {
 	if start > 0 && isWordByte(lower[start-1]) {
 		return false
@@ -242,15 +211,13 @@ func sentenceAround(lower string, start, end int) string {
 	return lower[lo:hi]
 }
 
-// negatedSentence reports whether a sentence carries a negation word, checked whole-word so
-// "notable" or "cannot deploy without approval" style incidental substrings of unrelated
-// words don't misfire the way an unanchored Contains would.
+// negatedSentence reports whether a sentence carries a negation word, checked whole-word
+// so "notable" does not misfire.
 //
-// The check is sentence-wide, not clause-scoped to the phrase: a sentence that negates
-// something else entirely ("Applicants must not have unresolved conflicts and must be a US
-// Citizen") suppresses the match too. That is the safe side of the same precision-over-recall
-// trade this file already makes elsewhere — missing a real eligibility signal costs less than
-// mislabeling a globally-open role as restricted.
+// The check is sentence-wide, not clause-scoped: "Applicants must not have unresolved
+// conflicts and must be a US Citizen" is suppressed too. That is the safe side of the
+// precision-over-recall trade: a missed signal costs less than labeling a global role
+// as restricted.
 func negatedSentence(sentence string) bool {
 	sentence = sponsorshipTail.ReplaceAllString(sentence, " ")
 	for _, word := range strings.Fields(sentence) {

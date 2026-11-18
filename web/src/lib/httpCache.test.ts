@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  NO_CACHE,
-  PRIVATE_CACHE,
-  PUBLIC_CACHE,
-  PUBLIC_DETAIL_CACHE,
-  cachePolicy,
-  variesOnCookie,
-} from './httpCache';
+import { NO_CACHE, PRIVATE_CACHE, PUBLIC_CACHE, PUBLIC_DETAIL_CACHE, cachePolicy, variesOnCookie } from './httpCache';
 
 describe('cachePolicy', () => {
   it('lets a shared cache hold an anonymous public page', () => {
@@ -66,11 +59,7 @@ describe('cachePolicy', () => {
 // per window and pays for a revalidation every time.
 describe('cachePolicy holds an entity page longer than a listing', () => {
   it('gives a detail page the longer shared-cache lifetime', () => {
-    for (const pathname of [
-      '/jobs/senior-go-engineer-acme-1a2b',
-      '/companies/acme',
-      '/blog/why-we-built-this',
-    ]) {
+    for (const pathname of ['/jobs/senior-go-engineer-acme-1a2b', '/companies/acme', '/blog/why-we-built-this']) {
       expect(cachePolicy({ pathname, authenticated: false })).toBe(PUBLIC_DETAIL_CACHE);
     }
   });
@@ -78,13 +67,7 @@ describe('cachePolicy holds an entity page longer than a listing', () => {
   // These move with every ingest run: counts, newest-first ordering, which jobs a
   // filter now matches. They keep the short lifetime.
   it('leaves listings and index pages on the short lifetime', () => {
-    for (const pathname of [
-      '/',
-      '/jobs',
-      '/companies',
-      '/collections/python',
-      '/insights/skills/backend',
-    ]) {
+    for (const pathname of ['/', '/jobs', '/companies', '/collections/python', '/insights/skills/backend']) {
       expect(cachePolicy({ pathname, authenticated: false })).toBe(PUBLIC_CACHE);
     }
   });
@@ -133,21 +116,15 @@ describe('cachePolicy is method-agnostic', () => {
 describe('cachePolicy never lets a server error be stored', () => {
   it('refuses to cache a 5xx, whatever the route would otherwise get', () => {
     expect(cachePolicy({ pathname: '/', authenticated: false, status: 500 })).toBe(NO_CACHE);
-    expect(cachePolicy({ pathname: '/companies/acme', authenticated: false, status: 502 })).toBe(
-      NO_CACHE,
-    );
-    expect(cachePolicy({ pathname: '/collections/python', authenticated: false, status: 503 })).toBe(
-      NO_CACHE,
-    );
+    expect(cachePolicy({ pathname: '/companies/acme', authenticated: false, status: 502 })).toBe(NO_CACHE);
+    expect(cachePolicy({ pathname: '/collections/python', authenticated: false, status: 503 })).toBe(NO_CACHE);
   });
 
   // A 404 is a fact about the URL, not a symptom: closed postings are a routine,
   // permanent outcome here and there are a great many of them, so letting the edge
   // absorb those repeats is the point. Only 5xx is withheld.
   it('still caches a 404, which is a stable answer rather than a failure', () => {
-    expect(cachePolicy({ pathname: '/jobs/gone', authenticated: false, status: 404 })).toBe(
-      PUBLIC_DETAIL_CACHE,
-    );
+    expect(cachePolicy({ pathname: '/jobs/gone', authenticated: false, status: 404 })).toBe(PUBLIC_DETAIL_CACHE);
     expect(cachePolicy({ pathname: '/nope', authenticated: false, status: 404 })).toBe(PUBLIC_CACHE);
   });
 

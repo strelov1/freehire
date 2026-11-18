@@ -3,6 +3,7 @@ package qualityaudit
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -128,7 +129,7 @@ func TestAuditHostAnsweringAnyID(t *testing.T) {
 	if s.asked("/ad/200001") || s.asked("/ad/200002") {
 		t.Errorf("an uncalibrated host's postings were fetched: %v", s.hits)
 	}
-	if c := TallyLiveness(results)["jobtech"]; c != (LivenessCounts{Sampled: 2}) {
+	if c := TallyLiveness(results)["jobtech"]; c.Sampled != 2 || c.Live != 0 || c.Dead != 0 {
 		t.Errorf("tally = %+v, want sampled only", c)
 	}
 }
@@ -342,5 +343,94 @@ func TestAuditFollowsFiveRedirects(t *testing.T) {
 	newAuditor(100).Run(context.Background(), []Posting{posting(1, "x", srv.URL, "140001", "/j/140001/0")})
 	if reached.Load() != 1 {
 		t.Error("the fifth redirect was not followed")
+	}
+}
+
+// AppOne's SPA route can 404 while its authoritative JSON detail is still live.
+func TestAuditAppOneUsesPostingAPI(t *testing.T) {
+	for _, externalID := range []string{"6af32ead3c3083588ad823e0", "zoomtan:6af32ead3c3083588ad823e0"} {
+		t.Run(externalID, func(t *testing.T) {
+			a := newAuditor(100)
+			detailRequests := 0
+			a.Client = &http.Client{Transport: auditTransport(func(r *http.Request) (*http.Response, error) {
+				status, body := http.StatusNotFound, ""
+				if r.URL.Path == "/api/apply/v2/jobposting/6af32ead3c3083588ad823e0" {
+					detailRequests++
+					status, body = http.StatusOK, `{"description":"Salon Sales Associate"}`
+				}
+				if strings.HasPrefix(r.URL.Path, "/job/") {
+					t.Errorf("probed misleading SPA route: %s", r.URL.Path)
+				}
+				return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+			})}
+			got := a.Run(context.Background(), []Posting{{ID: 1, Source: "appone", ExternalID: externalID, URL: "https://apply.appone.com/job/6af32ead3c3083588ad823e0"}})
+			if len(got) != 1 || got[0].Outcome != Live || detailRequests != 1 {
+				t.Fatalf("live API detail = %+v, detail requests=%d", got, detailRequests)
+			}
+		})
+	}
+}
+
+type auditTransport func(*http.Request) (*http.Response, error)
+
+func (f auditTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestAuditCanaryRefusalIsReported(t *testing.T) {
+	s := &site{unknown: http.StatusForbidden}
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	got := newAuditor(100).Run(context.Background(), []Posting{posting(1, "x", srv.URL, "123456", "/jobs/123456")})
+	if got[0].Reason != ReasonRefused {
+		t.Fatalf("canary refusal = %+v", got)
+	}
+}
+
+func TestAuditCalibratesEachSourceOnSharedHost(t *testing.T) {
+	s := &site{unknown: http.StatusOK, gone: map[string]bool{"/good/123456": true}}
+	// The first source's whole route 404s, the other route always answers 200.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/good/") {
+			http.NotFound(w, r)
+			return
+		}
+		s.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	got := byID(newAuditor(100).Run(context.Background(), []Posting{posting(1, "good", srv.URL, "123456", "/good/123456"), posting(2, "blind", srv.URL, "654321", "/blind/654321")}))
+	if got[2].Reason != ReasonUncalibrated {
+		t.Fatalf("another source's canary certified blind route: %+v", got)
+	}
+}
+
+func TestAuditAppOneAPIRequiresPostingEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		robots     string
+		want       Reason
+	}{
+		{name: "HTML success", body: "<html>Welcome</html>", want: ReasonNoAnswer},
+		{name: "empty JSON", body: `{}`, want: ReasonNoAnswer},
+		{name: "API disallowed", body: `{"description":"Live"}`, robots: "User-agent: *\nDisallow: /api/\n", want: ReasonRobots},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := newAuditor(100)
+			a.Client = &http.Client{Transport: auditTransport(func(r *http.Request) (*http.Response, error) {
+				status, body := http.StatusNotFound, ""
+				if r.URL.Path == "/robots.txt" && tc.robots != "" {
+					status, body = http.StatusOK, tc.robots
+				}
+				if strings.HasSuffix(r.URL.Path, "6af32ead3c3083588ad823e0") {
+					status, body = http.StatusOK, tc.body
+					if tc.robots != "" {
+						t.Error("disallowed API requested")
+					}
+				}
+				return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+			})}
+			got := a.Run(context.Background(), []Posting{{ID: 1, Source: "appone", ExternalID: "6af32ead3c3083588ad823e0", URL: "https://apply.appone.com/job/6af32ead3c3083588ad823e0"}})
+			if got[0].Outcome != Unmeasured || got[0].Reason != tc.want {
+				t.Fatalf("result = %+v", got)
+			}
+		})
 	}
 }

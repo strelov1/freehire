@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/classify"
+	"github.com/strelov1/freehire/internal/dict/engagement"
 	"github.com/strelov1/freehire/internal/dict/lang"
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/normalize"
@@ -19,132 +20,6 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobfacts"
 	"github.com/strelov1/freehire/internal/platform/stringset"
 )
-
-// Input is the raw job content the derivation reads. Source and ExternalID are the
-// already-resolved storage identity (the caller decides how to namespace them); they
-// feed the public slug so it is stable with the dedup key.
-//
-// WorkMode, Seniority, Category, Skills, and ExperienceYearsMin are the caller's
-// STRUCTURED signals — values the source states explicitly (an enum, a grade, a tag
-// list, a numeric field), already mapped into freehire's vocabularies. Each takes
-// precedence over the dictionary derivation: the scalar signals win when present and
-// the dictionary fills only when they are empty/nil; the multi-valued Skills are
-// unioned with the dictionary skills. They carry structured signal only, never a
-// heuristic an adapter inferred from free text; an adapter with no signal leaves them
-// empty/nil so the dictionary decides.
-//
-// Countries, Regions and Cities are the caller's structured GEOGRAPHY signal (a country
-// code the platform states directly, macro-region codes, and city names the
-// submitter/moderator stated by hand). Unlike the scalars they fully replace the
-// location-dictionary derivation for that facet when present — an explicit place is
-// authoritative, not a hint the dictionary refines — and when empty the dictionary
-// derives as before.
-type Input struct {
-	Title       string
-	Company     string
-	Source      string
-	ExternalID  string
-	Location    string
-	Description string
-	WorkMode    string
-	Countries   []string
-	Regions     []string
-	Cities      []string
-	// FallbackCountries is a WEAKER structured geography signal: a country the platform
-	// attaches to the posting without saying the work is there (Greenhouse's offices,
-	// which are sometimes the employer's headquarters rather than the hiring scope).
-	// Unlike Countries it never overrides anything — it is the last step of the geography
-	// chain, consulted only when the location, the title marker and both description
-	// rescues all stated nothing at all, and it pulls its region along like Countries.
-	FallbackCountries  []string
-	Seniority          string
-	Category           string
-	EmploymentType     string
-	Skills             []string
-	ExperienceYearsMin *int
-	// EducationLevel and EnglishLevel are the caller's structured signal for the two
-	// facets a platform states as a picklist rather than in prose (Profession.hu
-	// publishes both, on every posting). They obey the same contract as the scalars
-	// above — a member of vocab.EducationLevelValues / vocab.EnglishLevelValues, set
-	// only from a stated field and never from an adapter's own reading of the text,
-	// so an adapter with nothing to say leaves them empty and the matchers decide.
-	EducationLevel string
-	EnglishLevel   string
-	// SalaryMin/SalaryMax/SalaryCurrency/SalaryPeriod are the caller's structured
-	// salary signal — an adapter sets them only when the ATS states a salary in its
-	// own structured field (never a description-text guess: unlike the scalars
-	// above, there is no dictionary fallback for salary, so this is pure passthrough).
-	SalaryMin      *int
-	SalaryMax      *int
-	SalaryCurrency string
-	SalaryPeriod   string
-	// IsTechHint is the caller's structured signal that a posting is confirmed
-	// technical — e.g. a source that crawls only a platform's own dedicated IT
-	// category board, rather than a general-population board the title
-	// dictionary must judge on its own. Unlike Category it asserts IT-ness
-	// without naming a subcategory, so it feeds is_tech directly. It obeys the
-	// same contract as the scalars above: a fact the source states, never a
-	// heuristic an adapter infers from free text. When true it takes
-	// precedence over BOTH the tech and non-tech title/category evidence
-	// below — a source that crawled a posting specifically because it filed
-	// it as IT is more authoritative than a generic dictionary.
-	IsTechHint bool
-}
-
-// Derived is the set of facets computed from an Input.
-type Derived struct {
-	CompanySlug string
-	PublicSlug  string
-	Countries   []string
-	Regions     []string
-	Cities      []string
-	Metros      []string
-	WorkMode    string
-	Skills      []string
-	Seniority   string
-	Category    string
-	// IsTech is the tri-state technical/non-technical signal: non-nil true when the
-	// derived category is a recognized technical category, non-nil false when it is a
-	// known non-technical category or the title states a confident non-tech role, and
-	// nil when neither resolves (unknown — never coerced, so the coverage gap stays
-	// measurable).
-	IsTech *bool
-	// RequiresClearance marks a posting that states a government security-clearance
-	// requirement (internal/dict/location). Tri-state in shape but only ever true or
-	// nil: the dictionary cannot tell a posting that promises no clearance from one
-	// that is silent, so a denial produces the absence of a true, not a false.
-	RequiresClearance *bool
-	// ViaRecruiter marks a posting that states it is published by an intermediary on a
-	// client's behalf (internal/job/jobfacts). True or nil, never false, for the same
-	// reason as RequiresClearance: a recruiter who never says so is not detected.
-	ViaRecruiter *bool
-	// Equity is what the posting states about equity compensation (jobfacts.Equity): a
-	// vocab.EquityValues member, or "" when it states nothing the matcher reads. There
-	// is no "no equity" value, for the same reason as RequiresClearance has no false.
-	Equity string
-	// ClearanceLevels names the clearance levels the posting states, in
-	// vocab.ClearanceLevelValues order. Non-empty exactly when RequiresClearance is
-	// set: both come from one reading of the description, so they cannot disagree.
-	ClearanceLevels []string
-	// Perks are the benefits the description states it offers, in vocab.PerkValues
-	// order (internal/dict/perks); nil when it names none.
-	Perks []string
-	// Synthetic enrichment facets (category B): deterministic stand-ins for fields
-	// the LLM also emits, served dict-only like the facets above. ExperienceYearsMin
-	// is nil when the description states no figure.
-	PostingLanguage    string
-	EmploymentType     string
-	EducationLevel     string
-	EnglishLevel       string
-	ExperienceYearsMin *int
-	// SalaryMin/SalaryMax/SalaryCurrency/SalaryPeriod pass Input's structured salary
-	// signal through unchanged — see Input's doc for why there is no dictionary
-	// fallback here.
-	SalaryMin      *int
-	SalaryMax      *int
-	SalaryCurrency string
-	SalaryPeriod   string
-}
 
 // Derive computes the slugs and dictionary facets for a job. Geography, skills, and the
 // title classification (seniority/category) come from the curated dictionaries (which
@@ -208,7 +83,12 @@ func Derive(in Input) Derived {
 	// along with it (the same pairing Parse itself does for a country it resolves), so a
 	// structured country with no separate region statement still lands under the right
 	// region facet instead of falling back to whatever the free-text location parsed.
-	if len(in.Countries) > 0 {
+	// The exception is a location line whose own scope is at least as broad: then the
+	// adapter's country is an office address (Ashby's postalAddress US beside "Remote |
+	// North America or Europe"), and replacing the line with it narrowed a Europe-open
+	// role to one country.
+	lineWins := len(in.Countries) > 0 && lineOutranksCountries(geo, in.Countries)
+	if len(in.Countries) > 0 && !lineWins {
 		countries = in.Countries
 		regions = regionsForCountries(in.Countries)
 	}
@@ -219,7 +99,13 @@ func Derive(in Input) Derived {
 	// phrase as a "region" must not reach the facet, and one that folds to nothing
 	// is no signal at all.
 	if r := location.NormalizeRegions(in.Regions); len(r) > 0 {
-		regions = r
+		if lineWins {
+			// rederive feeds a stored row's regions back beside its country; a line that
+			// outranks the country must not be narrowed back by them.
+			regions = unionSorted(regions, r)
+		} else {
+			regions = r
+		}
 	}
 	// Parse already drops a global the location line contradicts; this applies the same
 	// rule to the final answer, whose countries and regions may come from a structured
@@ -241,16 +127,16 @@ func Derive(in Input) Derived {
 	if workMode == "" {
 		workMode = location.WorkModeFromDescription(in.Description)
 	}
-	// A description may CONTRADICT the result of that chain, not merely fill its gaps. It is
-	// the one place prose outranks a structured signal, and only for this one question: an ATS
-	// "remote" is routinely a requisition's location bucket rather than a work arrangement —
-	// NVIDIA publishes a whole "US, TX, Remote" location with remoteType unset, for a role its
-	// body calls 100% on-site (freehire#2555) — while a sentence denying remote work is the
-	// employer writing about the arrangement itself. Only "remote" is ever overruled, and only
-	// to "onsite": a denial of remote says nothing against hybrid, and location.RemoteContradicted
-	// deliberately answers that one question rather than proposing a mode of its own.
-	if workMode == "remote" && location.RemoteContradicted(in.Description) {
-		workMode = "onsite"
+	// Explicit arrangement prose fills a gap or contradicts a remote location bucket or ATS flag.
+	// Hybrid is checked before a remote denial: "not remote" alone does not distinguish
+	// an office-only role from one split between office and home.
+	if workMode == "remote" || workMode == "" {
+		switch {
+		case location.HybridArrangementStated(in.Description):
+			workMode = "hybrid"
+		case workMode == "remote" && location.RemoteContradicted(in.Description):
+			workMode = "onsite"
+		}
 	}
 	class := classify.Parse(title)
 	// Seniority precedence: structured source signal → title dictionary → description
@@ -284,12 +170,9 @@ func Derive(in Input) Derived {
 	// Experience precedence: structured source signal → description text parse.
 	//
 	// The ceiling is applied AFTER the choice, to whichever source won, because both
-	// can overshoot and for different reasons: the text parse cannot tell a candidate's
-	// years from an employer's ("With over 40 years of … experience, chipmakers rely on
-	// KLA" — the company's age), and a structured field can carry a unit nobody
-	// declared (seven smartrecruiters postings stored 84, a number their descriptions
-	// never contain). One bound after the merge catches both; a bound inside either
-	// parser would leave the other open. See vocab.MaxExperienceYears.
+	// can overshoot: the text parse cannot tell a candidate's years from an employer's ("over
+	// 40 years of … experience, chipmakers rely on KLA"), and a structured field can carry an
+	// undeclared unit. One bound after the merge catches both. See vocab.MaxExperienceYears.
 	experience := in.ExperienceYearsMin
 	if experience == nil {
 		experience = jobfacts.ExperienceYearsMin(in.Description)
@@ -329,6 +212,7 @@ func Derive(in Input) Derived {
 		Equity:             jobfacts.Equity(in.Title, in.Description),
 		ClearanceLevels:    clearanceLevels,
 		Perks:              perks.FromDescription(in.Description),
+		Engagement:         deriveEngagement(in.Engagement, title, in.Description),
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     employmentType,
 		EducationLevel:     educationLevel,
@@ -346,6 +230,20 @@ func RetainEmploymentType(stored, title, description string) string {
 		return ""
 	}
 	return stored
+}
+
+// deriveEngagement is the engagement column for a posting: the structured signal unioned
+// with what the title and description state, in vocab order, anything outside the
+// vocabulary dropped; nil when neither names a term.
+func deriveEngagement(signal []string, title, description string) []string {
+	text := engagement.FromText(normalize.CleanTitle(title), description)
+	var out []string
+	for _, v := range vocab.EngagementValues {
+		if slices.Contains(signal, v) || slices.Contains(text, v) {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // trueOrNil lifts a dictionary's boolean into a true-or-absent column: a positive is
@@ -371,25 +269,14 @@ func trueOrNil(v bool) *bool {
 // counterpart to IsNonTech — it rescues generic software titles ("Software
 // Engineer", "COBOL Programmer") that resolve no sub-category. A non-software
 // "…Engineer" matches the non-tech detector only where its discipline is named
-// outright — "mechanical engineer", "civil engineer" and the rest of that anchored
-// family — so "Drainage Engineer" still matches neither detector and stays unknown.
+// outright ("mechanical engineer"), so "Drainage Engineer" matches neither and stays unknown.
 //
-// The two kinds of technical evidence are NOT weighed the same, and that is the whole
-// of what this function decides. A technical TITLE (classify.IsTech) wins outright, as
-// it always has: it speaks for the whole role, so "Backend Engineer — Teller Systems"
-// stays technical despite its accidental "teller". A technical CATEGORY does not — it
-// is resolved from a SUBSTRING, and a substring can be about something else entirely.
-// "Quality Assurance Nurse Manager" resolves to `qa`, "Registered Nurse Intensive Mobile
-// Team" to `mobile`, "инспектор по охране труда" to `security`. In each the title
-// dictionary already says non-technical outright, and before this it was never asked:
-// the category alone asserted true and nothing later could take it back.
-//
-// Measured over the 3 000 commonest titles currently flagged technical (197 916 open
-// postings), letting the non-tech TITLE outvote a category-only signal changes 22 titles
-// and 2 067 postings, every one of them a correction — nurses, HVAC project managers,
-// mobile mechanics and phlebotomists, occupational-safety inspectors, a policeman, a
-// school safety teacher, a QA lab technician. Nothing moves the other way: the positive
-// branch is strictly narrower than before, so this can only ever withdraw a true.
+// The two kinds of technical evidence are NOT weighed the same. A technical TITLE
+// (classify.IsTech) wins outright: it speaks for the whole role, so "Backend Engineer —
+// Teller Systems" stays technical despite its accidental "teller". A technical CATEGORY
+// does not: it is resolved from a SUBSTRING that can be about something else ("Quality
+// Assurance Nurse Manager" resolves to `qa`, "Registered Nurse Intensive Mobile Team" to
+// `mobile`), so a non-tech title outvotes a category-only signal.
 func deriveIsTech(category, title string, sourceHint bool) *bool {
 	if sourceHint || classify.IsTech(title) {
 		t := true
@@ -419,6 +306,46 @@ func regionsForCountries(countries []string) []string {
 		if r, ok := countryToRegion[c]; ok {
 			set[r] = struct{}{}
 		}
+	}
+	return stringset.Sorted(set)
+}
+
+// lineOutranksCountries reports whether the location line states a scope at least as broad as
+// the adapter's structured countries, so that the adapter's country is an office address
+// (Ashby's postalAddress) rather than a narrowing. Two shapes qualify:
+//   - the line names a macro-region outright, one none of its own countries explains
+//     ("Remote | Europe", "North America or Europe"). The open-anywhere "global" does not
+//     count, so a country beside "Anywhere" still pins the posting;
+//   - the line is countries alone, no city, and names every structured country ("US or
+//     Canada" beside US). A line with a city keeps yielding even when it names the country
+//     too: a state code beside a town is where the dictionary misreads a second country,
+//     which is what the structured one corrects.
+func lineOutranksCountries(geo location.Geo, structured []string) bool {
+	own := regionsForCountries(geo.Countries)
+	for _, r := range geo.Regions {
+		if r != "global" && !slices.Contains(own, r) {
+			return true
+		}
+	}
+	if len(geo.Cities) > 0 {
+		return false
+	}
+	for _, c := range structured {
+		if !slices.Contains(geo.Countries, c) {
+			return false
+		}
+	}
+	return true
+}
+
+// unionSorted is the sorted, deduplicated union of two string sets.
+func unionSorted(a, b []string) []string {
+	set := make(map[string]struct{}, len(a)+len(b))
+	for _, s := range a {
+		set[s] = struct{}{}
+	}
+	for _, s := range b {
+		set[s] = struct{}{}
 	}
 	return stringset.Sorted(set)
 }

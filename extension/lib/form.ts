@@ -9,10 +9,12 @@
  * which a position in the list does.
  */
 
-import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, RevealRequest, Upload } from './protocol';
-import { countryLabel } from './labels';
+import { collapse, comboOptions, displayedValues, isComboWidget } from './comboWidget';
+import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, Upload } from './protocol';
+import type { AutofillProfile } from './freehire';
+import { formatAuthorizedCountries, normalizeLabel } from './fieldKeys';
 
-type Fillable = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+export type Fillable = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
 // Input types that are not free-fill targets.
 const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image', 'file']);
@@ -234,126 +236,6 @@ function describeQuestion({ label, controls }: Question, index: number, forms: H
   return field;
 }
 
-/**
- * The options a custom-widget combobox is offering right now, read from the
- * listbox the widget itself points at. Addressing it by `aria-controls`/
- * `aria-owns` rather than sweeping the page for `[role=option]` is what keeps a
- * form of 27 widgets honest: a closed widget owns no listbox, so it reports
- * nothing instead of inheriting an open neighbour's countries.
- *
- * A react-select renders its listbox only once opened, so this is empty for one
- * that is closed — the agent reaches for `combobox.open` in that case.
- */
-function comboOptions(el: Element): string[] {
-  return comboOptionNodes(el).map(collapseText).filter(Boolean);
-}
-
-/**
- * The option elements a widget is offering, for a caller that must click one.
- * Options the user cannot see are left out, on the same grounds as hidden
- * controls: a widget keeping a stale list behind `display:none` is not offering
- * it, and neither reading nor clicking it would be honest.
- */
-export function comboOptionNodes(el: Element): Element[] {
-  const listbox = comboListbox(el);
-  if (!listbox) return [];
-  return Array.from(listbox.querySelectorAll('[role="option"]')).filter(isOnScreen);
-}
-
-/**
- * The listbox a widget declares as its own, or null when it names none.
- *
- * `aria-controls` is an id *list*, and a widget may well point at a live-region
- * status node alongside its listbox — so the ids are resolved individually and
- * the one that actually looks like a listbox wins. Resolving the whole attribute
- * as a single id finds nothing, which would report an open widget as offering
- * no options.
- */
-export function comboListbox(el: Element): Element | null {
-  const ids = (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\s+/).filter(Boolean);
-  const named = ids.map((id) => el.ownerDocument.getElementById(id)).filter((node): node is HTMLElement => !!node);
-  const listbox = named.find((n) => n.getAttribute('role') === 'listbox' || n.querySelector('[role="option"]'));
-  return listbox ?? named[0] ?? null;
-}
-
-function collapseText(el: Element): string {
-  return collapse(el.textContent);
-}
-
-/**
- * True when the element is on screen for the user; see `isHidden`. A widget's
- * menu is routinely hidden with `visibility` or `opacity` rather than `display`,
- * which `checkVisibility` ignores unless asked, so those are checked explicitly.
- */
-export function isOnScreen(el: Element): boolean {
-  if (el.closest('[hidden]')) return false;
-  if (typeof el.checkVisibility === 'function' && !el.checkVisibility()) return false;
-
-  const view = el.ownerDocument.defaultView;
-  if (!view) return true;
-  for (let node: Element | null = el; node; node = node.parentElement) {
-    const style = view.getComputedStyle(node);
-    if (style.visibility === 'hidden' || style.visibility === 'collapse') return false;
-    if (style.opacity === '0') return false;
-  }
-  return true;
-}
-
-/**
- * True when the control is the text input of a custom dropdown widget
- * (react-select and friends) rather than a plain field. Such a widget ignores a
- * written value and commits whatever its own listbox highlights — the spike's
- * "Norfolk Island instead of No" failure — so the simple filler must skip it.
- * Detected by the ARIA the widgets expose; a native <select> is never one.
- */
-export function isComboWidget(el: Fillable): boolean {
-  if (el instanceof HTMLSelectElement) return false;
-  return el.matches(COMBO_WIDGET);
-}
-
-/**
- * The ways a widget declares itself a combobox. One constant because anything that
- * reads *around* a widget (`displayedValues`) must recognise the same set as
- * `isComboWidget`: a guard counting only `[role=combobox]` would walk straight past
- * a neighbour that says `aria-haspopup="listbox"` instead, and report that
- * neighbour's value.
- */
-const COMBO_WIDGET = '[role="combobox"], [aria-autocomplete], [aria-haspopup="listbox"]';
-
-// react-select's rendered value and placeholder, by the emotion class names it
-// generates. Only the *reading* path guesses at class names; see displayedValue.
-const VALUE_NODE = '[class*="singleValue"], [class*="single-value"], [class*="multiValue"], [class*="multi-value"]';
-const PLACEHOLDER_NODE = '[class*="placeholder"]';
-
-/**
- * The values the widget displays — one per chip on a multi-select, empty when it
- * displays none.
- *
- * A react-select keeps its committed value in its own markup — the input's
- * `value` is empty even after a successful commit — so this walks up from the
- * widget looking for the rendered value. It stops the moment the subtree holds a
- * second combobox, which is what makes reporting a *neighbour's* value
- * impossible: on a form of 27 widgets that would be a success reported for a
- * write that never happened. The count uses `COMBO_WIDGET`, the same set
- * `isComboWidget` accepts, so a neighbour declaring itself by `aria-haspopup`
- * rather than `role` still stops the walk.
- */
-export function displayedValues(widget: Element): string[] {
-  for (let el = widget.parentElement; el; el = el.parentElement) {
-    if (el.querySelectorAll(COMBO_WIDGET).length > 1) return [];
-    const shown = Array.from(el.querySelectorAll(VALUE_NODE));
-    if (shown.length) return shown.map(shownText).filter(Boolean);
-    // A visible placeholder means the widget is showing "Select…", not an answer.
-    if (el.querySelector(PLACEHOLDER_NODE)) return [];
-  }
-  return [];
-}
-
-/** An element's text as a person reads it: whitespace collapsed, ends trimmed. */
-export function shownText(el: Element): string {
-  return (el.textContent ?? '').replace(/\s+/g, ' ').trim();
-}
-
 /** Best-effort human label for a control, in decreasing reliability. */
 function extractLabel(el: Fillable): string {
   const fromLabels = Array.from(el.labels ?? [])
@@ -379,301 +261,6 @@ function textFromIds(doc: Document, ids: string | null): string {
     .filter(Boolean)
     .join(' ');
 }
-
-function collapse(text: string | null | undefined): string {
-  return (text ?? '').replace(/\s+/g, ' ').trim();
-}
-
-/**
- * Canonical profile keys and the label synonyms that map to them. German ATS forms
- * (Personio, softgarden, SuccessFactors) use the German synonyms. The English
- * 'email' / 'e-mail' prefixes already open "E-Mail-Adresse" and "Email-Adresse"
- * (a hyphen ends the word), so email needs no German entry.
- */
-const FIELD_SYNONYMS: Record<string, string[]> = {
-  fullName: ['full name', 'your name', 'candidate name', 'applicant name'],
-  firstName: ['first name', 'given name', 'legal first name', 'preferred first name', 'vorname'],
-  lastName: ['last name', 'family name', 'surname', 'legal last name', 'nachname', 'familienname'],
-  email: ['email', 'e-mail', 'e-mail address', 'email address'],
-  phone: [
-    'phone',
-    'mobile',
-    'telephone',
-    'contact number',
-    'cell',
-    'telefon',
-    'telefonnummer',
-    'mobilnummer',
-    'handynummer',
-    'rufnummer',
-    'mobil',
-  ],
-  city: ['city', 'town', 'current location', 'location (city)', 'ort', 'wohnort', 'stadt'],
-  state: ['state', 'province', 'region', 'bundesland'],
-  country: ['country', 'land'],
-  postalCode: ['postal code', 'zip', 'zip code', 'pincode', 'pin code', 'plz', 'postleitzahl'],
-  linkedin: ['linkedin'],
-  github: ['github'],
-  portfolio: ['portfolio', 'website', 'personal site', 'webseite', 'homepage'],
-  // The candidate's own screening answers (internal/screeninganswers), not a
-  // boolean "are you authorized to work" question — that asks something the
-  // profile does not carry an answer to, so it stays unmatched rather than
-  // being fed a country list where a Yes/No answer belongs.
-  authorizedCountries: [
-    'which countries are you authorized to work in',
-    'in which countries are you authorized to work',
-    'in which countries are you legally authorized to work',
-    'countries you are authorized to work in',
-    'list the countries you are authorized to work in',
-  ],
-  visaSponsorshipNeeded: [
-    'will you now or in the future require sponsorship',
-    'do you now or will you in the future require sponsorship',
-    'will you require sponsorship',
-    'do you require visa sponsorship',
-    'do you need visa sponsorship',
-    'will you need visa sponsorship',
-  ],
-  desiredSalary: [
-    'desired salary',
-    'desired compensation',
-    'expected salary',
-    'salary expectation',
-    'salary expectations',
-    'what are your salary expectations',
-    'compensation expectations',
-    'gehaltsvorstellung',
-    'gehaltsvorstellungen',
-    'gehaltswunsch',
-    'gewünschtes gehalt',
-    'ihre gehaltsvorstellung',
-  ],
-  noticePeriod: [
-    'notice period',
-    'current notice period',
-    'what is your notice period',
-    'how much notice',
-    'kündigungsfrist',
-    'ihre kündigungsfrist',
-  ],
-  willingToRelocate: [
-    'are you willing to relocate',
-    'would you be willing to relocate',
-    'willing to relocate',
-    'are you open to relocating',
-    'open to relocation',
-    'umzugsbereitschaft',
-    'sind sie umzugsbereit',
-    'sind sie bereit umzuziehen',
-  ],
-  age18OrOlder: [
-    'are you at least 18 years',
-    'are you 18 years of age or older',
-    'are you over the age of 18',
-    'are you 18 or older',
-    'will you be 18 years of age',
-  ],
-};
-
-/**
- * The profile's authorized-countries field arrives as comma-joined ISO codes ("US, DE" —
- * screeninganswers.AutofillFields' wire format), but the question it answers is almost
- * always a checkbox group whose options are full country names ("United States"), matched
- * option-by-option against this value by `chosenOptions` below. Left as codes, the value
- * would never match any option and the group would silently stay unchecked.
- */
-export function formatAuthorizedCountries(codes: string): string {
-  if (!codes) return '';
-  return codes
-    .split(',')
-    .map((c) => c.trim())
-    .filter(Boolean)
-    .map(countryLabel)
-    .join(', ');
-}
-
-/**
- * Comparison form of a label: case-, whitespace- and required-marker-insensitive,
- * so "First Name *" and "first name" address the same control.
- */
-export function normalizeLabel(label: string): string {
-  return label.toLowerCase().replace(/\*/g, '').replace(/\s+/g, ' ').trim();
-}
-
-/**
- * Maps a control's label to a canonical profile key, or null when unknown.
- *
- * The synonym has to *open* the label, not merely appear in it. A real form asks
- * "Are you authorized to lawfully work for Roku in the country to which you are
- * applying?" — a substring match hands that Yes/No question the `country` key,
- * and the profile's country goes into a radio group. Anchoring at the front
- * still reads every label the live ATS forms produce, decorations and all
- * ("First Name (required) e85441b6"), because those trail the question rather
- * than lead it.
- */
-export function matchFieldKey(label: string): string | null {
-  const normalized = normalizeLabel(label);
-  if (!normalized) return null;
-  for (const [key, synonyms] of Object.entries(FIELD_SYNONYMS)) {
-    if (synonyms.some((s) => opensWith(normalized, s))) return key;
-  }
-  return null;
-}
-
-/** True when the label opens with this synonym and ends it at a word boundary. */
-function opensWith(label: string, synonym: string): boolean {
-  if (!label.startsWith(synonym)) return false;
-  // "Citywide preference" is not a `city` question. äöüß count as letters too, so
-  // German "Ort" does not claim "Ortsteil" nor "Land" claim "Landkreis".
-  return !/[a-z0-9äöüß]/.test(label.charAt(synonym.length));
-}
-
-/**
- * Whether the page is showing an application form at all.
- *
- * A careers page routinely keeps the application behind an "Apply" button and
- * shows a job-alert signup meanwhile — on Roku that signup asks for a first
- * name, a last name and an email, all required, which no count of fields can
- * distinguish from a short application. The resume upload can: see
- * `extractUploads`.
- */
-export function looksLikeApplication(uploads: { form: number }[]): boolean {
-  return uploads.length > 0;
-}
-
-/**
- * Narrows an observation to the one form the application is asking, identified
- * by the upload sitting in it. Without this a page carrying both an application
- * and a job-alert signup gets both written, since each has its own "Email".
- *
- * Both the frame and the form identify the group: an ATS iframe numbers its own
- * forms from zero, so the frame alone would merge two unrelated first forms.
- * When the upload names a group holding no questions — a page rendering them
- * outside its form element — every field is kept, because filling nothing at all
- * is the worse answer.
- */
-export function scopeToApplication<T extends { frame: number; form: number }>(
-  fields: T[],
-  uploads: { frame: number; form: number }[],
-): T[] {
-  const [target] = uploads;
-  if (!target) return fields;
-  const scoped = fields.filter((f) => f.frame === target.frame && f.form === target.form);
-  return scoped.length > 0 ? scoped : fields;
-}
-
-/**
- * The fills a profile justifies against the questions a page asks: each
- * recognised label paired with the value it maps to. A label the profile knows
- * nothing about, or knows only as a blank, is left for the user rather than
- * written over with an empty string.
- *
- * A repeated label is asked for once, and the one fill kept carries the frame and
- * form of the FIRST field that offered it — which is the application's, because
- * `scopeToApplication` has already narrowed the input to it. Keeping the repeats
- * would send a second fill addressed at whatever else carries the label. Pure over
- * its input; the page is not touched here.
- */
-export function planLabelFills(
-  fields: { label: string; frame?: number; form?: number }[],
-  values: Record<string, string>,
-): LabelFill[] {
-  const asked = new Set<string>();
-  const fills: LabelFill[] = [];
-  for (const { label, frame, form } of fields) {
-    const key = matchFieldKey(label);
-    const value = key ? (values[key] ?? '') : '';
-    if (!value || asked.has(normalizeLabel(label))) continue;
-    asked.add(normalizeLabel(label));
-    fills.push({ label, value, frame, form });
-  }
-  return fills;
-}
-
-/**
- * The fills a given frame should act on: those addressed to it by
- * `deterministicAutofill`, plus any fill naming no frame at all — a
- * `fill_simple` tool call, which is still offered to every frame as before
- * frame scoping existed. Used by the background relay to stop broadcasting a
- * frame-addressed fill to frames that do not hold the target control, which is
- * what let a same-labeled field in another frame's form get filled instead.
- */
-export function fillsForFrame(fills: LabelFill[], frame: number): LabelFill[] {
-  return fills.filter((f) => f.frame === undefined || f.frame === frame);
-}
-
-/**
- * Writes values into the questions carrying the given labels, in one pass:
- * the page is read and written inside a single synchronous walk, so a re-render
- * between an agent's observation and its fills cannot drift the target the way a
- * positional index does. Every requested fill gets an outcome; custom-widget
- * comboboxes are reported as deferred rather than written into.
- *
- * A fill naming a `form` only matches a question inside that form — the frame's
- * own signup form sharing a label ("Email") with the application form must not
- * absorb a fill meant for the other. A fill naming NONE matches only where the
- * label is carried once; where it is carried by several questions the fill is
- * refused as `ambiguous` and nothing is written, because from here the application
- * and the signup are indistinguishable and the wrong write is silent.
- */
-/** How long the borrowed outline stays on a revealed control. Long enough to
- *  follow by eye, short enough that a walk's next step does not overlap it. */
-const REVEAL_OUTLINE_MS = 600;
-
-/**
- * Brings one question into view: scrolls its first control to the middle of the
- * viewport, outlines it briefly, and focuses it when asked. Reports whether the
- * question was there at all — the panel says so rather than doing nothing.
- *
- * The outline is written as inline style and the previous inline style is put
- * back: this runs on a page freehire does not own, where an injected class could
- * collide with the ATS's own and a stylesheet would outlive our interest in the
- * element.
- */
-export function revealField(
-  doc: Document,
-  { label, form, focus = false, outlineMs = REVEAL_OUTLINE_MS }: RevealRequest,
-): boolean {
-  // Reveal reports one boolean — the panel either scrolled to the question or says
-  // it was not there — so every miss reads the same here, ambiguity included. That
-  // is right for a reveal: with nothing written, there is nothing to be wrong about,
-  // and highlighting one of two same-labeled questions would assert a choice this
-  // has no basis for.
-  const resolved = findQuestion(
-    unfillableLabels(doc),
-    collectQuestions(doc),
-    Array.from(doc.querySelectorAll('form')),
-    label,
-    form,
-  );
-  if ('miss' in resolved) return false;
-
-  const el = resolved.found.controls[0];
-  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-
-  // Revealing the same control twice inside the outline's lifetime must not make
-  // the outline the style we give back: the first reveal's record wins, and its
-  // timer is replaced rather than left to fire against a control the second
-  // reveal is still outlining.
-  const open = outlined.get(el);
-  if (open) clearTimeout(open.timer);
-  const borrowed = open ? open.borrowed : el.getAttribute('style');
-  el.style.outline = '2px solid #4f46e5';
-  el.style.outlineOffset = '2px';
-  const timer = setTimeout(() => {
-    outlined.delete(el);
-    if (borrowed === null) el.removeAttribute('style');
-    else el.setAttribute('style', borrowed);
-  }, outlineMs);
-  outlined.set(el, { borrowed, timer });
-
-  if (focus) el.focus({ preventScroll: true });
-  return true;
-}
-
-/** Controls currently wearing a borrowed outline, and the style each one had
- *  before it. Weak so a control the page discards is not held alive by it. */
-const outlined = new WeakMap<Element, { borrowed: string | null; timer: ReturnType<typeof setTimeout> }>();
 
 export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
   const questions = collectQuestions(doc);
@@ -712,7 +299,7 @@ type Resolution =
  * are indistinguishable from here, and writing into the wrong one is worse than
  * writing into neither.
  */
-function findQuestion(
+export function findQuestion(
   unfillable: () => Set<string>,
   questions: Question[],
   forms: HTMLFormElement[],
@@ -755,7 +342,7 @@ function findQuestion(
  * full passes synchronously in the content script — and a call whose fills all land
  * should not pay for it at all.
  */
-function unfillableLabels(doc: Document): () => Set<string> {
+export function unfillableLabels(doc: Document): () => Set<string> {
   let read: Set<string> | undefined;
   return () => (read ??= readUnfillableLabels(doc));
 }
@@ -819,7 +406,7 @@ function answerQuestion({ controls }: Question, value: string): boolean {
  * unambiguously.
  */
 function chosenOptions(controls: Fillable[], value: string): Fillable[] | null {
-  const byLongestLabel = [...controls].sort((a, b) => extractLabel(b).length - extractLabel(a).length);
+  const byLongestLabel = controls.toSorted((a, b) => extractLabel(b).length - extractLabel(a).length);
   const chosen: Fillable[] = [];
   let rest = value.trim();
 
@@ -827,7 +414,10 @@ function chosenOptions(controls: Fillable[], value: string): Fillable[] | null {
     const next = byLongestLabel.find((c) => startsWithOption(rest, extractLabel(c)));
     if (!next) return null;
     chosen.push(next);
-    rest = rest.slice(extractLabel(next).trim().length).replace(/^\s*,\s*/, '').trim();
+    rest = rest
+      .slice(extractLabel(next).trim().length)
+      .replace(/^\s*,\s*/, '')
+      .trim();
   }
   return chosen.length ? chosen : null;
 }
@@ -879,4 +469,25 @@ function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: strin
 function dispatchNative(el: Fillable): void {
   el.dispatchEvent(new Event('input', { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/** The autofill profile as the label-keyed values `planLabelFills` fills from. */
+export function profileToValues(p: AutofillProfile): Record<string, string> {
+  return {
+    fullName: p.full_name,
+    firstName: p.first_name,
+    lastName: p.last_name,
+    email: p.email,
+    phone: p.phone,
+    city: p.location,
+    linkedin: p.linkedin,
+    github: p.github,
+    portfolio: p.portfolio,
+    authorizedCountries: formatAuthorizedCountries(p.authorized_countries),
+    visaSponsorshipNeeded: p.visa_sponsorship_needed,
+    desiredSalary: p.desired_salary,
+    noticePeriod: p.notice_period,
+    willingToRelocate: p.willing_to_relocate,
+    age18OrOlder: p.age_18_or_older,
+  };
 }

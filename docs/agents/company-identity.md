@@ -147,6 +147,12 @@ the source renamed the employer, which is a judgement, not a form.
 wave like this one can run without dragging the unreviewed spelling backlog along with it.
 `--only-slugs <file>` narrows a wave to the whole groups holding a listed slug — how a few
 groups already read by a person are taken without the rest of the spelling backlog.
+`--exact-slugs <file>` plans over only the listed slugs and reads only their rows through the
+index. `--only-slugs` still reads the whole table first, which on 22.8M rows did not finish in 50
+minutes under prod's load (2026-11-03). The election sees only what is listed, so name every slug
+of each group; an unlisted member stays where it is until a later wave.
+A plan the registry contradicts (a retired canon, a slug or folded key already settled on another
+canon) is refused whole, because the election cannot see a frozen canon that was not listed.
 
 It reports by default; `--apply` writes and `--min-jobs` bounds a wave so the plan
 stays short enough to read. Jobs move in chunks whose statement selects rows still carrying the
@@ -172,9 +178,10 @@ retired slug would resurrect the duplicate the day it reopens.
 
 **The worker does not touch the search index, deliberately.** A push to the facet index costs
 90-180s regardless of batch size, so feeding a wave through `search_outbox` would be tens of
-hours of pushes — the shape behind the 2026-08-05 outage. The scheduled `freehire-reindexw`
-picks the re-key up; until it does, a merged company under-counts its jobs for a few hours and
-nothing 404s. Do not run a manual reindex, and do not set `REINDEX_DEDUP`.
+hours of pushes — the shape behind the 2026-08-05 outage. **Follow a wave (or a day of waves)
+with one by-hand rebuild**, `systemctl start --no-block freehire-reindexw.service`: no timer
+runs it since 2026-11-05, so nothing else carries the re-key into search. Until it runs, a
+merged company under-counts its jobs and nothing 404s. Do not set `REINDEX_DEDUP`.
 
 `jobs.company` is left alone by a merge. The source keeps sending "DollarTree", so the next
 crawl would put it back, and the display name comes from `companies.name` regardless.
@@ -193,6 +200,56 @@ where it hurts: a slug a merge has already retired drops to 0 in the index while
 rows stay in the table. Filtering on it made the leftovers of a merge invisible — 8,375 rows
 stranded on `jpmorganchase` after the first wave, permanently, because the better the merge
 worked the more reliably the remainder hid.
+
+## The registered seat
+
+`normalize.CloseSpacedForms` drops the town a Slovenian or Croatian register name carries after
+its form ("TERME KRKA, d.o.o., Novo mesto"), but only with two or more name words before the
+form. A one-word name keeps its seat because the seat is what separates it from a namesake:
+measured 2026-11-04, 3 of the 7 one-word names that met an existing company met a different
+employer (`SCAN, d.o.o., Preddvor` on the US SCAN), against 0 of 22 longer names. Merge a
+one-word employer's spellings by a curated entry or a moderator's approval.
+
+## Corrections people propose (freehire#3895)
+
+The fold and the curated list cannot reach every duplicate, and nothing in them knows that two
+DIFFERENT employers belong together. A signed-in visitor can propose either from a company page
+(`POST /companies/:slug/relations`), and a moderator decides it in `/moderation?tab=companies`.
+`internal/job/companyrelation` holds the rules.
+
+- **`same`: one employer under two slugs.** Approval writes the alias with reason `moderator`
+  (migration 0230, its own class so it can be reversed alone) and its folded key from the
+  retiring company's NAME, then moves the jobs and reconciles the companies rows. Both writers
+  go through `internal/job/companymerge` (record and repoint, re-key, reconcile), so a merge
+  wave and a moderator's approval run the same procedure. The difference is that this one
+  runs inside the request. It refuses
+  what would break the registry silently: a retiring slug that is already someone's canon, a
+  canon that is itself retired, a slug already merged elsewhere, and a folded key that already
+  has a different canon. Approvals take an advisory lock (`fhcr`), so two checked against the
+  same registry cannot together make a chain. The registry row commits before the move; a move
+  that fails part-way leaves the proposal in the queue as approved, and approving it again
+  resumes it. The folded key comes from the retiring slug's newest POSTING's spelling, as the
+  merge worker reads it, not from `companies.name`, which can be a curated display name.
+- **`subsidiary`: two employers, one owned by the other.** Novartis Slovenija is not Novartis,
+  and merging the two would show one company's jobs under another's name. So nothing moves.
+  `company_parents` links them, and each company page names the other (`parent`,
+  `subsidiaries` on `GET /companies/:slug`). It is one level deep: a parent never has a parent,
+  so no page walks a chain. A merge carries the retiring slug's subsidiaries to the canon, or to
+  the canon's own parent when it has one.
+- Neither table has a foreign key to `companies`, for the reason `company_slug_aliases` has none:
+  a decision has to outlive the company row it was made about.
+
+**The website is the merge signal sources can give us.** `sources.Job.CompanyWebsite` carries
+an employer's own site where a source states it in a structured field. EURES does for about a
+third of named employers in AT/BE/DE; its `legalID` was empty in every posting sampled. The
+pipeline writes it to `company_info.feed_website`, never to `website`: the curated fillers
+(Wikipedia, YC, an employer's claim) only fill a blank `website`, so a feed value there would
+block them forever, and the logo map and the company header trust `website` as curated.
+`cmd/report-company-website-twins` reads either key through `logodomain.Domain` (the logo map's
+own reader) and lists the companies that share a website host while their
+names fold apart: Forum Jobs' branches (all `forumjobs.be`), or a posting whose employer name
+is really a job title. It is a report and never a merge, because a job board's or a group's
+host can stand behind several employers. A person reads it and proposes the merges.
 
 ## Gotchas
 

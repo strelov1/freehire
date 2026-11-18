@@ -44,7 +44,19 @@ export interface CvAppearanceDefaults {
 /** The cover-letter surface's read shape. `present: false` is a pair never drafted — an empty
  *  state, not an error. `stale` reports that the model or the vacancy's language moved since;
  *  the letter stays readable, because it may already have been sent. */
+export interface CoverLetterEvidenceView {
+  employment_labels?: Record<string, string>;
+  revision: number;
+  explicit: boolean;
+  atom_ids: string[];
+  suggested_ids: string[];
+  available: import('./wire-types/experience').ExperienceAtom[];
+  invalid_ids: string[];
+}
+
 export interface CoverLetterView {
+  evidence_changed?: boolean;
+  evidence_blocked?: boolean;
   present: boolean;
   stale?: boolean;
   letter?: Letter;
@@ -91,6 +103,14 @@ export interface CvTailoredItem extends CvMeta {
   job_title: string;
   job_company: string;
   agent_session_id: string;
+}
+
+/** A base (non-tailored) CV in the bases list and the tailoring picker. `is_default` marks the
+ *  base used when a tailor request names none; `hand_edited` that the candidate changed it in the
+ *  editor (a new CV upload will not overwrite it). */
+export interface CvBaseItem extends CvMeta {
+  is_default: boolean;
+  hand_edited: boolean;
 }
 
 /**
@@ -280,7 +300,10 @@ export function dateRange(start?: PeriodDate, end?: PeriodDate, current?: boolea
 }
 
 const joinNonEmpty = (parts: (string | undefined)[], sep: string): string =>
-  parts.map((p) => (p ?? '').trim()).filter((p) => p !== '').join(sep);
+  parts
+    .map((p) => (p ?? '').trim())
+    .filter((p) => p !== '')
+    .join(sep);
 
 /** An experience role header: "Company | Location | Role (start – end)", blanks dropped. */
 export function experienceHeader(

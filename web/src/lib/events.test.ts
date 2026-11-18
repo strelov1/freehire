@@ -5,7 +5,15 @@ import { eventLabel, eventTone, KIND_LABEL } from './events';
 import type { TimelineEvent } from './types';
 
 const event = (kind: string, signal?: string): TimelineEvent =>
-  ({ id: 1, kind, signal, source: 'mail_gmail', observed: true, occurred_at: '2026-08-01T09:00:00Z', company_slug: 'acme' }) as TimelineEvent;
+  ({
+    id: 1,
+    kind,
+    signal,
+    source: 'mail_gmail',
+    observed: true,
+    occurred_at: '2026-08-01T09:00:00Z',
+    company_slug: 'acme',
+  }) as TimelineEvent;
 
 // The panel and the calendar render the same ledger. A kind the Go side knows and this map
 // does not would fall through to the sentence-cased fallback — which reads plausibly and

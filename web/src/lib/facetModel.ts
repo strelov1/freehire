@@ -1,117 +1,17 @@
 // The pure job-filter model: the facet/filter types, their URL <-> state
-// (de)serialization, and the per-value sign transitions. No SvelteKit or Svelte
+// (de)serialization; the per-value sign transitions are in facetSign.ts and the sort
+// order in jobSort.ts. No SvelteKit or Svelte
 // runes here, so this module is unit-testable in plain Node and importable from
 // both the reactive store (filters.ts) and the staged-edit surface. Param names
 // match what the search API (GET /api/v1/jobs/search) expects, including the
 // `<param>_exclude` and `<param>_mode=and` conventions.
 
-import { CLEARANCE_UNSPECIFIED, FACETS, type FacetSelection } from './facets';
-import { SENIORITY_VALUES } from './generated/contracts';
-import type { UserProfile } from './types';
-
-/** The three states a facet value can hold. */
-export type Sign = 'off' | 'include' | 'exclude';
-
-/** One facet's selection: the included values and the excluded values (a value is
- *  in at most one set), plus whether the *included* values are ANDed (match all)
- *  instead of ORed (match any). Excluded values are always ANDed — a job matches
- *  only if it has none of them. Include and exclude coexist in one facet, so a
- *  user can include some values and exclude others at the same time.
- *
- *  Structurally identical to (and aliased from) facets.ts's `FacetSelection`, the
- *  shape `FacetSection` reads — one canonical type so the two can't drift. */
-export type FacetState = FacetSelection;
-
-export interface JobFilters {
-  q: string;
-  /** Facet state keyed by the facet's query param (see FACETS). */
-  facets: Record<string, FacetState>;
-  visa: boolean;
-  /** Hide the postings of employers candidates have reported screening with an AI
-   *  interviewer. A boolean, not a set of levels like `clearance_levels`: that facet
-   *  answers several different people, while nobody searches FOR an AI screen — the
-   *  only useful question here is "not these".
-   *
-   *  Serialized as `ai_interview=false`, whose value names the FACET while this names
-   *  the INTENT. It has to be the negative of the positive rather than an equality,
-   *  because nothing in the index is ever written false. */
-  hideAIInterview: boolean;
-  /** Keep only postings whose ATS provider is one auto-apply can currently attempt
-   *  to fill and submit (Greenhouse, Lever, Ashby, Workable) — a best-effort
-   *  provider-eligibility signal, never a guarantee a real attempt would succeed.
-   *
-   *  Serialized as `auto_apply_available=true`, true-or-absent like
-   *  `hideAIInterview`'s underlying facet: nothing in the index is ever written
-   *  false, so turning this off must omit the param rather than write `=false`. */
-  autoApplyAvailable: boolean;
-  salaryMin: number | null;
-  /** Keep only jobs whose stated MAXIMUM salary is at most this (null = no ceiling).
-   *  Serialized as `salary_max`, which bounds a different attribute than `salaryMin`
-   *  does: together they keep the postings whose whole stated range fits inside
-   *  [salaryMin, salaryMax], not those that merely overlap it. A posting that states
-   *  only a floor carries no maximum, so any ceiling drops it. */
-  salaryMax: number | null;
-  /** Freshness: keep only jobs posted within the last N days (null = any age).
-   *  Serialized as `posted_within_days`; the backend turns it into a posted_ts
-   *  range filter relative to request time.
-   *
-   *  This bounds the date the SOURCE states. Some boards restate it on every crawl,
-   *  so a posting open for months can satisfy a three-day bound here — see
-   *  `openWithinDays`, which is the bound that cannot be rewritten from outside. */
-  postedWithinDays: number | null;
-  /** Keep only jobs first seen within the last N days (null = any age). Serialized as
-   *  `open_within_days`; the backend turns it into a created_ts range filter.
-   *
-   *  Independent of `postedWithinDays` and not a substitute for it: one asks how long
-   *  the posting has been in the catalogue, the other what date the board claims. Both
-   *  may be set, and they narrow the list together. */
-  openWithinDays: number | null;
-  /** Keep only jobs asking for at most this many years of experience (null = any).
-   *  `0` is a real bound — the jobs stating no prior experience is required — so
-   *  every read of this field must test for null, never for falsiness. */
-  experienceYearsMax: number | null;
-  /** Also keep the jobs that state no experience requirement — most of the
-   *  catalogue, which a bound drops otherwise. A modifier of the bound, not a filter:
-   *  written to the URL only beside one, and never counted on its own. */
-  experienceIncludeUnspecified: boolean;
-  /** Apply the experience bound only to the jobs that carry no seniority level, so a
-   *  labelled one passes it whatever years it states. Beside the included levels and
-   *  `seniorityIncludeUnspecified` this reads "one of these levels, or no level and
-   *  within the bound" — the entry-level profile rule (freehire#3655). A modifier of the
-   *  bound: written to the URL only beside one, and never counted on its own. */
-  experienceOnlySeniorityUnspecified: boolean;
-  /** Also keep the jobs that carry no seniority level — most of the catalogue, which
-   *  including a level drops otherwise. A modifier of the included levels: written to
-   *  the URL only beside one, and never counted on its own. */
-  seniorityIncludeUnspecified: boolean;
-  /** Feed ordering, or `null` for "the caller has not chosen one".
-   *
-   *  `relevance` is the engine's own ranking, `newest` is freshest first, `views` is
-   *  most-opened first, and `match` ranks by how well a vacancy's skills overlap the
-   *  signed-in caller's profile. The server degrades `match` to its default for anyone
-   *  it cannot serve it to — anonymous, no profile, no skills — so this is not gated
-   *  client-side at all: every ordering is offered, and the feed explains the degraded
-   *  one rather than withholding it.
-   *
-   *  The `null` matters because the DEFAULT depends on `q` (see defaultSortFor) while
-   *  `q` changes under the ordering's feet. Storing the resolved default instead would
-   *  make "the browse feed defaulted to newest" indistinguishable from "the caller
-   *  asked for newest", so typing into the search box would carry `sort=posted_at`
-   *  into a text search and date-order it — the exact outcome design.md rejects. Read
-   *  this through effectiveSort, never directly. */
-  sort: JobSort | null;
-  /** Restricts `q` to a named subset of the search's usual fields (title, company,
-   *  description, location) — set only by a title suggestion's `applyParts` call
-   *  (see `filtersWithParts`), so the count it displayed (an exact-title-match count)
-   *  approximates what searching actually returns instead of a much wider match
-   *  across all four fields. `null`, not an empty array, spells "no restriction" —
-   *  the same convention `salaryMin`/`postedWithinDays` use — and it is cleared
-   *  whenever `q` is set independently (typing, the header's Enter, its clear
-   *  button; see `FilterStore.setQuery`/`commitQuery`), so the restriction never
-   *  outlives the search it was scoped to. Mirrors `q_fields` in
-   *  internal/search/search/query_params.go. */
-  qFields: string[] | null;
-}
+import { CLEARANCE_UNSPECIFIED, FACETS, REGION_UNSPECIFIED, dynamicLabel } from './facets';
+import { facetSetSign } from './facetSign';
+import { defaultSortFor, effectiveSort, type JobSort } from './jobSort';
+import { REGION_LABELS } from './labels';
+import type { FacetState, JobFilters } from './jobFilters';
+export type { FacetState, JobFilters } from './jobFilters';
 
 /** Strips a title suggestion's Meilisearch quoting wrapper (see `apiSuggestions.ts`'s
  *  `quoteForTitleSearch`) from a query before showing it to a person: a filter chip,
@@ -122,36 +22,6 @@ export interface JobFilters {
  *  normalisation). */
 export function displayQuery(q: string): string {
   return q.length >= 2 && q.startsWith('"') && q.endsWith('"') ? q.slice(1, -1) : q;
-}
-
-/** The feed's ordering vocabulary. Deliberately short: this is not a general sort
- *  control (the API also accepts created_at and the salary bounds), it is the two
- *  orderings the endpoint defaults between, plus the profile-match feed and the
- *  most-opened feed. */
-export type JobSort = 'relevance' | 'newest' | 'views' | 'match';
-
-/** The ordering the endpoint applies when a request carries no `sort` at all:
- *  relevance under query text, posting date without it (see `searchSort` in
- *  internal/api/handler/search.go). The client mirrors it rather than restating it,
- *  so "the default" and "what the server does with no param" cannot drift — which is
- *  also why serializing the default means writing nothing. */
-export function defaultSortFor(q: string): JobSort {
-  return q ? 'relevance' : 'newest';
-}
-
-/** The ordering a filter set actually resolves to.
- *
- *  An unchosen ordering resolves to the contextual default, and an explicit
- *  `relevance` collapses to the browse default once the query is cleared — it has
- *  nothing left to rank against. `relevance` is the ONLY ordering that collapses:
- *  `views` ranks by a stored figure, so an emptied query leaves it perfectly
- *  servable and discarding the caller's choice there would be a bug, not a fallback.
- *  This is a pure function, not an effect that rewrites the stored value, because BOTH
- *  the sort control and filtersToParams need the answer and a second copy of the rule
- *  is a second answer. */
-export function effectiveSort(f: JobFilters): JobSort {
-  const sort = f.sort ?? defaultSortFor(f.q);
-  return sort === 'relevance' && !f.q ? 'newest' : sort;
 }
 
 /** The `sort` values the search endpoint accepts, keyed by our vocabulary. `relevance`
@@ -168,63 +38,6 @@ const SORT_PARAM: Partial<Record<JobSort, string>> = {
 const SORT_FROM_PARAM: Record<string, JobSort> = Object.fromEntries(
   Object.entries(SORT_PARAM).map(([sort, param]) => [param, sort as JobSort]),
 );
-
-const SORT_LABEL: Record<JobSort, string> = {
-  relevance: 'Relevance',
-  newest: 'Newest',
-  views: 'Most viewed',
-  match: 'Best match',
-};
-
-export interface SortOption {
-  value: JobSort;
-  label: string;
-}
-
-/** The orderings a caller can actually choose between, in display order.
- *
- *  `relevance` is the only conditional one: it ranks against query text, so without any
- *  there is nothing for it to rank. `newest`, `views` and `match` always apply.
- *
- *  `match` was conditional too — it needed a profile with skills. That hid the one
- *  ordering that answers "which of these suit me" from precisely the people who had not
- *  filled a profile in, and told them nothing. It is offered to everyone now, and the
- *  view explains what it needs when there is nothing to rank against (see
- *  matchSortNeedsSkills below).
- *
- *  It lives here, not in the view, for the reason effectiveSort does: it is pure, it
- *  decides what the user sees, and in the component nothing could test it. */
-export function sortOptionsFor(q: string): SortOption[] {
-  // Match is offered to everyone, including a viewer with no skills on file. Hiding it
-  // from them answered "why can I not sort by fit here?" with nothing at all — and it
-  // hid the reason to fill in a profile from exactly the people who have not. What they
-  // get instead is an explanation of what the ordering needs; see matchSortNeedsSkills.
-  const values: JobSort[] = [...(q ? (['relevance'] as const) : []), 'newest', 'views', 'match'];
-  return values.map((value) => ({ value, label: SORT_LABEL[value] }));
-}
-
-/** The option the control shows as selected.
- *
- *  Normally the effective ordering. `relevance` is the one that can be asked for and not
- *  offered — it ranks against query text, and a shared link can arrive without any — so
- *  the control then names what the server will ACTUALLY serve. A select whose value
- *  matches no option renders blank, which would put an empty control over a live
- *  ordering. */
-export function selectedSortFor(f: JobFilters): JobSort {
-  const sort = effectiveSort(f);
-  const offered = sortOptionsFor(f.q);
-  return offered.some((o) => o.value === sort) ? sort : defaultSortFor(f.q);
-}
-
-/** Whether the feed should explain that the match ordering has nothing to rank against.
- *
- *  Only when match is the ordering actually in force AND the viewer has no skills on
- *  file. The server degrades such a request to newest rather than refusing it, so the
- *  list still fills — and a visitor told nothing reads that as the sort being broken
- *  rather than as a profile they have not filled in yet. */
-export function matchSortNeedsSkills(f: JobFilters, hasSkills: boolean): boolean {
-  return effectiveSort(f) === 'match' && !hasSkills;
-}
 
 /** Splits every raw query value on comma and flattens the result, dropping
  *  empty fragments (a stray comma) — so a repeated key (`skills=go&skills=react`)
@@ -251,6 +64,10 @@ export function emptyFilters(): JobFilters {
     visa: false,
     hideAIInterview: false,
     autoApplyAvailable: false,
+    formerEmployers: false,
+    watchlist: false,
+    applyQuestionsMax: null,
+    minSkillMatch: null,
     salaryMin: null,
     salaryMax: null,
     postedWithinDays: null,
@@ -261,6 +78,10 @@ export function emptyFilters(): JobFilters {
     seniorityIncludeUnspecified: false,
     sort: null,
     qFields: null,
+    hideSeen: false,
+    workModeRemoteAnywhere: false,
+    workModeRemoteRegions: [],
+    workModeRemoteCountries: [],
   };
 }
 
@@ -282,6 +103,10 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.visa) p.set('visa_sponsorship', 'true');
   if (f.hideAIInterview) p.set('ai_interview', 'false');
   if (f.autoApplyAvailable) p.set('auto_apply_available', 'true');
+  if (f.formerEmployers) p.set('former_employers', 'true');
+  if (f.watchlist) p.set('watchlist', 'true');
+  if (f.applyQuestionsMax != null) p.set('apply_questions_max', String(f.applyQuestionsMax));
+  if (f.minSkillMatch != null) p.set('min_skill_match', String(f.minSkillMatch));
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.salaryMax != null) p.set('salary_max', String(f.salaryMax));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
@@ -301,9 +126,14 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   const sort = effectiveSort(f);
   const sortParam = SORT_PARAM[sort];
   if (sortParam && sort !== defaultSortFor(f.q)) p.set('sort', sortParam);
+  if (f.hideSeen) p.set('hide_seen', 'true');
+  if (f.workModeRemoteAnywhere) {
+    p.set('work_mode_remote_anywhere', 'true');
+    if (f.workModeRemoteRegions.length) p.set('work_mode_remote_regions', f.workModeRemoteRegions.join(','));
+    if (f.workModeRemoteCountries.length) p.set('work_mode_remote_countries', f.workModeRemoteCountries.join(','));
+  }
   return p;
 }
-
 
 /** The furthest back either date bound reaches, mirroring `maxWithinDays` in
  *  internal/search/search. A century is past anything in the catalogue; the ceiling is
@@ -341,6 +171,19 @@ function salaryBound(raw: string | null): number | null {
   return raw !== null && ATOI.test(raw) ? Number(raw) : null;
 }
 
+/** A non-negative whole number, or null for anything else, read the way the server
+ *  reads the params that TRIM first: `apply_questions_max` and `min_skill_match`. A
+ *  param the server reads untrimmed (`experience_years_max`) must not use this — see
+ *  `salaryBound`. The syntax is Go's Atoi (ATOI), not `Number`, which also reads `0x0`,
+ *  `1e1` and a blank string — `apply_questions_max=0x0` would otherwise become a bound
+ *  the server never applies. */
+function nonNegativeInt(raw: string | null): number | null {
+  const trimmed = raw?.trim() ?? '';
+  if (!ATOI.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return n >= 0 ? n : null;
+}
+
 /** Parse filters back from URL query params. Include and exclude are independent
  *  sets; if a value appears in both (a malformed or legacy link), exclude wins and
  *  it is dropped from include so a value carries exactly one sign. */
@@ -363,6 +206,11 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.visa = p.get('visa_sponsorship') === 'true';
   f.hideAIInterview = p.get('ai_interview') === 'false';
   f.autoApplyAvailable = p.get('auto_apply_available') === 'true';
+  f.formerEmployers = p.get('former_employers') === 'true';
+  f.watchlist = p.get('watchlist') === 'true';
+  f.applyQuestionsMax = nonNegativeInt(p.get('apply_questions_max'));
+  const minSkillMatch = nonNegativeInt(p.get('min_skill_match'));
+  f.minSkillMatch = minSkillMatch != null && minSkillMatch > 0 && minSkillMatch <= 100 ? minSkillMatch : null;
   readLegacyClearance(p, f.facets);
   f.salaryMin = salaryBound(p.get('salary_min'));
   f.salaryMax = salaryBound(p.get('salary_max'));
@@ -372,12 +220,10 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.openWithinDays = positiveDays(p.get('open_within_days'));
   // Zero IS a bound here — it selects the postings stating no prior experience is
   // required — so the guard admits it and rejects only what cannot be a year count.
-  // The presence test is on the TRIMMED string, not the raw one: `Number('')` and
-  // `Number(' ')` are both 0 while `' '` is truthy, so a naive check would turn
-  // `?experience_years_max=%20` in a shared link into the entry-level filter.
-  const rawYears = p.get('experience_years_max')?.trim() ?? '';
-  const years = Number(rawYears);
-  f.experienceYearsMax = rawYears !== '' && Number.isInteger(years) && years >= 0 ? years : null;
+  // The server does NOT trim this one (a bare atoiOK), so neither may we: `%203` is no
+  // bound there, and a trimmed read would show a chip over an unbounded list.
+  const experienceYearsMax = salaryBound(p.get('experience_years_max'));
+  f.experienceYearsMax = experienceYearsMax != null && experienceYearsMax >= 0 ? experienceYearsMax : null;
   f.experienceIncludeUnspecified = p.get('experience_include_unspecified') === 'true';
   f.experienceOnlySeniorityUnspecified = p.get('experience_only_seniority_unspecified') === 'true';
   f.seniorityIncludeUnspecified = p.get('seniority_include_unspecified') === 'true';
@@ -388,7 +234,57 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // disagree about what a stale link means. Reads `f.q`, so it must follow the line
   // that sets it.
   f.sort = SORT_FROM_PARAM[p.get('sort') ?? ''] ?? null;
+  f.hideSeen = p.get('hide_seen') === 'true';
+  // Read like the server reads it (trimmed, case-insensitive), so a hand-written TRUE
+  // does not silently drop a modifier the server would apply.
+  f.workModeRemoteAnywhere = p.get('work_mode_remote_anywhere')?.trim().toLowerCase() === 'true';
+  const list = (key: string) =>
+    p
+      .getAll(key)
+      .flatMap((v) => v.split(','))
+      .map((v) => v.trim())
+      .filter(Boolean);
+  if (f.workModeRemoteAnywhere) {
+    f.workModeRemoteRegions = list('work_mode_remote_regions');
+    f.workModeRemoteCountries = list('work_mode_remote_countries');
+  }
   return f;
+}
+
+/** Whether the remote-anywhere modifier actually changes the answer for this filter
+ *  set — the server's precondition (`remoteAnywhereActive` in
+ *  internal/search/search/query_filter.go), mirrored so the checkbox shows only when
+ *  it has something to do and the count only rises when it does. */
+export function appliesWorkModeRemoteAnywhere(f: JobFilters): boolean {
+  const wm = f.facets.work_mode;
+  if (!wm || wm.matchAll) return false; // the server ignores it under work_mode_mode=and
+  // Folded like the server's workModeValues, so `Remote` from a hand-written link
+  // shows the checkbox and chip whenever the server applies the modifier.
+  const modes = wm.include.map((m) => m.trim().toLowerCase());
+  const hasLocation = LOCATION_FACET_PARAMS.some((p) => (f.facets[p]?.include ?? []).some((v) => knownLocation(p, v)));
+  return modes.includes('remote') && modes.some(isPhysicalMode) && hasLocation;
+}
+
+/** The modifier's chip and checkbox text: where the remote arm reaches. */
+export function workModeRemoteLabel(f: JobFilters): string {
+  const reach = [
+    ...f.workModeRemoteRegions.map((v) => REGION_LABELS[v.trim().toLowerCase()] ?? v),
+    ...f.workModeRemoteCountries.map((v) => dynamicLabel('countries', v)),
+  ];
+  return reach.length ? `Remote within ${reach.join(', ')}` : 'Remote from anywhere';
+}
+
+/** The location facets that share one ORed group on the server (`locationFacets`). */
+const LOCATION_FACET_PARAMS = ['regions', 'countries', 'cities', 'metros'];
+
+export const isPhysicalMode = (m: string) => m === 'hybrid' || m === 'onsite';
+
+/** `regions` is the one closed location facet: like the server's
+ *  `hasLocationInclude`, an unknown region (a hand-edited link) is not a location. */
+function knownLocation(param: string, value: string): boolean {
+  if (param !== 'regions') return true;
+  const v = value.trim().toLowerCase();
+  return v === REGION_UNSPECIFIED || v in REGION_LABELS;
 }
 
 /** The security-clearance control used to be a three-state toggle serialized as
@@ -423,87 +319,19 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.visa) n += 1;
   if (f.hideAIInterview) n += 1;
   if (f.autoApplyAvailable) n += 1;
+  if (f.formerEmployers) n += 1;
+  if (f.watchlist) n += 1;
+  if (f.applyQuestionsMax != null) n += 1;
+  if (f.minSkillMatch != null) n += 1;
   // One control and one summary chip, so one count whichever ends are set.
   if (f.salaryMin != null || f.salaryMax != null) n += 1;
   if (f.postedWithinDays != null) n += 1;
   if (f.openWithinDays != null) n += 1;
   if (f.experienceYearsMax != null) n += 1;
+  // The modifier counts only when it changes the answer — off or inert, it narrows
+  // nothing and a badge for it would lie.
+  if (f.workModeRemoteAnywhere && appliesWorkModeRemoteAnywhere(f)) n += 1;
   return n;
-}
-
-/** Normalize a search query string to its canonical form (parse → re-serialize),
- *  so two filter sets that differ only in param order or stale/unknown params
- *  compare equal. Used to detect which saved search matches the current filters. */
-export function canonicalQuery(query: string): string {
-  return savedSearchQuery(filtersFromParams(new URLSearchParams(query)));
-}
-
-/** The saved-search / alert target: the filters as a canonical query string, WITHOUT
- *  the ordering. A named wrapper over filtersToParams so the saved-search call sites
- *  (SavedSearches, FilterSummary, CompanyFollowButton) express intent ("the comparable
- *  query for this filter set") rather than reaching for the raw serializer.
- *
- *  The ordering is dropped because a saved search is about WHICH jobs are in the set,
- *  and the ordering does not change that. The digest matcher agrees already: it reads a
- *  stored query for `q` and the filter only and orders by its own clock
- *  (internal/engage/notify/match.go), so two sets differing only by sort mail the same
- *  jobs. Keeping the sort in the key made them compare unequal anyway, so choosing an
- *  ordering marked the saved search it came from as dirty and saving again created a
- *  duplicate that delivered identical digests.
- *
- *  It serializes with the ordering UNCHOSEN rather than deleting the key afterwards:
- *  `null` is the type's own word for "no choice", and filtersToParams already writes
- *  nothing for it, so this cannot drift if the wire parameter is ever renamed. */
-export function savedSearchQuery(f: JobFilters): string {
-  return filtersToParams({ ...f, sort: null }).toString();
-}
-
-// ---- per-value sign transitions (pure: FacetState -> FacetState) ----
-
-/** Which set a value currently belongs to. */
-export function signOf(st: FacetState, v: string): Sign {
-  if (st.include.includes(v)) return 'include';
-  if (st.exclude.includes(v)) return 'exclude';
-  return 'off';
-}
-
-/** Force a value into the given state, removing it from the other set first. */
-export function facetSetSign(st: FacetState, v: string, sign: Sign): FacetState {
-  const include = st.include.filter((x) => x !== v);
-  const exclude = st.exclude.filter((x) => x !== v);
-  if (sign === 'include') include.push(v);
-  else if (sign === 'exclude') exclude.push(v);
-  return { ...st, include, exclude };
-}
-
-/** Pills interaction: off → include → exclude → off. */
-export function facetCycle(st: FacetState, v: string): FacetState {
-  const s = signOf(st, v);
-  return facetSetSign(st, v, s === 'off' ? 'include' : s === 'include' ? 'exclude' : 'off');
-}
-
-/** Select-dropdown interaction: pick adds to include; picking a selected value
- *  (in either set) clears it. */
-export function facetPick(st: FacetState, v: string): FacetState {
-  return facetSetSign(st, v, signOf(st, v) === 'off' ? 'include' : 'off');
-}
-
-/** Per-chip toggle: flip a value between include and exclude. */
-export function facetToggleSign(st: FacetState, v: string): FacetState {
-  return facetSetSign(st, v, signOf(st, v) === 'include' ? 'exclude' : 'include');
-}
-
-/** Token-input add: put a value into include; no-op on blank or a value already
- *  present in either set. */
-export function facetAdd(st: FacetState, raw: string): FacetState {
-  const v = raw.trim();
-  if (!v || signOf(st, v) !== 'off') return st;
-  return facetSetSign(st, v, 'include');
-}
-
-/** Remove a value from the facet entirely (both sets). */
-export function facetRemove(st: FacetState, v: string): FacetState {
-  return facetSetSign(st, v, 'off');
 }
 
 /** Apply everything a chosen suggestion names, in ONE filter change.
@@ -531,158 +359,4 @@ export function filtersWithParts(
     facets[param] = facetSetSign(facets[param] ?? emptyFacet(), value, 'include');
   }
   return { ...f, q, qFields: qFields?.length ? [...qFields] : null, facets };
-}
-
-// How many characters each profile list may contribute to a profile-derived query.
-//
-// Skills are the reason this exists: a profile may hold up to 200 skills and,
-// independently, up to 200 excluded skills (userprofile.go's own `maxSkills`), each up to
-// 64 characters — free text, with no dictionary check behind it. Fed straight through,
-// that pair could add close to 25,000 characters, blowing well past the saved-search
-// service's own length bound (internal/search/savedsearch's `maxQueryLen`, 4000) before
-// the rest of the filter got a chance to matter — the toggle this seeds
-// (ProfileAlertToggle) would then fail outright with a raw "query is too long" error.
-//
-// Excluded sources carry the SAME cap (maxExcludedCount == maxSkills), so they need a
-// budget for the same reason — but a much smaller one. A source key is a crawl adapter's
-// name, ~12 characters, and a person avoids a handful rather than a career's worth; 200
-// characters covers a dozen and keeps the total comfortably clear of maxQueryLen.
-//
-// Excluded companies share that cap and get a budget sized the same way. A company slug
-// (normalize.CompanySlug) runs ~10-20 characters and the list is a short blocklist of
-// employers someone has ruled out, so 400 characters covers twenty-odd. The
-// maximal-profile test in profileFilters.test.ts holds all four lists together under
-// maxQueryLen.
-const SKILL_CHAR_BUDGET = 800;
-const SOURCE_CHAR_BUDGET = 200;
-const COMPANY_CHAR_BUDGET = 400;
-
-/** Values from `values`, in the profile's own order, until `maxChars` is spent.
- *
- *  Bounded by total character count rather than item count: a real pick from the skill
- *  autocomplete runs ~8 characters, so the budget comfortably covers a rich real-world
- *  profile while still capping the free-text worst case. Stops at a whole value rather
- *  than truncating one mid-string — half a source key filters on a source that does not
- *  exist. */
-function charBudget(values: string[], maxChars: number): string[] {
-  const out: string[] = [];
-  let used = 0;
-  for (const raw of values) {
-    const v = raw.trim();
-    if (!v) continue;
-    const cost = v.length + (out.length > 0 ? 1 : 0); // +1 for the joining comma
-    if (used + cost > maxChars) break;
-    out.push(v);
-    used += cost;
-  }
-  return out;
-}
-
-/** The most years of experience an entry-level-only profile should be offered, or null
- *  when any selected level is past junior — from middle up, years stated on a posting say
- *  little the level does not, and a bound would only drop real matches. Interns get one
- *  year rather than zero: "up to a year" is common wording on an internship. */
-const ENTRY_EXPERIENCE_CAP: Partial<Record<string, number>> = { intern: 1, junior: 2 };
-
-function entryExperienceCap(seniorities: string[]): number | null {
-  if (seniorities.length === 0) return null;
-  let cap = 0;
-  for (const level of seniorities) {
-    const levelCap = ENTRY_EXPERIENCE_CAP[level];
-    if (levelCap == null) return null;
-    cap = Math.max(cap, levelCap);
-  }
-  return cap;
-}
-
-/** Build a fresh filter set seeded from a user profile — the reset-and-seed behind
- *  "Apply my profile". Specializations become `category` values, skills become included
- *  `skills` values, and excluded skills become EXCLUDED `skills` values (rendering
- *  `skills_exclude=…` → `skills != "X"`). A skill that is somehow both wanted and avoided
- *  stays wanted (include wins), mirroring the server's overlap rule so the two never
- *  self-cancel. The optional location block flattens into the location facets: work_modes → `work_mode`;
- *  regions from the remote reach ∪ relocation targets; countries from the remote reach ∪
- *  base ∪ relocation targets; cities from the base ∪ relocation targets; and `relocation`
- *  staged as supported+required when the user is open to relocating. The flatten is lossy
- *  (base vs relocation merge) — the filter is a convenience narrowing of "places relevant to
- *  me". Trimming/dedup come free from facetAdd, so unions of overlapping lists are safe.
- *  Avoided SOURCES and COMPANIES become excluded `source` and `company_slug` values; unlike
- *  skills they have no wanted counterpart, so there is no overlap rule to apply. Every list
- *  is bounded by `charBudget` before seeding — see its own comment. */
-export function filtersFromProfile(profile: UserProfile): JobFilters {
-  const seed = (values: string[]) => values.reduce(facetAdd, emptyFacet());
-  const f = emptyFilters();
-  f.facets.category = seed(profile.specializations);
-  // The selected levels are included, together with the postings that carry no level at
-  // all — most of the catalogue, which an include alone would drop. Including rather than
-  // excluding the rest is what makes "Apply my profile" show the levels the user picked
-  // (freehire#3397: an intern saw seven red excludes and an unticked Intern, and read it as
-  // the profile not applying). An empty list, or every level, imposes no restriction.
-  const levels = profile.seniorities ?? [];
-  if (levels.length && !SENIORITY_VALUES.every((v) => levels.includes(v))) {
-    f.facets.seniority = seed(SENIORITY_VALUES.filter((v) => levels.includes(v)));
-    f.seniorityIncludeUnspecified = true;
-    // The level include cannot judge a posting with no level, and for someone after an
-    // entry role that is most of what it lets through — an intern's alerts were 19 of 19
-    // unlabelled, ten of them asking for 2-5 years (freehire#3397). The posting's stated
-    // years are the backstop for THOSE postings only: one labelled with a picked level
-    // passes whatever it states, since most internships state no years at all (95,645
-    // labelled intern, 4,071 of them stating at most a year — prod, 2026-10-26). An
-    // unlabelled posting must state a bound within the cap; keeping the unstated ones too
-    // was what flooded the alert with 2.6M postings (freehire#3655).
-    const cap = entryExperienceCap(profile.seniorities);
-    if (cap != null) {
-      f.experienceYearsMax = cap;
-      f.experienceOnlySeniorityUnspecified = true;
-    }
-  }
-  // Skills: wanted → include, avoided → exclude. Only stage an exclude for a token not
-  // already wanted (signOf === 'off'), so a stray overlap keeps the wanted value.
-  f.facets.skills = charBudget(profile.excluded_skills ?? [], SKILL_CHAR_BUDGET).reduce(
-    (st, raw) => {
-      const v = raw.trim();
-      return v && signOf(st, v) === 'off' ? facetSetSign(st, v, 'exclude') : st;
-    },
-    seed(charBudget(profile.skills, SKILL_CHAR_BUDGET)),
-  );
-
-  // Sources and companies: avoided → excluded. Neither has a wanted counterpart, so there is
-  // nothing to reconcile — every value goes in as an exclude. Until each list was seeded
-  // here it was stored and editable in the profile's Avoid card, yet read by nobody: a
-  // control that changed no result anywhere.
-  const seedExcluded = (values: string[], maxChars: number) =>
-    charBudget(values, maxChars).reduce((st, v) => facetSetSign(st, v, 'exclude'), emptyFacet());
-  f.facets.source = seedExcluded(profile.excluded_sources ?? [], SOURCE_CHAR_BUDGET);
-  f.facets.company_slug = seedExcluded(profile.excluded_companies ?? [], COMPANY_CHAR_BUDGET);
-
-  const loc = profile.location_preferences;
-  if (loc) {
-    // Relocation targets only count when the user is actually open to relocating — `open`
-    // gates the whole relocation contribution (targets and the relocation facet alike).
-    const reloc = loc.relocation.open ? loc.relocation : { regions: [], countries: [], cities: [] };
-    // `base` says where the user LIVES; the facets say where they want the WORK. Those
-    // coincide only for someone who accepts physical work — the job has to be commutable
-    // — so base is folded in for them and withheld from everyone else. Seeding a
-    // remote-only candidate's home country as a job-country filter would narrow their
-    // search to the one country they least need the job to be in.
-    //
-    // This gate used to be implicit: the profile form collected `base` from on-site and
-    // hybrid users only, and dropped it on save for everyone else. Now that the form asks
-    // every user where they are, the gate has to be stated here instead.
-    const wantsPhysical = (loc.work_modes ?? []).some((m) => m === 'onsite' || m === 'hybrid');
-    const base = wantsPhysical ? loc.base : {};
-    f.facets.work_mode = seed(loc.work_modes ?? []);
-    f.facets.regions = seed([...(loc.remote.regions ?? []), ...(reloc.regions ?? [])]);
-    f.facets.countries = seed([
-      ...(loc.remote.countries ?? []),
-      ...(base.country ? [base.country] : []),
-      ...(reloc.countries ?? []),
-    ]);
-    f.facets.cities = seed([
-      ...(base.city ? [base.city] : []),
-      ...(reloc.cities ?? []),
-    ]);
-    if (loc.relocation.open) f.facets.relocation = seed(['supported', 'required']);
-  }
-  return f;
 }

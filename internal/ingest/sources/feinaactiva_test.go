@@ -47,7 +47,7 @@ func (f *feinaactivaFake) GetJSON(_ context.Context, u string, v any) error {
 
 func newTestFeinaActiva(f *feinaactivaFake) feinaactiva {
 	s := NewFeinaActiva(f).(feinaactiva)
-	s.limiter = noWait{}
+	s.http = f
 	return s
 }
 

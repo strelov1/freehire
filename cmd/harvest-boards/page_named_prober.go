@@ -8,11 +8,10 @@ import (
 )
 
 // pageNamedProber validates a board by running its source adapter, as adapterProber does, and
-// then reads the employer's name from one page of the board — for a platform whose adapter takes
-// the employer from the catalogue row rather than the platform, so the plain fallback would store
-// the board id as the company (a "walnutfolks.zohorecruit.in" employer; see cmd/
-// backfill-company-names for what such rows cost to repair afterwards). The name is also what
-// lets a seed's company claim reject a guessed board that belongs to someone else.
+// then reads the employer's name from one page of the board. It is for a platform whose adapter
+// takes the employer from the catalogue row, so the plain fallback would store the board id as
+// the company (see cmd/backfill-company-names for the repair cost). The name also lets a seed's
+// company claim reject a guessed board that belongs to someone else.
 type pageNamedProber struct {
 	adapter adapterProber
 	// nameURL is the page that names the employer; name reads it from the parsed document.
@@ -41,9 +40,8 @@ func (p pageNamedProber) probe(ctx context.Context, c httpClient, board string) 
 }
 
 // Darwinbox's listing API sits behind a Cloudflare edge only the adapter's Chrome-fingerprint
-// transport passes, which is why it is probed through the adapter at all. The portal page, served
-// to a non-browser client as a shell, names the tenant's legal entity in its <title> ("Ather
-// Energy Limited"); the API names nobody.
+// transport passes, hence the adapter probe. The portal page, served to a non-browser client as
+// a shell, names the tenant's legal entity in its <title>; the API names nobody.
 var darwinboxProber = newPageNamedProber("darwinbox",
 	func(board string) string { return "https://" + board + "/ms/candidatev2/main/careers/allJobs" },
 	pageTitle)

@@ -39,8 +39,20 @@ func insertNotifyIntegrationUser(t *testing.T, pool *pgxpool.Pool, email string)
 	t.Helper()
 	var id int64
 	if err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (email) VALUES ($1) RETURNING id`, email).Scan(&id); err != nil {
+		`INSERT INTO users (email, email_verified) VALUES ($1, true) RETURNING id`, email).Scan(&id); err != nil {
 		t.Fatalf("insert user: %v", err)
+	}
+	// Pin the hourly interval: the no-row default is daily at 09:00 local (migration
+	// 0246), which would make these delivery tests depend on the wall clock.
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO notification_settings (user_id, digest_frequency) VALUES ($1, 'interval')`, id); err != nil {
+		t.Fatalf("insert notification settings: %v", err)
+	}
+	// Faster than daily is a paid benefit (free_daily_integration_test.go): these users are Pro
+	// so the delivery tests keep exercising the interval schedule they pin above.
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE users SET pro_until_granted = now() + interval '10 years' WHERE id = $1`, id); err != nil {
+		t.Fatalf("grant plan: %v", err)
 	}
 	return id
 }

@@ -10,11 +10,11 @@ import (
 )
 
 // Align rewrites doc so skill wording matches the spellings the vacancy used (canonical →
-// spelling, from skilltag.PreferredFromText) and reports whether anything changed. Skill
-// chips and experience stacks are matched through the full alias tables; summary and
-// bullet prose only through spellings that cannot be ordinary English. Same-skill
-// duplicates the rewrite creates are collapsed. Pure, deterministic and idempotent; no
-// LLM. The input is not mutated — a rewritten copy is returned. preferred may be nil.
+// spelling, from skilltag.PreferredFromText) and reports whether anything changed. Chips and
+// experience stacks match through the full alias tables; summary and bullet prose only
+// through spellings that cannot be ordinary English. Same-skill duplicates the rewrite
+// creates are collapsed. Pure, deterministic, idempotent, no LLM; the input is not mutated.
+// preferred may be nil.
 func Align(doc Document, preferred map[string]string) (Document, bool) {
 	if len(preferred) == 0 {
 		return doc, false
@@ -53,11 +53,9 @@ func alignSkillGroups(groups []SkillGroup, preferred map[string]string) []SkillG
 	return out
 }
 
-// alignChips rewrites each chip that resolves to a canonical the vacancy spelled its own
-// way, then drops the duplicates that rewrite can create — two spellings of one skill
-// become one chip, not two identical ones. A chip already in the vacancy's spelling keeps
-// the candidate's own casing: matching its wording is the point, matching its shouting is
-// not.
+// alignChips rewrites each chip that resolves to a canonical the vacancy spelled its own way,
+// then drops the duplicates that creates. A chip already in the vacancy's spelling keeps the
+// candidate's casing.
 func alignChips(items []string, preferred map[string]string) []string {
 	if len(items) == 0 {
 		return items
@@ -96,10 +94,9 @@ func alignProseList(items []string, rules []proseRule) []string {
 // ASCII-lowercase, so it can be compared against asciiLower(text) at the same offsets.
 type proseRule struct{ from, to string }
 
-// proseRules flattens preferred into the replacements a single pass over prose applies.
-// The order is total and derived only from the rules themselves, so the map's iteration
-// order cannot reach the output; longest-first keeps a short spelling from matching inside
-// a longer one ("node" inside "node.js").
+// proseRules flattens preferred into the replacements a single pass over prose applies. The
+// order is derived only from the rules, so map iteration cannot reach the output; longest
+// first keeps "node" from matching inside "node.js".
 func proseRules(preferred map[string]string) []proseRule {
 	var rules []proseRule
 	for canonical, want := range preferred {
@@ -108,10 +105,8 @@ func proseRules(preferred map[string]string) []proseRule {
 		}
 		for _, spelling := range skilltag.ProseSurfaces(canonical) {
 			for _, from := range separatorVariants(strings.ToLower(spelling)) {
-				// Nothing to do when the prose already reads the way the vacancy writes it —
-				// and rewriting it anyway would only impose the vacancy's casing. Checked per
-				// separator spelling, so "infrastructure-as-code" is still rewritten when the
-				// vacancy spells it with spaces.
+				// Skip prose already in the vacancy's spelling (rewriting would only impose its casing),
+				// checked per separator spelling so "infrastructure-as-code" still rewrites to a spaced form.
 				if strings.EqualFold(from, want) {
 					continue
 				}
@@ -129,9 +124,8 @@ func proseRules(preferred map[string]string) []proseRule {
 	return rules
 }
 
-// separatorVariants spells a multi-word term the three ways a CV writes it. The vacancy
-// side gets this for free from skilltag's separator-insensitive phrase matcher; prose
-// rewriting compares bytes, so it needs the spellings up front.
+// separatorVariants spells a multi-word term the three ways a CV writes it; prose rewriting
+// compares bytes, so it needs them up front.
 func separatorVariants(spelling string) []string {
 	if !strings.Contains(spelling, " ") {
 		return []string{spelling}
@@ -143,11 +137,9 @@ func separatorVariants(spelling string) []string {
 	}
 }
 
-// replaceProse applies rules in one left-to-right pass. What a rule writes is never
-// re-examined: the scan continues after the matched SOURCE span, so no replacement can
-// feed another rule. That is what makes a second alignment a no-op — the sequential
-// replace it replaces turned "REST API" into "REST APIs APIs", and then into
-// "REST APIs APIs APIs" on the next autopilot run.
+// replaceProse applies rules in one left-to-right pass. The scan continues after the matched
+// SOURCE span, so no replacement feeds another rule; that keeps a second alignment a no-op
+// (sequential replace turned "REST API" into "REST APIs APIs").
 func replaceProse(text string, rules []proseRule) string {
 	if text == "" || len(rules) == 0 {
 		return text
@@ -179,12 +171,9 @@ func ruleAt(text, lower string, i int, rules []proseRule) (proseRule, bool) {
 	return proseRule{}, false
 }
 
-// asciiLower lowercases the ASCII letters and leaves every other byte untouched, so the
-// result indexes byte-for-byte into its source. strings.ToLower does not: it is not
-// length-preserving (U+023A lowercases to a rune one byte longer), and mixing its offsets
-// with the original string is how a name written in Turkish silently disabled the rest of
-// a bullet — or ran off the end of it. Curated spellings are ASCII, so folding only ASCII
-// loses no match.
+// asciiLower lowercases only ASCII letters so the result indexes byte-for-byte into its
+// source. strings.ToLower is not length-preserving (U+023A grows a byte), and mixing its
+// offsets with the original once disabled the rest of a bullet or ran off its end.
 func asciiLower(s string) string {
 	b := []byte(s)
 	for i := 0; i < len(b); i++ {

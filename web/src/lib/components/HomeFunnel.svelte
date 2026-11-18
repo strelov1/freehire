@@ -10,8 +10,7 @@
 
   import { PIPELINE_BANDS } from '#lib/pipeline.js';
 
-  let { applications, buckets }: { applications: number; buckets: Record<string, number> } =
-    $props();
+  let { applications, buckets }: { applications: number; buckets: Record<string, number> } = $props();
 
   // The bands are the product's own, shared with the real Pipeline tab. The numbers below
   // them are illustrative, but the words must not be: a landing page naming a stage the
@@ -46,9 +45,7 @@
   }
 
   const model = $derived.by(() => {
-    const visible = VOCAB.map((b) => ({ ...b, count: buckets[b.key] ?? 0 })).filter(
-      (b) => b.count > 0,
-    );
+    const visible = VOCAB.map((b) => ({ ...b, count: buckets[b.key] ?? 0 })).filter((b) => b.count > 0);
     if (applications <= 0 || visible.length === 0) {
       return { height: HH + PAD * 2, barY: PAD, ribbons: [] as Ribbon[] };
     }
@@ -86,12 +83,7 @@
   );
 </script>
 
-<svg
-  viewBox="0 0 {W} {model.height}"
-  class="w-full"
-  role="img"
-  aria-label={chartLabel}
->
+<svg viewBox="0 0 {W} {model.height}" class="w-full" role="img" aria-label={chartLabel}>
   <!-- Source bar: all applications -->
   <rect x={LX} y={model.barY} width={LW} height={HH} rx="3" class="fill-foreground" />
 

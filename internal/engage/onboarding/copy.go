@@ -13,14 +13,13 @@ type spec struct {
 	preheader string
 	heading   string
 	body      *template.Template
-	// text builds the plain-text alternative. It takes the site origin because the
-	// text body spells its links out rather than hiding them behind labels.
+	// text builds the plain-text alternative; it takes the site origin because links
+	// are spelled out.
 	text func(baseURL string) string
 }
 
-// body parses one mail's markup with the shell's sign-off appended. It is appended
-// here rather than pasted into five templates: these are letters from a person, so
-// the signature is a property of the sequence, not of any one letter.
+// body parses one mail's markup with the shell's sign-off appended, since the
+// signature belongs to the sequence, not to one letter.
 func body(name, markup string) *template.Template {
 	return template.Must(mailtpl.Partials().New(name).Parse(markup + "\n" + `{{template "signature" .}}`))
 }
@@ -95,10 +94,9 @@ var specs = map[Step]spec{
 		},
 	},
 
-	// The extension letter claims only what the feature page claims — reads the page,
-	// scores it against the CV, fills the form. It is the one letter in the sequence
-	// about software the reader has to install, and an overstated sentence here is
-	// found out within a minute of installing it.
+	// The extension letter claims only what the feature page claims: reads the page,
+	// scores it against the CV, fills the form. Software the reader installs exposes an
+	// overstatement immediately.
 	StepExtension: {
 		subject:   "It fills out the application for you",
 		preheader: "It reads the posting, scores it against your CV, and fills the form from your profile.",
@@ -169,10 +167,9 @@ var specs = map[Step]spec{
 	},
 
 	// The tailoring letter claims only what the feature page claims: it starts from a
-	// match analysis, reframes what the candidate already has, asks about what they do
-	// not, and exports a PDF. "Invents nothing" is the promise the page is built on, so
-	// it is the promise the letter leads with. It names Pro plainly — a reader who
-	// clicks through to a paywall they were not told about has been tricked, not sold.
+	// match analysis, reframes what the candidate has, asks about what they do not, and
+	// exports a PDF. It leads with "invents nothing" and names Pro plainly, so nobody
+	// clicks through to an unannounced paywall.
 	StepTailor: {
 		subject:   "One CV for every job is why you don’t hear back",
 		preheader: "Tailor your CV to one vacancy — without inventing a line.",
@@ -204,12 +201,10 @@ var specs = map[Step]spec{
 		},
 	},
 
-	// The interview-buddies letter claims only what the feature's landing claims. It is
-	// honest about the limits of the anonymity: others see the handle, the role titles
-	// as written, and the progress through each application — never the name, email or
-	// CV. It says the feature is free, and it is skipped for accounts that already
-	// joined (or left), since explaining a feature to its own members reads as nobody
-	// looking.
+	// The interview-buddies letter claims only what the feature's landing claims. It
+	// states the anonymity limits: others see the handle, the role titles as written
+	// and the progress per application, never the name, email or CV. It says the
+	// feature is free, and is skipped for accounts that already joined (or left).
 	StepBuddies: {
 		subject:   "Someone just had the interview you’re preparing for",
 		preheader: "Find people applying to the same companies — anonymously, for free.",

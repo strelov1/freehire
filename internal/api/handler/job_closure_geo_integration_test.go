@@ -37,10 +37,10 @@ func TestGetJob_ShowsDuplicateClosureGeography(t *testing.T) {
 		if err != nil {
 			t.Fatalf("seed %s: %v", extID, err)
 		}
-		if _, err := pool.Exec(ctx, "UPDATE jobs SET countries = $2 WHERE id = $1", row.Job.ID, []string{country}); err != nil {
+		if _, err := pool.Exec(ctx, "UPDATE jobs SET countries = $2 WHERE id = $1", row.ID, []string{country}); err != nil {
 			t.Fatalf("set countries %s: %v", extID, err)
 		}
-		return row.Job.ID
+		return row.ID
 	}
 	canon := seed("1", "d365-black-pen-aaaaaaaa", "sz")
 	for i, cc := range []string{"eg", "il"} {
@@ -52,7 +52,7 @@ func TestGetJob_ShowsDuplicateClosureGeography(t *testing.T) {
 
 	h := &jobsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/:slug", h.GetJob)
+	mountJobsContract(app, h, middleware{})
 	resp, err := app.Test(httptest.NewRequestWithContext(ctx, "GET", "/api/v1/jobs/d365-black-pen-aaaaaaaa", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)

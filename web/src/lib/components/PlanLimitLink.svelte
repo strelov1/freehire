@@ -56,5 +56,7 @@
     {proMonthlyLabel ? format(s.upgradeWithPrice, { price: `${proMonthlyLabel}/mo` }) : s.upgrade}
   </Button>
 {:else}
-  <a href={planHref} target="_blank" rel="noopener noreferrer" class="text-xs font-medium underline underline-offset-4">{s.seeYourPlan}</a>
+  <a href={planHref} target="_blank" rel="noopener noreferrer" class="text-xs font-medium underline underline-offset-4"
+    >{s.seeYourPlan}</a
+  >
 {/if}

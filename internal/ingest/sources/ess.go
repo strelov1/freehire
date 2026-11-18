@@ -17,9 +17,9 @@ import (
 
 // ess adapts the job search of the Employment Service of Slovenia (Zavod Republike Slovenije za
 // zaposlovanje, www.ess.gov.si): every vacancy a Slovenian employer registers with the public
-// service, ~3.6k open at a time, every trade, mostly local employers and the public sector. It
-// is boardless and an aggregator — the employer is read per posting. See the "ESS traps" section
-// of AGENTS.md for the measurements behind each rule.
+// service, every trade, mostly local employers and the public sector. It is boardless and an
+// aggregator: the employer is read per posting. See the "ESS traps" section of AGENTS.md for the
+// measurements behind each rule.
 //
 // The site's search page is an Angular app over a public JSON API behind a 3scale gateway. The
 // listing endpoint pages the whole Slovenian catalogue with each vacancy's title, employer,
@@ -51,18 +51,18 @@ const (
 	// panel also needs the /#/pdm/<id> fragment appended in essBaseJob; idp alone opens the list.
 	essPostingURL = "https://www.ess.gov.si/iskalci-zaposlitve/iskanje-zaposlitve/iskanje-dela/?idp="
 
-	// essPageSize is the listing page size. The API caps a page at 2,000; a page of 500 answered
-	// in ~8 s (2026-10-29), so the long-timeout client is used and a full walk is 8 pages.
+	// essPageSize is the listing page size. The API caps a page at 2,000; 500 answers slowly, so the
+	// long-timeout client is used.
 	essPageSize = 500
-	// essMaxPages is a ceiling far past the catalogue's size (~3.6k = 8 pages); reaching it
-	// before the listing's end fails the crawl rather than accepting a truncated walk.
+	// essMaxPages is a ceiling far past the catalogue's size; reaching it before the listing's
+	// end fails the crawl rather than accepting a truncated walk.
 	essMaxPages = 40
 	// essSortNewest is the listing's "Po datumu objave" order (newest first); "0" is relevance.
 	essSortNewest = 7
 	// essITField is the occupational field "Računalništvo, programiranje, IT".
 	essITField = "0020"
 	// essPartTime is the working-time filter "Krajši delovni čas"; "1" is full time. The two
-	// partition the catalogue exactly (3,419 + 202 = 3,621 on 2026-10-29).
+	// partition the catalogue exactly.
 	essPartTime = "2"
 
 	// essRequestInterval paces every request of a run, listing and detail alike, at one a
@@ -70,9 +70,8 @@ const (
 	essRequestInterval = time.Second
 	essDetailWorkers   = 2
 	// essMaxNewPerRun bounds the detail requests one run buys: 1,200 at one a second is 20
-	// minutes, plus ~10 listing requests and the writes that follow, inside the scheduler's
-	// default 2,400 s crawl budget. ~170 vacancies arrive each weekday, so a cold catalogue
-	// (~3.6k) is taken in three runs, newest first, and every later run keeps up.
+	// minutes, plus the listing and the writes that follow, inside the scheduler's default 2,400 s
+	// crawl budget. A cold catalogue is taken over a few runs, newest first, and later runs keep up.
 	essMaxNewPerRun   = 1200
 	essDeadlineMargin = 5 * time.Minute
 
@@ -99,6 +98,9 @@ func (ess) boardless() {}
 
 // Thousands of employers post here, each named per vacancy.
 func (ess) aggregator() {}
+
+// One country's market (see nationalMarket).
+func (ess) marketCountries(CompanyEntry) []string { return []string{"si"} }
 
 // essSearchRequest is the listing query the search page posts. Every filter must be present: an
 // absent array is not read as "no filter", and the sort must be a number.
@@ -209,7 +211,7 @@ func (s ess) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(extern
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -277,8 +279,8 @@ func (s ess) list(ctx context.Context) ([]essPosting, error) {
 		}
 	}
 	var partTime map[string]bool
-	// The slice normally holds ~200 vacancies: an empty one is a fault, and reading it would call
-	// every vacancy full time.
+	// The slice normally holds a couple of hundred vacancies: an empty one is a fault, and reading
+	// it would call every vacancy full time.
 	if pt, err := s.walk(ctx, essSlice{workingTime: essPartTime}); err != nil || len(pt) == 0 {
 		log.Printf("ess: part-time slice failed or came back empty; no working time is stated this run: %v", err)
 	} else {
@@ -413,7 +415,36 @@ func essJob(d essDetail, p essPosting) (Job, bool) {
 		j.SalaryCurrency = "EUR"
 		j.SalaryPeriod = "month"
 	}
+	// prijavaDo is the vacancy's own application deadline, a Slovenian d. m. y date. Unlike a
+	// posted_at it may legitimately sit today or tomorrow, so it is not run through NotFuture;
+	// a stale one past today closes the vacancy on the write.
+	if t, ok := essDayMonthYear(d.ApplicationsTill); ok {
+		j.ApplicationDeadline = &t
+	}
 	return j, true
+}
+
+// essDMY matches a Slovenian day-month-year date: "10. 11. 2026" (prijavaDo) and the like.
+var essDMY = regexp.MustCompile(`^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\.?$`)
+
+// essDayMonthYear reads one of those dates at midnight UTC. ok is false for a value that is
+// not one.
+func essDayMonthYear(s string) (time.Time, bool) {
+	m := essDMY.FindStringSubmatch(strings.TrimSpace(essText(s)))
+	if m == nil {
+		return time.Time{}, false
+	}
+	day, _ := strconv.Atoi(m[1])
+	month, _ := strconv.Atoi(m[2])
+	year, _ := strconv.Atoi(m[3])
+	if month < 1 || month > 12 || day < 1 || day > 31 {
+		return time.Time{}, false
+	}
+	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	if t.Day() != day { // time.Date rolls 31.02 over to March rather than rejecting it
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 // essBodyFields are the record's facts rendered under the duties, labelled as the site labels

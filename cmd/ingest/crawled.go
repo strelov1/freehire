@@ -6,10 +6,8 @@ import (
 )
 
 // crawledSet records, per provider, the distinct company slugs a run actually wrote.
-// The post-run stale sweep scopes its closes to these slugs so a partial or targeted
-// run (a subset of a provider's boards) only closes jobs of the companies it crawled,
-// never the provider's whole catalogue. Safe for concurrent Save calls (boards run in
-// parallel goroutines).
+// The post-run stale sweep scopes its closes to these slugs, so a partial run only closes
+// jobs of the companies it crawled. Safe for concurrent Save calls.
 type crawledSet struct {
 	mu sync.Mutex
 	m  map[string]map[string]struct{} // provider -> set of company slugs

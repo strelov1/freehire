@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTRY_OPTIONS } from './facets';
-import {
-  COUNTRY_CENTROIDS,
-  LAND_PATH,
-  WORLD_VIEW,
-  bubbleRadius,
-  fitView,
-  placeCities,
-  projectToMap,
-} from './worldMap';
+import { COUNTRY_CENTROIDS, LAND_PATH, WORLD_VIEW, bubbleRadius, fitView, placeCities, projectToMap } from './worldMap';
 
 describe('world map geometry', () => {
   // The facet vocabulary is the list of codes a search can return; a code missing here
@@ -110,7 +102,16 @@ describe('placeCities', () => {
   } satisfies Record<string, Record<string, [number, number]>>;
 
   it('places the cities it can find in that country and omits the rest', () => {
-    const placed = placeCities('br', [['São Paulo', 50], ['Campinas', 9], ['Mexico City', 4], ['Brazil', 3]], table);
+    const placed = placeCities(
+      'br',
+      [
+        ['São Paulo', 50],
+        ['Campinas', 9],
+        ['Mexico City', 4],
+        ['Brazil', 3],
+      ],
+      table,
+    );
     expect(placed).toEqual([
       { name: 'São Paulo', count: 50, lat: -23.56, lng: -46.63 },
       { name: 'Campinas', count: 9, lat: -22.9, lng: -47.1 },
@@ -118,12 +119,26 @@ describe('placeCities', () => {
   });
 
   it('matches regardless of case, accents and stray whitespace', () => {
-    const placed = placeCities('br', [['  SÃO   PAULO ', 1], ['campínas', 2]], table);
+    const placed = placeCities(
+      'br',
+      [
+        ['  SÃO   PAULO ', 1],
+        ['campínas', 2],
+      ],
+      table,
+    );
     expect(placed.map((c) => c.name)).toEqual(['  SÃO   PAULO ', 'campínas']);
   });
 
   it('keeps one bubble per place when two spellings name the same city', () => {
-    const placed = placeCities('br', [['São Paulo', 50], ['Sao Paulo', 7]], table);
+    const placed = placeCities(
+      'br',
+      [
+        ['São Paulo', 50],
+        ['Sao Paulo', 7],
+      ],
+      table,
+    );
     expect(placed).toEqual([{ name: 'São Paulo', count: 50, lat: -23.56, lng: -46.63 }]);
   });
 
@@ -131,4 +146,3 @@ describe('placeCities', () => {
     expect(placeCities('zz', [['São Paulo', 1]], table)).toEqual([]);
   });
 });
-

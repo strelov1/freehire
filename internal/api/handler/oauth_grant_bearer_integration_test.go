@@ -3,7 +3,7 @@
 // Integration test proving an MCP OAuth grant (freehire#3114) authenticates
 // exactly where a full-scope API key already does — the REST surface every
 // non-browser client (the CLI, freehire-mcp) actually calls, not merely the
-// signed-in MCP server at /api/v1/mcp/account. Run with:
+// MCP server at /api/v1/mcp. Run with:
 // go test -tags=integration ./internal/api/handler/
 package handler
 
@@ -53,7 +53,7 @@ func TestOAuthGrant_AuthenticatesLikeAFullScopeAPIKey(t *testing.T) {
 	th := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
-	app.Post("/api/v1/jobs/:slug/apply", keyAuth, th.MarkApplied)
+	app.Post("/api/v1/jobs/:slug/apply", keyAuth, newContract(contractHandlers{trackingHandlers: th}))
 	app.Get("/api/v1/auth/me", auth.RequireAuthOrScopedKey(iss, testVersions, apiKeys{queries}, auth.ScopeCV), func(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusOK)
 	})

@@ -11,9 +11,8 @@ import (
 // HTML part is stripped to readable text so the classifier sees the actual
 // message body rather than only the subject. Length is bounded downstream.
 //
-// Exported because the agent inbox listing serves the same text to a caller's own
-// agent, and the two must not drift: what our worker classifies and what a
-// harness classifies has to be the same body.
+// Exported because the agent inbox listing serves the same text, so what the worker
+// classifies and what a harness reads must not drift.
 func ReadableBody(text, html string) string {
 	if strings.TrimSpace(text) != "" {
 		return text

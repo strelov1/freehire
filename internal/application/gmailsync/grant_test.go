@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -26,6 +27,10 @@ func TestRevokedGrant(t *testing.T) {
 		{"api refuses the access token", &APIError{Op: "gmail: list", StatusCode: 401, Status: "401 Unauthorized"}, true},
 		{"api forbids the scope", &APIError{Op: "gmail: list", StatusCode: 403, Status: "403 Forbidden"}, true},
 		{"api is rate limiting", &APIError{Op: "gmail: list", StatusCode: 429, Status: "429 Too Many Requests"}, false},
+		{"api rate limits with 403", &APIError{Op: "gmail: thread", StatusCode: 403, Status: "403 Forbidden", Reason: "rateLimitExceeded"}, false},
+		{"api user rate limits with 403", &APIError{Op: "gmail: thread", StatusCode: 403, Status: "403 Forbidden", Reason: "userRateLimitExceeded"}, false},
+		{"api quota with 403", &APIError{Op: "gmail: thread", StatusCode: 403, Status: "403 Forbidden", Reason: "quotaExceeded"}, false},
+		{"api lacks the scope", &APIError{Op: "gmail: thread", StatusCode: 403, Status: "403 Forbidden", Reason: "insufficientPermissions"}, true},
 		{"api is unwell", &APIError{Op: "gmail: list", StatusCode: 500, Status: "500 Internal Server Error"}, false},
 		{
 			"token endpoint refuses the refresh token",
@@ -56,7 +61,9 @@ func TestRevokedGrant(t *testing.T) {
 // value. Both entry points, since a wave's list and its per-message fetches fail apart.
 func TestAPIReaderCarriesTheStatus(t *testing.T) {
 	for _, status := range []int{http.StatusUnauthorized, http.StatusTooManyRequests} {
-		r := &apiReader{client: &http.Client{Transport: answering(status)}}
+		// A 429 would be waited out; a refused wait returns the status as it stood.
+		noWait := func(context.Context, time.Duration) error { return context.Canceled }
+		r := &apiReader{client: &http.Client{Transport: answering(status)}, sleep: noWait}
 
 		var apiErr *APIError
 		if err := r.getJSON(context.Background(), "https://example.test/messages", &struct{}{}); !errors.As(err, &apiErr) {
@@ -87,4 +94,37 @@ func (status answering) RoundTrip(req *http.Request) (*http.Response, error) {
 		Body:       io.NopCloser(strings.NewReader("")),
 		Request:    req,
 	}, nil
+}
+
+func TestNewAPIErrorReadsReason(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: 403,
+		Status:     "403 Forbidden",
+		Body:       io.NopCloser(strings.NewReader(`{"error":{"code":403,"errors":[{"domain":"usageLimits","reason":"rateLimitExceeded"}]}}`)),
+	}
+	e := NewAPIError("gmail: thread t1", resp)
+	if e.Reason != "rateLimitExceeded" || RevokedGrant(e) {
+		t.Fatalf("reason=%q revoked=%v, want rateLimitExceeded and not revoked", e.Reason, RevokedGrant(e))
+	}
+	resp.Body = io.NopCloser(strings.NewReader("not json"))
+	if e := NewAPIError("gmail: thread t1", resp); e.Reason != "" || !RevokedGrant(e) {
+		t.Fatalf("bodyless 403: reason=%q revoked=%v, want empty and revoked", e.Reason, RevokedGrant(e))
+	}
+}
+
+func TestLimitHit(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{&APIError{StatusCode: 429}, true},
+		{&APIError{StatusCode: 403, Reason: "rateLimitExceeded"}, true},
+		{&APIError{StatusCode: 403, Reason: "insufficientPermissions"}, false},
+		{&APIError{StatusCode: 503}, false},
+		{errors.New("boom"), false},
+	} {
+		if got := LimitHit(tc.err); got != tc.want {
+			t.Errorf("LimitHit(%v) = %v, want %v", tc.err, got, tc.want)
+		}
+	}
 }

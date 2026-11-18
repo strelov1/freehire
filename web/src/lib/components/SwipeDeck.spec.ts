@@ -10,16 +10,15 @@ vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/jobs') } }
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-const { swipeDeck, dismissJob, saveJob, unsaveJob, undismissJob, facetCounts, recordJobView } =
-  vi.hoisted(() => ({
-    swipeDeck: vi.fn(),
-    dismissJob: vi.fn(),
-    saveJob: vi.fn(),
-    unsaveJob: vi.fn(),
-    undismissJob: vi.fn(),
-    facetCounts: vi.fn(),
-    recordJobView: vi.fn(),
-  }));
+const { swipeDeck, dismissJob, saveJob, unsaveJob, undismissJob, facetCounts, recordJobView } = vi.hoisted(() => ({
+  swipeDeck: vi.fn(),
+  dismissJob: vi.fn(),
+  saveJob: vi.fn(),
+  unsaveJob: vi.fn(),
+  undismissJob: vi.fn(),
+  facetCounts: vi.fn(),
+  recordJobView: vi.fn(),
+}));
 
 // The real ApiError is kept on purpose: the deck tells a job that is gone (404)
 // from a transport failure by the class and the status, so a stand-in error

@@ -39,7 +39,7 @@ func TestCVRegister_TailoringEntryPointsTakeAKey(t *testing.T) {
 				key:    namedGate("key"),
 				cvKey:  namedGate("cvKey"),
 				cookie: namedGate("cookie"),
-			})
+			}, cvContract(&cvHandlers{}))
 
 			resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), tc.method, tc.path, nil))
 			if err != nil {
@@ -65,7 +65,7 @@ func TestCVRegister_AuthoringStaysCookieOnly(t *testing.T) {
 		key:    namedGate("key"),
 		cvKey:  namedGate("cvKey"),
 		cookie: namedGate("cookie"),
-	})
+	}, cvContract(&cvHandlers{}))
 
 	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/me/cvs", nil))
 	if err != nil {

@@ -1,6 +1,26 @@
 package normalize
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestJobSlugWithFullHashSeparatesRealShortcodeCollision(t *testing.T) {
+	const firstID, secondID = "collision-224028", "collision-1908612"
+	if JobSlug("Backend Engineer", "Acme", "lever", firstID) != JobSlug("Backend Engineer", "Acme", "lever", secondID) {
+		t.Fatal("fixture must have a real short-hash collision")
+	}
+	a := JobSlugWithFullHash("Backend Engineer", "Acme", "lever", firstID)
+	b := JobSlugWithFullHash("Backend Engineer", "Acme", "lever", secondID)
+	if a == b {
+		t.Fatal("full identity hashes must distinguish the colliding postings")
+	}
+	for _, slug := range []string{a, b} {
+		if code, ok := JobSlugCode(slug); !ok || code != "75jwd7n2" {
+			t.Fatalf("JobSlugCode(%q) = %q, %v; want the original shortcode", slug, code, ok)
+		}
+	}
+}
 
 func TestJobSlug(t *testing.T) {
 	cases := []struct {
@@ -88,5 +108,21 @@ func TestJobSlugCode(t *testing.T) {
 	}
 	if c, ok := JobSlugCode("abcdefgh"); !ok || c != "abcdefgh" {
 		t.Errorf("bare code: got %q, %v", c, ok)
+	}
+}
+
+func TestJobSlugWithFullHashBoundsReadablePrefix(t *testing.T) {
+	for _, names := range [][2]string{{strings.Repeat("long-title-", 30), strings.Repeat("long-company-", 30)}, {"", ""}, {"Engineer", "Acme"}} {
+		slug := JobSlugWithFullHash(names[0], names[1], "lever", "collision-1908612")
+		suffix := JobSlugWithFullHash("", "", "lever", "collision-1908612")
+		if len(slug) > 160 || !strings.HasSuffix(slug, suffix) {
+			t.Fatalf("fallback must fit return intents and preserve identity: %q", slug)
+		}
+		if code, ok := JobSlugIdentityCode("old-title-" + suffix); !ok || code != suffix {
+			t.Fatalf("extended identity = %q, %v; want %q", code, ok, suffix)
+		}
+	}
+	if code, ok := JobSlugIdentityCode("old-title-75jwd7n2"); !ok || code != "75jwd7n2" {
+		t.Fatalf("legacy identity = %q, %v", code, ok)
 	}
 }

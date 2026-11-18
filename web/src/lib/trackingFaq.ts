@@ -18,7 +18,7 @@ export const TRACKING_FAQ: FaqItem[] = [
   {
     question: 'Does it notice when an employer goes quiet?',
     answer:
-      "Yes. Once an application has gone unanswered past a point worth noticing, its card carries a day-counter — days since the last contact — so a stalled application stays visible instead of quietly aging at the bottom of a column.",
+      'Yes. Once an application has gone unanswered past a point worth noticing, its card carries a day-counter — days since the last contact — so a stalled application stays visible instead of quietly aging at the bottom of a column.',
   },
   {
     question: 'Can a reply move the card for me?',

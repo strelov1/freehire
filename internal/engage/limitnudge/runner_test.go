@@ -5,12 +5,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/engage/maildaily"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // fakeStore serves a fixed candidate page and records what was claimed, mirroring
 // prowelcome's own runner_test.go fakeStore.
 type fakeStore struct {
+	maildaily.Memory
 	rows      []db.ListLimitHitUsersMissingNudgeEmailRow
 	listErr   error
 	claimErr  error
@@ -104,5 +106,70 @@ func TestRunner_ListErrorAbortsThePass(t *testing.T) {
 
 	if _, err := r.Run(context.Background()); err == nil {
 		t.Error("Run() = nil error, want the listing error surfaced")
+	}
+}
+
+// Another sender already took the account's mail today: no send, no stamp, so the nudge is
+// a candidate again tomorrow.
+func TestRunner_LostDailyClaimLeavesTheNudgePending(t *testing.T) {
+	store := &fakeStore{rows: []db.ListLimitHitUsersMissingNudgeEmailRow{row(1, "a@example.test"), row(2, "b@example.test")}}
+	store.Hold(1, maildaily.SourceOnboarding)
+	mailer := &fakeMailer{}
+
+	stats, err := New(store, mailer, 3, 500).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(mailer.sent) != 1 || mailer.sent[0] != 2 {
+		t.Errorf("sent %v, want only user 2", mailer.sent)
+	}
+	if len(store.claimed) != 1 || store.claimed[0] != 2 {
+		t.Errorf("stamped %v, want only user 2", store.claimed)
+	}
+	if stats.Deferred != 1 || stats.Failed != 0 {
+		t.Errorf("stats = %+v, want one deferral", stats)
+	}
+}
+
+func TestRunner_FailedSendReleasesTheDailyClaim(t *testing.T) {
+	store := &fakeStore{rows: []db.ListLimitHitUsersMissingNudgeEmailRow{row(1, "a@example.test"), row(2, "b@example.test")}}
+	mailer := &fakeMailer{failFor: 1}
+
+	if _, err := New(store, mailer, 3, 500).Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := store.Holder(1); got != "" {
+		t.Errorf("holder of the failed account = %q, want the claim released", got)
+	}
+	if got := store.Holder(2); got != maildaily.SourceLimitNudge {
+		t.Errorf("holder of the sent account = %q, want the claim kept", got)
+	}
+}
+
+func TestRunner_ClaimErrorSendsNothing(t *testing.T) {
+	store := &fakeStore{rows: []db.ListLimitHitUsersMissingNudgeEmailRow{row(1, "a@example.test")}}
+	store.ClaimErr = errors.New("connection reset")
+	mailer := &fakeMailer{}
+
+	stats, err := New(store, mailer, 3, 500).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(mailer.sent) != 0 || stats.Failed != 1 {
+		t.Errorf("sent %v, stats %+v; want nothing sent and the failure counted", mailer.sent, stats)
+	}
+}
+
+func TestRunner_ReleaseErrorDoesNotStopThePass(t *testing.T) {
+	store := &fakeStore{rows: []db.ListLimitHitUsersMissingNudgeEmailRow{row(1, "a@example.test"), row(2, "b@example.test")}}
+	store.ReleaseErr = errors.New("connection reset")
+	mailer := &fakeMailer{failFor: 1}
+
+	stats, err := New(store, mailer, 3, 500).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Sent != 1 || stats.Failed != 1 {
+		t.Errorf("stats = %+v, want the second account still sent", stats)
 	}
 }

@@ -1,11 +1,7 @@
 <script lang="ts">
   import Button from './button.svelte';
 
-  let {
-    loading,
-    error = false,
-    onclick,
-  }: { loading: boolean; error?: boolean; onclick: () => void } = $props();
+  let { loading, error = false, onclick }: { loading: boolean; error?: boolean; onclick: () => void } = $props();
 </script>
 
 <div class="mt-6 flex flex-col items-center gap-2">

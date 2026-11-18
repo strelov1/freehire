@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  RECENT_PULL_REQUEST_LIMIT,
-  assembleEntries,
-  assertUsable,
-  serializeSnapshot,
-} from './build-contributors.mjs';
+import { RECENT_PULL_REQUEST_LIMIT, assembleEntries, assertUsable, serializeSnapshot } from './build-contributors.mjs';
 
 const author = (login, over = {}) => ({
   login,
@@ -234,10 +229,6 @@ describe('serializeSnapshot', () => {
       }).at(0),
     );
 
-    expect(JSON.parse(serializeSnapshot(entries)).people.map((p) => p.login)).toEqual([
-      'ada',
-      'Bea',
-      'cy',
-    ]);
+    expect(JSON.parse(serializeSnapshot(entries)).people.map((p) => p.login)).toEqual(['ada', 'Bea', 'cy']);
   });
 });

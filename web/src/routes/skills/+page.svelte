@@ -48,9 +48,7 @@
       <ul class="flex flex-wrap gap-x-4 gap-y-1">
         {#each group.skills as skill (skill.slug)}
           <li>
-            <a href={resolve('/skills/[slug]', { slug: skill.slug })} class="text-sm hover:underline"
-              >{skill.label}</a
-            >
+            <a href={resolve('/skills/[slug]', { slug: skill.slug })} class="text-sm hover:underline">{skill.label}</a>
           </li>
         {/each}
       </ul>

@@ -1,28 +1,21 @@
 // Command liveness is the standalone orphan-job liveness worker. It probes the
-// posting URL of every open job the ingest sweep never re-crawls — the sources not in
-// the ATS provider registry (manual/resolve-url imports and the like), whose closed_at
-// would otherwise stay NULL forever — and closes a job once two consecutive probes
-// report it dead. (Registered board providers, including aggregators like habr_career
-// and geekjob, are swept by cmd/ingest and excluded here — see excluded below. A few
-// registered providers whose sweep has a structural blind spot are added back in a
-// restricted form — see probeDespiteRegistered — verified by whatever evidence that
-// specific source actually offers: jobicy and remoteok candidates go through the same
-// plain-GET probe as everything else; himalayas.app 403s a bot-looking GET to any job
-// page (Cloudflare), so its candidates are checked against the site's own sitemap
-// instead (see himalayas.go); echojobs' stored URL is the employer's own ATS link, not
-// echojobs.io's, so its candidates are checked against echojobs.io's own per-posting
-// API instead (see echojobs.go); hh.ru's pages embed an "archived" phrase even when live, so
-// its candidates are read for the page's own archived flag instead, one page a second (see
-// hh.go); djinni, 4dayweek, torre, arbeitnow and jobtech are paced the same way, each against its
-// own evidence (djinni.go, fourdayweek.go, torre.go, arbeitnow.go, jobtech.go). A source with the same leak but NO evidence a probe
-// could ever read — see expireDespiteRegistered — falls back to the same age-based
-// guess as unsignalledSources instead of a verdict.)
+// posting URL of every open job the ingest sweep never re-crawls (sources not in the
+// ATS provider registry, such as manual and resolve-url imports) and closes a job once
+// two consecutive probes report it dead.
 //
-// It is a run-once-and-exit worker (cron-scheduled beside ingest/enrich): select
-// candidates, probe each over plain HTTP, classify, apply the strike/close/reset
-// update, and exit. Re-running is safe; only a definitive death signal confirmed
-// twice in a row closes a job, biasing toward leaving orphans open over a false
-// close (orphans have no re-ingest to reopen them). It exits non-zero when a probe
+// Registered board providers are swept by cmd/ingest and excluded (see excluded in
+// run). Providers whose sweep has a structural blind spot are added back in a
+// restricted form (probeDespiteRegistered), each verified by the evidence that source
+// offers: a plain GET, a sitemap (himalayas.go), a per-posting API (echojobs.go,
+// fourdayweek.go, jobtech.go) or a paced page read (hh.go, djinni.go, torre.go,
+// arbeitnow.go). A source with the same leak but no readable evidence
+// (expireDespiteRegistered) falls back to an age-based guess instead of a verdict.
+//
+// It is a run-once-and-exit worker: select candidates, probe each, apply the
+// strike/close/reset update, and exit. Re-running is safe. Only a definitive death
+// signal confirmed twice in a row closes a job, so orphans (which have no re-ingest to
+// reopen them) stay open rather than risk a false close. It exits non-zero when a
+// probe could not apply its DB update, so cron can alert.
 // could not apply its DB update, so cron can alert.
 package main
 
@@ -34,14 +27,11 @@ import (
 	"net/http"
 	"slices"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
-	"github.com/strelov1/freehire/internal/job/liveness"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/safehttp"
 	"github.com/strelov1/freehire/internal/platform/worker"
@@ -67,54 +57,37 @@ const (
 
 // unsignalledSources carry no close signal at all: no re-crawl that could stop seeing
 // them, no change feed, and a stored URL that is a container outliving the vacancy rather
-// than the vacancy's own page — so a liveness probe can never reach a death verdict. Only
-// telegram qualifies today: its URL is usually the Telegram post (see cmd/tg-extract), which
-// stays live after the job is filled. A single-vacancy post that names its apply link stores
-// that link instead (telegram.applyURL), but it is a page on someone else's site — mostly
-// LinkedIn, which answers a bot with a login wall rather than a verdict — so the source as a
-// whole stays age-closed rather than probing a mix. (habr_career/geekjob are already excluded as registered
-// providers — cmd/ingest's sweep owns their closes.)
+// than its own page, so a probe can never reach a death verdict. Only telegram qualifies:
+// its URL is usually the Telegram post, which stays live after the job is filled, and an
+// apply link it names is mostly LinkedIn, which answers a bot with a login wall.
 //
-// This one list plays both roles, and they are two halves of the same decision: these
-// sources are excluded from the probe BECAUSE probing them is futile, and closed by age
-// INSTEAD. Keeping it single means a source can never be dropped from the probe without
-// something else taking over its closes.
+// This one list is both the probe exclusion and the age-close set, so a source can never
+// be dropped from the probe without something else taking over its closes.
 var unsignalledSources = []string{"telegram"}
 
-// expiryWindow is how old a posting from an unsignalledSource must be before it is
-// presumed filled. Deliberately generous: this is the only close in the lifecycle that
-// rests on a guess rather than on evidence, so it takes the same under-closing bias the
-// probe does. Measured on the catalogue at 45 days it closes the tail without taking the
-// bulk of postings still inside a normal hiring cycle.
+// expiryWindow is how old an unsignalledSource posting must be before it is presumed
+// filled. Generous on purpose: this is the only close that rests on a guess, so it takes
+// the same under-closing bias as the probe.
 const expiryWindow = 45 * 24 * time.Hour
 
 // probeDespiteRegistered lists registered ATS providers whose ingest sweep still can't
-// close every open job — see job-lifecycle's company_slug-scope leak: each is a
-// recency-ordered aggregator with a fixed crawl budget (page count, offset cap, or
-// freshness window) smaller than its live catalogue — boardless, or for hh one board per
-// professional role, each read only as its newest ~2000 postings of the last 7 days — so
-// a company whose postings age below that budget never re-enters CloseUnseenJobs' crawled-slug scope and its last
-// posting stays open forever. These sources are NOT removed from atsProviders — the
-// sweep still owns their normal closes — they are only ADDED BACK as liveness
-// candidates, restricted to jobs already past the sweep's own staleness window (see
-// staleCutoff), so this only ever picks up what the sweep structurally cannot reach
-// rather than racing it. empregos leaks the same way for a different reason: its crawl reads
-// every posting that names a state but cannot prove it read the rest (see empregos.go), so it
-// is not fullCatalog and its sweep is company-scoped too. So do djinni (its listing names only
-// the last month), 4dayweek (an employer that leaves its feed takes its company out of the sweep's scope) and torre
-// (its sitemap still names a few closed postings), and arbeitnow (its API names only the last
-// week) — none of them fullCatalog, all boardless. jobtech is the one member the sweep never
-// touches at all: it is self-closing, closing from its change feed's removals, and a removal
-// the crawl missed inside the feed's 72h window is never sent again (see jobtech.go).
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech"}
+// close every open job: each is a recency-ordered aggregator whose crawl budget (page
+// count, offset cap or freshness window) is smaller than its live catalogue, so a company
+// whose postings age out of it never re-enters CloseUnseenJobs' crawled-slug scope and
+// its last posting stays open forever. They stay in atsProviders (the sweep still owns
+// their normal closes) and are only added back as liveness candidates, restricted to jobs
+// past the sweep's own staleness window (staleCutoff).
+//
+// Per-source leaks: empregos reads only postings that name a state and cannot prove it
+// read the rest; djinni lists only the last month, arbeitnow the last week; 4dayweek
+// drops an employer's company from the sweep scope when it leaves the feed; torre's
+// sitemap still names some closed postings; jobtech is never swept, it closes from its
+// change feed, and a removal missed inside the feed's 72h window is never resent.
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed", "arbeitsagentur", "xing", "gradcracker", "engage", "betterteam", "linkedin"}
 
-// probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
-// plain-GET-then-Classify probe as every orphan candidate — their job pages answer a
-// normal HTTP status/body, unlike himalayas (Cloudflare-blocked; see himalayas.go) or
-// echojobs (the stored URL is the employer's own ATS link, not a page this adapter's own
-// site serves; see echojobs.go). Each probeDespiteRegistered member needs its own such
-// evidence path decided on a case-by-case basis — there is no generic per-source plugin
-// here by design, since a GET probe is not guaranteed to work for any given source.
+// probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the plain
+// GET-then-Classify probe. Every other member needs its own evidence path, decided case by
+// case: there is no generic per-source plugin, since a GET is not guaranteed to work.
 var probeDespiteRegisteredGET = []string{"jobicy", "remoteok", "empregos"}
 
 // pacedPasses are the probeDespiteRegistered members probed one request at a time rather than
@@ -122,14 +95,15 @@ var probeDespiteRegisteredGET = []string{"jobicy", "remoteok", "empregos"}
 // its own evidence — hh's archived flag, djinni's page through the shared Classify, 4dayweek's
 // per-posting API, torre's page state, arbeitnow's status, jobtech's per-ad API.
 func pacedPasses(client *http.Client) []pacedPass {
-	return []pacedPass{
+	return append([]pacedPass{
 		hhPass(client, hhVacancyPage),
 		djinniPass(client),
 		fourDayWeekPass(client, fourDayWeekJobAPI),
 		torrePass(client, torrePostPage),
 		arbeitnowPass(client),
 		jobtechPass(client, jobtechAdAPI),
-	}
+		linkedInPass(client),
+	}, catalogStatusPasses(client)...)
 }
 
 // staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window) via the
@@ -138,40 +112,21 @@ func pacedPasses(client *http.Client) []pacedPass {
 // scope not in the way.
 const staleCutoff = sources.DefaultSweepGrace
 
-// expireDespiteRegisteredPrefixes lists registered-ATS-provider FAMILIES with the same
-// company_slug/keyword-scope leak as probeDespiteRegistered's members, but with NO
-// evidence a probe could ever read: see whatjobs.go — jobs.url is the ad network's own
-// billing/tracking landing page, not the employer's posting, so it answers the same
-// regardless of whether the underlying posting is still live. Unlike probeDespiteRegistered,
-// this is the same age-based fallback as unsignalledSources (see expiryWindow) — "what
-// cannot be probed is expired instead" — just applied to a source the sweep DOES
-// otherwise close on evidence (whatjobs' own extended sweepGrace), for the tail its crawl
-// budget structurally can never re-reach.
+// expireDespiteRegisteredPrefixes lists registered-provider FAMILIES with the same
+// company_slug/keyword-scope leak as probeDespiteRegistered but no evidence a probe can
+// read. whatjobs' jobs.url is the ad network's billing landing page (see whatjobs.go);
+// adzuna's stored `/land/ad/<id>` tracking redirect answers 403 to a bot, which classifies
+// uncertain, so this worker can never close an adzuna posting (cmd/adzuna-liveness reads
+// the hosted page, and this age rule is the backstop). Both also lose postings from a
+// date-ordered, bounded crawl that never revisits an ageing one.
 //
-// It is NOT the same statement, though: these sources are re-crawled, so the age guess has
-// to agree with what the crawl last saw before it may close anything
-// (CloseStaleUnseenUnprobeableJobs and unseenWindow below). Sharing the telegram statement
-// closed postings the crawl was still listing, and the next crawl reopened every one.
+// Unlike unsignalledSources, these are re-crawled, so the age guess must agree with what
+// the crawl last saw before it may close anything (CloseStaleUnseenUnprobeableJobs and
+// unseenWindow). Sharing the telegram rule closed postings the crawl still listed and the
+// next crawl reopened them.
 //
-// A prefix, not a source list: whatjobs runs one CPC account PER COUNTRY
-// (internal/ingest/sources/whatjobs.go's whatjobsMarkets — ~50 as of writing), each its own
-// registered provider ("whatjobs" for the bare US market, "whatjobs-<cc>" for every
-// other), all sharing the identical unprobeable-URL shape. Matching by prefix against the
-// live registry (see the derivation in run()) means a newly onboarded market is covered
-// automatically instead of silently falling through an enumerated list.
-//
-// adzuna reaches the same classification by a different route, and the obvious objection —
-// "its url is an adzuna page, so just probe it" — was tested rather than assumed. Following
-// 40 stored urls on 2026-09-06: roughly three quarters answered 403 Access Denied, Adzuna's
-// bot protection on the `…/land/ad/<id>` tracking redirect we store (it carries the
-// attribution parameters that credit a click to this publisher, so it is not the employer's
-// page and never will be). A 403 classifies uncertain, correctly — it is the platform
-// declining to answer, not a verdict — so THIS worker's probe can never close an adzuna posting,
-// however long it runs. Adzuna's hosted /details/<id> page does answer, through the Scrapling
-// tier's rotating proxy, and cmd/adzuna-liveness reads it on the crawl host; this age rule stays
-// as the backstop for what that probe never gets past the challenge. The leak on the other side is new as of the date-ordered crawl: a bounded
-// crawl reading newest-first never revisits an ageing posting, so the sweep stops being
-// offered it. Both halves of the membership test therefore hold.
+// A prefix, not a list: whatjobs runs one registered provider per country ("whatjobs" for
+// the US, "whatjobs-<cc>" otherwise), so a new market is covered automatically.
 var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna"}
 
 func main() {
@@ -184,7 +139,23 @@ func run() int {
 	// Meant for debugging a single adapter's close behaviour on prod without probing
 	// (or age-expiring) the rest of the catalogue in the same run.
 	sourceFilter := flag.String("source", "", "restrict this run to one source, for debugging (empty = every eligible source)")
+	jobIDsFlag := flag.String("job-ids", "", "probe only these comma-separated IDs (max 500); skips all bulk expiry")
 	flag.Parse()
+	explicitJobIDs := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "job-ids" {
+			explicitJobIDs = true
+		}
+	})
+	if explicitJobIDs && *jobIDsFlag == "" {
+		log.Print("liveness: explicit job-ids must not be empty")
+		return 1
+	}
+	jobIDs, err := parseProbeJobIDs(*jobIDsFlag)
+	if err != nil {
+		log.Printf("liveness: %v", err)
+		return 1
+	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
@@ -220,10 +191,11 @@ func run() int {
 	}()
 
 	// The candidate set is "every open job whose source is not a registered ATS
-	// provider" — the registry keys are the exclusion list, so a new adapter never
+	// provider" — the taxonomy keys are the exclusion list, so a new adapter never
 	// silently becomes a probe target.
 	registry := sources.All(sources.NewClient())
-	atsProviders := providerKeys(registry)
+	crawlProviders := providerKeys(registry)
+	atsProviders := classifiedProviderKeys()
 	// Guard: `source <> ALL('{}')` is vacuously TRUE in Postgres, so an empty
 	// exclusion list would select EVERY open job — including board jobs the ingest
 	// sweep owns. Refuse to run rather than risk URL-closing the whole catalogue.
@@ -255,50 +227,27 @@ func run() int {
 		}
 	}
 
-	// Derived from the live registry rather than enumerated (see
-	// expireDespiteRegisteredPrefixes), so a newly onboarded whatjobs market is covered this
-	// run without being named anywhere. That construction is why the list holds prefixes,
-	// and it is a complete answer for a member being ADDED — but not for one being ABSENT,
-	// which is what a missing crawl credential produces. Guard that case explicitly.
-	if missing := unmatchedPrefixes(atsProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+	// Keep the credential guard on the live crawl registry. The fallback's membership
+	// and grace come from taxonomy, so a market missing this host's credentials still
+	// has an age-based closure path instead of being excluded from every path.
+	if missing := unmatchedPrefixes(crawlProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
 		log.Printf("liveness: %q matches no registered ATS provider — refusing to run (a source that cannot be age-expired would silently fall to the URL probe instead)",
 			strings.Join(missing, ", "))
 		return 1
 	}
-	expireDespiteRegistered := matchingProviders(atsProviders, expireDespiteRegisteredPrefixes)
+	expireDespiteRegistered, registeredSweepGrace := registeredAgeFallback()
 
 	// Appended AFTER the guard above so the empty-ATS-registry safeguard still keys
 	// off atsProviders alone. See unsignalledSources for why these are excluded.
 	excluded := append(atsProviders, unsignalledSources...)
 
-	candidates, err := queries.SelectOrphanLivenessCandidates(ctx, excluded)
+	candidates, staleCandidates, err := selectProbeCandidates(ctx, queries,
+		probeScope{source: *sourceFilter, jobIDs: jobIDs}, excluded, probeDespiteRegistered, time.Now().Add(-staleCutoff))
 	if err != nil {
 		log.Printf("select candidates: %v", err)
 		return 1
 	}
-	if *sourceFilter != "" {
-		// SelectOrphanLivenessCandidates has no source allowlist of its own (it is
-		// "everything not a registered provider"), so -source is applied here rather
-		// than pushed into the query.
-		candidates = slices.DeleteFunc(candidates, func(c db.SelectOrphanLivenessCandidatesRow) bool {
-			return c.Source != *sourceFilter
-		})
-	}
 	orphanCount := len(candidates)
-
-	// probeDespiteRegistered candidates: restricted to jobs already past the sweep's own
-	// staleness window (see staleCutoff) — the sweep's scope leak, not a race with a run
-	// still inside its normal grace period. Split by source below into whichever
-	// evidence path that source actually has (see probeDespiteRegisteredGET and the
-	// per-source apply* functions).
-	staleCandidates, err := queries.SelectStaleRegisteredCandidates(ctx, db.SelectStaleRegisteredCandidatesParams{
-		Sources: filterSources(probeDespiteRegistered, *sourceFilter),
-		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-staleCutoff), Valid: true},
-	})
-	if err != nil {
-		log.Printf("select stale registered candidates: %v", err)
-		return 1
-	}
 	// Probes go out on safehttp: orphan-job URLs come from attacker-influenced sources
 	// (telegram posts), so the probe must refuse internal/metadata targets.
 	client := safehttp.NewClient(probeTimeout)
@@ -337,69 +286,65 @@ func run() int {
 
 	var st stats
 
-	// A source's stated application deadline remains authoritative even when a crawl
-	// keeps listing the posting, or its board is quiet or temporarily unreachable.
-	deadlineExpired, err := queries.CloseJobsPastApplicationDeadline(ctx, *sourceFilter)
-	if err != nil {
-		st.failed.Add(1)
-		log.Printf("liveness: expire application deadlines: %v", err)
+	if len(jobIDs) == 0 {
+		// A source's stated application deadline remains authoritative even when a crawl
+		// keeps listing the posting, or its board is quiet or temporarily unreachable.
+		deadlineExpired, err := queries.CloseJobsPastApplicationDeadline(ctx, *sourceFilter)
+		if err != nil {
+			st.failed.Add(1)
+			log.Printf("liveness: expire application deadlines: %v", err)
+		} else {
+			log.Printf("liveness: expired %d jobs past their application deadline", deadlineExpired)
+		}
+
+		// What the probe cannot judge, age judges. Runs before probing so a run that dies
+		// partway still expires. A -source run on an unrelated source expires nothing here.
+		sourcesToExpire := filterSources(unsignalledSources, *sourceFilter)
+		expired, err := queries.CloseStaleUnsignalledJobs(ctx, db.CloseStaleUnsignalledJobsParams{
+			Sources: sourcesToExpire,
+			Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
+		})
+		if err != nil {
+			// Log and carry on: a failing guess-half (e.g. a lock wait against a concurrent
+			// reindex) must not disable the evidence-half on every later run.
+			log.Printf("liveness: expire stale unsignalled jobs: %v", err)
+		} else {
+			log.Printf("liveness: expired %d jobs posted more than %d days ago from %d unsignalled sources",
+				expired, int(expiryWindow.Hours()/24), len(sourcesToExpire))
+		}
+
+		// Age fallback for expireDespiteRegistered sources: these are re-crawled, so the
+		// crawl's own reading must agree with the age guess before it closes. See unseenWindow.
+		sourcesToExpireDespiteRegistered := filterSources(expireDespiteRegistered, *sourceFilter)
+		unseenFor := unseenWindow(sourcesToExpireDespiteRegistered, registeredSweepGrace)
+		expiredRegistered, err := queries.CloseStaleUnseenUnprobeableJobs(ctx, db.CloseStaleUnseenUnprobeableJobsParams{
+			Sources:    sourcesToExpireDespiteRegistered,
+			Cutoff:     pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
+			SeenCutoff: pgtype.Timestamptz{Time: time.Now().Add(-unseenFor), Valid: true},
+		})
+		if err != nil {
+			log.Printf("liveness: expire stale expireDespiteRegistered jobs: %v", err)
+		} else {
+			log.Printf("liveness: expired %d jobs posted more than %d days ago and unseen for %d days, from %d expireDespiteRegistered sources",
+				expiredRegistered, int(expiryWindow.Hours()/24), int(unseenFor.Hours()/24), len(sourcesToExpireDespiteRegistered))
+		}
+
 	} else {
-		log.Printf("liveness: expired %d jobs past their application deadline", deadlineExpired)
+		log.Printf("liveness: targeted probe of %d IDs; bulk expiry disabled", len(jobIDs))
 	}
 
-	// The other half of the same decision: what the probe cannot judge, age judges.
-	// Run before probing so a run that dies partway through the probe still expires.
-	// filterSources means a -source run that targets neither unsignalledSources member
-	// expires nothing this run, rather than age-closing telegram jobs on a debug probe
-	// of an unrelated source.
-	sourcesToExpire := filterSources(unsignalledSources, *sourceFilter)
-	expired, err := queries.CloseStaleUnsignalledJobs(ctx, db.CloseStaleUnsignalledJobsParams{
-		Sources: sourcesToExpire,
-		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
-	})
-	if err != nil {
-		// Log and carry on rather than return: the guess-half failing must not disable
-		// the evidence-half. A lock wait against a concurrent reindex would otherwise
-		// stop orphan probing on every subsequent cron run, silently and indefinitely.
-		log.Printf("liveness: expire stale unsignalled jobs: %v", err)
-	} else {
-		log.Printf("liveness: expired %d jobs posted more than %d days ago from %d unsignalled sources",
-			expired, int(expiryWindow.Hours()/24), len(sourcesToExpire))
-	}
-
-	// expireDespiteRegistered's age-based fallback, for the registered providers that need
-	// it (whatjobs today). Same window on the posting's age, but a DIFFERENT statement:
-	// these sources are re-crawled, so age alone says nothing, and the crawl's own reading
-	// has to agree before the guess is allowed to close anything. See unseenWindow.
-	sourcesToExpireDespiteRegistered := filterSources(expireDespiteRegistered, *sourceFilter)
-	unseenFor := unseenWindow(sourcesToExpireDespiteRegistered, sources.SweepGraceWindows(registry))
-	expiredRegistered, err := queries.CloseStaleUnseenUnprobeableJobs(ctx, db.CloseStaleUnseenUnprobeableJobsParams{
-		Sources:    sourcesToExpireDespiteRegistered,
-		Cutoff:     pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
-		SeenCutoff: pgtype.Timestamptz{Time: time.Now().Add(-unseenFor), Valid: true},
-	})
-	if err != nil {
-		log.Printf("liveness: expire stale expireDespiteRegistered jobs: %v", err)
-	} else {
-		log.Printf("liveness: expired %d jobs posted more than %d days ago and unseen for %d days, from %d expireDespiteRegistered sources",
-			expiredRegistered, int(expiryWindow.Hours()/24), int(unseenFor.Hours()/24), len(sourcesToExpireDespiteRegistered))
-	}
-
-	// Each candidate set is judged by the evidence its source actually has, and every call
-	// below names that evidence at the call site. There is deliberately no source→judge
-	// registry: a source whose evidence path nobody wired must be a visible omission (the
-	// switch above logs one), never a default that quietly probes the wrong thing.
+	// Each candidate set is judged by its own source's evidence, named at the call site.
+	// There is deliberately no source->judge registry: an unwired source must be a visible
+	// omission (the switch above logs one), not a default that probes the wrong thing.
 	probe := probeJudge(client)
 	st.applyVerdicts(ctx, queries, orphanCandidates(candidates), probe)
-	// probeDespiteRegisteredGET candidates (jobicy, remoteok, empregos today): same plain-GET probe
-	// as the orphans, just a different candidate source.
+	// probeDespiteRegisteredGET candidates use the same plain-GET probe as the orphans.
 	st.applyVerdicts(ctx, queries, getProbeStale, probe)
-	// probeDespiteRegistered's own dedicated evidence sources — see the package doc and
-	// probeDespiteRegisteredGET for why these two can't share the GET probe above.
+	// himalayas and echojobs have their own evidence and can't share the GET probe.
 	applyHimalayasVerdicts(ctx, client, queries, himalayasStale, &st)
 	st.applyVerdicts(ctx, queries, echojobsStale, echoJobsJudge(client))
-	// Last, because they are the slow ones: each paces itself against its own site (see
-	// paced.go), side by side so the run lasts as long as the slowest of them.
+	// Last, because they are slow: each paces itself against its own site (see paced.go),
+	// side by side.
 	st.applyPacedPasses(ctx, queries, pacedStale, paced)
 
 	probed, closed, struck, failed := st.probed.Load(), st.closed.Load(), st.struck.Load(), st.failed.Load()
@@ -407,11 +352,8 @@ func run() int {
 	return worker.ExitCode(int(failed), 0)
 }
 
-// candidate is one open job this run may judge. The two queries that name candidates return
-// row types differing by a single field (SelectStaleRegisteredCandidatesRow carries
-// ExternalID, which echojobs' evidence path needs), so the fan-out takes this instead of
-// either of them — the alternative is unpacking every row into loose scalars at each call
-// site, which is how the twelve-parameter signatures this replaced came about.
+// candidate is one open job this run may judge. The two candidate queries return row types
+// differing by one field (ExternalID, which echojobs needs), so the fan-out takes this.
 type candidate struct {
 	id         int64
 	publicSlug string
@@ -436,210 +378,4 @@ func staleCandidate(r db.SelectStaleRegisteredCandidatesRow) candidate {
 		id: r.ID, publicSlug: r.PublicSlug, source: r.Source, url: r.URL,
 		externalID: r.ExternalID, strikes: r.LivenessStrikes,
 	}
-}
-
-// judge reads one candidate's evidence and reports what it says. Every evidence path in this
-// worker is one of these — a plain GET, a sitemap membership test, a per-posting API — so
-// they differ only in how the verdict is REACHED, never in what is done with it.
-type judge func(ctx context.Context, c candidate) (liveness.Verdict, string)
-
-// probeJudge is the plain-HTTP evidence path: GET the posting's own URL and classify the
-// response. Shared by every orphan candidate and the probeDespiteRegisteredGET subset.
-func probeJudge(client *http.Client) judge {
-	return func(ctx context.Context, c candidate) (liveness.Verdict, string) {
-		status, finalURL, body, err := liveness.Fetch(ctx, client, c.url)
-		if err != nil {
-			// A probe that could not reach the page is Uncertain (status 0), so apply
-			// takes no action — a fetch failure never advances or clears a strike, and is
-			// not counted as a worker failure.
-			log.Printf("liveness: probe %s failed: %v", c.publicSlug, err)
-		}
-		return liveness.Classify(status, finalURL, body)
-	}
-}
-
-// echoJobsJudge reads echojobs.io's own per-posting page, keyed on the posting's external
-// id — see echojobs.go for why the stored jobs.url (the employer's own ATS link, not an
-// echojobs.io page) is not what gets probed.
-func echoJobsJudge(client *http.Client) judge {
-	return func(ctx context.Context, c candidate) (liveness.Verdict, string) {
-		return checkEchoJobsLive(ctx, client, c.externalID)
-	}
-}
-
-// stats counts what one run did. Atomic because the fan-out judges candidates concurrently,
-// and the exit code is read off failed.
-type stats struct {
-	probed, closed, struck, failed atomic.Int64
-}
-
-// applyVerdicts judges every candidate at `concurrency` and applies each verdict as it
-// lands. The bound is per call rather than run-wide because the calls do not overlap: each
-// waits for its own fan-out before the next begins.
-func (s *stats) applyVerdicts(ctx context.Context, queries *db.Queries, candidates []candidate, decide judge) {
-	sem := make(chan struct{}, concurrency)
-	var wg sync.WaitGroup
-	for _, c := range candidates {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(c candidate) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			verdict, reason := decide(ctx, c)
-			s.apply(ctx, queries, c, verdict, reason)
-		}(c)
-	}
-	wg.Wait()
-}
-
-// apply writes one verdict: advances/closes on Expired, clears strikes on Live, and leaves
-// Uncertain untouched. Every evidence path in this worker ends here, so the
-// close/strike/reset semantics live in exactly one place.
-func (s *stats) apply(ctx context.Context, queries *db.Queries, c candidate, verdict liveness.Verdict, reason string) {
-	s.probed.Add(1)
-	switch verdict {
-	case liveness.Expired:
-		res, err := queries.MarkLivenessExpired(ctx, db.MarkLivenessExpiredParams{
-			ID:        c.id,
-			Threshold: closeThreshold,
-		})
-		if err != nil {
-			// The verdict was reached but the DB update did not apply — a real
-			// failure the exit code must surface, not a silent log-and-continue.
-			s.failed.Add(1)
-			log.Printf("liveness: mark expired %s: %v", c.publicSlug, err)
-			return
-		}
-		if res.ClosedAt.Valid {
-			s.closed.Add(1)
-			log.Printf("liveness: closed %s (%s, %s)", c.publicSlug, c.source, reason)
-		} else {
-			s.struck.Add(1)
-			log.Printf("liveness: strike %d/%d %s (%s)", res.LivenessStrikes, closeThreshold, c.publicSlug, reason)
-		}
-	case liveness.Live:
-		// Clear any accumulated strikes. Skip the write when there is nothing to
-		// clear so a healthy catalogue does not issue an UPDATE per open job.
-		if c.strikes != 0 {
-			if err := queries.ResetLivenessStrikes(ctx, c.id); err != nil {
-				s.failed.Add(1)
-				log.Printf("liveness: reset %s: %v", c.publicSlug, err)
-			}
-		}
-	case liveness.Uncertain:
-		// No signal either way — leave the strike count untouched.
-	}
-}
-
-// applyHimalayasVerdicts verifies every himalayas probeDespiteRegistered candidate
-// against the site's own sitemap of what is currently live — a plain GET of the job page
-// itself is Cloudflare-blocked (see himalayas.go), so this is the source's only available
-// evidence. It is the one path that cannot be a bare judge: the sitemap is fetched once for
-// the whole run, and a fetch failure counts as one worker failure and skips every candidate
-// — under-closing (leaving them open another run) is the only acceptable outcome of not
-// being able to verify, matching the bias everywhere else in this worker.
-func applyHimalayasVerdicts(ctx context.Context, client *http.Client, queries *db.Queries, candidates []candidate, s *stats) {
-	if len(candidates) == 0 {
-		return
-	}
-	liveURLs, err := fetchHimalayasLiveJobURLs(ctx, client)
-	if err != nil {
-		s.failed.Add(1)
-		log.Printf("liveness: himalayas sitemap fetch failed, skipping %d stale registered candidates: %v", len(candidates), err)
-		return
-	}
-	s.applyVerdicts(ctx, queries, candidates, func(_ context.Context, c candidate) (liveness.Verdict, string) {
-		if _, ok := liveURLs[c.url]; ok {
-			return liveness.Live, ""
-		}
-		return liveness.Expired, "absent_from_sitemap"
-	})
-}
-
-// providerKeys returns the registered ATS provider keys — the sources the ingest
-// sweep owns and the liveness probe must exclude.
-func providerKeys(registry map[string]sources.Source) []string {
-	keys := make([]string, 0, len(registry))
-	for k := range registry {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-// filterSources narrows a source list to sourceFilter for a debug run (-source=X);
-// an empty sourceFilter returns list unchanged, and a filter absent from list returns
-// nil rather than list, so a run scoped to a source outside this list touches none of it.
-func filterSources(list []string, sourceFilter string) []string {
-	if sourceFilter == "" {
-		return list
-	}
-	if slices.Contains(list, sourceFilter) {
-		return []string{sourceFilter}
-	}
-	return nil
-}
-
-// unseenWindow reports how long one of these sources' postings must have gone UNSEEN by
-// the crawl before the age rule may presume it filled — the second clock
-// CloseStaleUnseenUnprobeableJobs takes, and the whole difference between it and the
-// telegram statement.
-//
-// The answer is the provider's own post-run sweep window (sources.SweepGraceWindows,
-// declared by the adapter; DefaultSweepGrace when it declares none), because that window
-// is already this provider's answer to "unseen for long enough to mean removed": a
-// posting past it is one CloseUnseenJobs would have closed had its company_slug scope
-// been able to reach it, which is the exact leak this fallback exists to cover. Reading
-// it from the registry rather than restating a number keeps the two from drifting —
-// whatjobs widened its own window to 14 days precisely because a posting that drifts
-// past its crawl budget reads as unseen for days at a time.
-//
-// Where the named sources disagree it takes the WIDEST of their windows. That is the
-// under-closing bias every other verdict in this worker takes: this close rests on a
-// guess, so where the evidence is mixed the guess waits for the most patient of them.
-func unseenWindow(srcs []string, declared map[string]time.Duration) time.Duration {
-	window := sources.DefaultSweepGrace
-	for _, s := range srcs {
-		if d, ok := declared[s]; ok && d > window {
-			window = d
-		}
-	}
-	return window
-}
-
-// unmatchedPrefixes returns the configured prefixes that match no registered provider —
-// the drift guard matchingProviders' own derivation cannot give, because a prefix matching
-// nothing yields an empty set that is indistinguishable from a source with nothing to close.
-//
-// The case that makes this load-bearing is not a typo. Every expireDespiteRegisteredPrefixes
-// member is CREDENTIAL-GATED (sources.All registers adzuna only with ADZUNA_APP_ID/_KEY, and
-// each whatjobs market only with its publisher id), and this worker builds the registry from
-// that same constructor. On a host without the credential the source drops out of the age
-// rule and, by the same absence, drops INTO the orphan probe — so which lifecycle mechanism
-// owns a source would turn on an environment variable about crawling, silently, in the
-// direction that leaves its postings open for ever.
-func unmatchedPrefixes(providers, prefixes []string) []string {
-	var out []string
-	for _, prefix := range prefixes {
-		if len(matchingProviders(providers, []string{prefix})) == 0 {
-			out = append(out, prefix)
-		}
-	}
-	return out
-}
-
-// matchingProviders returns every entry of providers that equals one of prefixes or has
-// it as a "<prefix>-" prefix — how a provider family sharing one adapter across many
-// per-market registry keys (e.g. whatjobs' one row per country, see
-// expireDespiteRegisteredPrefixes) is matched without enumerating every key.
-func matchingProviders(providers, prefixes []string) []string {
-	var out []string
-	for _, p := range providers {
-		for _, prefix := range prefixes {
-			if p == prefix || strings.HasPrefix(p, prefix+"-") {
-				out = append(out, p)
-				break
-			}
-		}
-	}
-	return out
 }

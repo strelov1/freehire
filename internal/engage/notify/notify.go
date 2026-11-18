@@ -5,10 +5,9 @@
 // matches, sends them as one digest through a channel Notifier, and marks them
 // notified. It is the engine behind the run-once cmd/notify cron worker.
 //
-// Cost is O(distinct queries) per pass — subscriptions sharing a query are
-// grouped so the index is hit once regardless of subscriber count — and the
-// ledger's PK makes matching idempotent, so re-scanning recent jobs never
-// delivers twice.
+// Subscriptions sharing a query are grouped so the index is hit once per distinct
+// query, and the ledger's PK makes matching idempotent, so re-scanning recent jobs
+// never delivers twice.
 package notify
 
 import (
@@ -47,28 +46,52 @@ const ChannelWebhook = "webhook"
 // so the two can never drift.
 var Channels = []string{ChannelTelegram, ChannelEmail, ChannelPush, ChannelWebhook}
 
-// ValidChannel reports whether c is a delivery channel. It exists because the slice alone is
-// not usable as an allowlist, so both create-time gates — subscriptions and reminders — built
-// the same map[string]bool from it. Exposing the membership test is what stops a third caller
-// building a third copy.
+// ValidChannel reports whether c is a delivery channel. Both create-time gates,
+// subscriptions and reminders, use it instead of building their own allowlist.
 func ValidChannel(c string) bool {
 	return slices.Contains(Channels, c)
 }
 
-// ListLimit is how many jobs a channel message itemizes. It is a constant rather
-// than a Config field because the channel notifiers take only a base URL and a
-// transport — reaching Config into them would buy nothing, and a shared constant
-// keeps every channel's list and its "and N more" tail arithmetic in agreement.
+// The saved-search digest frequencies (notification_settings.digest_frequency).
 //
-// Ten, not the snapshot's ceiling: a digest is a notification, and a mail that
-// itemizes dozens of jobs is a page nobody reads to the bottom of.
+//   - FrequencyInstant sends on every pass that finds something new.
+//   - FrequencyDaily sends once a local day, at the account's digest time.
+//   - FrequencyInterval sends at most once every digest_interval_hours hours.
+//
+// FrequencyDaily at DefaultDigestTime is the default for an account with no settings
+// row (migration 0246). An unknown stored value reads as FrequencyInterval.
+//
+// Anything faster than daily is a Pro/Ultra benefit: the queries that feed this package
+// return the EFFECTIVE frequency (daily for an account without a live plan, webhook
+// excepted), so a stored preference never buys speed by itself.
+const (
+	FrequencyInstant  = "instant"
+	FrequencyDaily    = "daily"
+	FrequencyInterval = "interval"
+)
+
+// The bounds of an interval digest, in hours. A full day is FrequencyDaily, which
+// also picks the hour, so the interval stops one short of it. The column's CHECK
+// (migration 0233) holds the same numbers.
+const (
+	MinIntervalHours     = 1
+	MaxIntervalHours     = 23
+	DefaultIntervalHours = 1
+)
+
+// DefaultDigestTime is the local time a default daily digest goes out. Without a
+// time a daily digest is never due (deliverywindow.DigestDue), so the default
+// frequency must carry one. Migration 0246 and the queries' COALESCE hold the same.
+const DefaultDigestTime = 9 * time.Hour
+
+// ListLimit is how many jobs a channel message itemizes. A shared constant keeps
+// every channel's list and its "and N more" tail in agreement. It is well below the
+// snapshot cap because a notification that itemizes dozens of jobs goes unread.
 const ListLimit = 10
 
-// Listed splits a grouped message's items into the ones it itemizes — the first
-// ListLimit — and the count it only mentions as an "and N more" tail. It lives
-// beside the bound, and is generic, because all three engines apply the same rule
-// to three different message types and a private copy per engine is a copy that
-// drifts.
+// Listed splits a grouped message's items into the ones it itemizes (the first
+// ListLimit) and the count it only mentions as an "and N more" tail. It is generic
+// because all three engines apply the same rule to different message types.
 //
 // The shown slice has no spare capacity, so a renderer that appends to it cannot
 // scribble over the items it left out.
@@ -79,50 +102,39 @@ func Listed[T any](items []T) (shown []T, more int) {
 	return items[:ListLimit:ListLimit], len(items) - ListLimit
 }
 
-// Digest is one subscription's batch of new matches, rendered by a Notifier into
-// a channel-specific message. Jobs is what the digest carries — the newest
-// pending matches, at most Config.SnapshotCap — and is what the in-app
-// notification records; Listed is the much shorter slice a message itemizes.
-// Total is the true count of matches this digest delivers, which exceeds
-// len(Jobs) when more were pending than one digest carries (see Overflowed), so
-// a renderer can show an "and N more" tail under either bound.
+// Digest is one subscription's batch of new matches, rendered by a Notifier into a
+// channel-specific message. Jobs is what the digest carries (the newest pending
+// matches, at most Config.SnapshotCap) and what the in-app notification records;
+// Listed is the shorter slice a message itemizes. Total is the true count delivered,
+// which exceeds len(Jobs) when more were pending (see Overflowed).
 type Digest struct {
-	// UserID is whose digest this is. Only the email channel reads it, to sign that
-	// recipient's unsubscribe link — a chat or webhook destination the user
-	// connected themselves is turned off where they connected it.
-	UserID          int64
 	SavedSearchName string
-	// SearchQuery is the saved search's stored query string — where an
-	// overflowed digest's tail sends the reader, since the recorded snapshot
-	// cannot list what it does not carry. See SearchPath.
+	// SearchQuery is the saved search's stored query string, where an overflowed
+	// digest's tail sends the reader. See SearchPath.
 	SearchQuery string
 	Total       int
 	Jobs        []DigestJob
-	// NotificationID is the in-app notification recording this digest, which is
-	// where a channel's "and N more" tail sends the reader. Zero when the
-	// recording failed — the renderer then falls back to a generic destination
-	// rather than dropping the tail.
+	// NotificationID is the in-app notification recording this digest, where a
+	// channel's "and N more" tail sends the reader. Zero when the recording failed;
+	// the renderer then falls back to a generic destination.
 	NotificationID int64
 }
 
 // Listed returns the jobs a channel message should itemize: the first ListLimit,
-// or all of them when the digest is shorter. The omitted count is not returned
-// here — a digest's tail counts against Total, which can exceed len(Jobs).
+// or all of them when the digest is shorter. The omitted count is not returned: a
+// digest's tail counts against Total, which can exceed len(Jobs).
 func (d Digest) Listed() []DigestJob {
 	shown, _ := Listed(d.Jobs)
 	return shown
 }
 
-// Overflowed reports whether the digest counts more matches than it carries.
-// Its "and N more" tail must then lead to the saved search's live results: the
-// notification's own matched-jobs page lists only the recorded snapshot, which
-// would show a reader fewer jobs than the message just promised.
+// Overflowed reports whether the digest counts more matches than it carries. Its
+// "and N more" tail must then lead to the saved search's live results, since the
+// notification's matched-jobs page lists only the recorded snapshot.
 func (d Digest) Overflowed() bool { return d.Total > len(d.Jobs) }
 
-// SearchPath is the site-relative URL of the saved search's live results,
-// tagged with a channel's UTM source — the same /jobs?<query> link the saved
-// searches page opens. The stored query is already URL-encoded, so it is
-// appended as it is.
+// SearchPath is the site-relative URL of the saved search's live results, tagged
+// with a channel's UTM source. The stored query is already URL-encoded.
 func (d Digest) SearchPath(utmSource string) string {
 	var b strings.Builder
 	b.WriteString("/jobs?")
@@ -132,6 +144,30 @@ func (d Digest) SearchPath(utmSource string) string {
 	}
 	b.WriteString("utm_source=" + utmSource)
 	return b.String()
+}
+
+// Message is what one send delivers: every digest one person is due on one channel,
+// oldest subscription first (by id, so sections keep their order). A person with
+// several alerts gets one message carrying all their digests. A webhook is the
+// exception: its receiver reads one saved search's payload, so it gets one digest
+// per message.
+type Message struct {
+	// UserID is whose message this is. Only the email channel reads it, to sign that
+	// recipient's unsubscribe link.
+	UserID int64
+	// WebhookSecret signs a webhook delivery (see internal/engage/webhooknotify). Only
+	// the webhook channel reads it.
+	WebhookSecret string
+	Digests       []Digest
+}
+
+// Total is how many matches the message announces across its digests.
+func (m Message) Total() int {
+	n := 0
+	for _, d := range m.Digests {
+		n += d.Total
+	}
+	return n
 }
 
 // DigestJob is the display shape of one matched job (no internal id). The salary
@@ -148,11 +184,11 @@ type DigestJob struct {
 	SalaryPeriod   string
 }
 
-// Notifier delivers a digest over a channel to a destination. The matching engine
+// Notifier delivers a message over a channel to a destination. The matching engine
 // depends only on this, so a new channel is a new implementation, not a change
 // here. (Telegram resolves dest as a chat_id string; webhook/email as a URL/address.)
 type Notifier interface {
-	Send(ctx context.Context, channel, dest string, d Digest) error
+	Send(ctx context.Context, channel, dest string, m Message) error
 }
 
 // Searcher is the search backend the matcher runs filters against. *search.Client
@@ -164,11 +200,22 @@ type Searcher interface {
 // Store is the persistence the engine needs. *db.Queries satisfies it directly.
 type Store interface {
 	ListActiveSubscriptions(ctx context.Context) ([]db.ListActiveSubscriptionsRow, error)
-	// ListUserProfilesExcludedSkills returns each given user's avoid-skills preference, one
-	// round trip regardless of batch size. A user id with no profile row simply has no row in
-	// the result; the caller treats absence as an empty exclude set.
-	ListUserProfilesExcludedSkills(ctx context.Context, userIDs []int64) ([]db.ListUserProfilesExcludedSkillsRow, error)
+	// ListUserProfileSkillSets returns each given user's held and avoided skills. A
+	// user with no profile row has no row; the caller treats absence as empty sets.
+	ListUserProfileSkillSets(ctx context.Context, userIDs []int64) ([]db.ListUserProfileSkillSetsRow, error)
+	// ListWatchlistSlugsForUsers returns one row per (user, company) watched. A user
+	// with an empty watchlist has no rows.
+	ListWatchlistSlugsForUsers(ctx context.Context, userIDs []int64) ([]db.ListWatchlistSlugsForUsersRow, error)
 	RecordSubscriptionMatches(ctx context.Context, arg db.RecordSubscriptionMatchesParams) (int64, error)
+	// MarkSubscriptionsSearched stamps when the matching stage last searched these
+	// subscriptions; searchDue and matchQuery's paging read it back.
+	MarkSubscriptionsSearched(ctx context.Context, arg db.MarkSubscriptionsSearchedParams) error
+	// DeactivateSubscriptions pauses the given subscriptions and returns how many it
+	// paused; see pauseUnrunnable.
+	DeactivateSubscriptions(ctx context.Context, arg db.DeactivateSubscriptionsParams) (int64, error)
+	// ListDeliveryCandidates lists the subscriptions with a pending match and their delivery
+	// context, so the worker leases only the ones deliverable now (see deliveryHold).
+	ListDeliveryCandidates(ctx context.Context) ([]db.ListDeliveryCandidatesRow, error)
 	ClaimSubscriptionMatches(ctx context.Context, arg db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error)
 	// ExpireStaleSubscriptionMatches takes up to BatchSize stale matches (older
 	// than the freshness window, or for a closed job) out of the pending set and
@@ -184,35 +231,28 @@ type Store interface {
 	MarkMatchesNotified(ctx context.Context, arg db.MarkMatchesNotifiedParams) (int64, error)
 	RecordMatchDeliveryFailure(ctx context.Context, arg db.RecordMatchDeliveryFailureParams) error
 	ReleaseMatchClaim(ctx context.Context, arg db.ReleaseMatchClaimParams) error
-	// RecordNotification returns the new row's id. A digest is recorded BEFORE
-	// it is sent so the message can link to that row's matched-jobs page;
-	// DeleteNotification withdraws it when the send then fails. With a dedup key
-	// set it returns pgx.ErrNoRows when another channel of the same saved search
-	// already recorded this event — not a failure, see recordNotification.
+	// RecordNotification returns the new row's id. A digest is recorded BEFORE it is
+	// sent so the message can link to its matched-jobs page; DeleteNotification
+	// withdraws it when the send fails. With a dedup key set it returns pgx.ErrNoRows
+	// when another channel already recorded this event (not a failure, see
+	// recordNotification).
 	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) (int64, error)
-	// GetNotificationIDByDedupKey reads back the row another channel recorded
-	// for this same event, so every channel's message links to one page.
+	// GetNotificationIDByDedupKey reads back the row another channel recorded for
+	// this event, so every channel's message links to one page.
 	GetNotificationIDByDedupKey(ctx context.Context, arg db.GetNotificationIDByDedupKeyParams) (int64, error)
 	DeleteNotification(ctx context.Context, id int64) error
 	MarkDigestSent(ctx context.Context, id int64) error
-	// DeleteTelegramLink forgets a user's Telegram chat. Called when a send
-	// reports the chat is permanently closed (ErrRecipientGone) — the same
-	// unlink the settings page performs, reached from the delivery side.
+	// DeleteTelegramLink forgets a user's Telegram chat, called when a send reports
+	// it permanently closed (ErrRecipientGone).
 	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
-	// DisableWebhookConfig disables a user's webhook destination. Called when a
-	// webhook send reports the destination is gone for good (ErrRecipientGone,
-	// mapped from an HTTP 410) — the webhook channel's counterpart to
-	// DeleteTelegramLink.
+	// DisableWebhookConfig disables a user's webhook destination, called when a send
+	// reports it gone for good (ErrRecipientGone, mapped from HTTP 410).
 	DisableWebhookConfig(ctx context.Context, userID int64) (int64, error)
-	// RecordWebhookDeliverySuccess stamps last_success_at after a webhook
-	// digest sends successfully — the counterpart to DisableWebhookConfig on
-	// the success side.
+	// RecordWebhookDeliverySuccess stamps last_success_at after a successful send.
 	RecordWebhookDeliverySuccess(ctx context.Context, userID int64) error
-	// RecordWebhookDeliveryFailure counts a non-410 webhook send failure
-	// toward the destination's auto-disable threshold, disabling it once the
-	// returned count reaches Config.WebhookMaxConsecutiveFailures — the
-	// counterpart to DisableWebhookConfig for a destination that fails
-	// without ever answering 410 Gone (see migration 0177).
+	// RecordWebhookDeliveryFailure counts a non-410 send failure toward the
+	// destination's auto-disable threshold, disabling it once the returned count
+	// reaches Config.WebhookMaxConsecutiveFailures (see migration 0177).
 	RecordWebhookDeliveryFailure(ctx context.Context, arg db.RecordWebhookDeliveryFailureParams) (db.RecordWebhookDeliveryFailureRow, error)
 }
 
@@ -225,87 +265,74 @@ type Config struct {
 	// reclaimable after this, which doubles as the crash reaper.
 	LeaseSeconds int32
 	// ClaimBatch bounds how many pending matches one pass delivers, across all
-	// subscriptions. It is a backstop, not the working bound: what a pass normally
-	// claims is SnapshotCap per subscription with anything pending. Set it above
-	// SnapshotCap x the active subscription count, or the cut falls on whichever
-	// subscriptions the scan reached last — the starvation this replaced.
+	// subscriptions. It is a backstop: a pass normally claims SnapshotCap per
+	// subscription. Keep it above SnapshotCap x the active subscription count, or the
+	// cut falls on whichever subscriptions the scan reached last (starvation).
 	ClaimBatch int32
 	// MaxAttempts dead-letters a match after this many failed deliveries.
 	MaxAttempts int32
-	// WebhookMaxConsecutiveFailures auto-disables a webhook destination once
-	// it has failed this many sends in a row with no success in between (see
-	// RecordWebhookDeliveryFailure) — the webhook channel's own dead-letter,
-	// independent of MaxAttempts since a destination that is simply gone
-	// would otherwise fail a fresh match every pass, forever.
+	// WebhookMaxConsecutiveFailures auto-disables a webhook destination after this
+	// many failed sends in a row (see RecordWebhookDeliveryFailure). It is
+	// independent of MaxAttempts: a gone destination would otherwise fail a fresh
+	// match every pass, forever.
 	WebhookMaxConsecutiveFailures int64
-	// SnapshotCap bounds how many jobs a digest carries — which is how many the
-	// in-app notification records and its matched-jobs page can show. It is NOT
-	// the message listing bound (that is ListLimit): a message is short because a
-	// notification should be, while the recorded set is short only to keep one
-	// notification's jsonb document from growing without limit. It is also the
+	// SnapshotCap bounds how many jobs a digest carries, i.e. how many the in-app
+	// notification records. It is NOT the message listing bound (ListLimit); it only
+	// keeps one notification's jsonb document bounded. It is also the
 	// per-subscription claim, newest first. When more are pending, the rest are
-	// COUNTED in the digest's Total, its tail links to the saved search's live
-	// results, and once it is delivered they are marked notified with it — never
-	// re-queued, which is what kept a busy `daily` subscription mailing the same
-	// backlog, oldest first, for weeks.
+	// COUNTED in the digest's Total, its tail links to the live search, and they are
+	// marked notified with it, never re-queued.
 	SnapshotCap int
-	// FreshnessWindow is how long a match may wait to be delivered. Older than
-	// this — or for a job that has since closed — it goes stale and leaves the
-	// pending set undelivered (expired_at, migration 0193). It is what bounds the
-	// backlog of a subscription nobody can currently receive (push with no device,
-	// an unlinked Telegram chat), so a person who reconnects is sent what is new,
-	// not a month of postings that have mostly closed.
+	// FreshnessWindow is how long a match may wait to be delivered. Older, or for a
+	// job that has since closed, it goes stale and leaves the pending set undelivered
+	// (expired_at, migration 0193). It bounds the backlog of a subscription nobody can
+	// currently receive, so a reconnecting person is sent what is new.
 	FreshnessWindow time.Duration
 }
 
-// DefaultConfig is the production tuning. MatchLimit/cadence are revisited from
-// observed ingest rates (see the design's open questions).
+// DefaultConfig is the production tuning.
 func DefaultConfig() Config {
 	return Config{
 		MatchLimit:   200,
 		LeaseSeconds: 600,
-		// 200 per subscription x room for 250 active subscriptions. Prod carries 53;
-		// the headroom is deliberate, since hitting this bound is what starvation
-		// looks like.
+		// 200 per subscription x room for 250 active subscriptions; the headroom is
+		// deliberate, since hitting this bound is what starvation looks like.
 		ClaimBatch:  50000,
 		MaxAttempts: 5,
-		// Matches MaxAttempts: five chances before giving up, whether the
-		// failures are spread across different matches (MaxAttempts) or the
-		// same destination refusing everything in a row (this).
+		// Matches MaxAttempts: five chances, whether spread across matches or one
+		// destination refusing everything.
 		WebhookMaxConsecutiveFailures: 5,
-		// One query cannot match more than MatchLimit jobs in a pass, so an
-		// `instant` digest is carried whole. A `daily` one, or one held through
-		// quiet hours, accumulates across passes and can exceed it; that digest
-		// carries the newest 200 and counts the rest.
+		// An `instant` digest is carried whole (a query matches at most MatchLimit per
+		// pass). An `interval`, `daily` or quiet-hours-held one accumulates and can
+		// exceed it: it carries the newest 200 and counts the rest.
 		SnapshotCap: 200,
-		// Three days: long enough to outlast quiet hours, a daily digest's wait
-		// and a weekend away from the phone, short enough that nothing announced
-		// as new is a posting most people would already have seen elsewhere.
+		// Three days: outlasts quiet hours, a daily digest's wait and a weekend away,
+		// yet nothing announced as new is stale.
 		FreshnessWindow: 72 * time.Hour,
 	}
 }
 
 // Stats is the per-pass summary logged by the worker.
 type Stats struct {
-	Queries       int // distinct queries matched this pass
-	FailedQueries int // distinct queries whose search or record step errored and was skipped
-	Matched       int // newly recorded (subscription, job) matches
-	Delivered     int // digests sent
-	SoftSkips     int // digests skipped (e.g. Telegram not linked)
-	Deferred      int // digests held back by quiet hours or a not-yet-due daily digest time
-	Expired       int // pending matches that went stale (too old, or the job closed) undelivered
-	Failed        int // digest deliveries that errored
+	Queries        int // distinct queries searched this pass
+	SkippedQueries int // distinct queries not searched: none of their subscriptions was due (searchDue)
+	Searches       int // index requests made, counting every page of a paged query
+	Paused         int // subscriptions paused because the search cannot run their query (pauseUnrunnable)
+	FailedQueries  int // distinct queries whose search or record step errored and was skipped
+	Matched        int // newly recorded (subscription, job) matches
+	Delivered      int // messages sent (one per person and channel, carrying a digest per subscription)
+	SoftSkips      int // digests skipped (e.g. Telegram not linked)
+	Deferred       int // digests held back by quiet hours or a not-yet-due daily digest time
+	Expired        int // pending matches that went stale (too old, or the job closed) undelivered
+	Failed         int // digest deliveries that errored
 }
 
 // MatchingCollapsed reports whether the MATCH stage produced nothing because every
-// query it ran failed — the outcome the run has to go red on.
+// query it ran failed, the outcome the run has to go red on.
 //
-// It is deliberately narrower than "any query failed". Matching is isolated per query
-// exactly like the per-board ingest crawl, and one saved search whose filter Meilisearch
-// dislikes must not fail a pass that served the other fifty-two; the count in the log is
-// what makes that one visible. All of them failing is a different statement — an
-// unreachable index or a broken credential — and it is the one this worker used to print
-// as `queries=53 matched=0 ... failed=0` before exiting 0.
+// It is deliberately narrower than "any query failed": one saved search the index
+// dislikes must not fail a pass that served the rest. All of them failing means an
+// unreachable index or a broken credential.
 func (s Stats) MatchingCollapsed() bool {
 	return s.Queries > 0 && s.FailedQueries == s.Queries
 }
@@ -330,12 +357,11 @@ func New(store Store, searcher Searcher, notifier Notifier, cfg Config) *Runner 
 // what was never sent goes stale rather than arriving late.
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	var stats Stats
-	// Deferred so the counters land on EVERY exit, not only the clean one. A pass that
-	// stopped part-way is the pass whose figures somebody actually wants, and printing
-	// them last meant the run that ended early was also the run that said nothing.
+	// Deferred so the counters land on every exit; a pass that stopped part-way is
+	// the one whose figures matter.
 	defer func() {
-		log.Printf("notify: queries=%d failed_queries=%d matched=%d expired=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
-			stats.Queries, stats.FailedQueries, stats.Matched, stats.Expired, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
+		log.Printf("notify: queries=%d skipped_queries=%d searches=%d paused=%d failed_queries=%d matched=%d expired=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
+			stats.Queries, stats.SkippedQueries, stats.Searches, stats.Paused, stats.FailedQueries, stats.Matched, stats.Expired, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
 	}()
 	if err := r.match(ctx, &stats); err != nil {
 		return stats, fmt.Errorf("match: %w", err)
@@ -347,13 +373,10 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 }
 
 // recipient resolves the destination string for delivery, and whether the
-// subscription is deliverable right now. Telegram resolves the linked chat_id
-// (absent → not deliverable, soft-skipped); email resolves the user's account
-// email live (absent → soft-skipped); push resolves the subscribing user's id,
-// deliverable only when they have a currently registered device (absent →
-// soft-skipped, same as an unlinked Telegram chat); webhook resolves the
-// account's configured destination, deliverable only when one exists and is
-// enabled; any other channel uses the stored destination.
+// subscription is deliverable right now. Telegram resolves the linked chat_id, email
+// the account email live, push the user's id (only with a registered device), and
+// webhook the configured destination (only when enabled); any other channel uses
+// the stored destination. Not deliverable means soft-skipped.
 //
 // The deliverability half of this rule has a SQL twin: the `deliverable` CASE in
 // NotifyBacklogMetrics (internal/platform/db/queries/metrics.sql), which splits the

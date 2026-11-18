@@ -2,6 +2,7 @@ package gmailsync
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -23,7 +24,7 @@ func (s *DBStore) ListConnected(ctx context.Context) ([]Connection, error) {
 	}
 	out := make([]Connection, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, Connection{UserID: r.UserID, Email: r.Email, Cursor: r.SyncCursor})
+		out = append(out, Connection{UserID: r.UserID, Email: r.Email, Cursor: r.SyncCursor, SentCursor: r.SentSyncCursor})
 	}
 	return out, nil
 }
@@ -38,6 +39,7 @@ func (s *DBStore) RefreshToken(ctx context.Context, userID int64) (string, error
 
 func (s *DBStore) UpsertEmail(ctx context.Context, e StoredEmail) error {
 	return s.q.UpsertEmail(ctx, db.UpsertEmailParams{
+		Direction: e.Message.Direction, ToAddrs: e.Message.ToAddrs, CcAddrs: e.Message.CcAddrs,
 		UserID:     e.UserID,
 		ExternalID: e.Message.ID,
 		ThreadID:   e.Message.ThreadID,
@@ -51,8 +53,8 @@ func (s *DBStore) UpsertEmail(ctx context.Context, e StoredEmail) error {
 	})
 }
 
-func (s *DBStore) SetSynced(ctx context.Context, userID, cursorUnix int64) error {
-	return s.q.SetGmailSynced(ctx, db.SetGmailSyncedParams{UserID: userID, SyncCursor: cursorUnix})
+func (s *DBStore) SetSynced(ctx context.Context, userID, cursorUnix, sentCursor int64) error {
+	return s.q.SetGmailSynced(ctx, db.SetGmailSyncedParams{UserID: userID, SyncCursor: cursorUnix, SentSyncCursor: sentCursor})
 }
 
 func (s *DBStore) SetNeedsReconsent(ctx context.Context, userID int64) error {
@@ -79,4 +81,34 @@ func (s *DBStore) Promoted(ctx context.Context) ([]string, error) {
 		Threshold:     PromoteThreshold,
 		MaxOtherShare: MaxOtherShare,
 	})
+}
+
+func (s *DBStore) ListThreadIDs(ctx context.Context, userID int64) ([]string, error) {
+	return s.q.ListGmailThreadIDs(ctx, userID)
+}
+
+func (s *DBStore) StoredMessages(ctx context.Context, userID int64, ids []string) (map[string]StoredRef, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := s.q.ListStoredGmailMessages(ctx, db.ListStoredGmailMessagesParams{UserID: userID, ExternalIds: ids})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]StoredRef, len(rows))
+	for _, r := range rows {
+		out[r.ExternalID] = StoredRef{ThreadID: r.ThreadID, ReceivedAt: r.ReceivedAt.Time, Incoming: r.Direction != DirectionOutgoing}
+	}
+	return out, nil
+}
+
+func (s *DBStore) CooldownUntil(ctx context.Context, userID int64) (time.Time, error) {
+	v, err := s.q.GmailCooldownUntil(ctx, userID)
+	if v.InfinityModifier != 0 {
+		return time.Time{}, err
+	}
+	return v.Time, err
+}
+func (s *DBStore) SetCooldown(ctx context.Context, userID int64) error {
+	return s.q.SetGmailCooldown(ctx, userID)
 }

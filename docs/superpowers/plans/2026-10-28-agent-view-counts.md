@@ -35,6 +35,7 @@ Spec: `docs/superpowers/specs/2026-10-28-agent-view-counts-design.md`.
 - Modify: `internal/platform/arch/layering/blocks.go` — add `"agentview"` to the `application` package list next to `"viewlog"`.
 
 **Interfaces — Produces:**
+
 ```go
 type Kind string
 const KindSearch Kind = "search"; const KindDetail Kind = "detail"
@@ -52,11 +53,13 @@ func ListFiles(dir string, now time.Time) ([]DayFile, error) // days < today UTC
 type Stats struct { Lines, Bad int }
 func Aggregate(r io.Reader) (map[time.Time]map[int64]int, Stats, error) // day -> job id -> uniques
 ```
+
 Surfaces (constants in agentview.go): `SurfaceMCP = "mcp"`, `SurfaceMCPAccount = "mcp_account"`, `SurfaceOJCP = "ojcp"`, `SurfaceAgentAPI = "agent_api"`.
 
 - [ ] **Step 1: Write the failing tests**
 
 `agentview_test.go`:
+
 ```go
 package agentview
 
@@ -128,6 +131,7 @@ func TestFileNameIsTheEventsUTCDay(t *testing.T) {
 ```
 
 `writer_test.go`:
+
 ```go
 package agentview
 
@@ -192,6 +196,7 @@ func TestAFullBufferDropsInsteadOfBlocking(t *testing.T) {
 ```
 
 `aggregate_test.go`:
+
 ```go
 package agentview
 
@@ -266,6 +271,7 @@ Expected: FAIL — package does not compile (undefined: Record, NewWriter, …).
 - [ ] **Step 3: Implement**
 
 `agentview.go`:
+
 ```go
 // Package agentview records the job postings served to agents — over the hosted MCP
 // servers, OJCP and the agent search endpoint — as a JSON Lines log, and aggregates
@@ -360,6 +366,7 @@ func Record(ctx context.Context, kind Kind, ids []int64) {
 Note on `s.sink == nil`: a nil `*Writer` stored in the interface is non-nil as an interface, so `Writer.Write` must itself be nil-receiver safe (below).
 
 `writer.go`:
+
 ```go
 package agentview
 
@@ -474,6 +481,7 @@ func (w *Writer) run() {
 ```
 
 `aggregate.go`:
+
 ```go
 package agentview
 
@@ -564,6 +572,7 @@ func Aggregate(r io.Reader) (map[time.Time]map[int64]int, Stats, error) {
 ```
 
 `AGENTS.md` (short — the package's contract):
+
 ```markdown
 # internal/application/agentview
 
@@ -1089,17 +1098,22 @@ Check: `auth.UserID(c)`'s real signature in `internal/identity/auth/middleware.g
 - [ ] **Step 5: Record at the call sites**
 
 - `mcpapp.go` `SearchJobs`, after the hits loop:
+
   ```go
   	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
   ```
+
   `JobDetail`, after `publishedToAgents` passes and before returning:
+
   ```go
   	agentview.Record(ctx, agentview.KindDetail, []int64{row.ID})
   ```
+
 - `ojcp.go` `SearchJobs` / `JobDetail`: the same two lines at the same points.
 - `assistant_tools.go` `search_jobs` Run: `agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))` after the search succeeds; `get_job` Run: `agentview.Record(ctx, agentview.KindDetail, []int64{job.ID})` after `GetJobBySlug` succeeds.
 - `agent_search.go` `AgentSearchJobs`: `agentview.Record(c.Context(), agentview.KindSearch, hitIDs(res.Hits))` after `runJobSearch` succeeds.
 - Add the shared helper to `agent_views.go`:
+
   ```go
   // hitIDs is the job ids of a search answer, in order.
   func hitIDs(hits []search.JobDocument) []int64 {
@@ -1110,6 +1124,7 @@ Check: `auth.UserID(c)`'s real signature in `internal/identity/auth/middleware.g
   	return ids
   }
   ```
+
   If `semanticSearch.search` returns a different hit type, adapt `hitIDs`' parameter to it.
 
 `GET /api/v1/jobs/:slug` (`jobs.go`) is deliberately NOT touched: nginx already counts it.
@@ -1119,6 +1134,7 @@ Check: `auth.UserID(c)`'s real signature in `internal/identity/auth/middleware.g
 `internal/platform/config/config.go`: add `AgentViewLogDir string` to the settings struct with a doc comment ("AgentViewLogDir is where the server writes internal/application/agentview's day files. Unset, nothing is written."), read from `os.Getenv("AGENT_VIEW_LOG_DIR")` beside the other plain reads (e.g. `MetricsPort`).
 
 `cmd/server/main.go`, before `handler.Register`:
+
 ```go
 	// Postings served to agents, logged for cmd/rollup-views (internal/application/agentview).
 	var agentViews agentview.Sink
@@ -1127,12 +1143,15 @@ Check: `auth.UserID(c)`'s real signature in `internal/identity/auth/middleware.g
 		agentViews = w
 	}
 ```
+
 and `AgentViews: agentViews,` in the `handler.Config` literal. In `handler.Config` add:
+
 ```go
 	// AgentViews receives the postings served to agents (internal/application/agentview).
 	// Optional: nil records nothing.
 	AgentViews agentview.Sink
 ```
+
 Check that `defer w.Close()` runs on the server's real shutdown path (if `main` exits via `os.Exit` or a `run()` helper, place the `Close` where other shutdown cleanups live).
 
 - [ ] **Step 7: Run everything**

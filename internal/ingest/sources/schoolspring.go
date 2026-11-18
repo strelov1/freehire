@@ -17,76 +17,51 @@ import (
 // API is what this adapter reads — a listing endpoint that answers a search, and a per-posting
 // detail endpoint that holds the body the listing omits.
 //
-// # The board is a SEARCH KEYWORD, and the reason is the whole design decision
+// # The board is a SEARCH KEYWORD
 //
-// SchoolSpring has no per-tenant board. One central index serves every employer (80,611 open
-// postings on 2026-09-02), pagination reaches all of it — page 807 at size 100 returns the last
-// 11 rows and the count endpoint agrees exactly — and an employer is a FILTER (`organization`)
-// over that one index, read back off each posting as `employerID`/`employerName`. So the
-// per-employer shape does not exist to be crawled.
+// SchoolSpring has no per-tenant board. One central index serves every employer, pagination
+// reaches all of it, and an employer is a FILTER (`organization`) over that one index, read back
+// off each posting as `employerID`/`employerName`. So the per-employer shape does not exist to
+// be crawled.
 //
-// Crawling the whole index would be wrong for a different reason: it is a school board, not an IT
-// one, and freehire's own dictionaries say so twice. `classify.IsTech` fires on 36 of the 80,611
-// titles (0.04%); a generous substring sweep for IT vocabulary finds 328 (0.4%). But
-// `classify.ConfirmedNonTech` — the gate that decides what a crawl may store — turns away only
-// 39,068 and **admits 41,543**, because it is a non-tech TITLE dictionary written against
-// tech-company ATS boards and it has no term for K-12 classified staff. What it lets through is
-// school psychologists, bus monitors, crossing guards, football coaches and cafeteria workers. An
-// unscoped crawl would move forty thousand non-technical postings into the catalogue and re-fetch
-// their bodies every run (a rejected posting is never stored, so it is never `seen`).
+// Crawling the whole index would be wrong too: it is a school board, not an IT one.
+// Ingest stores every posting a crawl yields (#4412), so an unscoped crawl would move tens of
+// thousands of non-technical postings (school psychologists, bus monitors, coaches, cafeteria
+// workers) into the catalogue.
 //
-// The platform's own `category` taxonomy is the obvious thing to scope with — a server-side facet
-// on the same index, the shape hh and trudvsem use — and it was measured before the keyword list
-// was: it does not work here. 37% of postings carry no category at all (the union of all 239
-// categories is 50,644 of 80,611), the densest categories reach only about a quarter of the
-// technical postings, and the categories overlap so heavily — Administration/Technology and
-// Student Services/Educational Technology share 335 of their 418 and 419 postings — that one board
-// per category would store 40% of its rows twice.
+// The platform's `category` facet does not work as a scope: many postings carry no category, the
+// densest categories cover only a fraction of the technical postings, and categories overlap so
+// heavily that one board per category would store many rows twice.
 //
 // `keyword` is what selects a crawlable slice. It is a plain case-insensitive SUBSTRING match over
 // a posting's title and its employer name (which is why "it manager" matches "Unit Manager" and
-// why the keywords in sources/schoolspring.yml are whole phrases), it filters rather than ranks —
-// "software developer" answers zero rather than padding with near matches, the way WhatJobs' feed
-// does — and every hit for a term carries that term. That is the same board-is-a-keyword shape
-// sources/whatjobs.yml uses, and sources/hh.yml's board-is-a-professional-role before it.
+// why the keywords in sources/schoolspring.yml are whole phrases), and it filters rather than
+// ranks: "software developer" answers zero rather than padding with near matches. Same
+// board-is-a-keyword shape as sources/whatjobs.yml.
 //
 // # TEDK12 is a different product, and this adapter does not crawl it
 //
 // The per-tenant TEDK12 sites (pembinatrails.tedk12.ca and the like) are PowerSchool Applicant
 // Tracking, a separate ATS: per-district hosts, server-rendered ASP.NET with a __VIEWSTATE and no
-// JSON of any kind, board = the tenant host. They are not another spelling of this board and would
-// be their own adapter with its own host discovery.
-//
-// They are also largely already here. 332 of the 377 distinct upstream hosts this crawl's postings
-// link back to are `*.tedk12.com` tenants, carrying 622 of its 1,261 postings — SchoolSpring is
-// where the US TEDK12 fleet publishes, so crawling both would mostly re-crawl the same postings
-// under a second identity. What it would ADD is the fleet outside the US index: not one
-// `*.tedk12.ca` host appears among those 377, and Pembina Trails' postings are absent from the
-// national index entirely (searched live). A Canadian TEDK12 adapter is therefore a real, separate
-// piece of work rather than a variant of this one.
+// JSON, board = the tenant host. They would be their own adapter with its own host discovery.
+// The US `*.tedk12.com` tenants largely republish here, so crawling both would re-crawl the same
+// postings under a second identity; the `*.tedk12.ca` fleet is absent from the national index.
 //
 // # Consequences worth knowing
 //
 //   - A posting whose title matches two keywords is stored twice, under each board's external_id
-//     namespace. The first prod-shaped run stored 383 rows, 35 of them (9%) a second copy of a
-//     posting another board also listed. It is stable rather than churning — both boards list
-//     their copy on every crawl, so neither row ages out — and the duplicate markers collapse the
-//     pair in search.
-//   - The index carries stale inventory the platform never retired: 17,700 of the 80,611 postings
-//     display a date before 2025, some as far back as 2010, and 33 of the 383 rows this crawl stores
-//     (9%) are among them. They are served as open and no field says otherwise, so nothing here
-//     can filter them — and nothing downstream closes them either: they are re-listed on every
-//     crawl, so the unseen sweep never fires, and cmd/liveness skips registered providers. Only
-//     the ghost signal marks them. Giving them a verdict would
-//     mean a prober of this API's own (the detail resource answers success=false for a posting
-//     that is gone, which a plain GET of the SPA posting page cannot see) — a separate piece of
-//     work, noted here rather than guessed at.
+//     namespace. It is stable rather than churning, and the duplicate markers collapse the pair
+//     in search.
+//   - The index carries stale inventory the platform never retired (dates years back), served as
+//     open with no field saying otherwise, so nothing here can filter it. Nothing downstream
+//     closes it either: it is re-listed on every crawl, so the unseen sweep never fires, and
+//     cmd/liveness skips registered providers. Only the ghost signal marks it. A verdict would
+//     need a prober of this API's own (the detail resource answers success=false for a posting
+//     that is gone, which a plain GET of the SPA posting page cannot see).
 //   - SchoolSpring re-publishes postings that live on the employer's own ATS (jobInfo.infoURL
 //     points at teachermatch, applitrack, tedk12, searchsoft and others), so it is an aggregator:
 //     a first-party copy of the same posting wins over this one.
-//   - No metering observed: 82 listing pages at size 1000, 239 category probes at 6-way
-//     concurrency and 1,261 detail fetches at 8-way (≈13 req/s) all answered 200. So no pacer is
-//     wired; pacer.go is where one would go.
+//   - No metering observed, so no pacer is wired; pacer.go is where one would go.
 type schoolspring struct {
 	http JSONGetter
 }
@@ -108,13 +83,10 @@ const (
 	// renders client-side and serves no posting data of its own.
 	schoolspringAPI = "https://api.schoolspring.com"
 	// schoolspringDomain names the job board to search. SchoolSpring hosts per-district boards
-	// on subdomains (vansd.schoolspring.com and the like); the national domain is the one that
-	// sees every employer, and it is what the API falls back to anyway — stating it keeps the
-	// request saying which board it means.
+	// on subdomains; the national domain sees every employer and is the API's fallback anyway.
 	schoolspringDomain = "www.schoolspring.com"
 	// schoolspringPageSize is the listing page size. The endpoint honours far larger values, but
-	// no committed keyword reaches even one page of 100, so the modest size only ever costs the
-	// one request it takes to see the slice's end.
+	// no committed keyword reaches one page of 100.
 	schoolspringPageSize = 100
 	// schoolspringMaxPages backstops the page loop. The walk's real stop condition is a page that
 	// adds no posting; this only bounds an endpoint that keeps answering with fresh inventory.
@@ -182,7 +154,7 @@ type schoolspringJobInfo struct {
 	// JobTypeName is a closed platform enum (see schoolspringEmploymentType).
 	JobTypeName string `json:"jobTypeName"`
 	// PayDisplay is the employer's own "publish this figure" switch, and it is off on most
-	// postings that carry one — 154 of 200 sampled. PayMin/PayMax are bare numbers.
+	// postings that carry one. PayMin/PayMax are bare numbers.
 	PayDisplay int     `json:"payDisplay"`
 	PayMin     float64 `json:"payMin"`
 	PayMax     float64 `json:"payMax"`
@@ -190,14 +162,13 @@ type schoolspringJobInfo struct {
 	// the site renders the first and falls back to the second, and so does schoolspringSalaryPeriod.
 	SalaryCode  string `json:"salaryCode"`
 	PayTypeName string `json:"payTypeName"`
-	// CountryName is the employer's contact country, unset on about 40% of postings. It is the
+	// CountryName is the employer's contact country, often unset. It is the
 	// only country the platform states anywhere (see applySalary).
 	CountryName string `json:"countryName"`
 }
 
-// schoolspringLocation is one place a posting names. A posting may name several (217 of 1,261
-// live postings did), and only the display string is useful — the lat/lng and the school's own
-// name narrow a posting to a building.
+// schoolspringLocation is one place a posting names. A posting may name several, and only the
+// display string is useful — the lat/lng and the school's own name narrow it to a building.
 type schoolspringLocation struct {
 	DisplayLocation string `json:"displayLocation"`
 }
@@ -234,9 +205,7 @@ func (s schoolspring) crawl(ctx context.Context, e CompanyEntry, seen func(exter
 }
 
 // list pages the keyword's search results until a page adds no posting it has not already
-// collected. The endpoint reports no total, so that is the only end-of-slice signal; the walk was
-// verified exhaustive against the count endpoint over the whole index (80,611 rows, 81 pages, no
-// posting repeated and none missing).
+// collected. The endpoint reports no total, so that is the only end-of-slice signal.
 func (s schoolspring) list(ctx context.Context, keyword string) ([]schoolspringListing, error) {
 	var out []schoolspringListing
 	collected := map[int64]bool{}
@@ -296,8 +265,7 @@ func (s schoolspring) page(ctx context.Context, keyword string, page int) ([]sch
 // hydration only while it is younger than pipeline.HydrationRetryWindow, after which `seen`
 // reports it like any other row, so a row stored without a body would keep its empty description
 // permanently and never reach the search index. A skipped posting stays unseen and the next crawl
-// retries it. Twelve of 1,261 live postings publish no body at all; those cost one detail request
-// per crawl forever, which is the cheaper half of the trade.
+// retries it; postings that publish no body cost one detail request per crawl.
 func (s schoolspring) hydrate(ctx context.Context, l schoolspringListing) (Job, bool) {
 	var resp schoolspringEnvelope[schoolspringDetail]
 	if err := s.http.GetJSON(ctx, schoolspringDetailURL(l.JobID), &resp); err != nil || !resp.Success {
@@ -327,7 +295,7 @@ func (s schoolspring) hydrate(ctx context.Context, l schoolspringListing) (Job, 
 		// The platform states no work arrangement in any structured field, so WorkMode is left
 		// for the pipeline's location and description dictionaries. countryName is the employer's
 		// contact country as a NAME, which countryFromCode resolves alongside the codes it is
-		// usually handed, and it is unset on about 40% of postings.
+		// usually handed.
 		Countries:      countryFromCode(info.CountryName),
 		EmploymentType: schoolspringEmploymentType(info.JobTypeName),
 		PostedAt:       NotFuture(parseLayout(schoolspringDateLayout, info.DisplayDate)),
@@ -342,12 +310,10 @@ func (s schoolspring) hydrate(ctx context.Context, l schoolspringListing) (Job, 
 // for, and the posting states the United States as its country.
 //
 // The country requirement is what makes the currency a fact instead of a guess. The figures are
-// bare numbers, nothing on either resource names a currency, and the site's own UI simply renders
-// a "$" in front of them — an assumption that is right for a US district and wrong for the
-// international schools on the same index (a posting from Athens states €900–1,100 in its body).
-// So the only currency this adapter publishes is the one the posting's own country vouches for.
-// The employer contact block that carries it is filled on about 60% of postings; the rest yield no
-// structured salary and the enrichment pass reads the figure out of the body instead.
+// bare numbers with no currency, and the site's UI assumes "$", which is wrong for international
+// schools on the same index. So the only currency published is the one the posting's own country
+// vouches for; postings without the country yield no structured salary and enrichment reads the
+// figure out of the body.
 func (info schoolspringJobInfo) applySalary(job *Job) {
 	period := schoolspringSalaryPeriod(firstNonEmpty(info.SalaryCode, info.PayTypeName))
 	if info.PayDisplay != 1 || period == "" || !info.statesUS() {
@@ -371,10 +337,9 @@ func (info schoolspringJobInfo) statesUS() bool {
 
 // schoolspringSalaryPeriod maps the posting's pay period onto freehire's salary periods.
 //
-// salaryCode is free text the employer types — the live values run from "Per Year" and "Per Hour"
-// through "BU Salary Schedule" and "Salary Range: Per P.S.E. Contract Schedule" to "SY" — so this
-// recognises the handful of spellings that state a period and yields "" for everything else,
-// which drops the amount rather than publishing it half-qualified.
+// salaryCode is free text the employer types ("Per Year", "BU Salary Schedule", "SY"), so this
+// recognises the spellings that state a period and yields "" for everything else, which drops
+// the amount rather than publishing it half-qualified.
 func schoolspringSalaryPeriod(code string) string {
 	switch strings.TrimPrefix(strings.ToLower(strings.TrimSpace(code)), "per ") {
 	case "year", "yearly", "annual", "annually":
@@ -391,7 +356,7 @@ func schoolspringSalaryPeriod(code string) string {
 }
 
 // schoolspringEmploymentType maps the platform's job-type enum onto freehire's vocabulary. The
-// enum is closed and small (its dictionary endpoint lists exactly these seven values), and the
+// enum is closed and small (its dictionary endpoint lists it), and the
 // three it has no freehire counterpart for — "Summer", "After school/Evening" and the
 // "Not provided" default — yield "" so the description parser decides. The unpaid variants map on
 // their schedule: freehire's employment type says how much of a week a role takes, not whether it
@@ -413,8 +378,7 @@ func schoolspringEmploymentType(jobType string) string {
 func schoolspringText(s string) string { return strings.TrimSpace(html.UnescapeString(s)) }
 
 // schoolspringSearchURL builds one page of a keyword search. The filter parameters the SPA sends
-// alongside are omitted: the endpoint treats an absent filter exactly as it treats an empty one
-// (verified live), so sending eight empty ones would only obscure which two do the work.
+// alongside are omitted: the endpoint treats an absent filter as an empty one.
 func schoolspringSearchURL(keyword string, page int) string {
 	return fmt.Sprintf("%s/api/Jobs/GetPagedJobsWithSearch?domainName=%s&keyword=%s&page=%d&size=%d&sortDateAscending=false",
 		schoolspringAPI, schoolspringDomain, url.QueryEscape(keyword), page, schoolspringPageSize)

@@ -18,7 +18,7 @@
 
 {#if facts.length || badges.length}
   <div class="rounded-xl border border-border bg-card p-4">
-    <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Company facts</p>
+    <p class="mb-3 text-xs font-semibold text-muted-foreground">Company facts</p>
     {#if badges.length}
       <div class="mb-3 flex flex-wrap gap-1.5">
         {#each badges as badge (badge)}

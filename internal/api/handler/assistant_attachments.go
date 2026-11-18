@@ -13,11 +13,6 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
 
-// attachmentExtractionsPerHour bounds how many documents one caller may have read per
-// hour. Each one is a pdftotext subprocess, and nothing about a conversation needs more
-// than a handful; the bound is against a script, not a person.
-const attachmentExtractionsPerHour = 60
-
 // errAttachmentNoText mirrors the résumé upload's own message for the same cause: the file
 // parsed cleanly and carried no text layer.
 const errAttachmentNoText = "couldn't read any text from this PDF — it looks like a scan or image. Attach a text-based PDF, or paste the text instead."
@@ -30,14 +25,13 @@ type assistantAttachmentResponse struct {
 	Truncated bool   `json:"truncated"`
 }
 
-// PostAssistantAttachment reads one PDF the candidate wants to attach to a message and
-// returns its text. Nothing is stored — not the file and not the text: the client holds the
-// result and sends it with the message, where it becomes part of that message's transcript
-// row. A document attached here is therefore never a CV (the stored résumé has its own
-// upload), and it reaches the model exactly as if the candidate had pasted it.
+// PostAssistantAttachment reads one PDF the candidate wants to attach to a message and returns
+// its text. Nothing is stored: the client sends the result back with the message, where it
+// becomes part of that message's transcript row. It is never a CV, and reaches the model as if
+// the candidate had pasted it.
 //
-// Extraction is the résumé upload's own (resume.ExtractPDFText via h.extractPDFText): one
-// PDF reader in the codebase, with its timeout and its output ceiling.
+// Extraction is the résumé upload's own (resume.ExtractPDFText via h.extractPDFText), with its
+// timeout and output ceiling.
 func (h *assistantHandlers) PostAssistantAttachment(c *fiber.Ctx) error {
 	if _, err := requireUserID(c); err != nil {
 		return err
@@ -84,11 +78,10 @@ type assistantTurnRequest struct {
 // errEmptyTurn is a message with neither text nor a document.
 var errEmptyTurn = errors.New("text is required")
 
-// parseTurnRequest validates a turn's body into the prompt and its documents. Text may be
-// empty when a document is attached — "here is my CV" is often said by the file alone — but
-// a message carrying neither is refused. The typed text keeps its own ceiling; each
-// document is bounded by assistant.NewAttachment, which a client cannot raise by skipping
-// the extraction endpoint and posting text directly.
+// parseTurnRequest validates a turn's body into the prompt and its documents. Text may be empty
+// when a document is attached, but a message with neither is refused. The typed text keeps its
+// own ceiling; each document is bounded by assistant.NewAttachment, so a client cannot raise it
+// by posting text directly.
 func parseTurnRequest(in assistantTurnRequest, maxPrompt int) (string, []assistant.Attachment, error) {
 	prompt := strings.TrimSpace(in.Text)
 	if utf8.RuneCountInString(prompt) > maxPrompt {

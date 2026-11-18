@@ -87,10 +87,7 @@ func TestInsightsCompanyRollupVelocityAndRunningOpen(t *testing.T) {
 	// company-less job → excluded entirely.
 	seedCompanyJob(t, pool, "e1", "", 8, nil, nil)
 
-	if err := q.DeleteAllInsightsCompanyStats(ctx); err != nil {
-		t.Fatalf("delete company stats: %v", err)
-	}
-	if _, err := q.RebuildInsightsCompanyStats(ctx); err != nil {
+	if _, err := materializeInsightsCompanyStats(q)(ctx); err != nil {
 		t.Fatalf("rebuild company stats: %v", err)
 	}
 

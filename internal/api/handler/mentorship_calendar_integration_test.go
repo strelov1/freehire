@@ -80,7 +80,7 @@ func TestGetMyCalendarHTTPFlow(t *testing.T) {
 	cookieAuth := auth.RequireAuth(iss, testVersions)
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/mentorship/availability/calendar", cookieAuth, h.GetMyCalendar)
+	h.register(app.Group("/api/v1"), middleware{key: cookieAuth}, newContract(contractHandlers{mentorshipHandlers: h}))
 
 	// The calendar's month is the MENTOR's month: a booking starting late on the last day
 	// of a UTC month is already in the next one in Berlin, and asking for the UTC month

@@ -18,9 +18,9 @@ import (
 // employer comes from the listing item, so its boardless config entry's company is only a
 // validation placeholder.
 //
-// Coverage ceiling: the API reports ~974 vacancies but paginates only to ~748; the cap sits on
-// the result-set itself (every sort ordering, the s[]/qid filters, and the RSS feed return the
-// same ids), so the unreachable remainder needs an authenticated session and is out of scope.
+// Coverage ceiling: the API paginates short of the vacancies it reports; the cap sits on the
+// result-set itself (every sort ordering, the s[]/qid filters, and the RSS feed return the same
+// ids), so the unreachable remainder needs an authenticated session and is out of scope.
 type habrCareer struct {
 	http habrCareerHTTP
 }
@@ -36,13 +36,12 @@ const (
 	habrListURL    = "https://career.habr.com/api/frontend/vacancies?type=all&sort=date&page=%d"
 	habrVacancyURL = "https://career.habr.com/vacancies/%d"
 	// habrMaxPages bounds pagination so a wrong or missing meta.totalPages cannot loop. The API
-	// caps the listing at ~30 pages (the ~748 reachable vacancies of the package-doc ceiling), so
-	// 50 is a safe headroom over that cap.
+	// caps the listing well below this (see the package-doc ceiling).
 	habrMaxPages = 50
 )
 
-// habrHeaders mirror what a browser sends to the JSON API; Habr serves the listing without them
-// but the public Career.habr-parser project sends them and they reduce block risk.
+// habrHeaders mirror what a browser sends to the JSON API; Habr serves the listing without
+// them, but they reduce block risk.
 var habrHeaders = map[string]string{
 	"Accept":  "application/json",
 	"Referer": "https://career.habr.com/vacancies",
@@ -101,10 +100,9 @@ func (h habrCareer) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		var resp habrListResponse
 		if err := h.http.GetJSONWithHeaders(ctx, fmt.Sprintf(habrListURL, page), habrHeaders, &resp); err != nil {
 			// Any page failing is a board error, not a truncation to salvage: habr_career is a
-			// fullCatalog source, so the post-run sweep closes its unseen jobs by source. A
-			// partial crawl returned as success would look like a shrunken catalogue and
-			// mass-close every posting past the failed page. Fail the whole crawl instead —
-			// Failed>0 makes the sweep fall back to the safe company-scoped close.
+			// fullCatalog source, so a partial crawl returned as success would look like a shrunken
+			// catalogue and mass-close every posting past the failed page. Failed>0 makes the sweep fall
+			// back to the safe company-scoped close.
 			return nil, fmt.Errorf("habr_career: list page %d: %w", page, err)
 		}
 		if len(resp.List) == 0 {

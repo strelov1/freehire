@@ -7,9 +7,8 @@ import (
 	"strings"
 )
 
-// Kind says what a suggestion IS, which is the only thing that decides what picking it
-// does: a title becomes the free-text query (no facet names it), everything else
-// applies its own facet.
+// Kind says what a suggestion is, and so what picking it does: a title becomes the
+// free-text query, everything else applies its own facet.
 type Kind string
 
 const (
@@ -21,9 +20,8 @@ const (
 
 // Document is one offerable suggestion, as it sits in the index.
 type Document struct {
-	// ID is namespaced by kind. `backend` is a plausible role slug AND a plausible
-	// category slug AND a plausible skill, and Meilisearch dedupes on this — an
-	// unnamespaced id would silently keep whichever kind was written last.
+	// ID is namespaced by kind: Meilisearch dedupes on it, and `backend` is a plausible
+	// role, category and skill slug.
 	ID   string `json:"id"`
 	Text string `json:"text"`
 	Kind Kind   `json:"kind"`
@@ -31,8 +29,7 @@ type Document struct {
 	Slug string `json:"slug,omitempty"`
 	// Jobs is the open postings behind it. Never zero — see Build.
 	Jobs int `json:"jobs"`
-	// Searches is how often visitors have asked for it. Zero until the frequency
-	// record exists; the endpoint ranks by it first, then by Jobs.
+	// Searches is how often visitors have asked for it; the endpoint ranks by it, then Jobs.
 	Searches int `json:"searches"`
 }
 
@@ -43,45 +40,26 @@ type Company struct {
 	Jobs int
 }
 
-// Input is everything the dictionary is assembled from. The counts are the live facet
-// distributions; the builder does not measure anything itself.
+// Input is everything the dictionary is assembled from: live facet counts, nothing
+// measured by the builder.
 type Input struct {
-	// Titles are RAW posting titles with their counts, straight from the catalogue.
-	// Normalisation and merging happen here rather than in the query that produced
-	// them, because Title is one function shared with the query path.
+	// Titles are raw posting titles with counts; Build normalises and merges them with
+	// Title, which the query path shares.
 	Titles map[string]int
-	// TitleFloor is the merged count a title must reach. Applied AFTER normalisation:
-	// "Product Owner", "product owner" and "PRODUCT OWNER" are three rows and one
-	// suggestion, so a floor applied before merging drops a title that clears it.
+	// TitleFloor is the merged count a title must reach, applied after normalisation so
+	// spelling variants add up.
 	TitleFloor int
 
 	Categories map[string]int
 	Skills     map[string]int
 	Companies  []Company
 
-	// Searches is how often each NORMALISED phrase has been searched for. Keyed by
-	// Title(text), which is why a typed query and the title it names meet here at all.
-	// Absent is zero rather than excluded: nobody having asked for a suggestion is not
-	// evidence against it, and the posting count still orders it.
+	// Searches is how often each normalised phrase was searched for, keyed by Title(text).
+	// Absent counts as zero, not excluded.
 	Searches map[string]int
 }
 
-// Build assembles the suggestion dictionary.
-//
-// Two rules shape it beyond the obvious, and both come from measuring the live
-// catalogue rather than from taste:
-//
-//   - A bare-category role and its category select the SAME postings — role `devops`
-//     counts 53,250 against category `devops` at 53,251. Offering both puts one filter
-//     in the dropdown twice, which is the confusion this whole feature exists to
-//     remove. The role wins: "DevOps Engineer" names a job, "DevOps" names a
-//     department.
-//   - The catalogue carries every seniority grade as its own role slug, and graded
-//     slugs outnumber ungraded ones roughly six to one, so offering each would spend a
-//     whole dropdown on one role's grades.
-//
-// Nothing measured at zero is offered at all: a suggestion with no postings behind it
-// leads to an empty page, which is worse than no suggestion.
+// Build assembles the suggestion dictionary. Nothing with zero postings is offered.
 func Build(in Input) []Document {
 	var docs []Document
 	add := func(kind Kind, slug, text string, jobs int) {
@@ -102,18 +80,13 @@ func Build(in Input) []Document {
 		}
 	}
 	for text, n := range merged {
-		// Two gates, and they refuse different things. `Recordable` asks whether this is
-		// a search PHRASE at all — the same question the demand path asks of typed text,
-		// and the answer that keeps a runaway title out of an id (hex doubles the value,
-		// so the engine's 511-byte ceiling is a ~255-byte one here). `Offerable` asks
-		// whether the phrase names a craft.
+		// Recordable: is this a search phrase at all (also keeps runaway titles out of
+		// ids). Offerable: does it name a craft.
 		if n < in.TitleFloor || !Recordable(text) || !Offerable(text) {
 			continue
 		}
-		// A title names no facet, so its slug is empty and its id is the normalised
-		// text — the text IS its identity. The DISPLAY form is title-cased: the
-		// lowercase is what merges the spellings, and "product owner" sitting in a
-		// dropdown between "Backend Engineer" and "Google" reads as a bug.
+		// A title names no facet: empty slug, id from the normalised text. Display is
+		// title-cased.
 		docs = append(docs, Document{
 			ID: documentID(KindTitle, text), Text: displayTitle(text), Kind: KindTitle, Jobs: n,
 			Searches: in.Searches[text],
@@ -132,43 +105,22 @@ func Build(in Input) []Document {
 		add(KindCompany, c.Slug, c.Name, c.Jobs)
 	}
 
-	// Stable order so a rebuild that changed nothing writes the same documents in the
-	// same sequence — which is what makes a diff of two builds readable.
+	// Stable order, so builds diff cleanly.
 	sort.Slice(docs, func(i, j int) bool { return docs[i].ID < docs[j].ID })
 	return docs
 }
 
-// documentID builds the identifier Meilisearch dedupes on.
-//
-// The engine accepts letters, digits, hyphens and underscores and nothing else, up to
-// 511 bytes, and two production builds failed here in turn:
-//
-//   - `company:01-tech` — the readable separator was an illegal character, and so are
-//     characters the VALUES legitimately hold (`node.js`, `c++`, `at&t`), so no
-//     prefix-plus-value scheme survives this dictionary's own vocabulary;
-//   - then a 340-byte company slug — a transliterated college name — which the hex
-//     encoding that fixed the first failure doubled past the ceiling.
-//
-// So: a fixed-width hash. Legal by construction, and its length does not follow the
-// value at all — which is the property the second failure was really about. A slug
-// arrives from a feed and nobody promised its length; bounding the values we mine
-// ourselves could never have covered that.
-//
-// The kind stays in front, unencoded, because it is a closed vocabulary of plain
-// words: `backend` is a plausible role, skill AND category, and the whole reason an id
-// is namespaced is that those three must not collide.
-//
-// Readability in the engine's own UI is the cost. The document carries `kind`, `slug`
-// and `text` as fields, so nothing that has to be looked up is only in the id.
+// documentID builds the identifier Meilisearch dedupes on. The engine accepts only
+// letters, digits, hyphens and underscores, up to 511 bytes. Values can hold other
+// characters (`node.js`, `c++`) and arrive from feeds with unbounded length, so the value
+// is hashed to a fixed width. The kind stays in front, unencoded, to namespace the id.
 func documentID(kind Kind, value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return string(kind) + "_" + hex.EncodeToString(sum[:])
 }
 
-// categoryText and skillText render a slug as a person would write it. Neither
-// dictionary ships a display label to Go — the web contracts carry those — so the
-// slug's own shape is the honest fallback rather than a second label table that would
-// drift from the one the filter modal renders.
+// categoryText and skillText render a slug as words. Display labels live in the web
+// contracts, so the slug's shape is the fallback instead of a second label table.
 func categoryText(slug string) string { return titleWords(slug) }
 func skillText(slug string) string    { return titleWords(slug) }
 
@@ -176,14 +128,12 @@ func titleWords(slug string) string {
 	return capitalise(strings.FieldsFunc(slug, func(r rune) bool { return r == '_' || r == '-' }))
 }
 
-// displayTitle renders a normalised posting title the way it is written. It splits on
-// WHITESPACE only, unlike titleWords: a hyphen inside a mined title is part of the
-// name, so splitting there turns "front-end developer" into "Front End Developer".
+// displayTitle renders a normalised posting title. Unlike titleWords it splits on
+// whitespace only, so "front-end developer" does not become "Front End Developer".
 func displayTitle(title string) string { return capitalise(strings.Fields(title)) }
 
-// capitalise upper-cases each word's first rune and leaves the rest alone. Leaving the
-// rest alone is the point: "c#" becomes "C#" and "node.js" becomes "Node.js", where
-// title-casing the whole word would produce "Node.Js".
+// capitalise upper-cases each word's first rune only: "node.js" becomes "Node.js", not
+// "Node.Js".
 func capitalise(words []string) string {
 	for i, w := range words {
 		r := []rune(w)

@@ -34,10 +34,7 @@ class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
   static readonly OPEN = 1;
 
-  onopen: (() => void) | null = null;
-  onclose: (() => void) | null = null;
-  onmessage: ((ev: MessageEvent) => void) | null = null;
-  onerror: (() => void) | null = null;
+  private listeners: Record<string, Array<() => void>> = {};
   readyState = 0;
   sent: string[] = [];
 
@@ -46,6 +43,10 @@ class FakeWebSocket {
     public protocols: string[],
   ) {
     FakeWebSocket.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: () => void) {
+    (this.listeners[type] ??= []).push(listener);
   }
 
   send(data: string) {
@@ -58,11 +59,11 @@ class FakeWebSocket {
 
   triggerOpen() {
     this.readyState = FakeWebSocket.OPEN;
-    this.onopen?.();
+    this.listeners.open?.forEach((l) => l());
   }
 
   triggerClose() {
-    this.onclose?.();
+    this.listeners.close?.forEach((l) => l());
   }
 }
 

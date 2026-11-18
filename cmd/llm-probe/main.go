@@ -2,27 +2,18 @@
 // a few times and publishes what came back as Prometheus gauges through the node_exporter
 // textfile collector, one series per alias. Schedule it every few minutes.
 //
-// It exists because nothing measured what a provider ANSWERS. Three times in the week to
-// 2026-09-08 a provider behind the gateway stopped serving while the gateway went on
-// reporting it active — Cerebras on an empty wallet (402), then two Z.ai accounts, one
-// rate-limited under a Fair Usage Policy (429) and one with a revoked key (401). Every one
-// of them was discovered by a person noticing a feature was broken, and the last cost
-// roughly half a day: the fit analysis was failing 55% of real users' requests before
-// anyone looked at a log.
+// It exists because nothing measured what a provider ANSWERS: a provider behind the gateway
+// can stop serving (empty wallet 402, rate limit 429, revoked key 401) while the gateway
+// keeps reporting it active, and the failure is otherwise found by a person noticing a
+// broken feature.
 //
-// The alias is what it probes, not individual keys. Only the gateway host holds the raw
-// keys — the admin API returns them masked — so a probe run anywhere else cannot say WHICH
-// key is dead. It can say the thing that actually matters and that nothing else says: what
-// share of requests through the aliases this deployment uses are being served at all. On
-// 2026-09-08 that share was 23%.
+// The alias is what it probes, not individual keys: only the gateway host holds the raw
+// keys, so a probe elsewhere cannot say WHICH key is dead. It says what share of requests
+// through the aliases this deployment uses are being served at all.
 //
-// It watches every alias because watching one was not enough. Until 2026-09-09 it asked only
-// LLM_MODEL. Measured that day, this deployment routes through two: `flagship` answers from
-// z.ai and carries the assistant, the fit analysis and enrichment; `fast`
-// (SEARCH_INTENT_MODEL) answers from Gemini and carries the AI search filter, whose handler
-// turns a gateway refusal into a 500. A dead `fast` would have broken AI search for everyone
-// while `flagship` went on answering and this worker went on reporting it healthy — the exact
-// silence the worker was built to end.
+// It watches every alias, not just LLM_MODEL: `flagship` carries the assistant, fit analysis
+// and enrichment, while `fast` (SEARCH_INTENT_MODEL) carries the AI search filter, whose
+// handler turns a gateway refusal into a 500. A dead `fast` would otherwise go unseen.
 package main
 
 import (
@@ -38,28 +29,23 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// textfileName is the collector file this worker owns. Like queue-metrics it deliberately
-// does NOT follow the name-after-the-binary convention: worker.Main writes the run outcome
-// to <binary>.prom after run() returns, so publishing here under "llm-probe" would have
-// every run emit these gauges and then immediately overwrite them.
+// textfileName is the collector file this worker owns. It must not be named after the binary:
+// worker.Main writes the run outcome to <binary>.prom after run() returns and would overwrite
+// these gauges.
 const textfileName = "freehire-llm.prom"
 
-// probes is how many questions one run asks. Three is enough to tell a dead alias from a
-// flaky one while staying too small to matter: each is a handful of tokens, so a run every
-// five minutes costs less in a day than one fit analysis.
+// probes is how many questions one run asks: enough to tell a dead alias from a flaky one,
+// at a handful of tokens each.
 const probes = 3
 
-// probeTimeout bounds one question. It is deliberately far below the callers' own budgets
-// (90s for a fit-analysis stage, 180s for an assistant turn): this asks for five tokens, so
-// anything approaching a real caller's deadline is already a fault worth reporting rather
-// than something to keep waiting for.
+// probeTimeout bounds one question. It is far below the callers' own budgets: a five-token
+// answer that approaches them is already a fault worth reporting.
 const probeTimeout = 30 * time.Second
 
 func main() { worker.Main(run) }
 
 func run() int {
-	// Gate before touching anything, the same order queue-metrics follows: with nowhere to
-	// publish there is nothing worth spending a token on.
+	// Gate first: with nowhere to publish there is nothing worth spending a token on.
 	dir := os.Getenv(worker.PromTextfileDirEnv)
 	if dir == "" {
 		log.Printf("llm-probe: %s is unset, nothing to publish", worker.PromTextfileDirEnv)
@@ -69,20 +55,18 @@ func run() int {
 	cfg := config.LoadLLM()
 	if !cfg.Settings(cfg.Model).Enabled() {
 		log.Printf("llm-probe: LLM is unconfigured, nothing to probe")
-		return worker.Skip("LLM_SETTINGS")
+		return worker.Skip("LLM_BASE_URL+LLM_API_KEY+LLM_MODEL")
 	}
 
-	// Every alias the deployment routes through, not just LLM_MODEL. cmd/server reads these
-	// same two through cmp.Or, so this asks exactly what production asks.
+	// Every alias the deployment routes through; cmd/server reads these through cmp.Or too.
 	aliases := probedAliases(cfg.Model, os.Getenv("ASSISTANT_MODEL"), os.Getenv("SEARCH_INTENT_MODEL"))
 
 	snaps := make([]snapshot, 0, len(aliases))
 	for _, alias := range aliases {
 		client, flush, err := llm.NewClient(cfg.Settings(alias), "llm-probe")
 		if err != nil {
-			// One unbuildable client is not a reason to publish nothing about the others:
-			// the file is written whole, so an early return here would erase every alias's
-			// numbers and leave the collector reading a stale file as if it were current.
+			// Don't return early: the file is written whole, so that would erase every
+			// alias's numbers and leave the collector reading a stale file.
 			log.Printf("llm-probe: build client for %q: %v", alias, err)
 			continue
 		}
@@ -102,9 +86,7 @@ func run() int {
 	for _, snap := range snaps {
 		log.Printf("llm-probe: model=%s ok=%d/%d slowest=%s", snap.model, snap.ok, snap.attempts, snap.slowest)
 	}
-	// A failing alias is not this worker's failure. Exiting non-zero would paint the unit
-	// red for something it is only reporting, and a red unit that means "the thing I watch
-	// is broken" is indistinguishable from one that means "I am broken".
+	// A failing alias is not this worker's failure: a red unit must keep meaning "I am broken".
 	return 0
 }
 
@@ -113,20 +95,16 @@ type snapshot struct {
 	model    string
 	attempts int
 	ok       int
-	// slowest is the longest single probe, successful or not. It separates a refusal from
-	// a stall without parsing an error string: a gateway that says no answers in
-	// milliseconds, one that is deliberating burns the whole budget.
+	// slowest is the longest single probe, successful or not. It separates a fast refusal
+	// from a stall without parsing an error string.
 	slowest time.Duration
 }
 
 // collect asks the alias the same trivial question `probes` times.
 //
-// The failures are counted, not classified. A class would have to come from matching an
-// error string, and internal/platform/llm's own notes say that wording changes silently
-// where the status code does not — so a classifier here would decay into reporting
-// "other" for the next new failure, which is worse than a number that is simply true. The
-// slowest-probe gauge carries the distinction that actually matters, and a human reading
-// the log after an alert gets the exact text.
+// Failures are counted, not classified: a class would come from matching error strings,
+// whose wording changes silently (see internal/platform/llm). The slowest-probe gauge
+// carries the distinction that matters, and the log has the exact text.
 func collect(ctx context.Context, client *llm.Client, model string) snapshot {
 	snap := snapshot{model: model, attempts: probes}
 	for i := 0; i < probes; i++ {
@@ -147,20 +125,15 @@ func collect(ctx context.Context, client *llm.Client, model string) snapshot {
 
 // probedAliases names every alias this deployment actually routes through, once each.
 //
-// The extras fall back to the base when unset, exactly as cmd/server's cmp.Or does, so a
-// deployment that names none of them still probes one alias rather than three copies of it —
-// and a per-series alert is not handed three healthy-looking aliases that are one.
-//
-// The base goes first: it is what most of the product rides, so it is what a human scanning
-// the log or the alert list should read first.
+// The extras fall back to the base when unset, as cmd/server's cmp.Or does, so a deployment
+// naming none of them probes one alias, not three copies. The base goes first because most
+// of the product rides it.
 func probedAliases(base string, extra ...string) []string {
 	out := make([]string, 0, 1+len(extra))
 	seen := make(map[string]bool, 1+len(extra))
 	for _, alias := range append([]string{base}, extra...) {
 		alias = strings.TrimSpace(alias)
-		// A blank is not an alias. Publishing one would put an empty model label on a series
-		// the alert then divides — a measurement about nothing, indistinguishable from a
-		// measurement about something.
+		// A blank is not an alias: it would publish a series with an empty model label.
 		if alias == "" || seen[alias] {
 			continue
 		}
@@ -172,14 +145,12 @@ func probedAliases(base string, extra ...string) []string {
 
 // render writes the gauge set, one series per alias.
 //
-// The success RATE is not published: a rate over three probes is not a rate. The numerator
-// and denominator go out separately and whoever writes the alert divides them, which also
-// lets the alert choose its own window. The division is element-wise on the `model` label,
-// so an alias added here becomes another alert instance rather than blending into the first.
+// No success rate is published: numerator and denominator go out separately and the alert
+// divides them (element-wise on `model`, so a new alias becomes its own alert instance) and
+// picks its own window.
 //
-// HELP and TYPE are written once per METRIC, not once per series: the textfile collector
-// skips a file it cannot parse, and a repeated HELP for one metric is exactly that — a
-// metric that quietly stops existing, which reads like healthy silence.
+// HELP and TYPE are written once per metric, not per series: the textfile collector skips a
+// file it cannot parse, and a repeated HELP is exactly that.
 func render(snaps []snapshot) string {
 	var b strings.Builder
 	for _, m := range []struct {
@@ -195,9 +166,7 @@ func render(snaps []snapshot) string {
 	} {
 		fmt.Fprintf(&b, "# HELP %s %s\n# TYPE %s gauge\n", m.name, m.help, m.name)
 		for _, s := range snaps {
-			// %s, not %q: escapeLabel has already done the escaping, and %q would do it a
-			// second time — turning one backslash into four and the label into something no
-			// alert matches.
+			// %s, not %q: escapeLabel already escaped, and %q would double-escape.
 			fmt.Fprintf(&b, "%s{model=\"%s\"} %s\n", m.name, escapeLabel(s.model), m.value(s))
 		}
 	}

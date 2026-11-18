@@ -42,7 +42,7 @@ const (
 	// geekjobBaseURL is the site root the listing's relative /vacancy/<id> links resolve against.
 	geekjobBaseURL = "https://geekjob.ru/"
 	// geekjobMaxPages caps the /vacancies/N walk so a listing that never yields an empty page
-	// cannot loop forever. The public feed is ~13 pages; this is ample headroom.
+	// cannot loop forever. Real feeds are far shorter.
 	geekjobMaxPages = 100
 )
 

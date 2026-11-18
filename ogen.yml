@@ -1,0 +1,15 @@
+# ogen settings for internal/api/apigen (`make api-contract`).
+#
+# Server only: the SPA's client comes from the same OpenAPI document on the JS side,
+# and a Go client nobody calls would only feed the deadcode gate. No ogen/otel either:
+# errors are reported through handler.reportUnexpected like every Fiber route.
+#
+# convenient_errors: every operation answers a refusal with `Problem` as its `default`
+# response, so a handler returns its success type or an error, and Handler.NewError
+# renders the error. `on` fails generation when an operation lacks that response.
+generator:
+  convenient_errors: 'on'
+  features:
+    disable_all: true
+    enable:
+      - 'paths/server'

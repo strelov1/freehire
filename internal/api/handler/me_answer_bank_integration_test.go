@@ -32,7 +32,7 @@ func newAnswerBankApp(pool *pgxpool.Pool, iss *auth.Issuer) (*fiber.App, *answer
 	mw := middleware{
 		key: auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
 	}
-	h.register(api, mw)
+	h.register(api, mw, newContract(contractHandlers{answerBankHandlers: h}))
 	return app, h
 }
 

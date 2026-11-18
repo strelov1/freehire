@@ -209,6 +209,32 @@ func usageDetailsOf(t *testing.T, batch []map[string]any) map[string]any {
 	return details
 }
 
+func TestEncodeBatch_cancelledGenerationIsWarningNotError(t *testing.T) {
+	// A call our own caller abandoned (a worker restarting mid-call) is not a failed
+	// generation: the error-rate alert counts level=ERROR, so it must stay out of it.
+	start := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	g := Generation{
+		Model:     "mid",
+		Err:       errTest,
+		Cancelled: true,
+		Start:     start,
+		End:       start.Add(20 * time.Second),
+		Source:    "enrich",
+	}
+
+	body, err := encodeBatch([]Generation{g})
+	if err != nil {
+		t.Fatalf("encodeBatch: %v", err)
+	}
+	genBody, _ := findEvent(t, decodeBatch(t, body), "generation-create")["body"].(map[string]any)
+	if genBody["level"] != "WARNING" {
+		t.Errorf("level = %v, want WARNING", genBody["level"])
+	}
+	if genBody["statusMessage"] != errTest.Error() {
+		t.Errorf("statusMessage = %v, want %q", genBody["statusMessage"], errTest.Error())
+	}
+}
+
 func TestEncodeBatch_errorGenerationOmitsUsage(t *testing.T) {
 	start := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 	g := Generation{

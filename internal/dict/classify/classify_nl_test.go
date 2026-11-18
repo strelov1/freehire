@@ -19,7 +19,7 @@ func TestDutchCompoundHeads(t *testing.T) {
 		{"Werkplekbeheerder", "it_support", ""},
 		{"Netwerkbeheerder (Infrastructuur)", "network_engineering", ""},
 		{"Systeem- & Netwerkbeheerder", "network_engineering", ""},
-		{"systeembeheerder junior/medior", "devops", "junior"},
+		{"systeembeheerder junior/medior", "system_administration", "junior"},
 		{"Business Analist Data", "business_analysis", ""},
 		{"Senior Business & Informatieanalist", "business_analysis", "senior"},
 		{"Data Analist", "data_analytics", ""},

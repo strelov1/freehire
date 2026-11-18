@@ -10,16 +10,13 @@ import (
 	"golang.org/x/net/html"
 )
 
-// startupandvc adapts startupandvc.com's venture-capital jobs board, a curated Webflow site
-// listing VC roles that link out to the original posting (LinkedIn, an ATS, or a company page).
-// The single listing at /venture-capital-jobs server-renders every card (≤100, Webflow's CMS
-// collection cap; there is no pagination), each linking to a /venture-capital-jobs/<slug> detail
-// page whose schema.org JobPosting ld+json carries the structured fields. The rich description
-// lives in the page's w-richtext body (the ld+json description is only a one-line stub), and an
-// "Apply now" button links to the real posting.
+// startupandvc adapts startupandvc.com's VC jobs board (Webflow). One listing at
+// /venture-capital-jobs server-renders every card (≤100, the CMS collection cap; no pagination),
+// each linking to a /venture-capital-jobs/<slug> detail page with a schema.org JobPosting ld+json.
+// The rich description is the page's w-richtext body (the ld+json description is a one-line stub);
+// an "Apply now" button links to the real posting.
 //
-// Boardless (one site, no per-tenant board) and an aggregator (each posting's employer is its
-// hiringOrganization, and it re-lists jobs owned by first-party ATS boards), so it stays in the
+// Boardless aggregator: the employer is each posting's hiringOrganization, so it stays in the
 // source facet and inherits the reindex aggregator/ATS-duplicate suppression.
 type startupandvc struct {
 	http HTMLGetter
@@ -137,23 +134,18 @@ var startupandvcSlugPattern = regexp.MustCompile(`/venture-capital-jobs/([a-z0-9
 // vacancy detail link.
 func startupandvcSlug(loc string) string { return firstSubmatch(startupandvcSlugPattern, loc) }
 
-// startupandvcDate parses startupandvc's "Jul 07, 2026" datePosted (Webflow's "%b %d, %Y" format),
-// which the shared RFC3339/ISO parsers do not recognize. The lenient day layout ("2") accepts both
-// the zero-padded "07" the site emits and a bare "7", should a posting ever drop the pad.
+// startupandvcDate parses startupandvc's "Jul 07, 2026" datePosted (Webflow's "%b %d, %Y"), which
+// the shared RFC3339/ISO parsers do not recognize. The lenient day layout accepts "07" and "7".
 func startupandvcDate(s string) *time.Time { return parseLayout("Jan 2, 2006", s) }
 
 // startupandvcApplyURL returns the outbound "Apply now" link — the real posting on LinkedIn, an
 // ATS, or the company site — or "" when the page has no external apply button (the caller then
 // falls back to the startupandvc landing page).
 //
-// The button is the page's only <a class="button-large …">, and its href is the destination with
-// startupandvc's tracking params appended (e.g. ".../jobs/view/4417182287/?eBP=…&trk=…?utm_source=
-// startupandvc&…"). We drop the whole query/fragment: these postings carry their identity in the
-// PATH (LinkedIn /jobs/view/<id>/, /posts/<slug>), so trimming yields the clean, stable canonical
-// link and strips both startupandvc's UTM suffix and LinkedIn's session-scoped eBP/trk/refId
-// tracking — which go stale between crawl and click anyway. The trade-off: an ATS destination that
-// kept its id in the query (?gh_jid=…) would lose it, but the board's outbound links are
-// LinkedIn-dominated and path-identified, so a clean link is the better default.
+// The button is the page's only <a class="button-large …">. Its href carries tracking params, so
+// the whole query/fragment is dropped: these postings keep their identity in the PATH (LinkedIn
+// /jobs/view/<id>/), and the session-scoped tracking goes stale. Trade-off: an ATS link keeping
+// its id in the query (?gh_jid=…) loses it.
 func startupandvcApplyURL(root *html.Node) string {
 	href := elementAttr(root, "a", "button-large", "href")
 	if href == "" {

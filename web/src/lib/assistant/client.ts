@@ -11,6 +11,7 @@
 // without throwing the work away.
 
 import { trackPlanRefusal } from '#lib/api.js';
+import { SUPPORT_BASE } from './api';
 import { readFrames } from './sse';
 import type { TurnEvent } from './wire';
 
@@ -40,9 +41,9 @@ export class StreamInterrupted extends Error {
 
 /** Ask the server to stop a session's running turn. Safe to call when nothing is
  *  running: the caller cannot know whether the turn it stopped watching has ended. */
-async function cancelTurn(sessionId: string): Promise<void> {
+async function cancelTurn(sessionId: string, base: string): Promise<void> {
   try {
-    await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+    await fetch(`${base}/sessions/${encodeURIComponent(sessionId)}/cancel`, {
       method: 'POST',
       credentials: 'include',
     });
@@ -64,15 +65,17 @@ export function sendTurn(
   text: string,
   onEvent: (e: TurnEvent) => void,
   attachments: Attachment[] = [],
+  base: string = BASE,
 ): Turn {
   return streamTurn(
     sessionId,
-    `${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`,
+    `${base}/sessions/${encodeURIComponent(sessionId)}/messages`,
     attachments.length > 0
       ? { text, attachments: attachments.map(({ name, text: body }) => ({ name, text: body })) }
       : { text },
     'could not send the message',
     onEvent,
+    base,
   );
 }
 
@@ -110,7 +113,7 @@ export async function extractAttachment(file: File): Promise<Attachment> {
  * message — same frames, same cancellation — but carries no text: the brief and the turn's
  * ceiling are the server's, so there is nothing for a client to compose or to raise.
  */
-export function startAutopilot(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
+function startAutopilot(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
   return streamTurn(
     sessionId,
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/autopilot`,
@@ -128,7 +131,7 @@ export function startAutopilot(sessionId: string, onEvent: (e: TurnEvent) => voi
  * The backend refuses a rehearsal that already has a transcript, so a reload replays the
  * conversation instead of restarting the interview.
  */
-export function openRehearsal(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
+function openRehearsal(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
   return streamTurn(
     sessionId,
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/opening`,
@@ -158,7 +161,7 @@ export function syncApplication(sessionId: string, onEvent: (e: TurnEvent) => vo
  * from the existing transcript (healing any dangling tool calls), so the model's context
  * is not polluted with a duplicate prompt.
  */
-export function retryTurn(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
+function retryTurn(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
   return streamTurn(
     sessionId,
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/retry`,
@@ -180,13 +183,7 @@ export class TurnRefused extends Error {
   readonly turns: number;
   readonly ceiling: number;
 
-  constructor(
-    message: string,
-    sessionId: string,
-    canExtend: boolean,
-    turns: number,
-    ceiling: number,
-  ) {
+  constructor(message: string, sessionId: string, canExtend: boolean, turns: number, ceiling: number) {
     super(message);
     this.name = 'TurnRefused';
     this.sessionId = sessionId;
@@ -204,7 +201,8 @@ export class TurnRefused extends Error {
  *
  *  Reading the body cannot be allowed to replace one failure with another: a refusal whose
  *  body is unreadable still has to surface as the refusal it is. */
-async function turnFailure(res: Response, sessionId: string, failure: string): Promise<Error> {
+async function turnFailure(res: Response, sessionId: string, failure: string, base: string): Promise<Error> {
+  if (base === SUPPORT_BASE) return supportFailure(res, failure);
   if (res.status !== 402) {
     return new Error(`${failure} (${res.status})`);
   }
@@ -227,6 +225,18 @@ async function turnFailure(res: Response, sessionId: string, failure: string): P
   }
 }
 
+/** A support refusal (the day's messages, the conversation's length, a busy day) already names
+ *  the address to write to, and never points at a plan: support is free, so an upgrade prompt
+ *  or a plan-refusal record would be wrong. */
+async function supportFailure(res: Response, failure: string): Promise<Error> {
+  const body: unknown = await res.json().catch(() => null);
+  const message =
+    typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
+      ? body.error
+      : undefined;
+  return new Error(message ?? `${failure} (${res.status})`);
+}
+
 /** Buy this tailoring session another ceiling's worth of turns, out of the day's tailoring
  *  allowance. Rejects with a TurnRefused when there is none left to spend. */
 export async function extendSession(sessionId: string): Promise<void> {
@@ -235,7 +245,7 @@ export async function extendSession(sessionId: string): Promise<void> {
     credentials: 'include',
   });
   if (!res.ok) {
-    throw await turnFailure(res, sessionId, 'could not continue this session');
+    throw await turnFailure(res, sessionId, 'could not continue this session', BASE);
   }
 }
 
@@ -247,6 +257,7 @@ function streamTurn(
   body: unknown,
   failure: string,
   onEvent: (e: TurnEvent) => void,
+  base: string = BASE,
 ): Turn {
   const controller = new AbortController();
 
@@ -259,7 +270,7 @@ function streamTurn(
       signal: controller.signal,
     });
     if (!res.ok) {
-      throw await turnFailure(res, sessionId, failure);
+      throw await turnFailure(res, sessionId, failure, base);
     }
     // No content: the server had nothing to run (a sync with nothing new to narrate).
     if (res.status === 204) return;
@@ -288,7 +299,7 @@ function streamTurn(
       // Both halves: tell the server to stop the work, and stop reading it here. The
       // server no longer infers the first from the second. cancelTurn swallows its own
       // failures, so this cannot reject.
-      void cancelTurn(sessionId);
+      void cancelTurn(sessionId, base);
       controller.abort();
     },
   };
@@ -302,5 +313,40 @@ function decodeEvent(data: string): TurnEvent | null {
   } catch (e) {
     console.error('assistant: invalid event payload', e, data);
     return null;
+  }
+}
+
+// The ways a turn begins. Autopilot and opening carry no text (server-owned brief).
+// Retry continues from the existing transcript without appending another user message —
+// re-sending the prompt would duplicate it in the model's context.
+export type TurnStart =
+  | { kind: 'message'; text: string; attachments?: Attachment[] }
+  | { kind: 'autopilot' }
+  | { kind: 'opening' }
+  | { kind: 'retry' };
+
+/** Start the turn `start` describes on `sessionId`. `base` is the API base a support
+ *  conversation sends its messages to. */
+export function startTurnFor(
+  sessionId: string,
+  start: TurnStart,
+  onEvent: (e: TurnEvent) => void,
+  base?: string,
+): Turn {
+  switch (start.kind) {
+    case 'autopilot':
+      return startAutopilot(sessionId, onEvent);
+    case 'opening':
+      return openRehearsal(sessionId, onEvent);
+    case 'retry':
+      // A failed autopilot left runActive false after endTurn; if the last user brief was
+      // the unattended run, treat the retry as that run again so the host can keep its
+      // "run in progress" affordances. We cannot see the brief here cheaply — the server
+      // already re-raises the ceiling — so only flip the flag when the host already knew
+      // a run was in play (openingActions with autopilot, or prior runActive). For the
+      // tailor workspace, refreshing after a failed run is enough via onTurnComplete.
+      return retryTurn(sessionId, onEvent);
+    case 'message':
+      return sendTurn(sessionId, start.text, onEvent, start.attachments, base);
   }
 }

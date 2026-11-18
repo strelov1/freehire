@@ -11,6 +11,8 @@ export default ts.config(
   js.configs.recommended,
   ...ts.configs.strict,
   ...svelte.configs.recommended,
+  // The formatter (oxfmt, shared .oxfmtrc.json) owns layout: switch off the Svelte rules about it.
+  ...svelte.configs.prettier,
 
   // Component/token source runs in the browser (or a Storybook preview
   // iframe, same environment). Type-aware linting is left to `svelte-check`,

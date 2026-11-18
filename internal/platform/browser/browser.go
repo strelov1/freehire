@@ -1,31 +1,23 @@
 // Package browser holds how to launch a headless Chrome that does not announce itself as
-// automated. It is transport, not a feature: it knows nothing about jobs, candidates or
-// applications, in the same sense platform/llm and platform/aigateway know nothing about the
-// domain they carry bytes for.
+// automated. It is transport and knows nothing about the domain.
 //
-// api/atsapply is its one caller today; it drives the browser to fill an application form.
-// ingest/sources used to be the second, reading a source behind a JavaScript challenge, and
-// moved to the Scrapling fetch service (internal/platform/scraplingfetch) in 2026-10.
+// api/atsapply is its one caller; it drives the browser to fill an application form.
 package browser
 
 import "github.com/chromedp/chromedp"
 
-// flag is one Chrome command-line switch, kept as data so the flag set can be asserted on:
-// chromedp's own ExecAllocatorOption is an opaque func over an unexported struct, so a test
-// cannot read one back.
+// flag is one Chrome command-line switch, kept as data so tests can assert on it;
+// chromedp's ExecAllocatorOption is opaque.
 type flag struct {
 	name  string
 	value any
 }
 
-// stealthFlags are what make a headless Chrome resemble an ordinary one. This is the single
-// home for them in the repository: a second copy would mean the next anti-bot fix lands in
-// one caller and silently not the other.
+// stealthFlags make a headless Chrome resemble an ordinary one. Keep them in this one place
+// so an anti-bot fix reaches every caller.
 //
-// The pair is what the 2026-09-02 auto-apply spike measured against bot.sannysoft.com:
-// disable-blink-features=AutomationControlled alone flipped navigator.webdriver from true to
-// false, matching what a dedicated stealth framework achieved, at no extra dependency. It is
-// not a claim of undetectability — see the caveats in that change's design.md.
+// disable-blink-features=AutomationControlled alone flips navigator.webdriver to false. It
+// does not make the browser undetectable.
 func stealthFlags() []flag {
 	return []flag{
 		{name: "headless", value: true},

@@ -25,16 +25,11 @@ const sourceFacetAttr = "source"
 const sourceFacetTimeout = 15 * time.Second
 
 // rebuildSourceStats measures each source and replaces the source_stats snapshot the
-// public /sources page reads.
-//
-// Rides along after the rollups have committed, like the catalogue-scale snapshot beside
-// it: a separate concern with its own failure mode, so it neither joins their transaction
-// nor changes this run's exit code. Every failure here is logged and swallowed.
-func rebuildSourceStats(ctx context.Context, pool *pgxpool.Pool, meiliURL, meiliKey string) {
-	// ONE report for every ending. The pass has five ways to fail and deciding what to say
-	// at each `return` is how a worker ends up with one exit path that says nothing — the
-	// lesson backfill-derive's vanishing cursor taught twice in an evening.
-	published, err := publishSourceStats(ctx, pool, meiliURL, meiliKey)
+// public /sources page reads. It runs after the rollups have committed, outside their
+// transaction, and never changes the exit code: every failure is logged and swallowed.
+func rebuildSourceStats(ctx context.Context, reader, pool *pgxpool.Pool, meiliURL, meiliKey string) {
+	// One report for every ending, so no `return` path ends silently.
+	published, err := publishSourceStats(ctx, reader, pool, meiliURL, meiliKey)
 	if err != nil {
 		log.Printf("rollup-stats: source snapshot not published: %v", err)
 		return
@@ -43,25 +38,23 @@ func rebuildSourceStats(ctx context.Context, pool *pgxpool.Pool, meiliURL, meili
 }
 
 // publishSourceStats does the work and returns how many sources it wrote.
-func publishSourceStats(ctx context.Context, pool *pgxpool.Pool, meiliURL, meiliKey string) (int, error) {
+func publishSourceStats(ctx context.Context, reader, pool *pgxpool.Pool, meiliURL, meiliKey string) (int, error) {
 	q := db.New(pool)
 
-	agg, err := q.AggregateOpenJobsBySource(ctx)
+	agg, err := db.New(reader).AggregateOpenJobsBySource(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	// The snapshot this run replaces, read for its KEYS only: a source that has gone quiet
-	// must keep reporting a measured zero rather than vanishing from the page. See
-	// sourcestats.Union.
+	// The snapshot this run replaces, read for its keys only: a quiet source must keep a
+	// measured zero rather than vanish from the page. See sourcestats.Union.
 	previous, err := q.ListSourceStats(ctx)
 	if err != nil {
 		return 0, err
 	}
 
 	// Taxonomy, not a crawl registry: a keyed adapter is absent from a crawl registry
-	// wherever its credential is unset, and would vanish from the page on a host that does
-	// not hold it. Built once — it assembles every adapter.
+	// wherever its credential is unset. Built once because it assembles every adapter.
 	registry := slices.Collect(maps.Keys(sources.Taxonomy()))
 
 	rows := sourcestats.Rows(registry, agg, previous, fetchBrowsableCounts(ctx, meiliURL, meiliKey), time.Now().UTC())
@@ -89,12 +82,8 @@ func publishSourceStats(ctx context.Context, pool *pgxpool.Pool, meiliURL, meili
 }
 
 // fetchBrowsableCounts asks Meilisearch for the de-duplicated open count of every source in
-// ONE facet request — the distribution covers all of them at once, so the whole fleet costs
-// one round trip rather than one per source.
-//
-// An absent credential or an unreachable Meilisearch costs this one figure and not the
-// run: the Postgres-measured counts are still published, with the de-duplicated one
-// recorded as absent. It must never degrade to zero, which would state on a public page
+// one facet request. An absent credential or unreachable Meilisearch costs only this
+// figure (recorded as absent); it must never degrade to zero, which would state publicly
 // that every source carries nothing.
 func fetchBrowsableCounts(ctx context.Context, meiliURL, meiliKey string) sourcestats.BrowsableCounts {
 	if meiliKey == "" {
@@ -114,12 +103,9 @@ func fetchBrowsableCounts(ctx context.Context, meiliURL, meiliKey string) source
 	return resolveBrowsableCounts(res, err)
 }
 
-// resolveBrowsableCounts decides whether a facet response is a measurement.
-//
-// A response that carries no distribution for the source attribute is treated as
-// unmeasured rather than as an empty one. The difference matters: an empty distribution
-// read literally publishes a zero for every source in the fleet, which is a claim nobody
-// would make on purpose.
+// resolveBrowsableCounts decides whether a facet response is a measurement. A response
+// with no distribution for the source attribute is unmeasured, not empty: read literally
+// it would publish a zero for every source.
 func resolveBrowsableCounts(res search.FacetResult, err error) sourcestats.BrowsableCounts {
 	if err != nil {
 		return sourcestats.Unmeasured()

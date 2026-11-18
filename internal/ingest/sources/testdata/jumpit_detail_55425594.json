@@ -1,0 +1,54 @@
+{
+  "code": "C001",
+  "message": "조회에 성공하셨습니다.",
+  "status": 200,
+  "result": {
+    "id": 55425594,
+    "title": "웹 개발자 채용[과장]",
+    "companyName": "건강누리",
+    "jobCategories": [
+      {
+        "id": 1,
+        "name": "서버/백엔드 개발자"
+      },
+      {
+        "id": 2,
+        "name": "프론트엔드 개발자"
+      }
+    ],
+    "techStacks": [
+      {
+        "stack": "HTML5"
+      },
+      {
+        "stack": "JavaScript"
+      },
+      {
+        "stack": "Uniform CSS"
+      }
+    ],
+    "workingPlaces": [
+      {
+        "address": "서울 영등포구 가마산로48길16, 101호",
+        "domestic": false
+      }
+    ],
+    "location": "서울 영등포구 가마산로48길16, 101호",
+    "minCareer": 6,
+    "maxCareer": 12,
+    "newcomer": false,
+    "alwaysOpen": false,
+    "closedAt": "2026-11-27 23:59:59",
+    "publishedAt": "2026-10-29 00:00:00",
+    "status": 0,
+    "positionStatus": "CHECKED",
+    "hiddenPosition": false,
+    "invisible": false,
+    "serviceInfo": "병원용 의료용품 전문 개발 업체입니다.\r\n전문 의료용품, 건강 용품 등 의료, 헬스 케어 관련 용품들을 제조 및 유통하고 있습니다.\r",
+    "responsibility": "• AI 기술기반 의료 영상 소프트웨어 개발",
+    "qualifications": "• 경력 6~12년\n• 4년제 대학 졸업(예정)자\n• 자바스크립트 기본 지식 보유자\n• 정보처리기사 자격증 소유자",
+    "preferredRequirements": "• 컴퓨터공학 및 소프트웨어 관련 학과 전공\n• 마케팅 상용화 솔루션 경험자\n• 웹/앱 개발 경력",
+    "welfares": "• 자기개발비용 제공",
+    "recruitProcess": "서류 통과자에 한해 개별 연락 후 대면 면접"
+  }
+}

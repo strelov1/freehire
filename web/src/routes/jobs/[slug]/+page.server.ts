@@ -1,12 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import { ApiError } from '#lib/api.js';
 import { backerBadges } from '#lib/backers.js';
-import {
-  collectionBySlug,
-  jobFacetsFromJob,
-  relatedCollectionLinks,
-  type SeeAlsoCard,
-} from '#lib/collections.js';
+import { collectionBySlug, jobFacetsFromJob, relatedCollectionLinks, type SeeAlsoCard } from '#lib/collections.js';
 import { resolveSeeAlsoMark } from '#lib/seeAlsoMark.js';
 import { serverApi } from '#lib/server/api.js';
 import { rethrowUpstream } from '#lib/server/upstream.js';
@@ -68,13 +63,11 @@ async function buildSeeAlso(job: Job, api: Api): Promise<SeeAlsoCard[]> {
   }
   const groupedFacets = new Map<string, FacetCounts | null>(
     await Promise.all(
-      [...filterGroups.entries()].map(
-        async ([groupKey, { filter, keys }]): Promise<[string, FacetCounts | null]> => [
-          groupKey,
-          await api.facetCounts(new URLSearchParams(filter), { facets: [...keys] }).catch(() => null),
-        ]
-      )
-    )
+      [...filterGroups.entries()].map(async ([groupKey, { filter, keys }]): Promise<[string, FacetCounts | null]> => [
+        groupKey,
+        await api.facetCounts(new URLSearchParams(filter), { facets: [...keys] }).catch(() => null),
+      ]),
+    ),
   );
 
   return resolvedLinks.map(({ link, resolved }): SeeAlsoCard => {
@@ -111,20 +104,27 @@ export const load: PageServerLoad = async ({ params, fetch, url }) => {
   });
   const seeAlsoPromise = jobPromise.then((job) => buildSeeAlso(job, api));
 
-  // Similar jobs are a non-essential discovery aid: a failure (search disabled,
-  // no neighbours yet) must not break the page, so it degrades to an empty list.
-  //
   // The application form is known for a minority of postings — only a few ATS platforms
-  // publish one we can read — so its absence is the ordinary case, not a failure. It
-  // degrades to null for the same reason the two below degrade to empty: nothing on this
-  // page may be able to break the page.
-  const [job, similar, copiesResult, applyForm, seeAlso] = await Promise.all([
+  // publish one we can read — so its absence is the ordinary case, not a failure. The
+  // detail response already says whether one was captured: `apply_questions` is present
+  // (0 included) exactly when a form exists. So the form is fetched only then — asking for
+  // it on every page view made this the busiest API route, nearly all of it 404s, and a
+  // dead slug fired it too. It degrades to null for the same reason the two below degrade
+  // to empty: nothing on this page may be able to break the page.
+  const applyFormPromise = jobPromise.then((job) =>
+    job.apply_questions != null ? api.getApplyForm(params.slug).catch(() => null) : null,
+  );
+
+  // Similar jobs are NOT fetched here: the page is loaded in the browser (+page.svelte).
+  // Measured 2026-11-06, nearly every server render of this page is a crawler walking
+  // the long tail (99.4% distinct slugs, so no cache helps), and the similar lookup was
+  // ~92% of all Meilisearch searches. A reader who runs scripts still gets the list.
+  const [job, copiesResult, applyForm, seeAlso] = await Promise.all([
     jobPromise,
-    api.getSimilarJobs(params.slug).catch(() => []),
     // A small preview of the other-locations tab (the full list is /jobs/:slug/copies).
     // Non-essential and only meaningful for a mass-posted role, so it degrades to empty.
     api.getJobCopies(params.slug, 10).catch(() => ({ copies: [], total: 0 })),
-    api.getApplyForm(params.slug).catch(() => null),
+    applyFormPromise,
     seeAlsoPromise,
   ]);
 
@@ -137,7 +137,6 @@ export const load: PageServerLoad = async ({ params, fetch, url }) => {
 
   return {
     job,
-    similar,
     copies: copiesResult.copies,
     copiesTotal: copiesResult.total,
     applyForm,

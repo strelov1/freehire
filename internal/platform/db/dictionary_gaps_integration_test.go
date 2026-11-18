@@ -4,14 +4,10 @@ package db
 
 import (
 	"context"
-	"errors"
 	"sort"
 	"sync"
 	"testing"
-	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -124,34 +120,5 @@ func TestDictionaryGapConcurrentFirstAsks(t *testing.T) {
 		if c != int32(i+1) {
 			t.Fatalf("counts = %v, want 1..%d", counts, len(users))
 		}
-	}
-}
-
-func TestDictionaryGapDailyCap(t *testing.T) {
-
-	pool := startPostgres(t)
-	q := New(pool)
-	ctx := context.Background()
-	user := seedPlanUser(t, pool, "gap-cap@example.test")
-	day := pgtype.Date{Time: time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC), Valid: true}
-	arg := ClaimDictionaryGapWriteParams{UserID: user, Day: day}
-	for i := 1; i <= 20; i++ {
-		n, err := q.ClaimDictionaryGapWrite(ctx, arg)
-		if err != nil {
-			t.Fatalf("claim %d: %v", i, err)
-		}
-		if int(n) != i {
-			t.Fatalf("claim %d returned %d", i, n)
-		}
-	}
-	if _, err := q.ClaimDictionaryGapWrite(ctx, arg); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("21st claim err = %v, want no row", err)
-	}
-	var writes int32
-	if err := pool.QueryRow(ctx, `SELECT writes FROM dictionary_gap_daily WHERE user_id = $1`, user).Scan(&writes); err != nil {
-		t.Fatal(err)
-	}
-	if writes != 20 {
-		t.Fatalf("writes = %d, want 20", writes)
 	}
 }

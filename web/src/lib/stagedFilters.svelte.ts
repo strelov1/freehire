@@ -92,8 +92,28 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, hideAIInterview: on };
   }
 
+  setFormerEmployers(on: boolean): void {
+    this.#f = { ...this.#f, formerEmployers: on };
+  }
+
+  setWatchlist(on: boolean): void {
+    this.#f = { ...this.#f, watchlist: on };
+  }
+
+  setHideSeen(on: boolean): void {
+    this.#f = { ...this.#f, hideSeen: on };
+  }
+
   setAutoApplyAvailable(on: boolean): void {
     this.#f = { ...this.#f, autoApplyAvailable: on };
+  }
+
+  setApplyQuestionsMax(n: number | null): void {
+    this.#f = { ...this.#f, applyQuestionsMax: n };
+  }
+
+  setMinSkillMatch(n: number | null): void {
+    this.#f = { ...this.#f, minSkillMatch: n };
   }
 
   setPostedWithinDays(n: number | null): void {
@@ -118,6 +138,14 @@ export class StagedFilters implements FacetStore {
 
   setSeniorityIncludeUnspecified(on: boolean): void {
     this.#f = { ...this.#f, seniorityIncludeUnspecified: on };
+  }
+
+  setWorkModeRemoteAnywhere(on: boolean): void {
+    this.#f = {
+      ...this.#f,
+      workModeRemoteAnywhere: on,
+      ...(on ? {} : { workModeRemoteRegions: [], workModeRemoteCountries: [] }),
+    };
   }
 
   /** Reset every staged filter. */

@@ -17,9 +17,8 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// empregos adapts Empregos.com.br, a general Brazilian job board: ~90k open postings from
-// thousands of employers and staffing agencies, nearly all of them outside IT. It is boardless
-// and an aggregator — the employer is the company each posting names. See the "Empregos.com.br
+// empregos adapts Empregos.com.br, a general Brazilian job board, mostly non-IT. It is boardless
+// and an aggregator: the employer is the company each posting names. See the "Empregos.com.br
 // traps" section of AGENTS.md for the measurements behind each rule.
 //
 // The crawl reads the search API the site's own pages call, which answers a whole posting —
@@ -28,7 +27,6 @@ import (
 // answered), so the catalogue is cut into slices small enough to arrive in ONE answer each.
 type empregos struct {
 	http         JSONPoster
-	limiter      waiter
 	leafMax      int
 	maxNewPerRun int
 }
@@ -38,24 +36,19 @@ const (
 	empregosPostingURL = "https://www.empregos.com.br/vaga/"
 )
 
-// empregosRequestInterval paces the run's requests through one limiter. The answers are slow
-// (2-12 s each) and requested one at a time, so latency sets the real pace; the interval only
-// keeps a burst of small answers from arriving back to back. No refusal was seen at it.
+// empregosRequestInterval paces the run's requests through one limiter. Answers are slow and
+// requested one at a time, so latency sets the real pace; the interval only keeps a burst of
+// small answers from arriving back to back.
 const empregosRequestInterval = time.Second
 
 // empregosLeafMax is how many postings one answer may carry. A slice that reports more is cut
-// further; a slice that cannot be cut further fails the crawl. The largest slice the cuts leave
-// measured 10,356 postings (2026-10-24), and an answer of 15,000 is ~35 MB uncompressed —
-// under the client's 64 MiB response cap and, at ~12 s, inside the long-timeout transport.
+// further; a slice that cannot be cut further fails the crawl. 15,000 postings is ~35 MB
+// uncompressed, under the client's 64 MiB response cap.
 const empregosLeafMax = 15000
 
-// empregosMaxNewPerRun bounds how many unseen postings one run writes. The crawl itself costs
-// ~100 requests whatever the catalogue holds; what grows with it is the database work, measured
-// from the crawl host on 2026-10-24: a new posting's write ran at ~7 a second (14,119 in the
-// ~36 minutes before the first run's deadline), a stored posting's refresh at ~190 a second.
-// Against the run's 40-minute crawl budget (50 minutes less the sweep reserve), a run at steady
-// state spends ~4 minutes listing and ~8 refreshing ~90k stored postings, and 5,000 new writes
-// add ~12 — about 60% of the budget. The newest are written first; the rest wait for later runs.
+// empregosMaxNewPerRun bounds how many unseen postings one run writes. The crawl costs about the
+// same number of requests whatever the catalogue holds; what grows is database work, and a new
+// write is far slower than a refresh. The newest are written first; the rest wait for later runs.
 const empregosMaxNewPerRun = 5000
 
 // The search's facet ids, as its own pages send them.
@@ -81,8 +74,7 @@ var empregosZone = time.FixedZone("BRT", -3*3600)
 // largest answer (see empregosLeafMax).
 func NewEmpregos(c JSONPoster) Source {
 	return empregos{
-		http:         c,
-		limiter:      rate.NewLimiter(rate.Every(empregosRequestInterval), 1),
+		http:         rateLimitedJSONPoster{inner: c, limiter: rate.NewLimiter(rate.Every(empregosRequestInterval), 1)},
 		leafMax:      empregosLeafMax,
 		maxNewPerRun: empregosMaxNewPerRun,
 	}
@@ -204,8 +196,8 @@ type empregosCut func(parent empregosResponse) ([]empregosSlice, error)
 
 // list reads every posting the cuts reach: by level, then by state, then by workplace type.
 // A posting with no location is in no state, so a level too large for one answer loses its
-// location-less postings (~0.1% of the catalogue, measured 2026-10-24) — which is why this
-// adapter does not claim fullCatalog. The shortfall is logged rather than failed on.
+// location-less postings, which is why this adapter does not claim fullCatalog. The shortfall is
+// logged rather than failed on.
 func (s empregos) list(ctx context.Context) ([]empregosPosting, error) {
 	byID := make(map[int64]empregosPosting)
 	cuts := []empregosCut{
@@ -317,9 +309,6 @@ func empregosDescribe(filters []empregosFilter) string {
 
 // search asks for the first page of a slice through the run's limiter.
 func (s empregos) search(ctx context.Context, filters []empregosFilter, size int) (empregosResponse, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return empregosResponse{}, err
-	}
 	if filters == nil {
 		filters = []empregosFilter{} // the API wants [], not null
 	}
@@ -332,7 +321,7 @@ func (s empregos) search(ctx context.Context, filters []empregosFilter, size int
 }
 
 // company is the employer the posting names, or "" when it names none. "Confidencial" and
-// "Empresa confidencial" (~7% of postings) are the board's label for a hidden employer, not an
+// "Empresa confidencial" are the board's label for a hidden employer, not an
 // employer, so such a posting is skipped like an unnamed one: there is nobody to file it under.
 func (p empregosPosting) company() string {
 	if p.Company == nil {
@@ -355,6 +344,7 @@ func (p empregosPosting) job() Job {
 		Description:    p.body(),
 		WorkMode:       empregosWorkMode(p.WorkplaceTypes),
 		EmploymentType: empregosEmploymentType(p.ContractForm),
+		Engagement:     brazilRegimeEngagement(p.ContractForm),
 	}
 	j.Remote = j.WorkMode == "remote"
 	var places []string
@@ -411,7 +401,7 @@ func empregosWorkMode(t string) string {
 }
 
 // empregosEmploymentType maps the contract form where it names one. "A Combinar" (to be
-// agreed) is on 99.96% of postings and says nothing; "Efetivo (CLT)" is the employment regime,
+// agreed) is on nearly every posting and says nothing; "Efetivo (CLT)" is the employment regime,
 // not the schedule.
 func empregosEmploymentType(form string) string {
 	switch form {

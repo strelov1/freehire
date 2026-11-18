@@ -38,7 +38,11 @@ const DISMISSED_KEY = 'hire.messaging-dock-dismissed';
 
 function readWindows(): DockWindow[] {
   if (!browser) return [];
-  try { return parseDockWindows(sessionStorage.getItem(WINDOWS_KEY)); } catch { return []; }
+  try {
+    return parseDockWindows(sessionStorage.getItem(WINDOWS_KEY));
+  } catch {
+    return [];
+  }
 }
 
 function readDismissed(): number | null {
@@ -46,7 +50,9 @@ function readDismissed(): number | null {
   try {
     const n = Number(sessionStorage.getItem(DISMISSED_KEY) ?? NaN);
     return Number.isInteger(n) && n >= 0 ? n : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 class MessagingDockStore extends UserResource<Conversation[]> {
@@ -64,11 +70,19 @@ class MessagingDockStore extends UserResource<Conversation[]> {
 
   /** Whether the dock is needed at all: there is a conversation to show, or a first
    *  message is being written (its dialog lives in the dock). */
-  get active(): boolean { return this.#conversations.length > 0 || this.inviteHandle !== null; }
-  get conversations(): Conversation[] { return this.#conversations; }
-  get windows(): DockWindow[] { return this.#windows; }
+  get active(): boolean {
+    return this.#conversations.length > 0 || this.inviteHandle !== null;
+  }
+  get conversations(): Conversation[] {
+    return this.#conversations;
+  }
+  get windows(): DockWindow[] {
+    return this.#windows;
+  }
 
-  protected load(): Promise<Conversation[]> { return api.listConversations(); }
+  protected load(): Promise<Conversation[]> {
+    return api.listConversations();
+  }
 
   protected apply(data: Conversation[]): void {
     this.#conversations = data;
@@ -95,10 +109,14 @@ class MessagingDockStore extends UserResource<Conversation[]> {
 
   /** Whether this page has a dock at all, dismissed or not — what keeps the list polling,
    *  so a new message can bring a dismissed dock back. */
-  availableOn(pathname: string): boolean { return this.#conversations.length > 0 && !dockHiddenOn(pathname); }
+  availableOn(pathname: string): boolean {
+    return this.#conversations.length > 0 && !dockHiddenOn(pathname);
+  }
 
   /** Whether the dock renders on this page. */
-  shownOn(pathname: string): boolean { return this.availableOn(pathname) && this.#dismissedAt === null; }
+  shownOn(pathname: string): boolean {
+    return this.availableOn(pathname) && this.#dismissedAt === null;
+  }
 
   /** Close the whole dock until a new unread message arrives or a conversation is opened. */
   dismiss(): void {
@@ -136,14 +154,22 @@ class MessagingDockStore extends UserResource<Conversation[]> {
   async invited(conversation: Conversation): Promise<void> {
     this.#conversations = [conversation, ...this.#conversations.filter((c) => c.id !== conversation.id)];
     this.openConversation(conversation.id);
-    await this.refresh().catch(() => { /* the poll catches up */ });
+    await this.refresh().catch(() => {
+      /* the poll catches up */
+    });
   }
 
   /** The composer text a conversation was left with, kept across minimize and remount. */
-  draft(id: number): string { return this.#drafts.get(id); }
-  setDraft(id: number, text: string): void { this.#drafts.set(id, text); }
+  draft(id: number): string {
+    return this.#drafts.get(id);
+  }
+  setDraft(id: number, text: string): void {
+    this.#drafts.set(id, text);
+  }
 
-  close(id: number): void { this.#setWindows(closeDockWindow(this.#windows, id)); }
+  close(id: number): void {
+    this.#setWindows(closeDockWindow(this.#windows, id));
+  }
 
   setMinimized(id: number, minimized: boolean): void {
     this.#setWindows(setDockWindowMinimized(this.#windows, id, minimized));
@@ -155,7 +181,9 @@ class MessagingDockStore extends UserResource<Conversation[]> {
     try {
       if (at === null) sessionStorage.removeItem(DISMISSED_KEY);
       else sessionStorage.setItem(DISMISSED_KEY, String(at));
-    } catch { /* storage unavailable: the dismissal lasts for this page load */ }
+    } catch {
+      /* storage unavailable: the dismissal lasts for this page load */
+    }
   }
 
   #setWindows(windows: DockWindow[]): void {
@@ -164,7 +192,9 @@ class MessagingDockStore extends UserResource<Conversation[]> {
     try {
       if (windows.length) sessionStorage.setItem(WINDOWS_KEY, JSON.stringify(windows));
       else sessionStorage.removeItem(WINDOWS_KEY);
-    } catch { /* storage unavailable: the windows last for this page load */ }
+    } catch {
+      /* storage unavailable: the windows last for this page load */
+    }
   }
 }
 

@@ -197,7 +197,7 @@ group unanswered even when the candidate has stated an answer.
 
 ### Requirement: A boolean work-authorization question is not answered from the country list
 
-A plain Yes/No "are you authorized to work [here]?" question SHALL NOT be matched to the
+A plain Yes/No "are you authorized to work \[here\]?" question SHALL NOT be matched to the
 authorized-countries screening answer. That answer is a list of country codes, not a
 boolean, and the profile carries no boolean field stating plain work authorization — filling
 the question would put the wrong shape of value into a Yes/No control.

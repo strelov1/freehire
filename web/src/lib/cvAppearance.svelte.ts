@@ -82,10 +82,7 @@ class CvAppearanceStore extends UserResource<Loaded> {
   protected async load(): Promise<Loaded> {
     this.#loadFailed = false;
     try {
-      const [defaults, fonts] = await Promise.all([
-        api.getCvAppearanceDefaults(),
-        api.listCvFonts(),
-      ]);
+      const [defaults, fonts] = await Promise.all([api.getCvAppearanceDefaults(), api.listCvFonts()]);
       return { defaults, fonts };
     } catch (e) {
       this.#loadFailed = true;

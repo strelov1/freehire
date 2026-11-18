@@ -221,3 +221,50 @@ func TestOAuthAuthorizeSubmit_DenialRedirectsAccessDenied(t *testing.T) {
 		t.Errorf("denial must not create a grant, got %d", len(rows))
 	}
 }
+
+func TestOAuthAuthorizeSubmit_SwitchAccountSignsOutAndRestartsSignIn(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	userID := seedOAuthUser(t, pool, "authorize-switch@example.test")
+	seedOAuthTestClient(t, queries, "client-sw", []string{"http://127.0.0.1:9999/callback"})
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
+	h := &authHandlers{queries: queries, issuer: iss, frontendOrigin: "https://freehire.me", browserOrigins: []string{"https://freehire.me"}}
+	app := oauthAuthorizeApp(h, iss)
+
+	post := func(origin string) (status int, loc string, cookies []*http.Cookie) {
+		form := url.Values{"decision": {"switch"}, "client_id": {"client-sw"}, "redirect_uri": {"http://127.0.0.1:9999/callback"}, "state": {"xyz"}, "code_challenge": {"abc"}, "code_challenge_method": {"S256"}}
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/oauth/authorize", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Origin", origin)
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode, resp.Header.Get("Location"), resp.Cookies()
+	}
+
+	if status, _, _ := post("https://evil.example"); status != fiber.StatusForbidden {
+		t.Fatalf("cross-site switch status = %d, want 403", status)
+	}
+
+	status, loc, cookies := post("https://freehire.me")
+	if status != fiber.StatusFound {
+		t.Fatalf("status = %d, want 302", status)
+	}
+	if !strings.HasPrefix(loc, "https://freehire.me/signin?") || !strings.Contains(loc, "returnTo=") {
+		t.Errorf("Location = %q, want the sign-in page carrying returnTo", loc)
+	}
+	cleared := false
+	for _, c := range cookies {
+		if c.Name == auth.CookieName && c.Value == "" {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Error("session cookie was not cleared")
+	}
+}

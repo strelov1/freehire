@@ -6,17 +6,13 @@ import (
 	"fmt"
 )
 
-// RequestPasswordReset mails a reset code for the address, if it has an account. It
-// reports nil for every well-formed address — known or not — so the endpoint cannot be
-// used to discover which addresses have accounts. The caller answers 202 either way.
+// RequestPasswordReset mails a reset code if the address has an account. It returns nil
+// for every well-formed address so the endpoint cannot enumerate accounts; the caller
+// answers 202 either way.
 //
-// A passwordless (OAuth-only) account is served too, so its owner can set a password and
-// gain a second way in. Receiving the code proves control of the address, which is the
-// same proof the provider offers, so refusing would strand the user without buying safety.
-//
-// It reports an error only for conditions the caller itself must act on: mail being
-// unconfigured, or the resend cooldown. Neither leaks whether the account exists, because
-// the cooldown is only reachable by someone who already asked for this address.
+// An OAuth-only account is served too: the code proves the same control of the address
+// the provider does. Errors are only mail unconfigured and the resend cooldown, neither
+// of which leaks whether the account exists.
 func (s *Service) RequestPasswordReset(ctx context.Context, email string) error {
 	if !s.codesEnabled() {
 		return ErrMailUnavailable
@@ -32,6 +28,9 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) error 
 	if err != nil {
 		return err
 	}
+	if user.Banned {
+		return nil // a banned account gets no code, and the caller cannot tell
+	}
 
 	code, err := s.issueCode(ctx, user.ID, PurposeResetPassword, "")
 	if err != nil {
@@ -40,10 +39,8 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) error 
 	return s.mailer.SendPasswordResetCode(ctx, user.Email, code)
 }
 
-// ResetPassword sets a password when the presented code matches the outstanding one for
-// the address — replacing an existing one, or giving an OAuth-only account its first. A completed reset proves control of the address, so it also marks the
-// account verified, and it revokes every existing session — a reset is exactly the moment
-// a user suspects someone else is signed in.
+// ResetPassword sets a password when the code matches the outstanding one for the
+// address. It also marks the account verified and revokes every session.
 func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword string) error {
 	if !s.codesEnabled() {
 		return ErrMailUnavailable
@@ -59,14 +56,15 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 	if err != nil {
 		return err
 	}
+	if user.Banned {
+		return ErrInvalidCode // no code was sent, so none can match
+	}
 	if err := validatePassword(newPassword); err != nil {
-		// Checked before the code is consumed: a valid code must not be burnt because
-		// the user typed a password the rules reject.
+		// Checked before the code is consumed so a rejected password does not burn it.
 		return err
 	}
 
-	// Hash the new password BEFORE opening the transaction so CPU-heavy bcrypt work
-	// does not hold DB locks.
+	// Hash before opening the transaction so bcrypt does not hold DB locks.
 	hash, err := s.hasher.Hash(newPassword)
 	if err != nil {
 		return err
@@ -83,13 +81,9 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 	_, consumeErr := s.consumeCodeTx(ctx, txStore, user.ID, PurposeResetPassword, code)
 	if consumeErr != nil {
 		if errors.Is(consumeErr, ErrInvalidCode) {
-			// The failed guess is kept: the attempt counter is what bounds guessing, and
-			// rolling it back with the refusal would make the five-attempt limit unreachable.
-			//
-			// A commit that FAILS is therefore not a detail to swallow — it rolls the attempt
-			// back, and answering "wrong code" would hand the guesser that attempt for free.
-			// The limit is a security control, so an unrecorded attempt has to read as a
-			// failure of ours rather than as a verdict on their code.
+			// Commit the attempt bump: rolling it back would make the attempt limit unreachable.
+			// A failed commit must surface as our error; answering "wrong code" would give the
+			// guesser a free attempt.
 			if err := tx.Commit(ctx); err != nil {
 				return fmt.Errorf("commit the failed attempt: %w", err)
 			}
@@ -101,9 +95,8 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 		return err
 	}
 
-	// freehire#3114: a reset deletes every MCP OAuth grant outright, not merely
-	// the session-generation bump ResetPassword already causes — the same
-	// moment-of-suspicion reasoning that already revokes every cookie.
+	// A reset is the moment of suspicion: delete every MCP OAuth grant too, since the
+	// session-generation bump alone does not revoke them.
 	if err := txRepo.DeleteOAuthGrantsByUser(ctx, user.ID); err != nil {
 		return err
 	}
@@ -111,12 +104,9 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 	return tx.Commit(ctx)
 }
 
-// ChangePassword replaces a known password. It returns the account's new session
-// generation so the caller can re-issue its own cookie: the change revokes every session,
-// and the user who just typed their current password should not be signed out by it.
-//
-// An account with no password cannot use this — there is nothing to verify against. Those
-// users go through the reset flow, which proves the address instead.
+// ChangePassword replaces a known password and returns the new session generation so the
+// caller can re-issue its own cookie (every session is revoked). A passwordless account
+// has nothing to verify against and must use the reset flow.
 func (s *Service) ChangePassword(ctx context.Context, userID int64, current, next string) (int32, error) {
 	hash, hasPassword, err := s.repo.PasswordHash(ctx, userID)
 	if err != nil {
@@ -135,8 +125,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, current, nex
 	return s.repo.SetPassword(ctx, userID, newHash)
 }
 
-// validatePassword enforces the one rule set every password path shares, so registration,
-// reset, and change cannot drift apart.
+// validatePassword is the one rule set shared by registration, reset and change.
 func validatePassword(password string) error {
 	switch {
 	case len(password) < minPasswordLen:

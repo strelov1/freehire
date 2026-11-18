@@ -350,7 +350,7 @@ func identify(id, name string, by addressing, order *[]string) (string, bool) {
 }
 ```
 
-Set `DOMField.ID` from that identifier for both addressings, keeping `Name` as the raw
+Set `DOMField.ID` from that identifier for both ways of addressing, keeping `Name` as the raw
 attribute. Everything downstream — `Reconcile`, `Resolve`, the plan, the answer bank's
 topics — keeps working on one identifier and needs no change.
 

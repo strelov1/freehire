@@ -1,0 +1,26 @@
+-- Admit the 'support' preset: the first-line support agent, a conversation with no CV and no
+-- vacancy that can read the caller's plan and hand a question to a human.
+--
+-- The list is rewritten in full, as in 0048/0049/0062/0069/0199/0232: Postgres has no ALTER
+-- CONSTRAINT for a CHECK's expression, so every value added before carries forward. The new
+-- constraint is strictly wider than the one it replaces, so no existing row can violate it. The
+-- explicit BEGIN/COMMIT closes the window between DROP and ADD for initdb and a manual
+-- application; see 0069 for what that means under cmd/migrate.
+--
+-- Rolling back means redeploying the old binary; restore the narrower constraint only once no
+-- 'support' rows remain. Ships alone for that reason. Apply BEFORE code that writes the value.
+
+-- The explicit transaction is deliberate (see above), so the nesting warning does not apply.
+-- squawk-ignore transaction-nesting
+BEGIN;
+
+ALTER TABLE public.assistant_sessions
+    DROP CONSTRAINT IF EXISTS assistant_sessions_preset_check;
+
+ALTER TABLE public.assistant_sessions
+    -- squawk-ignore constraint-missing-not-valid -- strictly wider than the constraint it replaces, so the validating scan cannot fail
+    ADD CONSTRAINT assistant_sessions_preset_check
+    CHECK ((preset = ANY (ARRAY['chat'::text, 'tailor'::text, 'profile'::text, 'browse'::text, 'interview'::text, 'debrief'::text, 'apply'::text, 'base'::text, 'support'::text])));
+
+-- squawk-ignore transaction-nesting
+COMMIT;

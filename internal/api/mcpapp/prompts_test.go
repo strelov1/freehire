@@ -79,19 +79,6 @@ func TestAPromptWithoutItsRequiredArgumentIsRefused(t *testing.T) {
 	}
 }
 
-func TestTheInstructionsIntroduceEveryTool(t *testing.T) {
-	// The instructions are where cross-tool guidance belongs — tool descriptions may not
-	// carry it. A tool they never mention is one the model has to discover by accident.
-	// search and fetch are left out on purpose: they exist for the deep-research connectors,
-	// which call them by name without being told.
-	for _, name := range []string{toolSearchJobs, toolGetJob, toolSearchCompanies, toolGetCompany,
-		toolCheckJobsOpen, toolSimilarJobs, toolSalaryStats, toolMarketStats, toolFilterValues} {
-		if !strings.Contains(serverInstructions, name) {
-			t.Errorf("the instructions never mention %s", name)
-		}
-	}
-}
-
 func complete(t *testing.T, session *mcp.ClientSession, prompt, arg, value string) []string {
 	t.Helper()
 	res, err := session.Complete(context.Background(), &mcp.CompleteParams{

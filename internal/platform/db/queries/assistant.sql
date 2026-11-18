@@ -4,7 +4,7 @@
 -- for a chat. The label is set later, from the first user message.
 INSERT INTO assistant_sessions (user_id, preset, cv_id, job_id)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, preset, label, cv_id, job_id, created_at, updated_at;
+RETURNING id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief;
 
 -- name: ListAssistantChatSessions :many
 -- The caller's session rail: their unbound conversations, most recently active first.
@@ -27,7 +27,7 @@ RETURNING id, user_id, preset, label, cv_id, job_id, created_at, updated_at;
 -- here would offer a chat that silently loses its distinguishing capability the moment it
 -- is opened. It stays reachable from the extension, which holds its id directly rather
 -- than listing it. See the confine-browse-preset-to-extension change.
-SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
 FROM assistant_sessions
 WHERE user_id = $1 AND preset IN ('chat', 'profile', 'interview', 'debrief')
 ORDER BY updated_at DESC, id DESC;
@@ -35,7 +35,7 @@ ORDER BY updated_at DESC, id DESC;
 -- name: GetAssistantSession :one
 -- One session owned by the caller. Owner-scoped: a foreign or missing id returns no row,
 -- which the handler maps to 404 — so a probe cannot tell the two apart.
-SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
 FROM assistant_sessions
 WHERE id = $1 AND user_id = $2;
 
@@ -43,11 +43,26 @@ WHERE id = $1 AND user_id = $2;
 -- The caller's most recent session of one preset bound to one vacancy. Used to reopen the
 -- one conversation an application holds instead of minting a second beside it. Owner-scoped:
 -- another user's session for the same vacancy is never returned.
-SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
 FROM assistant_sessions
 WHERE user_id = $1 AND preset = $2 AND job_id = $3
 ORDER BY created_at DESC
 LIMIT 1;
+
+-- name: GetEmptyAssistantSession :one
+-- The caller's newest session of one preset that has not received a message yet. The support
+-- panel reuses it instead of minting another, which bounds the sessions an account can create
+-- by the messages it actually sent. Owner-scoped like every other read in this file.
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
+FROM assistant_sessions s
+WHERE s.user_id = $1 AND s.preset = $2
+  AND NOT EXISTS (SELECT 1 FROM assistant_messages m WHERE m.session_id = s.id AND m.role = 'user')
+ORDER BY s.created_at DESC
+LIMIT 1;
+
+-- name: LockAssistantSessionCreation :exec
+-- Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
+SELECT pg_advisory_xact_lock(hashtextextended('assistant_session_create:' || sqlc.arg(user_id)::bigint::text, 0));
 
 -- name: DeleteAssistantSession :execrows
 -- Remove an owned session; its transcript goes with it (ON DELETE CASCADE). Returns 0
@@ -131,3 +146,46 @@ UPDATE assistant_sessions
 SET narrated_event_id = sqlc.arg(narrated_event_id)
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
   AND narrated_event_id IS NOT DISTINCT FROM sqlc.narg(previous);
+
+-- name: CreateAssistantSearchSession :one
+-- A client-generated request id makes retrying session creation idempotent. A conflict
+-- never overwrites the owner or initial search; the caller reads and compares instead.
+INSERT INTO assistant_sessions (id, user_id, preset, search_query)
+VALUES ($1, $2, 'chat', $3)
+ON CONFLICT (id) DO NOTHING
+RETURNING id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief;
+
+-- name: UpdateAssistantSelectionBrief :execrows
+-- Only the owner can update preferences, and never the immutable initial search.
+UPDATE assistant_sessions
+SET selection_brief = $3, updated_at = now()
+WHERE id = $1 AND user_id = $2 AND search_query IS NOT NULL;
+
+-- name: ClaimSupportEscalation :execrows
+-- The claim for the one handover email a support session may send: stamps escalated_at only
+-- while it is unset, for the owner's own support session. 0 rows means somebody else already
+-- holds the claim (or the session is not the caller's).
+UPDATE assistant_sessions
+SET escalated_at = now()
+WHERE id = $1 AND user_id = $2 AND preset = 'support' AND escalated_at IS NULL;
+
+-- name: ReleaseSupportEscalation :exec
+-- Gives the claim back when the email could not be sent, so a retry can take it.
+UPDATE assistant_sessions
+SET escalated_at = NULL
+WHERE id = $1 AND user_id = $2 AND preset = 'support';
+
+-- name: CountSupportEscalationsSince :one
+-- How many handovers this account has made since the given instant, for the daily cap.
+SELECT count(*)
+FROM assistant_sessions
+WHERE user_id = $1 AND escalated_at >= $2;
+
+-- name: RateSupportSession :execrows
+-- The owner's verdict on their own support conversation, only once it holds a reply: a blank
+-- session is handed back on the next create, so a vote on it would land on a conversation not
+-- yet had. 0 rows means not theirs, not support, or nothing answered yet.
+UPDATE assistant_sessions
+SET helpful = $3
+WHERE id = $1 AND user_id = $2 AND preset = 'support'
+  AND EXISTS (SELECT 1 FROM assistant_messages m WHERE m.session_id = $1 AND m.role = 'assistant');

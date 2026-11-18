@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 // paradoxFake serves the real JovieofNewportBeach site captured 2026-10-20: its one-page
@@ -115,6 +117,120 @@ const paradoxBoardID = "olivia.paradox.ai/JovieofNewportBeach"
 
 func paradoxFetch(f *paradoxFake) ([]Job, error) {
 	return NewParadox(f).Fetch(context.Background(), CompanyEntry{Company: "Jovie of Newport Beach", Board: paradoxBoardID})
+}
+
+// A slow detail request must not spend the time the pipeline needs to persist the
+// board. Without a hydration reserve, FetchNew returns after its caller expires
+// and even successfully fetched postings cannot be written.
+func TestParadoxLeavesTimeForPersistence(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	f := &paradoxDeadlineGetter{paradoxFake: &paradoxFake{}}
+	jobs, err := NewParadox(f).(HydratingSource).FetchNew(ctx,
+		CompanyEntry{Company: "Acme", Board: paradoxBoardID},
+		func(id string) bool { return id == "P1-6681374-1" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("FetchNew exhausted the persistence context: %v", err)
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("got %d postings, want one seen refresh and two unreadable markers", len(jobs))
+	}
+	for _, j := range jobs {
+		if j.ExternalID == "P1-6681374-1" {
+			if !j.SeenRefresh {
+				t.Error("a seen posting must still refresh without a detail request")
+			}
+		} else if !j.Unreadable {
+			t.Errorf("deferred posting %q must remain visible to the sweep guard", j.ExternalID)
+		}
+	}
+	if f.details != 0 {
+		t.Errorf("sent %d detail requests with no hydration budget remaining", f.details)
+	}
+}
+
+type paradoxDeadlineGetter struct {
+	*paradoxFake
+	details int
+	readyID string
+}
+
+func (f *paradoxDeadlineGetter) GetJSONWithHeaders(ctx context.Context, raw string, headers map[string]string, v any) error {
+	if strings.Contains(raw, "/api/job-posting/") {
+		f.mu.Lock()
+		f.details++
+		f.mu.Unlock()
+		u, _ := url.Parse(raw)
+		if u.Query().Get("job_id") == f.readyID {
+			return f.paradoxFake.GetJSONWithHeaders(ctx, raw, headers, v)
+		}
+		// Bound the regression itself if the adapter stops reserving time.
+		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > time.Second {
+			return errors.New("detail request has no bounded hydration deadline")
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return f.paradoxFake.GetJSONWithHeaders(ctx, raw, headers, v)
+}
+
+func TestParadoxReturnsCompletedDetailsBeforePersistenceDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute+200*time.Millisecond)
+	defer cancel()
+	f := &paradoxDeadlineGetter{paradoxFake: &paradoxFake{}, readyID: "P1-6616376-1"}
+	jobs, err := NewParadox(f).Fetch(ctx, CompanyEntry{Company: "Acme", Board: paradoxBoardID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("the pipeline cannot persist the completed detail: %v", err)
+	}
+	var completed, unreadable int
+	for _, j := range jobs {
+		if j.Unreadable {
+			unreadable++
+		} else if j.ExternalID == "P1-6616376-1" && j.Description != "" {
+			completed++
+		}
+	}
+	if completed != 1 || unreadable != 2 {
+		t.Fatalf("got %d completed details and %d unreadable markers, want 1 and 2", completed, unreadable)
+	}
+}
+
+func TestParadoxRetainsPostingsWhenPacerRefusesBeforeDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	defer cancel()
+	// The listing consumes the only token. The next token is beyond even the
+	// parent deadline, so Wait refuses while both contexts are still alive.
+	f := &paradoxFake{}
+	s := NewParadox(rateLimitedHeaderJSONGetter{
+		inner:   f,
+		limiter: rate.NewLimiter(rate.Every(10*time.Minute), 1),
+	}).(HydratingSource)
+	jobs, err := s.FetchNew(ctx, CompanyEntry{Company: "Acme", Board: paradoxBoardID},
+		func(id string) bool { return id == "P1-6681374-1" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("the persistence context must remain live: %v", err)
+	}
+	var refreshed, unreadable int
+	for _, j := range jobs {
+		if j.SeenRefresh {
+			refreshed++
+		}
+		if j.Unreadable {
+			unreadable++
+		}
+	}
+	if refreshed != 1 || unreadable != 2 {
+		t.Fatalf("got %d refreshes and %d unreadable markers, want 1 and 2", refreshed, unreadable)
+	}
 }
 
 func TestParadoxFetch(t *testing.T) {

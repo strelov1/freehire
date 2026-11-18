@@ -19,7 +19,7 @@ type Config struct {
 // the one thing it addresses. Case folding is not enough where a platform accepts more than
 // one FORM of board id: iCIMS boards are written both as a bare slug and as the full
 // "careers-<slug>.icims.com" host, and icimsHost resolves both to that host, so the two
-// spellings are one crawl target — 37 pairs were once stored and crawled as if they were two.
+// spellings are one crawl target.
 // Dayforce is the same shape for a different reason: its optional culture segment chooses
 // which translations of a site's postings to read, and one posting keeps the same id in every
 // culture, so two entries differing only in culture would store each shared posting twice.
@@ -35,6 +35,12 @@ var boardIdentity = map[string]func(board string) string{
 	// GoHire addresses a site by the 8-character code its segment ends with (see gohire.go).
 	"gohire": gohireSiteCode,
 	"emply":  emplyHost,
+	// BrassRing addresses a site by host plus partnerid+siteid, in any key order and case.
+	"brassring": brassringBoardIdentity,
+	// Njoyn addresses a client by its clid alone: clients.njoyn.com serves every client's
+	// career site under the same path, so "<tenant>/corp/<clid>" and "clients/corp/<clid>"
+	// are one board (see njoyn.go).
+	"njoyn": njoynClientID,
 }
 
 // BoardDedupeKey is the identity two catalog rows are the same crawl target under:
@@ -83,6 +89,11 @@ func (c Config) Validate(registry map[string]Source) error {
 		// entries may omit board; every other provider still requires one.
 		if _, noBoard := src.(boardless); !noBoard && e.Board == "" {
 			return fmt.Errorf("sources: %s entry for company %q has empty board", provider, e.Company)
+		}
+		if v, ok := src.(boardValidator); ok && e.Board != "" {
+			if err := v.validateBoard(e.Board); err != nil {
+				return fmt.Errorf("sources: %s board %q: %w", provider, e.Board, err)
+			}
 		}
 	}
 	return nil

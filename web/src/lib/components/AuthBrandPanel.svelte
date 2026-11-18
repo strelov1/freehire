@@ -23,7 +23,7 @@
   // resolve without a non-null assertion.
   const SLIDES: readonly [Slide, Slide] = [
     {
-      headline: 'Every IT job in one place — deduplicated, enriched, and searchable in seconds.',
+      headline: 'Every tech job in one place — deduplicated, enriched, and searchable in seconds.',
       bullets: [
         'Advanced search across every source',
         "CV tailoring for the role you're applying to",
@@ -141,7 +141,12 @@
         </div>
       {/if}
 
-      <div class="absolute inset-x-0 bottom-3 flex justify-center gap-1.5" role="tablist" aria-label="Highlights" use:tablist={active}>
+      <div
+        class="absolute inset-x-0 bottom-3 flex justify-center gap-1.5"
+        role="tablist"
+        aria-label="Highlights"
+        use:tablist={active}
+      >
         {#each SLIDES as _, i (i)}
           <button
             type="button"
@@ -152,7 +157,7 @@
             aria-label={`Show highlight ${i + 1} of ${SLIDES.length}`}
             onclick={() => select(i)}
             class={[
-              'h-1.5 rounded-full transition-all',
+              'h-1.5 rounded-full transition-colors motion-reduce:transition-none',
               // /30 and /50 (this card's earlier near-transparent backdrop) blend to
               // under 3:1 against the now-opaque brand-foreground card — /80 clears it.
               active === i ? 'w-6 bg-brand' : 'w-1.5 bg-brand/80 hover:bg-brand',
@@ -176,15 +181,16 @@
       class="min-h-0 gap-1 px-0 text-xs text-brand-foreground hover:bg-transparent hover:text-brand-foreground hover:underline"
     />
     {#each otherSocials as social (social.provider)}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
-      <a href={social.href}
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
+      <a
+        href={social.href}
         target="_blank"
         rel="noopener noreferrer"
         aria-label={social.label}
         class="text-brand-foreground underline-offset-4 hover:underline"
       >
         <ProviderIcon provider={social.provider} />
-      </a>
+      </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
     {/each}
   </div>
 </div>

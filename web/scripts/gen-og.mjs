@@ -17,14 +17,14 @@ import { createOgVite, isValidPng, loadFonts, webRoot } from './og-render.mjs';
 
 const outPath = resolve(webRoot, 'static/og.png');
 
-// Rounded DOWN from /api/v1/stats/catalog on 2026-10-19. The jobs figure is the
+// Rounded DOWN from /api/v1/stats/catalog on 2026-11-07. The jobs figure is the
 // de-duplicated `unique_open_jobs` — what /jobs shows — not the raw `open_jobs`, which
 // counts a posting once per board and reads ~40% higher than anything a visitor can
 // browse.
 const STATS = [
-  { value: '3.3M+', label: 'unique jobs' },
-  { value: '470K+', label: 'companies' },
-  { value: '300+', label: 'sources' },
+  { value: '4.9M+', label: 'unique jobs' },
+  { value: '700K+', label: 'companies' },
+  { value: '430+', label: 'sources' },
   { value: '90+', label: 'Telegram channels' },
 ];
 

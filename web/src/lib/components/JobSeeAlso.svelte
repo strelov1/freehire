@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import type { SeeAlsoCard } from '#lib/collections.js';
+  import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
   import CollectionMark from './CollectionMark.svelte';
 
   // A horizontally-scrolling row of links into existing /collections/:slug
@@ -10,23 +11,31 @@
   // server-side (+page.server.ts) from this job's own facets and its
   // company's collections; no client-side fetch.
   let { cards }: { cards: SeeAlsoCard[] } = $props();
+  const edges = new ScrollEdges();
 </script>
 
 {#if cards.length > 0}
   <section class="mt-8">
     <h2 class="mb-3 text-sm font-semibold text-muted-foreground">See also</h2>
-    <div class="no-scrollbar flex gap-3 overflow-x-auto pb-1">
+    <!-- Keep one horizontally scrolling row at every width. On smaller screens it runs
+         to the page edges so the next card remains visible as a cue to scroll. -->
+    <div
+      {@attach edges.attach}
+      class={[
+        'no-scrollbar -mx-5 flex snap-x gap-2 overflow-x-auto scroll-px-5 px-5 pb-1 sm:-mx-4 sm:scroll-px-4 sm:px-4 lg:mx-0 lg:scroll-px-0 lg:px-0',
+        !edges.atStart && 'mask-l-from-97%',
+        !edges.atEnd && 'mask-r-from-97%',
+      ]}
+    >
       {#each cards as card (card.slug)}
         <a
           href={resolve('/collections/[slug]', { slug: card.slug })}
-          class="flex w-max shrink-0 flex-col items-start gap-1.5 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted"
+          class="flex w-max shrink-0 snap-start flex-col items-start gap-1.5 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted"
         >
           <div class="flex w-full items-center justify-between gap-2">
             <CollectionMark mark={card.mark} />
             {#if card.count !== null}
-              <span
-                class="shrink-0 rounded-full bg-secondary px-2 py-0.5 font-mono text-xs text-muted-foreground"
-              >
+              <span class="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
                 {card.count.toLocaleString()} jobs
               </span>
             {/if}

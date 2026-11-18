@@ -16,8 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/tracerlink"
 )
 
-// tracerLinkStore is the three queries the redirect makes. Narrow on purpose: this surface reads
-// one row and writes two, and anything wider would let it grow reach it has no business having.
+// tracerLinkStore is the three queries the redirect makes, kept narrow: it reads one row and writes two.
 type tracerLinkStore interface {
 	TracerLinkByToken(ctx context.Context, token string) (db.TracerLinkByTokenRow, error)
 	RecordTracerClick(ctx context.Context, arg db.RecordTracerClickParams) error
@@ -35,8 +34,7 @@ func newTracerHandlers(queries *db.Queries, salt string) *tracerHandlers {
 	return &tracerHandlers{links: queries, salt: salt}
 }
 
-// goneBody is what a recruiter sees when the CV behind a link has been deleted. They did nothing
-// wrong, and a bare 404 reads as a broken site rather than as a link that has expired.
+// goneBody is what a recruiter sees when the CV behind a link was deleted; a bare 404 reads as a broken site.
 const goneBody = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
@@ -59,30 +57,25 @@ a{display:inline-block;margin-top:1.5rem;color:#3f3f46;font-size:.875rem}
 
 // Redirect resolves a traced link, records the click, and sends the visitor on.
 //
-// Two properties hold whatever else changes here. The destination comes only from the stored
-// token — no query parameter, path remainder or header can name one — so the endpoint cannot be
-// aimed by whoever crafts the URL. And the click write is best-effort: the redirect happens
-// whether or not it succeeds, because a broken redirect lives inside a PDF the candidate can
-// neither see nor fix.
+// Two invariants. The destination comes only from the stored token (no query parameter, path
+// or header can name one), so the endpoint cannot be aimed by a crafted URL. The click write is
+// best-effort: the redirect happens regardless, since it lives in a PDF the candidate cannot fix.
 func (h *tracerHandlers) Redirect(c *fiber.Ctx) error {
 	link, err := h.links.TracerLinkByToken(c.Context(), c.Params("token"))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c.Status(fiber.StatusGone).Type("html").SendString(goneBody)
 	}
 	if err != nil {
-		// Only a token that genuinely is not there earns the 410. A pool timeout or a failover
-		// blip must not tell a recruiter the candidate deleted their CV — that is a false
-		// statement about a person, and 410 means "gone for good", so a well-behaved gateway
-		// would stop retrying a link that is perfectly alive.
+		// Only a missing token earns the 410 ("gone for good"); a pool timeout must not tell a
+		// recruiter the CV was deleted or make a gateway stop retrying a live link.
 		return err
 	}
 
 	ua := string(c.Request().Header.UserAgent())
 	client := tracerlink.Classify(c.Method(), ua)
 
-	// The redirect is served from our own origin, so a candidate following a link out of their
-	// own downloaded PDF arrives carrying their session. Cookie only: an API key must not be able
-	// to attribute a click, and a leaked one must not be able to hide one.
+	// The owner following a link from their own PDF arrives with their session. Cookie only:
+	// an API key must not attribute a click, and a leaked one must not hide one.
 	owner, signedIn := auth.UserID(c)
 	isOwner := signedIn && owner == link.OwnerID
 
@@ -105,9 +98,7 @@ func (h *tracerHandlers) Redirect(c *fiber.Ctx) error {
 	return c.Redirect(link.DestinationUrl, fiber.StatusFound)
 }
 
-// referrerHost keeps the host and discards the rest. A full referrer carries the path and query of
-// whatever page the reader came from — their inbox thread, their ATS search — which is none of our
-// business and would sit in our database forever.
+// referrerHost keeps only the host: the path and query of the reader's page (inbox thread, ATS search) are private.
 func referrerHost(referrer string) string {
 	if referrer == "" {
 		return ""

@@ -19,6 +19,13 @@ export const Default: Story = {
     description: 'The employer keeps the messages you already sent.',
   },
 };
+export const DescriptionOnly: Story = {
+  args: {
+    title: '',
+    description: 'Choose whether to withdraw this application. Your messages will remain available.',
+  },
+};
+
 export const TitleOnly: Story = { args: { title: 'Withdraw application?' } };
 
 // Held open: Escape, the backdrop and the close button all go away together,
@@ -33,8 +40,7 @@ export const NotDismissible: Story = {
   },
 };
 
-// Resize the canvas below the sm breakpoint (640px) to see the mobile takeover:
-// edge-to-edge, scrolling body, close button pinned to the viewport corner.
+// Long content scrolls inside the card while preserving margins around the viewport.
 export const LongContent: Story = {
   args: { title: 'Update your profile', body: 'long' },
 };

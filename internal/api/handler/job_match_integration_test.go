@@ -54,7 +54,7 @@ func TestJobMatchEndpoint(t *testing.T) {
 		userProfile: userprofile.New(userprofile.NewQueriesRepository(queries)),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/:slug/match", auth.RequireAuth(iss, testVersions), h.JobMatch)
+	app.Get("/api/v1/jobs/:slug/match", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{matchHandlers: h}))
 
 	type adj struct {
 		Name string `json:"name"`

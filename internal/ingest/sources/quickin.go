@@ -9,8 +9,8 @@ import (
 const (
 	quickinBaseURL  = "https://api.quickin.io"
 	quickinPageSize = 100
-	// quickinMaxPages bounds the page walk; the stop signal is the response's pages
-	// count, but this caps a misbehaving API well above any single tenant's postings.
+	// quickinMaxPages bounds the page walk; the stop signal is the response's pages count, but this
+	// caps a misbehaving API well above any single tenant's postings.
 	quickinMaxPages = 200
 	// quickinPublished is the publicate value marking a live posting; any other value
 	// (draft/paused/closed) is skipped.

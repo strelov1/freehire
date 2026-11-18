@@ -9,7 +9,6 @@ func testManifest() Manifest {
 	return NewManifest(ManifestConfig{
 		Origin:         testOrigin,
 		Tools:          []string{"search_jobs", "get_job_detail", "get_employer_context"},
-		AnonymousRPS:   10,
 		ApplyPathTypes: []string{"ats_direct", "external_redirect"},
 	})
 }
@@ -48,16 +47,6 @@ func TestManifestOmitsEndpointsItCannotAddress(t *testing.T) {
 	}
 	if err := validateAgainstSchema(t, schemaManifest, m); err != nil {
 		t.Fatalf("origin-less manifest rejected: %v", err)
-	}
-}
-
-func TestManifestDeclaresNoRateLimitItCannotName(t *testing.T) {
-	// The spec makes a declared limit binding. A zero would publish "no requests allowed",
-	// which is not what an unconfigured limiter means.
-	m := NewManifest(ManifestConfig{Origin: testOrigin, Tools: []string{"search_jobs"}})
-
-	if m.RateLimits != nil {
-		t.Errorf("rate_limits = %+v, want them omitted rather than declared as zero", m.RateLimits)
 	}
 }
 

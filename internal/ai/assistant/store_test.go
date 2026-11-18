@@ -50,7 +50,7 @@ func (f *fakeQueries) ListAssistantChatSessions(_ context.Context, userID int64)
 	}
 	return []db.ListAssistantChatSessionsRow{{
 		ID: f.session.ID, UserID: f.session.UserID, Preset: f.session.Preset,
-		Label: f.session.Label, CvID: f.session.CvID, JobID: f.session.JobID,
+		Label: f.session.Label, CvID: f.session.CvID, JobID: f.session.JobID, SearchQuery: f.session.SearchQuery, SelectionBrief: f.session.SelectionBrief,
 	}}, nil
 }
 
@@ -61,7 +61,7 @@ func (f *fakeQueries) GetAssistantSession(_ context.Context, arg db.GetAssistant
 	}
 	return db.GetAssistantSessionRow{
 		ID: f.session.ID, UserID: f.session.UserID, Preset: f.session.Preset,
-		Label: f.session.Label, CvID: f.session.CvID, JobID: f.session.JobID,
+		Label: f.session.Label, CvID: f.session.CvID, JobID: f.session.JobID, SearchQuery: f.session.SearchQuery, SelectionBrief: f.session.SelectionBrief,
 	}, nil
 }
 
@@ -74,6 +74,10 @@ func (f *fakeQueries) GetAssistantSessionForJob(_ context.Context, arg db.GetAss
 	return db.GetAssistantSessionForJobRow{
 		ID: s.ID, UserID: s.UserID, Preset: s.Preset, Label: s.Label, CvID: s.CvID, JobID: s.JobID,
 	}, nil
+}
+
+func (f *fakeQueries) GetEmptyAssistantSession(_ context.Context, _ db.GetEmptyAssistantSessionParams) (db.GetEmptyAssistantSessionRow, error) {
+	return db.GetEmptyAssistantSessionRow{}, pgx.ErrNoRows
 }
 
 func (f *fakeQueries) DeleteAssistantSession(_ context.Context, _ db.DeleteAssistantSessionParams) (int64, error) {
@@ -418,5 +422,16 @@ func TestAppendGivesUpOnAPersistentCollision(t *testing.T) {
 	q := &collidingQueries{collisions: 99}
 	if _, err := NewStore(q).Append(context.Background(), sessionID, Message{Role: RoleUser, Content: []byte(`{}`)}); err == nil {
 		t.Fatal("Append retried forever instead of reporting the failure")
+	}
+}
+
+func TestSessionRestoresSearchOutsideTranscript(t *testing.T) {
+	f := &fakeQueries{session: db.AssistantSession{ID: sessionID, UserID: 3, Preset: PresetChat, SearchQuery: pgtype.Text{String: "salary_min=80000", Valid: true}, SelectionBrief: "Prefer hands-on roles"}}
+	sess, err := NewStore(f).Session(context.Background(), sessionID, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.SearchContext == nil || sess.SearchContext.Query != "salary_min=80000" || sess.SearchContext.Brief != "Prefer hands-on roles" {
+		t.Fatalf("lost context: %+v", sess.SearchContext)
 	}
 }

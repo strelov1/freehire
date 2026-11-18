@@ -16,15 +16,12 @@ const speedrunDirectoryURL = "https://speedrun-talent-network.com/api/v1/compani
 // speedrunSourceTag identifies us to the API, matching internal/ingest/sources/speedrun.go.
 const speedrunSourceTag = "freehire"
 
-// speedrunUserAgent names us to the directory. Not optional politeness: the network
-// drops the connection for Go's default `Go-http-client/2.0` while serving any
-// identified agent, so an unnamed request fails with a bare 500. Matches the agent
-// string the liveness prober uses.
+// speedrunUserAgent names us to the directory. Required: the network fails Go's default
+// `Go-http-client/2.0` with a bare 500. Matches the liveness prober's agent string.
 const speedrunUserAgent = "freehire/0.1 (+https://freehire.me)"
 
-// speedrunPageLimit bounds the walk. The directory reports its own page count, but a
-// malformed or hostile response could report an unbounded one; 9 pages is the live
-// size, so this leaves a wide margin while keeping the run finite.
+// speedrunPageLimit bounds the walk, since a malformed or hostile response could report an
+// unbounded page count.
 const speedrunPageLimit = 100
 
 // The directory's tier value for the accelerator's cohorts. Its `a16z` tier is the
@@ -34,13 +31,11 @@ const speedrunPageLimit = 100
 const speedrunTierAccelerator = "speedrun"
 
 // The a16z Speedrun talent network publishes its company directory as a paginated
-// JSON API — the same one internal/ingest/sources/speedrun.go crawls for roles. It is the
+// JSON API, the same one internal/ingest/sources/speedrun.go crawls for roles. It is the
 // membership source for both a16z collections.
 //
-// The directory is the only honest source for this membership. Deriving it from
-// `source='speedrun'` on our jobs would find only the portfolio companies that host
-// their application on the network itself (11 of them); the rest are crawled through
-// their own Ashby/Greenhouse/Lever boards and would be missed.
+// Deriving membership from `source='speedrun'` on our jobs would miss the portfolio companies
+// crawled through their own Ashby/Greenhouse/Lever boards.
 
 // speedrunPage is one response: the companies on this page plus the page count the
 // walker needs to know how many more to fetch.
@@ -83,12 +78,10 @@ func parseSpeedrunPage(data []byte) (speedrunPage, error) {
 }
 
 // fetchSpeedrunDirectory walks every page of the directory and returns all of its
-// records. The API pins its page size at 100 regardless of what is asked for, so the
-// walk is the only way to read the whole thing.
+// records. The API pins its page size, so walking is the only way to read it all.
 //
-// Any page failing fails the whole call. A partial directory is worse than none: it
-// parses cleanly, so the import worker would treat the companies it never reached as
-// having left the collection and reconcile the tag off them.
+// Any page failing fails the whole call: a partial directory parses cleanly, so the import
+// would treat unreached companies as having left the collection and reconcile the tag off them.
 func fetchSpeedrunDirectory(ctx context.Context, client *http.Client, base string) ([]Record, error) {
 	var all []Record
 	for page := 0; page < speedrunPageLimit; page++ {
@@ -106,12 +99,9 @@ func fetchSpeedrunDirectory(ctx context.Context, client *http.Client, base strin
 
 // speedrunMembers builds the Dataset.Records source for one directory tier.
 //
-// The directory carries three tiers and only two of them mean anything here: `a16z`
-// is the fund's portfolio, `speedrun` is the accelerator's cohorts, and `market` is
-// the general job market — Walmart, TikTok, Amazon — which has no relationship to
-// a16z at all. Selecting by tier rather than filtering `market` out is deliberate: a
-// tier added upstream tomorrow is then excluded by default rather than silently
-// swept into whichever tag ran the exclusion.
+// Of the three tiers only `a16z` (the fund's portfolio) and `speedrun` (the accelerator's
+// cohorts) matter; `market` is the general job market. Selecting by tier rather than excluding
+// `market` means a tier added upstream is left out by default.
 func speedrunMembers(tier string) func(context.Context, *http.Client) ([]Record, error) {
 	return func(ctx context.Context, client *http.Client) ([]Record, error) {
 		return speedrunMembersFrom(ctx, client, speedrunDirectoryURL, tier)

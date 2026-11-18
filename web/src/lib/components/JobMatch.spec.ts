@@ -11,8 +11,8 @@ vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/jobs/rust-
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-const { addSkill, removeSkill, avoidSkill, unavoidSkill, getJobMatch, getMatchAnalysis, syncProfileAlert } =
-  vi.hoisted(() => ({
+const { addSkill, removeSkill, avoidSkill, unavoidSkill, getJobMatch, getMatchAnalysis, syncProfileAlert } = vi.hoisted(
+  () => ({
     addSkill: vi.fn(),
     removeSkill: vi.fn(),
     avoidSkill: vi.fn(),
@@ -23,7 +23,8 @@ const { addSkill, removeSkill, avoidSkill, unavoidSkill, getJobMatch, getMatchAn
     // throwing, which is what lets the test below name it.
     getMatchAnalysis: vi.fn(),
     syncProfileAlert: vi.fn(),
-  }));
+  }),
+);
 
 const authState = vi.hoisted(() => ({ signedIn: true }));
 
@@ -43,8 +44,7 @@ vi.mock('#lib/api.js', () => ({ api: { getJobMatch, getMatchAnalysis } }));
 vi.mock('#lib/profileAlertSync.js', () => ({ syncProfileAlert }));
 
 const job = { public_slug: 'rust-job', skills: ['rust'] } as Job;
-// The guest teaser needs two skills to have a have/missing contrast to draw; with one it
-// renders the call-to-action alone, which is not the branch under test.
+// A job with more than one skill, so a guest view has something it could have summarised.
 const twoSkillJob = { public_slug: 'rust-job', skills: ['rust', 'go'] } as Job;
 
 const analysed: MatchAnalysisResponse = {

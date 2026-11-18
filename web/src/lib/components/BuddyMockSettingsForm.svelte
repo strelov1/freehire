@@ -84,11 +84,14 @@
       </div>
     </div>
 
-    <p id="{uid}-link-note" class="flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+    <p
+      id="{uid}-link-note"
+      class="flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
+    >
       <Info class="mt-px size-3.5 shrink-0" aria-hidden="true" />
       <span>
-        Your guest may see your name through this link — for example the name on your Zoom or
-        Google account. Only the member who books you sees the link, and only after booking.
+        Your guest may see your name through this link — for example the name on your Zoom or Google account. Only the
+        member who books you sees the link, and only after booking.
       </span>
     </p>
 
@@ -121,7 +124,12 @@
         <span class="text-sm font-medium">Pause hosting</span>
         <span class="text-xs text-muted-foreground">Members cannot book you; booked mock interviews stay.</span>
       </span>
-      <input type="checkbox" class="mt-0.5 size-4 shrink-0 accent-brand" bind:checked={paused} onchange={() => (saved = false)} />
+      <input
+        type="checkbox"
+        class="mt-0.5 size-4 shrink-0 accent-brand"
+        bind:checked={paused}
+        onchange={() => (saved = false)}
+      />
     </label>
   </div>
 

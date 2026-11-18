@@ -54,7 +54,8 @@ func billingApp(t *testing.T, pool *pgxpool.Pool, cfg billing.Config, providerUR
 	// nothing — which is also what the disabled case below asserts about Stripe itself.
 	h := newBillingHandlers(billing.NewWithBase(cfg, db.New(pool), providerURL), nil, nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)})
+	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)},
+		newContract(contractHandlers{billingHandlers: h}))
 	return app
 }
 
@@ -303,6 +304,14 @@ func TestBillingCheckout(t *testing.T) {
 	// The provider mints the checkout page; we only ever hand it the account id.
 	var gotForm string
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/customers" {
+			_, _ = w.Write([]byte(`{"id":"cus_checkout"}`))
+			return
+		}
+		if r.URL.Path == "/subscriptions" {
+			_, _ = w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		_ = r.ParseForm()
 		gotForm = r.Form.Encode()
 		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_int"}`))
@@ -357,6 +366,54 @@ func TestBillingCheckout(t *testing.T) {
 	})
 }
 
+// TestBillingReadsReportAProviderFault keeps "no subscription" for the account that has
+// none, and answers 500 — a reported fault — when the provider fails for one that does, so
+// a paying subscriber is never told they have nothing while nobody hears about it.
+func TestBillingReadsReportAProviderFault(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var payer, free int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email, stripe_customer_id) VALUES ('payer@example.test', 'cus_down') RETURNING id`).Scan(&payer); err != nil {
+		t.Fatalf("seed payer: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('free@example.test') RETURNING id`).Scan(&free); err != nil {
+		t.Fatalf("seed free user: %v", err)
+	}
+
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, `{"error":{"message":"provider down"}}`, http.StatusInternalServerError)
+	}))
+	defer stub.Close()
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app := billingApp(t, pool, enabledBillingConfig(), stub.URL, iss)
+
+	get := func(userID int64, path string) int {
+		t.Helper()
+		token, _ := iss.Issue(userID, testTokenVersion)
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		resp, err := app.Test(req, 15000)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	for _, path := range []string{"/api/v1/billing/subscription", "/api/v1/billing/manage", "/api/v1/billing/checkout"} {
+		if got := get(payer, path); got != http.StatusInternalServerError {
+			t.Errorf("payer GET %s with the provider down: want 500, got %d", path, got)
+		}
+	}
+	for _, path := range []string{"/api/v1/billing/subscription", "/api/v1/billing/manage"} {
+		if got := get(free, path); got != http.StatusNotFound {
+			t.Errorf("free GET %s: want 404, got %d", path, got)
+		}
+	}
+}
+
 // TestBillingRoutesAbsentWhenUnconfigured is the property that lets this ship in a public
 // repository: a deployment that never sets the credentials cannot tell the endpoints are
 // there. 404, not 401 and not 500.
@@ -371,6 +428,7 @@ func TestBillingRoutesAbsentWhenUnconfigured(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/v1/billing/stripe/webhook"},
 		{http.MethodGet, "/api/v1/billing/checkout"},
+		{http.MethodGet, "/api/v1/billing/attempts"},
 	} {
 		req := httptest.NewRequestWithContext(ctx, tc.method, tc.path, strings.NewReader("{}"))
 		resp, err := app.Test(req, 15000)

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { untrack } from 'svelte';
   import { ScanSearch } from '@lucide/svelte';
   import { page } from '$app/state';
@@ -148,6 +149,8 @@
   {/if}
 {/snippet}
 
+<AccountPageHeading class="mb-6">{s.title}</AccountPageHeading>
+
 <div class="flex gap-6">
   <main class="flex min-w-0 flex-1 flex-col gap-6">
     {#if loadError}
@@ -200,12 +203,7 @@
 </div>
 
 {#if filters}
-  <FilterEdgeTab
-    active={filters.active}
-    onclick={() => (modalOpen = true)}
-    side="right"
-    class="top-[5.5rem]"
-  />
+  <FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} side="right" class="top-[5.5rem]" />
   <FilterModal
     store={filters}
     {counts}

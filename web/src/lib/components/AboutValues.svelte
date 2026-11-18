@@ -36,7 +36,7 @@
 <!-- Each value is a heading, so the five promises are reachable by heading navigation; a
      <dl> could not carry that, since a <dt> may not contain one. -->
 <section class="border-t border-border py-16 sm:py-20">
-  <SectionLabel as="h2" text="values" />
+  <SectionLabel as="h2" text="Values" />
   <ol class="mt-10 divide-y divide-border border-y border-border">
     {#each values as v (v.n)}
       <li class="grid gap-2 py-6 sm:grid-cols-[auto_1fr] sm:gap-8">

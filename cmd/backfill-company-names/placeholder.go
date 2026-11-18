@@ -70,18 +70,16 @@ type placeholderWriter interface {
 	InsertCompanySlugAlias(context.Context, db.InsertCompanySlugAliasParams) (int64, error)
 }
 
-// writePlaceholderRename applies one resolved name to the board's stored jobs and to the board,
-// reporting the slug the jobs moved onto and the distinct slugs they moved away from (none
-// when no job changed). The caller runs it in ONE transaction, and that is what
-// the order cannot give: this pass finds its work by the BOARD, so a board renamed without its
-// jobs is never listed again and its stored postings keep the placeholder for good, while jobs
-// renamed without the board are put back by the next crawl. Each half alone is a lost write.
+// writePlaceholderRename applies one resolved name to the board's stored jobs and to the
+// board, reporting the slug the jobs moved onto and the distinct slugs they moved away from
+// (none when no job changed). The caller runs it in ONE transaction: this pass finds its work
+// by the BOARD, so a board renamed without its jobs is never listed again and its postings
+// keep the placeholder, while jobs renamed without the board are put back by the next crawl.
 //
-// The slug is the one the pipeline writes for the same name — CompanySlug, then the merge
-// worker's alias registry — so a posting the next crawl rewrites lands on the company this
-// rename created instead of re-keying it again. The OLD slug is recorded as an alias of it: its
-// /companies page had been served and announced to search engines, and an alias is what turns
-// that address into a 301 instead of a 404.
+// The slug is the one the pipeline writes for the same name (CompanySlug, then the merge
+// worker's alias registry), so the next crawl lands on the company this rename created. The
+// OLD slug is recorded as an alias so its already-announced /companies page 301s instead of
+// 404ing.
 func writePlaceholderRename(ctx context.Context, q placeholderWriter, r placeholderRename) (string, []string, error) {
 	slug := normalize.CompanySlug(r.name)
 	aliases, err := q.ResolveCompanySlugAliases(ctx, []string{normalize.FoldSlug(slug)})
@@ -110,7 +108,7 @@ func writePlaceholderRename(ctx context.Context, q placeholderWriter, r placehol
 	if err != nil {
 		return "", nil, fmt.Errorf("board: %w", err)
 	}
-	// The board changed since it was listed — a curator named it meanwhile. Failing rolls the
+	// The board changed since it was listed (a curator named it meanwhile). Failing rolls the
 	// jobs half back, which would otherwise carry this name under a board stating another.
 	if boardRows == 0 {
 		return "", nil, fmt.Errorf("board: %s %s no longer carries %q", r.provider, r.board, r.oldName)

@@ -6,15 +6,8 @@
 
 import { dynamicLabel, FACETS } from './facets';
 import { experienceLabel, freshnessLabel } from './filterControls';
-import {
-  type JobFilters,
-  emptyFacet,
-  emptyFilters,
-  facetAdd,
-  facetSetSign,
-  filtersToParams,
-  signOf,
-} from './facetModel';
+import { type JobFilters, emptyFacet, emptyFilters, filtersToParams } from './facetModel';
+import { facetAdd, facetSetSign, signOf } from './facetSign';
 import type { Interpretation, ResumeProfile } from './types';
 
 /** Build a fresh filter set from an interpretation — the reset-and-apply behind the
@@ -76,10 +69,7 @@ export function cvContext(profile: ResumeProfile): string {
  *  counts the OTHER countries of every job that matched. Drawn as-is, a plan for Brazil
  *  shows Mexico beside it and reads as "these jobs are not in Brazil". When the plan
  *  names countries only those are drawn; the ones it excludes never are. */
-export function limitToRequestedCountries(
-  counts: Record<string, number>,
-  result: Interpretation,
-): [string, number][] {
+export function limitToRequestedCountries(counts: Record<string, number>, result: Interpretation): [string, number][] {
   const wanted = new Set(result.facets?.countries ?? []);
   const avoided = new Set(result.exclude?.countries ?? []);
   return Object.entries(counts)
@@ -93,14 +83,14 @@ export function limitToRequestedCountries(
 type PreviewChip = { key: string; text: string; exclude: boolean };
 export type PreviewGroup = { label: string; chips: PreviewChip[] };
 
+const label = (param: string, value: string) =>
+  FACETS.find((d) => d.param === param)?.options?.find((o) => o.value === value)?.label ?? dynamicLabel(param, value);
+
 /** What a plan will apply, grouped and labelled exactly as the filter controls label it,
  *  so the preview and the applied filter read the same. Included wins over excluded —
  *  the rule filtersFromInterpretation applies — which also keeps one value from being
  *  keyed twice. */
 export function planPreview(result: Interpretation): PreviewGroup[] {
-  const label = (param: string, value: string) =>
-    FACETS.find((d) => d.param === param)?.options?.find((o) => o.value === value)?.label ??
-    dynamicLabel(param, value);
   const groups: PreviewGroup[] = [];
   const push = (heading: string, chips: PreviewChip[]) => {
     if (chips.length) groups.push({ label: heading, chips });

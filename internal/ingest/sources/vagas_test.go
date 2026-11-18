@@ -385,7 +385,7 @@ func TestVagasHydratesAtMostTheBudgetOfNewPostings(t *testing.T) {
 // take a hydration slot on every run. The listing card names its employer and title, so it is
 // yielded body-less and costs no detail request.
 func TestVagasGateSkipsDetailForDiscardedPostings(t *testing.T) {
-	const covered, rejected, kept = "/vagas/v1/covered", "/vagas/v2/rejected", "/vagas/v3/kept"
+	const covered, rejected, kept = "/vagas/v1/covered", "/vagas/v2/covered", "/vagas/v3/kept"
 	page := `<html><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",
 "title":"Dev","hiringOrganization":{"@type":"Organization","name":"Acme"},"description":"<p>Body.</p>"}</script></body></html>`
 	http := &vagasFake{pages: map[string]string{vagasListingURL(1): vagasListingHTML(covered, rejected, kept)}}
@@ -394,9 +394,8 @@ func TestVagasGateSkipsDetailForDiscardedPostings(t *testing.T) {
 	}
 	gate := DetailGate{
 		Covered: func(companies []string) map[string]bool {
-			return map[string]bool{"Employer " + covered: true}
+			return map[string]bool{"Employer " + covered: true, "Employer " + rejected: true}
 		},
-		Rejected: func(j Job) bool { return j.Title == "Vaga "+rejected },
 	}
 	jobs, err := NewVagas(http).(vagas).FetchNewGated(context.Background(), CompanyEntry{},
 		func(string) bool { return false }, gate)

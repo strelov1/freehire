@@ -100,8 +100,8 @@
               <p class="text-sm text-muted-foreground">Posting views</p>
               <p class="mt-1 text-2xl font-semibold tabular-nums">{hiring.views.toLocaleString('en-US')}</p>
               <p class="mt-1 text-sm text-muted-foreground">
-                in the last 30 days, {formatGrowth(hiring.views - hiring.views_prev)} vs the 30 before.
-                One visitor counts once per posting per day.
+                in the last 30 days, {formatGrowth(hiring.views - hiring.views_prev)} vs the 30 before. One visitor counts
+                once per posting per day.
               </p>
             </Card>
 
@@ -134,10 +134,7 @@
           </section>
 
           <section>
-            <ActivityPanel
-              initial={hiring.series}
-              load={(g) => api.companyHiring(data.slug, g).then((h) => h.series)}
-            >
+            <ActivityPanel initial={hiring.series} load={(g) => api.companyHiring(data.slug, g).then((h) => h.series)}>
               {#snippet title()}
                 <h2 class="text-lg font-semibold tracking-tight">Postings added vs. removed</h2>
               {/snippet}
@@ -163,10 +160,13 @@
                   <ul class="mt-2 flex flex-col gap-1 text-sm">
                     {#each block.rows as row (row.value)}
                       <li class="flex items-baseline justify-between gap-3">
-                        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the path IS resolve()d; the rule can't see through the appended filter query -->
-                        <a class="truncate hover:underline" href={`${resolve('/companies/[slug]', { slug: data.slug })}?${new URLSearchParams({ [block.param]: row.value })}`}>
+                        <!-- eslint-disable svelte/no-navigation-without-resolve -- the path IS resolve()d; the rule can't see through the appended filter query -->
+                        <a
+                          class="truncate hover:underline"
+                          href={`${resolve('/companies/[slug]', { slug: data.slug })}?${new URLSearchParams({ [block.param]: row.value })}`}
+                        >
                           {breakdownLabel(block.param, row.value)}
-                        </a>
+                        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
                         <span class="tabular-nums text-muted-foreground">{row.count}</span>
                       </li>
                     {/each}

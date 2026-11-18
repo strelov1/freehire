@@ -113,8 +113,8 @@
            follow links automatically with ordinary browser identities, so an open is evidence the
            link was fetched — not proof a person read the CV. -->
       <p class="text-xs text-muted-foreground">
-        An open means the link was fetched. Company mail scanners do this automatically, so this is
-        a hint, not proof someone read your CV.
+        An open means the link was fetched. Company mail scanners do this automatically, so this is a hint, not proof
+        someone read your CV.
       </p>
     {:else}
       <p class="text-xs text-muted-foreground">No opens recorded yet.</p>

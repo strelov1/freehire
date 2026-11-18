@@ -105,7 +105,8 @@
     <p class="closed-note">This thread is closed.</p>
   {:else if isAuthenticated()}
     <form class="reply-form" onsubmit={submit}>
-      <textarea bind:value={body} rows="3" placeholder="Add a reply…" aria-label="Your reply" class="reply-form__body"></textarea>
+      <textarea bind:value={body} rows="3" placeholder="Add a reply…" aria-label="Your reply" class="reply-form__body"
+      ></textarea>
       {#if formError}<p class="reply-form__error">{formError}</p>{/if}
       <div class="reply-form__actions">
         <Button type="submit" disabled={!canSubmit}>{submitting ? 'Posting…' : 'Reply'}</Button>
@@ -114,7 +115,8 @@
   {:else}
     <p class="signin-hint">
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query -->
-      <a class="linklike" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</a> to reply.
+      <a class="linklike" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</a> to
+      reply.
     </p>
   {/if}
 </article>

@@ -17,5 +17,5 @@ git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
 git checkout -B "$BRANCH"
 git add "$SNAPSHOT"
-git commit -m 'Refresh the contributor snapshot'
+git commit -m 'chore(web): refresh the contributor snapshot'
 git push --force origin "$BRANCH"

@@ -51,7 +51,7 @@ Eleven blocks. `internal/<pkg>` becomes `internal/<block>/<pkg>`.
 
 | Block | Packages |
 |---|---|
-| `platform` | `arch/layering`※ `backfillpage` `blobstore` `cache` `config` `database` `db` `externalid`※ `flexjson` `htmltext` `isoweek` `linktoken` `llm` `llmschema` `migrate` `modroot`※ `observability` `outbox` `pgconv` `pgerr` `safehttp` `stringset` `testdb` `tokencrypt` `tracerlink` `worker` |
+| `platform` | `arch/layering`※ `blobstore` `cache` `config` `database` `db` `externalid`※ `flexjson` `htmltext` `isoweek` `linktoken` `llm` `llmschema` `migrate` `modroot`※ `observability` `outbox` `pgconv` `pgerr` `safehttp` `stringset` `testdb` `tokencrypt` `tracerlink` `worker` |
 | `dict` | `classify` `companyname` `industrytag` `lang` `location` `normalize` `roletag` `roletype` `skilladjacency` `skillbundle` `skilltag` `vocab` `wordmatch` |
 | `ai` | `aiarchetype` `assistant` `autofillagent` `browsertools` `credits` `embed` `enrich` `llmkey` `speech` |
 | `identity` | `accountdelete` `accounts` `auth` `auth/apple` `auth/applejobs` `auth/mobileauth` `auth/oauth` `auth/recentauth` `userprofile` |

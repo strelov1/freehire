@@ -1,4 +1,6 @@
-import { resolve } from '$app/paths';
+import { onboardingUrl } from '#lib/signin.js';
+
+export { onboardingUrl };
 
 // Shared "has this visit already been sent through /onboarding and left" flag. A
 // module-level $state singleton — a client-only UI concern, safe under SSR since it
@@ -19,6 +21,14 @@ import { resolve } from '$app/paths';
 // resetUserStores().
 let dismissedThisVisit = $state(false);
 
+// A guest who reaches /onboarding for an action and leaves it to authenticate (skipping the CV,
+// or signing in to an existing account) has been through it. The mark outlives a full-page OAuth
+// round trip (in-memory state does not), so it rides the tab's sessionStorage until an account
+// appears and the layout takes it. It carries only a timestamp, and goes stale: abandoned intent
+// must not excuse some later account from the flow.
+const GUEST_SKIP_KEY = 'fh:onboarding-guest-skip';
+const GUEST_SKIP_TTL_MS = 30 * 60 * 1000;
+
 export const onboardingGate = {
   get dismissed() {
     return dismissedThisVisit;
@@ -26,15 +36,53 @@ export const onboardingGate = {
   dismiss() {
     dismissedThisVisit = true;
   },
+  /** The session ended: the visit's dismissal and any pending guest skip go with it. */
   reset() {
     dismissedThisVisit = false;
+    try {
+      sessionStorage.removeItem(GUEST_SKIP_KEY);
+    } catch {
+      // Storage blocked: nothing was kept.
+    }
+  },
+  /** A guest is leaving /onboarding to authenticate: remember it for the account that appears. */
+  skipAsGuest(now = Date.now()) {
+    try {
+      sessionStorage.setItem(GUEST_SKIP_KEY, String(now));
+    } catch {
+      // Storage blocked: the account is routed through onboarding once, as any new one is.
+    }
+  },
+  /** Consumes the pending guest skip: true once, for the first account to appear within the TTL. */
+  takeGuestSkip(now = Date.now()): boolean {
+    try {
+      const at = Number(sessionStorage.getItem(GUEST_SKIP_KEY));
+      sessionStorage.removeItem(GUEST_SKIP_KEY);
+      return at > 0 && at <= now && now - at <= GUEST_SKIP_TTL_MS;
+    } catch {
+      return false;
+    }
   },
 };
 
-/** The URL for /onboarding carrying `returnTo` — where the wizard sends the visitor
- *  back once they finish or skip it. Every entry point (a signed-out gate's "Sign up",
- *  the layout's no-CV auto-redirect) builds this the same way, so they share one place
- *  to change the query param name or add validation. */
-export function onboardingUrl(returnTo: string): string {
-  return `${resolve('/onboarding')}?returnTo=${encodeURIComponent(returnTo)}`;
+/** The layout's routing for a signed-in account. A pending guest skip belongs to the first account
+ *  that appears (whether or not it needs onboarding), so it is consumed here, not left for the
+ *  next one. An account that has not been onboarded goes to /onboarding once — unless it just came
+ *  out of that page as a guest, which counts as having seen it. Not on /onboarding itself, nor on
+ *  /signin, which navigates to its own returnTo the moment the session flips. */
+export function routeAccount(
+  path: string,
+  search: string,
+  needsOnboarding: boolean,
+  deps: { complete: () => Promise<unknown>; go: (url: string) => void },
+): void {
+  if (path === '/onboarding' || path === '/signin') return;
+  const skipped = onboardingGate.takeGuestSkip();
+  if (!needsOnboarding) return;
+  if (skipped) {
+    dismissedThisVisit = true;
+    void deps.complete().catch(() => {});
+  } else if (!dismissedThisVisit) {
+    deps.go(onboardingUrl(path + search));
+  }
 }

@@ -1,13 +1,13 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -47,23 +47,36 @@ func usageEntryLabel(kind string, feature plan.Feature, subject string) (label, 
 }
 
 // GetMyPlanHistory returns the caller's usage entries newest first, each labelled for
-// display. Cookie or API key; never calls the LLM. References are resolved in two batch
-// lookups — a job analysis names a job id, a tailoring session names a session whose CV
+// display. Cookie or API key; never calls the LLM.
+func (h *planHandlers) GetMyPlanHistory(ctx context.Context) (*apigen.GetMyPlanHistoryOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := loadPlanHistory(ctx, h.queries, userID, usageHistoryLimit)
+	if err != nil {
+		return nil, err
+	}
+	data := make([]apigen.PlanHistoryEntry, len(entries))
+	for i, e := range entries {
+		data[i] = apigen.PlanHistoryEntry{Feature: e.Feature, Day: e.Day, Kind: e.Kind, Label: e.Label,
+			Subtitle: optString(e.Subtitle), CreatedAt: e.CreatedAt}
+	}
+	return &apigen.GetMyPlanHistoryOK{Data: data}, nil
+}
+
+// loadPlanHistory reads up to limit ledger entries for one user, newest first, shared by the
+// history endpoint and the support agent's `my_account` tool. References are resolved in two
+// batch lookups — a job analysis names a job id, a tailoring session names a session whose CV
 // carries the vacancy — so the list reads in plain terms.
-func (h *planHandlers) GetMyPlanHistory(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func loadPlanHistory(ctx context.Context, queries *db.Queries, userID int64, limit int32) ([]usageHistoryEntry, error) {
+	rows, err := queries.ListUsageLedger(ctx, db.ListUsageLedgerParams{UserID: userID, Limit: limit})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	rows, err := h.queries.ListUsageLedger(c.Context(), db.ListUsageLedgerParams{
-		UserID: userID, Limit: usageHistoryLimit,
-	})
+	subjects, err := resolveUsageSubjects(ctx, queries, userID, rows)
 	if err != nil {
-		return err
-	}
-	subjects, err := h.resolveUsageSubjects(c, userID, rows)
-	if err != nil {
-		return err
+		return nil, err
 	}
 
 	entries := make([]usageHistoryEntry, 0, len(rows))
@@ -79,18 +92,14 @@ func (h *planHandlers) GetMyPlanHistory(c *fiber.Ctx) error {
 			CreatedAt: r.CreatedAt.Time,
 		})
 	}
-	return c.JSON(fiber.Map{"data": entries})
+	return entries, nil
 }
 
 // resolveUsageSubjects batch-resolves the vacancies the entries name, keyed by
-// subjectKey(feature, ref).
-//
-// The two features name different things and neither can be parsed as the other: a job
-// analysis carries a job's numeric id, a tailoring charge carries '<session>#n'. The
-// feature is part of the key so a job id and a session that happen to look alike cannot
-// collide. A reference whose subject was deleted is simply absent, and the caller falls
-// back to a generic label.
-func (h *planHandlers) resolveUsageSubjects(c *fiber.Ctx, userID int64, rows []db.ListUsageLedgerRow) (map[string]string, error) {
+// subjectKey(feature, ref). A job analysis carries a job's numeric id, a tailoring charge
+// '<session>#n'; neither parses as the other. A deleted subject is absent and the caller
+// falls back to a generic label.
+func resolveUsageSubjects(ctx context.Context, queries *db.Queries, userID int64, rows []db.ListUsageLedgerRow) (map[string]string, error) {
 	var jobRefs []int64
 	var sessionRefs []string
 	// sessionByRef remembers which ledger reference each session id came from, because the
@@ -120,7 +129,7 @@ func (h *planHandlers) resolveUsageSubjects(c *fiber.Ctx, userID int64, rows []d
 
 	subjects := make(map[string]string)
 	if len(jobRefs) > 0 {
-		jobs, err := h.queries.ListJobLabelsByIDs(c.Context(), jobRefs)
+		jobs, err := queries.ListJobLabelsByIDs(ctx, jobRefs)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +138,7 @@ func (h *planHandlers) resolveUsageSubjects(c *fiber.Ctx, userID int64, rows []d
 		}
 	}
 	if len(sessionRefs) > 0 {
-		cvs, err := h.queries.ListTailoredCVLabelsBySessions(c.Context(), db.ListTailoredCVLabelsBySessionsParams{
+		cvs, err := queries.ListTailoredCVLabelsBySessions(ctx, db.ListTailoredCVLabelsBySessionsParams{
 			UserID: userID, SessionIds: sessionRefs,
 		})
 		if err != nil {

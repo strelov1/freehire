@@ -25,7 +25,7 @@ export function stripComments(source) {
 // Sorted, so a report and a baseline read in the same order every run.
 export function* sourceFiles(dir) {
   const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const entry of entries.toSorted((a, b) => a.name.localeCompare(b.name))) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) yield* sourceFiles(path);
     else if (/\.(svelte|ts)$/.test(entry.name)) yield path;

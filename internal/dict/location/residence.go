@@ -18,18 +18,15 @@ type Residence struct {
 	Cities    []string
 }
 
-// ParseResidence maps a candidate's location line to where they are: the job geography
-// parser's output minus the work-mode hint and minus the global region.
+// ParseResidence maps a candidate's location line to where they are: Parse's output minus the
+// work-mode hint and the global region.
 //
-// The global exclusion is stated as "a person is never located globally", not as a
-// no-op: Parse's own "worldwide"/"anywhere"/"по всему миру" dictionary entries (see
-// nameToRegion) still resolve a location to the global region on their own, and a
-// person's residence line can legitimately contain one ("Remote - Worldwide" on a CV
-// still names no place a person lives).
+// Global is excluded explicitly because Parse's "worldwide"/"anywhere" entries (see
+// nameToRegion) still resolve to it, and a CV line like "Remote - Worldwide" names no place a
+// person lives.
 //
-// Everything else survives untouched, including a macro-region with no country ("EU /
-// Remote" -> eu), which is a true claim about where someone is. Like Parse, this never
-// guesses: a location the curated dictionary cannot resolve yields an empty Residence.
+// Everything else survives, including a macro-region with no country ("EU / Remote" -> eu).
+// Like Parse, it never guesses: an unresolvable location yields an empty Residence.
 func ParseResidence(location string) Residence {
 	geo := Parse(location)
 	return Residence{

@@ -100,3 +100,16 @@ func TestClearTokenCookieEmptyDomainSingle(t *testing.T) {
 		t.Fatalf("expected host-only clear, got %q", scs[0])
 	}
 }
+
+func TestBrowserOriginsIncludesExactServedHosts(t *testing.T) {
+	got := BrowserOrigins("http://localhost:5173/", []string{".freehire.me"}, " Apply.Freehire.Me ", "", "*.freehire.me", "https://invalid.example")
+	want := []string{"http://localhost:5173", "https://freehire.me", "https://apply.freehire.me"}
+	if len(got) != len(want) {
+		t.Fatalf("origins = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("origin %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}

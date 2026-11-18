@@ -109,7 +109,13 @@
   </div>
 
   <div class="grid gap-3 sm:grid-cols-2">
-    <Input bind:value={fullName} oninput={edited} placeholder={s.fullNamePlaceholder} aria-label={s.fullNamePlaceholder} class="w-full" />
+    <Input
+      bind:value={fullName}
+      oninput={edited}
+      placeholder={s.fullNamePlaceholder}
+      aria-label={s.fullNamePlaceholder}
+      class="w-full"
+    />
     <div class="flex flex-col gap-1">
       <Input
         bind:value={email}
@@ -125,8 +131,20 @@
         <p id="contacts-email-error" class="text-xs text-destructive">{s.invalidEmail}</p>
       {/if}
     </div>
-    <Input bind:value={phone} oninput={edited} placeholder={s.phonePlaceholder} aria-label={s.phonePlaceholder} class="w-full" />
-    <Input bind:value={location} oninput={edited} placeholder={s.locationPlaceholder} aria-label={s.locationPlaceholder} class="w-full" />
+    <Input
+      bind:value={phone}
+      oninput={edited}
+      placeholder={s.phonePlaceholder}
+      aria-label={s.phonePlaceholder}
+      class="w-full"
+    />
+    <Input
+      bind:value={location}
+      oninput={edited}
+      placeholder={s.locationPlaceholder}
+      aria-label={s.locationPlaceholder}
+      class="w-full"
+    />
   </div>
   <label class="flex flex-col gap-1 text-sm">
     <span class="text-muted-foreground">{s.linksLabel}</span>
@@ -135,7 +153,6 @@
       oninput={edited}
       rows="3"
       class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-      placeholder={s.linksPlaceholder}
-    ></textarea>
+      placeholder={s.linksPlaceholder}></textarea>
   </label>
 </section>

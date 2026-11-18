@@ -1,16 +1,10 @@
-// Command push-receipts is the standalone Expo push-receipt polling worker.
-// Expo's push-send response is only a ticket, not a final delivery outcome —
-// a token that just went dead (app freshly uninstalled, permission freshly
-// revoked) is only discoverable later, once Expo has actually attempted
-// delivery through APNs/FCM, via its getReceipts endpoint. Each run claims a
-// batch of tickets old enough for Expo to have an answer (at least 15
-// minutes queued), checks them, and prunes any token whose receipt reports
-// DeviceNotRegistered.
+// Command push-receipts is the standalone Expo push-receipt polling worker. Expo's push-send
+// response is only a ticket; a dead token is discoverable later via getReceipts. Each run claims
+// a batch of tickets at least 15 minutes old, checks them, and prunes any token whose receipt
+// reports DeviceNotRegistered.
 //
-// It is a run-once-and-exit worker; schedule it on a cron every 15-20
-// minutes. Needs only DATABASE_URL — Expo's API takes no credentials. An
-// unscheduled worker is not a hard failure: the outbox just grows unchecked
-// until it runs, since nothing else reads it.
+// It is a run-once-and-exit worker; schedule it every 15-20 minutes. Needs only DATABASE_URL.
+// If unscheduled, the outbox just grows unchecked.
 package main
 
 import (

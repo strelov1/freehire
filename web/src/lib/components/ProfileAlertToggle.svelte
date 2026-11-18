@@ -2,7 +2,7 @@
   import { Check, User } from '@lucide/svelte';
   import { ApiError } from '#lib/api.js';
   import { notifications } from '#lib/notifications.svelte.js';
-  import { enableProfileAlert, profileAlertSearch } from '#lib/profileAlert.js';
+  import { canEnableProfileAlert, enableProfileAlert, profileAlertSearch } from '#lib/profileAlert.js';
   import { savedSearches } from '#lib/savedSearches.svelte.js';
   import { cn } from '#lib/ui/index.js';
   import type { UserProfile } from '#lib/types.js';
@@ -14,7 +14,7 @@
   // index is the actual invariant), and subscribes it over email — always deliverable
   // with no linking step, unlike telegram/push (which the account's notification
   // settings may list as a preferred channel without the user ever having connected
-  // them — see ReminderSettings.svelte/CompanyFollowButton.svelte's `linked` gate).
+  // them — see ReminderSettings.svelte's `linked` gate).
   // The user can add another channel from the Search alerts tab afterward. Flipping
   // the toggle off deletes the saved search, and its subscriptions go with it.
   //
@@ -30,6 +30,7 @@
   );
   // Until both stores have answered, "off" would be a guess rather than a reading, and
   // acting on a guess is how the toggle wrote past a subscription that already existed.
+  const canEnable = $derived(canEnableProfileAlert(profile));
   const ready = $derived(savedSearches.loaded && notifications.loaded);
 
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -94,13 +95,23 @@
     {#if saveState === 'saving'}
       <span class="text-xs text-muted-foreground">Saving…</span>
     {:else if saveState === 'saved'}
-      <span class="flex items-center gap-1 text-xs text-brand-strong"><Check class="size-3.5" aria-hidden="true" /> Saved</span>
+      <span class="flex items-center gap-1 text-xs text-brand-strong"
+        ><Check class="size-3.5" aria-hidden="true" /> Saved</span
+      >
     {:else if saveState === 'error'}
       <span class="text-xs text-destructive">{saveError}</span>
     {/if}
 
-    {@render toggleSwitch(enabled, 'Notify me about jobs matching my profile', toggle, saveState === 'saving' || !ready)}
+    {@render toggleSwitch(
+      enabled,
+      'Notify me about jobs matching my profile',
+      toggle,
+      saveState === 'saving' || !ready || (!enabled && !canEnable),
+    )}
   </div>
+  {#if !enabled && !canEnable}
+    <p class="mt-3 text-xs text-muted-foreground">Add a role, skill or work preference to enable profile alerts.</p>
+  {/if}
 </section>
 
 {#snippet toggleSwitch(on: boolean, label: string, onToggle: () => void, disabled: boolean)}

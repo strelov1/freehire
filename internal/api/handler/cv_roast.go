@@ -4,11 +4,9 @@ import (
 	"errors"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
 	"github.com/strelov1/freehire/internal/candidate/cvsection"
 	"github.com/strelov1/freehire/internal/job/verdict"
@@ -16,20 +14,15 @@ import (
 )
 
 // roastRoleValues builds the market filter for a public roast and names the role it
-// selected. It mirrors roleValues (same skills strip, same category default) with one
-// difference that matters: roleValues falls back to the caller's stored profile, and an
-// anonymous caller has none, so the fallback is the CV's own inferred categories.
+// selected. Like roleValues, but an anonymous caller has no stored profile, so the
+// fallback is the CV's own inferred categories.
 //
-// Three outcomes, and the third is a refusal rather than a guess: an explicit `category`
-// param wins; otherwise the first inferred category (classify returns them in precedence
-// order, primary first); otherwise NO role filter and an empty role name. classify never
-// guesses either — it returns nothing when its dictionary resolves nothing — and a
-// coverage figure attributed to the wrong role reads exactly like a correct one, so the
-// page is told the truth and says "the whole catalogue" instead.
+// Order: an explicit `category` param, else the first inferred category (primary first),
+// else NO role filter and an empty role name. The last is a refusal, not a guess: a
+// coverage figure for the wrong role reads like a correct one.
 //
-// The seniority resolveProfile also derives is deliberately not folded in: filtering a
-// junior's coverage to junior-only postings yields a smaller number that says nothing
-// about their skills, and skills are the reading this page sells.
+// Seniority is deliberately not folded in: junior-only coverage is a smaller number that
+// says nothing about skills, which is what this page sells.
 func roastRoleValues(c *fiber.Ctx, categories []string) (url.Values, string) {
 	vals := queryValues(c)
 	stripSkillParams(vals)
@@ -44,11 +37,10 @@ func roastRoleValues(c *fiber.Ctx, categories []string) (url.Values, string) {
 	return vals, ""
 }
 
-// roastResponse is the public roast's wire shape. Report is the deterministic ATS
-// score — never model-refined on this path. Role names the category the market was
-// measured against, empty when the dictionary resolved none; MarketScoped says which
-// of those two happened, so the page never has to infer it from an empty string.
-// Market is nil when the facet backend is unavailable (see MarketAvailable).
+// roastResponse is the public roast's wire shape. Report is the deterministic ATS score,
+// never model-refined here. Role is the category the market was measured against, empty
+// when none resolved; MarketScoped says so explicitly. Market is nil when the facet
+// backend is unavailable (see MarketAvailable).
 type roastResponse struct {
 	Report          *atscheck.Report `json:"report"`
 	Role            string           `json:"role"`
@@ -59,21 +51,13 @@ type roastResponse struct {
 
 // RoastCV scores an uploaded CV for an ANONYMOUS caller: the deterministic ATS report
 // plus a live market-coverage reading, with no account, no stored bytes and no model
-// call. It accepts the same two body forms as ExtractResumeProfile (multipart PDF or
-// {text} JSON) through the same reader.
+// call. Body forms match ExtractResumeProfile (multipart PDF or {text} JSON).
 //
-// Nothing here writes. ExtractResumeProfile stores the résumé because its signed-in
-// caller's later steps need the file; an anonymous visitor has no later step, so the
-// bytes die with the request. The PII masking layer is likewise absent by construction
-// rather than by omission — it exists to protect a CV from a MODEL, and no model runs.
-//
-// Withholding the model review is also the page's whole offer: the deterministic score
-// names what is wrong, and signing in is what rewrites it.
-//
-// Public on purpose and rate-limited by IP at the route (see resume.go's register).
+// Nothing is written: the bytes die with the request. PII masking is absent because no
+// model runs. Public on purpose: it reads a CV without storing it.
 func (h *resumeHandlers) RoastCV(c *fiber.Ctx) error {
-	// Refused before readResumeUpload ever runs: this route has no account behind it, and
-	// Fiber decompresses an encoded body without a ceiling. See refuseEncodedBody.
+	// Before readResumeUpload: Fiber decompresses an encoded body without a ceiling and
+	// this route has no account behind it. See refuseEncodedBody.
 	if err := refuseEncodedBody(c); err != nil {
 		return err
 	}
@@ -90,21 +74,18 @@ func (h *resumeHandlers) RoastCV(c *fiber.Ctx) error {
 	vals, role := roastRoleValues(c, profile.Categories)
 	roleFilter := search.FilterFromValues(vals)
 
-	// One role query feeds both readings, so the ATS keyword score and the coverage
-	// figure can never disagree about what this role demands.
+	// One role query feeds both readings so they cannot disagree about the role.
 	roleFacet, ferr := h.roleFacet(c, roleFilter)
 
-	report := atscheck.Score(up.Text, profile.Skills, topRoleSkills(roleFacet.Facets["skills"], atsRoleTopN))
+	report := atscheck.Score(up.Text, profile.Skills, atscheck.TopRoleSkills(roleFacet.Facets["skills"], atscheck.RoleTopN))
 	out := roastResponse{
 		Report:       &report,
 		Role:         role,
 		MarketScoped: role != "",
 	}
 
-	// Search being down costs the market half, not the answer: the ATS score needs no
-	// index at all, and a 503 would throw away the reading the visitor came for.
-	// MarketCoverage answers 503 in the same situation, which is right for an API
-	// client and wrong for a landing page.
+	// Search being down costs only the market half: the ATS score needs no index, and a
+	// 503 (as MarketCoverage answers) would discard the reading the visitor came for.
 	if ferr == nil {
 		declared, body, all := cvsection.Parse(up.Text)
 		v, err := h.coverageWithRole(c.Context(), roleFilter, roleFacet, profile.Skills, declared, body, all)
@@ -113,7 +94,7 @@ func (h *resumeHandlers) RoastCV(c *fiber.Ctx) error {
 			out.Market = &v
 		}
 	}
-	return dataResponseWithIgnored(c, out, coverageIgnoredParams(c), ignoredJobValues(c))
+	return dataResponseWithIgnored(c, out, coverageIgnoredParams(queryValues(c)), ignoredJobValues(queryValues(c)))
 }
 
 // roleFacet answers the role's skill distribution, or a zero result and an error when
@@ -131,24 +112,3 @@ func (h *resumeHandlers) roleFacet(c *fiber.Ctx, roleFilter any) (search.FacetRe
 // errSearchUnavailable stands for "no facet backend" so roleFacet has one error kind
 // for both of its failures and the caller needs no nil check of its own.
 var errSearchUnavailable = errors.New("search is not available")
-
-// cvRoastPerHour bounds the public roast per IP. The work is a pdftotext subprocess
-// plus three facet queries — not free, and not a model call either, so this is sized to
-// stop a scraper rather than to ration something scarce.
-//
-// Per HOUR rather than per minute, on purpose: someone fixing their CV genuinely
-// re-uploads it several times in a row, and that is the behaviour the page wants. A
-// per-minute ceiling would punish exactly the visitor who is getting value.
-//
-// This bounds request COUNT per IP, not aggregate concurrency — it does nothing against
-// many IPs at once, each under its own allowance. See design.md's "Rate limit" section
-// for what one allowed request costs in memory/disk/CPU and why that gap is knowingly
-// left open rather than addressed here.
-const cvRoastPerHour = 10
-
-// cvRoastLimiter bounds the public roast by source address. There is no authenticated
-// caller to key by — that is what public means — and the route mounts no auth gate, so
-// KeyByIP is not a fallback here, it is the only thing there is.
-func cvRoastLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return ratelimit.Middleware(throttler, ratelimit.KeyByIP("cvroast"), cvRoastPerHour, time.Hour)
-}

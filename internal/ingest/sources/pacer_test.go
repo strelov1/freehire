@@ -315,3 +315,45 @@ func TestRateLimitedTextGetter_WaitErrorShortCircuits(t *testing.T) {
 		t.Fatalf("err = %v, fetches %d", err, len(inner.urls))
 	}
 }
+
+func TestRateLimitedUKGHTTP_GatesBothKindsThenDelegates(t *testing.T) {
+	waiter := &recordingWaiter{}
+	inner := struct {
+		*recordingJSONPoster
+		*recordingHTMLGetter
+	}{&recordingJSONPoster{}, &recordingHTMLGetter{node: &html.Node{}}}
+	g := rateLimitedUKGHTTP{inner: inner, limiter: waiter}
+
+	if err := g.PostJSON(context.Background(), "https://recruiting.ultipro.com/t/g/JobBoard/JobBoardView/LoadSearchResults", nil, nil); err != nil {
+		t.Fatalf("PostJSON returned error: %v", err)
+	}
+	if _, err := g.GetHTML(context.Background(), "https://recruiting.ultipro.com/t/g/JobBoard/OpportunityDetail"); err != nil {
+		t.Fatalf("GetHTML returned error: %v", err)
+	}
+	if waiter.calls != 2 {
+		t.Fatalf("limiter.Wait called %d times, want 2 (one per request kind)", waiter.calls)
+	}
+	if len(inner.recordingJSONPoster.urls) != 1 || len(inner.recordingHTMLGetter.urls) != 1 {
+		t.Fatal("each request kind should delegate exactly once")
+	}
+}
+
+func TestRateLimitedUKGHTTP_WaitErrorShortCircuits(t *testing.T) {
+	sentinel := errors.New("rate wait cancelled")
+	waiter := &recordingWaiter{err: sentinel}
+	inner := struct {
+		*recordingJSONPoster
+		*recordingHTMLGetter
+	}{&recordingJSONPoster{}, &recordingHTMLGetter{node: &html.Node{}}}
+	g := rateLimitedUKGHTTP{inner: inner, limiter: waiter}
+
+	if err := g.PostJSON(context.Background(), "https://recruiting.ultipro.com/x", nil, nil); !errors.Is(err, sentinel) {
+		t.Fatalf("PostJSON error = %v, want %v", err, sentinel)
+	}
+	if _, err := g.GetHTML(context.Background(), "https://recruiting.ultipro.com/x"); !errors.Is(err, sentinel) {
+		t.Fatalf("GetHTML error = %v, want %v", err, sentinel)
+	}
+	if len(inner.recordingJSONPoster.urls) != 0 || len(inner.recordingHTMLGetter.urls) != 0 {
+		t.Fatal("inner must not be called despite a Wait error")
+	}
+}

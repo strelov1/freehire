@@ -37,12 +37,9 @@ func (vagas) boardless() {}
 // vagas aggregates postings from many companies, so it stays in the source facet.
 func (vagas) aggregator() {}
 
-// vagasListingURL is one page of the whole catalogue. The site's search path is
-// /vagas-de-<query>, and an EMPTY query is the unfiltered catalogue — the site links it itself
-// from its home page. Measured 2026-10-23 its heading reported 3 981 postings, the same total its
-// own facet counts sum to, over 100 pages of 40 (page 101 empty). The /vagas-de-<area> listings
-// it replaced are keyword searches, not partitions — "todas as areas" is one more, at 2 431 — and
-// the three tech ones together reached ~800.
+// vagasListingURL is one page of the whole catalogue. The search path is /vagas-de-<query>, and an
+// EMPTY query is the unfiltered catalogue (the site links it from its home page). The
+// /vagas-de-<area> listings are keyword searches, not partitions, so they miss most postings.
 func vagasListingURL(page int) string {
 	return fmt.Sprintf("https://www.vagas.com.br/vagas-de-?ordenar_por=mais_recentes&pagina=%d", page)
 }
@@ -50,21 +47,18 @@ func vagasListingURL(page int) string {
 // vagasPageSize is how many cards a full listing page carries.
 const vagasPageSize = 40
 
-// vagasMaxPages bounds the walk whatever total the heading states. Twice the measured 100 pages:
-// a cap the catalogue outgrew would read fewer postings every run, and the 48-hour sweep would
-// close what it stopped reaching.
+// vagasMaxPages bounds the walk whatever total the heading states. Set well above the real page
+// count: a cap the catalogue outgrew would read fewer postings every run, and the 48-hour sweep
+// would close what it stopped reaching.
 const vagasMaxPages = 200
 
 // vagasTotalPattern reads the listing heading's total ("3981 vagas de emprego").
 var vagasTotalPattern = regexp.MustCompile(`^\s*(\d+)\s+vagas`)
 
-// vagasMaxNewPerRun is the hydration budget per run. Measured 2026-10-23 through the production
-// fetch path, the whole listing (100 pages) took under four minutes and 30 detail pages took 29
-// seconds, the one-per-second pacer being the floor; 1 000 is therefore ~17 minutes plus the
-// listing, well inside the 50-minute unit timeout less the sweep's reserve. That matters because
-// the board writes only once the fetch returns: a run that overruns stores nothing and the next
-// one faces the same backlog. Widening to the whole catalogue left ~2 500 postings to bootstrap,
-// so three runs.
+// vagasMaxNewPerRun is the hydration budget per run. The board writes only once the fetch
+// returns, so a run that overruns the unit timeout stores nothing and the next faces the same
+// backlog; the budget keeps listing plus hydration (one request per second through the pacer)
+// well inside it.
 const vagasMaxNewPerRun = 1000
 
 // vagasBase is the scheme+host that relative job hrefs resolve against; parsed once.
@@ -78,23 +72,17 @@ func (v vagas) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 	return v.FetchNewGated(ctx, e, seen, DetailGate{})
 }
 
-// FetchNewGated fetches detail only for a posting the catalogue does not already have — seen
+// FetchNewGated fetches detail only for a posting the catalogue does not already have; seen
 // reports whether a native id is already ingested. A seen posting yields a liveness-refresh job
-// (no detail request), so the pipeline refreshes its open state WITHOUT rewriting the content
-// hydrated when it was new.
+// (no detail request), so the pipeline refreshes its open state WITHOUT rewriting hydrated content.
 //
-// This is what makes the crawl finish at all. Every request here — listing and detail alike —
-// goes through a one-per-second pacer, so re-reading all 1 939 stored postings costs half an
-// hour before the proxy's own latency, and the run overran its 50-minute budget every time:
-// measured 2026-09-07, the last successful crawl was 2026-08-18 and every attempt since either
-// timed out mid-detail or never got a slot. Hydrating only what is new turns that into a
-// handful of requests in the steady state.
+// Every request goes through a one-per-second pacer, so re-reading all stored postings would
+// overrun the unit's time budget on every run.
 //
-// The gate is what keeps it so. A posting the pipeline discards — its employer already covered
-// by a first-party source (a quarter of the tech listing, measured 2026-10-23) — is never stored,
-// so never seen, and without the gate would take a slot of the hydration budget on EVERY run,
-// newest first, until those slots crowded out the genuinely new postings behind them. The listing
-// card carries the company and title the gate needs, so such a posting is yielded body-less.
+// The gate matters too: a posting the pipeline discards (its employer is covered by a first-party
+// source) is never stored, so never seen, and would take a hydration slot on EVERY run, crowding
+// out genuinely new postings. The listing card carries the company and title the gate needs, so
+// such a posting is yielded body-less.
 func (v vagas) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	cards, err := v.list(ctx)
 	if err != nil {
@@ -129,7 +117,7 @@ func (v vagas) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(exte
 	deferred := 0
 	for _, c := range fresh {
 		switch j := c.job(); {
-		case covered[c.company] || (gate.Rejected != nil && gate.Rejected(j)):
+		case covered[c.company]:
 			jobs = append(jobs, j) // the pipeline discards it; its body would buy nothing
 		case len(toHydrate) < budget:
 			toHydrate = append(toHydrate, c.url)
@@ -159,14 +147,11 @@ func (c vagasCard) job() Job {
 // list walks the whole catalogue and returns each posting's card once.
 //
 // It does NOT stop at the first page that fails or adds nothing, the way crawlPagedLinks does,
-// because on this site page N is not a fixed slice of the catalogue. Measured 2026-10-23, the
-// same page fetched twice from one IP came back in a different order (even sorted newest
-// first, which only orders by day), so two full walks read 3 260 and 3 240 distinct postings of
-// 3 981, overlapping in only 2 734 — every page repeats some of what earlier pages showed and
-// hides some of the rest. Through the production fetch path 6-7 of 100 pages also failed. Stopping
-// at either kind of page read ~100 postings a run; reading every page reads ~80% of the
-// catalogue, a near-independent ~80% each run, so a posting the 48-hour sweep would close has to
-// be missed by every run in two days.
+// because on this site page N is not a fixed slice of the catalogue: the same page fetched twice
+// comes back in a different order, so every page repeats some postings and hides others, and some
+// pages fail through the production fetch path. Stopping at either kind of page reads a sliver of
+// the catalogue; reading every page reads most of it, near-independently each run, so a posting
+// the 48-hour sweep would close has to be missed by every run in two days.
 //
 // So the walk is driven by the heading's total instead: page 1 failing, or stating no total, is
 // the board failing (a layout change must not read as an empty catalogue), and any later page

@@ -6,7 +6,7 @@ import { planRefusedFrom } from './planRefused';
  * freehire.dev stays on purpose: it is the pre-migration domain, and a user can
  * still land on one of its job pages from an old link or bookmark. This list
  * recognises what a tab might show, so it must outlive the canonical domain. */
-const JOB_HOSTS = ['freehire.me', 'www.freehire.me', 'freehire.dev', 'localhost'];
+const JOB_HOSTS = new Set(['freehire.me', 'www.freehire.me', 'freehire.dev', 'localhost']);
 
 /**
  * Returns the freehire job slug for a page URL, or null if the URL is not a
@@ -19,7 +19,7 @@ export function freehireSlugFromUrl(rawUrl: string): string | null {
   } catch {
     return null;
   }
-  if (!JOB_HOSTS.includes(u.hostname)) return null;
+  if (!JOB_HOSTS.has(u.hostname)) return null;
   const m = u.pathname.match(/^\/jobs\/([^/]+)\/?$/);
   return m ? (m[1] ?? null) : null;
 }
@@ -88,7 +88,7 @@ export interface JobMatch {
  *  import path into the web app's source. */
 export function partitionBlockers(blockers: Blocker[] | undefined): { unmet: Blocker[]; met: Blocker[] } {
   const all = blockers ?? [];
-  const unmet = all.filter((b) => !b.met).sort((a, b) => a.score_cap - b.score_cap);
+  const unmet = all.filter((b) => !b.met).toSorted((a, b) => a.score_cap - b.score_cap);
   const met = all.filter((b) => b.met);
   return { unmet, met };
 }

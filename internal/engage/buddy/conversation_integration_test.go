@@ -7,11 +7,9 @@ package buddy_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -167,45 +165,6 @@ func TestInviteConcurrentDuplicateIsConflictNotError(t *testing.T) {
 	}
 	if n := countRows(t, pool, `SELECT count(*) FROM messages`); n != 1 {
 		t.Fatalf("messages = %d, want 1", n)
-	}
-}
-
-func TestInviteDailyLimitReportsWhenNextIsPossible(t *testing.T) {
-	pool, svc := setup(t)
-	ctx := context.Background()
-	a, _ := member(t, pool, svc, "a@example.test")
-	for i := range buddy.DailyInvitationCap {
-		_, h := member(t, pool, svc, fmt.Sprintf("t%d@example.test", i))
-		if _, err := svc.Invite(ctx, a, h, "hi"); err != nil {
-			t.Fatalf("invite %d: %v", i, err)
-		}
-	}
-	// Age the first invitation so the oldest in the window is a known instant.
-	oldest := time.Now().Add(-20 * time.Hour).Truncate(time.Microsecond)
-	if _, err := pool.Exec(ctx, `UPDATE conversations SET created_at = $2 WHERE id = (SELECT min(id) FROM conversations WHERE starter_id = $1)`, a, oldest); err != nil {
-		t.Fatal(err)
-	}
-	_, extra := member(t, pool, svc, "extra@example.test")
-	before := countRows(t, pool, `SELECT count(*) FROM conversations`)
-
-	_, err := svc.Invite(ctx, a, extra, "one more")
-	var limit *buddy.InvitationLimitError
-	if !errors.As(err, &limit) {
-		t.Fatalf("err = %v, want *InvitationLimitError", err)
-	}
-	if want := oldest.Add(24 * time.Hour); !limit.RetryAt.Equal(want) {
-		t.Fatalf("RetryAt = %v, want %v", limit.RetryAt, want)
-	}
-	if n := countRows(t, pool, `SELECT count(*) FROM conversations`); n != before {
-		t.Fatalf("a refused invitation created a conversation")
-	}
-
-	// An invitation older than the window no longer counts.
-	if _, err := pool.Exec(ctx, `UPDATE conversations SET created_at = now() - interval '25 hours' WHERE starter_id = $1`, a); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.Invite(ctx, a, extra, "one more"); err != nil {
-		t.Fatalf("after the window rolled: %v", err)
 	}
 }
 

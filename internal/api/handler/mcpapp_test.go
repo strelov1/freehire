@@ -68,32 +68,31 @@ func TestTheAppSearchNamesTheFiltersItCouldNotHonour(t *testing.T) {
 	}
 }
 
-func TestAPostingTheWebsiteWouldNotShowIsUnreachable(t *testing.T) {
-	// GetJobBySlug carries NO predicate — it is the read a private job's own creator uses,
-	// and the detail page relies on it to serve a closed posting. Neither is right here: a
-	// model enumerates, caches and republishes what it is handed.
-	//
-	// Every refusal answers NOT FOUND rather than forbidden. Whether a private posting
-	// exists under some slug is itself not an anonymous caller's business.
-	cases := []struct {
-		name string
-		job  db.Job
-	}{
-		{"private", db.Job{PublicSlug: "x", IsPrivate: true}},
-		{"closed", db.Job{PublicSlug: "x", ClosedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}}},
-		{"duplicate", db.Job{PublicSlug: "x", DuplicateOf: pgtype.Int8{Int64: 9, Valid: true}}},
+func TestAPrivatePostingIsUnreachable(t *testing.T) {
+	// GetJobBySlug carries NO predicate — it is the read a private job's own creator uses.
+	// A private posting answers NOT FOUND rather than forbidden: whether one exists under
+	// some slug is itself not an anonymous caller's business.
+	_, err := mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{job: db.Job{PublicSlug: "x", IsPrivate: true}}).
+		JobDetail(context.Background(), "x")
+	var notFound mcpapp.NotFoundError
+	if !errors.As(err, &notFound) {
+		t.Fatalf("err = %v, want a not-found", err)
 	}
+}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{job: tc.job}).
-				JobDetail(context.Background(), "x")
-
-			var notFound mcpapp.NotFoundError
-			if !errors.As(err, &notFound) {
-				t.Fatalf("err = %v, want a not-found", err)
-			}
-		})
+// search_jobs reads an index that trails the database, so it hands out slugs that closed or
+// became duplicates since the push. get_job answers them as the job page does — a closed one
+// with its closed_at — instead of a not-found that contradicts the search a turn earlier.
+func TestGetJobAnswersAClosedPostingWithItsClosedAt(t *testing.T) {
+	closedAt := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
+	got, err := mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{job: db.Job{
+		PublicSlug: "x", ClosedAt: pgtype.Timestamptz{Time: closedAt, Valid: true},
+	}}).JobDetail(context.Background(), "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ClosedAt != "2026-11-07T09:00:00Z" {
+		t.Errorf("closed_at = %q, want 2026-11-07T09:00:00Z", got.ClosedAt)
 	}
 }
 
@@ -170,12 +169,14 @@ func TestTheMountedRouteSpeaksMCPOverHTTP(t *testing.T) {
 	// that works in memory and 404s or hangs behind the adaptor is the whole feature broken,
 	// and it is exactly the shape of failure the OJCP manifest hit in production.
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.All("/mcp", adaptor.HTTPHandler(mcpapp.Handler(mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{}), "")))
+	app.All("/mcp", adaptor.HTTPHandler(mcpapp.Handler(nil, "", mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{}))))
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`
 	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
+	// What mcpAuthenticate stamps for a verified credential.
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
 
 	resp, err := app.Test(req)
 	if err != nil {
@@ -290,7 +291,7 @@ func TestTheAppOpenCheckFailsRatherThanCallingEverythingMissing(t *testing.T) {
 func TestTheAppSimilarJobsRefusesAnUnpublishedPostingLikeAnAbsentOne(t *testing.T) {
 	// Answering a private slug with its neighbours while an unknown slug answers not found
 	// would tell an anonymous caller the private posting exists.
-	store := fakeOJCPStore{job: db.Job{ID: 1, PublicSlug: "x", IsPrivate: true}, similarIDs: []int64{2}}
+	store := fakeOJCPStore{job: db.Job{ID: 1, PublicSlug: "x", IsPrivate: true}}
 	_, err := mcpappUnder(&fakeSearcher{}, nil, store).SimilarJobs(context.Background(), "x", 6)
 
 	var notFound mcpapp.NotFoundError
@@ -303,8 +304,7 @@ func TestTheAppSimilarJobsShowsOnlyWhatTheAppWouldShowNearestFirst(t *testing.T)
 	// The website drops closed and private neighbours; the app also drops duplicates, as
 	// every one of its tools does.
 	store := fakeOJCPStore{
-		job:        db.Job{ID: 1, PublicSlug: "x", Title: "Go Dev", Company: "Acme"},
-		similarIDs: []int64{5, 4, 3, 2},
+		job: db.Job{ID: 1, PublicSlug: "x", Title: "Go Dev", Company: "Acme", Category: "backend", Countries: []string{"de"}},
 		jobsByID: []db.Job{
 			{ID: 2, PublicSlug: "open-far", Title: "B", Company: "Acme"},
 			{ID: 3, PublicSlug: "dup", Title: "C", Company: "Acme", DuplicateOf: pgtype.Int8{Int64: 2, Valid: true}},
@@ -313,7 +313,7 @@ func TestTheAppSimilarJobsShowsOnlyWhatTheAppWouldShowNearestFirst(t *testing.T)
 		},
 	}
 
-	got, err := mcpappUnder(&fakeSearcher{}, nil, store).SimilarJobs(context.Background(), "x", 6)
+	got, err := mcpappUnder(&fakeSearcher{res: search.SearchResult{Hits: []search.JobDocument{{ID: 5}, {ID: 4}, {ID: 3}, {ID: 2}}}}, nil, store).SimilarJobs(context.Background(), "x", 6)
 	if err != nil {
 		t.Fatalf("SimilarJobs: %v", err)
 	}

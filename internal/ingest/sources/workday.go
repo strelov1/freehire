@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -20,16 +17,12 @@ const (
 	// (see listPostings), not paged directly.
 	workdayCapTotal = 2000
 	// maxFacetDepth bounds how many facet dimensions can be combined while subdividing a
-	// capped board. Verified sufficient against the worst known case (Accenture's largest
-	// single job family is still capped after one dimension, resolved by a second) with
-	// headroom to spare; raise it if a board's exhaustion log shows it is not enough.
+	// capped board; raise it if a board's exhaustion log shows it is not enough.
 	maxFacetDepth = 3
 	// workdaySliceParallelism bounds how many facet-slice listing requests one capped board has
-	// in flight at once, across every level of its split. A capped board is split by its
-	// finest dimension, which is often one value per store: michaels.wd5 has 1,340 locations and
-	// bridgestone.wd5 1,676, one request each. Made serially that is 15–30 minutes for one board,
-	// enough to eat a sharded run's whole budget. Four at a time keeps the load on one tenant
-	// modest, and the 403/429 retry absorbs a refusal.
+	// in flight at once, across every level of its split. A capped board is split by its finest
+	// dimension, often one value per store (over a thousand requests); serially that eats a
+	// sharded run's whole budget. The 403/429 retry absorbs a refusal.
 	workdaySliceParallelism = 4
 	// workdayRetryMaxAttempts and workdayRetryBase bound how a rate-limited (403/429) listing
 	// or detail request is retried before giving up.
@@ -65,6 +58,14 @@ func (workday) Provider() string { return "workday" }
 // via facet subdivision or fails the crawl outright rather than return a partial listing as a
 // success (see splitByFacet). See the fullBoardListing interface for the bar.
 func (workday) fullBoardListing() {}
+
+// emptyBoardListing: listPostings fails a non-2xx answer (an unknown tenant is 422, an unknown
+// site 404) and an undecodable one (a challenge or HTML page), and it fails a first page whose
+// jobPostings is absent or null or contradicts a positive total. Only a 200 carrying the
+// collection present and empty with total 0 is an empty board. Quiet backoff is left alone: a
+// board turning empty changes its fingerprint, which ends the quiet state, and later empty
+// crawls pause at most quietMax, each ending with Quiet == 0 so boardListedEmpty admits it.
+func (workday) emptyBoardListing() {}
 
 // workdayBoard is a configured board parsed into the parts the CXS endpoints need, plus the
 // board's prefix on the public careers site — which is not the CXS path, and differs between
@@ -124,10 +125,9 @@ func (s workday) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // posting's detail — the description the listing omits — only for a posting the catalogue lacks.
 // A seen posting yields the listing-only job as a liveness refresh, costing no request at all.
 //
-// This is what makes a large board crawlable. Workday serves 20 postings per listing page and one
-// posting per detail request, so a 24k-posting board spends 24k requests per crawl on descriptions
-// it already stores — enough for the platform to rate-limit the crawl into failure, after which
-// the board is never seen again and its whole catalogue leaks as permanently-open jobs.
+// This is what makes a large board crawlable: Workday serves 20 postings per listing page and
+// one per detail request, so re-fetching descriptions the catalogue already stores gets the
+// crawl rate-limited into failure, after which the board's catalogue leaks as permanently open.
 func (s workday) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	return s.crawl(ctx, e, seen)
 }
@@ -171,30 +171,6 @@ func (s workday) listingJob(e CompanyEntry, b workdayBoard, p workdayPosting) Jo
 	}
 }
 
-// workdayFacetValue is one value of a listing facet, e.g. a single job family within the
-// "jobFamilyGroup" dimension. Count is the platform's own true count for that value, which is
-// what makes it safe to plan a subdivision from a response already being parsed — no extra
-// probe request needed.
-type workdayFacetValue struct {
-	ID    string `json:"id"`
-	Count int    `json:"count"`
-	// Parameter and Values are set instead of ID and Count when the value is itself a facet:
-	// Workday nests its location dimensions (locationCountry, locationRegionStateProvince,
-	// locations, ...) inside a "locationMainGroup" wrapper whose values are facets, not values.
-	Parameter string              `json:"facetParameter"`
-	Values    []workdayFacetValue `json:"values"`
-}
-
-// workdayFacet is one filterable dimension a listing response offers, e.g. "jobFamilyGroup" or
-// "workerSubType". Applying a value from it (via appliedFacets) scopes the *other* dimensions'
-// counts in the response that follows, but not this dimension's own counts (verified live
-// against Workday) — so subdividing a still-capped slice further means picking a dimension not
-// yet applied in that recursion branch, never re-applying the same one.
-type workdayFacet struct {
-	Parameter string              `json:"facetParameter"`
-	Values    []workdayFacetValue `json:"values"`
-}
-
 // workdayListPage is one page of the jobs-listing response.
 type workdayListPage struct {
 	Total       int              `json:"total"`
@@ -211,6 +187,14 @@ func (s workday) listPostings(ctx context.Context, b workdayBoard) ([]workdayPos
 	first, err := s.fetchListPage(ctx, url, map[string]any{}, 0)
 	if err != nil {
 		return nil, fmt.Errorf("workday: list board %s: %w", b.site, err)
+	}
+	if first.JobPostings == nil {
+		return nil, errListingAbsent("workday", b.site, "jobPostings")
+	}
+	// A capped total is walked by facet below, whatever its first page carries.
+	if len(first.JobPostings) == 0 && first.Total > 0 && first.Total != workdayCapTotal {
+		return nil, fmt.Errorf("workday: board %s/%s: the first page lists no postings but reports a total of %d",
+			b.tenant, b.site, first.Total)
 	}
 	if first.Total != workdayCapTotal {
 		return s.pageAll(ctx, url, map[string]any{}, first)
@@ -240,10 +224,9 @@ func (s workday) fetchListPage(ctx context.Context, url string, appliedFacets ma
 // already-fetched first page so the caller's initial request is never wasted.
 func (s workday) pageAll(ctx context.Context, url string, appliedFacets map[string]any, first workdayListPage) ([]workdayPosting, error) {
 	var postings []workdayPosting
-	// Some boards (e.g. pg.wd5.myworkdayjobs.com) report the real total only on the
-	// first page and total:0 thereafter, so latch the first non-zero total and page
-	// against it — reading each page's total would break after page one and silently
-	// truncate the board, which the 48h unseen sweep then reads as postings removed.
+	// Some boards report the real total only on the first page and total:0 thereafter, so latch
+	// the first non-zero total; reading each page's total would silently truncate the board,
+	// which the unseen sweep then reads as postings removed.
 	total := -1
 	offset := 0
 	page := first
@@ -264,164 +247,6 @@ func (s workday) pageAll(ctx context.Context, url string, appliedFacets map[stri
 		page = next
 	}
 	return postings, nil
-}
-
-// splitByFacet subdivides a capped slice by the not-yet-used facet dimension that best splits
-// it, recursing into each value's own slice (which may itself still be capped, in which case it
-// recurses again with a different dimension) up to maxFacetDepth combined dimensions. Results
-// are merged and deduped by ExternalPath, since a multi-counting dimension (e.g. workerSubType)
-// can place the same posting in more than one slice.
-//
-// Slices are listed concurrently; inflight is one semaphore shared by the whole split, so the
-// board never has more than workdaySliceParallelism requests open however deep it recurses. It is
-// held only around a slice's own requests, never across a recursion, so a level waiting on its
-// children cannot starve them.
-func (s workday) splitByFacet(ctx context.Context, url string, b workdayBoard, appliedFacets map[string]any, capped workdayListPage, used map[string]bool, depth int, inflight chan struct{}) ([]workdayPosting, error) {
-	dim := pickSplitDimension(capped.Facets, used)
-	if dim == nil {
-		// Paging the capped response as-is would return fewer postings than the board
-		// actually has and report success — indistinguishable from the board having shrunk,
-		// and exactly the shape that let solidjobs' undetected truncation force freehire#2337's
-		// revert. A board this size cannot be proven complete without a usable dimension, so
-		// the crawl must fail loudly instead.
-		return nil, fmt.Errorf("workday: board %s/%s capped at %d with no further facet dimension to split on",
-			b.tenant, b.site, workdayCapTotal)
-	}
-	if depth >= maxFacetDepth {
-		// Same reasoning as the no-dimension case above: a still-capped slice this deep cannot
-		// be proven complete, so it must fail rather than silently return the depth limit's
-		// leaf slice as the whole board.
-		return nil, fmt.Errorf("workday: board %s/%s still capped at %d after splitting %d facet dimensions deep",
-			b.tenant, b.site, workdayCapTotal, maxFacetDepth)
-	}
-
-	nextUsed := make(map[string]bool, len(used)+1)
-	for k := range used {
-		nextUsed[k] = true
-	}
-	nextUsed[dim.Parameter] = true
-
-	var mu sync.Mutex
-	byExternalPath := map[string]workdayPosting{}
-	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(workdaySliceParallelism)
-	for _, v := range dim.Values {
-		sliceFacets := cloneAppliedFacets(appliedFacets)
-		sliceFacets[dim.Parameter] = []string{v.ID}
-		g.Go(func() error {
-			inflight <- struct{}{}
-			page, err := s.fetchListPage(gctx, url, sliceFacets, 0)
-			<-inflight
-			if err != nil {
-				return err
-			}
-			var slice []workdayPosting
-			if page.Total == workdayCapTotal {
-				slice, err = s.splitByFacet(gctx, url, b, sliceFacets, page, nextUsed, depth+1, inflight)
-			} else {
-				inflight <- struct{}{}
-				slice, err = s.pageAll(gctx, url, sliceFacets, page)
-				<-inflight
-			}
-			if err != nil {
-				return err
-			}
-			mu.Lock()
-			for _, p := range slice {
-				byExternalPath[p.ExternalPath] = p
-			}
-			mu.Unlock()
-			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-
-	postings := make([]workdayPosting, 0, len(byExternalPath))
-	for _, p := range byExternalPath {
-		postings = append(postings, p)
-	}
-	return postings, nil
-}
-
-// splittableFacets flattens Workday's facet tree into the dimensions a query can actually be
-// scoped by. A wrapper whose values are themselves facets ("locationMainGroup" holding
-// locationCountry, locationRegionStateProvince and locations) is replaced by those nested facets,
-// and a value without an id is dropped, since it cannot be applied. Measured 2026-10-27 on
-// michaels.wd5: the nested state facet (largest value 378) is what clears the 2000 cap, while the
-// wrapper — read as a dimension of zero-count values — looked like the best split of all and
-// was applied with an empty id.
-func splittableFacets(facets []workdayFacet) []workdayFacet {
-	var out []workdayFacet
-	var walk func(f workdayFacet)
-	walk = func(f workdayFacet) {
-		applicable := workdayFacet{Parameter: f.Parameter}
-		for _, v := range f.Values {
-			if v.Parameter != "" {
-				walk(workdayFacet{Parameter: v.Parameter, Values: v.Values})
-				continue
-			}
-			if v.ID != "" {
-				applicable.Values = append(applicable.Values, workdayFacetValue{ID: v.ID, Count: v.Count})
-			}
-		}
-		if len(applicable.Values) > 0 {
-			out = append(out, applicable)
-		}
-	}
-	for _, f := range facets {
-		walk(f)
-	}
-	return out
-}
-
-// pickSplitDimension returns the facet dimension (not already in used) whose largest single
-// value is smallest — i.e. the dimension that leaves the smallest oversized remainder after
-// splitting, so the recursion is most likely to clear the cap in one more level rather than
-// hitting maxFacetDepth still stuck on an enormous single value. (The opposite heuristic —
-// picking the dimension with the single biggest value anywhere — was tried first and, live
-// against Accenture, kept choosing a dimension whose top value was still ~2000-sized, making
-// no real progress across several depth-3 exhaustions before this was corrected.)
-// Returns nil if every present dimension has already been applied in this branch.
-func pickSplitDimension(facets []workdayFacet, used map[string]bool) *workdayFacet {
-	candidates := splittableFacets(facets)
-	var best *workdayFacet
-	bestMax := -1
-	for i := range candidates {
-		f := &candidates[i]
-		if used[f.Parameter] || len(f.Values) == 0 {
-			continue
-		}
-		max, sum := 0, 0
-		for _, v := range f.Values {
-			sum += v.Count
-			if v.Count > max {
-				max = v.Count
-			}
-		}
-		// A capped slice holds at least workdayCapTotal postings, so a dimension whose values
-		// add up to fewer cannot partition it: Workday's "distance" facet sums to 5 on a
-		// 4,390-posting board, and splitting on it listed 548 and called that the whole board.
-		if sum < workdayCapTotal {
-			continue
-		}
-		if best == nil || max < bestMax {
-			bestMax = max
-			best = f
-		}
-	}
-	return best
-}
-
-// cloneAppliedFacets copies an appliedFacets map so a recursion branch can add its own facet
-// value without mutating the map a sibling branch is still using.
-func cloneAppliedFacets(appliedFacets map[string]any) map[string]any {
-	out := make(map[string]any, len(appliedFacets)+1)
-	for k, v := range appliedFacets {
-		out[k] = v
-	}
-	return out
 }
 
 // detail fetches one posting's detail and maps it to a Job, returning ok=false when the
@@ -478,9 +303,8 @@ func (s workday) detail(ctx context.Context, e CompanyEntry, b workdayBoard, p w
 }
 
 // workdayWorkModes maps a Workday remoteType label, lowercased, to a work mode. remoteType is
-// not an enum: each tenant names its own workplace types, in its own language, and about one
-// posting in eight carries one. Every entry is a label a live tenant publishes (sampled across
-// ~1,000 boards, 2026-10-30). A label that offers a choice ("Hybrid or Onsite"), a schedule
+// not an enum: each tenant names its own workplace types, in its own language. Every entry is
+// a label a live tenant publishes. A label that offers a choice ("Hybrid or Onsite"), a schedule
 // ("Flex"), a place that is neither an office nor home ("Field Based", "Client site") or nothing
 // at all ("Not specified") is absent, so it states no work mode rather than a guessed one.
 // A benefit beside an office ("Mobiles Arbeiten möglich", "Télétravail possible") is hybrid,

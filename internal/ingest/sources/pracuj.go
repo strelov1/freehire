@@ -5,29 +5,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"log"
 	"net/http"
-	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
-
-	"github.com/strelov1/freehire/internal/dict/location"
-	"github.com/strelov1/freehire/internal/dict/skilltag"
 )
 
-// pracuj adapts Pracuj.pl (www.pracuj.pl), Poland's largest general job board: ~63k open offers
-// in ~48.5k postings (one posting is offered in several cities as several offers), every trade,
-// ~10% of them in the two IT categories. It is boardless and an aggregator — the employer is
-// read per posting. Grupa Pracuj's IT board theprotocol.it carries the same postings and is not
-// crawled separately. See the "Pracuj.pl traps" section of AGENTS.md for the measurements behind
-// each rule.
+// pracuj adapts Pracuj.pl (www.pracuj.pl), Poland's largest general job board. It is
+// boardless and an aggregator: the employer is read per posting. Grupa Pracuj's IT board
+// theprotocol.it carries the same postings and is not crawled separately. See the "Pracuj.pl
+// traps" section of AGENTS.md for the measurements behind each rule.
 //
 // Cloudflare refuses a plain client on every path, so the whole crawl goes through the Scrapling
 // tier's impersonating fetcher (see scraplingProviders). The listing is the site's own search,
@@ -63,32 +55,26 @@ const (
 	// pracujPageSize is the largest page the search serves; a page is ~1.2 MB of HTML.
 	pracujPageSize = 100
 
-	// pracujRequestInterval paces the listing at one page a second — a courtesy ceiling, not a
-	// measured limit; ~560 listing pages a run drew no refusal.
+	// pracujRequestInterval paces the listing at one page a second, a courtesy ceiling rather than
+	// a known limit.
 	pracujRequestInterval = time.Second
 	// pracujWorkers keeps two listing requests in flight: one round trip through the Scrapling
 	// tier is ~1-3 s, so a single worker would read well under the one-a-second pace.
 	pracujWorkers = 2
 	// pracujOfferInterval paces the offer pages, one at a time. Cloudflare rate-limits them
-	// separately from the listing: the first production run read 114 offer pages at about one a
-	// second and every offer request after that answered 429 "Access denied" for over an hour,
-	// while the listing kept answering; the block lifted after about an hour. 170 offer pages at
-	// one every ~7.3 s (20 minutes) then drew no refusal, which rules out any "~100 per window"
-	// rule with a window over ~12 minutes; one every 8 s stays under every rule that run allows.
+	// separately from the listing: reading about one a second ends in 429 "Access denied" on every
+	// offer request for about an hour. One every 8 s stays under every rule seen.
 	pracujOfferInterval = 8 * time.Second
 	// pracujRetries bounds how often a failed request is asked again. The search's server render
-	// sometimes answers 200 without its results (a deep page of the unfiltered search did so for
-	// about half the requests); within a category slice it did not in ~560 pages, and a second
-	// try a few seconds later is the cure either way.
+	// sometimes answers 200 without its results (mostly deep pages of the unfiltered search); asking
+	// again a few seconds later cures it.
 	pracujRetries      = 4
 	pracujRetryBackoff = 3 * time.Second
-	// pracujMaxPages is a safety ceiling per slice: the largest slice was 210 pages on
-	// 2026-10-29.
+	// pracujMaxPages is a safety ceiling per slice.
 	pracujMaxPages = 600
-	// pracujMaxNewPerRun bounds the offer pages of one run: the schedule's 4,500 s run timeout
-	// leaves the crawl 65 minutes once cmd/ingest keeps its 10-minute sweep reserve, and ~10
-	// minutes of listing, 360 offer pages at one every 8 s (48 minutes) and the 5-minute margin
-	// fit in that. A cold catalogue is taken in slices, newest first.
+	// pracujMaxNewPerRun bounds the offer pages of one run so that the listing, the offer pages at
+	// pracujOfferInterval and the deadline margin fit in the schedule's run timeout. A cold catalogue
+	// is taken in slices, newest first.
 	pracujMaxNewPerRun   = 360
 	pracujDeadlineMargin = 5 * time.Minute
 )
@@ -100,11 +86,10 @@ type pracujSlice struct {
 	tech       bool
 }
 
-// pracujSlices partitions the site's 35 top-level categories into four searches small enough to
-// walk to the end. The unfiltered search (48.5k postings) answers ~half its deep pages without
-// results; a search of up to ~21k did not fail once. The slices still overlap (a posting may be
-// filed under categories of two slices, ~15% of the walk) and the walk deduplicates by posting.
-// 5015 and 5016 are "IT - Administracja" and "IT - Rozwój oprogramowania".
+// pracujSlices partitions the site's top-level categories into four searches small enough to
+// walk to the end: the unfiltered search answers about half its deep pages without results. The
+// slices overlap (a posting may be filed under categories of two slices); the walk deduplicates
+// by posting. 5015 and 5016 are "IT - Administracja" and "IT - Rozwój oprogramowania".
 var pracujSlices = []pracujSlice{
 	{categories: "5015,5016", tech: true},
 	// Manual work, production, supply chain, transport, quality, health and safety, energy.
@@ -228,7 +213,7 @@ func (s pracuj) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(postings))
 		for _, p := range postings {
-			companies = append(companies, pracujClean(p.Company))
+			companies = append(companies, collapseSpace(p.Company))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -242,7 +227,7 @@ func (s pracuj) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -319,7 +304,7 @@ func (s pracuj) list(ctx context.Context) ([]pracujPosting, error) {
 		for _, page := range pages {
 			for _, p := range page {
 				if p.GroupID == "" || len(p.Offers) == 0 || pracujOfferURL(p.Offers[0]) == "" ||
-					pracujClean(p.Title) == "" || pracujClean(p.Company) == "" {
+					collapseSpace(p.Title) == "" || collapseSpace(p.Company) == "" {
 					continue
 				}
 				if prev, ok := byID[p.GroupID]; ok {
@@ -458,8 +443,6 @@ func pracujOfferRetryable(err error) bool {
 	return !errors.Is(err, errPracujRateLimited) && pracujRetryable(err)
 }
 
-func pracujClean(s string) string { return strings.Join(strings.Fields(s), " ") }
-
 // pracujOfferURL is an offer's page on the site's own host, or "" for anything else.
 func pracujOfferURL(o pracujListedOffer) string {
 	u := strings.TrimSpace(o.URL)
@@ -476,9 +459,9 @@ func pracujBaseJob(p pracujPosting) Job {
 	j := Job{
 		ExternalID:        p.GroupID,
 		URL:               pracujOfferURL(p.Offers[0]),
-		Title:             pracujClean(p.Title),
-		Company:           pracujClean(p.Company),
-		Location:          pracujClean(p.Offers[0].Workplace),
+		Title:             collapseSpace(p.Title),
+		Company:           collapseSpace(p.Company),
+		Location:          collapseSpace(p.Offers[0].Workplace),
 		IsTechHint:        p.tech,
 		FallbackCountries: []string{"pl"},
 	}
@@ -617,311 +600,4 @@ func (s pracuj) detail(ctx context.Context, p pracujPosting) (Job, bool, error) 
 	}
 	job, ok := pracujJob(o, p)
 	return job, ok, nil
-}
-
-// pracujJob maps an offer page and its search result to a Job. ok is false for one with no
-// title, employer or body.
-func pracujJob(o pracujOffer, p pracujPosting) (Job, bool) {
-	a := o.Attributes
-	j := pracujBaseJob(p)
-	if t := pracujClean(a.Title); t != "" {
-		j.Title = t
-	}
-	if co := pracujClean(a.Employer); co != "" {
-		j.Company = co
-	}
-	body := pracujBody(o.Sections)
-	if pay := pracujPayParagraph(a.Employment.Contracts); pay != "" {
-		body = pay + body
-	}
-	j.Description = sanitizeHTML(body)
-	if j.Title == "" || j.Company == "" || strings.TrimSpace(j.Description) == "" {
-		return Job{}, false
-	}
-	j.Location, j.Countries = pracujPlace(o)
-	if j.Location == "" {
-		j.Location = pracujClean(p.Offers[0].Workplace)
-	}
-	if t := parseRFC3339(strings.TrimSpace(o.Publication.Initial)); t != nil {
-		j.PostedAt = NotFuture(t)
-	}
-	codes := make([]string, 0, len(a.Employment.WorkModes))
-	for _, m := range a.Employment.WorkModes {
-		codes = append(codes, m.Code)
-	}
-	if a.Employment.EntirelyRemote {
-		codes = append(codes, "home-office")
-	}
-	if m := pracujWorkMode(codes); m != "" {
-		j.WorkMode, j.Remote = m, m == "remote"
-	}
-	if pracujTechCategories[a.Leading.Parent.ID] {
-		j.IsTechHint = true
-	}
-	levels := make([]int, 0, len(a.Employment.PositionLevels))
-	for _, l := range a.Employment.PositionLevels {
-		levels = append(levels, l.ID)
-	}
-	j.Seniority = pracujSeniority(levels)
-	j.EmploymentType = pracujEmploymentType(a.Employment.WorkSchedules, a.Employment.Contracts)
-	j.Skills = pracujSkills(o.Sections)
-	if lo, hi, period, ok := pracujSalary(a.Employment.Contracts); ok {
-		j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod = &lo, &hi, "PLN", period
-	}
-	return j, true
-}
-
-// pracujPlace reads the posting's first workplace as its location, and every workplace's country:
-// one in Poland is "pl", one abroad is the country its page names (in the posting's language, so
-// a Polish page's "Niemcy" resolves to nothing and is left to the dictionaries).
-func pracujPlace(o pracujOffer) (string, []string) {
-	var loc string
-	var countries []string
-	for _, w := range o.Attributes.Workplaces {
-		code := "pl"
-		if w.IsAbroad {
-			code = location.NormalizeCountry(strings.TrimSpace(w.Country.Name))
-		}
-		if code != "" && !slices.Contains(countries, code) {
-			countries = append(countries, code)
-		}
-		if loc != "" {
-			continue
-		}
-		if w.Inland != nil && strings.TrimSpace(w.Inland.Location.Name) != "" {
-			loc = pracujClean(w.Inland.Location.Name)
-		} else {
-			loc = pracujClean(w.Display)
-		}
-	}
-	return loc, countries
-}
-
-// pracujWorkMode reads the posting's stated arrangements, the most remote one winning, from the
-// search result's labels ("Praca zdalna", "Praca hybrydowa (do uzgodnienia)") or the offer page's
-// codes ("home-office", "hybrid", "full-office"). "Praca mobilna" (field work) says nothing.
-func pracujWorkMode(modes []string) string {
-	set := map[string]bool{}
-	for _, m := range modes {
-		m = strings.ToLower(pracujClean(m))
-		switch {
-		case m == "home-office" || strings.HasPrefix(m, "praca zdalna"):
-			set["remote"] = true
-		case m == "hybrid" || strings.HasPrefix(m, "praca hybrydowa"):
-			set["hybrid"] = true
-		case m == "full-office" || strings.HasPrefix(m, "praca stacjonarna"):
-			set["onsite"] = true
-		}
-	}
-	for _, m := range []string{"remote", "hybrid", "onsite"} {
-		if set[m] {
-			return m
-		}
-	}
-	return ""
-}
-
-// pracujSeniorityByLevel maps the site's position-level ids. Assistant, coordinator, manager,
-// director and manual worker name a role, not a seniority, and map to nothing.
-var pracujSeniorityByLevel = map[int]string{
-	1:  "intern", // praktykant / stażysta
-	17: "junior", // młodszy specjalista (junior)
-	4:  "middle", // specjalista (mid / regular)
-	18: "senior", // starszy specjalista (senior)
-	19: "senior", // ekspert
-	21: "c_level",
-}
-
-// pracujSeniority is the seniority every stated level agrees on, or "" when they disagree ("mid /
-// senior" is two levels) or none maps.
-func pracujSeniority(levels []int) string {
-	out := ""
-	for _, l := range levels {
-		s := pracujSeniorityByLevel[l]
-		if s == "" || (out != "" && s != out) {
-			return ""
-		}
-		out = s
-	}
-	return out
-}
-
-// pracujEmploymentType maps a single stated schedule (full-time 0, part-time 1); an internship
-// contract (7) as the only contract wins over the schedule.
-func pracujEmploymentType(schedules []struct {
-	ID int `json:"id"`
-}, contracts []pracujContract) string {
-	if len(contracts) == 1 && contracts[0].ID == 7 {
-		return "internship"
-	}
-	if len(schedules) != 1 {
-		return ""
-	}
-	switch schedules[0].ID {
-	case 0:
-		return "full_time"
-	case 1:
-		return "part_time"
-	}
-	return ""
-}
-
-// pracujContractUoP is "umowa o pracę", the contract of employment; pracujContractB2B is the B2B
-// contract, paid net of VAT.
-const (
-	pracujContractUoP = 0
-	pracujContractB2B = 3
-)
-
-// pracujSalary reads one stated salary: the contract of employment's gross pay if stated, else
-// another gross one, else a B2B contract's net pay — the order in which a figure is comparable to
-// the rest of the catalogue. Only PLN, with a stated kind (gross, or net for B2B) and a monthly
-// (0) or hourly (1) period. Every contract's pay is also written into the body (pracujPayParagraph).
-func pracujSalary(contracts []pracujContract) (lo, hi int, period string, ok bool) {
-	pick := func(match func(pracujContract) bool) (int, int, string, bool) {
-		for _, c := range contracts {
-			if !match(c) {
-				continue
-			}
-			if lo, hi, period, ok := pracujContractPay(c); ok {
-				return lo, hi, period, true
-			}
-		}
-		return 0, 0, "", false
-	}
-	gross := func(c pracujContract) bool { return c.Salary != nil && c.Salary.Kind.Code == "gross" }
-	if lo, hi, period, ok = pick(func(c pracujContract) bool { return c.ID == pracujContractUoP && gross(c) }); ok {
-		return
-	}
-	if lo, hi, period, ok = pick(gross); ok {
-		return
-	}
-	return pick(func(c pracujContract) bool {
-		return c.ID == pracujContractB2B && c.Salary != nil && strings.HasPrefix(c.Salary.Kind.Code, "net")
-	})
-}
-
-// pracujContractPay is one contract's structured pay, or ok=false when it is not a PLN range with
-// a monthly or hourly period. A single figure is stated as from == to.
-func pracujContractPay(c pracujContract) (lo, hi int, period string, ok bool) {
-	s := c.Salary
-	if s == nil || s.From == nil || !strings.EqualFold(strings.TrimSpace(s.Currency.Code), "PLN") {
-		return 0, 0, "", false
-	}
-	switch s.TimeUnit.ID {
-	case 0:
-		period = "month"
-	case 1:
-		period = "hour"
-	default:
-		return 0, 0, "", false
-	}
-	from, to := *s.From, *s.From
-	if s.To != nil {
-		to = *s.To
-	}
-	lo, hi = int(from+0.5), int(to+0.5)
-	if lo <= 0 || hi < lo {
-		return 0, 0, "", false
-	}
-	return lo, hi, period, true
-}
-
-// pracujPayParagraph states every contract's pay as the posting does — amount, gross or net,
-// period and contract — because the salary fields hold one figure and drop which contract and
-// tax basis it was.
-func pracujPayParagraph(contracts []pracujContract) string {
-	var lines []string
-	for _, c := range contracts {
-		lo, hi, _, ok := pracujContractPay(c)
-		if !ok {
-			continue
-		}
-		amount := strconv.Itoa(lo)
-		if hi != lo {
-			amount += "–" + strconv.Itoa(hi)
-		}
-		line := fmt.Sprintf("%s PLN %s / %s (%s)", amount, pracujClean(c.Salary.Kind.Name), pracujClean(c.Salary.TimeUnit.LongForm.Name), pracujClean(c.Name))
-		lines = append(lines, "<li>"+html.EscapeString(line)+"</li>")
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	return "<ul>" + strings.Join(lines, "") + "</ul>\n"
-}
-
-// pracujBody renders the posting's sections as HTML: a heading per titled section, bullets as a
-// list, paragraphs as paragraphs, and a dictionary (technologies, benefits) as a list of its
-// item names. A gallery is skipped.
-func pracujBody(sections []pracujSection) string {
-	var b strings.Builder
-	var render func(secs []pracujSection, depth int)
-	render = func(secs []pracujSection, depth int) {
-		for _, sec := range secs {
-			if t := pracujClean(sec.Title); t != "" {
-				tag := "h2"
-				if depth > 0 {
-					tag = "h3"
-				}
-				b.WriteString("<" + tag + ">" + html.EscapeString(t) + "</" + tag + ">\n")
-			}
-			if m := sec.Model; m != nil {
-				var items []string
-				switch {
-				case len(m.Bullets) > 0:
-					items = m.Bullets
-				case len(m.Items) > 0 || len(m.CustomItems) > 0:
-					for _, it := range m.Items {
-						items = append(items, it.Name)
-					}
-					for _, it := range m.CustomItems {
-						items = append(items, it.Name)
-					}
-				}
-				if len(items) > 0 {
-					b.WriteString("<ul>")
-					for _, it := range items {
-						if it = strings.TrimSpace(it); it != "" {
-							b.WriteString("<li>" + html.EscapeString(it) + "</li>")
-						}
-					}
-					b.WriteString("</ul>\n")
-				}
-				for _, para := range m.Paragraphs {
-					if para = strings.TrimSpace(para); para != "" {
-						b.WriteString("<p>" + strings.ReplaceAll(html.EscapeString(para), "\n", "<br>") + "</p>\n")
-					}
-				}
-			}
-			render(sec.Subs, depth+1)
-		}
-	}
-	render(sections, 0)
-	return b.String()
-}
-
-// pracujSkills canonicalizes the technologies the poster picked (expected and optional) through
-// the skill dictionary. Canonicalize, not Parse: these are discrete names from a structured
-// field, not prose to mine.
-func pracujSkills(sections []pracujSection) []string {
-	var names []string
-	var collect func(secs []pracujSection)
-	collect = func(secs []pracujSection) {
-		for _, sec := range secs {
-			if strings.HasPrefix(sec.Type, "technologies") && sec.Model != nil {
-				for _, it := range sec.Model.Items {
-					names = append(names, it.Name)
-				}
-				for _, it := range sec.Model.CustomItems {
-					names = append(names, it.Name)
-				}
-			}
-			collect(sec.Subs)
-		}
-	}
-	collect(sections)
-	if len(names) == 0 {
-		return nil
-	}
-	return skilltag.Canonicalize(names)
 }

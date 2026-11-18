@@ -23,11 +23,10 @@ const eightfoldDetailWorkers = 2
 
 // eightfoldMaxNewPerBoard bounds how many unseen positions one board hydrates per run. Every
 // board of a shard shares one ~1 req/s pace (pacedEightfoldGetter) inside a ~2,400 s crawl
-// deadline, so a cold or long-unreached board (nvidia, ~2,500 positions) hydrated in full would
+// deadline, so a cold or long-unreached board with thousands of positions hydrated in full would
 // spend the whole shard's budget and, since a buffered board saves nothing until it returns,
 // save nothing either. At 250 such a board converges over a few runs while steady-state churn
-// (measured 2026-10-29: ~7k new positions a week across ~35k open, ~85 per shard run) never
-// reaches the bound.
+// never reaches the bound.
 const eightfoldMaxNewPerBoard = 250
 
 // eightfoldMaxRetries bounds how many times a rate-limited (403/429) request is retried before
@@ -123,11 +122,10 @@ func (s eightfold) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // back as a SeenRefresh carrying the listing's identity, so its liveness refreshes and its
 // stored body is kept; an unseen position past the bound is left for a later run (see crawl).
 //
-// The detail was this adapter's whole cost: the list serves ten positions per request and the
+// The detail is this adapter's whole cost: the list serves ten positions per request and the
 // detail one, all under a ~1 req/s pace shared by every board in a shard. Re-reading every
-// stored body each run kept 24 of 25 runs in the fortnight to 2026-10-29 on their crawl
-// deadline, the Microsoft board (~2,400 positions) never finished a crawl after 10-26, and a
-// board that never finishes never qualifies for the board-scoped sweep.
+// stored body each run would hit the crawl deadline, and a board that never finishes never
+// qualifies for the board-scoped sweep.
 func (s eightfold) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	return s.crawl(ctx, e, seen, eightfoldMaxNewPerBoard)
 }
@@ -136,9 +134,8 @@ func (s eightfold) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 // the listing alone, and hydrate up to maxNew of the rest. The unseen positions past maxNew
 // are not yielded, so the pipeline reads the board as having pending work rather than as quiet.
 //
-// The budget goes to a random sample rather than the listing's first positions: a position the
-// catalogue filter rejects is never stored, so it stays unseen, and a fixed prefix of those would
-// take the budget on every run and starve the positions behind it.
+// The budget goes to a random sample rather than the listing's first positions: a position that
+// is never stored stays unseen, and a fixed prefix of those would take the budget on every run and starve the positions behind it.
 //
 // Not yielding is safe because an unseen position is almost always a new one. The exceptions are
 // the stored rows the seen set withholds (INGEST_REFETCH_ALL, the hydration-retry window,

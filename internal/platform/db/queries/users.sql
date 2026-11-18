@@ -19,7 +19,9 @@ RETURNING id, email, role, beta_tester, email_verified, created_at, timezone, la
 -- and the OAuth merge policy (an unverified account is seized, not silently joined).
 -- language is included so a password login's response carries the account's
 -- preference the same as /auth/me, rather than reporting the zero value.
-SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language
+-- banned drives the sign-in refusal and the silence of the reset-code mail.
+SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language,
+       (banned_at IS NOT NULL)::boolean AS banned
 FROM users
 WHERE lower(email) = lower($1);
 
@@ -42,9 +44,10 @@ WHERE id = $1;
 -- name: UpdateUserTimezone :one
 -- Set (or clear, with NULL) the account's IANA timezone name. The handler validates
 -- the name against time.LoadLocation before this runs — the query itself trusts its
--- input, same as every other single-column update in this file.
+-- input, same as every other single-column update in this file. Automatic adoption
+-- preserves a concurrently saved preference under the row lock.
 UPDATE users
-SET timezone = $2
+SET timezone = CASE WHEN sqlc.arg(only_if_unset)::boolean THEN COALESCE(timezone, sqlc.narg(timezone)::text) ELSE sqlc.narg(timezone)::text END
 WHERE id = $1
 RETURNING id, email, role, beta_tester, email_verified,
           (password_hash IS NOT NULL)::boolean AS has_password,
@@ -83,9 +86,22 @@ WHERE id = $1;
 -- The account's current session generation, read on every authenticated request to
 -- decide whether a correctly-signed token was revoked. One primary-key lookup; this
 -- is the price of making a stateless JWT revocable at all.
-SELECT token_version
-FROM users
-WHERE id = $1;
+--
+-- The same statement stamps last_active_at, at most once a day, because this is the
+-- one place every signed-in request passes; mail_recipient (migration 0247) reads it
+-- to stop optional mail to people who have not used freehire in 180 days.
+--
+-- A banned account returns no row, which every caller already reads as "session revoked"
+-- (middleware.resolveSession, the introspection endpoint) or, at sign-in, as a refusal
+-- (authHandlers.sessionVersion). This is the one place a ban meets every cookie and
+-- Bearer-JWT credential, and a ban does not stamp last_active_at.
+WITH seen AS (
+    UPDATE users AS su SET last_active_at = now()
+    WHERE su.id = $1 AND su.banned_at IS NULL AND su.last_active_at < now() - interval '1 day'
+)
+SELECT u.token_version
+FROM users AS u
+WHERE u.id = $1 AND u.banned_at IS NULL;
 
 -- name: BumpUserTokenVersion :one
 -- Invalidate every token issued for this account (sign out everywhere) by advancing
@@ -173,193 +189,6 @@ SET password_hash = NULL, email_verified = true, token_version = token_version +
 WHERE users.id = $1
 RETURNING token_version;
 
--- name: GetUserResume :one
--- The authenticated user's résumé pointer (object key + upload time), or NULLs when
--- no résumé is stored. The blob lives in S3 under the key; this is just the pointer.
-SELECT resume_object_key, resume_uploaded_at
-FROM users
-WHERE id = $1;
-
--- name: SetUserResume :exec
--- Record (or replace) the user's stored-résumé pointer, stamping the upload time.
--- Owner-scoped by id; the object key is derived from the id, never client input.
--- Also clears any cached ATS review so a new CV is never scored with a stale one,
--- and marks structured extract pending for this upload (background work must catch up).
-UPDATE users u
-SET resume_object_key = $2,
-    resume_uploaded_at = t.ts,
-    resume_ats_analysis = NULL,
-    resume_extract_status = 'pending',
-    resume_extract_detail = NULL,
-    resume_extract_for = t.ts
-FROM (SELECT now() AS ts) t
-WHERE u.id = $1;
-
--- name: ClearUserResume :exec
--- Clear the user's résumé pointer (after deleting the object from storage), any
--- cached ATS review, the derived CV embedding (no CV → no recommendations), the
--- derived structured résumé (the structure must not outlive the CV it describes), and
--- the geography derived from that structure (which must not outlive it either — a
--- country left behind here would keep answering "where is this candidate" from a CV
--- that no longer exists). Candidate contacts are intentionally kept: they are
--- owner-edited identity, not an extract artifact.
-UPDATE users
-SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL,
-    resume_embedding = NULL, resume_embedding_model = NULL,
-    resume_structured = NULL, resume_structured_model = NULL,
-    resume_structured_uploaded_at = NULL,
-    resume_countries = NULL, resume_regions = NULL, resume_cities = NULL,
-    resume_extract_status = NULL, resume_extract_detail = NULL, resume_extract_for = NULL
-WHERE id = $1;
-
--- name: GetUserPhoto :one
--- The authenticated user's headshot pointer (object key + upload time), or NULLs when
--- no headshot is stored. The image lives in S3 under the key; this is just the pointer.
-SELECT photo_object_key, photo_uploaded_at
-FROM users
-WHERE id = $1;
-
--- name: SetUserPhoto :exec
--- Record (or replace) the user's headshot pointer, stamping the upload time. Owner-scoped
--- by id; the object key is derived from the id, never client input. Nothing derived hangs
--- off the image, so — unlike SetUserResume — there is no cached artefact to invalidate.
-UPDATE users
-SET photo_object_key = $2, photo_uploaded_at = now()
-WHERE id = $1;
-
--- name: ClearUserPhoto :exec
--- Clear the user's headshot pointer, after deleting the object from storage.
-UPDATE users
-SET photo_object_key = NULL, photo_uploaded_at = NULL
-WHERE id = $1;
-
--- name: GetUserATSAnalysis :one
--- The user's cached CV ATS qualitative review (content-quality + findings), or NULL
--- when none has been computed. Derived only — never the raw CV text.
-SELECT resume_ats_analysis
-FROM users
-WHERE id = $1;
-
--- name: SetUserATSAnalysis :exec
--- Cache the derived CV ATS review for the user (keyed to their stored CV).
-UPDATE users
-SET resume_ats_analysis = $2
-WHERE id = $1;
-
--- name: GetUserResumeStructured :one
--- The user's derived structured résumé plus its provenance stamps (the LLM model and
--- the résumé upload time it was derived from), alongside the current résumé upload time
--- so the caller can tell whether the structure still describes the stored CV (served
--- only when resume_structured_uploaded_at equals resume_uploaded_at). NULLs when none.
--- Also returns candidate contacts and last extract status for Profile / seed composition.
-SELECT resume_structured, resume_structured_model, resume_structured_uploaded_at, resume_uploaded_at,
-       candidate_contacts, resume_extract_status, resume_extract_detail, resume_extract_for
-FROM users
-WHERE id = $1;
-
--- name: GetUserResumeStructuredOnly :one
--- Just the structured résumé, with none of the provenance stamps and none of the
--- contacts GetUserResumeStructured returns beside it.
---
--- It exists so the Talent Network's handle mint can read one job title without also
--- holding the candidate's phone number and email in memory. The stamp is deliberately
--- not applied here: a handle derived from a slightly stale title is still a fine
--- handle — it is frozen at mint and opaque afterwards — whereas refusing to mint over
--- an in-flight extraction would block the join itself.
-SELECT resume_structured
-FROM users
-WHERE id = $1;
-
--- name: SetUserResumeStructured :execrows
--- Persist the user's derived structured résumé, stamped with the producing LLM model
--- and the résumé upload time it was derived from (passed in, not now(), so the stamp
--- matches the CV the background extraction actually read). Never the raw CV text.
--- The `resume_uploaded_at = $4` guard makes the write monotonic: a slow background
--- extraction for a since-superseded CV (its stamp no longer equals the current upload
--- time) matches no row and is dropped, so a late writer can't clobber a newer CV's
--- structure with an already-stale stamp (which Store.Structured would then hide forever).
---
--- The candidate's geography rides in this same statement rather than a second one, so it
--- inherits that guard for free and can never end up describing a different CV than the
--- structure it was derived from. It is deterministic and costs no I/O, so there is
--- nothing to gain by deferring it — and a separate write would have to duplicate the
--- guard, which is exactly how invariants drift apart.
--- On success, extract status is marked ok for this upload stamp.
-UPDATE users
-SET resume_structured = $2, resume_structured_model = $3, resume_structured_uploaded_at = $4,
-    resume_countries = $5, resume_regions = $6, resume_cities = $7,
-    resume_extract_status = 'ok', resume_extract_detail = NULL, resume_extract_for = $4
-WHERE id = $1 AND resume_uploaded_at = $4;
-
--- name: GetUserCandidateContacts :one
-SELECT candidate_contacts
-FROM users
-WHERE id = $1;
-
--- name: SetUserCandidateContacts :exec
-UPDATE users
-SET candidate_contacts = $2
-WHERE id = $1;
-
--- name: SetUserResumeExtractFailed :exec
--- Record that structured extract failed for the current upload. The for-stamp guard
--- drops the write when a newer upload already superseded this attempt.
-UPDATE users
-SET resume_extract_status = 'failed',
-    resume_extract_detail = $2,
-    resume_extract_for = $3
-WHERE id = $1 AND resume_uploaded_at = $3;
-
--- name: SetUserResumeExtractPending :exec
--- Mark a retry of structured extract as running, clearing the stale status (typically
--- 'failed') a previous attempt left — the same transition a fresh upload makes in
--- SetUserResume, done here without touching the object key or re-stamping the upload
--- time, since a retry re-reads the SAME stored résumé rather than replacing it. The
--- for-stamp guard drops the write when a newer upload already superseded this retry.
-UPDATE users
-SET resume_extract_status = 'pending',
-    resume_extract_detail = NULL,
-    resume_extract_for = $2
-WHERE id = $1 AND resume_uploaded_at = $2;
-
--- name: GetUserResumeGeography :one
--- The geography derived from the user's structured résumé, alongside the two stamps the
--- caller needs to judge freshness (the derivation's own stamp and the current résumé
--- upload time) — the same stamp-and-compare the structure read uses, so a geography
--- derived from a superseded CV reads as absent rather than being served.
--- NULL arrays mean "not known"; an empty array means the CV named a place the dictionary
--- could not resolve. The two are deliberately different answers.
-SELECT resume_countries, resume_regions, resume_cities,
-       resume_structured_uploaded_at, resume_uploaded_at
-FROM users
-WHERE id = $1;
-
--- name: ListUsersForResumeGeoBackfill :many
--- Users whose stored structured résumé currently describes their stored CV, for the
--- geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:
--- deriving geography from one would route around the staleness rule that governs the
--- structure itself. Returns the location line the derivation reads plus the stamp to
--- write under, so the worker needs no second round-trip per user.
--- The location line is coalesced to '' and cast so sqlc types it as a string rather than
--- interface{}. An absent key and an empty string are the same case — the CV stated no
--- location — and both must derive to an ABSENT geography, not to an empty resolved one.
-SELECT id, coalesce(resume_structured ->> 'location', '')::text AS location, resume_uploaded_at
-FROM users
-WHERE resume_structured IS NOT NULL
-  AND resume_uploaded_at IS NOT NULL
-  AND resume_structured_uploaded_at IS NOT DISTINCT FROM resume_uploaded_at
-  AND (sqlc.arg(user_id)::bigint = 0 OR id = sqlc.arg(user_id)::bigint)
-ORDER BY id;
-
--- name: SetUserResumeGeography :exec
--- Persist only the derived geography for a user, under the same monotonic guard the
--- structure write uses. This is the reconciler's write path: it re-derives from an
--- already-stored structure, so it must not touch the structure or its model stamp, and
--- must still refuse to write against a CV that has been replaced since the row was read.
-UPDATE users
-SET resume_countries = $2, resume_regions = $3, resume_cities = $4
-WHERE id = $1 AND resume_uploaded_at = $5;
-
 -- name: GetUserRole :one
 -- Slim role lookup for the RequireRole authorization middleware: it runs on every
 -- request to a role-gated endpoint and needs only the role, so it does not drag the
@@ -442,172 +271,6 @@ SELECT email
 FROM users
 WHERE id = $1;
 
--- name: GetTalentNetworkVisibility :one
--- The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
--- talent_handle rides along so the page can render the public URL without a second
--- round-trip. It is NULL until the first join — a non-member has no card to link to —
--- unlike the visibility, which every row carries because 'off' is the column default.
---
--- `listed` answers the question the settings page actually has to ask: not "am I a
--- member" but "does a visitor see me". They come apart, and the gap is a live trap — a
--- candidate who joins before uploading a CV is a member with a handle whose card 404s,
--- so a page reading membership alone tells them their profile is up when it is not.
---
--- It repeats ListTalentNetworkMembers' predicate, which is a duplication worth naming:
--- the two must be changed together. It is not shared because the catalogue's version
--- selects rows and this one describes one row, and a caller cannot ask the first
--- "and what about me".
---
--- COALESCE is the difference from that WHERE. There, a NULL comparison simply drops the
--- row. Here the same comparison is a column scanned into a Go bool, and
--- `resume_structured_uploaded_at = resume_uploaded_at` is NULL when the extract stamp is
--- missing — which is the ordinary state of a CV that was uploaded and not yet parsed.
--- TRUE AND NULL is NULL, so a member in that state used to 500 the settings read. Not
--- listed is the answer, the same one the catalogue already gives by excluding them.
-SELECT talent_network_visibility,
-       talent_handle,
-       COALESCE((talent_network_visibility <> 'off'
-        AND talent_handle IS NOT NULL
-        AND resume_uploaded_at IS NOT NULL
-        AND resume_structured_uploaded_at = resume_uploaded_at), false)::boolean AS listed
-FROM users
-WHERE id = $1;
-
--- name: ListMembersMissingTalentHandle :many
--- The members who joined before handles existed, and so have no public address.
---
--- Migration 0148 rewrote every 'public' row to 'anonymous' but could not mint a handle —
--- minting reads a job title through a Go dictionary, which SQL cannot do — so those
--- accounts, and any that were already 'anonymous', are members the catalogue cannot list
--- and whose card 404s. cmd/backfill-talent-handle walks this list once and closes it.
---
--- No stamp gate here, unlike the catalogue's own read: a member whose CV extract is stale
--- still needs an address for when it catches up, and withholding one would make the
--- backfill's own result depend on when it happened to run.
-SELECT id
-FROM users
-WHERE talent_network_visibility <> 'off'
-  AND talent_handle IS NULL
-ORDER BY id;
-
--- name: IsBetaTester :one
--- Whether the account is in the beta group, on its own. GetUserByID answers it too, but
--- carries nine other columns a gate has no use for — and a gate that reads a whole user
--- row invites somebody to branch on a second field from it later.
-SELECT beta_tester
-FROM users
-WHERE id = $1;
-
--- name: SetTalentHandleIfUnset :execrows
--- Claims a freshly minted catalogue handle for a candidate who does not have one yet.
---
--- The `talent_handle IS NULL` predicate is the whole mechanism, and it does two jobs.
--- It makes the mint idempotent — a member who leaves and rejoins keeps the handle they
--- already shared, and a second concurrent join claims nothing — and it makes the
--- statement's own result the answer: 0 rows means somebody already has one, which the
--- caller reads rather than re-querying and racing again.
---
--- A collision with ANOTHER account's handle surfaces as a unique-violation from
--- users_talent_handle_key (migration 0150), not as 0 rows. The caller mints a new suffix
--- and retries — the same shape internal/identity/accounts uses to allocate a username.
-UPDATE users
-SET talent_handle = $2
-WHERE id = $1
-  AND talent_handle IS NULL;
-
--- name: SetTalentNetworkVisibility :exec
--- Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
--- since migration 0148). Does not touch talent_handle: the public URL stays stable
--- across a round trip through 'off', so a candidate who already shared it once — or who
--- leaves and rejoins — never has to reshare a new one.
---
--- The value is NOT validated here. Its authority is the CHECK constraint on the column;
--- the handler mirrors that set for a cheap 400, and this statement is the third place
--- the vocabulary would have to be repeated for no gain.
-UPDATE users
-SET talent_network_visibility = $2
-WHERE id = $1;
-
--- name: ListTalentNetworkMembers :many
--- Every member the public catalogue may show, in one read. The caller projects each row
--- through talentnetwork.ProjectCard and holds the result as a snapshot — see that
--- package's doc for why the whole set is read at once rather than filtered in SQL: the
--- category and seniority a card is filtered by do not exist as columns, they are derived
--- from the job title by a dictionary that changes weekly.
---
--- The predicate is the membership rule and nothing else:
---
---   * not 'off' — the candidate asked to be found;
---   * a minted handle — without one there is no URL to link the card to, so a row in
---     this state is mid-join, not a member;
---   * the stamp gate (resume_structured_uploaded_at = resume_uploaded_at, both set) —
---     the same "this structure still describes the CV on file" rule the rest of the
---     product applies. Without it most cards would be somebody's previous CV.
---
--- LEFT JOIN, because a candidate can join before ever saving a profile: a missing
--- user_profiles row is empty facets, not a missing member.
---
--- Ordered here rather than by the caller so the snapshot arrives sorted, and TOTALLY:
--- two members sharing a timestamp would otherwise order arbitrarily, and an arbitrary
--- order across pages silently drops some people and repeats others.
-SELECT u.talent_handle,
-       u.timezone,
-       COALESCE(u.resume_cities, '{}')::text[] AS cities,
-       u.resume_structured,
-       u.resume_structured_uploaded_at,
-       COALESCE(p.specializations, '{}')::text[] AS specializations,
-       -- Whether the member has an uploaded headshot, never the object key itself: the
-       -- catalogue card links to the blurred photo route by the member's own handle
-       -- (talentnetwork.CatalogueMember.HasPhoto), so a card can skip requesting a photo
-       -- that GetPhoto would only 404 for.
-       (u.photo_object_key IS NOT NULL AND u.photo_object_key <> '')::boolean AS has_photo
-FROM users u
-LEFT JOIN user_profiles p ON p.user_id = u.id
-WHERE u.talent_network_visibility <> 'off'
-  AND u.talent_handle IS NOT NULL
-  AND u.resume_uploaded_at IS NOT NULL
-  AND u.resume_structured_uploaded_at = u.resume_uploaded_at
-ORDER BY u.resume_structured_uploaded_at DESC, u.talent_handle DESC;
-
--- name: GetTalentNetworkMemberByHandle :one
--- One member's card, by the handle in the public URL. Same predicate as the list, so a
--- handle nobody holds, a member who has left, and one whose extract has gone stale all
--- come back as pgx.ErrNoRows — which the handler renders as the one 404. Deciding it
--- here rather than in the caller is deliberate: three ways to be absent and one way to
--- say so is a rule that cannot be half-applied.
---
--- Read against the DATABASE, never the snapshot the list is served from. A candidate who
--- leaves must stop resolving immediately, not when the snapshot next refreshes.
-SELECT u.talent_handle,
-       u.timezone,
-       COALESCE(u.resume_cities, '{}')::text[] AS cities,
-       u.resume_structured,
-       u.resume_structured_uploaded_at,
-       COALESCE(p.specializations, '{}')::text[] AS specializations,
-       (u.photo_object_key IS NOT NULL AND u.photo_object_key <> '')::boolean AS has_photo
-FROM users u
-LEFT JOIN user_profiles p ON p.user_id = u.id
--- The ::text cast is load-bearing, not decoration: talent_handle is nullable, so without
--- it sqlc types the argument as pgtype.Text and every caller has to wrap a plain string
--- it already knows is present.
-WHERE u.talent_handle = sqlc.arg(handle)::text
-  AND u.talent_network_visibility <> 'off'
-  AND u.resume_uploaded_at IS NOT NULL
-  AND u.resume_structured_uploaded_at = u.resume_uploaded_at;
-
--- name: GetTalentNetworkMemberUserIDByHandle :one
--- The same "is this handle a current member" predicate as
--- GetTalentNetworkMemberByHandle, but naming only the user id — for the public photo
--- route, which needs a headshot owner, never a public card. Kept as its own query
--- rather than widening ByHandle's result: the id is not part of the public projection
--- and has no reason to travel through the same path that assembles one.
-SELECT u.id
-FROM users u
-WHERE u.talent_handle = sqlc.arg(handle)::text
-  AND u.talent_network_visibility <> 'off'
-  AND u.resume_uploaded_at IS NOT NULL
-  AND u.resume_structured_uploaded_at = u.resume_uploaded_at;
-
 -- name: GetUserExperienceRequireContext :one
 -- Whether interactive atom creates require a non-empty context. Kept off /auth/me on
 -- purpose — only the experience write path and get_profile's bank summary need it.
@@ -637,3 +300,34 @@ SELECT agents_may_apply FROM users WHERE id = sqlc.arg(id);
 
 -- name: SetAgentsMayApply :exec
 UPDATE users SET agents_may_apply = sqlc.arg(agents_may_apply) WHERE id = sqlc.arg(id);
+
+-- name: BanUser :one
+-- Ban an account by hand. Advances token_version so everything bound to a generation
+-- (recent-auth proofs, mobile exchange codes, OAuth grants and codes) dies with the
+-- sessions, and deletes nothing else. The WHERE refuses an admin and the moderator's own
+-- account here rather than in Go, so no call site can ban around the rule. No row means
+-- the target is missing, already banned, an admin or the actor itself; the handler tells
+-- those apart with GetUserModerationState.
+UPDATE users
+SET banned_at = now(), ban_reason = sqlc.arg(reason), banned_by = sqlc.arg(actor_id),
+    token_version = token_version + 1
+WHERE id = sqlc.arg(id) AND banned_at IS NULL AND role <> 'admin' AND id <> sqlc.arg(actor_id)
+RETURNING id;
+
+-- name: UnbanUser :execrows
+-- Lift a ban. Sessions and grants stay dead (the ban bumped token_version); the person
+-- signs in again. 0 rows: the account is missing or was not banned.
+UPDATE users
+SET banned_at = NULL, ban_reason = NULL, banned_by = NULL
+WHERE id = $1 AND banned_at IS NOT NULL;
+
+-- name: FindUserForModeration :one
+-- The moderator's lookup: one account by id, exact email (case-insensitive) or username,
+-- with its ban state. The query is matched against all three; an id only when numeric.
+SELECT id, email, username, role, banned_at, ban_reason
+FROM users
+WHERE id = sqlc.arg(user_id)::bigint
+   OR lower(email) = lower(sqlc.arg(query)::text)
+   OR username = sqlc.arg(query)::text
+ORDER BY (id = sqlc.arg(user_id)::bigint) DESC
+LIMIT 1;

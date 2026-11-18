@@ -69,10 +69,8 @@ func TestReportsEndToEnd(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
-	app.Post("/api/v1/jobs/:slug/reports", keyAuth, h.CreateReport)
-	app.Get("/api/v1/reports", keyAuth, requireMod, h.ListPendingReports)
-	app.Post("/api/v1/reports/:id/resolve", keyAuth, requireMod, h.ResolveReport)
-	app.Post("/api/v1/reports/:id/dismiss", keyAuth, requireMod, h.DismissReport)
+	h.register(app.Group("/api/v1"), middleware{key: keyAuth, moderator: requireMod},
+		newContract(contractHandlers{reportHandlers: h}))
 
 	req := func(method, path, cookie, body string) *http.Request {
 		var r *http.Request

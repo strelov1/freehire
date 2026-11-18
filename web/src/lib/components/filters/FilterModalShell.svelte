@@ -37,7 +37,6 @@
     entryCount,
     seed,
     apply,
-    onClear,
     applyDisabled = false,
     applyLabel,
     previewCount,
@@ -64,9 +63,6 @@
     seed: () => void;
     /** Commit the staged copy (or a custom save). A thrown error keeps the modal open. */
     apply: () => void | Promise<void>;
-    /** Run after the footer's Clear all resets `staged` — for a draft the wrapper stages
-     *  outside it (the job modal's minimum skill match), so Clear all clears that too. */
-    onClear?: () => void;
     applyDisabled?: boolean;
     /** Custom footer label (e.g. "Save"); when absent the button shows the live preview. */
     applyLabel?: string;
@@ -183,20 +179,27 @@
             }
           });
       }, 200);
-    } else if (previewCount) {
-      const pc = previewCount;
-      t = setTimeout(() => {
-        pc(params)
-          .then((n) => {
-            if (gen === countGen) {
-              showCount = n;
-              countFailed = false;
-            }
-          })
-          .catch(() => {
-            if (gen === countGen) countFailed = true;
-          });
-      }, 200);
+    } else {
+      // No distribution to fetch (a personal filter is staged): a request that was in
+      // flight is now outdated by `gen`, so nothing would ever clear its spinner or its
+      // figure — leave neither behind.
+      loading = false;
+      liveCounts = null;
+      if (previewCount) {
+        const pc = previewCount;
+        t = setTimeout(() => {
+          pc(params)
+            .then((n) => {
+              if (gen === countGen) {
+                showCount = n;
+                countFailed = false;
+              }
+            })
+            .catch(() => {
+              if (gen === countGen) countFailed = true;
+            });
+        }, 200);
+      }
     }
     return () => clearTimeout(t);
   });
@@ -262,7 +265,6 @@
 
   function clearAll() {
     staged.clear();
-    onClear?.();
   }
 
   function selectionOf(hit: FilterSearchHit) {
@@ -275,7 +277,8 @@
 {#if open}
   <div class="fixed inset-0 z-50 flex items-stretch justify-center sm:items-center sm:p-6">
     <!-- backdrop -->
-    <button class="absolute inset-0 animate-modal-fade bg-foreground/35" aria-label="Close filters" onclick={onClose}></button>
+    <button class="absolute inset-0 animate-modal-fade bg-foreground/35" aria-label="Close filters" onclick={onClose}
+    ></button>
 
     <div
       class={[
@@ -346,11 +349,16 @@
              gives the pane 232px instead of 200px, and its search field and pills need it
              more than the rail does. Labels wrap to a second line rather than truncate,
              which at that width they would ("Work & employme…"). -->
-        <nav aria-label="Filter sections" class="w-32 shrink-0 overflow-y-auto overscroll-contain border-r border-border py-2 sm:w-56">
+        <nav
+          aria-label="Filter sections"
+          class="w-32 shrink-0 overflow-y-auto overscroll-contain border-r border-border py-2 sm:w-56"
+        >
           {#each sections as section (section)}
             {@const entries = rail.filter((e) => e.section === section)}
             {#if entries.length}
-              <div class="px-2.5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:px-3">{section}</div>
+              <div class="px-2.5 pb-1 pt-3 text-xs font-semibold text-muted-foreground sm:px-3">
+                {section.charAt(0) + section.slice(1).toLowerCase()}
+              </div>
               {#each entries as e (e.key)}
                 {@const n = entryCount(e)}
                 <button
@@ -368,7 +376,7 @@
                   {#if n > 0}
                     <span
                       class={[
-                        'shrink-0 rounded-full px-1.5 text-[11px] font-semibold',
+                        'shrink-0 rounded-full px-1.5 text-xs font-semibold',
                         shownKey === e.key ? 'bg-brand text-brand-foreground' : 'bg-secondary text-muted-foreground',
                       ]}><span aria-hidden="true">{n}</span><span class="sr-only">, {n} selected</span></span
                     >
@@ -421,13 +429,14 @@
             type="button"
             onclick={runApply}
             disabled={applyDisabled || applyBusy}
-            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand px-6 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand px-6 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
           >
             {#if applyLabel}
               {applyBusy ? 'Saving…' : applyLabel}
               {#if !applyBusy}<ArrowRight class="size-4" aria-hidden="true" />{/if}
             {:else if loading}
-              Show <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /><span class="sr-only">(counting)</span> jobs
+              Show <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /><span class="sr-only">(counting)</span
+              > jobs
             {:else}
               {showLabel}
               <ArrowRight class="size-4" aria-hidden="true" />

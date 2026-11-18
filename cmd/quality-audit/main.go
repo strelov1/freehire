@@ -40,21 +40,17 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// textfileName is the collector file this worker owns — deliberately NOT <binary>.prom, which
-// worker.Main overwrites with the run outcome after run returns (the same reason queue-metrics
-// publishes as freehire-pipeline.prom).
+// textfileName is the collector file this worker owns; not <binary>.prom, which worker.Main
+// overwrites with the run outcome.
 const textfileName = "freehire-quality-audit.prom"
 
 const (
-	// remoteWindow is how far back the remote gauges reach. One week judges ~10 sources ~20
-	// postings each; eight weeks lets a large source, drawn most weeks, accumulate a sample that
-	// is a precision rather than an anecdote.
+	// remoteWindow is how far back the remote gauges reach, so a large source accumulates a
+	// meaningful sample across weeks.
 	remoteWindow = 56 * 24 * time.Hour
-	// minRemote is the fewest open remote postings a source needs to be drawn at all: below it
-	// a sample of 20 is most of the source, and the source is not where visitors meet remote work.
+	// minRemote is the fewest open remote postings a source needs to be drawn at all.
 	minRemote = 50
-	// oversample sizes the Bernoulli pre-filter of a sample query at a few times the sample, so
-	// it almost never comes back short and still sorts only a few dozen rows.
+	// oversample sizes the Bernoulli pre-filter at a few times the sample so it rarely comes back short.
 	oversample = 4
 	// probeTimeout bounds one request, redirects included.
 	probeTimeout = 15 * time.Second
@@ -112,8 +108,8 @@ func run() int {
 		return 1
 	}
 
-	// The judge runs on the SERVICE credential: this is ownerless background work, so no user's
-	// key is resolved and the paid-AI gate does not apply. It is tagged so its spend reads apart.
+	// The judge runs on the service credential: ownerless background work, so no user key and no
+	// paid-AI gate. Tagged so its spend reads apart.
 	var model qualityaudit.JSONModel
 	if lcfg := config.LoadLLM(); lcfg.Require() == nil {
 		client, flush, err := llm.NewClient(lcfg.Settings(lcfg.Model), judgeFeature)
@@ -124,8 +120,7 @@ func run() int {
 		defer flush()
 		model = client.As("", nil, llm.Feature(judgeFeature))
 	} else {
-		// The remote gauges keep publishing the stored window; their timestamp going stale is
-		// what an alert sees.
+		// The remote gauges keep publishing the stored window; a stale timestamp is what alerts see.
 		log.Print("quality-audit: LLM_* not configured, the remote check is skipped this run")
 	}
 
@@ -181,7 +176,7 @@ func run() int {
 }
 
 // auditLiveness samples every eligible source, probes the sample and tallies it. Every eligible
-// source is in the tally, sampled or not, so a source whose sample came back empty still says so.
+// source is in the tally, so one whose sample came back empty still says so.
 func auditLiveness(ctx context.Context, q *db.Queries, k knobs) (map[string]qualityaudit.LivenessCounts, error) {
 	sources, err := q.ListLivenessAuditSources(ctx, k.minOpen)
 	if err != nil {
@@ -221,7 +216,7 @@ func auditLiveness(ctx context.Context, q *db.Queries, k knobs) (map[string]qual
 	for _, r := range results {
 		switch r.Outcome {
 		case qualityaudit.Dead:
-			// The drill-down: every posting shown while its source says it is gone.
+			// Drill-down: a posting still shown while its source says it is gone.
 			log.Printf("quality-audit: dead %s %s %s", r.Posting.Source, r.Posting.Slug, r.Posting.URL)
 		case qualityaudit.Unmeasured:
 			reasons[r.Reason]++
@@ -243,65 +238,87 @@ func auditLiveness(ctx context.Context, q *db.Queries, k knobs) (map[string]qual
 	return tally, nil
 }
 
+type remoteAuditQueries interface {
+	CountOpenRemoteJobsBySource(context.Context, int64) ([]db.CountOpenRemoteJobsBySourceRow, error)
+	SampleRemoteAuditJobs(context.Context, db.SampleRemoteAuditJobsParams) ([]db.SampleRemoteAuditJobsRow, error)
+	InsertRemoteAuditJudgement(context.Context, db.InsertRemoteAuditJudgementParams) error
+}
+
 // auditRemote judges the week's sample and stores each judgement, returning how many postings
 // could not be judged or stored.
-func auditRemote(ctx context.Context, q *db.Queries, model qualityaudit.JSONModel, k knobs, dryRun bool) int {
+func auditRemote(ctx context.Context, q remoteAuditQueries, model qualityaudit.JSONModel, k knobs, dryRun bool) int {
 	counts, err := q.CountOpenRemoteJobsBySource(ctx, minRemote)
 	if err != nil {
 		log.Printf("quality-audit: remote: count: %v", err)
 		return 1
 	}
-	weights := make([]qualityaudit.SourceWeight, 0, len(counts))
-	for _, c := range counts {
-		weights = append(weights, qualityaudit.SourceWeight{Source: c.Source, Weight: c.RemoteJobs})
-	}
-	picks := int(max(k.remoteMax/k.remotePerSource, 1))
-	chosen := qualityaudit.ChooseSources(weights, picks, rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())))
-	log.Printf("quality-audit: remote: judging up to %d postings each of %d sources", k.remotePerSource, len(chosen))
 
 	failed, judged := 0, 0
-	for _, pick := range chosen {
-		src := pick.Source
-		rows, err := q.SampleRemoteAuditJobs(ctx, db.SampleRemoteAuditJobsParams{
-			Source:   src,
-			Fraction: fraction(int64(k.remotePerSource), pick.Weight),
-			MaxRows:  k.remotePerSource,
-		})
-		if err != nil {
-			log.Printf("quality-audit: remote: sample %s: %v", src, err)
-			failed++
-			continue
+	usedBySource := map[string]int32{}
+	for _, stratum := range remoteStrata(counts, k.remoteMax) {
+		// Global runs first; its unused allocation remains available to the remote sample.
+		if !stratum.global {
+			stratum.budget = k.remoteMax - int32(judged)
 		}
-		verdicts := map[string]int{}
-		for _, r := range rows {
-			if ctx.Err() != nil || judged >= int(k.remoteMax) {
+		chosen := qualityaudit.ChooseSources(stratum.weights, len(stratum.weights), rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())))
+		log.Printf("quality-audit: remote: global=%t budget=%d sources=%d", stratum.global, stratum.budget, len(chosen))
+		stratumJudged := int32(0)
+		for _, pick := range chosen {
+			if ctx.Err() != nil {
+				return failed + 1
+			}
+			if judged >= int(k.remoteMax) || stratumJudged >= stratum.budget {
 				break
 			}
-			judged++
-			j, err := qualityaudit.JudgeRemote(ctx, model, qualityaudit.RemotePosting{
-				ID: r.ID, Title: r.Title, Location: r.Location, Description: r.Description,
+			src := pick.Source
+			capacity := min(k.remotePerSource-usedBySource[src], stratum.budget-stratumJudged)
+			if capacity <= 0 {
+				continue
+			}
+			rows, err := q.SampleRemoteAuditJobs(ctx, db.SampleRemoteAuditJobsParams{
+				Source:     src,
+				Fraction:   fraction(int64(capacity), pick.Weight),
+				MaxRows:    capacity,
+				OnlyGlobal: stratum.global,
 			})
 			if err != nil {
-				log.Printf("quality-audit: remote: %s %s: %v", src, r.PublicSlug, err)
+				log.Printf("quality-audit: remote: sample %s: %v", src, err)
 				failed++
 				continue
 			}
-			verdicts[j.WorkMode]++
-			if j.WorkMode == qualityaudit.ModeHybrid || j.WorkMode == qualityaudit.ModeOnsite ||
-				(r.TaggedGlobal && j.Worldwide == qualityaudit.WorldwideNo) {
-				log.Printf("quality-audit: remote: %s %s reads %s, worldwide %s", src, r.PublicSlug, j.WorkMode, j.Worldwide)
+			verdicts := map[string]int{}
+			for _, r := range rows {
+				if ctx.Err() != nil || judged >= int(k.remoteMax) || stratumJudged >= stratum.budget {
+					break
+				}
+				judged++
+				stratumJudged++
+				usedBySource[src]++
+				j, err := qualityaudit.JudgeRemote(ctx, model, qualityaudit.RemotePosting{
+					ID: r.ID, Title: r.Title, Location: r.Location, Description: r.Description,
+				})
+				if err != nil {
+					log.Printf("quality-audit: remote: %s %s: %v", src, r.PublicSlug, err)
+					failed++
+					continue
+				}
+				verdicts[j.WorkMode]++
+				if j.WorkMode == qualityaudit.ModeHybrid || j.WorkMode == qualityaudit.ModeOnsite ||
+					(r.TaggedGlobal && j.Worldwide == qualityaudit.WorldwideNo) {
+					log.Printf("quality-audit: remote: %s %s reads %s, worldwide %s; work_mode_quote=%q worldwide_quote=%q", src, r.PublicSlug, j.WorkMode, j.Worldwide, j.WorkModeQuote, j.WorldwideQuote)
+				}
+				if dryRun {
+					continue
+				}
+				if err := q.InsertRemoteAuditJudgement(ctx, db.InsertRemoteAuditJudgementParams{
+					JobID: r.ID, Source: src, WorkMode: j.WorkMode, Worldwide: j.Worldwide, TaggedGlobal: r.TaggedGlobal,
+				}); err != nil {
+					log.Printf("quality-audit: remote: store %s: %v", r.PublicSlug, err)
+					failed++
+				}
 			}
-			if dryRun {
-				continue
-			}
-			if err := q.InsertRemoteAuditJudgement(ctx, db.InsertRemoteAuditJudgementParams{
-				JobID: r.ID, Source: src, WorkMode: j.WorkMode, Worldwide: j.Worldwide, TaggedGlobal: r.TaggedGlobal,
-			}); err != nil {
-				log.Printf("quality-audit: remote: store %s: %v", r.PublicSlug, err)
-				failed++
-			}
+			log.Printf("quality-audit: remote: %s %v", src, verdicts)
 		}
-		log.Printf("quality-audit: remote: %s %v", src, verdicts)
 	}
 	return failed
 }

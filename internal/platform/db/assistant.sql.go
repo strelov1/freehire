@@ -76,10 +76,97 @@ func (q *Queries) AppendAssistantMessage(ctx context.Context, arg AppendAssistan
 	return i, err
 }
 
+const claimSupportEscalation = `-- name: ClaimSupportEscalation :execrows
+UPDATE assistant_sessions
+SET escalated_at = now()
+WHERE id = $1 AND user_id = $2 AND preset = 'support' AND escalated_at IS NULL
+`
+
+type ClaimSupportEscalationParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
+}
+
+// The claim for the one handover email a support session may send: stamps escalated_at only
+// while it is unset, for the owner's own support session. 0 rows means somebody else already
+// holds the claim (or the session is not the caller's).
+func (q *Queries) ClaimSupportEscalation(ctx context.Context, arg ClaimSupportEscalationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, claimSupportEscalation, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const countSupportEscalationsSince = `-- name: CountSupportEscalationsSince :one
+SELECT count(*)
+FROM assistant_sessions
+WHERE user_id = $1 AND escalated_at >= $2
+`
+
+type CountSupportEscalationsSinceParams struct {
+	UserID      int64              `json:"user_id"`
+	EscalatedAt pgtype.Timestamptz `json:"escalated_at"`
+}
+
+// How many handovers this account has made since the given instant, for the daily cap.
+func (q *Queries) CountSupportEscalationsSince(ctx context.Context, arg CountSupportEscalationsSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSupportEscalationsSince, arg.UserID, arg.EscalatedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createAssistantSearchSession = `-- name: CreateAssistantSearchSession :one
+INSERT INTO assistant_sessions (id, user_id, preset, search_query)
+VALUES ($1, $2, 'chat', $3)
+ON CONFLICT (id) DO NOTHING
+RETURNING id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
+`
+
+type CreateAssistantSearchSessionParams struct {
+	ID          uuid.UUID   `json:"id"`
+	UserID      int64       `json:"user_id"`
+	SearchQuery pgtype.Text `json:"search_query"`
+}
+
+type CreateAssistantSearchSessionRow struct {
+	ID             uuid.UUID          `json:"id"`
+	UserID         int64              `json:"user_id"`
+	Preset         string             `json:"preset"`
+	Label          pgtype.Text        `json:"label"`
+	CvID           *uuid.UUID         `json:"cv_id"`
+	JobID          *int64             `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SearchQuery    pgtype.Text        `json:"search_query"`
+	SelectionBrief string             `json:"selection_brief"`
+}
+
+// A client-generated request id makes retrying session creation idempotent. A conflict
+// never overwrites the owner or initial search; the caller reads and compares instead.
+func (q *Queries) CreateAssistantSearchSession(ctx context.Context, arg CreateAssistantSearchSessionParams) (CreateAssistantSearchSessionRow, error) {
+	row := q.db.QueryRow(ctx, createAssistantSearchSession, arg.ID, arg.UserID, arg.SearchQuery)
+	var i CreateAssistantSearchSessionRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Preset,
+		&i.Label,
+		&i.CvID,
+		&i.JobID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SearchQuery,
+		&i.SelectionBrief,
+	)
+	return i, err
+}
+
 const createAssistantSession = `-- name: CreateAssistantSession :one
 INSERT INTO assistant_sessions (user_id, preset, cv_id, job_id)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, preset, label, cv_id, job_id, created_at, updated_at
+RETURNING id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
 `
 
 type CreateAssistantSessionParams struct {
@@ -90,14 +177,16 @@ type CreateAssistantSessionParams struct {
 }
 
 type CreateAssistantSessionRow struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    int64              `json:"user_id"`
-	Preset    string             `json:"preset"`
-	Label     pgtype.Text        `json:"label"`
-	CvID      *uuid.UUID         `json:"cv_id"`
-	JobID     *int64             `json:"job_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID             uuid.UUID          `json:"id"`
+	UserID         int64              `json:"user_id"`
+	Preset         string             `json:"preset"`
+	Label          pgtype.Text        `json:"label"`
+	CvID           *uuid.UUID         `json:"cv_id"`
+	JobID          *int64             `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SearchQuery    pgtype.Text        `json:"search_query"`
+	SelectionBrief string             `json:"selection_brief"`
 }
 
 // Start a conversation for a user. preset selects the prompt and tool set ('chat' or
@@ -120,6 +209,8 @@ func (q *Queries) CreateAssistantSession(ctx context.Context, arg CreateAssistan
 		&i.JobID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SearchQuery,
+		&i.SelectionBrief,
 	)
 	return i, err
 }
@@ -165,7 +256,7 @@ func (q *Queries) GetAssistantNarratedEvent(ctx context.Context, arg GetAssistan
 }
 
 const getAssistantSession = `-- name: GetAssistantSession :one
-SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
 FROM assistant_sessions
 WHERE id = $1 AND user_id = $2
 `
@@ -176,14 +267,16 @@ type GetAssistantSessionParams struct {
 }
 
 type GetAssistantSessionRow struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    int64              `json:"user_id"`
-	Preset    string             `json:"preset"`
-	Label     pgtype.Text        `json:"label"`
-	CvID      *uuid.UUID         `json:"cv_id"`
-	JobID     *int64             `json:"job_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID             uuid.UUID          `json:"id"`
+	UserID         int64              `json:"user_id"`
+	Preset         string             `json:"preset"`
+	Label          pgtype.Text        `json:"label"`
+	CvID           *uuid.UUID         `json:"cv_id"`
+	JobID          *int64             `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SearchQuery    pgtype.Text        `json:"search_query"`
+	SelectionBrief string             `json:"selection_brief"`
 }
 
 // One session owned by the caller. Owner-scoped: a foreign or missing id returns no row,
@@ -200,12 +293,14 @@ func (q *Queries) GetAssistantSession(ctx context.Context, arg GetAssistantSessi
 		&i.JobID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SearchQuery,
+		&i.SelectionBrief,
 	)
 	return i, err
 }
 
 const getAssistantSessionForJob = `-- name: GetAssistantSessionForJob :one
-SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
 FROM assistant_sessions
 WHERE user_id = $1 AND preset = $2 AND job_id = $3
 ORDER BY created_at DESC
@@ -219,14 +314,16 @@ type GetAssistantSessionForJobParams struct {
 }
 
 type GetAssistantSessionForJobRow struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    int64              `json:"user_id"`
-	Preset    string             `json:"preset"`
-	Label     pgtype.Text        `json:"label"`
-	CvID      *uuid.UUID         `json:"cv_id"`
-	JobID     *int64             `json:"job_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID             uuid.UUID          `json:"id"`
+	UserID         int64              `json:"user_id"`
+	Preset         string             `json:"preset"`
+	Label          pgtype.Text        `json:"label"`
+	CvID           *uuid.UUID         `json:"cv_id"`
+	JobID          *int64             `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SearchQuery    pgtype.Text        `json:"search_query"`
+	SelectionBrief string             `json:"selection_brief"`
 }
 
 // The caller's most recent session of one preset bound to one vacancy. Used to reopen the
@@ -244,26 +341,78 @@ func (q *Queries) GetAssistantSessionForJob(ctx context.Context, arg GetAssistan
 		&i.JobID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SearchQuery,
+		&i.SelectionBrief,
+	)
+	return i, err
+}
+
+const getEmptyAssistantSession = `-- name: GetEmptyAssistantSession :one
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
+FROM assistant_sessions s
+WHERE s.user_id = $1 AND s.preset = $2
+  AND NOT EXISTS (SELECT 1 FROM assistant_messages m WHERE m.session_id = s.id AND m.role = 'user')
+ORDER BY s.created_at DESC
+LIMIT 1
+`
+
+type GetEmptyAssistantSessionParams struct {
+	UserID int64  `json:"user_id"`
+	Preset string `json:"preset"`
+}
+
+type GetEmptyAssistantSessionRow struct {
+	ID             uuid.UUID          `json:"id"`
+	UserID         int64              `json:"user_id"`
+	Preset         string             `json:"preset"`
+	Label          pgtype.Text        `json:"label"`
+	CvID           *uuid.UUID         `json:"cv_id"`
+	JobID          *int64             `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SearchQuery    pgtype.Text        `json:"search_query"`
+	SelectionBrief string             `json:"selection_brief"`
+}
+
+// The caller's newest session of one preset that has not received a message yet. The support
+// panel reuses it instead of minting another, which bounds the sessions an account can create
+// by the messages it actually sent. Owner-scoped like every other read in this file.
+func (q *Queries) GetEmptyAssistantSession(ctx context.Context, arg GetEmptyAssistantSessionParams) (GetEmptyAssistantSessionRow, error) {
+	row := q.db.QueryRow(ctx, getEmptyAssistantSession, arg.UserID, arg.Preset)
+	var i GetEmptyAssistantSessionRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Preset,
+		&i.Label,
+		&i.CvID,
+		&i.JobID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SearchQuery,
+		&i.SelectionBrief,
 	)
 	return i, err
 }
 
 const listAssistantChatSessions = `-- name: ListAssistantChatSessions :many
-SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
 FROM assistant_sessions
 WHERE user_id = $1 AND preset IN ('chat', 'profile', 'interview', 'debrief')
 ORDER BY updated_at DESC, id DESC
 `
 
 type ListAssistantChatSessionsRow struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    int64              `json:"user_id"`
-	Preset    string             `json:"preset"`
-	Label     pgtype.Text        `json:"label"`
-	CvID      *uuid.UUID         `json:"cv_id"`
-	JobID     *int64             `json:"job_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID             uuid.UUID          `json:"id"`
+	UserID         int64              `json:"user_id"`
+	Preset         string             `json:"preset"`
+	Label          pgtype.Text        `json:"label"`
+	CvID           *uuid.UUID         `json:"cv_id"`
+	JobID          *int64             `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SearchQuery    pgtype.Text        `json:"search_query"`
+	SelectionBrief string             `json:"selection_brief"`
 }
 
 // The caller's session rail: their unbound conversations, most recently active first.
@@ -304,6 +453,8 @@ func (q *Queries) ListAssistantChatSessions(ctx context.Context, userID int64) (
 			&i.JobID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SearchQuery,
+			&i.SelectionBrief,
 		); err != nil {
 			return nil, err
 		}
@@ -404,6 +555,57 @@ func (q *Queries) ListRecentAssistantMessages(ctx context.Context, arg ListRecen
 	return items, nil
 }
 
+const lockAssistantSessionCreation = `-- name: LockAssistantSessionCreation :exec
+SELECT pg_advisory_xact_lock(hashtextextended('assistant_session_create:' || $1::bigint::text, 0))
+`
+
+// Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
+func (q *Queries) LockAssistantSessionCreation(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, lockAssistantSessionCreation, userID)
+	return err
+}
+
+const rateSupportSession = `-- name: RateSupportSession :execrows
+UPDATE assistant_sessions
+SET helpful = $3
+WHERE id = $1 AND user_id = $2 AND preset = 'support'
+  AND EXISTS (SELECT 1 FROM assistant_messages m WHERE m.session_id = $1 AND m.role = 'assistant')
+`
+
+type RateSupportSessionParams struct {
+	ID      uuid.UUID   `json:"id"`
+	UserID  int64       `json:"user_id"`
+	Helpful pgtype.Bool `json:"helpful"`
+}
+
+// The owner's verdict on their own support conversation, only once it holds a reply: a blank
+// session is handed back on the next create, so a vote on it would land on a conversation not
+// yet had. 0 rows means not theirs, not support, or nothing answered yet.
+func (q *Queries) RateSupportSession(ctx context.Context, arg RateSupportSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, rateSupportSession, arg.ID, arg.UserID, arg.Helpful)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const releaseSupportEscalation = `-- name: ReleaseSupportEscalation :exec
+UPDATE assistant_sessions
+SET escalated_at = NULL
+WHERE id = $1 AND user_id = $2 AND preset = 'support'
+`
+
+type ReleaseSupportEscalationParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
+}
+
+// Gives the claim back when the email could not be sent, so a retry can take it.
+func (q *Queries) ReleaseSupportEscalation(ctx context.Context, arg ReleaseSupportEscalationParams) error {
+	_, err := q.db.Exec(ctx, releaseSupportEscalation, arg.ID, arg.UserID)
+	return err
+}
+
 const setAssistantSessionLabel = `-- name: SetAssistantSessionLabel :exec
 UPDATE assistant_sessions
 SET label = $3
@@ -443,4 +645,25 @@ type TouchAssistantSessionParams struct {
 func (q *Queries) TouchAssistantSession(ctx context.Context, arg TouchAssistantSessionParams) error {
 	_, err := q.db.Exec(ctx, touchAssistantSession, arg.ID, arg.UserID)
 	return err
+}
+
+const updateAssistantSelectionBrief = `-- name: UpdateAssistantSelectionBrief :execrows
+UPDATE assistant_sessions
+SET selection_brief = $3, updated_at = now()
+WHERE id = $1 AND user_id = $2 AND search_query IS NOT NULL
+`
+
+type UpdateAssistantSelectionBriefParams struct {
+	ID             uuid.UUID `json:"id"`
+	UserID         int64     `json:"user_id"`
+	SelectionBrief string    `json:"selection_brief"`
+}
+
+// Only the owner can update preferences, and never the immutable initial search.
+func (q *Queries) UpdateAssistantSelectionBrief(ctx context.Context, arg UpdateAssistantSelectionBriefParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateAssistantSelectionBrief, arg.ID, arg.UserID, arg.SelectionBrief)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

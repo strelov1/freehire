@@ -11,9 +11,8 @@ import (
 
 // potok adapts the public career pages Potok (potok.io), a Russian ATS, hosts per tenant at
 // <board>.potok.io/open/jobs/. The page is server-rendered Lever-clone markup and lists the
-// tenant's WHOLE open set in one response — no pagination (the largest tenant, 629 postings, is
-// one 560 KB page). Each row carries id, title, city and the group it is filed under, but no
-// body: that lives only on the posting page /open/jobs/<id>, which has no JSON-LD, so this is a
+// tenant's WHOLE open set in one response — no pagination. Each row carries id, title, city and
+// the group it is filed under, but no body: that lives only on the posting page /open/jobs/<id>, which has no JSON-LD, so this is a
 // HydratingSource that fetches a posting page only for a posting the catalogue lacks.
 //
 // Neither page states a salary or a publish date. The posting page adds one structured field the
@@ -66,8 +65,7 @@ func (s potok) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 // FetchNew fetches a posting page only for a posting the catalogue does not already have. A seen
 // posting yields its list-only job flagged SeenRefresh, so the pipeline refreshes liveness without
-// a request or a rewrite of the body hydrated when it was new. The title travels with it so the
-// refresh path can re-apply the catalogue filter.
+// a request or a rewrite of the body hydrated when it was new.
 func (s potok) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	postings, err := s.list(ctx, e)
 	if err != nil {

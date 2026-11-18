@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  cvContext,
-  filtersFromInterpretation,
-  limitToRequestedCountries,
-  planParams,
-  planPreview,
-} from './aiFilter';
+import { cvContext, filtersFromInterpretation, limitToRequestedCountries, planParams, planPreview } from './aiFilter';
 import type { Interpretation } from './types';
 import { filtersToParams } from './facetModel';
 
@@ -35,9 +29,7 @@ describe('filtersFromInterpretation', () => {
   // Mirror the rule the profile seed and the URL parser already share, rather than
   // inventing a third answer: the two must never self-cancel into an empty filter.
   it('keeps a value wanted when it is somehow both wanted and avoided', () => {
-    const f = filtersFromInterpretation(
-      interpretation({ facets: { skills: ['go'] }, exclude: { skills: ['go'] } }),
-    );
+    const f = filtersFromInterpretation(interpretation({ facets: { skills: ['go'] }, exclude: { skills: ['go'] } }));
     expect(f.facets.skills?.include).toEqual(['go']);
     expect(f.facets.skills?.exclude ?? []).toEqual([]);
   });
@@ -115,9 +107,7 @@ describe('limitToRequestedCountries', () => {
   const counts = { br: 799, mx: 54, us: 50 };
 
   it('keeps only the countries the plan names, largest first', () => {
-    expect(limitToRequestedCountries(counts, interpretation({ facets: { countries: ['br'] } }))).toEqual([
-      ['br', 799],
-    ]);
+    expect(limitToRequestedCountries(counts, interpretation({ facets: { countries: ['br'] } }))).toEqual([['br', 799]]);
   });
 
   it('keeps every country, largest first, when the plan names none', () => {
@@ -144,9 +134,7 @@ describe('planPreview', () => {
   });
 
   it('draws an excluded value struck, and an included one wins over its exclusion', () => {
-    const groups = planPreview(
-      interpretation({ facets: { skills: ['go'] }, exclude: { skills: ['go', 'php'] } }),
-    );
+    const groups = planPreview(interpretation({ facets: { skills: ['go'] }, exclude: { skills: ['go', 'php'] } }));
     const chips = groups.flatMap((g) => g.chips).filter((c) => c.key.startsWith('skills:'));
     expect(chips.map((c) => [c.key, c.exclude])).toEqual([
       ['skills:go', false],
@@ -155,9 +143,7 @@ describe('planPreview', () => {
   });
 
   it('adds the scalar bounds with the shared labels', () => {
-    const groups = planPreview(
-      interpretation({ query: 'designer', salary_min: 90000, visa_sponsorship: true }),
-    );
+    const groups = planPreview(interpretation({ query: 'designer', salary_min: 90000, visa_sponsorship: true }));
     expect(groups.map((g) => [g.label, g.chips[0]?.text])).toEqual([
       ['Search', 'designer'],
       ['Salary', '90,000+'],

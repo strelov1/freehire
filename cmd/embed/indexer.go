@@ -9,13 +9,9 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// searchIndexer adapts the search client to embed.Indexer: compute each open job's
-// pgvector-backed chunk embeddings. It works directly off the raw db.Job rows — no
-// search.JobDocument is built, no search index is written or read here. (An earlier
-// revision of this adapter also computed a legacy single-vector embedding via
-// search.Client.EmbedJobs, persisted to jobs.semantic_embedding; that write was
-// removed once nothing was left reading the column — job_semantic_chunks is the
-// queryable representation now. See openspec/changes/drop-hybrid-search-pgvector-similar.)
+// searchIndexer adapts the search client to embed.Indexer: it computes each open job's
+// pgvector-backed chunk embeddings from raw db.Job rows. No search.JobDocument is built and no
+// search index is touched.
 type searchIndexer struct {
 	client *search.Client
 }

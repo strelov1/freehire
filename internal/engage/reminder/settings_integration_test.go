@@ -56,7 +56,7 @@ func TestSettings_DeliveryTimingRoundTrips(t *testing.T) {
 	}
 }
 
-func TestSettings_AbsentRowDefaultsToInstant(t *testing.T) {
+func TestSettings_AbsentRowDefaultsToDailyAtNine(t *testing.T) {
 	pool := testdb.Pool(t)
 	queries := db.New(pool)
 	ctx := context.Background()
@@ -68,8 +68,8 @@ func TestSettings_AbsentRowDefaultsToInstant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSettings: %v", err)
 	}
-	if got.DigestFrequency != "instant" {
-		t.Errorf("DigestFrequency = %q, want %q for a never-configured account", got.DigestFrequency, "instant")
+	if got.DigestFrequency != "daily" || got.DigestTime == nil || *got.DigestTime != 9*time.Hour {
+		t.Errorf("digest = %q at %v, want daily at 9h for a never-configured account", got.DigestFrequency, got.DigestTime)
 	}
 	if got.QuietHoursStart != nil || got.QuietHoursEnd != nil {
 		t.Errorf("quiet hours = %v/%v, want both nil (off) by default", got.QuietHoursStart, got.QuietHoursEnd)

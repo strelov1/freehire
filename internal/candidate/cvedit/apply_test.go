@@ -351,3 +351,19 @@ func TestARefusedRemovalListsTheBulletsItCouldHaveMeant(t *testing.T) {
 		}
 	}
 }
+
+// On prod the agent kept inserting at `experience[0].bullets` (no index) and got back only
+// "does not name a position in a list"; the refusal now hands it the append index.
+func TestAnInsertAtABareListNamesTheAppendIndex(t *testing.T) {
+	_, _, err := Apply(sample(), []Op{
+		{Kind: OpInsert, Path: mustParse(t, "experience[0].bullets"), Value: "x"},
+	})
+	if err == nil {
+		t.Fatal("Apply inserted at a path that names no position")
+	}
+	for _, want := range []string{`"experience[0].bullets[2]" to add at the end`, `[1] "Twice"`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
+	}
+}

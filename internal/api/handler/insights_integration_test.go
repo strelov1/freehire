@@ -64,32 +64,32 @@ func rebuildInsightsForTest(t *testing.T, ctx context.Context, q *db.Queries) {
 		}
 	}
 	mustExec(q.DeleteAllInsightsRoleStats(ctx))
-	_, err := q.RebuildInsightsRoleStatsGlobal(ctx, prev)
+	_, err := materializeInsightsRoleStatsGlobal(q)(ctx, prev)
 	mustExec(err)
-	_, err = q.RebuildInsightsRoleStatsByCountry(ctx, prev)
+	_, err = materializeInsightsRoleStatsByCountry(q)(ctx, prev)
 	mustExec(err)
 	mustExec(q.DeleteAllInsightsSkillStats(ctx))
-	_, err = q.RebuildInsightsSkillStatsGlobal(ctx, prev)
+	_, err = materializeInsightsSkillStatsGlobal(q)(ctx, prev)
 	mustExec(err)
-	_, err = q.RebuildInsightsSkillStatsByCategory(ctx, prev)
+	_, err = materializeInsightsSkillStatsByCategory(q)(ctx, prev)
 	mustExec(err)
-	_, err = q.RebuildInsightsSkillStatsByCountry(ctx, prev)
+	_, err = materializeInsightsSkillStatsByCountry(q)(ctx, prev)
 	mustExec(err)
 	// Per-role skill demand at a floor of 2, and its denominator — which takes no floor,
 	// or a surviving share would have nothing to divide by.
 	mustExec(q.DeleteAllInsightsRoleSkillStats(ctx))
-	_, err = q.RebuildInsightsRoleSkillStats(ctx, 2)
+	_, err = materializeInsightsRoleSkillStats(q)(ctx, 2)
 	mustExec(err)
 	mustExec(q.DeleteAllInsightsRoleSkillSample(ctx))
-	_, err = q.RebuildInsightsRoleSkillSample(ctx)
+	_, err = materializeInsightsRoleSkillSample(q)(ctx)
 	mustExec(err)
 	mustExec(q.DeleteAllInsightsSalaryStats(ctx))
-	_, err = q.RebuildInsightsSalaryStatsGlobal(ctx, 1) // min sample 1 so a small band survives
+	_, err = materializeInsightsSalaryStatsGlobal(q)(ctx, 1) // min sample 1 so a small band survives
 	mustExec(err)
-	_, err = q.RebuildInsightsSalaryStatsByCountry(ctx, 1)
+	_, err = materializeInsightsSalaryStatsByCountry(q)(ctx, 1)
 	mustExec(err)
 	mustExec(q.DeleteAllInsightsVelocityDaily(ctx))
-	_, err = q.RebuildInsightsVelocityDaily(ctx)
+	_, err = materializeInsightsVelocityDaily(q)(ctx)
 	mustExec(err)
 }
 
@@ -129,10 +129,10 @@ func TestInsightsEndpoints(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/roles", h.InsightsRoles)
-	app.Get("/api/v1/insights/skills", h.InsightsSkills)
-	app.Get("/api/v1/insights/velocity", h.InsightsVelocity)
-	app.Get("/api/v1/insights/salary", h.InsightsSalary)
+	app.Get("/api/v1/insights/roles", statsContract(h))
+	app.Get("/api/v1/insights/skills", statsContract(h))
+	app.Get("/api/v1/insights/velocity", statsContract(h))
+	app.Get("/api/v1/insights/salary", statsContract(h))
 
 	get := func(t *testing.T, path string) (map[string]any, string, int) {
 		t.Helper()
@@ -315,7 +315,7 @@ func TestInsightsRoleSkillsEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/roles", h.InsightsRoles)
+	app.Get("/api/v1/insights/roles", statsContract(h))
 
 	get := func(t *testing.T, path string) (map[string]any, string, int) {
 		t.Helper()
@@ -474,7 +474,7 @@ func TestInsightsRoleCoverage(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/roles", auth.OptionalAuth(iss, testVersions, apiKeys{q}), h.InsightsRoles)
+	app.Get("/api/v1/insights/roles", auth.OptionalAuth(iss, testVersions, apiKeys{q}), statsContract(h))
 
 	const path = "/api/v1/insights/roles?category=backend&seniority=senior"
 	// as issues the request with an optional session cookie; an empty token is the

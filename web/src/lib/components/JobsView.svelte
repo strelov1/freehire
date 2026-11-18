@@ -1,96 +1,56 @@
 <script lang="ts">
-  import { onMount, untrack, type Snippet } from 'svelte';
-  import { ArrowRight, ChevronDown, Layers, Map as MapIcon, Target } from '@lucide/svelte';
+  import { onMount, untrack } from 'svelte';
   import { browser } from '$app/env';
-  import { afterNavigate, goto, replaceState } from '$app/navigation';
+  import { goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { api, type Slice } from '#lib/api.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { api } from '#lib/api.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { PUBLIC_OPEN_WITHIN } from '$app/env/public';
   import { openWithinEnabled } from '#lib/features.js';
-  import { computeClientMatch } from '#lib/jobMatch.js';
   import { ensureViewedLoaded } from '#lib/viewedJobs.svelte.js';
   import { ensureSavedLoaded } from '#lib/savedJobs.svelte.js';
   import { ensureAppliedCompaniesLoaded } from '#lib/appliedCompanies.svelte.js';
-  import { ensureDismissedLoaded, isDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
-  import { latestOnly } from '#lib/latestOnly.js';
+  import { ensureDismissedLoaded, isDismissed } from '#lib/dismissedJobs.svelte.js';
   import { Paginator } from '#lib/paginated.svelte.js';
   import { pageCount, pageOffset, resumePage } from '#lib/pagination.js';
   import Pagination from './Pagination.svelte';
+  import JobsEmptyState from './JobsEmptyState.svelte';
   import {
     FilterStore,
     filtersToParams,
     matchSortNeedsSkills,
     selectedSortFor,
-    sortOptionsFor,
-    type JobSort,
     activeFilterCount,
     displayQuery,
   } from '#lib/filters.js';
-  import { freshnessOptions } from '#lib/filterControls.js';
-  import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '#lib/filterStorage.js';
-  import { geoScopeQuery, shouldOfferGeoScope, WORLDWIDE_REGION } from '#lib/geoScope.js';
-  import { bannerVisible, loadOnboardingState, markSeen, narrowestFacet, type OnboardingLifecycle } from '#lib/onboarding.js';
-  import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
-  import { consumePendingAlert } from '#lib/saveSearchAlert.js';
-  import OnboardingBanner from './onboarding/OnboardingBanner.svelte';
-  import OnboardingAlertBanner from './onboarding/OnboardingAlertBanner.svelte';
+  import JobListControls from './JobListControls.svelte';
+  import JobsMapButtons from './JobsMapButtons.svelte';
+  import JobsSidebar from './JobsSidebar.svelte';
+  import JobsFeedNotices from './JobsFeedNotices.svelte';
+  import JobsFeedList from './JobsFeedList.svelte';
+  import { restoreFiltersOnNavigate } from './jobsFilterRestore';
+  import { GeoScopeGuess } from '#lib/geoScopeGuess.svelte.js';
+  import { jobsSearchTarget } from '#lib/jobsSearchTarget.js';
+  import { narrowestFacet } from '#lib/onboarding.js';
+  import { OnboardingNudge } from '#lib/onboardingNudge.svelte.js';
   import { syncOnNavigation } from '#lib/urlSynced.svelte.js';
   import { setListSearchTarget } from '#lib/listSearch.svelte.js';
   import { track } from '#lib/analytics.js';
-  import type { Job, FacetCounts } from '#lib/types.js';
-  import FilterSummary from './filters/FilterSummary.svelte';
+  import type { Job } from '#lib/types.js';
   import FilterModal from './filters/FilterModal.svelte';
   import ListToolbar from './ListToolbar.svelte';
   import States from './States.svelte';
-  import JobRow from './JobRow.svelte';
-  import { Button } from '#lib/ui/index.js';
+  import JobSearchError from './JobSearchError.svelte';
   import JobRowSkeleton from './JobRowSkeleton.svelte';
   import HiddenToast from './HiddenToast.svelte';
+  import type { JobsViewProps } from './JobsView.props';
+  import { clientMatchesOf, visibleFeed } from './feedVisibility';
+  import { FeedCounts } from './feedCounts.svelte';
+  import { HiddenJobUndo } from './hiddenJobUndo.svelte';
 
-  // Filters live in the URL; the route `load` searches by them and returns the
-  // first page as `initial`, so the rows are in the initial HTML for SSR/share/
-  // reload. After hydration the view is client-driven: FilterStore writes the URL
-  // synchronously and exposes a debounced `applied` snapshot; a filter change
-  // reloads the list + counts client-side off `applied` (no navigation), and
-  // infinite scroll pages the rest.
-  //
-  // `scope` pins extra search params that the user can't change (e.g. the company
-  // page passes `{ company_slug }`): they're merged into every search but kept out
-  // of `filters`/the URL, so they're not user-selectable facets. `excludeFacets`
-  // hides facets that are redundant under that scope (e.g. Source on a company).
-  // `sidebarTop` renders above the filter summary in the desktop sidebar (e.g. the
-  // company page's facts card); the standalone /jobs list omits it.
-  //
-  // `initialParams` overrides the seed below with the exact param string the
-  // route's `load` searched with (page.url.searchParams minus `page`, see
-  // +page.server.ts): the client must seed off that same string, not the raw
-  // URL, or the two would disagree and the mount effect would immediately
-  // discard the SSR page and refetch.
-  //
-  // `currentPage` is the `?page=N` the route's `load` served, and it is REQUIRED:
-  // page links are now the only way through the results, so a route that mounts
-  // this without honouring `?page=N` would render a nav whose every link leads
-  // back to the page already on screen. Required rather than optional so that
-  // mistake is a type error instead of a listing that silently stops at twenty.
-  let {
-    initial,
-    scope = {},
-    excludeFacets = [],
-    sidebarTop,
-    initialParams,
-    currentPage,
-  }: {
-    initial: Slice<Job>;
-    scope?: Record<string, string>;
-    excludeFacets?: string[];
-    sidebarTop?: Snippet;
-    initialParams?: string;
-    currentPage: number;
-  } = $props();
+  let { initial, scope = {}, excludeFacets = [], sidebarTop, initialParams, currentPage }: JobsViewProps = $props();
 
   // Standalone /jobs (no fixed scope) hands its text search to the header; an
   // embedded, scoped instance (e.g. a company page) keeps its own inline input.
@@ -104,12 +64,21 @@
   const seedParams = untrack(() =>
     initialParams != null ? new URLSearchParams(initialParams) : new URLSearchParams(page.url.search),
   );
-  const filters = new FilterStore(seedParams, untrack(() => standalone));
+  const filters = new FilterStore(
+    seedParams,
+    untrack(() => standalone),
+  );
 
   // The user's (debounced) facet filters plus the fixed `scope` params
   // (company_slug, …). Reads `applied` so typing doesn't fetch per keystroke.
   const scopedParams = () => {
     const p = filtersToParams(filters.applied);
+    // Scoped loaders render anonymously and offer no control for this preference.
+    if (!standalone) {
+      p.delete('hide_seen');
+      p.delete('former_employers');
+      p.delete('watchlist');
+    }
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return p;
   };
@@ -142,61 +111,27 @@
   // count announcement on, so turning a page does not re-announce the same total.
   const resultSetKey = $derived(filtersToParams(filters.applied).toString());
 
-  // What `shouldOfferGeoScope` decides on, read fresh each call — the address bar and
-  // storage both move under us. Client-only: `location` does not exist on the server.
-  // Shared with `offerGeoScope`, which asks the same question again after its round
-  // trip; two copies of these three keys would be two things to keep in step.
-  const geoScopeGuards = () => ({
-    search: location.search,
-    storedFilters: loadJobFilters(),
-    offered: geoScopeOffered(),
-  });
-
-  // Whether an opening scope is still to be guessed from the visitor's IP country, and
-  // so whether the facet measurement below is worth making yet. Asked here, at setup,
-  // because the answer is knowable without the network: `offerGeoScope` clears the same
-  // guards before it fetches anything, and only a first-time visitor landing on a bare
-  // URL gets past them. Everybody else — a repeat visitor, a link carrying filters, a
-  // restored set — is false here and waits for nothing.
-  //
-  // What the wait buys: measured from Brazil on 2026-08-21, a cold feed spent 778ms on
-  // a facet count of the unscoped catalogue that `/geo/region` (330ms) then replaced
-  // wholesale, and the two overlapped, so the discarded one was also competing for the
-  // connection the useful one needed. One scope, measured once.
-  //
-  // Never true on the server, where `browser` short-circuits before `location` is read.
-  let geoGuessPending = $state(
-    untrack(() => browser && standalone && shouldOfferGeoScope(geoScopeGuards())),
+  // The opening scope guessed for a first-time visitor (see GeoScopeGuess). Its `pending`
+  // holds the facet measurement until the guess has been made or ruled out.
+  const geo = new GeoScopeGuess(
+    filters,
+    untrack(() => standalone),
+    () => (holdover = jobs.items),
   );
 
-  // The live facet distribution (value → count per facet), feeding the dynamic
-  // selects (skills, countries) so the user sees which values exist and how many
-  // jobs each has under the current filters. A failed fetch leaves the prior
-  // counts — the selects degrade to plain (countless) options, never break.
-  // latestOnly stops a slow earlier response overwriting a newer one.
-  let counts = $state.raw<FacetCounts | null>(null);
+  // The live facet distribution (see FeedCounts).
+  const feedCounts = new FeedCounts(scopedParams);
+  // Facet counts cannot apply the former-employer constraint.
+  const counts = $derived(filters.value.formerEmployers || filters.value.watchlist ? null : feedCounts.catalog);
   // The map dialog reads and writes `filters` itself, so a click on the map narrows the
   // list behind it. Its module (the land outline among it) loads on the first open only.
   let mapOpen = $state(false);
   let mapLoaded = $state(false);
 
-  // The role distribution the header's suggestions are ranked and filtered by. A scope
-  // of its own, deliberately: `counts` above is scoped by the text query, and a
-  // suggestion list keyed off that would rank by "jobs matching what you have typed so
-  // far", lag it by one debounce, and drop roles in and out mid-word. Same filters, no
-  // `q` — so the figure still answers what a click would give.
-  const refreshCounts = latestOnly(
-    () => api.facetCounts(scopedParams()),
-    (facets) => (counts = facets),
-  );
-
   // Minimum profile-match slider: a client-only post-filter over the already-fetched
-  // page, not a search facet — the match percent depends on the viewer's own profile
-  // skills, which the backend/index never sees, so there's nothing to send server-side
-  // (unlike salary/freshness, which narrow the actual query). Local and URL-free: a
-  // shared link's match filter would mean nothing to whoever opens it. `null` means
-  // "no threshold" (the slider's own default position doubles as "off").
-  let minMatch = $state<number | null>(null);
+  // page — the match percent depends on the viewer's own profile skills, which the
+  // backend/index never sees. The threshold itself is a JobFilters field so a saved
+  // search carries it; `minMatch` below is what it means for THIS viewer.
 
   // Only a signed-in user with skills on their profile has a real match percent per
   // card (see resolveMatchState's `ready` state in JobRow) — everyone else sees a
@@ -205,22 +140,19 @@
     if (isAuthenticated()) profileStore.ensureLoaded();
   });
   const profileSkills = $derived(profileStore.profile?.skills ?? []);
+  // The server reads former_employers only for a signed-in caller, so only then does it
+  // explain an empty list.
+  const formerEmployersApplied = $derived(standalone && isAuthenticated() && filters.applied.formerEmployers);
+  const watchlistApplied = $derived(standalone && isAuthenticated() && filters.applied.watchlist);
   const matchFilterAvailable = $derived(isAuthenticated() && profileStore.loaded && profileSkills.length > 0);
-  // Drop a stale threshold the moment the slider would disappear (sign-out, profile
-  // cleared) so it can't silently keep hiding jobs with no control left to reset it.
-  $effect(() => {
-    if (!matchFilterAvailable) minMatch = null;
-  });
+  // Ignored the moment the slider would disappear (sign-out, profile cleared, or a
+  // shared link opened by someone without a profile) so it can't silently keep hiding
+  // jobs with no control left to reset it.
+  const minMatch = $derived(matchFilterAvailable ? filters.applied.minSkillMatch : null);
 
   // The orderings this caller can choose between, and which one the control shows —
   // both pure, both in facetModel so they can be tested (see sortOptionsFor).
   //
-  // Match is offered to everyone. It used to need the same profile the match SLIDER
-  // does, which meant the one ordering that answers "which of these actually suit me"
-  // was invisible to every visitor who had not filled a profile in — and nothing told
-  // them it existed. Choosing it without skills on file is now answered out loud
-  // instead, by the notice below the toolbar.
-  const sortOptions = $derived(sortOptionsFor(filters.value.q));
   const selectedSort = $derived(selectedSortFor(filters.value));
 
   // Whether that notice is showing: match is the ordering in force and there are no
@@ -233,9 +165,12 @@
   // later. `loaded` exists for exactly this (see userResource.svelte.ts). Signed out
   // there is nothing to wait for: no account means no profile, and that is known at once.
   const skillsSettled = $derived(!isAuthenticated() || profileStore.loaded);
-  const matchNeedsSkills = $derived(
-    skillsSettled && matchSortNeedsSkills(filters.value, matchFilterAvailable),
-  );
+  const matchNeedsSkills = $derived(skillsSettled && matchSortNeedsSkills(filters.value, matchFilterAvailable));
+
+  // Under best match the server applies the threshold across the whole ranking, so the
+  // page is used as served; under any other ordering the browser still trims the page.
+  const serverMatch = $derived(minMatch != null && selectedSort === 'match');
+  const matchSortHint = $derived(minMatch != null && selectedSort !== 'match');
 
   // Which date the above-list select bounds. Not $derived: the flag is a runtime env
   // value read once at module load, and it cannot change while the page is mounted.
@@ -254,50 +189,11 @@
   // how anyone paged; the page links made it visible.
   let lastSearchKey = untrack(() => filtersToParams(filters.applied).toString());
 
-
-  // Onboarding: the one-time nudge banner + wizard, standalone-only. The lifecycle
-  // lives in localStorage (client-only); seed it at init on the client so a returning
-  // (dismissed/completed) visitor never flashes a banner before mount. The banner is
-  // the sole entry — once dismissed or completed it retires; there is no persistent
-  // re-open control. "Set up" now navigates to /onboarding (registration is a step
-  // there, and it carries straight on into role/skills/level) rather than opening a
-  // local wizard that wrote to the anonymous filter query.
-  // Starts 'unseen' on both sides so the hydrated markup matches the server's; the
-  // stored value arrives on mount, by which point app.css has already hidden the
-  // banner for anyone who dismissed or completed it. Reading localStorage here
-  // instead would make the client disagree with the SSR output on the very first
-  // frame. Same shape as CliBanner's `dismissed`.
-  let onboardingState = $state<OnboardingLifecycle>('unseen');
-  // The ephemeral post-onboarding Telegram-alert offer (set after the wizard, or on
-  // mount to resume a pending alert after sign-in). Dismissible; not persisted.
-  let alertBanner = $state<{ query: string; autostart: boolean } | null>(null);
-  // Show only to an un-nudged visitor with no active facet filters AND no text query,
-  // so a shared search/filter link is never interrupted (activeFilterCount ignores the
-  // query, so check it explicitly).
-  //
-  // Deliberately NOT gated on `browser`. It was, and that is what made this banner
-  // the site's largest source of layout shift: the feed rendered without it, then
-  // hydration inserted 74px directly above the rows. Lab Lighthouse missed it
-  // (0.066) because it never carries a returning visitor's localStorage; CrUX put
-  // the mobile home page at CLS 0.28. It is server-rendered now, and hidden before
-  // first paint by app.css for a visitor who has already seen it.
-  const showBanner = $derived(
-    standalone &&
-      bannerVisible(onboardingState, filters.active > 0 || filters.value.q.trim() !== ''),
+  // The onboarding nudge and the alert offer after it (see OnboardingNudge).
+  const nudge = new OnboardingNudge(
+    untrack(() => standalone),
+    () => filters.active > 0 || filters.value.q.trim() !== '',
   );
-
-  function dismissBanner() {
-    markSeen();
-    onboardingState = 'seen';
-  }
-  function openOnboarding() {
-    // The nudge has done its job whether or not the visitor follows through — it
-    // retires the same way dismissing it does, just via a different exit.
-    markSeen();
-    onboardingState = 'seen';
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
-    void goto(onboardingUrl(page.url.pathname + page.url.search));
-  }
   // Narrow-feed relief: the single narrowest applied facet to drop (skills → regions →
   // seniority; never the role), or null if none. Shared by the empty-state guard and
   // the relax action so they can't disagree. Never broadens on its own.
@@ -306,28 +202,7 @@
     if (relaxTarget) filters.clearFacet(relaxTarget);
   }
 
-  // Resume a save the user started before signing in. Reactive on the session so it
-  // fires whether auth resolved server-side (an OAuth full-page redirect — mount is
-  // already authed) or flipped in-tab (an in-dialog sign-in re-resolves page.data.user
-  // without a remount). Consumed exactly once; standalone list only; skipped if a banner
-  // is already showing.
-  $effect(() => {
-    if (!untrack(() => standalone) || alertBanner) return; // effect: client-only, no browser guard
-    if (!isAuthenticated()) return;
-    const pending = consumePendingAlert();
-    if (pending !== null) alertBanner = { query: pending, autostart: true };
-  });
-
-  // Live disjunctive facet counts for the staged filter set (built by the modal),
-  // merged with the fixed scope params (e.g. company_slug) so every control's counts —
-  // and the "Show N jobs" total — match the list. Disjunctive so a selected facet
-  // still shows its siblings' counts.
-  const stagedCounts = (params: URLSearchParams) => {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: built, mutated, passed to the API once; not reactive state
-    const p = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(scope)) p.set(k, v);
-    return api.facetCounts(p, { disjunctive: true });
-  };
+  const stagedCounts = (params: URLSearchParams) => feedCounts.staged(params, scope);
 
   // The server-rendered `initial` was searched for `page.url`. After a back/forward
   // onto a shallow-routing entry that lags page.url behind the address bar, `initial`
@@ -344,49 +219,21 @@
     // Catch up with the stored lifecycle now that localStorage is readable. For a
     // returning visitor this drops the server-rendered banner — with no shift,
     // because app.css already took it out of the flow before first paint.
-    onboardingState = loadOnboardingState();
+    nudge.load();
     if (isAuthenticated()) {
       ensureViewedLoaded();
       ensureSavedLoaded();
       ensureDismissedLoaded();
       ensureAppliedCompaniesLoaded();
     }
-    // Register this page's store so the header search drives it. This holds for the
-    // standalone /jobs list AND the company page's embedded, scoped list — on
-    // /companies/:slug the header search filters that company's postings (there's
-    // no inline box), so both modes route their text search through the header.
-    // The adapter also exposes `filterScope` (the store + a reactive counts getter)
-    // so the header renders its Location & work-format popover on these jobs-backed
-    // lists; the company list registers a bare store with no filterScope, so the
-    // popover stays hidden there.
-    setListSearchTarget({
-      get value() {
-        return filters.value;
-      },
-      commitQuery: (q) => filters.commitQuery(q),
-      filterScope: { store: filters, counts: () => counts, variant: 'jobs', inferred: () => scopeInferred },
-      suggest: {
+    // Register this page's store so the header search drives it (see jobsSearchTarget).
+    setListSearchTarget(
+      jobsSearchTarget(filters, {
         counts: () => counts,
-        apply: (suggestion) => {
-          // Its own event, not a flag on `search`: the question this answers is how
-          // often the dropdown is what puts a facet on. The kind rides along so the
-          // empty box's starters can be told apart from a typed completion.
-          track('role_suggestion', { role: suggestion.slug, kind: suggestion.kind });
-          // A starter comes from the EMPTY box, so there is no typed text to drop —
-          // this is an ordinary facet write, the same one the filter modal makes.
-          filters.setSign('category', suggestion.slug, 'include');
-        },
-        applyParts: (plan) => {
-          track('role_suggestion', {
-            role: plan.facets.map(([, v]) => v).join('+') || (plan.q && displayQuery(plan.q)),
-            kind: 'completion',
-          });
-          filters.applyParts(plan.facets, plan.q ?? '', plan.qFields ?? null);
-        },
-      },
-      openFilters: () => (modalOpen = true),
-      activeFilters: () => filters.active,
-    });
+        inferred: () => geo.inferred,
+        openFilters: () => (modalOpen = true),
+      }),
+    );
     return () => {
       setListSearchTarget(null);
       filters.dispose();
@@ -397,6 +244,11 @@
     const next = makePaginator();
     next.start(offset);
     jobs = next;
+  }
+
+  function retrySearch() {
+    feedCounts.refresh();
+    if (jobs.status === 'error') reloadList(pageOffset(activePage));
   }
 
   // Rows kept on screen while the guessed opening scope reloads the feed underneath
@@ -426,53 +278,15 @@
   // is what put "No matching jobs." over a list that was merely reloading.
   const displayItems = $derived(holdingOver ? holdover : jobs.items);
 
-  // The feed minus the signed-in user's hidden jobs, and (when the match slider is
-  // active) minus jobs below the chosen match threshold. Dismissal is cross-referenced
-  // client-side against the shared dismissed set (loaded on mount), mirroring the
-  // viewed/saved sets — the server search is untouched. Re-derives when the page
-  // changes, when a hide/undo mutates the dismissed set, or when the slider moves, so
-  // a hidden or filtered-out card drops (and an undone one returns) instantly. A job
-  // with no skills has no percent to test (see computeClientMatch) and stays, matching
-  // the card's own `no-skills` state, which shows no match at all rather than a false 0%.
-  const visibleJobs = $derived(
-    displayItems.filter((j) => {
-      if (isDismissed(j.public_slug)) return false;
-      if (matchFilterAvailable && minMatch != null && (j.skills ?? []).length > 0) {
-        return computeClientMatch(j.skills ?? [], profileSkills).percent >= minMatch;
-      }
-      return true;
-    }),
-  );
+  // What the feed shows of the fetched page, and the total beside it (see feedVisibility.ts).
+  const clientMatches = $derived(clientMatchesOf(displayItems, profileSkills));
+  // The threshold the browser applies itself: only off best match, where the server does.
+  const clientMinMatch = $derived(!serverMatch && matchFilterAvailable ? minMatch : null);
+  const visibleJobs = $derived(visibleFeed(displayItems, clientMatches, clientMinMatch, isDismissed));
+  const listTotal = $derived(clientMinMatch != null ? visibleJobs.length : jobs.total);
 
-  // `jobs.total` is the server's raw count for the query — accurate for every facet,
-  // which all narrow the actual search, but not for the match slider, which only
-  // trims the already-fetched page client-side. Showing the raw total next to a
-  // shrunk list would read as a lie ("500 open jobs" over three visible cards), so
-  // swap in what's actually on screen while the threshold is active.
-  const listTotal = $derived(matchFilterAvailable && minMatch != null ? visibleJobs.length : jobs.total);
-
-  // The pending "Job hidden — Undo" toast, or null. Set when a card is hidden; the
-  // toast owns its auto-dismiss. Undo clears the slug's hidden mark (card returns via
-  // visibleJobs) and confirms with the server; a failed undo is swallowed — the
-  // durable recovery path is Activity → Hidden.
-  let hiddenToast = $state<{ slug: string } | null>(null);
-
-  function onHide(slug: string) {
-    hiddenToast = { slug };
-  }
-
-  async function undoHide() {
-    const pending = hiddenToast;
-    if (!pending) return;
-    markUndismissed(pending.slug);
-    hiddenToast = null;
-    try {
-      await api.undismissJob(pending.slug);
-    } catch {
-      // Swallow: the job is already back in the feed optimistically, and Activity →
-      // Hidden remains the durable way to manage hidden jobs.
-    }
-  }
+  // The "Job hidden — Undo" toast (see HiddenJobUndo).
+  const hidden = new HiddenJobUndo();
 
   // Enter swipe mode carrying the current filters + query (same param shape the
   // list uses), so the deck reflects exactly what's on screen. `scope` params are
@@ -496,18 +310,31 @@
     void filters.applied; // track the debounced snapshot
     // Read outside untrack: clearing the hold is what re-runs this, and it is the only
     // thing that ever will for a visitor whose guess came back empty.
-    if (geoGuessPending) return;
+    if (geo.pending) return;
     untrack(() => {
-      refreshCounts();
+      feedCounts.refresh();
     });
   });
+
+  // Personal feed preferences must be re-applied when the reader changes in-tab.
+  const searchUserID = $derived(
+    standalone &&
+      (filters.applied.hideSeen || filters.applied.formerEmployers || filters.applied.watchlist || serverMatch)
+      ? (currentUser()?.id ?? null)
+      : null,
+  );
+
+  let lastSearchUserID = untrack(() => searchUserID);
 
   // Reload the list whenever the debounced filters change — a settled keystroke, an
   // immediate facet toggle, or a back/forward re-seed. The first run is a no-op: the
   // SSR `initial` already seeded page one.
   $effect(() => {
     void filters.applied; // track the debounced snapshot
+    void searchUserID;
     untrack(() => {
+      const readerChanged = searchUserID !== lastSearchUserID;
+      lastSearchUserID = searchUserID;
       const firstRun = !started;
       if (firstRun) {
         started = true;
@@ -527,9 +354,16 @@
       }
       // Same query: this is a re-seed (initial navigation, back/forward), not a new
       // search — reload the page being read instead of snapping back to the first.
-      const sameQuery = searchKey === lastSearchKey;
+      const sameQuery = searchKey === lastSearchKey && !readerChanged;
       lastSearchKey = searchKey;
       if (!sameQuery) activePage = 1;
+      if (readerChanged) {
+        // A new reader has a different result set; an old offset can be past its end.
+        const url = new URL(location.href);
+        url.searchParams.delete('page');
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query update to the current URL
+        replaceState(url, page.state);
+      }
       reloadList(sameQuery ? pageOffset(activePage) : 0);
     });
   });
@@ -556,259 +390,42 @@
     });
   });
 
-  // The opening scope guessed from the visitor's IP country, once it has been
-  // applied — null whenever the scope is theirs rather than ours. The header trigger
-  // reads it to say the scope was inferred; see `scopeInferred` below.
-  let guessedRegion = $state<string | null>(null);
-
-  // The guess is only still ours while the geography is EXACTLY what we set: our
-  // region plus worldwide, nothing excluded, no country or city of their own. Any
-  // edit to the scope fails this and the marking drops, with no event to subscribe
-  // to and no flag to remember to clear. Filters outside geography (seniority, a
-  // search term) leave it standing — they did not touch the scope.
-  const scopeInferred = $derived.by(() => {
-    if (guessedRegion === null) return false;
-    const f = filters.value;
-    const untouched = (param: string) => {
-      const st = f.facets[param];
-      return !st || (st.include.length === 0 && st.exclude.length === 0);
-    };
-    const ours = [guessedRegion, WORLDWIDE_REGION];
-    const regions = f.facets.regions;
-    return (
-      !!regions &&
-      regions.exclude.length === 0 &&
-      regions.include.length === ours.length &&
-      ours.every((r) => regions.include.includes(r)) &&
-      untouched('countries') &&
-      untouched('metros') &&
-      untouched('cities')
-    );
-  });
-
-  // Ours until the geography first stops matching, and not ours again after that.
-  // Without the latch, someone who clears the guess and then picks the same region
-  // by hand lands back in a state the check above cannot tell from the guess, and
-  // the trigger would tell them the site inferred a scope they chose themselves.
-  $effect(() => {
-    if (guessedRegion !== null && !scopeInferred) untrack(() => (guessedRegion = null));
-  });
-
-  /** The visitor's region from the edge, or null for anyone the edge cannot place —
-   *  a crawler, a missing header, a country outside the grouping. A failed request
-   *  is the same answer: this is an opening convenience, never a thing to retry. */
-  async function fetchRegion(): Promise<string | null> {
-    try {
-      const res = await fetch('/geo/region');
-      if (!res.ok) return null;
-      return ((await res.json()) as { region: string | null }).region;
-    } catch {
-      return null;
-    }
-  }
-
-  // Open a first-time visitor on their own region plus worldwide. The precedence
-  // itself lives in `shouldOfferGeoScope`, where it is a pure function and a test
-  // can state each rule; this reads the browser and acts on the answer.
-  //
-  // The URL is written directly and re-read rather than going through
-  // `filters.apply()`: apply() is an explicit write, and on the standalone list an
-  // explicit write mirrors itself into `hire.jobFilters`. Storage records what the
-  // visitor chose, and this is a guess. Writing the address bar and re-seeding from
-  // it is the same path an ordinary navigation takes, which by construction persists
-  // nothing. It is also safe by now — `replaceState` is not available during the
-  // initial `enter`, but a network round trip has passed since.
-  async function offerGeoScope() {
-    // The page this offer is for. A request is in flight for a few hundred
-    // milliseconds and the visitor can leave in that time — onto a job page, onto
-    // /companies — and every one of those routes has an empty query string, so the
-    // guards below would pass and the scope would land on a page it was never meant
-    // for. The pathname captured here is the only thing that can tell those apart.
-    const pathname = location.pathname;
-    if (!shouldOfferGeoScope(geoScopeGuards())) return;
-
-    const region = await fetchRegion();
-    // Nothing was offered, so nothing is marked: a deployment whose edge sends no
-    // country would otherwise spend its one chance per browser on a null answer.
-    if (!region) return;
-    // Re-read the world, do not trust the snapshot: while we were asking they may
-    // have navigated away, filtered, or been offered the scope by another mount.
-    // Any of those outranks a guess; ours is dropped, not queued.
-    if (location.pathname !== pathname || !shouldOfferGeoScope(geoScopeGuards())) return;
-
-    // A guess that cannot be recorded is a guess that re-applies on every visit and
-    // cannot be dismissed, so a failed write means no scope at all.
-    if (!markGeoScopeOffered()) return;
-    // Keep what is on screen until the scoped page arrives, so the swap happens in
-    // place instead of through a spinner the height of the whole list.
-    holdover = jobs.items;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
-    replaceState(`${pathname}?${geoScopeQuery(region)}`, {});
-    filters.syncFromUrl();
-    // Claimed only now that the filters already carry the scope. Set before the
-    // re-seed, it would sit for a tick beside geography that does not match it, and
-    // the latch below would drop it before the trigger ever said anything.
-    guessedRegion = region;
-  }
-
-  // Re-seed the filters from the URL on every real navigation (initial load, the
-  // "Jobs" nav link, back/forward). On the standalone list a navigation that lands
-  // on a bare /jobs (empty URL) instead restores the last persisted filters, so an
-  // ordinary navigation never drops them ("Clear all" persisted an empty set, so it
-  // stays cleared).
-  //
-  // afterNavigate (not a URL-tracking $effect) because it runs only after the router
-  // is initialized: apply()'s replaceState is safe on a client-side navigation (a
-  // hydration-time $effect would throw "before router is initialized"), its `applied`
-  // change lands after the reload effect's first pass, and our own shallow replaceState
-  // writes don't re-fire it — so there's no restore loop. Restore is skipped on the
-  // initial `enter` navigation (a hard load / refresh): the router isn't ready for
-  // replaceState yet, and the SSR already rendered that exact URL, so we just re-seed
-  // from it. Every restore-worthy case — the "Jobs" nav link, cross-route entry,
-  // back/forward — is a client-side navigation, where it works. location.search is the
-  // address-bar truth (page.url can lag after shallow routing). The company-embedded
-  // list (persist off) keeps the plain re-seed — unchanged.
-  if (untrack(() => standalone)) {
-    afterNavigate((nav) => {
-      // SvelteKit 3 fires this for shallow routing too, i.e. for our own URL writes.
-      if (nav.shallow) return;
-      const stored = nav.type !== 'enter' && location.search === '' ? loadJobFilters() : '';
-      if (stored) {
-        filters.apply(stored);
-        // A restored set outranks the guess, so nothing is going to be asked for and
-        // the facet measurement must not keep waiting on an answer that is not coming.
-        geoGuessPending = false;
-      } else {
-        filters.syncFromUrl();
-        // Last in the precedence chain, and the only branch that runs on a cold
-        // load: URL params were just applied, or there was nothing to restore.
-        //
-        // Released on EVERY outcome — scope applied, no region, guard failed on the
-        // re-read, storage refused the marker — because the facet measurement is held
-        // behind this and a path that forgot to release would leave the filter panel
-        // permanently countless.
-        void offerGeoScope().finally(() => (geoGuessPending = false));
-      }
-    });
-  } else {
-    syncOnNavigation(filters);
-  }
+  // Re-seed the filters on every real navigation (see restoreFiltersOnNavigate).
+  if (untrack(() => standalone)) restoreFiltersOnNavigate(filters, geo);
+  else syncOnNavigation(filters);
 </script>
-
-<!-- The list's own controls, handed to ListToolbar so they sit in the shared toolbar
-     (mobile) / above the list (desktop) — same shape as the company catalog's
-     sortSelect. Each is reachable without opening the filter modal, which is the whole
-     point: the endpoint has always served these orderings and bounds, and every one of
-     them used to require either a profile, a modal, or a hand-edited URL.
-
-     The URL params are NOT cleared when a control disappears — the server degrades an
-     ordering it cannot serve rather than refusing it, so a shared match link stays
-     intact and starts working the moment its opener signs in. -->
-{#snippet sortSelect()}
-  <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
-    <span class="hidden sm:inline">Sort</span>
-    <!-- The native arrow is replaced: it sat over the end of the selected text. -->
-    <span class="relative flex items-center">
-      <select
-        aria-label="Sort jobs"
-        class="appearance-none rounded-lg border border-input bg-transparent py-2 pl-2 pr-6 text-sm max-sm:max-w-24 text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:py-1 dark:bg-input/30"
-        value={selectedSort}
-        onchange={(e) => filters.setSort(e.currentTarget.value as JobSort)}
-      >
-        {#each sortOptions as opt (opt.value)}
-          <option value={opt.value}>{opt.label}</option>
-        {/each}
-      </select>
-      <ChevronDown class="pointer-events-none absolute right-1.5 size-3.5 text-muted-foreground" aria-hidden="true" />
-    </span>
-  </label>
-{/snippet}
-
-<!-- A date bound, the same one a modal slider drags. This is the control the complaint
-     that prompted it asked for: years-old postings in the feed, with the only way to
-     bound them buried in the modal's third section.
-
-     WHICH date it bounds is the flag's decision, and there is deliberately only ever
-     one select here. Once `created_ts` is in the index it bounds how long the posting
-     has been open, because that is the question this control's placement implies and
-     the one the source-stated date was quietly failing: a board that restates its date
-     every crawl passes a three-day bound while its own card reads "Open 72d". Until
-     then it bounds the source's date exactly as before — never absent, so there is no
-     state in which the reader loses the ability to bound the feed by date at all. The
-     other bound stays reachable in the modal either way. -->
-{#snippet postedSelect()}
-  {@const openBound = openWithinAvailable}
-  <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
-    <span class="hidden sm:inline">{openBound ? 'Open' : 'Posted'}</span>
-    <span class="relative flex items-center">
-      <select
-        aria-label={openBound ? 'Open within' : 'Posted within'}
-        class="appearance-none rounded-lg border border-input bg-transparent py-2 pl-2 pr-6 text-sm max-sm:max-w-20 text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:py-1 dark:bg-input/30"
-        value={String((openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) ?? '')}
-        onchange={(e) => {
-          const days = Number(e.currentTarget.value) || null;
-          if (openBound) filters.pickOpenWithinDays(days);
-          else filters.pickPostedWithinDays(days);
-        }}
-      >
-        {#each freshnessOptions(openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) as preset (preset.label)}
-          <option value={String(preset.days ?? '')}>{preset.label}</option>
-        {/each}
-      </select>
-      <ChevronDown class="pointer-events-none absolute right-1.5 size-3.5 text-muted-foreground" aria-hidden="true" />
-    </span>
-  </label>
-{/snippet}
 
 <!-- Opens the current search on a world map, over the list rather than instead of it. -->
 {#snippet mapButton()}
-  <Button
-    variant="outline"
-    size="sm"
-    aria-label="Map"
-    onclick={() => {
+  <JobsMapButtons
+    blockedBy={filters.value.formerEmployers ? 'formerEmployers' : filters.value.watchlist ? 'watchlist' : null}
+    onMap={() => {
       mapLoaded = true;
       mapOpen = true;
     }}
-  >
-    <MapIcon class="size-4" />
-    <span class="hidden sm:inline">Map</span>
-  </Button>
+    onSwipe={standalone ? openSwipe : undefined}
+  />
 {/snippet}
 
-<!-- The two above, in one slot. Rendered as a fragment so ListToolbar keeps deciding
-     where the row sits and how it collapses on a phone.
-
-     A "Hide evergreen" toggle used to lead this row, writing one sign of one value of the
-     `reality` facet. The whole facet now sits in the modal's Posted pane, beside the age
-     bound it belongs with. -->
 {#snippet listControls()}
-  {@render postedSelect()}
-  <!-- Unconditional. This used to be guarded against a one-option select - a label
-       wearing a control's clothes - which could happen when match was hidden from a
-       viewer with no profile. Every caller is now offered newest, most-viewed and match,
-       so the guard could never be false. -->
-  {@render sortSelect()}
+  <JobListControls {filters} {selectedSort} {openWithinAvailable} />
 {/snippet}
 
 <div class="flex gap-6">
-  <aside class="hidden w-72 shrink-0 md:block">
-    <!-- `top-20` is the site header's own `h-14` plus 24px of air. At `top-6` the rail
-         pinned 24px from the VIEWPORT, so the opaque header (`sticky top-0`) covered its
-         first 32px — here, the "Filters" heading — for the whole scroll. The max-height
-         is then what is left of the viewport, less the same 24px at the bottom. -->
-    <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-4 overflow-y-auto">
-      {@render sidebarTop?.()}
-      <div class="rounded-xl border border-border bg-card p-4">
-        <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} />
-      </div>
-    </div>
-  </aside>
+  <JobsSidebar
+    top={sidebarTop}
+    {filters}
+    exclude={excludeFacets}
+    onOpen={() => (modalOpen = true)}
+    canSave={standalone}
+    matchAvailable={matchFilterAvailable}
+  />
 
   <div class="min-w-0 flex-1">
     <ListToolbar
       total={displayItems.length > 0 ? listTotal : null}
       unit={listTotal === 1 ? 'job' : 'jobs'}
+      atLeast={serverMatch && jobs.totalIsLowerBound}
       settled={jobs.status === 'ready'}
       announceKey={resultSetKey}
       onSwipe={standalone ? openSwipe : undefined}
@@ -816,71 +433,15 @@
       leading={standalone ? mapButton : undefined}
     />
 
-    <!-- Onboarding nudges sit UNDER the toolbar so the feed controls stay at the top;
-         each shows once (until dismissed or completed), then retires. Never blocks
-         the feed below. -->
-    {#if showBanner || alertBanner}
-      <div class="mt-3">
-        {#if showBanner}
-          <OnboardingBanner onOpen={openOnboarding} onDismiss={dismissBanner} />
-        {/if}
-        {#if alertBanner}
-          <OnboardingAlertBanner
-            query={alertBanner.query}
-            autostart={alertBanner.autostart}
-            onDismiss={() => (alertBanner = null)}
-          />
-        {/if}
-      </div>
-    {/if}
+    <JobsFeedNotices
+      {nudge}
+      {matchSortHint}
+      {minMatch}
+      onSortByMatch={() => filters.setSort('match')}
+      {matchNeedsSkills}
+    />
 
-    <!-- Match was chosen and there is nothing to rank against. Sits with the nudges
-         above and, like them, never replaces the feed: the server degrades this request
-         to newest rather than refusing it, so there ARE jobs below — taking them away
-         would punish someone for pressing a button we offered them. What was missing
-         was only the explanation. -->
-    {#if matchNeedsSkills}
-      <!-- `role="status"` because this appears in response to changing the Sort control,
-           and a screen-reader user who just did that gets no other signal that the
-           ordering they picked was not the one served. -->
-      <!-- `my-4`, not the nudges' `mt-3`: the feed below sets no top margin of its own,
-           so a block sitting between the toolbar and the first job row has to carry the
-           air on BOTH sides or it reads as glued to the list. -->
-      <!-- Laid out like the feed nudges above (icon tile, text, action), and worded as
-           what the visitor gets rather than what the sort is missing. -->
-      <div
-        role="status"
-        class="my-4 flex flex-col gap-4 rounded-xl border border-brand/30 bg-brand/5 p-4 sm:flex-row sm:items-center sm:p-5"
-      >
-        <div class="flex min-w-0 flex-1 items-start gap-3">
-          <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-muted text-brand-strong" aria-hidden="true">
-            <Target class="size-5" />
-          </span>
-          <div class="min-w-0">
-            <p class="font-semibold text-foreground">See your best matches first</p>
-            <p class="mt-1 text-sm text-muted-foreground">
-              Add your skills or CV and every job is ranked by how well it fits you. Until
-              then, the newest jobs come first.
-            </p>
-          </div>
-        </div>
-        <!-- The way out of this state is the whole point of the notice, so it is the
-             framed call to action rather than a link trailing the paragraph. -->
-        {#if isAuthenticated()}
-          <Button variant="cta" href={resolve('/my/profile')} class="w-full shrink-0 sm:w-auto">
-            Add your CV
-            <ArrowRight class="size-4" aria-hidden="true" />
-          </Button>
-        {:else}
-          <!-- Signed out there is no profile to fill in yet, so the first step is the
-               account that would hold one. -->
-          <Button variant="cta" onclick={() => promptSignIn()} class="w-full shrink-0 sm:w-auto">
-            Sign in to see your matches
-            <ArrowRight class="size-4" aria-hidden="true" />
-          </Button>
-        {/if}
-      </div>
-    {/if}
+    <JobSearchError error={jobs.status === 'error' ? null : feedCounts.error} onlyRateLimit onRetry={retrySearch} />
 
     {#if jobs.status === 'loading' && !holdingOver}
       <States state="loading">
@@ -889,46 +450,22 @@
         {/snippet}
       </States>
     {:else if jobs.status === 'error'}
-      <!-- Retry re-runs the same query on the page being read, the same reload a changed
-           filter would start. -->
-      <States state="error" message="Failed to load jobs." onRetry={() => reloadList(pageOffset(activePage))} />
+      <JobSearchError error={jobs.error} onRetry={retrySearch} />
     {:else if displayItems.length === 0}
-      <States state="empty" message="No matching jobs." />
-      {#if standalone && relaxTarget}
-        <!-- No semantic fallback in this slice: offer an honest one-step broaden
-             instead of silently widening the feed. -->
-        <div class="mt-4 flex justify-center">
-          <button
-            type="button"
-            onclick={relaxFeed}
-            class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
-          >
-            Broaden search
-          </button>
-        </div>
-      {/if}
+      <JobsEmptyState
+        kind={formerEmployersApplied ? 'formerEmployers' : watchlistApplied ? 'watchlist' : 'none'}
+        onRelax={standalone && relaxTarget ? relaxFeed : undefined}
+      />
     {:else}
-      {#if visibleJobs.length === 0}
-        <!-- The search DID match on this page — the client-side post-filters removed
-             every row. Saying "no matching jobs" here would blame the search for the
-             reader's own settings, and the two causes are worth telling apart because
-             one of them is a slider they can move. The paginator below still renders,
-             so this is somewhere to leave rather than a dead end. -->
-        <States
-          state="empty"
-          message={minMatch === null
-            ? 'Every job on this page is one you hid.'
-            : 'Every job on this page is hidden or below your match threshold.'}
-        />
-      {:else}
-        <!-- Busy while held-over rows stand in for a reload underneath them (see
-             `holdover`): the rows are real but about to be replaced. -->
-        <div class="flex flex-col gap-3" aria-busy={holdingOver}>
-          {#each visibleJobs as job (job.public_slug)}
-            <JobRow {job} {onHide} />
-          {/each}
-        </div>
-      {/if}
+      <JobsFeedList
+        jobs={visibleJobs}
+        {clientMatches}
+        {minMatch}
+        {serverMatch}
+        {holdingOver}
+        onHide={hidden.onHide}
+        hideCompany={!!scope.company_slug}
+      />
 
       <!-- Page links, and the only way through the results: a scroll-to-bottom
            auto-load used to sit here, which grew the page every time the reader
@@ -945,23 +482,7 @@
   </div>
 </div>
 
-{#if standalone}
-  <!-- Desktop swipe-mode entry: an icon-only button pinned to the right viewport edge
-       (mobile uses the inline toolbar / scroll-revealed tab, so this is md-only). Fixed,
-       so it exists only while the standalone list is mounted and stays reachable while
-       scrolling; kept below the z-40 mobile overlays. -->
-  <button
-    type="button"
-    onclick={openSwipe}
-    aria-label="Swipe mode"
-    title="Swipe mode"
-    class="fixed right-0 top-16 z-30 hidden items-center rounded-l-xl border border-r-0 border-border bg-secondary py-2.5 pl-2.5 pr-2 text-secondary-foreground shadow-md transition-colors hover:bg-accent md:flex"
-  >
-    <Layers class="size-4 shrink-0" />
-  </button>
-{/if}
-
-{#if standalone && mapLoaded}
+{#if standalone && mapLoaded && !filters.value.formerEmployers && !filters.value.watchlist}
   {#await import('./map/JobsMapDialog.svelte') then { default: JobsMapDialog }}
     <JobsMapDialog bind:open={mapOpen} store={filters} />
   {/await}
@@ -970,9 +491,9 @@
 <!-- Undo affordance for the hide gesture. Keyed by slug so hiding a second job while
      a toast is up restarts the countdown for the newer one. A hide-then-forget is
      still recoverable in Activity → Hidden. -->
-{#if hiddenToast}
-  {#key hiddenToast.slug}
-    <HiddenToast onUndo={undoHide} onClose={() => (hiddenToast = null)} />
+{#if hidden.pending}
+  {#key hidden.pending.slug}
+    <HiddenToast onUndo={hidden.undo} onClose={hidden.close} />
   {/key}
 {/if}
 
@@ -981,10 +502,11 @@
   {counts}
   exclude={excludeFacets}
   savedSearches={standalone}
+  formerEmployersAvailable={standalone}
+  watchlistAvailable={standalone}
+  hideSeenAvailable={standalone}
   open={modalOpen}
   onClose={() => (modalOpen = false)}
   {stagedCounts}
   matchAvailable={matchFilterAvailable}
-  {minMatch}
-  onMinMatchChange={(v) => (minMatch = v)}
 />

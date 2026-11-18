@@ -3,11 +3,54 @@ package savedsearch_test
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/search/savedsearch"
+	"github.com/strelov1/freehire/internal/search/search"
 )
+
+func TestQuerySyntaxIsCheckedBeforeSaving(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		query string
+		valid bool
+	}{
+		{"too many alternatives", "go OR rust OR java OR python OR ruby OR php", false},
+		{"at the limit", "go OR rust OR java OR python OR ruby", true},
+		{"quoted OR is literal", `"go OR rust OR java OR python OR ruby OR php"`, true},
+	} {
+		for _, operation := range []string{"create", "update"} {
+			t.Run(tc.name+"/"+operation, func(t *testing.T) {
+				repo := &fakeRepo{}
+				svc := savedsearch.New(repo)
+				query := url.Values{"q": {tc.query}, "work_mode": {"remote"}}.Encode()
+				var err error
+				if operation == "create" {
+					_, err = svc.Create(context.Background(), 7, "Languages", query, false)
+				} else {
+					_, err = svc.Update(context.Background(), 7, 1, nil, &query)
+				}
+				if tc.valid {
+					if err != nil {
+						t.Fatalf("valid query refused: %v", err)
+					}
+					if !repo.createCalled && !repo.updateCalled {
+						t.Fatal("valid query was not saved")
+					}
+				} else {
+					if !errors.Is(err, search.ErrTooManyAlternatives) {
+						t.Fatalf("error = %v, want ErrTooManyAlternatives", err)
+					}
+					if repo.createCalled || repo.updateCalled {
+						t.Fatal("an unexecutable query was saved")
+					}
+				}
+			})
+		}
+	}
+}
 
 // The *Args structs capture the primitive params the repository is handed, so the service
 // tests can assert them without a db.* params struct.

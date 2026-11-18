@@ -14,7 +14,11 @@ describe('findPlaceholders', () => {
       ...base,
       experience: [
         { company: 'Solvd', role: 'Engineer', bullets: ['Shipped search'] },
-        { company: 'Acme', role: 'Engineer', bullets: ['Real one', 'Built an app for [purpose], delivering [result].'] },
+        {
+          company: 'Acme',
+          role: 'Engineer',
+          bullets: ['Real one', 'Built an app for [purpose], delivering [result].'],
+        },
       ],
     } as Document;
     expect(findPlaceholders(doc)).toEqual([
@@ -41,7 +45,10 @@ describe('findPlaceholders', () => {
 
   // A long bracketed aside is prose, not a slot someone forgot to fill.
   it('leaves a long bracketed aside alone', () => {
-    const doc = { ...base, summary: 'Led it [together with two other teams across three time zones and a vendor].' } as Document;
+    const doc = {
+      ...base,
+      summary: 'Led it [together with two other teams across three time zones and a vendor].',
+    } as Document;
     expect(findPlaceholders(doc)).toEqual([]);
   });
 });

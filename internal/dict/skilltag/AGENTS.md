@@ -10,6 +10,23 @@ Deterministic skill tagging feeds a Meilisearch facet (`jobs.skills` text[], not
 - Indexed as a Meilisearch facet; dictionary change needs `cmd/backfill-derive` + `cmd/reindex` to reach existing jobs.
 - **Ambiguous words need corroboration; proper-noun ones also need a capital.** A word in `ambiguousWords` (react, networking, sap) tags only beside a strong match. The `properNounWords` subset (react, swift, rust, spring, express) must also appear capitalized somewhere in the text (`React`, `REACT`): a support posting naming Zendesk still writes "react quickly" in lowercase, and corroboration alone kept that tag. A caller parsing a skill LIST rather than prose (a CV's Skills section, an aggregator's structured tags) passes `WithSkillList()`, which drops the capital rule and keeps corroboration. `Canonicalize` applies neither rule.
 
+## Procurement vocabulary
+
+`procurement.go` holds the buyer's craft (strategic sourcing, purchase orders, inventory and
+supply-chain management, category management, spend analysis, `rfx`, `mrp`, `excel`), mined from
+live Purchasing/Procurement Specialist postings. Its canonicals are derived into
+`nonCorroboratingPhrases`: a duty names the posting's trade, not a technology, so none may lift the
+gate off `ai` or `crm`. Rules that are easy to undo by accident:
+
+- **No bare `sourcing`, `procurement`, `supply chain` or `excel`**: talent sourcing is a recruiter's
+  skill (`talent-sourcing`), the others are boilerplate or an English verb. Excel resolves only through
+  qualified phrases ("Microsoft Excel", "advanced Excel", "proficient in Excel").
+- **`supplier management` and `supplier relationship management` are aliases of `vendor-management`**,
+  not a second canonical.
+- **`RFI` is not an acronym alias** (radio-frequency interference); `RFQ`/`RFP` are, uppercase only.
+  `MRP` resolves as an acronym only inside an operations-like category (`procurementCategories`).
+- CIPS is a credential, so it lives in `internal/dict/certification` and only affects CVs.
+
 ## The three sides of a canonical
 
 A canonical slug carries three things, all owned here because the canonical set is owned
@@ -17,7 +34,7 @@ here, and none derivable from the others:
 
 | Side | Where | What it answers |
 |---|---|---|
-| the slug | `dictionaries.go` | what text resolves to it (`k8s` → `kubernetes`) |
+| the slug | `dictionaries*.go` (`dictionaries.go` assembles the tables; the entries live in `dictionaries_words*.go`, `dictionaries_phrases_*.go`, `dictionaries_ambiguity.go`, `dictionaries_acronyms.go`) | what text resolves to it (`k8s` → `kubernetes`) |
 | the label | `labels.go` | how it is written for a reader (`ci-cd` → `CI/CD`) |
 | the description | `descriptions.tsv` | what the thing *is* (`dbt` → a SQL transformation tool) |
 

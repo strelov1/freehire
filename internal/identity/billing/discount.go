@@ -8,24 +8,17 @@ import (
 	"strconv"
 )
 
-// Discount is a reduction to attach to one checkout session. The zero value means none,
-// and must produce exactly the request this package made before discounts existed.
+// Discount is a percentage reduction to attach to one checkout session. The zero value
+// means none. Who is owed one is decided in internal/identity/promo, not here.
 //
-// A percentage and nothing else. What decides an account is owed one lives in
-// internal/identity/promo, which this package does not import and does not know about: a
-// discount is a number and a label here, and the reason it exists is somebody else's.
-//
-// There is deliberately no amount-off variant. A referral reward is delivered as a credit
-// on the customer's balance rather than as a coupon, because a coupon would have to be
-// marked consumed when a session is CREATED, and a checkout session is abandoned far more
-// often than it is completed.
+// There is no amount-off variant: referral rewards are balance credits, since a coupon would
+// be consumed when a session is created and sessions are mostly abandoned.
 type Discount struct {
 	// PercentOff is 1..100. Zero means no discount.
 	PercentOff int32
 	// Label is what the buyer sees named on the coupon. Cosmetic, and never a code.
 	Label string
-	// Key makes the coupon idempotent across retries and double-clicks. Empty mints a new
-	// coupon on every call, which is wasteful rather than wrong.
+	// Key makes the coupon idempotent across retries. Empty mints a new coupon per call.
 	Key string
 }
 
@@ -34,19 +27,10 @@ func (d Discount) none() bool { return d.PercentOff <= 0 }
 
 // createCoupon mints a one-off, single-redemption percentage discount and returns its id.
 //
-// `duration=once` on every coupon this package creates: each discount here applies to the
-// first invoice of a subscription and must not follow it into renewals. A recurring coupon
-// created by accident would be indistinguishable from a price change nobody approved.
-//
-// `max_redemptions=1` beside it, because the two bound different things and only together
-// say what the offer means. `duration` bounds how many INVOICES of one subscription a
-// coupon touches; redemptions bound how many SUBSCRIPTIONS may claim it. Without the
-// second, a buyer who subscribes, cancels and subscribes again gets the discount each time
-// — the idempotency key hands their checkout the same coupon back, and an unlimited coupon
-// happily applies again. The offer is a first month, not a first month per attempt.
-//
-// The count moves when a subscription actually claims the coupon, not when a session is
-// created, so an abandoned checkout costs nothing.
+// `duration=once` keeps the discount on the first invoice only. `max_redemptions=1` bounds
+// subscriptions, not invoices: without it a buyer who cancels and resubscribes gets the same
+// coupon back via the idempotency key and the discount applies again. The count moves when
+// a subscription claims the coupon, so an abandoned checkout costs nothing.
 func (c *client) createCoupon(ctx context.Context, percentOff int32, name, idempotencyKey string) (string, error) {
 	form := url.Values{}
 	form.Set("duration", "once")
@@ -68,12 +52,21 @@ func (c *client) createCoupon(ctx context.Context, percentOff int32, name, idemp
 	return out.ID, nil
 }
 
-// createCustomer registers an account with the provider before it has bought anything, and
-// returns the customer id.
-//
-// Used only to deliver a referral reward to somebody who has never paid us: a balance
-// credit needs a customer to sit on. It carries the same metadata a checkout would, so the
-// customer is attributable the moment it exists rather than only after a first purchase.
+// couponValid reports whether a coupon can still be applied. A replayed idempotent create
+// returns the coupon as it was born, not its current state.
+func (c *client) couponValid(ctx context.Context, id string) (bool, error) {
+	var out struct {
+		Valid bool `json:"valid"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/coupons/"+url.PathEscape(id), nil, "", &out); err != nil {
+		return false, err
+	}
+	return out.Valid, nil
+}
+
+// createCustomer registers an account that has not bought anything and returns the customer
+// id. Used for checkout and referral rewards before the first payment; it carries account
+// metadata so the customer is attributable at once.
 func (c *client) createCustomer(ctx context.Context, userID int64, email, idempotencyKey string) (string, error) {
 	id := strconv.FormatInt(userID, 10)
 
@@ -95,14 +88,10 @@ func (c *client) createCustomer(ctx context.Context, userID int64, email, idempo
 	return out.ID, nil
 }
 
-// creditCustomerBalance places credit on a customer, which the provider consumes on that
-// customer's next invoice.
+// creditCustomerBalance places credit on a customer, consumed on their next invoice.
 //
-// The amount is NEGATED here rather than by the caller. The provider's sign convention is
-// the opposite of the intuitive one — a positive balance is money the customer OWES — so a
-// caller passing a signed amount would eventually pass the wrong sign and bill somebody for
-// a reward. Callers name a positive amount of credit; this is the one place the convention
-// is applied.
+// The amount is negated here, not by the caller: the provider's balance is money the
+// customer owes, so callers pass a positive credit and this is the one place the sign flips.
 func (c *client) creditCustomerBalance(ctx context.Context, customerID string, cents int64, currency, description, idempotencyKey string) error {
 	form := url.Values{}
 	form.Set("amount", strconv.FormatInt(-cents, 10))
@@ -118,37 +107,22 @@ func (c *client) creditCustomerBalance(ctx context.Context, customerID string, c
 // hasCollectedAtLeast reports whether any of this customer's invoices collected at least
 // minCents.
 //
-// A THRESHOLD and not "more than nothing", because the two discounts stack in the customer's
-// favour across different invoices: an invitee redeeming a 90% code pays a tenth of the list
-// price, and a reward worth half of it would cost us four times what the sale brought in —
-// repeatably, for as long as that code has seats. The rule the threshold states is that a
-// referral never pays out more than it brought in.
+// It is a threshold so a referral never pays out more than the sale brought in (a heavily
+// discounted invitee must not trigger a full reward). It checks money collected, not an
+// active subscription, which may have collected nothing (trial, total discount).
 //
-// Deliberately NOT built on `invoices` in overview.go, which serves the receipt list. That
-// one returns an empty slice when the provider fails, and falls back to `amount_due` when
-// `amount_paid` is zero so a declined charge does not render as a free month. Both are
-// right for a receipt list and both are wrong here: the first would read a network blip as
-// "collected nothing" and silently deny a reward somebody earned, and the second would read
-// an unpaid invoice as a payment.
-//
-// It asks about money COLLECTED and not about the subscription being active, because a
-// subscription can be active having collected nothing — a trial, or a total discount.
+// Not built on `invoices` in overview.go: that returns empty on provider failure (here a
+// network blip would deny an earned reward) and falls back to `amount_due` (here an unpaid
+// invoice would count as paid).
 func (c *client) hasCollectedAtLeast(ctx context.Context, customerID string, minCents int64) (bool, error) {
-	// A threshold of zero would make `amount_paid >= 0` true of an UNPAID invoice, which is
-	// the exact opposite of the question. Callers pass a reward amount and it is always
-	// positive; the floor is here so that a future caller passing nothing cannot silently
-	// turn this into "has any invoice at all".
+	// A zero threshold would make `amount_paid >= 0` true of an unpaid invoice.
 	if minCents < 1 {
 		minCents = 1
 	}
 
-	// One page, newest first, and deliberately not paginated. The only caller walks rewards
-	// that are still PENDING, and a reward stops being pending at the first invoice meeting
-	// this threshold — so the window this has to cover is from the invitee's signup to their
-	// first real payment. Reaching past a hundred invoices would mean a hundred billing
-	// periods of paying less than half the list price and then paying it, which is not a
-	// case; paginating for it would spend a request per page on every account that has
-	// simply never paid, which is almost all of them.
+	// One page, newest first, deliberately not paginated: a pending reward only needs the
+	// window up to the invitee's first real payment, and paging would cost a request per page
+	// for every account that never paid.
 	form := url.Values{}
 	form.Set("customer", customerID)
 	form.Set("limit", "100")

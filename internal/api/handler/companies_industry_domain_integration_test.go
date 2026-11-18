@@ -92,7 +92,7 @@ func TestListCompaniesIndustryFacetReadsBothColumns(t *testing.T) {
 
 	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/companies", h.ListCompanies)
+	mountCompaniesContract(app, h)
 
 	query := func(t *testing.T, url string) (slugs []string, total float64) {
 		t.Helper()

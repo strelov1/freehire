@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COMPANY_FACETS, TALENT_FACETS } from './facets';
+import { COMPANY_FACETS, TALENT_FACETS } from './directoryFacets';
 import { COMPANY_RAIL_GROUPS, TALENT_RAIL_GROUPS } from './filterSections';
 import { FILTER_SEARCH_LIMIT, jobFilterSearchItems, matchFilterSearch, railFacetSearchItems } from './filterSearch';
 
@@ -19,6 +19,17 @@ describe('matchFilterSearch', () => {
     expect(
       matchFilterSearch(items, 'data engineer').some((h) => h.param === 'category' && h.value === 'data_engineering'),
     ).toBe(true);
+  });
+
+  it.each([
+    ['Computer Networking', 'network_engineering'],
+    ['Network Support', 'it_support'],
+    ['Cloud Computing', 'devops'],
+    ['Cybersecurity SOC Analyst', 'security'],
+  ])('finds the specialization for %s in the job filters', (query, category) => {
+    expect(matchFilterSearch(items, query).some((hit) => hit.param === 'category' && hit.value === category)).toBe(
+      true,
+    );
   });
 
   it('accepts the same typos as the facet picker', () => {
@@ -42,6 +53,41 @@ describe('matchFilterSearch', () => {
 });
 
 describe('jobFilterSearchItems', () => {
+  it('offers Hide viewed only to an eligible viewer, found by its aliases', () => {
+    const enabled = jobFilterSearchItems({ hideSeen: true });
+    expect(matchFilterSearch(enabled, 'viewed').some((h) => h.action === 'hide-seen')).toBe(true);
+    expect(jobFilterSearchItems().some((h) => h.action === 'hide-seen')).toBe(false);
+    expect(jobFilterSearchItems({ hideSeen: true, railKeys: ['salary'] }).some((h) => h.action === 'hide-seen')).toBe(
+      false,
+    );
+  });
+
+  it('offers Your watchlist only when the personal filters are available', () => {
+    expect(
+      matchFilterSearch(jobFilterSearchItems({ watchlist: true }), 'watchlist').some((h) => h.action === 'watchlist'),
+    ).toBe(true);
+    expect(jobFilterSearchItems().some((h) => h.action === 'watchlist')).toBe(false);
+    expect(
+      jobFilterSearchItems({ watchlist: true, exclude: ['company_slug'] }).some((h) => h.action === 'watchlist'),
+    ).toBe(false);
+  });
+
+  it('offers Hiring again only in an eligible Company pane, including former-employer aliases', () => {
+    const enabled = jobFilterSearchItems({ formerEmployers: true });
+    expect(matchFilterSearch(enabled, 'former employers').some((h) => h.action === 'former-employers')).toBe(true);
+    expect(jobFilterSearchItems().some((h) => h.action === 'former-employers')).toBe(false);
+    expect(
+      jobFilterSearchItems({ formerEmployers: true, exclude: ['company_slug'] }).some(
+        (h) => h.action === 'former-employers',
+      ),
+    ).toBe(false);
+    expect(
+      jobFilterSearchItems({ formerEmployers: true, railKeys: ['salary'] }).some(
+        (h) => h.action === 'former-employers',
+      ),
+    ).toBe(false);
+  });
+
   it('hides panes and params the modal is not showing', () => {
     const salary = jobFilterSearchItems({ railKeys: ['salary'] });
     expect(salary.length).toBeGreaterThan(0);

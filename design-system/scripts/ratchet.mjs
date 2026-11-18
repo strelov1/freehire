@@ -13,9 +13,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 export function ratchet({ counts, baselinePath, direction, update = false }) {
-  const baseline = existsSync(baselinePath)
-    ? JSON.parse(readFileSync(baselinePath, 'utf-8'))
-    : {};
+  const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf-8')) : {};
 
   if (update) {
     const sorted = Object.fromEntries(byKey(Object.entries(counts)));
@@ -31,7 +29,7 @@ export function ratchet({ counts, baselinePath, direction, update = false }) {
   // fixed, the file was deleted, or it was renamed — and from here they are
   // indistinguishable. The first is the best outcome there is, so the wording
   // must not read as an accusation; all three are recorded the same way.
-  for (const key of Object.keys(baseline).sort()) {
+  for (const key of Object.keys(baseline).toSorted()) {
     if (key in counts) continue;
     lines.push(`${key}: no longer measured — cleared, removed or renamed; --update records it`);
   }
@@ -57,5 +55,5 @@ export function ratchet({ counts, baselinePath, direction, update = false }) {
 // By key, so a baseline diffs by the entry that moved rather than by insertion
 // order, and a report reads in the same order every run.
 function byKey(entries) {
-  return entries.sort(([a], [b]) => a.localeCompare(b));
+  return entries.toSorted(([a], [b]) => a.localeCompare(b));
 }

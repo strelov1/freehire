@@ -574,6 +574,7 @@ go test ./...
 go test -tags=integration ./internal/api/handler/ ./internal/ingest/linkimport/ ./internal/platform/db/ ./internal/ingest/contribution/
 cd web && pnpm lint && pnpm build
 ```
+
 Expected: build/vet clean, `gofmt -l` silent, all tests pass, web lint 0 errors.
 
 - [ ] **Step 7: Commit and open the PR**

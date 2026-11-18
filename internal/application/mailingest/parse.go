@@ -14,23 +14,24 @@ import (
 	"github.com/jhillyerd/enmime"
 
 	"github.com/strelov1/freehire/internal/application/ical"
+	"github.com/strelov1/freehire/internal/platform/mailmeta"
 )
 
 // Parsed is the display-ready view of a received email the worker stores. The
 // full raw MIME is kept separately in S3, so this carries only what the inbox
 // list and reading pane need.
 type Parsed struct {
-	MessageID  string
-	FromAddr   string
-	FromName   string
-	Subject    string
-	TextBody   string
-	HTMLBody   string
-	ReceivedAt time.Time
-	// CalendarUID is the identifier of the meeting an invitation attaches as its
-	// text/calendar part, and "" for the mail that carries none — which is most of it.
-	// It is the only thing that later proves a calendar entry and this invitation are
-	// the same meeting, which is the one link calmatch may make without asking.
+	SystemNotification bool
+	MessageID          string
+	FromAddr           string
+	FromName           string
+	Subject            string
+	TextBody           string
+	HTMLBody           string
+	ReceivedAt         time.Time
+	// CalendarUID is the meeting identifier from the invitation's text/calendar part, "" when
+	// there is none. It is the only proof that a calendar entry and this invitation are the
+	// same meeting, the one link calmatch may make without asking.
 	CalendarUID string
 }
 
@@ -44,10 +45,11 @@ func Parse(raw []byte) (Parsed, error) {
 	}
 
 	p := Parsed{
-		MessageID: trimAngles(env.GetHeader("Message-ID")),
-		Subject:   env.GetHeader("Subject"),
-		TextBody:  env.Text,
-		HTMLBody:  env.HTML,
+		MessageID:          trimAngles(env.GetHeader("Message-ID")),
+		SystemNotification: mailmeta.IsDigest(env.GetHeader(mailmeta.NotificationHeader), env.GetHeader("Auto-Submitted")),
+		Subject:            env.GetHeader("Subject"),
+		TextBody:           env.Text,
+		HTMLBody:           env.HTML,
 	}
 
 	if addr, err := mail.ParseAddress(env.GetHeader("From")); err == nil {
@@ -69,10 +71,9 @@ func Parse(raw []byte) (Parsed, error) {
 
 // calendarUID reads the meeting identifier out of a text/calendar part.
 //
-// The part arrives as an attachment from some senders and as a plain sibling part from
-// others, so every list enmime splits the message into is searched. A body that does not
-// parse yields "" and nothing else: an invitation whose meeting we cannot identify is
-// still an invitation, and failing the message over it would lose the mail as well.
+// The part arrives as an attachment from some senders and a sibling part from others, so
+// every list enmime splits the message into is searched. An unparseable body yields "",
+// never an error: failing the message over it would lose the mail.
 func calendarUID(env *enmime.Envelope) string {
 	for _, parts := range [][]*enmime.Part{env.Attachments, env.Inlines, env.OtherParts} {
 		for _, part := range parts {

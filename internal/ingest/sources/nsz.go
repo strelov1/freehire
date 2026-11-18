@@ -19,9 +19,8 @@ import (
 
 // nsz adapts the job search of Serbia's National Employment Service (Nacionalna služba za
 // zapošljavanje, nsz.gov.rs): the vacancies Serbian employers publish through the public
-// service, ~500 open at a time, every trade, mostly health care, education and local
-// employers. It is boardless and an aggregator — the employer is read per posting. See the
-// "NSZ traps" section of AGENTS.md for the measurements behind each rule.
+// service, every trade, mostly health care, education and local employers. It is boardless and an
+// aggregator: the employer is read per posting. See the "NSZ traps" section of AGENTS.md.
 //
 // The search is a server-rendered page, 20 vacancies a page, newest first; a card carries the
 // title, the employer and its town. The body and the vacancy's facts are on the vacancy's own
@@ -45,16 +44,16 @@ const (
 	// home page.
 	nszPostingURL = nszBaseURL + "/employee/jobs/preview/%s"
 
-	// nszMaxPages is a safety ceiling far past the catalogue's size (510 vacancies, 26 pages,
-	// on 2026-10-29); reaching it fails the crawl rather than ending it.
+	// nszMaxPages is a safety ceiling far past the catalogue's size; reaching it fails the crawl
+	// rather than ending it.
 	nszMaxPages = 200
-	// nszRequestInterval paces every request of a run at one a second — a courtesy ceiling
-	// toward a public service, not a measured limit.
+	// nszRequestInterval paces every request of a run at one a second: a courtesy ceiling
+	// toward a public service.
 	nszRequestInterval = time.Second
 	nszDetailWorkers   = 2
-	// nszMaxNewPerRun bounds the vacancy pages one run buys: a page answers in ~1.5 s, so 1,200
-	// is ~30 minutes, plus a ~2 minute listing walk and the writes, inside the scheduler's
-	// default crawl budget. The whole catalogue is ~500, so a cold run takes it all.
+	// nszMaxNewPerRun bounds the vacancy pages one run buys, so the page fetches at one a second
+	// plus the listing walk and the writes fit the scheduler's default crawl budget. The whole
+	// catalogue is small enough that a cold run takes it all.
 	nszMaxNewPerRun   = 1200
 	nszDeadlineMargin = 5 * time.Minute
 
@@ -87,6 +86,9 @@ func (nsz) boardless() {}
 
 // Hundreds of employers post here, each named per vacancy.
 func (nsz) aggregator() {}
+
+// One country's market (see nationalMarket).
+func (nsz) marketCountries(CompanyEntry) []string { return []string{"rs"} }
 
 // nszCard is one vacancy as the search lists it, still in the site's script.
 type nszCard struct {
@@ -133,7 +135,7 @@ func (s nsz) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(extern
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -331,8 +333,30 @@ var nszEmploymentTypes = map[string]string{
 	"Рад на пројекту":                "contract",
 }
 
-// nszPeriod reads the "Временско трајање огласа за посао" value: "29.10.2026. - 28.11.2026.".
-var nszPeriod = regexp.MustCompile(`^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?\s*-`)
+// nszPeriod reads a vacancy's period: its two day-month-year dates, opening and closing
+// ("29.10.2026. - 28.11.2026."). The first is the posting date, the second the application
+// deadline.
+var nszPeriod = regexp.MustCompile(`^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?\s*-\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\.?`)
+
+// nszDate reads the period's day-month-year date named by i (3 for the posting date, 6 for
+// the application deadline), midnight in Belgrade.
+func nszDate(s string, i int) *time.Time {
+	m := nszPeriod.FindStringSubmatch(s)
+	if m == nil {
+		return nil
+	}
+	day, _ := strconv.Atoi(m[i-2])
+	month, _ := strconv.Atoi(m[i-1])
+	year, _ := strconv.Atoi(m[i])
+	if month < 1 || month > 12 || day < 1 || day > 31 {
+		return nil
+	}
+	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, nszBelgrade)
+	if t.Day() != day { // time.Date rolls 31.02 over to March rather than rejecting it
+		return nil
+	}
+	return &t
+}
 
 // nszGenderNotice is the opening of the paragraph every body ends with: a statement that the
 // masculine forms used in the ad apply to women too. It says nothing about the vacancy.
@@ -392,7 +416,11 @@ func nszJob(root *xhtml.Node, c nszCard) (Job, error) {
 	for _, f := range facts {
 		switch f.label {
 		case "Временско трајање огласа за посао":
-			j.PostedAt = NotFuture(nszDate(f.value))
+			j.PostedAt = NotFuture(nszDate(f.value, 3))
+			// The period's closing date is the last application day. Unlike a posted_at it may
+			// legitimately sit today or tomorrow, so it is not run through NotFuture; a stale
+			// one past today closes the vacancy on the write.
+			j.ApplicationDeadline = nszDate(f.value, 6)
 		case "Место рада":
 			if place := nszPlace(f.value); place != "" {
 				j.Location = place
@@ -460,22 +488,6 @@ func nszFacts(root *xhtml.Node) []nszFact {
 		return false
 	})
 	return out
-}
-
-// nszDate reads the first date of a vacancy's period, midnight in Belgrade.
-func nszDate(s string) *time.Time {
-	m := nszPeriod.FindStringSubmatch(s)
-	if m == nil {
-		return nil
-	}
-	day, _ := strconv.Atoi(m[1])
-	month, _ := strconv.Atoi(m[2])
-	year, _ := strconv.Atoi(m[3])
-	if month < 1 || month > 12 || day < 1 || day > 31 {
-		return nil
-	}
-	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, nszBelgrade)
-	return &t
 }
 
 // nszPlace reads "Место рада", one or more municipalities each closed by a semicolon

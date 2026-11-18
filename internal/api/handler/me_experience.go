@@ -7,30 +7,27 @@ import (
 	"fmt"
 	"strings"
 
+	moejson "github.com/MoeForge/moego/json"
+	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
 // experienceHandlers serve the owner's view of their experience bank: what has been
-// recorded about them, and the ability to correct, merge or remove any of it.
-//
-// This surface is the reason the bank is allowed to be written by an agent at all. A
-// system that records claims about a person and gives them no way to see or delete those
-// claims is a trust problem before it is a compliance one — and provenance is served on
-// every entry precisely so the distinction the model cannot fake is visible to the person
-// it describes.
+// recorded about them, and the ability to correct, merge or remove any of it. Provenance
+// is served on every entry so the owner can see what the model, not they, asserted.
 type experienceHandlers struct {
 	bank           experienceBankOwner
 	requireContext experienceRequireContext
 }
 
-// experienceBankOwner is what the owner-facing surface needs from the bank: read it all,
-// correct an entry, merge a pair, remove one. Narrow handler-side interface, as
-// everywhere else in this layer — and it is what lets the routes be tested without a
-// database.
+// experienceBankOwner is what the owner-facing surface needs from the bank. Narrow
+// handler-side interface so the routes are testable without a database.
 type experienceBankOwner interface {
 	ListEmployments(ctx context.Context, userID int64) ([]experience.Employment, error)
 	ListAtoms(ctx context.Context, userID int64) ([]experience.Atom, error)
@@ -59,68 +56,29 @@ func (h *experienceHandlers) withRequireContext(r experienceRequireContext) *exp
 	return h
 }
 
-func (h *experienceHandlers) register(api fiber.Router, mw middleware) {
-	// The read takes a key, like the profile read, so a programmatic consumer can ground
-	// itself in what the candidate has actually done. Creating takes a key too — it is
-	// additive-only, and a full-scope key already reaches everything more destructive than
-	// this (cv edit, apply) through the rest of the CLI's surface.
+func (h *experienceHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	// Reads, creates, corrects and deletes take a key. UpdateAtom keeps a keyed caller's edit
+	// from moving the claim's provenance (see updateAuthor), so a key cannot launder an
+	// inference into `manual`.
 	//
-	// Correcting takes a key as well, but only because UpdateAtom below keeps a keyed
-	// caller's edit from moving the claim's provenance. Without that, a key reaching this
-	// route would be a laundering step rather than a correction — see provenanceForUpdate.
-	// A caller able to ADD an achievement from a script and unable to fix a typo in it has
-	// a bank it can only make worse: the duplicate check refuses the corrected retry.
+	// DeleteEmployment cascades to its achievements (experience_atoms.employment_id, migration
+	// 0047) and the bank has no undo, so it refuses a keyed caller while the place is occupied.
 	//
-	// Deleting takes a key, but the CASCADE does not come with it. Removing an achievement
-	// removes the row named and nothing else. Removing a place takes every achievement
-	// under it (experience_atoms.employment_id is ON DELETE CASCADE, migration 0047), and
-	// the bank has no undo — so DeleteEmployment refuses a keyed caller while the place is
-	// still occupied. Move the achievements first, then remove the shell.
-	//
-	// The merge stays cookie-only, and unlike the deletes it cannot simply be widened:
-	// unionForMerge folds the discarded atom's metrics and skills into the kept one while
-	// the kept one's provenance stands, so a `manual` atom can absorb numbers an agent
-	// invented. That has to be settled before the gate moves.
-	api.Get("/me/experience", mw.key, h.ListExperience)
-	api.Post("/me/experience/employments", mw.key, h.AddEmployment)
-	api.Put("/me/experience/employments/:id", mw.key, h.UpdateEmployment)
-	api.Delete("/me/experience/employments/:id", mw.key, h.DeleteEmployment)
-	api.Post("/me/experience/atoms", mw.key, h.AddAtom)
-	api.Post("/me/experience/atoms/merge", mw.cookie, h.MergeAtoms)
-	api.Put("/me/experience/atoms/:id", mw.key, h.UpdateAtom)
-	api.Delete("/me/experience/atoms/:id", mw.key, h.DeleteAtom)
+	// The merge stays cookie-only: unionForMerge folds the discarded atom's metrics and skills
+	// into the kept one while the kept one's provenance stands, so a `manual` atom could
+	// absorb numbers an agent invented.
+	api.Get("/me/experience", mw.key, contract)
+	api.Post("/me/experience/employments", mw.key, contract)
+	api.Put("/me/experience/employments/:id", mw.key, contract)
+	api.Delete("/me/experience/employments/:id", mw.key, contract)
+	api.Post("/me/experience/atoms", mw.key, contract)
+	api.Post("/me/experience/atoms/merge", mw.cookie, contract)
+	api.Put("/me/experience/atoms/:id", mw.key, contract)
+	api.Delete("/me/experience/atoms/:id", mw.key, contract)
 }
 
-// experienceResponse is the bank as its owner sees it: the places, and the achievements
-// grouped under the place each belongs to. Achievements belonging to no place come back
-// under `unplaced` rather than being hidden — they are usually the ones volunteered in
-// conversation, which makes them the most important ones to be able to check.
-type experienceResponse struct {
-	Employments []employmentWithAtoms `json:"employments"`
-	Unplaced    []atomView            `json:"unplaced"`
-}
-
-type employmentWithAtoms struct {
-	experience.Employment
-	Atoms []atomView `json:"atoms"`
-}
-
-// MarshalJSON flattens the employment wire shape with atoms. Employment's own
-// MarshalJSON would otherwise replace the whole object and drop atoms (Go embeds a
-// Marshaler as the sole encoded value for the outer struct).
-func (w employmentWithAtoms) MarshalJSON() ([]byte, error) {
-	base, err := json.Marshal(w.Employment)
-	if err != nil {
-		return nil, err
-	}
-	var m map[string]any
-	if err := json.Unmarshal(base, &m); err != nil {
-		return nil, err
-	}
-	m["atoms"] = w.Atoms
-	return json.Marshal(m)
-}
-
+// Achievements belonging to no place come back under `unplaced` rather than being hidden:
+// they are usually the ones volunteered in conversation, so the owner most needs to check them.
 // atomView is an atom plus read-time richness / soft-dup flags. Those flags are not
 // fields on experience.Atom — the client must not POST them back.
 type atomView struct {
@@ -131,18 +89,18 @@ type atomView struct {
 }
 
 // ListExperience returns the caller's whole bank. Cookie or key.
-func (h *experienceHandlers) ListExperience(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *experienceHandlers) ListExperience(ctx context.Context) (*apigen.ListExperienceOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	employments, err := h.bank.ListEmployments(c.Context(), userID)
+	employments, err := h.bank.ListEmployments(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	atoms, err := h.bank.ListAtoms(c.Context(), userID)
+	atoms, err := h.bank.ListAtoms(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	known := make(map[uuid.UUID]bool, len(employments))
@@ -153,11 +111,8 @@ func (h *experienceHandlers) ListExperience(c *fiber.Ctx) error {
 	grouped := make(map[uuid.UUID][]experience.Atom, len(employments))
 	var unplaced []experience.Atom
 	for _, a := range atoms {
-		// An achievement whose place is unknown is shown as unplaced rather than filed
-		// under a heading that will never be rendered. The store refuses to create that
-		// state, but grouping by a pointer without checking it means any state nobody
-		// anticipated costs the owner an achievement they can no longer see or delete —
-		// and this view exists precisely so nothing is invisible to them.
+		// An achievement whose place is unknown is shown as unplaced, never dropped: the owner
+		// must always be able to see and delete every entry.
 		if a.EmploymentID == nil || !known[*a.EmploymentID] {
 			unplaced = append(unplaced, a)
 			continue
@@ -166,18 +121,80 @@ func (h *experienceHandlers) ListExperience(c *fiber.Ctx) error {
 	}
 
 	views := projectAtomViews(atoms)
-	resp := experienceResponse{
-		Employments: make([]employmentWithAtoms, 0, len(employments)),
-		Unplaced:    atomViewsFor(unplaced, views),
+	resp := apigen.ExperienceBank{
+		Employments: make([]apigen.ExperienceEmploymentWithAtoms, 0, len(employments)),
+		Unplaced:    atomsOut(atomViewsFor(unplaced, views)),
 	}
 	for _, e := range employments {
-		entry := employmentWithAtoms{Employment: e, Atoms: atomViewsFor(grouped[e.ID], views)}
-		if entry.Atoms == nil {
-			entry.Atoms = []atomView{}
-		}
-		resp.Employments = append(resp.Employments, entry)
+		resp.Employments = append(resp.Employments, employmentOut(e, atomsOut(atomViewsFor(grouped[e.ID], views))))
 	}
-	return c.JSON(fiber.Map{"data": resp})
+	return &apigen.ListExperienceOK{Data: resp}, nil
+}
+
+// employmentOut is the kind-aware wire shape of a place: jobs keep `company`, projects
+// expose the same stored label as `name`.
+func employmentOut(e experience.Employment, atoms []apigen.ExperienceAtom) apigen.ExperienceEmploymentWithAtoms {
+	out := apigen.ExperienceEmploymentWithAtoms{
+		ID: e.ID.String(), Kind: apigen.ExperienceEmploymentKind(e.Kind),
+		Role: optString(e.Role), Location: optString(e.Location),
+		Summary: optString(e.Summary), Link: optString(e.Link), Stack: nilIfEmpty(e.Stack),
+		Atoms: atoms,
+	}
+	if e.Current {
+		out.Current = apigen.NewOptBool(true)
+	}
+	if e.Start != nil {
+		out.Start = apigen.NewOptPeriodDate(periodDateOut(*e.Start))
+	}
+	if e.End != nil {
+		out.End = apigen.NewOptPeriodDate(periodDateOut(*e.End))
+	}
+	if e.Kind == experience.KindProject {
+		out.Name = optString(e.Company)
+	} else {
+		out.Company = optString(e.Company)
+	}
+	return out
+}
+
+func periodDateOut(d perioddate.PeriodDate) apigen.PeriodDate {
+	out := apigen.PeriodDate{Year: int32(d.Year)}
+	if d.Month != 0 {
+		out.Month = apigen.NewOptInt32(int32(d.Month))
+	}
+	return out
+}
+
+func atomsOut(views []atomView) []apigen.ExperienceAtom {
+	out := make([]apigen.ExperienceAtom, 0, len(views))
+	for _, v := range views {
+		a := apigen.ExperienceAtom{
+			ID: v.ID.String(), Claim: v.Claim, Context: optString(v.Context),
+			Metrics: nilIfEmpty(v.Metrics), Skills: nilIfEmpty(v.Skills),
+			Provenance: apigen.ExperienceProvenance(v.Provenance), SourceRef: optString(v.SourceRef),
+			NeedsContext: v.NeedsContext, NeedsMetrics: v.NeedsMetrics, ClusterID: optString(v.ClusterID),
+		}
+		if v.EmploymentID != nil {
+			a.EmploymentID = apigen.NewOptString(v.EmploymentID.String())
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// marshalRaws writes each value as the JSON its type marshals to, for an entry whose shape
+// belongs to the bank.
+func marshalRaws[T any](vs []T) ([]jx.Raw, error) {
+	out := make([]jx.Raw, 0, len(vs))
+	for _, v := range vs {
+		// Faster drop-in for encoding our own values; request bodies stay on encoding/json.
+		raw, err := moejson.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, raw)
+	}
+	return out, nil
 }
 
 // projectAtomViews builds the id→view map with richness and soft-dup cluster ids.
@@ -218,130 +235,133 @@ func atomViewsFor(atoms []experience.Atom, views map[uuid.UUID]atomView) []atomV
 	return out
 }
 
-// AddEmployment records a new place — a job or a project — under the caller. Unlike
-// UpdateEmployment this creates rather than corrects, so nothing about provenance applies:
-// an employment carries no claim of its own, only the atoms attached to it do.
-func (h *experienceHandlers) AddEmployment(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// AddEmployment records a new place under the caller. An employment carries no claim of its
+// own, so provenance does not apply; only its atoms do.
+func (h *experienceHandlers) AddEmployment(ctx context.Context, req jx.Raw) (*apigen.AddEmploymentCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var in experience.Employment
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	if err := decodeBody(req, &in); err != nil {
+		return nil, err
 	}
-	created, err := h.bank.CreateEmployment(c.Context(), userID, in)
+	created, err := h.bank.CreateEmployment(ctx, userID, in)
 	if err != nil {
-		return experienceError(err)
+		return nil, experienceError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": created})
+	raw, err := json.Marshal(created)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.AddEmploymentCreated{Data: raw}, nil
 }
 
-// AddAtom records a new achievement under the caller. This is the only route that can add
-// evidence outside a chat session — the assistant's own experience_add tool is the other —
-// so provenance is forced to manual regardless of what the body sends, the same way
-// UpdateAtom already forces it on a correction: an authenticated POST with no chat
-// transcript behind it can only ever honestly be "the owner typed this themselves".
-func (h *experienceHandlers) AddAtom(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	var in experience.Atom
-	if err := c.BodyParser(&in); err != nil {
+// decodeBody reads a body that travels as raw JSON into the bank's own type, so its decoding
+// rules stay the type's.
+func decodeBody(raw jx.Raw, into any) error {
+	if err := json.Unmarshal(raw, into); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	if err := h.checkContextRequired(c.Context(), userID, in.Context); err != nil {
-		return experienceError(err)
-	}
-	// The door names who is asserting this; the bank derives the label. A provenance in the
-	// body is inert.
-	created, err := h.bank.AddAtom(c.Context(), userID, in, experience.AuthorCandidate)
+	return nil
+}
+
+// AddAtom records a new achievement under the caller. Provenance is forced to manual
+// regardless of the body: a POST with no chat transcript behind it can only honestly be
+// "the owner typed this themselves".
+func (h *experienceHandlers) AddAtom(ctx context.Context, req jx.Raw) (*apigen.AddAtomCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return experienceError(err)
+		return nil, err
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": created})
+	var in experience.Atom
+	if err := decodeBody(req, &in); err != nil {
+		return nil, err
+	}
+	if err := h.checkContextRequired(ctx, userID, in.Context); err != nil {
+		return nil, experienceError(err)
+	}
+	// The door names who is asserting this; a provenance in the body is inert.
+	created, err := h.bank.AddAtom(ctx, userID, in, experience.AuthorCandidate)
+	if err != nil {
+		return nil, experienceError(err)
+	}
+	raw, err := json.Marshal(created)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.AddAtomCreated{Data: raw}, nil
 }
 
 // MergeAtoms folds two owned atoms into one richer keep. Cookie-only — merge deletes.
-func (h *experienceHandlers) MergeAtoms(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *experienceHandlers) MergeAtoms(ctx context.Context, req *apigen.MergeAtoms) (*apigen.MergeAtomsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in struct {
-		IDs []string `json:"ids"`
+	ids := req.Ids.Value
+	if len(ids) != 2 {
+		return nil, experienceError(experience.ErrInvalidMerge)
 	}
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	if len(in.IDs) != 2 {
-		return experienceError(experience.ErrInvalidMerge)
-	}
-	a, err := uuid.Parse(strings.TrimSpace(in.IDs[0]))
+	a, err := uuid.Parse(strings.TrimSpace(ids[0]))
 	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
+		return nil, fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	b, err := uuid.Parse(strings.TrimSpace(in.IDs[1]))
+	b, err := uuid.Parse(strings.TrimSpace(ids[1]))
 	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
+		return nil, fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	kept, err := h.bank.MergeAtoms(c.Context(), userID, a, b)
+	kept, err := h.bank.MergeAtoms(ctx, userID, a, b)
 	if err != nil {
-		return experienceError(err)
+		return nil, experienceError(err)
 	}
-	return c.JSON(fiber.Map{"data": kept})
+	raw, err := json.Marshal(kept)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.MergeAtomsOK{Data: raw}, nil
 }
 
-// UpdateEmployment replaces one place's fields with what the owner typed — blanks
-// included. This is the user editing their own history, so unlike import it means exactly
-// what it says.
-func (h *experienceHandlers) UpdateEmployment(c *fiber.Ctx) error {
-	userID, id, err := ownedEntry(c)
+// UpdateEmployment replaces one place's fields with what the owner typed, blanks included.
+func (h *experienceHandlers) UpdateEmployment(ctx context.Context, req jx.Raw, params apigen.UpdateEmploymentParams) (*apigen.UpdateEmploymentOK, error) {
+	userID, id, err := ownedEntry(ctx, params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var in experience.Employment
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	if err := decodeBody(req, &in); err != nil {
+		return nil, err
 	}
-	updated, err := h.bank.UpdateEmployment(c.Context(), id, userID, in)
+	updated, err := h.bank.UpdateEmployment(ctx, id, userID, in)
 	if err != nil {
-		return experienceError(err)
+		return nil, experienceError(err)
 	}
-	return c.JSON(fiber.Map{"data": updated})
+	raw, err := json.Marshal(updated)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.UpdateEmploymentOK{Data: raw}, nil
 }
 
-// DeleteEmployment removes a place and, with it, the achievements that were evidence of
-// it. Idempotent from the caller's side: a second delete is a 404, never a 500.
-func (h *experienceHandlers) DeleteEmployment(c *fiber.Ctx) error {
-	userID, id, err := ownedEntry(c)
+// DeleteEmployment removes a place and the achievements recorded under it. A second delete
+// is a 404, never a 500.
+func (h *experienceHandlers) DeleteEmployment(ctx context.Context, params apigen.DeleteEmploymentParams) error {
+	userID, id, err := ownedEntry(ctx, params.ID)
 	if err != nil {
 		return err
 	}
-	if auth.ViaAPIKey(c) {
-		if err := h.refuseKeyedCascade(c.Context(), userID, id); err != nil {
+	if auth.ViaAPIKeyFromContext(ctx) {
+		if err := h.refuseKeyedCascade(ctx, userID, id); err != nil {
 			return err
 		}
 	}
-	if err := h.bank.DeleteEmployment(c.Context(), id, userID); err != nil {
-		return experienceError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return experienceError(h.bank.DeleteEmployment(ctx, id, userID))
 }
 
-// refuseKeyedCascade is the one thing a keyed caller may not do to the bank: take a place
-// down and every achievement recorded under it with it.
-//
-// The cascade lives in the schema (migration 0047), so nothing downstream will stop it and
-// nothing can put the rows back. A candidate doing this in the browser has been told what
-// they are about to lose; a credential in a script's environment has not, and one wrong id
-// there erases years of someone's record in a single request.
-//
-// Confining the keyed form to an already-empty place keeps the route useful — move the
-// achievements with PUT, then remove the shell — while the destructive form stays where its
-// consequence is visible. Unknown or foreign ids resolve to 404 here, before the count, so
-// the refusal never doubles as a way to probe which ids exist.
+// refuseKeyedCascade stops a keyed caller from deleting a place that still holds
+// achievements: the cascade lives in the schema (migration 0047) and cannot be undone, and a
+// script's credential has not been told what it would lose. Unknown or foreign ids 404
+// before the count, so the refusal cannot be used to probe which ids exist.
 func (h *experienceHandlers) refuseKeyedCascade(ctx context.Context, userID int64, id uuid.UUID) error {
 	employments, err := h.bank.ListEmployments(ctx, userID)
 	if err != nil {
@@ -370,52 +390,50 @@ func (h *experienceHandlers) refuseKeyedCascade(ctx context.Context, userID int6
 	if n == 0 {
 		return nil
 	}
-	// The message names the way out, because the caller reading it is usually an agent and
-	// this is its only route to correcting itself inside the turn.
+	// The message names the way out: the caller is usually an agent and this is its only
+	// route to correcting itself inside the turn.
 	return fiber.NewError(fiber.StatusConflict, fmt.Sprintf(
 		"this place still holds %d achievement(s), and deleting it would delete them too. "+
 			"Move them first (PUT /me/experience/atoms/:id with another employment_id, or "+
 			"delete them one by one), or remove the place from the experience page on the site.", n))
 }
 
-// UpdateAtom rewrites one achievement. Editing it makes it the owner's own statement —
-// they typed it — so the provenance becomes `manual` regardless of how it arrived. That is
-// the confirmation path for something the agent inferred: correct it, and it becomes
-// yours.
-func (h *experienceHandlers) UpdateAtom(c *fiber.Ctx) error {
-	userID, id, err := ownedEntry(c)
+// UpdateAtom rewrites one achievement. A cookie edit is the owner's own statement, so
+// provenance becomes `manual`; this is how they confirm something the agent inferred.
+func (h *experienceHandlers) UpdateAtom(ctx context.Context, req jx.Raw, params apigen.UpdateAtomParams) (*apigen.UpdateAtomOK, error) {
+	userID, id, err := ownedEntry(ctx, params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var in experience.Atom
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	if err := decodeBody(req, &in); err != nil {
+		return nil, err
 	}
-	// A keyed caller may change what an achievement says and may not change who is held to
-	// have said it — AuthorRewrite is that rule, and the bank reads the standing itself
-	// rather than trusting a label computed up here.
-	updated, err := h.bank.UpdateAtom(c.Context(), id, userID, in, updateAuthor(auth.ViaAPIKey(c)))
+	// A keyed caller may change what an achievement says, not who is held to have said it;
+	// the bank reads the standing itself rather than trusting a label computed here.
+	updated, err := h.bank.UpdateAtom(ctx, id, userID, in, updateAuthor(auth.ViaAPIKeyFromContext(ctx)))
 	if err != nil {
-		return experienceError(err)
+		return nil, experienceError(err)
 	}
-	return c.JSON(fiber.Map{"data": updated})
+	raw, err := json.Marshal(updated)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.UpdateAtomOK{Data: raw}, nil
 }
 
-// DeleteAtom removes one achievement. This is the only path that takes evidence out of the
-// bank — import never deletes — so it belongs to the owner and nobody else.
-func (h *experienceHandlers) DeleteAtom(c *fiber.Ctx) error {
-	userID, id, err := ownedEntry(c)
+// DeleteAtom removes one achievement. The only path that takes evidence out of the bank
+// (import never deletes), so it belongs to the owner.
+func (h *experienceHandlers) DeleteAtom(ctx context.Context, params apigen.DeleteAtomParams) error {
+	userID, id, err := ownedEntry(ctx, params.ID)
 	if err != nil {
 		return err
 	}
-	if err := h.bank.DeleteAtom(c.Context(), id, userID); err != nil {
-		return experienceError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return experienceError(h.bank.DeleteAtom(ctx, id, userID))
 }
 
 // checkContextRequired refuses an interactive create with empty context when the owner
-// has opted in. Import and UpdateAtom never call this.
+// has opted in. Import and UpdateAtom never call it.
 func (h *experienceHandlers) checkContextRequired(ctx context.Context, userID int64, contextText string) error {
 	if h.requireContext == nil || strings.TrimSpace(contextText) != "" {
 		return nil
@@ -430,18 +448,10 @@ func (h *experienceHandlers) checkContextRequired(ctx context.Context, userID in
 	return nil
 }
 
-// ownedEntry resolves the caller and the addressed entry id together, since every route
-// here needs both and neither is useful alone.
-// provenanceForUpdate answers what an edit does to a claim's standing, and it is the reason
-// correcting an achievement can be reached with an API key at all.
-//
-// A candidate editing their own entry IS asserting it — that is what `manual` records, and
-// it is why the browser path stamps every correction with it regardless of where the row
-// came from. The tailoring agent holds a key, and stamping its path would let it promote its
-// own reading: bank an inference as `agent_inferred` (which the CV evidence gate refuses),
-// PUT it, read back `manual`, and cite it. So a keyed edit rewrites the words and leaves the
-// label untouched, which is what AuthorRewrite means; the cookie path is the person, so it is
-// AuthorCandidate.
+// updateAuthor says who an edit is attributed to. The cookie path is the person, so
+// AuthorCandidate. A key rewrites the words but leaves the provenance label untouched
+// (AuthorRewrite): otherwise the tailoring agent could bank an inference as `agent_inferred`,
+// PUT it, read back `manual`, and cite it past the CV evidence gate.
 func updateAuthor(viaKey bool) experience.Author {
 	if viaKey {
 		return experience.AuthorRewrite
@@ -449,22 +459,22 @@ func updateAuthor(viaKey bool) experience.Author {
 	return experience.AuthorCandidate
 }
 
-func ownedEntry(c *fiber.Ctx) (int64, uuid.UUID, error) {
-	userID, err := requireUserID(c)
+// ownedEntry resolves the caller and the addressed entry id together.
+func ownedEntry(ctx context.Context, rawID string) (int64, uuid.UUID, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return 0, uuid.Nil, err
 	}
-	id, err := uuid.Parse(c.Params("id"))
+	id, err := uuid.Parse(rawID)
 	if err != nil {
-		// A malformed id is indistinguishable from an id that does not exist, and saying
-		// so is the same disclosure choice ownership already makes.
+		// A malformed id looks the same as a missing one, like ownership.
 		return 0, uuid.Nil, fiber.NewError(fiber.StatusNotFound, "not found")
 	}
 	return userID, id, nil
 }
 
-// experienceError maps the bank's sentinels onto HTTP. ErrNotFound covers both "no such
-// entry" and "not yours" — the two are deliberately indistinguishable.
+// experienceError maps the bank's sentinels onto HTTP. ErrNotFound covers "no such entry"
+// and "not yours" alike.
 func experienceError(err error) error {
 	switch {
 	case errors.Is(err, experience.ErrNotFound):

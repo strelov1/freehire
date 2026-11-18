@@ -4,17 +4,6 @@
 -- (see the add-username-claim change) and no longer read by any caller.
 SELECT id, user_id, created_at FROM mailboxes WHERE user_id = $1;
 
--- name: ListMailboxesWithoutBackfilledUsername :many
--- Candidates for cmd/backfill-username-from-mailbox: every hosted mailbox whose
--- owner has not yet been backfilled onto users.username. Small by construction —
--- mailboxes is an opt-in feature, nowhere near the row counts the repo's chunked
--- cmd/backfill-* workers exist for — so one unpaged query is enough.
-SELECT m.user_id, m.address
-FROM mailboxes m
-JOIN users u ON u.id = m.user_id
-WHERE u.username IS NULL
-ORDER BY m.user_id;
-
 -- name: EnsureMailbox :exec
 -- Enroll userID in the hosted mailbox, idempotently — a second call for the same
 -- user is a no-op. The address itself is never stored here; it is always derived

@@ -10,7 +10,17 @@ function setup(lo: number, hi: number) {
   const onLo = vi.fn();
   const onHi = vi.fn();
   render(RangeSlider, {
-    props: { min: 0, max: 300000, step: 5000, lo, hi, loLabel: 'Minimum salary', hiLabel: 'Maximum salary', onLo, onHi },
+    props: {
+      min: 0,
+      max: 300000,
+      step: 5000,
+      lo,
+      hi,
+      loLabel: 'Minimum salary',
+      hiLabel: 'Maximum salary',
+      onLo,
+      onHi,
+    },
   });
   const loInput = screen.getByRole('slider', { name: 'Minimum salary' }) as HTMLInputElement;
   const hiInput = screen.getByRole('slider', { name: 'Maximum salary' }) as HTMLInputElement;
@@ -56,7 +66,8 @@ describe('RangeSlider accessibility and touch', () => {
         hiLabel: 'Maximum salary',
         onLo: () => {},
         onHi: () => {},
-        valueText: (n: number, thumb: 'lo' | 'hi') => (thumb === 'lo' && n === 0 ? 'No minimum' : thumb === 'hi' && n === 300000 ? 'No ceiling' : String(n)),
+        valueText: (n: number, thumb: 'lo' | 'hi') =>
+          thumb === 'lo' && n === 0 ? 'No minimum' : thumb === 'hi' && n === 300000 ? 'No ceiling' : String(n),
       },
     });
     expect(screen.getByRole('slider', { name: 'Minimum salary' }).getAttribute('aria-valuetext')).toBe('No minimum');
@@ -67,7 +78,17 @@ describe('RangeSlider accessibility and touch', () => {
     const { onLo, onHi, loInput } = setup(0, 300000);
     const box = loInput.parentElement as HTMLElement;
     // 0..300000 over a 324px box: the thumb centre travels 300px, 12px in from each end.
-    box.getBoundingClientRect = () => ({ left: 0, width: 324, top: 0, height: 24, right: 324, bottom: 24, x: 0, y: 0, toJSON: () => ({}) });
+    box.getBoundingClientRect = () => ({
+      left: 0,
+      width: 324,
+      top: 0,
+      height: 24,
+      right: 324,
+      bottom: 24,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
     await fireEvent.pointerDown(box, { clientX: 12 + 50 });
     expect(onLo).toHaveBeenCalledWith(50000);
     await fireEvent.pointerDown(box, { clientX: 12 + 250 });

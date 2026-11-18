@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/application/ical"
+	"github.com/strelov1/freehire/internal/platform/mailmeta"
 )
 
 const gmailBaseURL = "https://gmail.googleapis.com/gmail/v1/users/me"
@@ -24,27 +25,54 @@ const gmailBaseURL = "https://gmail.googleapis.com/gmail/v1/users/me"
 type apiReader struct {
 	client  *http.Client
 	learned []string
+	// waited is how much of limitWaitBudget this reader (one mailbox, one run) has spent.
+	waited time.Duration
+	sleep  func(ctx context.Context, d time.Duration) error
 }
+
+// Gmail's per-user quota is per minute, and a large first sync spends it in about thirty
+// seconds; giving up on the first refusal stopped every run at the same point. A refused
+// call waits and retries, doubling the pause, until the mailbox's budget for the run is
+// spent; then the refusal is returned and the next run continues.
+const (
+	limitFirstWait  = 2 * time.Second
+	limitMaxWait    = 32 * time.Second
+	limitWaitBudget = 3 * time.Minute
+)
 
 // NewAPIReader wraps a token-bearing HTTP client as a GmailReader, unioning the
 // learned domains into its search query.
 func NewAPIReader(client *http.Client, learned []string) GmailReader {
-	return &apiReader{client: client, learned: learned}
+	return &apiReader{client: client, learned: learned, sleep: sleepCtx}
 }
 
 // ListATSMessageIDs pages through the ATS-scoped search, returning all matching ids.
 func (r *apiReader) ListATSMessageIDs(ctx context.Context, selfAddr string, afterUnix int64) ([]string, error) {
 	q := BuildQueryFor(selfAddr, afterUnix, r.learned)
-	var ids []string
+	refs, err := r.listMessages(ctx, q)
+	ids := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		ids = append(ids, ref.ID)
+	}
+	return ids, err
+}
+
+func (r *apiReader) ListSentMessages(ctx context.Context, afterUnix int64) ([]MessageRef, error) {
+	return r.listMessages(ctx, fmt.Sprintf("in:sent after:%d", max(0, afterUnix-60)))
+}
+
+func (r *apiReader) listMessages(ctx context.Context, query string) ([]MessageRef, error) {
+	var refs []MessageRef
 	pageToken := ""
 	for {
-		u := fmt.Sprintf("%s/messages?maxResults=100&q=%s", gmailBaseURL, url.QueryEscape(q))
+		u := fmt.Sprintf("%s/messages?maxResults=100&q=%s", gmailBaseURL, url.QueryEscape(query))
 		if pageToken != "" {
 			u += "&pageToken=" + url.QueryEscape(pageToken)
 		}
 		var page struct {
 			Messages []struct {
-				ID string `json:"id"`
+				ID       string `json:"id"`
+				ThreadID string `json:"threadId"`
 			} `json:"messages"`
 			NextPageToken string `json:"nextPageToken"`
 		}
@@ -52,10 +80,10 @@ func (r *apiReader) ListATSMessageIDs(ctx context.Context, selfAddr string, afte
 			return nil, err
 		}
 		for _, m := range page.Messages {
-			ids = append(ids, m.ID)
+			refs = append(refs, MessageRef{ID: m.ID, ThreadID: m.ThreadID})
 		}
 		if page.NextPageToken == "" {
-			return ids, nil
+			return refs, nil
 		}
 		pageToken = page.NextPageToken
 	}
@@ -82,22 +110,11 @@ func (r *apiReader) ListThreadMessageIDs(ctx context.Context, threadID string) (
 // GetMessage fetches one full message and parses it.
 func (r *apiReader) GetMessage(ctx context.Context, id string) (Message, error) {
 	u := fmt.Sprintf("%s/messages/%s?format=full", gmailBaseURL, url.PathEscape(id))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return Message{}, err
-	}
-	resp, err := r.client.Do(req)
+	resp, err := r.get(ctx, u, fmt.Sprintf("gmail: get message %s", id))
 	if err != nil {
 		return Message{}, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return Message{}, &APIError{
-			Op:         fmt.Sprintf("gmail: get message %s", id),
-			StatusCode: resp.StatusCode,
-			Status:     resp.Status,
-		}
-	}
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return Message{}, err
@@ -106,19 +123,53 @@ func (r *apiReader) GetMessage(ctx context.Context, id string) (Message, error) 
 }
 
 func (r *apiReader) getJSON(ctx context.Context, u string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := r.client.Do(req)
+	resp, err := r.get(ctx, u, "gmail: "+u)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return &APIError{Op: "gmail: " + u, StatusCode: resp.StatusCode, Status: resp.Status}
-	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// get returns a 200 response, waiting out rate-limit refusals within the reader's budget.
+// A daily quota does not recover within a run, so it is returned at once.
+func (r *apiReader) get(ctx context.Context, u, op string) (*http.Response, error) {
+	wait := limitFirstWait
+	for {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := r.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusOK {
+			return resp, nil
+		}
+		apiErr := NewAPIError(op, resp)
+		_ = resp.Body.Close()
+		if !LimitHit(apiErr) || strings.Contains(strings.ToLower(apiErr.Reason), "daily") ||
+			r.waited+wait > limitWaitBudget {
+			return nil, apiErr
+		}
+		if err := r.sleep(ctx, wait); err != nil {
+			return nil, apiErr
+		}
+		r.waited += wait
+		wait = min(2*wait, limitMaxWait)
+	}
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 // --- pure parsing -----------------------------------------------------------
@@ -139,6 +190,7 @@ type gmailHeader struct {
 
 type gmailMessage struct {
 	ID           string    `json:"id"`
+	Labels       []string  `json:"labelIds"`
 	ThreadID     string    `json:"threadId"`
 	InternalDate string    `json:"internalDate"`
 	Payload      gmailPart `json:"payload"`
@@ -151,7 +203,18 @@ func parseMessage(raw []byte) (Message, error) {
 	if err := json.Unmarshal(raw, &gm); err != nil {
 		return Message{}, fmt.Errorf("gmail: decode message: %w", err)
 	}
-	m := Message{ID: gm.ID, ThreadID: gm.ThreadID}
+	m := Message{ID: gm.ID, ThreadID: gm.ThreadID, Direction: DirectionIncoming}
+	for _, label := range gm.Labels {
+		if label == "SENT" {
+			m.Direction = DirectionOutgoing
+		}
+		if label == "DRAFT" {
+			m.Draft = true
+		}
+	}
+	m.SystemNotification = mailmeta.IsDigest(headerValue(gm.Payload.Headers, mailmeta.NotificationHeader), headerValue(gm.Payload.Headers, "Auto-Submitted"))
+	m.ToAddrs = headerValue(gm.Payload.Headers, "To")
+	m.CcAddrs = headerValue(gm.Payload.Headers, "Cc")
 
 	if ms, err := strconv.ParseInt(gm.InternalDate, 10, 64); err == nil {
 		m.ReceivedAt = time.UnixMilli(ms)
@@ -202,8 +265,7 @@ func bodies(p gmailPart) (text, html string) {
 }
 
 // calendarUID walks the MIME tree for a text/calendar part and reads the meeting's
-// identifier out of it. A part that carries none, or that does not parse, yields "" —
-// an invitation whose meeting we cannot identify is still an invitation, and the mail
+// identifier out of it. A part that carries none, or does not parse, yields "": the mail
 // must not be lost over it.
 func calendarUID(p gmailPart) string {
 	var found string
@@ -240,9 +302,8 @@ func decodeB64URL(s string) string {
 
 // Search runs an arbitrary query and returns the matching messages in full.
 //
-// One page only. The recall query is already scoped to one employer inside one window, so a
-// result that overflows a page is a query that failed to narrow rather than a mailbox that
-// needs paging — and the caller is a person waiting at a button.
+// One page only: the recall query is scoped to one employer and window, and the caller is a
+// person waiting at a button.
 func (r *apiReader) Search(ctx context.Context, query string, limit int) ([]Message, error) {
 	if query == "" {
 		return nil, nil
@@ -261,8 +322,7 @@ func (r *apiReader) Search(ctx context.Context, query string, limit int) ([]Mess
 	for _, m := range page.Messages {
 		msg, err := r.GetMessage(ctx, m.ID)
 		if err != nil {
-			// One unreadable message must not lose the rest: the caller is choosing from
-			// what we found, and a short list beats an error nobody can act on.
+			// One unreadable message must not lose the rest.
 			continue
 		}
 		out = append(out, msg)

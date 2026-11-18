@@ -7,18 +7,15 @@ import (
 	"encoding/hex"
 )
 
-// apiKeyPrefix marks every freehire API key so a leaked secret is recognizable (to
-// the user and to secret scanners) and never confused with a session token.
+// apiKeyPrefix marks freehire API keys so leaks are recognizable and never confused with
+// a session token.
 const apiKeyPrefix = "fhk_"
 
-// apiKeyDisplayLen is how much of the token is kept as a non-secret display prefix
-// (token_prefix): enough to tell keys apart in a list, far too little to guess the
-// rest of a 256-bit secret.
+// apiKeyDisplayLen is the non-secret display prefix kept as token_prefix.
 const apiKeyDisplayLen = 12
 
-// GenerateAPIKey mints a new opaque API key. It returns the plaintext token (shown
-// to the user exactly once), its SHA-256 hash (the only thing persisted, and the
-// per-request authentication lookup key), and a short non-secret display prefix.
+// GenerateAPIKey mints an API key: the plaintext token (shown once), its SHA-256 hash (the
+// only thing persisted, and the lookup key), and a short display prefix.
 func GenerateAPIKey() (token, hash, prefix string, err error) {
 	var b [32]byte
 	if _, err = rand.Read(b[:]); err != nil {
@@ -28,17 +25,12 @@ func GenerateAPIKey() (token, hash, prefix string, err error) {
 	return token, HashAPIKey(token), token[:apiKeyDisplayLen], nil
 }
 
-// HashAPIKey returns the hex-encoded SHA-256 of an API key. The token is
-// high-entropy random, so a single SHA-256 is sufficient and keeps the lookup an
-// indexed, constant-work probe — unlike a salted password hash, which a low-entropy
-// password needs but which would forbid an indexed lookup.
+// HashAPIKey returns the hex SHA-256 of an API key. The token is high-entropy random, so
+// one SHA-256 suffices and keeps the lookup indexed.
 //
-// CodeQL reads this as password hashing (go/weak-sensitive-data-hashing, high) and
-// the finding is dismissed, not silenced: nothing but a 32-byte crypto/rand token
-// reaches here — GenerateAPIKey above, or the Bearer header in middleware.go — and
-// passwords take an entirely separate path through bcrypt in password.go. Re-check
-// that the two paths are still separate before dismissing it again; the rule is
-// right about what it looks for, only wrong about what this argument is.
+// CodeQL flags this as password hashing (go/weak-sensitive-data-hashing) and the finding
+// is dismissed: only 32-byte crypto/rand tokens reach here, and passwords go through
+// bcrypt in password.go. Re-check that the paths stay separate.
 func HashAPIKey(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

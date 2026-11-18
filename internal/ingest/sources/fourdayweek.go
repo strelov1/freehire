@@ -12,13 +12,9 @@ import (
 // many employers, so it stays in the source facet and takes each posting's company from the
 // feed.
 //
-// It reads /api/v2/jobs, which robots.txt explicitly ALLOWS ("Allow: /api/v2") — the /api/jobs
-// this adapter used until 2026-09 is under that same file's "Disallow: /api/", and the crawl
-// began failing when the site started enforcing it. The move is therefore a correction, not a
-// workaround, and it is a better feed besides: v2 carries the DESCRIPTION and the canonical URL
-// inline, so the per-posting HTML fetch this adapter used to make is gone — with it the ~24k
-// extra requests per crawl and the whole "is this posting Pro-locked?" problem, since the API
-// serves the body directly.
+// It reads /api/v2/jobs, which robots.txt allows ("Allow: /api/v2"); the older /api/jobs is
+// under "Disallow: /api/" and is enforced. v2 carries the description and the canonical URL
+// inline, so there is no per-posting HTML fetch.
 type fourDayWeek struct {
 	http fourDayWeekHTTP
 }
@@ -37,7 +33,7 @@ const (
 	// this is the fallback for a posting that omits it.
 	fourDayWeekJobURL = "https://4dayweek.io/job/%s"
 	// fourDayWeekMaxPages bounds pagination so a feed that never reports has_more=false cannot
-	// loop forever. The catalogue is ~21k postings at 100/page, so this leaves ample headroom.
+	// loop forever.
 	fourDayWeekMaxPages = 400
 )
 

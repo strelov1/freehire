@@ -21,9 +21,14 @@ export const messages = defineMessages(
     cvUnreadable: "Couldn't read that CV.",
     send: 'Send',
     trySearch: 'Try a search',
-    examples: ['Senior Go backend in Europe', 'Data engineer, remote', 'Product designer in Brazil', 'DevOps lead, Germany'],
+    examples: [
+      'Senior Go backend in Europe',
+      'Data engineer, remote',
+      'Product designer in Brazil',
+      'DevOps lead, Germany',
+    ],
     cvFallback: 'Find jobs that fit my CV',
-    searchLabel: 'search',
+    searchLabel: 'Search',
     keepChattingPrompt:
       'Sure — what should I change? For example: "remote only", "only startups", "add Python", "posted this week" or "not in the US".',
     emptyPlan:
@@ -66,9 +71,14 @@ export const messages = defineMessages(
       cvUnreadable: 'Не удалось прочитать это CV.',
       send: 'Отправить',
       trySearch: 'Попробуйте',
-      examples: ['Senior Go-бэкенд в Европе', 'Data engineer, удалённо', 'Продуктовый дизайнер в Бразилии', 'DevOps-лид, Германия'],
+      examples: [
+        'Senior Go-бэкенд в Европе',
+        'Data engineer, удалённо',
+        'Продуктовый дизайнер в Бразилии',
+        'DevOps-лид, Германия',
+      ],
       cvFallback: 'Найди вакансии под моё CV',
-      searchLabel: 'поиск',
+      searchLabel: 'Поиск',
       keepChattingPrompt:
         'Хорошо — что поменять? Например: «только удалённо», «только стартапы», «добавь Python», «за эту неделю» или «не в США».',
       emptyPlan:

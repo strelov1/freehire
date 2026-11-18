@@ -36,8 +36,7 @@ asked for.
 
 It works over plain HTTP or over [MCP](https://modelcontextprotocol.io), the
 protocol most AI tools already speak. No API key, no signup, nothing to pay —
-same as [our public API](/docs/api). The budget is 300 requests a minute per
-anonymous caller.
+same as [our public API](/docs/api).
 
 We're one of the first implementers outside the group that drafted it, and we've
 been sending our findings back. Writing a real provider turned up several things

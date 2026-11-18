@@ -37,12 +37,17 @@ type fakeQueries struct {
 	boilerplate    []db.EmploymentBoilerplateCandidatesRow
 	boilerplateErr error
 	notify         []db.NotifyBacklogMetricsRow
+	notifyVolume   db.NotifyDigestVolumeMetricsRow
 	newestErr      error
 	searchErr      error
 }
 
 func (f fakeQueries) NotifyBacklogMetrics(context.Context) ([]db.NotifyBacklogMetricsRow, error) {
 	return f.notify, nil
+}
+
+func (f fakeQueries) NotifyDigestVolumeMetrics(context.Context) (db.NotifyDigestVolumeMetricsRow, error) {
+	return f.notifyVolume, nil
 }
 
 func (f fakeQueries) SearchOutboxMetrics(context.Context) (db.SearchOutboxMetricsRow, error) {

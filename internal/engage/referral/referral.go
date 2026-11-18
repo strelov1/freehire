@@ -44,10 +44,6 @@ const (
 	CVBuilt    = "built"
 )
 
-// DefaultDailyRequestCap bounds how many referral requests one seeker may create in a
-// rolling 24h window. Requests are free but spam-resistant; tune as usage shows.
-const DefaultDailyRequestCap = 10
-
 // Sentinel errors, mapped to HTTP statuses by the handler.
 var (
 	// ErrProofRequired is an offer submitted without a proof CV (422).
@@ -81,8 +77,6 @@ var (
 	ErrNoResume = errors.New("referral: no stored CV to attach")
 	// ErrCompanyNotEligible is a request into a company with no approved referrer (409).
 	ErrCompanyNotEligible = errors.New("referral: company has no approved referrer")
-	// ErrDailyCapReached is a seeker exceeding the rolling-24h request cap (429).
-	ErrDailyCapReached = errors.New("referral: daily request cap reached")
 	// ErrAlreadyRequested is a second active request for a company the seeker already has a
 	// sent request for; the repository maps the partial-unique violation to this (409).
 	ErrAlreadyRequested = errors.New("referral: an active request already exists")
@@ -100,19 +94,15 @@ var (
 	ErrContactTooLong = errors.New("referral: contact is too long")
 )
 
-// Free-text length bounds (the content-field convention: report.maxDetailsLen,
-// companyfeedback.maxBodyRunes), applied where sibling packages already cap their
-// equivalent user-supplied text — this package had been the gap.
+// Free-text length bounds, matching the caps sibling packages apply to their
+// user-supplied text (report.maxDetailsLen, companyfeedback.maxBodyRunes).
 const (
 	// maxNoteLen bounds a request's free-text note.
 	maxNoteLen = 5000
-	// maxContactLen bounds ContactTelegram and ContactEmail — generous for either shape
-	// (a Telegram handle/t.me link or an email address, RFC 5321's own 254-byte cap)
-	// while still bounding what a request can carry.
+	// maxContactLen bounds ContactTelegram and ContactEmail (RFC 5321's own 254-byte cap).
 	maxContactLen = 254
-	// maxLinkedInURLLen bounds LinkedInURL (on both OfferInput and RequestInput, via
-	// validLinkedInURL below) — generous for a real linkedin.com/in/<handle> URL,
-	// including a country subdomain and a trailing query/fragment, while still bounded.
+	// maxLinkedInURLLen bounds LinkedInURL, with room for a country subdomain and a trailing
+	// query/fragment.
 	maxLinkedInURLLen = 500
 )
 
@@ -214,7 +204,6 @@ type Repository interface {
 	UserHasResume(ctx context.Context, userID int64) (bool, error)
 
 	CreateRequest(ctx context.Context, in RequestInput) (Request, error)
-	CountRequestsSince(ctx context.Context, seekerID int64, since time.Time) (int64, error)
 	GetRequest(ctx context.Context, id uuid.UUID) (Request, bool, error)
 	ResolveRequest(ctx context.Context, id uuid.UUID, actorID int64, status string) (Request, error)
 	ListRequestsBySeeker(ctx context.Context, seekerID int64) ([]Request, error)
@@ -230,12 +219,8 @@ type Pinger interface {
 
 // Config tunes a Service.
 type Config struct {
-	// DailyRequestCap is the rolling-24h per-seeker request limit; 0 → DefaultDailyRequestCap.
-	DailyRequestCap int
 	// CabinetURL is the referrer inbox URL a ping links to (frontend origin + inbox path).
 	CabinetURL string
-	// Now is the clock, injectable for tests; nil → time.Now.
-	Now func() time.Time
 }
 
 // Service implements the referral use cases over a Repository and a Pinger.
@@ -245,23 +230,12 @@ type Service struct {
 	// blobs erases a withdrawn offer's proof CV. Nil where object storage is unconfigured,
 	// in which case there is no object to erase — which must not stop a withdrawal.
 	blobs      blobstore.Store
-	dailyCap   int
 	cabinetURL string
-	now        func() time.Time
 }
 
-// New builds a Service. A zero DailyRequestCap falls back to DefaultDailyRequestCap and a
-// nil Now to time.Now; a nil blobs is a deployment without object storage.
+// New builds a Service over the repository, delivery channels and proof storage.
 func New(repo Repository, pinger Pinger, blobs blobstore.Store, cfg Config) *Service {
-	cap := cfg.DailyRequestCap
-	if cap <= 0 {
-		cap = DefaultDailyRequestCap
-	}
-	now := cfg.Now
-	if now == nil {
-		now = time.Now
-	}
-	return &Service{repo: repo, pinger: pinger, blobs: blobs, dailyCap: cap, cabinetURL: cfg.CabinetURL, now: now}
+	return &Service{repo: repo, pinger: pinger, blobs: blobs, cabinetURL: cfg.CabinetURL}
 }
 
 // SubmitOffer records a member's offer to refer into a company, awaiting moderation. It
@@ -293,19 +267,16 @@ func (s *Service) GetOffer(ctx context.Context, offerID uuid.UUID) (Offer, bool,
 }
 
 // WithdrawOffer lets a member stop being a referrer: it hard-deletes their own offer,
-// owner-scoped by userID. A missing offer or one owned by someone else returns
-// ErrOfferNotFound. Deleting frees the (user, company) slot so they can offer again later.
+// owner-scoped by userID. A missing or foreign offer returns ErrOfferNotFound. Deleting
+// frees the (user, company) slot.
 //
-// The offer's proof CV is erased with it, and that is not housekeeping. The offer row is the
-// only thing that names the object: accountdelete finds a member's stored objects by reading
-// these rows (see its BlobKeys), so a row deleted on its own leaves a CV in the bucket that
-// nothing can reach again — not a later withdrawal, not the member's own account deletion.
+// The offer's proof CV is erased with it: the row is the only thing that names the object
+// (accountdelete finds a member's objects through these rows, see its BlobKeys), so
+// deleting the row alone would orphan a CV nothing can reach.
 //
-// The object goes BEFORE the row, the order accountdelete uses and for its reason: if the
-// object cannot be erased the offer stands, so the member simply retries, whereas deleting
-// the row first would strand the object with no key left to find it by. The read that learns
-// the key is also what enforces ownership, so a non-owner never reaches another member's
-// proof. Object deletes are idempotent, so a retry after a partial run is safe.
+// The object goes BEFORE the row, as in accountdelete: if the erase fails the offer stands
+// and the member retries. The read that learns the key also enforces ownership. Object
+// deletes are idempotent, so a retry is safe.
 func (s *Service) WithdrawOffer(ctx context.Context, offerID uuid.UUID, userID int64) error {
 	offer, ok, err := s.repo.GetOffer(ctx, offerID)
 	if err != nil {
@@ -364,7 +335,7 @@ func (s *Service) CVOptions(ctx context.Context, userID int64, companySlug strin
 
 // CreateRequest validates and records a seeker's referral request, then best-effort pings
 // the company's approved referrers. It enforces contact presence, the CV kind/id invariant,
-// company eligibility, and the rolling-24h cap before writing; a duplicate active request
+// and company eligibility before writing; a duplicate active request
 // returns ErrAlreadyRequested.
 func (s *Service) CreateRequest(ctx context.Context, in RequestInput) (Request, error) {
 	if err := validateContact(in); err != nil {
@@ -380,10 +351,10 @@ func (s *Service) CreateRequest(ctx context.Context, in RequestInput) (Request, 
 		return Request{}, err
 	}
 	// The attached CV must be one the seeker has AND one that fits the request: tailored for
-	// its vacancy, or for a vacancy at its company. A built cv_id comes from the client, so
-	// its FK guarantees existence, not ownership or fit — anything else is an invalid choice
-	// (not a distinct error) so the response never leaks that a foreign CV exists. An
-	// original attachment requires a stored résumé, else it would serve nothing.
+	// its vacancy, or for a vacancy at its company. A built cv_id comes from the client, so its
+	// FK guarantees existence, not ownership or fit. Anything else is an invalid choice (not a
+	// distinct error) so the response never leaks that a foreign CV exists. An original needs a
+	// stored résumé.
 	switch in.CVKind {
 	case CVBuilt:
 		fitting, err := s.repo.ReferralCVs(ctx, in.SeekerUserID, in.CompanySlug, in.JobID)
@@ -408,13 +379,6 @@ func (s *Service) CreateRequest(ctx context.Context, in RequestInput) (Request, 
 	}
 	if !eligible {
 		return Request{}, ErrCompanyNotEligible
-	}
-	n, err := s.repo.CountRequestsSince(ctx, in.SeekerUserID, s.now().Add(-24*time.Hour))
-	if err != nil {
-		return Request{}, err
-	}
-	if int(n) >= s.dailyCap {
-		return Request{}, ErrDailyCapReached
 	}
 	req, err := s.repo.CreateRequest(ctx, in)
 	if err != nil {

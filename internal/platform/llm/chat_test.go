@@ -22,6 +22,7 @@ type chatModel struct {
 	gotTools     []llms.Tool
 	gotTemp      float64
 	gotReasoning ReasoningEffort
+	gotChoice    any
 }
 
 func (m *chatModel) GenerateContent(ctx context.Context, msgs []llms.MessageContent, opts ...llms.CallOption) (*llms.ContentResponse, error) {
@@ -33,6 +34,7 @@ func (m *chatModel) GenerateContent(ctx context.Context, msgs []llms.MessageCont
 	}
 	m.gotTools = co.Tools
 	m.gotTemp = co.Temperature
+	m.gotChoice = co.ToolChoice
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -209,6 +211,21 @@ func TestChatObservesModelError(t *testing.T) {
 	}
 	if len(ct.got) != 1 || ct.got[0].Err == nil {
 		t.Fatalf("expected one error generation, got %+v", ct.got)
+	}
+}
+
+func TestChatCallerCancellationIsObservedAsCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ct := &captureTracer{}
+	c := &Client{model: &chatModel{err: errors.New("request cancelled")}, timeout: time.Second, tracer: ct, source: "assistant"}
+
+	if _, err := c.Chat(ctx,
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, ChatStream{}); err == nil {
+		t.Fatal("expected an error from a cancelled call")
+	}
+	if len(ct.got) != 1 || !ct.got[0].Cancelled {
+		t.Fatalf("expected one cancelled error generation, got %+v", ct.got)
 	}
 }
 

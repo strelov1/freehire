@@ -16,25 +16,32 @@ WHERE open_jobs >= sqlc.arg(min_open)::bigint
 ORDER BY source;
 
 -- name: SampleLivenessAuditJobs :many
-SELECT id, source, external_id, url, public_slug
-FROM jobs
-WHERE source = sqlc.arg(source)
-  AND closed_at IS NULL
-  AND NOT is_private
-  AND random() < sqlc.arg(fraction)::float8
+-- Materialize the narrow source/id scan before fetching any posting columns. The partial
+-- (source, id) open index can supply candidates without reading the catalogue's wide rows.
+WITH candidates AS MATERIALIZED (
+    SELECT candidate.id FROM jobs candidate
+    WHERE candidate.source = sqlc.arg(source)
+      AND candidate.closed_at IS NULL
+      AND random() < sqlc.arg(fraction)::float8
+)
+SELECT j.id, j.source, j.external_id, j.url, j.public_slug
+FROM candidates c JOIN jobs j ON j.id = c.id
+WHERE NOT j.is_private
 ORDER BY random()
 LIMIT sqlc.arg(max_rows)::int;
 
 -- name: CountOpenRemoteJobsBySource :many
 -- How many open public postings each source tags remote — the weights the week's sources are
 -- drawn by. Narrow: no description is read.
-SELECT source, count(*)::bigint AS remote_jobs
+SELECT source, count(*)::bigint AS remote_jobs,
+       count(*) FILTER (WHERE 'global' = ANY(regions))::bigint AS global_jobs
 FROM jobs
 WHERE closed_at IS NULL
   AND NOT is_private
   AND work_mode = 'remote'
 GROUP BY source
 HAVING count(*) >= sqlc.arg(min_remote)::bigint
+    OR count(*) FILTER (WHERE 'global' = ANY(regions)) > 0
 ORDER BY source;
 
 -- name: SampleRemoteAuditJobs :many
@@ -45,6 +52,7 @@ WHERE source = sqlc.arg(source)
   AND closed_at IS NULL
   AND NOT is_private
   AND work_mode = 'remote'
+  AND ('global' = ANY(regions)) = sqlc.arg(only_global)::boolean
   AND random() < sqlc.arg(fraction)::float8
 ORDER BY random()
 LIMIT sqlc.arg(max_rows)::int;

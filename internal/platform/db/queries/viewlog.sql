@@ -32,6 +32,10 @@ WITH ins AS (
         DO UPDATE SET uniques      = job_daily_views.uniques + EXCLUDED.uniques,
                       page_uniques = job_daily_views.page_uniques + EXCLUDED.page_uniques
 )
+-- view_count is a sortable attribute of the search document, but it is NOT queued for
+-- the drain: cmd/rollup-views writes the new figures to the index itself at the end of
+-- the run (search.SetViewCounts). Queuing them re-built ~1.7M whole documents a day and
+-- kept search_outbox from ever emptying (2026-11-14).
 UPDATE jobs SET view_count = view_count + sqlc.arg('total_delta')
 WHERE id = sqlc.arg('job_id');
 
@@ -62,6 +66,7 @@ WITH ins AS (
     ON CONFLICT (day, job_id)
         DO UPDATE SET agent_uniques = job_daily_views.agent_uniques + EXCLUDED.agent_uniques
 )
+-- Not queued for the drain, for the same reason as ApplyDailyView.
 UPDATE jobs SET view_count = view_count + sqlc.arg('delta')
 WHERE id = sqlc.arg('job_id');
 
@@ -79,3 +84,8 @@ VALUES (sqlc.arg('signature'), sqlc.arg('filename'), sqlc.arg('job_id'), sqlc.ar
 ON CONFLICT (signature) DO UPDATE
     SET job_id = EXCLUDED.job_id, day = EXCLUDED.day, updated_at = now()
     WHERE c.job_id = sqlc.narg('prev_job_id') AND c.day = sqlc.narg('prev_day');
+
+-- name: GetJobViewCounts :many
+-- The current view_count of the jobs a rollup run touched, for the index write that
+-- replaces the old per-view search_outbox enqueue.
+SELECT id, view_count FROM jobs WHERE id = ANY(sqlc.arg('ids')::bigint[]);

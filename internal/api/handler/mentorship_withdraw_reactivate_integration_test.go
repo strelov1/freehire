@@ -49,15 +49,22 @@ func TestMentorshipWithdrawAndReactivateHTTPFlow(t *testing.T) {
 	cookieAuth := auth.RequireAuth(iss, testVersions)
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/mentorship/profile", cookieAuth, h.GetMyMentorProfile)
-	app.Post("/api/v1/me/mentorship/profile", cookieAuth, h.SubmitMentorProfile)
-	app.Delete("/api/v1/me/mentorship/profile", cookieAuth, h.WithdrawMentorProfile)
-	app.Post("/api/v1/me/mentorship/profile/reactivate", cookieAuth, h.ReactivateMentorProfile)
+	h.register(app.Group("/api/v1"), middleware{key: cookieAuth}, newContract(contractHandlers{mentorshipHandlers: h}))
 
 	authedRequest := func(method, path string) *http.Request {
 		r := httptest.NewRequestWithContext(ctx, method, path, nil)
 		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
 		return r
+	}
+
+	// No profile yet reads back as an explicit null, not an error or a missing key.
+	noneResp, err := app.Test(authedRequest(fiber.MethodGet, "/api/v1/me/mentorship/profile"))
+	if err != nil {
+		t.Fatalf("get profile with none: %v", err)
+	}
+	defer noneResp.Body.Close()
+	if noneBody, _ := io.ReadAll(noneResp.Body); string(noneBody) != `{"data":null}` {
+		t.Errorf("profile with none = %s, want {\"data\":null}", noneBody)
 	}
 
 	// Reactivating a profile that was never withdrawn (here: no profile at all yet) is

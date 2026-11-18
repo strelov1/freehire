@@ -53,11 +53,3 @@ WHERE user_id = sqlc.arg(user_id)::bigint
   AND job_id = sqlc.arg(job_id)::bigint
   AND retracted_at IS NULL
 RETURNING *;
-
--- name: CountGhostReportsSince :one
--- How many claims this account has filed since a cutoff, for the daily cap. Counts
--- retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
--- exists to bound, so forgiving it would leave the cap trivially bypassable.
-SELECT count(*) FROM ghost_reports
-WHERE user_id = sqlc.arg(user_id)::bigint
-  AND created_at >= sqlc.arg(since)::timestamptz;

@@ -70,14 +70,22 @@
   let historyPages = 0;
   // Loads are chained, so two quick clicks never append the same page twice.
   let historyLoad: Promise<void> = Promise.resolve();
-  let dayView = $state<{ key: string; status: 'loading' | 'ready' | 'error'; entries: BuddyFeedItem[]; complete: boolean } | null>(null);
+  let dayView = $state<{
+    key: string;
+    status: 'loading' | 'ready' | 'error';
+    entries: BuddyFeedItem[];
+    complete: boolean;
+  } | null>(null);
 
   function readThrough(key: string, current: string): Promise<void> {
     historyLoad = historyLoad.then(async () => {
-      while (historyPages < DAY_PAGES && (historyPages === 0 || (historyCursor && (history[history.length - 1]?.day ?? '') >= key))) {
+      while (
+        historyPages < DAY_PAGES &&
+        (historyPages === 0 || (historyCursor && (history[history.length - 1]?.day ?? '') >= key))
+      ) {
         const next = await api.listBuddyMemberFeed(current, historyCursor ?? undefined, DAY_PAGE_SIZE);
         if (current !== handle) return;
-        history = [...history, ...next.data];
+        history.push(...next.data);
         historyCursor = next.meta.next_cursor;
         historyPages += 1;
       }
@@ -108,13 +116,25 @@
   $effect(() => {
     const current = handle;
     let cancelled = false;
-    view = 'loading'; profile = null; feed = []; cursor = null; feedError = false;
+    view = 'loading';
+    profile = null;
+    feed = [];
+    cursor = null;
+    feedError = false;
     // `?tab=mock` opens straight on the booking tab: the mocks page's Book links there.
     const opening = untrack(() => page.url.searchParams.get('tab'));
-    activity = null; dayView = null; tab = opening === 'mock' || opening === 'experience' ? opening : 'activity'; allSkills = false;
-    history = []; historyCursor = null; historyPages = 0; historyLoad = Promise.resolve();
+    activity = null;
+    dayView = null;
+    tab = opening === 'mock' || opening === 'experience' ? opening : 'activity';
+    allSkills = false;
+    history = [];
+    historyCursor = null;
+    historyPages = 0;
+    historyLoad = Promise.resolve();
     api.getBuddyActivity(current).then(
-      (a) => { if (!cancelled) activity = a; },
+      (a) => {
+        if (!cancelled) activity = a;
+      },
       () => {},
     );
     void (async () => {
@@ -128,20 +148,25 @@
           messagingDock.refresh().catch(() => {}),
         ]);
         if (cancelled) return;
-        profile = p; feed = first.data; cursor = first.meta.next_cursor;
+        profile = p;
+        feed = first.data;
+        cursor = first.meta.next_cursor;
         view = 'ready';
       } catch (err) {
         if (cancelled) return;
         view = err instanceof ApiError && err.status === 404 ? 'unavailable' : 'error';
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   });
 
   async function loadMore() {
     if (feedBusy || !cursor) return;
     const current = handle;
-    feedBusy = true; feedError = false;
+    feedBusy = true;
+    feedError = false;
     try {
       const next = await api.listBuddyMemberFeed(current, cursor);
       if (current !== handle) return;
@@ -150,9 +175,10 @@
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) view = 'unavailable';
       else feedError = true;
-    } finally { feedBusy = false; }
+    } finally {
+      feedBusy = false;
+    }
   }
-
 </script>
 
 <svelte:head><title>{handle} · Interview buddies</title></svelte:head>
@@ -173,15 +199,21 @@
                 <h1 class="text-2xl font-semibold tracking-tight">{buddyHeading(summary)}</h1>
                 {#if summary.country}<CountryFlag code={summary.country} label={countryLabel(summary.country)} />{/if}
                 {#if totals && totals.offer > 0}
-                  <span class="inline-flex items-center gap-1 rounded-full bg-brand px-2 py-0.5 text-xs font-semibold text-brand-foreground">
-                    <BadgeCheck class="size-3.5" aria-hidden="true" />{totals.offer === 1 ? 'Got an offer' : `${totals.offer} offers`}
+                  <span
+                    class="inline-flex items-center gap-1 rounded-full bg-brand px-2 py-0.5 text-xs font-semibold text-brand-foreground"
+                  >
+                    <BadgeCheck class="size-3.5" aria-hidden="true" />{totals.offer === 1
+                      ? 'Got an offer'
+                      : `${totals.offer} offers`}
                   </span>
                 {/if}
               </div>
               <p class="flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
                 <span>{profile.handle}</span>
                 {#if summary.country}<span>{countryLabel(summary.country)}</span>{/if}
-                {#if profile.card.total_years}<span>{profile.card.total_years} {profile.card.total_years === 1 ? 'year' : 'years'} of experience</span>{/if}
+                {#if profile.card.total_years}<span
+                    >{profile.card.total_years} {profile.card.total_years === 1 ? 'year' : 'years'} of experience</span
+                  >{/if}
               </p>
             </div>
             <!-- Wraps under the header on a narrow screen rather than squeezing the heading. -->
@@ -199,9 +231,17 @@
           {#if totals}
             <!-- The same events the year grid counts, so the two never disagree. -->
             <p class="flex flex-wrap gap-x-5 gap-y-1 text-sm tabular-nums">
-              <span><b class="font-semibold">{totals.applied}</b> <span class="text-muted-foreground">applied</span></span>
-              <span><b class="font-semibold">{totals.interview}</b> <span class="text-muted-foreground">{totals.interview === 1 ? 'interview' : 'interviews'}</span></span>
-              <span><b class="font-semibold">{totals.offer}</b> <span class="text-muted-foreground">{totals.offer === 1 ? 'offer' : 'offers'}</span></span>
+              <span
+                ><b class="font-semibold">{totals.applied}</b> <span class="text-muted-foreground">applied</span></span
+              >
+              <span
+                ><b class="font-semibold">{totals.interview}</b>
+                <span class="text-muted-foreground">{totals.interview === 1 ? 'interview' : 'interviews'}</span></span
+              >
+              <span
+                ><b class="font-semibold">{totals.offer}</b>
+                <span class="text-muted-foreground">{totals.offer === 1 ? 'offer' : 'offers'}</span></span
+              >
               <span class="text-muted-foreground">in the last year</span>
             </p>
           {/if}
@@ -212,7 +252,11 @@
                 <Chip>{skillLabel(skill)}</Chip>
               {/each}
               {#if !allSkills && profile.card.skills.length > SKILLS_SHOWN}
-                <button type="button" class="rounded-full px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground" onclick={() => (allSkills = true)}>
+                <button
+                  type="button"
+                  class="rounded-full px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onclick={() => (allSkills = true)}
+                >
                   +{profile.card.skills.length - SKILLS_SHOWN} more
                 </button>
               {/if}
@@ -220,7 +264,13 @@
           {/if}
         </div>
         <div class="border-t border-border px-3">
-          <TabStrip tabs={TABS} active={tab} onSelect={(next) => (tab = next)} label="Member sections" panelId={PANEL_ID} />
+          <TabStrip
+            tabs={TABS}
+            active={tab}
+            onSelect={(next) => (tab = next)}
+            label="Member sections"
+            panelId={PANEL_ID}
+          />
         </div>
       </section>
 
@@ -246,11 +296,15 @@
                     <p role="alert" class="text-sm text-destructive">Could not load this day.</p>
                   {:else}
                     {#if dayView.entries.length > 0}
-                      <ul>{#each dayView.entries as item (item.id)}<BuddyFeedEntry {item} />{/each}</ul>
+                      <ul>
+                        {#each dayView.entries as item (item.id)}<BuddyFeedEntry {item} />{/each}
+                      </ul>
                     {/if}
                     {#if !dayView.complete}
                       <p class="text-sm text-muted-foreground">
-                        {dayView.entries.length > 0 ? 'Not every entry of this day can be listed here.' : 'This day is too far back to list here.'}
+                        {dayView.entries.length > 0
+                          ? 'Not every entry of this day can be listed here.'
+                          : 'This day is too far back to list here.'}
                       </p>
                     {/if}
                   {/if}
@@ -263,7 +317,9 @@
             {#if feed.length === 0}
               <p class="text-sm text-muted-foreground">No application updates yet.</p>
             {:else}
-              <ul>{#each feed as item (item.id)}<BuddyFeedEntry {item} />{/each}</ul>
+              <ul>
+                {#each feed as item (item.id)}<BuddyFeedEntry {item} />{/each}
+              </ul>
               {#if cursor}<LoadMore loading={feedBusy} error={feedError} onclick={() => void loadMore()} />{/if}
             {/if}
           </section>

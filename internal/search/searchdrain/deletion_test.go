@@ -71,9 +71,7 @@ func (d *fakeDeleter) DeleteBatch(ctx context.Context, jobIDs []int64) error {
 		case <-ctx.Done():
 			// What the SDK actually hands back, rather than the context's own error:
 			// *meilisearch.Error implements no Unwrap (search/client.go says so itself),
-			// so a guard that reads the ERROR cannot see the context ending — and the
-			// case it misses is the deadline landing inside the SDK's retry window,
-			// which engages on 502/503/504, i.e. exactly when it is needed.
+			// so a guard that reads the ERROR cannot see the context ending.
 			return errors.New("meilisearch: communication error")
 		}
 	}
@@ -241,5 +239,17 @@ func TestDeletionRunnerStopsAtMaxPerRun(t *testing.T) {
 	}
 	if len(store.completed) != 4 {
 		t.Errorf("completed = %d, want 4", len(store.completed))
+	}
+}
+
+func TestDeletionRunnerLeavesUnpreparedWaveForRetry(t *testing.T) {
+	store := newFakeDeleteStore(1, 2)
+	deleter := &fakeDeleter{err: ErrSkipWave}
+	stats, err := (DeletionRunner{Store: store, Deleter: deleter}).Run(context.Background(), deleteOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleter.calls != 1 || len(store.failed) != 0 || len(store.completed) != 0 || stats.Deleted != 0 {
+		t.Fatalf("unprepared wave was retried per item: calls=%d failures=%v completed=%v stats=%+v", deleter.calls, store.failed, store.completed, stats)
 	}
 }

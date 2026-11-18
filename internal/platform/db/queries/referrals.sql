@@ -50,12 +50,6 @@ SELECT EXISTS (
     SELECT 1 FROM referral_offers WHERE company_slug = $1 AND status = 'approved'
 ) AS exists;
 
--- name: CompaniesWithApprovedReferrer :many
--- The subset of the given company slugs that are referral-eligible — for annotating a
--- job/company list in one round-trip instead of a query per row.
-SELECT DISTINCT company_slug FROM referral_offers
-WHERE status = 'approved' AND company_slug = ANY(sqlc.arg(slugs)::text[]);
-
 -- name: ReferrerApprovedForCompany :one
 -- Whether a specific member is an approved referrer for a company — the authorization
 -- check for acting on / viewing a request in that company's pool.
@@ -66,12 +60,12 @@ SELECT EXISTS (
 
 -- name: ListApprovedReferrerRecipients :many
 -- The notify fan-out targets: every approved referrer of a company with their email and
--- linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
--- optional Telegram ping.
-SELECT o.user_id, u.email, t.chat_id
+-- linked Telegram chat (NULL when unlinked). Email is '' when mail_recipient (0247) says
+-- the address may not be mailed; chat_id drives the optional Telegram ping.
+SELECT o.user_id, mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS email, t.chat_id
 FROM referral_offers o
 JOIN users u ON u.id = o.user_id
-LEFT JOIN telegram_links t ON t.user_id = o.user_id
+LEFT JOIN telegram_links t ON t.user_id = o.user_id AND u.banned_at IS NULL
 WHERE o.company_slug = $1 AND o.status = 'approved';
 
 -- name: UserHasResume :one
@@ -148,8 +142,3 @@ UPDATE referral_requests
 SET status = sqlc.arg(status), acted_by = sqlc.arg(acted_by), acted_at = now()
 WHERE id = sqlc.arg(id) AND status = 'sent'
 RETURNING *;
-
--- name: CountReferralRequestsSince :one
--- How many requests a seeker has created since a cutoff — the per-day cap check.
-SELECT count(*) FROM referral_requests
-WHERE seeker_user_id = sqlc.arg(seeker_user_id) AND created_at >= sqlc.arg(since);

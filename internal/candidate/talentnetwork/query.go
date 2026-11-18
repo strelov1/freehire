@@ -8,36 +8,28 @@ import (
 	"strings"
 )
 
-// The catalogue's query vocabulary. It lives here rather than in the handler because the
-// filters are facts about a candidate, and the endpoint is one of possibly several
-// readers — the approved-recruiter surface will want the same vocabulary with a wider
-// projection behind it.
+// The catalogue's query vocabulary. It lives here, not in the handler, because the
+// filters are facts about a candidate and a recruiter surface will want the same ones.
 
 const (
-	// maxFilterTerms bounds one filter list. A longer one is truncated rather than
-	// refused: a URL is typed by hand and pasted between people, and refusing renders as
-	// an error page for what is at worst an over-eager filter.
+	// maxFilterTerms bounds one filter list. A longer one is truncated, not refused: an
+	// over-eager filter in a hand-edited URL should not become an error page.
 	maxFilterTerms = 25
 
-	// defaultLimit is the page size when none is asked for, and the fallback when the
-	// one asked for is unusable.
+	// defaultLimit is the page size when none is asked for or the one asked for is unusable.
 	defaultLimit = 24
 
-	// maxLimit is the largest page the catalogue will build. It is a real bound, not a
-	// clamp target: a request for more is reported as unread and served the default,
-	// because silently clamping hands a caller a page they mistake for the whole result.
+	// maxLimit is the largest page. A request for more is reported as unread and served the
+	// default, since silent clamping hands back a page mistaken for the whole result.
 	maxLimit = 100
 
-	// maxYears bounds min_years. A ceiling rather than "any non-negative integer",
-	// because the point of the bound is to REPORT: `min_years=100` names no candidate
-	// alive, and answering it with an empty catalogue tells the caller nothing, while
-	// naming it in meta.ignored_params tells them their filter was not read.
+	// maxYears bounds min_years so an absurd value is reported in meta.ignored_params
+	// instead of answered with a silently empty catalogue.
 	maxYears = 60
 )
 
-// Param names, in one place so KnownParams and QueryFromValues cannot drift. A param
-// that reads but is not listed here would be reported as ignored while working, which
-// misleads harder than saying nothing.
+// Param names, in one place so KnownParams and QueryFromValues cannot drift (a param read
+// but not listed would be reported as ignored while working).
 const (
 	paramCategories      = "categories"
 	paramSeniorities     = "seniorities"
@@ -50,16 +42,12 @@ const (
 	paramOffset          = "offset"
 )
 
-// FacetParams is every param that selects a SET of dictionary values — the ones a filter
-// pane offers and Facets counts. min_years is not one (it is a threshold), and neither is
-// paging.
+// FacetParams is every param that selects a SET of dictionary values, the ones a filter
+// pane offers and Facets counts (not min_years or paging).
 //
-// It is the SOURCE the browser's own list is generated from (cmd/gen-contracts emits it as
-// TALENT_FACET_PARAMS), because the two ends of this feature are in different languages and
-// a param the UI offers but the API does not read is not an error anywhere: the API reports
-// it in meta.ignored_params and WIDENS, so the visitor sees more candidates than their own
-// filter chips claim. Generating one end from the other is what makes that undetectable
-// case impossible rather than merely tested for.
+// cmd/gen-contracts emits it as TALENT_FACET_PARAMS for the browser: a param the UI offers
+// but the API does not read only shows up in meta.ignored_params and WIDENS the results
+// beyond the visitor's chips, so the two ends are generated, not just tested.
 func FacetParams() []string {
 	return []string{
 		paramCategories, paramSeniorities, paramSkills,
@@ -74,15 +62,9 @@ func KnownParams() []string {
 }
 
 // QueryFromValues reads a catalogue query out of URL parameters, and reports the params
-// it recognised but could not READ — a `min_years=lots`, a `limit=1000`.
-//
-// Those go in the same report as a param nobody recognises, for the same reason: both
-// WIDEN the answer. An endpoint whose answer widens when it does not understand its
-// input has to say so, or a typo is indistinguishable from an unfiltered search.
-//
-// Unusable paging falls back to the default rather than failing the request. The filters
-// are what a visitor came for; refusing the whole page over a hand-edited `limit` trades
-// a working answer for an error page.
+// it recognised but could not READ (`min_years=lots`, `limit=1000`). They are reported
+// like unknown params because both WIDEN the answer. Unusable paging falls back to the
+// default rather than failing the request.
 func QueryFromValues(v url.Values) (Query, []string) {
 	var unread []string
 
@@ -103,9 +85,8 @@ func QueryFromValues(v url.Values) (Query, []string) {
 	return q, unread
 }
 
-// terms splits a comma-joined filter, trimming each term and dropping blanks, so an
-// absent parameter and a present-but-empty one produce the same query. A trailing comma
-// and stray spaces are what a UI joining chips actually emits.
+// terms splits a comma-joined filter, trimming terms and dropping blanks, so an absent
+// parameter and an empty one give the same query.
 func terms(raw string) []string {
 	if raw == "" {
 		return nil
@@ -125,12 +106,9 @@ func terms(raw string) []string {
 	return out
 }
 
-// boundedInt reads one integer param. An absent one takes the default silently; a
-// present one that is not an integer, or falls outside [min, max], takes the default AND
-// is named in unread.
-//
-// strconv.Atoi over a prefix parse on purpose: "12abc" must not read as 12, or a
-// parameter that is not a number at all would be accepted as one.
+// boundedInt reads one integer param. An absent one takes the default silently; one that
+// is not an integer or is outside [min, max] takes the default AND is named in unread.
+// strconv.Atoi on purpose: "12abc" must not read as 12.
 func boundedInt(v url.Values, param string, min, max, fallback int, unread []string) (int, []string) {
 	raw := v.Get(param)
 	if raw == "" {

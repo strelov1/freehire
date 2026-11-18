@@ -37,6 +37,8 @@ requests, and feature ideas are all fair game.
 - Write in your own voice. A pasted LLM transcript is hard to act on.
 - For a bug, include reproduction steps and the relevant logs.
 - If you want to implement it yourself, say so — we will not race you.
+- Check [.out-of-scope/](.out-of-scope/README.md) first: it lists ideas already
+  declined, why, and what would change the answer.
 
 Questions, half-formed ideas, and help requests belong in
 [Discussions](https://github.com/strelov1/freehire/discussions) instead.

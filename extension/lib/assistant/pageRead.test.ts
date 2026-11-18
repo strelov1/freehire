@@ -18,9 +18,7 @@ describe('pageReadTarget', () => {
   // One-time tokens and session ids live here. Putting them in the transcript is
   // the leak this display exists to guard against.
   it('drops the query string and the fragment', () => {
-    const call = read(
-      JSON.stringify({ url: 'https://jobs.example.test/apply?token=s3cr3t&ref=mail#stage=2' }),
-    );
+    const call = read(JSON.stringify({ url: 'https://jobs.example.test/apply?token=s3cr3t&ref=mail#stage=2' }));
 
     expect(pageReadTarget(call)).toBe('jobs.example.test/apply');
   });

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/strelov1/freehire/internal/engage/messaging"
 )
@@ -160,10 +159,6 @@ func TestStartReopensAConversationClosedWithoutABlock(t *testing.T) {
 			t.Fatalf("list for %d = %+v, %v, want unread %d", user, list, err, want)
 		}
 	}
-	// It counts against the starter's window again.
-	if n, _, err := svc.StartedSince(ctx, "buddy", b, time.Now().Add(-time.Minute)); err != nil || n != 1 {
-		t.Fatalf("started since = %d, %v, want 1", n, err)
-	}
 	if _, err := svc.Accept(ctx, a, id); err != nil {
 		t.Fatalf("accepting the reopened request: %v", err)
 	}
@@ -275,30 +270,5 @@ func TestAnswerWriteRefusesABlockedPair(t *testing.T) {
 	}
 	if n := countRows(t, pool, `SELECT count(*) FROM conversations WHERE status = 'pending'`); n != 1 {
 		t.Fatal("the conversation moved")
-	}
-}
-
-func TestStartedSinceCountsTheKindsStartsInTheWindow(t *testing.T) {
-	pool, svc := setup(t)
-	ctx := context.Background()
-	a := seedUser(t, pool, "a@example.test")
-	var ids []int64
-	for _, email := range []string{"b@example.test", "c@example.test", "d@example.test"} {
-		c, err := start(ctx, svc, a, seedUser(t, pool, email), "hi")
-		if err != nil {
-			t.Fatal(err)
-		}
-		ids = append(ids, c.ID)
-	}
-	oldest := time.Now().Add(-20 * time.Hour).Truncate(time.Microsecond)
-	if _, err := pool.Exec(ctx, `UPDATE conversations SET created_at = $2 WHERE id = $1`, ids[0], oldest); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `UPDATE conversations SET created_at = now() - interval '30 hours' WHERE id = $1`, ids[1]); err != nil {
-		t.Fatal(err)
-	}
-	n, first, err := svc.StartedSince(ctx, "buddy", a, time.Now().Add(-24*time.Hour))
-	if err != nil || n != 2 || !first.Equal(oldest) {
-		t.Fatalf("started since = %d, %v, %v; want 2 starting at %v", n, first, err, oldest)
 	}
 }

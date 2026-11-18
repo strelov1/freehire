@@ -21,16 +21,13 @@ import (
 // the vacancy page's JobPosting ld+json, and only for postings the catalogue does not already have
 // (HydratingSource.FetchNew). Multi-company, board-based.
 //
-// Caveat/seam: HH-Lux-InitialState is a frontend detail (the client-hydration state), not a
-// documented API, so a hh.ru frontend change can move the vacancy list within it. The public
-// render must carry the data somewhere; today it is this template.
+// Caveat: HH-Lux-InitialState is a frontend detail, not a documented API, so a hh.ru frontend
+// change can move the vacancy list within it.
 //
-// Listing and detail are two separate transports (http, detailHTTP) because they don't need the
-// same one: hh.ru's detail pages sit behind DDoS-Guard in a way the listing page does not (see
-// scraplingtier.go's hh entry). With SCRAPLING_FETCH_URL configured, ApplyScraplingEgress rewires
-// detail onto the Scrapling tier while listing stays on a plain, unproxied client; without it
-// (e.g. local/dev), NewHH gives both fields the same caller-supplied client, exactly as before
-// this split existed.
+// Listing and detail use separate transports (http, detailHTTP): detail pages sit behind
+// DDoS-Guard (see scraplingtier.go's hh entry). With SCRAPLING_FETCH_URL set, ApplyScraplingEgress
+// moves detail onto the Scrapling tier while listing stays on a plain client; without it, NewHH
+// gives both fields the same client.
 type hh struct {
 	http       HTMLGetter // listing (search) pages
 	detailHTTP HTMLGetter // per-vacancy detail pages
@@ -56,12 +53,10 @@ func (hh) aggregator() {}
 // older than that is never listed again; cmd/liveness reads its archived flag off the page.
 func (hh) livenessProbed() {}
 
-// hh deliberately does NOT implement fullBoardListing. hh.ru's own search UI caps a query's
-// reachable depth at ~2000 results independent of a role's true count — see crawl's own comment
-// for the live 2026-09-08 confirmation against a currently-configured board — so this adapter
-// cannot structurally prove it reached a busy board's real end the way the marker requires.
-// A posting that ages out of the 7-day window is never listed again; cmd/liveness reads its
-// vacancy page instead (see cmd/liveness/hh.go).
+// hh deliberately does NOT implement fullBoardListing: hh.ru's search UI caps a query's reachable
+// depth at ~2000 results regardless of a role's true count (see crawl), so the adapter cannot
+// prove it reached a busy board's real end. Aged-out postings are closed by cmd/liveness (see
+// cmd/liveness/hh.go).
 
 const (
 	hhSearchURL  = "https://hh.ru/search/vacancy"
@@ -163,19 +158,12 @@ func (s hh) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID s
 }
 
 // crawl pages the search listing, decoding each page's embedded state, until a page yields no new
-// vacancy or the depth cap is hit — the shared list walk behind Fetch and FetchNew. Promoted (ad)
-// vacancies are skipped: they are injected across searches regardless of the role filter, so each
-// role crawl keeps only genuine matches. A later page failing to fetch or decode is now a hard
-// Fetch failure (matching the other hand-rolled adapters — a mid-crawl request failure is not
-// evidence of anything). Reaching hhMaxPages, however, is deliberately NOT a hard failure here,
-// unlike the sibling adapters in this batch: hh.ru's OWN search UI caps a query's reachable depth
-// at ~2000 results (hhMaxPages == 2000/hhPageSize) regardless of how many more a role's true
-// count is, so a busy role can legitimately exhaust the cap on every run. Confirmed live
-// 2026-09-08 against a currently-configured board (professional_role 96): hh.ru's own paging
-// state reports totalResults=6657 for the 7-day window while capping its own lastPage at index
-// 19 — the exact ceiling hhMaxPages encodes. Treating that as a Fetch failure would fail this
-// board's crawl on every run, not surface a genuine truncation; hh therefore does NOT earn the
-// fullBoardListing marker (see its own note below) and keeps the original soft return here.
+// vacancy or the depth cap is hit; it is the shared walk behind Fetch and FetchNew. Promoted (ad)
+// vacancies are skipped: they are injected across searches regardless of the role filter. A later
+// page failing to fetch or decode is a hard Fetch failure. Reaching hhMaxPages is deliberately
+// NOT: hh.ru caps a query's reachable depth at ~2000 results (hhMaxPages == 2000/hhPageSize)
+// however large the role is, so a busy role can exhaust the cap on every run and failing would
+// fail that board each time. That is also why hh does not earn the fullBoardListing marker.
 func (s hh) crawl(ctx context.Context, e CompanyEntry) ([]hhVacancy, error) {
 	var out []hhVacancy
 	seen := map[int64]bool{}

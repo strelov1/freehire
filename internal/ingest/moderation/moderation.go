@@ -29,6 +29,14 @@ var (
 	// surfaces the wrapped message in the 400 body, so it carries no package prefix.
 	ErrInvalid     = errors.New("invalid request")
 	ErrJobNotFound = errors.New("moderation: job not found")
+	// ErrOwnedElsewhere is an employer Create (CreateInput.Employer set) whose identity
+	// already belongs to a posting created outside the author's company team: nothing was
+	// written.
+	ErrOwnedElsewhere = errors.New("moderation: this posting belongs to another employer")
+	// ErrNoCompany is an employer Create whose author, when the write ran, no longer acted
+	// for the company the write was prepared for (removed, the account deleted, or moved to
+	// another company).
+	ErrNoCompany = errors.New("moderation: the author acts for no company")
 )
 
 // defaultSource is the origin recorded when the moderator does not name one. The URL is
@@ -73,6 +81,23 @@ type CreateInput struct {
 	SalaryMax      *int
 	SalaryCurrency string
 	SalaryPeriod   string
+
+	// Employer, when set, makes this an employer's write for their company team: an existing
+	// posting at the same identity is updated only if that team created it (employer_team),
+	// otherwise nothing is written and Create returns ErrOwnedElsewhere. The write also holds
+	// the author's users row, the company-account row and the author's membership row FOR KEY
+	// SHARE for its transaction — the order a user deletion takes them — so removing the member or
+	// deleting the account waits for it and then hands over or detaches the new posting too;
+	// an author who no longer acts for Employer.CompanySlug gets ErrNoCompany. A moderator,
+	// who may edit any manual job, leaves it zero.
+	Employer EmployerOwner
+}
+
+// EmployerOwner names the employer an employer write is for: the author and the company
+// they acted for when the write was prepared. The zero value is a moderator write.
+type EmployerOwner struct {
+	UserID      int64
+	CompanySlug string
 }
 
 // Validate enforces the required fields and that the URL is an absolute http(s) link
@@ -137,7 +162,9 @@ func (p UpdatePatch) validate() error {
 // the derived job.Fields plus the acting moderator; the adapter builds the db params from
 // them. All three return the persisted aggregate and its read-only Extras.
 type Repository interface {
-	Create(ctx context.Context, f job.Fields, actorID int64) (job.Job, job.Extras, error)
+	// Create upserts the posting; for an employer write (owner non-zero) an existing row is
+	// updated only when the author's company team created it, else ErrOwnedElsewhere.
+	Create(ctx context.Context, f job.Fields, actorID int64, owner EmployerOwner) (job.Job, job.Extras, error)
 	BySlug(ctx context.Context, slug string) (job.Job, job.Extras, error)
 	Update(ctx context.Context, slug string, f job.Fields, actorID int64) (job.Job, job.Extras, error)
 }
@@ -187,7 +214,7 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (jo
 	f.URL = in.URL
 	f.Remote = in.Remote
 	f.PostedAt = in.PostedAt
-	return s.repo.Create(ctx, f, actorID)
+	return s.repo.Create(ctx, f, actorID, in.Employer)
 }
 
 // Update loads the manual job, overlays the supplied (nil-means-unchanged) fields, and

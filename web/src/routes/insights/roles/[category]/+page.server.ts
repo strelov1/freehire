@@ -27,8 +27,7 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   // gate the leaf route and the sitemap read, so a level is linked only where the
   // link resolves — a row linking to a 404 is worse than a row that does not link.
   const leaves = new Set(
-    roles.filter((r) => roleQualifies(globalRoles, category, r.seniority, r.open_count))
-      .map((r) => r.seniority),
+    roles.filter((r) => roleQualifies(globalRoles, category, r.seniority, r.open_count)).map((r) => r.seniority),
   );
 
   return {

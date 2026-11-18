@@ -26,11 +26,10 @@ describe('dropdownRows', () => {
   // The free-text row is last because it is the fallback, and absent on an empty box
   // because there is no text to offer searching for.
   it('offers the free-text row last, and only with text to search', () => {
-    expect(dropdownRows({ suggestions: [], jobs: [], companies: [], text: 'x' }).at(-1)?.kind).toBe(
-      'text',
-    );
-    expect(dropdownRows({ suggestions: [suggestion('a')], jobs: [], companies: [], text: '  ' })
-      .map((r) => r.kind)).toEqual(['suggestion']);
+    expect(dropdownRows({ suggestions: [], jobs: [], companies: [], text: 'x' }).at(-1)?.kind).toBe('text');
+    expect(
+      dropdownRows({ suggestions: [suggestion('a')], jobs: [], companies: [], text: '  ' }).map((r) => r.kind),
+    ).toEqual(['suggestion']);
   });
 
   // A pasted URL is not text anybody wrote to be searched for: the sections behind it
@@ -113,8 +112,7 @@ describe('dropdownRows', () => {
 // none of them anything to do with the query, and enough to make the whole dropdown
 // look broken.
 describe('namedCompanies', () => {
-  const named = (...names: string[]) =>
-    names.map((name) => ({ name, slug: name })) as unknown as CompanyListItem[];
+  const named = (...names: string[]) => names.map((name) => ({ name, slug: name })) as unknown as CompanyListItem[];
 
   it('drops a company the query does not name', () => {
     const got = namedCompanies(named('Energise.pro', 'CLOVERDALE FOODS CO'), 'product own');
@@ -150,9 +148,7 @@ describe('namedCompanies', () => {
   // exception keeps the test describing what the system does.
   it('judges by the whole name, article and all', () => {
     expect(namedCompanies(named('The Reject Shop'), 'reject')).toEqual([]);
-    expect(namedCompanies(named('The Reject Shop'), 'the reject').map((c) => c.name)).toEqual([
-      'The Reject Shop',
-    ]);
+    expect(namedCompanies(named('The Reject Shop'), 'the reject').map((c) => c.name)).toEqual(['The Reject Shop']);
   });
 
   it('keeps the longer spellings of a company the query starts', () => {
@@ -189,8 +185,8 @@ describe('dropdownRows in operator mode', () => {
   });
 
   it('shows nothing rather than the ordinary panel when no option matches', () => {
-    expect(
-      dropdownRows({ suggestions: [suggestion('a')], jobs: [], companies: [], text: 'x', operator: [] }),
-    ).toEqual([]);
+    expect(dropdownRows({ suggestions: [suggestion('a')], jobs: [], companies: [], text: 'x', operator: [] })).toEqual(
+      [],
+    );
   });
 });

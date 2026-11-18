@@ -111,6 +111,69 @@ func (q *Queries) GetBoardCooldown(ctx context.Context, arg GetBoardCooldownPara
 	return i, err
 }
 
+const listBoardGoneBoards = `-- name: ListBoardGoneBoards :many
+SELECT h.provider, h.board, h.region, h.consecutive_board_gone_failures,
+       h.board_gone_since, count(*) OVER () AS total
+FROM board_health h
+WHERE h.board <> ''
+  AND h.consecutive_board_gone_failures >= 3
+  AND h.board_gone_since < now() - $1::interval
+  AND h.last_error_at >= h.board_gone_since + $1::interval
+  AND EXISTS (
+      SELECT 1 FROM board_health sibling
+      WHERE sibling.provider = h.provider
+        AND (sibling.board, sibling.region) <> (h.board, h.region)
+        AND sibling.board <> h.board
+        AND sibling.consecutive_failures = 0
+        AND sibling.last_success_at >= now() - interval '48 hours'
+  )
+ORDER BY h.board_gone_since, h.provider, h.board, h.region
+LIMIT $2
+`
+
+type ListBoardGoneBoardsParams struct {
+	AgeWindow pgtype.Interval `json:"age_window"`
+	MaxBoards int32           `json:"max_boards"`
+}
+
+type ListBoardGoneBoardsRow struct {
+	Provider                     string             `json:"provider"`
+	Board                        string             `json:"board"`
+	Region                       string             `json:"region"`
+	ConsecutiveBoardGoneFailures int64              `json:"consecutive_board_gone_failures"`
+	BoardGoneSince               pgtype.Timestamptz `json:"board_gone_since"`
+	Total                        int64              `json:"total"`
+}
+
+// Boards with repeated explicit disappearance evidence spanning age_window, plus a recent
+// successful sibling crawl as a guard against provider-wide outages.
+func (q *Queries) ListBoardGoneBoards(ctx context.Context, arg ListBoardGoneBoardsParams) ([]ListBoardGoneBoardsRow, error) {
+	rows, err := q.db.Query(ctx, listBoardGoneBoards, arg.AgeWindow, arg.MaxBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBoardGoneBoardsRow{}
+	for rows.Next() {
+		var i ListBoardGoneBoardsRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Board,
+			&i.Region,
+			&i.ConsecutiveBoardGoneFailures,
+			&i.BoardGoneSince,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBoardLastRuns = `-- name: ListBoardLastRuns :many
 SELECT board, region, last_run_at
 FROM board_health
@@ -151,8 +214,13 @@ const listChronicBoards = `-- name: ListChronicBoards :many
 SELECT provider, board, region, consecutive_failures, cooldown_until, last_error, last_error_at,
        last_success_at, first_seen_at, count(*) OVER () AS total
 FROM board_health h
-WHERE (last_success_at IS NOT NULL AND last_success_at < now() - $1::interval)
-    OR (last_success_at IS NULL AND first_seen_at < now() - $1::interval)
+WHERE ((last_success_at IS NOT NULL AND last_success_at < now() - $1::interval)
+    OR (last_success_at IS NULL AND first_seen_at < now() - $1::interval))
+  AND EXISTS (
+    SELECT 1 FROM boards b
+    WHERE b.provider = h.provider AND lower(b.board) = lower(h.board) AND b.region = h.region
+      AND b.status IN ('active', 'pending')
+)
 ORDER BY coalesce(last_success_at, first_seen_at), provider, board, region
 LIMIT $2
 `
@@ -189,6 +257,7 @@ type ListChronicBoardsRow struct {
 // the two callers' needs differ, so one query with a caller-supplied cap serves both rather
 // than duplicating the threshold logic across an uncapped and a capped variant. total is the
 // FULL count before the cap, same convention as ListUnhealthyBoards.Total.
+// Only scheduled (active/pending) catalog identities participate; history stays in health.
 //
 // No differently-cased-twin guard here any more: board_health's identity is
 // case-insensitive as of migration 0171 (board_health_identity_key), so two rows for the
@@ -349,8 +418,13 @@ func (q *Queries) ListEmptyFeedBoards(ctx context.Context, arg ListEmptyFeedBoar
 const listUnhealthyBoards = `-- name: ListUnhealthyBoards :many
 SELECT provider, board, region, consecutive_failures, cooldown_until, last_error, last_error_at,
        count(*) OVER () AS total
-FROM board_health
-WHERE consecutive_failures > 0 OR (cooldown_until IS NOT NULL AND cooldown_until > now())
+FROM board_health h
+WHERE (consecutive_failures > 0 OR (cooldown_until IS NOT NULL AND cooldown_until > now()))
+  AND EXISTS (
+    SELECT 1 FROM boards b
+    WHERE b.provider = h.provider AND lower(b.board) = lower(h.board) AND b.region = h.region
+      AND b.status IN ('active', 'pending')
+)
 ORDER BY consecutive_failures DESC, provider, board, region
 LIMIT $1
 `
@@ -370,7 +444,7 @@ type ListUnhealthyBoardsRow struct {
 // per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is
 // evaluated over the whole filtered set, before the LIMIT, so the caller reports how many
 // boards are broken without a second round trip and without naming them all. Ask this table
-// directly for the rest.
+// directly for the rest. Only scheduled (active/pending) catalog identities participate.
 func (q *Queries) ListUnhealthyBoards(ctx context.Context, maxBoards int32) ([]ListUnhealthyBoardsRow, error) {
 	rows, err := q.db.Query(ctx, listUnhealthyBoards, maxBoards)
 	if err != nil {
@@ -407,14 +481,16 @@ SELECT
     count(*) FILTER (WHERE cooldown_until IS NULL OR cooldown_until <= now()) AS healthy_boards,
     count(*) FILTER (WHERE cooldown_until IS NOT NULL AND cooldown_until > now()) AS cooled_boards,
     max(last_run_at)::timestamptz                                    AS last_run_at,
-    -- A board in its quiet pause (migration 0198) is not crawled for up to 72h on purpose, which
-    -- outlasts the page's 48h freshness; it reads as fresh while the pause holds, since the pause
-    -- is only ever set by a success.
-    max(CASE WHEN quiet_until > now() THEN now() ELSE last_success_at END)::timestamptz AS last_success_at,
+    max(last_success_at)::timestamptz AS last_success_at,
+    -- Internal policy only: a successful quiet pause can outlast the 48h freshness window.
+    max(CASE WHEN quiet_until > now() AND consecutive_failures = 0 AND last_success_at IS NOT NULL
+                  AND (last_error_at IS NULL OR last_success_at > last_error_at)
+             THEN now() ELSE last_success_at END)::timestamptz AS freshness_at,
     coalesce(sum(last_ingested_count) FILTER (WHERE consecutive_failures = 0), 0)::bigint AS ingested_total
-FROM board_health
+FROM board_health h
 WHERE EXISTS (
-    SELECT 1 FROM boards b WHERE b.provider = board_health.provider AND b.status = 'active'
+    SELECT 1 FROM boards b WHERE b.provider = h.provider AND lower(b.board) = lower(h.board)
+      AND b.region = h.region AND b.status = 'active'
 )
 GROUP BY provider
 ORDER BY provider
@@ -427,6 +503,7 @@ type ProviderHealthRollupRow struct {
 	CooledBoards  int64              `json:"cooled_boards"`
 	LastRunAt     pgtype.Timestamptz `json:"last_run_at"`
 	LastSuccessAt pgtype.Timestamptz `json:"last_success_at"`
+	FreshnessAt   pgtype.Timestamptz `json:"freshness_at"`
 	IngestedTotal int64              `json:"ingested_total"`
 }
 
@@ -441,7 +518,7 @@ type ProviderHealthRollupRow struct {
 // yields 0, not NULL). A provider with no ACTIVE board is left out: board_health rows
 // outlive the boards they describe, so a provider whose boards were all retired or rejected
 // (apploi's 5,833, retired 2026-09-15) would otherwise read "down" forever for a crawl
-// nobody runs any more.
+// nobody runs any more. Each health identity must match an active catalog identity.
 func (q *Queries) ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error) {
 	rows, err := q.db.Query(ctx, providerHealthRollup)
 	if err != nil {
@@ -458,6 +535,7 @@ func (q *Queries) ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRol
 			&i.CooledBoards,
 			&i.LastRunAt,
 			&i.LastSuccessAt,
+			&i.FreshnessAt,
 			&i.IngestedTotal,
 		); err != nil {
 			return nil, err
@@ -471,14 +549,23 @@ func (q *Queries) ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRol
 }
 
 const recordBoardFailure = `-- name: RecordBoardFailure :one
-INSERT INTO board_health (provider, board, region, consecutive_failures, last_error, last_error_at, last_run_at)
-VALUES ($1, $2, $3, 1, $4, now(), now())
+INSERT INTO board_health (provider, board, region, consecutive_failures, last_error, last_error_at, last_run_at,
+                          consecutive_board_gone_failures, board_gone_since)
+VALUES ($1, $2, $3, 1, $4, now(), now(),
+        CASE WHEN $5::boolean THEN 1 ELSE 0 END,
+        CASE WHEN $5::boolean THEN now() END)
 ON CONFLICT (provider, lower(board), region) DO UPDATE SET
     board                = EXCLUDED.board,
     consecutive_failures = board_health.consecutive_failures + 1,
     last_error           = EXCLUDED.last_error,
     last_error_at        = now(),
-    last_run_at          = now()
+    last_run_at          = now(),
+    consecutive_board_gone_failures = CASE WHEN $5::boolean
+        THEN board_health.consecutive_board_gone_failures + 1 ELSE 0 END,
+    board_gone_since = CASE
+        WHEN NOT $5::boolean THEN NULL
+        WHEN board_health.consecutive_board_gone_failures = 0 THEN now()
+        ELSE board_health.board_gone_since END
 RETURNING consecutive_failures
 `
 
@@ -487,6 +574,7 @@ type RecordBoardFailureParams struct {
 	Board     string      `json:"board"`
 	Region    string      `json:"region"`
 	LastError pgtype.Text `json:"last_error"`
+	BoardGone bool        `json:"board_gone"`
 }
 
 // Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
@@ -500,6 +588,7 @@ func (q *Queries) RecordBoardFailure(ctx context.Context, arg RecordBoardFailure
 		arg.Board,
 		arg.Region,
 		arg.LastError,
+		arg.BoardGone,
 	)
 	var consecutive_failures int32
 	err := row.Scan(&consecutive_failures)
@@ -509,13 +598,15 @@ func (q *Queries) RecordBoardFailure(ctx context.Context, arg RecordBoardFailure
 const recordBoardSuccess = `-- name: RecordBoardSuccess :one
 INSERT INTO board_health (provider, board, region, consecutive_failures, cooldown_until,
                           last_success_at, last_ingested_count, last_run_at, last_yield_at,
-                          listing_fingerprint)
+                          listing_fingerprint, consecutive_board_gone_failures, board_gone_since)
 VALUES ($1, $2, $3, 0, NULL, now(), $4, now(),
         CASE WHEN $5::boolean THEN now() END,
-        $6::text)
+        $6::text, 0, NULL)
 ON CONFLICT (provider, lower(board), region) DO UPDATE SET
     board                = EXCLUDED.board,
     consecutive_failures = 0,
+    consecutive_board_gone_failures = 0,
+    board_gone_since      = NULL,
     cooldown_until       = NULL,
     last_success_at      = now(),
     last_ingested_count  = EXCLUDED.last_ingested_count,

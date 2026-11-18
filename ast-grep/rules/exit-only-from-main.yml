@@ -1,0 +1,26 @@
+id: exit-only-from-main
+language: Go
+severity: error
+message: "a library package ends the process; fix: return the error and let the binary's main (worker.Main for a cron worker) choose the exit code"
+note: >-
+  Every cmd/ worker exits non-zero on failure through internal/platform/worker, which is
+  also what flushes telemetry and writes the heartbeat. An os.Exit or log.Fatal inside
+  internal/ skips all of that and kills whatever binary happened to call it, the API server
+  included. A package main under internal/ (a generator) and TestMain are exempt.
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: ^(os\.Exit|log\.(Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln))$
+  not:
+    inside:
+      kind: source_file
+      stopBy: end
+      has:
+        kind: package_clause
+        regex: ^package main$
+files:
+  - internal/**/*.go
+ignores:
+  - "**/*_test.go"
+  - internal/platform/worker/main.go

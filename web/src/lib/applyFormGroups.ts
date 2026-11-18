@@ -58,7 +58,7 @@ export interface ApplyFormModel {
  *  Every other kind is named ONLY by its heading, since the hint that used to sit on
  *  each row moved there. Suppressing it would delete the fact, and a form asking
  *  nothing but two work-authorization dropdowns is an ordinary form to be handed. */
-const NEEDS_NO_HEADING: readonly GroupKey[] = ['short', 'written'];
+const NEEDS_NO_HEADING: ReadonlySet<GroupKey> = new Set(['short', 'written']);
 
 const groupOf = (question: Question): GroupKey => GROUP_BY_ANSWER[question.answer ?? ''] ?? 'short';
 
@@ -77,6 +77,6 @@ export function applyFormModel(questions: Question[]): ApplyFormModel {
     groups,
     total: questions.length,
     written: groups.find((group) => group.key === 'written')?.questions.length ?? 0,
-    headed: groups.length > 1 || (only !== undefined && !NEEDS_NO_HEADING.includes(only.key)),
+    headed: groups.length > 1 || (only !== undefined && !NEEDS_NO_HEADING.has(only.key)),
   };
 }

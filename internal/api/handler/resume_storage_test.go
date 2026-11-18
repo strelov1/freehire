@@ -46,6 +46,16 @@ func (f *fakeResumeBlobs) Get(_ context.Context, key string) (io.ReadCloser, err
 	return io.NopCloser(bytes.NewReader(b)), nil
 }
 
+func (f *fakeResumeBlobs) List(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for k := range f.objs {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeResumeBlobs) Delete(_ context.Context, key string) error {
 	delete(f.objs, key)
 	return nil
@@ -113,6 +123,10 @@ func (r *fakeResumeRepo) Clear(_ context.Context, _ int64) error {
 	return nil
 }
 
+func (r *fakeResumeRepo) WithUploadLock(_ context.Context, _ int64, fn func(resume.Repository) error) error {
+	return fn(r)
+}
+
 func (r *fakeResumeRepo) SetExtractPending(_ context.Context, _ int64, _ time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -158,15 +172,15 @@ func resumeStorageApp(t *testing.T, store *resume.Store) (*fiber.App, string) {
 	h := &resumeHandlers{resume: store}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss, testVersions)
-	app.Put("/me/resume", g, h.PutResume)
-	app.Get("/me/resume", g, h.GetResume)
-	app.Delete("/me/resume", g, h.DeleteResume)
+	app.Put("/api/v1/me/resume", g, h.PutResume)
+	app.Get("/api/v1/me/resume", g, newContract(contractHandlers{resumeHandlers: h}))
+	app.Delete("/api/v1/me/resume", g, newContract(contractHandlers{resumeHandlers: h}))
 	return app, token
 }
 
-func resumeReq(t *testing.T, app *fiber.App, method, body, token string) (int, resumeMetaResponse) {
+func resumeReq(t *testing.T, app *fiber.App, method, body, token string) (int, resume.MetaResponse) {
 	t.Helper()
-	req := httptest.NewRequestWithContext(context.Background(), method, "/me/resume", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), method, "/api/v1/me/resume", strings.NewReader(body))
 	if body != "" {
 		req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
 	}
@@ -179,7 +193,7 @@ func resumeReq(t *testing.T, app *fiber.App, method, body, token string) (int, r
 	}
 	defer resp.Body.Close()
 	var out struct {
-		Data resumeMetaResponse `json:"data"`
+		Data resume.MetaResponse `json:"data"`
 	}
 	_ = json.NewDecoder(resp.Body).Decode(&out)
 	return resp.StatusCode, out.Data
@@ -281,9 +295,9 @@ func resumeContactsApp(t *testing.T, store *resume.Store) (*fiber.App, string) {
 	h := &resumeHandlers{resume: store}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss, testVersions)
-	app.Get("/me/resume", g, h.GetResume)
-	app.Put("/me/resume/contacts", g, h.PutResumeContacts)
-	app.Post("/me/resume/contacts/replace-from-cv", g, h.ReplaceResumeContactsFromCV)
+	app.Get("/api/v1/me/resume", g, newContract(contractHandlers{resumeHandlers: h}))
+	app.Put("/api/v1/me/resume/contacts", g, newContract(contractHandlers{resumeHandlers: h}))
+	app.Post("/api/v1/me/resume/contacts/replace-from-cv", g, newContract(contractHandlers{resumeHandlers: h}))
 	return app, token
 }
 
@@ -296,7 +310,7 @@ func TestResume_PutContactsAndGetParseStatus(t *testing.T) {
 	store := resume.New(newFakeResumeBlobs(), repo)
 	app, token := resumeContactsApp(t, store)
 
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPut, "/me/resume/contacts", strings.NewReader(
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPut, "/api/v1/me/resume/contacts", strings.NewReader(
 		`{"full_name":"Ada","email":"ada@example.com","links":["https://ada.example"]}`,
 	))
 	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
@@ -329,7 +343,7 @@ func TestResume_PutContactsLanguagesAndGetReflectsIt(t *testing.T) {
 	store := resume.New(newFakeResumeBlobs(), repo)
 	app, token := resumeContactsApp(t, store)
 
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPut, "/me/resume/contacts", strings.NewReader(
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPut, "/api/v1/me/resume/contacts", strings.NewReader(
 		`{"languages":["English","English","  Russian  "]}`,
 	))
 	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
@@ -366,7 +380,7 @@ func TestResume_PutContactsSummaryOnlyDoesNotBlankIdentity(t *testing.T) {
 	store := resume.New(newFakeResumeBlobs(), repo)
 	app, token := resumeContactsApp(t, store)
 
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPut, "/me/resume/contacts", strings.NewReader(
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPut, "/api/v1/me/resume/contacts", strings.NewReader(
 		`{"summary":"Staff engineer"}`,
 	))
 	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)

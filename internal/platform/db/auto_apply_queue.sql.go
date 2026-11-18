@@ -12,26 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const approveAutoApplyReview = `-- name: ApproveAutoApplyReview :execrows
-UPDATE auto_apply_queue
-SET review_decision = 'approved',
-    reviewed_at     = now()
-WHERE id = $1 AND review_decision IS NULL
-`
-
-// Records an approval. Guarded by review_decision IS NULL so a second attempt at an
-// already-reviewed entry affects zero rows rather than overwriting a recorded decision —
-// the handler reads the row first (GetAutoApplyQueueEntryForReview) to tell "already
-// reviewed" apart from "not found" before ever reaching this statement, so zero rows here
-// would only mean a race with a concurrent decision on the same entry.
-func (q *Queries) ApproveAutoApplyReview(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, approveAutoApplyReview, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const cancelAutoApplyEntry = `-- name: CancelAutoApplyEntry :one
 WITH deleted AS (
     DELETE FROM auto_apply_queue q
@@ -237,33 +217,6 @@ func (q *Queries) ClaimAutoApplyPreviewBatch(ctx context.Context, arg ClaimAutoA
 	return items, nil
 }
 
-const declineAutoApplyReview = `-- name: DeclineAutoApplyReview :execrows
-UPDATE auto_apply_queue
-SET review_decision = 'declined',
-    reviewed_at     = now(),
-    blocked_at      = now(),
-    last_error      = $1
-WHERE id = $2 AND review_decision IS NULL
-`
-
-type DeclineAutoApplyReviewParams struct {
-	LastError string `json:"last_error"`
-	ID        int64  `json:"id"`
-}
-
-// Records a decline AND parks the entry in one statement — the same fields
-// MarkAutoApplyBlocked sets (blocked_at, last_error), reusing that park vocabulary rather
-// than inventing a second one, plus the review columns MarkAutoApplyBlocked has no reason
-// to know about. unmapped stays NULL: this is not a form-field park. last_error is what
-// tells the two park reasons apart in the queue's own history, per design.md.
-func (q *Queries) DeclineAutoApplyReview(ctx context.Context, arg DeclineAutoApplyReviewParams) (int64, error) {
-	result, err := q.db.Exec(ctx, declineAutoApplyReview, arg.LastError, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deleteAutoApplyEntry = `-- name: DeleteAutoApplyEntry :exec
 WITH deleted AS (
     DELETE FROM auto_apply_queue q
@@ -433,44 +386,6 @@ func (q *Queries) GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoA
 	return i, err
 }
 
-const getAutoApplyQueueEntryForReview = `-- name: GetAutoApplyQueueEntryForReview :one
-SELECT id, user_id, job_id, tailored_cv_id, review_decision
-FROM auto_apply_queue
-WHERE id = $1 AND user_id = $2
-`
-
-type GetAutoApplyQueueEntryForReviewParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
-}
-
-type GetAutoApplyQueueEntryForReviewRow struct {
-	ID             int64       `json:"id"`
-	UserID         int64       `json:"user_id"`
-	JobID          int64       `json:"job_id"`
-	TailoredCvID   *uuid.UUID  `json:"tailored_cv_id"`
-	ReviewDecision pgtype.Text `json:"review_decision"`
-}
-
-// One read backing both the tailoring-trigger and the review-decision endpoints
-// (openspec/changes/auto-apply-tailored-resume): resolves ownership (a foreign or missing
-// id comes back as pgx.ErrNoRows, which the handler renders as 404 — never 403, so a
-// probing caller learns nothing about entries they do not own) and carries enough of the
-// entry's own state (job_id for tailoring, tailored_cv_id/review_decision for the review
-// gate) that neither endpoint needs a second query to decide whether to proceed.
-func (q *Queries) GetAutoApplyQueueEntryForReview(ctx context.Context, arg GetAutoApplyQueueEntryForReviewParams) (GetAutoApplyQueueEntryForReviewRow, error) {
-	row := q.db.QueryRow(ctx, getAutoApplyQueueEntryForReview, arg.ID, arg.UserID)
-	var i GetAutoApplyQueueEntryForReviewRow
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.JobID,
-		&i.TailoredCvID,
-		&i.ReviewDecision,
-	)
-	return i, err
-}
-
 const listAutoApplyEntries = `-- name: ListAutoApplyEntries :many
 SELECT q.id, j.public_slug, j.title, j.company, q.review_decision, q.failed_at, q.blocked_at,
        q.tailored_cv_id, (q.resolved_preview IS NOT NULL)::boolean AS has_preview,
@@ -481,8 +396,13 @@ FROM auto_apply_queue q
 JOIN jobs j ON j.id = q.job_id
 WHERE q.user_id = $1
 ORDER BY q.id DESC
-LIMIT 200
+LIMIT $2::bigint
 `
+
+type ListAutoApplyEntriesParams struct {
+	UserID     int64       `json:"user_id"`
+	MaxEntries pgtype.Int8 `json:"max_entries"`
+}
 
 type ListAutoApplyEntriesRow struct {
 	ID              int64              `json:"id"`
@@ -502,9 +422,10 @@ type ListAutoApplyEntriesRow struct {
 
 // The caller's live attempts, newest first, with what a status derivation and a list row
 // need. last_event_at is when anything last happened to the pair, which is what an agent
-// polling for progress compares.
-func (q *Queries) ListAutoApplyEntries(ctx context.Context, userID int64) ([]ListAutoApplyEntriesRow, error) {
-	rows, err := q.db.Query(ctx, listAutoApplyEntries, userID)
+// polling for progress compares. A NULL max_entries returns the complete browser list;
+// the assistant keeps its bounded response by supplying a limit.
+func (q *Queries) ListAutoApplyEntries(ctx context.Context, arg ListAutoApplyEntriesParams) ([]ListAutoApplyEntriesRow, error) {
+	rows, err := q.db.Query(ctx, listAutoApplyEntries, arg.UserID, arg.MaxEntries)
 	if err != nil {
 		return nil, err
 	}
@@ -731,91 +652,6 @@ type MarkAutoApplySubmitUncertainParams struct {
 func (q *Queries) MarkAutoApplySubmitUncertain(ctx context.Context, arg MarkAutoApplySubmitUncertainParams) error {
 	_, err := q.db.Exec(ctx, markAutoApplySubmitUncertain, arg.LastError, arg.ID)
 	return err
-}
-
-const markAutoApplyTailorFailed = `-- name: MarkAutoApplyTailorFailed :one
-WITH updated AS (
-    UPDATE auto_apply_queue q
-    SET tailor_failed_at = now(),
-        last_error       = $1
-    WHERE q.id = $2
-      AND q.review_decision IS NULL
-      AND q.tailored_cv_id IS NULL
-    RETURNING q.job_id, q.user_id
-)
-SELECT j.public_slug, j.title, j.company, u.user_id
-FROM jobs j
-JOIN updated u ON u.job_id = j.id
-`
-
-type MarkAutoApplyTailorFailedParams struct {
-	LastError string `json:"last_error"`
-	ID        int64  `json:"id"`
-}
-
-type MarkAutoApplyTailorFailedRow struct {
-	PublicSlug string `json:"public_slug"`
-	Title      string `json:"title"`
-	Company    string `json:"company"`
-	UserID     int64  `json:"user_id"`
-}
-
-// Records that a tailoring run gave up without producing a CV (migration 0154), so the
-// entry stops reading as one still being prepared.
-//
-// Guarded by tailored_cv_id IS NULL as well as review_decision IS NULL: a run that failed
-// AFTER an earlier one had already produced a CV has nothing to report — the candidate has
-// something to look at, and telling them preparation failed while it sits there ready is
-// worse than saying nothing. DeriveStatus ranks the same way and does not depend on this
-// guard having fired.
-//
-// Returns the job's title/company/slug for the caller's own notification, the same shape and
-// for the same reason SetAutoApplyResolvedPreview already returns them: this statement
-// already holds the job_id its own WHERE resolved, and a second round trip for exactly what
-// this write just touched would be a query with no reason to exist. pgx.ErrNoRows means a
-// guard fired, which the caller treats as "nothing to say", never as an error.
-func (q *Queries) MarkAutoApplyTailorFailed(ctx context.Context, arg MarkAutoApplyTailorFailedParams) (MarkAutoApplyTailorFailedRow, error) {
-	row := q.db.QueryRow(ctx, markAutoApplyTailorFailed, arg.LastError, arg.ID)
-	var i MarkAutoApplyTailorFailedRow
-	err := row.Scan(
-		&i.PublicSlug,
-		&i.Title,
-		&i.Company,
-		&i.UserID,
-	)
-	return i, err
-}
-
-const markStaleAutoApplyTailoringFailed = `-- name: MarkStaleAutoApplyTailoringFailed :execrows
-UPDATE auto_apply_queue q
-SET tailor_failed_at = now(),
-    last_error       = 'tailoring never finished'
-WHERE q.tailored_cv_id IS NULL
-  AND q.tailor_failed_at IS NULL
-  AND q.review_decision IS NULL
-  AND q.blocked_at IS NULL
-  AND q.failed_at IS NULL
-  AND COALESCE((SELECT max(e.created_at) FROM auto_apply_events e
-                WHERE e.user_id = q.user_id AND e.job_id = q.job_id), q.created_at)
-      < now() - make_interval(secs => $1::bigint)
-`
-
-// Gives up on attempts whose tailoring nobody is doing: no CV, no failure recorded, no
-// decision, and nothing has happened to the pair for stale_seconds. The orchestrator is
-// started by a best-effort publish and a run can die between steps; either way the entry sat
-// reading "tailoring" forever, unclaimable by both passes, with no failure for a retry to act
-// on (two production entries since 2026-09-07). Marking it tailor_failed is what makes it
-// visible and retryable — and the trigger records the event.
-//
-// "Nothing has happened" is the pair's newest history event, not created_at: a retry
-// re-publishes the orchestrator for an old entry, and measuring from created_at would fail it
-// again before the new run could finish. COALESCE covers entries older than the history.
-func (q *Queries) MarkStaleAutoApplyTailoringFailed(ctx context.Context, staleSeconds int64) (int64, error) {
-	result, err := q.db.Exec(ctx, markStaleAutoApplyTailoringFailed, staleSeconds)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const recordAutoApplyCaptchaRefusal = `-- name: RecordAutoApplyCaptchaRefusal :one
@@ -1054,44 +890,4 @@ func (q *Queries) SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoAp
 		&i.UserID,
 	)
 	return i, err
-}
-
-const setAutoApplyTailoredCV = `-- name: SetAutoApplyTailoredCV :execrows
-UPDATE auto_apply_queue
-SET tailored_cv_id    = $1,
-    resolved_preview  = NULL,
-    preview_attempts  = 0,
-    preview_failed_at = NULL,
-    tailor_failed_at  = NULL
-WHERE id = $2 AND review_decision IS NULL
-`
-
-type SetAutoApplyTailoredCVParams struct {
-	TailoredCvID *uuid.UUID `json:"tailored_cv_id"`
-	ID           int64      `json:"id"`
-}
-
-// Records which tailored CV a queue entry's tailoring run produced. Guarded by
-// review_decision IS NULL, matching ApproveAutoApplyReview/DeclineAutoApplyReview's own
-// guard: PostAutoApplyTailor's own review_decision check happens before its (potentially
-// minutes-long) LLM run, not after, so a candidate can approve or decline an EARLIER
-// tailored CV while a stale or retried tailor call for the same entry is still in flight.
-// Without this guard that call's own write here would silently attach a fresh, never-seen
-// CV to an already-decided entry — which ClaimAutoApplyBatch's own predicate
-// (tailored_cv_id IS NOT NULL AND review_decision = 'approved') would then submit for
-// real. Zero rows here means exactly that race happened; the handler checks it.
-//
-// Also clears resolved_preview and resets the preview pass's own attempts/failed_at
-// (migration 0140): a deliberate re-tailor (this entry already had a tailored_cv_id) means
-// the candidate's profile or the tailoring evidence changed, so a preview computed against
-// the PREVIOUS CV is stale and must be recomputed — leaving it would let the candidate
-// review an answer preview that no longer matches what would actually be submitted. Reset,
-// not left exhausted: an entry whose preview pass had already dead-lettered deserves a
-// fresh attempt budget against the fresh CV, not a permanent unclaimable state.
-func (q *Queries) SetAutoApplyTailoredCV(ctx context.Context, arg SetAutoApplyTailoredCVParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setAutoApplyTailoredCV, arg.TailoredCvID, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

@@ -124,6 +124,18 @@ func TestServiceBuild(t *testing.T) {
 		assertIDs(t, got.Items, []int64{1, 2})
 	})
 
+	t.Run("the day's theme decides the list and its heading", func(t *testing.T) {
+		repo := newFakeRepo(append([]Posting{posting(100, "office", 500)}, remotePostings(MinThemeItems)...)...)
+		got, err := New(repo, fixedNow("2026-09-09")).Build(ctx, day("2026-09-08")) // a Tuesday
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Theme.Heading != themeRemote.Heading {
+			t.Errorf("theme = %q, want %q", got.Theme.Heading, themeRemote.Heading)
+		}
+		assertIDs(t, got.Items, []int64{1, 2, 3, 4, 5})
+	})
+
 	t.Run("an explicit day bypasses the freshness lookup entirely", func(t *testing.T) {
 		repo := newFakeRepo(posting(1, "alpha", 90))
 		repo.latestErr = errors.New("must not be called")
@@ -154,8 +166,23 @@ func TestServiceBuild(t *testing.T) {
 		}
 	})
 
+	// The failure this guards: the digest ran before the rollup reached the day, read a
+	// stub and exited 0, and nothing reported the lost post.
+	for name, candidates := range map[string][]Posting{
+		"nothing above the floor": {posting(1, "alpha", MinPageUniques-1)},
+		"no rows at all":          nil,
+	} {
+		t.Run("a stub day is an error: "+name, func(t *testing.T) {
+			_, err := New(newFakeRepo(candidates...), fixedNow("2026-09-04")).Build(ctx, time.Time{})
+			if !errors.Is(err, ErrThinViewData) {
+				t.Errorf("got %v, want ErrThinViewData", err)
+			}
+		})
+	}
+
 	t.Run("a quiet day is an empty digest, not an error", func(t *testing.T) {
-		repo := newFakeRepo(posting(1, "alpha", MinPageUniques-1))
+		repo := newFakeRepo(posting(1, "alpha", MinPageUniques))
+		repo.quarantine = map[int64]bool{1: true}
 		got, err := New(repo, fixedNow("2026-09-04")).Build(ctx, time.Time{})
 		if err != nil {
 			t.Fatalf("a quiet day must not be an error: %v", err)

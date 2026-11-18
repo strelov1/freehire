@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { uniqueByValue, type FacetOption } from '#lib/facets.js';
+  import { type FacetOption } from '#lib/facets.js';
+  import { uniqueByValue } from '#lib/facetOptions.js';
   import { pillClass, pillPressed, pillTitle } from './pill';
   import PillMeta from './PillMeta.svelte';
 
@@ -53,7 +54,11 @@
       onclick={() => onToggle(opt.value)}
       aria-pressed={pillPressed(included, excluded)}
       title={pillTitle(included, excluded, excludable)}
-      class={pillClass(included || excluded, excluded, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+      class={pillClass(
+        included || excluded,
+        excluded,
+        'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+      )}
     >
       <!-- A brand mark, where the option has one (the backer collections). Purely
            decorative: the label right beside it says the same thing, so announcing

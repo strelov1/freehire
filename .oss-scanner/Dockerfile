@@ -35,7 +35,7 @@ RUN curl -fsSL "https://github.com/meilisearch/meilisearch/releases/download/${M
 ENV TYPST_BIN=/usr/local/bin/typst
 
 # Node 24 + pnpm for the SvelteKit app under web/ and the design-system package it links.
-ARG NODE_VERSION=24.11.0
+ARG NODE_VERSION=24.22.1
 # A failed download still fails the build without pipefail: tar rejects the empty stream.
 # hadolint ignore=DL4006
 RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" | tar -xJ -C /usr/local --strip-components=1 \

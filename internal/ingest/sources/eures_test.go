@@ -313,7 +313,7 @@ func TestEuresMapsFieldsHappyPath(t *testing.T) {
 	  "id":"MTAwMDEtMTAwMTEzOTMxMS1TIDE",
 	  "title":"Software Engineer",
 	  "description":"<p>We build things.</p>",
-	  "employer":{"name":"SUSS MicroTec Solutions GmbH & Co. KG"},
+	  "employer":{"name":"SUSS MicroTec Solutions GmbH & Co. KG","website":"http://www.suss.com","legalID":null},
 	  "creationDate":1739403609768,
 	  "locationMap":{"DE":["DE12B"],"EL":["EL30"]},
 	  "positionOfferingCode":"directhire",
@@ -342,6 +342,9 @@ func TestEuresMapsFieldsHappyPath(t *testing.T) {
 	}
 	if j.Title != "Software Engineer" || j.Company != "SUSS MicroTec Solutions GmbH & Co. KG" {
 		t.Errorf("title/company = %q / %q", j.Title, j.Company)
+	}
+	if j.CompanyWebsite != "http://www.suss.com" {
+		t.Errorf("CompanyWebsite = %q, want the employer block's website", j.CompanyWebsite)
 	}
 	if j.Description != "<p>We build things.</p>" {
 		t.Errorf("Description = %q", j.Description)

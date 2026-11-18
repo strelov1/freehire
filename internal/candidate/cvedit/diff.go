@@ -10,23 +10,19 @@ import (
 
 // Diff derives the operations that turn one state into another.
 //
-// It exists because the editor's forms bind to a single shared document and autosave ships
-// it whole, so the only thing the server receives is "here is the new state" — no address,
-// no intent. Deriving the operations here means a whole-document save is an input format
-// rather than a second way to write the document: from Commit's point of view it is
-// indistinguishable from an agent's batch.
+// Autosave ships the whole document with no address or intent; deriving operations here makes
+// a whole-document save indistinguishable from an agent's batch from Commit's point of view.
 //
-// The result is not merely correct but ordered: applying it to `old` in sequence produces
-// `new` exactly, indices included. That property is what every test asserts first.
+// The result is ordered: applying it to `old` in sequence produces `new` exactly, indices
+// included.
 func Diff(old, next State) []Op {
 	var ops []Op
 	diffValue(reflect.ValueOf(old), reflect.ValueOf(next), "", &ops)
 	return ops
 }
 
-// Equal reports whether two states are the same document once stored. It goes through the
-// differ rather than through DeepEqual so that the two representations of an empty list are
-// treated as one, the same way every other comparison here does.
+// Equal reports whether two states are the same document once stored. It uses the differ, not
+// DeepEqual, so an absent and an empty list compare equal.
 func Equal(a, b State) bool { return len(Diff(a, b)) == 0 }
 
 func diffValue(old, next reflect.Value, path string, ops *[]Op) {
@@ -62,10 +58,8 @@ func diffStruct(old, next reflect.Value, path string, ops *[]Op) {
 	}
 }
 
-// diffSlice compares two lists. Equal lengths compare in place, which is what an editor
-// almost always produces — text changed where it stood. Differing lengths go through the
-// longest common subsequence, and the removes and inserts it yields are then collapsed where
-// they describe a rewrite rather than a replacement.
+// diffSlice compares two lists. Equal lengths compare in place (the usual editor change);
+// differing lengths go through the longest common subsequence, with rewrites then collapsed.
 func diffSlice(old, next reflect.Value, path string, ops *[]Op) {
 	if equalValues(old, next) {
 		return
@@ -80,17 +74,15 @@ func diffSlice(old, next reflect.Value, path string, ops *[]Op) {
 }
 
 // derived is an operation together with the element it came from. A remove carries no value
-// on the wire, so without this the collapse below could not see what was taken out — and
-// recovering it by matching text would go wrong the moment a list holds two equal entries.
+// on the wire, and recovering it by matching text breaks when a list holds two equal entries.
 type derived struct {
 	op       Op
 	value    reflect.Value // the element removed, or the element inserted
 	position int           // where it sits in the list as the batch changes it
 }
 
-// lcsOps walks the two lists together and emits the removes and inserts that turn one into
-// the other, tracking the position in the list as it is being changed so each operation's
-// index is the one it will actually see.
+// lcsOps emits the removes and inserts that turn old into next, tracking the position in the
+// list as it changes so each index is the one the operation will see.
 func lcsOps(old, next reflect.Value, path string) []derived {
 	table := lcsTable(old, next)
 
@@ -145,10 +137,8 @@ func lcsTable(old, next reflect.Value) [][]int {
 // collapseRewrites turns an adjacent remove-then-insert at the same position into an edit of
 // what is already there, when the two values are recognisably the same thing reworded.
 //
-// Without it, a candidate who rewords one bullet gets "removed a bullet, added a bullet" in
-// their history — technically true and useless. For anything with fields of its own the
-// collapse recurses instead of replacing wholesale, so the feed says which field moved
-// rather than that an entry was swapped.
+// Without it, rewording one bullet reads "removed a bullet, added a bullet" in the history.
+// Structs recurse, so the feed says which field moved rather than that an entry was swapped.
 func collapseRewrites(ops []derived) []Op {
 	out := make([]Op, 0, len(ops))
 	for i := 0; i < len(ops); i++ {
@@ -160,8 +150,6 @@ func collapseRewrites(ops []derived) []Op {
 
 		target := removed.op.Path
 		if removed.value.Kind() == reflect.Struct {
-			// An entry reworded rather than replaced: say which of its fields moved, not
-			// that the whole entry was swapped.
 			var nested []Op
 			diffValue(removed.value, inserted.value, string(target), &nested)
 			out = append(out, nested...)
@@ -190,9 +178,7 @@ func rewrittenPair(ops []derived, i int) (removed, inserted derived, ok bool) {
 }
 
 func equalValues(a, b reflect.Value) bool {
-	// An absent list and an empty one are the same stored state, since the document's json
-	// tags omit both. Left to DeepEqual they would differ, and the differ would emit
-	// operations between two documents that are identical once saved.
+	// An absent and an empty list are the same stored state (the json tags omit both).
 	if a.Kind() == reflect.Slice && b.Kind() == reflect.Slice && a.Len() == 0 && b.Len() == 0 {
 		return true
 	}
@@ -213,9 +199,8 @@ func textOf(v reflect.Value) string {
 }
 
 // rewriteSimilarity is the share of vocabulary two values must have before one is treated as
-// a rewording of the other. Half is deliberately permissive on one side and strict on the
-// other: "shipped the billing service" against the same line with three words appended
-// scores well above it, while two unrelated bullets in the same entry score near zero.
+// a rewording of the other: appending a few words to a line scores well above it, two
+// unrelated bullets near zero.
 const rewriteSimilarity = 0.5
 
 func similarEnough(a, b string) bool {
@@ -232,9 +217,8 @@ func words(s string) map[string]struct{} {
 	return out
 }
 
-// jaccard is shared words over total distinct words. Two empty sets are not similar: an
-// empty signature means "nothing to compare", and calling that a perfect match would collapse
-// every blank entry into its neighbour.
+// jaccard is shared words over total distinct words. An empty set is never similar, or every
+// blank entry would collapse into its neighbour.
 func jaccard(a, b map[string]struct{}) float64 {
 	if len(a) == 0 || len(b) == 0 {
 		return 0

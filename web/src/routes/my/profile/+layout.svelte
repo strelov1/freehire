@@ -1,34 +1,31 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { tick, untrack, type Snippet } from 'svelte';
   import { scrollBehavior } from '#lib/motion.js';
   import { Briefcase, ClipboardList, Tags, User } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Badge, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
   import { activeRouteTab } from '#lib/routeTabs.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { format, t } from '#lib/i18n/t.js';
+  import { t } from '#lib/i18n/t.js';
   import { profileCompleteness } from '#lib/profileCompleteness.svelte.js';
   import type { CompletenessSection } from '#lib/profileCompleteness.js';
   import { resumeStore } from '#lib/resume.svelte.js';
   import { experienceBankStore } from '#lib/experienceBank.svelte.js';
   import { screeningStore } from '#lib/screening.svelte.js';
-  import AccountPreferences from '#lib/components/AccountPreferences.svelte';
+  import PlanBadge from '#lib/components/PlanBadge.svelte';
   import AccountSetupCard from '#lib/components/AccountSetupCard.svelte';
-  import ProfileForm from '#lib/components/ProfileForm.svelte';
+  import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import States from '#lib/components/States.svelte';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { handleCvDeleted, handleCvUploaded, handleSaved } from './actions';
   import { messages } from './messages';
 
   // The account shell (my/+layout) owns the container, auth gate, and noindex; this
-  // layout adds Profile's own section navigation and the shared load gate. Each
-  // section is its own route so it is linkable, bookmarkable, and survives a reload —
-  // see docs/superpowers/specs/2026-09-04-profile-section-routes-design.md. Before a
-  // profile exists there is nothing to navigate between, so the tab strip (and
-  // `children`) stay hidden on every one of these routes, same as the old single-page
-  // version.
+  // layout adds Profile's navigation and shared load gate. Visiting Profile creates
+  // an empty editable profile so every section can autosave independently, including
+  // before a candidate has chosen any roles or skills.
 
   let { children }: { children: Snippet } = $props();
 
@@ -62,8 +59,6 @@
   };
 
   const s = $derived(t(messages, locale()));
-  const profile = $derived(profileStore.profile);
-  const resumeMeta = $derived(resumeStore.meta);
   const completeness = $derived(profileCompleteness());
   const activeSectionId = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'profile'));
   const tabs = $derived(
@@ -91,7 +86,14 @@
       // every field it did not carry. ensureLoaded swallows a failure, so `loaded` is
       // what says whether it arrived.
       await Promise.all([profileStore.ensureLoaded(), resumeStore.ensureLoaded()]);
-      status = resumeStore.loaded ? 'ready' : 'error';
+      if (!profileStore.loaded || !resumeStore.loaded) {
+        status = 'error';
+        return;
+      }
+      if (profileStore.profile === null) {
+        await profileStore.save([], [], [], [], [], [], null);
+      }
+      status = 'ready';
     } catch {
       status = 'error';
     }
@@ -168,69 +170,38 @@
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. The
      heading sits above the gate so the section is titled while it is still loading and
      whether or not a profile exists yet, the way every other /my section titles itself. -->
-<div class="mb-6 flex flex-col gap-1 max-lg:sr-only">
-  <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
-  <p class="text-sm text-muted-foreground">{s.description}</p>
+<div class="mb-4 flex flex-col gap-1 lg:mb-6">
+  <div class="flex items-center gap-3">
+    <AccountPageHeading class="min-w-0 flex-1">{s.title}</AccountPageHeading>
+    <PlanBadge tier={currentUser()?.tier} />
+  </div>
+  <p class="text-sm text-muted-foreground max-lg:sr-only">{s.description}</p>
 </div>
 
 {#if status === 'loading'}
   <States state="loading" />
 {:else if status === 'error'}
   <States state="error" message={s.loadError} onRetry={() => void load()} />
-{:else if profile === null}
-  <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
-  <div class="w-full">
-    <ProfileForm
-      profile={null}
-      hasCv={resumeStore.present}
-      uploadedAt={resumeMeta?.uploaded_at}
-      onSaved={handleSaved}
-      onCvUploaded={handleCvUploaded}
-      onCvDeleted={handleCvDeleted}
-    />
-    <!-- Account-level (not candidate-profile) settings live here too, so they never wait on
-         a CV upload; once a profile exists they move to Profile's Location part and /my/account. -->
-    <AccountPreferences class="mt-6" />
-  </div>
 {:else}
   <!-- Above the tab strip: what is left to set up belongs to the account rather than to
        whichever section happens to be open — a card inside a section would be
-       re-announced on every tab switch. The Talent Network invitation used to sit beside
-       it and has moved further out still, to the account shell (`my/+layout`), which puts
-       it above every section rather than only above Profile's. -->
+       re-announced on every tab switch. It is one folded line; the Talent Network
+       invitation rides inside it while steps remain, and stands alone once they don't. -->
   <div class="mb-6">
-    <AccountSetupCard />
+    <AccountSetupCard>
+      {#snippet extra()}
+        <div class="mt-4 [&>*]:mb-0">
+          <TalentNetworkInvite />
+        </div>
+      {/snippet}
+    </AccountSetupCard>
   </div>
 
-  <!-- The overall count reads the same helper the tab dots do, so the two cannot
-       disagree. Shown only while something is missing — a finished profile needs no
-       scoreboard. It sits above the strip rather than inside it: the strip is navigation,
-       and this is a measurement of the whole profile. -->
-  {#if completeness && completeness.filled < completeness.total}
-    <div class="mb-3 flex justify-end">
-      <Badge variant="outline" class="tabular-nums">
-        {format(s.completeness.summary, {
-          filled: String(completeness.filled),
-          total: String(completeness.total),
-        })}
-      </Badge>
-    </div>
-  {/if}
+  <!-- No separate "n/m sections" count: the tab dots already mark the empty sections, and
+       a third progress meter beside the setup checklist read as clutter. -->
+  <TabStrip {tabs} active={activeSectionId} label="Profile sections" panelId={PANEL_ID} class="mb-6" />
 
-  <TabStrip
-    {tabs}
-    active={activeSectionId}
-    label="Profile sections"
-    panelId={PANEL_ID}
-    class="mb-6"
-  />
-
-  <div
-    id={PANEL_ID}
-    role="tabpanel"
-    aria-labelledby={tabStripId(PANEL_ID, activeSectionId)}
-    tabindex="0"
-  >
+  <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, activeSectionId)} tabindex="0">
     {@render children()}
   </div>
 {/if}

@@ -20,13 +20,27 @@ func (s stubCounter) CountCatalogueScale(context.Context) (db.CountCatalogueScal
 	return s.row, s.err
 }
 
+type stubRecorder struct {
+	got []db.RecordCatalogSizeParams
+	err error
+}
+
+func (s *stubRecorder) RecordCatalogSize(_ context.Context, arg db.RecordCatalogSizeParams) error {
+	s.got = append(s.got, arg)
+	return s.err
+}
+
 func TestPublishSnapshotStoresAReadableSnapshot(t *testing.T) {
 	c := cache.NewMemory()
 	ctx := context.Background()
 	counts := stubCounter{row: db.CountCatalogueScaleRow{OpenJobs: 3_300_658, Companies: 294_282}}
 
-	if err := publishSnapshot(ctx, counts, c, 95, 2_075_865); err != nil {
+	history := &stubRecorder{}
+	if err := publishSnapshot(ctx, counts, c, history, 95, 2_075_865); err != nil {
 		t.Fatalf("publishSnapshot: %v", err)
+	}
+	if len(history.got) != 1 || history.got[0].OpenJobs != 3_300_658 || !history.got[0].Day.Valid {
+		t.Errorf("recorded size = %+v, want one row of the published 3300658", history.got)
 	}
 
 	got := catalogstats.Load(ctx, c, failingEstimator{})
@@ -52,7 +66,7 @@ func TestPublishSnapshotReportsFailureWithoutPanicking(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("counting fails", func(t *testing.T) {
-		err := publishSnapshot(ctx, stubCounter{err: errors.New("scan failed")}, cache.NewMemory(), 95, 2_075_865)
+		err := publishSnapshot(ctx, stubCounter{err: errors.New("scan failed")}, cache.NewMemory(), &stubRecorder{}, 95, 2_075_865)
 		if err == nil {
 			t.Error("publishSnapshot returned nil when the count failed — the caller has nothing to log")
 		}
@@ -60,9 +74,21 @@ func TestPublishSnapshotReportsFailureWithoutPanicking(t *testing.T) {
 
 	t.Run("storing fails", func(t *testing.T) {
 		counts := stubCounter{row: db.CountCatalogueScaleRow{OpenJobs: 1, Companies: 1}}
-		err := publishSnapshot(ctx, counts, unwritableCache{}, 95, 2_075_865)
+		err := publishSnapshot(ctx, counts, unwritableCache{}, &stubRecorder{}, 95, 2_075_865)
 		if err == nil {
 			t.Error("publishSnapshot returned nil when the store failed")
+		}
+	})
+
+	t.Run("recording the day's size fails", func(t *testing.T) {
+		counts := stubCounter{row: db.CountCatalogueScaleRow{OpenJobs: 1, Companies: 1}}
+		c := cache.NewMemory()
+		err := publishSnapshot(ctx, counts, c, &stubRecorder{err: errors.New("writer down")}, 95, 2_075_865)
+		if err == nil {
+			t.Error("publishSnapshot returned nil when recording the history failed")
+		}
+		if !catalogstats.Load(ctx, c, failingEstimator{}).Exact {
+			t.Error("a failed history write must not take back the snapshot already published")
 		}
 	})
 }

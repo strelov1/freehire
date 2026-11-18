@@ -145,7 +145,7 @@ SELECT a.id AS application_id,
            '{}'
        )::text[] AS ical_uids
   FROM applications a
-  LEFT JOIN emails em ON em.application_id = a.id AND em.user_id = a.user_id
+  LEFT JOIN emails em ON em.application_id = a.id AND em.user_id = a.user_id AND em.direction = 'incoming'
  WHERE a.user_id = sqlc.arg(user_id)
  GROUP BY a.id, a.company_slug, a.role_title
  ORDER BY a.id;
@@ -193,17 +193,6 @@ SET refresh_token_enc = EXCLUDED.refresh_token_enc,
                             WHEN cardinality(EXCLUDED.scopes) > 0 THEN EXCLUDED.scopes
                             ELSE gmail_connections.scopes
                         END;
-
--- name: RecordGrantScopes :exec
--- Record what a grant covers, as the provider reported it. Replacing rather than unioning,
--- for the reason above: a list that only grows cannot express a scope the candidate took
--- away. An empty list means the exchange did not say, and keeps what we held.
-UPDATE gmail_connections
-SET scopes = CASE
-                 WHEN cardinality(sqlc.arg(scopes)::text[]) > 0 THEN sqlc.arg(scopes)::text[]
-                 ELSE scopes
-             END
-WHERE user_id = sqlc.arg(user_id);
 
 -- name: ListCalendarConnections :many
 -- The candidates whose grant actually covers the calendar. The scope check belongs in the

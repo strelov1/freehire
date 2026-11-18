@@ -6,20 +6,18 @@ import (
 	"strings"
 )
 
-// apple adapts Apple's public careers search API (jobs.apple.com/api/v1), a single-company
-// source with no per-tenant board id (boardless). The listing is a POST to /api/v1/search,
-// paged 20 at a time (the page size is server-fixed; a larger request is ignored). Its
-// results carry only a generic team summary, so each posting's role-specific description
-// comes from a /api/v1/jobDetails/<positionId> GET, fanned out under a bounded worker pool
-// like the other detail adapters.
+// apple adapts Apple's public careers search API (jobs.apple.com/api/v1), single-company and
+// boardless. The listing is a POST to /api/v1/search, paged 20 at a time (server-fixed; a larger
+// request is ignored). Results carry only a generic team summary, so each posting's role-specific
+// description comes from a /api/v1/jobDetails/<positionId> GET, fanned out under a bounded worker
+// pool like the other detail adapters.
 //
-// Two non-obvious API facts, both learned from the live endpoint:
-//   - The request body's filters object is REQUIRED even when empty. Omitting it makes the
-//     API reject the body with HTTP 436 ("jobsite.general.serviceError"), so an empty
-//     filters:{} is always sent. No CSRF token or session cookie is needed.
-//   - The listing returns one row per (position, location), so a multi-location role recurs
-//     under the same positionId across the result set; it is deduped to one job before the
-//     detail fan-out so its detail is fetched once.
+// Two non-obvious API facts:
+//   - The request body's filters object is REQUIRED even when empty: omitting it is rejected with
+//     HTTP 436 ("jobsite.general.serviceError"), so an empty filters:{} is always sent. No CSRF
+//     token or session cookie is needed.
+//   - The listing returns one row per (position, location), so a multi-location role recurs under
+//     the same positionId; it is deduped before the detail fan-out so its detail is fetched once.
 type apple struct {
 	http appleHTTP
 }
@@ -182,11 +180,11 @@ func appleLocationString(locs []appleLocation) string {
 }
 
 // appleDescription assembles the role's full description from the detail fields into sanitized
-// HTML, matching the "descriptions are sanitized HTML" convention the {@html} consumer relies
-// on (mirroring the other plain-text/Markdown adapters). Apple serves the summary and
-// description as plain-text paragraphs (blank-line separated) and the qualifications as
-// newline-separated bullet lines, so the summary/description are emitted as Markdown paragraphs
-// and each qualification section as a headed bullet list. An empty section is omitted.
+// HTML, matching the "descriptions are sanitized HTML" convention the {@html} consumer relies on.
+// Apple serves the summary and description as plain-text paragraphs (blank-line separated) and the
+// qualifications as newline-separated bullet lines, so the summary/description are emitted as
+// Markdown paragraphs and each qualification section as a headed bullet list. An empty section is
+// omitted.
 func appleDescription(jobSummary, description, minQual, prefQual string) string {
 	var b strings.Builder
 	appendParagraphs := func(s string) {

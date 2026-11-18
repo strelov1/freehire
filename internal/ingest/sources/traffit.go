@@ -46,6 +46,12 @@ type traffitItem struct {
 	Description     string `json:"description"`
 	Geolocation     string `json:"geolocation"`
 	ValidStart      int64  `json:"validStart"`
+	Job             struct {
+		// RemoteStatus is the employer's work-mode picklist ("remote", "hybrid", "on_site"),
+		// filled on only some tenants. The top-level "remote"/"remote.desc" fields are a form
+		// default and a constant label on every posting (Antal), not signals, so they stay unread.
+		RemoteStatus []string `json:"remoteStatus"`
+	} `json:"job"`
 }
 
 // traffitGeo is the posting's structured location, carried as a JSON string in geolocation.
@@ -115,6 +121,12 @@ func (traffit) toJob(it traffitItem, e CompanyEntry) (Job, bool) {
 		}
 	}
 
+	// Several ticked values name no single mode, so they stay "" rather than a guess.
+	var mode string
+	if len(it.Job.RemoteStatus) == 1 {
+		mode = workplaceTypeMode(it.Job.RemoteStatus[0])
+	}
+
 	return Job{
 		ExternalID:  strconv.FormatInt(id, 10),
 		URL:         it.URL,
@@ -123,5 +135,7 @@ func (traffit) toJob(it traffitItem, e CompanyEntry) (Job, bool) {
 		Location:    location,
 		Description: sanitizeHTML(it.Description),
 		PostedAt:    parseEpochSeconds(it.ValidStart),
+		Remote:      mode == "remote",
+		WorkMode:    mode,
 	}, true
 }

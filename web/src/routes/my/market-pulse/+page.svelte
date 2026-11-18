@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { untrack } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
@@ -63,6 +64,13 @@
     return `/jobs?${params}`;
   }
 
+  // Add a skill the verdict lists as missing to the saved profile, then recompute the
+  // verdict, which the server scores against that profile.
+  async function addSkill(skill: string) {
+    await profileStore.addSkill(skill);
+    await reload();
+  }
+
   // (Re)load the profile once the session resolves.
   $effect(() => {
     if (isAuthenticated()) void profileStore.ensureLoaded();
@@ -118,9 +126,9 @@
 {#if !isAuthenticated()}
   <p class="py-12 text-center text-sm text-muted-foreground">{s.signedOut}</p>
 {:else}
-  <div class="mb-6 flex flex-col gap-1 max-lg:sr-only">
-    <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
-    <p class="text-sm text-muted-foreground">
+  <div class="mb-4 flex flex-col gap-1 lg:mb-6">
+    <AccountPageHeading>{s.title}</AccountPageHeading>
+    <p class="text-sm text-muted-foreground max-lg:sr-only">
       {s.subtitle}
     </p>
   </div>
@@ -147,7 +155,7 @@
         {:else if verdict === null}
           <States state="loading" />
         {:else}
-          <VerdictView {verdict} {gapHref} />
+          <VerdictView {verdict} {gapHref} onAdd={addSkill} />
         {/if}
       </div>
     </main>

@@ -12,44 +12,28 @@ import (
 	"time"
 )
 
-// The header a provider signs with is that provider's business and lives with it — see
-// stripeSignatureHeader and revenuecatSignatureHeader. The SCHEME is shared and lives here:
-// both send `t=<unix>,v1=<hex>` and both sign "<timestamp>.<raw body>" with HMAC-SHA256, so
-// one verifier serves both and only the name it is read under differs.
+// The header name lives with each provider (stripeSignatureHeader, revenuecatSignatureHeader).
+// The scheme is shared: `t=<unix>,v1=<hex>` over "<timestamp>.<raw body>" with HMAC-SHA256.
 
-// stripeSignatureWindow bounds how old a signed Stripe delivery may be. Five minutes is that
-// provider's own default tolerance.
-//
-// Stripe retries for up to three days, and this is deliberately NOT wide enough to admit a
-// late retry — a retry is re-signed when it is sent, so the window bounds the age of the
-// SIGNATURE rather than the age of the event. Widening it to accommodate retries would only
-// lengthen the life of a captured delivery.
-//
-// The window is a PARAMETER rather than a constant here because that reasoning is Stripe's
-// and not the scheme's: whether RevenueCat re-signs its retries is not documented, and
-// assuming it does would silently drop every retry it sends. See revenuecatSignatureWindow.
+// stripeSignatureWindow bounds how old a signed Stripe delivery may be (the provider's
+// default tolerance). Retries are re-signed when sent, so the window bounds the signature's
+// age, not the event's; widening it only lengthens the life of a captured delivery.
+// It is a parameter because RevenueCat's retry signing is undocumented (see
+// revenuecatSignatureWindow).
 const stripeSignatureWindow = 5 * time.Minute
 
 // ErrBadSignature marks every reason a delivery failed to authenticate: no header, a
-// malformed one, a stale timestamp, a MAC that does not match.
-//
-// It is exported so the handler can tell "not from the provider" (401, and they stop) from
-// "from the provider but unreadable" (400, and they also stop). Both are refusals; only one
-// is worth retrying, and neither is.
+// malformed one, a stale timestamp, a MAC mismatch. Exported so the handler can answer 401
+// for it and 400 for a validly signed but unreadable body.
 var ErrBadSignature = errors.New("billing: delivery is not signed by the provider")
 
 var errNoSignature = fmt.Errorf("%w: delivery carries no signature", ErrBadSignature)
 
 // verifySignature checks that a delivery was signed by the provider, recently.
 //
-// raw MUST be the request body exactly as received. The HMAC covers those bytes, so a
-// caller that parses the JSON and re-marshals it before verifying will reject valid
-// deliveries — the same event, serialised differently, is different bytes.
-//
-// Two independent checks, and both are load-bearing. The MAC says the body came from
-// someone holding the secret. The freshness window says it is not a delivery captured
-// last month and sent again: a signature with no time bound is a bearer credential, which
-// is exactly the property that made the shared Authorization header worth replacing.
+// raw MUST be the body exactly as received: the HMAC covers those bytes, so re-marshalled
+// JSON is rejected. Two checks, both required: the MAC proves the secret holder sent it, and
+// the freshness window stops a captured delivery being replayed.
 func verifySignature(raw []byte, header, secret string, window time.Duration, now time.Time) error {
 	if strings.TrimSpace(header) == "" {
 		return errNoSignature
@@ -65,23 +49,17 @@ func verifySignature(raw []byte, header, secret string, window time.Duration, no
 		return fmt.Errorf("%w: signature is %s away from now, outside the %s window", ErrBadSignature, drift.Round(time.Second), window)
 	}
 
-	// The signed payload is "<timestamp>.<raw body>", written in two goes rather than
-	// concatenated, so the body is never copied to be hashed. Once, then compared against
-	// every candidate: the MAC does not depend on which signature we are checking.
+	// The payload is "<timestamp>.<raw body>", written in two parts to avoid copying the body.
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(strconv.FormatInt(ts, 10) + "."))
 	mac.Write(raw)
 	expected := mac.Sum(nil)
 
-	// EVERY v1 is tried, not just one, and that is a rotation requirement rather than
-	// belt-and-braces. While two endpoint secrets are active the provider signs each
-	// delivery with BOTH and sends two v1 elements in one header — so a verifier that keeps
-	// only one of them rejects roughly half of all deliveries, for the whole rollover.
-	// Which is precisely when a secret is being rotated because it leaked.
+	// Try every v1: while two endpoint secrets are active the provider sends two v1 elements,
+	// and checking only one would reject about half the deliveries during a rotation.
 	//
-	// subtle.ConstantTimeCompare, not bytes.Equal: this comparison is the whole of the
-	// endpoint's authentication, so how long it takes to fail is the only thing it could
-	// leak. It returns 0 for unequal lengths, so a truncated signature is handled here too.
+	// Constant-time compare, since this is the endpoint's whole authentication; it returns 0
+	// for unequal lengths, so truncated signatures are handled too.
 	for _, sig := range sigs {
 		if subtle.ConstantTimeCompare(expected, sig) == 1 {
 			return nil
@@ -92,18 +70,10 @@ func verifySignature(raw []byte, header, secret string, window time.Duration, no
 
 // parseSignatureHeader reads `t=<unix seconds>,v1=<hex>[,v1=<hex>…]`.
 //
-// It returns EVERY v1, because the provider sends more than one while an endpoint has two
-// active secrets — see the note at the comparison. They are candidates, not a sequence:
-// exactly one of them is expected to match, and which is not knowable here.
-//
-// Unknown elements are ignored rather than rejected: the scheme is versioned in the `v1`
-// key, so the provider adding a `v2` beside it must not turn every delivery into a
-// rejection. A missing t or v1 is still an error — that is not a new scheme, it is a
-// malformed one.
-//
-// Ignoring every scheme but v1 is the provider's own instruction, and it is a DOWNGRADE
-// defence: they send a deliberately fake `v0` on test deliveries, so a verifier that
-// accepted any scheme would accept a signature it never checked.
+// It returns every v1 as a candidate (two are sent during a secret rotation). Unknown
+// elements are ignored so a future `v2` does not reject everything, but a missing t or v1 is
+// an error. Ignoring schemes other than v1 is a downgrade defence: test deliveries carry a
+// deliberately fake `v0`.
 func parseSignatureHeader(header string) (ts int64, sigs [][]byte, err error) {
 	var sawTS bool
 	for _, part := range strings.Split(header, ",") {

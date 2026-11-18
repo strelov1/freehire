@@ -148,11 +148,7 @@ describe('SITEMAP_CHUNK', () => {
 
 describe('skillGlossaryPaths', () => {
   it('lists the index and one page per described skill', () => {
-    expect(skillGlossaryPaths(['dbt', 'kubernetes'])).toEqual([
-      '/skills',
-      '/skills/dbt',
-      '/skills/kubernetes',
-    ]);
+    expect(skillGlossaryPaths(['dbt', 'kubernetes'])).toEqual(['/skills', '/skills/dbt', '/skills/kubernetes']);
   });
 
   // The route 404s on a skill with no description, so listing every canonical would

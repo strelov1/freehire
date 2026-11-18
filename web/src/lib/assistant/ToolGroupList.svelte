@@ -58,7 +58,9 @@
     {#each g as c, ci (ci)}
       {@const confirmation = parseConfirmationRequest(c)}
       {#if confirmation}
-        <div class="self-start max-w-[90%] flex flex-col gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-sm">
+        <div
+          class="self-start max-w-[90%] flex flex-col gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-sm"
+        >
           {#if confirmation.question}
             <p class="text-muted-foreground">{confirmation.question}</p>
           {/if}

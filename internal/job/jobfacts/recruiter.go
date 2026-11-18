@@ -9,15 +9,11 @@ import (
 
 // reViaRecruiter matches a posting's own statement that it is written by an
 // intermediary hiring for someone else: a staffing agency, a recruiter, a job portal
-// relaying a client's vacancy. Tuned for precision, measured against a 29,466-row
-// random sample of open postings (2026-10-30), where these phrases marked ~0.5%.
-//
-// What the sample excluded, and why each alternative is shaped as it is:
+// relaying a client's vacancy. Tuned for precision. Why each alternative is shaped as it is:
 //   - "our client" is anchored to a following "is <a|looking|seeking|…>" or ", a/an":
 //     the bare pair is how consultancies describe their own work ("depending on our
 //     client's needs"), and the plural "our clients" is every product company's copy.
-//   - "confidential client" matched only "confidential client information" — 4 of 4
-//     false — so it is absent.
+//   - "confidential client" only matched "confidential client information", so it is absent.
 //   - "for a client"/"for our client" read as caregiving and asset management ("for a
 //     client base") more often than as a recruiter, so they are absent.
 //   - "our client's" counts only inside "join our client's team".

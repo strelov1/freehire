@@ -4,7 +4,8 @@
   import ExtensionLandingView from '#lib/components/ExtensionLandingView.svelte';
   import { EXTENSION_FAQ } from '#lib/extensionFaq.js';
   import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
-  import { breadcrumbJsonLd, extensionApplicationJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { breadcrumbJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { extensionApplicationJsonLd } from '#lib/seoAppJsonLd.js';
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/features/extension`);
@@ -19,7 +20,7 @@
         { name: 'freehire', url: `${origin}/` },
         { name: 'Browser extension', url: canonical },
       ]),
-    ])
+    ]),
   );
 </script>
 

@@ -15,7 +15,7 @@
     todayIn,
     weekdayOrder,
     weekdayShortLabel,
-  } from '#lib/mentorship.js';
+  } from '#lib/mentorshipCalendar.js';
   import type { MentorCalendar, MentorCalendarInterval } from '#lib/types.js';
 
   let { calendar: initial }: { calendar: MentorCalendar } = $props();

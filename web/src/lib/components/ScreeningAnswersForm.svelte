@@ -336,7 +336,8 @@
         class="w-full {salaryInvalid ? 'border-destructive focus-visible:ring-destructive' : ''}"
       />
       {#if salaryInvalid}
-        <span class="text-xs text-destructive">{format(s.mustBePositive, { field: s.fields.desiredSalaryAmount })}</span>
+        <span class="text-xs text-destructive">{format(s.mustBePositive, { field: s.fields.desiredSalaryAmount })}</span
+        >
       {/if}
     </label>
 
@@ -371,5 +372,4 @@
       </select>
     </label>
   </div>
-
 </section>

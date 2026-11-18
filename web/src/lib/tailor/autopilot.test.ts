@@ -68,9 +68,7 @@ describe('undoRun', () => {
       throw new Error('there is no autopilot run to undo');
     };
 
-    await expect(undoRun({ flush: async () => {}, undo: failing, refetch })).rejects.toThrow(
-      'no autopilot run',
-    );
+    await expect(undoRun({ flush: async () => {}, undo: failing, refetch })).rejects.toThrow('no autopilot run');
     expect(refetch).not.toHaveBeenCalled();
   });
 });
@@ -99,4 +97,14 @@ describe('openingActions', () => {
       expect(typeof action.label).toBe('string');
     }
   });
+});
+
+it('keeps partially evidenced requirements open and labels the remaining gap', () => {
+  expect(summarizeRun([{ requirement: 'Azure AI Search', status: 'partial' }])).toEqual({
+    closed: 0,
+    open: 1,
+    notReached: 0,
+    total: 1,
+  });
+  expect(statusMeta('partial')).toEqual({ label: 'Partially supported', tone: 'open' });
 });

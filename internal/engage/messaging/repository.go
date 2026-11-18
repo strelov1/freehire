@@ -3,7 +3,6 @@ package messaging
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -107,16 +106,6 @@ func (r *QueriesRepository) Participants(ctx context.Context, conversationID int
 		out[i] = Participant{UserID: row.UserID, Persona: row.Persona}
 	}
 	return out, nil
-}
-
-func (r *QueriesRepository) StartedSince(ctx context.Context, kind string, userID int64, since time.Time) (int, time.Time, error) {
-	row, err := r.q.CountConversationsStartedSince(ctx, db.CountConversationsStartedSinceParams{
-		StarterID: userID, Kind: kind, Since: pgtype.Timestamptz{Time: since, Valid: true},
-	})
-	if err != nil {
-		return 0, time.Time{}, err
-	}
-	return int(row.Started), row.Oldest.Time, nil
 }
 
 func (r *QueriesRepository) Blocked(ctx context.Context, a, b int64) (bool, error) {

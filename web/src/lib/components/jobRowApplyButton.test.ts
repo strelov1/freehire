@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest';
 // direct-apply shortcut appears (has a destination / has none) and where (full action row /
 // compact, which has none).
 const ROW = readFileSync(join(import.meta.dirname, 'JobRow.svelte'), 'utf8');
+// The full card's corner controls are their own component, rendered in the action row.
+const CORNER = readFileSync(join(import.meta.dirname, 'JobRowCornerActions.svelte'), 'utf8');
 
 // The compact card's control inventory is a separate `{#if compact} … {:else} … {/if}`
 // branch (see the component's own comment on `compact`): splitting on that boundary is what
@@ -23,33 +25,34 @@ const ROW = readFileSync(join(import.meta.dirname, 'JobRow.svelte'), 'utf8');
 const compactIfIndex = ROW.indexOf('{#if compact}');
 const compactElseIndex = compactIfIndex === -1 ? -1 : ROW.indexOf('{:else}', compactIfIndex);
 const compactBranch = compactElseIndex === -1 ? '' : ROW.slice(compactIfIndex, compactElseIndex);
-const actionRow = compactElseIndex === -1 ? '' : ROW.slice(compactElseIndex, ROW.lastIndexOf('{/if}'));
-// The button's own `{#if applyJob} … {/if}` block, isolated within the action row so the
+const rowActionBranch = compactElseIndex === -1 ? '' : ROW.slice(compactElseIndex, ROW.lastIndexOf('{/if}'));
+const actionRow = rowActionBranch.includes('<JobRowCornerActions') ? CORNER.slice(CORNER.indexOf('</script>')) : '';
+// The button's own `{#if applyUrl} … {/if}` block, isolated within the action row so the
 // hover-reveal and link-hygiene assertions can't pass by matching Hide's copies instead.
-const applyIfIndex = actionRow.indexOf('{#if applyJob}');
+const applyIfIndex = actionRow.indexOf('{#if applyUrl}');
 const applyBlock = applyIfIndex === -1 ? '' : actionRow.slice(applyIfIndex, actionRow.indexOf('{/if}', applyIfIndex));
 
 describe('JobRow direct-apply button', () => {
   it('finds the branches it audits', () => {
     expect(compactBranch, 'compact branch not found in JobRow.svelte').not.toBe('');
     expect(actionRow, 'action row not found in JobRow.svelte').not.toBe('');
-    expect(applyBlock, 'applyJob block not found in JobRow.svelte').not.toBe('');
+    expect(applyBlock, 'applyUrl block not found in JobRowCornerActions.svelte').not.toBe('');
   });
 
   it('is gated on an open job that actually carries an outbound url', () => {
     // A non-empty one: a vacancy taking applications on freehire carries `url: ""`. And an
     // open one: a closed posting takes no applications, on any surface that lists it.
-    expect(ROW).toContain(
-      "const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);",
-    );
-    expect(ROW).toContain("job.direct_apply === true && !job.closed_at");
+    expect(ROW).toContain("const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);");
+    expect(ROW).toContain('job.direct_apply === true && !job.closed_at');
+    expect(ROW).toContain('applyUrl={applyJob?.url ?? null}');
     expect(applyBlock).not.toBe('');
   });
 
   it('sends a vacancy taking applications on freehire to its own page, not outside', () => {
     const i = actionRow.indexOf('{#if directApply}');
     const block = i === -1 ? '' : actionRow.slice(i, actionRow.indexOf('{/if}', i));
-    expect(block).toContain("href={resolve('/jobs/[slug]', { slug: job.public_slug })}");
+    expect(ROW).toContain('slug={job.public_slug}');
+    expect(block).toContain("href={resolve('/jobs/[slug]', { slug })}");
     expect(block).not.toContain('target="_blank"');
   });
 
@@ -72,7 +75,7 @@ describe('JobRow direct-apply button', () => {
 
   it('is a sibling of the card link, inside the action row', () => {
     // The action row itself sits after the closing `</a>` of the card link.
-    expect(ROW.indexOf('</a>')).toBeLessThan(ROW.indexOf('{#if applyJob}'));
+    expect(ROW.indexOf('</a>')).toBeLessThan(ROW.indexOf('<JobRowCornerActions'));
   });
 
   it('hover-reveals like Hide, and stays visible on touch', () => {
@@ -89,28 +92,26 @@ describe('JobRow direct-apply button', () => {
   it('names the job it applies to, and which of the two destinations it is', () => {
     // A feed holds twenty "Apply" buttons; a name without the job is twenty identical
     // entries in a screen reader's control list.
-    expect(applyBlock).toContain("`Apply to ${job.title} on the employer's site (opens in a new tab)`");
+    expect(applyBlock).toContain("`Apply to ${title} on the employer's site (opens in a new tab)`");
     // Signed out, the button opens a choice rather than sending the visitor straight to sign-in.
-    expect(applyBlock).toContain('`Choose how to apply to ${job.title}`');
+    expect(applyBlock).toContain('`Choose how to apply to ${title}`');
     const i = actionRow.indexOf('{#if directApply}');
     const block = i === -1 ? '' : actionRow.slice(i, actionRow.indexOf('{/if}', i));
-    expect(block).toContain('aria-label="Apply to {job.title}"');
+    expect(ROW).toContain('title={job.title}');
+    expect(block).toContain('aria-label="Apply to {title}"');
   });
 
+  // The live region and the choice it announces live in JobRowApplyGate, which the card
+  // renders unconditionally so the region is mounted before anything is said into it.
   it('announces the apply choices through a persistently mounted live region', () => {
-    expect(ROW).toContain('<div class="sr-only" aria-live="polite" aria-atomic="true">');
-    expect(ROW).toContain(
-      'Choose how to apply to {job.title}: sign in, sign up, or continue without signing in.',
-    );
+    const gate = readFileSync(join(import.meta.dirname, 'JobRowApplyGate.svelte'), 'utf8');
+    expect(ROW).toContain('<JobRowApplyGate');
+    expect(gate).toContain('<div class="sr-only" aria-live="polite" aria-atomic="true">');
+    expect(gate).toContain('Choose how to apply to {title}: sign in, sign up, or continue without signing in.');
   });
 });
 
 describe('JobRow card link', () => {
-  it('is named by title and company, not by every word on the card', () => {
-    expect(ROW).toContain('aria-label={linkName}');
-    expect(ROW).toContain("const linkName = $derived(`${job.title} at ${job.company || 'Unknown company'}`);");
-  });
-
   it('dims a viewed card no further than 90%, which keeps muted text above 4.5:1', () => {
     expect(ROW).toContain('class:opacity-90={isViewed}');
     expect(ROW).not.toContain('class:opacity-80');

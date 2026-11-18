@@ -11,6 +11,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
@@ -23,9 +24,9 @@ func apiKeysApp() *fiber.App {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &authHandlers{}
 	app := fiber.New()
-	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.CreateAPIKey)
-	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.ListAPIKeys)
-	app.Delete("/api/v1/me/api-keys/:id", auth.RequireAuth(iss, testVersions), h.RevokeAPIKey)
+	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Delete("/api/v1/me/api-keys/:id", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 	return app
 }
 
@@ -95,9 +96,10 @@ func TestCreateAPIKey_RejectsUnrequestableScope(t *testing.T) {
 // The created-key response carries the plaintext token exactly once, alongside the
 // display metadata — and never the stored hash.
 func TestCreatedAPIKeyResponse_IncludesTokenNotHash(t *testing.T) {
-	fields := marshalToFields(t, createdAPIKeyResponse{
-		apiKeyResponse: apiKeyResponse{ID: 1, Name: "ci", TokenPrefix: "fhk_ab12cd"},
-		Token:          "fhk_the-one-time-secret",
+	fields := marshalToFields(t, apigen.ApiKeyCreated{
+		ID: 1, Name: "ci", TokenPrefix: "fhk_ab12cd",
+		CreatedAt: nilDateTime(nil), LastUsedAt: nilDateTime(nil), ExpiresAt: nilDateTime(nil),
+		Token: "fhk_the-one-time-secret",
 	})
 	for _, want := range []string{"id", "name", "token_prefix", "created_at", "last_used_at", "expires_at", "token"} {
 		if _, ok := fields[want]; !ok {
@@ -111,7 +113,10 @@ func TestCreatedAPIKeyResponse_IncludesTokenNotHash(t *testing.T) {
 
 // The list/metadata response never exposes the plaintext token or its hash.
 func TestAPIKeyResponse_OmitsSecret(t *testing.T) {
-	fields := marshalToFields(t, apiKeyResponse{ID: 1, Name: "ci", TokenPrefix: "fhk_ab12cd"})
+	fields := marshalToFields(t, apigen.ApiKey{
+		ID: 1, Name: "ci", TokenPrefix: "fhk_ab12cd",
+		CreatedAt: nilDateTime(nil), LastUsedAt: nilDateTime(nil), ExpiresAt: nilDateTime(nil),
+	})
 	for _, leaked := range []string{"token", "token_hash"} {
 		if _, ok := fields[leaked]; ok {
 			t.Errorf("list response must not include %q", leaked)

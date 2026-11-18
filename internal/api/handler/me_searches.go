@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/savedsearch"
 )
@@ -20,47 +22,38 @@ func newSavedSearchHandlers(queries *db.Queries) *savedSearchHandlers {
 	return &savedSearchHandlers{savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
 }
 
-func (h *savedSearchHandlers) register(api fiber.Router, mw middleware) {
-	// Saved searches are cookie-only (RequireAuth) like API-key management: they are a
-	// browser convenience (the "My filters" picker), not a scripting primitive. Each
-	// operation is owner-scoped; an id that is not the caller's is a 404.
-	api.Get("/me/searches", mw.cookie, h.ListSavedSearches)
-	api.Post("/me/searches", mw.cookie, h.CreateSavedSearch)
-	api.Patch("/me/searches/:id", mw.cookie, h.UpdateSavedSearch)
-	api.Delete("/me/searches/:id", mw.cookie, h.DeleteSavedSearch)
+func (h *savedSearchHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	// Cookie-only like API-key management: a browser convenience (the "My filters" picker),
+	// not a scripting primitive. Owner-scoped; an id that is not the caller's is a 404.
+	api.Get("/me/searches", mw.cookie, contract)
+	api.Post("/me/searches", mw.cookie, contract)
+	api.Patch("/me/searches/:id", mw.cookie, contract)
+	api.Delete("/me/searches/:id", mw.cookie, contract)
 }
 
-// savedSearchResponse is the public shape of a saved search. user_id is omitted
-// (ownership, internal); query is the canonical search query string the SPA replays
-// into the filter URL.
-type savedSearchResponse struct {
-	ID                 int64      `json:"id"`
-	Name               string     `json:"name"`
-	Query              string     `json:"query"`
-	DerivedFromProfile bool       `json:"derived_from_profile"`
-	CreatedAt          *time.Time `json:"created_at"`
-	UpdatedAt          *time.Time `json:"updated_at"`
-}
-
-// toSavedSearchResponse maps a stored saved search to its wire shape (no user id).
-func toSavedSearchResponse(s savedsearch.SavedSearch) savedSearchResponse {
-	return savedSearchResponse{
-		ID:                 s.ID,
-		Name:               s.Name,
-		Query:              s.Query,
-		DerivedFromProfile: s.DerivedFromProfile,
-		CreatedAt:          s.CreatedAt,
-		UpdatedAt:          s.UpdatedAt,
+// setNilDateTime fills a `utcDateTime | null` field that is always present: null when the
+// row carries no stamp.
+func setNilDateTime(dst *apigen.NilDateTime, at *time.Time) {
+	if at != nil {
+		*dst = apigen.NewNilDateTime(*at)
+		return
 	}
+	dst.SetToNull()
 }
 
-// savedSearchError maps the saved-search sentinels onto HTTP statuses: a bad name is a
-// 400, a duplicate name or the per-user cap is a 409, a missing/non-owned row is a 404.
-// Anything else falls through to RenderError as a 500.
-//
-// Every sentinel the package declares belongs here, and a test walks the list: one left
-// out does not merely render the wrong status, it tells the caller their own mistake was
-// our fault and files a fault report for ordinary traffic.
+// savedSearchOut maps a stored saved search to its wire shape. user_id is omitted; query is
+// the canonical search query string the SPA replays into the filter URL.
+func savedSearchOut(s savedsearch.SavedSearch) apigen.SavedSearch {
+	out := apigen.SavedSearch{ID: s.ID, Name: s.Name, Query: s.Query, DerivedFromProfile: s.DerivedFromProfile}
+	setNilDateTime(&out.CreatedAt, s.CreatedAt)
+	setNilDateTime(&out.UpdatedAt, s.UpdatedAt)
+	return out
+}
+
+// savedSearchError maps the saved-search sentinels onto HTTP: a bad name is a 400, a
+// duplicate name or the per-user cap a 409, a missing/non-owned row a 404. Anything else is a
+// 500. Every sentinel the package declares belongs here (a test walks the list): one left out
+// would blame the caller's own mistake on us and file a fault report for ordinary traffic.
 func savedSearchError(err error) error {
 	switch {
 	case errors.Is(err, savedsearch.ErrInvalidName):
@@ -80,100 +73,68 @@ func savedSearchError(err error) error {
 	}
 }
 
-// createSavedSearchRequest is the create body: a required display name and the canonical
-// search query string (an empty query is the valid "show all" snapshot).
-type createSavedSearchRequest struct {
-	Name               string `json:"name"`
-	Query              string `json:"query"`
-	DerivedFromProfile bool   `json:"derived_from_profile"`
+// CreateSavedSearch stores a named filter snapshot for the caller. Cookie-only. A bad name
+// is a 400, a duplicate name or the per-user cap a 409. An empty query is the valid "show
+// all" snapshot.
+func (h *savedSearchHandlers) CreateSavedSearch(ctx context.Context, req *apigen.SavedSearchCreate) (*apigen.CreateSavedSearchCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	saved, err := h.savedSearch.Create(ctx, userID, req.Name.Value, req.Query.Value, req.DerivedFromProfile.Value)
+	if err != nil {
+		return nil, savedSearchError(err)
+	}
+	return &apigen.CreateSavedSearchCreated{Data: savedSearchOut(saved)}, nil
 }
 
-// updateSavedSearchRequest is the partial-update body: a nil field is left unchanged, so a
-// caller can rename, overwrite the filters, or both. An empty (non-nil) query is a real
-// "show all" value.
-type updateSavedSearchRequest struct {
-	Name  *string `json:"name"`
-	Query *string `json:"query"`
-}
-
-// CreateSavedSearch stores a named filter snapshot for the authenticated user. Behind
-// RequireAuth (cookie-only): saved searches are a browser feature, not a scripting
-// primitive. A bad name is a 400, a duplicate name or the per-user cap is a 409.
-func (h *savedSearchHandlers) CreateSavedSearch(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// ListSavedSearches returns the caller's saved searches, most recently updated first.
+// Owner-scoped. Cookie-only.
+func (h *savedSearchHandlers) ListSavedSearches(ctx context.Context) (*apigen.SavedSearchList, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	var in createSavedSearchRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-
-	saved, err := h.savedSearch.Create(c.Context(), userID, in.Name, in.Query, in.DerivedFromProfile)
+	rows, err := h.savedSearch.List(ctx, userID)
 	if err != nil {
-		return savedSearchError(err)
+		return nil, err
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toSavedSearchResponse(saved)})
-}
-
-// ListSavedSearches returns the authenticated user's saved searches, most recently updated
-// first. Owner-scoped, so it never reveals another user's. Cookie-only.
-func (h *savedSearchHandlers) ListSavedSearches(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-
-	rows, err := h.savedSearch.List(c.Context(), userID)
-	if err != nil {
-		return err
-	}
-	out := make([]savedSearchResponse, len(rows))
+	out := make([]apigen.SavedSearch, len(rows))
 	for i, r := range rows {
-		out[i] = toSavedSearchResponse(r)
+		out[i] = savedSearchOut(r)
 	}
-	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"total": len(out)}})
+	return &apigen.SavedSearchList{Data: out, Meta: apigen.AlertListMeta{Total: int64(len(out))}}, nil
 }
 
 // UpdateSavedSearch overwrites a saved search's name and/or query (partial), scoped to its
-// owner. A missing or non-owned id is a 404; a bad name is a 400; a name collision is a 409.
-func (h *savedSearchHandlers) UpdateSavedSearch(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// owner. A missing or non-owned id is a 404, a bad name a 400, a name collision a 409. An
+// absent or null field is left unchanged; an empty (non-null) query is a real "show all".
+func (h *savedSearchHandlers) UpdateSavedSearch(ctx context.Context, req *apigen.SavedSearchUpdate, params apigen.UpdateSavedSearchParams) (*apigen.UpdateSavedSearchOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := pathID(c)
+	id, err := contractPathID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	var in updateSavedSearchRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-
-	saved, err := h.savedSearch.Update(c.Context(), userID, id, in.Name, in.Query)
+	saved, err := h.savedSearch.Update(ctx, userID, id, ptrOf(req.Name.Get), ptrOf(req.Query.Get))
 	if err != nil {
-		return savedSearchError(err)
+		return nil, savedSearchError(err)
 	}
-	return c.JSON(fiber.Map{"data": toSavedSearchResponse(saved)})
+	return &apigen.UpdateSavedSearchOK{Data: savedSearchOut(saved)}, nil
 }
 
-// DeleteSavedSearch removes one of the authenticated user's saved searches by id.
-// Owner-scoped: an id that does not exist or belongs to another user is a 404. Cookie-only.
-func (h *savedSearchHandlers) DeleteSavedSearch(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// DeleteSavedSearch removes one of the caller's saved searches by id. A missing or
+// non-owned id is a 404. Cookie-only.
+func (h *savedSearchHandlers) DeleteSavedSearch(ctx context.Context, params apigen.DeleteSavedSearchParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := pathID(c)
+	id, err := contractPathID(params.ID)
 	if err != nil {
 		return err
 	}
-
-	if err := h.savedSearch.Delete(c.Context(), userID, id); err != nil {
-		return savedSearchError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return savedSearchError(h.savedSearch.Delete(ctx, userID, id))
 }

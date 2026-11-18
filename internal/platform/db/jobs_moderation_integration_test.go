@@ -16,6 +16,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// upsertManual and updateManual run the moderator writes, which return the job id only, and
+// read the complete row back through jobs_read, the row the tests below assert on.
+func upsertManual(ctx context.Context, q *Queries, p UpsertManualJobParams) (Job, error) {
+	id, err := q.UpsertManualJob(ctx, p)
+	if err != nil {
+		return Job{}, err
+	}
+	return q.GetJob(ctx, id)
+}
+
+func updateManual(ctx context.Context, q *Queries, p UpdateManualJobParams) (Job, error) {
+	id, err := q.UpdateManualJob(ctx, p)
+	if err != nil {
+		return Job{}, err
+	}
+	return q.GetJob(ctx, id)
+}
+
 func manualParams(url, title string, createdBy, updatedBy int64) UpsertManualJobParams {
 	return UpsertManualJobParams{
 		Source:      "manual",
@@ -49,7 +67,7 @@ func TestUpsertManualJobIdempotentOnURLAndAudit(t *testing.T) {
 	author := insertUser(t, pool, "author@example.test")
 	editor := insertUser(t, pool, "editor@example.test")
 
-	first, err := q.UpsertManualJob(ctx, manualParams(url, "Old Title", author, author))
+	first, err := upsertManual(ctx, q, manualParams(url, "Old Title", author, author))
 	if err != nil {
 		t.Fatalf("initial upsert: %v", err)
 	}
@@ -73,7 +91,7 @@ func TestUpsertManualJobIdempotentOnURLAndAudit(t *testing.T) {
 	}
 
 	// Re-create the same URL with an edited title and a different acting user.
-	second, err := q.UpsertManualJob(ctx, manualParams(url, "New Title", author, editor))
+	second, err := upsertManual(ctx, q, manualParams(url, "New Title", author, editor))
 	if err != nil {
 		t.Fatalf("re-upsert: %v", err)
 	}
@@ -116,13 +134,13 @@ func TestUpdateManualJobScopedByCreatedBy(t *testing.T) {
 	editor := insertUser(t, pool, "editor@example.test")
 
 	const url = "https://acme.example/jobs/2"
-	manual, err := q.UpsertManualJob(ctx, manualParams(url, "Manual Job", editor, editor))
+	manual, err := upsertManual(ctx, q, manualParams(url, "Manual Job", editor, editor))
 	if err != nil {
 		t.Fatalf("create manual: %v", err)
 	}
 
 	// Editing the manual job succeeds and records the editor.
-	updated, err := q.UpdateManualJob(ctx, updateManualParams(manual.PublicSlug, "Edited Title", editor))
+	updated, err := updateManual(ctx, q, updateManualParams(manual.PublicSlug, "Edited Title", editor))
 	if err != nil {
 		t.Fatalf("update manual: %v", err)
 	}
@@ -140,7 +158,7 @@ func TestUpdateManualJobScopedByCreatedBy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create ats: %v", err)
 	}
-	if _, err := q.UpdateManualJob(ctx, updateManualParams(ats.PublicSlug, "Hijacked", editor)); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := updateManual(ctx, q, updateManualParams(ats.PublicSlug, "Hijacked", editor)); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("update of an automated-source job: err = %v, want pgx.ErrNoRows", err)
 	}
 
@@ -157,7 +175,7 @@ func TestUpdateManualJobScopedByCreatedBy(t *testing.T) {
 		         'stealthworks', 'Confidential body', 'private-role-stealthworks', $1, true)`, editor); err != nil {
 		t.Fatalf("insert private job: %v", err)
 	}
-	if _, err := q.UpdateManualJob(ctx, updateManualParams("private-role-stealthworks", "Hijacked", editor)); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := updateManual(ctx, q, updateManualParams("private-role-stealthworks", "Hijacked", editor)); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("update of a private job: err = %v, want pgx.ErrNoRows", err)
 	}
 	var title string

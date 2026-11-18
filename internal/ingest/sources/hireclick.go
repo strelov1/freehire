@@ -25,15 +25,14 @@ import (
 // subdomain no tenant owns redirects to "/misc/maintenance", which carries no GUID.
 //
 // The list states each posting's title, URL and city but only a truncated plain-text excerpt of
-// the body, so the description comes from the posting's own page ("/jb/<slug>/view/<id>"),
-// which carries a schema.org JobPosting ld+json with the full HTML body, the publish date, the
-// employment type and a postal address. Every page on the platform is heavy — the tenant logo
-// is inlined as base64 several times over and an ASP.NET view state rides along, 1-3 MB
-// measured — and is served uncompressed at ~80-160 KB/s per connection (2026-10-20: a 3.2 MB
-// board page took 20-40s, a 1.3 MB posting page ~11s, while the JSON list answered in ~1s). So
-// the adapter rides the long-timeout client under one run-wide in-flight cap (registry.go,
-// limitedHireClick in pacer.go — the cap, not the detail fan-out below, is what bounds load), and
-// it hydrates: a posting already in the catalogue is refreshed from the list alone.
+// the body, so the description comes from the posting's own page ("/jb/<slug>/view/<id>"), which
+// carries a schema.org JobPosting ld+json with the full HTML body, the publish date, the
+// employment type and a postal address. Every page on the platform is heavy (the tenant logo is
+// inlined as base64 several times over and an ASP.NET view state rides along) and is served
+// uncompressed and slowly, while the JSON list answers fast. So the adapter rides the long-timeout
+// client under one run-wide in-flight cap (registry.go, limitedHireClick in pacer.go; the cap, not
+// the detail fan-out below, bounds load), and it hydrates: a posting already in the catalogue is
+// refreshed from the list alone.
 //
 // A posting the platform has taken down redirects to "/jobboard/" rather than answering 404.
 //
@@ -82,8 +81,6 @@ func (s hireclick) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 	}
 	return fetchDetails(postings, defaultDetailWorkers, func(p hireclickPosting) (Job, bool) {
 		if seen(p.id) {
-			// The title travels because a refresh faces the catalogue filter, which is how a
-			// stored row ages out when the non-technical dictionary later covers its title.
 			return Job{
 				ExternalID:  p.id,
 				URL:         p.url,

@@ -1,25 +1,20 @@
 package worker
 
 import (
-	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/getsentry/sentry-go"
+	"github.com/strelov1/freehire/internal/platform/observability"
+	collector "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	"google.golang.org/protobuf/proto"
 )
-
-// recordingTransport is a sentry.Transport that captures sent events in memory so
-// a test can assert what would have been delivered without any network.
-type recordingTransport struct{ events []*sentry.Event }
-
-func (t *recordingTransport) Configure(sentry.ClientOptions)        {}
-func (t *recordingTransport) SendEvent(e *sentry.Event)             { t.events = append(t.events, e) }
-func (t *recordingTransport) Flush(time.Duration) bool              { return true }
-func (t *recordingTransport) FlushWithContext(context.Context) bool { return true }
-func (t *recordingTransport) Close()                                {}
 
 // A held switch must stop the work itself, not merely tidy up after it: the run
 // function is the thing that opens pools and crawls boards, so "paused" is only
@@ -39,7 +34,7 @@ func TestRunOrPauseSkipsTheRunWhenHeld(t *testing.T) {
 	code := runOrPause(func() int {
 		called = true
 		return 3
-	})
+	}, nil)
 
 	if called {
 		t.Error("the run function was called while the switch was held")
@@ -66,7 +61,7 @@ func TestRunOrPauseRunsAndReportsWhenClear(t *testing.T) {
 	defer func() { os.Args = origArgs }()
 	os.Args = []string{"/opt/freehire/src/hire-current/embed"}
 
-	code := runOrPause(func() int { return 3 })
+	code := runOrPause(func() int { return 3 }, nil)
 
 	if code != 3 {
 		t.Errorf("exit code = %d, want 3 — the run's own status must survive", code)
@@ -80,24 +75,14 @@ func TestRunOrPauseRunsAndReportsWhenClear(t *testing.T) {
 	}
 }
 
-// A panic flowing through the worker guard must be reported to Sentry AND
-// re-raised, so the process still crashes with the original stack and non-zero exit.
-func TestCapturePanicReportsAndRepanics(t *testing.T) {
-	tr := &recordingTransport{}
-	if err := sentry.Init(sentry.ClientOptions{
-		Dsn:       "https://public@o0.ingest.sentry.io/0",
-		Transport: tr,
-	}); err != nil {
-		t.Fatalf("sentry.Init: %v", err)
-	}
-
+// A panic flowing through the worker guard must be re-raised, so the process still
+// crashes with the original stack and non-zero exit. That it is also reported is
+// TestRunReportedFlushesFinalFault's job, against a real OTLP receiver.
+func TestCapturePanicRepanics(t *testing.T) {
 	defer func() {
 		r := recover()
 		if r == nil {
 			t.Fatal("capturePanic swallowed the panic; want it re-raised")
-		}
-		if len(tr.events) != 1 {
-			t.Fatalf("captured %d events, want exactly 1", len(tr.events))
 		}
 	}()
 
@@ -105,4 +90,70 @@ func TestCapturePanicReportsAndRepanics(t *testing.T) {
 		defer capturePanic()
 		panic("boom")
 	}()
+}
+
+// Bootstrap's cleanup runs inside run, before Main observes the final status or
+// panic. Both terminal outcomes must still reach the real OTLP receiver.
+func TestRunReportedFlushesFinalFault(t *testing.T) {
+	for _, panics := range []bool{false, true} {
+		t.Run(fmt.Sprintf("panic=%t", panics), func(t *testing.T) {
+			requests := make(chan *collector.ExportLogsServiceRequest, 4)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				request := new(collector.ExportLogsServiceRequest)
+				if err := proto.Unmarshal(body, request); err != nil {
+					t.Error(err)
+				}
+				requests <- request
+				w.Header().Set("Content-Type", "application/x-protobuf")
+			}))
+			defer server.Close()
+			t.Setenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", server.URL+"/v1/logs")
+			t.Setenv("FREEHIRE_IGNORE_PAUSE", "1")
+			func() {
+				defer func() {
+					if r := recover(); (r != nil) != panics {
+						t.Errorf("panic=%v, want %t", r, panics)
+					}
+				}()
+				code := runReported(func() int {
+					cleanup, err := observability.InitLogs("inner-bootstrap")
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer cleanup()
+					if panics {
+						panic("late worker failure")
+					}
+					return 3
+				}, nil)
+				if code != 3 {
+					t.Errorf("code=%d, want 3", code)
+				}
+			}()
+			select {
+			case request := <-requests:
+				records := request.ResourceLogs[0].ScopeLogs[0].LogRecords
+				if len(records) != 1 {
+					t.Fatalf("got %d records, want one terminal exception", len(records))
+				}
+				attrs := map[string]string{}
+				exitCode := int64(0)
+				for _, attr := range records[0].Attributes {
+					attrs[attr.Key] = attr.Value.GetStringValue()
+					if attr.Key == "process.exit.code" {
+						exitCode = attr.Value.GetIntValue()
+					}
+				}
+				if attrs["worker.name"] == "" {
+					t.Error("missing worker.name")
+				}
+				if !panics && exitCode != 3 {
+					t.Errorf("exit code=%d, want 3", exitCode)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("final worker exception was not flushed")
+			}
+		})
+	}
 }

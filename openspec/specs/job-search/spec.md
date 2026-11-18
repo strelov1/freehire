@@ -298,173 +298,6 @@ again on the next run.
 - **WHEN** a previously closed job is reopened and a reindex runs
 - **THEN** the job's document is indexed again
 
-### Requirement: Default ordering is newest-added first
-
-A search request with no query text and no valid `sort` parameter SHALL return
-jobs ordered by the source's posting date (`posted_at`), newest first. A request
-with query text and no `sort` SHALL keep relevance order. An explicit valid
-`sort` parameter SHALL always take precedence. `posted_at`, `created_at` and
-`view_count` SHALL all be sortable attributes of the index and accepted `sort`
-values. The DB-backed jobs list keeps its own stable default (`created_at`
-descending) and is no longer required to match the search default — it accepts no
-`sort` parameter at all, so every ordering the feed offers is served by the search
-endpoint.
-
-`sort=view_count` orders by how many people have opened each posting. Like the
-other attribute sorts it honours `order` and defaults to descending, so the
-common case — the most-viewed postings first — needs no second parameter.
-
-`sort=match` is the one accepted value that is NOT an index attribute: it orders
-by the caller's own skill vector (see `skill-match-sort`). When it is served, the
-request SHALL carry no attribute sort directive at all, because an explicit sort
-directive takes precedence over vector ranking in the engine and would silently
-discard the ordering the caller asked for.
-
-#### Scenario: Browsing without a query shows freshest postings first
-
-- **WHEN** the search endpoint is called with empty `q` and no `sort`
-- **THEN** results are ordered `posted_at` descending
-
-#### Scenario: A text query keeps relevance order
-
-- **WHEN** the search endpoint is called with `q=golang` and no `sort`
-- **THEN** results are in relevance order (no sort directive)
-
-#### Scenario: Explicit sort wins
-
-- **WHEN** the search endpoint is called with `sort=created_at&order=desc`
-- **THEN** results are ordered by `created_at` descending regardless of `q`
-
-#### Scenario: Most-viewed ordering defaults to descending
-
-- **WHEN** the search endpoint is called with `sort=view_count` and no `order`
-- **THEN** results are ordered by `view_count` descending
-
-#### Scenario: Most-viewed ordering honours an ascending order
-
-- **WHEN** the search endpoint is called with `sort=view_count&order=asc`
-- **THEN** results are ordered by `view_count` ascending
-
-#### Scenario: A served match sort suppresses the attribute sort
-
-- **WHEN** the search endpoint serves `sort=match` for an eligible caller
-- **THEN** the engine request carries the caller's vector and no sort directive
-
-### Requirement: Incremental indexing keeps new and changed jobs fresh
-
-The system SHALL index a job into the live Meilisearch facet index as soon as
-ingest persists it with new or changed indexed content, so a newly ingested or
-edited open job becomes searchable within one crawl cycle rather than only after
-the next scheduled batch reindex. A job whose indexed content did not change on a
-re-ingest (for example, an upsert that only refreshes its last-seen timestamp)
-SHALL NOT be re-pushed. This incremental path SHALL target the facet/keyword
-production index only; the semantic index keeps its separate schedule.
-
-Incremental indexing SHALL be best-effort and SHALL NOT change the source of
-truth: the batch reindex (the "Batch reindex keeps the index in sync"
-requirement) remains responsible for reconciliation. Removing the documents of
-closed jobs is no longer part of that reconciliation alone — it also has its own
-incremental path (the "Closed jobs leave the facet index incrementally"
-requirement), so the batch reindex bounds how stale the index can drift rather
-than bounding how long a closed job stays searchable. A failure to push to the
-index SHALL NOT fail ingest.
-
-#### Scenario: A newly ingested job is searchable before the next batch reindex
-
-- **WHEN** ingest persists a job that was not previously in the catalogue
-- **THEN** the job's document is present in the live facet index and the job
-  matches search without waiting for a batch reindex
-
-#### Scenario: An edited job is re-indexed on re-ingest
-
-- **WHEN** a job already in the catalogue is re-ingested with an edited title or
-  description
-- **THEN** the job's document in the live facet index reflects the edit without
-  waiting for a batch reindex
-
-#### Scenario: An unchanged re-ingest does not re-push the document
-
-- **WHEN** a job already in the catalogue is re-ingested with no change to its
-  indexed content
-- **THEN** no document push is issued for that job
-
-#### Scenario: An index failure does not fail ingest
-
-- **WHEN** the search engine is unavailable while ingest is pushing new documents
-- **THEN** the ingest run records the persisted jobs and completes, and the
-  failure is logged rather than aborting the run
-
-### Requirement: Closed jobs leave the facet index incrementally
-
-The system SHALL remove a closed job's document from the live facet index without waiting
-for the next batch reindex, so a vacancy that is no longer open stops matching search within
-one drain cycle.
-
-Removal SHALL be driven by a queue written in the same database transaction that closes the
-job, so that a close and its pending removal cannot diverge. Because jobs are closed in bulk
-— one statement closing every posting a crawl no longer saw — the enqueue SHALL be part of
-the closing statement itself rather than a separate call per row.
-
-A job removed from the catalogue outright SHALL also leave the index, on the same path. The
-queue therefore SHALL NOT depend on the job's row still existing: a queued removal identifies
-the document by key alone, and MUST survive the deletion of the job it refers to. A queue that
-cascaded with the job would lose exactly the removals it exists to guarantee.
-
-Removal SHALL be idempotent: removing a document that is not in the index is a no-op, so a
-retried, overlapping, or duplicated removal is harmless and needs no coordination with the
-indexing path.
-
-A job that is queued both for indexing and for removal SHALL end up removed. The indexing
-claim already excludes jobs that are not open, so a job closed after being queued for
-indexing is never indexed by that entry.
-
-Failure to remove SHALL NOT fail the run that closed the job, and SHALL leave the queue entry
-for a later attempt rather than dropping it.
-
-#### Scenario: A closed job stops matching search before the next batch reindex
-
-- **WHEN** a crawl closes a job that was previously searchable
-- **THEN** the job's document is removed from the live facet index and it no longer matches
-  search, without waiting for a batch reindex
-
-#### Scenario: A bulk close queues every job it closed
-
-- **WHEN** one statement closes many jobs a crawl no longer saw
-- **THEN** every closed job is queued for removal by that same statement
-
-#### Scenario: A rolled-back close queues nothing
-
-- **WHEN** the transaction that closes a job does not commit
-- **THEN** no removal is queued for that job
-
-#### Scenario: A hard-deleted job leaves the index
-
-- **WHEN** a job is removed from the catalogue outright rather than closed
-- **THEN** its removal is queued by the same statement that deleted it, and the document
-  leaves the index
-
-#### Scenario: A queued removal survives its job being deleted
-
-- **WHEN** a job is queued for removal and its row is then hard-deleted before the queue is
-  drained
-- **THEN** the queued removal still exists and is still processed
-
-#### Scenario: Removing an unindexed job is harmless
-
-- **WHEN** a removal is processed for a job whose document is not in the index
-- **THEN** the operation succeeds and the queue entry is completed
-
-#### Scenario: A job queued for both indexing and removal ends up removed
-
-- **WHEN** a job is queued for indexing and is then closed before that entry is drained
-- **THEN** the job is not indexed by that entry, and its document is removed
-
-#### Scenario: An unavailable search engine does not lose the removal
-
-- **WHEN** the search engine is unavailable while a removal is being processed
-- **THEN** the failure is logged, the queue entry remains for a later attempt, and the run
-  that closed the job is unaffected
-
 ### Requirement: Experience years is filterable as a range
 
 The search endpoints SHALL accept an `experience_years_max` parameter that bounds a
@@ -517,61 +350,6 @@ requirement does not satisfy.
 - **WHEN** a client requests `GET /api/v1/jobs/search?experience_years_max=0`
 - **THEN** only postings whose stated experience requirement is `0` are returned
 
-### Requirement: The jobs feed can be ordered by profile match
-
-The system SHALL accept `sort=match` on `GET /api/v1/jobs/search`, ordering
-results by the cosine between each job's skill vector and the authenticated
-caller's, computed from their profile skills.
-
-The endpoint SHALL remain public. It SHALL attach the caller's identity when a
-session is present but MUST NOT reject a request that lacks one.
-
-Ranking SHALL compose with every existing facet filter in a single engine query,
-and pagination SHALL behave as it does for any other ordering — there is no
-window, and no ceiling beyond the endpoint's existing pagination guard.
-
-The caller's vector SHALL be built per request from their profile alone. It SHALL
-require no database read: the vector depends on nothing but the skills the profile
-names.
-
-**`sort=match` SHALL NEVER return an error.** Every reason it cannot be served —
-no session, no profile, no skills, no recognised skills —
-SHALL degrade to the endpoint's default ordering. A saved search or a shared link
-carrying `sort=match` must not break when opened by someone it cannot be served
-for, which is the same reason the jobs list ignores unknown filters rather than
-refusing them.
-
-#### Scenario: A signed-in caller with skills is ranked by match
-
-- **WHEN** a caller with a session and a profile naming recognised skills requests
-  `sort=match`
-- **THEN** the engine query carries a vector of the declared width and results are
-  ordered by their cosine against it
-
-#### Scenario: An anonymous caller gets the default feed
-
-- **WHEN** a caller with no session requests `sort=match`
-- **THEN** the response is `200` with the default freshest-first ordering, and the
-  engine query carries no vector
-
-#### Scenario: A profile with no skills gets the default feed
-
-- **WHEN** a signed-in caller whose profile names no skills requests `sort=match`
-- **THEN** the response is `200` with the default ordering and no vector
-
-#### Scenario: The match sort composes with facet filters
-
-- **WHEN** an eligible caller requests `sort=match` together with country and
-  seniority filters
-- **THEN** one engine query carries both the vector and the facet filter, and
-  neither is dropped
-
-#### Scenario: Deep pagination under the match sort behaves normally
-
-- **WHEN** an eligible caller pages into the match-ordered feed within the
-  endpoint's pagination guard
-- **THEN** results continue in match order, with no separate depth limit
-
 ### Requirement: Search query operators
 
 The jobs search query `q` SHALL accept two operators on top of Meilisearch's own quotes
@@ -614,3 +392,30 @@ message `q has more than 5 OR alternatives`.
 - **WHEN** a caller searches with six alternatives
 - **THEN** the response is HTTP 400 with the message `q has more than 5 OR alternatives`
 
+### Requirement: Duplicate jobs are hidden by indexed status
+
+A posting newly marked as a duplicate SHALL have its existing Meilisearch document marked `is_duplicate = true` through the durable state-checked removal queue rather than physically deleted. Updates SHALL preserve text and vectors, change existing documents only, and be idempotent. All job searches, vector/federated queries, facets, distinct counts and job sitemaps SHALL exclude marked duplicates before pagination. Legacy documents lacking the marker SHALL remain eligible. The internal marker SHALL not enter the public job response or facet vocabulary.
+
+The index document built from a database row SHALL carry its current duplicate status. Replacing an open canonical document SHALL clear stale closure and duplicate markers. A job released from duplication while an update is in flight SHALL be requeued for indexing on acknowledgment. Missing/private rows SHALL still be physically removed. Full rebuilds SHALL continue to omit duplicate and closed documents and discard obsolete indexes.
+
+A link import's duplicate transition SHALL use its existing atomic removal outbox and SHALL NOT submit a separate direct index deletion.
+
+#### Scenario: A duplicate retains its indexed content
+- **WHEN** a searchable posting becomes a duplicate and the status wave completes
+- **THEN** its text and vectors remain stored but it contributes no hits, facets, distinct counts or sitemap entries
+
+#### Scenario: An absent duplicate document creates no skeleton
+- **WHEN** a duplicate status wave includes a job absent from the index
+- **THEN** no document is created
+
+#### Scenario: A released duplicate returns to search
+- **WHEN** a duplicate becomes canonical before or during its status wave
+- **THEN** it is queued for current-content replacement and becomes searchable with stale markers cleared
+
+#### Scenario: A private or missing duplicate is physically removed
+- **WHEN** a queued duplicate is private or its database row is missing
+- **THEN** its document is physically removed regardless of duplicate status
+
+#### Scenario: Link import has one durable duplicate update
+- **WHEN** reimporting a previously searchable generic URL identifies an existing canonical posting
+- **THEN** the marking transaction queues the duplicate and the importer submits no direct engine deletion

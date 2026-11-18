@@ -1,16 +1,13 @@
-// Command harvest-role mines role.com — a job aggregator whose every posting links out
-// to the real ATS vacancy — for ATS boards we don't yet ingest. It walks role.com's
-// sitemaps newest-first, follows each job page's outbound apply link, and resolves the
-// supported ones to a (provider, board) pair via atsdetect.FromURL. The distinct boards
-// are written as per-provider seed files that the existing cmd/harvest-boards then
-// validates against each platform's API and commits to sources/*.yml — so role.com is a
-// discovery layer, never a stored source (no cross-source duplication; jobs are crawled
-// under their real ATS identity). Static fetch only; run-once host tool.
+// Command harvest-role mines role.com, an aggregator whose postings all link out to the real ATS
+// vacancy, for ATS boards we don't yet ingest. It walks role.com's sitemaps newest-first, follows each
+// job page's outbound apply link, and resolves supported ones to a (provider, board) pair via
+// atsdetect.FromURL. The distinct boards are written as per-provider seed files for cmd/harvest-boards
+// to validate; role.com is a discovery layer, never a stored source. Static fetch only; run-once host tool.
 //
 //	harvest-role [maxDetails]   # cap on job pages fetched (default 20000)
 //
-// Boards saturate far faster than postings (one board backs many jobs), so a bounded
-// sample surfaces most of the catalogue's boards. Re-run with a higher cap to dig deeper.
+// Boards saturate far faster than postings, so a bounded sample surfaces most boards. Re-run with a
+// higher cap to dig deeper.
 package main
 
 import (
@@ -36,10 +33,9 @@ const (
 	sitemapIndexURL   = roleBase + "/sitemap.xml"
 	defaultMaxDetails = 20000
 	detailWorkers     = 14
-	// maxShards bounds how many sitemap documents (several MB each) a run downloads.
-	// The detail budget is spread evenly across this many shards sampled across the
-	// whole id-range, so discovery sees the full catalogue's board diversity rather
-	// than one retail-heavy id-range.
+	// maxShards bounds how many sitemap documents (several MB each) a run downloads. The detail budget
+	// is spread across shards sampled over the whole id-range, so discovery sees the catalogue's board
+	// diversity rather than one retail-heavy range.
 	maxShards = 150
 )
 
@@ -133,12 +129,12 @@ feed:
 	return writeSeeds(boards)
 }
 
-// jobSitemapNum captures the integer N of a sitemap_jobs<N>.xml shard URL; the number
-// tracks role.com's posting-id range, so higher N holds the freshest postings.
+// jobSitemapNum captures the integer N of a sitemap_jobs<N>.xml shard URL; higher N holds the
+// freshest postings.
 var jobSitemapNum = regexp.MustCompile(`sitemap_jobs(\d+)\.xml`)
 
-// jobSitemaps keeps only the job-shard sitemaps from a sitemap index, ordered newest
-// (highest-numbered) first so a capped run covers the freshest postings.
+// jobSitemaps keeps only the job-shard sitemaps, newest (highest-numbered) first so a capped run
+// covers the freshest postings.
 func jobSitemaps(locs []string) []string {
 	type shard struct {
 		url string
@@ -159,9 +155,8 @@ func jobSitemaps(locs []string) []string {
 	return out
 }
 
-// seedEntry is one board candidate written to a seed file: the board id plus the employer
-// name read from role.com's JSON-LD, which harvest-boards uses where the platform API
-// exposes no name (see cmd/harvest-boards seedItem).
+// seedEntry is one board candidate in a seed file: the board id plus the employer name from
+// role.com's JSON-LD, which harvest-boards uses where the platform API exposes none.
 type seedEntry struct {
 	Board   string `json:"board"`
 	Company string `json:"company,omitempty"`
@@ -203,9 +198,8 @@ func writeJSON(path string, v any) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-// fetchBytes GETs a sitemap document whole. Sitemaps run several MB (past the sources
-// client's GetText cap), so this reads the body uncapped; the detail-page fetch keeps
-// using the shared client for its 429 backoff.
+// fetchBytes GETs a sitemap whole. Sitemaps run several MB, past the sources client's GetText cap,
+// so this reads the body uncapped; detail pages keep the shared client for its 429 backoff.
 func fetchBytes(url string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

@@ -3,28 +3,33 @@
 //
 // It reports by default and writes only under --apply: the election is
 // deterministic but the catalogue is not clean, so a wave is meant to be read before it runs.
-// --min-jobs bounds a wave to the groups big enough to matter, which is how the backlog is
-// taken in reviewed passes (1000, then 100, then 10, then 1) instead of one 333k-row leap.
+// --min-jobs bounds a wave to the groups big enough to matter, so the backlog is taken in
+// reviewed passes (1000, then 100, then 10, then 1).
 //
-// Most groups it finds by folding the NAME, which covers the two duplicate classes the rule
-// can reach. The pairs it cannot — one employer whose boards disagree on the name itself, like
-// "Exadel" beside "Exadel Inc (Website)" — come from the hand-written list in curated.go, and
-// that file argues why they are a list and not another rule.
+// Most groups it finds by folding the name. Pairs the rule cannot reach (one employer whose
+// boards disagree on the name, like "Exadel" and "Exadel Inc (Website)") come from the
+// hand-written list in curated.go.
 //
-// It does NOT touch the search index. A push to the facet index costs 90-180s regardless of
-// batch size, so feeding a wave through search_outbox would be tens of hours of pushes and the
-// shape that took the site down on 2026-08-05. The scheduled reindex picks the re-key up; until
-// it does, a merged company under-counts its jobs for a few hours and nothing 404s.
+// It does NOT touch the search index: a facet-index push costs 90-180s regardless of batch
+// size, so feeding a wave through search_outbox would take tens of hours. The scheduled
+// reindex picks the re-key up; until then a merged company under-counts its jobs and
+// nothing 404s.
 package main
 
 import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
+	"github.com/strelov1/freehire/internal/job/companymerge"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -33,19 +38,28 @@ func main() {
 	worker.Main(run)
 }
 
-// rekeyChunk is how many job rows one UPDATE moves. Small because one company can carry
-// twenty thousand open jobs (dollar-tree does), and each statement is a transaction against
-// the hottest table in the schema — a wave should be interruptible at any moment, not held
-// open while it rewrites a large employer whole.
-const rekeyChunk = 500
-
 func run() int {
 	apply := flag.Bool("apply", false, "actually merge; without it the run only reports the plan")
 	minJobs := flag.Int("min-jobs", 0, "only merge folded groups whose combined open jobs reach this")
 	reason := flag.String("reason", "", "only merge groups whose every alias retires for this reason ("+
 		reasonLegalForm+" or "+reasonSpelling+"); empty takes both")
 	onlySlugsFile := flag.String("only-slugs", "", "only merge groups holding a slug listed in this file, one per line")
+	exactSlugsFile := flag.String("exact-slugs", "", "plan over exactly the slugs listed in this file, one per line, reading only their rows; "+
+		"the list must name every slug of each group it takes")
 	flag.Parse()
+	if *onlySlugsFile != "" && *exactSlugsFile != "" {
+		log.Printf("merge-companies: --only-slugs and --exact-slugs are alternatives")
+		return 2
+	}
+	var exact []string
+	if *exactSlugsFile != "" {
+		slugs, err := readSlugList(*exactSlugsFile)
+		if err != nil {
+			log.Printf("merge-companies: --exact-slugs: %v", err)
+			return 2
+		}
+		exact = slices.Sorted(maps.Keys(slugs))
+	}
 	if *reason != "" && *reason != reasonLegalForm && *reason != reasonSpelling {
 		log.Printf("merge-companies: unknown --reason %q", *reason)
 		return 2
@@ -59,7 +73,7 @@ func run() int {
 	defer cleanup()
 
 	q := db.New(pool)
-	plan, err := loadPlan(ctx, q, *minJobs)
+	plan, err := loadPlan(ctx, q, *minJobs, exact)
 	if err != nil {
 		log.Printf("merge-companies: plan: %v", err)
 		return 1
@@ -79,7 +93,7 @@ func run() int {
 		return 0
 	}
 
-	moved, err := applyMerges(ctx, &store{q: q}, plan, rekeyChunk)
+	moved, err := applyMerges(ctx, &store{q: q}, plan, companymerge.Chunk)
 	log.Printf("merge-companies: moved %d job rows across %d groups", moved, len(plan))
 	if err != nil {
 		log.Printf("merge-companies: %v", err)
@@ -89,24 +103,16 @@ func run() int {
 	// The jobs now carry the canonical slug; give each canonical a company row and sweep the
 	// rows the re-key orphaned.
 	//
-	// This is not optional bookkeeping. Until the orphan row is gone, GET /companies/<retired>
-	// still FINDS a company — one with no jobs left — so it answers 200 instead of falling
-	// through to the alias lookup and the 301. The merge would look done and the redirect,
-	// which is the whole reason the alias row exists, would not be running.
+	// Required: until the orphan row is gone, GET /companies/<retired> still finds a company
+	// and answers 200 instead of falling through to the alias lookup and the 301.
 	//
-	// Scoped to the alias registry, NOT the full SyncCompaniesFromJobs + DeleteOrphanCompanies
-	// this used to run. That pair costs a whole-table pass whatever the wave's size, and on
-	// 2026-10-28 a 20-group run held its transaction for 56 minutes while every ingest
-	// UpsertJob queued behind it. The registry scope also heals a run killed before this step:
+	// Scoped to the alias registry, NOT the full SyncCompaniesFromJobs + DeleteOrphanCompanies,
+	// which costs a whole-table pass whatever the wave's size and blocks ingest UpsertJob
+	// behind its transaction. The registry scope also heals a run killed before this step:
 	// its drained slugs are no longer in any plan, but they are in the registry.
-	created, err := q.InsertMissingCanonicalCompanies(ctx)
+	created, orphans, err := companymerge.Reconcile(ctx, q)
 	if err != nil {
-		log.Printf("merge-companies: insert canonical companies: %v", err)
-		return 1
-	}
-	orphans, err := q.DeleteOrphanAliasCompanies(ctx)
-	if err != nil {
-		log.Printf("merge-companies: delete orphan alias companies: %v", err)
+		log.Printf("merge-companies: %v", err)
 		return 1
 	}
 	log.Printf("merge-companies: reconciled the catalogue, %d canonical rows created, %d retired rows removed",
@@ -119,17 +125,16 @@ func run() int {
 
 // loadPlan reads the catalogue and the frozen canons and returns the wave to perform.
 //
-// The whole company list comes back in one read — ~153k rows on prod, a few megabytes — because
-// the grouping key is normalize.CompanyKey, a repeating legal-form strip. Reproducing that in
-// SQL would be a second implementation of the one rule this change exists to stop duplicating.
-func loadPlan(ctx context.Context, q *db.Queries, minJobs int) ([]merge, error) {
-	rows, err := q.ListCompaniesForMerge(ctx)
+// The whole company list comes back in one read because the grouping key is
+// normalize.CompanyKey; reproducing it in SQL would duplicate the one rule.
+//
+// exact, when set, replaces that read with one over only the named slugs. It is not a filter
+// over the same plan, as --only-slugs is: the election sees only these slugs, so a list that
+// leaves out a member of a group leaves that member unmerged and may elect another canon.
+func loadPlan(ctx context.Context, q *db.Queries, minJobs int, exact []string) ([]merge, error) {
+	companies, err := readCompanies(ctx, q, exact)
 	if err != nil {
 		return nil, err
-	}
-	companies := make([]company, 0, len(rows))
-	for _, r := range rows {
-		companies = append(companies, company{Slug: r.Slug, Name: r.Name, JobCount: int(r.JobCount)})
 	}
 	canonical, err := q.ListCanonicalCompanySlugs(ctx)
 	if err != nil {
@@ -139,12 +144,85 @@ func loadPlan(ctx context.Context, q *db.Queries, minJobs int) ([]merge, error) 
 	for _, slug := range canonical {
 		frozen[slug] = true
 	}
-	return planMerges(companies, frozen, minJobs, curatedAliases), nil
+	plan := planMerges(companies, frozen, minJobs, curatedAliases)
+	if len(exact) > 0 {
+		if err := checkExactPlan(ctx, q, plan); err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
 }
 
-// report prints the wave. It prints every group rather than a sample: a wave is bounded by
-// --min-jobs precisely so that the whole of it can be read, and a truncated report would let
-// a bad merge through in the part nobody saw.
+// checkExactPlan refuses a wave the registry contradicts. A full read sees every frozen canon
+// and elects it. An exact read sees only what was listed, so it can elect a different canon for
+// a spelling the registry already settled: the alias insert would then do nothing while the jobs
+// still moved. The whole wave is refused, naming the slug to add or remove from the list.
+func checkExactPlan(ctx context.Context, q *db.Queries, plan []merge) error {
+	retiring := make(map[string]string)
+	for _, m := range plan {
+		for _, a := range m.Aliases {
+			retiring[a.Slug] = m.Canonical
+		}
+	}
+	for _, m := range plan {
+		if into, ok := retiring[m.Canonical]; ok {
+			return fmt.Errorf("canon %q is retired into %q by the same wave", m.Canonical, into)
+		}
+		retiredInto, err := q.GetCompanySlugAlias(ctx, m.Canonical)
+		switch {
+		case err == nil:
+			return fmt.Errorf("canon %q is itself retired into %q", m.Canonical, retiredInto)
+		case !errors.Is(err, pgx.ErrNoRows):
+			return err
+		}
+		for _, a := range m.Aliases {
+			prior, err := q.GetCompanySlugAlias(ctx, a.Slug)
+			if err == nil && prior != m.Canonical {
+				return fmt.Errorf("%q is already merged into %q, not %q", a.Slug, prior, m.Canonical)
+			}
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			rows, err := q.ResolveCompanySlugAliases(ctx, []string{a.FoldedKey})
+			if err != nil {
+				return err
+			}
+			for _, r := range rows {
+				if r.CanonicalSlug != m.Canonical {
+					return fmt.Errorf("the name of %q (key %q) already resolves to %q, not %q",
+						a.Slug, a.FoldedKey, r.CanonicalSlug, m.Canonical)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func readCompanies(ctx context.Context, q *db.Queries, exact []string) ([]company, error) {
+	if len(exact) > 0 {
+		rows, err := q.ListCompaniesForMergeBySlugs(ctx, exact)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]company, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, company{Slug: r.Slug, Name: r.Name, JobCount: int(r.JobCount)})
+		}
+		return out, nil
+	}
+	rows, err := q.ListCompaniesForMerge(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]company, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, company{Slug: r.Slug, Name: r.Name, JobCount: int(r.JobCount)})
+	}
+	return out, nil
+}
+
+// report prints every group, not a sample: a wave is bounded by --min-jobs so all of it can
+// be read, and a truncated report would let a bad merge through unseen.
 func report(plan []merge) {
 	var jobs, aliases int
 	for _, m := range plan {
@@ -155,9 +233,8 @@ func report(plan []merge) {
 		}
 	}
 	// OPEN jobs, because that is what companies.job_count holds and what elects a winner.
-	// The re-key moves closed rows too — it has to, or a closed posting would keep the
-	// retired slug and resurrect the duplicate the day it reopens — so the number of rows
-	// actually written is larger, on prod about 3x.
+	// The re-key moves closed rows too (or a reopened posting would resurrect the duplicate),
+	// so the number of rows written is larger.
 	log.Printf("merge-companies: %d groups, %d slugs retiring, %d open jobs (closed rows move too)",
 		len(plan), aliases, jobs)
 }
@@ -166,26 +243,15 @@ func report(plan []merge) {
 type store struct{ q *db.Queries }
 
 func (s *store) InsertAlias(ctx context.Context, a alias, canonical string) error {
-	_, err := s.q.InsertCompanySlugAlias(ctx, db.InsertCompanySlugAliasParams{
-		AliasSlug:     a.Slug,
-		CanonicalSlug: canonical,
-		FoldedKey:     a.FoldedKey,
-		Reason:        a.Reason,
-	})
-	return err
+	return companymerge.Retire(ctx, s.q, a.Slug, canonical, a.FoldedKey, a.Reason)
 }
 
 func (s *store) RekeyChunk(ctx context.Context, aliasSlug, canonical string, chunk int) (int64, error) {
-	return s.q.RekeyCompanySlugChunk(ctx, db.RekeyCompanySlugChunkParams{
-		CanonicalSlug: canonical,
-		AliasSlug:     aliasSlug,
-		ChunkSize:     int32(chunk),
-	})
+	return companymerge.Rekey(s.q)(ctx, aliasSlug, canonical, chunk)
 }
 
-// readSlugList reads one slug per line, skipping blank lines. An empty list is refused: a
-// filter that admits nothing would report an empty wave, which reads exactly like a list
-// whose groups have all been merged already.
+// readSlugList reads one slug per line, skipping blank lines. An empty list is refused: it
+// would report an empty wave, which reads like a list already fully merged.
 func readSlugList(path string) (map[string]bool, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {

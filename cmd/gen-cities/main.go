@@ -1,23 +1,16 @@
-// Command gen-cities regenerates internal/dict/location/cities1000.tsv from the
-// GeoNames cities1000 dump (populated places with population >= 1,000; CC-BY 4.0,
+// Command gen-cities regenerates internal/dict/location/cities1000.tsv from the GeoNames
+// cities1000 dump (populated places with population >= 1,000; CC-BY 4.0,
 // https://www.geonames.org/).
 //
-// The threshold is 1,000 rather than 15,000 deliberately, and it makes the parser
-// MORE conservative rather than less. The dictionary states a city's country only
-// when exactly one country claims the name, so coverage and caution move together:
-// at 15,000 the only Taft in the file is Iranian and the parser confidently
-// mislabels a Californian one, while at 1,000 the Iranian, Filipino and Californian
-// Tafts all appear, the name becomes contested, and it correctly says nothing. The
-// same fix arrives for "Somerset", "San" and "Young". It also stops losing genuine
-// small places: Ilminster (pop. 5,808) is why "Ilminster, Somerset" used to resolve
-// to the United States.
+// The 1,000 threshold makes the parser more conservative: the dictionary states a city's
+// country only when exactly one country claims the name, so a lower threshold surfaces more
+// rival claimants (the Iranian, Filipino and Californian Tafts) and the name correctly says
+// nothing.
 //
-// For each place it keeps a canonical display name, the
-// ISO 3166-1 alpha-2 country code, and the filtered lowercase lookup aliases (name,
-// ASCII name, and alternate names). Places are emitted sorted by population
-// descending so the loader's first-wins alias registration picks the most-populous
-// place for a shared name. Run it with `make gen-cities`; the output is committed,
-// so the build never depends on this tool.
+// For each place it keeps a canonical display name, the ISO 3166-1 alpha-2 country code, and
+// the filtered lowercase lookup aliases. Places are sorted by population descending so the
+// loader's first-wins alias registration picks the most-populous place for a shared name. Run
+// it with `make gen-cities`; the output is committed, so the build never depends on this tool.
 package main
 
 //go:generate go run .
@@ -177,10 +170,10 @@ const statingPopulation = 15000
 // contestedAliases returns the aliases claimed by more than one country across EVERY
 // place in the dump, hamlets included.
 //
-// Computing this here rather than in the loader is what keeps the dictionary small.
-// The parser only ever states places above statingPopulation, so shipping the smaller
-// ones would grow the embedded file fivefold and the process-start parse from ~44ms to
-// ~205ms — all to recover one bit per alias that is already known at generation time.
+// Computing this here rather than in the loader keeps the dictionary small: the parser only
+// states places above statingPopulation, so shipping the smaller ones would grow the embedded
+// file fivefold and slow the process-start parse, to recover one bit per alias already known
+// at generation time.
 func contestedAliases(places []place) map[string]bool {
 	claimedBy := make(map[string]string, len(places)*4)
 	contested := map[string]bool{}

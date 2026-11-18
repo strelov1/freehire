@@ -34,7 +34,7 @@ func TestJobMatchToolScoresTheCurrentCV(t *testing.T) {
 		db.Job{Title: "Senior Backend Engineer", Skills: []string{"go", "kafka", "terraform"}},
 		twoRequirementAnalysis)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "job_match")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "job_match")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("job_match: %v", err)
@@ -68,7 +68,7 @@ func TestJobMatchToolReflectsAnEditedDocument(t *testing.T) {
 	a, repo := jobMatchToolAPI(t, oneExperienceCV,
 		db.Job{Title: "Senior Backend Engineer", Skills: []string{"go", "kafka", "terraform"}},
 		twoRequirementAnalysis)
-	tools := a.assistantCVTools(testCVID, 9, uuid.New())
+	tools := a.assistantCVTools(testCVID, &testJobID, uuid.New())
 
 	before, err := toolByName(t, tools, "job_match").Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
@@ -100,7 +100,7 @@ func TestJobMatchToolReflectsAnEditedDocument(t *testing.T) {
 func TestJobMatchReportsAnUnwiredDeployment(t *testing.T) {
 	bare := &assistantHandlers{}
 
-	_, err := toolByName(t, bare.assistantCVTools(testCVID, 9, uuid.New()), "job_match").
+	_, err := toolByName(t, bare.assistantCVTools(testCVID, &testJobID, uuid.New()), "job_match").
 		Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err == nil {
 		t.Fatal("job_match answered from a handler wired to nothing")

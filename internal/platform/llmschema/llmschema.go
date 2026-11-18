@@ -1,14 +1,10 @@
-// Package llmschema derives the JSON Schema a model is constrained by from the Go
-// contract type the response is decoded into, so the two cannot drift. A schema
-// written by hand beside a contract is a second description of the same shape, free
-// to fall behind it silently: a schema missing a field simply stops the model
-// returning it, with nothing to fail.
+// Package llmschema derives the JSON Schema a model is constrained by from the Go contract
+// type the response is decoded into, so the two cannot drift (a hand-written schema missing a
+// field silently stops the model returning it).
 //
-// The output targets OpenAI-style structured outputs in strict mode, which reflection
-// alone does not satisfy. Strict mode demands `additionalProperties: false` on every
-// object — nested ones included — and every property listed in `required`, leaving no
-// absent key to express optionality with. Optional fields are therefore widened to
-// admit null, which decodes into the same zero value an absent key produced.
+// The output targets OpenAI-style strict mode: `additionalProperties: false` on every object,
+// nested ones included, and every property `required`. Optional fields are therefore widened
+// to admit null, which decodes to the same zero value an absent key gave.
 package llmschema
 
 import (
@@ -18,19 +14,16 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/invopop/jsonschema"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
-// Schema is a JSON Schema document, shaped for transport as the `schema` member of a
-// `json_schema` response format. It is a plain map because strict mode needs types
-// expressed as `["string", "null"]`, which the reflected struct's single-string Type
-// field cannot hold.
+// Schema is a JSON Schema document for the `schema` member of a `json_schema` response format.
+// It is a plain map because strict mode needs `["string", "null"]` types, which the reflected
+// struct's single-string Type cannot hold.
 type Schema map[string]any
 
-// Override adjusts a derived schema before it is returned. It reports an error rather
-// than doing nothing when it cannot apply — an override that silently misses is the
-// dangerous case, because the field goes on generating freely and only the validator
-// downstream would ever notice.
+// Override adjusts a derived schema. It must error when it cannot apply: a silent miss leaves
+// the field generating freely and only the downstream validator would notice.
 type Override func(Schema) error
 
 // Of derives a strict-mode schema from contract type T and applies the overrides in
@@ -41,15 +34,13 @@ func Of[T any](overrides ...Override) (Schema, error) {
 		return nil, fmt.Errorf("llmschema: contract type must be a struct, got %s", k)
 	}
 
-	reflector := jsonschema.Reflector{
-		// A flat document keeps the strict pass local: with $defs and $ref the same
-		// nested type could be reached through several paths, and a shared definition
-		// would have to be strict for all of them at once.
-		DoNotReference: true,
-		ExpandedStruct: true,
+	// For inlines nested types (no $defs/$ref), keeping the strict pass local.
+	reflected, err := jsonschema.For[T](nil)
+	if err != nil {
+		return nil, fmt.Errorf("llmschema: reflect schema: %w", err)
 	}
 
-	raw, err := json.Marshal(reflector.Reflect(zero))
+	raw, err := json.Marshal(reflected)
 	if err != nil {
 		return nil, fmt.Errorf("llmschema: marshal reflected schema: %w", err)
 	}
@@ -59,9 +50,8 @@ func Of[T any](overrides ...Override) (Schema, error) {
 		return nil, fmt.Errorf("llmschema: decode reflected schema: %w", err)
 	}
 
-	// Metadata the reflector adds about itself; a response format carries the schema alone.
-	delete(schema, "$schema")
-	delete(schema, "$id")
+	// The reflector marks every slice and pointer nullable; strict re-adds null only for optional fields.
+	dropNull(schema)
 
 	if err := strict(schema); err != nil {
 		return nil, err
@@ -76,10 +66,8 @@ func Of[T any](overrides ...Override) (Schema, error) {
 	return schema, nil
 }
 
-// Enum constrains one top-level field to a controlled vocabulary, so a value outside
-// it cannot be generated rather than being discarded after the fact. The vocabulary
-// stays wherever it is defined; naming it here keeps contract structs free of a
-// second copy that no compiler would catch drifting.
+// Enum constrains one top-level field to a controlled vocabulary, so a value outside it cannot
+// be generated. The vocabulary stays where it is defined, not copied into the contract struct.
 func Enum(field string, values []string) Override {
 	return func(schema Schema) error {
 		prop, ok := propertyOf(schema, field)
@@ -92,16 +80,14 @@ func Enum(field string, values []string) Override {
 			allowed = append(allowed, v)
 		}
 
-		// On an array the vocabulary constrains each element: put on the array itself
-		// it would demand the whole list equal one of the values.
+		// On an array it constrains each element, not the whole list.
 		if items, ok := prop["items"].(map[string]any); ok {
 			items["enum"] = allowed
 
 			return nil
 		}
 
-		// A nullable field needs null inside the enum too: enum is the narrower
-		// constraint, and would otherwise forbid the very absence the type permits.
+		// A nullable field needs null in the enum too, or enum forbids the absence the type permits.
 		if admitsNull(prop) {
 			allowed = append(allowed, nil)
 		}
@@ -111,10 +97,9 @@ func Enum(field string, values []string) Override {
 	}
 }
 
-// AsText retypes top-level fields to string, keeping whatever nullability they had.
-// Use it where the contract's Go type would hand the arithmetic to the model: asked
-// for an integer, a model given "5.9 years" returns 6, while a decoder that truncates
-// on purpose returns 5 — and the difference is experience the candidate does not have.
+// AsText retypes top-level fields to string, keeping their nullability. Use it where an integer
+// type would hand rounding to the model: "5.9 years" becomes 6, while our truncating decoder
+// gives 5, and the difference is experience the candidate does not have.
 func AsText(fields ...string) Override {
 	return func(schema Schema) error {
 		for _, field := range fields {
@@ -136,10 +121,9 @@ func AsText(fields ...string) Override {
 	}
 }
 
-// Omit drops top-level fields from the schema, for the parts of a contract the model
-// is not the source of. Strict mode requires every property, so a field left in is a
-// field the model is ordered to produce — for a value it may have no honest way to
-// know, such as a contact detail redacted out of the text it was given.
+// Omit drops top-level fields the model is not the source of. Strict mode requires every
+// property, so a field left in is one the model must produce, even a redacted contact detail
+// it cannot honestly know.
 func Omit(fields ...string) Override {
 	return func(schema Schema) error {
 		props, ok := schema["properties"].(map[string]any)
@@ -166,14 +150,9 @@ func Omit(fields ...string) Override {
 	}
 }
 
-// strict rewrites node and everything below it for strict mode: no additional
-// properties, every property required, and each property the reflector left optional
-// widened to admit null.
-//
-// It reports an error for a node it cannot make strict — a map field, say, which
-// reflects to an object with an open additionalProperties and no property list. Left
-// alone that document would be rejected by the provider at call time, hundreds of
-// lines from the contract that produced it.
+// strict rewrites node and everything below it for strict mode: no additional properties,
+// every property required, optional ones widened to admit null. It errors on a node it cannot
+// make strict (a map field), which the provider would otherwise reject at call time.
 func strict(node map[string]any) error {
 	props, ok := node["properties"].(map[string]any)
 	if !ok {
@@ -212,6 +191,29 @@ func strict(node map[string]any) error {
 	return nil
 }
 
+// dropNull removes "null" from every type list in the tree, collapsing a one-element
+// list back to a plain string.
+func dropNull(node map[string]any) {
+	if types, ok := node["type"].([]any); ok {
+		kept := slices.DeleteFunc(slices.Clone(types), func(t any) bool { return t == "null" })
+		if len(kept) == 1 {
+			node["type"] = kept[0]
+		} else if len(kept) > 1 {
+			node["type"] = kept
+		}
+	}
+	if props, ok := node["properties"].(map[string]any); ok {
+		for _, child := range props {
+			if prop, ok := child.(map[string]any); ok {
+				dropNull(prop)
+			}
+		}
+	}
+	if items, ok := node["items"].(map[string]any); ok {
+		dropNull(items)
+	}
+}
+
 // rejectOpenObject fails on an object node the strict pass cannot close: one whose
 // additionalProperties is a schema (a Go map) rather than the bool it would set.
 func rejectOpenObject(node map[string]any) error {
@@ -225,9 +227,8 @@ func rejectOpenObject(node map[string]any) error {
 	return errors.New("llmschema: contract holds a map-typed field, which strict mode cannot express")
 }
 
-// optionalFields returns the properties the reflector did NOT mark required — the
-// `omitempty` fields. It must be read before required is rewritten, since afterwards
-// every field is required and the distinction is gone.
+// optionalFields returns the properties the reflector did NOT mark required (`omitempty`).
+// Read it before required is rewritten.
 func optionalFields(node map[string]any, props map[string]any) map[string]bool {
 	required := map[string]bool{}
 	if list, ok := node["required"].([]any); ok {
@@ -246,8 +247,7 @@ func optionalFields(node map[string]any, props map[string]any) map[string]bool {
 	return optional
 }
 
-// widenToNull adds null to a property's type, in whichever of the two forms JSON
-// Schema allows it to already be written.
+// widenToNull adds null to a property's type, whether written as a string or a list.
 func widenToNull(prop map[string]any) {
 	switch typ := prop["type"].(type) {
 	case string:

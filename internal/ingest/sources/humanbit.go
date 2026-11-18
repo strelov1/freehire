@@ -9,16 +9,15 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )
 
-// humanbit adapts HumanBit, a multi-tenant ATS (jobs.humanbit.ai/<board>). The board is the
-// tenant's path segment. Like Scalis, it is a Next.js App Router site decoded via the
-// shared fetchFlight/bracketSlice/nextFlightTextRows primitives, but its two page shapes
-// carry complementary rather than identical fields: the listing embeds every posting's id
-// and the platform's own company display name (org_name) but no employment
-// type/skills/remote flag, while a posting's own detail page carries those structured
-// fields but never org_name. Confirmed live: the listing is ~5.6 MB (dominated by
-// framework chunks) against a ~59 KB detail page, so Fetch reads the listing once for
-// enumeration and the employer name, then hydrates each posting from its own detail page —
-// the same "cheap list, per-item hydrate" shape hiringthing/topco already use.
+// humanbit adapts HumanBit, a multi-tenant ATS (jobs.humanbit.ai/<board>); the board is the
+// tenant's path segment. A Next.js App Router site decoded via the shared
+// fetchFlight/bracketSlice/nextFlightTextRows primitives.
+//
+// The two page shapes carry complementary fields: the listing has every posting's id and the
+// company display name (org_name) but no employment type/skills/remote flag; a detail page has
+// those but never org_name. The listing is ~5.6 MB (framework chunks) against a ~59 KB detail
+// page, so Fetch reads the listing once, then hydrates each posting from its detail page, like
+// hiringthing/topco.
 type humanbit struct {
 	http HTMLGetter
 }
@@ -28,10 +27,9 @@ func NewHumanBit(c HTMLGetter) Source { return humanbit{http: c} }
 
 func (humanbit) Provider() string { return "humanbit" }
 
-// fullBoardListing: the listing proves the whole set of open postings, and a detail-fetch
-// failure for one posting becomes an Unreadable marker rather than a silent drop (see
-// detail) — the same contract a listing-then-detail adapter like successfactors already
-// gives this marker. A listing fetch/decode failure fails the whole Fetch outright.
+// fullBoardListing: the listing proves the whole set of open postings, and a detail-fetch failure
+// for one posting becomes an Unreadable marker rather than a silent drop (see detail). A listing
+// fetch/decode failure fails the whole Fetch.
 func (humanbit) fullBoardListing() {}
 
 func (h humanbit) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -61,20 +59,16 @@ func (h humanbit) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// humanbitListJob is one listing-page entry: the posting id and the platform's own company
-// display name (org_name is carried per-posting in the real payload, not once at the top
-// level, but is the same value for every posting on a board). Confirmed live that
-// `"jobs":` is the only occurrence of that key on the whole page, so flightArray's
-// first-match anchor cannot pick up an unrelated array.
+// humanbitListJob is one listing entry: the posting id and the platform's company display name
+// (org_name, the same for every posting on a board). `"jobs":` is the only occurrence of that key
+// on the page, so flightArray's first-match anchor cannot pick up an unrelated array.
 type humanbitListJob struct {
 	ID      string `json:"id"`
 	OrgName string `json:"org_name"`
 }
 
-// humanbitJob is the structured object a posting's own detail page carries.
-// description is a "$<id>" reference into THIS SAME page's flight text rows — confirmed
-// live that the listing page's own text rows do NOT carry the same id, so it must be
-// resolved against the detail flight, not the listing's.
+// humanbitJob is the object a posting's detail page carries. description is a "$<id>" reference
+// into THIS page's flight text rows, not the listing's, so resolve it against the detail flight.
 type humanbitJob struct {
 	ID             string   `json:"id"`
 	Title          string   `json:"title"`
@@ -86,10 +80,8 @@ type humanbitJob struct {
 	CreatedAt      string   `json:"created_at"`
 }
 
-// extractHumanBitJob decodes the "job":{"id"...} object out of a detail page's flight. ok
-// is false when the page carries no such object — the shape a stale/removed posting
-// answers with (a real, decodable flight whose tree renders a client "not found" state
-// rather than a job, confirmed live, HTTP 200 throughout).
+// extractHumanBitJob decodes the "job":{"id"...} object out of a detail page's flight. ok is false
+// when the page has none: a stale/removed posting answers HTTP 200 with a client "not found" tree.
 func extractHumanBitJob(flight string) (humanbitJob, bool) {
 	raw, ok := bracketSlice(flight, `"job":{"id"`, '{', '}')
 	if !ok {
@@ -102,12 +94,9 @@ func extractHumanBitJob(flight string) (humanbitJob, bool) {
 	return j, true
 }
 
-// detail fetches one posting's detail page and maps it to a Job. A transport failure that
-// states nothing about the posting (detailUnreadable) yields an Unreadable marker, since
-// the detail page is this adapter's only source for the posting; a page that answers but
-// carries no job object (the soft-404 shape) or a genuine platform-stated gone status drops
-// the posting instead, matching the "page read successfully and said it's not there"
-// distinction every other detail-fetching adapter in this package already makes.
+// detail fetches one posting's page and maps it to a Job. A transport failure that says nothing
+// about the posting yields an Unreadable marker (the page is the only source); a page with no job
+// object (the soft-404 shape) or a platform-stated gone status drops the posting.
 func (h humanbit) detail(ctx context.Context, e CompanyEntry, company, id string) (Job, bool) {
 	url := fmt.Sprintf("https://jobs.humanbit.ai/%s/jobs/%s", e.Board, id)
 	flight, err := fetchFlight(ctx, h.http, url)
@@ -147,11 +136,9 @@ func (h humanbit) detail(ctx context.Context, e CompanyEntry, company, id string
 	}, true
 }
 
-// humanbitEmploymentType maps HumanBit's employment_type array onto
-// vocab.EmploymentTypeValues, returning the first recognized element or "" when none match.
-// "full-time" is the only value confirmed live (both sampled postings carried it); the
-// other plain-English spellings below follow this codebase's usual defensive mapping for a
-// self-evident word (e.g. talenthr's employment_status_name), not a guess at an opaque code.
+// humanbitEmploymentType maps HumanBit's employment_type array onto vocab.EmploymentTypeValues,
+// returning the first recognized element or "". Only "full-time" is confirmed live; the other
+// spellings are the usual defensive mapping for self-evident words.
 func humanbitEmploymentType(types []string) string {
 	for _, t := range types {
 		switch strings.ToLower(strings.TrimSpace(t)) {
@@ -168,11 +155,9 @@ func humanbitEmploymentType(types []string) string {
 	return ""
 }
 
-// humanbitSkills canonicalizes HumanBit's raw skill strings through the shared skilltag
-// dictionary. Live entries are compound phrases ("Cost Accounting", "Zero-Based
-// Budgeting"), not atomic canonical tokens, the same shape micro1Skills already documents —
-// so, like there, the entries are mined via Parse rather than matched whole, and joined
-// into one blob first to keep that mining ability across entry boundaries.
+// humanbitSkills canonicalizes HumanBit's skill strings through the skilltag dictionary. Entries
+// are compound phrases ("Cost Accounting"), like micro1Skills, so they are joined into one blob
+// and mined via Parse rather than matched whole.
 func humanbitSkills(skills []string) []string {
 	return skilltag.Parse(strings.Join(skills, " "), skilltag.WithSkillList())
 }

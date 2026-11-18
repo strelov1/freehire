@@ -105,13 +105,17 @@ func TestMatch_CancellationStopsInsteadOfCountingEveryQueryFailed(t *testing.T) 
 	}
 }
 
-// deliverOne's two reads happen before anything is sent and release the claim on
+// deliverMessage's two reads happen before anything is sent and release the claim on
 // failure, so they burn no attempt and leave no dead letter. Without a counter a pass
 // that could not read a single subscription printed `delivered=0 failed=0` and exited 0,
 // which reads as an idle queue.
 func TestDeliver_CountsASubscriptionItCouldNotRead(t *testing.T) {
 	store := &fakeStore{
-		claimed:     []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		// The listing saw it deliverable; the per-subscription read after the claim fails.
+		listed: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
+		},
 		deliveryErr: errors.New("connection reset"),
 	}
 	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())

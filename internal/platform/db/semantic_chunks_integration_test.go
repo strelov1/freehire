@@ -4,8 +4,7 @@
 // storage introduced by migration 0092 (see
 // openspec/changes/drop-hybrid-search-pgvector-similar/design.md Decisions 1/5). These
 // cover the delete/insert "replace" round trip (DeleteJobSemanticChunks +
-// InsertJobSemanticChunks) and the similar-jobs nearest-neighbour-over-chunks rollup
-// (NearestJobsToJob). This is SQL/pgvector behavior and can only be verified against a
+// InsertJobSemanticChunks). This is SQL/pgvector behavior and can only be verified against a
 // real Postgres. Run with: go test -tags=integration ./internal/platform/db/ (requires Docker).
 // Reuses startPostgres/truncate from enrichment_integration_test.go.
 package db
@@ -18,10 +17,7 @@ import (
 	"github.com/pgvector/pgvector-go"
 )
 
-// insertChunkTestJob inserts a job with an explicit company_slug and returns its id —
-// company_slug is the axis these tests exercise (same-company exclusion), which
-// insertJob (enrichment_integration_test.go) leaves blank and insertJobForCompany
-// (job_collections_integration_test.go) doesn't hand back an id for.
+// insertChunkTestJob seeds a job for the chunk-storage round trips.
 func insertChunkTestJob(t *testing.T, pool *pgxpool.Pool, externalID, companySlug string) int64 {
 	t.Helper()
 	var id int64
@@ -33,16 +29,6 @@ func insertChunkTestJob(t *testing.T, pool *pgxpool.Pool, externalID, companySlu
 		t.Fatalf("insert job %q: %v", externalID, err)
 	}
 	return id
-}
-
-// markJobPrivate flips jobs.is_private, the column InsertPrivateJob sets for a job
-// description a candidate pasted in rather than one the crawl found.
-func markJobPrivate(t *testing.T, pool *pgxpool.Pool, jobID int64) {
-	t.Helper()
-	if _, err := pool.Exec(context.Background(),
-		`UPDATE jobs SET is_private = true WHERE id = $1`, jobID); err != nil {
-		t.Fatalf("mark job %d private: %v", jobID, err)
-	}
 }
 
 // unitVector768 builds a 768-dim vector literal (job_semantic_chunks.embedding's fixed
@@ -208,94 +194,4 @@ func TestJobSemanticChunksReplace(t *testing.T) {
 			t.Errorf("job %d chunk indices after batched delete = %v, want none", j2, got)
 		}
 	})
-}
-
-func TestNearestJobsToJob(t *testing.T) {
-	pool := startPostgres(t)
-	q := New(pool)
-	ctx := context.Background()
-	truncate(t, pool)
-
-	insertChunks := func(t *testing.T, jobID int64, indices []int16, dims []int) {
-		t.Helper()
-		embeddings := make([]string, len(dims))
-		for i, d := range dims {
-			embeddings[i] = unitVector768(d)
-		}
-		if err := q.InsertJobSemanticChunks(ctx, InsertJobSemanticChunksParams{
-			JobIds: repeatJobID(jobID, len(indices)), ChunkIndices: indices, Embeddings: embeddings,
-		}); err != nil {
-			t.Fatalf("insert chunks for job %d: %v", jobID, err)
-		}
-	}
-
-	// Source job: two chunks, unit vectors along dims 0 and 1.
-	source := insertChunkTestJob(t, pool, "source", "acme-source")
-	insertChunks(t, source, []int16{0, 1}, []int{0, 1})
-
-	// Same company as the source, and its one chunk is an EXACT match (dist 0) for the
-	// source's chunk 0 — the closest possible vector match, yet it must be excluded
-	// purely because it shares the source's company_slug.
-	sameCompany := insertChunkTestJob(t, pool, "same-company", "acme-source")
-	insertChunks(t, sameCompany, []int16{0}, []int{0})
-
-	// Different company. Its FIRST chunk (dim 5) is far from both of the source's
-	// chunks (orthogonal, dist 1); its SECOND chunk exactly matches the source's chunk
-	// 1 (dim 1, dist 0). Proves the MIN-across-chunks rollup is real: the winning pair
-	// is (source.chunk1, candidate.chunk_index=1), not chunk_index 0 vs 0.
-	trueNearest := insertChunkTestJob(t, pool, "true-nearest", "beta-co")
-	insertChunks(t, trueNearest, []int16{0, 1}, []int{5, 1})
-
-	// Different company, closed. Its chunk is an exact match (dist 0) for the source's
-	// chunk 0 — would rank first by vector distance alone, but must be excluded because
-	// it is closed.
-	closedMatch := insertChunkTestJob(t, pool, "closed-match", "gamma-co")
-	insertChunks(t, closedMatch, []int16{0}, []int{0})
-	closeJob(t, pool, closedMatch)
-
-	// Different company, open, and PRIVATE: a job description a candidate pasted into
-	// the JD-tailor intake (InsertPrivateJob). Its chunk is an exact match (dist 0) for
-	// the source's chunk 0, so nothing but the privacy predicate keeps it out — and it
-	// must stay out, because what this query names becomes jobs.similar_job_ids, which
-	// the unauthenticated /jobs/:slug/similar publishes whole.
-	privateMatch := insertChunkTestJob(t, pool, "private-match", "epsilon-co")
-	insertChunks(t, privateMatch, []int16{0}, []int{0})
-	markJobPrivate(t, pool, privateMatch)
-
-	// Different company, open, orthogonal to both source chunks (dist 1 from either) —
-	// a background candidate that should rank behind trueNearest (dist 0) but still
-	// appear in the result (open, different company).
-	farAway := insertChunkTestJob(t, pool, "far-away", "delta-co")
-	insertChunks(t, farAway, []int16{0}, []int{6})
-
-	rows, err := q.NearestJobsToJob(ctx, NearestJobsToJobParams{JobID: source, LimitCount: 10, OverFetch: 100})
-	if err != nil {
-		t.Fatalf("NearestJobsToJob: %v", err)
-	}
-
-	got := map[int64]float64{}
-	var order []int64
-	for _, r := range rows {
-		got[r.JobID] = r.Distance
-		order = append(order, r.JobID)
-	}
-
-	if _, ok := got[sameCompany]; ok {
-		t.Errorf("same-company job %d present in results %v, want excluded even though it is the closest vector match", sameCompany, order)
-	}
-	if _, ok := got[closedMatch]; ok {
-		t.Errorf("closed job %d present in results %v, want excluded", closedMatch, order)
-	}
-	if _, ok := got[privateMatch]; ok {
-		t.Errorf("private job %d present in results %v, want excluded even though it is an exact vector match", privateMatch, order)
-	}
-	if len(order) != 2 || order[0] != trueNearest || order[1] != farAway {
-		t.Fatalf("result order = %v, want [%d(true-nearest) %d(far-away)]", order, trueNearest, farAway)
-	}
-	if d := got[trueNearest]; d > 1e-6 {
-		t.Errorf("trueNearest distance = %v, want ~0 (its chunk_index=1 exactly matches source chunk_index=1)", d)
-	}
-	if d := got[farAway]; d < 0.999 || d > 1.001 {
-		t.Errorf("farAway distance = %v, want ~1 (orthogonal)", d)
-	}
 }

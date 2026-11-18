@@ -1,22 +1,15 @@
 // Command auto-apply-orchestrate serves the durable tailor-then-review Inngest function
-// (internal/application/autoapplyorchestrate) that sequences one auto-apply queue entry's
-// tailoring call and its candidate-review call, pausing between them for however long the
-// candidate's decision takes — including across a restart of this very process. Unlike the
-// run-once cron workers it is long-lived (an Inngest function must stay reachable between
-// steps for the SDK's own callback protocol), so it serves HTTP until SIGTERM — mirrors
-// cmd/mail-ingest's own shape.
+// (internal/application/autoapplyorchestrate): it sequences one auto-apply queue entry's
+// tailoring call and review call, pausing between them for as long as the candidate's decision
+// takes, across restarts. Unlike the run-once cron workers it is long-lived (the Inngest SDK
+// needs it reachable between steps) and serves HTTP until SIGTERM, like cmd/mail-ingest.
 //
-// It needs no database: every call it makes goes out over plain HTTP to freehire's own API
-// (internal/api/handler's two auto-apply routes) — see
-// openspec/changes/auto-apply-inngest-orchestration/design.md on why not
-// internal/platform/safehttp, and why not internal/candidate/cv or internal/ai/assistant
-// directly.
+// It needs no database: every call goes over plain HTTP to freehire's own API (the two auto-
+// apply routes in internal/api/handler).
 //
 // AUTO_APPLY_ORCHESTRATOR_SECRET / INNGEST_EVENT_KEY / INNGEST_SIGNING_KEY have no useful
-// degraded mode here (unlike PostAutoApplyReview's own best-effort event publish): this
-// worker either runs against a real, self-hosted Inngest instance or is not deployed, so a
-// missing value fails startup loudly rather than serving a function that could never
-// actually authenticate anywhere.
+// degraded mode: this worker runs against a real self-hosted Inngest instance or is not
+// deployed, so a missing value fails startup loudly.
 package main
 
 import (
@@ -38,9 +31,8 @@ import (
 
 func main() { worker.Main(run) }
 
-// selfRegisterTimeout bounds the request that triggers this worker's own sync with the
-// self-hosted Inngest server at startup — a local call between two systemd units on the
-// same host, not a network hop that needs generosity.
+// selfRegisterTimeout bounds the startup sync with the self-hosted Inngest server, a local
+// call between two units on one host.
 const selfRegisterTimeout = 10 * time.Second
 
 func run() int {
@@ -77,10 +69,10 @@ func run() int {
 	}
 
 	mux := http.NewServeMux()
-	// EnableUnauthedSync: this deployment is one internal, single-tenant, self-hosted
-	// Inngest instance (never reachable from the public internet, per design.md) — the
-	// restriction unauthed-sync guards against (an arbitrary caller registering functions
-	// on someone else's Inngest Cloud account) does not apply here.
+	// EnableUnauthedSync: this is one internal, single-tenant, self-hosted Inngest instance,
+	// never reachable from the public internet, so the risk unauthed sync guards against (an
+	// arbitrary caller registering functions on someone else's Inngest Cloud account) does not
+	// apply.
 	mux.Handle("/api/inngest", client.ServeWithOpts(inngestgo.ServeOpts{
 		EnableUnauthedSync: inngestgo.BoolPtr(true),
 	}))
@@ -119,10 +111,8 @@ func run() int {
 }
 
 // selfRegister triggers this worker's own sync with the Inngest server: a PUT to its own
-// /api/inngest endpoint, which the SDK answers by pushing its function list out of band —
-// the same handshake this package's own integration tests (and this session's earlier
-// spike) verified against a real Inngest dev server. It retries briefly since the HTTP
-// server above has just started serving in its own goroutine.
+// /api/inngest endpoint, which the SDK answers by pushing its function list. It retries
+// briefly since the HTTP server has just started in its own goroutine.
 func selfRegister(addr string) error {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPut, "http://127.0.0.1"+addr+"/api/inngest", nil)
 	if err != nil {

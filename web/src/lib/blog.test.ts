@@ -47,10 +47,7 @@ describe('parseFrontmatter', () => {
   });
 
   it('defaults type to changelog, tags to [], draft to false when omitted', () => {
-    const post = parseFrontmatter(
-      { title: 'Note', date: '2026-02-01', summary: 'Small fix.' },
-      '/src/posts/note.svx',
-    );
+    const post = parseFrontmatter({ title: 'Note', date: '2026-02-01', summary: 'Small fix.' }, '/src/posts/note.svx');
     expect(post.type).toBe('changelog');
     expect(post.tags).toEqual([]);
     expect(post.draft).toBe(false);
@@ -63,24 +60,18 @@ describe('parseFrontmatter', () => {
   });
 
   it('throws naming the file for a type outside the enum', () => {
-    expect(() =>
-      parseFrontmatter({ ...full, type: 'news' }, '/src/posts/bad-type.svx'),
-    ).toThrow(/bad-type\.svx/);
+    expect(() => parseFrontmatter({ ...full, type: 'news' }, '/src/posts/bad-type.svx')).toThrow(/bad-type\.svx/);
   });
 
   it.each(['Jan 15 2026', '2026-13-40', '2026/01/15', '15-01-2026'])(
     'throws naming the file for a non-ISO date %s',
     (date) => {
-      expect(() => parseFrontmatter({ ...full, date }, '/src/posts/bad-date.svx')).toThrow(
-        /bad-date\.svx/,
-      );
+      expect(() => parseFrontmatter({ ...full, date }, '/src/posts/bad-date.svx')).toThrow(/bad-date\.svx/);
     },
   );
 
   it('throws naming the file when tags is present but not a list', () => {
-    expect(() =>
-      parseFrontmatter({ ...full, tags: 'product' }, '/src/posts/bad-tags.svx'),
-    ).toThrow(/bad-tags\.svx/);
+    expect(() => parseFrontmatter({ ...full, tags: 'product' }, '/src/posts/bad-tags.svx')).toThrow(/bad-tags\.svx/);
   });
 });
 

@@ -18,11 +18,12 @@ type fakeScopedKeys struct {
 	validHash string
 	userID    int64
 	scope     string
+	keyID     int64
 }
 
 func (f fakeScopedKeys) AuthenticateAPIKey(_ context.Context, tokenHash string) (APIKeyIdentity, error) {
 	if tokenHash == f.validHash {
-		return APIKeyIdentity{UserID: f.userID, Scope: f.scope}, nil
+		return APIKeyIdentity{UserID: f.userID, Scope: f.scope, KeyID: f.keyID}, nil
 	}
 	return APIKeyIdentity{}, pgx.ErrNoRows
 }

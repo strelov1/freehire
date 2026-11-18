@@ -105,7 +105,8 @@
     submitting = true;
     error = null;
     try {
-      const choice = cv === 'tailored' && form.cvs.tailored ? { cv_id: form.cvs.tailored.id } : { resume: true as const };
+      const choice =
+        cv === 'tailored' && form.cvs.tailored ? { cv_id: form.cvs.tailored.id } : { resume: true as const };
       await api.sendDirectApplication(submittedSlug, { ...choice, answers, note: note.trim() || undefined });
       done = true;
       announce(`Your application was sent to ${submittedCompany}.`);
@@ -217,7 +218,14 @@
             <div class="flex gap-4 text-sm">
               {#each [['true', 'Yes'], ['false', 'No']] as [value, label] (value)}
                 <label class="flex items-center gap-1.5">
-                  <input type="radio" name={q.id} {value} required={q.required} bind:group={answers[q.id]} class="accent-current" />
+                  <input
+                    type="radio"
+                    name={q.id}
+                    {value}
+                    required={q.required}
+                    bind:group={answers[q.id]}
+                    class="accent-current"
+                  />
                   {label}
                 </label>
               {/each}
@@ -234,7 +242,8 @@
                   {/each}
                 </select>
               {:else}
-                <textarea {id} {required} bind:value={answers[q.id]} rows="2" maxlength={2000} class={areaClass}></textarea>
+                <textarea {id} {required} bind:value={answers[q.id]} rows="2" maxlength={2000} class={areaClass}
+                ></textarea>
               {/if}
             {/snippet}
           </FormField>

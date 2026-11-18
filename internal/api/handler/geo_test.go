@@ -9,15 +9,14 @@ import (
 func geoApp() *fiber.App {
 	h := newGeoHandlers()
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	// A nil throttler fails open, so this exercises the handler and not the limiter.
-	h.register(app, middleware{})
+	h.register(app.Group("/api/v1"), newContract(contractHandlers{geoHandlers: h}))
 	return app
 }
 
 func TestSearchCitiesEndpoint_ReturnsMatches(t *testing.T) {
 	app := geoApp()
 
-	status, body := doGet(t, app, "/geo/cities?q=Florian")
+	status, body := doGet(t, app, "/api/v1/geo/cities?q=Florian")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -37,7 +36,7 @@ func TestSearchCitiesEndpoint_ReturnsMatches(t *testing.T) {
 func TestSearchCitiesEndpoint_CountryNarrows(t *testing.T) {
 	app := geoApp()
 
-	status, body := doGet(t, app, "/geo/cities?q=San&country=us")
+	status, body := doGet(t, app, "/api/v1/geo/cities?q=San&country=us")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -56,7 +55,7 @@ func TestSearchCitiesEndpoint_CountryNarrows(t *testing.T) {
 func TestSearchCitiesEndpoint_BlankQueryReturnsEmptyList(t *testing.T) {
 	app := geoApp()
 
-	status, body := doGet(t, app, "/geo/cities")
+	status, body := doGet(t, app, "/api/v1/geo/cities")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -72,7 +71,7 @@ func TestSearchCitiesEndpoint_BlankQueryReturnsEmptyList(t *testing.T) {
 func TestSearchCitiesEndpoint_RequiresNoAuth(t *testing.T) {
 	app := geoApp()
 
-	status, _ := doGet(t, app, "/geo/cities?q=Berlin")
+	status, _ := doGet(t, app, "/api/v1/geo/cities?q=Berlin")
 	if status == fiber.StatusUnauthorized {
 		t.Error("anonymous request got 401, want city search to be public")
 	}

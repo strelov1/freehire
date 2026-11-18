@@ -18,23 +18,21 @@ import (
 )
 
 // mokahr adapts MokaHR (Moka), a Chinese multi-tenant ATS. A board is one tenant careers SITE,
-// "<orgId>/<siteId>" (DeepSeek is high-flyer/140576), on app.mokahr.com — or, with region
-// "r1", on hire-r1.mokahr.com, Moka's international deployment, where a tenant of the other
-// host is unknown. Every tenant site calls the same keyless JSON listing. On some tenants a row
-// carries the whole posting with its HTML body; on others (SHEIN, Tesla, Zhihu — 45 of 81 sites
-// checked on 2026-10-25) the row has no body and no job function, and the detail endpoint
-// supplies both. So the adapter is a HydratingSource: a body-less row is fetched only when the
-// catalogue does not hold it yet.
+// "<orgId>/<siteId>" (e.g. high-flyer/140576), on app.mokahr.com, or with region "r1" on
+// hire-r1.mokahr.com, Moka's international deployment, where a tenant of the other host is
+// unknown. Every tenant site calls the same keyless JSON listing. On some tenants a row carries
+// the whole posting with its HTML body; on others the row has no body and no job function, and the
+// detail endpoint supplies both. So the adapter is a HydratingSource: a body-less row is fetched
+// only when the catalogue does not hold it yet.
 //
 // app.mokahr.com answers that listing ENCRYPTED: {"data": base64 AES-128-CBC ciphertext,
-// "necromancer": the 16-byte key}, under an IV every tenant's own page publishes and every
-// tenant checked shares. hire-r1 answers the same body as plain JSON. Both are read.
+// "necromancer": the 16-byte key}, under an IV every tenant's own page publishes and all tenants
+// share. hire-r1 answers the same body as plain JSON. Both are read.
 //
-// The whole tenant is read: a tenant's job functions (zhineng) are its own vocabulary, and on
-// Zhipu 117 of 134 postings sit under "其它" (other), so no function filter could scope the crawl
-// to technology. Our title dictionary cannot read Chinese titles either (classify resolved a
-// category for 24 of 271 titles on the three mainland tenants checked), so IsTechHint is set from
-// the tenant's function where its NAME is unambiguously technical (mokahrTechFunctions).
+// The whole tenant is read: a tenant's job functions (zhineng) are its own vocabulary and many
+// postings sit under "其它" (other), so no function filter could scope the crawl to technology.
+// Our title dictionary cannot read Chinese titles either, so IsTechHint is set from the tenant's
+// function where its NAME is unambiguously technical (mokahrTechFunctions).
 //
 // fullBoardListing: there is no total (jobStats.total is always 0), so the walk reads offsets
 // until a short page — the source's natural end — and ANY page failing fails the board; reaching
@@ -55,7 +53,7 @@ const (
 )
 
 // mokahrIV is the AES IV app.mokahr.com encrypts the listing under: the "aesIv" of each tenant
-// page's init-data, identical on every tenant checked.
+// page's init-data, identical on every tenant.
 var mokahrIV = []byte("de7c21ed8d6f50fe")
 
 var mokahrBoardRE = regexp.MustCompile(`^([A-Za-z0-9_-]+)/([1-9][0-9]*)$`)
@@ -64,7 +62,7 @@ var mokahrBoardRE = regexp.MustCompile(`^([A-Za-z0-9_-]+)/([1-9][0-9]*)$`)
 var mokahrRobotsDisallowed = map[string]bool{"lingjuninvest/46355": true, "shopee/74378": true}
 
 // mokahrTechFunctions are tenant job-function (zhineng) names that state technical work outright,
-// as the tenants checked on 2026-10-15 and 2026-10-25 spell them, whitespace removed. A function
+// whitespace removed. A function
 // not listed — "其它" (other), a bare "技术类"/"研发类" (technical, R&D: a pharma, a property or a
 // battery tenant files lab and building work there too), a data, product or hardware function, a
 // name not yet seen — sets no hint and leaves the posting to the title dictionary. The names are

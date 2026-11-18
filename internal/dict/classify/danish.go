@@ -1,30 +1,12 @@
 package classify
 
-// Danish titles glue their role into the LAST morpheme of a compound, as German and
-// Dutch do: a lager|medarbejder, a social|pædagog, a software|udvikler, a
-// salgs|assistent|elev. Measured 2026-10-26 over the 62,102 open postings of the three
-// Danish boards (jobindex, jobnet, jobdanmark), 88% resolved no category — the
-// commonest unresolved words were Danish heads: pædagog, sygeplejerske,
-// sundhedsassistent, tømrer, montør, rengøringsassistent.
+// Danish titles glue their role into the LAST morpheme of a compound, as German and Dutch do: a lager|medarbejder, a social|pædagog, a software|udvikler.
 //
-// The tables follow german.go exactly (matchHeads): an alias written "-pædagog" is a
-// head and matches any word that ends in it, an alias without the dash is a whole-word
-// phrase, a head resolves per word and precedence is table order. They run after the
-// main, German and Dutch tables have resolved nothing, so no existing answer changes —
-// and every head here must also be safe on any other title that reaches the same
-// fallback. Most heads carry an æ, ø or å or a spelling no other catalogue language
-// shares; the ones that do not are argued beside their entry.
+// The tables follow german.go exactly (matchHeads): an alias written "-pædagog" is a head and matches any word that ends in it, an alias without the dash is a whole-word phrase, a head resolves per word and precedence is table order. They run after the main, German and Dutch tables have resolved nothing, so no existing answer changes, and every head here must also be safe on any other title that reaches the same fallback. Most heads carry an æ, ø or å or a spelling no other catalogue language shares; the ones that do not are argued beside their entry.
 //
-// Danish plurals add -e/-er/-r ("pædagoger", "tømrere", "sygeplejersker"); a head
-// matches only the word's tail, so the plural forms that appear in live titles are
-// listed as heads of their own.
+// Danish plurals add -e/-er/-r ("pædagoger", "tømrere", "sygeplejersker"); a head matches only the word's tail, so the plural forms that appear in live titles are listed as heads of their own.
 //
-// A generic head with no category of its own — "medarbejder" (employee), "assistent",
-// "medhjælper" (helper), "konsulent", "tekniker", "ingeniør", "rådgiver",
-// "sagsbehandler" (a caseworker of social benefits, building permits or tax alike) — is
-// deliberately absent: only the compound that names the trade resolves
-// ("lagermedarbejder", "køkkenmedhjælper", "salgskonsulent"). Shift words are never
-// heads: "aftenvagt" and "nattevagt" are the evening and night SHIFT, not a guard.
+// A generic head with no category of its own is deliberately absent: "medarbejder" (employee), "assistent", "medhjælper" (helper), "konsulent", "tekniker", "ingeniør", "rådgiver", "sagsbehandler" (a caseworker of social benefits, building permits or tax alike). Only the compound that names the trade resolves ("lagermedarbejder", "køkkenmedhjælper", "salgskonsulent"). Shift words are never heads: "aftenvagt" and "nattevagt" are the evening and night SHIFT, not a guard.
 
 // danishCategoryTable lists the Danish category aliases in precedence order.
 var danishCategoryTable = []aliasEntry{
@@ -54,7 +36,7 @@ var danishCategoryTable = []aliasEntry{
 	{"-it-udvikler", "software_engineering"},
 	{"-programmør", "software_engineering"},
 	{"-softwareingeniør", "software_engineering"},
-	{"-systemadministrator", "devops"}, // the main table files the system administrator here
+	{"-systemadministrator", "system_administration"}, // the main table files the system administrator here
 	{"-netværksadministrator", "network_engineering"},
 	{"-dataanalytiker", "data_analytics"},
 	{"-it-arkitekt", "architecture"},

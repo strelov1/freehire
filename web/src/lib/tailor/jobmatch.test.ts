@@ -98,7 +98,13 @@ describe('viewJobMatch', () => {
       resp({
         requirements: [
           { text: 'Proficiency in Python', priority: 'required', coverage: 'covered', skills: ['python'] },
-          { text: 'Experience with Terraform', priority: 'required', coverage: 'missing', skills: ['terraform'], missing: ['terraform'] },
+          {
+            text: 'Experience with Terraform',
+            priority: 'required',
+            coverage: 'missing',
+            skills: ['terraform'],
+            missing: ['terraform'],
+          },
           { text: 'Strong communication', priority: 'preferred', coverage: 'unverifiable', cached_status: 'covered' },
         ],
       }),

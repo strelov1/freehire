@@ -148,6 +148,24 @@ func TestRunRetriesThenDeadLettersAFailingFetch(t *testing.T) {
 	}
 }
 
+func TestDegradedOnlyWhenNothingWasCaptured(t *testing.T) {
+	cases := []struct {
+		stats RunStats
+		want  bool
+	}{
+		{RunStats{Captured: 462, DeadLettered: 20}, false}, // a taken-down posting beside real captures
+		{RunStats{Captured: 5, Failed: 2}, false},
+		{RunStats{DeadLettered: 1}, true},
+		{RunStats{Failed: 1}, true},
+		{RunStats{}, false}, // an empty queue
+	}
+	for _, tc := range cases {
+		if got := tc.stats.Degraded(); got != tc.want {
+			t.Errorf("%+v.Degraded() = %t, want %t", tc.stats, got, tc.want)
+		}
+	}
+}
+
 func TestRunDeadLettersATerminalFailureOnTheFirstAttempt(t *testing.T) {
 	// errNoJobPosting/errEmptyDescription/a 404 are deterministic: the same URL will
 	// answer the same way every time, so retrying wastes two more requests against a page

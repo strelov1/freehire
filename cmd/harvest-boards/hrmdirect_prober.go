@@ -10,14 +10,12 @@ import (
 )
 
 // hrmdirectProber validates an HRM Direct board "<slug>" by asking ClearCompany's career-site
-// API how many postings the tenant lists. HRM Direct tenants are served by ClearCompany since
-// ~2026-10-21: the hosted career page ("apply.clearcompany.com/<slug>") renders no posting and
-// names the tenant's career-site id in its widget script, and the API answers a page of
-// postings with the total. This mirrors the adapter (internal/ingest/sources/hrmdirect.go),
-// which explains the move.
-//
-// It reports no company name. The career page's title is free text, not an employer field, so
-// the seed's own name labels the board instead — the same reading careerplugProber takes.
+// API how many postings the tenant lists. HRM Direct tenants are served by ClearCompany: the
+// hosted career page ("apply.clearcompany.com/<slug>") renders no posting and names the tenant's
+// career-site id in its widget script, and the API answers a page of postings with the total.
+// This mirrors the adapter (internal/ingest/sources/hrmdirect.go), which explains the move.
+// It reports no company name: the career page's title is free text, so the seed's name labels
+// the board, as careerplugProber does.
 type hrmdirectProber struct{}
 
 func (hrmdirectProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {

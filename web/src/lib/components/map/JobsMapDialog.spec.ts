@@ -6,7 +6,9 @@ import { FilterStore } from '#lib/filters.js';
 import JobsMapDialog from './JobsMapDialog.svelte';
 
 vi.mock('$app/env', () => ({ browser: false }));
-const { page } = vi.hoisted(() => ({ page: { data: {} as { locale?: string }, url: new URL('http://localhost/jobs') } }));
+const { page } = vi.hoisted(() => ({
+  page: { data: {} as { locale?: string }, url: new URL('http://localhost/jobs') },
+}));
 vi.mock('$app/state', () => ({ page }));
 vi.mock('$app/navigation', () => ({ replaceState: vi.fn(), goto: vi.fn() }));
 
@@ -37,7 +39,11 @@ const BRAZIL = counts(700, {
   regions: { global: 5 },
 });
 
-const SAO_PAULO = counts(500, { countries: { br: 500 }, cities: { 'São Paulo': 500, Campinas: 2 }, regions: { global: 2 } });
+const SAO_PAULO = counts(500, {
+  countries: { br: 500 },
+  cities: { 'São Paulo': 500, Campinas: 2 },
+  regions: { global: 2 },
+});
 
 // A store seeded through its own writes, the way a visitor's clicks would leave it.
 function storeWith(...writes: [string, string][]) {
@@ -142,32 +148,19 @@ describe('JobsMapDialog — clicks narrow the filters', () => {
     expect(include(store, 'regions')).toEqual([]);
   });
 
+  it('World view is the way out of a worldwide filter set elsewhere', async () => {
+    const store = storeWith(['regions', 'global']);
+    render(JobsMapDialog, { open: true, store });
+    await fireEvent.click(await screen.findByRole('button', { name: 'World view' }));
+    expect(include(store, 'regions')).toEqual([]);
+  });
+
   it('World view clears the country and city filters together', async () => {
     const store = storeWith(['countries', 'br'], ['cities', 'São Paulo']);
     render(JobsMapDialog, { open: true, store });
     await fireEvent.click(await screen.findByRole('button', { name: 'World view' }));
     expect(include(store, 'countries')).toEqual([]);
     expect(include(store, 'cities')).toEqual([]);
-  });
-
-  it('Remote worldwide replaces a place when turned on', async () => {
-    const store = storeWith(['countries', 'br'], ['cities', 'São Paulo']);
-    render(JobsMapDialog, { open: true, store });
-    const toggle = await screen.findByRole('button', { name: /Remote worldwide/ });
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    await fireEvent.click(toggle);
-    expect(include(store, 'regions')).toEqual(['global']);
-    expect(include(store, 'countries')).toEqual([]);
-    expect(include(store, 'cities')).toEqual([]);
-  });
-
-  it('Remote worldwide turns off again', async () => {
-    const store = storeWith(['regions', 'global']);
-    render(JobsMapDialog, { open: true, store });
-    const toggle = await screen.findByRole('button', { name: /Remote worldwide/ });
-    expect(toggle.getAttribute('aria-pressed')).toBe('true');
-    await fireEvent.click(toggle);
-    expect(include(store, 'regions')).toEqual([]);
   });
 });
 
@@ -237,7 +230,6 @@ describe('JobsMapDialog — Russian', () => {
     render(JobsMapDialog, { open: true, store: storeWith() });
     const n = (1_000).toLocaleString('ru');
     expect(await screen.findByRole('button', { name: `Показать ${n} вакансий` })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Удалённо из любой страны · 40' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Brazil: 700 вакансий' })).toBeTruthy();
   });
 });

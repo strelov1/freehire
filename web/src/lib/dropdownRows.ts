@@ -52,11 +52,7 @@ export type DropdownRow = { key: string; first: boolean } & (
  *
  *  Deliberately NOT pushed into the endpoint: fuzzy matching is correct for its other
  *  caller, and this is a rule about what a three-row section may show. */
-export function namedCompanies(
-  companies: readonly CompanyListItem[],
-  text: string,
-  limit = 3,
-): CompanyListItem[] {
+export function namedCompanies(companies: readonly CompanyListItem[], text: string, limit = 3): CompanyListItem[] {
   const q = text.trim().toLowerCase();
   if (q === '') return [];
   return companies.filter((c) => c.name.toLowerCase().startsWith(q)).slice(0, limit);
@@ -130,4 +126,22 @@ export function dropdownRows(content: DropdownContent): DropdownRow[] {
   if (text !== '') rows.push({ kind: 'text', text, key: 't', first: true });
 
   return rows;
+}
+
+const OPERATOR_HEADINGS = { company: 'Companies', source: 'Sources', title: 'Titles' } as const;
+
+/** The label above a section's first row, or null for a section that needs none.
+ *
+ *  An EMPTY box gets none. Its rows are the only thing in the panel — there is no
+ *  second section to tell them apart from — so the heading was a line of small caps
+ *  introducing a list nobody could confuse with anything. A typed box does have
+ *  neighbours (postings, companies), and there "Filter by" says what picking one of
+ *  these rows does rather than what it is. */
+export function sectionHeading(row: DropdownRow, emptyBox: boolean): string | null {
+  const kind = row.kind;
+  if (kind === 'operator') return OPERATOR_HEADINGS[row.option.key];
+  if (kind === 'text' || kind === 'link') return null;
+  if (kind === 'job') return 'Jobs';
+  if (kind === 'company') return 'Companies';
+  return emptyBox ? null : 'Filter by';
 }

@@ -12,7 +12,8 @@
   // Who the open chat is with, beside it: their card, the companies both of you applied
   // to, and their latest moves — what to talk about. Only where the chat keeps room to read
   // (2xl); below that the chat's own "you both applied to" carries the context.
-  let { handle, summary, companies }: { handle: string; summary: BuddySummary | null; companies: BuddyCompany[] } = $props();
+  let { handle, summary, companies }: { handle: string; summary: BuddySummary | null; companies: BuddyCompany[] } =
+    $props();
 
   const LATEST = 3;
   let latest = $state<BuddyFeedItem[]>([]);
@@ -23,10 +24,14 @@
     latest = [];
     // Their own feed, under every rule the feed keeps. A failure leaves the section out.
     api.listBuddyMemberFeed(current, undefined, LATEST).then(
-      (page) => { if (!cancelled) latest = page.data; },
+      (page) => {
+        if (!cancelled) latest = page.data;
+      },
       () => {},
     );
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   });
 </script>
 
@@ -36,11 +41,17 @@
     {#if summary}
       <p class="flex items-center gap-1.5 font-semibold">
         {buddyHeading(summary)}
-        {#if summary.country}<CountryFlag code={summary.country} label={countryLabel(summary.country)} class="text-xs" />{/if}
+        {#if summary.country}<CountryFlag
+            code={summary.country}
+            label={countryLabel(summary.country)}
+            class="text-xs"
+          />{/if}
       </p>
     {/if}
     <p class="text-xs text-muted-foreground">{handle}</p>
-    <Button href={resolve('/buddies/[handle]', { handle })} variant="outline" size="sm" class="mt-2">View profile</Button>
+    <Button href={resolve('/buddies/[handle]', { handle })} variant="outline" size="sm" class="mt-2"
+      >View profile</Button
+    >
   </section>
 
   {#if companies.length}
@@ -49,7 +60,10 @@
       <ul class="flex flex-col gap-1">
         {#each companies as c (c.slug)}
           <li>
-            <a href={resolve('/companies/[slug]', { slug: c.slug })} class="flex items-center gap-2.5 rounded-md p-1 text-sm font-medium hover:bg-muted">
+            <a
+              href={resolve('/companies/[slug]', { slug: c.slug })}
+              class="flex items-center gap-2.5 rounded-md p-1 text-sm font-medium hover:bg-muted"
+            >
               <BuddyCompanyLogo name={c.name} size="sm" />{c.name}
             </a>
           </li>
@@ -61,7 +75,9 @@
   {#if latest.length}
     <section class="rounded-xl border border-border bg-card px-4 pt-3 pb-1">
       <h2 class="text-sm font-semibold">Their latest</h2>
-      <ul>{#each latest as item (item.id)}<BuddyFeedEntry {item} />{/each}</ul>
+      <ul>
+        {#each latest as item (item.id)}<BuddyFeedEntry {item} />{/each}
+      </ul>
     </section>
   {/if}
 </aside>

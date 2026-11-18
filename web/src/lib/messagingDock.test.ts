@@ -29,7 +29,10 @@ describe('dock windows', () => {
     let windows = openDockWindow(openDockWindow([], 1), 2);
     windows = setDockWindowMinimized(windows, 1, true);
     windows = openDockWindow(windows, 1);
-    expect(windows).toEqual([{ id: 1, minimized: false }, { id: 2, minimized: false }]);
+    expect(windows).toEqual([
+      { id: 1, minimized: false },
+      { id: 2, minimized: false },
+    ]);
   });
 
   it('honours a smaller maximum', () => {
@@ -48,8 +51,10 @@ describe('dock persistence and badge', () => {
     expect(parseDockWindows(null)).toEqual([]);
     expect(parseDockWindows('not json')).toEqual([]);
     expect(parseDockWindows('{"id":1}')).toEqual([]);
-    expect(parseDockWindows('[{"id":1,"minimized":true},{"id":1},{"id":-2},{"id":"3"},{"id":4,"body":"hi"}]'))
-      .toEqual([{ id: 1, minimized: true }, { id: 4, minimized: false }]);
+    expect(parseDockWindows('[{"id":1,"minimized":true},{"id":1},{"id":-2},{"id":"3"},{"id":4,"body":"hi"}]')).toEqual([
+      { id: 1, minimized: true },
+      { id: 4, minimized: false },
+    ]);
     expect(parseDockWindows('[{"id":1},{"id":2},{"id":3}]').map((w) => w.id)).toEqual([2, 3]);
   });
 
@@ -81,9 +86,24 @@ describe('dock placement', () => {
 describe('mobile sheet', () => {
   it('is the newest window that is not minimized', () => {
     expect(mobileSheetId([])).toBeNull();
-    expect(mobileSheetId([{ id: 1, minimized: false }, { id: 2, minimized: false }])).toBe(2);
-    expect(mobileSheetId([{ id: 1, minimized: false }, { id: 2, minimized: true }])).toBe(1);
-    expect(mobileSheetId([{ id: 1, minimized: true }, { id: 2, minimized: true }])).toBeNull();
+    expect(
+      mobileSheetId([
+        { id: 1, minimized: false },
+        { id: 2, minimized: false },
+      ]),
+    ).toBe(2);
+    expect(
+      mobileSheetId([
+        { id: 1, minimized: false },
+        { id: 2, minimized: true },
+      ]),
+    ).toBe(1);
+    expect(
+      mobileSheetId([
+        { id: 1, minimized: true },
+        { id: 2, minimized: true },
+      ]),
+    ).toBeNull();
   });
 });
 
@@ -94,13 +114,23 @@ describe('dock reserve', () => {
     expect(dockReserveClass(true, false, [])).toBe('pb-12');
     expect(dockReserveClass(true, false, [{ id: 1, minimized: false }])).toBe('pb-12');
     expect(dockReserveClass(true, false, [{ id: 1, minimized: true }])).toBe('pb-28 sm:pb-12');
-    expect(dockReserveClass(true, false, [{ id: 1, minimized: true }, { id: 2, minimized: true }])).toBe('pb-44 sm:pb-12');
+    expect(
+      dockReserveClass(true, false, [
+        { id: 1, minimized: true },
+        { id: 2, minimized: true },
+      ]),
+    ).toBe('pb-44 sm:pb-12');
   });
 
   it('lifts the support toast above every stacked bar', () => {
     expect(dockToastOffsetClass([])).toBe('bottom-16');
     expect(dockToastOffsetClass([{ id: 1, minimized: true }])).toBe('bottom-32 sm:bottom-16');
-    expect(dockToastOffsetClass([{ id: 1, minimized: true }, { id: 2, minimized: true }])).toBe('bottom-48 sm:bottom-16');
+    expect(
+      dockToastOffsetClass([
+        { id: 1, minimized: true },
+        { id: 2, minimized: true },
+      ]),
+    ).toBe('bottom-48 sm:bottom-16');
   });
 });
 
@@ -125,7 +155,9 @@ describe('dock dismissal', () => {
 
   it('remembers the newest message time it had seen, 0 with none', () => {
     expect(newestMessageAt([])).toBe(0);
-    expect(newestMessageAt([conv(0, null), conv(1, '2026-10-27T10:00:00Z'), conv(0, '2026-10-27T09:00:00Z')])).toBe(at('2026-10-27T10:00:00Z'));
+    expect(newestMessageAt([conv(0, null), conv(1, '2026-10-27T10:00:00Z'), conv(0, '2026-10-27T09:00:00Z')])).toBe(
+      at('2026-10-27T10:00:00Z'),
+    );
   });
   it('stays dismissed while nothing new arrives', () => {
     expect(dismissalLifted(at('2026-10-27T10:00:00Z'), [conv(2, '2026-10-27T10:00:00Z')])).toBe(false);

@@ -12,27 +12,20 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// QueriesCodeStore is the production CodeStore backed by sqlc-generated *db.Queries.
-// The table's composite primary key (user_id, purpose) is what enforces "at most one
-// outstanding code"; this type just translates types and the no-row sentinel.
+// QueriesCodeStore is the production CodeStore. The composite primary key
+// (user_id, purpose) enforces at most one outstanding code.
 type QueriesCodeStore struct {
 	q    *db.Queries
 	pool *pgxpool.Pool
 }
 
-// NewQueriesCodeStore constructs a QueriesCodeStore.
-//
-// The pool is REQUIRED, and was variadic until 2026-09-06. That made the five-attempt
-// limit's FOR UPDATE serialisation, and the atomicity of "spend the code, write the
-// password, bump token_version", properties of how the object had been constructed rather
-// than of the code: Begin returned (nil, nil) without one and the service tolerated it in
-// eight places. It has already shipped that way once — a55cc537 records both call sites
-// omitting the pool, so none of it ever ran in production.
+// NewQueriesCodeStore constructs a QueriesCodeStore. The pool is required: without a real
+// transaction the attempt limit's FOR UPDATE and the atomic "spend the code, write the
+// password, bump token_version" silently do not hold.
 func NewQueriesCodeStore(q *db.Queries, pool *pgxpool.Pool) *QueriesCodeStore {
 	return &QueriesCodeStore{q: q, pool: pool}
 }
 
-// Compile-time assertion that QueriesCodeStore satisfies CodeStore.
 var _ CodeStore = (*QueriesCodeStore)(nil)
 
 // WithTx returns a transactional copy of QueriesCodeStore.
@@ -48,9 +41,8 @@ func (s *QueriesCodeStore) Begin(ctx context.Context) (pgx.Tx, error) {
 	return s.pool.Begin(ctx)
 }
 
-// UpsertCode issues or replaces the outstanding code for one purpose. target is the
-// address a change_email code was mailed to, and empty (stored NULL) for every other
-// purpose.
+// UpsertCode issues or replaces the outstanding code. target is the change_email address,
+// empty (stored NULL) otherwise.
 func (s *QueriesCodeStore) UpsertCode(ctx context.Context, userID int64, purpose, codeHash, target string, expiresAt time.Time) error {
 	return s.q.UpsertEmailCode(ctx, db.UpsertEmailCodeParams{
 		UserID:      userID,

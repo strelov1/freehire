@@ -13,41 +13,26 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// assistantInboxBodyMax caps a mail listing that carries bodies, far below the 50
-// the HTTP surface allows an external harness.
-//
-// The two callers are bounded differently on purpose. A harness reads a page once
-// and forgets it; a tool result is persisted in the transcript and replayed into
-// the model's context on EVERY later turn of the session, so a page of fifty
-// bodies is charged again to every question that follows. assistantResultCap is
-// the backstop, not the answer — it truncates after the fact, and a truncated mail
-// listing is one whose tail silently does not exist.
+// assistantInboxBodyMax caps a mail listing that carries bodies, far below the 50 the HTTP surface
+// allows an external harness: a tool result is replayed into the model's context on every later turn,
+// so a page of fifty bodies is charged again to every question. assistantResultCap is only the
+// backstop; it truncates after the fact and the tail silently does not exist.
 const assistantInboxBodyMax = 10
 
-// assistantInboxPageMax caps a listing without bodies. Rows are small, but they
-// are still replayed forever.
+// assistantInboxPageMax caps a listing without bodies. Rows are small but replayed forever.
 const assistantInboxPageMax = 40
 
-// assistantInboxBodyRunes caps ONE body. The page cap bounds how many bodies come
-// back; without this nothing bounded how large each is, and real ATS mail is
-// HTML-only and renders to tens of kilobytes — ten of them overflow the registry's
-// result cap, so the model receives a truncation envelope holding one message
-// instead of the page it asked for.
-//
-// It is tighter than the classifier's own 4000-rune bound on purpose: that text is
-// read once, this text is replayed into the context on every later turn.
+// assistantInboxBodyRunes caps ONE body. Real ATS mail is HTML-only and renders to tens of kilobytes,
+// so without this ten bodies overflow the registry's result cap and the model gets a truncation
+// envelope holding one message. Tighter than the classifier's 4000-rune bound on purpose: that text
+// is read once, this is replayed every later turn.
 const assistantInboxBodyRunes = 2000
 
-// assistantInboxTools are the mail tools. They are registered for the general chat
-// preset only: a tailoring session works one CV, an experience interview collects
-// what the candidate has done, and a side panel talks about the page on screen.
-//
-// There is deliberately no tool here that opens ONE message by id. That endpoint
-// marks the message read, and read_at means "a human saw this" — an agent sweeping
-// the backlog through it would silently zero its owner's unread count. Bodies come
-// from the listing, which marks nothing. And there is deliberately no tool that
-// SENDS mail: message bodies are attacker-controlled text, and the surest answer to
-// a prompt injection is that it has no outbound channel to reach.
+// assistantInboxTools are the mail tools, registered for the general chat preset only. There is no
+// tool that opens ONE message by id: that endpoint marks it read, and read_at means "a human saw this",
+// so an agent sweeping the backlog would zero the owner's unread count. Bodies come from the listing,
+// which marks nothing. There is also no tool that SENDS mail: bodies are attacker-controlled text, and
+// a prompt injection with no outbound channel has nowhere to go.
 func (h *assistantHandlers) assistantInboxTools() []assistant.Tool {
 	return []assistant.Tool{
 		h.inboxOverviewTool(),
@@ -69,7 +54,7 @@ func (h *assistantHandlers) inboxOverviewTool() assistant.Tool {
 			"broad (\"what's happening with my applications?\") — it is one cheap call that tells you which " +
 			"inbox_search to make, instead of reading messages until an answer appears. It returns no message " +
 			"text at all.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Schema: assistant.EmptySchema,
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			svc, err := h.mailService()
 			if err != nil {
@@ -80,12 +65,15 @@ func (h *assistantHandlers) inboxOverviewTool() assistant.Tool {
 	}
 }
 
-// assistantMailMessage is the model's view of one message: the fields it needs to
-// decide and to act, and nothing it would pay to keep. Body is present only when
-// the call asked for it.
+// assistantMailMessage is the model's view of one message: what it needs to decide and act. Body is
+// present only when the call asked for it.
 type assistantMailMessage struct {
 	ID           int64  `json:"id"`
 	Source       string `json:"source"`
+	Direction    string `json:"direction"`
+	ThreadID     string `json:"thread_id,omitempty"`
+	ToAddrs      string `json:"to_addrs,omitempty"`
+	CcAddrs      string `json:"cc_addrs,omitempty"`
 	From         string `json:"from"`
 	Subject      string `json:"subject"`
 	ReceivedAt   string `json:"received_at"`
@@ -99,9 +87,8 @@ type assistantMailMessage struct {
 	Body         string `json:"body,omitempty"`
 }
 
-// mailMessageView projects a message for the model. The sender's address and
-// display name are joined because both matter and neither is the employer: the
-// display name is usually the ATS relay that sent it.
+// mailMessageView projects a message for the model. Sender address and display name are joined because
+// neither alone identifies the employer: the display name is usually the ATS relay.
 func mailMessageView(m inbox.Message, withBody bool) assistantMailMessage {
 	from := m.FromName
 	if from == "" {
@@ -110,7 +97,7 @@ func mailMessageView(m inbox.Message, withBody bool) assistantMailMessage {
 		from = fmt.Sprintf("%s <%s>", m.FromName, m.FromAddr)
 	}
 	out := assistantMailMessage{
-		ID: m.ID, Source: m.Source, From: from, Subject: m.Subject,
+		ID: m.ID, Source: m.Source, From: from, Subject: m.Subject, Direction: m.Direction, ThreadID: m.ThreadID, ToAddrs: m.ToAddrs, CcAddrs: m.CcAddrs,
 		ReceivedAt: m.ReceivedAt.Format(time.RFC3339), Read: m.Read,
 		Label: m.StatusSignal, LinkState: m.LinkState,
 		LinkedSlug: m.LinkedSlug, LinkedTo: m.LinkedCompany, SuggestedFor: m.SuggestedSlug,
@@ -395,15 +382,14 @@ func (h *assistantHandlers) inboxRecordApplicationTool() assistant.Tool {
 // surface was not wired up.
 func (h *assistantHandlers) mailService() (*inbox.Service, error) {
 	if h.mail == nil || h.mail.inbox == nil {
-		return nil, errors.New("mail is not available")
+		return nil, unavailable("mail")
 	}
 	return h.mail.inbox, nil
 }
 
-// mailToolError turns a service error into a message the model can act on within
-// the same turn. The service already names an invalid value and its vocabulary;
-// what is added here is the shape a model reads best — an unaddressable message is
-// said to be missing, not merely "not found".
+// mailToolError turns a service error into a message the model can act on in the same turn. The
+// service names an invalid value and its vocabulary; this adds that an unaddressable message is said
+// to be missing, not merely "not found".
 func mailToolError(err error) error {
 	var invalid *inbox.InvalidError
 	switch {

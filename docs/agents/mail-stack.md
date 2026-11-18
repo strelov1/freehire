@@ -1,12 +1,12 @@
 # Mail stack
 
-Eight packages and three workers turn inbound recruiter mail into linked, stage-advancing
+Nine packages and three workers turn inbound recruiter mail into linked, stage-advancing
 applications. Each package has a package doc explaining *what* it does; this file explains
 how they compose and where the traps are.
 
 ## The pipeline
 
-```
+```text
                  ┌── Gmail OAuth ──→ internal/application/gmailsync ──┐
 inbound mail ────┤                                        ├──→ emails table
                  └── SES→S3→SQS ──→ internal/application/mailingest ──┘    (source = gmail|hosted)
@@ -40,9 +40,32 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 | `internal/application/mailmatch` | Deterministic match: thread continuity, company name in sender/subject |
 | `internal/application/mailclassify` | Status vocabulary, sanitizer, LLM adapter |
 | `internal/application/mailrecall` | Pull direction: one Gmail search scoped to an employer, proposals only — never stored, never linked |
+| `internal/application/mailreply` | Drafts the candidate's reply to one received message (`POST /me/emails/:id/reply-draft`, paid, `mail-reply` allowance). Text only: never sent, never stored |
 
 ## Always true
 
+- **Gmail keeps both directions inside hiring threads.** Incoming search excludes SENT and
+  DRAFT mail; thread expansion retains sent replies and discards drafts. Gmail's SENT label
+  identifies aliases; the connected primary address is a fallback. `emails.direction` is
+  `incoming` or `outgoing`, with To/Cc headers and thread ids exposed to inbox readers.
+  Sent messages start read and never enter employer classification, stage advancement,
+  employer-reply events, interview evidence or silence calculations. Hosted and external
+  messages retain their existing incoming defaults; this adds no sending transport.
+  Application mail views also show unlinked sent replies when their Gmail conversation
+  has one unambiguous linked incoming job, including links classified after sync. Explicit
+  attachments win; this display inference writes no link or employer activity. Recall
+  candidates and suggestion writes remain incoming-only, including after alias repair.
+- **Sent discovery has its own cursor.** `gmail_connections.sent_sync_cursor` starts at zero:
+  the first successful pass expands stored Gmail threads to recover their sent history.
+  Later passes list SENT message/thread identifiers since the prior successful run (with a
+  60-second overlap), fetching content only for known hiring threads. This catches replies
+  to old conversations without a new incoming anchor. The cursor records run-start time;
+  a transient message or thread failure preserves both cursors, and idempotent inserts
+  make retries safe. Permanently missing provider messages/threads are skipped. Reimports
+  refresh direction and recipient metadata; an old alias reply newly recognized as SENT
+  loses its employer classification, pending work and employer-reply event. Existing
+  application stages are not automatically rolled back: that would overwrite later user
+  decisions. Apply migration 0267 before deploying the readers.
 - **The fetch is scoped to hiring-SHAPED mail, not to ATS senders, and the inbox filters at
   DISPLAY.** `gmailsync.BuildQueryFor` admits mail from a curated ATS domain OR carrying one
   of the recognised application/interview phrasings, minus anything the connected address
@@ -61,7 +84,7 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   it omitted, under the SAME filters — a hidden count computed separately would describe a
   different mailbox the moment any filter is on. Two rules keep it honest: unclassified mail
   is NEVER hidden (nothing has judged it), and asking FOR the label overrides the default
-  (`inbox.Query.showsOther`), or `?status=other` and the hide rule cancel and the filter
+  (`inbox.Query.ShowsOther`), or `?status=other` and the hide rule cancel and the filter
   answers nothing about its own subject.
   **Why display and not fetch:** the sync carries a watermark, so mail not fetched today is
   never fetched. A fetch-time filter loses silently and permanently, and fixing the rule
@@ -81,59 +104,7 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   other employers — an application that then could never look silent, while the real ones
   lost their mail. Adding a brand there is deliberately lossy (that brand's own mail stops
   auto-linking, degrading to a suggestion) and that trade is always worth taking.
-- **Read the body via `maillink.ReadableBody(text, html)`, never `body_text` alone.** Many ATS senders
-  (Gem, Ashby, Greenhouse) send **HTML-only** mail with no `text/plain` part, so `body_text`
-  is empty and a classifier fed only that judges from the subject line — which once turned a
-  plain rejection into `screening`. Bounded downstream by `TruncateRunes(4000)`.
-- **Two confidence gates, two different decisions** (`maillink/decide.go`): `autoLink`
-  decides auto-link vs. a suggestion the user confirms; `stage` decides automatic
-  advancement. Only a *linked* email, at or above the stage threshold, whose signal maps
-  **strictly forward**, advances a stage — never backward, never sideways.
-- **Only a deterministic tier (`TierThread` / `TierName`) can auto-link.** A confident LLM
-  pick becomes a *suggestion*, never a link. Keep that asymmetry: the LLM reads untrusted
-  text.
-- **What a signal IMPLIES and what it may APPLY are two fields, not one.** `mailclassify.StageFor`
-  returns both, and `rejection → {rejected, advances:false}` is why: the message plainly means
-  the application is over, and settling one stays the candidate's call. The table previously
-  encoded "never automatic" by simply omitting rejection, which also made the meaning unsayable —
-  so an application could hold seven messages including a plain rejection, sit at `interview`,
-  and say nothing anywhere about why nothing moved. The Emails tab now states the implication per
-  message, and `jobtracking.SuggestStage` offers the change in one press. It applies nothing by
-  itself; `AdvanceStage` is unchanged and still reads only `advances:true`.
-- **An automatic advance writes `stage_set` beside the column, in one statement.**
-  `AdvanceUserJobStage` was a bare `UPDATE` until 2026-09-06, which made the mail path the one
-  stage-writer that moved an application and recorded nothing — and the ledger, not the column,
-  is what the aggregates read. `ListInterviewPrepCandidates` selects `kind='stage_set' AND
-  signal='interview'` and nothing else, so `cmd/nudge` found no interview an employer's own
-  invitation had produced; and since `SuggestStage` returns nil once the stage already matches
-  what the mail implies, there was nothing to click either. **`occurred_at` is the message's own
-  `received_at`**, read inside the statement, for the reason `RecordEmailApplicationEvent` gives:
-  `now()` would compress a year of imported mail into the day a mailbox was connected.
-- **The suggestion is silenced by the ledger, not by a flag.** A `stage_set` in
-  `application_events` later than the message means the candidate has already answered — whichever
-  stage they chose. `LastStageSetAt` reads it, **excluding the mail sources** (`appevent.MailSources`):
-  now that mail records its own auto-advances there, a mail-derived event silencing a suggestion
-  computed from the same messages would answer the question on the candidate's behalf. `system`
-  stays in — an auto-expire is a decision about the application, not a reading of a message. Do
-  not add a dismissal column: it would be a second store of a decision the ledger already holds,
-  and the two would drift.
-- **The classifier prompt carries the same three lessons the matcher learned.** The
-  sender display name is usually the ATS, not the employer; a calendar invite the
-  candidate organised themselves is `other`, not `interview_invitation`; and an
-  employer absent from the candidate list means `matched_job_id = 0`, because an
-  unlinked classification is useful while a wrong link transplants one employer's
-  history onto another. `prompt_test.go` pins the prompt and `validSignals` to each
-  other in both directions — a signal valid but undescribed can never be produced,
-  and one described but invalid is coerced to `other`, so the model is asked for an
-  answer that is thrown away.
-- **A corroboration guard was measured and rejected.** Dropping any LLM pick whose
-  company is not named in the message looks obviously right and would have caught
-  the three mislinks that prompted this. Measured against 99 confirmed-correct links
-  on a live mailbox, it would also have dropped **16** of them — recruiters routinely
-  write without naming the employer. Prompt guidance carries this, not a hard rule.
-- **`mailclassify` is the prompt-injection and out-of-vocabulary guard.** Email bodies are
-  attacker-controlled. An unknown signal is sanitized to `other` before anything is
-  persisted or served — do not persist a raw model string.
+- **Reading the body, the two confidence gates, the deterministic tiers, what a signal implies vs. applies, `stage_set`, the classifier prompt, and the classification worker (consumers, ledger reconcile, claims, ownership, time-bounded failures)** are in [mail-stack/linking.md](mail-stack/linking.md).
 - **`MAILBOX_DOMAIN` ≠ `NOTIFY_EMAIL_FROM`.** The first is the *receiving* domain (mailbox
   addresses; read by both the API's `mailboxReady` gate and `cmd/mail-ingest`); the second is
   the SES *sending* identity for notifications. They may point at the same host — they are
@@ -168,127 +139,7 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 - **`UpsertExternalEmail` refreshes content columns only.** `read_at`, `deleted_at` and
   every classification column are the *reader's* state, not the mail server's, so a nightly
   re-sync cannot resurrect deleted mail, un-read a message, or wipe a triage verdict.
-- **There is a PULL direction, and it SEARCHES the mailbox rather than reading our copy.**
-  Everything above starts from a message and asks which application it belongs to.
-  `POST /me/tracking/:slug/mail-recall` (`internal/application/mailrecall`) asks the opposite. It issues
-  ONE Gmail search scoped to the employer inside a window around `applied_at`, adjudicates
-  what comes back in one model call, and shows the confident answers.
-  The first version read the stored table instead, and production retired it: candidates in
-  that window ran 96 at minimum and 158 at the median, **263 of 263 applications exceeded
-  the cap of 40**, and the batch was chosen oldest-first — which says nothing about
-  relevance. The store simply cannot answer "about this employer": matched against sender
-  name and subject the employer's name is absent from the median application's mail
-  entirely. A mailbox search reads BODIES, and found mail for **14 applications in 15**
-  where the store found none. A caller with no searchable mailbox still gets the stored
-  path, which is why both still exist.
-  Four rules carry it:
-  *The search is gated* — employer AND (hiring vocabulary OR `filename:ics` OR the role
-  title) — because scoping by a company name would otherwise reach personal mail. All three
-  gate members were measured: hiring words alone cut 53 candidates to 41 and dropped both
-  calendar invitations for one interview plus a live thread whose only subject was the role.
-  `filename:ics` is the exact member for invitations, whatever language the subject uses.
-  *A proposal is not stored.* The sweep keeps nothing; pressing Link imports the message
-  (idempotent on `(source, external_id)`) and then links it. What nobody confirmed is not
-  kept.
-  *The model is addressed by POSITION in the batch, never by an id* — a searched message
-  has none of ours, and an out-of-range position resolves to nothing by construction.
-  *It never links, never advances a stage, never writes the ledger* — held by
-  `TestMailRecallCannotLink`, which now walks both `Store` and `Mailbox`, and by a source
-  scan of the package for `LinkEmailToJob` / `application_events` / `calsync`.
-  **The calendar still needs no code**: `cmd/cal-sync` re-reads its whole ±90-day window
-  every run, so an invitation linked here yields its meeting on the next one.
-- **`internal/application/calsync` stores only meetings an application earned.** `cmd/cal-sync` reads each
-  connected candidate's calendar ±90 days around now and writes ONLY a meeting `calmatch` can
-  attach to one of the candidate's own applications — the schema backstops the rule
-  (`application_interviews.application_id` is NOT NULL), so a mistake cannot become a stored
-  dentist appointment. The whole window is re-read on every run; there is no incremental
-  state to drift. The only status ever written is `confirmed`. Connections are filtered by
-  the scopes recorded at consent, so a Google grant that predates the calendar consent never
-  reaches the worker and never costs an API call to discover. The worker shares the Gmail
-  Google grant and `gmailsync.CalendarScope`, and nothing else.
-- **Only `gmailsync.RevokedGrant` may cost a candidate their connection**, and both syncs ask
-  it rather than deciding for themselves. `gmail_connections.status` is SHARED between mail
-  and calendar (one grant covers both scopes), nothing but a browser consent clears it, and
-  the mail half is a restricted scope Google makes them re-approve — so a rule that read any
-  failure as a revocation would disconnect every mailbox we hold during one Google incident,
-  and the inbox's own Sync button would do it to one candidate on a bad afternoon. The rule
-  reads TWO carriers, because a revocation arrives on either leg: **401/403 from the API**
-  (`gmailsync.APIError`, which both readers attach to a non-200 so the status survives the
-  return), and **`invalid_grant` from the TOKEN endpoint**, which is where a real revocation
-  actually lands — the readers' client is built from a stored refresh token, so oauth2
-  exchanges it before any API call and the API is never reached. That one arrives as a
-  `*url.Error` wrapping `*oauth2.RetrieveError`. `invalid_client` is deliberately NOT a
-  revocation: that is our own credential being wrong.
-- **Two known gaps in the PUSH path, measured and not yet fixed.** They are why the pull
-  direction has so much to find. `gmailsync.BuildQuery` fetched **431** messages over 120
-  days from a mailbox holding **3297**; **739** hiring-shaped messages were never fetched,
-  including an acknowledgement, three interview invitations and four live recruiter threads
-  from personal and corporate domains. The misses are near misses on wording — the phrase
-  list knows `invite you to interview` but not `interview invite`. Separately,
-  `mailmatch.ExtractCompany`'s five subject templates all use `to`, while the mailbox shows
-  `at`, `with`, `as … at`, a company before a dash, a company after a pipe, and Portuguese;
-  33 of 93 messages with an empty sender name carry a subject it cannot parse.
-- **A suggestion needs a consumer, or the matcher's caution turns into a backlog.**
-  Only a deterministic tier auto-links, so everything else lands as a suggestion —
-  and a suggestion nobody can see is a row that never resolves. `?link=suggested`
-  is that queue, `?link=unlinked` is the mail with no application to attach to,
-  and `POST /me/emails/:id/application` is the way out of the second: it records
-  the application from the mail and links it in one call. Keep all three reachable;
-  measured link coverage is a function of the interface, not only of `mailmatch`.
-- **Every link mutation ends with a ledger reconcile, and retraction is not deletion.**
-  A linked message records an `employer_reply` in `application_events`, and that ledger —
-  not this table — is what the per-company response rate reads. Five paths change the
-  pairing (`SetEmailClassification`, `AgentTriageEmail`, `ConfirmEmailLink`,
-  `LinkEmailToJob`, `UnlinkEmail`), and the classification worker is a sixth. The rule is
-  one reconcile — `inbox.ReconcileMailEvent` — and it now really is one: the worker used to
-  carry its own copy of the same three steps, inside a `cmd/` main where no domain test
-  could reach it, under a comment asserting the rule had one home. The callers differ only
-  in what they do with the error: the inbox's paths are best-effort (the mutation the user
-  asked for already succeeded, and the reconcile is idempotent), while the worker propagates
-  it to roll back the transaction that persisted the link. **Deleting a message changes nothing** —
-  it hides content, it does not un-happen the reply — while **re-linking retracts and
-  re-records**, because a wrong link left standing poisons a named company's public rate
-  permanently (the Workable case above). The reconcile is deliberately **two statements in
-  order**: written as one with data-modifying CTEs, every CTE reads the same pre-statement
-  snapshot, so the insert's `ON CONFLICT` still sees the row the retract just stamped and
-  silently records nothing.
-- **The store rides with the claim, and dropping it stops the whole queue.**
-  `ReconcileMailEvent` needs the mailbox that observed the reply, and `appevent.SourceForMail`
-  refuses an empty one by design — so an unset `Claimed.Source` fails the transaction that
-  persisted the link, and the message dead-letters after three attempts. The field was threaded
-  through the query, the port and the ledger in one change; the only place that never took it
-  was the hand-written copy in `cmd/classify-mail/store.go`, where Go's zero value made the
-  omission legal and invisible. Every message queued between 2026-07-31 and 2026-09-05 died
-  that way (2726 of them, across every user), and nothing said so: dead entries are never
-  re-claimed, so each subsequent run truthfully logged `done failed=0 dead-lettered=0` and the
-  binary kept exiting 0. `store_test.go` now walks `maillink.Claimed` by reflection, so a field
-  added there and not mapped fails a test rather than the queue. **Recovery is not automatic** —
-  `EnqueuePendingEmailClassification` is `ON CONFLICT DO NOTHING`, so a dead row stays dead
-  until `failed_at`/`attempts`/`claimed_at` are cleared by hand.
-- **The worker owns the classification, never a link someone else made.** A hand-made link
-  does not stamp `classified_at` (neither `LinkEmailToJob`, `ConfirmEmailLink` nor
-  `RejectEmailLink` does) and `EnqueuePendingEmailClassification` selects on
-  `classified_at IS NULL`, so every manually linked message comes back round on the next
-  five-minute tick. `SetEmailClassification` therefore keeps `job_id` / `application_id` /
-  `link_source` / `match_confidence` whenever the row already reads `manual` or `agent` —
-  the same precaution `AgentTriageEmail` carries from the other side. Without it the worker
-  re-derived the link from a cascade that usually cannot reproduce it
-  (`ListUserApplicationsForMatch` excludes closed postings, hosted mail carries no
-  `thread_id`), so the common outcome was `NULL` — and since `ReconcileMailEvent` runs in the
-  same transaction, the `employer_reply` event was retracted with it and the company started
-  reading as silent in the reply-rate rollup. It still rewrites its OWN (`auto`) link: a
-  later run correcting an earlier guess is the queue working.
-- **A failure the message did not cause is bounded by TIME, not by attempts.**
-  `maillink.messageAtFault` decides which of `FailEmailClassification`'s two branches
-  applies, modelled on `enrich.postingAtFault` and defaulting to "not the message's fault".
-  Only an undecodable model answer (`mailclassify.ErrUnparseableResponse`) spends the
-  attempt ceiling; Postgres, the gateway, a schema-build failure and an unrecognised
-  `emails.source` are all held to a 14-day queue-age window instead. The distinction is
-  load-bearing because the lease makes a claimed entry re-claimable minutes later, so three
-  attempts are spent well inside a quarter-hour outage — and, as the bullet above says,
-  nothing here ever clears `failed_at`. An unrecognised source is deliberately on the
-  *upstream* side: the one time that fired, the column was fine and the store's own mapping
-  had dropped the field.
+- **The pull direction, the calendar sync, connection revocation and the known push-path gaps** are in [mail-stack/pull-and-sync.md](mail-stack/pull-and-sync.md).
 - **The self-learning ATS-domain cache is fed by Gmail mail only** — hits and misses alike.
   A miss demotes, so a forged `From` could push a real ATS out as easily as a hit could pull
   one in. What `learner.Learn`

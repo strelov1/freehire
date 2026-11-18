@@ -7,37 +7,9 @@ package db
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-const companyDescriptionDue = `-- name: CompanyDescriptionDue :one
-SELECT NOT EXISTS (
-    SELECT 1 FROM companies
-    WHERE slug = $1
-      AND (
-          COALESCE(company_info->>'summary', '') <> ''
-          OR company_description_checked_at >= $2::timestamptz
-      )
-) AS due
-`
-
-type CompanyDescriptionDueParams struct {
-	Slug         string             `json:"slug"`
-	CheckedSince pgtype.Timestamptz `json:"checked_since"`
-}
-
-// Whether an ingest crawl should fetch this company's own description: it holds none yet
-// (company_info.summary absent or blank — the fill keeps a stored one, so re-asking could
-// not change it) AND no answered fetch has been recorded since checked_since. A slug with
-// no row at all is due.
-func (q *Queries) CompanyDescriptionDue(ctx context.Context, arg CompanyDescriptionDueParams) (bool, error) {
-	row := q.db.QueryRow(ctx, companyDescriptionDue, arg.Slug, arg.CheckedSince)
-	var due bool
-	err := row.Scan(&due)
-	return due, err
-}
 
 const companyExists = `-- name: CompanyExists :one
 SELECT EXISTS(SELECT 1 FROM companies WHERE slug = $1)
@@ -214,24 +186,6 @@ func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) 
 	return count, err
 }
 
-const deleteOrphanCompanies = `-- name: DeleteOrphanCompanies :execrows
-DELETE FROM companies c
-WHERE NOT c.is_reference
-  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug)
-`
-
-// Drop companies no longer referenced by any job — the stale rows left behind
-// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
-// by the company-info backfill are preserved: they intentionally have no job, so
-// the NOT is_reference guard keeps the backfill directory from being swept away.
-func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteOrphanCompanies)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deleteOrphanCompaniesForSlugs = `-- name: DeleteOrphanCompaniesForSlugs :execrows
 DELETE FROM companies c
 WHERE c.slug = ANY($1::text[])
@@ -263,71 +217,6 @@ func (q *Queries) EstimateHiringCompanies(ctx context.Context) (int64, error) {
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
-}
-
-const fillCompanyDescriptionFromIngest = `-- name: FillCompanyDescriptionFromIngest :exec
-INSERT INTO companies (
-    slug, name, tagline, company_info, is_reference, company_info_at,
-    company_description_checked_at
-) VALUES (
-    $1, $2, $3, $4, false, now(),
-    now()
-)
-ON CONFLICT (slug) DO UPDATE SET
-    tagline         = COALESCE(NULLIF(companies.tagline, ''), EXCLUDED.tagline),
-    company_info    = EXCLUDED.company_info || companies.company_info,
-    company_info_at = now(),
-    company_description_checked_at = now(),
-    updated_at      = now()
-`
-
-type FillCompanyDescriptionFromIngestParams struct {
-	Slug        string          `json:"slug"`
-	Name        string          `json:"name"`
-	Tagline     pgtype.Text     `json:"tagline"`
-	CompanyInfo json.RawMessage `json:"company_info"`
-}
-
-// Applies a company-level description an ATS adapter yielded alongside its board
-// crawl (see sources.CompanyDescriber — Greenhouse's board-metadata endpoint today).
-// Same fill-gap shape as UpsertYCCompany's non-owned columns: tagline fills only a
-// blank, company_info merges key-wise (existing keys win), touching nothing else —
-// this source has no industries/year_founded/etc. to assert. A slug with no existing
-// row is inserted with is_reference = false, since it is arriving with a real
-// crawled job, not as a reference-only row the way an unmatched YC entry is.
-// Also stamps company_description_checked_at: a write here IS an answered fetch.
-func (q *Queries) FillCompanyDescriptionFromIngest(ctx context.Context, arg FillCompanyDescriptionFromIngestParams) error {
-	_, err := q.db.Exec(ctx, fillCompanyDescriptionFromIngest,
-		arg.Slug,
-		arg.Name,
-		arg.Tagline,
-		arg.CompanyInfo,
-	)
-	return err
-}
-
-const fillCompanyInfoFromWikipedia = `-- name: FillCompanyInfoFromWikipedia :exec
-UPDATE companies
-SET tagline          = COALESCE(NULLIF(tagline, ''), $1),
-    company_info     = $2 || company_info,
-    company_info_at  = now(),
-    company_info_wikipedia_checked_at = now(),
-    updated_at       = now()
-WHERE slug = $3
-`
-
-type FillCompanyInfoFromWikipediaParams struct {
-	Tagline     pgtype.Text     `json:"tagline"`
-	CompanyInfo json.RawMessage `json:"company_info"`
-	Slug        string          `json:"slug"`
-}
-
-// Applies a confident Wikipedia match: fills tagline only if blank, merges the
-// company_info keys (existing keys win on collision, matching UpsertYCCompany's
-// gap-fill rule), and marks the company checked so it is never looked up again.
-func (q *Queries) FillCompanyInfoFromWikipedia(ctx context.Context, arg FillCompanyInfoFromWikipediaParams) error {
-	_, err := q.db.Exec(ctx, fillCompanyInfoFromWikipedia, arg.Tagline, arg.CompanyInfo, arg.Slug)
-	return err
 }
 
 const getCompany = `-- name: GetCompany :one
@@ -564,6 +453,51 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 	return items, nil
 }
 
+const listCompaniesBySiteHost = `-- name: ListCompaniesBySiteHost :many
+SELECT company_site_host(company_info)::text AS domain,
+       slug, name, job_count,
+       COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''))::text AS website
+FROM companies
+WHERE company_site_host(company_info) = ANY($1::text[])
+ORDER BY domain, job_count DESC, slug
+`
+
+type ListCompaniesBySiteHostRow struct {
+	Domain   string `json:"domain"`
+	Slug     string `json:"slug"`
+	Name     string `json:"name"`
+	JobCount int32  `json:"job_count"`
+	Website  string `json:"website"`
+}
+
+// Every company whose site (company_info website, else homepage) reduces to one of the
+// given hosts, job_count 0 included. Rides companies_site_host_idx.
+func (q *Queries) ListCompaniesBySiteHost(ctx context.Context, hosts []string) ([]ListCompaniesBySiteHostRow, error) {
+	rows, err := q.db.Query(ctx, listCompaniesBySiteHost, hosts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompaniesBySiteHostRow{}
+	for rows.Next() {
+		var i ListCompaniesBySiteHostRow
+		if err := rows.Scan(
+			&i.Domain,
+			&i.Slug,
+			&i.Name,
+			&i.JobCount,
+			&i.Website,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCompaniesForReindex = `-- name: ListCompaniesForReindex :many
 SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry, upvote_count, downvote_count, feedback_count, feedback_rating_avg, industries_derived, company_info_wikipedia_checked_at, ai_interview_reports, company_description_checked_at
 FROM companies
@@ -639,50 +573,6 @@ func (q *Queries) ListCompaniesForReindex(ctx context.Context, arg ListCompanies
 	return items, nil
 }
 
-const listCompaniesMissingWikipediaInfo = `-- name: ListCompaniesMissingWikipediaInfo :many
-SELECT slug, name FROM companies
-WHERE (tagline IS NULL OR tagline = '')
-  AND company_info_wikipedia_checked_at IS NULL
-  AND slug > $1
-ORDER BY slug
-LIMIT $2
-`
-
-type ListCompaniesMissingWikipediaInfoParams struct {
-	AfterSlug string `json:"after_slug"`
-	RowLimit  int32  `json:"row_limit"`
-}
-
-type ListCompaniesMissingWikipediaInfoRow struct {
-	Slug string `json:"slug"`
-	Name string `json:"name"`
-}
-
-// Candidates for the Wikipedia company-info backfill: no tagline yet, and never
-// resolved by this backfill before (company_info_wikipedia_checked_at IS NULL —
-// set on every resolution, match or reject, so a company is looked up at most
-// once). Keyset-paginated by slug so one run can be bounded and a later run
-// resumes past what it already paged through.
-func (q *Queries) ListCompaniesMissingWikipediaInfo(ctx context.Context, arg ListCompaniesMissingWikipediaInfoParams) ([]ListCompaniesMissingWikipediaInfoRow, error) {
-	rows, err := q.db.Query(ctx, listCompaniesMissingWikipediaInfo, arg.AfterSlug, arg.RowLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListCompaniesMissingWikipediaInfoRow{}
-	for rows.Next() {
-		var i ListCompaniesMissingWikipediaInfoRow
-		if err := rows.Scan(&i.Slug, &i.Name); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listCompanyCollections = `-- name: ListCompanyCollections :many
 SELECT slug, collections, countries, hq_country,
        COALESCE(company_info ->> 'website', '')::text AS website,
@@ -733,48 +623,6 @@ func (q *Queries) ListCompanyCollections(ctx context.Context) ([]ListCompanyColl
 			&i.Website,
 			&i.JobCount,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listCompanyIndustriesPage = `-- name: ListCompanyIndustriesPage :many
-SELECT slug, industries
-FROM companies
-WHERE slug > $1
-ORDER BY slug
-LIMIT $2
-`
-
-type ListCompanyIndustriesPageParams struct {
-	AfterSlug string `json:"after_slug"`
-	PageLimit int32  `json:"page_limit"`
-}
-
-type ListCompanyIndustriesPageRow struct {
-	Slug       string   `json:"slug"`
-	Industries []string `json:"industries"`
-}
-
-// Keyset page over every company, ordered by slug so a run resumes from the last
-// slug it saw. Deliberately unfiltered: the normalization pass only cares about
-// rows that already hold industries, but the merge pass must also reach companies
-// with none, and one query serving both keeps the two walks identical.
-func (q *Queries) ListCompanyIndustriesPage(ctx context.Context, arg ListCompanyIndustriesPageParams) ([]ListCompanyIndustriesPageRow, error) {
-	rows, err := q.db.Query(ctx, listCompanyIndustriesPage, arg.AfterSlug, arg.PageLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListCompanyIndustriesPageRow{}
-	for rows.Next() {
-		var i ListCompanyIndustriesPageRow
-		if err := rows.Scan(&i.Slug, &i.Industries); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -863,500 +711,6 @@ func (q *Queries) ListHiringCompaniesByFoldedSlug(ctx context.Context, arg ListH
 		return nil, err
 	}
 	return items, nil
-}
-
-const listPlaceholderBoardDescriptions = `-- name: ListPlaceholderBoardDescriptions :many
-SELECT description
-FROM jobs
-WHERE source = $1
-  AND external_id LIKE $2
-  AND description <> ''
-ORDER BY (closed_at IS NULL) DESC, id DESC
-LIMIT $3
-`
-
-type ListPlaceholderBoardDescriptionsParams struct {
-	Source       string `json:"source"`
-	BoardPattern string `json:"board_pattern"`
-	MaxRows      int32  `json:"max_rows"`
-}
-
-// A few of one board's stored posting bodies, open ones first, for a placeholder whose ATS
-// states the employer nowhere but in the posting text (adp; see cmd/backfill-company-names).
-// board_pattern is externalid.BoardPattern(board). A board is small — the index behind
-// (source, external_id LIKE) reaches its rows directly — so the sort is over one board only.
-func (q *Queries) ListPlaceholderBoardDescriptions(ctx context.Context, arg ListPlaceholderBoardDescriptionsParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, listPlaceholderBoardDescriptions, arg.Source, arg.BoardPattern, arg.MaxRows)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var description string
-		if err := rows.Scan(&description); err != nil {
-			return nil, err
-		}
-		items = append(items, description)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSlugLikeCompaniesForBackfill = `-- name: ListSlugLikeCompaniesForBackfill :many
-SELECT DISTINCT ON (company_slug)
-       company_slug AS slug,
-       company      AS name,
-       source,
-       url
-FROM jobs
-WHERE closed_at IS NULL
-  AND duplicate_of IS NULL
-  AND NOT is_private
-  AND company_slug <> ''
-  AND company ~ '^[a-z0-9._-]+$'
-ORDER BY company_slug, created_at DESC
-`
-
-type ListSlugLikeCompaniesForBackfillRow struct {
-	Slug   string `json:"slug"`
-	Name   string `json:"name"`
-	Source string `json:"source"`
-	URL    string `json:"url"`
-}
-
-// Companies whose ingested name is still a squished slug (lowercase, no
-// whitespace or uppercase) and that have at least one open job, with a
-// representative open job's source and URL so the backfill worker can locate the
-// ATS board. Only boards with live jobs matter, so dead ones never appear. The Go
-// side re-validates slug-likeness authoritatively before touching anything.
-//
-// AND NOT is_private excludes the jd-tailor-intake private-job path: the representative
-// row here supplies the URL the worker reads a real display name from, and the name it
-// reads is written to the PUBLIC companies row (RenameSlugCompany below). A JD one user
-// pasted in is not a board, and it must not be the source of an employer's public name.
-func (q *Queries) ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListSlugLikeCompaniesForBackfillRow, error) {
-	rows, err := q.db.Query(ctx, listSlugLikeCompaniesForBackfill)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListSlugLikeCompaniesForBackfillRow{}
-	for rows.Next() {
-		var i ListSlugLikeCompaniesForBackfillRow
-		if err := rows.Scan(
-			&i.Slug,
-			&i.Name,
-			&i.Source,
-			&i.URL,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const markCompanyDescriptionChecked = `-- name: MarkCompanyDescriptionChecked :exec
-INSERT INTO companies (slug, name, is_reference, company_description_checked_at)
-VALUES ($1, $2, false, now())
-ON CONFLICT (slug) DO UPDATE SET
-    company_description_checked_at = now()
-`
-
-type MarkCompanyDescriptionCheckedParams struct {
-	Slug string `json:"slug"`
-	Name string `json:"name"`
-}
-
-// Records an answered company-description fetch that found the field BLANK, so the next
-// crawl does not ask again until the refresh window passes (see
-// pipeline.CompanyDescriptionRefreshWindow). Touches nothing else — company_info_at means
-// "info was written", and nothing was. Inserts the row like FillCompanyDescriptionFromIngest
-// does when the slug is new, because a stamp with nowhere to live would be lost and the
-// board asked again on every run.
-func (q *Queries) MarkCompanyDescriptionChecked(ctx context.Context, arg MarkCompanyDescriptionCheckedParams) error {
-	_, err := q.db.Exec(ctx, markCompanyDescriptionChecked, arg.Slug, arg.Name)
-	return err
-}
-
-const markCompanyWikipediaChecked = `-- name: MarkCompanyWikipediaChecked :exec
-UPDATE companies
-SET company_info_wikipedia_checked_at = now()
-WHERE slug = $1
-`
-
-// Records that the backfill looked this company up and found no confident match,
-// so it is never looked up again. Touches nothing else: an unmatched company's
-// tagline/company_info stay exactly as another source may have left them.
-func (q *Queries) MarkCompanyWikipediaChecked(ctx context.Context, slug string) error {
-	_, err := q.db.Exec(ctx, markCompanyWikipediaChecked, slug)
-	return err
-}
-
-const refreshCompanyFacets = `-- name: RefreshCompanyFacets :execrows
-WITH unseen_window AS (
-    -- Zipped by position for the same analyzer reason as domain_industry_map below.
-    SELECT s.source, w.seconds
-    FROM unnest($1::text[]) WITH ORDINALITY AS s(source, ord)
-    JOIN unnest($2::bigint[]) WITH ORDINALITY AS w(seconds, ord)
-      ON w.ord = s.ord
-),
-oj AS MATERIALIZED (
-    -- duplicate_of IS NULL counts one canonical job per role cluster, so the company
-    -- job_count matches the collapsed /jobs and company lists (reposts share facets, so
-    -- the DISTINCT region/country aggregates are unaffected — only the count changes).
-    SELECT j.company_slug, j.regions, j.countries, j.enrichment, j.work_mode, j.source
-    FROM jobs j
-    LEFT JOIN unseen_window uw ON uw.source = j.source
-    WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND j.company_slug <> ''
-      -- search.UnseenWindows.Unseen: the source has stopped showing the posting.
-      AND (uw.source IS NULL OR j.last_seen_at >= now() - make_interval(secs => uw.seconds))
-      -- Visible only to its creator (the jd-tailor-intake path).
-      AND NOT j.is_private
-      -- search.DescriptionMissing strips the body to plain text first, which SQL
-      -- cannot reproduce, so a body that is only empty markup still counts here. That
-      -- residual is small and self-limiting: such a company reaches the sitemap, and
-      -- its page answers noindex off the same search that excluded the row.
-      AND j.description <> ''
-      -- search.CategoryUnresolved: the column answers, or the enrichment does, or
-      -- is_tech is confidently true (a confirmed-technical job — e.g. Profession's
-      -- dedicated itdev/itops boards, issue #2601 — is never the undifferentiated
-      -- bulk this predicate exists to keep out, even lacking a specific category) —
-      -- and "other" is the classifier declining, not an answer. This is the predicate
-      -- that excluded almost everything in the sample, the dictionaries being
-      -- deliberately dict-only: a Samara kindergarten's vacancy resolves to no tech
-      -- category and no is_tech, so nobody can find it and its employer is not a page
-      -- worth handing a crawler. Keep this in step with search.CategoryUnresolved
-      -- (internal/search/search/document.go) — a company whose only open jobs are
-      -- confirmed-technical-but-uncategorized would otherwise show 0 open jobs here
-      -- while those same jobs are live in search.
-      --
-      -- The one branch this cannot mirror is the role_type one: search also keeps an
-      -- uncategorised posting whose TITLE roletype marks a people manager ("General
-      -- Manager"), and that dictionary is Go, not SQL. Such a posting is therefore
-      -- searchable but not counted here. The residual is the price of not storing a
-      -- derived column for one count; it under-counts a company, never invents one.
-      AND (j.category <> '' OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other') OR j.is_tech IS TRUE)
-),
-counts AS (
-    SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug
-),
-reg AS (
-    SELECT company_slug, array_agg(DISTINCT r ORDER BY r) AS arr
-    FROM oj CROSS JOIN LATERAL unnest(oj.regions) AS r
-    GROUP BY company_slug
-),
-remote_reg AS (
-    SELECT company_slug, array_agg(DISTINCT r ORDER BY r) AS arr
-    FROM oj CROSS JOIN LATERAL unnest(oj.regions) AS r
-    WHERE oj.work_mode = 'remote'
-    GROUP BY company_slug
-),
-cty AS (
-    SELECT company_slug, array_agg(DISTINCT c ORDER BY c) AS arr
-    FROM oj CROSS JOIN LATERAL unnest(oj.countries) AS c
-    GROUP BY company_slug
-),
-dom AS (
-    SELECT company_slug, array_agg(DISTINCT d ORDER BY d) AS arr
-    FROM oj CROSS JOIN LATERAL jsonb_array_elements_text(
-        CASE WHEN jsonb_typeof(oj.enrichment->'domains') = 'array'
-             THEN oj.enrichment->'domains' ELSE '[]'::jsonb END) AS d
-    GROUP BY company_slug
-),
-ctype AS (
-    SELECT company_slug,
-           array_agg(DISTINCT (enrichment->>'company_type') ORDER BY (enrichment->>'company_type')) AS arr
-    FROM oj
-    WHERE COALESCE(enrichment->>'company_type', '') <> ''
-    GROUP BY company_slug
-),
-csize AS (
-    SELECT company_slug,
-           array_agg(DISTINCT (enrichment->>'company_size') ORDER BY (enrichment->>'company_size')) AS arr
-    FROM oj
-    WHERE COALESCE(enrichment->>'company_size', '') <> ''
-    GROUP BY company_slug
-),
-gov AS (
-    SELECT company_slug, bool_or(source IN ('usajobs', 'neogov')) AS is_gov
-    FROM oj
-    GROUP BY company_slug
-),
-mat AS (
-    SELECT co.slug AS company_slug,
-           CASE
-               WHEN COALESCE(g.is_gov, false) OR co.organization_type = 'Government' THEN 'government'
-               -- enterprise beats startup: a grown company is enterprise regardless of a
-               -- historical YC badge (YC alumni go Public/Acquired and scale to thousands).
-               WHEN co.employee_count >= 1000 THEN 'enterprise'
-               -- startup only for a still-ACTIVE YC company (not Public/Acquired/Inactive),
-               -- or an independently small-and-recent company.
-               WHEN co.yc_status && ARRAY['Active']
-                    OR (co.year_founded >= extract(year FROM now())::int - 7 AND co.employee_count <= 50) THEN 'startup'
-               WHEN co.employee_count BETWEEN 51 AND 999 THEN 'scaleup'
-               ELSE NULL
-           END AS val
-    FROM companies co
-    LEFT JOIN gov g ON g.company_slug = co.slug
-),
-csize_final AS (
-    SELECT co.slug AS company_slug,
-           CASE
-               WHEN co.employee_count IS NULL   THEN COALESCE(cs.arr, '{}')
-               WHEN co.employee_count <= 10     THEN ARRAY['1-10']
-               WHEN co.employee_count <= 50     THEN ARRAY['11-50']
-               WHEN co.employee_count <= 200    THEN ARRAY['51-200']
-               WHEN co.employee_count <= 500    THEN ARRAY['201-500']
-               WHEN co.employee_count <= 1000   THEN ARRAY['501-1000']
-               ELSE ARRAY['1000+']
-           END AS arr
-    FROM companies co
-    LEFT JOIN csize cs ON cs.company_slug = co.slug
-),
-derived_eligible AS (
-    SELECT co.slug AS company_slug, COALESCE(dom.arr, '{}') AS domains
-    FROM companies co
-    LEFT JOIN dom ON dom.company_slug = co.slug
-    WHERE cardinality(co.industries) = 0
-      AND cardinality(COALESCE(dom.arr, '{}')) <= 2
-),
-domain_industry_map AS (
-    SELECT d.domain, i.industry
-    FROM unnest($3::text[]) WITH ORDINALITY AS d(domain, ord)
-    JOIN unnest($4::text[]) WITH ORDINALITY AS i(industry, ord)
-      ON i.ord = d.ord
-),
-derived_ind AS (
-    SELECT de.company_slug,
-           array_agg(DISTINCT map.industry ORDER BY map.industry) AS arr
-    FROM derived_eligible de
-    CROSS JOIN LATERAL unnest(de.domains) AS d(domain)
-    JOIN domain_industry_map map ON map.domain = d.domain
-    GROUP BY de.company_slug
-)
-UPDATE companies c
-SET job_count          = COALESCE(counts.cnt, 0),
-    regions            = COALESCE(reg.arr, '{}'),
-    remote_regions     = COALESCE(remote_reg.arr, '{}'),
-    countries          = COALESCE(cty.arr, '{}'),
-    domains            = COALESCE(dom.arr, '{}'),
-    company_types      = COALESCE(ctype.arr, '{}'),
-    company_sizes      = csize_final.arr,
-    maturity           = mat.val,
-    industries_derived = COALESCE(derived_ind.arr, '{}')
-FROM companies c2
-LEFT JOIN counts      ON counts.company_slug     = c2.slug
-LEFT JOIN reg         ON reg.company_slug        = c2.slug
-LEFT JOIN remote_reg  ON remote_reg.company_slug = c2.slug
-LEFT JOIN cty         ON cty.company_slug        = c2.slug
-LEFT JOIN dom         ON dom.company_slug        = c2.slug
-LEFT JOIN ctype       ON ctype.company_slug      = c2.slug
-LEFT JOIN csize_final ON csize_final.company_slug = c2.slug
-LEFT JOIN mat         ON mat.company_slug        = c2.slug
-LEFT JOIN derived_ind ON derived_ind.company_slug = c2.slug
-WHERE c.slug = c2.slug
-  AND (c.job_count          IS DISTINCT FROM COALESCE(counts.cnt, 0)
-    OR c.regions            IS DISTINCT FROM COALESCE(reg.arr, '{}')
-    OR c.remote_regions     IS DISTINCT FROM COALESCE(remote_reg.arr, '{}')
-    OR c.countries          IS DISTINCT FROM COALESCE(cty.arr, '{}')
-    OR c.domains            IS DISTINCT FROM COALESCE(dom.arr, '{}')
-    OR c.company_types      IS DISTINCT FROM COALESCE(ctype.arr, '{}')
-    OR c.company_sizes      IS DISTINCT FROM csize_final.arr
-    OR c.maturity           IS DISTINCT FROM mat.val
-    OR c.industries_derived IS DISTINCT FROM COALESCE(derived_ind.arr, '{}'))
-`
-
-type RefreshCompanyFacetsParams struct {
-	UnseenSources     []string `json:"unseen_sources"`
-	UnseenSeconds     []int64  `json:"unseen_seconds"`
-	MappingDomains    []string `json:"mapping_domains"`
-	MappingIndustries []string `json:"mapping_industries"`
-}
-
-// Recompute every company's denormalized state in one set-based pass: the open-job
-// count plus the facet arrays derived from those open jobs — regions/countries from
-// the jobs geography columns, remote_regions from those same regions but scoped to
-// remote jobs (work_mode='remote'), and domains/company_types/company_sizes from the
-// jobs.enrichment JSONB. Each array is the distinct union across the company's open
-// jobs (closed_at IS NULL), aggregated with a stable ORDER BY so the guard below
-// compares deterministically. A company with no open jobs (or no remote/enriched
-// jobs) is zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips
-// rows already current, so re-running rewrites nothing and the affected-rows count
-// reports real churn. This is cmd/recount-companies' whole job; run periodically
-// (eventual consistency). The facet aggregates are each their own non-correlated
-// GROUP BY so the row-multiplying unnest of one array never distorts another's count.
-// oj is referenced by all eight aggregates, so it is pinned MATERIALIZED: without the
-// keyword the planner is free to inline it and re-scan the open-jobs set per aggregate.
-//
-// `oj` is scoped to the postings the JOB SEARCH INDEX will hold, which is what every
-// consumer of these columns actually means. job_count gates the companies index and so
-// the sitemap, the facet arrays are what the /companies filters offer, and a company
-// page's list is served by search — so a row search drops must not put a company in
-// the sitemap, under a filter, or behind a number its own page contradicts. Counting
-// the wider table scope did all three: 294,021 company URLs in the sitemap of which
-// most rendered "0 open jobs", `remote_regions` offering regions whose jobs the click
-// through could not find, and Stripe listed at 570 on /companies against 444 on its
-// own page. The four predicates below (private, body, category, unseen) are the ones
-// cmd/reindex's splitJobs applies on top of closed/duplicate; keep the two in step.
-//
-// industries_derived (see derived_eligible/derived_ind below) is a SECOND-ORDER
-// derivation — computed from this pass's own `dom` and the company's curated
-// `industries`, not from `jobs` directly — so it is not one of the eight oj-scoped
-// aggregates above. `mapping_domains`/`mapping_industries` are
-// internal/dict/industrytag.DomainIndustryPairs(), passed as parameters so this query
-// has exactly one copy of the domain→industry table to read, not a second one typed
-// into SQL.
-//
-// `unseen_sources`/`unseen_seconds` are search.Withheld's unseen rule as parallel arrays
-// (internal/ingest/sources.UnseenWindows, resolved by the caller): a posting whose source is
-// listed and has not shown it for longer than that many seconds is not in search, so it is
-// not counted here either. A source not listed is never excluded on this ground — the same
-// reading search gives it.
-// gov marks a company whose open jobs come from an exclusively-government source
-// (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
-// greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.
-// mat is the deterministic single-valued maturity, computed per company from its own
-// signals plus the gov-source marker, in precedence order (government beats size).
-// NULL = unknown (an honest abstain when no signal fits). Computed once here so both
-// the SET and the IS DISTINCT FROM guard reference the same value.
-// csize_final is the employee_count-authoritative company_sizes hybrid: the company's
-// own recorded headcount (bucketed into the company_size vocabulary) is a single, more
-// accurate value than the LLM's per-posting guess, so it wins when present; otherwise
-// fall back to the distinct union of enrichment.company_size over open jobs (the csize
-// CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
-// derived_eligible is the set of companies the industries_derived arm may speak for
-// at all: no curated industry of their own (co.industries empty — precedence, unless
-// from #2082) AND at most two distinct domains (the #2088 threshold — above that, the
-// domains union describes hiring range rather than business, see the change design).
-// A company outside this set gets industries_derived = '{}' by simply not appearing
-// in derived_ind below.
-// Zips the two parallel parameter arrays back into (domain, industry) rows by
-// position (WITH ORDINALITY), since this analyzer's catalog does not resolve the
-// two-array form of unnest(text[], text[]) the way a live Postgres does. The pairs
-// themselves are internal/dict/industrytag.DomainIndustryPairs(), passed in rather
-// than duplicated as a second copy of the table in SQL.
-// Translates each eligible company's domains to industries via the mapping above. A
-// company whose domains all fail to join (none of them map to an industry, e.g.
-// {other} or a retired vocabulary value) simply produces no rows here and reads as
-// '{}' below, with no special case.
-func (q *Queries) RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFacetsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, refreshCompanyFacets,
-		arg.UnseenSources,
-		arg.UnseenSeconds,
-		arg.MappingDomains,
-		arg.MappingIndustries,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const renamePlaceholderBoardJobs = `-- name: RenamePlaceholderBoardJobs :many
-WITH moved AS (
-    SELECT j.id, j.company_slug
-    FROM jobs j
-    WHERE j.source = $3
-      AND j.external_id LIKE $4
-      AND j.company = $5
-    FOR UPDATE
-)
-UPDATE jobs
-SET company = $1,
-    company_slug = $2,
-    -- Kept in step with company_slug by hand; see RenameSlugCompany.
-    company_slug_folded = replace($2, '-', ''),
-    -- The same invalidation UpsertJob makes on a company change: the precomputed similar-jobs
-    -- list may have excluded the OLD company.
-    similar_computed_at = NULL,
-    updated_at = now()
-FROM moved
-WHERE jobs.id = moved.id
-RETURNING moved.company_slug AS old_slug
-`
-
-type RenamePlaceholderBoardJobsParams struct {
-	Name         string `json:"name"`
-	NewSlug      string `json:"new_slug"`
-	Source       string `json:"source"`
-	BoardPattern string `json:"board_pattern"`
-	OldName      string `json:"old_name"`
-}
-
-// Apply a resolved display name to every stored job of ONE board whose company is still that
-// board's placeholder (see ListPlaceholderCompanyBoards). board_pattern is
-// externalid.BoardPattern(board), the board's external_id namespace, so only this board's rows
-// move. Needed beside the board write because a crawl only REWRITES a posting that changed — an
-// unchanged one is refreshed for liveness and keeps the placeholder, and a closed one is never
-// seen again. Guarded on the old name, so a re-run writes nothing.
-//
-// Returns the company_slug each moved job carried BEFORE the write, one row per job: the rows
-// are matched by board and name, not by slug, and an alias the merge worker recorded may have
-// re-keyed them away from the slug the placeholder name folds to — the caller sweeps exactly
-// these for orphaned companies rows.
-func (q *Queries) RenamePlaceholderBoardJobs(ctx context.Context, arg RenamePlaceholderBoardJobsParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, renamePlaceholderBoardJobs,
-		arg.Name,
-		arg.NewSlug,
-		arg.Source,
-		arg.BoardPattern,
-		arg.OldName,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var old_slug string
-		if err := rows.Scan(&old_slug); err != nil {
-			return nil, err
-		}
-		items = append(items, old_slug)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const renameSlugCompany = `-- name: RenameSlugCompany :execrows
-UPDATE jobs
-SET company = $1,
-    company_slug = $2,
-    -- Kept in step with company_slug by hand, like every other write path that sets
-    -- it — see migrations/0109 for why the folded value is a stored column at all,
-    -- and internal/platform/db/folded_slug_rule_test.go for the test that catches a new write
-    -- path forgetting this line.
-    company_slug_folded = replace($2, '-', ''),
-    updated_at = now()
-WHERE company_slug = $3
-  AND company ~ '^[a-z0-9._-]+$'
-`
-
-type RenameSlugCompanyParams struct {
-	Name    string `json:"name"`
-	NewSlug string `json:"new_slug"`
-	OldSlug string `json:"old_slug"`
-}
-
-// Apply a resolved display name to every job under a slug-like company and
-// re-key its company_slug (computed by the caller via normalize.Slug); the caller then
-// reconciles the touched slugs through SyncCompaniesForSlugs + DeleteOrphanCompaniesForSlugs.
-// The name guard keeps a re-run from overwriting a name that is no longer a slug.
-func (q *Queries) RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, renameSlugCompany, arg.Name, arg.NewSlug, arg.OldSlug)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const seedCompanyAccountWebsite = `-- name: SeedCompanyAccountWebsite :exec
@@ -1466,43 +820,6 @@ func (q *Queries) SetCompanyCollections(ctx context.Context, arg SetCompanyColle
 	return err
 }
 
-const setCompanyIndustries = `-- name: SetCompanyIndustries :execrows
-UPDATE companies
-SET industries = $1,
-    industries_derived = CASE
-        WHEN cardinality($1::text[]) > 0 THEN '{}'::text[]
-        ELSE industries_derived
-    END,
-    updated_at = now()
-WHERE slug = $2 AND industries IS DISTINCT FROM $1
-`
-
-type SetCompanyIndustriesParams struct {
-	Industries []string `json:"industries"`
-	Slug       string   `json:"slug"`
-}
-
-// Replace one company's industries. The IS DISTINCT FROM guard keeps updated_at
-// honest — a row already holding the wanted value is not rewritten — and makes the
-// affected-row count real churn, so a second run reports zero.
-//
-// Setting a non-empty industries here immediately zeroes industries_derived rather
-// than waiting for the next RefreshCompanyFacets: that column answers only where
-// industries is empty, and leaving a stale non-empty value in place would let a
-// company just curated by cmd/import-company-industries keep matching through
-// domains it no longer speaks for — the #2082 bug, reopened for the gap between
-// this write and the next periodic recompute (hours). The reverse case (industries
-// becomes empty) is left for that recompute like every other job-derived facet: it
-// only widens reach, never produces a false match, so it can stay eventually
-// consistent.
-func (q *Queries) SetCompanyIndustries(ctx context.Context, arg SetCompanyIndustriesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setCompanyIndustries, arg.Industries, arg.Slug)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const syncCompaniesForSlugs = `-- name: SyncCompaniesForSlugs :execrows
 INSERT INTO companies (slug, name)
 SELECT j.company_slug, j.company
@@ -1539,151 +856,4 @@ func (q *Queries) SyncCompaniesForSlugs(ctx context.Context, slugs []string) (in
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const syncCompaniesFromJobs = `-- name: SyncCompaniesFromJobs :exec
-INSERT INTO companies (slug, name)
-SELECT j.company_slug, j.company
-FROM (
-    SELECT DISTINCT ON (company_slug) company_slug, company
-    FROM jobs
-    WHERE company_slug <> ''
-    ORDER BY company_slug
-) j
-WHERE NOT EXISTS (
-    SELECT 1 FROM companies c WHERE c.slug = j.company_slug AND c.name = j.company
-)
-ON CONFLICT (slug) DO UPDATE SET
-    name       = EXCLUDED.name,
-    updated_at = now()
-`
-
-// Rebuild the companies catalogue from jobs. The companies table is derivable
-// from jobs (slug = company_slug, name = company), so after a slug-builder change
-// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
-// name variants; ON CONFLICT folds collisions and refreshes existing rows.
-//
-// Only a slug that is missing or whose name differs reaches the INSERT. This statement
-// runs for about an hour on prod in one transaction and holds a lock on every row it
-// writes until it commits, while ingest's UpsertJob upserts into companies on every
-// posting — rewriting the ~750k unchanged rows stalled the crawl fleet behind it
-// (2026-10-28). The filter must sit HERE, not in an ON CONFLICT ... WHERE: Postgres
-// locks the conflicting row before it evaluates that WHERE, so the lock would remain.
-func (q *Queries) SyncCompaniesFromJobs(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, syncCompaniesFromJobs)
-	return err
-}
-
-const upsertYCCompany = `-- name: UpsertYCCompany :exec
-INSERT INTO companies (
-    slug, name, industries, subindustry, year_founded, employee_count, hq_country,
-    tagline, company_info, yc_batch, yc_status, yc_stage, yc_flags,
-    is_reference, company_info_at
-) VALUES (
-    $1, $2, $3, $4,
-    $5, $6, $7, $8,
-    $9, $10, $11,
-    $12, $13, true, now()
-)
-ON CONFLICT (slug) DO UPDATE SET
-    -- Union, sorted and de-duplicated, so two sources accumulate instead of
-    -- overwriting — UNLESS an active employer account exists, in which case the stored
-    -- value (the employer's own, curated list) wins outright, same as the four columns
-    -- below. Sorted because the stored order is compared for equality by the
-    -- normalization worker's no-op guard.
-    industries      = CASE WHEN EXISTS (
-                          SELECT 1 FROM company_accounts ca
-                          WHERE ca.company_slug = companies.slug AND ca.status = 'active'
-                      ) THEN companies.industries ELSE ARRAY(
-        SELECT DISTINCT x
-        FROM unnest(companies.industries || EXCLUDED.industries) AS x
-        WHERE x <> ''
-        ORDER BY x
-    ) END,
-    subindustry     = CASE WHEN EXISTS (
-                          SELECT 1 FROM company_accounts ca
-                          WHERE ca.company_slug = companies.slug AND ca.status = 'active'
-                      ) THEN companies.subindustry ELSE EXCLUDED.subindustry END,
-    year_founded    = CASE WHEN EXISTS (
-                          SELECT 1 FROM company_accounts ca
-                          WHERE ca.company_slug = companies.slug AND ca.status = 'active'
-                      ) THEN companies.year_founded ELSE EXCLUDED.year_founded END,
-    employee_count  = CASE WHEN EXISTS (
-                          SELECT 1 FROM company_accounts ca
-                          WHERE ca.company_slug = companies.slug AND ca.status = 'active'
-                      ) THEN companies.employee_count ELSE EXCLUDED.employee_count END,
-    hq_country      = CASE WHEN EXISTS (
-                          SELECT 1 FROM company_accounts ca
-                          WHERE ca.company_slug = companies.slug AND ca.status = 'active'
-                      ) THEN companies.hq_country ELSE EXCLUDED.hq_country END,
-    -- NULLIF folds '' into NULL so an empty string counts as absent, not as a value
-    -- worth protecting.
-    tagline         = COALESCE(NULLIF(companies.tagline, ''), EXCLUDED.tagline),
-    -- Operand order is load-bearing: a || b keeps b on key collision, so the YC keys
-    -- fill gaps while anything already stored wins. Reversed, this is the bug above.
-    company_info    = EXCLUDED.company_info || companies.company_info,
-    yc_batch        = EXCLUDED.yc_batch,
-    yc_status       = EXCLUDED.yc_status,
-    yc_stage        = EXCLUDED.yc_stage,
-    yc_flags        = EXCLUDED.yc_flags,
-    company_info_at = now(),
-    updated_at      = now()
-`
-
-type UpsertYCCompanyParams struct {
-	Slug          string          `json:"slug"`
-	Name          string          `json:"name"`
-	Industries    []string        `json:"industries"`
-	Subindustry   pgtype.Text     `json:"subindustry"`
-	YearFounded   pgtype.Int4     `json:"year_founded"`
-	EmployeeCount pgtype.Int4     `json:"employee_count"`
-	HqCountry     pgtype.Text     `json:"hq_country"`
-	Tagline       pgtype.Text     `json:"tagline"`
-	CompanyInfo   json.RawMessage `json:"company_info"`
-	YcBatch       []string        `json:"yc_batch"`
-	YcStatus      []string        `json:"yc_status"`
-	YcStage       []string        `json:"yc_stage"`
-	YcFlags       []string        `json:"yc_flags"`
-}
-
-// Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
-// reference row (is_reference = true) with no jobs; an existing slug (job-backed or a
-// prior reference) has the YC-owned columns refreshed — name, job_count, collections,
-// is_reference, and the job-derived facet arrays (regions/remote_regions/countries/
-// domains/company_types/company_sizes) are left untouched. Idempotent: re-running
-// the same entry rewrites the same values.
-//
-// Three columns are NOT YC-owned, because this is no longer their only writer, and
-// replacing them would erase another source's work on the importer's next run:
-// tagline fills only a blank, company_info merges key-wise, and industries union —
-// guarded the same way the four below are, once an active employer account exists: an
-// employer who deliberately REMOVES a tag via their profile edit must not see this
-// importer silently re-add it from the YC entry on its next scheduled run.
-//
-// subindustry/year_founded/employee_count/hq_country are a FOURTH kind of not-owned:
-// unlike the three above, this importer WAS their only writer, right up until a verified
-// employer (internal/ingest/employer, migration 0174) became a second, more authoritative
-// one — the company speaking about itself outranks an imported directory entry. Since
-// there was never a second writer before, these four were never protected at all, so the
-// guard is a plain "leave them alone when an active company_accounts row exists for this
-// slug" rather than a merge: an employer's own edit is meant to win outright (see
-// add-employer-company-accounts' company-info spec delta), and this importer's job is
-// simply to not be the one that undoes it on its next scheduled run.
-func (q *Queries) UpsertYCCompany(ctx context.Context, arg UpsertYCCompanyParams) error {
-	_, err := q.db.Exec(ctx, upsertYCCompany,
-		arg.Slug,
-		arg.Name,
-		arg.Industries,
-		arg.Subindustry,
-		arg.YearFounded,
-		arg.EmployeeCount,
-		arg.HqCountry,
-		arg.Tagline,
-		arg.CompanyInfo,
-		arg.YcBatch,
-		arg.YcStatus,
-		arg.YcStage,
-		arg.YcFlags,
-	)
-	return err
 }

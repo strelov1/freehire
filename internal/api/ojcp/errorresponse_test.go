@@ -19,18 +19,6 @@ func TestErrorEnvelopeConformsToTheStandard(t *testing.T) {
 	}
 }
 
-func TestRateLimitErrorAlwaysSaysHowLongToWait(t *testing.T) {
-	// The schema makes retry_after_seconds mandatory alongside `rate_limited` — found by the
-	// oracle the moment it was finally pointed at this envelope. An agent told to slow down
-	// and not told for how long can only guess, and a guessing agent retries.
-	if err := validateAgainstSchema(t, schemaErrorResponse, NewRateLimitError(30)); err != nil {
-		t.Fatalf("rate-limit envelope rejected: %v", err)
-	}
-	if err := validateAgainstSchema(t, schemaErrorResponse, NewError(ErrorRateLimited, "slow down")); err == nil {
-		t.Fatal("a rate-limit refusal with no retry_after_seconds validated")
-	}
-}
-
 func TestErrorCodeOutsideTheStandardsEnumIsRejected(t *testing.T) {
 	// Proves the check above can actually fail. An agent branches on this field, so a code of
 	// our own invention is unreadable rather than merely unfamiliar.

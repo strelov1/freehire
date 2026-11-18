@@ -1,55 +1,48 @@
 <script lang="ts">
+  import { onDestroy, untrack } from 'svelte';
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
-  import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
-  import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen, Check } from '@lucide/svelte';
+  import { Button, ConfirmDialog, cn } from '#lib/ui/index.js';
+  import { Trash2 } from '@lucide/svelte';
   import { askConfirmTailor, confirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
-  import { groupedStages, humanizeStage, offersDebrief } from '#lib/stages.js';
+  import { tailorHref } from '#lib/tailorHref.js';
+  import { humanizeStage } from '#lib/stages.js';
   import { canFollowUp } from '#lib/followup.js';
-  import { CLOSED_OUTCOMES, type ClosedOutcome } from '#lib/board.js';
+  import type { ClosedOutcome } from '#lib/board.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { timeAgo, errorMessage } from '#lib/utils.js';
+  import { errorMessage } from '#lib/utils.js';
   import { tablist } from '#lib/actions/tablist.js';
   import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
   import { cardTagsFromCard } from '#lib/enrichment.js';
-  import { companyLogoUrl } from '#lib/logo.js';
-  import JobDescription from './JobDescription.svelte';
-  import MatchAnalysisFull from './MatchAnalysisFull.svelte';
   import JobMatch from './JobMatch.svelte';
-  import NoteEditor from './NoteEditor.svelte';
-  import { api, isPlanRefusal } from '#lib/api.js';
-  import PlanLimitLink from './PlanLimitLink.svelte';
-  import type { EmailBody } from '#lib/api.js';
+  import { api } from '#lib/api.js';
+  import JobDrawerMailRecall from './JobDrawerMailRecall.svelte';
+  import JobDrawerEmailList from './JobDrawerEmailList.svelte';
+  import JobDrawerAutoApply from './JobDrawerAutoApply.svelte';
   import { currentUser } from '#lib/auth.svelte.js';
-  import { statusLabel, stageImplication } from '#lib/emailStatus.js';
-  import { eventLabel, eventTone } from '#lib/events.js';
-  import StatusChip from '#lib/components/StatusChip.svelte';
-  import SkillChip from './SkillChip.svelte';
-  import { avatarInitials, avatarColor } from '#lib/avatar.js';
   import type {
     Job,
     MyJob,
     ApplicationEmail,
     AutoApplyReviewInfo,
-    MailRecallResult,
-    RecalledEmail,
     StageSuggestion,
-    TimelineEvent
+    TimelineEvent,
   } from '#lib/types.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import { lockScroll, unlockScroll } from '#lib/ui/index.js';
-  import { autoApplyReviewBanner } from '#lib/autoApplyReview.js';
-  import { autoApplyProgressSteps, type AutoApplyProgressStepId } from '#lib/autoApplyProgress.js';
-  import { isAutoApplyPaused, setAutoApplyPaused } from '#lib/autoApplyPauseStorage.js';
-  import { hasVisibleRows, pendingRows, type PendingAnswerRow } from '#lib/answerBank.js';
   import { messages } from './JobDrawer.messages';
-  import AssistantChat from '#lib/assistant/AssistantChat.svelte';
-  import AssistantPanel from '#lib/components/AssistantPanel.svelte';
-  import { openApplyChat } from '#lib/assistant/api.js';
-  import { format, plural, t } from '#lib/i18n/t.js';
+  import JobDrawerLoadState from './JobDrawerLoadState.svelte';
+  import JobDrawerTitle from './JobDrawerTitle.svelte';
+  import JobDrawerActions from './JobDrawerActions.svelte';
+  import JobDrawerApplication from './JobDrawerApplication.svelte';
+  import JobDrawerHistory from './JobDrawerHistory.svelte';
+  import JobDrawerDescription from './JobDrawerDescription.svelte';
+  import JobDrawerStageSuggestion from './JobDrawerStageSuggestion.svelte';
+  import { format, t } from '#lib/i18n/t.js';
 
   let {
     item,
+    initialTab = 'application',
     pendingOutcome,
     onsetstage,
     onsavenotes,
@@ -57,14 +50,11 @@
     onautoapplyreview,
     onremove,
     onclose,
-    onrehearse,
-    ondebrief,
     onfollowup,
-    startingSession = false,
-    sessionError = null,
     blocked = false,
   }: {
     item: MyJob;
+    initialTab?: 'application' | 'auto_apply';
     pendingOutcome: boolean;
     onsetstage: (stage: string) => void;
     // Rejects when the write fails; the notes editor reports it and keeps the text.
@@ -82,17 +72,7 @@
     onclose: () => void;
     // The actions the card used to carry. They live here because a card carries no
     // controls — one on its surface is what stopped it being dragged at all.
-    onrehearse: (item: MyJob) => void;
-    ondebrief: (item: MyJob) => void;
     onfollowup: (item: MyJob) => void;
-    // Starting either conversation is one round trip before the navigation; the board
-    // owns the flag so a second click in that window cannot mint a second one. Both
-    // buttons share it because both end in the same navigation away from here.
-    startingSession?: boolean;
-    // ...and the board owns the failure too. It has to be rendered in here: this panel
-    // covers the viewport, so a message left behind on the board would be invisible to
-    // the person who pressed the button.
-    sessionError?: string | null;
     // True while something is stacked above this panel — today, the follow-up dialog it
     // now opens. Both listen for Escape on the window, so without this one press would
     // close the dialog and the application underneath it in the same keystroke. The
@@ -101,6 +81,7 @@
   } = $props();
 
   const s = $derived(t(messages, locale()));
+  let buddyVisibilityError = $state<string | null>(null);
 
   // Removing untracks the application — its stage, notes and history go with it — so it is
   // asked first, the way deleting a list is.
@@ -114,25 +95,21 @@
   async function startTailoring() {
     if (!item.job || tailoring) return;
     tailoring = true;
-    const ok = await askConfirmTailor(item.job.public_slug, `${item.job.title} at ${item.job.company}`);
-    if (!ok) {
+    const choice = await askConfirmTailor(item.job.public_slug, `${item.job.title} at ${item.job.company}`);
+    if (!choice) {
       tailoring = false;
       return;
     }
-    await goto(resolve('/tailor/[slug]', { slug: item.job.public_slug }));
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- tailorHref() wraps resolve('/tailor/[slug]'); the rule can't see through the appended ?base= query
+    await goto(tailorHref(item.job.public_slug, choice.baseCvId));
   }
 
-  // Rehearse, Analyze and Tailor all need the posting. Absent rather than disabled when
+  // Tailoring needs the posting. Absent rather than disabled when
   // it is gone — the same treatment View job gets. Follow up does not need one: the chase
   // is addressed to the employer, which the application knows by itself.
   const hasPosting = $derived(!!item.job);
   const offersFollowUp = $derived(canFollowUp(item));
-  // The debrief reviews an interview that has already happened, so it appears only once
-  // the stage says one plausibly did. The backend takes it from any stage — this is
-  // where to advertise it, not who may have it.
-  const offersDebriefAction = $derived(hasPosting && offersDebrief(item.stage ?? ''));
-
-  type Tab = 'application' | 'fit' | 'description' | 'emails' | 'auto_apply';
+  type Tab = 'application' | 'history' | 'fit' | 'description' | 'emails' | 'auto_apply';
   // The Emails tab shows linked mail — open to every signed-in user.
   const canSeeMail = $derived(!!currentUser());
 
@@ -151,28 +128,6 @@
   // else loadEmails() fetches (openspec/changes/auto-apply-review-tracking) — null for a
   // job with none.
   let autoApply = $state.raw<AutoApplyReviewInfo | null>(null);
-  let autoApplyDeciding = $state(false);
-  let autoApplyError = $state<string | null>(null);
-  const autoApplyBanner = $derived(autoApplyReviewBanner(autoApply?.status));
-
-  // The application chat (openspec/changes/auto-apply-chat): the same questions and the same
-  // review as the form below, answered in free text. Offered exactly where the form is —
-  // while the attempt waits on the candidate.
-  const offersApplyChat = $derived(autoApplyBanner?.kind === 'blocked' || autoApplyBanner?.kind === 'pending_review');
-  let applyChatId = $state<string | null>(null);
-  let applyChatOpen = $state(false);
-  let applyChatError = $state<string | null>(null);
-
-  async function startApplyChat() {
-    if (!item.job) return;
-    applyChatError = null;
-    try {
-      applyChatId ??= (await openApplyChat(item.job.public_slug)).id;
-      applyChatOpen = true;
-    } catch (e) {
-      applyChatError = errorMessage(e, s.applyChat.openFailed);
-    }
-  }
 
   // The application's history, newest first, from the ledger — also loaded by
   // loadEmails() below. It replaces a strip that read as a timeline and was not one:
@@ -215,8 +170,10 @@
       await api.setBuddyApplicationHidden(String(buddyApplicationId), hiddenInBuddyFeed);
     } catch (err) {
       hiddenInBuddyFeed = previous;
-      sessionError = err instanceof Error ? err.message : s.errors.buddyVisibility;
-    } finally { buddyVisibilityBusy = false; }
+      buddyVisibilityError = err instanceof Error ? err.message : s.errors.buddyVisibility;
+    } finally {
+      buddyVisibilityBusy = false;
+    }
   }
 
   // Once a successful submission retires the live attempt, `autoApply` goes back to null
@@ -224,252 +181,85 @@
   // cmd/auto-apply's Store.Submit records this exact fact (appevent.SourceAutoApply) when
   // it calls MarkJobApplied. See openspec/changes/auto-apply-progress-tab/design.md.
   const autoApplied = $derived(events.some((e) => e.kind === 'applied' && e.source === 'auto_apply'));
-  const progressSteps = $derived(autoApplyProgressSteps(autoApply?.status, autoApplied));
-  const PROGRESS_STEP_LABELS = $derived<Record<AutoApplyProgressStepId, string>>({
-    tailoring: s.progressSteps.tailoring,
-    review: s.progressSteps.review,
-    submitted: s.progressSteps.submitted,
-  });
-
-  // The Pause/Continue marker (openspec/changes/auto-apply-progress-tab/design.md) is
-  // purely a candidate-side reminder — it never reaches the server and has no effect on
-  // cmd/auto-apply. Only offered over a live, still-open attempt: once it is terminal or
-  // already submitted there is nothing left to pause. `pausedOverride` lets a press inside
-  // this mount take effect immediately, without waiting on a reload to re-read storage.
-  const canPauseAutoApply = $derived(
-    !!autoApply && ['tailoring', 'pending_review', 'approved', 'blocked'].includes(autoApply.status)
-  );
-  let pausedOverride = $state<boolean | null>(null);
-  const autoApplyPaused = $derived(
-    pausedOverride ?? (autoApply ? isAutoApplyPaused(autoApply.queue_id) : false)
-  );
-  function toggleAutoApplyPaused() {
-    if (!autoApply) return;
-    const next = !autoApplyPaused;
-    setAutoApplyPaused(autoApply.queue_id, next);
-    pausedOverride = next;
-  }
-
-  async function decideAutoApply(decision: 'approved' | 'declined') {
-    if (!autoApply || autoApplyDeciding || autoApplyActing) return;
-    autoApplyDeciding = true;
-    autoApplyError = null;
-    try {
-      await api.reviewAutoApply(String(autoApply.queue_id), decision);
-      autoApply = { ...autoApply, status: decision };
-      // The board's own item is the parent's to mutate — see onautoapplyreview's own
-      // doc comment for why this isn't done directly here.
-      onautoapplyreview(decision);
-    } catch (e) {
-      autoApplyError = errorMessage(e, s.decisionFailed);
-    } finally {
-      autoApplyDeciding = false;
-    }
-  }
-
-  // pendingRows pairs every pending question with its position in the list — never its
-  // label — because two distinct questions can share label text and an entry can carry no
-  // text at all; either would collide an `{#each}` key, a DOM id, or a draft keyed on the
-  // text itself.
-  const pendingQuestions = $derived(pendingRows(autoApply?.resolved_preview?.pending));
-
-  // Whether anything in the pending list will actually render. Only an `empty` row (see
-  // answerBank's PendingRowKind) draws nothing, so gating the list on pendingQuestions.length
-  // alone produces an empty bulleted block whenever every pending question is empty-label. A
-  // work-authorization question is `blocked`, not `empty` — it still renders, naming what is
-  // stopping the application — so hasVisibleRows is what decides this, not a re-derivation
-  // here.
-  const showsPendingList = $derived(hasVisibleRows(pendingQuestions));
-
-  // One draft per pending question, keyed by its row's position (see pendingQuestions).
-  let bankDrafts = $state<Record<number, string>>({});
-  let bankSaving = $state<number | null>(null);
-  let bankError = $state<string | null>(null);
-  // The rows whose answer reached the bank in this session. Nothing else says a save
-  // happened: the draft clears and the button re-disables, which on its own reads like
-  // typing that got lost.
-  let bankSaved = $state<Record<number, boolean>>({});
-
-  async function saveBankedAnswer(key: number, question: string) {
-    const answer = bankDrafts[key]?.trim();
-    // One save at a time — but every Save button is disabled while one is in flight, not
-    // just this row's. A button that looks pressable and silently does nothing is worse
-    // than one that is plainly unavailable.
-    if (!answer || bankSaving !== null) return;
-    bankSaving = key;
-    bankError = null;
-    try {
-      await api.saveBankedAnswer(question, answer);
-      // Cleared rather than left filled: the answer now lives in the bank, and a filled
-      // input beside a saved answer reads as unsaved work. The marker below is what tells
-      // the candidate it went somewhere.
-      bankDrafts = { ...bankDrafts, [key]: '' };
-      bankSaved = { ...bankSaved, [key]: true };
-    } catch (e) {
-      bankError = errorMessage(e, s.errors.saveAnswer);
-    } finally {
-      bankSaving = null;
-    }
-  }
-  // The questions a submission attempt parked on, answerable the same way as the review's
-  // pending ones: save the answer to the bank, then try again (openspec/changes/
-  // auto-apply-over-mcp). Only one banner renders at a time, so the two lists share the
-  // drafts below without their position keys colliding.
-  const blockedQuestions = $derived(
-    pendingRows(autoApply?.unmapped?.map((u) => ({ label: u.label, will_draft_at_submission: false }))),
-  );
-  const showsBlockedList = $derived(hasVisibleRows(blockedQuestions));
-
-  // Retry re-arms a stopped attempt (or refreshes a review's preview after answers were
-  // saved); cancel withdraws one. Both re-read the attempt afterwards rather than guessing
-  // its next status — a retry can land on any of three, depending on where it stopped.
-  let autoApplyActing = $state(false);
-  async function actOnAutoApply(act: (slug: string) => Promise<unknown>, failed: string) {
-    // One action at a time across review, retry and cancel: a review answer landing after
-    // a cancel's refresh would restore the status the cancel just removed.
-    if (!item.job || autoApplyActing || autoApplyDeciding) return;
-    autoApplyActing = true;
-    autoApplyError = null;
-    try {
-      await act(item.job.public_slug);
-      bankSaved = {};
-      // Read directly rather than through loadEmails, which returns early while its own
-      // load is in flight and would leave the pre-action status on screen.
-      const app = await api.getTrackedApplication(item.job.public_slug);
-      autoApply = app.auto_apply ?? null;
-      events = app.events ?? [];
-      // A cancel takes the Progress tab away with the attempt; stay on a tab that exists.
-      if (tab === 'auto_apply' && !autoApply && !autoApplied) tab = 'application';
-    } catch (e) {
-      autoApplyError = errorMessage(e, failed);
-    } finally {
-      autoApplyActing = false;
-    }
-  }
-  const retryAutoApply = () => actOnAutoApply(api.retryAutoApply, s.retryFailed);
-  const cancelAutoApply = () => actOnAutoApply(api.cancelAutoApply, s.cancelFailed);
-  const savedAnyAnswer = $derived(Object.values(bankSaved).some(Boolean));
 
   // The full posting. The listing serves a card — employer, role, and the facets a row draws —
   // because carrying every description was 84% of its payload for text no row renders. The
   // panel is the one place that wants the posting, and it already makes this request for the
   // linked mail, so the description arrives on a call that was happening anyway.
   let posting = $state.raw<Job | null>(null);
-  let expandedId = $state<number | null>(null);
-  let expandedBody = $state.raw<EmailBody | null>(null);
-  let bodyLoading = $state(false);
 
   const TABS = $derived<{ id: Tab; label: string }[]>([
     { id: 'application', label: s.tabs.application },
-    ...(autoApply || autoApplied ? [{ id: 'auto_apply' as Tab, label: s.tabs.progress }] : []),
+    ...(autoApply || autoApplied || (hasPosting && initialTab === 'auto_apply' && emails === null)
+      ? [{ id: 'auto_apply' as Tab, label: s.tabs.progress }]
+      : []),
     { id: 'fit', label: s.tabs.jobMatch },
     { id: 'description', label: s.tabs.jobDescription },
+    { id: 'history', label: s.history },
     ...(canSeeMail
-      ? [{ id: 'emails' as Tab, label: emails ? format(s.tabs.emailsWithCount, { count: String(emails.length) }) : s.tabs.emails }]
+      ? [
+          {
+            id: 'emails' as Tab,
+            label: emails ? format(s.tabs.emailsWithCount, { count: String(emails.length) }) : s.tabs.emails,
+          },
+        ]
       : []),
   ]);
-  // Local UI state. The parent re-keys this component per job (JobBoard's {#key}),
-  // so a fresh mount always opens on Application.
-  let tab = $state<Tab>('application');
+  // The parent re-keys the drawer per job. A deep link chooses the opening tab;
+  // later tab navigation belongs to this drawer.
+  // svelte-ignore state_referenced_locally
+  let tab = $state<Tab>(initialTab === 'auto_apply' && !item.job ? 'application' : initialTab);
 
-  // The mailbox sweep: from this application, find the mail that belongs to it. What comes
-  // back are SUGGESTIONS — nothing is linked — resolved by the same confirm/reject calls
-  // the inbox uses. Null until the button is pressed, so an untouched tab shows no verdict.
-  let recall = $state.raw<MailRecallResult | null>(null);
-  let recallLoading = $state(false);
-  let recallError = $state<string | null>(null);
-  let recallPlanRefused = $state(false);
-  // Ids resolved since the sweep, so a confirmed or dismissed row leaves at the press
-  // rather than on the next load.
-  let recallResolved = $state.raw<string[]>([]);
-  const recallPending = $derived(
-    (recall?.suggested ?? []).filter((e) => !recallResolved.includes(e.provider_id ?? String(e.id)))
-  );
+  let applyChatStarted = $state(false);
+  $effect(() => {
+    if (tab === 'auto_apply' && emails !== null && !emailsError) applyChatStarted = true;
+  });
+
   // Only applications can be swept: the window is anchored on the date it was recorded, and
   // a job that was merely saved has none.
   const canRecall = $derived(hasPosting && !!item.applied_at);
 
+  let disposed = false;
+  onDestroy(() => {
+    disposed = true;
+  });
+  let emailsReloadRequested = false;
   async function loadEmails(force = false) {
-    if ((emails !== null && !force) || emailsLoading) return;
+    if (disposed || !item.job || (emails !== null && !force)) return;
+    if (emailsLoading) {
+      emailsReloadRequested ||= force;
+      return;
+    }
     emailsLoading = true;
     emailsError = null;
     try {
-      if (!item.job) return;
       const app = await api.getTrackedApplication(item.job.public_slug);
+      if (disposed) return;
       emails = app.emails;
       stageSuggestion = app.stage_suggestion ?? null;
       autoApply = app.auto_apply ?? null;
+      if (autoApply?.status === 'approved' || autoApply?.status === 'declined') {
+        onautoapplyreview(autoApply.status);
+      }
       posting = app.job;
       events = app.events ?? [];
+      if (tab === 'auto_apply' && !autoApply && !autoApplied) tab = 'application';
     } catch (e) {
       emailsError = errorMessage(e, s.errors.loadEmails);
     } finally {
       emailsLoading = false;
-    }
-  }
-
-  async function runRecall() {
-    if (!item.job || recallLoading) return;
-    recallLoading = true;
-    recallError = null;
-    recallPlanRefused = false;
-    recallResolved = [];
-    try {
-      recall = await api.recallApplicationMail(item.job.public_slug);
-    } catch (e) {
-      // Shown rather than swallowed. An empty result would read as "your mailbox holds
-      // nothing", which is the wrong thing to say about a gateway being down.
-      recall = null;
-      recallPlanRefused = isPlanRefusal(e);
-      recallError = recallPlanRefused ? s.errors.searchMailNeedsPlan : errorMessage(e, s.errors.searchMail);
-    } finally {
-      recallLoading = false;
-    }
-  }
-
-  // A proposal arrives one of two ways and leaves the same way. From the mailbox search it
-  // is a provider id and nothing of ours yet, so linking imports it first; from stored mail
-  // it is a row carrying a suggestion, resolved by the calls the inbox already uses.
-  async function resolveRecalled(e: RecalledEmail, accept: boolean) {
-    const key = e.provider_id ?? String(e.id);
-    recallResolved = [...recallResolved, key];
-    try {
-      if (e.provider_id) {
-        if (accept && item.job) await api.linkRecalledMail(item.job.public_slug, e.provider_id);
-      } else {
-        await (accept ? api.confirmEmailLink(e.id) : api.rejectEmailLink(e.id));
+      if (emailsReloadRequested) {
+        emailsReloadRequested = false;
+        void loadEmails(true);
       }
-      if (accept) await loadEmails(true);
-    } catch {
-      // Put it back: a proposal the caller can press again beats a row that vanished
-      // without becoming anything.
-      recallResolved = recallResolved.filter((x) => x !== key);
     }
   }
 
   // Load the linked mail eagerly (moderator or beta only) so the tab shows its count
   // before it's opened. Re-keyed per job by the parent, so this runs once per application.
   $effect(() => {
-    if (canSeeMail) void loadEmails();
+    if (canSeeMail) untrack(() => void loadEmails());
   });
-
-  async function toggleEmail(id: number) {
-    if (expandedId === id) {
-      expandedId = null;
-      expandedBody = null;
-      return;
-    }
-    expandedId = id;
-    expandedBody = null;
-    bodyLoading = true;
-    try {
-      expandedBody = await api.getEmail(id);
-    } catch {
-      /* leave the row collapsed-open with no body; the list still shows */
-    } finally {
-      bodyLoading = false;
-    }
-  }
 
   // Meta pills (work arrangement, region, employment type, seniority) — only the
   // stated ones, reusing the list-card logic.
@@ -517,199 +307,55 @@
     if (active) tabEdges.reveal(active);
   });
 
-  // One action block: a two-column grid of equal buttons on a phone, where a wrapping row
-  // left three outline buttons of different widths in a ragged pair of lines; a single
-  // wrapping row from sm up. An odd last button spans both columns rather than leaving a
-  // hole beside it. The label truncates rather than overflow a 170px column.
-  const actionClass = 'h-10 min-w-0 gap-1.5 px-2 sm:h-8 sm:px-3';
-
   const tabClass = (active: boolean) =>
     cn(
-      'shrink-0 rounded-full px-4 py-1.5 text-sm transition-colors',
-      active
-        ? 'bg-card font-medium text-foreground shadow-sm'
-        : 'text-muted-foreground hover:text-foreground',
+      'min-h-11 shrink-0 border-b-2 px-1 py-2 text-xs font-medium transition-colors sm:px-2 sm:text-sm',
+      active ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
     );
-  const sectionLabel = 'text-sm font-medium text-muted-foreground';
 </script>
 
-{#snippet answerList(rows: PendingAnswerRow[])}
-<ul class="flex flex-col gap-2 text-xs text-muted-foreground">
-  {#each rows as row (row.key)}
-    {#if row.kind === 'draft'}
-      <li>{format(s.willBeFilledAutomatically, { label: row.pending.label })}</li>
-    {:else if row.kind === 'blocked'}
-      <!-- A work-authorization question: the bank refuses to recall an
-           answer for it (the correct one depends on this posting's own
-           country), and offering an input would only collect one it could
-           never safely reuse. Plain text, distinct in wording and color from
-           both the "filled automatically" row above and an answerable
-           question's input below, so the candidate sees what is blocking
-           the application instead of nothing at all. -->
-      <li class="text-warning-strong">
-        {format(s.cannotAnswerForYou, { label: row.pending.label })}
-      </li>
-    {:else if row.kind === 'answerable'}
-      <li class="flex flex-col gap-1">
-        <label class="text-foreground" for={`bank-${row.key}`}>{row.pending.label}</label>
-        <div class="flex items-start gap-2">
-          <!-- A textarea, not an input: the bound is 2000 characters, and a
-               single-line control collects a paragraph the writer cannot
-               re-read. -->
-          <textarea
-            id={`bank-${row.key}`}
-            rows="2"
-            maxlength="2000"
-            class="min-w-0 flex-1 resize-y rounded-md border border-border bg-background px-2 py-1"
-            bind:value={bankDrafts[row.key]}
-            placeholder={s.answerPlaceholder}
-          ></textarea>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={bankSaving !== null || !bankDrafts[row.key]?.trim()}
-            onclick={() => saveBankedAnswer(row.key, row.pending.label)}
-          >
-            {s.save}
-          </Button>
-        </div>
-        {#if bankSaved[row.key]}
-          <span class="text-brand-strong">{s.savedToBank}</span>
-        {/if}
-      </li>
-    {/if}
-  {/each}
-</ul>
-{/snippet}
-
-
 <!-- The confirmation is stacked above the panel too: its Escape closes it, not both. -->
-<!-- Not while the application chat is open: Escape there belongs to the chat (the covering
-     panel closes itself on it), and closing the whole drawer under a half-typed answer would
-     throw the conversation away. -->
 <svelte:window
-  onkeydown={(e) =>
-    e.key === 'Escape' && !blocked && !confirmRemoveOpen && !applyChatOpen && !confirmTailorDialog.open && close()}
+  onkeydown={(e) => e.key === 'Escape' && !blocked && !confirmRemoveOpen && !confirmTailorDialog.open && close()}
 />
 
-<!-- Fullscreen job panel (like the swipe deck): a centered column with a fixed
-     header + pill tabs, a scrolling tab body, and a pinned View-job footer. It covers
-     the screen edge to edge, so it fades in rather than growing from the centre. -->
+<!-- A focused desktop dialog; the same application uses the full screen on phones. -->
+<div class="fixed inset-0 z-50 bg-foreground/30" aria-hidden="true"></div>
 <div
-  class="fixed inset-0 z-50 flex animate-modal-fade flex-col bg-background text-foreground"
+  class="fixed inset-0 z-50 flex animate-modal-fade flex-col overflow-hidden bg-background text-foreground outline-none sm:inset-6 sm:mx-auto sm:my-auto sm:max-h-[52rem] sm:max-w-3xl sm:rounded-2xl sm:border sm:border-border sm:shadow-xl"
   role="dialog"
   aria-modal="true"
   aria-label={s.dialogAria}
   {@attach focusTrap()}
 >
-  <!-- Header: employer · close, then the title at full width, its pills, the actions and
-       the tabs. The title used to share a row with View job and the close button, which
-       on a phone left it a column one word wide. -->
+  <!-- Employer, role, and posting details lead; status and application actions follow. -->
   <div class="shrink-0 border-b border-border">
-    <div class="mx-auto flex w-full max-w-2xl flex-col gap-3 px-5 pb-3 pt-4 sm:gap-4 sm:px-6 sm:pt-5">
-      <div class="flex items-center gap-3">
-        <EntityLogo
-          name={company || s.unknownCompany}
-          src={companyLogoUrl(company) ?? undefined}
-          shape="square"
-          size="sm"
-          class="shrink-0"
-        />
-        <p class="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">{company || s.unknownCompany}</p>
-        <button
-          type="button"
-          onclick={close}
-          class="-mr-1.5 shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          aria-label={s.close}
-        >
-          <X class="size-5" />
-        </button>
-      </div>
+    <div class="mx-auto flex w-full max-w-2xl flex-col gap-3 px-5 pt-4 sm:gap-4 sm:px-6 sm:pt-5">
+      <JobDrawerTitle {company} {title} {tags} jobSlug={item.job?.public_slug} onClose={close} />
 
-      <h2 class="text-balance text-xl font-semibold leading-tight tracking-tight">{title}</h2>
-
-      {#if tags.length || stageLabel}
-        <div class="flex flex-wrap items-center gap-2">
-          {#each tags as tag (tag)}
-            <span class="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">{tag}</span>
-          {/each}
-          {#if stageLabel}
-            <span class="rounded-full bg-brand-muted px-2.5 py-0.5 text-xs font-medium text-brand-strong">{stageLabel}</span>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- What the candidate can do about this application, on every tab. The card used
-           to carry Rehearse and Follow up in a strip beside its badges, which is both
-           less room than they need and the reason the card could not be dragged. -->
-      {#if item.job || offersFollowUp}
-        <div class="grid grid-cols-2 gap-2 *:last:odd:col-span-2 sm:flex sm:flex-wrap sm:items-center">
-          {#if item.job}
-            <Button
-              variant="outline"
-              size="sm"
-              href={resolve('/jobs/[slug]', { slug: item.job.public_slug })}
-              target="_blank"
-              rel="noopener noreferrer"
-              class={actionClass}
-            >
-              <ExternalLink class="size-3.5 shrink-0" />
-              <span class="truncate">{s.viewJob}</span>
-            </Button>
-            <Button
-              variant={tailorIsPrimary ? 'cta' : 'outline'}
-              size="sm"
-              onclick={startTailoring}
-              disabled={tailoring}
-              class={actionClass}
-            >
-              <SquarePen class="size-3.5 shrink-0" />
-              <span class="truncate">{tailoring ? s.preparing : s.tailorCv}</span>
-            </Button>
-            <Button variant="outline" size="sm" onclick={() => onrehearse(item)} disabled={startingSession} class={actionClass}>
-              <Mic class="size-3.5 shrink-0" />
-              <span class="truncate">{startingSession ? s.starting : s.rehearse}</span>
-            </Button>
-          {/if}
-          {#if offersDebriefAction}
-            <!-- Sits next to Rehearse: the pair reads as before and after the interview. -->
-            <Button variant="outline" size="sm" onclick={() => ondebrief(item)} disabled={startingSession} class={actionClass}>
-              <NotebookPen class="size-3.5 shrink-0" />
-              <span class="truncate">{startingSession ? s.starting : s.debrief}</span>
-            </Button>
-          {/if}
-          {#if item.job}
-            <!-- The analysis is already in this panel; sending the user to /tailor would
-                 close the application to show them something it contains. -->
-            <Button variant="outline" size="sm" onclick={() => (tab = 'fit')} class={actionClass}>
-              <Target class="size-3.5 shrink-0" />
-              <span class="truncate">{s.analyze}</span>
-            </Button>
-          {/if}
-          {#if offersFollowUp}
-            <Button
-              variant="outline"
-              size="sm"
-              onclick={() => onfollowup(item)}
-              class={cn(
-                actionClass,
-                'border-transparent bg-warning-muted text-warning-strong hover:bg-warning-muted hover:opacity-80',
-              )}
-            >
-              <Send class="size-3.5 shrink-0" />
-              <span class="truncate">{item.followed_up_at ? s.chaseAgain : s.followUp}</span>
-            </Button>
-          {/if}
-        </div>
-      {/if}
+      <JobDrawerActions
+        {stageLabel}
+        canTailor={!!item.job}
+        {tailorIsPrimary}
+        {tailoring}
+        onTailor={startTailoring}
+        {offersFollowUp}
+        followedUp={!!item.followed_up_at}
+        onFollowUp={() => onfollowup(item)}
+      />
       {#if buddyMember && buddyApplicationId !== null}
         <label class="flex items-center gap-2 text-sm text-muted-foreground">
-          <input type="checkbox" checked={!hiddenInBuddyFeed} disabled={buddyVisibilityBusy} onchange={toggleBuddyVisibility} />
+          <input
+            type="checkbox"
+            checked={!hiddenInBuddyFeed}
+            disabled={buddyVisibilityBusy}
+            onchange={toggleBuddyVisibility}
+          />
           {s.showInBuddyFeed}
         </label>
       {/if}
-      {#if sessionError}
-        <p class="text-sm text-warning-strong" role="alert">{sessionError}</p>
+      {#if buddyVisibilityError}
+        <p class="text-sm text-warning-strong" role="alert">{buddyVisibilityError}</p>
       {/if}
 
       <div
@@ -725,7 +371,7 @@
           role="tablist"
           aria-label={s.tabsAria}
           use:tablist={tab}
-          class="flex w-max items-center gap-1 rounded-full bg-muted p-1"
+          class="flex w-max min-w-full items-center gap-3 sm:gap-4"
         >
           {#each TABS as t (t.id)}
             <button
@@ -754,279 +400,34 @@
       tabindex="0"
       class="mx-auto w-full max-w-2xl px-5 py-5 sm:px-6"
     >
+      {#if applyChatStarted}
+        <div hidden={tab !== 'auto_apply' || !!emailsError}>
+          <JobDrawerAutoApply slug={item.job?.public_slug ?? null} onTurnComplete={() => void loadEmails(true)} />
+        </div>
+      {/if}
       {#if tab === 'application'}
-        <div class="flex flex-col gap-4">
-          {#if pendingOutcome}
-            <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
-              <p class="text-sm font-medium">{s.howDidItClose}</p>
-              <div class="flex flex-wrap gap-2">
-                {#each CLOSED_OUTCOMES as o (o)}
-                  <Button variant="outline" onclick={() => onchooseoutcome(o)}>{humanizeStage(o, locale())}</Button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          <!-- What happened, newest first. Absent entirely when the ledger holds nothing:
-               an application saved but never applied to has no history, and an empty frame
-               would say otherwise. -->
-          {#if events.length}
-            <div class="flex flex-col gap-1 text-sm">
-              <span class="font-medium">{s.history}</span>
-              <ol class="flex flex-col gap-1.5">
-                {#each events as e (e.id)}
-                  <!-- The event first and its age beneath it on a phone, where a fixed time
-                       column wrapped "11 секунд назад" onto two lines beside a one-line
-                       event; side by side from sm up, the age kept whole on the right. -->
-                  <li class="flex items-baseline gap-2">
-                    <span class="shrink-0 text-xs {eventTone(e.kind)}" aria-hidden="true">●</span>
-                    <div class="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-                      <span class="min-w-0 text-sm">{eventLabel(e, locale())}</span>
-                      <time datetime={e.occurred_at} class="text-xs text-muted-foreground sm:shrink-0 sm:whitespace-nowrap">
-                        {timeAgo(e.occurred_at, locale())}
-                      </time>
-                    </div>
-                  </li>
-                {/each}
-              </ol>
-            </div>
-          {/if}
-
-          <label class="flex flex-col gap-1 text-sm">
-            <span class="font-medium">{s.stage}</span>
-            <select
-              value={item.stage ?? ''}
-              onchange={(e) => onsetstage(e.currentTarget.value)}
-              class="rounded-md border border-input bg-transparent px-2 py-1.5 text-sm"
-            >
-              <option value="">{s.noStage}</option>
-              <!-- Grouped so `Closed` reads as a heading over its three outcomes rather than
-                   as a fifth state competing with them — the same four groups the board's
-                   columns use, from the same generated table. -->
-              {#each groupedStages(locale()) as g (g.id)}
-                <optgroup label={g.label}>
-                  {#each g.options as s (s.value)}
-                    <option value={s.value}>{s.label}</option>
-                  {/each}
-                </optgroup>
-              {/each}
-            </select>
-          </label>
-
-          <div class="flex flex-col gap-1 text-sm">
-            <span class="font-medium">{s.notes}</span>
-            <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} label={s.notes} showSaveState />
-          </div>
-        </div>
-      {:else if tab === 'auto_apply'}
-        <div class="flex flex-col gap-4">
-          {#if progressSteps}
-            <ol class="flex items-center" aria-label={s.autoApplyProgressAria}>
-              {#each progressSteps as step, i (step.id)}
-                <li class="flex flex-1 items-center last:flex-none">
-                  <div class="flex flex-col items-center gap-1">
-                    <span
-                      class={cn(
-                        'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium',
-                        step.state === 'done' && 'bg-brand text-brand-foreground',
-                        step.state === 'active' && 'bg-brand-muted text-brand-strong ring-2 ring-brand-ring',
-                        step.state === 'queued' && 'bg-muted text-muted-foreground ring-2 ring-border',
-                        step.state === 'error' && 'bg-destructive/15 text-destructive-strong',
-                        step.state === 'pending' && 'bg-muted text-muted-foreground'
-                      )}
-                    >
-                      {#if step.state === 'done'}
-                        <Check class="size-3.5" />
-                      {:else if step.state === 'error'}
-                        <X class="size-3.5" />
-                      {:else}
-                        {i + 1}
-                      {/if}
-                    </span>
-                    <span class="text-xs font-medium whitespace-nowrap">{PROGRESS_STEP_LABELS[step.id]}</span>
-                  </div>
-                  {#if i < progressSteps.length - 1}
-                    <span class="mx-1 h-px flex-1 bg-border" aria-hidden="true"></span>
-                  {/if}
-                </li>
-              {/each}
-            </ol>
-          {/if}
-
-          {#if canPauseAutoApply}
-            <div class="flex flex-col gap-1">
-              <div class="flex items-center gap-2">
-                <Button variant="outline" size="sm" class="w-fit" onclick={toggleAutoApplyPaused}>
-                  {autoApplyPaused ? s.continue : s.pause}
-                </Button>
-                <Button variant="ghost" size="sm" class="w-fit" disabled={autoApplyActing || autoApplyDeciding} onclick={cancelAutoApply}>
-                  {s.cancelAutoApply}
-                </Button>
-              </div>
-              {#if autoApplyPaused}
-                <p class="text-xs text-muted-foreground">
-                  {s.pausedNote}
-                </p>
-              {/if}
-            </div>
-          {/if}
-
-          <!-- Auto-apply's own "action needed"/status content (openspec/changes/
-               auto-apply-progress-tab) — moved here from the Application tab so this is
-               the one place it lives. -->
-          {#if offersApplyChat}
-            <div class="flex flex-col gap-1">
-              <Button variant="primary" size="sm" class="w-fit" onclick={startApplyChat}>{s.applyChat.open}</Button>
-              <p class="text-xs text-muted-foreground">{s.applyChat.hint}</p>
-              {#if applyChatError}
-                <p class="text-xs text-destructive">{applyChatError}</p>
-              {/if}
-            </div>
-          {/if}
-
-          {#if autoApplyBanner?.kind === 'tailoring'}
-            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm text-muted-foreground">{s.banners.tailoring}</p>
-            </div>
-          {:else if autoApplyBanner?.kind === 'approved'}
-            <div class="flex flex-col gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm font-medium">{s.banners.approved}</p>
-              {#if hasPosting && item.job}
-                <a
-                  href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
-                  class="w-fit text-xs underline-offset-2 hover:underline"
-                >
-                  {s.viewTailoredCv}
-                </a>
-              {/if}
-            </div>
-          {:else if autoApplyBanner?.kind === 'pending_review'}
-            <div class="flex flex-col gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
-              <p class="text-sm font-medium">{s.banners.pendingReview}</p>
-              {#if autoApply?.resolved_preview?.fields.length}
-                <dl class="flex flex-col gap-1 text-sm">
-                  <!-- Keyed on the position, as JobApplyForm keys the questions it renders
-                       from the same forms. A PreviewField carries a label and a value and
-                       nothing else (internal/application/autoapply/preview.go), and an ATS
-                       form is free to ask "Location" twice — so a key on the label is one
-                       repeated question away from each_key_duplicate taking the drawer
-                       down, the same way the tag row did (FREEHIRE-WEB-20). This list is a
-                       read-only snapshot that nothing reorders, so position IS its
-                       identity. -->
-                  {#each autoApply.resolved_preview.fields as f, i (i)}
-                    <div class="flex gap-2">
-                      <dt class="shrink-0 text-muted-foreground">{f.label}:</dt>
-                      <dd class="min-w-0 truncate">{f.value}</dd>
-                    </div>
-                  {/each}
-                </dl>
-              {/if}
-              {#if showsPendingList}
-                {@render answerList(pendingQuestions)}
-                {#if bankError}
-                  <p class="text-xs text-destructive">{bankError}</p>
-                {/if}
-              {/if}
-              {#if hasPosting && item.job}
-                <a
-                  href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
-                  class="w-fit text-xs underline-offset-2 hover:underline"
-                >
-                  {s.viewTailoredCv}
-                </a>
-              {/if}
-              {#if savedAnyAnswer}
-                <div class="flex flex-col gap-1">
-                  <Button size="sm" variant="outline" class="w-fit" disabled={autoApplyActing} onclick={retryAutoApply}>
-                    {s.refreshPreview}
-                  </Button>
-                  <p class="text-xs text-muted-foreground">{s.refreshPreviewNote}</p>
-                </div>
-              {/if}
-              <div class="flex items-center gap-2">
-                <Button size="sm" disabled={autoApplyDeciding || autoApplyActing} onclick={() => decideAutoApply('approved')}>
-                  {s.approveAndSend}
-                </Button>
-                <Button size="sm" variant="outline" disabled={autoApplyDeciding || autoApplyActing} onclick={() => decideAutoApply('declined')}>
-                  {s.decline}
-                </Button>
-              </div>
-              {#if autoApplyError}
-                <p class="text-xs text-destructive">{autoApplyError}</p>
-              {/if}
-            </div>
-          {:else if autoApplyBanner?.kind === 'blocked'}
-            <div class="flex flex-col gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
-              <p class="text-sm font-medium">{s.banners.blocked}</p>
-              {#if showsBlockedList}
-                {@render answerList(blockedQuestions)}
-                {#if bankError}
-                  <p class="text-xs text-destructive">{bankError}</p>
-                {/if}
-              {/if}
-              <p class="text-xs text-muted-foreground">{s.banners.blockedRetryHint}</p>
-              <Button size="sm" class="w-fit" disabled={autoApplyActing} onclick={retryAutoApply}>
-                {s.tryAgain}
-              </Button>
-              {#if autoApplyError}
-                <p class="text-xs text-destructive">{autoApplyError}</p>
-              {/if}
-            </div>
-          {:else if autoApplyBanner?.kind === 'declined'}
-            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm text-muted-foreground">
-                {s.banners.declined}
-              </p>
-            </div>
-          {:else if autoApplyBanner?.kind === 'failed'}
-            <div class="flex flex-col gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-              {#if autoApply?.may_have_reached_employer}
-                <!-- The one failure retry refuses: the employer may already hold the
-                     application, and sending it again would be a duplicate in the
-                     candidate's name. -->
-                <p class="text-sm text-muted-foreground">{s.banners.failedUncertain}</p>
-              {:else}
-                <p class="text-sm text-muted-foreground">{s.banners.failed}</p>
-                <Button size="sm" variant="outline" class="w-fit" disabled={autoApplyActing} onclick={retryAutoApply}>
-                  {s.tryAgain}
-                </Button>
-              {/if}
-              {#if autoApplyError}
-                <p class="text-xs text-destructive">{autoApplyError}</p>
-              {/if}
-            </div>
-          {:else if autoApplyBanner?.kind === 'tailor_failed'}
-            <!-- Deliberately not the 'failed' copy: nothing was submitted and there is no
-                 tailored CV to look at, so "could not submit after retrying" would describe
-                 a step this attempt never reached. Says what did NOT happen, because the
-                 state it replaces (an entry that read as 'tailoring' forever) left people
-                 believing an application was on its way. -->
-            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm font-medium">{s.banners.tailorFailed}</p>
-              <p class="text-xs text-muted-foreground">
-                {s.banners.tailorFailedDetail}
-              </p>
-              <Button size="sm" variant="outline" class="w-fit" disabled={autoApplyActing} onclick={retryAutoApply}>
-                {s.tryAgain}
-              </Button>
-              {#if autoApplyError}
-                <p class="text-xs text-destructive">{autoApplyError}</p>
-              {/if}
-              {#if hasPosting && item.job}
-                <a
-                  href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}
-                  class="w-fit text-xs underline-offset-2 hover:underline"
-                >
-                  {s.tailorACv}
-                </a>
-              {/if}
-            </div>
-          {:else if autoApplied}
-            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm text-muted-foreground">{s.banners.autoApplied}</p>
-            </div>
-          {/if}
-        </div>
+        <JobDrawerApplication
+          stage={item.stage ?? ''}
+          notes={item.notes ?? ''}
+          {pendingOutcome}
+          {onchooseoutcome}
+          {onsetstage}
+          {onsavenotes}
+        />
+      {:else if tab === 'history'}
+        {#if !item.job}
+          <p class="text-sm text-muted-foreground">{s.historyUnavailable}</p>
+        {:else if emailsLoading || emailsError}
+          <JobDrawerLoadState loading={emailsLoading} error={emailsError} onretry={() => loadEmails(true)} />
+        {:else}
+          <JobDrawerHistory {events} />
+        {/if}
+      {:else if tab === 'auto_apply' && (emails === null || emailsError)}
+        <JobDrawerLoadState
+          loading={emailsLoading || (emails === null && !emailsError)}
+          error={emailsError}
+          onretry={() => loadEmails(true)}
+        />
       {:else if tab === 'fit'}
         <div class="flex flex-col gap-6">
           {#if posting}
@@ -1035,119 +436,43 @@
                  would restate the panel's own content and offer a "View full analysis"
                  link that closes the drawer to show what is already open. -->
             <JobMatch job={posting} matchAnalysis={null} />
-            <MatchAnalysisFull job={posting} />
+            {#await import('./MatchAnalysisFull.svelte')}
+              <p role="status" class="text-sm text-muted-foreground">{s.loading}</p>
+            {:then { default: MatchAnalysisFull }}
+              <MatchAnalysisFull job={posting} />
+            {:catch}
+              <p role="alert" class="text-sm text-destructive">{s.analysisLoadError}</p>
+              <button
+                type="button"
+                class="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                onclick={() => (tab = 'description')}>{s.returnToDescription}</button
+              >
+            {/await}
           {:else if item.job}
             <p class="text-sm text-muted-foreground">{s.loading}</p>
           {/if}
         </div>
       {:else if tab === 'emails'}
         <div class="flex flex-col gap-2">
-          <!-- The mail says one thing, the stage says another, and nothing moved it. That is
-               the rule working — mail never settles an application — so the resolution is
-               offered rather than applied, and it goes through the ordinary stage change so
-               the ledger records the candidate as its source. -->
           {#if stageSuggestion}
-            <div class="flex flex-wrap items-center gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
-              <span class="min-w-0 flex-1 text-sm">
-                {format(s.looksLike, {
-                  signal: statusLabel(stageSuggestion.signal, locale()).toLowerCase(),
-                  stage: item.stage ? humanizeStage(item.stage, locale()) : s.stageUnset,
-                })}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                class="shrink-0"
-                onclick={() => {
-                  const stage = stageSuggestion?.stage;
-                  stageSuggestion = null;
-                  if (stage) onsetstage(stage);
-                }}
-              >
-                {format(s.moveTo, { stage: humanizeStage(stageSuggestion.stage, locale()) })}
-              </Button>
-              <button
-                type="button"
-                class="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
-                onclick={() => (stageSuggestion = null)}
-              >
-                {s.dismiss}
-              </button>
-            </div>
+            <JobDrawerStageSuggestion
+              suggestion={stageSuggestion}
+              currentStage={item.stage}
+              onmove={(stage) => {
+                stageSuggestion = null;
+                if (stage) onsetstage(stage);
+              }}
+              ondismiss={() => (stageSuggestion = null)}
+            />
           {/if}
-          <!-- The pull direction. Everything else in the mail stack starts from a message
-               and asks which application it belongs to; this asks the opposite, which is
-               the only way an application that plainly ought to have mail can say so. -->
-          {#if canRecall}
-            <div class="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" disabled={recallLoading} onclick={runRecall}>
-                {recallLoading ? s.searchingMail : s.findMail}
-              </Button>
-              {#if recall && recallPending.length === 0}
-                <span class="text-xs text-muted-foreground">
-                  {recall.scanned === 0
-                    ? s.noUnattachedMail
-                    : format(plural(locale(), recall.scanned, s.noMatchAmong), { scanned: String(recall.scanned) })}
-                </span>
-              {/if}
-            </div>
-          {/if}
-          {#if recallPlanRefused}
-            <div class="flex flex-wrap items-center gap-3">
-              <p class="text-sm text-muted-foreground">{recallError}</p>
-              <PlanLimitLink />
-            </div>
-          {:else if recallError}
-            <p class="text-sm text-destructive">{recallError}</p>
-          {/if}
-          {#if recallPending.length > 0}
-            <div class="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3">
-              <p class="text-sm">
-                {format(plural(locale(), recall?.scanned ?? 0, s.possibleMatches), {
-                  count: String(recallPending.length),
-                  scanned: String(recall?.scanned ?? 0),
-                })}
-              </p>
-              <!-- Said where the boundary is crossed, not buried in a settings page: the
-                   sweep looks through the mailbox and keeps nothing until Link is pressed. -->
-              <p class="text-xs text-muted-foreground">
-                {format(s.searchedMailboxFor, { company })}
-              </p>
-              {#each recallPending as e (e.provider_id ?? e.id)}
-                <div class="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2">
-                  <div class="min-w-0 flex-1">
-                    <div class="flex items-baseline gap-2">
-                      <span class="min-w-0 flex-1 truncate text-sm font-medium">{e.from_name || e.from_addr}</span>
-                      <span class="shrink-0 text-xs text-muted-foreground">{timeAgo(e.received_at, locale())}</span>
-                    </div>
-                    <div class="truncate text-sm text-muted-foreground">{e.subject || s.noSubject}</div>
-                    <!-- Marked on the row it belongs to, not only counted below it. The
-                         count alone made the reader hunt for which message it meant. -->
-                    {#if e.invitation}
-                      <span class="mt-1 inline-flex text-xs text-muted-foreground">
-                        {s.carriesInvitation}
-                      </span>
-                    {/if}
-                  </div>
-                  <Button size="sm" class="shrink-0" onclick={() => resolveRecalled(e, true)}>{s.link}</Button>
-                  <button
-                    type="button"
-                    class="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
-                    onclick={() => resolveRecalled(e, false)}
-                  >
-                    {s.notThisOne}
-                  </button>
-                </div>
-              {/each}
-              <!-- The calendar follows from the mail and needs no calendar code: cal-sync
-                   re-reads its whole window every run, so an invitation linked today
-                   produces its meeting on the next one. -->
-              {#if recall && recall.invitations > 0}
-                <p class="text-xs text-muted-foreground">
-                  {s.invitationSyncNote}
-                </p>
-              {/if}
-            </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" href={resolve('/my/inbox')} class="h-9">
+              {s.linkEmail}
+            </Button>
+            <span class="text-xs text-muted-foreground">{s.linkEmailHint}</span>
+          </div>
+          {#if item.job}
+            <JobDrawerMailRecall slug={item.job.public_slug} {company} {canRecall} onlinked={() => loadEmails(true)} />
           {/if}
           {#if emailsLoading}
             <p class="text-sm text-muted-foreground">{s.loadingEmails}</p>
@@ -1156,134 +481,33 @@
           {:else if !emails || emails.length === 0}
             <p class="text-sm text-muted-foreground">{s.noEmailsLinked}</p>
           {:else}
-            {#each emails as e (e.id)}
-              <div class="overflow-hidden rounded-xl border border-border">
-                <button
-                  type="button"
-                  onclick={() => toggleEmail(e.id)}
-                  aria-expanded={expandedId === e.id}
-                  class="flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-accent"
-                >
-                  <div
-                    class="mt-0.5 flex size-9 shrink-0 select-none items-center justify-center rounded-full text-xs font-semibold text-white"
-                    style="background-color: {avatarColor(e.from_addr || e.from_name)}"
-                  >
-                    {avatarInitials(e.from_name, e.from_addr)}
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex items-baseline gap-2">
-                      <span class="min-w-0 flex-1 truncate text-sm font-medium">{e.from_name || e.from_addr}</span>
-                      <span class="shrink-0 text-[11px] text-muted-foreground">{timeAgo(e.received_at, locale())}</span>
-                    </div>
-                    <div class="mt-0.5 truncate text-sm text-muted-foreground">{e.subject || s.noSubject}</div>
-                    {#if statusLabel(e.status_signal, locale())}
-                      <!-- The chip, and what its signal means for the stage. The chip alone left
-                           three different situations looking identical: the signal moved the
-                           stage, it named one only the candidate may apply, or it was never
-                           about progress.
-                           Both run at the chip's own size (text-xs) rather than at a 10px the
-                           wrapper used to impose: StatusChip renders a Badge, which carries its
-                           size, so pinning the wrapper smaller would leave the explanation off
-                           the chip's baseline — and this thread has the room the dense inbox
-                           list does not. -->
-                      <span class="mt-1 inline-flex flex-wrap items-baseline gap-1.5 text-xs leading-4">
-                        <StatusChip signal={e.status_signal} />
-                        {#if stageImplication(e.status_signal, locale())}
-                          <span class="text-muted-foreground">{stageImplication(e.status_signal, locale())}</span>
-                        {/if}
-                      </span>
-                    {/if}
-                  </div>
-                </button>
-                {#if expandedId === e.id}
-                  <div class="border-t border-border p-3">
-                    {#if bodyLoading}
-                      <p class="text-sm text-muted-foreground">{s.loading}</p>
-                    {:else if expandedBody?.body_html}
-                      <!-- Untrusted sender HTML isolated in a sandboxed iframe (no scripts/forms/navigation). -->
-                      <iframe
-                        title={s.messageBodyTitle}
-                        sandbox=""
-                        srcdoc={expandedBody.body_html}
-                        class="h-96 w-full bg-white"
-                      ></iframe>
-                    {:else if expandedBody?.body_text}
-                      <pre class="max-h-96 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{expandedBody.body_text}</pre>
-                    {:else}
-                      <p class="text-sm text-muted-foreground">{s.noContent}</p>
-                    {/if}
-                  </div>
-                {/if}
-              </div>
-            {/each}
+            <JobDrawerEmailList {emails} />
           {/if}
         </div>
-      {:else}
-        <div class="flex flex-col gap-5">
-          {#if !item.job}
-            <!-- The posting was removed from the catalogue. What it said is genuinely
-                 gone; saying so is better than an empty tab that reads as a bug. -->
-            <p class="text-sm text-muted-foreground">
-              {s.postingRemoved}
-            </p>
-          {:else if posting?.description}
-            <JobDescription html={posting.description} />
-          {:else if !posting}
-            <p class="text-sm text-muted-foreground">{s.loading}</p>
-          {:else}
-            <p class="text-sm text-muted-foreground">{s.noDescription}</p>
-          {/if}
-
-          {#if posting?.skills?.length}
-            <div class="flex flex-col gap-2 border-t border-border pt-5">
-              <p class={sectionLabel}>{s.skills}</p>
-              <div class="flex flex-wrap gap-1.5">
-                <!-- Unlinked: the drawer is a reading surface over a posting, and a
-                     filter link would navigate out of it. -->
-                {#each posting.skills as skill (skill)}
-                  <SkillChip slug={skill} linked={false} />
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </div>
+      {:else if tab === 'description'}
+        <JobDrawerDescription removed={!item.job} {posting} />
       {/if}
     </div>
   </div>
 
   <!-- Pinned footer: remove-from-board (destructive card action). A flex sibling of the
-       scrolling body, not an overlay, so it never sits over the notes editor; `pb-safe`
-       lifts it clear of the home indicator. -->
+       scrolling body, not an overlay, so it never sits over the notes editor. The bottom
+       padding leaves room for both the button and the home indicator. -->
   <div class="shrink-0 border-t border-border">
-    <div class="mx-auto flex w-full max-w-2xl justify-end px-5 pb-safe pt-3 sm:px-6">
+    <div
+      class="mx-auto flex w-full max-w-2xl justify-end px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 sm:px-6"
+    >
       <Button
         variant="ghost"
         size="sm"
         onclick={() => (confirmRemoveOpen = true)}
-        class="gap-1.5 text-destructive-strong hover:bg-destructive/10 hover:text-destructive-strong"
+        class="h-11 gap-1.5 text-destructive-strong hover:bg-destructive/10 hover:text-destructive-strong sm:h-8"
       >
         <Trash2 class="size-4" />
         {s.removeFromBoard}
       </Button>
     </div>
   </div>
-
-  <!-- Inside the drawer's root on purpose: the drawer covers the screen at z-50, so a panel
-       docked outside it would sit underneath. Here it is drawn over the drawer's right edge,
-       or over the whole drawer where there is no room to dock. -->
-  {#if applyChatId}
-    <AssistantPanel open={applyChatOpen} title={s.applyChat.title} onClose={() => (applyChatOpen = false)}>
-      {#snippet children(setSessionId)}
-        <AssistantChat
-          session={applyChatId ?? undefined}
-          showSessionRail={false}
-          syncApplication={applyChatOpen}
-          onSessionChange={setSessionId}
-          onTurnComplete={() => void loadEmails(true)}
-        />
-      {/snippet}
-    </AssistantPanel>
-  {/if}
 </div>
 
 <!-- Outside the panel's root on purpose: the panel's focus trap handles Tab on its own

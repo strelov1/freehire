@@ -2,29 +2,25 @@ package main
 
 import (
 	"context"
+	"log"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 )
 
 // closeEmptyFeedBoards lists the boards board_health proves are reachable-but-empty for at least
-// closeWindowDays, and for each one either closes its open jobs (apply) or counts how many would
-// close (dry run) — never both in the same call, so a dry run genuinely writes nothing.
+// closeWindowDays, and for each either closes its open jobs (apply) or counts how many would
+// close (dry run), never both in one call, so a dry run writes nothing.
 //
-// This is the twin of closeChronicBoards, for the failure mode that one structurally cannot see:
-// there, a board whose crawls all FAIL; here, a board whose crawls all SUCCEED and return
-// nothing. The distinction is not academic — it decided the WhatJobs incident of 2026-09-10,
-// where a market's publisher account was emptied, every crawl answered 200 with zero results,
-// board_health showed a green board with consecutive_failures = 0, and a month of stale postings
-// stayed open because neither the per-run sweep nor the chronic net could reach them (see
-// migration 0158).
+// Twin of closeChronicBoards for the case it cannot see: a board whose crawls all SUCCEED with
+// zero results shows consecutive_failures = 0, so neither the per-run sweep nor the chronic net
+// reaches its stale postings (migration 0158).
 //
-// The two passes are kept as separate functions rather than one parameterised by predicate: they
-// share the shape of the walk (list, refuse the ambiguous, close or count, report) and that part
-// IS shared below, but what each one proves is different, and a single function taking a "which
-// net am I" flag would put the two safety nets' evidence one boolean apart from each other.
+// Kept separate rather than one function with a predicate flag: what each pass proves differs,
+// and a flag would put the two safety nets' evidence one boolean apart.
 func closeEmptyFeedBoards(ctx context.Context, q *db.Queries, closeWindowDays int32, maxBoards int32, apply bool) (closeReport, error) {
 	ageWindow := pgtype.Interval{Days: closeWindowDays, Valid: true}
 	rows, err := q.ListEmptyFeedBoards(ctx, db.ListEmptyFeedBoardsParams{
@@ -35,9 +31,14 @@ func closeEmptyFeedBoards(ctx context.Context, q *db.Queries, closeWindowDays in
 		return closeReport{}, err
 	}
 
+	registry := sources.Taxonomy()
 	report := closeReport{boardsProcessed: len(rows)}
 	for _, r := range rows {
-		ref := boardRef{r.Provider, r.Board}
+		ref := boardRef{provider: r.Provider, board: r.Board}
+		if sources.ProbeCloses(registry[ref.provider]) {
+			log.Printf("close-chronic-boards: skipping board %s — requires individual posting evidence", ref)
+			continue
+		}
 		ambiguous, err := isRegionAmbiguous(ctx, q, ref)
 		if err != nil {
 			return report, err
@@ -52,7 +53,7 @@ func closeEmptyFeedBoards(ctx context.Context, q *db.Queries, closeWindowDays in
 			return report, err
 		}
 		report.jobsAffected += n
-		logBoardAction("empty-feed", ref, n, apply)
+		logBoardAction("empty-feed", ref, n, apply, "--apply-empty-feed")
 	}
 	if len(rows) > 0 {
 		logCapOverflow("empty-feed", rows[0].Total, len(rows))
@@ -61,13 +62,12 @@ func closeEmptyFeedBoards(ctx context.Context, q *db.Queries, closeWindowDays in
 }
 
 // closeOrCountOneEmptyFeedBoard closes (or, without apply, counts) one empty-feed row's jobs. A
-// boardless provider's record (board == "") routes to the source-scoped statement, exactly as in
-// closeOrCountOneBoard: such a record already stands for the provider's whole crawl.
+// boardless provider's record (board == "") routes to the source-scoped statement, as in
+// closeOrCountOneBoard.
 //
-// ageWindow is passed through to the query itself, which re-validates board_health's CURRENT
-// state against it before touching anything — see CloseEmptyFeedBoardJobs's doc comment: the row
-// was read by an earlier, separate query, and a single crawl that reaches one posting in the gap
-// stamps last_yield_at and makes the board live again.
+// ageWindow is passed to the query, which re-validates board_health's current state before
+// touching anything: the row was read by an earlier query, and one crawl in the gap makes the
+// board live again.
 func closeOrCountOneEmptyFeedBoard(ctx context.Context, q *db.Queries, ref boardRef, ageWindow pgtype.Interval, apply bool) (int64, error) {
 	if ref.board == "" {
 		if apply {

@@ -5,9 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/valyala/fasthttp"
-
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 )
 
@@ -26,11 +23,6 @@ func (s *stubProfiler) Professional(_ context.Context, _ int64, st resumeextract
 	return s.profile, s.err
 }
 
-// fiberCtx makes a throwaway request context; candidateProfile only needs c.Context().
-func fiberCtx() *fiber.Ctx {
-	return fiber.New().AcquireCtx(&fasthttp.RequestCtx{})
-}
-
 func TestCandidateProfileComesFromTheBank(t *testing.T) {
 	bank := &stubProfiler{profile: resumeextract.Professional{
 		Headline: "Senior Backend Engineer",
@@ -40,7 +32,7 @@ func TestCandidateProfileComesFromTheBank(t *testing.T) {
 	}}
 	h := &matchHandlers{bank: bank}
 
-	got := h.candidateProfile(fiberCtx(), 7)
+	got := h.candidateProfile(context.Background(), 7)
 
 	if len(got.Experience) != 1 || got.Experience[0].Company != "RingCentral" {
 		t.Errorf("experience = %+v, want the banked role", got.Experience)
@@ -57,7 +49,7 @@ func TestCandidateProfileHasNoExperienceWhenTheBankIsEmpty(t *testing.T) {
 		Education: []resumeextract.Education{{Degree: "BSc"}},
 	}}}
 
-	if got := h.candidateProfile(fiberCtx(), 7); len(got.Experience) != 0 {
+	if got := h.candidateProfile(context.Background(), 7); len(got.Experience) != 0 {
 		t.Errorf("experience = %+v, want none — an empty bank means no analysis", got.Experience)
 	}
 }
@@ -65,7 +57,7 @@ func TestCandidateProfileHasNoExperienceWhenTheBankIsEmpty(t *testing.T) {
 func TestCandidateProfileSurvivesAFailingBank(t *testing.T) {
 	h := &matchHandlers{bank: &stubProfiler{err: errors.New("database down")}}
 
-	if got := h.candidateProfile(fiberCtx(), 7); len(got.Experience) != 0 {
+	if got := h.candidateProfile(context.Background(), 7); len(got.Experience) != 0 {
 		t.Errorf("experience = %+v, want none on a bank error", got.Experience)
 	}
 }
@@ -77,7 +69,7 @@ func TestCandidateProfileSurvivesAFailingBank(t *testing.T) {
 func TestCandidateProfileWithNothingToReadFrom(t *testing.T) {
 	h := &matchHandlers{}
 
-	if got := h.candidateProfile(fiberCtx(), 7); len(got.Experience) != 0 {
+	if got := h.candidateProfile(context.Background(), 7); len(got.Experience) != 0 {
 		t.Errorf("experience = %+v, want none when there is no bank and no queries", got.Experience)
 	}
 	if h.candidateBank() != nil {

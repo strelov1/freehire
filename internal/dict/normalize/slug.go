@@ -9,23 +9,17 @@ import (
 	"github.com/mozillazg/go-unidecode"
 )
 
-// Slug turns a name into its natural key, usable verbatim in a URL path:
-// transliterated to ASCII, lowercased, with each run of non-alphanumeric
-// characters collapsed to a single hyphen and leading/trailing hyphens trimmed.
-// Non-Latin names are romanized (e.g. "Яндекс" → "iandeks", "小红书" →
-// "xiao-hong-shu"), so the resulting slug is always ASCII — public_slug and
-// company_slug are URL path segments, and a Cyrillic/CJK slug breaks routing.
-// An empty or untransliterable name yields an empty slug, which the write path
-// treats as "no company".
+// Slug turns a name into its natural key, usable verbatim in a URL path: transliterated to
+// ASCII, lowercased, each run of non-alphanumeric characters collapsed to one hyphen, ends
+// trimmed. Non-Latin names are romanized ("Яндекс" → "iandeks", "小红书" → "xiao-hong-shu"),
+// because a Cyrillic/CJK slug breaks routing. An empty or untransliterable name yields an
+// empty slug, which the write path treats as "no company".
 //
-// It deliberately does not strip legal suffixes (LLC, Inc) — that is [CompanySlug]'s
-// job, and the two are different keys. Most non-Latin forms (ООО, 有限公司) are stripped
-// by neither: the form test reduces a word to its ASCII letters, so a Cyrillic or Chinese
-// suffix simply is not one. The Japanese business forms (株式会社) are the exception, which
-// CompanySlug matches literally and keys as a Latin mark — see japaneseForms. Slug is faithful to the name it
-// was given, which is what a URL path segment and a job's public slug need; CompanySlug
-// answers "which employer is this", where "RingCentral" and "RingCentral, Inc." must not
-// be two answers. Reach for CompanySlug whenever the value keys a COMPANY.
+// It does not strip legal suffixes (LLC, Inc): that is [CompanySlug]'s job, and the two are
+// different keys. Most non-Latin forms (ООО, 有限公司) are stripped by neither; the Japanese
+// forms (株式会社) are matched literally by CompanySlug (see japaneseForms). Use CompanySlug
+// whenever the value keys a COMPANY, where "RingCentral" and "RingCentral, Inc." must not be
+// two answers.
 func Slug(name string) string {
 	name = unidecode.Unidecode(name)
 	var b strings.Builder

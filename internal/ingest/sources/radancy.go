@@ -8,11 +8,10 @@ import (
 	"golang.org/x/net/html"
 )
 
-// radancy adapts Radancy (TalentBrew) career sites. The board is the career-site host
-// (e.g. "careers.ing.com"). The site's sitemap.xml enumerates the pages; each job page is
-// server-rendered HTML carrying a schema.org JobPosting ld+json block, so the description
-// comes from a per-job detail fetch (bounded-concurrency), like the other detail adapters
-// (successfactors, icims).
+// radancy adapts Radancy (TalentBrew) career sites. The board is the career-site host (e.g.
+// "careers.ing.com"). The site's sitemap.xml enumerates the pages; each job page is server-rendered
+// HTML carrying a schema.org JobPosting ld+json block, so the description comes from a per-job
+// detail fetch (bounded concurrency).
 
 // radancyHTTP is the transport radancy needs: an XML sitemap plus HTML detail pages.
 type radancyHTTP interface {

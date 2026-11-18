@@ -26,15 +26,14 @@ import (
 // A list entry is an anchor carrying data_idOferta with the title, the employer brand (a group
 // such as FCC lists Aqualia and FCC Infraestructuras), "Province, Country" and a Spanish date;
 // the page states the count ("Total ofertas: 259"), which the walk is checked against. The detail
-// page repeats the whole list beside the panel, so a body costs 50-700 KB; hence a HydratingSource
+// page repeats the whole list beside the panel, so a body is large; hence a HydratingSource
 // with a per-board budget.
 //
 // The edge is Imperva's: to the crawl host and to a single proxy exit it answers "Pardon Our
-// Interruption" (HTTP 405) after a handful of requests, and through the rotating exits about
-// half the requests pass. The provider is therefore routed through the Scrapling tier's
-// impersonating fetcher over the rotating proxy (scraplingtier.go), and the adapter retries a 405
-// several times — each retry leaves on a new exit.
-//
+// Interruption" (HTTP 405) after a handful of requests, and through the rotating exits only some
+// requests pass. The provider is therefore routed through the Scrapling tier's impersonating
+// fetcher over the rotating proxy (scraplingtier.go), and the adapter retries a 405, each retry on
+// a new exit.
 // An unknown or switched-off label answers 200 with the platform's "404 - Page not found" page;
 // that is a board-level error, so the chronic-board close retires the board.
 type epreselec struct {
@@ -55,12 +54,10 @@ func (epreselec) Provider() string { return "epreselec" }
 func (epreselec) fullBoardListing() {}
 
 const (
-	// epreselecMaxNewPerBoard bounds the bodies one board buys in a run. The largest sites hold
-	// ~300 offers and each body is a page carrying the whole list again; the rest wait for the
-	// next run, and a stored posting never costs a body again.
+	// epreselecMaxNewPerBoard bounds the bodies one board buys in a run: each is a page carrying the
+	// whole list again. The rest wait for the next run, and a stored posting never costs a body again.
 	epreselecMaxNewPerBoard = 120
-	// epreselecAttempts is how many times a request refused by the edge (405) is sent. With four,
-	// the first crawl (2026-10-27) still lost 498 of 1,211 bodies and ten lists: the refusals
+	// epreselecAttempts is how many times a request refused by the edge (405) is sent. Refusals
 	// come in runs, not independently. Each retry leaves on a new rotating exit.
 	epreselecAttempts = 8
 	// epreselecDetailWorkers keeps the per-board fan-out low: every request goes through the

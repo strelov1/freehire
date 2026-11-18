@@ -60,11 +60,47 @@ func TestUpdateTimezone_RoundTrips(t *testing.T) {
 		t.Fatalf("Timezone = %v, want nil before any update", user.Timezone)
 	}
 
-	updated, err := svc.UpdateTimezone(context.Background(), user.ID, "America/New_York")
+	updated, err := svc.UpdateTimezone(context.Background(), user.ID, "America/New_York", false)
 	if err != nil {
 		t.Fatalf("UpdateTimezone: %v", err)
 	}
 	if updated.Timezone == nil || *updated.Timezone != "America/New_York" {
 		t.Errorf("Timezone = %v, want %q", updated.Timezone, "America/New_York")
+	}
+}
+
+// A delayed automatic write must preserve an explicit selection committed since
+// the browser loaded its null-timezone session snapshot.
+func TestUpdateTimezone_AdoptionPreservesExplicitSelection(t *testing.T) {
+	pool := startPostgres(t)
+	svc := accounts.New(oauthRepo(pool), plainHasher{})
+	ctx := context.Background()
+	user, err := svc.Register(ctx, "tz-adopt@example.test", "password123", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct {
+		zone  string
+		adopt bool
+		want  string
+	}{
+		{"Asia/Karachi", true, "Asia/Karachi"},
+		{"Europe/Berlin", false, "Europe/Berlin"},
+		{"Asia/Karachi", true, "Europe/Berlin"},
+	} {
+		got, err := svc.UpdateTimezone(ctx, user.ID, step.zone, step.adopt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Timezone == nil || *got.Timezone != step.want {
+			t.Fatalf("timezone = %v, want %s", got.Timezone, step.want)
+		}
+	}
+	got, err := svc.UserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Timezone == nil || *got.Timezone != "Europe/Berlin" {
+		t.Fatalf("persisted timezone = %v, want Europe/Berlin", got.Timezone)
 	}
 }

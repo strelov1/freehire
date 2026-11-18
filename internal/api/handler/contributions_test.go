@@ -8,8 +8,8 @@ import (
 
 // A recorded contribution's wire shape exposes the board it discovered and the surface it was
 // submitted through.
-func TestToContributionResponse_Shape(t *testing.T) {
-	got := toContributionResponse(contribution.Contribution{
+func TestContributionOut_Shape(t *testing.T) {
+	got := contributionOut(contribution.Contribution{
 		ID: 9, URL: "https://jobs.ashbyhq.com/blitzy", Source: "ashby",
 		Board: "blitzy", Status: "pending", Surface: contribution.SurfaceCLI,
 	})

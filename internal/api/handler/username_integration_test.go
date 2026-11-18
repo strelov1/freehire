@@ -32,9 +32,9 @@ func newUsernameTestApp(t *testing.T) (*fiber.App, *auth.Issuer, func() (int64, 
 	ra := auth.RequireAuth(iss, testVersions)
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/username/check", h.CheckUsername)
-	app.Get("/api/v1/me/username", ra, h.GetUsername)
-	app.Put("/api/v1/me/username", ra, h.ClaimUsername)
+	app.Get("/api/v1/username/check", newContract(contractHandlers{authHandlers: h}))
+	app.Get("/api/v1/me/username", ra, newContract(contractHandlers{authHandlers: h}))
+	app.Put("/api/v1/me/username", ra, newContract(contractHandlers{authHandlers: h}))
 
 	var nextEmail int
 	seedUser := func() (int64, string) {

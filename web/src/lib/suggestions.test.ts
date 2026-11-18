@@ -24,10 +24,20 @@ describe('starterSuggestions', () => {
     // would fill the whole list with it and never reach a designer or a PM.
     const got = starterSuggestions(
       counts({
-        backend: 8000, frontend: 7000, fullstack: 6000, devops: 5000, sre: 4000,
-        mobile: 3000, hardware: 2000, embedded: 1000, blockchain: 900,
-        architecture: 800, network_engineering: 700, industrial_engineering: 600,
-        design: 40005, product: 30000,
+        backend: 8000,
+        frontend: 7000,
+        fullstack: 6000,
+        devops: 5000,
+        sre: 4000,
+        mobile: 3000,
+        hardware: 2000,
+        embedded: 1000,
+        blockchain: 900,
+        architecture: 800,
+        network_engineering: 700,
+        industrial_engineering: 600,
+        design: 40005,
+        product: 30000,
       }),
     );
     const slugs = got.map((s) => s.slug);
@@ -80,21 +90,33 @@ describe('starterSuggestions', () => {
   it('gives each leading group two rows before reaching a later one', () => {
     const got = starterSuggestions(
       counts({
-        software_engineering: 89598, devops: 53313,
-        data_analytics: 77404, data_engineering: 42090,
-        security: 73684, qa: 28985,
-        design: 40023, creative: 9000,
-        product: 57120, project_management: 68851,
-        sales: 180253, hr: 15369, healthcare: 78498,
+        software_engineering: 89598,
+        devops: 53313,
+        data_analytics: 77404,
+        data_engineering: 42090,
+        security: 73684,
+        qa: 28985,
+        design: 40023,
+        creative: 9000,
+        product: 57120,
+        project_management: 68851,
+        sales: 180253,
+        hr: 15369,
+        healthcare: 78498,
       }),
     );
     const slugs = got.map((s) => s.slug);
     expect(slugs).toEqual([
-      'software_engineering', 'devops',
-      'data_analytics', 'data_engineering',
-      'security', 'qa',
-      'design', 'creative',
-      'project_management', 'product',
+      'software_engineering',
+      'devops',
+      'data_analytics',
+      'data_engineering',
+      'security',
+      'qa',
+      'design',
+      'creative',
+      'project_management',
+      'product',
     ]);
     expect(slugs).not.toContain('sales');
     expect(slugs).not.toContain('healthcare');

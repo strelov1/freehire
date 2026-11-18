@@ -7,7 +7,7 @@
   import { NOTIFICATIONS_FAQ } from '#lib/notificationsFaq.js';
 
   const triggers = [
-    { key: 'match', text: 'A new match: instantly, or once a day at a time you pick.' },
+    { key: 'match', text: 'A new match: once a day at a time you pick, or sooner with Pro or Ultra.' },
     { key: 'saved', text: "A saved job you haven't applied to, 3 days after saving it." },
     {
       key: 'silent',
@@ -36,14 +36,14 @@
        controls in miniature — the same ones on the job feed's filter sidebar. -->
   <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-[1.05fr_0.95fr]">
     <div>
-      <SectionLabel text="notifications" />
+      <SectionLabel text="Notifications" />
       <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
         You don't refresh the feed. It comes to you.
       </h1>
       <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-        Save a search once and freehire watches it for you — instantly, or as a daily digest. The
-        same settings also carry your tracking nudges, so a new match and a stalled application
-        both reach you the same way: email, Telegram, or push.
+        Save a search once and freehire watches it for you and sends a daily digest at a time you pick; Pro and Ultra
+        can get matches sooner. The same settings also carry your tracking nudges, so a new match and a stalled
+        application both reach you the same way: email, Telegram, or push.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
         <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
@@ -67,11 +67,10 @@
           All filters
           <span
             class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-brand-foreground"
-          >3</span>
+            >3</span
+          >
         </span>
-        <span
-          class="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-secondary text-sm font-semibold"
-        >
+        <span class="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-secondary text-sm font-semibold">
           <Bell class="size-4" aria-hidden="true" />
           Get new-job alerts
           <ChevronRight class="size-4 text-muted-foreground" aria-hidden="true" />
@@ -102,7 +101,7 @@
 
   <!-- The two triggers. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="two things worth knowing about" />
+    <SectionLabel text="Two things worth knowing about" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">A new match, or your own board gone quiet.</h2>
     </div>
@@ -110,8 +109,8 @@
       <div class="bg-background p-6 sm:p-7">
         <h3 class="text-lg font-semibold tracking-tight">A job that just appeared</h3>
         <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Save a search — stack, seniority, region, salary — and freehire matches new postings
-          against it as they're added. Get told instantly, or once a day at a time you pick.
+          Save a search — stack, seniority, region, salary — and freehire matches new postings against it as they're
+          added. Get a daily digest at a time you pick; Pro and Ultra can choose instant or batched alerts.
         </p>
         <a
           href={resolve('/my/notifications/searches')}
@@ -123,8 +122,8 @@
       <div class="bg-background p-6 sm:p-7">
         <h3 class="text-lg font-semibold tracking-tight">Your own board, going quiet</h3>
         <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-          The same channels also carry your tracking nudges — a saved job you haven't applied to,
-          an application gone silent, an interview coming up.
+          The same channels also carry your tracking nudges — a saved job you haven't applied to, an application gone
+          silent, an interview coming up.
         </p>
         <a
           href={resolve('/features/tracking')}
@@ -138,12 +137,11 @@
 
   <!-- What the two emails actually look like. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="what it looks like" />
+    <SectionLabel text="What it looks like" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Two kinds of email, one settings page.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        Both mirror the real template — the same card, the same brand button, the same opt-out
-        line at the bottom.
+        Both mirror the real template — the same card, the same brand button, the same opt-out line at the bottom.
       </p>
     </div>
     <div class="mt-10 grid gap-6 lg:grid-cols-2">
@@ -178,7 +176,7 @@
 
   <!-- Every trigger, on your channel. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="every trigger, on your channel" />
+    <SectionLabel text="Every trigger, on your channel" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-start">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Four things trigger a notification.</h2>
@@ -193,17 +191,19 @@
       </div>
       <div>
         <p class="max-w-md leading-relaxed text-muted-foreground">
-          Pick the channel — any combination sends, and one you never connect is simply skipped —
-          and set quiet hours; nothing arrives while they're on. A daily digest is exempt, since
-          it already fires once at a time you chose.
+          Pick the channel — any combination sends, and one you never connect is simply skipped — and set quiet hours;
+          nothing arrives while they're on. A daily digest is exempt, since it already fires once at a time you chose.
         </p>
         <div class="mt-6 flex flex-wrap items-center gap-4 text-muted-foreground">
           <span class="flex items-center gap-1.5 text-sm"><Mail class="size-4" aria-hidden="true" /> Email</span>
-          <span class="flex items-center gap-1.5 text-sm"><ProviderIcon provider="telegram" class="size-4" /> Telegram</span>
+          <span class="flex items-center gap-1.5 text-sm"
+            ><ProviderIcon provider="telegram" class="size-4" /> Telegram</span
+          >
           <span class="flex items-center gap-1.5 text-sm"><Smartphone class="size-4" aria-hidden="true" /> Push</span>
         </div>
         <div class="mt-8">
-          <Button href={resolve('/my/notifications/settings')} variant="primary" size="lg">Notification settings</Button>
+          <Button href={resolve('/my/notifications/settings')} variant="primary" size="lg">Notification settings</Button
+          >
         </div>
       </div>
     </div>
@@ -211,7 +211,7 @@
 
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share NOTIFICATIONS_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="faq" />
+    <SectionLabel text="FAQ" />
     <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Frequently asked questions.</h2>
     <!-- An odd number of items would leave the last row half empty (see the
          features doorway grid in HomeView.svelte) — the last card fills the
@@ -233,8 +233,7 @@
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
       <h2 class="text-2xl font-semibold tracking-tight">Stop checking back to find out.</h2>
       <p class="max-w-xl leading-relaxed text-muted-foreground">
-        Save the next search worth watching and freehire tells you the moment — or the day — it
-        matters.
+        Save the next search worth watching and freehire tells you the moment — or the day — it matters.
       </p>
       <div class="flex flex-wrap gap-3">
         <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>

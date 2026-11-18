@@ -1,0 +1,258 @@
+import { describe, expect, it } from 'vitest';
+import { ORIGIN, company, job } from './seoTestUtils';
+import type { PostMeta } from './blog';
+import {
+  collectionPageJsonLd,
+  companyListItems,
+  datasetJsonLd,
+  definedTermJsonLd,
+  jobListItems,
+  organizationJsonLd,
+} from './seo';
+import { articleJsonLd } from './seoAppJsonLd';
+
+// articleJsonLd reads a validated PostMeta.
+function post(overrides: Partial<PostMeta> = {}): PostMeta {
+  return {
+    slug: 'launch',
+    title: 'Launch',
+    date: '2026-01-15',
+    summary: 'We shipped it.',
+    type: 'article',
+    tags: ['product', 'launch'],
+    draft: false,
+    ...overrides,
+  };
+}
+
+describe('organizationJsonLd', () => {
+  it('emits every company-info fact the company provides', () => {
+    const ld = organizationJsonLd(
+      company({
+        year_founded: 2015,
+        employee_count: 250,
+        hq_country: 'us',
+        company_info: {
+          logo: 'https://logo.dev/acme.png',
+          description: 'Acme builds rockets.',
+          website: 'https://acme.example',
+          linkedin: 'https://linkedin.com/company/acme',
+        },
+      }),
+      ORIGIN,
+    );
+
+    expect(ld['@type']).toBe('Organization');
+    expect(ld.name).toBe('Acme');
+    expect(ld.url).toBe('https://freehire.me/companies/acme');
+    expect(ld.logo).toBe('https://logo.dev/acme.png');
+    expect(ld.description).toBe('Acme builds rockets.');
+    expect(ld.sameAs).toEqual(['https://acme.example', 'https://linkedin.com/company/acme']);
+    expect(ld.foundingDate).toBe('2015');
+    expect(ld.numberOfEmployees).toEqual({
+      '@type': 'QuantitativeValue',
+      value: 250,
+    });
+    expect(ld.address).toEqual({
+      '@type': 'PostalAddress',
+      addressCountry: 'US',
+    });
+  });
+
+  it('omits every fact a bare company lacks', () => {
+    const ld = organizationJsonLd(company(), ORIGIN);
+
+    expect(ld).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: 'Acme',
+      url: 'https://freehire.me/companies/acme',
+    });
+  });
+
+  it('includes only the links that are present in sameAs', () => {
+    const ld = organizationJsonLd(company({ company_info: { website: 'https://acme.example' } }), ORIGIN);
+
+    expect(ld.sameAs).toEqual(['https://acme.example']);
+  });
+
+  it('falls back to the homepage field and normalizes a bare domain to https', () => {
+    // The bulk company-info backfill stores the homepage under `homepage` (often a
+    // bare domain), not `website` — sameAs must still emit a valid absolute URL.
+    const ld = organizationJsonLd(company({ company_info: { homepage: 'acme.com' } }), ORIGIN);
+
+    expect(ld.sameAs).toEqual(['https://acme.com']);
+  });
+
+  it('prefers website over homepage and leaves an already-absolute homepage as-is', () => {
+    const ld = organizationJsonLd(
+      company({
+        company_info: { website: 'https://acme.io', homepage: 'https://old.acme.com' },
+      }),
+      ORIGIN,
+    );
+
+    expect(ld.sameAs).toEqual(['https://acme.io']);
+  });
+
+  it('omits sameAs entirely when no links are present', () => {
+    const ld = organizationJsonLd(company({ company_info: { description: 'no links here' } }), ORIGIN);
+
+    expect(ld).not.toHaveProperty('sameAs');
+  });
+
+  it('emits aggregateRating when the company has feedback', () => {
+    const ld = organizationJsonLd(company({ feedback_count: 12, feedback_rating_avg: 4.5 }), ORIGIN);
+
+    expect(ld.aggregateRating).toEqual({
+      '@type': 'AggregateRating',
+      ratingValue: 4.5,
+      reviewCount: 12,
+      bestRating: 5,
+      worstRating: 1,
+    });
+  });
+
+  it('omits aggregateRating when the company has no feedback yet', () => {
+    const ld = organizationJsonLd(company(), ORIGIN);
+
+    expect(ld).not.toHaveProperty('aggregateRating');
+  });
+});
+
+describe('collectionPageJsonLd', () => {
+  const URL = 'https://freehire.me/collections/react';
+
+  it('wraps the jobs in a CollectionPage → ItemList of summary ListItems', () => {
+    const ld = collectionPageJsonLd(
+      'React jobs',
+      'Every open React role.',
+      URL,
+      jobListItems(
+        [job('Senior React Engineer', 'senior-react-engineer-abc'), job('React Native Dev', 'react-native-dev-xyz')],
+        ORIGIN,
+      ),
+    );
+
+    expect(ld['@type']).toBe('CollectionPage');
+    expect(ld.name).toBe('React jobs');
+    expect(ld.description).toBe('Every open React role.');
+    expect(ld.url).toBe(URL);
+    expect(ld.mainEntity).toEqual({
+      '@type': 'ItemList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Senior React Engineer',
+          url: 'https://freehire.me/jobs/senior-react-engineer-abc',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'React Native Dev',
+          url: 'https://freehire.me/jobs/react-native-dev-xyz',
+        },
+      ],
+    });
+  });
+
+  it('emits an empty ItemList for a collection with no jobs', () => {
+    const ld = collectionPageJsonLd('Empty', 'Nothing yet.', URL, []);
+
+    expect(ld.mainEntity).toEqual({ '@type': 'ItemList', itemListElement: [] });
+  });
+
+  // The directory reuses the same CollectionPage with company items, so a company's
+  // ListItem must point at /companies/<slug>, never the job path.
+  it('wraps companies in the same CollectionPage shape', () => {
+    const ld = collectionPageJsonLd(
+      'Companies hiring in tech',
+      'Browse companies hiring in tech.',
+      'https://freehire.me/companies',
+      companyListItems(
+        [
+          { name: 'Acme', slug: 'acme' },
+          { name: 'Globex', slug: 'globex' },
+        ],
+        ORIGIN,
+      ),
+    );
+
+    expect(ld['@type']).toBe('CollectionPage');
+    expect(ld.mainEntity).toEqual({
+      '@type': 'ItemList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Acme', url: 'https://freehire.me/companies/acme' },
+        { '@type': 'ListItem', position: 2, name: 'Globex', url: 'https://freehire.me/companies/globex' },
+      ],
+    });
+  });
+});
+
+describe('datasetJsonLd', () => {
+  const URL = 'https://freehire.me/insights/salary/engineering';
+
+  // The insights pages are aggregate-only: an empty `distribution` array would be a
+  // dead end for a crawler, so the key must be absent rather than empty.
+  it('omits distribution when the page advertises no endpoint', () => {
+    const ld = datasetJsonLd('Engineering salaries', 'Bands by seniority.', URL, ORIGIN);
+
+    expect(ld['@type']).toBe('Dataset');
+    expect(ld.isAccessibleForFree).toBe(true);
+    expect(ld).not.toHaveProperty('distribution');
+  });
+
+  it('advertises each endpoint as a JSON DataDownload', () => {
+    const ld = datasetJsonLd('Live figures', 'Catalogue scale.', `${ORIGIN}/open`, ORIGIN, [
+      { name: 'Jobs API', contentUrl: `${ORIGIN}/api/v1/jobs` },
+    ]);
+
+    expect(ld.distribution).toEqual([
+      {
+        '@type': 'DataDownload',
+        name: 'Jobs API',
+        encodingFormat: 'application/json',
+        contentUrl: 'https://freehire.me/api/v1/jobs',
+      },
+    ]);
+  });
+});
+
+describe('articleJsonLd', () => {
+  it('builds an Article with headline, description, date, url and keywords', () => {
+    const ld = articleJsonLd(post(), ORIGIN);
+    expect(ld['@type']).toBe('Article');
+    expect(ld.headline).toBe('Launch');
+    expect(ld.description).toBe('We shipped it.');
+    expect(ld.datePublished).toBe('2026-01-15');
+    expect(ld.url).toBe('https://freehire.me/blog/launch');
+    expect(ld.keywords).toBe('product, launch');
+  });
+
+  it('omits keywords when the post has no tags', () => {
+    const ld = articleJsonLd(post({ tags: [] }), ORIGIN);
+    expect(ld.keywords).toBeUndefined();
+  });
+});
+
+describe('definedTermJsonLd', () => {
+  // A glossary page defining a term is the textbook DefinedTerm case, and it is the
+  // one thing on the page a search engine cannot infer from the prose: that the
+  // heading names a term and the paragraph below it is that term's definition.
+  it('names the term, its definition and the set it belongs to', () => {
+    const ld = definedTermJsonLd(
+      { slug: 'dbt', label: 'dbt', description: 'A SQL transformation tool.' },
+      'https://freehire.me',
+    ) as Record<string, unknown>;
+
+    expect(ld['@type']).toBe('DefinedTerm');
+    expect(ld.name).toBe('dbt');
+    expect(ld.description).toBe('A SQL transformation tool.');
+    expect(ld['@id']).toBe('https://freehire.me/skills/dbt');
+    expect(ld.inDefinedTermSet).toMatchObject({
+      '@type': 'DefinedTermSet',
+      '@id': 'https://freehire.me/skills',
+    });
+  });
+});

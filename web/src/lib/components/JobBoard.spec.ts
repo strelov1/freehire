@@ -1,9 +1,11 @@
+import { pushState } from '$app/navigation';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyJob } from '#lib/types.js';
 import JobBoard from './JobBoard.svelte';
 import { resetUserStores } from '#lib/userResource.svelte.js';
 import { hasAppliedToCompany, markAppliedToCompany } from '#lib/appliedCompanies.svelte.js';
+import { ApiError } from '#lib/api.js';
 
 vi.mock('$app/state', () => ({
   page: { data: { locale: 'en' }, url: new URL('http://localhost/my/tracking'), state: {} },
@@ -15,7 +17,6 @@ vi.mock('$app/navigation', () => ({
   replaceState: vi.fn(),
 }));
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true, currentUser: () => null }));
-vi.mock('#lib/assistant/api.js', () => ({ createRehearsal: vi.fn(), createDebrief: vi.fn() }));
 
 // EasyMDE stands in as a plain text holder: what is under test is when the board persists
 // the notes, not the markdown editor. `typed` is what the next editor will hold.
@@ -33,24 +34,42 @@ vi.mock('easymde', () => ({
   },
 }));
 
-const { untrackApplication, listMyJobs, trackApplication, saveJob, clearApplicationStage, listAppliedCompanySlugs } =
-  vi.hoisted(() => ({
-    untrackApplication: vi.fn(),
-    listMyJobs: vi.fn(),
-    trackApplication: vi.fn(),
-    saveJob: vi.fn(),
-    clearApplicationStage: vi.fn(),
-    listAppliedCompanySlugs: vi.fn(),
-  }));
+const {
+  untrackApplication,
+  listMyJobs,
+  getTrackedApplication,
+  trackApplication,
+  saveJob,
+  clearApplicationStage,
+  listAppliedCompanySlugs,
+} = vi.hoisted(() => ({
+  untrackApplication: vi.fn(),
+  listMyJobs: vi.fn(),
+  getTrackedApplication: vi.fn(),
+  trackApplication: vi.fn(),
+  saveJob: vi.fn(),
+  clearApplicationStage: vi.fn(),
+  listAppliedCompanySlugs: vi.fn(),
+}));
 
-vi.mock('#lib/api.js', () => ({
-  api: { untrackApplication, listMyJobs, trackApplication, saveJob, clearApplicationStage, listAppliedCompanySlugs },
+vi.mock('#lib/api.js', async () => ({
+  ApiError: (await import('#lib/api-core.js')).ApiError,
+  api: {
+    untrackApplication,
+    listMyJobs,
+    getTrackedApplication,
+    trackApplication,
+    saveJob,
+    clearApplicationStage,
+    listAppliedCompanySlugs,
+  },
   isPlanRefusal: () => false,
 }));
 
 // No posting: the panel then fetches nothing of its own, which keeps the test on the board.
 const application: MyJob = {
   id: 'app-1',
+  added_to_board_at: null,
   company_slug: 'acme',
   role_title: 'Backend Engineer',
   job: null,
@@ -73,6 +92,7 @@ beforeEach(() => {
   clearApplicationStage.mockReset().mockResolvedValue(undefined);
   untrackApplication.mockReset().mockResolvedValue(undefined);
   listMyJobs.mockReset();
+  getTrackedApplication.mockReset();
   trackApplication.mockReset();
   editorText.typed = '';
 });
@@ -84,9 +104,7 @@ describe('JobBoard — empty board', () => {
     expect(screen.getByText('Your board is empty')).toBeTruthy();
     expect(screen.getByText(/Save a job from any listing and it lands here/)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Find jobs' }).getAttribute('href')).toBe('/jobs');
-    expect(screen.getByRole('link', { name: 'Upload your CV' }).getAttribute('href')).toBe(
-      '/my/profile',
-    );
+    expect(screen.getByRole('link', { name: 'Upload your CV' }).getAttribute('href')).toBe('/my/profile');
     // The columns behind it are not drawn at all.
     expect(screen.queryByRole('heading', { name: 'Applied' })).toBeNull();
     expect(screen.queryByRole('searchbox')).toBeNull();
@@ -132,10 +150,49 @@ describe('JobBoard — removing an application', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Remove from board' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() =>
-      expect(screen.getByText("Couldn't remove it from your board. Try again.")).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText("Couldn't remove it from your board. Try again.")).toBeTruthy());
     expect(screen.queryByText('Your board is empty')).toBeNull();
+  });
+});
+
+describe('JobBoard — column navigation', () => {
+  it('jumps to a column and follows scrolling without changing application stages', async () => {
+    render(JobBoard, { initial: [application] });
+    const sections = screen.getAllByRole('region');
+    const row = screen.getByRole('region', { name: 'No stage' }).parentElement;
+    if (!row) throw new Error('Missing board row');
+    Object.defineProperty(row, 'clientWidth', { value: 300 });
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({ left: 0 } as DOMRect);
+    sections.forEach((section, index) => {
+      vi.spyOn(section, 'getBoundingClientRect').mockImplementation(
+        () => ({ left: index * 300 - row.scrollLeft, width: 300 }) as DOMRect,
+      );
+    });
+    const picker = screen.getByRole('combobox', { name: 'Go to stage' }) as HTMLSelectElement;
+
+    await fireEvent.change(picker, { target: { value: 'offer' } });
+    expect(row.scrollLeft).toBe(1200);
+    expect(picker.value).toBe('offer');
+
+    row.scrollLeft = 600;
+    await fireEvent.scroll(row);
+    expect(picker.value).toBe('applied');
+    expect(trackApplication).not.toHaveBeenCalled();
+  });
+});
+
+describe('JobBoard — search recovery', () => {
+  it('explains an empty search and restores the board with focus in the search field', async () => {
+    render(JobBoard, { initial: [application] });
+    const search = screen.getByRole('searchbox', { name: 'Search applications by company or role' });
+    await fireEvent.input(search, { target: { value: 'unmatched company' } });
+    expect(screen.getByText('No matching applications')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Applied' })).toBeNull();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(screen.getByRole('region', { name: 'Applied' })).toBeTruthy();
+    expect(document.activeElement).toBe(search);
+    expect((search as HTMLInputElement).value).toBe('');
   });
 });
 
@@ -150,6 +207,62 @@ describe('JobBoard — clearing application progress', () => {
 });
 
 describe('JobBoard — a failed stage change', () => {
+  it.each([404, 503])('handles an omitted target returning %s after a successful board read', async (code) => {
+    const target = {
+      ...application,
+      job: { public_slug: 'older-job', title: 'Backend Engineer', company: 'Acme' },
+    } as MyJob;
+    const other = { ...application, id: 'other', role_title: 'Other role' };
+    trackApplication.mockRejectedValue(new Error('refused'));
+    listMyJobs.mockResolvedValue({ items: [other] });
+    getTrackedApplication.mockRejectedValue(new ApiError(code, 'Unavailable'));
+    render(JobBoard, { initial: [target], initialId: target.id });
+    const picker = within(screen.getByRole('dialog')).getByRole('combobox');
+    await fireEvent.change(picker, { target: { value: 'interview' } });
+    if (code === 404) {
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.getByText('Other role')).toBeTruthy();
+      expect(screen.queryByText("Couldn't load your board.")).toBeNull();
+    } else {
+      expect(await screen.findByText("Couldn't load your board.")).toBeTruthy();
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    }
+  });
+
+  it.each([
+    ['preloaded', 'applied'],
+    ['preloaded', 'offer'],
+    ['direct', 'applied'],
+    ['direct', 'offer'],
+  ] as const)('refreshes an out-of-page %s target after a rejected stage write back to %s', async (source, stage) => {
+    const target = {
+      ...application,
+      job: { public_slug: 'older-job', title: 'Backend Engineer', company: 'Acme' },
+    } as MyJob;
+    trackApplication.mockRejectedValue(new Error('refused'));
+    listMyJobs.mockResolvedValue({ items: [] });
+    getTrackedApplication.mockResolvedValue({ ...target, job: target.job, emails: [] });
+    render(JobBoard, {
+      initialId: target.id,
+      ...(source === 'preloaded' ? { initial: [target] } : { initialItem: target }),
+    });
+    const picker = within(await screen.findByRole('dialog')).getByRole('combobox') as HTMLSelectElement;
+    if (source === 'direct') await screen.findByRole('region', { name: 'Applied' });
+    getTrackedApplication.mockClear().mockResolvedValue({ ...target, stage, emails: [] });
+    await fireEvent.change(picker, { target: { value: 'interview' } });
+    await waitFor(() => expect(getTrackedApplication).toHaveBeenCalledWith('older-job'));
+    const label = stage === 'offer' ? 'Offer' : 'Applied';
+    expect(await screen.findByText(`Couldn't move Backend Engineer — it's back in ${label}. Try again.`)).toBeTruthy();
+    expect(picker.value).toBe(stage);
+  });
+
+  it('opens a directly loaded target while keeping a failed board read visible', async () => {
+    listMyJobs.mockRejectedValue(new Error('offline'));
+    render(JobBoard, { initialId: application.id, initialItem: application, initialAutoApply: true });
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(await screen.findByText("Couldn't load your board.")).toBeTruthy();
+  });
+
   it('rolls the card back and names where it landed', async () => {
     trackApplication.mockRejectedValue(new Error('boom'));
     listMyJobs.mockResolvedValue({ items: [application] });
@@ -159,9 +272,7 @@ describe('JobBoard — a failed stage change', () => {
     await fireEvent.change(picker, { target: { value: 'interview' } });
 
     await waitFor(() =>
-      expect(
-        screen.getByText("Couldn't move Backend Engineer — it's back in Applied. Try again."),
-      ).toBeTruthy(),
+      expect(screen.getByText("Couldn't move Backend Engineer — it's back in Applied. Try again.")).toBeTruthy(),
     );
   });
 });
@@ -217,7 +328,6 @@ describe('JobBoard — the list view drawing a page at a time', () => {
   });
 });
 
-
 describe('JobBoard — quick triage', () => {
   const posting = {
     ...application,
@@ -250,15 +360,40 @@ describe('JobBoard — quick triage', () => {
 
   it.each(['board', 'list'] as const)('sorts %s by company and date added', async (view) => {
     const rows = [
-      { ...application, id: 'z', role_title: 'Z role', company_slug: 'zeta', added_to_board_at: '2026-10-30T00:00:00Z' },
-      { ...application, id: 'a', role_title: 'A role', company_slug: 'alpha', added_to_board_at: '2026-10-01T00:00:00Z' },
+      {
+        ...application,
+        id: 'z',
+        role_title: 'Z role',
+        company_slug: 'zeta',
+        added_to_board_at: '2026-10-30T00:00:00Z',
+      },
+      {
+        ...application,
+        id: 'a',
+        role_title: 'A role',
+        company_slug: 'alpha',
+        added_to_board_at: '2026-10-01T00:00:00Z',
+      },
     ];
     render(JobBoard, { initial: rows, view });
     const sort = screen.getByRole('combobox', { name: 'Sort applications' });
     await fireEvent.change(sort, { target: { value: 'company' } });
-    const titles = () => (view === 'board' ? within(screen.getByRole('region', { name: 'Applied' })) : screen).getAllByText(/^[AZ] role$/).map((el) => el.textContent);
+    const titles = () =>
+      (view === 'board' ? within(screen.getByRole('region', { name: 'Applied' })) : screen)
+        .getAllByText(/^[AZ] role$/)
+        .map((el) => el.textContent);
     expect(titles()).toEqual(['A role', 'Z role']);
     await fireEvent.change(sort, { target: { value: 'added' } });
     expect(titles()).toEqual(['Z role', 'A role']);
+  });
+});
+
+describe('JobBoard — List navigation', () => {
+  it('keeps a list application on the List route so refresh preserves its presentation', async () => {
+    render(JobBoard, { initial: [application], view: 'list' });
+    const target = screen.getByText('Backend Engineer').closest('button');
+    if (!target) throw new Error('Missing application button');
+    await fireEvent.click(target);
+    expect(pushState).toHaveBeenLastCalledWith('/my/tracking/list?application=app-1', { trackingItem: 'app-1' });
   });
 });

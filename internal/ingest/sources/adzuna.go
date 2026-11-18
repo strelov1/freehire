@@ -6,25 +6,19 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// adzuna adapts the Adzuna Job Search API v1 (api.adzuna.com), an independent job aggregator
-// operating its own employer/recruiter feeds across many countries. It is the one KEYED source
-// besides usajobs/reed/whatjobs: every request needs an app_id/app_key pair, so the adapter is
-// registered only when both ADZUNA_APP_ID and ADZUNA_APP_KEY are set (see All).
+// adzuna adapts the Adzuna Job Search API v1 (api.adzuna.com), an independent aggregator across
+// many countries. KEYED: every request needs an app_id/app_key pair, so the adapter is registered
+// only when both ADZUNA_APP_ID and ADZUNA_APP_KEY are set (see All).
 //
-// Unlike the boardless aggregators (getmanfred, echojobs), Adzuna has no "list everything" call —
-// every request selects a country and, within it, a category (e.g. "it-jobs"), the same shape
-// whatjobs' keyword board and trudvsem's OKATO-region board already use for a source whose real
-// catalogue is far deeper than any one crawl can walk. The country goes in CompanyEntry.Region
-// (it is literally which regional API path segment to hit — /jobs/{country}/search/{page} — the
-// same job Region already does for Lever's EU host), and the category in CompanyEntry.Board.
-// Category, not free-text keyword: a live check confirmed it is a hard filter (every result on
-// page 50 of "it-jobs" still tagged it-jobs), unlike whatjobs' relevance-ranked keyword search,
-// which pads a thin result set with unrelated inventory past the first page or two — so this
-// adapter does not need whatjobs' corroboration-and-relevance-collapse logic.
+// There is no "list everything" call: every request selects a country and, within it, a category
+// (e.g. "it-jobs"). The country goes in CompanyEntry.Region (the /jobs/{country}/search/{page}
+// path segment), the category in CompanyEntry.Board. Category is a hard filter, unlike whatjobs'
+// relevance-ranked keyword search, so no corroboration logic is needed.
 type adzuna struct {
 	http   JSONGetter
 	appID  string
@@ -33,34 +27,25 @@ type adzuna struct {
 
 const (
 	adzunaBaseURL = "https://api.adzuna.com/v1/api/jobs"
-	// adzunaPageSize is this API's page-size ceiling, confirmed live rather than assumed:
-	// results_per_page=100 answers HTTP 400.
+	// adzunaPageSize is this API's page-size ceiling: results_per_page=100 answers HTTP 400.
 	adzunaPageSize = 50
-	// adzunaSortOrder makes the crawl read the NEWEST postings first. Without it Adzuna
-	// answers in relevance order, which is stable between runs, so a bounded crawl re-reads
-	// one fixed slice for ever: measured live on 2026-09-06, the first result of the request
-	// this adapter used to send was published 2026-02-10, seven months earlier. The budget was
-	// buying 23.5k posting-slots a day and writing ~6.3k new postings — a 27% yield. Ordering
-	// by date is what aims the budget at postings the catalogue does not already hold.
+	// adzunaSortOrder reads the NEWEST postings first. Without it Adzuna answers in a stable
+	// relevance order, so a bounded crawl re-reads one fixed slice forever.
 	adzunaSortOrder = "date"
-	// adzunaMaxDaysOld bounds a request to recently published postings. It is NOT redundant
-	// with adzunaSortOrder, and that is the whole reason it exists: Fetch's loop ends when a
-	// page comes back empty, and against a feed tens of thousands deep that never happens
-	// inside adzunaMaxPages. A quiet board (au publishes ~176 postings between runs) would
-	// otherwise spend its full page budget on postings the pipeline's seen-set discards, and
-	// those requests are drawn from the same daily ceiling a busy board needs. Two days rather
-	// than one so a missed run does not open a gap the next run cannot close.
+	// adzunaMaxDaysOld bounds a request to recently published postings. Not redundant with
+	// adzunaSortOrder: Fetch ends on an empty page, which never happens inside adzunaMaxPages
+	// against a feed tens of thousands deep, so a quiet board would spend its page budget on
+	// postings the seen-set discards, from the same daily ceiling a busy board needs. Two days
+	// rather than one so a missed run leaves no gap.
 	adzunaMaxDaysOld = 2
-	// adzunaMaxPages bounds one board's crawl. Unlike a plain "how deep is sensible" figure,
-	// this is one leg of a REQUEST BUDGET the platform's terms bound: Adzuna's free API states
-	// 250 requests/day and 2500/month, and the crawl spends
+	// adzunaMaxPages bounds one board's crawl. It is one leg of a REQUEST BUDGET set by Adzuna's
+	// free-API terms (250 requests/day, 2500/month):
 	//
 	//	boards (4) x adzunaMaxPages (15) x runs/day (4, see the systemd timer) = 240/day
 	//
-	// so raising any one of the three without lowering another puts the catalogue's largest
-	// single source outside the terms it is served under. TestAdzunaPageBudgetStaysWithinThe-
-	// DailyCeiling holds the arithmetic; the timer's cadence is the leg that lives outside
-	// this repository's build, in freehire-ops' provision/host2/systemd/freehire-ingest@adzuna.timer.
+	// Raising one leg without lowering another breaks the terms.
+	// TestAdzunaPageBudgetStaysWithinTheDailyCeiling holds the arithmetic; the timer cadence lives
+	// outside this repo, in freehire-ops' provision/host2/systemd/freehire-ingest@adzuna.timer.
 	adzunaMaxPages = 15
 	// adzunaSweepGrace widens the unseen sweep for the same reason whatjobs' does: redirect_url
 	// routes through Adzuna's own domain rather than the employer's site, so a posting's liveness
@@ -80,15 +65,14 @@ func (adzuna) aggregator() {}
 
 func (adzuna) sweepGrace() time.Duration { return adzunaSweepGrace }
 
-// adzuna's crawl reads ~750 postings a run of a feed holding ~157k US it-jobs alone, so
-// unseen is not evidence there (57% of its live US feed is older than 21 days);
-// cmd/adzuna-liveness reads Adzuna's own /details page and closes on a 404/410.
+// Unseen is not evidence a posting closed: a crawl reaches only a small slice of a much deeper
+// feed, most of which is older than 21 days. cmd/adzuna-liveness reads Adzuna's own /details page
+// and closes on a 404/410.
 func (adzuna) livenessProbed() {}
 
 // adzunaID reads a posting's id, which the API emits as a JSON string for most postings but as a
-// bare JSON number for some (observed live 2026-08-08, gb/it-jobs page 7) — an upstream
-// inconsistency, not a documented alternate shape. A page hitting it must decode instead of
-// failing the whole page, mirroring habrJobLocations/habrAddress's shape-tolerant UnmarshalJSON.
+// bare number for some. A page hitting it must decode rather than fail whole, mirroring
+// habrJobLocations/habrAddress's shape-tolerant UnmarshalJSON.
 type adzunaID string
 
 func (id *adzunaID) UnmarshalJSON(b []byte) error {
@@ -105,9 +89,8 @@ func (id *adzunaID) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// adzunaPosting is one search result. Several fields the API sends are deliberately unread —
-// salary_min/salary_max/salary_is_predicted and category — because none has a home in the Job
-// shape today, mirroring echojobs' treatment of its own unread vendor fields.
+// adzunaPosting is one search result. salary_min/salary_max/salary_is_predicted and category are
+// deliberately unread: none has a home in the Job shape.
 type adzunaPosting struct {
 	ID          adzunaID `json:"id"`
 	Title       string   `json:"title"`
@@ -126,6 +109,18 @@ type adzunaPosting struct {
 // page is a board-level error; a failure on a later page ends the walk with what was already
 // gathered. Pagination stops on an empty page or at adzunaMaxPages.
 func (a adzuna) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return a.fetch(ctx, e, adzunaMaxDaysOld)
+}
+
+// FetchRecent reads the same slice as Fetch but bounds it to the run's window. The window goes
+// out as max_days_old, which Adzuna's search API documents as "the age of the oldest advertisement
+// in days that will be returned" (https://developer.adzuna.com/docs/search). A window under one
+// day still asks for one, the finest grain the parameter has.
+func (a adzuna) FetchRecent(ctx context.Context, e CompanyEntry, window time.Duration) ([]Job, error) {
+	return a.fetch(ctx, e, max(1, int(window/(24*time.Hour))))
+}
+
+func (a adzuna) fetch(ctx context.Context, e CompanyEntry, maxDaysOld int) ([]Job, error) {
 	country := strings.TrimSpace(e.Region)
 	if country == "" {
 		return nil, fmt.Errorf("adzuna: company %q has a blank country (Region)", e.Company)
@@ -140,7 +135,7 @@ func (a adzuna) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		var resp struct {
 			Results []adzunaPosting `json:"results"`
 		}
-		if err := a.http.GetJSON(ctx, adzunaPageURL(country, category, page, a.appID, a.appKey), &resp); err != nil {
+		if err := a.http.GetJSON(ctx, adzunaPageURL(country, category, page, maxDaysOld, a.appID, a.appKey), &resp); err != nil {
 			if page == 1 {
 				return nil, fmt.Errorf("adzuna: country %q category %q page %d: %w", country, category, page, err)
 			}
@@ -158,7 +153,7 @@ func (a adzuna) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return jobs, nil
 }
 
-func adzunaPageURL(country, category string, page int, appID, appKey string) string {
+func adzunaPageURL(country, category string, page, maxDaysOld int, appID, appKey string) string {
 	q := url.Values{
 		"app_id":           {appID},
 		"app_key":          {appKey},
@@ -166,7 +161,7 @@ func adzunaPageURL(country, category string, page int, appID, appKey string) str
 		"category":         {category},
 		"content-type":     {"application/json"},
 		"sort_by":          {adzunaSortOrder},
-		"max_days_old":     {fmt.Sprint(adzunaMaxDaysOld)},
+		"max_days_old":     {strconv.Itoa(maxDaysOld)},
 	}
 	return fmt.Sprintf("%s/%s/search/%d?%s", adzunaBaseURL, country, page, q.Encode())
 }

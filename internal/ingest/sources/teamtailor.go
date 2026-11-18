@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -31,24 +33,19 @@ func NewTeamtailor(c teamtailorHTTP) Source { return teamtailor{http: c} }
 
 func (teamtailor) Provider() string { return "teamtailor" }
 
-// fullBoardListing: jobURLs proves completeness by paginating to a genuinely empty page,
-// and now treats a later-page failure or reaching the ttMaxPages safety ceiling as a hard
-// Fetch failure rather than a partial success. See the fullBoardListing interface for the
-// bar, and ttMaxPages's own comment for the real-board truncation this closes.
+// fullBoardListing: jobURLs paginates to a genuinely empty page; a later-page failure or hitting
+// ttMaxPages fails the crawl instead of returning a partial list.
 func (teamtailor) fullBoardListing() {}
 
-// ttMaxPages bounds listing pagination so a board that never returns an empty page cannot
-// loop forever. It is a safety ceiling, not a real-world board size: found by code review
-// (openspec/changes/teamtailor-listing-cap-fix) that the previous value, 100, was actively
-// truncating real boards — a live probe of tantor.teamtailor.com found pages 100 and 101
-// still full (21 links each) and the board's true end only past page 120, meaning the crawl
-// was silently dropping roughly a fifth of that board's live postings, not a hypothetical.
-// 1000 is a wide multiple over that measurement, and reaching it is now a hard failure
-// (jobURLs), never a silent partial success — see fullBoardListing's own bar (source.go)
-// for why a reachable ceiling must fail loudly rather than truncate quietly.
+// ttMaxPages bounds listing pagination so a board that never returns an empty page cannot loop
+// forever. Real boards run past 100 pages, so it is a safety ceiling; reaching it fails the crawl
+// (jobURLs).
 const (
 	ttMaxPages = 1000
 )
+
+// ttJobListID is the id of the element a standard Teamtailor listing renders its postings in.
+const ttJobListID = "jobs_list_container"
 
 func (t teamtailor) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	urls, err := t.jobURLs(ctx, e)
@@ -64,15 +61,10 @@ func (t teamtailor) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // FetchNew is the hydrating crawl: it enumerates the whole board, but fetches a posting's detail
-// page only for an id the catalogue does not already have. A seen posting is emitted as a
-// liveness refresh (identity only, no detail request, no content rewrite); an unseen one is
-// hydrated as before.
-//
-// This is the difference between a run that costs a request per POSTING and one that costs a
-// request per NEW posting, and on this platform the two are worlds apart: measured on prod
-// 2026-08-16, the board file holds ~40k live postings and about one an hour is genuinely new, so
-// the old crawl spent ~36.7k detail fetches to discover ~100. That volume is what Teamtailor's
-// edge turned away — nearly half the fleet 403'd — and what pacing could only spread out.
+// page only for an id the catalogue does not already have. A seen posting is emitted as a liveness
+// refresh (identity only, no detail request, no content rewrite). This costs a request per new
+// posting instead of per posting, which keeps the fleet under Teamtailor's edge limits (it answers
+// heavy crawls with 403).
 func (t teamtailor) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	urls, err := t.jobURLs(ctx, e)
 	if err != nil {
@@ -107,15 +99,9 @@ func (t teamtailor) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 	}), nil
 }
 
-// jobURLs enumerates every posting URL on a board — the listing walk shared by Fetch and
-// FetchNew, which differ only in what they do with the result.
-//
-// Every failure to prove the walk reached the board's real end is a hard error, never a
-// partial result — a page fetch failing past page 1, and running out the whole ttMaxPages
-// ceiling without ever seeing an empty page, both fail the crawl. This is the
-// fullBoardListing bar (source.go): the 2026 measurement that found ttMaxPages=100 quietly
-// truncating a real board is exactly the shape of bug that bar exists to catch structurally
-// rather than trust to a comment.
+// jobURLs enumerates every posting URL on a board, shared by Fetch and FetchNew. Failing to prove
+// the walk reached the board's real end (a page fails past page 1, or ttMaxPages runs out) is a
+// hard error, never a partial result: the fullBoardListing bar (source.go).
 func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, error) {
 	// base carries the scheme+host; relative job hrefs resolve against it (an absolute
 	// href resolves to itself), so it is parsed once rather than per listing page.
@@ -131,6 +117,8 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 	listPath := "jobs"
 	var urls []string
 	seen := make(map[string]bool)
+	pageVisits := make(map[string]int)
+	listed := false // page 1 carried the job-list element; see the scope below
 	for page := 1; page <= ttMaxPages; page++ {
 		listURL := fmt.Sprintf("https://%s/%s?page=%d", e.Board, listPath, page)
 		root, err := t.http.GetHTML(ctx, listURL)
@@ -140,24 +128,45 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 				listPath = ""
 				listURL = fmt.Sprintf("https://%s/?page=%d", e.Board, page)
 				root, err = t.http.GetHTML(ctx, listURL)
+				if err != nil && errors.As(err, &se) && se.Code == http.StatusNotFound {
+					return nil, fmt.Errorf("teamtailor: career site %q: %w", e.Board, ErrBoardGone)
+				}
 			}
 		}
 		if err != nil {
-			// A later page failing is no longer treated as "the board must have ended
-			// here" — that assumption is exactly what let ttMaxPages's truncation go
-			// unnoticed. An unproven end fails the whole crawl instead.
+			// A later page failing is an unproven end: fail the whole crawl.
 			return nil, fmt.Errorf("teamtailor: listing %s page %d: %w", e.Board, page, err)
 		}
-		// Stop on the first page that carries no links at all — the raw count, read before
-		// cross-page dedup, not the count of newly-added ones. A non-empty page whose links
-		// are all already-seen duplicates is not itself proof the board has no more pages
-		// beyond it (a sort tie spanning a page boundary, a re-served page): stopping on
-		// "nothing new" there would leave an unseen posting past it unreached. Two currently
-		// crawled boards (migen, tantor — see ttMaxPages' own comment) were checked live and
-		// both answer a genuinely empty page past their real end, not a repeat, so this is
-		// not a regression against an observed pattern; it closes the same class of gap
-		// found and fixed for the hand-rolled batch (openspec/changes/fullboardlisting-hand-rolled-batch).
-		links := ttJobLinks(base, root)
+		// Stop on the first page with no links (raw count, before cross-page dedup): a page of only
+		// already-seen links does not prove the end (sort ties, re-served pages).
+		//
+		// A standard site renders postings in ul#jobs_list_container and drops it past the board's
+		// end, while its page chrome may link a posting on EVERY page (an FAQ pointing at an
+		// open-application role). So when page 1 carries the list, every page is read through it
+		// alone; a custom site without it keeps the whole-page read. Deciding per page would
+		// reintroduce the chrome link.
+		list := firstByID(root, ttJobListID)
+		if page == 1 {
+			listed = list != nil
+		}
+		var links []string
+		switch {
+		case !listed:
+			links = ttJobLinks(base, root)
+		case list != nil:
+			links = ttJobLinks(base, list)
+		} // listed, and this page has no list: past the end, zero links
+
+		// Tolerate one overlapping page, but repeated non-empty pages prove no end.
+		if len(links) > 0 {
+			signatureLinks := append([]string(nil), links...)
+			sort.Strings(signatureLinks)
+			signature := strings.Join(signatureLinks, "\n")
+			pageVisits[signature]++
+			if pageVisits[signature] >= 3 {
+				return nil, fmt.Errorf("teamtailor: listing %s page %d: repeated non-empty listing page", e.Board, page)
+			}
+		}
 		for _, link := range links {
 			if !seen[link] {
 				seen[link] = true
@@ -168,8 +177,7 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 			return urls, nil
 		}
 	}
-	// The loop ran out ttMaxPages without ever seeing an empty page — the board is not
-	// proven to have ended, so this is not "here is what we found," it is a failure.
+	// ttMaxPages ran out without an empty page: the end is unproven, so fail.
 	return nil, fmt.Errorf("teamtailor: listing %s: reached the %d-page safety ceiling without finding the board's end",
 		e.Board, ttMaxPages)
 }
@@ -265,10 +273,8 @@ func ttJobPosting(root *html.Node) (ttPosting, bool) {
 	return p, ldJobPosting(root, &p)
 }
 
-// ttFeedPageSize is how many items one jobs.rss request asks for. The feed honours
-// per_page and offset (verified 2026-10-18: 100 items by default, 5000 on request, offset
-// pages contiguous with a single larger page); 500 keeps one response near 4 MB with
-// descriptions inline.
+// ttFeedPageSize is how many items one jobs.rss request asks for. The feed honours per_page and
+// offset; 500 keeps one response near 4 MB with descriptions inline.
 const ttFeedPageSize = 500
 
 // ttFeedMaxPages bounds the feed walk. Unlike the listing it proves nothing about the
@@ -324,10 +330,9 @@ type ttFeed struct {
 	} `xml:"channel"`
 }
 
-// ttRemoteStatusMode maps the feed's remoteStatus enum to a work mode. Sampled over 25 live
-// boards (2026-10-18) the values are none, onsite, hybrid and fully; Teamtailor also
-// documents temporary. "none" is the default nobody changed, and "temporary" (remote for
-// now) does not state the arrangement the posting hires into, so both stay "".
+// Values seen are none, onsite, hybrid and fully (Teamtailor also documents temporary). "none" is
+// the default nobody changed and "temporary" does not state the hiring arrangement, so both stay
+// "".
 func ttRemoteStatusMode(s string) string {
 	switch s {
 	case "fully":

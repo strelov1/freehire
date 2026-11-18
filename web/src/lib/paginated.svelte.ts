@@ -55,6 +55,7 @@ export class Paginator<T> {
   // place), so `raw` skips the per-item proxy overhead of deep `$state`.
   items = $state.raw<T[]>([]);
   status = $state<'loading' | 'error' | 'ready'>('loading');
+  error = $state.raw<unknown>(null);
   loadingMore = $state(false);
   // A failed `loadMore` surfaces here instead of flipping `status`, so the
   // already-loaded items stay on screen while the error shows by the button.
@@ -63,6 +64,8 @@ export class Paginator<T> {
   // Total items matching the current query (the search engine's estimate); shown as
   // the result count and refreshed each page since the estimate can drift.
   total = $state(0);
+  // The total is a minimum ("at least"): the server stopped reading before the end.
+  totalIsLowerBound = $state(false);
 
   #fetch: FetchSlice<T>;
   #limit: number;
@@ -75,6 +78,8 @@ export class Paginator<T> {
   #keyOf?: (item: T) => unknown;
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
   #seen = new Set<unknown>();
+  // Bumped by every start(); a response from an earlier one is discarded (see start).
+  #generation = 0;
 
   constructor(fetch: FetchSlice<T>, opts: { limit?: number; keyOf?: (item: T) => unknown } = {}) {
     this.#fetch = fetch;
@@ -94,11 +99,13 @@ export class Paginator<T> {
    *  served `?page=N`, so paging continues after the seeded window instead of
    *  refetching from the top. */
   seed(slice: Slice<T>, offset = 0) {
+    this.error = null;
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
     this.#seen = new Set();
     this.#baseOffset = offset;
     this.items = this.#dedupe(slice.items);
     this.total = slice.total ?? 0;
+    this.totalIsLowerBound = slice.totalIsLowerBound ?? false;
     this.hasMore = slice.hasMore;
     this.status = 'ready';
   }
@@ -113,16 +120,24 @@ export class Paginator<T> {
    *  on the `?page=N` the visitor is reading, rather than yanking them back to page
    *  one. A changed query passes 0, because its results are a different set. */
   async start(offset = 0) {
+    // A start supersedes every request before it: a slower earlier one — a filter the view
+    // has since changed — must not land after it and replace its items.
+    const mine = ++this.#generation;
+    this.error = null;
     try {
       const slice = await loadWithRetry(() => this.#fetch(this.#limit, offset));
+      if (mine !== this.#generation) return;
       // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
       this.#seen = new Set();
       this.#baseOffset = offset;
       this.items = this.#dedupe(slice.items);
       this.total = slice.total ?? 0;
+      this.totalIsLowerBound = slice.totalIsLowerBound ?? false;
       this.hasMore = slice.hasMore;
       this.status = 'ready';
-    } catch {
+    } catch (error) {
+      if (mine !== this.#generation) return;
+      this.error = error;
       this.status = 'error';
     }
   }
@@ -130,12 +145,15 @@ export class Paginator<T> {
   /** Append the next page; no-op while one is in flight or none remain. */
   async loadMore() {
     if (this.loadingMore || !this.hasMore) return;
+    const mine = this.#generation;
     this.loadingMore = true;
     this.loadMoreError = false;
     try {
       const slice = await this.#fetch(this.#limit, this.#baseOffset + this.items.length);
+      if (mine !== this.#generation) return; // a start since replaced the list
       this.items = [...this.items, ...this.#dedupe(slice.items)];
       this.total = slice.total ?? 0;
+      this.totalIsLowerBound = slice.totalIsLowerBound ?? false;
       this.hasMore = slice.hasMore;
     } catch {
       this.loadMoreError = true;

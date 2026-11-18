@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"slices"
 	"strings"
 	"time"
 )
@@ -14,9 +16,8 @@ type Service struct {
 	now  func() time.Time
 }
 
-// New builds a Service. now is injectable because the staleness guard is a
-// comparison against the clock, and a rule about time that cannot be tested at a
-// chosen instant is a rule nobody has read.
+// New builds a Service. now is injectable so the staleness guard can be tested at a chosen
+// instant.
 func New(repo Repository, now func() time.Time) *Service {
 	if now == nil {
 		now = time.Now
@@ -26,13 +27,12 @@ func New(repo Repository, now func() time.Time) *Service {
 
 // Build assembles the digest for a day.
 //
-// A zero requestedDay means "discover the freshest day with data" and applies the
-// staleness guard; a non-zero one is used verbatim, because asking to replay an old
-// day is the one case where old data is the point.
+// A zero requestedDay discovers the freshest day with data and applies the staleness guard; a
+// non-zero one is used verbatim, since replaying an old day is the point.
 //
-// An empty Digest is a normal result: the day was quiet. The errors it returns
-// (ErrNoViewData, ErrStaleViewData) mean the view pipeline is broken, which is not
-// the same thing and must not be published over.
+// An empty Digest is normal (every posting above the floor was published recently). The errors
+// (ErrNoViewData, ErrStaleViewData, ErrThinViewData) mean the view pipeline is broken or
+// behind and must not be published over.
 func (s *Service) Build(ctx context.Context, requestedDay time.Time) (Digest, error) {
 	day := truncateDay(requestedDay)
 	if requestedDay.IsZero() {
@@ -50,23 +50,23 @@ func (s *Service) Build(ctx context.Context, requestedDay time.Time) (Digest, er
 	if err != nil {
 		return Digest{}, fmt.Errorf("candidates for %s: %w", day.Format(DayLayout), err)
 	}
+	if !slices.ContainsFunc(candidates, func(p Posting) bool { return p.PageUniques >= MinPageUniques }) {
+		return Digest{}, fmt.Errorf("%s: %w", day.Format(DayLayout), ErrThinViewData)
+	}
 	quarantined, err := s.repo.RecentlyDigested(ctx, QuarantineSince(day), day)
 	if err != nil {
 		return Digest{}, fmt.Errorf("quarantine set: %w", err)
 	}
 
-	return Digest{Day: day, Items: Select(candidates, quarantined)}, nil
+	theme, items := SelectThemed(ThemeFor(day), candidates, quarantined)
+	return Digest{Day: day, Items: items, Theme: theme}, nil
 }
 
-// Dispatch publishes a digest to every publisher that has not already had this day,
-// and records each success in the ledger.
+// Dispatch publishes a digest to every publisher that has not already had this day, and records
+// each success in the ledger.
 //
-// Every publisher is attempted even after one fails: a Discord outage must not cost
-// us the day everywhere. The failures are joined and returned together, so the run
-// exits non-zero and the log names each channel that broke rather than only the
-// first.
-//
-// An empty digest publishes nothing anywhere and is not an error — a quiet day.
+// Every publisher is attempted even after one fails; the failures are joined and returned
+// together. An empty digest publishes nothing and is not an error.
 func (s *Service) Dispatch(ctx context.Context, d Digest, publishers []Publisher) error {
 	if d.Empty() {
 		return nil
@@ -80,17 +80,18 @@ func (s *Service) Dispatch(ctx context.Context, d Digest, publishers []Publisher
 			continue
 		}
 		if done {
+			log.Printf("social-digest: %s already has %s, skipping", p.Name(), d.Day.Format(DayLayout))
 			continue
 		}
 		if err := p.Publish(ctx, d); err != nil {
 			failures = append(failures, fmt.Errorf("%s: publish: %w", p.Name(), err))
 			continue
 		}
-		// Written immediately after the publish, and deliberately not before it. The
-		// two cannot be one transaction across an HTTP boundary, so one of the orders
-		// has to lose: recording first risks a day that is silently never published,
-		// recording after risks one duplicate post. A duplicate is visible and
-		// recoverable; a silent gap is neither.
+		// "Selected", because a publisher may carry fewer: LinkedIn trims to its length limit.
+		log.Printf("social-digest: published %s to %s (%d postings selected)", d.Day.Format(DayLayout), p.Name(), len(d.Items))
+		// After the publish, deliberately not before: they cannot share a transaction across
+		// HTTP. Recording first risks a silent gap; recording after risks a visible,
+		// recoverable duplicate.
 		if err := s.repo.RecordPublished(ctx, d.Day, p.Name(), d.Items); err != nil {
 			failures = append(failures, fmt.Errorf("%s: ledger write after a SUCCESSFUL publish: %w", p.Name(), err))
 		}
@@ -98,15 +99,9 @@ func (s *Service) Dispatch(ctx context.Context, d Digest, publishers []Publisher
 	return errors.Join(failures...)
 }
 
-// viewsLabel is how many people opened a posting, as one short phrase.
-//
-// Shared by both publishers rather than written twice: it is the figure the whole list is
-// RANKED on, so the two channels disagreeing about how to say it — or one of them
-// quietly dropping it — would make the same digest look like two different measurements.
-//
-// It counts page_uniques, which is bot-filtered. Saying "views" of a number that also
-// carried crawler traffic would be the exact claim migration 0138 was written to stop us
-// making in public.
+// viewsLabel is how many people opened a posting, as one short phrase. Shared by both
+// publishers because it is the figure the list is ranked on. It counts page_uniques, which is
+// bot-filtered; never say "views" of a number that includes crawler traffic.
 func viewsLabel(p Posting) string {
 	if p.PageUniques == 1 {
 		return "1 view"
@@ -114,8 +109,7 @@ func viewsLabel(p Posting) string {
 	return fmt.Sprintf("%d views", p.PageUniques)
 }
 
-// jobURL is the public link for a posting, tagged with the channel that carried it so
-// the digest's traffic is separable from every other inbound path in analytics.
+// jobURL is the public link for a posting, tagged with its channel (utm_source) for analytics.
 func jobURL(origin, slug, utmSource string) string {
 	return strings.TrimRight(origin, "/") + "/jobs/" + slug + "?utm_source=" + utmSource
 }

@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  FRESH_SITEMAP_CHUNKS,
-  JOB_SITEMAP_CHUNK,
-  freshJobSitemapOffsets,
-  sitemapIndexLocs,
-} from './sitemap';
+import { FRESH_SITEMAP_CHUNKS, JOB_SITEMAP_CHUNK, freshJobSitemapOffsets, sitemapIndexLocs } from './sitemap';
 
 const ORIGIN = 'https://example.test';
 

@@ -4,18 +4,16 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // queueMetrics is one outbox queue's measurement. oldestAgeSeconds is the age of the
 // oldest LIVE entry, so a queue whose only old entries are dead-lettered reads as young.
 //
-// deadLetters and blocked are pointers because not every queue has the state they
-// measure: push_ticket_outbox carries neither attempts nor failed_at, and only
-// auto_apply_queue can park an entry. A nil omits that queue from the family rather than
-// publishing a zero — the same zero-versus-absent rule newestJob and lastSuccess follow,
-// applied to a state that does not exist rather than to one that measured empty. A
-// permanent zero would read as "given up on nothing so far", which is a claim about a
-// measurement nobody took.
+// deadLetters and blocked are pointers because not every queue has the state: push_ticket_outbox
+// has neither attempts nor failed_at, and only auto_apply_queue can park an entry. A nil omits
+// the queue from the family; a permanent zero would claim a measurement nobody took.
 type queueMetrics struct {
 	name             string
 	depth            int64
@@ -24,16 +22,13 @@ type queueMetrics struct {
 	oldestAgeSeconds float64
 }
 
-// providerHealth is one ingest provider's state: when its most recent board crawl
-// succeeded, when its oldest live board entered the catalogue, and how its live boards
-// currently split across the four health states.
+// providerHealth is one ingest provider's state: its most recent successful board crawl, when
+// its oldest live board entered the catalogue, and its live boards split across the four health
+// states.
 //
-// lastSuccess is the zero time when no live board of that provider has ever succeeded,
-// which render publishes as an absent sample rather than as a 1970 timestamp. firstListed
-// and the board counts carry the signal that absence throws away — they exist for every
-// provider with a live board, so a provider that has never succeeded is still measurable,
-// both as one with no healthy boards and as one that has been listed for so long without
-// producing anything.
+// lastSuccess is the zero time when no live board has ever succeeded; render then omits the
+// sample rather than publish 1970. firstListed and the counts exist for every provider with a
+// live board, so a never-succeeded provider is still measurable.
 type providerHealth struct {
 	name        string
 	lastSuccess time.Time
@@ -44,15 +39,12 @@ type providerHealth struct {
 	healthy     int64
 }
 
-// ingestVolume is how much one source wrote into the catalogue in the recent window, and
-// how many DISTINCT postings that writing stands for. The two are published separately and
-// the GAP between them is the signal: a source whose boards all fetch the same catalogue
-// writes many rows for few postings.
+// ingestVolume is how much one source wrote into the catalogue in the recent window, and how
+// many distinct postings that stands for. The gap between the two is the signal: boards that
+// all fetch the same catalogue write many rows for few postings.
 //
-// It measures what every other family here structurally cannot. The rest answer "is
-// something failing"; this answers "is what succeeded worth anything". apploi's crawls all
-// returned 200 with valid postings for two weeks while accumulating 1.5M rows standing for
-// 3,024 real jobs, and nothing in this exposition moved.
+// Every other family answers "is something failing"; this answers "is what succeeded worth
+// anything".
 type ingestVolume struct {
 	provider         string
 	rowsWritten      int64
@@ -60,19 +52,15 @@ type ingestVolume struct {
 }
 
 // qualityChecks names the per-source quality counts, in the order sourceQuality.gaps holds
-// them. It is the `check` label's whole vocabulary, a cross-repository contract like every
-// name here: the alert rules in freehire-ops select on these strings. What each one counts
-// is AggregateOpenJobsBySource's to say.
+// them. It is the `check` label's whole vocabulary, a cross-repository contract (alert rules in
+// freehire-ops select on it). What each counts is AggregateOpenJobsBySource's.
 var qualityChecks = [...]string{"missing_work_mode", "missing_geo", "missing_company", "unseen_7d", "posted_over_60d"}
 
 // sourceQuality is one source's open postings and how many of them fail each quality check,
 // as cmd/rollup-stats last measured them.
 //
-// It catches what neither the board families nor the ingest pair can: a source whose crawls
-// succeed and whose rows are unique, but whose rows are EMPTY where it matters. Measured on
-// 2026-10-29, successfactors carried ~98% of its open postings with no location at all, and
-// hrmdirect had listed nothing for eight days while every crawl succeeded and all of its
-// postings stayed on the site.
+// It catches a source whose crawls succeed and rows are unique, but whose rows are empty where
+// it matters (no location, nothing newly listed).
 type sourceQuality struct {
 	source     string
 	openJobs   int64
@@ -92,19 +80,18 @@ type notifyBacklog struct {
 // rather than as a 1970 timestamp.
 type snapshot struct {
 	queues []queueMetrics
-	// notifyDeliverable/notifyUndeliverable are the subscription-digest backlog, split by
-	// whether the subscription's channel can be delivered at all (NotifyBacklogMetrics,
-	// the SQL twin of notify.recipient). The deliverable AGE is the one that catches a
-	// starved subscription: a pass runs every five minutes, so an age climbing without
-	// bound means someone reachable is never served — and that produces no failure in the
-	// worker's own log to notice. The undeliverable age sits at the 72h freshness window
-	// by construction, which is why it is published apart instead of mixed in.
+	// notifyDeliverable/notifyUndeliverable are the subscription-digest backlog, split by whether
+	// the channel can be delivered at all (NotifyBacklogMetrics, the SQL twin of
+	// notify.recipient). A climbing deliverable age means a reachable subscription is never
+	// served, with no failure in the worker's log. The undeliverable age sits at the 72h
+	// freshness window by construction, so it is published apart.
 	notifyDeliverable   notifyBacklog
 	notifyUndeliverable notifyBacklog
+	// notifyVolume is whether too many digests reach one person (NotifyDigestVolumeMetrics).
+	notifyVolume db.NotifyDigestVolumeMetricsRow
 
 	newestJob time.Time
-	// providers is also the fleet: freehire_boards_total is their sum, so the two board
-	// families are one measurement published twice and cannot disagree.
+	// providers is also the fleet: freehire_boards_total is their sum, so the two board families cannot disagree.
 	providers   []providerHealth
 	ingest      []ingestVolume
 	sources     []sourceQuality
@@ -117,9 +104,8 @@ type employmentBoilerplate struct {
 	truncated  bool
 }
 
-// fleet is the whole board fleet, summed from the per-provider rows rather than measured
-// by a second query, so summing freehire_provider_boards by state reproduces
-// freehire_boards_total by construction.
+// fleet is the whole board fleet, summed from the per-provider rows so freehire_boards_total
+// always equals freehire_provider_boards summed by state.
 func (s snapshot) fleet() providerHealth {
 	var f providerHealth
 	for _, p := range s.providers {
@@ -133,13 +119,11 @@ func (s snapshot) fleet() providerHealth {
 
 // render turns a snapshot into the Prometheus text exposition format.
 //
-// Output is grouped family-by-family rather than queue-by-queue because the format
-// requires every sample of a family to follow a single HELP/TYPE pair; iterating queues
-// on the outside would interleave the families and produce an invalid exposition.
+// Output is grouped by family because the format requires every sample of a family to follow a
+// single HELP/TYPE pair.
 //
-// The metric names and label sets below are a cross-repository contract: the dashboard
-// and alert rules that consume them live in freehire-ops and cannot be compiled against
-// this package, so render_test.go pins the exact text.
+// The metric names and label sets are a cross-repository contract (dashboards and alert rules
+// live in freehire-ops), so render_test.go pins the exact text.
 func render(s snapshot) string {
 	var b strings.Builder
 
@@ -152,8 +136,8 @@ func render(s snapshot) string {
 	writeFamily(&b, "freehire_queue_oldest_age_seconds", "Age of the oldest live entry in a pipeline outbox queue.",
 		func(q queueMetrics) (string, bool) { return fmt.Sprintf("%.3f", q.oldestAgeSeconds), true }, s.queues)
 
-	// Both deliverability states are always published, as explicit zeros when empty: an
-	// absent series is how the consuming rules recognize a dead exporter.
+	// Both deliverability states are always published, as explicit zeros when empty: an absent
+	// series is how the rules recognize a dead exporter.
 	notify := [2]struct {
 		label string
 		notifyBacklog
@@ -168,28 +152,37 @@ func render(s snapshot) string {
 	for _, n := range notify {
 		fmt.Fprintf(&b, "freehire_notify_oldest_pending_age_seconds{deliverable=%q} %.3f\n", n.label, n.oldestAgeSeconds)
 	}
+	v := s.notifyVolume
+	for _, g := range []struct {
+		name, help string
+		value      int64
+	}{
+		{"freehire_notify_digests_24h", "Subscription digests delivered in the last 24 hours.", v.Digests},
+		{"freehire_notify_digest_recipients_24h", "Users who received at least one subscription digest in the last 24 hours.", v.Recipients},
+		{"freehire_notify_digests_max_per_user_24h", "Most subscription digests one user received in the last 24 hours.", v.MaxPerUser},
+		{"freehire_notify_users_over_daily_cap_24h", "Users who received more than 24 subscription digests in the last 24 hours.", v.UsersOverDailyCap},
+		{"freehire_notify_profile_alerts_rewritten_1h", "Profile-derived saved searches created earlier and updated in the last hour.", v.ProfileAlertsRewritten1h},
+	} {
+		writeHeader(&b, g.name, g.help)
+		fmt.Fprintf(&b, "%s %d\n", g.name, g.value)
+	}
 
-	// An empty fleet still publishes four explicit zeros: an absent series is how the
-	// consuming rules recognize a dead exporter.
+	// An empty fleet still publishes four explicit zeros (an absent series reads as a dead exporter).
 	writeHeader(&b, "freehire_boards_total", "Ingest boards by health state.")
 	for _, st := range s.fleet().boardStates() {
 		fmt.Fprintf(&b, "freehire_boards_total{state=%q} %d\n", st.name, st.count)
 	}
 
-	// A zero timestamp would be read as 1970, i.e. a catalogue infinitely overdue for
-	// new postings. An empty catalogue is a fresh-install state and not an incident,
-	// so the honest exposition omits the sample and lets the alert rule's no-data
-	// handling decide what that means.
+	// A zero timestamp would read as 1970, a catalogue infinitely overdue. An empty catalogue is
+	// a fresh install, so the sample is omitted and the alert's no-data handling decides.
 	if !s.newestJob.IsZero() {
 		writeHeader(&b, "freehire_catalogue_newest_job_timestamp_seconds", "Unix time the newest open job was created.")
 		fmt.Fprintf(&b, "freehire_catalogue_newest_job_timestamp_seconds %d\n", s.newestJob.Unix())
 	}
 
-	// Per-provider freshness: the signal the catalogue-wide gauge above cannot give. That
-	// one stays young while any provider produces, so a provider that stopped is invisible
-	// in it — which is how a 13-day proxy outage went unnoticed until someone looked by
-	// hand. A provider with no measurement is omitted rather than zeroed, and the whole
-	// family is omitted when none has one, on the same reasoning as newestJob.
+	// Per-provider freshness: the catalogue-wide gauge above stays young while any provider
+	// produces, so it cannot show a provider that stopped. A provider with no measurement is
+	// omitted rather than zeroed, as is the whole family when none has one.
 	measured := make([]providerHealth, 0, len(s.providers))
 	for _, p := range s.providers {
 		if !p.lastSuccess.IsZero() {
@@ -205,15 +198,10 @@ func render(s snapshot) string {
 		}
 	}
 
-	// When each provider's oldest live board entered the catalogue — the fallback the
-	// timestamp above needs for a provider that has never once succeeded, published for
-	// every provider so a rule can write `last_success or first_listed` and get an honest
-	// silence for all of them. See ProviderIngestHealth for why the OLDEST board: with the
-	// newest, adding a board to a failing provider would restart its clock.
-	//
-	// Without it, the never-succeeded case vanished from every age-based rule. On
-	// 2026-10-19 all 3,324 gupy boards were freshly re-keyed and uncrawled, and gupy had no
-	// timestamp to be late about — on the day its API had been dead for 19 days.
+	// When each provider's oldest live board entered the catalogue: the fallback for a provider
+	// that never succeeded, published for all so a rule can use `last_success or first_listed`.
+	// The OLDEST board, because adding a board to a failing provider must not restart its clock
+	// (see ProviderIngestHealth).
 	listed := make([]providerHealth, 0, len(s.providers))
 	for _, p := range s.providers {
 		if !p.firstListed.IsZero() {
@@ -229,19 +217,12 @@ func render(s snapshot) string {
 		}
 	}
 
-	// Per-provider board states: the companion the timestamp above needs, because omitting
-	// the never-succeeded case is exactly what hid gulftalent. It sat at 19,828 postings
-	// unrefreshed since 2026-07-07 with its systemd timer disabled — no crawl, so no
-	// success, so no timestamp sample, so nothing for an alert to be late about. These
-	// counts exist for every provider with a live board in the catalogue, so `healthy == 0`
-	// names it — including one none of whose boards has been crawled yet, which is the
-	// `uncrawled` state.
+	// Per-provider board states: the companion the timestamp above needs, since a provider
+	// with no crawl has no success timestamp to be late about. These counts exist for every
+	// provider with a live board, so `healthy == 0` names it, including an uncrawled one.
 	//
-	// Published as raw counts under one state label rather than as a baked-in "is this
-	// provider down" boolean: the fleet runs a few percent failing boards as background, so
-	// what separates a broken provider from a normal one is the RATIO, and which ratio
-	// deserves a page belongs in the alert rule, not here. Same four mutually exclusive
-	// states as freehire_boards_total, which is summed from these.
+	// Raw counts, not a "provider down" boolean: a few percent failing is normal background, so
+	// the ratio that deserves a page belongs in the alert rule.
 	if len(s.providers) > 0 {
 		writeHeader(&b, "freehire_provider_boards", "Ingest boards by health state, per provider.")
 		for _, p := range s.providers {
@@ -252,22 +233,15 @@ func render(s snapshot) string {
 		}
 	}
 
-	// Ingest volume against distinct postings: the only family here that can catch a source
-	// whose crawls all SUCCEED and whose output is worthless. Everything above measures
-	// failure — a queue backing up, a board cooling, a provider going quiet — and apploi
-	// tripped none of it for two weeks while writing 518 copies of every posting under 518
-	// different employers.
+	// Ingest volume against distinct postings: the only family that catches a source whose
+	// crawls all succeed but whose output is worthless.
 	//
-	// Two raw counts, deliberately not a ratio. Which multiple deserves a page depends on
-	// the source (a keyword-sliced aggregator legitimately stores one posting under two
-	// boards; jobleads measured 2.1 on 2026-09-16), so the threshold belongs to the alert
-	// rule — the same division freehire_provider_boards already makes. Dividing them in
-	// Prometheus also degrades gracefully: rows/postings is simply absent for a source that
-	// wrote nothing, where a ratio computed here would have to invent a number.
+	// Two raw counts, not a ratio: which multiple deserves a page depends on the source (a
+	// keyword-sliced aggregator legitimately stores one posting under two boards), and a ratio
+	// in Prometheus is simply absent for a source that wrote nothing.
 	//
-	// A source that wrote nothing in the window yields no row, and the whole family is
-	// omitted rather than zeroed — a zero here would claim the source was measured and
-	// found idle, when the window may simply not have contained its crawl.
+	// A source that wrote nothing in the window yields no row; the family is omitted, not zeroed,
+	// since the window may not have contained its crawl.
 	if len(s.ingest) > 0 {
 		writeHeader(&b, "freehire_ingest_rows_written",
 			"Open postings a source wrote into the catalogue in the recent window.")
@@ -281,15 +255,12 @@ func render(s snapshot) string {
 		}
 	}
 
-	// Per-source quality: raw counts beside their denominator, never a share — which share
-	// of which source deserves a page is the alert rule's call, since several sources are
-	// legitimately geo-less or never re-listed (telegram reads ~100% unseen forever). The
-	// rule watches a share CHANGE, so a permanent level stays quiet.
+	// Per-source quality: raw counts beside their denominator, never a share, since several
+	// sources are legitimately geo-less or never re-listed; the rule watches a share change.
 	//
-	// The measurement time is published once: the whole snapshot is rebuilt in one
-	// transaction, so every row carries the same one. It is what tells a rollup that has
-	// stopped from a fleet that simply has not changed. With no snapshot all three families
-	// are omitted — nothing was measured, and a fleet of zeros would claim otherwise.
+	// The measurement time is published once (the snapshot is rebuilt in one transaction); it
+	// tells a stopped rollup from an unchanged fleet. With no snapshot all three families are
+	// omitted rather than zeroed.
 	if len(s.sources) > 0 {
 		writeHeader(&b, "freehire_source_open_jobs", "Open postings a source carries, as the per-source snapshot last measured them.")
 		for _, q := range s.sources {
@@ -335,18 +306,12 @@ type boardState struct {
 	count int64
 }
 
-// boardStates returns those four in the order both board families publish them.
-//
-// Two families carry these labels — freehire_boards_total fleet-wide and
-// freehire_provider_boards per provider — and a dashboard that stacks one against the
-// other only reads correctly while they agree on the names and the order. Spelled twice
-// they can drift apart without failing to compile, and the drift shows up as a graph that
-// quietly disagrees with itself, so the vocabulary lives here once.
+// boardStates returns those four in the order both board families (freehire_boards_total and
+// freehire_provider_boards) publish them; the vocabulary lives here once so they cannot drift.
 //
 // The precedence behind the counts (uncrawled when no health row exists, then cooled over
-// failing, so the four sum to the provider's live boards rather than double-counting) is
-// ProviderIngestHealth's in queries/metrics.sql; this only fixes how they are named and
-// ordered. uncrawled comes last so the three older series keep their place on a graph.
+// failing) is ProviderIngestHealth's in queries/metrics_ingest.sql. uncrawled is last so the three
+// older series keep their place on a graph.
 func (p providerHealth) boardStates() [4]boardState {
 	return [4]boardState{
 		{"healthy", p.healthy},
@@ -356,9 +321,8 @@ func (p providerHealth) boardStates() [4]boardState {
 	}
 }
 
-// countSample renders an optional count, reporting whether the queue has that state at
-// all. It is the one place the nil-means-omit rule on queueMetrics is applied, so the
-// two optional families cannot answer it differently.
+// countSample renders an optional count, reporting whether the queue has that state at all.
+// It is the one place the nil-means-omit rule on queueMetrics is applied.
 func countSample(n *int64) (string, bool) {
 	if n == nil {
 		return "", false
@@ -366,14 +330,8 @@ func countSample(n *int64) (string, bool) {
 	return fmt.Sprintf("%d", *n), true
 }
 
-// writeFamily emits one metric family: its HELP and TYPE lines, then one sample per
-// queue that HAS the state, labelled by queue name. A queue whose value function
-// declines is left out of that family — see queueMetrics on why an absent sample and a
-// zero are different statements.
-//
-// A family no queue answers is omitted head and all, the same rule the provider
-// timestamp family follows: a bare HELP/TYPE pair with no samples is valid and says
-// nothing.
+// writeFamily emits one metric family: HELP and TYPE, then one sample per queue that has the
+// state. A family no queue answers is omitted entirely.
 func writeFamily(b *strings.Builder, name, help string, value func(queueMetrics) (string, bool), queues []queueMetrics) {
 	var samples strings.Builder
 	for _, q := range queues {
@@ -390,8 +348,7 @@ func writeFamily(b *strings.Builder, name, help string, value func(queueMetrics)
 	b.WriteString(samples.String())
 }
 
-// writeHeader emits the HELP and TYPE lines a family must be preceded by. Every metric
-// here is a gauge: each is a level measured at collection time, never a running total.
+// writeHeader emits the HELP and TYPE lines a family needs. Every metric here is a gauge.
 func writeHeader(b *strings.Builder, name, help string) {
 	fmt.Fprintf(b, "# HELP %s %s\n", name, help)
 	fmt.Fprintf(b, "# TYPE %s gauge\n", name)

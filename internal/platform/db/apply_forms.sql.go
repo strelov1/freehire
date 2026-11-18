@@ -174,8 +174,7 @@ type ListApplyFormsForJobsRow struct {
 
 // The captured forms of a BATCH of jobs, for the search-index writers that count each
 // form's questions onto its document (applyform.QuestionCounts). One call per writer
-// batch, never one per document — the same shape ListSemanticChunksForJobs gives the
-// description vectors. A job with no captured form simply has no row.
+// batch, never one per document. A job with no captured form simply has no row.
 func (q *Queries) ListApplyFormsForJobs(ctx context.Context, jobIds []int64) ([]ListApplyFormsForJobsRow, error) {
 	rows, err := q.db.Query(ctx, listApplyFormsForJobs, jobIds)
 	if err != nil {

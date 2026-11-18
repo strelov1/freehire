@@ -5,14 +5,12 @@ import (
 	"html/template"
 )
 
-// DefaultDir is where the previews are written. They live inside the design system
-// because that is what serves them to Storybook, and Storybook can only load files
-// under its own root.
+// DefaultDir is where the previews are written, inside the design system because
+// Storybook can only load files under its own root.
 const DefaultDir = "design-system/static/email-previews"
 
-// Index renders a contact sheet linking every preview: one iframe per mail, at the
-// width a phone gives it. Reviewing the set side by side is the point — a mail that
-// has drifted from the others is obvious in a row and invisible one file at a time.
+// Index renders a contact sheet linking every preview: one iframe per mail, at phone
+// width, so a mail that drifted from the others stands out.
 func Index(samples []Sample) string {
 	var buf bytes.Buffer
 	// Trusted template over our own sample data; a failure is a template bug.
@@ -20,16 +18,14 @@ func Index(samples []Sample) string {
 	return buf.String()
 }
 
-// indexTemplate is the contact sheet. It is a plain browser page, not an email, so
-// it is free to use the CSS and the script the mails cannot.
+// indexTemplate is the contact sheet, a plain browser page free to use the CSS and
+// script mails cannot.
 //
-// The light/dark toggle swaps each frame's src between the pinned copies rather
-// than restyling anything: a page cannot tell a framed document to ignore the OS
-// preference, and rewriting the frame's markup would need to read it first, which
-// the browser forbids when the sheet is opened from disk.
+// The light/dark toggle swaps each frame's src between the pinned copies: a page
+// cannot make a framed document ignore the OS preference, and rewriting its markup
+// is forbidden by the browser when the sheet is opened from disk.
 //
-// Each frame is sandboxed: the previews are trusted, but a sandbox costs nothing
-// and keeps a preview from navigating the sheet away if a link is ever clicked.
+// Frames are sandboxed so a clicked link cannot navigate the sheet away.
 var indexTemplate = template.Must(template.New("index").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>

@@ -4,7 +4,4 @@ import { defineMessages } from '#lib/i18n/t.js';
 // derives from a call (title/callLine) are the agent's own text or data read from its
 // arguments — not catalog text, except `tool-formatters.ts`'s own intent LABELS map,
 // which has its own messages file.
-export const messages = defineMessages(
-  { yes: 'Yes', no: 'No' },
-  { ru: { yes: 'Да', no: 'Нет' } },
-);
+export const messages = defineMessages({ yes: 'Yes', no: 'No' }, { ru: { yes: 'Да', no: 'Нет' } });

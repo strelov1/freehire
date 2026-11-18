@@ -133,7 +133,7 @@ func TestInsightsSalaryPerCurrencyAndSuppression(t *testing.T) {
 	if err := q.DeleteAllInsightsSalaryStats(ctx); err != nil {
 		t.Fatalf("delete salary: %v", err)
 	}
-	if _, err := q.RebuildInsightsSalaryStatsGlobal(ctx, 3); err != nil {
+	if _, err := materializeInsightsSalaryStatsGlobal(q)(ctx, 3); err != nil {
 		t.Fatalf("rebuild salary global: %v", err)
 	}
 
@@ -181,7 +181,7 @@ func TestInsightsSalaryCurrencyCaseMerges(t *testing.T) {
 	if err := q.DeleteAllInsightsSalaryStats(ctx); err != nil {
 		t.Fatalf("delete salary: %v", err)
 	}
-	if _, err := q.RebuildInsightsSalaryStatsGlobal(ctx, 1); err != nil {
+	if _, err := materializeInsightsSalaryStatsGlobal(q)(ctx, 1); err != nil {
 		t.Fatalf("rebuild salary: %v", err)
 	}
 
@@ -208,7 +208,7 @@ func TestInsightsVelocityFaceted(t *testing.T) {
 	if err := q.DeleteAllInsightsVelocityDaily(ctx); err != nil {
 		t.Fatalf("delete velocity: %v", err)
 	}
-	if _, err := q.RebuildInsightsVelocityDaily(ctx); err != nil {
+	if _, err := materializeInsightsVelocityDaily(q)(ctx); err != nil {
 		t.Fatalf("rebuild velocity: %v", err)
 	}
 
@@ -241,7 +241,7 @@ func TestInsightsSkillRollupScoping(t *testing.T) {
 		t.Fatalf("delete skills: %v", err)
 	}
 	for _, rebuild := range []func(context.Context, pgtype.Timestamptz) (int64, error){
-		q.RebuildInsightsSkillStatsGlobal, q.RebuildInsightsSkillStatsByCategory, q.RebuildInsightsSkillStatsByCountry,
+		materializeInsightsSkillStatsGlobal(q), materializeInsightsSkillStatsByCategory(q), materializeInsightsSkillStatsByCountry(q),
 	} {
 		if _, err := rebuild(ctx, prev); err != nil {
 			t.Fatalf("rebuild skills: %v", err)
@@ -277,7 +277,7 @@ func TestInsightsSkillHistorySnapshotIdempotentAndPruned(t *testing.T) {
 	if err := q.DeleteAllInsightsSkillStats(ctx); err != nil {
 		t.Fatalf("delete skills: %v", err)
 	}
-	if _, err := q.RebuildInsightsSkillStatsGlobal(ctx, windowStart()); err != nil {
+	if _, err := materializeInsightsSkillStatsGlobal(q)(ctx, windowStart()); err != nil {
 		t.Fatalf("rebuild skills global: %v", err)
 	}
 
@@ -360,10 +360,10 @@ func rebuildRoles(t *testing.T, ctx context.Context, q *Queries, prev pgtype.Tim
 	if err := q.DeleteAllInsightsRoleStats(ctx); err != nil {
 		t.Fatalf("delete roles: %v", err)
 	}
-	if _, err := q.RebuildInsightsRoleStatsGlobal(ctx, prev); err != nil {
+	if _, err := materializeInsightsRoleStatsGlobal(q)(ctx, prev); err != nil {
 		t.Fatalf("rebuild roles global: %v", err)
 	}
-	if _, err := q.RebuildInsightsRoleStatsByCountry(ctx, prev); err != nil {
+	if _, err := materializeInsightsRoleStatsByCountry(q)(ctx, prev); err != nil {
 		t.Fatalf("rebuild roles by country: %v", err)
 	}
 }
@@ -521,13 +521,13 @@ func rebuildRoleSkills(t *testing.T, ctx context.Context, q *Queries, minSample 
 	if err := q.DeleteAllInsightsRoleSkillStats(ctx); err != nil {
 		t.Fatalf("delete role skills: %v", err)
 	}
-	if _, err := q.RebuildInsightsRoleSkillStats(ctx, minSample); err != nil {
+	if _, err := materializeInsightsRoleSkillStats(q)(ctx, minSample); err != nil {
 		t.Fatalf("rebuild role skills: %v", err)
 	}
 	if err := q.DeleteAllInsightsRoleSkillSample(ctx); err != nil {
 		t.Fatalf("delete role skill sample: %v", err)
 	}
-	if _, err := q.RebuildInsightsRoleSkillSample(ctx); err != nil {
+	if _, err := materializeInsightsRoleSkillSample(q)(ctx); err != nil {
 		t.Fatalf("rebuild role skill sample: %v", err)
 	}
 }
@@ -616,7 +616,7 @@ func TestInsightsGrowthCountsExistenceNotDiscovery(t *testing.T) {
 			t.Fatalf("delete skills: %v", err)
 		}
 		for _, rebuild := range []func(context.Context, pgtype.Timestamptz) (int64, error){
-			q.RebuildInsightsSkillStatsGlobal, q.RebuildInsightsSkillStatsByCategory, q.RebuildInsightsSkillStatsByCountry,
+			materializeInsightsSkillStatsGlobal(q), materializeInsightsSkillStatsByCategory(q), materializeInsightsSkillStatsByCountry(q),
 		} {
 			if _, err := rebuild(ctx, prev); err != nil {
 				t.Fatalf("rebuild skills: %v", err)
@@ -637,7 +637,7 @@ func TestInsightsGrowthCountsExistenceNotDiscovery(t *testing.T) {
 		if err := q.DeleteAllInsightsCompanyGrowth(ctx); err != nil {
 			t.Fatalf("delete growth: %v", err)
 		}
-		if _, err := q.RebuildInsightsCompanyGrowth(ctx, prev); err != nil {
+		if _, err := materializeInsightsCompanyGrowth(q)(ctx, prev); err != nil {
 			t.Fatalf("rebuild growth: %v", err)
 		}
 		got, ok := companyGrowth(t, ctx, q, "acme")

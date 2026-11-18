@@ -52,7 +52,7 @@ func realGateAssistantApp(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, mo
 		paidAI: paidAIGate(entitlementOf(plans)),
 		cookie: auth.RequireAuth(iss, testVersions),
 		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	})
+	}, newContract(contractHandlers{assistantHandlers: h}))
 	return app
 }
 
@@ -97,14 +97,18 @@ func TestPaidAIFitStreamRefusesFree(t *testing.T) {
 	plans := plan.NewStore(queries, pool, plan.DefaultConfig())
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	(&matchHandlers{}).register(app.Group("/api/v1"), middleware{
-		paidAI:    paidAIGate(entitlementOf(plans)),
-		key:       auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-		throttler: newTestThrottler(t),
-	})
+		paidAI: paidAIGate(entitlementOf(plans)),
+		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
+	}, newContract(contractHandlers{}))
 
 	userID, token := assistantUser(t, pool, iss, "paid-gate-fit@example.test", false)
+	insertAutoApplyJob(t, pool, "any-job")
 	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/jobs/any-job/fit/stream", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	// The SPA's EventSource shape: a same-origin cookie request stamps Fetch Metadata,
+	// and the route refuses a cookie request without it. The 402 under test is the
+	// paid-AI gate's answer, which runs before the handler's own refusal.
+	req.Header.Set(headerSecFetchSite, secFetchSiteSameOrigin)
 	resp, err := app.Test(req, 10000)
 	if err != nil {
 		t.Fatalf("stream request: %v", err)
@@ -118,6 +122,17 @@ func TestPaidAIFitStreamRefusesFree(t *testing.T) {
 	}
 	if got := usedToday(t, pool, userID, plan.FeatureFit); got != 0 {
 		t.Errorf("a refused free caller was charged %d analyses", got)
+	}
+
+	paywallWrites.Wait()
+	var feature, slug string
+	if err := pool.QueryRow(context.Background(),
+		`SELECT h.feature, j.public_slug FROM paywall_hits h JOIN jobs j ON j.id = h.job_id WHERE h.user_id = $1`,
+		userID).Scan(&feature, &slug); err != nil {
+		t.Fatalf("the refusal left no paywall hit naming its job: %v", err)
+	}
+	if feature != string(plan.FeatureFit) || slug != "any-job" {
+		t.Errorf("paywall hit = %s on %s, want %s on any-job", feature, slug, plan.FeatureFit)
 	}
 }
 
@@ -145,6 +160,15 @@ func TestPaidAIAutoApplyTailorIsGatedByTheEntryOwner(t *testing.T) {
 	}
 	if n := model.calls.Load(); n != 0 {
 		t.Errorf("the model was called %d times for a free entry owner", n)
+	}
+	paywallWrites.Wait()
+	var hits int
+	if err := pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM paywall_hits WHERE user_id = $1", userID).Scan(&hits); err != nil {
+		t.Fatalf("count paywall hits: %v", err)
+	}
+	if hits != 0 {
+		t.Errorf("the orchestrator's refusal recorded %d paywall hits, want 0 — nobody pressed a button", hits)
 	}
 	var tailored *string
 	if err := pool.QueryRow(context.Background(),

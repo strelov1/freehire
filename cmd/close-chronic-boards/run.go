@@ -6,33 +6,27 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 )
 
-// maxChronicBoardsPerRun bounds ListChronicBoards's result for this worker, mirroring the
-// per-run report's cap (cmd/ingest's chronicBoardsCap) but far more generous: this is a daily
-// one-off, not a hot per-run log line, and the whole point of the chronic mechanism is that
-// very few boards should ever cross the closure window. A real run naming more than this many
-// would itself be worth a human noticing, so the cap stays a safety rail, not a working limit.
+// maxChronicBoardsPerRun bounds ListChronicBoards's result. A safety rail, not a working limit:
+// very few boards should cross the closure window, so more than this is worth a human noticing.
 const maxChronicBoardsPerRun = 10000
 
-// closeReport summarizes one pass of either safety net: how many boards were found past its
-// closure window, how many of those were skipped as region-ambiguous, and how many jobs were
-// (or, without --apply, would be) closed across the rest. Shared by both passes because the
-// SHAPE of the answer is the same question — what did you find, what did you refuse, what did
-// you do — even though the evidence each pass reads is different.
+// closeReport summarizes one pass of either safety net: boards found past the closure window,
+// boards skipped as region-ambiguous, and jobs closed (or, without --apply, that would close).
 type closeReport struct {
 	boardsProcessed        int
 	boardsSkippedAmbiguous int
 	jobsAffected           int64
 }
 
-// boardRef is the (provider, board) identity the region-ambiguity check and the log lines need,
-// and the only part of a chronic row and an empty-feed row that is common to both. The two list
-// queries return distinct generated row types with no interface between them, so the helpers
-// below take this instead of being written once per row type.
-type boardRef struct{ provider, board string }
+// boardRef is the (provider, board) identity the region-ambiguity check and log lines need,
+// common to a chronic row and an empty-feed row. The two list queries return distinct generated
+// types, so the helpers take this.
+type boardRef struct{ provider, board, region string }
 
 // String renders a health record the way both passes' logs name one: "provider/board", or just
 // the provider for a boardless record, whose empty board would otherwise print a trailing slash.
@@ -40,15 +34,15 @@ func (b boardRef) String() string {
 	if b.board == "" {
 		return b.provider
 	}
+	if b.region != "" {
+		return b.provider + "/" + b.board + " (" + b.region + ")"
+	}
 	return b.provider + "/" + b.board
 }
 
 // isRegionAmbiguous reports whether ref's board name is registered under more than one region
-// for its provider (see CountBoardHealthRegions) — the same hazard the ordinary sweep's
-// ambiguousRegionBoards guards against, checked directly against board_health since this worker
-// has no crawl-run board list to consult. A boardless provider's own record (board == "") is
-// never ambiguous in this sense: it already IS the whole provider, with no board-name collision
-// possible.
+// for its provider (see CountBoardHealthRegions), the hazard ambiguousRegionBoards guards
+// against in the ordinary sweep. A boardless provider's record (board == "") is never ambiguous.
 func isRegionAmbiguous(ctx context.Context, q *db.Queries, ref boardRef) (bool, error) {
 	if ref.board == "" {
 		return false, nil
@@ -69,17 +63,16 @@ func logAmbiguousSkip(kind string, ref boardRef) {
 		"so a board-scoped close could close a healthy region's jobs alongside this one", kind, ref)
 }
 
-func logBoardAction(kind string, ref boardRef, n int64, apply bool) {
+func logBoardAction(kind string, ref boardRef, n int64, apply bool, applyFlag string) {
 	if apply {
 		log.Printf("close-chronic-boards: closed %d job(s) for %s board %s", n, kind, ref)
 		return
 	}
-	log.Printf("close-chronic-boards: would close %d job(s) for %s board %s (--apply to close)", n, kind, ref)
+	log.Printf("close-chronic-boards: would close %d job(s) for %s board %s (%s to close)", n, kind, ref, applyFlag)
 }
 
 // logCapOverflow reports the boards a pass could not reach because maxChronicBoardsPerRun cut
-// the list short — a truncation that must never be silent, since the whole point of the cap is
-// that crossing it is itself worth noticing.
+// the list short; a truncation must never be silent.
 func logCapOverflow(kind string, total int64, processed int) {
 	if total <= int64(processed) {
 		return
@@ -88,12 +81,11 @@ func logCapOverflow(kind string, total int64, processed int) {
 		total-int64(processed), kind, processed)
 }
 
-// closeChronicBoards lists the boards (or boardless providers) that board_health proves have
-// had no successful crawl for at least closeWindowDays, and for each one either closes its
-// open jobs (apply) or counts how many would close (dry run) — never both in the same call, so
-// a dry run genuinely writes nothing. A board with `board == ""` is a boardless provider's own
-// health record (see ingest-board-health spec) and routes to the source-scoped close/count
-// instead of the board-scoped one, since it already stands for the provider's whole catalogue.
+// closeChronicBoards lists the boards (or boardless providers) with no successful crawl for at
+// least closeWindowDays, and for each either closes its open jobs (apply) or counts how many
+// would close (dry run), never both in one call. A board with `board == ""` is a boardless
+// provider's own health record and routes to the source-scoped close/count, since it stands for
+// the provider's whole catalogue.
 func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int32, maxBoards int32, apply bool) (closeReport, error) {
 	ageWindow := pgtype.Interval{Days: closeWindowDays, Valid: true}
 	rows, err := q.ListChronicBoards(ctx, db.ListChronicBoardsParams{
@@ -104,9 +96,14 @@ func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int3
 		return closeReport{}, err
 	}
 
+	registry := sources.Taxonomy()
 	report := closeReport{boardsProcessed: len(rows)}
 	for _, r := range rows {
-		ref := boardRef{r.Provider, r.Board}
+		ref := boardRef{provider: r.Provider, board: r.Board}
+		if sources.ProbeCloses(registry[ref.provider]) {
+			log.Printf("close-chronic-boards: skipping board %s — requires individual posting evidence", ref)
+			continue
+		}
 		ambiguous, err := isRegionAmbiguous(ctx, q, ref)
 		if err != nil {
 			return report, err
@@ -121,7 +118,7 @@ func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int3
 			return report, err
 		}
 		report.jobsAffected += n
-		logBoardAction("chronic", ref, n, apply)
+		logBoardAction("chronic", ref, n, apply, "--apply")
 	}
 	if len(rows) > 0 {
 		logCapOverflow("chronic", rows[0].Total, len(rows))
@@ -129,11 +126,63 @@ func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int3
 	return report, nil
 }
 
+// closeBoardGoneBoards handles only boards whose adapter returned ErrBoardGone on three or more
+// consecutive runs spanning closeWindowDays, while another board from the provider succeeded
+// in the last 48 hours. It is separate from the generic unreachable pass so the evidence and
+// close reason remain explicit, and separately armed by --apply-board-gone.
+func closeBoardGoneBoards(ctx context.Context, q *db.Queries, closeWindowDays int32, maxBoards int32, apply bool) (closeReport, error) {
+	ageWindow := pgtype.Interval{Days: closeWindowDays, Valid: true}
+	rows, err := q.ListBoardGoneBoards(ctx, db.ListBoardGoneBoardsParams{
+		AgeWindow: ageWindow,
+		MaxBoards: maxBoards,
+	})
+	if err != nil {
+		return closeReport{}, err
+	}
+
+	registry := sources.Taxonomy()
+	report := closeReport{boardsProcessed: len(rows)}
+	for _, r := range rows {
+		ref := boardRef{r.Provider, r.Board, r.Region}
+		if sources.ProbeCloses(registry[ref.provider]) {
+			log.Printf("close-chronic-boards: skipping board %s — requires individual posting evidence", ref)
+			continue
+		}
+		ambiguous, err := isRegionAmbiguous(ctx, q, ref)
+		if err != nil {
+			return report, err
+		}
+		if ambiguous {
+			report.boardsSkippedAmbiguous++
+			logAmbiguousSkip("board-gone", ref)
+			continue
+		}
+		pattern := externalid.BoardPattern(ref.board)
+		var n int64
+		if apply {
+			n, err = q.CloseBoardGoneJobs(ctx, db.CloseBoardGoneJobsParams{
+				Source: ref.provider, BoardPattern: pattern, Board: ref.board, Region: ref.region, AgeWindow: ageWindow,
+			})
+		} else {
+			n, err = q.CountBoardGoneJobs(ctx, db.CountBoardGoneJobsParams{
+				Source: ref.provider, BoardPattern: pattern, Board: ref.board, Region: ref.region, AgeWindow: ageWindow,
+			})
+		}
+		if err != nil {
+			return report, err
+		}
+		report.jobsAffected += n
+		logBoardAction("board-gone", ref, n, apply, "--apply-board-gone")
+	}
+	if len(rows) > 0 {
+		logCapOverflow("board-gone", rows[0].Total, len(rows))
+	}
+	return report, nil
+}
+
 // closeOrCountOneBoard closes (or, without apply, counts) one chronic row's jobs. ageWindow is
-// passed through to the query itself, which re-validates board_health's CURRENT state against
-// it before touching anything — see CloseChronicBoardJobs's doc comment for why: the row was
-// read by an earlier, separate query (ListChronicBoards), and the board can recover in the gap
-// between that read and this call.
+// passed to the query, which re-validates board_health's current state: the board can recover
+// between the earlier ListChronicBoards read and this call (see CloseChronicBoardJobs).
 func closeOrCountOneBoard(ctx context.Context, q *db.Queries, ref boardRef, ageWindow pgtype.Interval, apply bool) (int64, error) {
 	if ref.board == "" {
 		if apply {

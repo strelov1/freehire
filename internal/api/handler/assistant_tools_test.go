@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -115,6 +116,29 @@ func TestSearchJobsToolReturnsFullDescriptionsAsMarkdown(t *testing.T) {
 	}
 }
 
+// Models send a one-value filter as a bare string; on the account MCP server that failed
+// every such call before the search ran.
+func TestSearchJobsToolReadsABareStringFilterAsOneValue(t *testing.T) {
+	s := &recordingSearcher{}
+	a := assistantWith(&searchHandlers{search: s, descriptions: fixedDescriptions{}}, nil)
+
+	tool := toolByName(t, a.assistantDiscoveryTools(), "search_jobs")
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"filters":{"work_mode":"remote","seniority":["senior"],"regions":null}}`)); err != nil {
+		t.Fatalf("search_jobs: %v", err)
+	}
+	if got := fmt.Sprint(s.got.Filter); !strings.Contains(got, "remote") || !strings.Contains(got, "senior") {
+		t.Errorf("filter = %v, want both work_mode remote and seniority senior applied", s.got.Filter)
+	}
+
+	for _, bad := range []string{`42`, `["remote",42]`} {
+		_, err := tool.Run(context.Background(), 3, json.RawMessage(`{"filters":{"work_mode":`+bad+`}}`))
+		if err == nil || !strings.Contains(err.Error(), "work_mode") || !strings.Contains(err.Error(), bad) {
+			t.Errorf("work_mode %s: error = %v, want it refused naming the filter and the value sent", bad, err)
+		}
+	}
+}
+
 func TestSearchJobsToolRejectsAnUnknownFacet(t *testing.T) {
 	a := assistantWith(&searchHandlers{search: &recordingSearcher{}, descriptions: fixedDescriptions{}}, nil)
 
@@ -189,6 +213,119 @@ func TestFacetsToolReturnsTheVocabulary(t *testing.T) {
 	}
 	if strings.Contains(string(payload), "enrichment.seniority") {
 		t.Errorf("payload = %s, want the internal attribute hidden", payload)
+	}
+}
+
+// Problem report #17: an agent enumerating employers asked for company_slug and was refused.
+func TestMCPFacetsListsTheBusiestCompanies(t *testing.T) {
+	fc := &stubFacets{res: search.FacetResult{
+		Total: 90,
+		Facets: map[string]map[string]int64{
+			"company_slug": {"acme-corp": 40, "acme-labs": 10, "globex": 30},
+		},
+	}}
+	a := assistantWith(&searchHandlers{facets: fc}, nil)
+	tool := toolByName(t, mcpKeyTools(a, testMCPOrigin), "facets")
+	run := func(args string) map[string]any {
+		t.Helper()
+		out, err := tool.Run(context.Background(), 3, json.RawMessage(args))
+		if err != nil {
+			t.Fatalf("facets %s: %v", args, err)
+		}
+		return out.(map[string]any)
+	}
+
+	got := run(`{"facet":"company_slug"}`)["companies"].([]companyFacetValue)
+	if len(got) != 3 || got[0].Slug != "acme-corp" || got[0].Count != 40 || got[0].Name != "acme-corp" {
+		t.Errorf("companies = %+v, want all three busiest first, named by slug without a names source", got)
+	}
+	if asked := fc.gotP[0].Facets; len(asked) != 1 || asked[0] != "company_slug" {
+		t.Errorf("asked the index for %v, want only company_slug", asked)
+	}
+	// A space in the text matches the slug's hyphen.
+	res := run(`{"facet":"company_slug","contains":"Acme Corp"}`)
+	if got := res["companies"].([]companyFacetValue); len(got) != 1 || got[0].Slug != "acme-corp" {
+		t.Errorf("contains=Acme Corp companies = %+v, want acme-corp", got)
+	}
+	if res["matching_companies"] != 1 {
+		t.Errorf("matching_companies = %v, want 1", res["matching_companies"])
+	}
+}
+
+// An MCP client keeps every answer in its context, and the whole vocabulary ran to ~125 KB
+// (2026-11-05): four long tails of up to 1,200 values each. The MCP facets names the
+// filters with their sizes, and lists one filter's values on request.
+func TestMCPFacetsNamesTheFiltersAndListsOneOnRequest(t *testing.T) {
+	fc := &stubFacets{res: search.FacetResult{
+		Total: 120,
+		Facets: map[string]map[string]int64{
+			"skills":               {"go": 40, "golang-migrate": 3, "python": 30},
+			"enrichment.seniority": {"senior": 60},
+		},
+		Stats: map[string]search.FacetStat{"enrichment.salary_min": {Min: 1000, Max: 9000}},
+	}}
+	a := assistantWith(&searchHandlers{facets: fc}, nil)
+	tool := toolByName(t, mcpKeyTools(a, testMCPOrigin), "facets")
+	run := func(args string) map[string]any {
+		t.Helper()
+		out, err := tool.Run(context.Background(), 3, json.RawMessage(args))
+		if err != nil {
+			t.Fatalf("facets %s: %v", args, err)
+		}
+		return out.(map[string]any)
+	}
+
+	index := run(`{}`)
+	if sizes := index["filters"].(map[string]int); sizes["skills"] != 3 || sizes["seniority"] != 1 {
+		t.Errorf("filters = %v, want each public filter name with its number of values", sizes)
+	}
+	sizes := index["filters"].(map[string]int)
+	if n, ok := sizes["metros"]; !ok || n != 0 {
+		t.Errorf("filters = %v, want metros named with 0 although no matching posting carries one", sizes)
+	}
+	if _, ok := sizes["salary_min"]; ok {
+		t.Errorf("filters = %v, want numeric facets left to stats", sizes)
+	}
+	if payload, _ := json.Marshal(index); strings.Contains(string(payload), "python") {
+		t.Errorf("index = %s, want no values without a facet", payload)
+	}
+
+	fc.gotP = nil
+	if got := run(`{"facet":"skills"}`)["values"].(map[string]int64); len(got) != 3 {
+		t.Errorf("facet=skills values = %v, want all three", got)
+	}
+	if asked := fc.gotP[0].Facets; len(asked) != 1 || asked[0] != "skills" {
+		t.Errorf("facet=skills asked the index for %v, want only the skills attribute", asked)
+	}
+	// "golang" is an alias of "go": the alias finds the value the search filters by.
+	got := run(`{"facet":"skills","contains":"golang"}`)["values"].(map[string]int64)
+	if _, ok := got["go"]; !ok || len(got) != 2 {
+		t.Errorf("contains=golang values = %v, want go (by alias) and golang-migrate (by text)", got)
+	}
+
+	if got := run(`{"facet":"salary_min"}`)["stats"].(*search.FacetStat); got == nil || got.Max != 9000 {
+		t.Errorf("facet=salary_min stats = %+v, want the numeric range", got)
+	}
+	// No matching posting states a salary_max: still a numeric answer, with no range.
+	if got := run(`{"facet":"salary_max"}`); got["stats"].(*search.FacetStat) != nil || got["values"] != nil {
+		t.Errorf("facet=salary_max = %v, want stats with no range and no values", got)
+	}
+
+	for _, unlisted := range []string{"vibe"} {
+		_, err := tool.Run(context.Background(), 3, json.RawMessage(`{"facet":"`+unlisted+`"}`))
+		if err == nil || !strings.Contains(err.Error(), unlisted) || !strings.Contains(err.Error(), "salary_min") {
+			t.Errorf("facet=%s error = %v, want it refused, naming it and the valid ones", unlisted, err)
+		}
+	}
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"facet":"vibe"}`)); err == nil ||
+		!strings.Contains(err.Error(), "vibe") || !strings.Contains(err.Error(), "skills") {
+		t.Errorf("error = %v, want an unknown facet refused, naming it and the valid ones", err)
+	}
+
+	// The in-app assistant's own copy still lists every value.
+	full, _ := toolByName(t, a.assistantDiscoveryTools(), "facets").Run(context.Background(), 3, json.RawMessage(`{}`))
+	if got := len(full.(facetPayload).Facets["skills"]); got != 3 {
+		t.Errorf("in-app facets lists %d skills, want all 3", got)
 	}
 }
 

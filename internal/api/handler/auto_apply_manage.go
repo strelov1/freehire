@@ -7,14 +7,14 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// Retry and cancel for an auto-apply attempt (openspec/changes/auto-apply-over-mcp). Both are
-// addressed by the job's slug, like the start route beside them: a queue id dies on submission
-// and on cancel, while (caller, job) is the queue's own unique key and is what both the
-// tracker drawer and an agent already hold.
+// Retry and cancel for an auto-apply attempt. Both are addressed by the job's slug, like the
+// start route: a queue id dies on submission and cancel, while (caller, job) is the queue's
+// unique key and what the tracker drawer and agents hold.
 
 // autoApplyNoAttemptMessage answers a retry or cancel for a job the caller has no attempt on.
 const autoApplyNoAttemptMessage = "there is no auto-apply attempt for this job"
@@ -22,7 +22,7 @@ const autoApplyNoAttemptMessage = "there is no auto-apply attempt for this job"
 // autoApplyEntryForSlug resolves the caller's attempt on the job behind slug. An unknown slug
 // is pgx.ErrNoRows (404 over HTTP); a known job with no attempt is a 404 that says so.
 func (h *assistantHandlers) autoApplyEntryForSlug(ctx context.Context, userID int64, slug string) (db.Job, db.GetAutoApplyQueueEntryForJobRow, error) {
-	job, err := h.queries.GetJobBySlug(ctx, slug)
+	job, err := jobBySlugOrCode(ctx, h.queries, slug)
 	if err != nil {
 		return db.Job{}, db.GetAutoApplyQueueEntryForJobRow{}, err
 	}
@@ -109,25 +109,25 @@ func (h *assistantHandlers) cancelAutoApply(ctx context.Context, userID int64, s
 const autoApplyCancelled = "cancelled"
 
 // PostJobAutoApplyRetry is retryAutoApply over HTTP.
-func (h *assistantHandlers) PostJobAutoApplyRetry(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *assistantHandlers) PostJobAutoApplyRetry(ctx context.Context, params apigen.PostJobAutoApplyRetryParams) (*apigen.PostJobAutoApplyRetryOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := h.retryAutoApply(c.Context(), userID, c.Params("slug")); err != nil {
-		return err
+	if err := h.retryAutoApply(ctx, userID, params.Slug); err != nil {
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"retried": true}})
+	return &apigen.PostJobAutoApplyRetryOK{Data: apigen.AutoApplyRetried{Retried: true}}, nil
 }
 
 // DeleteJobAutoApply is cancelAutoApply over HTTP.
-func (h *assistantHandlers) DeleteJobAutoApply(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *assistantHandlers) DeleteJobAutoApply(ctx context.Context, params apigen.DeleteJobAutoApplyParams) (*apigen.DeleteJobAutoApplyOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := h.cancelAutoApply(c.Context(), userID, c.Params("slug")); err != nil {
-		return err
+	if err := h.cancelAutoApply(ctx, userID, params.Slug); err != nil {
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"cancelled": true}})
+	return &apigen.DeleteJobAutoApplyOK{Data: apigen.AutoApplyCancelled{Cancelled: true}}, nil
 }

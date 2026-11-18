@@ -1,8 +1,6 @@
-// Package oauth implements sign-in via external OAuth providers (Google,
-// GitHub, LinkedIn) behind a small Provider interface and a registry built
-// from config, mirroring how internal/ingest/sources grows by adapters. Providers
-// are read-only identity fetchers: tokens are used once to resolve who the
-// user is and are never stored.
+// Package oauth implements sign-in via external OAuth providers behind a Provider
+// interface and a registry built from config. Tokens are used once to resolve identity
+// and never stored.
 package oauth
 
 import (
@@ -11,31 +9,24 @@ import (
 	"github.com/strelov1/freehire/internal/platform/config"
 )
 
-// Identity is what a provider knows about the signing-in user: a stable
-// per-provider user id and, when available, an email with its verification
-// status. Account resolution MUST ignore unverified emails (linking on an
-// unverified email would allow account takeover).
+// Identity is what a provider knows about the user. Account resolution MUST ignore
+// unverified emails; linking on one allows account takeover.
 type Identity struct {
 	ProviderUserID string
 	Email          string
 	EmailVerified  bool
 }
 
-// Provider is one OAuth provider in the authorization-code flow: it builds
-// the consent URL and turns a callback code into an Identity.
+// Provider is one OAuth provider in the authorization-code flow.
 type Provider interface {
 	Name() string
 	AuthCodeURL(state string) string
 	FetchIdentity(ctx context.Context, code string) (Identity, error)
 }
 
-// constructors maps a provider name to its builder. The redirect URL is a build
-// argument, not baked in, so the same registry can serve OAuth on more than one
-// domain (the origin is chosen per request — see Registry.Provider). Every
-// constructor takes the full credentials struct, even though Google/GitHub/
-// LinkedIn only read ClientID/ClientSecret from it — Apple needs the rest
-// (TeamID/KeyID/PrivateKey) and authenticates with a self-signed JWT instead of
-// a static ClientSecret.
+// constructors maps a provider name to its builder. The redirect URL is a build argument
+// so one registry serves several domains; the full credentials struct is passed because
+// Apple needs more than ClientID/ClientSecret.
 var constructors = map[string]func(creds config.OAuthCredentials, redirectURL string) Provider{
 	"google":   NewGoogle,
 	"github":   NewGitHub,
@@ -43,19 +34,14 @@ var constructors = map[string]func(creds config.OAuthCredentials, redirectURL st
 	"apple":    NewApple,
 }
 
-// Registry holds the credentials of the enabled OAuth providers and builds a
-// Provider on demand for a given request origin. Deferring the redirect URL to
-// build time is what lets one deployment complete the flow on multiple domains
-// during a migration — each domain's callback must be registered with the
-// provider. Provider construction is a cheap struct literal (no network), so
-// building per request is free.
+// Registry holds the enabled providers' credentials and builds a Provider per request
+// origin. Each domain's callback must be registered with the provider.
 type Registry struct {
 	creds map[string]config.OAuthCredentials
 }
 
-// credentialsComplete reports whether creds has everything the named provider
-// needs to authenticate. Apple has no client secret — it needs TeamID, KeyID,
-// and PrivateKey instead, to mint its own client-secret JWT.
+// credentialsComplete reports whether creds suffice for the provider. Apple needs
+// TeamID, KeyID and PrivateKey instead of a client secret.
 func credentialsComplete(name string, creds config.OAuthCredentials) bool {
 	if creds.ClientID == "" {
 		return false
@@ -66,9 +52,8 @@ func credentialsComplete(name string, creds config.OAuthCredentials) bool {
 	return creds.ClientSecret != ""
 }
 
-// NewRegistry keeps only providers with complete credentials for a known
-// provider name; unknown names and incomplete credentials are dropped, so an
-// unconfigured provider is simply absent (its routes 404 / the list omits it).
+// NewRegistry drops unknown names and incomplete credentials, so an unconfigured
+// provider is absent (its routes 404).
 func NewRegistry(creds map[string]config.OAuthCredentials) *Registry {
 	enabled := make(map[string]config.OAuthCredentials)
 	for name, c := range creds {
@@ -79,7 +64,7 @@ func NewRegistry(creds map[string]config.OAuthCredentials) *Registry {
 	return &Registry{creds: enabled}
 }
 
-// Names returns the enabled provider names (unsorted; callers sort for output).
+// Names returns the enabled provider names, unsorted.
 func (r *Registry) Names() []string {
 	names := make([]string, 0, len(r.creds))
 	for name := range r.creds {
@@ -88,9 +73,8 @@ func (r *Registry) Names() []string {
 	return names
 }
 
-// Provider builds the named provider with its callback rooted at origin
-// (origin + /api/v1/auth/oauth/<name>/callback). ok is false for a name that is
-// not enabled.
+// Provider builds the named provider with its callback at
+// origin + /api/v1/auth/oauth/<name>/callback. ok is false when not enabled.
 func (r *Registry) Provider(name, origin string) (Provider, bool) {
 	c, ok := r.creds[name]
 	if !ok {
@@ -99,17 +83,12 @@ func (r *Registry) Provider(name, origin string) (Provider, bool) {
 	return constructors[name](c, origin+"/api/v1/auth/oauth/"+name+"/callback"), true
 }
 
-// ProviderV2 builds a browser provider for the verifier-bound native flow.
-// Apple is used here only by the same-origin web recent-auth adapter; native
-// clients use their SDK plus the dedicated nonce-bound exchange endpoint.
+// ProviderV2 builds a browser provider for the verifier-bound native flow. Apple is used
+// here only by the same-origin web recent-auth adapter; native clients use their SDK.
 //
-// Same callback as Provider, deliberately. A provider console registers ONE callback
-// URL per application, so a second path is not a second option — it is a redirect the
-// provider has never heard of. This used to answer `/api/v2/...`, which GitHub refused
-// outright ("The redirect_uri is not associated with this application"); Google only
-// worked because somebody had listed both there and nowhere else. The flows are told
-// apart at the callback by which state cookie the browser brings back, not by which URL
-// the provider was sent to.
+// The callback is deliberately the same as Provider's: a provider console registers one
+// callback URL per application. The flows are told apart at the callback by which state
+// cookie comes back.
 func (r *Registry) ProviderV2(name, origin string) (Provider, bool) {
 	return r.Provider(name, origin)
 }

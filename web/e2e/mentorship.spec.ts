@@ -49,9 +49,7 @@ async function registerBetaUser(context: BrowserContext, email: string) {
   // Past the first-run wizard, and into the beta. The marketplace ships gated: every
   // route it owns answers 404 to an account without the flag, so a test account without
   // it would exercise the gate rather than the feature.
-  sql(
-    `UPDATE users SET onboarding_completed_at = now(), beta_tester = true WHERE email = '${email}'`,
-  );
+  sql(`UPDATE users SET onboarding_completed_at = now(), beta_tester = true WHERE email = '${email}'`);
 }
 
 /** Open a page and wait until its Svelte handlers are actually attached.
@@ -66,9 +64,7 @@ async function open(page: Page, path: string) {
   await page.waitForLoadState('networkidle');
 }
 
-test('a mentor publishes a profile and somebody else books an hour of it', async ({
-  browser,
-}) => {
+test('a mentor publishes a profile and somebody else books an hour of it', async ({ browser }) => {
   const run = Date.now();
   const mentorEmail = `e2e-mentor-${run}@example.test`;
   const seekerEmail = `e2e-seeker-${run}@example.test`;
@@ -123,8 +119,14 @@ test('a mentor publishes a profile and somebody else books an hour of it', async
       await mentor.getByRole('button', { name: 'Add a row' }).click();
       const row = mentor.locator('select').nth(weekday - 1);
       await row.selectOption(String(weekday));
-      await mentor.locator('input[type="time"]').nth((weekday - 1) * 2).fill('09:00');
-      await mentor.locator('input[type="time"]').nth((weekday - 1) * 2 + 1).fill('21:00');
+      await mentor
+        .locator('input[type="time"]')
+        .nth((weekday - 1) * 2)
+        .fill('09:00');
+      await mentor
+        .locator('input[type="time"]')
+        .nth((weekday - 1) * 2 + 1)
+        .fill('21:00');
     }
     await mentor.getByRole('button', { name: 'Save the week' }).click();
     await expect(mentor.getByText('Monday 09:00–21:00')).toBeVisible();
@@ -151,10 +153,7 @@ test('a mentor publishes a profile and somebody else books an hour of it', async
     // set depends on the notice period and on what day this test runs, and a hard-coded
     // date makes the test fail on a Sunday for reasons that have nothing to do with the
     // code.
-    const openDay = seeker
-      .getByTestId('mentor-calendar')
-      .locator('button:not([disabled])')
-      .first();
+    const openDay = seeker.getByTestId('mentor-calendar').locator('button:not([disabled])').first();
     await expect(openDay).toBeVisible();
     await openDay.click();
 

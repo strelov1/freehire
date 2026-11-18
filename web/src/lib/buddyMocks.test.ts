@@ -27,14 +27,25 @@ describe('buddy mocks', () => {
   // label, which the server already resolved).
   it('renders a mock in the given zone', () => {
     const mock = { starts_at: '2026-11-10T18:00:00Z', ends_at: '2026-11-10T19:00:00Z' };
-    expect(mockDateParts(mock, 'Europe/Berlin')).toEqual({ weekday: 'Tue', day: '10', month: 'Nov', time: '19:00–20:00' });
+    expect(mockDateParts(mock, 'Europe/Berlin')).toEqual({
+      weekday: 'Tue',
+      day: '10',
+      month: 'Nov',
+      time: '19:00–20:00',
+    });
     expect(mockDateParts(mock, 'Asia/Tokyo')).toMatchObject({ weekday: 'Wed', day: '11', time: '03:00–04:00' });
   });
 
   it('never states an average of nothing', () => {
-    expect(reviewSummaryLine({ completed: 0, rating_count: 0, rating_avg: 0 })).toBe('0 mock interviews · no ratings yet');
-    expect(reviewSummaryLine({ completed: 1, rating_count: 1, rating_avg: 4 })).toBe('1 mock interview · 4.0 ★ from 1 rating');
-    expect(reviewSummaryLine({ completed: 5, rating_count: 3, rating_avg: 4.333 })).toBe('5 mock interviews · 4.3 ★ from 3 ratings');
+    expect(reviewSummaryLine({ completed: 0, rating_count: 0, rating_avg: 0 })).toBe(
+      '0 mock interviews · no ratings yet',
+    );
+    expect(reviewSummaryLine({ completed: 1, rating_count: 1, rating_avg: 4 })).toBe(
+      '1 mock interview · 4.0 ★ from 1 rating',
+    );
+    expect(reviewSummaryLine({ completed: 5, rating_count: 3, rating_avg: 4.333 })).toBe(
+      '5 mock interviews · 4.3 ★ from 3 ratings',
+    );
   });
 
   it('names a departed or blocked counterpart without a handle', () => {

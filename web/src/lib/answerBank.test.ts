@@ -5,11 +5,11 @@ describe('answerableQuestions', () => {
   it('offers an input for a question that has readable text', () => {
     const pending = [
       { label: 'What is your desired salary?', will_draft_at_submission: false },
-      { label: 'Which state do you currently reside in?', will_draft_at_submission: false }
+      { label: 'Which state do you currently reside in?', will_draft_at_submission: false },
     ];
     expect(answerableQuestions(pending).map((q) => q.label)).toEqual([
       'What is your desired salary?',
-      'Which state do you currently reside in?'
+      'Which state do you currently reside in?',
     ]);
   });
 
@@ -28,7 +28,7 @@ describe('answerableQuestions', () => {
   it('skips a question with no readable text at all', () => {
     const pending = [
       { label: '', will_draft_at_submission: false },
-      { label: '   ', will_draft_at_submission: false }
+      { label: '   ', will_draft_at_submission: false },
     ];
     expect(answerableQuestions(pending)).toEqual([]);
   });
@@ -41,10 +41,10 @@ describe('answerableQuestions', () => {
     const pending = [
       {
         label: 'Are you legally authorized to work in the country in which this position is located?',
-        will_draft_at_submission: false
+        will_draft_at_submission: false,
       },
       { label: 'Do you require visa sponsorship?', will_draft_at_submission: false },
-      { label: 'Do you have the right to work in the UK?', will_draft_at_submission: false }
+      { label: 'Do you have the right to work in the UK?', will_draft_at_submission: false },
     ];
     expect(answerableQuestions(pending)).toEqual([]);
   });
@@ -54,7 +54,7 @@ describe('answerableQuestions', () => {
   it('still offers an input for the other sensitive questions', () => {
     const pending = [
       { label: 'What is your desired salary?', will_draft_at_submission: false },
-      { label: 'Are you a protected veteran?', will_draft_at_submission: false }
+      { label: 'Are you a protected veteran?', will_draft_at_submission: false },
     ];
     expect(answerableQuestions(pending)).toHaveLength(2);
   });
@@ -73,7 +73,7 @@ describe('pendingRows', () => {
   it('gives two entries with the same label their own distinct identity', () => {
     const pending = [
       { label: 'Additional information', will_draft_at_submission: false },
-      { label: 'Additional information', will_draft_at_submission: false }
+      { label: 'Additional information', will_draft_at_submission: false },
     ];
     const rows = pendingRows(pending);
     expect(rows).toHaveLength(2);
@@ -89,7 +89,7 @@ describe('pendingRows', () => {
       { label: '', will_draft_at_submission: false },
       { label: '', will_draft_at_submission: false },
       { label: '   ', will_draft_at_submission: false },
-      { label: '', will_draft_at_submission: false }
+      { label: '', will_draft_at_submission: false },
     ];
     const rows = pendingRows(pending);
     expect(new Set(rows.map((r) => r.key)).size).toBe(4);
@@ -115,8 +115,8 @@ describe('pendingRows', () => {
     const pending = [
       {
         label: 'Are you legally authorized to work in the country in which this position is located?',
-        will_draft_at_submission: false
-      }
+        will_draft_at_submission: false,
+      },
     ];
     const rows = pendingRows(pending);
     expect(rows).toHaveLength(1);
@@ -151,7 +151,7 @@ describe('hasVisibleRows', () => {
   it('is false when every row is empty-label', () => {
     const pending = [
       { label: '', will_draft_at_submission: false },
-      { label: '   ', will_draft_at_submission: false }
+      { label: '   ', will_draft_at_submission: false },
     ];
     expect(hasVisibleRows(pendingRows(pending))).toBe(false);
   });

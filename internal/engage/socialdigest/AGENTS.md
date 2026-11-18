@@ -21,21 +21,36 @@ already publishes.
   third posting yields its place and the list comes out full; truncating first would
   leave a hole nothing refills. Quarantine is checked before the cap is counted, so a
   quarantined posting does not spend its company's place.
+- `ThemeFor(day)` / `SelectThemed` — which top the day runs. **The post rotates by the
+  weekday of the day it describes: remote on Tuesday, entry-level on Wednesday, data and AI
+  on Friday, the plain list otherwise.** A function of the day and not stored state, so every
+  channel, retry and `-day` replay agrees, and the ledger needs no column. A theme narrows
+  who competes and never changes the ranking, so every heading can say "most viewed". A theme
+  that cannot fill `MinThemeItems` publishes the plain list under the plain heading, and
+  `Digest.Theme` records the one actually used. **The rotation adds no posts**: still one a
+  day per channel, and the quarantine holds across themes, so a posting does not reappear
+  under the next heading. `MinThemeItems` and the weekday table are guesses until dry runs
+  have been read (`-dry-run -day <a Tuesday>`).
 - `ResolveDay(latest, hasData, now)` — the day is **discovered**, not computed from
-  the clock. `cmd/rollup-views` fires at 02:30 UTC and reads the *rotated* access log,
+  the clock. `cmd/rollup-views` runs once a day and reads the *rotated* access log,
   so whether its freshest complete day is yesterday or the day before depends on when
   logrotate runs on the host — an assumption that would fail by silently publishing a
   stale list. Past `StaleAfterDays` it returns `ErrStaleViewData` rather than a day.
 
   **Two places decide the day, and this is only the second.** What "latest" means is
   settled in SQL: `LatestJobViewDay` excludes the day in PROGRESS (`WHERE day < (now()
-  AT TIME ZONE 'utc')::date`), because the 02:30 run reaches past midnight and lands a
+  AT TIME ZONE 'utc')::date`), because a rotated file spans midnight and lands a
   few dozen rows on the current day — so a plain `max(day)` reads a stub whose best
   posting has one view. Nothing clears `MinPageUniques`, the run reports a quiet day
   and exits 0, and the finished day beside it is lost for good. That cost three digests
   before it was found, and a silent exit 0 is indistinguishable from a quiet day. A
   rollup holding only the day in progress therefore reports NO data, which arrives here
   as `ErrNoViewData` and exits non-zero: loud once on a fresh host beats silent daily.
+- **The timer has to follow the rollup.** Both live in `freehire-ops`. The rollup takes hours
+  (17:00 UTC since 2026-11-04, its nginx stage alone 1h42m), so the digest runs at 21:00 UTC.
+  Run before it finishes, a day holds partial counts or only a stub: on 2026-11-05 the 13:00
+  run found nothing above the floor and exited 0, and a list published by hand during the
+  rollup led with 8 views on a day whose busiest posting was later measured at 65.
 - `Service.Build` / `Service.Dispatch` — assemble, then deliver. Every publisher is
   attempted even after one fails, and the failures are joined: a Discord outage must
   not cost the day everywhere, and the log should name every channel that broke.
@@ -64,9 +79,12 @@ already publishes.
   be one transaction across an HTTP boundary, so one order has to lose. Recording
   first risks a day silently never published; recording after risks one duplicate
   post. A duplicate is visible and recoverable; a silent gap is neither.
-- **An empty digest is a quiet day, not a failure** — publish nothing, exit zero.
-  `ErrNoViewData` and `ErrStaleViewData` are the other thing: the pipeline is broken
-  and must not be published over.
+- **An empty digest is a quiet day, not a failure** — publish nothing, exit zero. It now
+  means only that the quarantine took everything above the floor. `ErrNoViewData`,
+  `ErrStaleViewData` and `ErrThinViewData` (nothing clears the floor at all, which is a
+  stub day) are the other thing: the pipeline is broken or behind, the run exits non-zero
+  and nothing is published. It cannot see a day the rollup has half finished: that still
+  clears the floor, which is why the timer has to follow the rollup.
 - **A channel with no credential is not configured**, so it is absent from the
   publisher list rather than present and disabled — the same degradation as the rest
   of this worker fleet.
@@ -83,7 +101,7 @@ no counterpart in the Discord publisher:
   storing and renewing it is [linkedinauth](../linkedinauth/AGENTS.md); this file
   knows only that a string arrives or an error does.
 - **The text format reserves characters, and they must be escaped even as plain
-  text.** `\ | { } @ [ ] ( ) < > # * _ ~` — a bare `(` in `Senior C++ (Remote)` is a
+  text.** `\ | { } @ [] ( ) < > # * _ ~` — a bare `(` in `Senior C++ (Remote)` is a
   syntax error in LinkedIn's `little` format and the API refuses the whole post with
   a 400. The URL is deliberately NOT escaped: a backslash inside a link publishes
   verbatim and breaks it.

@@ -50,21 +50,21 @@ func TestBuildSkillPulses(t *testing.T) {
 	if len(goP.Series) != 2 || goP.Series[0].OpenCount != 100 || goP.Series[1].OpenCount != 120 {
 		t.Errorf("go series = %+v, want ascending [100, 120]", goP.Series)
 	}
-	if goP.ChangePct == nil || *goP.ChangePct != 20 {
+	if v, ok := goP.ChangePct.Get(); !ok || v != 20 {
 		t.Errorf("go change_pct = %v, want 20 (100 -> 120)", goP.ChangePct)
 	}
 
 	rustP := got[1]
-	if rustP.ChangePct != nil {
-		t.Errorf("rust change_pct = %v, want nil (only one snapshot)", *rustP.ChangePct)
+	if !rustP.ChangePct.Null {
+		t.Errorf("rust change_pct = %v, want null (only one snapshot)", rustP.ChangePct)
 	}
 	if len(rustP.Series) != 1 {
 		t.Errorf("rust series len = %d, want 1", len(rustP.Series))
 	}
 
 	zigP := got[2]
-	if zigP.ChangePct != nil {
-		t.Errorf("zig change_pct = %v, want nil (earliest open_count is 0)", *zigP.ChangePct)
+	if !zigP.ChangePct.Null {
+		t.Errorf("zig change_pct = %v, want null (earliest open_count is 0)", zigP.ChangePct)
 	}
 }
 
@@ -91,13 +91,13 @@ func marketPulseApp(t *testing.T, repo *fakeProfileRepo, history *fakeSkillHisto
 	h := &marketPulseHandlers{userProfile: userprofile.New(repo), history: history}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss, testVersions)
-	app.Get("/me/market-pulse", g, h.GetMarketPulse)
+	h.register(app.Group("/api/v1"), middleware{cookie: g}, newContract(contractHandlers{marketPulseHandlers: h}))
 	return app, token
 }
 
 func doMarketPulse(t *testing.T, app *fiber.App, token string) *http.Response {
 	t.Helper()
-	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/market-pulse", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/market-pulse", nil)
 	if token != "" {
 		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	}
@@ -111,7 +111,15 @@ func doMarketPulse(t *testing.T, app *fiber.App, token string) *http.Response {
 // marketPulseBody is the wire shape this test file decodes responses into, to confirm
 // the actual JSON on the wire (not just status code and mock call args).
 type marketPulseBody struct {
-	Data []skillPulse `json:"data"`
+	Data []struct {
+		Skill     string   `json:"skill"`
+		OpenCount int32    `json:"open_count"`
+		ChangePct *float64 `json:"change_pct"`
+		Series    []struct {
+			WeekStart string `json:"week_start"`
+			OpenCount int32  `json:"open_count"`
+		} `json:"series"`
+	} `json:"data"`
 	Meta struct {
 		WeekStart string `json:"week_start"`
 	} `json:"meta"`

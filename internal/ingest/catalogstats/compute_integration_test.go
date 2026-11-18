@@ -34,7 +34,11 @@ func seedJob(t *testing.T, q *db.Queries, source, externalID, companySlug string
 	if err != nil {
 		t.Fatalf("seed %s: %v", externalID, err)
 	}
-	return row.Job
+	job, err := q.GetJob(context.Background(), row.ID)
+	if err != nil {
+		t.Fatalf("read back %s: %v", externalID, err)
+	}
+	return job
 }
 
 func truncateJobs(t *testing.T, pool *pgxpool.Pool) {

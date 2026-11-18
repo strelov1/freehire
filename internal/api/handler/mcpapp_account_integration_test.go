@@ -8,8 +8,10 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +20,9 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
+	"github.com/strelov1/freehire/internal/engage/problemreport"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -32,7 +36,14 @@ func (rt bearerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-func TestMCPAccountEndToEnd(t *testing.T) {
+func TestMCPAuthenticatedEndpoint(t *testing.T) {
+	const endpoint = "/api/v1/mcp"
+	t.Run("oauth", func(t *testing.T) { testMCPEndToEnd(t, endpoint) })
+	t.Run("database failure", func(t *testing.T) { testMCPInfraFailure(t, endpoint) })
+	t.Run("api keys", func(t *testing.T) { testMCPByAPIKey(t, endpoint) })
+}
+
+func testMCPEndToEnd(t *testing.T, endpoint string) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	userID := seedOAuthUser(t, pool, "mcp-account-1@example.test")
@@ -52,18 +63,24 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 	}
 
 	assistants := &assistantHandlers{
-		queries:  queries,
-		tracking: &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
+		queries:    queries,
+		dictionary: &dictionaryHandlers{queries: queries},
+		problems:   problemreport.New(queries),
+		tracking:   &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
+	sink := &recordingSink{}
+	catalogue := newMCPAppHandlers(nil, nil, queries, testMCPOrigin)
+	catalogue.agentViews = sink
+	seedApplyFormJob(t, queries, "mcp-viewer", "mcp-viewer")
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	mountMCPAccount(api, middleware{}, assistants, testMCPOrigin, nil)
+	mountMCP(api, assistants, catalogue)
 
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	defer server.Close()
 
 	t.Run("an unknown token is rejected before any MCP framing", func(t *testing.T) {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, server.URL+"/api/v1/mcp/account", nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, server.URL+endpoint, nil)
 		if err != nil {
 			t.Fatalf("NewRequest: %v", err)
 		}
@@ -86,7 +103,7 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 
 	t.Run("a live token runs a tool as the right user", func(t *testing.T) {
 		transport := &mcp.StreamableClientTransport{
-			Endpoint:   server.URL + "/api/v1/mcp/account",
+			Endpoint:   server.URL + endpoint,
 			HTTPClient: &http.Client{Transport: bearerRoundTripper{token: liveToken}},
 		}
 		client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
@@ -95,8 +112,40 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 			t.Fatalf("Connect: %v", err)
 		}
 		defer func() { _ = session.Close() }()
+		assertAccountCatalogue(t, session)
+		assertMCPViewer(t, session, sink, userID)
+		res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+			Name:      suggestDictionaryTermToolName,
+			Arguments: map[string]any{"kind": "specialization", "term": "Unlisted Quasar Specialist"},
+		})
+		if err != nil || res.IsError {
+			t.Fatalf("dictionary call: %+v %v", res, err)
+		}
+		var submittedBy int64
+		if err := pool.QueryRow(t.Context(), `SELECT submitted_by FROM dictionary_gaps WHERE kind='specialization'`).Scan(&submittedBy); err != nil {
+			t.Fatal(err)
+		}
+		if submittedBy != userID {
+			t.Fatalf("dictionary suggestion owner=%d want%d", submittedBy, userID)
+		}
+		res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
+			Name: "report_problem",
+			Arguments: map[string]any{
+				"category": "missing_capability", "goal": "Compare a requested unsupported field",
+				"expected": "A matching filter", "actual": "No such filter is available",
+			},
+		})
+		if err != nil || res.IsError {
+			t.Fatalf("problem report call: %+v %v", res, err)
+		}
+		if err := pool.QueryRow(t.Context(), `SELECT user_id FROM problem_reports`).Scan(&submittedBy); err != nil {
+			t.Fatal(err)
+		}
+		if submittedBy != userID {
+			t.Fatalf("problem report owner=%d want%d", submittedBy, userID)
+		}
 
-		res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		res, err = session.CallTool(context.Background(), &mcp.CallToolParams{
 			Name: "my_jobs", Arguments: map[string]any{},
 		})
 		if err != nil {
@@ -106,6 +155,25 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 			t.Fatalf("my_jobs failed: %+v", res.Content)
 		}
 	})
+	t.Run("a revoked generation cannot fall back to anonymous", func(t *testing.T) {
+		if _, err := queries.BumpUserTokenVersion(t.Context(), userID); err != nil {
+			t.Fatal(err)
+		}
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+endpoint, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+liveToken)
+		resp, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized || !strings.Contains(resp.Header.Get("WWW-Authenticate"), "invalid_token") {
+			t.Fatalf("revoked grant status=%d challenge=%s", resp.StatusCode, resp.Header.Get("WWW-Authenticate"))
+		}
+	})
+
 }
 
 // TestMCPAccountAuthenticate_InfraFailureIsA500NotA401 is a regression test
@@ -115,9 +183,9 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 // gets. Those are different failures with different owners: one is the
 // caller's mistake, the other is ours and belongs in the error inbox. Only a
 // real Fiber handler returning a Go error gets reported through classify/
-// Sentry, which is why authentication now runs as middleware ahead of the
+// the exception log, which is why authentication now runs as middleware ahead of the
 // adapted raw http.Handler rather than inside it.
-func TestMCPAccountAuthenticate_InfraFailureIsA500NotA401(t *testing.T) {
+func testMCPInfraFailure(t *testing.T, endpoint string) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	assistants := &assistantHandlers{
@@ -126,11 +194,11 @@ func TestMCPAccountAuthenticate_InfraFailureIsA500NotA401(t *testing.T) {
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	mountMCPAccount(api, middleware{}, assistants, testMCPOrigin, nil)
+	mountMCP(api, assistants, newMCPAppHandlers(nil, nil, queries, testMCPOrigin))
 
 	pool.Close() // simulate the database going away, not an unknown token
 
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/mcp/account", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, endpoint, nil)
 	req.Header.Set("Authorization", "Bearer fhm_whatever")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -144,7 +212,7 @@ func TestMCPAccountAuthenticate_InfraFailureIsA500NotA401(t *testing.T) {
 
 // A full-scope API key is let in — the local MCP package holds a key, not a grant — and is
 // served the alert tools but not auto-apply; a narrow key is refused as insufficient scope.
-func TestMCPAccountByAPIKey(t *testing.T) {
+func testMCPByAPIKey(t *testing.T, endpoint string) {
 	ctx := context.Background()
 	pool := startPostgres(t)
 	queries := db.New(pool)
@@ -165,13 +233,17 @@ func TestMCPAccountByAPIKey(t *testing.T) {
 		queries:  queries,
 		tracking: &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
+	sink := &recordingSink{}
+	catalogue := newMCPAppHandlers(nil, nil, queries, testMCPOrigin)
+	catalogue.agentViews = sink
+	seedApplyFormJob(t, queries, "mcp-viewer", "mcp-viewer")
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	mountMCPAccount(app.Group("/api/v1"), middleware{}, assistants, testMCPOrigin, nil)
+	mountMCP(app.Group("/api/v1"), assistants, catalogue)
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	defer server.Close()
 
 	status := func(token string) int {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/api/v1/mcp/account", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+endpoint, nil)
 		if err != nil {
 			t.Fatalf("NewRequest: %v", err)
 		}
@@ -192,13 +264,15 @@ func TestMCPAccountByAPIKey(t *testing.T) {
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint:   server.URL + "/api/v1/mcp/account",
+		Endpoint:   server.URL + endpoint,
 		HTTPClient: &http.Client{Transport: bearerRoundTripper{token: fullKey}},
 	}, nil)
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
 	defer func() { _ = session.Close() }()
+	assertAccountCatalogue(t, session)
+	assertMCPViewer(t, session, sink, userID)
 
 	listed, err := session.ListTools(ctx, nil)
 	if err != nil {
@@ -211,8 +285,10 @@ func TestMCPAccountByAPIKey(t *testing.T) {
 	if !served["subscribe"] || !served["list_subscriptions"] {
 		t.Errorf("a full key is not served the alert tools: %v", served)
 	}
-	if served["auto_apply_start"] {
-		t.Error("a full key is served auto_apply_start")
+	for _, name := range []string{"auto_apply_start", "suggest_dictionary_term", "report_problem"} {
+		if served[name] {
+			t.Errorf("a full key is served OAuth-only tool %s", name)
+		}
 	}
 
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "list_subscriptions", Arguments: map[string]any{}})
@@ -221,5 +297,64 @@ func TestMCPAccountByAPIKey(t *testing.T) {
 	}
 	if res.IsError {
 		t.Fatalf("list_subscriptions failed: %+v", res.Content)
+	}
+}
+
+func assertAccountCatalogue(t *testing.T, session *mcp.ClientSession) {
+	t.Helper()
+	listed, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served := map[string]bool{}
+	for _, tool := range listed.Tools {
+		served[tool.Name] = true
+	}
+	// /mcp serves the catalogue's own search_jobs, not the assistant's `filters` object.
+	for _, tool := range listed.Tools {
+		if schema, _ := json.Marshal(tool.InputSchema); tool.Name == "search_jobs" && !strings.Contains(string(schema), `"work_mode"`) {
+			t.Errorf("search_jobs is not the catalogue's schema: %s", schema)
+		}
+	}
+	for _, name := range []string{
+		"search_jobs", "get_job", "get_company", "search_companies", "check_jobs_open",
+		"similar_jobs", "salary_stats", "job_market_stats", "list_filter_values", "search", "fetch",
+	} {
+		if !served[name] {
+			t.Errorf("authenticated endpoint is missing public tool %s", name)
+		}
+	}
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "check_jobs_open", Arguments: map[string]any{"slugs": []string{"account-catalogue-missing-posting"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError || len(result.Content) != 1 {
+		t.Fatalf("catalogue call through authenticated mount failed: %+v", result)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("catalogue content is %T, want JSON text", result.Content[0])
+	}
+	var states struct {
+		Jobs []struct{ Status string }
+	}
+	if err := json.Unmarshal([]byte(text.Text), &states); err != nil {
+		t.Fatal(err)
+	}
+	if len(states.Jobs) != 1 || states.Jobs[0].Status != "not_found" {
+		t.Fatalf("catalogue state = %+v, want missing posting", states)
+	}
+}
+
+func assertMCPViewer(t *testing.T, session *mcp.ClientSession, sink *recordingSink, userID int64) {
+	t.Helper()
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "get_job", Arguments: map[string]any{"slug": "mcp-viewer"}})
+	if err != nil || result.IsError {
+		t.Fatalf("get_job for viewer recording: %+v %v", result, err)
+	}
+	if len(sink.got) != 1 || sink.got[0].Viewer != "user:"+strconv.FormatInt(userID, 10) || sink.got[0].Kind != agentview.KindDetail {
+		t.Fatalf("MCP events=%+v, want one detail recorded as verified account %d", sink.got, userID)
 	}
 }

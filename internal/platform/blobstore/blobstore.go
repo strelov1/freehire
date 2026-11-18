@@ -7,11 +7,13 @@ package blobstore
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -22,15 +24,13 @@ type Store interface {
 	Put(ctx context.Context, key, contentType string, r io.Reader, size int64) error
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	Delete(ctx context.Context, key string) error
+	// List returns the key of every object whose key starts with prefix.
+	List(ctx context.Context, prefix string) ([]string, error)
 }
 
-// IsNotFound reports whether err — from Get, or from reading/stat-ing the io.ReadCloser
-// it returned — means the object does not exist in the bucket, as opposed to a real
-// backend failure (network, auth, bucket gone). Get's read is lazy (see its doc comment),
-// so a missing object can surface from either call site; check both with this helper
-// instead of string-matching the provider's error text. Uses errors.As rather than
-// minio.ToErrorResponse's plain type switch, so it still recognizes the error through a
-// Get/Put/Delete wrapper's %w chain.
+// IsNotFound reports whether err, from Get or from reading the io.ReadCloser it returned,
+// means the object does not exist, as opposed to a backend failure. Get is lazy, so a
+// missing object can surface from either call site. It matches through %w wrapping.
 func IsNotFound(err error) bool {
 	var resp minio.ErrorResponse
 	return errors.As(err, &resp) && resp.Code == minio.NoSuchKey
@@ -43,34 +43,80 @@ type Config struct {
 	Bucket    string
 	AccessKey string
 	SecretKey string
+	// Region is optional. Set it for providers that do not answer the bucket-location probe
+	// minio otherwise makes before the first signed request (Hetzner: "hel1", "fsn1", "nbg1").
+	Region string
 }
 
 func (c Config) configured() bool {
 	return c.Endpoint != "" && c.Bucket != "" && c.AccessKey != "" && c.SecretKey != ""
 }
 
-// ResumeKey is the per-user object key for a stored résumé. It is derived from the
-// authenticated user id, never from client input.
-func ResumeKey(userID int64) string {
-	return fmt.Sprintf("resumes/%d", userID)
+// ResumeUploadKey is the object key one résumé upload is written under: the authenticated user
+// id (never client input), the upload's instant and a random suffix, so each upload has its own
+// object. Readers take the key from the pointer on the users row; old rows point at the fixed
+// `resumes/<id>`. Parts are joined with "-", not "/": MinIO refuses an object under a prefix
+// that is itself an object.
+func ResumeUploadKey(userID int64, at time.Time) string {
+	return fmt.Sprintf("%s%d-%s", ResumeUploadPrefix(userID), at.UnixNano(), rand.Text()[:16])
 }
 
-// PhotoKey is the per-user object key for a stored headshot. Like ResumeKey it is
-// derived from the authenticated user id, never from client input; the distinct
-// prefix keeps the two per-user objects apart in the shared bucket.
+// ResumeUploadPrefix is what every upload key of one user starts with. The id ends at the "-",
+// so user 1's prefix never matches user 12's keys.
+func ResumeUploadPrefix(userID int64) string { return fmt.Sprintf("resumes/%d-", userID) }
+
+// ResumeObjectKeys is every object a user's CV may be stored under, whatever the pointer says:
+// each upload's object plus the legacy fixed key (named even if absent; deleting a missing
+// object succeeds). Account deletion erases them all so no leftover outlives the account.
+func ResumeObjectKeys(ctx context.Context, s Store, userID int64) ([]string, error) {
+	keys, err := s.List(ctx, ResumeUploadPrefix(userID))
+	if err != nil {
+		return nil, err
+	}
+	return append(keys, fmt.Sprintf("resumes/%d", userID)), nil
+}
+
+// PhotoKey is the per-user object key for a stored headshot, derived from the
+// authenticated user id, never from client input.
 func PhotoKey(userID int64) string {
 	return fmt.Sprintf("photos/%d", userID)
 }
 
-// New builds an S3-backed Store from the config, or returns (nil, nil) when the
-// settings are incomplete (storage disabled). minio.New does not dial here — the
-// first network call happens on Put/Get/Delete.
+// Bucket is a Store that can also stream an object of unknown length in and hand out a
+// time-limited download link. It backs the catalogue export, whose objects are far too large
+// to buffer and are fetched by the customer straight from the bucket.
+type Bucket interface {
+	Store
+	// PutStream uploads r until EOF as a multipart upload (about 64 MiB held in memory).
+	PutStream(ctx context.Context, key, contentType string, r io.Reader) error
+	// PresignGet returns a URL that serves the object without credentials until ttl runs out.
+	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
+}
+
+// NewBucket is New for a Bucket: (nil, nil) when the settings are incomplete.
+func NewBucket(c Config) (Bucket, error) {
+	s, err := newS3(c)
+	if s == nil || err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// New builds an S3-backed Store from the config, or returns (nil, nil) when the settings
+// are incomplete (storage disabled). It does not dial.
 func New(c Config) (Store, error) {
+	s, err := newS3(c)
+	if s == nil || err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func newS3(c Config) (*s3Store, error) {
 	if !c.configured() {
 		return nil, nil
 	}
-	// The endpoint may include a scheme (https://host); minio wants the bare host
-	// plus a Secure flag.
+	// minio wants the bare host plus a Secure flag, not a scheme.
 	host := c.Endpoint
 	secure := true
 	if strings.Contains(host, "://") {
@@ -84,6 +130,7 @@ func New(c Config) (Store, error) {
 	client, err := minio.New(host, &minio.Options{
 		Creds:  credentials.NewStaticV4(c.AccessKey, c.SecretKey, ""),
 		Secure: secure,
+		Region: c.Region,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("blobstore: %w", err)
@@ -104,9 +151,29 @@ func (s *s3Store) Put(ctx context.Context, key, contentType string, r io.Reader,
 	return nil
 }
 
+// streamPartSize is the multipart part size of PutStream. Without a known length minio sizes
+// parts for a 5 TiB object (~525 MiB each); 64 MiB keeps memory modest and still allows 640 GB
+// (10000 parts).
+const streamPartSize = 64 << 20
+
+func (s *s3Store) PutStream(ctx context.Context, key, contentType string, r io.Reader) error {
+	_, err := s.client.PutObject(ctx, s.bucket, key, r, -1, minio.PutObjectOptions{ContentType: contentType, PartSize: streamPartSize})
+	if err != nil {
+		return fmt.Errorf("blobstore: put %s: %w", key, err)
+	}
+	return nil
+}
+
+func (s *s3Store) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	u, err := s.client.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
+	if err != nil {
+		return "", fmt.Errorf("blobstore: presign %s: %w", key, err)
+	}
+	return u.String(), nil
+}
+
 func (s *s3Store) Get(ctx context.Context, key string) (io.ReadCloser, error) {
-	// *minio.Object satisfies io.ReadCloser; the request is lazy — a missing object
-	// surfaces as a read error, which the caller treats as "no résumé".
+	// The request is lazy: a missing object surfaces as a read error.
 	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("blobstore: get %s: %w", key, err)
@@ -119,4 +186,18 @@ func (s *s3Store) Delete(ctx context.Context, key string) error {
 		return fmt.Errorf("blobstore: delete %s: %w", key, err)
 	}
 	return nil
+}
+
+func (s *s3Store) List(ctx context.Context, prefix string) ([]string, error) {
+	// Cancelling stops the listing goroutine on early return.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var keys []string
+	for obj := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if obj.Err != nil {
+			return nil, fmt.Errorf("blobstore: list %s: %w", prefix, obj.Err)
+		}
+		keys = append(keys, obj.Key)
+	}
+	return keys, nil
 }

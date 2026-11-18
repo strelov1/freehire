@@ -11,16 +11,13 @@ import (
 // proberFor resolves the prober for a provider: the bespoke one when probers names it, else
 // the provider's own source adapter run as a probe.
 //
-// The fallback exists because the two lists drift. probers is hand-maintained and names ~35
-// platforms; internal/ingest/sources carries close to a hundred adapters, and a platform missing from
-// the first is not a platform we cannot crawl — it is one whose boards nobody can propose. That
-// gap is what stranded 485 detected boards across 13 platforms in the August 2026 harvest. A
-// bespoke prober is still worth writing (one cheap request instead of a full crawl, and on ~10
-// platforms the employer name that powers the corroboration gate), so it always wins here.
+// The fallback exists because probers is hand-maintained and lags internal/ingest/sources: a
+// platform missing from it is one whose boards nobody can propose, not one we cannot crawl. A
+// bespoke prober still wins (one cheap request instead of a full crawl, and on some platforms
+// the employer name that powers the corroboration gate).
 //
-// Two things the fallback does not inherit: -pace and the refusal counter. The adapter carries
-// its own sources.Client, so its requests bypass the run's paced, counting client — the same
-// blind spot the hand-written adapterProber entries have always had.
+// The fallback does not inherit -pace or the refusal counter: the adapter carries its own
+// sources.Client, bypassing the run's paced, counting client.
 func proberFor(provider string) (prober, bool) {
 	if p, ok := probers[provider]; ok {
 		return p, true
@@ -40,15 +37,12 @@ var adapterRegistry = sync.OnceValue(func() map[string]sources.Source {
 })
 
 // adapterProber validates a board by running the real source adapter and counting the
-// postings it returns. It suits platforms (Taleo, Cornerstone) whose crawl is too stateful
-// (a session-bound careersection flow, or a home-page token exchange) to cheaply reimplement
-// as a one-shot probe — reusing the proven adapter is both correct and DRY. These adapters
-// expose no cheap employer name (the board id is an opaque tenant/host), so the empty name
-// falls back to the seed-supplied company.
+// postings it returns. It suits platforms (Taleo, Cornerstone) whose crawl is too stateful to
+// reimplement as a one-shot probe. These adapters expose no cheap employer name, so the empty
+// name falls back to the seed-supplied company.
 //
-// A fetch error is returned, so probeAll counts it as a probe failure: an adapter error is as
-// likely a dead platform or a broken adapter as a dead board, and reporting it as "0 postings"
-// is what hides the former behind a clean found=0.
+// A fetch error is returned so probeAll counts it as a probe failure: an adapter error is as
+// likely a dead platform or broken adapter as a dead board, and "0 postings" would hide that.
 type adapterProber struct {
 	provider  string
 	newSource func() sources.Source
@@ -59,12 +53,9 @@ func (a adapterProber) probe(ctx context.Context, c httpClient, board string) (s
 }
 
 // probeSeeded runs the adapter with the company the seed names for the board. The entry must
-// carry SOME company: several adapters (hrmanager, tencent) take the posting's employer from
-// the catalogue row rather than the platform and drop every posting when it is empty, so a
-// company-less probe reads every live board as empty — measured on prod 2026-10-19, hrmanager
-// found 0 of 216 seeded boards that way. With no seed company the board id stands in: it is
-// only a label on postings this probe counts and discards, and it is the same fallback
-// chooseCompany puts on the harvested entry.
+// carry SOME company: several adapters (hrmanager, tencent) take the employer from the
+// catalogue row and drop every posting when it is empty, so a company-less probe reads every
+// live board as empty. With no seed company the board id stands in, as in chooseCompany.
 func (a adapterProber) probeSeeded(ctx context.Context, _ httpClient, board, company string) (string, int, error) {
 	if company == "" {
 		company = board
@@ -72,9 +63,7 @@ func (a adapterProber) probeSeeded(ctx context.Context, _ httpClient, board, com
 	e := sources.CompanyEntry{Provider: a.provider, Board: board, Company: company}
 	src := a.newSource()
 	// A hydrating adapter is asked for its listing alone: every posting reads as already held,
-	// so the probe costs the listing and no detail request — the body is not what it counts,
-	// and on a platform whose detail is slow (oorwin's takes seconds) Fetch would hydrate
-	// every board it probes only to throw the bodies away.
+	// so the probe skips detail requests whose bodies it would throw away.
 	if hs, ok := src.(sources.HydratingSource); ok {
 		jobs, err := hs.FetchNew(ctx, e, func(string) bool { return true })
 		if err != nil {

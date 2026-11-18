@@ -31,10 +31,7 @@
     class="flex cursor-pointer list-none items-center gap-1.5 text-sm text-muted-foreground marker:hidden hover:text-foreground [&::-webkit-details-marker]:hidden"
   >
     {summary}{#if srSuffix}<span class="sr-only"> — {srSuffix}</span>{/if}
-    <ChevronDown
-      class="size-3.5 shrink-0 transition-transform group-open:rotate-180"
-      aria-hidden="true"
-    />
+    <ChevronDown class="size-3.5 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
   </summary>
   {@render children()}
 </details>

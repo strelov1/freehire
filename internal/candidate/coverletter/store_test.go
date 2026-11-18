@@ -136,3 +136,10 @@ func TestSavePropagatesAFailure(t *testing.T) {
 		t.Fatal("err = nil, want the underlying failure")
 	}
 }
+
+func (f *fakeRepo) GetSelection(context.Context, int64, int64) (Selection, error) {
+	return Selection{}, pgx.ErrNoRows
+}
+func (f *fakeRepo) SaveSelection(context.Context, int64, int64, int64, []uuid.UUID) (Selection, error) {
+	return Selection{}, pgx.ErrNoRows
+}

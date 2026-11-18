@@ -21,7 +21,7 @@ Worktree: `/Users/i_strelov/Projects/hire-wt-buddies-landing`, branch `buddies-l
 - **Copy limits.** No user counts, testimonials or claims we cannot prove. No competitor names. No Sparkles icon. Write "CV", never "résumé". English only.
 - **Tailwind.** No arbitrary values, such as `text-[11px]` or `grid-cols-[…]`. The pre-commit design-system-tokens hook rejects them.
 - **Baseline files.** The design-system adoption check can ask for a baseline update. If it does, run the command it prints and commit the file.
-- **Formatting.** Never run prettier, because the repo has none.
+- **Formatting.** Run `pnpm run format` (oxfmt), never prettier.
 - **Commit messages.** Never put backticks in a commit message.
 - **Exports.** knip fails on any export that nothing outside tests imports.
 - **Demo content.** Every handle, company and event in the demo is illustrative and labelled "example".
@@ -456,9 +456,11 @@ Then check whether any sitemap or static list of feature pages also needs the ne
 ### Task 4: Browser pass (controller)
 
 - [ ] Start the dev server against prod:
+
   ```bash
   VITE_API_URL=https://freehire.me API_INTERNAL_URL=https://freehire.me pnpm exec vite dev --port 5192
   ```
+
 - [ ] Screenshot `/features/interview-buddies` at 1440 and 390 widths with the Playwright script in `/tmp/tailor-shots/shot.mjs`. Point it at the new URL first.
 - [ ] Check four things:
   - The demo loops, and the card keeps its height while it does.

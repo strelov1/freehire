@@ -67,8 +67,7 @@
   /** What a square says on hover and to a screen reader. A day with nothing on it says so in
    *  words rather than "0 actions", which across three hundred empty squares is noise a screen
    *  reader has to walk through one at a time. */
-  const cellLabel = (d: ActivityDay) =>
-    `${d.count > 0 ? countOf(d.count) : s.noActions} — ${dayHeading(d)}`;
+  const cellLabel = (d: ActivityDay) => `${d.count > 0 ? countOf(d.count) : s.noActions} — ${dayHeading(d)}`;
 
   // A year of squares is tall enough that the panel can open below the fold, where the click
   // reads as having done nothing. Only scrolls when it actually is out of view.

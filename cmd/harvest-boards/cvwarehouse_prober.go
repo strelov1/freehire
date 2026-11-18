@@ -12,11 +12,11 @@ import (
 )
 
 // cvwarehouseProber validates a CVWarehouse career site (the <board> of
-// jobpage.cvwarehouse.com/?companyGuid=<board>) by counting the vacancies its pages list, the
-// home page's and, for a sectioned site, those of every section it links. The employer is the
-// page's <meta name="author">. It mirrors internal/ingest/sources/cvwarehouse.go, which is
-// unexported. An unknown companyGuid answers 200 with the platform's "not available" page, whose
-// <body> is not class "home"; that is the skip.
+// jobpage.cvwarehouse.com/?companyGuid=<board>) by counting the vacancies its pages list: the
+// home page's and, for a sectioned site, every linked section's. The employer is the page's
+// <meta name="author">. It mirrors internal/ingest/sources/cvwarehouse.go, which is unexported.
+// An unknown companyGuid answers 200 with a "not available" page whose <body> is not class
+// "home"; that is the skip.
 type cvwarehouseProber struct{}
 
 const cvwarehouseHome = "https://jobpage.cvwarehouse.com/?companyGuid="

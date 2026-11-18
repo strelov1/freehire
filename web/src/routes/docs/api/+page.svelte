@@ -11,7 +11,8 @@
   import ScalarReference from '#lib/components/ScalarReference.svelte';
   import Seo from '#lib/components/Seo.svelte';
   import { scalarConfigFromUrl } from '#lib/docs/scalarConfig.js';
-  import { breadcrumbJsonLd, jsonLdScript, webApiJsonLd } from '#lib/seo.js';
+  import { breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { webApiJsonLd } from '#lib/seoAppJsonLd.js';
 
   let { data } = $props();
 

@@ -1,4 +1,4 @@
-import type { Locale } from '#lib/locale.js';
+import type { Locale } from '#lib/i18n/locale.js';
 
 /** The plural forms of one noun, keyed by CLDR category. `other` is required
  *  because it is the only category every language has.
@@ -19,9 +19,7 @@ const PLURAL_LEAF = '__pluralForms' as const;
  *  property of the LANGUAGE, not of the message. So unlike every other key, a
  *  translation here is not held to the English source's shape: `{ one, other }`
  *  in English may become `{ one, few, many, other }` in Russian. */
-export function plurals(
-  forms: { other: string } & Partial<Record<Intl.LDMLPluralRule, string>>,
-): PluralForms {
+export function plurals(forms: { other: string } & Partial<Record<Intl.LDMLPluralRule, string>>): PluralForms {
   return { [PLURAL_LEAF]: true, ...forms };
 }
 
@@ -56,9 +54,7 @@ export type Catalog<T extends Messages> = { en: T } & Partial<Record<TranslatedL
 // for plurals that is the point: merging would leave English's `other` sitting
 // under a Russian noun's four forms.
 function isMessages(value: unknown): value is Messages {
-  return (
-    typeof value === 'object' && value !== null && !Array.isArray(value) && !isPluralForms(value)
-  );
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && !isPluralForms(value);
 }
 
 // Merges a translation over a full copy of `en`, per key, at any nesting depth —

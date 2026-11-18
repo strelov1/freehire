@@ -1,0 +1,11 @@
+id: no-legacy-env-modules
+valid:
+  - import { env } from '$app/env/public';
+  - import { browser } from '$app/env';
+  - export { env } from '$app/env/private';
+  - const m = await import('$app/env/public');
+invalid:
+  - import { env } from '$env/dynamic/public';
+  - import { API_INTERNAL_URL } from "$env/static/private";
+  - export { env } from '$env/dynamic/private';
+  - const m = await import('$env/dynamic/public');

@@ -135,6 +135,8 @@ func TestEveryCheckedFacetReadsItsOwnField(t *testing.T) {
 				in.Category = []string{"probe"}
 			case "employment_type":
 				in.EmploymentType = []string{"probe"}
+			case "engagement":
+				in.Engagement = []string{"probe"}
 			case "english_level":
 				in.EnglishLevel = []string{"probe"}
 			case "regions":

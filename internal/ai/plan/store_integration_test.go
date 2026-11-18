@@ -546,3 +546,24 @@ func TestRequirePaid(t *testing.T) {
 
 // jobRef makes a distinct reference per attempt, standing in for a job id.
 func jobRef(i int) string { return "job-" + strconv.Itoa(i) }
+
+// A support refusal is the same daily limit for every tier, so it must not feed the
+// "Pro removes this limit" mail: Pro removes nothing here.
+func TestASupportRefusalIsNotAPlanLimitHit(t *testing.T) {
+	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
+	cfg := enforcing()
+	cfg.SupportMessagesPerDay = 1
+	s, pool := newStore(t, cfg, now)
+	ctx := context.Background()
+	user := insertUser(t, pool, "support-refusal@example.test")
+
+	if _, err := s.ConsumeSupport(ctx, user, "turn-1"); err != nil {
+		t.Fatalf("the first support message was refused: %v", err)
+	}
+	if _, err := s.ConsumeSupport(ctx, user, "turn-2"); !errors.Is(err, ErrRefused) {
+		t.Fatalf("the message past the limit returned %v, want ErrRefused", err)
+	}
+	if got := countLimitHits(t, pool, user, FeatureSupport); got != 0 {
+		t.Fatalf("%d plan_limit_hits rows for a support refusal, want 0", got)
+	}
+}

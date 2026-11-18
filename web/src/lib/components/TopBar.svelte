@@ -5,7 +5,6 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { signinUrl } from '#lib/signin.js';
   import HeaderSearch from './HeaderSearch.svelte';
-  import { ROLE_PLACEHOLDER } from '#lib/placeholderRoles.js';
   import HeaderMenu from './HeaderMenu.svelte';
   import BrandMark from './BrandMark.svelte';
   import { isApiReferenceRoute, isWideHeaderRoute } from '#lib/shellLayout.js';
@@ -25,12 +24,11 @@
   // to select between two components that shared everything but that one behaviour and
   // drifted apart in the parts they shared.
   //
-  // The companies box rotates nothing: the roles the jobs box cycles through would be
-  // answering a question it does not ask.
+  // Keep header hints static; animated role examples belong only to the homepage hero.
   const searchWording = $derived(
     page.url.pathname === '/companies'
       ? { placeholder: 'Search companies…', label: 'Search companies' }
-      : { placeholder: ROLE_PLACEHOLDER, label: 'Search jobs' },
+      : { placeholder: 'Search jobs…', label: 'Search jobs' },
   );
 
   // The homepage is the one exception: its whole content is a large centred copy of
@@ -107,23 +105,14 @@
      containing block for the mobile menu's `position: fixed` full-screen drawer,
      pinning it to the header instead of the viewport and breaking it. -->
 <header class="sticky top-0 z-40 border-b border-border bg-background">
-  <div
-    class={[
-      'mx-auto flex h-14 items-center gap-3 px-4 sm:gap-4',
-      wideHeader ? 'max-w-none' : 'max-w-6xl',
-    ]}
-  >
+  <div class={['mx-auto flex h-14 items-center gap-3 px-4 sm:gap-4', wideHeader ? 'max-w-none' : 'max-w-6xl']}>
     <!-- Wide header only: the two side slots grow from a zero basis, so the free space
          splits evenly between them and the search sits on the container's axis — the
          menu cluster is wider than the brand, so centering the middle slot on its own
          leftover space would push it visibly off-centre. `basis-0` also keeps them from
          shrinking (shrink scales the basis), so the narrow layout is untouched. -->
     <div class={['flex shrink-0 items-center', wideHeader && 'flex-1 basis-0']}>
-      <a
-        href={resolve('/')}
-        aria-label="freehire"
-        class="flex items-center gap-2 text-sm font-semibold tracking-tight"
-      >
+      <a href={resolve('/')} aria-label="freehire" class="flex items-center gap-2 text-sm font-semibold tracking-tight">
         <BrandMark />
         <!-- Dropped on a phone to leave the middle slot its width for the search box —
              except wherever showSiteNav puts no box there (the homepage's own hero is the
@@ -147,7 +136,7 @@
              LINKS_BELOW_LG). The cut is by width, not by rank; the burger a thumb away
              still lists all five with the same glyph and a full label, which is also why
              bare icons here would trade a legible row for guesses. -->
-        <nav aria-label="Site" class="flex items-center gap-3 sm:gap-5 lg:gap-6">
+        <nav aria-label="Site" class="flex items-center gap-3 sm:gap-5 lg:gap-3 xl:gap-6">
           <!-- Divides the nav from the wordmark, the same rule the search box draws
                between its Location scope and the field. Without it the first link sat
                one word-gap from "freehire" and read as part of it. -->

@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { CircleUser, SquarePlus, ShieldCheck, LogOut, LogIn } from '@lucide/svelte';
   import { isAuthenticated, currentUser, logout as doLogout } from '#lib/auth.svelte.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { promptLogin } from '#lib/signin.js';
   import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
   import { cn } from '#lib/ui/index.js';
   import { menuNav } from '#lib/actions/menuNav.js';
@@ -31,7 +31,7 @@
   const rowBase =
     'flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground';
   const iconButton =
-    'size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+    'h-9 min-w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   function closeSelf() {
     open = false;
@@ -55,7 +55,7 @@
   }
 
   function signIn() {
-    promptSignIn();
+    promptLogin();
   }
 
   function logout() {
@@ -64,10 +64,7 @@
   }
 </script>
 
-<svelte:window
-  onclick={onWindowClick}
-  onkeydown={(e) => e.key === 'Escape' && (open = false)}
-/>
+<svelte:window onclick={onWindowClick} onkeydown={(e) => e.key === 'Escape' && (open = false)} />
 
 <!-- Signed in, the profile trigger lives here on wide screens only (the consolidated menu
      carries it on a phone). Signed out, Sign in shows at every width: a first-time visitor
@@ -87,16 +84,15 @@
         e.stopPropagation();
         open = !open;
       }}
-      class={cn('relative inline-flex', iconButton)}
+      class={cn('inline-flex gap-1.5', tier !== 'free' && 'px-2', iconButton)}
     >
-      <CircleUser class="size-5" />
+      <CircleUser class="size-5 shrink-0" />
       {#if tier !== 'free'}
-        <!-- Same height/weight as NotificationBell's unread-count badge (h-4, bold, ring
-             against the background) so the two corner badges read with equal prominence —
-             the 8px/py-px version this replaced was easy to miss next to that one. -->
+        <!-- Keep the tier in flow so its width cannot overlap the profile icon or
+             the neighbouring notification count. -->
         <span
           aria-hidden="true"
-          class="absolute -bottom-1 -right-1 flex h-4 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-bold uppercase leading-none text-brand-foreground ring-2 ring-background"
+          class="flex h-4 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-bold uppercase leading-none text-brand-foreground"
         >
           {tier}
         </span>
@@ -107,8 +103,9 @@
       <div
         role="menu"
         aria-label="Profile"
+        style:max-height="calc(100dvh - 20 * var(--spacing))"
         {@attach menuNav({ onclose: closeSelf })}
-        class="absolute right-0 top-full z-50 mt-2 flex w-64 flex-col rounded-md border border-border bg-background py-1 shadow-lg"
+        class="absolute right-0 top-full z-50 mt-2 flex w-64 flex-col overflow-y-auto overscroll-contain rounded-md border border-border bg-background py-1 shadow-lg"
       >
         <WorkspaceSwitcher rowClass={rowBase} onselect={() => (open = false)} />
 
@@ -135,10 +132,13 @@
     <button
       type="button"
       onclick={signIn}
-      class="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      title="Sign in"
+      class="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border px-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
     >
-      <LogIn class="size-4" aria-hidden="true" /> Sign in
+      <LogIn class="size-4" aria-hidden="true" />
+      <!-- Labelled from sm: the way in is the header's main action for a visitor, and a bare
+           boxed arrow read as a utility. A phone keeps the icon (its name stays here). -->
+      <span class="max-sm:sr-only">Sign in</span>
     </button>
   {/if}
 </div>
-

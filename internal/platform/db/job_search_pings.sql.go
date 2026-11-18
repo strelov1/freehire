@@ -150,8 +150,8 @@ type ListCompaniesToPingParams struct {
 //
 // job_count > 0 is the whole eligibility, and it is not a fresh judgement: it is the
 // same gate that puts a company in the sitemap, derived by cmd/recount-companies from
-// the postings the SEARCH INDEX will hold (see the long argument on that query in
-// companies.sql). So a page announced here is exactly a page the site already claims,
+// the postings the SEARCH INDEX will hold (see the long argument on RefreshCompanyFacets in
+// company_facets.sql). So a page announced here is exactly a page the site already claims,
 // and a company whose last posting drops out of search stops being offered without this
 // query knowing why.
 //
@@ -189,9 +189,6 @@ WHERE j.closed_at IS NULL
   AND NOT j.is_private
   AND j.public_slug IS NOT NULL
   AND j.description <> ''
-  AND (j.is_tech IS TRUE
-       OR j.category <> ''
-       OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other'))
   AND (j.is_tech IS TRUE) = $1::boolean
   AND NOT EXISTS (
       SELECT 1
@@ -217,16 +214,15 @@ type ListJobsToPingRow struct {
 
 // The newest eligible postings of ONE tier this engine has not been told about yet, for
 // cmd/search-ping. The gate is what the search index admits (cmd/reindex's splitJobs):
-// open, canonical, public, carrying a body (search.DescriptionMissing), and with a
-// resolved category (search.CategoryUnresolved — the column answers, or enrichment does
-// with something other than "other", or is_tech is confidently true). A URL worth
+// open, canonical, public, and carrying a body (search.DescriptionMissing); an uncategorized
+// posting is indexed under "other" (#4412), so category does not gate. A URL worth
 // announcing is a URL the site itself claims, and the sitemap claims exactly what the
 // index holds. The body test is the raw column, not the stripped text the index tests;
-// a body that is only empty markup is the same small residual companies.sql names.
+// a body that is only empty markup is the same small residual company_facets.sql names.
 //
 // `technical` picks the tier, and the two tiers partition the gate: true is the
-// is_tech postings, false is every other posting with a resolved category — the
-// catalogue beyond IT. The split is not an eligibility rule, it is a PRIORITY one: an
+// is_tech postings, false is every other posting — the catalogue beyond IT, uncategorized
+// included. The split is not an eligibility rule, it is a PRIORITY one: an
 // engine with a scarce daily budget (Google, 200/day) asks for the technical tier
 // first and offers the rest only what that left, while an unbounded engine takes a
 // batch of each (see passes in internal/job/searchping). Two calls of one query rather

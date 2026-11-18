@@ -1,7 +1,9 @@
 -- Audience reader and ledger writer for one-off campaigns (internal/engage/broadcast).
 
 -- name: ListBroadcastCandidates :many
--- Everyone who can be mailed and has not received this campaign yet.
+-- Everyone who can be mailed and has not received this campaign yet. A non-empty half ('a' or
+-- 'b') narrows that to one side of a split test, and a non-empty timezones list to the
+-- accounts whose stored timezone is one of them (how a campaign reaches one country).
 --
 -- No signup window, unlike the onboarding queries: a campaign is addressed to the
 -- whole audience by definition, and the launch it announces matters as much to
@@ -19,14 +21,24 @@
 -- follow-up reminders, and an account with no settings row could not decline at
 -- all, because the only thing that creates the row is a page behind the login.
 -- Migration 0153 split the two.
+--
+-- An account that already holds today's mail_day_claims row is left out — one optional
+-- letter per account per UTC day across all senders — and stays a candidate for the next
+-- run. CountBroadcastCandidates does not carry that clause: it answers how much of the
+-- audience is still to be reached, and a person who got another letter today is.
 SELECT u.id, u.email
 FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
-WHERE u.email_verified
+WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM broadcast_emails be
       WHERE be.user_id = u.id AND be.campaign = sqlc.arg(campaign)
+  )
+  AND sqlc.arg(half)::text IN ('', broadcast_half(sqlc.arg(campaign)::text, u.id))
+  AND (COALESCE(cardinality(sqlc.arg(timezones)::text[]), 0) = 0 OR u.timezone = ANY(sqlc.arg(timezones)::text[]))
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
   )
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
@@ -37,12 +49,14 @@ LIMIT sqlc.arg(max_rows)::int;
 SELECT count(*)
 FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
-WHERE u.email_verified
+WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM broadcast_emails be
       WHERE be.user_id = u.id AND be.campaign = sqlc.arg(campaign)
-  );
+  )
+  AND sqlc.arg(half)::text IN ('', broadcast_half(sqlc.arg(campaign)::text, u.id))
+  AND (COALESCE(cardinality(sqlc.arg(timezones)::text[]), 0) = 0 OR u.timezone = ANY(sqlc.arg(timezones)::text[]));
 
 -- name: RecordBroadcastEmail :exec
 -- Closes out one (user, campaign) whether or not the send worked.

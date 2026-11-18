@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/job/ghostreport"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -27,79 +29,58 @@ func newGhostReportHandlers(queries *db.Queries) *ghostReportHandlers {
 	}
 }
 
-func (h *ghostReportHandlers) register(api fiber.Router, mw middleware) {
+func (h *ghostReportHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Cookie or full-scope API key, like the rest of the per-user surface, so a user's
 	// own agent harness can file and withdraw on their behalf.
-	api.Post("/jobs/:slug/ghost-report", mw.key, h.CreateGhostReport)
-	api.Delete("/jobs/:slug/ghost-report", mw.key, h.RetractGhostReport)
+	api.Post("/jobs/:slug/ghost-report", mw.key, contract)
+	api.Delete("/jobs/:slug/ghost-report", mw.key, contract)
 }
 
-// ghostReportRequest is the claim body: the date the reporter states they applied.
-type ghostReportRequest struct {
-	AppliedOn string `json:"applied_on"`
-}
-
-// ghostReportResponse is the public shape of a filed claim. It carries no user id: the
-// claim is evidence, and who supplied it is never on the wire.
-type ghostReportResponse struct {
-	JobID     int64  `json:"job_id"`
-	AppliedOn string `json:"applied_on"`
-	CreatedAt string `json:"created_at,omitempty"`
-}
-
-// appliedOnLayout is a plain calendar date. The reporter is stating a day, not an
-// instant, and asking a browser for a timezone-bearing timestamp would invite a claim
-// that reads as tomorrow in one zone and today in another.
+// appliedOnLayout is a plain calendar date: the reporter states a day, not an instant,
+// so a timezone cannot make the claim read as tomorrow.
 const appliedOnLayout = "2006-01-02"
 
 // CreateGhostReport files the caller's claim about the job named by :slug. The slug is
 // resolved before any write (a miss is a 404 via RenderError); an unparseable or
 // out-of-range date is a 400; an unproven address is a 403; a closed job or a claim the
-// caller already has is a 409; past the daily cap is a 429.
-func (h *ghostReportHandlers) CreateGhostReport(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// caller already has is a 409.
+func (h *ghostReportHandlers) CreateGhostReport(ctx context.Context, req *apigen.GhostReportRequest, params apigen.CreateGhostReportParams) (*apigen.CreateGhostReportCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	jobID, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
+	jobID, err := h.queries.GetJobIDBySlug(ctx, params.Slug)
 	if err != nil {
-		return err // pgx.ErrNoRows → 404 in RenderError
+		return nil, err // pgx.ErrNoRows → 404 in classify
 	}
 
-	var in ghostReportRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	appliedOn, err := time.Parse(appliedOnLayout, in.AppliedOn)
+	appliedOn, err := time.Parse(appliedOnLayout, req.AppliedOn.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "applied_on must be a date like 2026-07-29")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "applied_on must be a date like 2026-07-29")
 	}
 
-	rep, err := h.reports.File(c.Context(), userID, jobID, appliedOn, time.Now().UTC())
+	rep, err := h.reports.File(ctx, userID, jobID, appliedOn, time.Now().UTC())
 	if err != nil {
-		return ghostReportError(err)
+		return nil, ghostReportError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toGhostReportResponse(rep)})
+	return &apigen.CreateGhostReportCreated{Data: ghostReportOut(rep)}, nil
 }
 
 // RetractGhostReport withdraws the caller's claim about :slug. A claim that is absent or
 // already withdrawn is a 404.
 //
-// It answers 204, not 200: Fiber's SendStatus(200) writes the body "OK", which breaks a
-// JSON client on a call that in fact succeeded.
-func (h *ghostReportHandlers) RetractGhostReport(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// It answers 204, not 200: Fiber's SendStatus(200) writes the body "OK", which breaks
+// JSON clients.
+func (h *ghostReportHandlers) RetractGhostReport(ctx context.Context, params apigen.RetractGhostReportParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	jobID, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
+	jobID, err := h.queries.GetJobIDBySlug(ctx, params.Slug)
 	if err != nil {
 		return err
 	}
-	if err := h.reports.Retract(c.Context(), userID, jobID); err != nil {
-		return ghostReportError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return ghostReportError(h.reports.Retract(ctx, userID, jobID))
 }
 
 // ghostReportError maps the service sentinels onto HTTP statuses.
@@ -114,8 +95,6 @@ func ghostReportError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "this job is already closed")
 	case errors.Is(err, ghostreport.ErrDuplicate):
 		return fiber.NewError(fiber.StatusConflict, "you have already reported this job")
-	case errors.Is(err, ghostreport.ErrRateLimited):
-		return fiber.NewError(fiber.StatusTooManyRequests, "too many reports today")
 	case errors.Is(err, ghostreport.ErrNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "no report to withdraw")
 	default:
@@ -123,10 +102,10 @@ func ghostReportError(err error) error {
 	}
 }
 
-func toGhostReportResponse(r ghostreport.Report) ghostReportResponse {
-	out := ghostReportResponse{JobID: r.JobID, AppliedOn: r.AppliedOn.Format(appliedOnLayout)}
+func ghostReportOut(r ghostreport.Report) apigen.GhostReport {
+	out := apigen.GhostReport{JobID: r.JobID, AppliedOn: r.AppliedOn.Format(appliedOnLayout)}
 	if r.CreatedAt != nil {
-		out.CreatedAt = r.CreatedAt.UTC().Format(time.RFC3339)
+		out.CreatedAt = apigen.NewOptDateTime(r.CreatedAt.UTC())
 	}
 	return out
 }

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // djinni adapts djinni.co, a Ukrainian/CEE IT job board. Each anonymous listing page
@@ -24,16 +26,15 @@ const (
 	// djinniListBase is the guest listing; the caller appends the "page=N" (1-based) marker,
 	// which doubles as the end-of-feed sentinel checked against the resolved final URL.
 	djinniListBase = "https://djinni.co/jobs/?"
-	// djinniMaxPages caps pagination as a backstop, comfortably above the observed corpus
-	// (~488 pages). The empty-page stop below is the primary terminator; this only bounds a
-	// pathological feed that never empties.
+	// djinniMaxPages caps pagination as a backstop, comfortably above the real corpus.
+	// The empty-page stop below is the primary terminator; this only bounds a feed that never empties.
 	djinniMaxPages = 600
 )
 
 // djinniPageDelay paces the sequential page crawl. Djinni rate-limits a fast burst from a
-// datacenter IP with a 403 (a no-delay crawl 403'd around page ~200 from prod, while the same
-// pages spaced ~1s apart return 200), so we throttle to stay under the limit and be a polite
-// crawler; partial-on-error bounds the damage if a 403 still lands. A var so tests zero it.
+// datacenter IP with a 403 (a no-delay crawl 403s a couple of hundred pages in, while pages
+// spaced ~1s apart return 200), so we throttle; partial-on-error bounds the damage if a 403
+// still lands. A var so tests zero it.
 var djinniPageDelay = 600 * time.Millisecond
 
 // NewDjinni builds the djinni listing adapter over the given HTML client.
@@ -45,8 +46,7 @@ func (djinni) boardless() {}
 
 func (djinni) aggregator() {}
 
-// djinni's listing names only about the last month of postings (measured 2026-10-29: one stale
-// posting in eight was still live, every one of them posted earlier than that), so an older
+// djinni's listing names only about the last month of postings, so an older
 // live posting is never listed again; cmd/liveness reads the job page's inactive-ad alert.
 func (djinni) livenessProbed() {}
 
@@ -86,12 +86,16 @@ func (s djinni) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		if len(nodes) == 0 {
 			break // a non-redirected page with no postings — nothing more to read
 		}
+		modes := djinniCardModes(root)
 		for _, raw := range nodes {
 			var p djinniPosting
 			if json.Unmarshal(raw, &p) != nil {
 				continue // a posting that fails to decode is skipped, never aborting the page
 			}
 			if job, ok := p.toJob(); ok {
+				if job.WorkMode == "" {
+					job.WorkMode = modes[p.Identifier]
+				}
 				jobs = append(jobs, job)
 			}
 		}
@@ -100,9 +104,10 @@ func (s djinni) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 }
 
 // djinniPosting is one schema.org JobPosting from the listing. identifier is a bare integer;
-// jobLocationType (TELECOMMUTE/ON_SITE) is the work-arrangement signal; the applicant location
-// requirement carries the candidate-residence rule Djinni renders as "Countries where we consider
-// candidates", as EITHER a country or a macro-region — see toJob.
+// jobLocationType is TELECOMMUTE or absent (never ON_SITE), so it marks only remote postings and
+// djinniCardModes reads the other modes from the card; the applicant location requirement carries
+// the candidate-residence rule Djinni renders as "Countries where we consider candidates", as
+// EITHER a country or a macro-region — see toJob.
 type djinniPosting struct {
 	Title              string `json:"title"`
 	Description        string `json:"description"`
@@ -136,7 +141,7 @@ type djinniPosting struct {
 // Leaving a stated area unread is not neutral: the served facet falls back to the enrichment
 // guess whenever the dictionary pins nothing (see internal/job/jobview.geoFacet), and the LLM
 // reads "work ... from any part of the world" out of a benefits paragraph, publishing a
-// Europe-only role as open worldwide (1012 open postings at the time of the fix).
+// Europe-only role as open worldwide.
 func (p djinniPosting) toJob() (Job, bool) {
 	if p.Identifier == 0 || p.URL == "" || p.HiringOrganization.Name == "" {
 		return Job{}, false
@@ -160,6 +165,56 @@ func (p djinniPosting) toJob() (Job, bool) {
 		EmploymentType: schemaEmploymentType(p.EmploymentType),
 		PostedAt:       djinniDate(p.DatePosted),
 	}, true
+}
+
+// djinniCardLabels maps the arrangement label a listing card shows to a work mode. Djinni shows
+// one label only when the employer picked one arrangement; a card listing several ("Office,
+// Remote" on the posting page) shows none, and its mode stays "" rather than a guess.
+var djinniCardLabels = map[string]string{
+	"Full Remote":   "remote",
+	"Hybrid Remote": "hybrid",
+	"Office Work":   "onsite",
+}
+
+// djinniCardModes reads the work mode of each card on a listing page, keyed by posting id. The
+// JSON-LD marks only remote postings (many open rows had no mode), while
+// a card (div#job-item-<id>) carries the label in its metadata row (div.fw-medium).
+func djinniCardModes(root *html.Node) map[int64]string {
+	modes := map[int64]string{}
+	walk(root, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "div" {
+			return true
+		}
+		id, ok := strings.CutPrefix(Attr(n, "id"), "job-item-")
+		if !ok {
+			return true
+		}
+		if jid, err := strconv.ParseInt(id, 10, 64); err == nil {
+			if mode := djinniCardMode(n); mode != "" {
+				modes[jid] = mode
+			}
+		}
+		return false
+	})
+	return modes
+}
+
+// djinniCardMode returns the mode of one card's label, a span of its metadata row. It is the
+// first span except on a part-time posting, where "Part-time" precedes it.
+func djinniCardMode(card *html.Node) string {
+	mode := ""
+	walk(card, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "div" || !HasClass(n, "fw-medium") {
+			return mode == ""
+		}
+		for c := n.FirstChild; c != nil && mode == ""; c = c.NextSibling {
+			if c.Type == html.ElementNode && c.Data == "span" {
+				mode = djinniCardLabels[collapseSpace(textContent(c))]
+			}
+		}
+		return false
+	})
+	return mode
 }
 
 // djinniDate parses Djinni's datePosted, an ISO-8601 local datetime WITHOUT a zone (e.g.

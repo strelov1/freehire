@@ -6,11 +6,11 @@
   //
   // The font list comes from the API rather than a constant here: the server's registry is what
   // the PDF obeys, and a second copy in TypeScript would drift from it. Clamping and stepping
-  // live in the unit-tested helpers in #lib/tailor/geometry.
+  // live in the unit-tested helpers in #lib/cvGeometry.
   import { RotateCcw } from '@lucide/svelte';
   import type { Style } from '#lib/generated/contracts.js';
   import type { CvFont } from '#lib/cv.js';
-  import { stepFontSize, FONT_SIZE_STEP, TEMPLATE_FONT_SIZE_PT } from '#lib/tailor/geometry.js';
+  import { stepFontSize, FONT_SIZE_STEP, TEMPLATE_FONT_SIZE_PT } from '#lib/cvGeometry.js';
   import { SettingRow } from '#lib/ui/index.js';
   import Stepper from './Stepper.svelte';
   import { messages } from './StyleSettings.messages';
@@ -50,9 +50,7 @@
     return [...LINE_HEIGHTS, { value: v, label: format(s.custom, { value: v.toFixed(2) }) }];
   });
 
-  const isPristine = $derived(
-    !style.font_family && !((style.font_size ?? 0) > 0) && !((style.line_height ?? 0) > 0),
-  );
+  const isPristine = $derived(!style.font_family && !((style.font_size ?? 0) > 0) && !((style.line_height ?? 0) > 0));
 
   function reset() {
     style.font_family = '';

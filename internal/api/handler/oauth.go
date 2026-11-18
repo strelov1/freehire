@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -10,19 +11,14 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 )
 
-// requestOrigin returns the scheme+host origin to use for this request's OAuth
-// redirect URLs and post-login redirect. The request Host is honoured only when it
-// matches a configured served host EXACTLY; anything else (dev/localhost, a spoofed
-// Host, a subdomain we do not serve) falls back to the canonical frontendOrigin.
-//
-// The exact match is the point. This used to accept any suffix of a cookie domain,
-// which meant a hijacked or third-party-hosted subdomain of freehire.me could steer
-// the provider redirect and the post-login redirect. Cookie scope still uses the
-// suffix rule — that is what SSO across subdomains needs — but a redirect target is
-// not a cookie scope, and conflating them is what produced the finding.
+// requestOrigin returns the origin for this request's OAuth redirect URLs. The Host is
+// honoured only on an EXACT match with a configured served host; anything else falls back
+// to frontendOrigin. Cookie scope keeps the suffix rule (SSO across subdomains), but a
+// redirect target must not, or a hijacked subdomain could steer the redirect.
 func (h *authHandlers) requestOrigin(c *fiber.Ctx) string {
 	host := c.Hostname()
 	for _, served := range h.servedHosts {
@@ -33,19 +29,15 @@ func (h *authHandlers) requestOrigin(c *fiber.Ctx) string {
 	return h.frontendOrigin
 }
 
-// needsExplicitServedHosts reports a deployment that answers on several hosts while
-// leaving SERVED_HOSTS unset. A configured COOKIE_DOMAIN is that signal: the session
-// cookie is only ever scoped to a registrable domain when more than one host shares it.
-// The default (the frontend origin's host alone) then silently breaks sign-in on every
-// other domain — the state cookie is set on the host the flow started from, while the
-// callback is sent to the canonical origin, so the state can never match.
+// needsExplicitServedHosts reports a multi-host deployment with SERVED_HOSTS unset (a
+// configured COOKIE_DOMAIN is the signal). The default breaks sign-in on other domains: the
+// state cookie is set on the starting host while the callback goes to the canonical origin.
 func needsExplicitServedHosts(configured, cookieDomains []string) bool {
 	return len(configured) == 0 && len(cookieDomains) > 0
 }
 
-// servedHostsOrDefault falls back to the frontend origin's own host when SERVED_HOSTS
-// is unset, so a deployment that never sets it keeps working on its canonical domain
-// (and every other Host simply gets the canonical origin).
+// servedHostsOrDefault falls back to the frontend origin's host when SERVED_HOSTS is
+// unset; other Hosts get the canonical origin.
 func servedHostsOrDefault(configured []string, frontendOrigin string) []string {
 	if len(configured) > 0 {
 		return configured
@@ -57,12 +49,12 @@ func servedHostsOrDefault(configured []string, frontendOrigin string) []string {
 	return []string{u.Hostname()}
 }
 
-// ListOAuthProviders returns the names of enabled OAuth providers, so the SPA
+// ListOauthProviders returns the names of enabled OAuth providers, so the SPA
 // renders only usable sign-in buttons.
-func (h *authHandlers) ListOAuthProviders(c *fiber.Ctx) error {
+func (h *authHandlers) ListOauthProviders(ctx context.Context) (*apigen.ListOauthProvidersOK, error) {
 	names := h.oauth.Names()
 	sort.Strings(names)
-	return c.JSON(fiber.Map{"data": names})
+	return &apigen.ListOauthProvidersOK{Data: names}, nil
 }
 
 // OAuthStart begins the authorization-code flow: it stores a fresh CSRF state
@@ -77,9 +69,8 @@ func (h *authHandlers) OAuthStart(c *fiber.Ctx) error {
 
 	state, err := oauth.NewState()
 	if err != nil {
-		// Returned rather than phrased as fiber.NewError(500, …): a failing CSPRNG is
-		// exactly the fault the error inbox exists for, and a *fiber.Error carries no
-		// cause for it to show. The caller sees the generic 500 body — see classify.
+		// Returned, not fiber.NewError(500): a failing CSPRNG is a fault for the error inbox, and a
+		// *fiber.Error carries no cause. The caller sees the generic 500 (see classify).
 		return fmt.Errorf("mint oauth state: %w", err)
 	}
 	oauth.SetStateCookie(c, state, h.cookieSecure)
@@ -92,10 +83,8 @@ func (h *authHandlers) OAuthStart(c *fiber.Ctx) error {
 	return c.Redirect(p.AuthCodeURL(state), fiber.StatusFound)
 }
 
-// callbackState reads the state the provider returned. Apple's callback arrives as a
-// POST with a form-encoded body instead of a GET query string — response_mode=form_post
-// is mandatory once the email scope is requested. Every other provider's callback is
-// still a GET.
+// callbackState reads the state the provider returned. Apple's callback is a form-encoded
+// POST (response_mode=form_post is mandatory with the email scope); others are GET.
 func callbackState(c *fiber.Ctx) string {
 	if c.Method() == fiber.MethodPost {
 		return c.FormValue("state")
@@ -119,16 +108,13 @@ func (h *authHandlers) OAuthCallback(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusNotFound, "unknown provider")
 	}
 
-	// Re-authentication returns to this same URL, because a provider console registers
-	// ONE callback per application — asking for a second path is asking for a redirect
-	// the provider has never heard of, which is exactly what GitHub refused. The two
-	// flows are told apart here, by which state cookie the browser brings back: each
-	// sets its own, under its own name, and each is single-use.
+	// Re-authentication returns to this same URL (a provider console registers ONE callback
+	// per app), so the two flows are told apart by which state cookie comes back; each has its
+	// own name and is single-use.
 	//
-	// Gated on the flag that registers the v2 routes at all: with it off no such attempt
-	// can exist, so a cookie of that name proves nothing and must not divert a sign-in.
-	// Compared against the state the PROVIDER returned, so a stale cookie left by an
-	// abandoned attempt cannot capture somebody else's sign-in either.
+	// Gated on the flag that registers the v2 routes: with it off such a cookie proves nothing
+	// and must not divert a sign-in. Compared against the state the PROVIDER returned, so a
+	// stale cookie cannot capture someone else's sign-in.
 	if h.authV2Enabled {
 		if v2State := c.Cookies(oauthV2StateCookieName); v2State != "" && v2State == callbackState(c) {
 			return h.OAuthCallbackV2(c)
@@ -165,11 +151,16 @@ func (h *authHandlers) OAuthCallback(c *fiber.Ctx) error {
 		return h.oauthFail(c, p.Name(), returnTo, mobile, err)
 	}
 
-	// The majority sign-up path, and the reason attribution rides in a cookie at all: this
-	// is a GET redirect back from the provider, so there is no request body a code could
-	// have travelled in. Safe to call for a returning user — the SQL only attributes an
-	// account created within the hour.
+	// The majority sign-up path: attribution rides in a cookie because this is a GET redirect
+	// with no body. Safe for a returning user; the SQL only attributes an account created
+	// within the hour.
 	h.attributeInvite(c, userID)
+
+	// Refused here, before a code is minted for the app; the web path below is refused by
+	// setSession. A banned account is sent back with the same generic marker.
+	if _, err := h.sessionVersion(c.Context(), userID); err != nil {
+		return h.oauthFail(c, p.Name(), returnTo, mobile, err)
+	}
 
 	if mobile {
 		// Hand the app a single-use code instead of a cookie; the app exchanges

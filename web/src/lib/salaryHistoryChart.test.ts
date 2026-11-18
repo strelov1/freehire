@@ -45,7 +45,10 @@ describe('buildSalaryChart', () => {
   };
 
   it('gives a missing month a slot but no point, and splits the line there', () => {
-    const model = buildSalaryChart(series([row('2026-01', 100), row('2026-02', 110), row('2026-04', 120), row('2026-05', 130)]), '2026-10');
+    const model = buildSalaryChart(
+      series([row('2026-01', 100), row('2026-02', 110), row('2026-04', 120), row('2026-05', 130)]),
+      '2026-10',
+    );
     expect(model.slots).toEqual(['2026-01', '2026-02', '2026-03', '2026-04', '2026-05']);
     expect(model.segments.map((seg) => seg.map((p) => p.month))).toEqual([
       ['2026-01', '2026-02'],
@@ -74,7 +77,11 @@ describe('buildSalaryChart', () => {
   });
 
   it('draws a flat series on the midline instead of dividing by zero', () => {
-    const flat = series([row('2026-08', 100, { p25: 100, p75: 100 }), row('2026-09', 100, { p25: 100, p75: 100 }), row('2026-10', 100, { p25: 100, p75: 100 })]);
+    const flat = series([
+      row('2026-08', 100, { p25: 100, p75: 100 }),
+      row('2026-09', 100, { p25: 100, p75: 100 }),
+      row('2026-10', 100, { p25: 100, p75: 100 }),
+    ]);
     const model = buildSalaryChart(flat, '2026-12');
     for (const p of model.points) expect(p.yMid).toBeCloseTo((model.topY + model.baselineY) / 2);
   });
@@ -94,4 +101,3 @@ describe('buildSalaryChart', () => {
     expect(model.points.map((p) => p.mixShift)).toEqual([false, false, true, false]);
   });
 });
-

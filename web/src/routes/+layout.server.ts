@@ -1,6 +1,6 @@
 import { ApiError } from '#lib/api.js';
 import { hasSessionCookie } from '#lib/authCookie.js';
-import { isTranslatedLocale, LOCALE_COOKIE } from '#lib/locale.js';
+import { isTranslatedLocale, LOCALE_COOKIE } from '#lib/i18n/locale.js';
 import { serverApi } from '#lib/server/api.js';
 import type { LayoutServerLoad } from './$types';
 
@@ -25,11 +25,10 @@ export const load: LayoutServerLoad = async ({ fetch, request, cookies, url, loc
     // `locale()` (AccountNavRail, DeleteAccountButton, ...) would need its own
     // path check instead of one shared source of truth. `user.language` is
     // matched against TRANSLATED_LOCALES rather than one literal — see
-    // #lib/locale for why that list is narrower than what `users.language`
+    // #lib/i18n/locale for why that list is narrower than what `users.language`
     // accepts. An unrecognised or not-yet-translated value collapses to 'en'.
     const onAccountSection = url.pathname === '/my' || url.pathname.startsWith('/my/');
-    const locale =
-      onAccountSection && isTranslatedLocale(user.language) ? user.language : ('en' as const);
+    const locale = onAccountSection && isTranslatedLocale(user.language) ? user.language : ('en' as const);
     // Refines hooks.server.ts's cookie-derived guess with this request's fresh,
     // authoritative value. `event.locals` is one object for the whole request;
     // `transformPageChunk` reads `locals.locale` lazily (after this load

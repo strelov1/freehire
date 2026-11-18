@@ -19,10 +19,8 @@ var ErrEvidenceRequired = errors.New("cvedit: writing this needs evidence")
 
 // Policy says what each actor may change.
 //
-// This replaces access control by omission. The named-op vocabulary it succeeds kept the
-// agent away from the candidate's contact details by having no operation that could name
-// them — a real defence, but an accidental one that widens silently every time the
-// vocabulary grows. Stated as a table, it can be read, tested, and argued with.
+// Access is an explicit table, not omission from the op vocabulary, which would widen
+// silently as the vocabulary grows.
 type Policy struct {
 	denied map[Actor][]string
 }
@@ -54,9 +52,8 @@ func (p Policy) Allows(actor Actor, ops []Op) error {
 	for _, op := range ops {
 		for _, place := range denied {
 			if pathTouches(op.Path, place) {
-				// The agent reaches for `title` to aim the CV at the vacancy, writing the
-				// job's own title there; the generic refusal did not stop it, because it
-				// does not say the field is never printed.
+				// The agent writes the job's title into `title`; the generic refusal did not
+				// stop it because it never said the field is not printed.
 				if place == "title" {
 					return fmt.Errorf("%w: %q is this CV's name in the candidate's list and is not printed "+
 						"on the CV. To aim the CV at the role, rewrite the summary and the experience bullets instead",
@@ -70,22 +67,17 @@ func (p Policy) Allows(actor Actor, ops []Op) error {
 	return nil
 }
 
-// pathTouches reports whether writing at `p` writes the named place — which is true in BOTH
-// directions, and getting that wrong was a hole.
-//
-// Downwards is obvious: denying `header.links` must deny `header.links[0]`. Upwards is the one
-// that bites: `header` is not inside `header.email`, but writing a whole `header` object
-// replaces every contact identifier in it at once. The addressable vocabulary published to the
-// model offers the container alongside the leaf, so a denial that only looks downwards is a
-// denial the model can step over.
+// pathTouches reports whether writing at `p` writes the named place, in BOTH directions:
+// denying `header.links` must deny `header.links[0]`, and writing a whole `header` replaces
+// `header.email` too. The model is offered the container alongside the leaf, so a
+// downwards-only denial can be stepped over.
 func pathTouches(p Path, place string) bool {
 	s := string(p)
 	return s == place || nests(s, place) || nests(place, s)
 }
 
-// nests reports whether `inner` sits inside `outer` — the same field or index boundary check
-// both directions of pathTouches need, and what keeps `experience[1]` from matching
-// `experience[10]`.
+// nests reports whether `inner` sits inside `outer`, on a field or index boundary
+// (`experience[1]` does not match `experience[10]`).
 func nests(inner, outer string) bool {
 	if !strings.HasPrefix(inner, outer) || len(inner) == len(outer) {
 		return false
@@ -104,13 +96,9 @@ type EvidenceGate interface {
 // presentationShapes are the places that assert NOTHING about the candidate: how the CV
 // looks, and what it is called. Everything else in the document is a claim.
 //
-// The list is inverted on purpose, and the earlier version — a list of the places that DO
-// carry a claim — is why. It named summary, bullets, stack and skills, so a degree nobody
-// earned, a certification nobody holds and a job title nobody had all landed uncited. They
-// are the larger lie: a recruiter checks a diploma, not a bullet's phrasing.
-//
-// Listing what is exempt makes the default safe. A field added to the document is a claim
-// until someone says otherwise, which is the direction this has to fail in.
+// The list is inverted on purpose: listing what is exempt makes the default safe, since a new
+// document field is a claim until someone says otherwise. (A list of claim-bearing places let
+// an unearned degree, certification or job title land uncited.)
 var presentationShapes = map[string]bool{
 	"title":             true,
 	"template_id":       true,
@@ -123,9 +111,8 @@ var presentationShapes = map[string]bool{
 	"margins.right":     true,
 	"margins.bottom":    true,
 	"margins.left":      true,
-	// The header is the candidate's identity rather than a claim about their career, and the
-	// agent is denied most of it by policy anyway. What it may still write — the location —
-	// is the candidate's own to state and is not evidenced in the bank.
+	// The header is identity, not a career claim; the agent is denied most of it by policy, and
+	// the location it may write is not evidenced in the bank.
 	"header":           true,
 	"header.full_name": true,
 	"header.email":     true,
@@ -145,8 +132,8 @@ func shapeOf(p Path) string { return pathIndex.ReplaceAllString(string(p), "[]")
 // Removing and moving assert nothing: they rearrange or delete what was already said.
 //
 // Anything that is not presentation is a claim, INCLUDING a container: writing `experience[0]`
-// writes the bullets inside it, and writing `education` replaces the whole section. A write to
-// a container of presentation — `style` — is exempt only because everything inside it is.
+// writes the bullets inside it. A presentation container such as `style` is exempt only
+// because everything inside it is.
 func assertsAClaim(op Op) bool {
 	if op.Kind != OpSet && op.Kind != OpInsert {
 		return false
@@ -154,20 +141,16 @@ func assertsAClaim(op Op) bool {
 	return !presentationShapes[shapeOf(op.Path)]
 }
 
-// requireEvidence holds the rule the whole tailoring capability exists to keep: a sentence
-// about what the candidate did cannot reach the page unless it traces to something they
-// asserted. It runs in the service path rather than in a system prompt, because a rule that
-// lives only in a prompt is one a long conversation eventually loses.
+// requireEvidence enforces that a sentence about what the candidate did cannot reach the page
+// unless it traces to something they asserted. It lives in the service path, not a system
+// prompt that a long conversation could lose.
 //
-// Each writing operation answers for itself and one uncited operation refuses the whole
-// batch — otherwise a claim could ride in among valid ones.
+// Each writing operation answers for itself, and one uncited operation refuses the whole batch.
 func (e *Editor) requireEvidence(ctx context.Context, userID int64, ch Change) error {
 	if e.gate == nil {
 		return nil
 	}
-	// Only the agent has to cite. The rule is that a MODEL's inference must not reach the
-	// page — the candidate writing about their own career is the source the bank exists to
-	// record, and asking them for a citation would make their own editor unusable.
+	// Only the agent cites: the candidate is the source the bank records.
 	if ch.Actor != ActorAgent {
 		return nil
 	}

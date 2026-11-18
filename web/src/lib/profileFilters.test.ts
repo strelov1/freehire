@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { filtersFromProfile, filtersFromParams, filtersToParams, emptyFilters } from './facetModel';
+import { filtersFromParams, filtersToParams, emptyFilters } from './facetModel';
+import { filtersFromProfile } from './profileFilters';
 import { SENIORITY_VALUES } from './generated/contracts';
 import type { LocationPreferences, UserProfile } from './types';
 
@@ -19,6 +20,7 @@ function mkProfile(
     excluded_skills: excludedSkills,
     excluded_sources: excludedSources,
     excluded_companies: excludedCompanies,
+    job_languages: [],
     location_preferences: location,
     derived_location: null,
     cv: null,
@@ -56,9 +58,7 @@ describe('filtersFromProfile', () => {
     expect(intern.get('experience_only_seniority_unspecified')).toBe('true');
     expect(intern.has('experience_include_unspecified')).toBe(false);
 
-    const junior = filtersToParams(
-      filtersFromProfile({ ...mkProfile([], []), seniorities: ['intern', 'junior'] }),
-    );
+    const junior = filtersToParams(filtersFromProfile({ ...mkProfile([], []), seniorities: ['intern', 'junior'] }));
     expect(junior.get('experience_years_max')).toBe('2');
     expect(junior.get('experience_only_seniority_unspecified')).toBe('true');
     expect(junior.has('experience_include_unspecified')).toBe(false);
@@ -149,14 +149,18 @@ describe('filtersFromProfile', () => {
     };
     const p = filtersToParams(filtersFromProfile(mkProfile(['backend'], ['go'], location)));
     expect(p.getAll('work_mode')).toEqual(['remote,onsite']);
-    // regions = remote ∪ relocation targets.
-    expect(p.getAll('regions')).toEqual(['latam,eu']);
-    // countries = remote ∪ base ∪ relocation; base 'br' dedupes against remote 'br'.
+    // Remote and on-site with a home stated: the remote-anywhere modifier, with the
+    // remote reach on the remote arm…
+    expect(p.get('work_mode_remote_anywhere')).toBe('true');
+    expect(p.get('work_mode_remote_regions')).toBe('latam');
+    expect(p.get('work_mode_remote_countries')).toBe('br');
+    // …and the physical arm bounded by home ∪ relocation targets.
+    expect(p.getAll('regions')).toEqual(['eu']);
     expect(p.getAll('countries')).toEqual(['br']);
-    // cities = base ∪ relocation targets.
     expect(p.getAll('cities')).toEqual(['Florianópolis,Berlin']);
-    // open to relocation → both relocation-supporting values.
-    expect(p.getAll('relocation')).toEqual(['supported,required']);
+    // The relocation facet would AND over the remote arm too; the targets bound the
+    // physical arm instead.
+    expect(p.getAll('relocation')).toEqual([]);
   });
 
   it('seeds no relocation facet when the user is not open to relocating', () => {
@@ -293,9 +297,7 @@ describe('filtersFromProfile', () => {
     });
 
     it('keeps avoided companies and avoided sources independent', () => {
-      const p = filtersToParams(
-        filtersFromProfile(mkProfile([], [], null, [], ['smartrecruiters'], ['acme'])),
-      );
+      const p = filtersToParams(filtersFromProfile(mkProfile([], [], null, [], ['smartrecruiters'], ['acme'])));
 
       expect(p.getAll('source_exclude')).toEqual(['smartrecruiters']);
       expect(p.getAll('company_slug_exclude')).toEqual(['acme']);
@@ -374,5 +376,109 @@ describe('filtersFromProfile', () => {
       const p = filtersToParams(filtersFromProfile(mkProfile([], skills)));
       expect(p.getAll('skills')).toEqual([skills.join(',')]);
     });
+  });
+});
+
+// The profile's most common shape — remote anywhere, hybrid/on-site at home — must
+// survive the flatten: the plain AND of work_mode with the location facets narrows
+// remote work to the home country, exactly the complaint that motivated the
+// work_mode_remote_anywhere modifier.
+describe('filtersFromProfile remote-anywhere flattening', () => {
+  const loc = (workModes: string[], extra: Partial<LocationPreferences> = {}): LocationPreferences => ({
+    work_modes: workModes,
+    remote: {},
+    base: { country: 'de', city: 'Berlin' },
+    relocation: { open: false },
+    ...extra,
+  });
+
+  it('stages the modifier for remote plus physical with a base geography', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid']))));
+    expect(p.get('work_mode')).toBe('remote,hybrid');
+    expect(p.getAll('countries')).toContain('de');
+    expect(p.get('work_mode_remote_anywhere')).toBe('true');
+  });
+
+  it('stages the modifier when the geography comes from relocation instead', () => {
+    const p = filtersToParams(
+      filtersFromProfile(
+        mkProfile([], [], loc(['remote', 'onsite'], { relocation: { open: true, countries: ['pl'] } })),
+      ),
+    );
+    expect(p.get('work_mode_remote_anywhere')).toBe('true');
+    expect(p.get('countries')?.split(',')).toContain('pl');
+    // ANDed around the whole disjunction, the relocation facet would demand that
+    // remote postings offer relocation too.
+    expect(p.has('relocation')).toBe(false);
+  });
+
+  // The reach bounds the remote arm only; the location facets carry just the home
+  // geography, so hybrid work is not widened to the whole reach.
+  it('stages the remote reach on the remote arm, not on the location facets', () => {
+    const p = filtersToParams(
+      filtersFromProfile(
+        mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['eu'], countries: ['us'] } })),
+      ),
+    );
+    expect(p.get('work_mode_remote_anywhere')).toBe('true');
+    expect(p.get('work_mode_remote_regions')).toBe('eu');
+    // Home stays reachable: a remote job restricted to Germany is one this user can take.
+    expect(p.get('work_mode_remote_countries')).toBe('us,de');
+    expect(p.get('countries')).toBe('de');
+    expect(p.has('regions')).toBe(false);
+  });
+
+  // `regions=global` matches only postings labelled worldwide, so it does not cover home.
+  it('keeps home on the remote arm when the reach is worldwide', () => {
+    const p = filtersToParams(
+      filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['global'] } }))),
+    );
+    expect(p.get('work_mode_remote_regions')).toBe('global');
+    expect(p.get('work_mode_remote_countries')).toBe('de');
+  });
+
+  // No reach is unbounded: home needs no entry, and adding one would bound the arm to it.
+  it('leaves the remote arm unbounded when no reach is stated', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid']))));
+    expect(p.has('work_mode_remote_regions')).toBe(false);
+    expect(p.has('work_mode_remote_countries')).toBe(false);
+  });
+
+  // Remote only: no physical arm, so the reach stays an ordinary location filter.
+  it('keeps the plain flatten for a remote-only profile with a reach', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote'], { remote: { regions: ['eu'] } }))));
+    expect(p.get('regions')).toBe('eu');
+    expect(p.has('work_mode_remote_anywhere')).toBe(false);
+  });
+
+  it('leaves a remote-only profile global — no base-country narrowing, no modifier', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote']))));
+    expect(p.get('work_mode')).toBe('remote');
+    expect(p.has('countries')).toBe(false);
+    expect(p.has('work_mode_remote_anywhere')).toBe(false);
+  });
+
+  it('leaves a physical-only profile unchanged', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['hybrid', 'onsite']))));
+    expect(p.get('work_mode')).toBe('hybrid,onsite');
+    expect(p.getAll('countries')).toContain('de');
+    expect(p.has('work_mode_remote_anywhere')).toBe(false);
+  });
+
+  it('leaves remote plus physical without any stated geography unchanged', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { base: {} }))));
+    expect(p.has('work_mode_remote_anywhere')).toBe(false);
+  });
+});
+
+describe('profile job languages', () => {
+  it('includes either chosen language in the shared feed and alert query', () => {
+    const p = filtersToParams(filtersFromProfile({ ...mkProfile([], []), job_languages: ['en', 'ru'] }));
+    expect(p.get('posting_language')).toBe('en,ru');
+  });
+
+  it('keeps every language when no preference is set or the choice is cleared', () => {
+    const p = filtersToParams(filtersFromProfile({ ...mkProfile([], []), job_languages: [] }));
+    expect(p.has('posting_language')).toBe(false);
   });
 });

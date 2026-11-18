@@ -13,23 +13,19 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"golang.org/x/time/rate"
 )
 
-// optius adapts Optius (www.optius.com), a Slovenian general job board: ~1.3k open postings
-// from employers and staffing agencies across every trade. It is boardless and an aggregator —
-// the employer is read per posting. See the "Optius traps" section of AGENTS.md for the
-// measurements behind each rule.
+// optius adapts Optius (www.optius.com), a Slovenian general job board. It is boardless and an
+// aggregator: the employer is read per posting. See the "Optius traps" section of AGENTS.md.
 //
-// The listing is server-rendered HTML, twenty cards a page, newest first; a card carries the
-// title, the employer, the place and the application deadline, never the body. The body is
-// bought from the posting page for postings the catalogue lacks, within a per-run budget, one
-// request at a time: the site answers 429 to as few as two concurrent requests. The site's own
-// "abroad" region listing (Tujina) is walked as well, so the Slovenian fallback country is never
-// attached to a posting in Austria whose place the location dictionary cannot read.
+// The listing is server-rendered HTML, twenty cards a page, newest first; a card carries title,
+// employer, place and deadline, never the body. The body is fetched from the posting page for
+// postings the catalogue lacks, within a per-run budget, one request at a time: the site answers
+// 429 to as few as two concurrent requests. The site's "abroad" region listing (Tujina) is walked
+// too, so the Slovenian fallback country is never attached to a posting abroad whose place the
+// location dictionary cannot read.
 type optius struct {
 	http           HTMLGetter
-	limiter        waiter
 	maxNewPerRun   int
 	maxPages       int
 	deadlineMargin time.Duration
@@ -42,16 +38,13 @@ const (
 	optiusAbroadListing = optiusListing + "regija/tujina/"
 	// optiusPageSize is the cards a listing page carries; the pager's s= is a card offset.
 	optiusPageSize = 20
-	// optiusMaxPages is a safety ceiling on one listing walk: 66 pages on 2026-10-29. Reaching
-	// it fails the crawl rather than ending the walk as a success.
+	// optiusMaxPages is a safety ceiling on one listing walk; reaching it fails the crawl.
 	optiusMaxPages = 300
-	// optiusRequestInterval paces every request of a run, listing and posting page alike, at one
-	// every three seconds. One request is in flight at a time, yet a walk paced at one a second
-	// drew a 429 by its twelfth page, while requests back to back at ~4 s each never did.
+	// optiusRequestInterval paces every request of a run, listing and posting page alike. One
+	// request at a time is not enough: a walk paced at one a second still drew a 429.
 	optiusRequestInterval = 3 * time.Second
-	// optiusMaxNewPerRun bounds the posting pages one run reads. The listing walk takes ~5
-	// minutes and a posting page ~3.5 s, so 400 pages fit the scheduler's 2,400 s crawl budget
-	// with the writes after them. A cold catalogue (~1.3k) is taken over a few runs.
+	// optiusMaxNewPerRun bounds the posting pages one run reads, sized so the walk, the pages and
+	// the writes after them fit the scheduler's crawl budget. A cold catalogue takes a few runs.
 	optiusMaxNewPerRun   = 400
 	optiusDeadlineMargin = 5 * time.Minute
 )
@@ -59,8 +52,7 @@ const (
 // NewOptius builds the adapter over the given client.
 func NewOptius(c HTMLGetter) Source {
 	return optius{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(optiusRequestInterval), 1),
+		http:           pacedHTMLGetter(c, optiusRequestInterval, 1),
 		maxNewPerRun:   optiusMaxNewPerRun,
 		maxPages:       optiusMaxPages,
 		deadlineMargin: optiusDeadlineMargin,
@@ -75,14 +67,18 @@ func (optius) boardless() {}
 // Hundreds of employers and agencies post here, each named per posting.
 func (optius) aggregator() {}
 
+// One country's market (see nationalMarket).
+func (optius) marketCountries(CompanyEntry) []string { return []string{"si"} }
+
 // optiusCard is one listing card: what the gate and the job need before the page is bought.
 type optiusCard struct {
-	id      string
-	url     string
-	title   string
-	company string
-	place   string
-	abroad  bool
+	id       string
+	url      string
+	title    string
+	company  string
+	place    string
+	abroad   bool
+	deadline *time.Time
 }
 
 // optiusIDPath is a posting path: a slug ending in the posting id, written twice.
@@ -124,7 +120,7 @@ func (s optius) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[c.company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[c.company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -149,7 +145,7 @@ func (s optius) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 		answered.Add(1)
 		return job, ok
 	})
-	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
+	// A crawl that read no page at all is broken, not quiet. "Answered" includes a posting the
 	// site reported gone; postings left for want of time are not failures.
 	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
 		return nil, fmt.Errorf("optius: requested %d posting pages and none answered", int64(len(unseen))-outOfTime.Load())
@@ -196,20 +192,16 @@ func (s optius) list(ctx context.Context) ([]optiusCard, error) {
 	return cards, nil
 }
 
-// walk reads one listing to its end: the first page carrying no card at an offset past the
-// total the page itself states. A cardless page without the result counter (a challenge or an
-// error page answered 200), or one short of the stated total, is not the listing's end and
-// fails the walk. The total is the cardless page's own, so postings that expired while the walk
-// ran do not fail it.
+// walk reads one listing to its end: the first cardless page at an offset past the total that
+// page states. A cardless page without the result counter (a challenge or error page answered
+// 200), or short of the stated total, fails the walk. The total is the cardless page's own, so
+// postings that expired mid-walk do not fail it.
 func (s optius) walk(ctx context.Context, path string) ([]optiusCard, error) {
 	seen := make(map[string]bool)
 	var out []optiusCard
 	for page := 0; ; page++ {
 		if page == s.maxPages {
 			return nil, fmt.Errorf("optius: %s runs past %d pages", path, s.maxPages)
-		}
-		if err := s.limiter.Wait(ctx); err != nil {
-			return nil, err
 		}
 		root, err := s.http.GetHTML(ctx, optiusBaseURL+path+"?s="+strconv.Itoa(page*optiusPageSize))
 		if err != nil {
@@ -247,7 +239,7 @@ func optiusTotal(root *html.Node) (int, bool) {
 	if span == nil {
 		return 0, false
 	}
-	n, err := strconv.Atoi(strings.ReplaceAll(optiusClean(textContent(span)), ".", ""))
+	n, err := strconv.Atoi(strings.ReplaceAll(collapseSpace(textContent(span)), ".", ""))
 	return n, err == nil
 }
 
@@ -278,10 +270,10 @@ func optiusCardFrom(n *html.Node) (optiusCard, bool) {
 	}
 	c := optiusCard{id: m[2], url: optiusBaseURL + path}
 	if h := firstByTag(n, "h3"); h != nil {
-		c.title = optiusClean(textContent(h))
+		c.title = collapseSpace(textContent(h))
 	}
 	if name := firstByClass(n, "company-name"); name != nil {
-		c.company = optiusClean(textContent(name))
+		c.company = collapseSpace(textContent(name))
 	}
 	if infos := firstByClass(n, "job-infos"); infos != nil {
 		walk(infos, func(x *html.Node) bool {
@@ -289,8 +281,17 @@ func optiusCardFrom(n *html.Node) (optiusCard, bool) {
 				return true
 			}
 			left, right := firstByClass(x, "left"), firstByClass(x, "right")
-			if left != nil && right != nil && optiusClean(textContent(left)) == "Kraj dela" {
-				c.place = optiusPlace(textContent(right))
+			if left != nil && right != nil {
+				switch collapseSpace(textContent(left)) {
+				case "Kraj dela":
+					c.place = optiusPlace(textContent(right))
+				case "Prijave do":
+					if date := firstByClass(right, "date"); date != nil {
+						if d, err := time.Parse("2.1.2006", strings.ReplaceAll(collapseSpace(textContent(date)), " ", "")); err == nil {
+							c.deadline = &d
+						}
+					}
+				}
 			}
 			return false
 		})
@@ -301,8 +302,6 @@ func optiusCardFrom(n *html.Node) (optiusCard, bool) {
 	return c, true
 }
 
-func optiusClean(s string) string { return strings.Join(strings.Fields(s), " ") }
-
 // optiusPlateCode is the vehicle-registration code the site's region names carry ("Podravska -
 // MB"). Read as a geography token it is a foreign state or country (MB is Manitoba, KR Korea).
 var optiusPlateCode = regexp.MustCompile(`\s+-\s+[A-Z]{2}\s*(,|$)`)
@@ -310,7 +309,7 @@ var optiusPlateCode = regexp.MustCompile(`\s+-\s+[A-Z]{2}\s*(,|$)`)
 // optiusPlace cleans a card's "Kraj dela" (place of work): the region's plate code is dropped,
 // and the space the site leaves before a comma with it.
 func optiusPlace(s string) string {
-	s = optiusPlateCode.ReplaceAllString(optiusClean(s), "$1")
+	s = optiusPlateCode.ReplaceAllString(collapseSpace(s), "$1")
 	return strings.ReplaceAll(s, " ,", ",")
 }
 
@@ -319,11 +318,12 @@ func optiusPlace(s string) string {
 // applies only when the place, the title and the body name no country of their own.
 func optiusBaseJob(c optiusCard) Job {
 	j := Job{
-		ExternalID: c.id,
-		URL:        c.url,
-		Title:      c.title,
-		Company:    c.company,
-		Location:   c.place,
+		ExternalID:          c.id,
+		URL:                 c.url,
+		Title:               c.title,
+		Company:             c.company,
+		Location:            c.place,
+		ApplicationDeadline: c.deadline,
 	}
 	if !c.abroad {
 		j.FallbackCountries = []string{"si"}
@@ -336,6 +336,7 @@ func optiusBaseJob(c optiusCard) Job {
 // whose page shows only an image or an embedded third-party page.
 type optiusLD struct {
 	DatePosted             string `json:"datePosted"`
+	ValidThrough           string `json:"validThrough"`
 	Description            string `json:"description"`
 	Responsibilities       string `json:"responsibilities"`
 	JobBenefits            string `json:"jobBenefits"`
@@ -346,9 +347,6 @@ type optiusLD struct {
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410, or a listing in place of the posting); an error is the absence of an answer.
 func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
 		var se *StatusError
@@ -358,7 +356,7 @@ func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 		return Job{}, false, err
 	}
 	var ld optiusLD
-	hasLD := ldJobPosting(root, &ld)
+	hasLD := optiusJobPosting(root, &ld)
 	section := firstByClass(root, "job-detail-col") // the page's main column
 	if section == nil && !hasLD {
 		if firstByClass(root, "result-count") != nil {
@@ -377,8 +375,11 @@ func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 		return Job{}, false, fmt.Errorf("posting page carries no body")
 	}
 	if hasLD {
-		if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
-			j.PostedAt = NotFuture(&t)
+		j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
+		// validThrough is the source's last application day, a bare UTC date. It may legitimately
+		// be today or tomorrow, so it skips NotFuture.
+		if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.ValidThrough)); err == nil {
+			j.ApplicationDeadline = &t
 		}
 		j.EmploymentType = optiusEmploymentType(ld.WorkHours)
 		if years, ok := optiusYears(ld.ExperienceRequirements); ok {
@@ -388,16 +389,14 @@ func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 	return j, true, nil
 }
 
-// optiusBody renders the posting from the page's main column: the employer's introduction
-// under its name, then each section heading ("Opis delovnega mesta", "Pričakujemo", "Ponujamo")
-// and labelled fact ("Delovni čas", "Zahtevana izobrazba") in page order. Employers with their
-// own page template keep the same headings and fact rows, so one reading covers both. A page
-// whose posting is an image or an embedded third-party page yields nothing here.
+// optiusBody renders the posting from the page's main column: the employer's introduction, then
+// each section heading and labelled fact in page order. Employers with their own template keep
+// the same headings and rows. A posting that is an image or an embedded page yields nothing.
 func optiusBody(section *html.Node) string {
 	var b strings.Builder
 	heading := ""
 	writeHeading := func(n *html.Node) {
-		heading = optiusClean(textContent(n))
+		heading = collapseSpace(textContent(n))
 		if heading != "" {
 			b.WriteString("<h3>" + html.EscapeString(heading) + "</h3>")
 		}
@@ -424,7 +423,7 @@ func optiusBody(section *html.Node) string {
 			}
 			if h := firstByClass(left, "section-title"); h != nil {
 				writeHeading(h)
-			} else if label := strings.TrimSuffix(optiusClean(textContent(left)), ":"); label != "" && label != heading {
+			} else if label := strings.TrimSuffix(collapseSpace(textContent(left)), ":"); label != "" && label != heading {
 				b.WriteString("<p><strong>" + html.EscapeString(label) + "</strong></p>")
 			}
 			b.WriteString("<div>" + innerHTML(right) + "</div>")

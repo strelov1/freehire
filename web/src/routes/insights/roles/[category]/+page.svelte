@@ -18,9 +18,7 @@
   // is how "· freehire" ended up inside the <h1>.
   const heading = $derived(`Most-Hiring ${data.label} Roles`);
   const title = $derived(`${heading} · freehire`);
-  const updated = $derived(
-    new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-  );
+  const updated = $derived(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
   const figures = $derived(rolePulseFigures(data.pulse));
   // The direction is stated in words beside its arrow: whether more competition or a
   // longer time to close is good news depends on who is reading, so no colour judges it.
@@ -65,7 +63,8 @@
             {#if f.direction && f.previous !== null}
               <p class="mt-1 text-sm tabular-nums text-muted-foreground">
                 <span aria-hidden="true">{MOVES[f.direction][0]}</span>
-                {MOVES[f.direction][1]} {f.previous} the 30 days before
+                {MOVES[f.direction][1]}
+                {f.previous} the 30 days before
               </p>
             {/if}
           {/if}
@@ -74,8 +73,8 @@
     </div>
     {#if data.pulse.competition.views_through}
       <p class="mt-2 text-xs text-muted-foreground">
-        Views counted through {data.pulse.competition.views_through} (UTC); closures that only
-        reflect our crawler, such as an unreachable board, are left out of the close time.
+        Views counted through {data.pulse.competition.views_through} (UTC); closures that only reflect our crawler, such as
+        an unreachable board, are left out of the close time.
       </p>
     {/if}
   </section>

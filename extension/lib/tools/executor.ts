@@ -6,14 +6,7 @@
  * a browser.
  */
 
-import type {
-  LabelFill,
-  FillOutcome,
-  FillStatus,
-  ComboboxStep,
-  ComboboxReply,
-  PageSnapshot,
-} from '../protocol';
+import type { LabelFill, FillOutcome, FillStatus, ComboboxStep, ComboboxReply, PageSnapshot } from '../protocol';
 import type { FramedField, FramedUpload, ToolCall, ToolResult } from './wire';
 
 /** What one read of the page reports: its questions, and its resume uploads. */

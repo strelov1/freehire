@@ -3,71 +3,52 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { LayoutGrid, Link2, Search, SlidersHorizontal, Tag, X } from '@lucide/svelte';
-  import { api } from '#lib/api.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { browseQuery, planForSuggestion } from '#lib/browseTarget.js';
+  import { Search } from '@lucide/svelte';
+  import { LauncherTarget } from './launcherTarget.svelte';
+  import HeaderSearchClear from './HeaderSearchClear.svelte';
+  import { WIDE_QUERY, boxKey, isFocusHotkey, stepIndex } from './headerSearchBox';
   import { displayQuery } from '#lib/filters.js';
-  import { dropdownRows, namedCompanies, type DropdownRow } from '#lib/dropdownRows.js';
-  import { companyLogoUrl, sourceLogoUrl, SOURCE_LOGO_DOMAINS } from '#lib/logo.js';
-  import { EntityLogo } from '#lib/ui/index.js';
-  import type { Job, CompanyListItem, ApiSuggestionPart, FacetCounts } from '#lib/types.js';
+  import { dropdownRows } from '#lib/dropdownRows.js';
   import { listSearchTarget, type ListSearchTarget } from '#lib/listSearch.svelte.js';
   import { headerFilterTrigger } from '#lib/headerFilterTrigger.js';
-  import { keyboardFit, NO_FIT, type KeyboardFit } from '#lib/keyboardFit.js';
+  import { trackKeyboardFit } from '#lib/keyboardFitTracker.svelte.js';
   import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
-  import { fromApi, applyParams, type ApplyPlan } from '#lib/apiSuggestions.js';
-  import { pastedJobLink, type PastedJobLink } from '#lib/jobLink.js';
-  import { runLinkIntake, type LinkIntakeStep } from '#lib/linkIntake.js';
+  import { applyParams, type ApplyPlan } from '#lib/apiSuggestions.js';
+  import { pastedJobLink } from '#lib/jobLink.js';
+  import { PastedLinkIntake } from '#lib/pastedLinkIntake.svelte.js';
+  import { TypedSuggestions } from '#lib/typedSuggestions.svelte.js';
   import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '#lib/searchDraft.js';
-  import { starterSuggestions, type Suggestion } from '#lib/suggestions.js';
-  import { loadSourceDistribution } from '#lib/sourceDictionary.js';
-  import type { FacetOption } from '#lib/facets.js';
+  import { starterSuggestions } from '#lib/suggestions.js';
+  import { OperatorPanel } from './operatorPanel.svelte';
+  import HeaderStatusPanel from './HeaderStatusPanel.svelte';
+  import { focusFieldFromBox, searchBoxClass } from './headerSearchBox';
+  import {
+    SUGGEST_DEBOUNCE_MS,
+    SUGGEST_MIN_CHARS,
+    companiesFetch,
+    companiesLimit,
+    completionsLimit,
+    jobsLimit,
+    panelSuggestions,
+  } from './headerSearchLimits';
   import {
     activeOperator,
-    companyOptions,
     hasOperators,
-    matchCompany,
-    matchSource,
     operatorPlan,
     parseOperators,
     replaceToken,
-    sourceOptions,
-    titleOptions,
     unresolvedToken,
     type OperatorOption,
-    type OperatorResolvers,
-    type OperatorToken,
   } from '#lib/searchOperators.js';
-  import {
-    completeWord,
-    typedTail,
-    typewriterStart,
-    typewriterStep,
-    type TypewriterState,
-  } from '#lib/placeholderRoles.js';
+  import { typedPlaceholder } from '#lib/typedPlaceholder.svelte.js';
   import { cn } from '#lib/ui/index.js';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
-  import IntakeOutcome from './IntakeOutcome.svelte';
+  import type { HeaderSearchProps } from './HeaderSearch.props';
+  import HeaderFilterTrigger from './HeaderFilterTrigger.svelte';
+  import HeaderSuggestionList from './HeaderSuggestionList.svelte';
+  import LinkIntakeRow from './LinkIntakeRow.svelte';
 
-  // The header's search box — the ONE of them, on every page.
-  //
-  // There were two: this, which filtered the list under it, and a launcher on every
-  // other page, which navigated to the feed. They shared the debounce, the stale-answer
-  // guard, the arrow keys, the hotkeys, the dismissal and the row rendering, in two
-  // copies, and differed in exactly one thing: what a pick DOES. So
-  // that one thing is a target now (see `target` below), and everything else is
-  // written once.
-  //
-  // Typing does NOT run the search. What you type is a draft; Enter or choosing a row
-  // commits it. The box used to push every keystroke into the store, so the feed
-  // refetched while the visitor was still composing — and the half-typed word it
-  // searched for was rarely the one they meant.
-  //
-  // `size` and `autofocus` are presentation. The homepage renders this same box, at
-  // hero size, as the whole of its content (see HomeLandingView) — it registers no
-  // list, so it gets the browse target above and every pick becomes a link to the
-  // feed. A hero-sized second copy of this component is how the two would drift.
+  // The header's search box — the ONE of them, on every page (see HeaderSearchProps).
   let {
     placeholder,
     label,
@@ -75,163 +56,14 @@
     autofocus = false,
     counts = null,
     onOpenFilters,
-  }: {
-    /** What an empty box shows.
-     *
-     *  A plain string is static. `{ prefix, roles }` types the roles one after another
-     *  into the tail of a sentence whose `prefix` never moves — see lib/placeholderRoles.ts,
-     *  which owns both the words and the stepping.
-     *
-     *  One prop rather than a static one plus an animated override, because an override
-     *  would always win and leave the static string dead at every animating call site —
-     *  the reader would have two candidates and no way to tell which one ships. Either
-     *  way this is never the field's accessible name; that is `label`. */
-    placeholder: string | { prefix: string; roles: string[] };
-    /** The field's accessible name. Static, and required of every caller rather than
-     *  defaulting to `placeholder`: the two were one prop until the placeholder learned
-     *  to rotate, at which point a screen reader announced the input as whatever example
-     *  happened to be on screen. A default would reinstate that at the next call site. */
-    label: string;
-    size?: 'header' | 'hero';
-    /** Focus the box on mount — desktop only. A page whose whole content is this box
-     *  should put the caret in it; on a phone the same call raises the keyboard over
-     *  the page before the visitor has decided to search, so the width check below is
-     *  the feature rather than a fallback. */
-    autofocus?: boolean;
-    /** A filter modal the HOST owns, for a page with no list of its own — the
-     *  homepage, where picking filters composes a search rather than narrowing a list.
-     *  Where a list IS registered its own modal wins, so this is never a second way to
-     *  open the same thing. */
-    onOpenFilters?: () => void;
-    /** The category distribution behind the empty box, when the page has already
-     *  measured it. Off a list page this is otherwise fetched here on first focus;
-     *  a caller that server-rendered the same numbers passes them instead of making
-     *  the browser ask for them again. */
-    counts?: FacetCounts | null;
-  } = $props();
+  }: HeaderSearchProps = $props();
 
   const hero = $derived(size === 'hero');
 
-  // ---- the typed placeholder ----
-  //
-  // Runs only while the box is empty and has never been touched. The first focus or
-  // keystroke stops it for the rest of the visit — text moving under the cursor while a
-  // query is being composed is the failure an animated placeholder invites.
-  //
-  // Only the tail moves; `prefix` is never rewritten, so the sentence stays readable and
-  // the eye has one place to look. The words and the stepping both live in
-  // lib/placeholderRoles.ts, which is where they can be tested without a browser.
-  const typing = $derived(typeof placeholder === 'string' ? null : placeholder);
+  // The typed placeholder: see typedPlaceholder.svelte.ts.
+  const typedHint = typedPlaceholder(() => placeholder);
 
-  // Capturing just the initial value is the intent: this is where the animation STARTS,
-  // and the server renders it. A caller that later swaps its word list is handled by the
-  // stepper instead — a role index the new list has no word for steps past on the next
-  // tick rather than needing this seed to be recomputed.
-  // svelte-ignore state_referenced_locally
-  let typewriter = $state<TypewriterState>(
-    typewriterStart(typeof placeholder === 'string' ? [] : placeholder.roles),
-  );
-  let typingStopped = $state(false);
-
-  function stopTyping() {
-    if (typingStopped || !typing) return;
-    // Finish the word on the way out. Freezing on "Devo" reads as a typo rather than as
-    // an animation that stopped, and it would do so at the exact moment the visitor's
-    // attention arrived on the field.
-    typewriter = completeWord(typewriter, typing.roles);
-    typingStopped = true;
-  }
-
-  /** Undo a stop that no visitor asked for — see the autofocus effect below. */
-  function resumeTyping() {
-    if (!typing) return;
-    // Both halves, not just the flag: stopTyping also FILLED IN the current word, so
-    // clearing the flag alone would leave the animation resuming from a finished word
-    // and skip typing the very first one — on the homepage hero, the one surface this
-    // exists for.
-    typewriter = typewriterStart(typing.roles);
-    typingStopped = false;
-  }
-
-  // Sampled AND subscribed: the OS-level setting can be turned on mid-visit, and reading
-  // it once would leave that visitor with a timer already running for the rest of it.
-  let reduceMotion = $state(false);
-  $effect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    reduceMotion = query.matches;
-    const onChange = (e: MediaQueryListEvent) => (reduceMotion = e.matches);
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-  });
-
-  $effect(() => {
-    if (typingStopped || !typing) return;
-    const roles = typing.roles;
-    // Under reduced motion nothing is scheduled at all and the first role simply stands.
-    if (reduceMotion || roles.length === 0) return;
-
-    // One chained timeout rather than an interval: every step has its own delay (a typed
-    // character, a faster deleted one, and the long hold on a finished word), so a fixed
-    // tick would have to be the shortest of them and then count its way to the others.
-    //
-    // `untrack` is what makes that chain real. Read plainly, the seed below would
-    // subscribe this effect to the very state its own callback writes: each character
-    // would invalidate the effect, the cleanup would cancel the link already scheduled,
-    // and the animation would be driven by re-runs at the mercy of flush latency rather
-    // than by the delays computed here.
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const schedule = (from: TypewriterState) => {
-      const { next, delayMs } = typewriterStep(from, roles);
-      timer = setTimeout(() => {
-        // Untracked on the WRITE as well as on the seed below, and for the same reason
-        // stated the other way round: this chain drives itself, so neither end of it is
-        // part of any reaction. Svelte's `set` refuses a write whose active reaction is a
-        // derived or a block effect (svelte/src/internal/client/reactivity/sources.js),
-        // and `untrack` is what says this assignment answers to neither —
-        // state_unsafe_mutation reached production from this line (FREEHIRE-WEB-26) and
-        // took the header down with it, which a placeholder animation must never be able
-        // to do whatever raced it.
-        untrack(() => {
-          typewriter = next;
-        });
-        schedule(next);
-      }, delayMs);
-    };
-    schedule(untrack(() => typewriter));
-    return () => clearTimeout(timer);
-  });
-
-  // Server-rendered markup carries the prefix with an empty tail, since the effect above
-  // is client-only — so the sentence is already there and only its last word arrives.
-  // Under reduced motion the first role is shown whole instead.
-  const shownPlaceholder = $derived.by(() => {
-    if (!typing) return placeholder as string;
-    if (reduceMotion && !typingStopped) return typing.prefix + (typing.roles[0] ?? '');
-    return typing.prefix + typedTail(typewriter, typing.roles);
-  });
-
-  // How long the draft must sit still before the suggestions are refetched.
-  //
-  // A settled draft costs THREE requests (completions, postings, companies), so the
-  // window is not sized against one cheap pass — it is sized against the gap between
-  // keystrokes. At 120ms it sat inside that gap: a fast typist's 18 characters fired
-  // six rounds, eighteen requests, for one query they had not finished writing. 300ms
-  // is past the gap and is the window the filter store already debounces its reload by
-  // (see urlSynced.svelte.ts) — one answer to "how long is a pause" across the app.
-  const SUGGEST_DEBOUNCE_MS = 300;
-
-  // Below this, the box asks nothing. A single character matches a large fraction of
-  // the catalogue, so the round trip buys a list nobody can act on — and it is the one
-  // round that fires with certainty, since every query passes through its first letter.
-  const SUGGEST_MIN_CHARS = 2;
-
-  // Section caps. The dropdown is a shortcut, not a results page: past a handful each
-  // section stops being scannable and the whole thing stops fitting on a phone.
-  const jobsLimit = 5;
-  const completionsLimit = 5;
-  const companiesLimit = 3;
-  // Asked for, before the relevance filter takes its cut.
-  const companiesFetch = 12;
+  // How long a pause is, and what the dropdown asks for: see headerSearchLimits.ts.
 
   /** The Location popover's own state, held here so the two panels can take turns:
    *  the effect below puts this box's dropdown away when the popover opens, and every
@@ -245,15 +77,16 @@
   let inputEl = $state<HTMLInputElement | null>(null);
   let wrapEl = $state<HTMLDivElement | null>(null);
 
-  /** Tailwind's `sm`. Two things below ask it — whether to place the caret on mount, and
-   *  how this box's panel is drawn — and they must get one answer, since the markup they
-   *  are reasoning about switches on the same breakpoint. */
-  const WIDE_QUERY = '(min-width: 640px)';
+  // True while the caret sits where the page put it, before the visitor touched anything:
+  // the focus ring is for focus somebody moved, and drawn on load it framed the homepage's
+  // search in a heavy ring nobody asked for. The first key or pointer press inside clears it.
+  let autoFocused = $state(false);
 
   $effect(() => {
     if (!autofocus) return;
     if (!window.matchMedia(WIDE_QUERY).matches) return;
     inputEl?.focus();
+    autoFocused = true;
     // Focusing normally opens the dropdown, and on a landing page that would drop a
     // ten-row panel over the page on every load, covering the very shortcuts printed
     // underneath it. A caret the visitor did not place is not the question "what can I
@@ -263,7 +96,7 @@
     // which stops the placeholder animation. On the homepage — where this box IS the
     // page, and the one surface the animation exists for — that killed it before the
     // first character. A caret nobody placed has not interrupted anything.
-    resumeTyping();
+    typedHint.resume();
   });
   // -1 means nothing is highlighted, which is the state the dropdown opens in: Enter
   // then falls through to the free-text search it has always run.
@@ -278,53 +111,18 @@
   // The draft and caret as of the last pause — what the fetches below answer.
   let settled = $state.raw({ text: '', caret: 0 });
 
-  // The distribution behind the empty box on a page with no list of its own. Fetched
-  // once, lazily, the first time somebody focuses the box — a page that nobody searches
-  // from should not pay for it, and a page that has a list already has the numbers.
-  let browseCounts = $state.raw<FacetCounts | null>(null);
-  let browseCountsAsked = false;
-
-  function loadBrowseCounts() {
-    // Already measured by the page that rendered us — asking again would fetch the
-    // identical unfiltered distribution a second time.
-    if (counts) return;
-    if (browseCountsAsked) return;
-    browseCountsAsked = true;
-    void api
-      .facetCounts(new URLSearchParams(), { facets: ['category'] })
-      .then((c) => (browseCounts = c))
-      // A missing distribution is not an error here: the empty box simply offers
-      // nothing, which is what it did on these pages before.
-      .catch(() => {});
-  }
-
-  /** Open the feed with a filter. What a pick does off a list page — the ONE thing the
-   *  launcher ever did differently, and the reason there were two of these components. */
-  function browse(plan: ApplyPlan) {
-    const query = browseQuery(plan);
-    // A plan that names nothing navigates nowhere: landing on an unfiltered feed is
-    // not what "search for nothing" should do.
-    if (query === '') return;
-    close();
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path
-    void goto(`${resolve('/jobs')}?${query}`);
-  }
+  // The navigating target off a list page (see LauncherTarget).
+  const launcher = new LauncherTarget(
+    () => counts,
+    () => close(),
+  );
 
   // The list page's own store, or — on every other page — a target that navigates to
   // the feed instead of filtering in place. Never null, so nothing below has to ask
   // which kind of page it is on.
   const registered = $derived(listSearchTarget());
-  const target = $derived<ListSearchTarget>(
-    registered ?? {
-      value: { q: '' },
-      commitQuery: (q) => browse({ facets: [], q }),
-      suggest: {
-        counts: () => counts ?? browseCounts,
-        apply: (s) => browse(planForSuggestion(s)),
-        applyParts: browse,
-      },
-    },
-  );
+  const target = $derived<ListSearchTarget>(registered ?? launcher.target);
+
   // Fall back to the URL's `q` before the view registers (SSR + first paint), so a
   // shared /jobs?q=… link shows its query immediately.
   const q = $derived(displayQuery(target.value.q || (page.url.searchParams.get('q') ?? '')));
@@ -375,183 +173,32 @@
   // would ask every endpoint for the word "company:google".
   const settledQuery = $derived(parseOperators(settled.text).text);
 
-  // A box with nothing to complete offers the catalogue's shape; a typed one offers
-  // what matches.
-  //
-  // The first case is the whole point of opening on focus, and it is answered LOCALLY:
-  // the curated group order lives in the filter modal's own grouping, checked there
-  // against the category vocabulary at compile time, so asking a server for it would
-  // be a second copy of that order. The typed case is the endpoint's — it completes a
-  // phrase against the catalogue's real vocabulary, which no dictionary shipped to the
-  // browser can do.
-  //
-  // The threshold is SUGGEST_MIN_CHARS, the same one the fetch below gates on, and
-  // deliberately not a separate `=== ''`. Two thresholds opened a state nobody designed:
-  // at exactly one character the box was past "empty" but short of "asked", so it showed
-  // neither the starters nor completions it had not fetched — a ten-row panel collapsing
-  // to the single free-text row, then refilling on the next keystroke. One predicate
-  // answers "is there a query yet", so there is no gap for a state to fall into.
+  // The empty box's starting points, or what matches the typed text (see panelSuggestions).
   const starters = $derived(suggest ? starterSuggestions(suggest.counts()) : []);
-  let completions = $state.raw<Suggestion[]>([]);
-  const suggestions = $derived(
-    settled.text.trim().length < SUGGEST_MIN_CHARS ? starters : completions,
+  // Completions, postings and companies for the typed text (see TypedSuggestions).
+  const typed = new TypedSuggestions(
+    () => settledQuery,
+    () => !!suggest,
+    {
+      completions: completionsLimit,
+      jobs: jobsLimit,
+      companies: companiesLimit,
+      companiesFetch,
+      minChars: SUGGEST_MIN_CHARS,
+    },
   );
-  // The parts each completion applies, by row key — kept beside the rows rather than
-  // inside them because a Suggestion is what the dropdown RENDERS, and these are what
-  // choosing it DOES.
-  let completionParts = $state.raw(new Map<string, ApiSuggestionPart[]>());
-  // Postings and companies for the typed text, fetched exactly the way the launcher
-  // dropdown (HeaderSearch) fetches them — same endpoints, same abandonment rule, same
-  // row rendering below. A second implementation of "show me matching jobs" is how the
-  // two would drift.
-  //
-  // These matter MORE now than before, not less: the list below no longer narrows as
-  // you type, so these rows are the only live evidence the query finds anything.
-  let jobs = $state.raw<Job[]>([]);
-  let companies = $state.raw<CompanyListItem[]>([]);
-
-  $effect(() => {
-    const q = settledQuery.trim();
-    if (q.length < SUGGEST_MIN_CHARS || !suggest) {
-      completions = [];
-      completionParts = new Map();
-      jobs = [];
-      companies = [];
-      return;
-    }
-    // One controller per settled query, aborted by this effect's own cleanup. It
-    // replaced a stale-response counter, which dropped the ANSWER after the request had
-    // already gone out and the server had already worked for it. The signal doubles as
-    // the staleness check below: abandoned and stale are the same condition here, so a
-    // counter beside it would be a second answer to one question.
-    const ac = new AbortController();
-    void (async () => {
-      // allSettled, not all: the three sections are independent, so one endpoint
-      // failing still shows the sections that succeeded instead of blanking all of
-      // them. The completions in particular sit behind a dictionary that is rebuilt on
-      // a schedule — a cold or missing one must cost the box its completions, not its
-      // postings.
-      const [s, j, c] = await Promise.allSettled([
-        api.suggest(q, completionsLimit, ac.signal),
-        api.searchJobs(new URLSearchParams({ q }), jobsLimit, 0, ac.signal),
-        // Over-fetch: most of what the fuzzy endpoint returns is discarded below, and
-        // asking for exactly three would leave the section empty whenever the fourth
-        // was the only real match.
-        api.listCompanies(q, companiesFetch, 0, undefined, ac.signal),
-      ]);
-      // An abort rejects all three, and `allSettled` would otherwise report that as
-      // three empty sections — blanking the panel a fresher query is about to fill.
-      if (ac.signal.aborted) return;
-      const rows = s.status === 'fulfilled' ? s.value : [];
-      completions = fromApi(rows);
-      completionParts = new Map(completions.map((row, i) => [row.slug, rows[i]?.parts ?? []]));
-      jobs = j.status === 'fulfilled' ? j.value.items : [];
-      companies =
-        c.status === 'fulfilled' ? namedCompanies(c.value.items, q, companiesLimit) : [];
-    })();
-    return () => ac.abort();
-  });
+  const suggestions = $derived(panelSuggestions(settled.text, starters, typed.completions));
 
   // ── Field operators ───────────────────────────────────────────────────────
   //
   // `title:`, `company:` and `source:` are a typing shortcut for filters the feed
-  // already has (see #lib/searchOperators). Inside an operator's value the panel offers
-  // only that kind; on Enter the operators become those filters.
-
-  const OPERATOR_LIMIT = 8;
-
-  // The operator the caret is in, read live so the panel switches mode on the keystroke
-  // rather than after the debounce. The options themselves follow the settled draft.
-  const liveOperator = $derived(suggest ? activeOperator(draft.text, caret) : null);
-  // The last answer, with the token it answers — so an EMPTY answer can be told apart
-  // from one that has not arrived yet.
-  // `options` is null when nothing was asked (a title too short to complete) or the
-  // lookup failed — neither is "nothing matches", and saying so would be a lie.
-  let operatorAnswer = $state.raw<{
-    key: string;
-    value: string;
-    options: OperatorOption[] | null;
-  } | null>(null);
-  const operatorOptions = $derived(operatorAnswer?.options ?? []);
-  // Inside a value that names nothing, say so. An empty panel would vanish, and after an
-  // Enter that stopped on this token that reads as the box ignoring the key.
-  const operatorMiss = $derived(
-    liveOperator !== null &&
-      liveOperator.value !== '' &&
-      operatorAnswer?.key === liveOperator.key &&
-      operatorAnswer.value === liveOperator.value &&
-      operatorAnswer.options?.length === 0,
+  // already has (see #lib/searchOperators and OperatorPanel).
+  const ops = new OperatorPanel(
+    () => ({ text: draft.text, caret }),
+    () => settled,
+    () => !!suggest,
+    { companiesFetch, minChars: SUGGEST_MIN_CHARS },
   );
-  // The rows for the operator the caret is in — null outside one. Only the answer for
-  // the KIND the caret is in: until the next pause settles, the last answer may be about
-  // a different operator.
-  const liveOptions = $derived.by(() => {
-    if (!liveOperator) return null;
-    return operatorAnswer?.key === liveOperator.key ? operatorOptions : [];
-  });
-
-  // Company names this box has seen resolved to a slug — picked rows and exact matches —
-  // so committing a picked `company:Google` does not ask the endpoint again. Keyed by
-  // the lower-cased name. Not reactive: it is read at commit time only.
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a cache nothing renders from
-  const knownCompanies = new Map<string, string>();
-  // The cache key for a typed company value: what `formatOperator` writes back into the
-  // box drops `"`, so the key must too, or a picked name with a quote never hits it.
-  const companyKey = (value: string) => value.replaceAll('"', '').toLowerCase();
-
-  // The live source distribution, fetched once, the first time a `source:` appears. A
-  // failed fetch is forgotten so the next attempt asks again.
-  let sourceDist: Promise<FacetOption[]> | null = null;
-  function sources(): Promise<FacetOption[]> {
-    sourceDist ??= loadSourceDistribution().catch((err: unknown) => {
-      sourceDist = null;
-      throw err;
-    });
-    return sourceDist;
-  }
-
-  async function companiesNamed(value: string, signal?: AbortSignal): Promise<CompanyListItem[]> {
-    const { items } = await api.listCompanies(value, companiesFetch, 0, undefined, signal);
-    const exact = matchCompany(value, items);
-    if (exact) knownCompanies.set(companyKey(value), exact);
-    return items;
-  }
-
-  async function optionsFor(op: OperatorToken, signal: AbortSignal): Promise<OperatorOption[] | null> {
-    if (op.key === 'company') {
-      return companyOptions(await companiesNamed(op.value, signal), op.value, OPERATOR_LIMIT);
-    }
-    if (op.key === 'source') return sourceOptions(await sources(), op.value, OPERATOR_LIMIT);
-    if (op.value.length < SUGGEST_MIN_CHARS) return null;
-    return titleOptions(await api.suggest(op.value, OPERATOR_LIMIT, signal));
-  }
-
-  // The settled token as a string, so moving the caret WITHIN an unchanged value — an
-  // arrow key inside `company:goo` — does not abort and resend the same lookup.
-  const settledOperator = $derived.by(() => {
-    const op = suggest ? activeOperator(settled.text, settled.caret) : null;
-    return op ? `${op.key}:${op.start}:${op.value}` : '';
-  });
-
-  $effect(() => {
-    if (!settledOperator) {
-      operatorAnswer = null;
-      return;
-    }
-    const op = untrack(() => activeOperator(settled.text, settled.caret));
-    if (!op) {
-      operatorAnswer = null;
-      return;
-    }
-    // Same abandonment rule as the ordinary fetch above: a newer pause aborts this one.
-    const ac = new AbortController();
-    void optionsFor(op, ac.signal)
-      .catch(() => null)
-      .then((opts) => {
-        if (!ac.signal.aborted) operatorAnswer = { key: op.key, value: op.value, options: opts };
-      });
-    return () => ac.abort();
-  });
 
   /** Put the caret at `at` once the box has rendered the text it points into. */
   async function placeCaret(at: number) {
@@ -569,27 +216,11 @@
     // The row may belong to the token the caret just LEFT (its answer is a debounce
     // behind); writing a company over a `source:` token is a wrong filter, not a pick.
     if (!op || op.key !== option.key) return;
-    if (option.key === 'company') knownCompanies.set(companyKey(option.value), option.id);
+    if (option.key === 'company') ops.lookup.rememberCompany(option.value, option.id);
     const next = replaceToken(draft.text, op, option.value);
     draft = edit(draft, next.text);
     activeIndex = -1;
     void placeCaret(next.caret);
-  }
-
-  /** Resolve every operator value in `text`, asking the companies endpoint for the
-   *  names this box has not seen. A failed lookup resolves to nothing, which stops the
-   *  commit on that token rather than guessing. */
-  async function resolversFor(text: string): Promise<OperatorResolvers> {
-    const parsed = parseOperators(text);
-    const unseen = parsed.company.filter((v) => !knownCompanies.has(companyKey(v)));
-    const [dist] = await Promise.all([
-      parsed.source.length ? sources().catch(() => []) : Promise.resolve([]),
-      ...unseen.map((v) => companiesNamed(v).catch(() => [])),
-    ]);
-    return {
-      company: (v) => knownCompanies.get(companyKey(v)) ?? null,
-      source: (v) => matchSource(v, dist),
-    };
   }
 
   /** Enter on a draft carrying operators. Everything applies, or — when a value names
@@ -597,7 +228,7 @@
    *  feed filtered by half of what was typed is not what was typed. */
   async function runOperatorSearch(apply: (plan: ApplyPlan) => void) {
     const text = draft.text;
-    const resolvers = await resolversFor(text);
+    const resolvers = await ops.lookup.resolversFor(text);
     // Typing went on while the lookups were out; this answer is about older text.
     if (draft.text !== text) return;
     const bad = unresolvedToken(text, resolvers);
@@ -626,50 +257,11 @@
   // show a panel of nothing first.
   const link = $derived(pastedJobLink(draft.text, page.url.origin));
 
-  let linkBusy = $state(false);
-  // Where the last run stopped, when it stopped anywhere worth showing. Null while
-  // nothing has been asked yet — the row then offers to ask.
-  let linkStep = $state.raw<LinkIntakeStep | null>(null);
-
-  /** Where a signed-out visitor goes to hand this link in. The link rides along in the
-   *  return path so it survives the round trip — otherwise signing in costs them the
-   *  paste, and the whole point was that they had it in hand. */
-  const signinHref = $derived.by(() => {
-    const back = `/my/contributions?url=${encodeURIComponent(link?.url ?? '')}`;
-    return `${resolve('/signin')}?returnTo=${encodeURIComponent(back)}`;
-  });
-
-  /** Look this link up, and hand it in if we don't have it. See #lib/linkIntake for the
-   *  order and why it is that way round. */
-  async function activateLink(pasted: PastedJobLink) {
-    // One of our own posting pages: the slug is in the path, so asking the API whether
-    // we carry a posting we are serving right now would be asking ourselves.
-    if (pasted.ownSlug) {
-      openPosting(pasted.ownSlug);
-      return;
-    }
-    if (linkBusy) return;
-    linkBusy = true;
-    linkStep = null;
-    const step = await runLinkIntake(pasted.url, {
-      find: (u) => api.findJobByUrl(u),
-      submit: (u) => api.resolveJobLink(u),
-      signedIn: isAuthenticated,
-    });
-    linkBusy = false;
-    // The box may have moved on while the intake was out: a paste over the old text, or
-    // the text cleared entirely. The answer is about the URL we asked with, so applying
-    // it now would navigate to a posting nobody is asking about any more — the same
-    // stale-answer hazard the suggestion fetches guard with their AbortController, held
-    // off here by comparing the question instead, because this runs from a click rather
-    // than from an effect with a cleanup to hang the abort on.
-    if (link?.url !== pasted.url) return;
-    if (step.kind === 'open') {
-      openPosting(step.slug);
-      return;
-    }
-    linkStep = step;
-  }
+  // Looking the link up and handing it in (see PastedLinkIntake).
+  const intake = new PastedLinkIntake(
+    () => link,
+    (slug) => openPosting(slug),
+  );
 
   /** Go to a posting and leave the box empty behind us: the URL that got us there is
    *  not a query, and leaving it sitting in the header over the vacancy it opened reads
@@ -683,57 +275,25 @@
   const rows = $derived(
     dropdownRows({
       suggestions,
-      jobs,
-      companies,
+      jobs: typed.jobs,
+      companies: typed.companies,
       text: draft.text,
       link,
-      operator: liveOptions,
+      operator: ops.options,
     }),
   );
   const suggestOpen = $derived(rows.length > 0 && !dismissed);
   const rowCount = $derived(suggestOpen ? rows.length : 0);
 
-  /** Where this panel may sit with the on-screen keyboard up: a lift for the one that is
-   *  pinned to the bottom of the screen, a ceiling for the one that hangs off the box,
-   *  and why one number cannot serve both — see #lib/keyboardFit. */
-  let fit = $state.raw<KeyboardFit>(NO_FIT);
-
-  $effect(() => {
-    // Nothing to place while the panel is shut, and no listener to keep either.
-    if (!suggestOpen) return;
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const box = wrapEl;
-    if (!box) return;
-    const measure = () => {
-      fit = keyboardFit({
-        windowHeight: window.innerHeight,
-        viewportHeight: viewport.height,
-        viewportOffsetTop: viewport.offsetTop,
-        // The ceiling is measured from the bottom of the box the panel hangs off.
-        anchorBottom: box.getBoundingClientRect().bottom,
-        // Exactly the case the class list below pins to `bottom-0`: the header's box, on
-        // a phone. The hero hangs its panel off the box at every width, and so does the
-        // header at `sm` and up.
-        bottomAnchored: !hero && !window.matchMedia(WIDE_QUERY).matches,
-      });
-    };
-    measure();
-    // `scroll` as well as `resize`: iOS scrolls the visual viewport inside the layout one
-    // to keep the focused field visible, which moves the keyboard's top edge without
-    // changing its height. The window's own scroll counts too — a ceiling is measured
-    // from where the box IS, and scrolling the page moves it under a keyboard that has
-    // not budged.
-    viewport.addEventListener('resize', measure);
-    viewport.addEventListener('scroll', measure);
-    window.addEventListener('scroll', measure, { passive: true });
-    return () => {
-      viewport.removeEventListener('resize', measure);
-      viewport.removeEventListener('scroll', measure);
-      window.removeEventListener('scroll', measure);
-      fit = NO_FIT;
-    };
-  });
+  // Where the panel may sit with the on-screen keyboard up (see trackKeyboardFit). Pinned to
+  // the bottom in exactly the case the class list below pins to `bottom-0`: the header's box,
+  // on a phone. The hero hangs its panel off the box at every width, and so does the header
+  // at `sm` and up.
+  const keyboard = trackKeyboardFit(
+    () => suggestOpen,
+    () => wrapEl,
+    () => !hero && !window.matchMedia(WIDE_QUERY).matches,
+  );
 
   function close() {
     dismissed = true;
@@ -762,7 +322,7 @@
     // for — including from the dropdown's own last row, which is why that row is not
     // offered at all while a link is recognised.
     if (link) {
-      void activateLink(link);
+      void intake.activate(link);
       return;
     }
     // Operators need a list that takes facets; the companies list publishes none, so
@@ -786,7 +346,7 @@
       return;
     }
     if (row.kind === 'link') {
-      void activateLink(row.link);
+      void intake.activate(row.link);
       return;
     }
     if (row.kind === 'job') {
@@ -809,7 +369,7 @@
     // feature exists to make possible.
     //
     // A starter row (the empty box) has no parts: it IS its own facet, applied below.
-    const parts = completionParts.get(row.suggestion.slug);
+    const parts = typed.parts[row.suggestion.slug];
     if (parts?.length) suggest?.applyParts(applyParams(parts));
     else suggest?.apply(row.suggestion);
     // The box is cleared because the filters now carry what was in it — the parts
@@ -822,94 +382,32 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    // Mid-composition (CJK/IME) Enter CONFIRMS a candidate and the arrows move through
-    // them; the browser must keep those. `oninput` has already fired by then, so the
-    // draft holds pre-conversion text — searching it would search a half-typed word.
-    if (e.isComposing) return;
-    // Enter is handled whether or not the dropdown is open — it is the only way typing
-    // reaches the list now, so it cannot sit behind the dropdown's guard. A highlighted
-    // ROLE row applies its facet; anything else (nothing highlighted, or the last row,
-    // which is the free-text one) searches the text.
-    if (e.key === 'Enter') {
-      e.preventDefault();
+    const key = boxKey(e, suggestOpen);
+    if (key === null) return;
+    e.preventDefault();
+    if (key === 'enter') {
       if (suggestOpen && activeIndex >= 0) choose(activeIndex);
       else runSearch();
-      return;
-    }
-    // Every other key belongs to the dropdown, so with it closed this handler owns
-    // nothing — which keeps the input behaving as it does where no suggestions exist.
-    if (!suggestOpen) return;
-    if (e.key === 'Escape') {
-      e.preventDefault(); // keep the typed text; only the dropdown closes
-      close();
-      return;
-    }
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      activeIndex = activeIndex < rowCount - 1 ? activeIndex + 1 : 0;
-      return;
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      activeIndex = activeIndex > 0 ? activeIndex - 1 : rowCount - 1;
-      return;
-    }
+    } else if (key === 'close') close();
+    else activeIndex = stepIndex(activeIndex, rowCount, key);
   }
 
-  const OPERATOR_HEADINGS = { company: 'Companies', source: 'Sources', title: 'Titles' } as const;
-
-  /** The label above a section's first row, or null for a section that needs none.
-   *
-   *  An EMPTY box gets none. Its rows are the only thing in the panel — there is no
-   *  second section to tell them apart from — so the heading was a line of small caps
-   *  introducing a list nobody could confuse with anything. A typed box does have
-   *  neighbours (postings, companies), and there "Filter by" says what picking one of
-   *  these rows does rather than what it is. */
-  function sectionHeading(row: DropdownRow): string | null {
-    const kind = row.kind;
-    if (kind === 'operator') return OPERATOR_HEADINGS[row.option.key];
-    if (kind === 'text' || kind === 'link') return null;
-    if (kind === 'job') return 'Jobs';
-    if (kind === 'company') return 'Companies';
-    return draft.text.trim() === '' ? null : 'Filter by';
+  /** The visitor is at the box again: the dropdown reopens, unhighlighted, and the typed
+   *  placeholder stops. */
+  function reopen() {
+    dismissed = false;
+    activeIndex = -1;
+    typedHint.stop();
   }
-
-  /** The panel a recognised link drops.
-   *
-   *  It does NOT take the phone's screen the way the suggestions list does. That panel
-   *  goes full-bleed because it is a dozen rows that truncate at the box's width; this
-   *  one is a sentence, and a sentence stretched from the header to the bottom of the
-   *  screen reads as a page that has gone wrong. */
-  const linkPanelClass = $derived(
-    cn(
-      'absolute inset-x-0 top-full z-50 mt-2 border border-border bg-background px-3 py-2.5 text-sm shadow-lg',
-      hero ? 'rounded-2xl' : 'rounded-md',
-    ),
-  );
-
-  const rowClass = (active: boolean) =>
-    cn(
-      'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
-      active ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
-    );
 
   function onWindowClick(e: MouseEvent) {
     if (suggestOpen && wrapEl && !wrapEl.contains(e.target as Node)) close();
   }
 
-  // Same global hotkeys as the launcher: Cmd/Ctrl+K always, `/` unless typing.
   function onWindowKeydown(e: KeyboardEvent) {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    if (isFocusHotkey(e)) {
       e.preventDefault();
       inputEl?.focus();
-      return;
-    }
-    if (e.key === '/' && !e.metaKey && !e.ctrlKey) {
-      const tag = (document.activeElement as HTMLElement | null)?.tagName;
-      if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
-        e.preventDefault();
-        inputEl?.focus();
-      }
     }
   }
 </script>
@@ -919,35 +417,14 @@
 <!-- `min-w-0` lets this flex item shrink below its content's intrinsic width (flex-1
      alone keeps min-width:auto), so the box narrows to fit the header row instead of
      overflowing it — the inner input (also min-w-0) absorbs the shrink. -->
-<div bind:this={wrapEl} class="relative min-w-0 flex-1">
-  <div
-    class={cn(
-      'flex items-center border border-border bg-background focus-within:ring-2 focus-within:ring-ring',
-      hero
-        ? // Taller, rounder and lifted off the page: at the centre of an otherwise
-          // empty screen this is the only interactive thing, so it carries the weight
-          // the header version borrows from the bar around it.
-          'h-14 gap-3 rounded-2xl px-4 text-base shadow-lg shadow-foreground/5 sm:h-16 sm:px-5'
-        : // 48px inside the bar's own 56px. The header height is `h-14` in eight other
-          // places (`top-14`, `top-20`, `PINNED_HEADER_TOP`, the full-bleed
-          // `calc(100dvh-3.5rem)`), so it is the field that grows into the bar rather
-          // than the bar that grows.
-          'h-12 gap-2 rounded-md px-3 text-sm',
-    )}
-    onpointerdown={(e) => {
-      // The whole box takes the caret, not just the field inside it. Probed at 390px: the
-      // field is 175px of a 278px box, and the other 103 — the rule, the magnifier, the
-      // `/` hint, the padding — landed on nothing at all. That reads as a search box that
-      // ignored the first tap and answered the second, better-aimed one.
-      //
-      // Only what is NOT itself a control: the scope prefix, the clear button and the
-      // All-filters trigger keep their own taps. `preventDefault` because the default for
-      // a press on a non-focusable box is to take focus AWAY from the field.
-      if ((e.target as HTMLElement | null)?.closest('button, input, a')) return;
-      e.preventDefault();
-      inputEl?.focus();
-    }}
-  >
+<div
+  bind:this={wrapEl}
+  class="relative min-w-0 flex-1"
+  onkeydowncapture={() => (autoFocused = false)}
+  onpointerdowncapture={() => (autoFocused = false)}
+  onfocusout={() => (autoFocused = false)}
+>
+  <div class={searchBoxClass(hero, autoFocused)} onpointerdown={(e) => focusFieldFromBox(e, inputEl)}>
     <!-- List pages expose a filter scope: surface the Location quick-filter as a
          scope-prefix, divided from the search icon. `variant` picks the popover body
          (jobs work-format+location vs the company region/remote-hiring pills). -->
@@ -974,17 +451,13 @@
       onpointerdown={() => {
         // A click on an already-focused box fires no `focus` event, so without this an
         // autofocused hero would stay silent when its own field is clicked.
-        dismissed = false;
-        activeIndex = -1;
-        stopTyping();
+        reopen();
       }}
       oninput={(e) => {
-        dismissed = false;
-        activeIndex = -1;
-        stopTyping();
+        reopen();
         // Editing the text asks a different question, so the last link's answer goes
         // with it — otherwise a half-corrected URL sits under a verdict on the old one.
-        linkStep = null;
+        intake.step = null;
         draft = edit(draft, e.currentTarget.value);
         caret = e.currentTarget.selectionStart ?? draft.text.length;
       }}
@@ -997,20 +470,18 @@
         caret = e.currentTarget.selectionStart ?? caret;
         // Off a list page nothing has measured the catalogue for us, so the empty
         // box's starting points are fetched here — on the first focus, never on load.
-        if (!registered) loadBrowseCounts();
+        if (!registered) launcher.loadCounts();
         // Reached without a click by `/` and Cmd+K, which is the case the popover's own
         // click-away handler cannot see.
         locationOpen = false;
         // Focus is the question "what can I put here", so it reopens the dropdown —
         // including after a click-away dismissed it, which would otherwise leave the
         // box permanently silent for the rest of the visit.
-        dismissed = false;
-        activeIndex = -1;
-        stopTyping();
+        reopen();
       }}
       onkeydown={onKeydown}
       type="text"
-      placeholder={shownPlaceholder}
+      placeholder={typedHint.shown}
       aria-label={label}
       autocomplete="off"
       spellcheck="false"
@@ -1018,64 +489,19 @@
       aria-expanded={suggestOpen}
       aria-controls="role-suggestions"
       aria-activedescendant={activeIndex >= 0 ? `role-suggestion-${activeIndex}` : undefined}
-      class="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+      class={cn(
+        'min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground',
+        !hero && 'placeholder:text-sm',
+      )}
     />
-    {#if draft.text}
-      <!-- Clearing is an explicit act, not typing, so it commits at once: the visitor
-           asked for the unfiltered list, not for an empty box over the old results. -->
-      <button
-        type="button"
-        onclick={() => {
-          draft = edit(draft, '');
-          runSearch();
-        }}
-        aria-label="Clear search"
-        class="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <!-- 24px box around the 16px glyph: the glyph alone was the whole target. -->
-        <X class="size-4" aria-hidden="true" />
-      </button>
-    {:else}
-      <kbd
-        class="hidden shrink-0 rounded border border-border px-1.5 text-xs text-muted-foreground sm:inline"
-        >/</kbd
-      >
-    {/if}
-    <!-- All-filters trigger, mirroring the Location scope-prefix on the left: divided
-         from the input and pinned to the right edge. Opens the active page's own filter
-         modal — or, on a page with no list, the one its host handed us. The badge shows
-         the active-filter count, and only a list can have one. Hidden where neither
-         exists.
-
-         On a phone this is the ONLY way into the filters (the jobs sidebar is md+), and
-         it was a bare 16px glyph. The button is now a 44px square around the same glyph,
-         pulled into the box's right padding by `-mr-3` so the icon sits where it did;
-         the badge rides the glyph's own wrapper so it stays pinned to the icon rather
-         than to the larger box. -->
-    {#if filterTrigger.open}
-      <div class="h-5 w-px shrink-0 bg-border"></div>
-      <button
-        type="button"
-        onclick={filterTrigger.open}
-        aria-label={filterTrigger.count > 0
-          ? `Filters (${filterTrigger.count} active)`
-          : 'Filters'}
-        title="Filters"
-        class="-mr-3 grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <span class="relative flex">
-          <SlidersHorizontal class="size-4 shrink-0" aria-hidden="true" />
-          {#if filterTrigger.count > 0}
-            <span
-              aria-hidden="true"
-              class="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-brand-foreground"
-            >
-              {filterTrigger.count}
-            </span>
-          {/if}
-        </span>
-      </button>
-    {/if}
+    <HeaderSearchClear
+      empty={!draft.text}
+      onclear={() => {
+        draft = edit(draft, '');
+        runSearch();
+      }}
+    />
+    <HeaderFilterTrigger open={filterTrigger.open} count={filterTrigger.count} />
   </div>
 
   <!-- Three sections and a free-text row, flattened by `dropdownRows` into the single
@@ -1089,189 +515,28 @@
        do and no list to walk, and the states it passes through carry a link of their own
        (sign in, view the company), which cannot live inside an option's button. -->
   {#if link && !dismissed}
-    <div class={linkPanelClass} role="status" aria-live="polite">
-      {#if linkBusy}
-        <span class="flex items-center gap-2 text-muted-foreground">
-          <Link2 class="size-4 shrink-0" />
-          Checking whether we have this one…
-        </span>
-      {:else if linkStep?.kind === 'signin'}
-        <span class="flex flex-col gap-1">
-          <span>We don't have this one yet.</span>
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path -->
-          <a href={signinHref} class="font-medium underline underline-offset-4">
-            Sign in to send it to us →
-          </a>
-        </span>
-      {:else if linkStep?.kind === 'outcome'}
-        <IntakeOutcome resolved={linkStep.resolved} />
-      {:else if linkStep?.kind === 'error'}
-        <span class="flex flex-col gap-1">
-          <span>That didn't go through.</span>
-          <button
-            type="button"
-            onclick={() => link && activateLink(link)}
-            class="self-start font-medium underline underline-offset-4"
-          >
-            Try again
-          </button>
-        </span>
-      {:else}
-        <button
-          type="button"
-          onclick={() => link && activateLink(link)}
-          class="flex w-full items-center gap-2 text-left"
-        >
-          <Link2 class="size-4 shrink-0 text-muted-foreground" />
-          <span class="min-w-0 flex-1 truncate">Open this job link</span>
-          <kbd class="hidden shrink-0 rounded border border-border px-1.5 text-xs text-muted-foreground sm:inline">
-            ↵
-          </kbd>
-        </button>
-      {/if}
-    </div>
-  {:else if operatorMiss && liveOperator && !dismissed}
-    <div class={linkPanelClass} role="status" aria-live="polite">
+    <HeaderStatusPanel {hero}>
+      <LinkIntakeRow
+        url={link.url}
+        busy={intake.busy}
+        step={intake.step}
+        onActivate={() => link && intake.activate(link)}
+      />
+    </HeaderStatusPanel>
+  {:else if ops.miss && ops.live && !dismissed}
+    <HeaderStatusPanel {hero}>
       <span class="text-muted-foreground">
-        No {liveOperator.key} matches “{liveOperator.value}”
+        No {ops.live.key} matches “{ops.live.value}”
       </span>
-    </div>
+    </HeaderStatusPanel>
   {:else if suggestOpen}
-    <ul
-      id="role-suggestions"
-      role="listbox"
-      style:bottom={fit.lift > 0 ? `${fit.lift}px` : null}
-      style:max-height={fit.ceiling > 0 ? `${fit.ceiling}px` : null}
-      aria-label="Search suggestions"
-      class={cn(
-        'inset-x-0 z-50 max-h-[70vh] overflow-y-auto border border-border bg-background py-1 shadow-lg',
-        hero
-          ? 'absolute top-full mt-2 rounded-2xl'
-          : // On a phone the panel leaves the box and takes the screen: full width, from
-            // under the sticky header (`top-14` is that header's own `h-14`) down to
-            // `bottom-0`. The box is 278px of a 390px screen, so at its width every row —
-            // a logo, a title, a company line — truncates; and a panel that stopped short
-            // of the bottom left the feed showing through beneath it, where a scroll moved
-            // whichever of the two the finger happened to land on. The side borders and
-            // the radius go with the edges they drew.
-            //
-            // `fixed` rather than an outward margin, because the box does not start at the
-            // viewport edge — the brand sits to its left and the menu to its right, so no
-            // margin reaches past them. It works only because the header draws no
-            // `backdrop-filter` (see TopBar): one would make the header the containing
-            // block and pin this panel to it instead of to the window.
-            'max-sm:fixed max-sm:bottom-0 max-sm:top-14 max-sm:max-h-none max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:top-full sm:mt-2 sm:rounded-md',
-      )}
-    >
-      {#each rows as row, i (row.key)}
-        {@const heading = row.first ? sectionHeading(row) : null}
-        {#if heading}
-          <!-- A caption, not a choice: presentation keeps it out of the option count while
-               its text still reads in place. -->
-          <li
-            role="presentation"
-            class="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
-          >
-            {heading}
-          </li>
-        {/if}
-        <!-- The option itself takes the click — a button inside it would be a second
-             interactive element nested in the first. tabindex -1 keeps rows out of the Tab
-             order; the input owns the keyboard through aria-activedescendant. -->
-        <li
-          role="option"
-          id="role-suggestion-{i}"
-          aria-selected={activeIndex === i}
-          tabindex="-1"
-          onmouseenter={() => (activeIndex = i)}
-          onclick={() => choose(i)}
-          onkeydown={(e) => {
-            // Reached only if a row ever held focus itself; the input normally handles keys.
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              choose(i);
-            }
-          }}
-          class={cn(rowClass(activeIndex === i), 'cursor-pointer', row.kind === 'text' && 'border-t border-border')}
-        >
-          {#if row.kind === 'suggestion'}
-            <!-- The glyph says which vocabulary the row comes from. A company gets its
-                 own mark, the same one the postings below carry, because a logo is
-                 what makes an employer scannable; everything else is a glyph. -->
-            {#if row.suggestion.kind === 'company'}
-              <EntityLogo
-                name={row.suggestion.label}
-                src={companyLogoUrl(row.suggestion.label) ?? undefined}
-                shape="square"
-                size="xs"
-              />
-            {:else if row.suggestion.kind === 'category'}
-              <LayoutGrid class="size-4 shrink-0 text-muted-foreground" />
-            {:else if row.suggestion.kind === 'title'}
-              <Search class="size-4 shrink-0 text-muted-foreground" />
-            {:else}
-              <Tag class="size-4 shrink-0 text-muted-foreground" />
-            {/if}
-            <span class="min-w-0 flex-1 truncate">{row.suggestion.label}</span>
-            {#if row.suggestion.count !== undefined}
-              <span class="shrink-0 text-xs text-muted-foreground"
-                >{row.suggestion.count.toLocaleString()}</span
-              >
-            {/if}
-          {:else if row.kind === 'job'}
-            <!-- Same mark the launcher dropdown renders, from the same resolver: the
-                 recognisable logo is what makes a row scannable at a glance. -->
-            <EntityLogo
-              name={row.job.company || 'Unknown company'}
-              src={companyLogoUrl(row.job.company) ?? undefined}
-              shape="square"
-              size="xs"
-            />
-            <span class="min-w-0 flex-1">
-              <span class="block truncate">{row.job.title}</span>
-              <span class="block truncate text-xs text-muted-foreground">
-                {row.job.company}{#if row.job.location}&nbsp;·&nbsp;{row.job.location}{/if}
-              </span>
-            </span>
-          {:else if row.kind === 'company'}
-            <EntityLogo
-              name={row.company.name}
-              src={companyLogoUrl(row.company.name) ?? undefined}
-              shape="square"
-              size="xs"
-            />
-            <span class="min-w-0 flex-1 truncate">{row.company.name}</span>
-            <span class="shrink-0 text-xs text-muted-foreground">
-              {row.company.job_count}
-              {row.company.job_count === 1 ? 'job' : 'jobs'}
-            </span>
-          {:else if row.kind === 'operator'}
-            {#if row.option.key === 'title'}
-              <Search class="size-4 shrink-0 text-muted-foreground" />
-            {:else}
-              <EntityLogo
-                name={row.option.label}
-                src={(row.option.key === 'company'
-                  ? companyLogoUrl(row.option.label)
-                  : sourceLogoUrl(row.option.label, SOURCE_LOGO_DOMAINS[row.option.id])) ?? undefined}
-                shape="square"
-                size="xs"
-              />
-            {/if}
-            <span class="min-w-0 flex-1 truncate">{row.option.label}</span>
-            {#if row.option.count !== undefined}
-              <span class="shrink-0 text-xs text-muted-foreground"
-                >{row.option.count.toLocaleString()}</span
-              >
-            {/if}
-          {:else if row.kind === 'text'}
-            <Search class="size-4 shrink-0 text-muted-foreground" />
-            <span class="min-w-0 flex-1 truncate text-muted-foreground"
-              >Search “{row.text}” as text</span
-            >
-          {/if}
-        </li>
-      {/each}
-    </ul>
+    <HeaderSuggestionList
+      {rows}
+      bind:activeIndex
+      {hero}
+      fit={keyboard.fit}
+      emptyQuery={draft.text.trim() === ''}
+      onChoose={choose}
+    />
   {/if}
 </div>

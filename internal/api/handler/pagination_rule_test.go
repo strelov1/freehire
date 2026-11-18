@@ -9,7 +9,7 @@ import (
 
 // helperFile is where the shared pagination parse lives, and the one file allowed to read the
 // raw query params.
-const helperFile = "handler.go"
+const helperFile = "pagination.go"
 
 // TestOffsetIsParsedOnlyByTheSharedHelper pins a rule that a comment failed to hold.
 //
@@ -46,7 +46,8 @@ func TestOffsetIsParsedOnlyByTheSharedHelper(t *testing.T) {
 		readsRaw := strings.Contains(body, `QueryInt("offset"`) || strings.Contains(body, `Query("offset"`)
 		usesHelper := strings.Contains(body, "pageParams(") ||
 			strings.Contains(body, "pageParamsBounded(") ||
-			strings.Contains(body, "pageParamsWindowed(")
+			strings.Contains(body, "pageParamsWindowed(") ||
+			strings.Contains(body, "contractPageBounded(")
 		if !readsRaw && !usesHelper {
 			continue
 		}

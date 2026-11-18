@@ -14,11 +14,12 @@ import (
 //
 // These gauges are the durable copy. They are deliberately the SAME numbers the log line
 // carries, so the two can never tell different stories.
-func TestRenderPublishesBothPassesAndTheirArmedState(t *testing.T) {
+func TestRenderPublishesAllPassesAndTheirArmedState(t *testing.T) {
 	out := render(
 		closeReport{boardsProcessed: 94, boardsSkippedAmbiguous: 2, jobsAffected: 6637},
 		closeReport{boardsProcessed: 1, boardsSkippedAmbiguous: 0, jobsAffected: 2},
-		false, true,
+		closeReport{boardsProcessed: 3, boardsSkippedAmbiguous: 1, jobsAffected: 17},
+		false, true, false,
 	)
 
 	for _, want := range []string{
@@ -27,6 +28,9 @@ func TestRenderPublishesBothPassesAndTheirArmedState(t *testing.T) {
 		`freehire_chronic_board_jobs{pass="unreachable"} 6637`,
 		`freehire_chronic_boards{pass="empty_feed"} 1`,
 		`freehire_chronic_board_jobs{pass="empty_feed"} 2`,
+		`freehire_chronic_boards{pass="board_gone"} 3`,
+		`freehire_chronic_boards_skipped{pass="board_gone"} 1`,
+		`freehire_chronic_board_jobs{pass="board_gone"} 17`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
@@ -42,10 +46,13 @@ func TestRenderPublishesBothPassesAndTheirArmedState(t *testing.T) {
 	if !strings.Contains(out, `freehire_chronic_boards_armed{pass="empty_feed"} 1`) {
 		t.Errorf("empty-feed pass should report itself armed:\n%s", out)
 	}
+	if !strings.Contains(out, `freehire_chronic_boards_armed{pass="board_gone"} 0`) {
+		t.Errorf("board-gone pass should report itself unarmed:\n%s", out)
+	}
 }
 
 func TestRenderIsValidTextfileFormat(t *testing.T) {
-	out := render(closeReport{}, closeReport{}, false, false)
+	out := render(closeReport{}, closeReport{}, closeReport{}, false, false, false)
 
 	// Every family needs its HELP and TYPE before its samples, or node_exporter drops the file
 	// and the metric is silently absent — the same failure mode as not publishing at all.

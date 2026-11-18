@@ -30,7 +30,7 @@ func TestIngestStatusEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: db.New(pool), pool: pool}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/status", h.IngestStatus)
+	app.Get("/api/v1/status", statsContract(h))
 
 	type providerEntry struct {
 		Provider      string  `json:"provider"`
@@ -183,7 +183,7 @@ func TestIngestStatusEndpoint(t *testing.T) {
 	// ACTIVE board; board_health rows outlive the boards they describe.
 	catalogue := func(provider, status string) {
 		if _, err := pool.Exec(ctx, `
-			INSERT INTO boards (provider, board, company, status) VALUES ($1, $1, $1, $2)`,
+			INSERT INTO boards (provider, board, region, company, status) SELECT provider, board, region, provider, $2 FROM board_health WHERE provider = $1`,
 			provider, status); err != nil {
 			t.Fatalf("seed %s board for %s: %v", status, provider, err)
 		}

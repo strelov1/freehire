@@ -20,9 +20,8 @@ import (
 // It answers {"total": N, "hits": [{"_id", "_source": {...}}]} and each hit carries the whole
 // posting — title, employer, places, employment types and every body section — so one walk of
 // the index is the crawl and no posting needs a detail request. The provider is therefore
-// boardless and an aggregator: the employer is read per posting (553 employers on 2026-10-25).
-//
-// See the "onapply traps" section of AGENTS.md for the measurements behind each rule.
+// boardless and an aggregator: the employer is read per posting. See the "onapply traps" section
+// of AGENTS.md.
 type onapply struct {
 	http      JSONGetter
 	pageSize  int
@@ -32,14 +31,13 @@ type onapply struct {
 // onapplyAPI is the listing endpoint without its <from>/<size> path segments.
 const onapplyAPI = "https://api-jobboard.onapply.de/jobboard/production/listing/search"
 
-// onapplyPageSize is the page the walk asks for. The endpoint answers 500 rows (~2 MB) in about a
+// onapplyPageSize is the page the walk asks for. The endpoint answers 500 rows in about a
 // second; 5000 in one request is refused with a 502 by the gateway in front of it.
 const onapplyPageSize = 500
 
 // onapplyMaxPasses bounds how many times one run walks the index. The search sends no sort, so
 // Elasticsearch orders tied scores per shard and a page boundary can repeat one posting and skip
-// another: one walk of 4,131 postings yielded 4,037 and 4,082 distinct ids. Two walks unioned
-// reached the stated total exactly, so a run walks again while it is short of it.
+// another. Two walks unioned reach the stated total, so a run walks again while it is short of it.
 const onapplyMaxPasses = 4
 
 // NewOnapply builds the adapter over the given HTTP client.
@@ -182,9 +180,8 @@ func onapplyPostingURL(raw string) string {
 	return u.String()
 }
 
-// onapplyLocation lists the posting's places. A posting may name dozens of localities (one
-// chain named 58); the first few say where it is and the rest add nothing the countries field
-// does not already state.
+// onapplyLocation lists the posting's places. A posting may name dozens of localities; the first
+// few say where it is and the rest add nothing the countries field does not already state.
 func onapplyLocation(p onapplyPosting) string {
 	const maxPlaces = 5
 	places := p.LocationLocalities

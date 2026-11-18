@@ -1,0 +1,42 @@
+# Scenarios of the official MCP conformance suite that do not apply to /api/v1/ojcp/mcp, run
+# by .github/workflows/contract.yml (job `mcp-conformance`). The suite fails on a scenario
+# that fails and is not listed AND on a listed one that passes (a stale entry), so a fix or a
+# new fixture shows up here. See docs/agents/ci-checks.md.
+server:
+  # Declares no `completions` capability (three read tools, no prompts or resources), so the
+  # suite's completion/complete request answers "method not found".
+  - completion-complete
+  # The scenarios below call the suite's reference "everything-server" fixtures
+  # (test_simple_text, test_simple_prompt, test://static-text, ...). A real product server
+  # does not ship them, so each fails with "unknown tool/prompt/resource". Inapplicable, not
+  # a bug to fix.
+  - tools-call-simple-text
+  - tools-call-image
+  - tools-call-audio
+  - tools-call-embedded-resource
+  - tools-call-mixed-content
+  - tools-call-with-logging
+  - tools-call-error
+  - tools-call-with-progress
+  - tools-call-sampling
+  - tools-call-elicitation
+  - elicitation-sep1034-defaults
+  - elicitation-sep1330-enums
+  - resources-read-text
+  - resources-read-binary
+  - resources-templates-read
+  - resources-subscribe
+  - resources-unsubscribe
+  - prompts-get-simple
+  - prompts-get-with-args
+  - prompts-get-embedded-resource
+  - prompts-get-with-image
+  # Needs a session id for its parallel SSE streams and only WARNS without one, which the
+  # baseline mode counts as a failure. The server is stateless by design (no Mcp-Session-Id;
+  # see ojcpmcp.Handler), so there is no session to give.
+  - server-sse-multiple-streams
+  # Runs only because CI reaches the server on localhost: it sends a foreign Host header and
+  # expects a 4xx. This endpoint is public behind a reverse proxy and serves any Host by
+  # design. An accepted trade-off, not a pending fix: this entry goes stale only if the
+  # server starts rejecting foreign Hosts.
+  - dns-rebinding-protection

@@ -53,23 +53,16 @@ describe('gateMatrix', () => {
   // came from the rule does not catch that: a mislabelled axis leaves every level
   // correct and the diagram still wrong.
   it('labels each axis by what its example actually does', () => {
-    const outcome = new Set<string>(
-      CRITERIA.filter((c) => c.tier === 'outcome').map((c) => c.code),
-    );
+    const outcome = new Set<string>(CRITERIA.filter((c) => c.tier === 'outcome').map((c) => c.code));
     for (const cell of gateMatrix()) {
-      expect(cell.criteria.length >= CONVERGENCE, `converged on ${cell.criteria}`).toBe(
-        cell.converged,
-      );
-      const witnesses =
-        cell.contributors >= WITNESS_GATE && cell.criteria.some((c) => outcome.has(c));
+      expect(cell.criteria.length >= CONVERGENCE, `converged on ${cell.criteria}`).toBe(cell.converged);
+      const witnesses = cell.contributors >= WITNESS_GATE && cell.criteria.some((c) => outcome.has(c));
       expect(witnesses, `witnessed on ${cell.criteria}`).toBe(cell.witnessed);
     }
   });
 
   it('shows the ceiling on structural evidence', () => {
-    const structural = new Set<string>(
-      CRITERIA.filter((c) => c.tier === 'structural').map((c) => c.code),
-    );
+    const structural = new Set<string>(CRITERIA.filter((c) => c.tier === 'structural').map((c) => c.code));
     for (const cell of gateMatrix()) {
       if (cell.criteria.every((code) => structural.has(code))) {
         expect(cell.level, 'structural-only cells must never read likely').not.toBe('likely');

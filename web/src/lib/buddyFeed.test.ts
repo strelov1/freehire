@@ -4,7 +4,18 @@ import type { BuddyFeedItem } from './types';
 
 const summary = { category: 'backend', seniority: 'senior', country: 'de' };
 function item(id: number, handle: string, type: BuddyFeedItem['type'], day: string): BuddyFeedItem {
-  return { id, handle, card_summary: summary, company: { slug: `c${id}`, name: `C${id}` }, job_title: null, job_slug: null, job_location: null, reactions: { counts: {}, mine: '' }, type, day };
+  return {
+    id,
+    handle,
+    card_summary: summary,
+    company: { slug: `c${id}`, name: `C${id}` },
+    job_title: null,
+    job_slug: null,
+    job_location: null,
+    reactions: { counts: {}, mine: '' },
+    type,
+    day,
+  };
 }
 
 describe('buddyFeedPosts', () => {

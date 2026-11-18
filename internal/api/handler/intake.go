@@ -11,20 +11,16 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// intakeService is the one sequence every surface that accepts a job link runs — the website's
-// contribute form, the Telegram bot, the browser extension, and the CLI. It lives here, rather
-// than in each handler, because the outcome must depend on the link and not on where it was
-// pasted: the moment two surfaces carry their own copy of "look, then import, then record",
-// they drift.
+// intakeService is the one sequence every surface that accepts a job link runs (contribute
+// form, Telegram bot, extension, CLI), so the outcome depends on the link, not where it was pasted.
 //
 // The order is load-bearing at two points:
 //
 //   - The catalog lookup runs FIRST. The last-resort resolver writes under source "weblink"
-//     keyed by the page URL, so importing a posting we already carry from an aggregator would
-//     add a second row under a different identity — a duplicate the ingest dedup passes (which
-//     work per company+title) would not collapse.
-//   - The board is inspected BEFORE the import, because the import writes a posting under that
-//     very board. Asking afterwards reports every freshly imported board as already tracked.
+//     keyed by the page URL, so importing a posting we already carry would add a duplicate
+//     the per-company+title dedup passes would not collapse.
+//   - The board is inspected BEFORE the import, which writes a posting under that board;
+//     asking afterwards reports every freshly imported board as already tracked.
 type intakeService struct {
 	queries      *db.Queries
 	contribution *contribution.Service
@@ -37,23 +33,18 @@ type intakeService struct {
 // intakeOutcome is what happened to one link, in the vocabulary every surface renders from.
 // PublicSlug is empty unless a posting is in the catalog.
 //
-// Status and CompanySlug answer two different questions, and conflating them is what told a
-// contributor of a second Dropbox ATS that "this company is new to us": Status is the fate of
-// the BOARD (crawled already, queued for onboarding, or filed for review), CompanySlug names
-// the COMPANY when the catalog already carries it — through any source, not just this one.
+// Status and CompanySlug answer different questions: Status is the fate of the BOARD
+// (crawled, queued for onboarding, or filed for review), CompanySlug names the COMPANY when
+// the catalog already carries it through any source.
 type intakeOutcome struct {
 	Status      string
 	PublicSlug  string
 	CompanySlug string
-	// Board names the company board the link belongs to, when one was recognised. It is set
-	// even for outcomeQueued: failing to READ a page says nothing about whether we recognised
-	// the board behind it, and a surface that conflates the two tells a user we ignored a
-	// company we in fact just accepted.
+	// Board names the company board the link belongs to, when recognised. It is set even
+	// for outcomeQueued: failing to READ a page says nothing about recognising its board.
 	Board string
 	// NovelBoard reports that this intake was the first submission of a board we do not yet
-	// crawl — the case that used to earn AI credits, and that will earn days of Pro once
-	// add-invites lands. It still decides what the submitter is told, because "this is new
-	// to us" and "we already had this" are different answers regardless of what they pay.
+	// crawl. It decides what the submitter is told: "new to us" vs "we already had this".
 	NovelBoard bool
 }
 
@@ -74,9 +65,8 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 		return intakeOutcome{}, err
 	}
 
-	// The board Inspect just resolved is handed to the import: it is often the only thing that
-	// knows a storefront link belongs to a board we already crawl, and without it the posting
-	// would be written a second time under its URL.
+	// The inspected board goes to the import: it is often the only thing that knows a
+	// storefront link belongs to a board we already crawl, else the posting is written twice.
 	res, imported, err := s.imports.Import(ctx, pageURL, linkimport.Board{
 		Source: intake.Source,
 		Board:  intake.Board,
@@ -94,10 +84,9 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 	out := intakeOutcome{Board: intake.Board, CompanySlug: companySlug, NovelBoard: novel}
 	switch {
 	case imported && res.Deduped:
-		// The catalog already carried this vacancy under a crawled source. Answering found HERE
-		// rather than at the top of Resolve is what keeps the board: an unrecognised storefront
-		// may front a board nobody has contributed yet, and the vacancy being known says nothing
-		// about the board being known.
+		// The catalog already carried this vacancy under a crawled source. Answering here, not
+		// at the top of Resolve, keeps the board: a known vacancy says nothing about the
+		// board being known.
 		out.Status, out.PublicSlug = outcomeFound, res.PublicSlug
 	case !imported:
 		out.Status = outcomeQueued
@@ -106,9 +95,8 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 	case intake.Recognized:
 		out.Status, out.PublicSlug = outcomeImported, res.PublicSlug
 	default:
-		// Imported, but no board could be named from the URL — a careers site on the company's
-		// own domain. Nothing was queued for onboarding, so promising a crawl here would be a
-		// promise nothing keeps; the link is in the manual triage queue instead.
+		// Imported, but no board could be named from the URL (a careers site on the company's
+		// own domain). Nothing was queued, so no crawl is promised; the link is in manual triage.
 		out.Status, out.PublicSlug = outcomeReview, res.PublicSlug
 	}
 	if out.CompanySlug == "" {
@@ -118,11 +106,9 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 }
 
 // companyAlreadyCarried names the employer of a just-imported posting when the catalog holds
-// more of it than this one row — the answer to "is this company new to us?", which the board
-// checks cannot give: a company reached through an ATS we do not recognise, or through a
-// second ATS, is one we already carry. Empty when the company is genuinely new, when nothing
-// was imported, or on a lookup failure — the posting is saved either way, so the question
-// degrades to "we won't claim we know them".
+// more of it than this one row: the answer to "is this company new to us?", which board
+// checks cannot give. Empty when the company is new, nothing was imported, or the lookup
+// failed (the posting is saved either way, so it degrades to not claiming we know them).
 func (s *intakeService) companyAlreadyCarried(ctx context.Context, res linkimport.Result) string {
 	if res.CompanySlug == "" {
 		return ""
@@ -146,12 +132,11 @@ func (s *intakeService) companyAlreadyCarried(ctx context.Context, res linkimpor
 // slug to name in the answer.
 //
 // A tracked board is deliberately NOT recorded: it needs no onboarding. Every other recognised
-// board is, even when the vacancy itself imported fine, because reading one posting tells us
-// nothing about the other twenty on that board. A board someone already contributed is
-// recorded too — each row names its own submitter — but only the first counts as novel.
+// board is, even when the vacancy imported fine, since one posting says nothing about the
+// rest of the board. An already-contributed board is recorded too (each row names its own
+// submitter), but only the first counts as novel.
 //
-// None of the duplicate outcomes is an error the caller can act on: the link is known to us
-// either way, so they are swallowed rather than surfaced.
+// Duplicate outcomes are swallowed: the link is known to us either way.
 func (s *intakeService) record(ctx context.Context, userID int64, pageURL, surface string, intake contribution.Intake) (companySlug string, novel bool, err error) {
 	res, err := s.contribution.RecordIntake(ctx, contribution.SubmitInput{
 		SubmittedBy: userID,
@@ -174,17 +159,12 @@ func (s *intakeService) record(ctx context.Context, userID int64, pageURL, surfa
 	}
 }
 
-// renderIntakeOutcome puts one intake outcome into words. A readable vacancy now comes back as
-// a link to the posting — before, a Telegram user was only ever told about the board, even when
-// we could have handed them the job. Shared by every surface that calls intakeService.Resolve
-// and reports the result back to the submitter in a chat, so the wording does not drift between
-// them. Telegram is the only such surface today; Discord was the second until its bot was
-// removed, the search box having taken over what it did.
+// renderIntakeOutcome puts one intake outcome into words, shared by every chat surface
+// that reports an intakeService.Resolve result back to the submitter (Telegram today). A
+// readable vacancy comes back as a link to the posting.
 //
-// emphasize renders the one span of emphasis this wording needs (a board name), in whatever
-// markup the calling surface actually understands — Telegram sends parse_mode "HTML". The
-// parameter stays because the markup is the caller's property, not this function's, and
-// hardcoding one surface's is what made the wording drift the first time.
+// emphasize renders the one span of emphasis (a board name) in the calling surface's own
+// markup (Telegram sends parse_mode "HTML").
 func renderIntakeOutcome(out intakeOutcome, frontendOrigin string, emphasize func(string) string) string {
 	switch out.Status {
 	case outcomeFound:
@@ -207,9 +187,8 @@ func renderIntakeOutcome(out intakeOutcome, frontendOrigin string, emphasize fun
 		return "✅ Added. Its careers site isn't one we can crawl yet — we'll check by hand whether we can pull the rest of its jobs.\n" +
 			jobURL(frontendOrigin, out.PublicSlug)
 	}
-	// outcomeQueued. Failing to read the page says nothing about whether we recognised the
-	// board behind it, and answering only "couldn't read" would hide a contribution we just
-	// accepted.
+	// outcomeQueued. Failing to read the page says nothing about recognising the board, and
+	// "couldn't read" alone would hide a contribution we just accepted.
 	switch {
 	case out.NovelBoard:
 		return "🎉 We couldn't open that page, but " + emphasize(out.Board) +

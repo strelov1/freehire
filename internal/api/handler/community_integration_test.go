@@ -2,7 +2,7 @@
 
 // Integration tests for the community discussion-thread HTTP flow against a real
 // Postgres: creating a thread on a company and on a job, the rejection paths
-// (unknown subject, bad type, unauthenticated, over the rate limit), the reply flow
+// (unknown subject, bad type, unauthenticated), the reply flow
 // (count increments; closed/missing rejected), and persona stability. A recurring
 // assertion across all of them: no author user id ever appears in a response body.
 // Run with: go test -tags=integration ./internal/api/handler/
@@ -30,16 +30,8 @@ func newCommunityApp(queries *db.Queries, iss *auth.Issuer, cfg community.Config
 	repo := community.NewQueriesRepository(queries)
 	h := &communityHandlers{community: community.New(repo, repo, cfg)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	cookieAuth := auth.RequireAuth(iss, testVersions)
-	requireModerator := auth.RequireRole(queries, "moderator")
-	app.Get("/api/v1/threads", h.ListThreads)
-	// Before "/threads/:id", exactly as register() orders them — otherwise "recent"
-	// is parsed as a thread id and the feed tests would exercise GetThread instead.
-	app.Get("/api/v1/threads/recent", h.ListRecentThreads)
-	app.Get("/api/v1/threads/:id", h.GetThread)
-	app.Post("/api/v1/threads", cookieAuth, h.CreateThread)
-	app.Post("/api/v1/threads/:id/replies", cookieAuth, h.CreateReply)
-	app.Post("/api/v1/threads/:id/close", cookieAuth, requireModerator, h.CloseThread)
+	mw := middleware{cookie: auth.RequireAuth(iss, testVersions), moderator: auth.RequireRole(queries, "moderator")}
+	h.register(app.Group("/api/v1"), mw, newContract(contractHandlers{communityHandlers: h}))
 	return app
 }
 
@@ -208,28 +200,4 @@ func TestCommunityThreadsEndToEnd(t *testing.T) {
 			t.Fatalf("different users share a handle: %v", a["author"])
 		}
 	})
-}
-
-func TestCommunityThreadRateLimit(t *testing.T) {
-	pool := startPostgres(t)
-	ctx := context.Background()
-	var userID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('rl@example.test') RETURNING id`).Scan(&userID); err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	if _, err := pool.Exec(ctx, `INSERT INTO companies (slug, name, job_count) VALUES ('acme', 'Acme', 1)`); err != nil {
-		t.Fatalf("seed company: %v", err)
-	}
-	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID, testTokenVersion)
-	app := newCommunityApp(db.New(pool), iss, community.Config{ThreadCap: 2})
-
-	for i := 0; i < 2; i++ {
-		if resp := postThread(t, app, cookie, community.SubjectCompany, "acme"); resp.StatusCode != fiber.StatusCreated {
-			t.Fatalf("post %d: status %d, want 201", i, resp.StatusCode)
-		}
-	}
-	if resp := postThread(t, app, cookie, community.SubjectCompany, "acme"); resp.StatusCode != fiber.StatusTooManyRequests {
-		t.Fatalf("over-limit status %d, want 429", resp.StatusCode)
-	}
 }

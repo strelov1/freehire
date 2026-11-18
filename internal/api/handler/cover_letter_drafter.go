@@ -10,25 +10,23 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
+	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // letterBankPort is the experience bank as this feature needs it: evidence retrieval and the
-// candidate projection. Naming both halves in one interface is what lets a surface hold ONE
-// field for one object - it previously arrived under two names on each of two handlers, four
-// names for the same store, and a reader had to check whether they could differ.
+// candidate projection, in one interface so a surface holds one field for one store.
 type letterBankPort interface {
+	ListEmployments(context.Context, int64) ([]experience.Employment, error)
 	coverletter.Retriever
 	candidateProfiler
 }
 
-// coverLetterDeps is the cover-letter surface's dependencies travelling as one value. Both
-// handler types take it through their constructor rather than by assignment afterwards: the
-// bank, the store and the chain all exist before either handler is built, and
-// handler/AGENTS.md reserves post-construction assignment for dependencies that genuinely do
-// not. Passing them as three parameters instead would be the same clump written out.
+// coverLetterDeps is the cover-letter surface's dependencies as one value. Both handler types take it
+// through their constructor; handler/AGENTS.md reserves post-construction assignment for dependencies
+// that genuinely arrive later.
 type coverLetterDeps struct {
 	letters *coverletter.Store
 	chain   *coverletter.Analyzer
@@ -39,10 +37,8 @@ type coverLetterDeps struct {
 // the endpoint and the assistant tool — assemble one and call it, so what a letter is built
 // from cannot drift between the button and the chat.
 //
-// It deliberately does NOT meter. The two callers refuse differently and must: an endpoint
-// answers 402, while a tool has to hand the model a sentence it can relay, because the turn
-// was already paid for and still owes an answer. Folding that in would force one of them to
-// speak the other's language.
+// It deliberately does NOT meter: an endpoint answers 402 while a tool must hand the model a sentence,
+// so each caller refuses in its own vocabulary.
 type letterDrafter struct {
 	jobs    jobReader
 	fit     *fitanalysis.Service
@@ -52,9 +48,8 @@ type letterDrafter struct {
 	letters *coverletter.Store
 }
 
-// ready reports whether every dependency is wired. A partially-wired harness must refuse in
-// the caller's own vocabulary rather than panic inside it — on the tool's path that panic
-// would land in a detached SSE-writer goroutine, where no error path is listening.
+// ready reports whether every dependency is wired, so a partially-wired harness refuses in the caller's
+// vocabulary instead of panicking (on the tool path, in a detached SSE-writer goroutine).
 func (d letterDrafter) ready() bool {
 	return d.jobs != nil && d.fit != nil && d.bank != nil && d.chain != nil && d.letters != nil
 }
@@ -65,82 +60,38 @@ func (d letterDrafter) ready() bool {
 // caller reads as "release whatever was charged and say so". Every other failure comes back
 // as an error, so a caller can never overwrite a stored letter with an empty one.
 func (d letterDrafter) draft(
-	ctx context.Context, caller llm.Caller, userID, jobID int64, band coverletter.Band,
+	ctx context.Context, caller llm.Caller, userID, jobID int64, band coverletter.Band, prepared letterPreparation,
 ) (*coverletter.Letter, error) {
-	return d.draftStream(ctx, caller, userID, jobID, band, func(string, bool) {})
+	return d.draftStream(ctx, caller, userID, jobID, band, prepared, func(string, bool) {})
 }
 
 // draftStream is draft with progress. The streaming endpoint needs it because the chain takes
 // minutes and a silent response is one a proxy closes at sixty seconds; every other caller
 // takes the no-op above.
 func (d letterDrafter) draftStream(
-	ctx context.Context, caller llm.Caller, userID, jobID int64, band coverletter.Band, emit coverletter.Emit,
+	ctx context.Context, caller llm.Caller, userID, jobID int64, band coverletter.Band, prepared letterPreparation, emit coverletter.Emit,
 ) (*coverletter.Letter, error) {
-	job, err := d.jobs.GetJob(ctx, jobID)
-	if err != nil {
-		return nil, err
-	}
-	// REQUIRES a cached analysis; it does not produce one. Producing is Ensure's, and Ensure
-	// takes the coalescing Request the autopilot assembles — a letter has no business
-	// assembling that, and no business paying for an analysis the candidate did not ask for.
-	// An absent analysis therefore surfaces as ErrNoAnalysis, which the shared error mapper
-	// renders as "run the fit analysis first": a state the candidate can act on in the same
-	// workspace, one tab over.
-	// No posting requirements: the letter's prompt builds its own vacancy block from the
-	// title, company and description alone (coverletter.vacancyBlock) and reads that field
-	// nowhere, so supplying it would be a jobview projection paid for on every draft and
-	// thrown away. Worth wiring up — a letter that answers what the employer asked for is
-	// a better letter — but that is a change to what the model is told, with its own
-	// prompt tests, and not this one.
-	tailoring, err := d.fit.TailoringContext(ctx, userID, job, nil)
-	if err != nil {
-		return nil, err
-	}
-	atoms, err := coverletter.Gather(ctx, d.bank, userID, tailoring.MissingHave)
-	if err != nil {
-		return nil, err
-	}
-	// The BANK layered over the structured résumé, not the file's structure alone. The ATS
-	// report judges the document, so it reads the file; a letter speaks for the candidate, so
-	// it reads what the candidate has — and a letter built from the file alone could not cite
-	// an achievement banked from chat.
-	candidate := candidateProfileFrom(ctx, d.resume, d.bank, userID)
-
-	// The atoms go in UNFILTERED: the provenance gate lives inside Draft so that no caller can
-	// apply a weaker one, or forget to apply it at all.
-	// Bound once, and the same bound chain both writes the letter and names the model it was
-	// written with. Reading the id off a separately bound client is what let the stamp and the
-	// writer drift apart in principle — they were the same model only because both happened to
-	// come from the same configuration.
+	input := prepared.input
+	input.Band = band
 	chain := d.chain.As(caller)
-	letter, err := chain.DraftStream(ctx, coverletter.Input{
-		Context:         tailoring,
-		Candidate:       candidate,
-		Atoms:           atoms,
-		Band:            band,
-		PostingLanguage: job.PostingLanguage,
-	}, emit)
+	letter, err := chain.DraftStream(ctx, input, emit)
 	if err != nil || letter == nil {
 		return nil, err
 	}
-	if err := d.letters.Save(ctx, userID, jobID, *letter, chain.ModelID()); err != nil {
+	if err := d.letters.SaveSnapshot(ctx, userID, jobID, coverletter.Stored{Letter: *letter, Model: chain.ModelID(), EvidenceRevision: prepared.revision, EvidenceFingerprint: prepared.fingerprint}); err != nil {
 		return nil, err
 	}
 	return letter, nil
 }
 
-// letterReleaseTimeout bounds the detached release. Generous for two small statements, short
-// enough that a wedged database cannot pile up goroutines behind it. Same figure and same
-// reasoning as the assistant turn's.
+// letterReleaseTimeout bounds the detached release: long enough for two small statements, short enough
+// that a wedged database cannot pile up goroutines.
 const letterReleaseTimeout = 5 * time.Second
 
 // releaseLetterCharge gives back what a draft took when it produced nothing usable.
 //
-// It runs on a DETACHED context on purpose, the rule releaseTurn documents beside itself: a
-// client that disconnects mid-draft cancels the request context, the chain fails with it, and
-// a release on that same context could not even open its transaction — leaving the candidate
-// charged for a letter they never got, in exactly the case this exists for. A three-call chain
-// is the likeliest place in this feature to lose the client.
+// It runs on a DETACHED context on purpose (see releaseTurn): a client that disconnects mid-draft cancels
+// the request context, and a release on it could not even open its transaction.
 //
 // Safe to call blind: an empty reference releases nothing.
 func releaseLetterCharge(plans *plan.Store, userID int64, ref string) {
@@ -158,10 +109,7 @@ func releaseLetterCharge(plans *plan.Store, userID int64, ref string) {
 // timestamp. A retry of the same request computes the same string and takes nothing more; a
 // redraft happens after a successful save moved that timestamp, so it computes a new one and
 // pays again — which is right, because a redraft is a second set of model calls.
-//
-// Both entry points use it. The tool used a constant, which made every redraft from chat free
-// forever while the endpoint charged for each — the two diverging on the one axis they were
-// built to share.
+// Both entry points use it, so a redraft is charged the same from chat as from the endpoint.
 func letterAttempt(ctx context.Context, letters *coverletter.Store, userID, jobID int64) string {
 	if letters == nil {
 		return "first"
@@ -210,12 +158,7 @@ func chargeLetter(ctx context.Context, plans *plan.Store, userID, jobID int64, a
 
 // citedAtom is one piece of evidence as the surface shows it: the id the letter stored, and
 // the claim a reader actually checks.
-//
-// The claim is resolved HERE rather than left to the client. A client that has to look ids up
-// can forget to — and did: the workspace threaded an optional lookup table that nothing ever
-// passed, so every citation rendered the same placeholder while types, tests and linters all
-// stayed green. The citation list is this feature's whole claim to honesty; it cannot depend
-// on a caller remembering to populate it.
+// The claim is resolved here, not by the client, so a citation can never render without it.
 type citedAtom struct {
 	ID string `json:"id"`
 	// Claim is empty when the atom is gone — an owner may delete evidence a stored letter
@@ -246,4 +189,52 @@ func citedAtomsOf(ctx context.Context, bank letterBankPort, userID int64, ids []
 		out = append(out, citedAtom{ID: id.String(), Claim: claims[id]})
 	}
 	return out
+}
+
+type letterPreparation struct {
+	input       coverletter.Input
+	revision    int64
+	fingerprint string
+}
+
+func (d letterDrafter) prepare(ctx context.Context, userID, jobID int64) (letterPreparation, error) {
+	selection, err := d.letters.GetSelection(ctx, userID, jobID)
+	if err != nil {
+		return letterPreparation{}, err
+	}
+	var atoms []experience.Atom
+	if selection != nil {
+		bank, e := d.bank.ListAtoms(ctx, userID)
+		if e != nil {
+			return letterPreparation{}, e
+		}
+		atoms, err = coverletter.ResolveSelection(selection.AtomIDs, bank)
+		if err != nil {
+			return letterPreparation{}, err
+		}
+	}
+	job, err := d.jobs.GetJob(ctx, jobID)
+	if err != nil {
+		return letterPreparation{}, err
+	}
+	tailoring, err := d.fit.TailoringContext(ctx, userID, job, nil)
+	if err != nil {
+		return letterPreparation{}, err
+	}
+	if selection == nil {
+		atoms, err = coverletter.Gather(ctx, d.bank, userID, tailoring.MissingHave)
+		if err != nil {
+			return letterPreparation{}, err
+		}
+	}
+	candidate := candidateProfileFrom(ctx, d.resume, d.bank, userID)
+	out := letterPreparation{fingerprint: coverletter.EvidenceFingerprint(atoms)}
+	if selection != nil {
+		candidate = coverletter.SelectedProfile(candidate)
+		// Analysis prose can repeat achievements the candidate explicitly excluded.
+		tailoring = fitanalysis.TailoringContext{Job: tailoring.Job}
+		out.revision = selection.Revision
+	}
+	out.input = coverletter.Input{Context: tailoring, Candidate: candidate, Atoms: atoms, PostingLanguage: job.PostingLanguage}
+	return out, nil
 }

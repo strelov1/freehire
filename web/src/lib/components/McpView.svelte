@@ -1,10 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { MCP_CATALOG_PITCH } from '#lib/mcpCopy.js';
   import { SectionLabel } from '#lib/ui/index.js';
-  import McpSetup from './McpSetup.svelte';
+  import AgentSetupButton from './AgentSetupButton.svelte';
+  import AssistantSetup from './AssistantSetup.svelte';
 
   // Things to ask, grouped by what the visitor is after. Each one is answerable by
-  // the anonymous server's tools alone, except the last group, which needs the account.
+  // public tools alone, except the last group, which needs OAuth on the same connection.
   const prompts = [
     {
       title: 'Find jobs',
@@ -26,57 +28,24 @@
       items: ['Find jobs that fit my profile and save the best three', 'Which of my applications have gone quiet?'],
     },
   ];
-
-  // The hero's sample conversation. Illustrative, so no real employer is named.
-  const heroJobs = [
-    { title: 'Senior Go Engineer — payments platform', meta: 'Remote · EU · €85–100k' },
-    { title: 'Senior Backend Engineer (Go, Kafka)', meta: 'Remote · Germany, Netherlands' },
-    { title: 'Staff Go Developer — observability', meta: 'Remote · Europe · posted 2 days ago' },
-  ];
 </script>
 
-
-
-<!-- Hero. Left: the pitch. Right: what a conversation with the connector looks like. -->
-<section class="grid items-center gap-10 pb-10 pt-12 sm:pt-16 lg:grid-cols-2">
+<!-- Hero: the pitch. -->
+<section class="pb-10 pt-12 sm:pt-16">
   <div>
-    <SectionLabel text="mcp" />
+    <SectionLabel text="MCP" />
     <h1 class="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
       Search jobs right inside your AI assistant.
     </h1>
     <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-      Free. No freehire account needed to search — sign in only if you want the assistant to save and track jobs for
-      you.
+      {MCP_CATALOG_PITCH} Find your next role inside Claude, ChatGPT or your coding assistant. Connect your freehire account
+      with OAuth to search, save your shortlist, track applications and manage alerts.
     </p>
+    <AgentSetupButton />
   </div>
-
-  <figure class="overflow-hidden rounded-xl border border-border bg-secondary/60 text-sm shadow-sm">
-    <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
-      <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
-      Your assistant · freehire connector
-    </figcaption>
-    <div class="flex flex-col gap-3 p-4 leading-relaxed">
-      <div class="max-w-xs self-end rounded-2xl rounded-br-sm bg-foreground px-3.5 py-2 text-background">
-        Remote senior Go jobs in Europe, posted this week
-      </div>
-      <p class="text-xs text-muted-foreground">Used freehire · Search jobs</p>
-      <div class="max-w-md rounded-2xl rounded-bl-sm border border-border bg-background px-3.5 py-2.5">
-        <p class="text-muted-foreground">Here are the strongest matches:</p>
-        {#each heroJobs as job (job.title)}
-          <div class="mt-2.5">
-            <p class="font-medium text-foreground">{job.title}</p>
-            <p class="text-xs text-muted-foreground">{job.meta}</p>
-          </div>
-        {/each}
-      </div>
-      <div class="max-w-xs self-end rounded-2xl rounded-br-sm bg-foreground px-3.5 py-2 text-background">
-        Save the first one to my board
-      </div>
-    </div>
-  </figure>
 </section>
 
-<McpSetup />
+<AssistantSetup />
 
 <!-- Things to ask. -->
 <section class="border-t border-border py-14 sm:py-16">
@@ -100,10 +69,13 @@
   <h2 class="text-2xl font-semibold tracking-tight">What the connector can reach</h2>
   <ul class="mt-6 max-w-2xl list-disc space-y-2 pl-5 leading-relaxed text-muted-foreground">
     <li>Public job postings, employer profiles and market figures — the same catalogue the site shows.</li>
-    <li>Without sign-in it cannot see or change anything of yours.</li>
+    <li>
+      It connects only after you sign in to freehire and approve access, and you can revoke it from Connected devices.
+    </li>
     <li>
       With your account it reads your profile and tracked jobs, and saves, marks applied or moves jobs on your board —
-      never another person's.
+      never another person's. It can also manage alerts, suggest missing dictionary terms and report problems. Automatic
+      applications require your permission, a supported employer form and review before submission.
     </li>
   </ul>
   <p class="mt-8 text-sm leading-relaxed text-muted-foreground">

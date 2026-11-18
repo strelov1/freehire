@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Check, ArrowRight, X } from '@lucide/svelte';
+  import type { Snippet } from 'svelte';
+  import { Check, ArrowRight, ChevronDown, X } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { outstandingOf, stepLeadsSomewhere, type CompletenessStep } from '#lib/accountCompleteness.js';
@@ -14,6 +15,10 @@
   // questions once, and this is what remains of them afterwards for anyone who skipped a
   // step or signed up before the wizard existed. It disappears the moment nothing is
   // outstanding — a card that congratulates you forever is a permanent tax on the page.
+
+  // `extra` rides along with the checklist: inside the folded card while steps remain
+  // (the profile page keeps its Talent Network invite there), on its own once they don't.
+  let { extra }: { extra?: Snippet } = $props();
 
   const steps = $derived(setupSteps());
   const outstanding = $derived(outstandingOf(steps));
@@ -40,76 +45,89 @@
 <!-- The dashed dot and the label — everything an outstanding step shows whether or not it
      is a link, so the two branches below cannot drift apart in padding or wording. -->
 {#snippet dotAndLabel(step: CompletenessStep)}
-  <span
-    class="size-4 shrink-0 rounded-full border border-dashed border-muted-foreground"
-    aria-hidden="true"
-  ></span>
+  <span class="size-4 shrink-0 rounded-full border border-dashed border-muted-foreground" aria-hidden="true"></span>
   <span class="min-w-0 flex-1">{step.label}</span>
 {/snippet}
 
 {#if outstanding.length > 0}
-  <!-- No outer margin: every host so far is a flex column that owns its own spacing,
-       and a margin here would add to that gap rather than replace it. -->
-  <section class="rounded-xl border border-border bg-card p-4" aria-labelledby="account-setup-heading">
-    <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-      <h2 id="account-setup-heading" class="text-sm font-semibold tracking-tight">
-        Finish setting up your account
-      </h2>
-      <!-- The count, not a percentage bar: five steps is few enough that "3 of 5" is the
-           more precise statement and needs no legend. `tabular-nums` keeps it from
-           twitching as steps are completed. -->
-      <p class="text-xs tabular-nums text-muted-foreground">{done} of {steps.length} done</p>
-    </div>
-
-    <ul class="mt-3 flex flex-col gap-1">
-      {#each steps as step (step.id)}
-        <li>
-          {#if step.done}
-            <!-- Completed steps stay listed rather than disappearing: a list that only
+  <!-- One line until opened: the count and the next step, so the page's own content is the
+       first screen. A native <details>, so the fold needs no script and is a disclosure
+       to assistive technology. No outer margin: every host is a flex column that owns its
+       spacing. -->
+  <details class="group/setup rounded-xl border border-border bg-card" aria-labelledby="account-setup-heading">
+    <summary
+      class="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm [&::-webkit-details-marker]:hidden"
+    >
+      <span id="account-setup-heading" class="font-semibold tracking-tight">Finish setting up</span>
+      <span class="tabular-nums text-muted-foreground">{done} of {steps.length} done</span>
+      <span class="hidden min-w-0 flex-1 truncate text-muted-foreground sm:block">
+        · Next: {outstanding[0]?.label}
+      </span>
+      <ChevronDown
+        class="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-open/setup:rotate-180"
+        aria-hidden="true"
+      />
+    </summary>
+    <div class="border-t border-border px-4 pb-4">
+      <ul class="mt-3 flex flex-col gap-1">
+        {#each steps as step (step.id)}
+          <li>
+            {#if step.done}
+              <!-- Completed steps stay listed rather than disappearing: a list that only
                  shows what is left cannot show progress, and progress is the reason
                  somebody finishes the next one. Not a link — there is nothing to go
                  and do. -->
-            <p class="flex items-center gap-2 px-1 py-1.5 text-sm text-muted-foreground">
-              <Check class="size-4 shrink-0 text-brand" aria-hidden="true" />
-              <span class="line-through decoration-border">{step.label}</span>
-            </p>
-          {:else if leadsSomewhere(step)}
-            <!-- The dismiss button (alerts only) must not nest inside the link, so the
+              <p class="flex items-center gap-2 px-1 py-1.5 text-sm text-muted-foreground">
+                <Check class="size-4 shrink-0 text-brand" aria-hidden="true" />
+                <!-- Muted with a check, not struck through: a line through it read as cancelled. -->
+                <span>{step.label}</span>
+              </p>
+            {:else if leadsSomewhere(step)}
+              <!-- The dismiss button (alerts only) must not nest inside the link, so the
                  row itself carries the hover background and the group, and the link
                  covers only the part that navigates. -->
-            <div class="group flex items-center gap-1 rounded-lg py-1.5 pl-1 pr-1.5 text-sm transition-colors hover:bg-accent">
-              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- stepHref() wraps resolve(step.href); the rule can't see through the appended #anchorId -->
-              <a href={stepHref(step)} class="flex min-w-0 flex-1 items-center gap-2">
-                {@render dotAndLabel(step)}
-                <ArrowRight
-                  class="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                  aria-hidden="true"
-                />
-              </a>
-              {#if step.id === 'alerts'}
-                <!-- Not everyone is job-hunting right now — this is the only step that
+              <div
+                class="group flex items-center gap-1 rounded-lg py-1.5 pl-1 pr-1.5 text-sm transition-colors hover:bg-accent"
+              >
+                <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- stepHref() wraps resolve(step.href); the rule can't see through the appended #anchorId -->
+                <a href={stepHref(step)} class="flex min-w-0 flex-1 items-center gap-2">
+                  {@render dotAndLabel(step)}
+                  <ArrowRight
+                    class="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                    aria-hidden="true"
+                  />
+                </a>
+                {#if step.id === 'alerts'}
+                  <!-- Not everyone is job-hunting right now — this is the only step that
                      can be waved off instead of completed. -->
-                <button
-                  type="button"
-                  onclick={dismissAlertsStep}
-                  aria-label="Hide the &quot;{step.label}&quot; step"
-                  class="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-accent-foreground"
-                >
-                  <X class="size-4" aria-hidden="true" />
-                </button>
-              {/if}
-            </div>
-          {:else}
-            <!-- The step is done on the page already open. Still listed — it is genuinely
+                  <button
+                    type="button"
+                    onclick={dismissAlertsStep}
+                    aria-label="Hide the &quot;{step.label}&quot; step"
+                    class="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-accent-foreground"
+                  >
+                    <X class="size-4" aria-hidden="true" />
+                  </button>
+                {:else}
+                  <!-- Holds the dismiss button's width, so every row's arrow lines up. -->
+                  <span class="size-6 shrink-0" aria-hidden="true"></span>
+                {/if}
+              </div>
+            {:else}
+              <!-- The step is done on the page already open. Still listed — it is genuinely
                  outstanding — but as a statement rather than a link, with the section it
                  names sitting right below this card. -->
-            <p class="flex items-center gap-2 px-1 py-1.5 text-sm">
-              {@render dotAndLabel(step)}
-              <span class="shrink-0 text-xs text-muted-foreground">on this page</span>
-            </p>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-  </section>
+              <p class="flex items-center gap-2 px-1 py-1.5 text-sm">
+                {@render dotAndLabel(step)}
+                <span class="shrink-0 text-xs text-muted-foreground">on this page</span>
+              </p>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+      {@render extra?.()}
+    </div>
+  </details>
+{:else}
+  {@render extra?.()}
 {/if}

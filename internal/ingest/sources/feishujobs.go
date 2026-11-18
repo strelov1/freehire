@@ -17,12 +17,10 @@ import (
 // body included. A board is therefore a handful of search requests and no hydration.
 //
 // The crawl is scoped to the tenant's R&D (研发) job category, the platform's own top-level
-// technical bucket. Our title dictionary does not read Chinese titles (classify resolves a
-// category for 7 of 100 ByteDance R&D titles and confirms none of any category non-technical),
-// so a whole-tenant crawl would store thousands of postings nothing could place, while the
-// source's category is a structured statement that a posting is engineering. Both hire types
-// are read — experienced (社招) and campus (校招: new graduates and interns) — since both are
-// real postings: on 2026-10-15 ByteDance listed 5,088 experienced and 4,453 campus R&D ones.
+// technical bucket. Our title dictionary does not read Chinese titles, so a whole-tenant crawl
+// would store thousands of postings nothing could place, while the source's category is a
+// structured statement that a posting is engineering. Both hire types are read: experienced
+// (社招) and campus (校招: new graduates and interns), since both are real postings.
 //
 // fullBoardListing: each hire type is walked until the distinct postings read equal the
 // search's own count, any page failing fails the board, and a count at the search's result
@@ -45,15 +43,14 @@ type feishuJobsHTTP interface {
 
 const (
 	feishuJobsByteDanceHost = "jobs.bytedance.com"
-	// feishuJobsPageSize is one search request's rows: the search serves 500 (and more), and
-	// 500 rows is ~2.4 MB, so ByteDance's ~9.5k R&D postings take ~20 requests.
+	// feishuJobsPageSize is one search request's rows: the search serves 500 (and more), and a
+	// 500-row response is a few MB.
 	feishuJobsPageSize = 500
-	// feishuJobsWindow is where the search stops counting: an unfiltered ByteDance query
-	// answers count=10000 for a catalogue of ~20k. A count at it is the cap, not the total.
+	// feishuJobsWindow is where the search stops counting: an unfiltered query answers
+	// count=10000 for a larger catalogue. A count at it is the cap, not the total.
 	feishuJobsWindow = 10000
 	// feishuJobsTechCategory is the en_name of the platform's top-level technical category.
-	// The id differs per tenant; the name comes from the platform's default category template
-	// and was the same on both tenants checked.
+	// The id differs per tenant; the name comes from the platform's default category template.
 	feishuJobsTechCategory = "R&D"
 )
 

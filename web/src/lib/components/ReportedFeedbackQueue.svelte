@@ -47,9 +47,8 @@
   <div class="flex flex-col gap-1">
     <h2 class="text-xl font-semibold tracking-tight">Reported feedback</h2>
     <p class="text-sm text-muted-foreground">
-      Company reviews flagged by readers. Hiding drops a review from its company's public list and
-      rating average immediately. There is no further queue state — a hidden review stays hidden
-      until someone changes it directly.
+      Company reviews flagged by readers. Hiding drops a review from its company's public list and rating average
+      immediately. There is no further queue state — a hidden review stays hidden until someone changes it directly.
     </p>
   </div>
 
@@ -80,7 +79,9 @@
             </div>
             <p class="whitespace-pre-wrap text-sm text-muted-foreground">{r.body}</p>
             <span class="text-xs text-muted-foreground">
-              {r.rating}★ by {r.author}, posted {timeAgo(r.created_at, locale())} · reported for {r.report_reasons.join(', ')}
+              {r.rating}★ by {r.author}, posted {timeAgo(r.created_at, locale())} · reported for {r.report_reasons.join(
+                ', ',
+              )}
             </span>
           </div>
           <div class="flex shrink-0 gap-2">

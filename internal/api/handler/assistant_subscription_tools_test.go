@@ -1,13 +1,20 @@
 package handler
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/engage/subscription"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/observability"
+	"github.com/strelov1/freehire/internal/search/savedsearch"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -24,7 +31,7 @@ func TestApplyAlertSearch_DropsUnknownValuesAndRefusesUnknownNames(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := encodeSavedQuery(vals); got != "q=rust&salary_min=80000&skills=go&work_mode=remote" {
+	if got := savedsearch.EncodeQuery(vals); got != "q=rust&salary_min=80000&skills=go&work_mode=remote" {
 		t.Errorf("query = %q", got)
 	}
 	if strings.Join(ignored, " ") != "skills=golangg work_mode=sometimes" {
@@ -38,12 +45,12 @@ func TestApplyAlertSearch_DropsUnknownValuesAndRefusesUnknownNames(t *testing.T)
 // An update replaces only what it names: new filters replace the facets but keep the
 // text, the salary bound and what only the website sets; a 0 bound clears it.
 func TestApplyAlertSearch_PartialUpdate(t *testing.T) {
-	base := parseSavedQuery("q=backend&skills=go,rust&salary_min=80000&skills_exclude=php&visa_sponsorship=true")
+	base := savedsearch.ParseQuery("q=backend&skills=go,rust&salary_min=80000&skills_exclude=php&visa_sponsorship=true")
 	vals, _, err := applyAlertSearch(base, alertSearchArgs{Filters: &assistantFilterArgs{"seniority": {"senior"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := encodeSavedQuery(vals); got != "q=backend&salary_min=80000&seniority=senior&skills_exclude=php&visa_sponsorship=true" {
+	if got := savedsearch.EncodeQuery(vals); got != "q=backend&salary_min=80000&seniority=senior&skills_exclude=php&visa_sponsorship=true" {
 		t.Errorf("filters update = %q", got)
 	}
 	vals, _, _ = applyAlertSearch(base, alertSearchArgs{SalaryMin: ptr(0)})
@@ -59,25 +66,6 @@ func TestAlertSearchOf_IsTheShapeTheToolsTake(t *testing.T) {
 	}
 	if len(got.Other) != 1 || got.Other["skills_exclude"] != "php" {
 		t.Errorf("other = %v, want only the website-only exclusion", got.Other)
-	}
-}
-
-func TestSameSelection_IgnoresOrderListFormAndSort(t *testing.T) {
-	if !sameSelection("skills=go,rust&company_slug=stripe", "company_slug=stripe&skills=rust&skills=go&sort=posted_at:desc") {
-		t.Error("the same selection written two ways must compare equal")
-	}
-	if sameSelection("skills=go", "skills=go,rust") {
-		t.Error("different value sets must not compare equal")
-	}
-}
-
-func TestFilterSummaryAndAlertName(t *testing.T) {
-	if got := filterSummary("skills=go,rust&q=backend&company_slug=stripe"); got != `"backend" · company_slug: stripe · skills: go, rust` {
-		t.Errorf("summary = %q", got)
-	}
-	long := alertName("q=" + strings.Repeat("x", 200))
-	if n := len([]rune(long)); n != alertNameMaxRunes {
-		t.Errorf("long name has %d runes, want %d", n, alertNameMaxRunes)
 	}
 }
 
@@ -118,5 +106,40 @@ func TestUpdatesSince(t *testing.T) {
 	}
 	if _, err := updatesSince(now, "yesterday", 0); err == nil {
 		t.Error("a non-RFC 3339 since must be refused")
+	}
+}
+
+// A refusal the caller caused must reach the agent as invalid_request / conflict with words it
+// can act on; subscribe answered internal_error for a q with too many OR alternatives (the
+// saved-search parser refuses it) and for a push subscription with no device.
+func TestAlertSavedSearchError_GivesUserCausedRefusalsACode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		code string
+	}{
+		{"too many OR alternatives", search.ErrTooManyAlternatives, "invalid_request"},
+		{"malformed query", fmt.Errorf("%w: visa_sponsorship must be true or false", search.ErrBadQuery), "invalid_request"},
+		{"no push device", subscription.ErrNoPushDevice, "conflict"},
+		{"unsupported channel", subscription.ErrInvalidChannel, "invalid_request"},
+		{"duplicate name", savedsearch.ErrDuplicateName, "conflict"},
+		{"a real fault", errors.New("connection reset"), "internal_error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := observability.ErrorCode(alertSavedSearchError(tc.err, "x")); got != tc.code {
+				t.Errorf("code = %q, want %q", got, tc.code)
+			}
+		})
+	}
+}
+
+func TestUnknownFilterAndBadQueryNameTheirArgument(t *testing.T) {
+	_, err := assistantFilterArgs{"bogus_facet": {"x"}}.values()
+	if got := assistant.ArgField(err); got != "filters.bogus_facet" || observability.ErrorCode(err) != "invalid_request" {
+		t.Errorf("unknown filter: field=%q code=%q", got, observability.ErrorCode(err))
+	}
+	err = searchToolError(search.ErrTooManyAlternatives)
+	if got := assistant.ArgField(err); got != "query" || observability.ErrorCode(err) != "invalid_request" {
+		t.Errorf("too many alternatives: field=%q code=%q", got, observability.ErrorCode(err))
 	}
 }

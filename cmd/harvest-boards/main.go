@@ -1,20 +1,19 @@
-// Command harvest-boards expands a provider's board catalog with live boards drawn from
-// a seed slug list. The seed (e.g. a public aggregator dump) is a candidate worklist
-// only: every new slug is probed against the platform's official public API and kept
-// only if it returns jobs, so what lands in the catalog is our own validated fact set,
-// not a redistributed dataset.
+// Command harvest-boards expands a provider's board catalog with live boards drawn from a seed
+// slug list. The seed is a candidate worklist only: every new slug is probed against the
+// platform's official public API and kept only if it returns jobs, so the catalog holds our own
+// validated facts, not a redistributed dataset.
 //
-// It reports by default and writes only under --apply, the same convention as
-// cmd/add-board and cmd/merge-companies: the probe result is printed before anything is
-// persisted. A kept board enters at status='pending' — probed, but not yet proven by a
-// pipeline crawl, which is exactly what pending means. Pending boards are crawled, so
-// the first successful run promotes them.
+// It reports by default and writes only under --apply, like cmd/add-board and
+// cmd/merge-companies. A kept board enters at status='pending' (probed, not yet proven by a
+// pipeline crawl); the first successful crawl promotes it.
 //
 //	go run ./cmd/harvest-boards <provider> <seed.json>
 //	go run ./cmd/harvest-boards -pace 2 -workers 4 workable seed.json   # rate-limited platform
 //	go run ./cmd/harvest-boards --apply greenhouse seed.json            # persist what probed live
 //
-// Needs DATABASE_URL.
+// Needs DATABASE_URL, except for -audit-feeds with an explicit seed file. Feed audits compare
+// Scalis/Teamtailor machine feeds with the current adapter and emit JSON lines; without a seed
+// they inspect existing catalog boards. See README.md for limits and output.
 //
 // A seed entry is either a bare slug or an object. The object may claim two things about the
 // candidate, and a seed source that knows either should say so:
@@ -37,6 +36,7 @@ import (
 	"log"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -56,6 +56,9 @@ func run() int {
 	pace := flag.Float64("pace", 0, "cap the probe rate at this many requests per second (0 = unpaced)")
 	workers := flag.Int("workers", defaultProbeWorkers, "concurrent probes in flight")
 	apply := flag.Bool("apply", false, "actually add the boards it kept; without it the run only reports")
+	auditFeeds := flag.Bool("audit-feeds", false, "compare documented feeds with the current adapter (scalis, teamtailor); read-only JSON lines")
+	auditLimit := flag.Int("audit-limit", 20, "maximum boards for -audit-feeds; uses the catalog when no seed is supplied")
+	auditTimeout := flag.Duration("audit-timeout", 2*time.Minute, "per-board deadline for -audit-feeds, including the adapter comparison")
 	rotating := flag.Bool("rotating", false, "probe every request through SOURCES_ROTATING_PROXY_URL instead of the provider's usual egress")
 	flag.Parse()
 	args := flag.Args()
@@ -71,6 +74,12 @@ func run() int {
 	if *workers < 1 {
 		log.Printf("harvest-boards: -workers must be at least 1")
 		return 2
+	}
+	if *auditFeeds {
+		return runFeedAuditCommand(provider, seedPath, feedAuditOptions{
+			Apply: *apply, Limit: *auditLimit, Pace: *pace, Rotating: *rotating,
+			Timeout: *auditTimeout,
+		})
 	}
 
 	p, ok := proberFor(provider)
@@ -95,9 +104,8 @@ func run() int {
 	defer cleanup()
 	repo := boardcatalog.NewQueriesRepository(db.New(pool))
 
-	// The probe talks to the platform's API directly rather than through the provider's
-	// adapter, so it needs the same proxy policy cmd/ingest gets from ApplyProxyEgress —
-	// see sources.ClientFor for what a bare direct client cost workable here.
+	// The probe talks to the platform's API directly rather than through the provider's adapter, so
+	// it needs the same proxy policy cmd/ingest gets from ApplyProxyEgress (see sources.ClientFor).
 	egress, err := egressFor(provider, *rotating)
 	if err != nil {
 		log.Printf("harvest-boards: %v", err)
@@ -139,29 +147,25 @@ func run() int {
 	kept, failures, mismatches := probeAll(ctx, client, p, candidates, expected, *workers)
 	log.Printf("harvest-boards: live boards found=%d probe-failures=%d mismatches=%d refused=%d answered=%d",
 		len(kept), failures, mismatches, client.refused(), client.answered())
-	// A run the platform mostly turned away found nothing because it was not allowed to look.
-	// The probers cannot say so — they report a refusal as an absent board — so this is the
-	// only guard that can tell a truncated harvest from an exhausted one. Committing the
-	// former is how a board file silently loses the boards nobody got to probe.
+	// A run the platform mostly turned away found nothing because it was not allowed to look. The
+	// probers report a refusal as an absent board, so this is the only guard that tells a truncated
+	// harvest from an exhausted one.
 	if refusalsDominated(client.refused(), client.answered()) {
 		log.Printf("harvest-boards: %d requests refused against %d answered — the platform is "+
 			"rate-limiting this run; nothing written. Retry later, or lower -pace",
 			client.refused(), client.answered())
 		return 1
 	}
-	// Every candidate erroring means the probe itself is broken (an API change, an
-	// auth wall, a network outage) — not "no new boards". Fail loudly so the empty
-	// result is not mistaken for an exhausted candidate list.
+	// Every candidate erroring means the probe itself is broken (API change, auth wall, outage),
+	// not "no new boards". Fail loudly so the empty result is not mistaken for an exhausted list.
 	if failures > 0 && failures == len(candidates) {
 		log.Printf("harvest-boards: all %d probes failed", failures)
 		return 1
 	}
-	// Every live board disagreeing with its seed means the gate itself is wrong — a prober
-	// that started reporting a platform-wide name, a seed built against the wrong employers,
-	// or ids drawn from a different id space than the platform's — not "no new boards". Same
-	// reasoning as the all-probes-failed guard: an empty harvest that is really a broken one
-	// must not exit 0. A single rejection is the gate working, not failing, so the alarm
-	// needs more than one.
+	// Every live board disagreeing with its seed means the gate itself is wrong (a prober reporting
+	// a platform-wide name, a seed built against the wrong employers, ids from a different id
+	// space), not "no new boards". Same as the all-probes-failed guard: do not exit 0. A single
+	// rejection is the gate working, so the alarm needs more than one.
 	if mismatches > 1 && len(kept) == 0 {
 		log.Printf("harvest-boards: every live board (%d) disagreed with what its seed expected", mismatches)
 		return 1
@@ -181,9 +185,9 @@ func run() int {
 	return addBoards(ctx, repo, provider, kept)
 }
 
-// addBoards persists the probed-live boards at status='pending'. A duplicate is counted,
-// not an error: a concurrent harvest or a curator addition landing the same board first
-// is the unique index doing its job, and the run should still add the rest.
+// addBoards persists the probed-live boards at status='pending'. A duplicate is counted, not an
+// error: a concurrent harvest or curator landing the same board first is the unique index doing
+// its job.
 func addBoards(ctx context.Context, repo boardcatalog.Repository, provider string, kept []entry) int {
 	ins := boardcatalog.NewInserter(repo, sources.All(sources.NewClient()))
 	added, duplicate := 0, 0
@@ -201,9 +205,8 @@ func addBoards(ctx context.Context, repo boardcatalog.Repository, provider strin
 			log.Printf("harvest-boards: add %s/%s: %v", provider, e.Board, err)
 			return 1
 		case b.Status == boardcatalog.StatusRejected:
-			// Validation refused a board the prober just watched return jobs through its
-			// own adapter. That is a bug in the harvest, not a bad seed — stop rather
-			// than store more of whatever produced it.
+			// Validation refused a board the prober just watched return jobs through its own adapter. That
+			// is a harvest bug, not a bad seed: stop rather than store more of what produced it.
 			log.Printf("harvest-boards: %s/%s rejected by validation: %s", provider, e.Board, b.RejectedReason)
 			return 1
 		default:
@@ -215,10 +218,8 @@ func addBoards(ctx context.Context, repo boardcatalog.Repository, provider strin
 }
 
 // resolveCandidates supplies a run's candidate board ids. With no seed file the prober must
-// support discovery and enumerates its own candidates from the platform API; otherwise the
-// candidates come from the seed file, mapped through the prober. This is the only step that
-// differs between a discovery provider and a seed-list one — dedup, probe, and append are
-// shared downstream.
+// support discovery and enumerates its own candidates; otherwise they come from the seed file,
+// mapped through the prober.
 func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath string) ([]string, map[string]expectation, error) {
 	if seedPath == "" {
 		d, ok := p.(discoverer)
@@ -258,7 +259,7 @@ func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath str
 
 // resolveSeeds maps every token through a seedResolver, one at a time over the run's paced
 // client, leaving "" where a token names no board. A failed resolution is logged and skipped
-// like a failed probe: one unreadable posting must not abort the harvest.
+// like a failed probe.
 func resolveSeeds(ctx context.Context, r seedResolver, c httpClient, tokens []string) []string {
 	boards := make([]string, len(tokens))
 	failed := 0
@@ -277,17 +278,13 @@ func resolveSeeds(ctx context.Context, r seedResolver, c httpClient, tokens []st
 
 // probeAll probes every candidate concurrently (bounded), returning the live boards as
 // emit-ready entries sorted by board, the number of candidates whose probe errored, and the
-// number rejected because the board did not match what the seed expected of it.
-// A probe error is logged and the candidate skipped, so one dead board never aborts the
-// harvest; the caller uses the failure count to fail the run when EVERY probe errored
-// (a broken probe or outage, not a legitimately empty harvest). expected supplies what the
-// seed claims about each candidate: the employer it should belong to, which gates the board
-// when the platform reports a name of its own and labels it when it reports none
+// number rejected because the board did not match what the seed expected. A probe error is
+// logged and the candidate skipped; the caller fails the run when EVERY probe errored. expected
+// supplies what the seed claims about each candidate: the employer it should belong to, which
+// gates the board when the platform reports a name and labels it when it reports none
 // (chooseCompany), and/or the id of a posting the board should carry.
-//
-// Mismatches are counted apart from failures because they mean something else entirely — a
-// dead board is noise, while a wave of mismatches means the candidates or the prober's name
-// extraction are wrong, and burying them in the failure count would hide that.
+// Mismatches are counted apart from failures: a wave of mismatches means the candidates or the
+// prober's name extraction are wrong, which the failure count would hide.
 func probeAll(ctx context.Context, client httpClient, p prober, candidates []string, expected map[string]expectation, workers int) ([]entry, int, int) {
 	sem := make(chan struct{}, workers)
 	var (

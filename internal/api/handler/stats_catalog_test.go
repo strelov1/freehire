@@ -20,10 +20,7 @@ type stubEstimator struct {
 func (s stubEstimator) EstimateOpenJobs(context.Context) (int64, error) { return s.value, s.err }
 
 func catalogApp(c cache.Cache, est catalogstats.Estimator) *fiber.App {
-	h := &statsHandlers{cache: c, estimator: est}
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/stats/catalog", h.CatalogScale)
-	return app
+	return statsTestApp(&statsHandlers{cache: c, estimator: est})
 }
 
 func publishedSnapshot() catalogstats.Snapshot {
@@ -54,7 +51,7 @@ func TestCatalogScale_ServesThePublishedSnapshot(t *testing.T) {
 	}
 
 	app := catalogApp(c, stubEstimator{value: 9_999_999})
-	status, body := doGet(t, app, "/stats/catalog")
+	status, body := doGet(t, app, "/api/v1/stats/catalog")
 
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
@@ -86,7 +83,7 @@ func TestCatalogScale_ServesThePublishedSnapshot(t *testing.T) {
 // than one showing an estimate it labels as such.
 func TestCatalogScale_DegradesRatherThanFailing(t *testing.T) {
 	app := catalogApp(cache.NewMemory(), stubEstimator{value: 3_150_000})
-	status, body := doGet(t, app, "/stats/catalog")
+	status, body := doGet(t, app, "/api/v1/stats/catalog")
 
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 on a cold cache", status)
@@ -107,7 +104,7 @@ func TestCatalogScale_DegradesRatherThanFailing(t *testing.T) {
 
 func TestCatalogScale_SurvivesEverythingFailing(t *testing.T) {
 	app := catalogApp(cache.NewMemory(), stubEstimator{err: errors.New("database down")})
-	status, _ := doGet(t, app, "/stats/catalog")
+	status, _ := doGet(t, app, "/api/v1/stats/catalog")
 
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 even with no figure available", status)

@@ -3,17 +3,14 @@ import { findFirstUnconfirmed, sortNeedsAttentionFirst } from './experienceBank'
 import type { ExperienceAtom, ExperienceBank, ExperienceEmploymentWithAtoms } from './types';
 
 function atom(id: string, provenance: ExperienceAtom['provenance'] = 'manual'): ExperienceAtom {
-  return { id, claim: `claim ${id}`, provenance };
+  return { id, claim: `claim ${id}`, provenance, needs_context: false, needs_metrics: false };
 }
 
 function employment(id: string, atoms: ExperienceAtom[]): ExperienceEmploymentWithAtoms {
   return { id, kind: 'job', company: `company ${id}`, atoms };
 }
 
-function bank(
-  employments: ExperienceEmploymentWithAtoms[],
-  unplaced: ExperienceAtom[] = [],
-): ExperienceBank {
+function bank(employments: ExperienceEmploymentWithAtoms[], unplaced: ExperienceAtom[] = []): ExperienceBank {
   return { employments, unplaced };
 }
 
@@ -28,18 +25,13 @@ describe('findFirstUnconfirmed', () => {
   });
 
   it('picks the leftmost of two unconfirmed atoms under the same employment', () => {
-    const b = bank([
-      employment('e1', [atom('a1'), atom('a2', 'agent_inferred'), atom('a3', 'agent_inferred')]),
-    ]);
+    const b = bank([employment('e1', [atom('a1'), atom('a2', 'agent_inferred'), atom('a3', 'agent_inferred')])]);
 
     expect(findFirstUnconfirmed(b)).toEqual({ employmentId: 'e1', atomId: 'a2' });
   });
 
   it('finds an unconfirmed atom under a later employment when earlier ones have none', () => {
-    const b = bank([
-      employment('e1', [atom('a1')]),
-      employment('e2', [atom('a2'), atom('a3', 'agent_inferred')]),
-    ]);
+    const b = bank([employment('e1', [atom('a1')]), employment('e2', [atom('a2'), atom('a3', 'agent_inferred')])]);
 
     expect(findFirstUnconfirmed(b)).toEqual({ employmentId: 'e2', atomId: 'a3' });
   });

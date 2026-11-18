@@ -11,7 +11,6 @@
   let { item }: { item: BuddyFeedItem } = $props();
 
   const lines = $derived(buddyJobLines(item));
-
 </script>
 
 {#snippet body()}
@@ -26,11 +25,17 @@
 {/snippet}
 
 {#if item.job_slug}
-  <a href={resolve('/jobs/[slug]', { slug: item.job_slug })} class="group flex items-center gap-3 rounded-lg bg-muted px-3 py-2.5 transition-colors hover:bg-accent">
+  <a
+    href={resolve('/jobs/[slug]', { slug: item.job_slug })}
+    class="group flex items-center gap-3 rounded-lg bg-muted px-3 py-2.5 transition-colors hover:bg-accent"
+  >
     {@render body()}
   </a>
 {:else}
-  <a href={resolve('/companies/[slug]', { slug: item.company.slug })} class="group flex items-center gap-3 rounded-lg bg-muted px-3 py-2.5 transition-colors hover:bg-accent">
+  <a
+    href={resolve('/companies/[slug]', { slug: item.company.slug })}
+    class="group flex items-center gap-3 rounded-lg bg-muted px-3 py-2.5 transition-colors hover:bg-accent"
+  >
     {@render body()}
   </a>
 {/if}

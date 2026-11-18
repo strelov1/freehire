@@ -14,36 +14,19 @@ import (
 	"github.com/strelov1/freehire/internal/job/liveness"
 )
 
-// 4dayweek's list feed (/api/v2/jobs) names its whole catalogue, but the adapter is not
-// fullCatalog, so its sweep is company-scoped and the last posting of a company that leaves the
-// feed stays open. This is that leak's evidence path. (Measured 2026-10-29, a third of the open
-// rows gone unseen still answered 200; those were listed all along, under employers the
-// coverage gate keeps out of the write path — which refreshed none of them until
-// pipeline.CoveredRefresher, 2026-10-30.)
+// 4dayweek's list feed names its whole catalogue, but the adapter is not fullCatalog, so its sweep is company-scoped and the last posting of a company that leaves the feed stays open. This is that leak's evidence path.
 //
-// What it reads is the per-posting API, keyed on the slug: /api/v2/jobs/<slug> answers 200
-// with the posting while 4dayweek has it and 404 {"error":{"code":404,"message":"Job not
-// found"}} once it is gone. It is the path robots.txt allows (/api/v2) and ~7 KB against the
-// job page's ~250 KB, and the page offers no better signal: a removed posting's page answers
-// the same 404, and a kept one renders as live either way: on 120 stale rows read both ways the
-// two agreed on every one (77 gone, 43 live). The external id (a UUID) is NOT a key this API accepts — it answers 404 for
-// a live posting asked that way — so the slug comes from the stored url.
+// It reads the per-posting API keyed on the slug: /api/v2/jobs/<slug> answers 200 while 4dayweek has the posting and 404 once it is gone. That is the path robots.txt allows, and ~7 KB against the page's ~250 KB; the page offers no better signal. The external id (a UUID) is NOT a key this API accepts (it answers 404 for a live posting), so the slug comes from the stored url.
 //
-// The site sits behind Cloudflare, which refuses every self-identifying client (see
-// sources.BrowserUserAgent), and meters by IP. The crawl reads the list from the same host, so
-// the pass goes one request at a time and stops at the first 403 or 429 (see applyPaced).
+// The site sits behind Cloudflare, which refuses every self-identifying client (see sources.BrowserUserAgent) and meters by IP. The crawl reads the list from the same host, so the pass goes one request at a time and stops at the first 403 or 429 (see applyPaced).
 
 // fourDayWeekJobAPI is the per-posting API, keyed by slug.
 const fourDayWeekJobAPI = "https://4dayweek.io/api/v2/jobs/%s"
 
 const (
-	// fourDayWeekProbeInterval spaces 4dayweek probes. 376 sequential API requests at one a
-	// second from the crawl host drew no refusal (2026-10-29); the job PAGE at the same pace
-	// drew a few 429s in 120, and four pages in flight drew them on most requests.
+	// fourDayWeekProbeInterval spaces 4dayweek probes. One API request a second drew no refusal; the job PAGE at that pace drew 429s, and concurrent pages drew them on most requests.
 	fourDayWeekProbeInterval = time.Second
-	// fourDayWeekMaxProbesPerRun bounds one run to 50 minutes. ~22k 4dayweek postings were
-	// past the sweep window when this landed, so a first read of each takes under four days at
-	// two runs a day; a row read Expired once is re-read first on the next run (see applyPaced).
+	// fourDayWeekMaxProbesPerRun bounds one run to 50 minutes. A row read Expired once is re-read first on the next run (see applyPaced).
 	fourDayWeekMaxProbesPerRun = 3000
 )
 

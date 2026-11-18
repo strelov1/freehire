@@ -130,8 +130,7 @@ func newSurfaceVariant(canonical, display string) surfaceVariant {
 
 // surfaceIndex compiles interchangeableSurfaces once at startup, and proseDisplays is the
 // ProseSurfaces answer materialised alongside it — that one is read per canonical per prose
-// string during an alignment, and rebuilding the slice there was the dominant cost of the
-// whole pass.
+// string during an alignment, so it is built once rather than per call.
 //
 // Each canonical's variants are ordered longest-first, so a vacancy that writes both
 // "Kubernetes" and "k8s" resolves to the fuller spelling, and prose rewriting cannot match

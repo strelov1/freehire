@@ -10,13 +10,11 @@ import (
 // Invite renders a booking as an iCalendar object (RFC 5545), the thing a mail client
 // turns into an "add to calendar" button.
 //
-// internal/application/ical does NOT do this — it PARSES incoming invitations, for the
-// calendar sync and the mail reader. Writing one is the opposite direction, shares no
-// code with reading one, and has exactly one caller, so it lives here. If a second
-// feature ever needs to write invitations, this file is what moves.
+// internal/application/ical only parses invitations; writing one shares no code with it,
+// so it lives here.
 //
-// Four rules decide almost everything below, and each is a way a calendar client
-// silently does the wrong thing rather than reporting an error:
+// Four rules, each a way a calendar client silently misbehaves instead of reporting an
+// error:
 //
 //   - Lines end with CRLF. Bare newlines are rejected by some clients and mis-parsed by
 //     others.
@@ -119,9 +117,8 @@ func inviteDescription(b Booking) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// icalTime renders an instant as UTC in iCalendar's basic format. UTC always, never a
-// local time with a TZID: a floating or zone-qualified time means shipping the zone
-// definition too, and the instant is the only thing both parties agree on anyway.
+// icalTime renders an instant as UTC in iCalendar's basic format; a TZID would mean
+// shipping the zone definition too.
 func icalTime(at time.Time) string {
 	if at.IsZero() {
 		at = time.Now()
@@ -149,10 +146,8 @@ const maxLineOctets = 75
 // foldLine breaks a long content line the way RFC 5545 requires: at most 75 octets, with
 // each continuation beginning with one space.
 //
-// It counts octets and steps by RUNE, which is the whole subtlety. The limit is a byte
-// limit, but splitting between the bytes of a multi-byte character corrupts it — a
-// description in Cyrillic is half the characters per line and twice as likely to land on
-// a boundary, so this is not a theoretical case.
+// It counts octets but steps by rune: the limit is in bytes, but splitting inside a
+// multi-byte character corrupts it.
 func foldLine(line string) string {
 	if len(line) <= maxLineOctets {
 		return line

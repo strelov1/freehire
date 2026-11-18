@@ -58,7 +58,7 @@ func TestParse_CentralEasternEuropeTitles(t *testing.T) {
 		{"Systémoví analytici", "business_analysis"},
 		{"Specialisté v oblasti testování softwaru a příbuzní pracovníci", "qa"},
 		{"Špecialisti v oblasti databáz a počítačových sietí inde neuvedení", "network_engineering"},
-		{"Systémoví administrátoři, správci počítačových sítí", "devops"},
+		{"Systémoví administrátoři, správci počítačových sítí", "system_administration"},
 		{"Operátor výroby", "manufacturing"},
 		{"Skladník", "logistics"},
 		// Croatian.
@@ -81,7 +81,7 @@ func TestParse_CentralEasternEuropeTitles(t *testing.T) {
 		{"Асистент відділу маркетингу", "marketing"},
 		{"Сътрудник Продажби", "sales"},
 		{"Тест Інженер", "qa"},
-		{"Системний адміністратор", "devops"},
+		{"Системний адміністратор", "system_administration"},
 		{"Адміністратор баз даних (Oracle)", "devops"},
 		// A bank's cashier is the teller.
 		{"Менеджер - касир відділення банку", "finance"},

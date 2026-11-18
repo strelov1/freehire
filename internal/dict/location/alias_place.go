@@ -7,24 +7,22 @@ import (
 	"sync"
 )
 
-// GeoNames lists a town's old, foreign and colloquial names among its aliases, and the
-// city table hands an alias to the most populous place carrying it (loadCityDict). That
-// is right for the names people still write — "Calcutta", "Bombay", "Peking" — and wrong
-// for a name a big city carried once and a smaller town carries now: "Harrison" was
-// Scranton's name until 1851 and is a town in New Jersey today, "Morton" an old name of
-// Mandan and a town in Illinois, "Frisco" San Francisco's nickname and a city in Texas.
-// Nothing in the dataset tells the two kinds apart — cities1000 carries no flag saying
-// which alternate names are historical — but a location line usually does: it states the
-// country and, in North America, the state. addAliasCity holds a city read through an
-// alias to that statement.
+// GeoNames lists a town's old and colloquial names among its aliases, and the city
+// table gives an alias to the most populous place carrying it (loadCityDict). That
+// is right for names people still write ("Calcutta", "Peking") and wrong for a name
+// a big city carried once and a smaller town carries now ("Harrison" was Scranton's
+// name until 1851 and is a town in New Jersey; "Frisco" is also a city in Texas).
+// The dataset cannot tell the two apart, but a location line usually states the
+// country and, in North America, the state; addAliasCity holds an alias-read city
+// to that statement.
 
 // addAliasCity adds to cities the city a line names through tok, an alias of the
 // differently named place ce, given the line's countries and its location segment's
 // US/CA subdivision codes — or nothing, when it names none.
 //
 // A line that states ce's country keeps ce unless the segment also states subdivisions
-// of that country and ce lies in none of them; then the town called tok in a stated subdivision
-// is the city, or there is none ("Harrison, NJ" is Harrison, not Scranton, PA). A line
+// of that country and ce lies in none of them; then the town called tok in a stated
+// subdivision is the city, or there is none ("Harrison, NJ" is Harrison, not Scranton, PA). A line
 // that states other countries names that country's own place of the name, when it has
 // exactly one, and never ce ("Bombay, NY" is not Mumbai). A line that states no country
 // keeps ce only when the alias is uncontested: a contested one waits for a country.
@@ -98,9 +96,8 @@ func placeInSubdivision(name, country string, subs []string) bool {
 
 // townIn returns the US/CA place of the city table called tok in one of the
 // subdivisions of country; "" when there is none, or when two differently named places
-// qualify. Only a place's OWN name counts — an alias here would repeat the reading being
-// corrected one state down ("Newton, NC" would be Wilmington, whose old name it is) — but
-// spelt the way the line spells it: "St Petersburg, FL" is St. Petersburg.
+// qualify. Only a place's OWN name counts (an alias would repeat the misreading one
+// state down: "Newton, NC" would be Wilmington), spelt the way the line spells it.
 func townIn(tok, country string, subs []string) string {
 	found := ""
 	for _, name := range northAmericanTowns()[[2]string{townKey(tok), country}] {
@@ -153,9 +150,8 @@ var placeSubdivisions = sync.OnceValue(func() map[[2]string]map[string]bool {
 	return out
 })
 
-// northAmericanTowns maps a townKey and a country (us, ca) to the display names of the
-// city table's places whose own name it is — every one of them, not first-wins like
-// cityDict, since the stated subdivision is what picks among them.
+// northAmericanTowns maps a townKey and a country (us, ca) to every city-table place
+// whose own name it is (not first-wins like cityDict: the stated subdivision picks).
 var northAmericanTowns = sync.OnceValue(func() map[[2]string][]string {
 	out := map[[2]string][]string{}
 	sc := bufio.NewScanner(strings.NewReader(citiesTSV))

@@ -14,17 +14,14 @@
   // this viewer's match. Offering the text alternative is the caller's job — only it
   // knows which invitation applies, and where it can sit without joining the accessible
   // name of a card-wide link.
-  let {
-    match,
-    blurred = false,
-  }: { match: ClientMatch | null; blurred?: boolean } = $props();
+  let { match, blurred = false }: { match: ClientMatch | null; blurred?: boolean } = $props();
 </script>
 
 {#if match}
   <div
     class={[
       'mt-3 flex items-center gap-2 border-t border-dashed border-border pt-2.5',
-      blurred && 'pointer-events-none select-none opacity-90 blur-[1.5px]',
+      blurred && 'pointer-events-none select-none opacity-50 grayscale blur-[1.5px]',
     ]}
     aria-hidden={blurred ? 'true' : undefined}
   >

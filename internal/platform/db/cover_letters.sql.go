@@ -12,7 +12,7 @@ import (
 )
 
 const getCoverLetter = `-- name: GetCoverLetter :one
-SELECT body, cited_atom_ids, language, model, created_at, updated_at
+SELECT body, cited_atom_ids, language, model, created_at, updated_at, evidence_revision, evidence_fingerprint
 FROM cover_letters
 WHERE user_id = $1 AND job_id = $2
 `
@@ -23,12 +23,14 @@ type GetCoverLetterParams struct {
 }
 
 type GetCoverLetterRow struct {
-	Body         string             `json:"body"`
-	CitedAtomIds []pgtype.UUID      `json:"cited_atom_ids"`
-	Language     string             `json:"language"`
-	Model        string             `json:"model"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	Body                string             `json:"body"`
+	CitedAtomIds        []pgtype.UUID      `json:"cited_atom_ids"`
+	Language            string             `json:"language"`
+	Model               string             `json:"model"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	EvidenceRevision    int64              `json:"evidence_revision"`
+	EvidenceFingerprint string             `json:"evidence_fingerprint"`
 }
 
 // The caller's current cover letter for one vacancy, with the two staleness stamps it was
@@ -47,28 +49,118 @@ func (q *Queries) GetCoverLetter(ctx context.Context, arg GetCoverLetterParams) 
 		&i.Model,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EvidenceRevision,
+		&i.EvidenceFingerprint,
 	)
 	return i, err
 }
 
+const getCoverLetterEvidence = `-- name: GetCoverLetterEvidence :one
+SELECT revision, atom_ids FROM cover_letter_evidence WHERE user_id = $1 AND job_id = $2
+`
+
+type GetCoverLetterEvidenceParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+type GetCoverLetterEvidenceRow struct {
+	Revision int64         `json:"revision"`
+	AtomIds  []pgtype.UUID `json:"atom_ids"`
+}
+
+func (q *Queries) GetCoverLetterEvidence(ctx context.Context, arg GetCoverLetterEvidenceParams) (GetCoverLetterEvidenceRow, error) {
+	row := q.db.QueryRow(ctx, getCoverLetterEvidence, arg.UserID, arg.JobID)
+	var i GetCoverLetterEvidenceRow
+	err := row.Scan(&i.Revision, &i.AtomIds)
+	return i, err
+}
+
+const saveCoverLetterEvidence = `-- name: SaveCoverLetterEvidence :one
+INSERT INTO cover_letter_evidence (user_id,job_id,revision,atom_ids)
+SELECT $1,$2,1,$3::uuid[]
+WHERE $4::bigint = 0
+ON CONFLICT (user_id,job_id) DO NOTHING
+RETURNING revision,atom_ids
+`
+
+type SaveCoverLetterEvidenceParams struct {
+	UserID           int64         `json:"user_id"`
+	JobID            int64         `json:"job_id"`
+	AtomIds          []pgtype.UUID `json:"atom_ids"`
+	ExpectedRevision int64         `json:"expected_revision"`
+}
+
+type SaveCoverLetterEvidenceRow struct {
+	Revision int64         `json:"revision"`
+	AtomIds  []pgtype.UUID `json:"atom_ids"`
+}
+
+func (q *Queries) SaveCoverLetterEvidence(ctx context.Context, arg SaveCoverLetterEvidenceParams) (SaveCoverLetterEvidenceRow, error) {
+	row := q.db.QueryRow(ctx, saveCoverLetterEvidence,
+		arg.UserID,
+		arg.JobID,
+		arg.AtomIds,
+		arg.ExpectedRevision,
+	)
+	var i SaveCoverLetterEvidenceRow
+	err := row.Scan(&i.Revision, &i.AtomIds)
+	return i, err
+}
+
+const updateCoverLetterEvidence = `-- name: UpdateCoverLetterEvidence :one
+UPDATE cover_letter_evidence SET revision = revision + 1, atom_ids = $1::uuid[]
+WHERE user_id = $2 AND job_id = $3
+ AND revision = $4::bigint
+RETURNING revision,atom_ids
+`
+
+type UpdateCoverLetterEvidenceParams struct {
+	AtomIds          []pgtype.UUID `json:"atom_ids"`
+	UserID           int64         `json:"user_id"`
+	JobID            int64         `json:"job_id"`
+	ExpectedRevision int64         `json:"expected_revision"`
+}
+
+type UpdateCoverLetterEvidenceRow struct {
+	Revision int64         `json:"revision"`
+	AtomIds  []pgtype.UUID `json:"atom_ids"`
+}
+
+func (q *Queries) UpdateCoverLetterEvidence(ctx context.Context, arg UpdateCoverLetterEvidenceParams) (UpdateCoverLetterEvidenceRow, error) {
+	row := q.db.QueryRow(ctx, updateCoverLetterEvidence,
+		arg.AtomIds,
+		arg.UserID,
+		arg.JobID,
+		arg.ExpectedRevision,
+	)
+	var i UpdateCoverLetterEvidenceRow
+	err := row.Scan(&i.Revision, &i.AtomIds)
+	return i, err
+}
+
 const upsertCoverLetter = `-- name: UpsertCoverLetter :exec
-INSERT INTO cover_letters (user_id, job_id, body, cited_atom_ids, language, model, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, now(), now())
+INSERT INTO cover_letters (user_id, job_id, body, cited_atom_ids, language, model, created_at, updated_at, evidence_revision, evidence_fingerprint)
+VALUES ($1, $2, $3, $4, $5, $6, now(), now(), $7, $8)
 ON CONFLICT (user_id, job_id) DO UPDATE
 SET body           = EXCLUDED.body,
     cited_atom_ids = EXCLUDED.cited_atom_ids,
     language       = EXCLUDED.language,
     model          = EXCLUDED.model,
+ evidence_revision = EXCLUDED.evidence_revision,
+ evidence_fingerprint = EXCLUDED.evidence_fingerprint,
     updated_at     = now()
 `
 
 type UpsertCoverLetterParams struct {
-	UserID       int64         `json:"user_id"`
-	JobID        int64         `json:"job_id"`
-	Body         string        `json:"body"`
-	CitedAtomIds []pgtype.UUID `json:"cited_atom_ids"`
-	Language     string        `json:"language"`
-	Model        string        `json:"model"`
+	UserID              int64         `json:"user_id"`
+	JobID               int64         `json:"job_id"`
+	Body                string        `json:"body"`
+	CitedAtomIds        []pgtype.UUID `json:"cited_atom_ids"`
+	Language            string        `json:"language"`
+	Model               string        `json:"model"`
+	EvidenceRevision    int64         `json:"evidence_revision"`
+	EvidenceFingerprint string        `json:"evidence_fingerprint"`
 }
 
 // Create-or-replace the current letter for a (user, job). The composite PRIMARY KEY makes
@@ -88,6 +180,8 @@ func (q *Queries) UpsertCoverLetter(ctx context.Context, arg UpsertCoverLetterPa
 		arg.CitedAtomIds,
 		arg.Language,
 		arg.Model,
+		arg.EvidenceRevision,
+		arg.EvidenceFingerprint,
 	)
 	return err
 }

@@ -21,7 +21,9 @@
       <span class="font-medium text-destructive">{s.closed}</span>
     {/if}
     {#if job?.application_deadline}
-      <span class="text-muted-foreground">{s.applyBy} <time datetime={job.application_deadline}>{job.application_deadline}</time></span>
+      <span class="text-muted-foreground"
+        >{s.applyBy} <time datetime={job.application_deadline}>{job.application_deadline}</time></span
+      >
       {#if !job.closed_at}
         <span class="text-muted-foreground">{remaining(job.application_deadline)}</span>
       {/if}

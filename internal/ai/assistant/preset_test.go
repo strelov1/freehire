@@ -11,7 +11,7 @@ import (
 // instructions and another's tools — the model would then be told about tools it
 // cannot call. One exported normaliser is what keeps the two answers the same.
 func TestNormalizePresetMapsTheUnrecognisedToChat(t *testing.T) {
-	for _, known := range []string{PresetChat, PresetTailor, PresetProfile, PresetBrowse, PresetInterview, PresetDebrief, PresetApply} {
+	for _, known := range []string{PresetChat, PresetTailor, PresetProfile, PresetBrowse, PresetInterview, PresetDebrief, PresetApply, PresetSupport} {
 		if got := NormalizePreset(known); got != known {
 			t.Errorf("NormalizePreset(%q) = %q, want it unchanged", known, got)
 		}
@@ -38,7 +38,7 @@ func TestOnlyTheChatPresetIsToldAboutMail(t *testing.T) {
 	if !strings.Contains(SystemPrompt(PresetChat, "en"), "inbox_overview") {
 		t.Error("the chat prompt does not mention the mail tools it carries")
 	}
-	for _, preset := range []string{PresetBrowse, PresetTailor, PresetProfile, PresetInterview, PresetDebrief, PresetApply} {
+	for _, preset := range []string{PresetBrowse, PresetTailor, PresetProfile, PresetInterview, PresetDebrief, PresetApply, PresetSupport} {
 		if strings.Contains(SystemPrompt(preset, "en"), "inbox_overview") {
 			t.Errorf("the %q prompt talks about mail, but that preset registers no mail tool", preset)
 		}

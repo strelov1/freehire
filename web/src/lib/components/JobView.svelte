@@ -1,66 +1,37 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { resolve } from '$app/paths';
-  import { page } from '$app/state';
   import { untrack } from 'svelte';
-  import {
-    ArrowRight,
-    Bookmark,
-    Check,
-    CheckCircle2,
-    CircleSlash,
-    Clock,
-    ExternalLink,
-    Eye,
-    Flag,
-    MessageSquare,
-    RefreshCw,
-    SquarePen,
-  } from '@lucide/svelte';
-  import { ApiError, api } from '#lib/api.js';
-  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import { ArrowRight, SquarePen } from '@lucide/svelte';
+  import JobActionStrip from './JobActionStrip.svelte';
+  import JobSaveButton from './JobSaveButton.svelte';
+  import JobAsides from './JobAsides.svelte';
+  import JobTitle from './JobTitle.svelte';
+  import JobTabPanels from './JobTabPanels.svelte';
+  import { api } from '#lib/api.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
-  import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
-  import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
-  import { formatSalary, summaryFacets } from '#lib/enrichment.js';
-  import { freshnessBadges } from '#lib/freshness.js';
-  import { markViewed } from '#lib/viewedJobs.svelte.js';
-  import { markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
-  import {
-    ensureAppliedCompaniesLoaded,
-    hasAppliedToCompany,
-    markAppliedToCompany,
-  } from '#lib/appliedCompanies.svelte.js';
+  import { ensureAppliedCompaniesLoaded, hasAppliedToCompany } from '#lib/appliedCompanies.svelte.js';
   import { track } from '#lib/analytics.js';
   import { foreignContentLang } from '#lib/seo.js';
-  import { roleAddressExists, seniorityLabel } from '#lib/insights.js';
-  import { categoryLabel } from '#lib/labels.js';
   import type { Display } from '#lib/generated/contracts.js';
-  import type { Job, MatchAnalysisResponse, PlanState, UserJob } from '#lib/types.js';
-  import { companyLogoUrl } from '#lib/logo.js';
+  import type { Job } from '#lib/types.js';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { Button, Chip, EntityLogo, TabStrip, tabStripId } from '#lib/ui/index.js';
-  import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { formatDate, formatDateOrAgo, formatDateTime } from '#lib/utils.js';
-  import BackerBadge from './BackerBadge.svelte';
-  import CountryFlagStack from './CountryFlagStack.svelte';
-  import JobApplyForm, { applyFormWorthShowing } from './JobApplyForm.svelte';
-  import JobCompanyPanel from './JobCompanyPanel.svelte';
-  import JobSourceRow from './JobSourceRow.svelte';
-  import JobDescription from './JobDescription.svelte';
-  import JobMatch from './JobMatch.svelte';
-  import { supersedesReality } from '#lib/ghost.js';
-  import GhostChecklist from './GhostChecklist.svelte';
-  import AIInterviewBadge from './AIInterviewBadge.svelte';
-  import DirectApplyBadge from './DirectApplyBadge.svelte';
-  import AppliedCompanyBadge from './AppliedCompanyBadge.svelte';
-  import RealityBadge from './RealityBadge.svelte';
-  import ReferralBlock from './ReferralBlock.svelte';
-  import MentorBlock from './MentorBlock.svelte';
+  import { Button, TabStrip } from '#lib/ui/index.js';
+  import JobFactsCard from './JobFactsCard.svelte';
+  import JobPinnedHeader from './JobPinnedHeader.svelte';
+  import JobApplyNotices from './JobApplyNotices.svelte';
+  import JobSignInGate from './JobSignInGate.svelte';
+  import { JobTailor } from '#lib/jobTailor.svelte.js';
+  import { LazyDialog } from '#lib/lazyDialog.svelte.js';
+  import { JobAutoApply } from './jobAutoApply.svelte';
+  import { JobInteraction } from './jobInteraction.svelte';
+  import { JobContentTabs } from './jobContentTabs.svelte';
+  import JobPeopleLinks from './JobPeopleLinks.svelte';
+  import JobPostingMeta from './JobPostingMeta.svelte';
+  import JobScrollPadding from './JobScrollPadding.svelte';
+  import JobProvenanceLine from './JobProvenanceLine.svelte';
+  import JobClosedNotice from './JobClosedNotice.svelte';
   import ReportDialog from './ReportDialog.svelte';
-  import SkillChip from './SkillChip.svelte';
-  import VoteControl from './VoteControl.svelte';
 
   // The job is server-rendered: it arrives as a prop from the route's `load`, so
   // the article's content is in the initial HTML. Only the per-user interactions
@@ -81,41 +52,13 @@
   // Save stays: keeping a closed posting for reference is still a reasonable thing to do.
   const closed = $derived(job.closed_at != null);
 
-  // Both facets live under `enrichment` on the wire (jobview sets them from the
-  // dictionary columns), and either can be absent.
-  const roleCategory = $derived(job.enrichment?.category ?? '');
-  const roleSeniority = $derived(job.enrichment?.seniority ?? '');
-
   // Set on the two subtrees below that carry the posting's own words; undefined
   // (so unset) when it is English. See foreignContentLang for why the document
   // stays `en` regardless.
   const contentLang = $derived(foreignContentLang(job));
 
-  // The signed-in user's interaction with this job (null when signed out or not
-  // yet loaded). `showApplyPrompt` is the post-click "Did you apply?" question.
-  let interaction = $state.raw<UserJob | null>(null);
-  let showApplyPrompt = $state(false);
-  // The signed-in user's own plan (null when signed out or not yet loaded), fetched
-  // alongside `interaction` below — auto-apply is the one caller-scoped feature on this
-  // page whose visibility (not just its outcome) depends on the plan tier.
-  let userPlan = $state.raw<PlanState | null>(null);
-  const isPro = $derived(userPlan?.plan === 'pro' || userPlan?.plan === 'ultra');
-  // Open-thread count for the "Discussion · N" badge; loaded client-side so the
-  // page renders immediately and the number fills in. Failures leave it hidden.
-  let threadCount = $state<number | null>(null);
-  $effect(() => {
-    let alive = true;
-    api
-      .countThreads('job', job.public_slug)
-      .then((n) => alive && (threadCount = n))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  });
-  // Set after the user confirms "Yes" on the apply prompt: surfaces a one-tap
-  // link to the Tracking board where the job now sits. Reset when the job changes.
-  let justApplied = $state(false);
+  // The signed-in user's interaction with this job (see JobInteraction).
+  const tracking = new JobInteraction(() => job);
   // Signed-out gate: the "Apply" click offers sign-in before opening the posting.
   let showSignInPrompt = $state(false);
   let mobileSignInFeedback: HTMLDivElement | undefined = $state();
@@ -124,141 +67,37 @@
   // The application form of a vacancy its employer publishes here (job.direct_apply). The
   // dialog is imported on the click that opens it, like ReferralBlock's modal: only those
   // few vacancies ever show it, so it stays out of every other job page's module graph.
-  type DirectApplyDialogComponent = typeof import('./DirectApplyDialog.svelte').default;
-  let DirectApplyDialog = $state.raw<DirectApplyDialogComponent | null>(null);
-  let showDirectApply = $state(false);
-  let loadingDirectApply = $state(false);
+  const directApply = new LazyDialog(() => import('./DirectApplyDialog.svelte'));
+  const referralMessage = new LazyDialog(() => import('./ReferralMessageDialog.svelte'));
+
+  /** Load the drafting dialog only when a signed-in seeker opens it. */
+  function openReferralMessage() {
+    if (!isAuthenticated()) {
+      promptSignIn();
+      return;
+    }
+    void referralMessage.show();
+  }
   // Whether THIS candidate's application reached the employer — read from the application
   // itself, never from tracking: a vacancy marked applied by hand must still take the
   // application, and a delivered one must not offer Apply again if tracking lagged.
   let directApplied = $state(false);
-  const applied = $derived(interaction?.applied_at != null);
+  const applied = $derived(tracking.current?.applied_at != null);
   // The reader applied to this EMPLOYER before, through any of its postings. The title row
   // shows it only when this posting is not itself applied to: "Applied" already says more,
   // and both chips side by side would state one fact twice.
   const appliedToCompany = $derived(hasAppliedToCompany(job.company_slug));
-  const saved = $derived(interaction?.saved_at != null);
+  const saved = $derived(tracking.current?.saved_at != null);
 
-  // Presentational values derived from the (server-rendered) job.
-  // Both read as an age for their first day ("20 minutes ago") and as a date after it —
-  // the same label the feed's card already gives a posting, so a reader arriving from
-  // the list meets the answer in the form they just left.
-  const posted = $derived(formatDateOrAgo(job.posted_at, locale(), 'short'));
-  // When the posting's own content last changed. `jobs.updated_at` is deliberately left
-  // unstamped by the liveness refresh (internal/platform/db/queries/jobs.sql), so the column
-  // means "the words moved", not "the crawler came back" — which is the only reading that
-  // earns a line beside the posting date.
-  const updated = $derived(formatDateOrAgo(job.updated_at, locale(), 'short'));
-  const e = $derived(job.enrichment ?? {});
-  const salary = $derived(formatSalary(e, 'standard'));
-  const facets = $derived(summaryFacets(job));
-  // Engagement counters (distinct signed-in viewers / applicants), served on the
-  // job. A zero metric is omitted so the line never reads as a dead "0 views".
-  const views = $derived(job.view_count ?? 0);
-  const applies = $derived(job.applied_count ?? 0);
-  // "New" / "Be an early applicant" — see freshness.ts for why the posting date alone
-  // does not earn either.
-  const freshness = $derived(freshnessBadges(job.posted_at, job.reality, applies, job.closed_at));
-
-  // The content column is tabbed so "who are these people?" and "what will they ask
-  // me?" are answerable without leaving the posting. Page state, not a route: the
-  // company copy already has a canonical home at /companies/<slug>, and a second URL
-  // serving it would be a thin duplicate we'd then have to keep out of the index.
-  //
-  // Built per job rather than fixed, because neither of the two extra tabs is always
-  // there: a posting can arrive without a company slug, and only a few ATS platforms
-  // publish a form we can read. A tab is offered only when its panel has something in
-  // it — `applyFormWorthShowing` is the same predicate the panel itself renders on, so
-  // the two cannot disagree about whether there is anything to show.
-  type ContentTab = 'description' | 'company' | 'application';
-
-  const companySlug = $derived(job.company_slug ?? '');
-  const contentTabs: { id: ContentTab; label: string }[] = $derived([
-    { id: 'description', label: 'Description' },
-    ...(companySlug ? [{ id: 'company' as const, label: 'Company' }] : []),
-    // The screening form is pointless once the posting stops taking applications.
-    ...(!closed && applyFormWorthShowing(applyForm)
-      ? [{ id: 'application' as const, label: 'Application' }]
-      : []),
-  ]);
-  let contentTab = $state<ContentTab>('description');
+  // The content tabs: Description, Company, Application, Discussion (see JobContentTabs).
+  const tabs = new JobContentTabs(
+    () => job,
+    () => closed,
+    () => applyForm,
+  );
   // Per-instance so a second JobView on one page can't claim the same panel, which
   // would leave both strips' aria-controls pointing at the first one's panel.
   const panelId = $props.id();
-  // Reset when the visitor navigates client-side to another job: JobView is not
-  // remounted on a param change, so the Company tab would otherwise stay selected
-  // over a company they never asked about.
-  $effect(() => {
-    void job.public_slug;
-    contentTab = 'description';
-  });
-
-  // The pinned header. Once the posting's own header has scrolled under the top bar,
-  // a one-line copy of it — company, title, apply — takes its place, so "who is this
-  // for?" and the button stay a glance away through a description that routinely runs
-  // several screens.
-  //
-  // It rides a zero-height sticky rail inside an absolutely-positioned overlay, so the
-  // bar occupies no space in the flow and appearing can never shift the text under it.
-  // The obvious alternative — pinning the real header and collapsing it — cannot say
-  // that: its flow box loses ~90px the instant it pins, jerking the paragraph the
-  // reader is mid-sentence in, and again in reverse on the way back up.
-  const PINNED_HEADER_TOP = 56; // `top-14` on the rail below, and the top bar's own `h-14`.
-  let headerSentinel: HTMLElement | undefined = $state();
-  let headerPinned = $state(false);
-  $effect(() => {
-    const el = headerSentinel;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-        // `isIntersecting` alone also reads false while the sentinel is BELOW the fold,
-        // which is where it sits on a short viewport before anything has been scrolled.
-        // The rect settles which edge it left by.
-        headerPinned =
-          !entry.isIntersecting && entry.boundingClientRect.top < PINNED_HEADER_TOP;
-      },
-      { rootMargin: `-${PINNED_HEADER_TOP}px 0px 0px 0px` },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  });
-
-  // Keyboard focus must not land under a sticky bar (WCAG 2.4.11). Three of them cover the
-  // page's edges here: the site header (`h-14`, every width), the pinned header (lg, see
-  // PINNED_HEADER_TOP) and the phone's sticky apply bar. `scroll-padding` on the root is
-  // what the browser honours when it scrolls a newly focused element into view, so the
-  // page reserves both edges while it is mounted — on <html>, which is the scroller, and
-  // only for as long as this view is the page. The bottom edge is reserved only while the
-  // apply bar exists, which a closed posting does not render. The sizes are in the
-  // <style> block below, beside the media query that switches them.
-  $effect(() => {
-    const root = document.documentElement;
-    root.classList.add('job-scroll-pad');
-    root.classList.toggle('job-scroll-pad-bar', !closed);
-    const feedback = mobileSignInFeedback;
-    if (!closed && showSignInPrompt && feedback) {
-      const updateFeedbackHeight = () => {
-        const parent = feedback.parentElement;
-        const gap = parent ? Number.parseFloat(getComputedStyle(parent).rowGap) || 0 : 0;
-        root.style.setProperty(
-          '--job-scroll-pad-feedback-height',
-          `${feedback.getBoundingClientRect().height + gap}px`,
-        );
-      };
-      updateFeedbackHeight();
-      const observer = new ResizeObserver(updateFeedbackHeight);
-      observer.observe(feedback);
-      return () => {
-        observer.disconnect();
-        root.classList.remove('job-scroll-pad', 'job-scroll-pad-bar');
-        root.style.removeProperty('--job-scroll-pad-feedback-height');
-      };
-    }
-    root.style.removeProperty('--job-scroll-pad-feedback-height');
-    return () => root.classList.remove('job-scroll-pad', 'job-scroll-pad-bar');
-  });
 
   // Funnel view — captured for everyone (unlike the authed-only server record
   // below). Keyed on the slug alone so it fires once per job and never re-emits
@@ -268,42 +107,22 @@
     track('job_view', { slug, source: job.source });
   });
 
-  // The caller's plan, fetched once per signed-in session rather than per job: unlike
-  // `interaction` below it does not depend on `job.public_slug`, so navigating between job
-  // pages does not re-fetch or flicker it back to null while a plan that has not changed
-  // reloads. A failed fetch leaves it null, which the auto-apply gate above already treats
-  // the same as "not Pro" — a safe, if conservative, default rather than a broken page.
-  $effect(() => {
-    if (!isAuthenticated()) {
-      userPlan = null;
-      return;
-    }
-    let alive = true;
-    api
-      .myPlan()
-      .then((p) => alive && (userPlan = p))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  });
-
   // Record a view for signed-in users once the page hydrates (browser only).
   // Silent history that also tells us whether they
   // already applied; a failed view must not break the page. Re-runs on client
   // navigation to another job, resetting the per-user state first.
   $effect(() => {
     const slug = job.public_slug; // track the current job
-    interaction = null;
-    showApplyPrompt = false;
-    justApplied = false;
+    tracking.reset();
     showSignInPrompt = false;
-    showDirectApply = false;
+    directApply.close();
+    referralMessage.close();
     directApplied = false;
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
     untrack(ensureAppliedCompaniesLoaded);
     if (job.direct_apply) {
-      api.getDirectApplyForm(slug)
+      api
+        .getDirectApplyForm(slug)
         .then((f) => {
           if (job.public_slug === slug) directApplied = f.applied;
         })
@@ -312,13 +131,7 @@
     // The Avoid control below reads the profile's excluded_sources; without this its mark
     // would be wrong on a first load until something else happened to fetch the profile.
     untrack(() => profileStore.ensureLoaded());
-    api.recordJobView(slug)
-      .then((rec) => {
-        // Mark it locally so its card dims on back-navigation without a reload.
-        markViewed(slug);
-        if (job.public_slug === slug) interaction = rec;
-      })
-      .catch(() => {});
+    tracking.record(slug);
   });
 
   // The Apply link opens the external posting; once the user has gone to apply,
@@ -326,30 +139,15 @@
   // Signed-out visitors are gated first: the click is intercepted (the link does
   // not open) and a sign-in offer is shown instead — the posting opens only via
   // "View without signing in" below.
-  function onApplyClick(e: MouseEvent) {
+  function onApplyClick(event: MouseEvent) {
     // Apply-intent — fired regardless of auth (the CTA click is the funnel step).
     track('job_apply', { slug: job.public_slug, source: job.source });
     if (!isAuthenticated()) {
-      e.preventDefault();
+      event.preventDefault();
       showSignInPrompt = true;
       return;
     }
-    if (!applied) showApplyPrompt = true;
-  }
-
-  // Gate — "Sign up" routes to /onboarding, which bounces an anonymous visitor to
-  // /signin to register before continuing into the CV/profile wizard; "View without
-  // signing in" opens the posting in a new tab (the navigation the click was holding
-  // back).
-  function signUpFromGate() {
-    showSignInPrompt = false;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
-    void goto(onboardingUrl(page.url.pathname + page.url.search));
-  }
-
-  function signInFromGate() {
-    showSignInPrompt = false;
-    promptSignIn();
+    if (!applied) tracking.askApplied = true;
   }
 
   // A vacancy taking applications here has no outside page: Apply opens the form instead
@@ -361,62 +159,8 @@
       showSignInPrompt = true;
       return;
     }
-    if (!DirectApplyDialog) {
-      // Disabled while the chunk loads: a click that looks ignored invites a second one.
-      loadingDirectApply = true;
-      try {
-        DirectApplyDialog = (await import('./DirectApplyDialog.svelte')).default;
-      } catch {
-        // Offline or a deploy swap — leave the button live so a retry works.
-        return;
-      } finally {
-        loadingDirectApply = false;
-      }
-    }
-    showDirectApply = true;
-  }
-
-  // Build the callback from this posting before the dialog starts an asynchronous send.
-  function directAppliedCallback({ public_slug: slug, company_slug: companySlug }: Job) {
-    const userID = currentUser()?.id;
-    return () => {
-      if (currentUser()?.id !== userID) return;
-      markAppliedToCompany(companySlug);
-      track('job_track', { slug, stage: 'applied' });
-      if (job.public_slug !== slug) return;
-      directApplied = true;
-      if (interaction) interaction = { ...interaction, applied_at: interaction.applied_at ?? new Date().toISOString() };
-      justApplied = true;
-    };
-  }
-
-  function viewWithoutSignIn() {
-    showSignInPrompt = false;
-    window.open(job.url, '_blank', 'noopener,noreferrer');
-  }
-
-  async function confirmApplied() {
-    const { public_slug: slug, company_slug: companySlug } = job;
-    const userID = currentUser()?.id;
-    let result: UserJob;
-    try {
-      result = await api.markJobApplied(slug);
-    } catch {
-      // Leave the prompt up so the user can retry; nothing else to do.
-      return;
-    }
-    if (currentUser()?.id !== userID) return;
-    markAppliedToCompany(companySlug);
-    track('job_track', { slug, stage: 'applied' });
-    if (job.public_slug !== slug) return;
-    interaction = result;
-    showApplyPrompt = false;
-    justApplied = true;
-  }
-
-  // "No": purely local — the job must not enter the tracker.
-  function dismissApplyPrompt() {
-    showApplyPrompt = false;
+    // Offline or a deploy swap leaves it closed and the button live, so a retry works.
+    await directApply.show();
   }
 
   // Saving requires an account.
@@ -425,15 +169,7 @@
       promptSignIn();
       return;
     }
-    toggleSave();
-  }
-
-  // The save button's accessible name, where its visible text does not already state the
-  // effect (see the saveButton snippet).
-  function saveLabel(iconOnly: boolean): string | undefined {
-    if (saved) return 'Remove from your board';
-    if (iconOnly) return 'Save to board';
-    return undefined;
+    void tracking.toggleSave();
   }
 
   // Reporting also requires an account (the report is attributed to the user).
@@ -445,46 +181,16 @@
     showReport = true;
   }
 
-  // The discussion is members-only: a signed-out click is held back (the link
-  // does not navigate) and the sign-in page opens instead. The href stays put
-  // so the route is still SSR-linkable for signed-in visitors.
-  function onDiscussionClick(e: MouseEvent) {
-    if (!isAuthenticated()) {
-      e.preventDefault();
-      promptSignIn();
-    }
-  }
-
-  // The toggle flips on the server's answer, not optimistically: both endpoints
-  // return the full interaction, so the button can never drift from the truth.
-  async function toggleSave() {
-    try {
-      interaction = saved ? await api.unsaveJob(job.public_slug) : await api.saveJob(job.public_slug);
-      // Keep the shared saved set in sync so a browse card's bookmark reflects this
-      // on back-navigation without a reload (mirrors markViewed above).
-      if (interaction?.saved_at != null) {
-        markSaved(job.public_slug);
-        track('job_save', { slug: job.public_slug });
-      } else markUnsaved(job.public_slug);
-    } catch {
-      // Leave the current state; the user can retry.
-    }
-  }
-
   // Auto-apply (openspec/changes/auto-apply-submit-trigger): Pro (or above) and one of the
-  // ATS providers auto-apply can queue against — both are gated on VISIBILITY (isPro above),
-  // not just what happens on click. Base-CV existence is the one eligibility fact still not
-  // known client-side — the backend's own 409 is what tells a caller with no base CV why,
-  // surfaced below rather than pre-empted here.
-  let autoApplyOverrideStatus = $state<string | null>(null);
-  let autoApplySubmitting = $state(false);
-  let autoApplyError = $state<string | null>(null);
+  // ATS providers auto-apply can queue against — both are gated on VISIBILITY (the plan JobAutoApply reads),
+  // not just what happens on click.
+  const autoApplyQueue = new JobAutoApply(() => job);
   const autoApplyState = $derived(
     autoApplyButtonState(
       job.source,
-      autoApplyOverrideStatus ?? job.auto_apply_status,
+      autoApplyQueue.overrideStatus ?? job.auto_apply_status,
       applied,
-      isPro,
+      autoApplyQueue.isPro,
       closed,
     ),
   );
@@ -492,76 +198,24 @@
   // ("never two primaries; one wherever an action remains") live in autoApplyButton.ts,
   // where they unit-test without mounting this component.
   const cta = $derived(jobCtaPlan(autoApplyState));
-
-  // The cached fit analysis, read ONCE for the whole page: the CTA row's `Tailor my CV`
-  // button needs it to know whether the reader has a CV at all, and the sidebar's
-  // MatchSummary needs the analysis itself. It used to be MatchSummary's own fetch; moving
-  // the button up must not buy a second call to the same endpoint, so the read moved with
-  // it and the response goes down as a prop.
-  //
-  // Guarded on the slug the way MatchSummary guarded it, so a slow response for a previous
-  // posting cannot overwrite the current one. Never read for a guest: the endpoint is
-  // authenticated, and a rejected request per visit from one address is what got real users
-  // fail2banned once already.
-  let matchAnalysis = $state.raw<MatchAnalysisResponse | null>(null);
-  $effect(() => {
-    const forSlug = job.public_slug;
-    matchAnalysis = null;
-    if (!isAuthenticated()) return;
-    api
-      .getMatchAnalysis(forSlug)
-      .then((d) => {
-        if (forSlug === job.public_slug) matchAnalysis = d;
-      })
-      .catch(() => {});
+  const strip = $derived({
+    saved,
+    onSaveClick,
+    onReportClick,
+    applyUrl: cta.autoApply?.leads ? job.url : null,
+    applyLabel: cta.external.label,
+    onApplyClick,
   });
 
-  // Withheld only once the page KNOWS there is no CV. Unknown — a guest, or a read still in
-  // flight — still offers the button: the offer is what brings a guest to sign in, and
-  // withholding the page's primary CTA until a fetch resolves makes the row jump.
-  const canTailor = $derived(matchAnalysis?.has_cv !== false);
+  // Tailoring: the cached fit analysis, whether there is a CV, and the start (see JobTailor).
+  const tailor = new JobTailor(() => job);
 
-  // Tailoring navigates away; the confirmation dialog owns its own fetch of the
-  // deterministic skill/requirement check, so this only needs to await the yes/no. The
-  // dialog also states what the session costs and what today has left — which is why
-  // nothing beside the button does.
-  let tailoring = $state(false);
-
-  async function onTailorClick() {
+  function onAutoApplyClick() {
     if (!isAuthenticated()) {
       promptSignIn();
       return;
     }
-    if (tailoring) return;
-    tailoring = true;
-    try {
-      const ok = await askConfirmTailor(job.public_slug, `${job.title} at ${job.company}`);
-      if (ok) await goto(resolve('/tailor/[slug]', { slug: job.public_slug }));
-    } finally {
-      // Released even on the happy path, where the navigation has already left this page:
-      // a rejected `goto` would otherwise leave all THREE copies of the page's primary CTA
-      // permanently disabled with no way back. It mattered less when this was one sidebar
-      // button; it is the whole call to action now.
-      tailoring = false;
-    }
-  }
-
-  async function onAutoApplyClick() {
-    if (!isAuthenticated()) {
-      promptSignIn();
-      return;
-    }
-    autoApplyError = null;
-    autoApplySubmitting = true;
-    try {
-      await api.autoApplyJob(job.public_slug);
-      autoApplyOverrideStatus = 'queued';
-      track('job_auto_apply', { slug: job.public_slug });
-    } catch (err) {
-      autoApplyError = err instanceof ApiError ? err.message : 'Something went wrong — please try again.';
-    } finally {
-      autoApplySubmitting = false;
-    }
+    void autoApplyQueue.start();
   }
 </script>
 
@@ -571,7 +225,7 @@
      link never reads at two ranks on one page. Size and layout classes are the only
      difference, which is why they share this snippet.
      A fourth copy of the link exists and does NOT come through here: the phone-only anchor
-     in `actionStrip`, which is quiet strip furniture rather than a button. It repeats the
+     in `JobActionStrip`, which is quiet strip furniture rather than a button. It repeats the
      `rel`/`target`/handler below on purpose — see the note there.
      `external` decides only the WORD. The treatment does not vary: the brand fill belongs
      to `Tailor my CV` in every state, so this link is an outline button whether it reads
@@ -585,7 +239,13 @@
      link from every job page, which is what the SEO submissions are actually after. -->
 {#snippet applyCta(size: 'md' | 'lg', className: string, external: JobCtaPlan['external'])}
   {#if job.direct_apply}
-    <Button variant="outline" {size} onclick={onDirectApplyClick} disabled={directApplied || loadingDirectApply} class={className}>
+    <Button
+      variant="outline"
+      {size}
+      onclick={onDirectApplyClick}
+      disabled={directApplied || directApply.loading}
+      class={className}
+    >
       {directApplied ? 'Application sent' : external.label}
       {#if !directApplied}<ArrowRight class="size-4" />{/if}
     </Button>
@@ -599,33 +259,15 @@
       onclick={onApplyClick}
       class={className}
     >
-      {external.label} <ArrowRight class="size-4" />
+      {external.label}
+      <ArrowRight class="size-4" />
     </Button>
   {/if}
 {/snippet}
 
 {#snippet signInFeedback()}
   {#if showSignInPrompt}
-    <div
-      aria-live="polite"
-      class="flex flex-col gap-3 rounded-md border border-border bg-secondary px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-    >
-      <span class="text-sm text-pretty">
-        {job.direct_apply
-          ? 'Sign in to apply — your CV goes straight to the employer.'
-          : 'Sign in to keep track of the jobs you apply to.'}
-      </span>
-      <!-- The same phone layout as the job card's gate (JobRow.svelte). -->
-      <div class="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:items-center">
-        <Button variant="primary" size="sm" onclick={signInFromGate}>Sign in</Button>
-        <Button variant="outline" size="sm" onclick={signUpFromGate}>Sign up</Button>
-        {#if !job.direct_apply}
-          <Button variant="ghost" size="sm" class="col-span-2" onclick={viewWithoutSignIn}>
-            Continue without signing in
-          </Button>
-        {/if}
-      </div>
-    </div>
+    <JobSignInGate directApply={!!job.direct_apply} url={job.url} onclose={() => (showSignInPrompt = false)} />
   {/if}
 {/snippet}
 
@@ -640,8 +282,8 @@
      already says what a session costs and what today has left, at the moment of the commit;
      a count in two places is a count that can disagree. -->
 {#snippet tailorCta(size: 'md' | 'lg', className: string)}
-  {#if canTailor}
-    <Button variant="cta" {size} disabled={tailoring} onclick={onTailorClick} class={className}>
+  {#if tailor.canTailor}
+    <Button variant="cta" {size} disabled={tailor.busy} onclick={tailor.start} class={className}>
       Tailor my CV
       <SquarePen class="size-4" aria-hidden="true" />
     </Button>
@@ -666,181 +308,18 @@
     <Button
       variant="secondary"
       {size}
-      disabled={autoApply.disabled || autoApplySubmitting}
+      disabled={autoApply.disabled || autoApplyQueue.submitting}
       onclick={onAutoApplyClick}
       class={className}
     >
       {autoApply.label}
       {#if autoApply.pro}
-        <span
-          class="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-semibold uppercase leading-none tracking-wide text-background"
-        >
+        <span class="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-semibold leading-none text-background">
           Pro
         </span>
       {/if}
     </Button>
   {/if}
-{/snippet}
-
-<!-- Save, a quiet action rather than the full-width button it was in the sidebar: keeping a
-     posting is something a reader does in passing, not the thing the page is for. It sits
-     with the other quiet ones on the tab row, and beside the apply CTA in the pinned header,
-     which has room for one bookmark and not for four. The filled bookmark is the state.
-     `iconOnly` is for the pinned header, whose one line already holds the company, the
-     title and the CTA.
-     The words are JobRow's ("Save to board" / "On your board"), so one action reads the same
-     on the card and on the page, and so is the accessible-name rule: the visible label
-     already flips with the state, so there is no `aria-pressed` announcing the same fact a
-     second time in another vocabulary. Only the saved state overrides the name, because "On
-     your board" is a state and leaves a screen reader with a button whose effect is
-     unstated. The icon-only copy has no visible label, so it names both states itself. -->
-{#snippet saveButton(className = '', iconOnly = false)}
-  <Button
-    variant="ghost"
-    size="sm"
-    onclick={onSaveClick}
-    aria-label={saveLabel(iconOnly)}
-    title={saved ? 'On your board' : 'Save to board'}
-    class={`shrink-0 gap-1.5 px-2 ${saved ? 'text-brand hover:text-brand' : 'text-muted-foreground'} ${className}`}
-  >
-    <Bookmark class="size-4 shrink-0 {saved ? 'fill-current' : ''}" aria-hidden="true" />
-    {#if !iconOnly}{saved ? 'On your board' : 'Save to board'}{/if}
-  </Button>
-{/snippet}
-
-<!-- Report, the same shape as Save and, like it, `ghost`: complaining about a posting is
-     the rarest thing on the strip, and a filled or outlined box would give it the
-     standing of the apply CTA beside it. -->
-{#snippet reportButton()}
-  <Button
-    variant="ghost"
-    size="sm"
-    onclick={onReportClick}
-    aria-label="Report this job"
-    title="Report this job"
-    class="shrink-0 gap-1.5 px-2 text-muted-foreground"
-  >
-    <Flag class="size-4 shrink-0" aria-hidden="true" />
-    Report
-  </Button>
-{/snippet}
-
-<!-- How this posting is doing: when it went up, when its words last moved, and how many
-     people have opened it or told us they applied. Facts ABOUT the posting rather than
-     about the role, so they ride the provenance line with the company and the badges,
-     rather than the sidebar, where a reader comparing "posted 20 minutes ago" against "3
-     views" had to hold one thought across two places — past the match score and the salary
-     to reach either.
-     Every one of them is an icon and a number, which is what lets four of them share a line
-     the words would have filled on their own. The icons carry the word they replaced in an
-     `sr-only` span, so the line reads the same to a screen reader as it did when it was
-     spelled out.
-     "Updated" is dropped when it renders to the same label as the posting date: a job
-     written once and never touched would otherwise say the same thing twice. Comparing
-     the LABELS rather than the timestamps is the point — two edits an hour apart on one
-     day are a real difference while both read as ages, and stop being one the day they
-     both collapse into that date.
-     The exact clock time rides the `title` on both dates, since a reader who has read "2
-     hours ago" off a server-rendered page may want to know how old the page is.
-     Rendered twice, one visible at a time (the caller passes the display class): to the
-     right of the provenance line from lg, and under the title below it, where that line
-     already spends a phone's width on the company name and its badges. -->
-{#snippet postingMeta(className: string)}
-  {#if posted || views > 0 || applies > 0 || job.application_deadline}
-    <div class={`items-center gap-x-3 text-xs text-muted-foreground ${className}`}>
-      {#if posted}
-        <span
-          class="inline-flex items-center gap-1 whitespace-nowrap"
-          title={`Posted ${formatDateTime(job.posted_at, locale())}`}
-        >
-          <Clock class="size-3.5 shrink-0" aria-hidden="true" />
-          <span class="sr-only">Posted</span>
-          <time datetime={job.posted_at}>{posted}</time>
-        </span>
-        {#if updated && updated !== posted}
-          <span
-            class="inline-flex items-center gap-1 whitespace-nowrap"
-            title={`Updated ${formatDateTime(job.updated_at, locale())}`}
-          >
-            <RefreshCw class="size-3.5 shrink-0" aria-hidden="true" />
-            <span class="sr-only">Updated</span>
-            <time datetime={job.updated_at}>{updated}</time>
-          </span>
-        {/if}
-      {/if}
-      {#if job.application_deadline}
-        <span class="inline-flex items-center gap-1 whitespace-nowrap">
-          Apply by <time datetime={job.application_deadline}>{job.application_deadline}</time>
-        </span>
-      {/if}
-      <!-- A zero counter is omitted rather than drawn: "0 views" on a posting nobody has
-           opened yet measures our own traffic, not the job. -->
-      {#if views > 0}
-        <span class="inline-flex items-center gap-1 whitespace-nowrap">
-          <Eye class="size-3.5 shrink-0" aria-hidden="true" />
-          {views}
-          {views === 1 ? 'view' : 'views'}
-        </span>
-      {/if}
-      {#if applies > 0}
-        <span class="inline-flex items-center gap-1 whitespace-nowrap">
-          <Check class="size-3.5 shrink-0" aria-hidden="true" />
-          {applies} applied
-        </span>
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
-<!-- The action strip: the QUIET things a reader does with a posting — talk about it, flag
-     it, keep it, file it — on one line, sharing the tab row's rule. It carries the
-     rule itself (`border-b`) rather than sitting above one, so the line reads as a
-     single edge across the column: the strip and the TabStrip beside it are aligned on
-     their bottoms, and each draws its own half of it.
-     The two loud things — auto-apply and the apply link — are NOT here; they are ctaGroup,
-     up beside the title. They shared this row until there were six controls on it, at which
-     point the TabStrip, the only half that yields, had been squeezed to a scrolling sliver.
-     Rendered in two places, one visible at a time (the caller passes the display class):
-     the tab row on lg, and directly under the title below it, where the sidebar stacks
-     between the title and the description and a strip left on the tab row would put Save
-     a whole screen away from the job it saves. -->
-{#snippet actionStrip(className: string)}
-  <div class={`shrink-0 items-center gap-1.5 ${className}`}>
-    <a
-      class="inline-flex shrink-0 items-center gap-1.5 px-1 text-sm font-medium text-primary hover:underline"
-      href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
-      onclick={onDiscussionClick}
-    >
-      <MessageSquare class="size-4 shrink-0" aria-hidden="true" />
-      Discussion{threadCount ? ` · ${threadCount}` : ''}
-    </a>
-    {@render reportButton()}
-    {@render saveButton()}
-    <!-- The link out, phone only. Below lg the sticky bottom bar belongs to auto-apply
-         whenever auto-apply can be started, so the posting's own page needs a door
-         somewhere else — and this strip is where the quiet things already are. On lg the
-         same link is a button up beside the title, so this copy stays hidden rather than
-         offering it twice. Same handler as that button: one click, one apply-intent event,
-         whichever copy the reader reached.
-         An anchor rather than `applyCta`, because a `Button` here would be a fourth loud
-         thing on a strip whose whole job is to be quiet — so it carries `rel` and `target`
-         itself. `nofollow` for the reason the snippet above states in full: the destination
-         is the posting's own site, which the catalogue never vetted, and without it a
-         submitted vacancy buys a followed link from every job page. Change one, change
-         both. -->
-    {#if cta.autoApply?.leads}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
-        href={job.url}
-        class="inline-flex shrink-0 items-center gap-1.5 px-2 text-sm font-medium text-muted-foreground hover:text-foreground lg:hidden"
-        target="_blank"
-        rel="nofollow noopener noreferrer"
-        onclick={onApplyClick}
-      >
-        <ExternalLink class="size-4 shrink-0" aria-hidden="true" />
-        {cta.external.label}
-      </a>
-    {/if}
-  </div>
 {/snippet}
 
 <!-- The call-to-action buttons: the page's answer to "what do I do with this posting".
@@ -854,107 +333,11 @@
      apply control the plan did not pick. -->
 {#snippet ctaGroup()}
   {#if !closed}
-    <div class="hidden shrink-0 items-center justify-end gap-2 lg:flex">
+    <div class="hidden shrink-0 items-center gap-2 lg:flex">
       {@render autoApplyCta('md', 'shrink-0')}
       {@render applyCta('md', 'shrink-0', cta.external)}
       {@render tailorCta('md', 'shrink-0')}
     </div>
-  {/if}
-{/snippet}
-
-<!-- The posting itself. A snippet because it is rendered either inside the Description
-     tab panel or, on a job whose employer we don't know, straight into the column with
-     no tab strip above it at all. -->
-{#snippet descriptionContent()}
-  {#if e.summary}
-    <!-- Model-written synopsis (only on enriched jobs). Plain text, capped at
-         400 chars server-side — the headline above the full description. -->
-    <section class="flex flex-col gap-2">
-      <h2 class="text-base font-semibold">Summary</h2>
-      <p class="text-sm leading-relaxed text-muted-foreground">{e.summary}</p>
-    </section>
-  {:else}
-    <!-- The description's own headings are demoted to h3 (descriptionHeadings.ts) to sit
-         under a section heading. Without the Summary there is none between them and the
-         page's h1, so name the section for the outline: h1 → h2 → h3. -->
-    <h2 class="sr-only">Description</h2>
-  {/if}
-
-  <!-- The Summary above is an LLM synopsis the enrichment prompt pins to English
-       (internal/enrich), so the body is the only part of this snippet that takes
-       the posting's language. -->
-  <JobDescription html={job.description} lang={contentLang} />
-
-  <!-- Some sources carry no body at all and enrichment had nothing to summarise, which
-       left the Description tab blank — a reader could not tell an empty posting from a
-       page that failed to load. Say so, and offer the posting's own page, which is the
-       only place the rest of it can be. Not for a vacancy published here (`direct_apply`):
-       it has no outside page to send anyone to. -->
-  {#if !e.summary && !job.description?.trim()}
-    <p class="text-sm text-muted-foreground">
-      The posting didn't include a description.
-      {#if job.url && !job.direct_apply}
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
-          href={job.url}
-          target="_blank"
-          rel="nofollow noopener noreferrer"
-          class="font-medium text-brand-strong underline underline-offset-4"
-        >
-          Read it on the original site
-        </a>
-      {/if}
-    </p>
-  {/if}
-
-  {#if job.skills?.length}
-    <!-- Top-level `skills` is the served (deterministic-dictionary) facet; the raw
-         `enrichment.skills` is kept in the JSONB and never served (see JobRow's same
-         fix), so reading it here always rendered nothing. -->
-    <section class="flex flex-col gap-2 border-t border-border pt-4">
-      <h2 class="text-base font-semibold">Skills</h2>
-      <ul class="flex flex-wrap gap-1.5">
-        {#each job.skills as skill (skill)}
-          <li>
-            <!-- The chip used to print the raw slug, so a posting read "ci-cd" beside a
-                 filter panel reading "CI/CD" — the same skill spelled two ways on one
-                 screen. SkillChip labels it from the dictionary and, for a skill the
-                 glossary has reached, carries the definition too. -->
-            <SkillChip slug={skill} />
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
-
-  <!-- The way into the role's skill page, placed here because this is the moment the
-       question arises: the reader has just seen what THIS posting asks for and the next
-       thought is whether that is the role or just this employer. Before this the page
-       existed and nothing in the product linked to it — reachable only from the footer,
-       four clicks deep, from no screen where anybody is thinking about their skills.
-
-       Shown only when both facets name a real role — the same check the route 404s on,
-       so the link cannot point at a page that refuses it. Being BUSY enough to index is
-       a separate question the route answers with noindex, because this page cannot know
-       it without a request of its own on the hottest page on the site.
-
-       That is a minority of postings:
-       measured 2026-09-18, 98.7% of open technical postings state a category and just
-       39.0% state a seniority. The link is absent rather than guessed when either is
-       missing. It never 404s — a role below the publication floor is served and marked
-       noindex rather than refused. -->
-  {#if roleAddressExists(roleCategory, roleSeniority)}
-    <section class="border-t border-border pt-4">
-      <a
-        class="text-brand-strong hover:underline"
-        href={resolve('/insights/roles/[category]/[seniority]', {
-          category: roleCategory,
-          seniority: roleSeniority,
-        })}
-      >
-        What {seniorityLabel(roleSeniority)}
-        {categoryLabel(roleCategory)} jobs ask for — and how much of it you have →
-      </a>
-    </section>
   {/if}
 {/snippet}
 
@@ -969,434 +352,109 @@
 <article
   class="flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-4"
 >
-  <!-- The company line and the badges about the posting. It WRAPS, at every width: the
-       badges are one `shrink-0` group that drops to a line of its own when it does not fit
-       beside the company name. It used to be one non-wrapping row below lg with the
-       company name as the part that gave way, and measured at 360px a reality chip and its
-       "posting date refreshed" note left "Grupo …" of the employer — the one fact on the
-       line a reader needs whole. The name still carries `min-w-0` and truncates, but only
-       when it alone is wider than the column.
-       The badge group keeps `shrink-0` rather than the default `min-width: auto`, whose
-       floor for text is the longest WORD: a squeezed chip does not stay one line, it wraps
-       "Be an early / applicant" inside itself. `max-w-full` plus its own `flex-wrap` let
-       the chips wrap BETWEEN each other instead when even a line of their own is too
-       narrow for all of them. -->
-  <div
-    class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 lg:col-start-2 lg:row-start-1 lg:gap-x-3"
-  >
-    <EntityLogo
-      name={job.company || 'Unknown company'}
-      src={companyLogoUrl(job.company) ?? undefined}
-      shape="square"
-      size="sm"
-    />
-    <p class="min-w-0 text-sm text-muted-foreground max-lg:truncate">
-      {#if job.company_slug}
-        <a href={resolve('/companies/[slug]', { slug: job.company_slug })} class="hover:text-foreground hover:underline">
-          {job.company || 'Unknown company'}
-        </a>
-      {:else}
-        {job.company || 'Unknown company'}
-      {/if}
-    </p>
-
-    <div class="flex max-w-full shrink-0 flex-wrap items-center gap-x-2 gap-y-2 lg:gap-x-3">
-      <!-- Who backed the employer. The page has room the feed card does not, so the
-           badge carries the brand name too and links to that collection's roles. -->
-      <BackerBadge collections={job.collections} withLabel />
-
-      <!-- How long this has really been open, on the provenance line rather than under
-           the title: it is a fact ABOUT the posting, like the company and the backer,
-           and a chip on its own row read as a headline. The ghost checklist stays below
-           the title — it is a disclosure with a criteria list inside, not a chip, and it
-           supersedes this badge rather than joining it. -->
-      <!-- Nor on a closed posting: "Open 35d · reposted 4×" describes one still taking
-           applications and contradicts the closure notice under the title. -->
-      {#if !closed && !supersedesReality(job.ghost, locale())}
-        <RealityBadge reality={job.reality} detailed />
-      {/if}
-
-      <!-- How the employer screens, beside how the posting reads. Neutral by design:
-           the badge names the practice and its report count, and lets the reader
-           decide. -->
-      {#if job.direct_apply}
-        <DirectApplyBadge />
-      {/if}
-      <AIInterviewBadge count={job.ai_interview_reports} />
-
-      <!-- Freshness rides the same provenance line: like the backer and the reality
-           badge it describes the POSTING, not the role, so the title keeps a single
-           voice and the reader still meets all of it in one glance. A closed posting
-           earns nothing here — that rule lives in freshnessBadges, beside the reality
-           gate, rather than as a second copy in this template. -->
-      {#each freshness as badge (badge.label)}
-        <!-- The tooltip rides a wrapper, not the Chip: the primitive takes only
-             variant/class/children, so a `title` passed to it would be dropped
-             silently and the badge would state a claim with its evidence gone. -->
-        <span title={badge.tooltip} class="inline-flex">
-          <Chip variant="brand" class="font-semibold">{badge.label}</Chip>
-        </span>
-      {/each}
-    </div>
-
-    <!-- `ml-auto` rather than a grid column: the badges above are a variable-width group,
-         so the dates take whatever is left of the line and sit against its right edge. -->
-    {@render postingMeta('ml-auto hidden shrink-0 lg:flex')}
-  </div>
+  <JobProvenanceLine {job} {closed}>
+    {#snippet meta()}<JobPostingMeta {job} className="ml-auto hidden shrink-0 lg:flex" />{/snippet}
+  </JobProvenanceLine>
 
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
-    <div class="flex flex-wrap items-center gap-2.5">
-      <h1 class="text-2xl font-semibold tracking-tight" lang={contentLang}>{job.title}</h1>
-      <!-- Applied stays with the title: it is a fact about THIS READER, not about the
-           posting, so it does not belong on the provenance line above. -->
-      {#if applied}
-        <Chip variant="brand" class="gap-1.5 border-brand/30 font-semibold">
-          <CheckCircle2 class="size-3.5" aria-hidden="true" /> Applied
-        </Chip>
-      {:else if appliedToCompany}
-        <AppliedCompanyBadge />
-      {/if}
-    </div>
+    <JobTitle title={job.title} lang={contentLang} {applied} {appliedToCompany} />
 
-    <!-- Directly under the title, before anything that reads as a way in: a closed
-         posting's first fact is that it is closed. It sat below the tab row once, under
-         live Apply buttons that led to a dead page — the controls are withheld now (see
-         `closed`), and the reader is pointed at the open postings the route lists below. -->
-    {#if job.closed_at}
-      {@const closedOn = formatDate(job.closed_at, locale())}
-      <div
-        class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-border bg-secondary px-4 py-3 text-sm"
-      >
-        <p class="inline-flex items-center gap-2 font-medium">
-          <CircleSlash class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span>
-            This position is no longer accepting applications{closedOn ? ` (closed ${closedOn})` : ''}.
-          </span>
-        </p>
-        {#if hasSimilar}
-          <a href="#similar-jobs" class="font-medium text-brand-strong underline underline-offset-4">
-            See similar open jobs →
-          </a>
-        {/if}
-      </div>
-    {/if}
+    <JobClosedNotice {job} {hasSimilar} />
 
     <!-- The CTAs take a row of their own under the title rather than riding its right
          edge: the title is the longest string on the page and the buttons are the widest
          fixed thing beside it, so sharing a line meant a two-word title left them adrift in
-         the middle of the page and a long one pushed them down anyway. Right-aligned, so
-         they land above the quiet strip's own right edge on the tab row below. -->
-    {@render ctaGroup()}
+         the middle of the page and a long one pushed them down anyway. Left-aligned under
+         the title they read as its next step; right-aligned they floated with nothing to
+         their left. -->
+    <!-- From lg the quiet actions (Report, Save) share the CTAs' row, at its far
+         end, rather than the tab row: there they read as more tabs, and every pixel they
+         took came out of the tab labels. -->
+    <div class="hidden items-center justify-between gap-4 lg:flex">
+      {@render ctaGroup()}
+      <JobActionStrip className="-mr-1 flex" {...strip} />
+    </div>
 
     <!-- Below lg the provenance line already spends its width on the company name and its
          badges, so the dates read here instead — a caption under the title rather than
          right-aligned, which on one phone-width column would only look adrift. -->
-    {@render postingMeta('flex lg:hidden')}
 
-    <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
-         between the title and the description on a phone, so a strip left down there
-         would put Save a full screen of match card and metadata away from the job it
-         saves. Under the title and not above it — these are the quiet things a reader
-         does WITH a posting, and above the title they wedged three tertiary controls
-         between the employer and the role. Right-aligned like the lg copy beside the
-         tabs, so the strip reads the same on both; `-mr-2` cancels the last button's
-         own padding, lining its right edge up with the column's. -->
-    <!-- `flex-wrap` only on this copy: the phone's strip carries a fifth item the tab row's
-         does not (the link out), and five labels do not fit one phone-width line — without
-         it the row simply overflowed its left edge and ate "Discussion". The lg copy shares
-         a line with the TabStrip and must not wrap. -->
-    {@render actionStrip(
-      '-mr-2 flex w-full flex-wrap justify-end border-b border-border pb-2 lg:hidden',
-    )}
+    <!-- Keep the metadata left and the compact actions at the right edge, even when
+         longer metadata wraps onto its own line. -->
+    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border pb-2 lg:hidden">
+      <JobPostingMeta {job} className="flex min-w-0 flex-wrap" />
+      <JobActionStrip className="ml-auto -mr-2 flex max-w-full flex-wrap justify-end" iconOnly {...strip} />
+    </div>
 
-    <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
-         once for the whole page: a gauge and the hedged wording here, the criteria and
-         a link to the full explanation behind its own disclosure. Placed above the
-         description, so somebody deciding whether this is worth an hour of unpaid work
-         meets the hedge before the pitch rather than after they have already invested
-         the reading. The caveat itself now lives on /features/ghost-jobs — the row
-         carries the ceiling on the claim ("possibly", two of four), not the essay. -->
-    {#if supersedesReality(job.ghost, locale())}
-      <GhostChecklist ghost={job.ghost} />
-    {/if}
-
-    {#if job.referral_available && job.company_slug}
-      <ReferralBlock
-        companySlug={job.company_slug}
-        companyName={job.company}
-        jobSlug={job.public_slug}
-        onTailor={() => void onTailorClick()}
-      />
-    {/if}
-
-    <!-- Beside the referral block rather than a fourth button of its own: the two are the
-         same insider seen from different ends, and this page's CTA hierarchy is the
-         subject of its own open change. -->
-    {#if job.company_slug}
-      <MentorBlock companySlug={job.company_slug} companyName={job.company} />
-    {/if}
+    <JobAsides {job} onTailor={() => void tailor.start()} />
   </header>
 
-  <aside class="w-full shrink-0 lg:col-start-1 lg:row-span-3 lg:row-start-1">
-    <!-- `top-20`, not `top-6`: the site header is `sticky top-0 h-14` and opaque, so a
-         card pinned 24px from the viewport spends the whole read with its first 32px —
-         the border, the padding, and the top of the match score — behind it. 80px is
-         the header's 56 plus the same 24 of air the card was asking for. -->
-    <div class="sticky top-20 flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
-      <JobMatch {job} {matchAnalysis} />
-
-      {#if salary}
-        <p
-          class="border-t border-border pt-4 text-xl font-semibold tabular-nums tracking-tight first:border-t-0 first:pt-0"
-        >
-          {salary}
-        </p>
-      {/if}
-
-      {#if facets.length}
-        <dl class="flex flex-col gap-2 border-t border-border pt-4 text-sm first:border-t-0 first:pt-0">
-          {#each facets as facet (facet.label)}
-            <div class="flex items-baseline justify-between gap-3">
-              <dt class="shrink-0 text-muted-foreground">{facet.label}</dt>
-              {#if facet.values.every((v) => v.flag)}
-                <!-- Flag facet (Country): an overlapping cluster of round flags,
-                     right-aligned, each linking to its filter. The stack laps the
-                     flags over one another so a many-country remote role stays a
-                     single compact row instead of wrapping. -->
-                <dd class="flex min-w-0 justify-end text-base">
-                  <!-- `labelClass` matches the sibling `dd` below (text-sm font-medium,
-                       ordinary foreground) — the component's own default is a muted
-                       caption sized for the browse card and company panel instead. -->
-                  <CountryFlagStack
-                    codes={facet.values.map((v) => v.flag ?? '')}
-                    link
-                    labelClass="text-sm font-medium"
-                  />
-                </dd>
-              {:else}
-                <dd class="min-w-0 break-words text-right font-medium"
-                  >{#each facet.values as v, i (v.text)}{#if i > 0}, {/if}{#if v.href}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal filter link from filterHref; query-only, no route to resolve --><a
-                        href={v.href}
-                        class="hover:text-foreground hover:underline">{v.text}</a
-                      >{:else}{v.text}{/if}{/each}</dd
-                >
-              {/if}
-            </div>
-          {/each}
-        </dl>
-      {/if}
-
-      <!-- Where the posting came from, and the control to stop seeing that source. One row
-           since the engagement counters left it for the provenance line up beside the title. -->
-      <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
-
-      <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <div class="flex justify-center">
-          <!-- Keyed on the slug so a client-side navigation to another job remounts
-               the control and re-seeds its counts/highlight (JobView itself is not
-               remounted on param change). -->
-          {#key job.public_slug}
-            <VoteControl
-              target="job"
-              slug={job.public_slug}
-              upvoteCount={job.upvote_count ?? 0}
-              downvoteCount={job.downvote_count ?? 0}
-              myVote={job.my_vote ?? 0}
-            />
-          {/key}
-        </div>
-      </div>
-    </div>
-  </aside>
+  <JobFactsCard {job} matchAnalysis={tailor.analysis} {closed} />
 
   <div class="relative flex min-w-0 flex-col gap-6 lg:col-start-2 lg:row-start-3">
-    <!-- The pinned header (see PINNED_HEADER_TOP). The overlay spans this column, which
-         is what gives the rail inside it something to travel: a `sticky` element is
-         clamped to its containing block, and the column is exactly the stretch the bar
-         should stay pinned over — it releases at the end of the posting, not over the
-         related jobs below. The `bottom-14` inset is the bar's own height: the rail is
-         zero-height, so without it the bar hangs a further ~52px past the end of the
-         overlay and spills over the "See also" strip on the last screen.
-         `pointer-events-none` on the overlay keeps the description selectable through
-         it; the bar itself takes them back.
-         `invisible` rather than a conditional block: keeping the bar mounted lets it
-         fade, and visibility:hidden takes it out of the focus order and the a11y tree
-         while it is away, so the duplicate apply button is not tabbable from the top
-         of the page. -->
-    <div class="pointer-events-none absolute inset-x-0 top-0 bottom-14">
-      <div bind:this={headerSentinel} aria-hidden="true" class="h-px w-full"></div>
-      <div class="sticky top-14 z-20 h-0">
-        <div
-          class={[
-            // Opaque, not frosted: the description slides directly under this and a
-            // translucent bar leaves a blurred ghost of the text inside it, which reads
-            // as a rendering fault rather than as glass. The mobile apply bar below can
-            // afford the frost because nothing scrolls under it at speed.
-            'pointer-events-auto flex items-center gap-3 border-b border-border bg-background py-2.5 transition-opacity duration-150',
-            headerPinned ? 'opacity-100' : 'invisible opacity-0',
-          ]}
-        >
-          <EntityLogo
-            name={job.company || 'Unknown company'}
-            src={companyLogoUrl(job.company) ?? undefined}
-            shape="square"
-            size="sm"
-          />
-          <p class="min-w-0 flex-1 truncate text-sm">
-            {#if job.company_slug}
-              <a
-                href={resolve('/companies/[slug]', { slug: job.company_slug })}
-                class="text-muted-foreground hover:text-foreground hover:underline"
-              >
-                {job.company || 'Unknown company'}
-              </a>
-            {:else}
-              <span class="text-muted-foreground">{job.company || 'Unknown company'}</span>
-            {/if}
-            <span class="px-1 text-muted-foreground" aria-hidden="true">·</span>
-            <span class="font-semibold" lang={contentLang}>{job.title}</span>
-          </p>
-          <!-- Hidden below lg for the same reason as the action strip's own copy: on
-               mobile the CTA is the sticky bottom bar, and two pinned buttons would
-               fight. Save comes along, since this bar is what a reader has in front of
-               them for most of a description several screens long.
-               It carries the SAME buttons as the header, in the same order, plan and all —
-               this bar is the header for most of the read, and an `Apply` here for the link
-               the title row calls a quiet `Apply on company site` would be one link at two ranks on
-               one page. `Tailor my CV` comes along for the same reason: the page's primary
-               CTA must not be a thing the reader scrolls past and loses. -->
-          <div class="hidden shrink-0 items-center gap-2 lg:flex">
-            {@render saveButton('size-9 rounded-md px-0', true)}
-            {#if !closed}
-              {@render autoApplyCta('md', 'shrink-0')}
-              {@render applyCta('md', 'shrink-0', cta.external)}
-              {@render tailorCta('md', 'shrink-0')}
-            {/if}
-          </div>
-        </div>
-      </div>
-    </div>
+    <JobPinnedHeader {job} lang={contentLang}>
+      {#snippet actions()}
+        <JobSaveButton {saved} onclick={onSaveClick} className="size-9 rounded-md px-0" iconOnly />
+        {#if !closed}
+          {@render autoApplyCta('md', 'shrink-0')}
+          {@render applyCta('md', 'shrink-0', cta.external)}
+          {@render tailorCta('md', 'shrink-0')}
+        {/if}
+      {/snippet}
+    </JobPinnedHeader>
 
-    <!-- Tabs left, actions right, one rule under both — and no gap between the halves,
-         because each draws its own stretch of that rule and a gap here is a gap in the
-         line (the strip's own left padding separates them instead). The row is rendered
-         whether or not there are tabs to put in it: a posting from an unknown employer
-         has only the description, and the rule then simply closes the actions off. -->
     <div class="flex items-end justify-between">
-      {#if contentTabs.length > 1}
-        <TabStrip
-          tabs={contentTabs}
-          active={contentTab}
-          onSelect={(id) => (contentTab = id)}
-          label="Job details"
-          {panelId}
-          class="min-w-0 flex-1"
+      <TabStrip
+        tabs={tabs.tabs}
+        active={tabs.current}
+        onSelect={tabs.select}
+        label="Job details"
+        {panelId}
+        class="min-w-0 flex-1"
+      />
+      {#if job.company?.trim()}
+        <JobPeopleLinks
+          slug={job.public_slug}
+          company={job.company.trim()}
+          {closed}
+          loading={referralMessage.loading}
+          ondraft={() => void openReferralMessage()}
         />
-      {:else}
-        <div class="min-w-0 flex-1 border-b border-border" aria-hidden="true"></div>
       {/if}
-      {@render actionStrip('hidden border-b border-border pb-2 lg:flex')}
     </div>
 
-    <!-- The three states of one exchange. They sit at the top of the content column rather
-         than beside the CTA that raised them: the question follows a click that opened a
-         NEW TAB, so the reader meets it on returning to this one, and the first thing under
-         the tabs is what a returning eye lands on. It is also the widest slot on the page,
-         which a two-button question needs and the title row — already carrying the CTAs —
-         does not have. They share one slot so that answering "Yes, save" replaces the
-         question in place; split across the page, the confirmation would read as a second,
-         unrelated banner appearing somewhere the reader was not looking. -->
-    {#if showApplyPrompt && !applied}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
-      >
-        <span class="text-sm">Did you apply to this job?</span>
-        <div class="flex items-center gap-2">
-          <Button variant="primary" size="sm" onclick={confirmApplied}>Yes, save</Button>
-          <Button variant="ghost" size="sm" onclick={dismissApplyPrompt}>No</Button>
-        </div>
-      </div>
+    {#if job.company?.trim() && !closed && referralMessage.failed}
+      <span role="alert" class="text-sm text-destructive">Could not open the draft form. Please try again.</span>
     {/if}
 
-    {#if justApplied}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
-      >
-        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
-          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> Added to your board
-        </span>
-        <a
-          href={resolve('/my/tracking')}
-          class="text-sm font-medium text-brand-strong underline underline-offset-4"
-        >
-          View on your board →
-        </a>
-      </div>
-    {/if}
+    <JobApplyNotices
+      askApplied={tracking.askApplied && !applied}
+      justApplied={tracking.justApplied}
+      queued={autoApplyState.kind === 'queued'}
+      slug={job.public_slug}
+      error={autoApplyQueue.error}
+      onconfirm={tracking.confirmApplied}
+      ondismiss={tracking.dismiss}
+    />
 
-    {#if autoApplyState.kind === 'queued'}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
-      >
-        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
-          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored CV — you'll get
-          a notification to review it.
-        </span>
-        <a
-          href={resolve('/my/tracking/[id]', { id: job.public_slug })}
-          class="text-sm font-medium text-brand-strong underline underline-offset-4"
-        >
-          Track progress →
-        </a>
-      </div>
-    {/if}
-    {#if autoApplyError}
-      <p role="alert" class="text-sm text-destructive">{autoApplyError}</p>
-    {/if}
-
-    {#if showDirectApply && DirectApplyDialog}
-      <DirectApplyDialog
+    {#if directApply.open && directApply.component}
+      <directApply.component
         slug={job.public_slug}
         title={job.title}
-        onClose={() => (showDirectApply = false)}
-        onSent={directAppliedCallback(job)}
+        onClose={directApply.close}
+        onSent={tracking.sentCallback(() => (directApplied = true))}
         onTailor={() => {
-          showDirectApply = false;
-          void onTailorClick();
+          directApply.close();
+          void tailor.start();
         }}
       />
     {/if}
 
-    <div class="hidden lg:block">{@render signInFeedback()}</div>
+    <!-- `contents`, not `block`: an empty wrapper still took a slot in the column's gap and
+         doubled the space between the tab row and the description. -->
+    <div class="hidden lg:contents">{@render signInFeedback()}</div>
 
-    {#if contentTabs.length > 1}
-      <!-- One panel for every tab, its contents toggled by class rather than {#if}.
-           Unmounting the inactive one would throw away the company the visitor already
-           waited for, and re-render the description on every switch back. It also keeps
-           every panel in the server-rendered HTML, so a crawler reads what a visitor
-           would have to click for. -->
-      <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, contentTab)}>
-        <div class={contentTab === 'description' ? 'flex flex-col gap-6' : 'hidden'}>
-          {@render descriptionContent()}
-        </div>
-        {#if companySlug}
-          <div class={contentTab === 'company' ? 'block' : 'hidden'}>
-            {#key companySlug}
-              <JobCompanyPanel
-                slug={companySlug}
-                name={job.company || 'this company'}
-                active={contentTab === 'company'}
-              />
-            {/key}
-          </div>
-        {/if}
-        <div class={contentTab === 'application' ? 'block' : 'hidden'}>
-          <JobApplyForm form={applyForm} />
-        </div>
-      </div>
-    {:else}
-      {@render descriptionContent()}
-    {/if}
+    <JobTabPanels {panelId} {tabs} {job} lang={contentLang} {applyForm} />
   </div>
 
   <!-- Mobile apply CTA. It sticks to the bottom of the viewport while the job
@@ -1427,11 +485,7 @@
         {#if cta.autoApply?.leads}
           {@render autoApplyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg')}
         {:else}
-          {@render applyCta(
-            'lg',
-            'flex-1 rounded-xl font-semibold shadow-lg',
-            cta.external,
-          )}
+          {@render applyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg', cta.external)}
         {/if}
       </div>
     </div>
@@ -1442,28 +496,8 @@
   <ReportDialog slug={job.public_slug} companySlug={job.company_slug} onClose={() => (showReport = false)} />
 {/if}
 
-<style>
-  /* See the `job-scroll-pad` effect. Below lg: the site header on top (h-14 plus air), and
-     the apply bar at the bottom — its pt-3, an h-11 button, a padding of at least pb-3 that
-     grows with the home indicator, and a rule. From lg: the site header plus the pinned
-     header under it (py-2.5 around an h-9 button, and a rule); no bottom bar. */
-  :global(html.job-scroll-pad) {
-    scroll-padding-top: 4rem;
-  }
+{#if referralMessage.open && referralMessage.component}
+  <referralMessage.component slug={job.public_slug} company={job.company} onClose={referralMessage.close} />
+{/if}
 
-  :global(html.job-scroll-pad.job-scroll-pad-bar) {
-    scroll-padding-bottom: calc(
-      4.75rem + env(safe-area-inset-bottom) + var(--job-scroll-pad-feedback-height, 0px)
-    );
-  }
-
-  @media (min-width: 64rem) {
-    :global(html.job-scroll-pad) {
-      scroll-padding-top: 7.75rem;
-    }
-
-    :global(html.job-scroll-pad.job-scroll-pad-bar) {
-      scroll-padding-bottom: 0;
-    }
-  }
-</style>
+<JobScrollPadding {closed} signInPrompt={showSignInPrompt} feedbackEl={mobileSignInFeedback} />

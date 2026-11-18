@@ -68,7 +68,8 @@
 {#if isAuthenticated()}
   <form class="topic-form" onsubmit={submit}>
     <Input bind:value={title} placeholder="A short title" aria-label="Topic title" maxlength={140} />
-    <textarea bind:value={body} rows="6" placeholder="Say more…" aria-label="Topic body" class="topic-form__body"></textarea>
+    <textarea bind:value={body} rows="6" placeholder="Say more…" aria-label="Topic body" class="topic-form__body"
+    ></textarea>
     {#if formError}<p class="topic-form__error">{formError}</p>{/if}
     <div class="topic-form__actions">
       <Button variant="ghost" href={listHref}>Cancel</Button>
@@ -78,7 +79,8 @@
 {:else}
   <p class="signin-hint">
     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query -->
-    <a class="linklike" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</a> to start a topic.
+    <a class="linklike" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</a> to
+    start a topic.
   </p>
 {/if}
 

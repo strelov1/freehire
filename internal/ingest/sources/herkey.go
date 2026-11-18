@@ -36,20 +36,17 @@ const (
 	herkeyDetailURL  = herkeyAPI + "jobs/jobs/%s"
 	herkeyJobURL     = "https://www.herkey.com/jobs/%s/%s"
 
-	// herkeyPageSize is served as asked (500 answered 500 rows), so the ~1.6k-posting catalogue
-	// is four requests.
+	// herkeyPageSize is served as asked, so the catalogue is a handful of requests.
 	herkeyPageSize = 500
-	// herkeyMaxPages is a ceiling ~12x the measured catalogue, never the expected end. Reaching
-	// it fails the crawl: the provider is swept by source, so a truncated walk must not pass.
+	// herkeyMaxPages is a ceiling far above the catalogue, never the expected end. Reaching it
+	// fails the crawl: the provider is swept by source, so a truncated walk must not pass.
 	herkeyMaxPages = 40
 )
 
-// The detail endpoint answers in ~5 s (4-15 s measured sequentially, 2026-10-18), so the
-// in-flight bound, not the rate, is what keeps the load on that origin modest; four workers at
-// that latency make well under one request a second. The limiter caps the burst when the origin
-// answers fast. A cold catalogue is ~1.5k details, so one run hydrates at most
-// herkeyDetailBudget of them and the rest accrete over the next runs instead of one run
-// outliving its unit timeout and saving nothing.
+// The detail endpoint is slow (seconds per call), so the in-flight bound, not the rate, keeps the
+// load on that origin modest; the limiter caps the burst when it answers fast. One run hydrates at
+// most herkeyDetailBudget details and the rest accrete over later runs, so a cold catalogue cannot
+// outlive the unit timeout and save nothing.
 const (
 	herkeyRequestInterval = time.Second
 	herkeyRequestBurst    = 2
@@ -57,8 +54,7 @@ const (
 	herkeyDetailBudget    = 600
 )
 
-// herkeyZone is the zone the API's zone-less timestamps are written in: a posting modified
-// "06:01" was served at 02:52 UTC on the same day, so the stamps are India Standard Time.
+// herkeyZone is the zone of the API's zone-less timestamps: India Standard Time.
 var herkeyZone = time.FixedZone("IST", 5*3600+30*60)
 
 // herkeyRedirectors wrap the employer's own link in a tracking redirect; the wrapped link is
@@ -127,13 +123,12 @@ func (s herkey) FetchNew(ctx context.Context, _ CompanyEntry, seen func(external
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrate(ctx, rows, seen, nil, nil)
+	return s.hydrate(ctx, rows, seen, nil)
 }
 
-// FetchNewGated is FetchNew told which postings the pipeline will discard anyway: 186 of the
-// 539 non-pharma rows (2026-10-18) link to an ATS platform freehire crawls first-party, and a
-// covered employer's postings are never stored, so without the coverage answer their slow
-// details would be bought and thrown away on every run.
+// FetchNewGated is FetchNew told which postings the pipeline will discard anyway: a covered
+// employer's postings are never stored, so without the coverage answer their slow details would be
+// bought and thrown away on every run.
 func (s herkey) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	rows, err := s.list(ctx)
 	if err != nil {
@@ -147,7 +142,7 @@ func (s herkey) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 		}
 		covered = gate.Covered(names)
 	}
-	return s.hydrate(ctx, rows, seen, covered, gate.Rejected)
+	return s.hydrate(ctx, rows, seen, covered)
 }
 
 // list mints the anonymous session the site's own frontend uses and walks the index to its
@@ -205,12 +200,11 @@ func (s herkey) list(ctx context.Context) ([]herkeyListing, error) {
 }
 
 // hydrate maps the listed rows to Jobs. A seen posting is a liveness refresh with no request; a
-// posting the pipeline will discard — its employer covered, or its title rejected as
-// non-technical — is yielded body-less for the pipeline to count; every other posting costs one
+// posting the pipeline will discard — its employer covered — is yielded body-less for the pipeline to count; every other posting costs one
 // detail request, up to the run's budget. A detail that could not be read defers its posting to
 // a later run rather than storing it body-less, which would never be hydrated again.
 func (s herkey) hydrate(ctx context.Context, rows []herkeyListing, seen func(string) bool,
-	covered map[string]bool, rejected func(Job) bool) ([]Job, error) {
+	covered map[string]bool) ([]Job, error) {
 	links := map[string]int{}
 	for _, r := range rows {
 		if l := r.applyLink(); l != "" {
@@ -227,7 +221,7 @@ func (s herkey) hydrate(ctx context.Context, rows []herkeyListing, seen func(str
 			base.SeenRefresh = true
 			return base, true
 		}
-		if covered[base.Company] || (rejected != nil && rejected(base)) {
+		if covered[base.Company] {
 			return base, true
 		}
 		if budget.Add(1) > herkeyDetailBudget {
@@ -255,10 +249,10 @@ func (s herkey) hydrate(ctx context.Context, rows []herkeyListing, seen func(str
 }
 
 // withDetail adds the posting resource's body and date. ok=false with a nil error is the
+// withDetail adds the posting resource's body and date. ok=false with a nil error is the
 // platform's own answer that the posting is gone: a 400 or 404 for the id, an empty body, or a
-// status other than active — the search index keeps listing postings the posting resource has
-// already expired (JobsPikr-sourced copies months past their expiry). An error is the absence of
-// an answer.
+// status other than active (the search index keeps listing postings the posting resource has
+// already expired). An error is the absence of an answer.
 func (s herkey) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	var d herkeyDetail
 	if err := s.http.GetJSONWithHeaders(ctx, fmt.Sprintf(herkeyDetailURL, base.ExternalID), nil, &d); err != nil {
@@ -294,8 +288,8 @@ func (s herkey) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	}
 	body := sanitizeHTML(strings.Join(parts, "\n"))
 	if strings.TrimSpace(body) == "" {
-		// A placeholder is the platform's own answer that the posting has no description
-		// (10 of 65 sampled pharma postings read "TBD"); nothing else is the absence of one.
+		// A placeholder is the platform's own answer that the posting has no description; nothing
+		// else is the absence of one.
 		if placeholder {
 			return Job{}, false, nil
 		}
@@ -349,8 +343,7 @@ func (r herkeyListing) toJob(linkCounts map[string]int) (Job, bool) {
 		EmploymentType: herkeyEmploymentType(r.JobTypes),
 		PostedAt:       herkeyTime(r.CreatedOn),
 	}
-	// min_year is a form field defaulting to 0 (1,092 of 1,560 rows read 0-2 years), so only a
-	// stated floor above zero is a fact.
+	// min_year is a form field defaulting to 0, so only a stated floor above zero is a fact.
 	if r.MinYear != nil && *r.MinYear > 0 {
 		j.ExperienceYearsMin = r.MinYear
 	}

@@ -51,6 +51,7 @@ Every query that used `user_low`/`user_high` is rewritten over participants; the
 "other participant" is the participant row whose `user_id` differs from the caller.
 
 ### D3. Kinds plug in through an interface registered at the composition root
+
 ```go
 type Kind interface {
     Name() string
@@ -63,6 +64,7 @@ type Kind interface {
     Notice(conversationID int64, pending bool) Notice
 }
 ```
+
 `Counterpart` is `{Reachable bool; Detail any}` — `Detail` is the kind's own value (for buddy:
 handle and card summary), and the core blanks it whenever `Reachable` is false. Starting a conversation is NOT on the interface: the kind's own
 service decides who may start (buddy: active members, the 10-per-24h limit) and then calls

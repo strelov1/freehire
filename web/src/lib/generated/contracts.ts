@@ -2,17 +2,12 @@
 // Regenerate with `make gen-contracts`.
 
 /**
- * Enrichment is the typed view of a job's enrichment JSONB payload. JSON keys
- * are snake_case to match the existing jobs JSON tags. The blob maps 1:1 to the
- * future search document.
+ * Enrichment is the typed view of a job's enrichment JSONB payload (snake_case keys).
  */
 export interface Enrichment {
   /**
-   * Summary is a short, model-written synopsis of the role (1–2 sentences): what
-   * the job involves and its core stack. Unlike every other field — which is
-   * extracted and omitted when the posting does not state it — this one is
-   * SYNTHESIZED, so the prompt asks the model to always produce it. It is served
-   * free text (no controlling dictionary), bounded by Sanitize.
+   * Summary is a 1-2 sentence synopsis. Unlike the other fields it is synthesized, so the
+   * prompt always asks for it. Free text, bounded by Sanitize.
    */
   summary?: string;
   /**
@@ -23,11 +18,9 @@ export interface Enrichment {
   relocation?: string; // enum: RelocationValues
   visa_sponsorship?: boolean; // pointer: false is meaningful
   /**
-   * Location / eligibility. Regions is a remote role's geographic reach — a flat
-   * macro-region vocabulary (global / continent-level area; country-level reach
-   * lives in Countries). It is meaningful only when WorkMode is "remote". Empty
-   * means *unknown*; "global" (open anywhere) is an explicit value, never
-   * inferred, so global ≠ unknown.
+   * Location / eligibility. Regions is a remote role's reach (country-level lives in
+   * Countries), meaningful only when WorkMode is "remote". Empty means unknown; "global"
+   * is explicit, never inferred.
    */
   regions?: string[]; // enum[]: RegionValues
   countries?: string[]; // enum[]: ISO 3166-1 alpha-2
@@ -60,23 +53,16 @@ export interface Enrichment {
   company_type?: string; // enum: CompanyTypeValues
   company_size?: string; // enum: CompanySizeValues
   /**
-   * Stated requirements (job-only, no CV). Freeform: what the posting itself asks
-   * for, with no comparison against any candidate — unlike, and unrelated to,
-   * matchanalysis.Requirement, which additionally classifies a requirement against
-   * one candidate's résumé. Priority is deliberately NOT schema-constrained (see
-   * requestSchema in schema.go): llmschema.Enum only reaches a top-level field or
-   * an array of scalars, not a nested property of an array of objects — adding an
-   * Enum("requirements", ...) override here would silently produce an inert/wrong
-   * constraint rather than erroring, so priority correctness relies on the prompt
-   * plus Sanitize's coercion below instead.
+   * Stated requirements (job-only, no CV; unrelated to matchanalysis.Requirement).
+   * Priority is not schema-constrained: llmschema.Enum cannot reach a property of an array
+   * of objects and would silently produce an inert constraint, so the prompt plus
+   * Sanitize's coercion enforce it.
    */
   requirements?: Requirement[];
 }
 /**
- * Requirement is one requirement stated in the posting — job-only, not compared
- * against any CV. (Distinct from, and unrelated to, matchanalysis.Requirement,
- * which additionally classifies a requirement against a specific candidate's
- * résumé.)
+ * Requirement is one requirement stated in the posting, job-only and not compared against
+ * any CV (unlike matchanalysis.Requirement).
  */
 export interface Requirement {
   text: string;
@@ -85,15 +71,11 @@ export interface Requirement {
 
 /**
  * Card is the list-row projection of a job: what a card draws, and nothing else.
- * It lives beside Job rather than in the package that lists, because both answer the same
- * question — what of a posting is public — and answering it in two places is how the wire
- * shapes drift. Card is a strict subset of Job's fields, with the same names and the same
- * derivations, so a row and a detail page cannot disagree about a job's work mode or where it
- * is open.
- * The difference is what is absent. Card has no description, and the tracking listing's query
- * does not read one: over 500 applications the descriptions were 2.37 MB of a 2.83 MB response
- * and 13 ms of a 40 ms query, for text no list row renders. A caller that wants the posting
- * reads the one application it opened.
+ * It lives beside Job because both answer what of a posting is public, and two places
+ * answering it is how wire shapes drift. Card is a strict subset of Job's fields with
+ * the same names and derivations.
+ * It has no description: the tracking listing's query does not read one, and the text
+ * dominated the response size for something no list row renders.
  */
 export interface Card {
   /**
@@ -105,13 +87,12 @@ export interface Card {
   company: string;
   closed_at?: string;
   /**
-   * Location is the posting's own location line as it states it — what tells one employer's
-   * postings in different cities apart on a row whose flags all name the same country.
+   * Location is the posting's own location line, which tells one employer's postings
+   * in different cities apart on a row whose flags all name the same country.
    */
   location?: string;
   /**
-   * The stated facets of the tag row. Empty means unstated, and the row simply omits it —
-   * the same rule the full projection follows.
+   * The stated facets of the tag row. Empty means unstated and the row omits it.
    */
   work_mode?: string;
   seniority?: string;
@@ -121,29 +102,24 @@ export interface Card {
   skills?: string[];
   collections?: string[];
   /**
-   * AIInterviewReports mirrors Job.AIInterviewReports — omitted at zero for the same
-   * reason: the badge is the count, so no reports must be an absent field.
+   * AIInterviewReports mirrors Job.AIInterviewReports: omitted at zero, since the
+   * badge is the count.
    */
   ai_interview_reports?: number /* int32 */;
   /**
-   * PostedAt is the effective posting date, the same derivation the full projection makes:
-   * the stated date, or the row's creation when the source never gave one.
+   * PostedAt is the effective posting date: the stated date, or the row's creation
+   * when the source gave none.
    */
   posted_at?: string;
   /**
-   * Blurb is the line a row shows under the title — the enrichment's summary, or the
-   * opening of the description with its tags stripped. Cut server-side: a row displays
-   * about 220 characters, and shipping the whole posting to reach them was 84% of this
-   * listing's payload.
+   * Blurb is the line under the title: the enrichment's summary, or the opening of
+   * the description with tags stripped. Cut server-side to about 220 characters.
    */
   blurb?: string;
   /**
-   * Ghost is the ghost-job signal, mirroring Job.Ghost exactly — computed at read time
-   * by ClassifyGhost, never stored, and never a bare accusation: the level plus the
-   * criteria that fired. Omitted (nil) when there is nothing to say. Unlike Job, Card
-   * carries no Reality field: no listing surface in this app serves Reality on a card
-   * today, only the detail page does — Reality is only ever an internal ingredient of
-   * ClassifyGhost here, the same convention the other two listings already follow.
+   * Ghost mirrors Job.Ghost: computed at read time by ClassifyGhost, never stored.
+   * Omitted (nil) when there is nothing to say. Unlike Job, Card carries no Reality
+   * field; Reality is only an internal ingredient of ClassifyGhost here.
    */
   ghost?: Ghost;
 }
@@ -154,14 +130,11 @@ export interface Card {
 /**
  * Ghost is the served ghost signal: a hedged level, the criteria that produced it,
  * and the denominator of the scale the interface shows. It carries facts so the UI
- * can state them, never a bare accusation — the same doctrine as Reality.
- * Contributors is the number of DISTINCT people behind the outcome criteria, and it
- * is ABSENT below the anonymity gate rather than zeroed or rounded. Absence is what
- * makes the guarantee structural: with a single witness there is no count to serve,
- * so no later caller can forget to redact one. (A count of one would identify that
- * applicant to the employer.)
- * The signal is computed on read and never stored — it is time-dependent, and a
- * stored level would go stale sitting still.
+ * can state them, never a bare accusation.
+ * Contributors is the number of distinct people behind the outcome criteria. It is
+ * ABSENT below the anonymity gate rather than zeroed or rounded, so no caller can
+ * forget to redact it (a count of one would identify that applicant to the employer).
+ * Computed on read and never stored: it is time-dependent.
  */
 export interface Ghost {
   level: string;
@@ -174,32 +147,32 @@ export interface Ghost {
 //////////
 // source: jobview.go
 /*
-Package jobview defines the single public wire shape of a job — the JSON
-representation served by the list, detail, and search endpoints and stored in
-the search index. Keeping one type (instead of parallel per-endpoint structs)
-makes drift between the API surfaces impossible.
+Package jobview defines the single public wire shape of a job, served by the list,
+detail and search endpoints and stored in the search index. One type keeps the
+surfaces from drifting.
 */
 
 /**
- * Job is the public wire shape of a job. It carries the public_slug and
- * deliberately omits the internal numeric id, which must never be exposed: the
- * id is enumerable and its growth leaks inventory size and fill rate.
- * Enrichment is nested (not flattened) and typed; an unenriched job serializes
- * it as `{}`. Timestamps are RFC3339 UTC strings (or null) — the lexicographic
- * order is chronological, which the search index relies on for sorting.
+ * Job is the public wire shape of a job. It carries public_slug and deliberately omits
+ * the numeric id, which is enumerable and its growth leaks inventory size and fill rate.
+ * Enrichment is nested and typed; an unenriched job serializes it as `{}`. Timestamps
+ * are RFC3339 UTC strings (or null), which sort chronologically as the index relies on.
  */
 export interface Job {
   public_slug: string;
   source: string;
   /**
-   * ManuallyAdded marks a hand-curated posting added by a moderator (created_by is
-   * set), as opposed to an automated source. It is the provenance signal, decoupled
-   * from Source (which is the real origin); the authoring user id itself is internal
-   * and never exposed.
+   * ManuallyAdded marks a hand-curated posting added by a moderator (created_by set),
+   * decoupled from Source. The authoring user id is never exposed.
    */
   manually_added: boolean;
   external_id: string;
   url: string;
+  /**
+   * SourceURL is the original posting when URL points to a separately verified
+   * application destination. Omitted when both links are the same.
+   */
+  source_url?: string;
   title: string;
   company: string;
   company_slug: string;
@@ -207,37 +180,28 @@ export interface Job {
   description: string;
   /**
    * DirectApply marks an employer vacancy that takes applications on freehire instead
-   * of linking out (job.IsDirectApply); its URL is empty. Omitted for every other
-   * posting rather than served false, so the flag adds nothing to the search index
-   * for the catalogue it does not describe.
+   * of linking out (job.IsDirectApply); its URL is empty. Omitted rather than served
+   * false, to keep the search index small.
    */
   direct_apply?: boolean;
   /**
-   * WorkMode/Skills are served from the jobs dictionary columns ONLY — the
-   * deterministic dictionaries are the sole production source for these facets. The
-   * LLM's enrichment values for them are deliberately excluded from the served object
-   * (they remain raw in the stored enrichment JSONB), so the LLM can later run free as
-   * a discovery signal without corrupting production data.
-   * Countries/Regions are a HYBRID facet, like Cities (see geoFacet): the dictionary
-   * columns win whenever they pinned a place, but an unpinned geography (no country,
-   * and at most the "global" bucket an explicit open-anywhere marker resolves to)
-   * falls back to the LLM's enrichment.countries/regions — catching a restriction
-   * stated only in the prose ("Remote (SPAIN only)") that the location string never
-   * carried.
-   * All four are served top-level and once; the same fields are folded out of the
-   * nested Enrichment to avoid duplication.
+   * WorkMode/Skills are served from the jobs dictionary columns ONLY; the LLM's values
+   * stay raw in the stored enrichment JSONB, so the LLM can run free as a discovery
+   * signal without corrupting production data.
+   * Countries/Regions are a hybrid facet, like Cities (see geoFacet): the dictionary
+   * columns win whenever they pinned a place; otherwise the LLM's enrichment.countries/
+   * regions fill in, catching a restriction stated only in prose ("Remote (SPAIN only)").
+   * All four are served top-level and folded out of the nested Enrichment.
    */
   countries: string[];
   regions: string[];
   work_mode?: string;
   skills: string[];
   /**
-   * Cities is a HYBRID facet (the one deliberate dict+LLM exception): the
-   * deterministic jobs.cities column when it resolved a beacon city, otherwise a
-   * normalized fallback to the LLM's enrichment.cities — cities are high-cardinality
-   * and the dictionary is only a beacon list, so a pure-dict facet would be too
-   * sparse. Values are canonical display names (Title case); the LLM copy is folded
-   * out of the nested Enrichment like the other geography facets.
+   * Cities is a hybrid facet (the one deliberate dict+LLM exception): the dictionary
+   * column when it resolved a beacon city, otherwise a normalized fallback to the LLM's
+   * enrichment.cities, since the dictionary is only a beacon list and would be too
+   * sparse. Values are canonical display names (Title case).
    */
   cities: string[];
   /**
@@ -245,76 +209,68 @@ export interface Job {
    */
   metros: string[];
   /**
-   * Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
-   * job's company belongs to, denormalized from the company onto the job. It is a
-   * deterministic source fact (no LLM counterpart) served straight from the jobs
-   * column; an untagged job serializes it as [].
+   * Collections is the curated-collection slugs (e.g. yc, bigtech) of the job's
+   * company, denormalized onto the job. A deterministic source fact; an untagged job
+   * serializes it as [].
    */
   collections: string[];
   /**
-   * Perks are the benefits the description states it offers, from the closed
-   * vocabulary vocab.PerkValues and in its order (internal/dict/perks, never the LLM).
-   * Indexed as a filterable Meili facet. Always an array: [] means the description
-   * names none of them, not that the job offers none.
+   * Perks are the benefits the description states it offers, from vocab.PerkValues in
+   * its order (internal/dict/perks, never the LLM). Always an array: [] means the
+   * description names none, not that the job offers none.
    */
   perks: string[];
   /**
-   * AIInterviewReports is how many people have reported that this job's company
-   * screens candidates with an AI interviewer (internal/engage/processreport),
-   * denormalized from the company onto the job. Omitted at zero: the count is what
-   * the label must always be shown with, so "no reports" has to be the absence of
-   * the field rather than a zero a badge could render beside.
+   * Engagement names the legal terms the posting states it engages its worker on, from
+   * vocab.EngagementValues (internal/dict/engagement, never the LLM), each in its
+   * market's own term (ir35_outside, w2, b2b, clt, gph...). Always an array: [] means
+   * the posting does not say.
+   */
+  engagement: string[];
+  /**
+   * AIInterviewReports is how many people reported that this job's company screens with
+   * an AI interviewer (internal/engage/processreport), denormalized from the company.
+   * Omitted at zero, so "no reports" is an absent field rather than a zero a badge
+   * could render.
    */
   ai_interview_reports?: number /* int32 */;
   /**
-   * IsTech is the deterministic technical/non-technical facet: "tech" or "non_tech",
-   * omitted when unknown (the tri-state jobs.is_tech NULL). Served top-level and
-   * indexed as a filterable Meili facet; an unknown value is absent so it filters as
-   * empty. Derived from title + category (jobderive), never from the LLM.
+   * IsTech is the deterministic "tech" or "non_tech" facet, derived from title +
+   * category (jobderive), never the LLM. Omitted when unknown (jobs.is_tech NULL) so it
+   * filters as empty.
    */
   is_tech?: string;
   /**
    * RequiresClearance marks a posting that states a government security-clearance
-   * requirement (UK SC/DV, US Secret/TS-SCI, AU NV1). Deterministic, derived from
-   * the description (internal/dict/location), never from the LLM.
-   * A plain bool with omitempty rather than the tri-state IsTech renders as: the
-   * stored column only ever holds true or NULL, so the key is present exactly when
-   * a requirement was detected. There is no serialized false, because "we detected
-   * nothing" must not reach a reader as "this job needs no clearance".
+   * requirement (UK SC/DV, US Secret/TS-SCI, AU NV1), derived from the description
+   * (internal/dict/location), never the LLM.
+   * A plain bool with omitempty: the column only holds true or NULL, and a serialized
+   * false would read as "this job needs no clearance".
    */
   requires_clearance?: boolean;
   /**
-   * ViaRecruiter marks a posting that states it is published by an intermediary on
-   * a client's behalf — a staffing agency or recruiter ("on behalf of our client").
-   * Deterministic, from the description (internal/job/jobfacts). True-or-absent like
-   * RequiresClearance: a recruiter who never says so is not detected, so an absent
-   * key does not mean "posted by the employer".
+   * ViaRecruiter marks a posting published by an intermediary on a client's behalf
+   * ("on behalf of our client"), from the description (internal/job/jobfacts).
+   * True-or-absent like RequiresClearance: an absent key does not mean "posted by the
+   * employer".
    */
   via_recruiter?: boolean;
   /**
-   * Equity is what the posting states about equity compensation:
-   * "salary_and_equity" (offered beside cash pay, with or without a salary figure)
-   * or "equity_only" (the posting says equity is the whole pay). Deterministic, from
-   * the title and description (internal/job/jobfacts). Absent when the posting states
-   * neither — "not stated", never "no equity".
+   * Equity is what the posting states about equity compensation: "salary_and_equity"
+   * or "equity_only", from the title and description (internal/job/jobfacts). Absent
+   * means "not stated", never "no equity".
    */
   equity?: string;
   /**
-   * ClearanceLevels names the clearance levels the posting states, from the closed
-   * vocabulary vocab.ClearanceLevelValues — the US ladder (confidential, secret,
-   * top_secret, ts_sci, public_trust), interim, and other (a non-US scheme, or a
-   * clearance stated with no level). Present exactly when RequiresClearance is true
-   * and omitted otherwise: an empty list would read as a claim about levels the
-   * posting never made.
+   * ClearanceLevels names the clearance levels the posting states, from
+   * vocab.ClearanceLevelValues (the US ladder, interim, and other). Present exactly when
+   * RequiresClearance is true; an empty list would claim levels the posting never made.
    */
   clearance_levels?: string[];
   /**
-   * AutoApplyAvailable marks a posting whose ATS provider (Source) is one
-   * internal/api/atsapply can currently attempt to fill and submit for (see
-   * AutoApplyProviders) — a best-effort, provider-level eligibility signal,
-   * never a guarantee that a real attempt would succeed. True-or-absent like
-   * RequiresClearance: omitted rather than false, because "not one of the
-   * providers we can drive" must not be read as "checked and ineligible".
+   * AutoApplyAvailable marks a posting whose ATS provider (Source) internal/api/atsapply
+   * can attempt (see AutoApplyProviders): a provider-level signal, not a guarantee.
+   * True-or-absent: omitted must not be read as "checked and ineligible".
    */
   auto_apply_available?: boolean;
   /**
@@ -322,85 +278,73 @@ export interface Job {
    */
   application_deadline?: string;
   /**
-   * ApplyQuestions is how many questions the posting's application form REQUIRES
-   * beyond the standard fields every form asks for (name, contact details, CV) —
-   * counted from the form captured for it (applyform.Form.RequiredQuestions), so the
-   * job card can say "3 questions" and the `apply_questions_max` filter can find the
-   * short forms.
-   * nil, and omitted, when no form has been captured — which is most postings: the
-   * platforms whose forms can be read at all are a minority of the catalogue. 0 is a
-   * real answer ("nothing beyond the basics") and is serialized; an absent key is
-   * "we do not know", and the two must never read alike. Not set by FromRow, which
-   * sees only the jobs row: the search-index writers and the detail endpoint attach
-   * it from apply_forms, so a list served straight from Postgres omits it.
+   * Team is the department or team the source ATS files the posting under (Greenhouse,
+   * Lever and Ashby state one), verbatim. Omitted when the source states none.
+   */
+  team?: string;
+  /**
+   * ApplyQuestions is how many questions the application form REQUIRES beyond the
+   * standard fields (name, contact details, CV), counted from the captured form
+   * (applyform.Form.RequiredQuestions); it feeds the `apply_questions_max` filter.
+   * nil and omitted when no form was captured (most postings). 0 is a real answer and is
+   * serialized; the two must never read alike. Not set by FromRow, which sees only the
+   * jobs row: the search-index writers and the detail endpoint attach it from apply_forms.
    */
   apply_questions?: number /* int */;
   posted_at?: string;
   created_at?: string;
   updated_at?: string;
   /**
-   * LastSeenAt is when a re-crawl last confirmed this posting still live — see
-   * docs/agents/job-lifecycle.md. The SPA uses it to estimate a rolling
-   * JobPosting.validThrough for an open job (seo.ts), since most sources carry
-   * no real listing-expiry date of their own.
+   * LastSeenAt is when a re-crawl last confirmed the posting live (see
+   * docs/agents/job-lifecycle.md). The SPA uses it to estimate a rolling
+   * JobPosting.validThrough (seo.ts) for sources with no expiry date.
    */
   last_seen_at?: string;
   /**
-   * ClosedAt is non-null when the posting is no longer open. Lists and the
-   * search index never contain closed jobs; only the detail endpoint serves
-   * them, and the SPA renders the closed state from this field.
+   * ClosedAt is non-null when the posting is no longer open. Lists and the search index
+   * never contain closed jobs; only the detail endpoint serves them.
    */
   closed_at?: string;
   enrichment: Enrichment;
   enriched_at?: string;
   enrichment_version: number /* int32 */;
   /**
-   * ViewCount/AppliedCount are the job's materialized engagement counters —
-   * distinct signed-in users who viewed and who marked applied — served straight
-   * from the jobs columns (no read-time counting). Displayed on the detail page.
+   * ViewCount/AppliedCount are the materialized counters of distinct signed-in users who
+   * viewed and who marked applied, served straight from the jobs columns.
    */
   view_count: number /* int32 */;
   applied_count: number /* int32 */;
   /**
-   * UpvoteCount/DownvoteCount are the job's materialized public thumbs counters —
-   * distinct signed-in users whose current vote is up / down — served straight from
-   * the jobs columns on every read.
+   * UpvoteCount/DownvoteCount are the materialized public thumbs counters, served
+   * straight from the jobs columns.
    */
   upvote_count: number /* int32 */;
   downvote_count: number /* int32 */;
   /**
-   * MyVote is the caller's own vote (-1, 0, 1). It is caller-scoped, so it is only
-   * populated on auth-aware detail reads (GetJob with OptionalAuth); list, search,
-   * and the index-build path leave it 0 and never persist a real user's vote.
+   * MyVote is the caller's own vote (-1, 0, 1). Caller-scoped: only auth-aware detail
+   * reads populate it; list, search and index-build leave it 0.
    */
   my_vote: number /* int32 */;
   /**
-   * Reality is the job-reality signal (fresh/stale/likely-evergreen + evidence),
-   * computed at index/read time and attached by ClassifyReality — never stored, as
-   * it is time-dependent. Nil when not computed (e.g. a plain FromRow without counts).
+   * Reality is the job-reality signal (fresh/stale/likely-evergreen + evidence), attached
+   * by ClassifyReality, never stored. Nil when not computed.
    */
   reality?: Reality;
   /**
-   * Ghost is the ghost-job signal (level + the criteria that fired + the scale's
-   * denominator), computed at read time by ClassifyGhost — never stored, and never
-   * present on a closed job. Nil at level `none`, which is most of the catalogue:
-   * the field appears only when the system has something to say.
+   * Ghost is the ghost-job signal, computed at read time by ClassifyGhost, never stored
+   * and never present on a closed job. Nil at level `none`, most of the catalogue.
    */
   ghost?: Ghost;
   /**
-   * ReferralAvailable is true when the job's company has at least one approved employee
-   * referrer, so the detail page can show the "ask for a referral" affordance. A
-   * read-time projection attached only by the detail handler (omitted on list rows,
-   * where FromRow leaves it false).
+   * ReferralAvailable is true when the job's company has an approved employee referrer.
+   * Attached only by the detail handler; list rows leave it false.
    */
   referral_available?: boolean;
   /**
-   * AutoApplyStatus is the caller's own auto-apply status for this job — "queued" (a
-   * live, undecided entry) or "declined" (the candidate's own prior decision, permanent)
-   * — or nil for no attempt or an anonymous caller. Caller-scoped like MyVote: only the
-   * detail handler overlays it, keyed by (caller_id, job_id), never joined into the
-   * primary job query every anonymous reader also pays for.
-   * See openspec/changes/auto-apply-submit-trigger.
+   * AutoApplyStatus is the caller's own auto-apply status for this job: "queued" or
+   * "declined" (the candidate's permanent decision), nil for no attempt or an anonymous
+   * caller. Caller-scoped like MyVote: only the detail handler overlays it, keyed by
+   * (caller_id, job_id), so the shared job query stays free of it.
    */
   auto_apply_status?: string;
 }
@@ -409,11 +353,9 @@ export interface Job {
 // source: reality.go
 
 /**
- * Reality is the served job-reality signal: the class plus the observable facts that
- * produced it, so the UI states facts ("open 240 days · reposted 6×") rather than a
- * bare accusation. It is computed at index/read time (never stored — it is
- * time-dependent) and attached via ClassifyReality; a job with no computed signal
- * omits the field.
+ * Reality is the served job-reality signal: the class plus the observable facts behind
+ * it, so the UI states facts ("open 240 days · reposted 6×") rather than a bare
+ * accusation. Computed at index/read time, never stored; omitted when not computed.
  */
 export interface Reality {
   class: string;
@@ -562,31 +504,28 @@ export interface Report {
 // source: delta.go
 
 /**
- * Delta is the change one CV's ATS readiness shows against another's: the overall
- * move plus one entry per category, and — only when the overall fell — the category
- * that fell furthest. It compares two Reports and computes nothing itself, so the
- * five categories, their labels and their weights stay the scorer's business.
- * JSON is the wire contract shared with the frontend (see cmd/gen-contracts).
+ * Delta is the change one CV's ATS readiness shows against another's: the overall move,
+ * one entry per category, and (only when the overall fell) the category that fell furthest.
+ * It only compares two Reports; the categories, labels and weights stay the scorer's. JSON is
+ * the wire contract shared with the frontend (see cmd/gen-contracts).
  */
 export interface Delta {
   base: number /* int */; // the baseline CV's overall score
   tailored: number /* int */; // the compared CV's overall score
   change: number /* int */; // Tailored − Base, signed
   /**
-   * Categories reports only the categories present in BOTH reports: a category on
-   * one side alone is not a difference, and reporting it against an implied zero
-   * would invent a change nobody made.
+   * Categories reports only the categories present in BOTH reports: one-sided ones would
+   * invent a change against an implied zero.
    */
   categories: CategoryChange[];
   /**
-   * Regressed is true when the overall score fell. A category may fall while the
-   * overall holds; that is not a regression, and WorstCategory stays empty for it.
+   * Regressed is true when the overall score fell. A category may fall while the overall
+   * holds; that is not a regression and leaves WorstCategory empty.
    */
   regressed: boolean;
   /**
-   * WorstCategory is the id of the category with the most negative change, set only
-   * when Regressed. An equal drop resolves to the earlier of the two in the compared
-   * report's own order, so the answer never depends on map iteration.
+   * WorstCategory is the id of the category with the most negative change, set only when
+   * Regressed. Ties go to the earlier one in the compared report's order, never map order.
    */
   worst_category?: string;
 }
@@ -600,10 +539,8 @@ export interface CategoryChange {
   tailored: number /* int */;
   change: number /* int */; // Tailored − Base, signed
   /**
-   * Items are the checks behind the TAILORED side's score, so a panel can expand a row
-   * into why it stands where it does. The base side's items are deliberately not carried:
-   * the candidate is editing the tailored copy, and a before/after list of individual
-   * checks is a diff nobody asked for.
+   * Items are the checks behind the TAILORED side's score, so a panel can expand a row. The
+   * base side's items are deliberately not carried.
    */
   items?: LineItem[];
 }
@@ -986,10 +923,8 @@ export interface Requirement {
   evidence_strength: string; // metric|scope|responsibility|keyword for positive statuses; empty for missing-*
 }
 /**
- * Signal is one interpretive read of the job posting's own wording — a verbatim quote plus
- * what it implies about pace, ownership expectations, team stage, or culture. Freeform text
- * bounded by length only (the same tier as Recommendation/comment), not a controlled
- * vocabulary: there is no fixed set of "signal types" to coerce into.
+ * Signal is one interpretive read of the job posting's own wording: a verbatim quote plus what
+ * it implies about pace, ownership, team stage, or culture. Freeform, bounded by length only.
  */
 export interface Signal {
   quote: string;
@@ -1012,18 +947,15 @@ export interface Analysis {
 }
 
 /**
- * Band is how long the letter should be. Two are offered rather than a free-form length,
- * because the application forms do not state a limit — no captured apply_forms field carries
- * maxlength — so the numbers are a product decision and a slider over them would be a
- * precision the data does not support.
+ * Band is how long the letter should be. Two are offered because forms state no limit, so the
+ * numbers are a product decision and a finer control would imply precision the data lacks.
  */
 export type Band = string;
 export const BandShort: Band = "short";
 export const BandStandard: Band = "standard";
 /**
  * Bounds are the server-owned ceilings on what the chain may return. The model is never
- * trusted to observe them; Sanitize enforces them after the fact, the same discipline
- * matchanalysis keeps over its own output.
+ * trusted to observe them; Sanitize enforces them afterwards.
  */
 export interface Bounds {
   /**
@@ -1032,14 +964,13 @@ export interface Bounds {
   ShortCeiling: number /* int */;
   StandardCeiling: number /* int */;
   /**
-   * Floor is the shortest body that still counts as a letter. The audit stage cuts, and a
-   * stage whose only instruction is to cut can cut to nothing; below this the caller keeps
-   * the un-audited draft instead.
+   * Floor is the shortest body that still counts as a letter. The audit only cuts and can cut
+   * to nothing; below this the caller keeps the un-audited draft.
    */
   Floor: number /* int */;
   /**
-   * MaxCited caps how many atoms one letter may cite. A letter that cites everything cites
-   * nothing — the point of the citation list is that a reader can check it.
+   * MaxCited caps how many atoms one letter may cite; citing everything makes the list
+   * uncheckable.
    */
   MaxCited: number /* int */;
 }
@@ -1049,21 +980,19 @@ export interface Bounds {
 export interface Letter {
   body: string;
   /**
-   * Cited are the atoms the letter's claims rest on, in the order the letter uses them.
-   * This is what the UI shows beside the letter and what makes the honesty claim checkable.
+   * Cited are the atoms the letter's claims rest on, in the order the letter uses them; the UI
+   * shows them beside the letter.
    */
   cited_atom_ids: string[];
   /**
-   * Language is what the letter was written in, taken from the VACANCY and not from the
-   * candidate's profile — the employer is the reader.
+   * Language is what the letter was written in, from the VACANCY, not the candidate's profile.
    */
   language: string;
 }
 
 /**
- * Structured is the typed, sanitized résumé. Every field is optional — a value the CV
- * does not state is left empty rather than invented (the model is prompted accordingly
- * and Sanitize drops empty entries).
+ * Structured is the typed, sanitized résumé. Every field is optional: a value the CV
+ * does not state stays empty, and Sanitize drops empty entries.
  */
 export interface Structured {
   full_name?: string;
@@ -1082,14 +1011,11 @@ export interface Structured {
   projects?: Project[];
 }
 /**
- * Professional is Structured with the contact fields left out — the résumé's substance
- * (what the person has done) without the identity (who they are). It is what goes to a
- * consumer that has no business knowing the candidate's name: the LLM fit chain, and an
- * agent reading the profile over the API.
- * The field set is a whitelist, deliberately: a field later added to Structured is
- * withheld until it is added here too. A blacklist — dropping the four known contact
- * keys — would disclose that new field by default, which is the wrong way round for a
- * projection whose whole job is to hold personal data back.
+ * Professional is Structured without the contact fields: what the person has done, not
+ * who they are. It goes to consumers that must not know the name (the LLM fit chain, an
+ * agent reading the profile over the API).
+ * The field set is a whitelist on purpose: a field later added to Structured stays
+ * withheld until added here, where a blacklist would disclose it by default.
  */
 export interface Professional {
   headline?: string;
@@ -1104,10 +1030,9 @@ export interface Professional {
   projects?: Project[];
 }
 /**
- * Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
- * (year, optional month) that the model interprets from however the CV prints the
- * range; Current marks an ongoing role instead of a fabricated End. Summary is the
- * role/company one-line context; Highlights are the achievement bullets.
+ * Experience is one work-history entry. Current marks an ongoing role instead of a
+ * fabricated End. Summary is the one-line role/company context; Highlights are the
+ * achievement bullets.
  */
 export interface Experience {
   title?: string;
@@ -1129,14 +1054,10 @@ export interface Project {
   highlights?: string[];
 }
 /**
- * Education is one education entry. Year is the same structured perioddate.PeriodDate as
- * Experience's Start/End (month is rarely stated for a degree, so it is usually
- * year-only, but the type stays the one shared shape rather than a bare int).
- * Degree is assumed short and dedicated (a CV's own degree line, e.g. "BSc Computer
- * Science"), never a full sentence — internal/dict/edulevel.ForDegree relies on this to
- * safely match bare "BS"/"MS" forms that would be ambiguous in free-running prose. If
- * this field's extraction ever changes to allow fuller sentences, revisit ForDegree's
- * leniency alongside it.
+ * Education is one education entry; Year is usually year-only.
+ * Degree must stay short (a CV's own degree line, e.g. "BSc Computer Science"), never a
+ * sentence: internal/dict/edulevel.ForDegree relies on it to match bare "BS"/"MS", which
+ * are ambiguous in prose.
  */
 export interface Education {
   degree?: string;
@@ -1145,10 +1066,73 @@ export interface Education {
 }
 
 /**
- * AutopilotStatus is what an autopilot run made of one requirement. The vocabulary is
- * fixed and small on purpose: the panel renders each value, and a value it cannot render
- * is worse than a refused write. Nothing is coerced — an unrecognised status is reported
- * back to the model with the valid ones named, which is how it corrects itself mid-turn.
+ * MetaResponse is GET /me/resume: storage flags, parse status, the candidate's owned
+ * overrides and the composed structured résumé.
+ */
+export interface MetaResponse {
+  enabled: boolean;
+  present: boolean;
+  uploaded_at: string | null;
+  structured: Structured | null;
+  structure_pending: boolean;
+  parse_status?: string;
+  parse_detail?: string;
+  /**
+   * Contacts is the wire name for historical/API-stability reasons; the Go/DB concept
+   * underneath is resume.Owned, which now also carries headline/summary/languages/
+   * certifications — see Owned.
+   */
+  contacts?: Owned;
+}
+/**
+ * Owned is everything about a candidate's résumé that the CANDIDATE edited directly, rather
+ * than what resume_structured last re-derived from an upload. It is the one owned-overlay
+ * mechanism for the whole profile, not identity alone: a re-upload regenerates
+ * headline/summary/languages/certifications/education as wholesale as email/phone.
+ * Deliberately NOT here: Skills (userprofile.Profile.Skills, a CV-independent resource) and
+ * Experience/Projects (the experience bank, provenance-tracked). Education stays a flat overlay.
+ * Persisted as one JSON blob on users.candidate_contacts; the column keeps its original name.
+ */
+export interface Owned {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  links?: string[];
+  headline?: string;
+  summary?: string;
+  languages?: string[];
+  certifications?: string[];
+  education?: Education[];
+  /**
+   * TotalYears is the candidate's own years of experience: a re-upload recomputes the
+   * extracted figure wholesale, so a correction must survive. The onboarding wizard saves
+   * whatever the candidate leaves in the field.
+   */
+  total_years?: number /* int */;
+  /**
+   * The five body fields above are owned per field (see ApplyBody); a non-empty value implies
+   * ownership. A cleared field has no value left to signal it, so an explicit save carries its
+   * own *Set flag, true even while the value is "". Sanitize only turns these on, never off, so
+   * an explicit clear survives it. Identity fields need no flag: they are overlaid as one
+   * IdentityEmpty()-gated block.
+   */
+  headline_set?: boolean;
+  summary_set?: boolean;
+  languages_set?: boolean;
+  certifications_set?: boolean;
+  education_set?: boolean;
+  /**
+   * TotalYearsSet is the same explicit-clear signal for a numeric field: zero is a legitimate
+   * answer ("less than a year"), and without the flag the CV's own figure would replace it.
+   */
+  total_years_set?: boolean;
+}
+
+/**
+ * AutopilotStatus is what an autopilot run made of one requirement. The vocabulary is fixed
+ * because the panel must render each value. Nothing is coerced: an unrecognised status is
+ * reported back to the model with the valid ones named, so it can correct itself.
  */
 export type AutopilotStatus = string;
 /**
@@ -1161,6 +1145,10 @@ export const AutopilotClosedBank: AutopilotStatus = "closed_bank";
  * run, their words were banked, and the bullet cites that record.
  */
 export const AutopilotClosedCandidate: AutopilotStatus = "closed_candidate";
+/**
+ * AutopilotPartial means related evidence exists, but part of the requirement is unverified.
+ */
+export const AutopilotPartial: AutopilotStatus = "partial";
 /**
  * AutopilotOpen: the bank holds nothing for it. This is the remainder worth asking about.
  */
@@ -1176,6 +1164,7 @@ export interface AutopilotEntry {
   requirement: string;
   status: AutopilotStatus;
   note?: string;
+  unverified?: string;
 }
 
 //////////
@@ -1186,9 +1175,38 @@ seeding from the extracted résumé, and PDF rendering behind a Renderer interfa
 */
 
 /**
- * DefaultMaxBullets is the per-experience / per-project bullet ceiling when
- * CV_MAX_BULLETS is unset. Writers must refuse growth past MaxBullets rather
- * than let Sanitize drop trailing content silently.
+ * The section ceilings Sanitize truncates to, exported (and generated into the web
+ * contracts) so the editor can refuse an Add past them instead of dropping a row silently.
+ */
+export const MaxExperience = 30;
+/**
+ * Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+ * Sanitize is both the persistence guard and the prompt-injection guard.
+ */
+export const MaxEducation = 20;
+/**
+ * Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+ * Sanitize is both the persistence guard and the prompt-injection guard.
+ */
+export const MaxSkillGroups = 20;
+/**
+ * Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+ * Sanitize is both the persistence guard and the prompt-injection guard.
+ */
+export const MaxLanguages = 20;
+/**
+ * Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+ * Sanitize is both the persistence guard and the prompt-injection guard.
+ */
+export const MaxProjects = 30;
+/**
+ * Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+ * Sanitize is both the persistence guard and the prompt-injection guard.
+ */
+export const MaxCertifications = 30;
+/**
+ * DefaultMaxBullets is the per-experience / per-project bullet ceiling when CV_MAX_BULLETS
+ * is unset. Writers must refuse growth past MaxBullets rather than let Sanitize drop it.
  */
 export const DefaultMaxBullets = 20;
 /**
@@ -1198,9 +1216,8 @@ export const DefaultMaxBullets = 20;
 export interface Document {
   margins: Margins;
   /**
-   * No omitempty: it does nothing on a struct (encoding/json only omits false, 0, nil, and
-   * empty strings/slices/maps), so the tag would promise clients an absence they never see
-   * while making the generated TypeScript optional for no reason.
+   * No omitempty: it does nothing on a struct, so the tag would only make the generated
+   * TypeScript optional.
    */
   style: Style;
   header: Header;
@@ -1214,8 +1231,7 @@ export interface Document {
 }
 /**
  * Margins is the CV's per-side page margin in inches, applied identically to the HTML
- * preview and the Typst-rendered PDF. Sanitize clamps each side and defaults an unset
- * (zero) side to defaultMargin.
+ * preview and the Typst PDF. Sanitize clamps each side and defaults an unset side.
  */
 export interface Margins {
   top: number /* float64 */;
@@ -1225,19 +1241,13 @@ export interface Margins {
 }
 /**
  * Style is the CV's typography: the typeface, the base type size in points, and the line
- * height as a leading multiple of the em. It is part of the document, so it persists with
- * the CV, is copied when the CV is tailored, and is not clobbered by field-level patches.
- * A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO. This is
- * the opposite of Margins, which resolves an unset side to a concrete 0.5in, and the
- * difference is deliberate on both counts:
- *   - Every CV written before this type existed has no style block, so it renders exactly as
- *     it did. There is nothing to migrate.
- *   - A template stays a whole design choice. Switching to a template with looser leading
- *     actually loosens the leading, because that value was never frozen into the document.
- * Resolving defaults here — the natural thing to do by analogy with clampMargin — would
- * silently bake the current template's typography into every document on its next save.
- * FontFamily is a registry id (see fonts.go), never a renderer's own face name: the renderer
- * resolves it on its own copy of the document at render time.
+ * height as a leading multiple of the em. It is part of the document, so it persists, is
+ * copied when the CV is tailored, and is not clobbered by field-level patches.
+ * A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO, unlike
+ * Margins. Resolving defaults here would bake the current template's typography into every
+ * document on its next save and stop a template switch from changing leading.
+ * FontFamily is a registry id (see fonts.go), never a renderer's face name; the renderer
+ * resolves it on its own copy at render time.
  */
 export interface Style {
   font_family?: string;
@@ -1257,9 +1267,7 @@ export interface Header {
 }
 /**
  * Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
- * (year, optional month) — the same shared type experience.Employment and
- * resumeextract.Experience use. Rendering to PDF formats this back to display text
- * (see renderer.go); no template deals with the structured value directly.
+ * (year, optional month), formatted to display text at render time (see renderer.go).
  */
 export interface ExperienceItem {
   role?: string;
@@ -1458,9 +1466,8 @@ export const FieldAge18OrOlder: Field = "age_18_or_older";
 export const FieldPrivacyConsent: Field = "privacy_consent";
 
 /**
- * Responses is one candidate's survey record. Every field is independently optional: a nil
- * pointer means the candidate has not stated that fact, never a guessed default and never
- * a zero standing in for silence.
+ * Responses is one candidate's survey record. Every field is independently optional: nil
+ * means not stated, never a default or a zero standing in for silence.
  */
 export interface Responses {
   job_search_stage?: string;
@@ -1471,8 +1478,7 @@ export interface Responses {
   biggest_challenges?: string[];
   /**
    * BiggestChallengeNote is free text, admitted only while vocab.JobChallengeOther is
-   * among the challenges. A note beside coded answers alone could contradict them, and
-   * nothing downstream would know which to believe.
+   * among the challenges; beside coded answers alone it could contradict them.
    */
   biggest_challenge_note?: string;
   current_income_amount?: number /* int */;
@@ -1486,8 +1492,7 @@ export interface Responses {
 export interface CandidateCard {
   /**
    * Seniority and Category describe the candidate as a whole: what their current (or
-   * most recent) role resolves to. This is the card's heading, built rather than
-   * quoted — see PrimaryTitle.
+   * most recent) role resolves to. The heading is built, not quoted; see PrimaryTitle.
    */
   seniority?: string;
   category?: string;
@@ -1496,28 +1501,21 @@ export interface CandidateCard {
    */
   total_years?: number /* int */;
   /**
-   * Skills are skilltag canonicals. A token the dictionary does not resolve emits
-   * nothing, which is exactly the whitelisting this card needs — see skilltag's
-   * "never guess" rule.
+   * Skills are skilltag canonicals; an unresolved token emits nothing.
    */
   skills: string[];
   /**
-   * Roles is the work history with everything nameable removed: no employer, no
-   * location, no prose. What remains is the shape of a career, which is what a
-   * recruiter reads a history for anyway.
+   * Roles is the work history with everything nameable removed: no employer, location or prose.
    */
   roles: CandidateRole[];
   /**
-   * Education carries only what internal/dict/edulevel resolves from each entry's
-   * degree text, plus its year — never the institution or field of study. An entry
-   * whose degree resolves to nothing is dropped rather than kept under an empty
-   * label: a work-history gap reads worse than absence, but a candidate's set of
-   * degrees carries no such expectation of completeness.
+   * Education carries only what internal/dict/edulevel resolves from each entry's degree
+   * text, plus its year. An entry whose degree resolves to nothing is dropped, not kept
+   * under an empty label (unlike roles, nobody expects a complete degree list).
    */
   education?: EducationEntry[];
   /**
-   * Certifications are internal/dict/certification canonicals. A name the dictionary
-   * does not resolve emits nothing, the same whitelisting Skills gets from skilltag.
+   * Certifications are internal/dict/certification canonicals; unresolved names emit nothing.
    */
   certifications?: string[];
 }
@@ -1534,10 +1532,9 @@ export interface EducationEntry {
  */
 export interface CandidateRole {
   /**
-   * Title is the candidate's own words, verbatim — the card's ONE exception to the
-   * dictionary-only rule, argued in this file's header comment. Seniority and Category
-   * remain beside it as the fallback for a role whose title is absent, and as the
-   * values every filter reads: the raw string is for a human to read, never to match on.
+   * Title is the candidate's own words, the card's ONE exception to the dictionary-only
+   * rule (see the header). Seniority and Category are the fallback for an absent title
+   * and what every filter reads; the raw string is never matched on.
    */
   title?: string;
   seniority?: string;
@@ -1548,55 +1545,44 @@ export interface CandidateRole {
   stack?: string[];
 }
 /**
- * CatalogueMember is one entry in the public catalogue: the dictionary-checked card, plus the
- * facts that live in columns rather than in the CV.
- * Every field here survives the same rule ProjectCard enforces. Cities are the NORMALISED
- * extraction (users.resume_cities), not the free-text location inside the CV, which
- * carries values like "Austria, Klagenfurt 9020"; the timezone is an IANA zone;
- * specializations are drawn from vocab.CategoryValues by the profile form. None of the
- * three can carry a sentence.
- * Specializations are NOT a duplicate of Card.Category, and the difference is the useful
- * part. Category is derived from what the candidate has DONE — the title of their most
- * recent role, through classify. Specializations are what they SAY they want, ticked from
- * the same closed vocabulary on their own profile. A backend engineer whose profile says
- * `ml_ai` is somebody a recruiter wants to find, and the two fields disagreeing is the
- * only way that shows.
+ * CatalogueMember is one entry in the public catalogue: the dictionary-checked card, plus
+ * the facts that live in columns rather than in the CV.
+ * Every field obeys the ProjectCard rule: cities are the NORMALISED extraction
+ * (users.resume_cities), not the free-text CV location; the timezone is an IANA zone;
+ * specializations come from vocab.CategoryValues.
+ * Specializations are NOT a duplicate of Card.Category: Category is what the candidate has
+ * DONE (latest title through classify), Specializations what they SAY they want. A backend
+ * engineer who ticks `ml_ai` is findable only because the two can disagree.
  */
 export interface CatalogueMember {
   handle: string;
   card: CandidateCard;
   /**
-   * Timezone is the IANA zone; TimezoneRegion is the part before the slash. The region
-   * is what a recruiter asking "can we overlap for a call" actually means — there are
-   * dozens of zones per continent — so it is what the filter reads.
+   * Timezone is the IANA zone; TimezoneRegion is the part before the slash, which is what
+   * the filter reads (dozens of zones per continent).
    */
   timezone?: string;
   timezone_region?: string;
   cities: string[];
   specializations: string[];
   /**
-   * UpdatedAt is when the structured extract was written, which is the freshest thing
-   * the catalogue knows about a member. It orders the list.
+   * UpdatedAt is when the structured extract was written; it orders the list.
    */
   updated_at: string;
   /**
-   * HasPhoto says only whether GET /talent/{handle}/photo has something to serve —
-   * never the object key, and never the image itself. It survives the card's own
-   * dictionary-only rule because a boolean carries no name: the alternative was every
-   * list card firing that request and reading the 404 GetPhoto already gives a member
-   * with none, which is correct but a wasted round trip for what is, in practice, most
-   * of the catalogue.
+   * HasPhoto says only whether GET /talent/{handle}/photo has something to serve, never
+   * the object key. A boolean carries no name, and it saves list cards a wasted 404 request.
    */
   has_photo: boolean;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'academictransfer', 'adp', 'adpmyjobs', 'adzuna', 'aijobs', 'applicantpro', 'applicantstack', 'applitrack', 'appone', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'beehire', 'beesite', 'betterteam', 'bizneo', 'breezy', 'briefhq', 'builtin', 'bullhorn', 'bumeran', 'cadremploi', 'cake', 'careerplug', 'careerspage', 'catho', 'catsone', 'cbop', 'civilservicejobs', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'computrabajo', 'concludis', 'cornerstone', 'coveto', 'crelate', 'cryptocurrencyjobs', 'cvwarehouse', 'darwinbox', 'dayforce', 'deel', 'devglobaljobs', 'digitalrecruiters', 'djinni', 'dover', 'dualoo', 'dvinci', 'earcu', 'easycruit', 'echojobs', 'edjoin', 'eightfold', 'emply', 'empregos', 'energyjobline', 'engage', 'enlizt', 'epam', 'eploy', 'epreselec', 'erecruiter', 'ess', 'eures', 'factorial', 'feinaactiva', 'feishujobs', 'flatchr', 'francetravail', 'freework', 'freshteam', 'friendwork', 'functionalworks', 'geekhunter', 'geekjob', 'gem', 'gemeentebanen', 'gethired', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'gohire', 'golangjobs', 'gr8people', 'gradcracker', 'greenhouse', 'greythr', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hackernews', 'harri', 'hcshiring', 'helixjobs', 'herkey', 'herp', 'hh', 'hibob', 'higherme', 'himalayas', 'hireclick', 'hirehive', 'hireology', 'hiringroom', 'hiringthing', 'hirist', 'homerun', 'hrmanager', 'hrmdirect', 'hrmos', 'hroffice', 'humanbit', 'huntflow', 'hurma', 'hzz', 'icims', 'idealtraits', 'iimjobs', 'infoempleo', 'infojobs', 'infojobsbr', 'infostud', 'inhire', 'inploi', 'instaffo', 'instahyre', 'ismartrecruit', 'isolvedhire', 'itechart', 'itjobs', 'itviec', 'japandev', 'jazzhr', 'jibe', 'job104', 'jobappnetwork', 'jobboardly', 'jobdanmark', 'jobicy', 'jobindex', 'jobleads', 'jobnet', 'jobsch', 'jobscore', 'jobspage', 'jobspresso', 'jobstash', 'jobstreet', 'jobteaser', 'jobtech', 'jobvite', 'jobylon', 'join', 'joppy', 'justjoin', 'kalibrr', 'keka', 'kenjo', 'landingjobs', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'meincheckin', 'mindsight', 'mojedelo', 'mojposao', 'mokahr', 'mycareersfuture', 'mynavi', 'naukri', 'neogov', 'netempregos', 'nodesk', 'nofluffjobs', 'northstone', 'nsz', 'occ', 'odoo', 'onapply', 'onlyfy', 'oorwin', 'opencats', 'optius', 'oracle', 'pageup', 'pandape', 'pandapelatam', 'paradox', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'peoplesoft', 'personio', 'phenom', 'pinpoint', 'polymer', 'posaohr', 'potok', 'powertofly', 'pracuj', 'profession', 'prospective', 'pyjamahr', 'pythonorg', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruiterflow', 'recruitify', 'recruitingsolutions', 'recrutei', 'reed', 'refline', 'remotedotcom', 'remotive', 'remotli', 'rexx', 'rippling', 'rocketjobs', 'sapoemprego', 'scalis', 'schoolspring', 'seamlesshiring', 'seek', 'selfrecruit', 'senior', 'servicepublic', 'shine', 'sitemapldjson', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spainjobs', 'spark', 'speedrun', 'startupandvc', 'startupjobs', 'successfactors', 'swissdevjobs', 'taleez', 'talentadore', 'talentclue', 'talenthr', 'talentlyft', 'talentsoft', 'talentstorm', 'taleo', 'taleobe', 'teamex', 'teamtailor', 'techinasia', 'techtree', 'tecla', 'tenstreet', 'thehub', 'themuse', 'topco', 'torre', 'traffit', 'trakstar', 'trinethire', 'trudvsem', 'turijobs', 'tyomarkkinatori', 'ukg', 'ukgready', 'usajobs', 'vagas', 'velorahr', 'vention', 'viterbit', 'vouch', 'wantapply', 'wellfound', 'werecruit', 'werkenvoornederland', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-cr', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-do', 'whatjobs-dz', 'whatjobs-ec', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-gt', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-ma', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-ng', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pa', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pr', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-ru', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-tz', 'whatjobs-ug', 'whatjobs-uk', 'whatjobs-uy', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'work180', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'workwise', 'wpyoast', 'wttj', 'wuzzuf', 'xing', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'academictransfer', 'adp', 'adpmyjobs', 'adzuna', 'aijobs', 'applicantpro', 'applicantstack', 'applitrack', 'appone', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'beehire', 'beesite', 'berlinstartupjobs', 'betterteam', 'bizneo', 'brassring', 'breezy', 'briefhq', 'builtin', 'bullhorn', 'bumeran', 'cadremploi', 'cake', 'careerplug', 'careerspage', 'catho', 'catsone', 'cbop', 'civilservicejobs', 'clearedjobs', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'computrabajo', 'concludis', 'cornerstone', 'coveto', 'crelate', 'cryptocurrencyjobs', 'cryptojobslist', 'cutshort', 'cvwarehouse', 'darwinbox', 'dayforce', 'deel', 'devglobaljobs', 'dice', 'digitalrecruiters', 'djinni', 'dover', 'dualoo', 'dvinci', 'dynamitejobs', 'earcu', 'easycruit', 'echojobs', 'edjoin', 'eightfold', 'emply', 'empregos', 'energyjobline', 'engage', 'enlizt', 'epam', 'eploy', 'epreselec', 'erecruiter', 'ess', 'eures', 'factorial', 'feinaactiva', 'feishujobs', 'firefish', 'flatchr', 'foundit', 'francetravail', 'freework', 'freshteam', 'friendwork', 'functionalworks', 'geekhunter', 'geekjob', 'gem', 'gemeentebanen', 'gethired', 'getinit', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'glints', 'gohire', 'golangjobs', 'gr8people', 'gradcracker', 'greenhouse', 'greythr', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hackernews', 'harri', 'hcshiring', 'helixjobs', 'herkey', 'herp', 'hh', 'hibob', 'higherme', 'himalayas', 'hireclick', 'hirehive', 'hireology', 'hiringroom', 'hiringthing', 'hirist', 'homerun', 'hrmanager', 'hrmdirect', 'hrmos', 'hroffice', 'hrsmart', 'humanbit', 'huntflow', 'hurma', 'hzz', 'icims', 'idealtraits', 'iimjobs', 'infoempleo', 'infojobs', 'infojobsbr', 'infostud', 'inhire', 'inploi', 'instaffo', 'instahyre', 'intervieweb', 'ismartrecruit', 'isolvedhire', 'itechart', 'itjobs', 'itviec', 'japandev', 'jazzhr', 'jibe', 'job104', 'jobappnetwork', 'jobboardly', 'jobdanmark', 'jobicy', 'jobindex', 'jobleads', 'jobnet', 'jobsch', 'jobscore', 'jobspage', 'jobspresso', 'jobstash', 'jobstreet', 'jobteaser', 'jobtech', 'jobvite', 'jobylon', 'join', 'joppy', 'jumpit', 'justjoin', 'justremote', 'kalibrr', 'kariyernet', 'keka', 'kenjo', 'landingjobs', 'lever', 'levtech', 'likeit', 'linkedin', 'livehire', 'loxo', 'luxoft', 'manatal', 'meincheckin', 'mindsight', 'mojedelo', 'mojposao', 'mokahr', 'mycareersfuture', 'mynavi', 'naukri', 'neogov', 'netempregos', 'njoyn', 'nodesk', 'nofluffjobs', 'northstone', 'nsz', 'occ', 'odoo', 'onapply', 'onlyfy', 'oorwin', 'opencats', 'optius', 'oracle', 'pageup', 'pandape', 'pandapelatam', 'paradox', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'peoplesoft', 'personio', 'phenom', 'pinpoint', 'polymer', 'posaohr', 'potok', 'powertofly', 'pracuj', 'profession', 'prospective', 'pyjamahr', 'pythonorg', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruiter_co_kr', 'recruiterflow', 'recruitify', 'recruitingsolutions', 'recrutei', 'reed', 'refline', 'remotedotcom', 'remotive', 'remotli', 'rexx', 'rippling', 'rocketjobs', 'sapoemprego', 'scalis', 'schoolspring', 'seamlesshiring', 'seek', 'selfrecruit', 'senior', 'servicepublic', 'shine', 'sitemapldjson', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spainjobs', 'spark', 'speedrun', 'startupandvc', 'startupjobs', 'successfactors', 'swissdevjobs', 'taleez', 'talentadore', 'talentbrew', 'talentclue', 'talenthr', 'talentlyft', 'talentsoft', 'talentstorm', 'taleo', 'taleobe', 'teamex', 'teamtailor', 'techinasia', 'techtree', 'tecla', 'tenstreet', 'thehub', 'themuse', 'topco', 'torre', 'traffit', 'trakstar', 'trinethire', 'trudvsem', 'turijobs', 'tyomarkkinatori', 'ukg', 'ukgready', 'umantis', 'usajobs', 'vagas', 'velorahr', 'vention', 'viterbit', 'vouch', 'wantapply', 'wantapply-cy', 'wellfound', 'werecruit', 'werkenvoornederland', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-cr', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-do', 'whatjobs-dz', 'whatjobs-ec', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-gt', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-ma', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-ng', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pa', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pr', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-ru', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-tz', 'whatjobs-ug', 'whatjobs-uk', 'whatjobs-uy', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'work180', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'workwise', 'wpyoast', 'wttj', 'wuzzuf', 'xing', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['preparing', 'applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn', 'expired'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
 export const APPLICATION_EVENT_KINDS = ['applied', 'employer_reply', 'follow_up_sent', 'stage_set', 'interview_scheduled'] as const;
 export type ApplicationEventKind = (typeof APPLICATION_EVENT_KINDS)[number];
-export const APPLICATION_EVENT_SOURCES = ['mail_gmail', 'mail_hosted', 'mail_external', 'user', 'assistant', 'calendar_google', 'system', 'auto_apply'] as const;
+export const APPLICATION_EVENT_SOURCES = ['mail_gmail', 'mail_hosted', 'mail_external', 'user', 'assistant', 'calendar_google', 'system', 'auto_apply', 'employer'] as const;
 export type ApplicationEventSource = (typeof APPLICATION_EVENT_SOURCES)[number];
 export const STAGE_LABELS = {
   'accepted': 'Accepted',
@@ -1623,9 +1609,9 @@ export const WORK_MODE_VALUES = ['remote', 'hybrid', 'onsite'] as const;
 export type WorkMode = (typeof WORK_MODE_VALUES)[number];
 export const SENIORITY_VALUES = ['intern', 'junior', 'middle', 'senior', 'lead', 'staff', 'principal', 'c_level'] as const;
 export type Seniority = (typeof SENIORITY_VALUES)[number];
-export const CATEGORY_VALUES = ['software_engineering', 'backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'network_engineering', 'it_support', 'data_engineering', 'data_science', 'data_analytics', 'ml_ai', 'ai_engineering', 'qa', 'security', 'hardware', 'embedded', 'blockchain', 'architecture', 'design', 'creative', 'engineering_design', 'industrial_engineering', 'occupational_safety', 'product', 'project_management', 'healthcare', 'skilled_trades', 'retail', 'hospitality', 'logistics', 'education', 'personal_services', 'administration', 'social_services', 'science', 'manufacturing', 'public_safety', 'marketing', 'sales', 'support', 'business_analysis', 'solutions_engineering', 'developer_relations', 'technical_writing', 'recruiting', 'hr', 'finance', 'legal', 'operations', 'customer_success', 'other'] as const;
+export const CATEGORY_VALUES = ['software_engineering', 'backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'network_engineering', 'system_administration', 'telecommunications_engineering', 'it_support', 'data_engineering', 'data_science', 'data_analytics', 'ml_ai', 'ai_engineering', 'qa', 'security', 'hardware', 'embedded', 'blockchain', 'architecture', 'design', 'creative', 'engineering_design', 'industrial_engineering', 'occupational_safety', 'product', 'project_management', 'healthcare', 'skilled_trades', 'retail', 'hospitality', 'logistics', 'education', 'personal_services', 'administration', 'social_services', 'science', 'manufacturing', 'public_safety', 'marketing', 'sales', 'support', 'business_analysis', 'solutions_engineering', 'developer_relations', 'technical_writing', 'recruiting', 'hr', 'finance', 'legal', 'operations', 'customer_success', 'other'] as const;
 export type Category = (typeof CATEGORY_VALUES)[number];
-export const TECH_CATEGORY_VALUES = ['software_engineering', 'backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'network_engineering', 'it_support', 'data_engineering', 'data_science', 'data_analytics', 'ml_ai', 'ai_engineering', 'qa', 'security', 'hardware', 'embedded', 'blockchain', 'architecture', 'design', 'creative', 'product', 'project_management', 'business_analysis', 'solutions_engineering', 'developer_relations', 'technical_writing'] as const;
+export const TECH_CATEGORY_VALUES = ['software_engineering', 'backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'network_engineering', 'system_administration', 'telecommunications_engineering', 'it_support', 'data_engineering', 'data_science', 'data_analytics', 'ml_ai', 'ai_engineering', 'qa', 'security', 'hardware', 'embedded', 'blockchain', 'architecture', 'design', 'creative', 'product', 'project_management', 'business_analysis', 'solutions_engineering', 'developer_relations', 'technical_writing'] as const;
 export type TechCategory = (typeof TECH_CATEGORY_VALUES)[number];
 export const JOB_CHALLENGE_VALUES = ['english', 'recruiter_contact', 'working_abroad', 'technical_interviews', 'job_fit', 'remote_flexible', 'visa_sponsorship', 'first_job', 'just_starting', 'other'] as const;
 export type JobChallenge = (typeof JOB_CHALLENGE_VALUES)[number];
@@ -1724,12 +1710,76 @@ export const INDUSTRY_LABELS = {
   'wholesale': 'Wholesale',
 } as const;
 export type IndustryLabels = typeof INDUSTRY_LABELS;
+export const INDUSTRY_ALIASES = {
+  'accounting': ['accounting-services', 'accounting-software'],
+  'adtech': ['advertising', 'advertising-services', 'brand-strategy', 'creative-services', 'digital-advertising', 'marketing-and-advertising', 'programmatic-advertising'],
+  'aerospace': ['aerospace-and-defense', 'aviation'],
+  'ai': ['ai-and-ml', 'artificial-intelligence', 'computer-vision', 'conversational-ai', 'deep-learning', 'generative-ai', 'machine-learning', 'natural-language-processing'],
+  'automotive': ['automotive-retail', 'automotive-services', 'electric-vehicles'],
+  'banking': ['commercial-banking', 'digital-banking', 'retail-banking'],
+  'biotech': ['biotechnology', 'life-sciences'],
+  'climate-tech': ['clean-tech', 'energy-efficiency', 'energy-transition', 'environmental-sustainability', 'sustainability', 'sustainability-solutions'],
+  'construction': ['construction-management', 'construction-services', 'construction-technology', 'hvac', 'infrastructure-development', 'residential-construction'],
+  'consumer-goods': ['consumer-electronics', 'consumer-packaged-goods'],
+  'crypto': ['blockchain', 'cryptocurrency', 'defi', 'digital-assets', 'web3'],
+  'cybersecurity': ['cyber-security', 'data-protection', 'data-security', 'enterprise-security', 'infosec', 'network-security', 'threat-intelligence'],
+  'data-analytics': ['big-data', 'business-intelligence', 'data-engineering', 'data-management', 'data-management-and-analytics', 'data-science', 'predictive-analytics'],
+  'defense': ['defence'],
+  'developer-tools': ['devops', 'open-source-software'],
+  'digital-marketing': ['content-marketing', 'email-marketing', 'lead-generation', 'marketing-automation', 'marketing-services', 'martech', 'performance-marketing', 'seo', 'seo-services', 'social-media-marketing'],
+  'ecommerce': ['direct-to-consumer', 'e-commerce', 'marketplace', 'online-marketplaces', 'online-retail'],
+  'edtech': ['e-learning', 'online-education', 'online-learning'],
+  'education': ['corporate-training', 'education-management', 'educational-services', 'professional-development', 'professional-education', 'professional-training-and-coaching', 'workforce-development'],
+  'energy': ['energy-and-mining'],
+  'engineering-services': ['civil-engineering'],
+  'enterprise-software': ['b2b-saas', 'business-process-automation', 'cloud-computing', 'cloud-infrastructure', 'cloud-technologies', 'collaboration-software', 'crm', 'customer-experience-management', 'enterprise-software-and-solutions', 'erp', 'remote-work-solutions', 'saas', 'software-as-a-service', 'workflow-automation'],
+  'entertainment': ['content-creation', 'creator-economy', 'digital-entertainment', 'digital-media', 'digital-publishing', 'interactive-entertainment', 'media', 'media-and-communications', 'media-and-entertainment', 'publishing', 'social-media'],
+  'facilities-services': ['facilities-management'],
+  'financial-services': ['finance', 'risk-management'],
+  'fintech': ['digital-payments', 'mobile-payments', 'payment-processing', 'personal-finance'],
+  'food-and-beverage': ['food-and-beverages'],
+  'gambling': ['igaming'],
+  'gaming': ['game-development', 'mobile-games', 'online-gaming', 'video-games'],
+  'government': ['government-administration', 'government-contracting', 'government-services', 'govtech', 'public-administration', 'public-policy', 'public-sector-technology'],
+  'health-tech': ['digital-health', 'healthcare-analytics', 'healthcare-it', 'healthcare-software', 'healthcare-technology', 'medical-technology'],
+  'healthcare': ['chronic-disease-management', 'community-health', 'dentistry', 'health-and-wellness', 'healthcare-services', 'hospitals', 'hospitals-and-health-systems', 'medical-practice', 'medical-services', 'patient-care-services', 'primary-care', 'public-health', 'veterinary-services', 'wellness-and-fitness'],
+  'home-services': ['home-improvement'],
+  'hospitality': ['hospitality-technology', 'restaurant-technology', 'restaurants'],
+  'hr-tech': ['hr-technology', 'human-capital-management', 'human-resources-technology', 'talent-management', 'workforce-management'],
+  'insurance': ['commercial-insurance', 'health-insurance', 'insurtech', 'life-insurance'],
+  'iot': ['internet-of-things'],
+  'it-services': ['bpo', 'custom-software-development', 'custom-software-solutions', 'information-technology', 'information-technology-and-services', 'it', 'managed-it-services', 'managed-services', 'outsourcing', 'system-integration'],
+  'k-12-education': ['primary-and-secondary-education'],
+  'legal-services': ['legal', 'legal-tech'],
+  'logistics': ['fleet-management', 'logistics-and-supply-chain', 'logistics-technology', 'supply-chain-management', 'third-party-logistics', 'transportation-and-logistics'],
+  'manufacturing': ['industrial-machinery', 'industrial-manufacturing', 'machinery-manufacturing', 'manufacturing-technology'],
+  'mental-health': ['behavioral-health', 'mental-health-care', 'mental-health-services'],
+  'nonprofit': ['non-profit', 'non-profit-organizations', 'nonprofit-organizations', 'nonprofit-sector', 'nonprofit-services', 'philanthropy', 'social-impact'],
+  'pharmaceuticals': ['biopharma', 'drug-development', 'pharmaceutical'],
+  'real-estate': ['commercial-real-estate', 'real-estate-development', 'real-estate-services', 'residential-real-estate'],
+  'recruitment': ['career-development', 'employment-services', 'executive-search', 'human-resources', 'human-resources-services', 'it-staffing', 'recruitment-services', 'recruitment-technology', 'staffing-and-recruiting', 'staffing-services', 'staffing-solutions', 'talent-acquisition'],
+  'regtech': ['regulatory-compliance'],
+  'renewable-energy': ['clean-energy', 'solar-energy', 'sustainable-energy'],
+  'retail': ['retail-technology'],
+  'senior-care': ['elder-care', 'elderly-care', 'home-health-care', 'senior-living'],
+  'social-services': ['community-development', 'family-support-services', 'human-services', 'individual-and-family-services', 'social-assistance'],
+  'software-development': ['app-development', 'computer-software', 'mobile-application-developer', 'mobile-application-development', 'mobile-apps', 'mobile-development', 'software', 'software-engineering', 'web-design', 'web-development'],
+  'technology-consulting': ['digital-transformation', 'digital-transformation-consulting', 'it-consulting'],
+  'telecommunications': ['telecom'],
+  'telehealth': ['telemedicine'],
+  'transportation': ['mobility', 'mobility-as-a-service', 'mobility-solutions', 'ride-hailing', 'ride-sharing', 'transportation-technology', 'urban-mobility'],
+  'travel': ['recreation-and-travel', 'tourism', 'travel-and-tourism', 'travel-technology'],
+  'wealth-management': ['asset-management', 'investment-banking', 'investment-management', 'private-equity', 'venture-capital'],
+} as const;
+export type IndustryAliases = typeof INDUSTRY_ALIASES;
 export const AI_ARCHETYPE_VALUES = ['rag_app_builder', 'agent_builder', 'cloud_ml_platform_engineer', 'ml_trainer_researcher', 'fullstack_ai_engineer', 'devops_infra_engineer'] as const;
 export type AIArchetype = (typeof AI_ARCHETYPE_VALUES)[number];
 export const ROLE_TYPE_VALUES = ['people_manager'] as const;
 export type RoleType = (typeof ROLE_TYPE_VALUES)[number];
 export const CLEARANCE_LEVEL_VALUES = ['confidential', 'secret', 'top_secret', 'ts_sci', 'public_trust', 'interim', 'other'] as const;
 export type ClearanceLevel = (typeof CLEARANCE_LEVEL_VALUES)[number];
+export const EQUITY_VALUES = ['salary_and_equity', 'equity_only'] as const;
+export type Equity = (typeof EQUITY_VALUES)[number];
 export const SOURCE_TYPE_VALUES = ['ats', 'company', 'aggregator', 'social'] as const;
 export type SourceType = (typeof SOURCE_TYPE_VALUES)[number];
 export const PERK_VALUES = ['generous_pto', 'four_day_week', '401k_match', 'parental_leave', 'retirement_plan', 'tuition_reimbursement', 'unlimited_pto', 'health_insurance', 'mental_health', 'learning_budget', 'home_office_stipend', 'sabbatical', 'sign_on_bonus'] as const;
@@ -1750,6 +1800,60 @@ export const PERK_LABELS = {
   'unlimited_pto': 'Unlimited PTO',
 } as const;
 export type PerkLabels = typeof PERK_LABELS;
+export const ENGAGEMENT_VALUES = ['ir35_outside', 'ir35_inside', 'w2', '1099', 'c2c', 'contract_to_hire', 'b2b', 'uop', 'umowa_zlecenie', 'umowa_o_dzielo', 'clt', 'pj', 'tk', 'gph', 'samozanyaty', 'ip', 'freiberuflich', 'arbeitnehmerueberlassung', 'zzp', 'auto_entrepreneur', 'portage_salarial', 'autonomo', 'monotributo'] as const;
+export type Engagement = (typeof ENGAGEMENT_VALUES)[number];
+export const ENGAGEMENT_LABELS = {
+  '1099': '1099',
+  'arbeitnehmerueberlassung': 'Arbeitnehmerüberlassung',
+  'auto_entrepreneur': 'Auto-entrepreneur',
+  'autonomo': 'Autónomo',
+  'b2b': 'B2B contract',
+  'c2c': 'Corp-to-Corp (C2C)',
+  'clt': 'CLT',
+  'contract_to_hire': 'Contract-to-hire',
+  'freiberuflich': 'Freiberuflich',
+  'gph': 'ГПХ',
+  'ip': 'ИП',
+  'ir35_inside': 'Inside IR35',
+  'ir35_outside': 'Outside IR35',
+  'monotributo': 'Monotributo',
+  'pj': 'PJ',
+  'portage_salarial': 'Portage salarial',
+  'samozanyaty': 'Самозанятый',
+  'tk': 'Трудовой договор (ТК)',
+  'umowa_o_dzielo': 'Umowa o dzieło',
+  'umowa_zlecenie': 'Umowa zlecenie',
+  'uop': 'Umowa o pracę',
+  'w2': 'W-2',
+  'zzp': 'ZZP',
+} as const;
+export type EngagementLabels = typeof ENGAGEMENT_LABELS;
+export const ENGAGEMENT_MARKETS = {
+  '1099': 'United States',
+  'arbeitnehmerueberlassung': 'Germany',
+  'auto_entrepreneur': 'France',
+  'autonomo': 'Spain',
+  'b2b': 'Poland & Central Europe',
+  'c2c': 'United States',
+  'clt': 'Brazil',
+  'contract_to_hire': 'International',
+  'freiberuflich': 'Germany',
+  'gph': 'Russia & CIS',
+  'ip': 'Russia & CIS',
+  'ir35_inside': 'United Kingdom',
+  'ir35_outside': 'United Kingdom',
+  'monotributo': 'Argentina',
+  'pj': 'Brazil',
+  'portage_salarial': 'France',
+  'samozanyaty': 'Russia & CIS',
+  'tk': 'Russia & CIS',
+  'umowa_o_dzielo': 'Poland',
+  'umowa_zlecenie': 'Poland',
+  'uop': 'Poland',
+  'w2': 'United States',
+  'zzp': 'Netherlands',
+} as const;
+export type EngagementMarkets = typeof ENGAGEMENT_MARKETS;
 export const GHOST_CRITERION_VALUES = ['evergreen_posting', 'ats_absent', 'silent_applications', 'user_reports'] as const;
 export type GhostCriterion = (typeof GHOST_CRITERION_VALUES)[number];
 export const EMAIL_STATUS_SIGNAL_VALUES = ['acknowledgement', 'screening', 'interview_invitation', 'assessment', 'offer', 'rejection', 'info_request', 'incomplete_application', 'other'] as const;
@@ -1978,6 +2082,7 @@ export const SKILL_LABELS = {
   'asana': 'Asana',
   'asic': 'Asic',
   'assembly': 'Assembly',
+  'asset-performance-management': 'Asset Performance Management (APM)',
   'astro': 'Astro',
   'asyncio': 'Asyncio',
   'athena': 'Athena',
@@ -2026,6 +2131,7 @@ export const SKILL_LABELS = {
   'boolean-search': 'Boolean Search',
   'boomi': 'Boomi',
   'bootstrap': 'Bootstrap',
+  'box-office-management': 'Box Office Management',
   'bpmn': 'BPMN',
   'braze': 'Braze',
   'burp-suite': 'Burp Suite',
@@ -2042,11 +2148,13 @@ export const SKILL_LABELS = {
   'canva': 'Canva',
   'capcut': 'Capcut',
   'cassandra': 'Cassandra',
+  'category-management': 'Category Management',
   'catia': 'CATIA',
   'causal-inference': 'Causal Inference',
   'ccna': 'Ccna',
   'ccnp': 'CCNP',
   'ccpa': 'Ccpa',
+  'cctv': 'CCTV',
   'cdk': 'CDK',
   'centos': 'CentOS',
   'ceph': 'Ceph',
@@ -2101,6 +2209,7 @@ export const SKILL_LABELS = {
   'community-management': 'Community Management',
   'computer-vision': 'Computer Vision',
   'concur': 'Concur',
+  'condition-monitoring': 'Condition Monitoring',
   'confined-space': 'Confined Space',
   'confluence': 'Confluence',
   'container-security': 'Container Security',
@@ -2157,6 +2266,7 @@ export const SKILL_LABELS = {
   'data-modeling': 'Data Modeling',
   'data-pipelines': 'Data Pipelines',
   'data-quality': 'Data Quality',
+  'data-reconciliation': 'Data Reconciliation',
   'data-science': 'Data Science',
   'data-vault': 'Data Vault',
   'data-visualization': 'Data Visualization',
@@ -2183,6 +2293,7 @@ export const SKILL_LABELS = {
   'design-of-experiments': 'Design of Experiments (DOE)',
   'design-patterns': 'Design Patterns',
   'design-thinking': 'Design Thinking',
+  'design-tokens': 'Design Tokens',
   'developer-advocacy': 'Developer Advocacy',
   'developer-experience': 'Developer Experience',
   'devops': 'DevOps',
@@ -2200,6 +2311,7 @@ export const SKILL_LABELS = {
   'docs-as-code': 'Docs as Code',
   'domain-driven-design': 'Domain-Driven Design (DDD)',
   'dotnet': '.NET',
+  'dotnet-maui': '.NET MAUI',
   'dropwizard': 'Dropwizard',
   'druid': 'Druid',
   'drupal': 'Drupal',
@@ -2235,18 +2347,22 @@ export const SKILL_LABELS = {
   'envoy': 'Envoy',
   'epa': 'EPA',
   'eplan': 'EPLAN',
+  'equipment-calibration': 'Equipment Calibration',
   'erlang': 'Erlang',
   'erp': 'ERP',
   'ethercat': 'EtherCAT',
   'ethereum': 'Ethereum',
   'ethernet': 'Ethernet',
   'ethersjs': 'ethers.js',
+  'etix': 'Etix',
   'etl': 'ETL',
   'event-driven-architecture': 'Event Driven Architecture',
+  'event-ticketing': 'Event Ticketing',
   'eventbridge': 'Eventbridge',
   'evm': 'EVM',
   'evpn': 'EVPN',
   'exact-online': 'Exact Online',
+  'excel': 'Excel',
   'express': 'Express.js',
   'faiss': 'FAISS',
   'fall-protection': 'Fall Protection',
@@ -2261,6 +2377,7 @@ export const SKILL_LABELS = {
   'fiber': 'Fiber',
   'figjam': 'FigJam',
   'figma': 'Figma',
+  'figma-plugins': 'Figma Plugins',
   'final-cut-pro': 'Final Cut Pro',
   'financial-modeling': 'Financial Modeling',
   'financial-reporting': 'Financial Reporting',
@@ -2344,10 +2461,13 @@ export const SKILL_LABELS = {
   'hot-work': 'Hot Work',
   'houdini': 'Houdini',
   'hpc': 'HPC',
+  'hr-operations': 'HR Operations',
   'hris': 'HRIS',
   'html': 'HTML',
   'hubspot': 'HubSpot',
   'huggingface': 'Hugging Face',
+  'hvac': 'HVAC',
+  'hydraulics': 'Hydraulics',
   'hyper-v': 'Hyper-V',
   'i-129': 'I-129',
   'i-130': 'I-130',
@@ -2373,6 +2493,7 @@ export const SKILL_LABELS = {
   'interaction-design': 'Interaction Design',
   'intrusion-detection': 'Intrusion Detection',
   'intune': 'Intune',
+  'inventory-management': 'Inventory Management',
   'invision': 'InVision',
   'ionic': 'Ionic',
   'ios': 'iOS',
@@ -2381,6 +2502,7 @@ export const SKILL_LABELS = {
   'ipv6': 'IPv6',
   'iso-13485': 'Iso 13485',
   'iso-14001': 'ISO 14001',
+  'iso-17025': 'ISO/IEC 17025',
   'iso-26262': 'Iso 26262',
   'iso-27001': 'ISO 27001',
   'iso-45001': 'ISO 45001',
@@ -2419,6 +2541,7 @@ export const SKILL_LABELS = {
   'k6': 'k6',
   'kafka': 'Kafka',
   'kanban': 'Kanban',
+  'kandji': 'Kandji',
   'keras': 'Keras',
   'keycloak': 'Keycloak',
   'kibana': 'Kibana',
@@ -2448,6 +2571,7 @@ export const SKILL_LABELS = {
   'lgpd': 'Lgpd',
   'lidar': 'LiDAR',
   'lifecycle-marketing': 'Lifecycle Marketing',
+  'lightroom': 'Lightroom',
   'lims': 'LIMS',
   'link-building': 'Link Building',
   'linkedin-ads': 'LinkedIn Ads',
@@ -2475,6 +2599,7 @@ export const SKILL_LABELS = {
   'madcap-flare': 'MadCap Flare',
   'mailchimp': 'Mailchimp',
   'mainframe': 'Mainframe',
+  'maintenance-planning': 'Maintenance Planning',
   'mariadb': 'MariaDB',
   'marketing-automation': 'Marketing Automation',
   'marketo': 'Marketo',
@@ -2492,6 +2617,7 @@ export const SKILL_LABELS = {
   'medallion-architecture': 'Medallion Architecture',
   'memcached': 'Memcached',
   'mendix': 'Mendix',
+  'mep': 'MEP',
   'meta-ads': 'Meta Ads',
   'metabase': 'Metabase',
   'metadata-management': 'Metadata Management',
@@ -2527,10 +2653,14 @@ export const SKILL_LABELS = {
   'model-evaluation': 'Model Evaluation',
   'monday-com': 'Monday.com',
   'mongodb': 'MongoDB',
+  'monorepo': 'Monorepo',
   'motion-design': 'Motion Design',
   'motion-graphics': 'Motion Graphics',
   'mpls': 'MPLS',
   'mqtt': 'MQTT',
+  'mrp': 'MRP',
+  'mtbf': 'MTBF',
+  'mttr': 'MTTR',
   'mulesoft': 'Mulesoft',
   'multithreading': 'Multithreading',
   'mvc': 'MVC',
@@ -2556,6 +2686,7 @@ export const SKILL_LABELS = {
   'ngrx': 'NgRx',
   'nifi': 'NiFi',
   'nim': 'Nim',
+  'ninjaone': 'NinjaOne',
   'nis2': 'NIS2',
   'nist': 'Nist',
   'nlp': 'NLP',
@@ -2597,6 +2728,7 @@ export const SKILL_LABELS = {
   'osint': 'Osint',
   'ospf': 'OSPF',
   'outsystems': 'OutSystems',
+  'overall-equipment-effectiveness': 'Overall Equipment Effectiveness (OEE)',
   'owasp': 'OWASP',
   'pagerduty': 'PagerDuty',
   'paid-social': 'Paid Social',
@@ -2630,8 +2762,10 @@ export const SKILL_LABELS = {
   'plotly': 'Plotly',
   'plsql': 'PL/SQL',
   'pmp': 'PMP',
+  'pneumatics': 'Pneumatics',
   'podman': 'Podman',
   'polars': 'Polars',
+  'pos-terminals': 'POS Terminals',
   'postgresql': 'PostgreSQL',
   'postman': 'Postman',
   'power-automate': 'Power Automate',
@@ -2644,10 +2778,12 @@ export const SKILL_LABELS = {
   'pre-sales': 'Pre-sales',
   'preact': 'Preact',
   'predictive-analytics': 'Predictive Analytics',
+  'predictive-maintenance': 'Predictive Maintenance',
   'predictive-modeling': 'Predictive Modeling',
   'prefect': 'Prefect',
   'premiere-pro': 'Premiere Pro',
   'presto': 'Presto',
+  'preventive-maintenance': 'Preventive Maintenance',
   'primavera-p6': 'Primavera P6',
   'process-improvement': 'Process Improvement',
   'process-modeling': 'Process Modeling',
@@ -2668,6 +2804,7 @@ export const SKILL_LABELS = {
   'pulumi': 'Pulumi',
   'puppet': 'Puppet',
   'puppeteer': 'Puppeteer',
+  'purchase-order-management': 'Purchase Order Management',
   'pydantic': 'Pydantic',
   'pyspark': 'PySpark',
   'pytest': 'pytest',
@@ -2701,6 +2838,8 @@ export const SKILL_LABELS = {
   'redux': 'Redux',
   'regulatory-compliance': 'Regulatory Compliance',
   'reinforcement-learning': 'Reinforcement Learning',
+  'reliability-centered-maintenance': 'Reliability-Centered Maintenance (RCM)',
+  'reliability-engineering': 'Reliability Engineering',
   'remix': 'Remix',
   'renewal-management': 'Renewal Management',
   'requirements-elicitation': 'Requirements Elicitation',
@@ -2710,6 +2849,7 @@ export const SKILL_LABELS = {
   'revenue-recognition': 'Revenue Recognition',
   'reverse-engineering': 'Reverse Engineering',
   'revit': 'Revit',
+  'rfx': 'RFx (RFQ/RFP/RFI)',
   'rhel': 'RHEL',
   'rhino': 'Rhino',
   'risk-assessment': 'Risk Assessment',
@@ -2717,6 +2857,7 @@ export const SKILL_LABELS = {
   'robot-framework': 'Robot Framework',
   'root-cause-analysis': 'Root Cause Analysis',
   'ros2': 'ROS 2',
+  'rotating-equipment': 'Rotating Equipment',
   'route53': 'Route 53',
   'rpa': 'RPA',
   'rspec': 'RSpec',
@@ -2745,6 +2886,7 @@ export const SKILL_LABELS = {
   'sap-fiori': 'SAP Fiori',
   'sap-hana': 'Sap Hana',
   'sap-mm': 'SAP MM',
+  'sap-pm': 'SAP PM',
   'sap-s4hana': 'SAP S/4HANA',
   'sas': 'SAS',
   'sase': 'Sase',
@@ -2783,6 +2925,7 @@ export const SKILL_LABELS = {
   'sglang': 'SGLang',
   'sharepoint': 'SharePoint',
   'shopify': 'Shopify',
+  'shutdown-management': 'Shutdown Management',
   'siem': 'SIEM',
   'siemens-nx': 'Siemens NX',
   'signal-integrity': 'Signal Integrity',
@@ -2792,6 +2935,7 @@ export const SKILL_LABELS = {
   'six-sigma': 'Six Sigma',
   'sketch': 'Sketch',
   'sketchup': 'SketchUp',
+  'sla-management': 'SLA Management',
   'slack': 'Slack',
   'slurm': 'Slurm',
   'smart-contracts': 'Smart Contracts',
@@ -2816,9 +2960,12 @@ export const SKILL_LABELS = {
   'solr': 'Solr',
   'solution-design': 'Solution Design',
   'sonarqube': 'SonarQube',
+  'sop-development': 'SOP Development',
   'soql': 'SOQL',
+  'sourcegraph': 'Sourcegraph',
   'spacy': 'spaCy',
   'spark': 'Spark',
+  'spend-analysis': 'Spend Analysis',
   'sphera': 'Sphera',
   'splunk': 'Splunk',
   'spring': 'Spring',
@@ -2843,15 +2990,18 @@ export const SKILL_LABELS = {
   'storyboarding': 'Storyboarding',
   'storybook': 'Storybook',
   'strategic-planning': 'Strategic Planning',
+  'strategic-sourcing': 'Strategic Sourcing',
   'streamlit': 'Streamlit',
   'stripe': 'Stripe',
   'structured-authoring': 'Structured Authoring',
+  'structured-cabling': 'Structured Cabling',
   'substance-designer': 'Substance Designer',
   'substance-painter': 'Substance Painter',
   'successfactors': 'SuccessFactors',
   'succession-planning': 'Succession Planning',
   'supabase': 'Supabase',
   'superset': 'Superset',
+  'supply-chain-management': 'Supply Chain Management',
   'svelte': 'Svelte',
   'svn': 'SVN',
   'swagger': 'Swagger',
@@ -2860,6 +3010,7 @@ export const SKILL_LABELS = {
   'sybase': 'Sybase',
   'symfony': 'Symfony',
   'sysml': 'SysML',
+  'system-integration': 'System Integration',
   'systemverilog': 'SystemVerilog',
   'tableau': 'Tableau',
   'tabular-editor': 'Tabular Editor',
@@ -2867,6 +3018,7 @@ export const SKILL_LABELS = {
   'talend': 'Talend',
   'talent-management': 'Talent Management',
   'talent-sourcing': 'Talent Sourcing',
+  'tanium': 'Tanium',
   'tcl': 'Tcl',
   'tcp-ip': 'TCP/IP',
   'tdd': 'TDD',
@@ -2903,11 +3055,13 @@ export const SKILL_LABELS = {
   'tomcat': 'Tomcat',
   'toolbox-talks': 'Toolbox Talks',
   'topdesk': 'TOPdesk',
+  'total-productive-maintenance': 'Total Productive Maintenance (TPM)',
   'transformers': 'Transformers',
   'travis': 'Travis CI',
   'trello': 'Trello',
   'trino': 'Trino',
   'triton': 'Triton',
+  'turnaround-management': 'Turnaround Management',
   'typescript': 'TypeScript',
   'typography': 'Typography',
   'uart': 'UART',
@@ -2927,6 +3081,7 @@ export const SKILL_LABELS = {
   'user-research': 'User Research',
   'user-stories': 'User Stories',
   'uvm': 'Uvm',
+  'ux-design': 'UX Design',
   'vault': 'Vault',
   'vba': 'VBA',
   'vbnet': 'VB.NET',
@@ -2976,6 +3131,7 @@ export const SKILL_LABELS = {
   'websphere': 'WebSphere',
   'wifi': 'Wi-Fi',
   'windchill': 'Windchill',
+  'windows-autopilot': 'Windows Autopilot',
   'windows-server': 'Windows Server',
   'wireframing': 'Wireframing',
   'wireshark': 'Wireshark',
@@ -2984,6 +3140,7 @@ export const SKILL_LABELS = {
   'workday': 'Workday',
   'workflow-orchestration': 'Workflow Orchestration',
   'working-at-height': 'Working At Height',
+  'workspace-one': 'Workspace ONE',
   'wpf': 'Wpf',
   'xamarin': 'Xamarin',
   'xcode': 'Xcode',
@@ -3013,7 +3170,7 @@ export const SKILL_LABELS = {
 } as const;
 export type SkillLabels = typeof SKILL_LABELS;
 export const FACET_ALIASES = {
-  'administration': ['admin assistant', 'administration manager', 'administrative assistant', 'administrative coordinator', 'administrative manager', 'administrative specialist', 'administrative support', 'administrativna asistentica', 'administrativna referentica', 'administrativni asistent', 'administrativni delavec', 'administrativni djelatnik', 'administrativni radnik', 'administrativni referent', 'administrativni saradnik', 'administrativni službenik', 'administrativni suradnik', 'administrator in koordinator dela', 'administrator na info pultu', 'administrator podatkov', 'administrator v servisni delavnici', 'administrator v zaledni pisarni', 'asistent direktorja', 'asistent direktorju', 'asistent vodje poslovalnice', 'asistente administrativa', 'asistente administrativo', 'asistente ejecutiva', 'asistente ejecutivo', 'asistente virtual', 'assistant administratif', 'assistant de direction', 'assistant virtuel', 'assistante administrative', 'assistante de direction', 'assistante virtuelle', 'assistente administrativa', 'assistente administrativo', 'assistente executiva', 'assistente executivo', 'assistente virtual', 'auxiliar administrativo', 'data entry', 'document controller', 'ds administracji', 'ds. administracji', 'evidentičar', 'executive assistant', 'file clerk', 'front desk', 'intake coordinator', 'intake specialist', 'koordinator administracije', 'legal secretary', 'medical secretary', 'office assistant', 'office coordinator', 'office manager', 'online assistant', 'operater unosa podataka', 'personal assistant', 'pomočnik v pisarni in delavnici', 'poslovna asistentka', 'poslovni administrator', 'poslovni asistent', 'recepcionar', 'recepcionarka', 'recepcioner', 'recepcionerka', 'recepcionista', 'recepciós', 'recepcjonista', 'recepcjonistka', 'receptionist', 'receptor', 'referent registracij', 'referent za registracij', 'referent za registracije', 'referent za registracijo', 'secretary', 'sekretar', 'sekretarica', 'sekretarka', 'sodelavec v glavni pisarni', 'sodelavec za administrativno podporo', 'tajnica', 'tajnik', 'transaction coordinator', 'virtual assistant', 'virtual medical assistant', 'virtuelle assistenz', 'virtueller assistent', 'vodja administracije', 'vodja skupnih služb', 'študentsko delo: administrativna podpora', 'študentsko delo: projektna in administrativna podpora', 'администратор', 'адміністратор', 'ассистент руководителя', 'виртуальный ассистент', 'виртуальный помощник', 'делопроизводитель', 'диспетчер факультета', 'заведующая хозяйством', 'заведующий хозяйством', 'завхоз', 'личный ассистент', 'личный помощник', 'офис-менеджер', 'помощник руководителя', 'секретарь', 'データ入力', '一般事務', '事務アシスタント', '事務スタッフ', '事務員', '事務職', '前台', '医療事務', '受付', '営業事務', '工務行政', '总务', '文書人員', '文書助理', '文書處理', '文管', '業務行政', '櫃台', '櫃檯', '特別助理', '特助', '秘书', '秘書', '総務', '總務', '總機', '總經理助理', '行政专员', '行政主管', '行政人員', '行政企劃', '行政助理', '行政客服', '行政專員', '行政工讀', '行政文書', '行政業務', '行政櫃', '行政秘書', '行政管理', '行政經理', '行政總務', '行政经理', '行政類'],
+  'administration': ['admin assistant', 'administration manager', 'administrative assistant', 'administrative coordinator', 'administrative manager', 'administrative specialist', 'administrative support', 'administrativna asistentica', 'administrativna referentica', 'administrativni asistent', 'administrativni delavec', 'administrativni djelatnik', 'administrativni radnik', 'administrativni referent', 'administrativni saradnik', 'administrativni službenik', 'administrativni suradnik', 'administrator in koordinator dela', 'administrator na info pultu', 'administrator podatkov', 'administrator v servisni delavnici', 'administrator v zaledni pisarni', 'asistent direktorja', 'asistent direktorju', 'asistent vodje poslovalnice', 'asistente administrativa', 'asistente administrativo', 'asistente ejecutiva', 'asistente ejecutivo', 'asistente virtual', 'assistant administratif', 'assistant de direction', 'assistant virtuel', 'assistante administrative', 'assistante de direction', 'assistante virtuelle', 'assistente administrativa', 'assistente administrativo', 'assistente executiva', 'assistente executivo', 'assistente virtual', 'auxiliar administrativo', 'data entry', 'document controller', 'ds administracji', 'ds. administracji', 'evidentičar', 'executive assistant', 'file clerk', 'front desk', 'intake coordinator', 'intake specialist', 'koordinator administracije', 'legal secretary', 'medical secretary', 'office administrator', 'office assistant', 'office coordinator', 'office manager', 'online assistant', 'operater unosa podataka', 'personal assistant', 'pomočnik v pisarni in delavnici', 'poslovna asistentka', 'poslovni administrator', 'poslovni asistent', 'recepcionar', 'recepcionarka', 'recepcioner', 'recepcionerka', 'recepcionista', 'recepciós', 'recepcjonista', 'recepcjonistka', 'receptionist', 'receptor', 'referent registracij', 'referent za registracij', 'referent za registracije', 'referent za registracijo', 'secretary', 'sekretar', 'sekretarica', 'sekretarka', 'sodelavec v glavni pisarni', 'sodelavec za administrativno podporo', 'tajnica', 'tajnik', 'transaction coordinator', 'virtual assistant', 'virtual medical assistant', 'virtuelle assistenz', 'virtueller assistent', 'vodja administracije', 'vodja skupnih služb', 'študentsko delo: administrativna podpora', 'študentsko delo: projektna in administrativna podpora', 'администратор', 'адміністратор', 'ассистент руководителя', 'виртуальный ассистент', 'виртуальный помощник', 'делопроизводитель', 'диспетчер факультета', 'заведующая хозяйством', 'заведующий хозяйством', 'завхоз', 'личный ассистент', 'личный помощник', 'офис-менеджер', 'помощник руководителя', 'секретарь', 'データ入力', '一般事務', '事務アシスタント', '事務スタッフ', '事務員', '事務職', '前台', '医療事務', '受付', '営業事務', '工務行政', '总务', '文書人員', '文書助理', '文書處理', '文管', '業務行政', '櫃台', '櫃檯', '特別助理', '特助', '秘书', '秘書', '総務', '總務', '總機', '總經理助理', '行政专员', '行政主管', '行政人員', '行政企劃', '行政助理', '行政客服', '行政專員', '行政工讀', '行政文書', '行政業務', '行政櫃', '行政秘書', '行政管理', '行政經理', '行政總務', '行政经理', '行政類'],
   'ai_engineering': ['agent engineer', 'agent开发', 'ai & automation lead', 'ai agent engineer', 'ai automation engineer', 'ai developer', 'ai engineer', 'ai product engineer', 'ai research engineer', 'ai software engineer', 'ai-automation engineer', 'ai-product engineer', 'ai-research engineer', 'aiエンジニア', 'ai工程师', 'ai工程師', 'ai应用', 'ai應用', 'applied ai', 'direktor za ai in podatkovno strategijo', 'genai', 'generative ai', 'llm', 'llm engineer', 'llmエンジニア', 'prompt engineer', 'rag engineer', 'specialist za digitalizacijo in ai avtomatizacijo', '大模型应用', '大模型开发'],
   'architecture': ['architect', 'cloud architect', 'enterprise architect', 'softverski arhitekt', 'softverski arhitekta', 'software architect', 'solutions architect', 'архитектор', 'アーキテクト', 'ソリューションアーキテクト'],
   'backend': ['1c', '1с', 'back end', 'back-end', 'back-end developer', 'backend', 'backend developer', 'laravel developer', 'webアプリケーションエンジニア', 'webエンジニア', 'бекенд', 'бэкенд', 'アプリケーションエンジニア', 'サーバサイド', 'サーバーサイド', 'バックエンド', '伺服器端', '后端', '後端', '服务端开发'],
@@ -3027,32 +3184,32 @@ export const FACET_ALIASES = {
   'data_science': ['data scien', 'data science', 'data scientist', 'дата-сайентист', 'データサイエンティスト', '数据科学', '數據科學', '資料科學'],
   'design': ['design', 'design engineer, product', 'design system engineer', 'design systems engineer', 'designer', 'experience design engineer', 'game design engineer', 'grafični in mulzimedijski oblikovalec', 'grafični oblikovalec', 'istraživač za korisničko iskustvo', 'product design engineer', 'projektant gier', 'projektant graficzny', 'projektant mody', 'projektant wnętrz', 'projektantka gier', 'projektantka graficzna', 'projektantka mody', 'projektantka wnętrz', 'service design engineer', 'ui', 'ui design engineer', 'ui/ux design engineer', 'ui/uxデザイナー', 'ui/ux設計', 'ui/ux设计', 'uiuxデザイナー', 'uiux设计', 'uiデザイナー', 'ui設計', 'ui设计', 'ux', 'ux design engineer', 'uxデザイナー', 'ux設計', 'ux设计', 'web design engineer', 'webデザイナー', 'дизайн', 'дизайнер', 'グラフィックデザイナー', 'ゲームデザイナー', 'ゲームプランナー', 'コミュニケーションデザイナー', 'プロダクトデザイナー', '互動設計', '交互设计', '关卡策划', '剧情策划', '品牌設計', '品牌设计', '室內設計', '室内设计', '工業設計', '平面設計', '平面设计', '战斗策划', '数值策划', '服裝設計', '游戏策划', '產品設計師', '空間設計', '系统策划', '美工', '美編', '美術設計', '視覺設計', '视觉设计', '遊戲企劃'],
   'developer_relations': ['developer advocate', 'developer community manager', 'developer evangelist', 'developer experience engineer', 'developer relations', 'devrel', 'technical evangelist', 'деврел', 'технический евангелист'],
-  'devops': ['administrator systemów', 'ai platform administrator', 'alkalmazás üzemeltető', 'alkalmazásüzemeltető', 'awsエンジニア', 'cloud analyst', 'cloud design engineer', 'cloud engineer', 'cloud migration engineer', 'cloud operations engineer', 'data center engineer', 'data center technician', 'database administrator', 'database engineer', 'datenbankadministrator', 'devops', 'dizajnéri a správcovia databáz', 'fachinformatiker', 'fachinformatiker für systemintegration', 'fachinformatiker systemintegration', 'informatik', 'informatikai üzemeltető', 'informatikus', 'informatičar', 'informatičarka', 'informatyczka', 'informatyk', 'infrastructure analyst', 'infrastructure engineer', 'infrastruktúra üzemeltető', 'it administrator', 'it infrastructure', 'it manager', 'it systemelektroniker', 'it systemtechniker', 'it üzemeltető', 'it-systemelektroniker', 'it-systemtechniker', 'itインフラ', 'linux administrator', 'linux systems engineer', 'ml ops', 'mlops', 'network operations engineer', 'návrháři a správci databází', 'oracle dba', 'platform engineer', 'platform engineering', 'release engineer', 'release manager', 'rendszergazda', 'rendszerüzemeltető', 'sap basis administrator', 'servicenow administrator', 'sharepoint administrator', 'sistemski administrator', 'skrbnik informacijskega sistema', 'skrbnik računalniških sistemov', 'skrbnik sistemov', 'skrbnika informacijskih sistemov', 'správcovia systémov', 'strokovnjak s področja informacijsko-komunikacijskih tehnologij', 'sysadmin', 'system administrator', 'systemadministrator', 'systems administrator', 'systémoví administrátoři', 'szoftverüzemeltető', 'vodja informacijskih tehnologij in digitalizacije', 'vodja informatike', 'windows administrator', 'администратор баз данных', 'адміністратор баз даних', 'адміністратор системи', 'девопс', 'системний адміністратор', 'системный администратор', 'インフラエンジニア', 'インフラ運用', 'クラウドエンジニア', 'サーバエンジニア', 'サーバーエンジニア', 'サーバー構築', 'サーバー設計', 'サーバー運用', 'サーバ構築', 'サーバ設計', 'サーバ運用', 'システム運用', 'データセンターエンジニア', 'データベースエンジニア', 'プラットフォームエンジニア', '云计算', '系統管理工程', '系統管理師', '維運工程', '資料庫管理', '运维工程', '运维开发', '運用監視', '雲端工程'],
+  'devops': ['ai platform administrator', 'alkalmazás üzemeltető', 'alkalmazásüzemeltető', 'awsエンジニア', 'cloud analyst', 'cloud design engineer', 'cloud engineer', 'cloud migration engineer', 'cloud operations engineer', 'data center engineer', 'data center technician', 'database administrator', 'database engineer', 'datenbankadministrator', 'devops', 'dizajnéri a správcovia databáz', 'fachinformatiker', 'fachinformatiker für systemintegration', 'fachinformatiker systemintegration', 'informatik', 'informatikai üzemeltető', 'informatikus', 'informatičar', 'informatičarka', 'informatyczka', 'informatyk', 'infrastructure analyst', 'infrastructure engineer', 'infrastruktúra üzemeltető', 'it infrastructure', 'it manager', 'it systemelektroniker', 'it systemtechniker', 'it üzemeltető', 'it-systemelektroniker', 'it-systemtechniker', 'itインフラ', 'linux systems engineer', 'ml ops', 'mlops', 'network operations engineer', 'návrháři a správci databází', 'oracle dba', 'platform engineer', 'platform engineering', 'release engineer', 'release manager', 'rendszerüzemeltető', 'sap basis administrator', 'servicenow administrator', 'sharepoint administrator', 'strokovnjak s področja informacijsko-komunikacijskih tehnologij', 'szoftverüzemeltető', 'vodja informacijskih tehnologij in digitalizacije', 'vodja informatike', 'администратор баз данных', 'адміністратор баз даних', 'девопс', 'インフラエンジニア', 'インフラ運用', 'クラウドエンジニア', 'サーバエンジニア', 'サーバーエンジニア', 'サーバー構築', 'サーバー設計', 'サーバー運用', 'サーバ構築', 'サーバ設計', 'サーバ運用', 'システム運用', 'データセンターエンジニア', 'データベースエンジニア', 'プラットフォームエンジニア', '云计算', '系統管理工程', '系統管理師', '維運工程', '資料庫管理', '运维工程', '运维开发', '運用監視', '雲端工程'],
   'education': ['adjunct faculty', 'after school counselor', 'after-school counselor', 'asistent z doktoratom', 'assistant superintendent for', 'assistant superintendent of', 'basketball coach', 'bibliotekar', 'camp counselor', 'chess instructor', 'child care', 'childcare', 'daycare', 'edukator', 'edukatorica', 'english trainer', 'fitness coach', 'fitness instructor', 'instruktor fitness', 'instruktor vožnje', 'instruktorka fitness', 'korepetytor', 'korepetytorka', 'lecturer', 'librarian', 'nastavnica', 'nastavnik', 'nauczyciel', 'nauczycielka', 'odgajatelj', 'odgajateljica', 'odgojitelj', 'odgojiteljica', 'organizator izobraževanja odraslih', 'paraprofessional', 'pedagog', 'pilates instructor', 'pomočnik v.d. ravnatelja', 'predavatelj', 'predavačica', 'preschool', 'preschool teacher', 'profesor', 'professor', 'ravnatelj', 'referent višje strokovne šole', 'school superintendent', 'soccer coach', 'spremljevalec otroka', 'spremljevalec učenca', 'spremljevalec učencu', 'spremljevalec v osnovni šoli', 'strokovni delavec v visokošolski dejavnosti', 'substitute teacher', 'superintendent of schools', 'swim instructor', 'tanár', 'tanító', 'teacher', 'teaching assistant', 'tutor', 'učitel', 'učitelj', 'učiteljica', 'učitelka', 'vaspitač', 'vaspitačica', 'vodja enote v visokošolski dejavnost', 'vodja medpodjetniškega izobraževalnega centra', 'vzgojitelj', 'vzgojitelja', 'vzgojiteljica', 'yoga instructor', 'šolski psiholog', 'библиотекарь', 'викладач', 'вихователь', 'воспитатель', 'воспитателя', 'вчитель', 'вчителька', 'мастер производственного обучения', 'методист', 'музыкальный руководитель', 'педагог', 'преподаватель', 'тьютор', 'учител', 'учитель', '保姆', '保母', '保育スタッフ', '保育園', '保育士', '保育教諭', '保育補助', '助教', '家教', '導師', '幼兒園', '幼稚園教諭', '延長保育', '托嬰', '托育', '教保員', '教員', '教室運営', '教师', '教師', '教授', '留学カウンセラー', '老师', '老師', '課輔', '講師', '讲师'],
   'embedded': ['beágyazott szoftverfejlesztő', 'bios工程', 'embedded', 'firmware', 'inženir vgrajene programske opreme', 'logiciel embarqué', 'strokovnjak za mobilne komunikacije vgrajenih sistemov', 'vgrajene programske opreme', 'встраиваемые', 'встраиваемых', 'デバイスドライバ', 'ファームウェア', '固件', '嵌入式', '組み込み', '組込', '組込み', '韌體', '驅動程式', '驱动开发'],
   'engineering_design': ['architectural designer', 'arhitekt', 'arhitekta', 'arhitektica', 'bim coordinator', 'bim designer', 'bim digital design', 'bim manager', 'bim modeler', 'bim specialist', 'bim-digital design', 'buildings design delivery', 'cad designer', 'cad工程', 'cad繪圖', 'cad設計', 'cad设计', 'cam工程', 'civil designer', 'civil digital design', 'design engineer', 'design technician', 'die designer', 'digital design (bim)', 'digital design coordinator (electrical', 'digital design lead (buildings)', 'digital design lead (mechanical', 'digital design lead (structural', 'digital design specialist (bim)', 'digital design specialist (electrical', 'digital design specialist (structural', 'drafter', 'draftsman', 'draughtsman', 'ec&i digital design', 'electrical designer', 'electrical digital design', 'elektro projektant', 'geodet', 'geodetski inženjer', 'geodetski tehničar', 'geometar', 'hvac designer', 'inżynier konstruktor', 'inżynier projektant', 'inženir projektant', 'inženjer geodezije', 'konstruker', 'konstrukter', 'konstruktor', 'konstruktér', 'konštruktér', 'mechanical designer', 'mechanical digital design', 'mold designer', 'odgovorni projektant', 'piping designer', 'plumbing designer', 'projektant', 'projektantica', 'projektantka', 'revit designer', 'security digital design coordinator', 'security digital design specialist', 'statičar', 'structural designer', 'structural digital design', 'tehnička crtačica', 'tehnički crtač', 'tehnični risar', 'tool designer', 'vodja oddelka elektro konstrukcije', 'инженер-проектировщик', 'конструктор', '建築師', '建築設計', '意匠設計', '机械设计', '構造設計', '模具設計', '機械設計', '機構助理工程', '機構工程', '機構研發', '機構設計', '电气设计', '結構設計', '繪圖', '结构设计', '绘图', '製圖', '設備設計', '配管設計', '電気設計', '電氣設計'],
-  'finance': ['accountant', 'accounting', 'accounts payable', 'accounts receivable', 'analitik energetskih trgov', 'associate banker', 'audit manager', 'bank teller', 'bankar', 'bankowości', 'bančni', 'billing specialist', 'bookkeeper', 'borzni posrednik', 'bérszámfejtési', 'bérszámfejtő', 'cfo', 'chief financial officer', 'claims adjuster', 'controller', 'controllers', 'controllingu', 'credit manager', 'davčni svetovalec', 'direktor financ skupine', 'f&i manager', 'fakturista', 'fakturistkinja', 'finance & insurance manager', 'finance analyst', 'finance and insurance manager', 'finance controller', 'finance director', 'finance manager', 'financial adviser', 'financial advisor', 'financial analyst', 'financial controller', 'financial manager', 'financial services professional', 'financija', 'financijama', 'financije', 'financijski analitičar', 'financijski kontrolor', 'finansija', 'finansijama', 'finansijski analitičar', 'finansijski kontrolor', 'finansowa', 'finansowej', 'finansowy', 'finansów', 'finančni kontrolor', 'finančni referent', 'finančni svetovalec', 'finančnik', 'finančno - komercialni sodelavec', 'fp&a', 'head of finance', 'internal audit', 'investor relations', 'knjigovodja', 'knjigovodstveni referent', 'knjigovođa', 'kontroler', 'kontrolingu', 'kontroller', 'kontrolor v financah', 'księgowa', 'księgowego', 'księgowej', 'księgowości', 'księgowy', 'könyvelő', 'likvidator šteta', 'loan officer', 'loan originator', 'mortgage', 'obračunski referent', 'obračunski tehnik', 'ocenjevalec kreditnih tveganj', 'payroll', 'personal banker', 'pomočnik vodje računovodsko-finančnega oddelka', 'portfolio manager', 'premium auditor', 'produktni specialist za kredite', 'pénzügyi', 'płac', 'računovodja', 'računovodkinja', 'računovodske in knjigovodske storitve', 'računovodski administrator', 'računovodski referent', 'računovodstva', 'računovodstvena referentica', 'računovodstveni referent', 'računovodstvu', 'računovođa', 'referent obračun plač', 'referent specialist za računovodstvo', 'referent za finance in računovodstvo', 'referent za obračun', 'relationship banker', 'relationship manager', 'risk manager', 'rozliczeń', 'sodelavec v obračunu', 'sodelavec v računovodskem/finančnem', 'sodelavec za obračun plač', 'sodelavec za provizijske obračune', 'sodelavec za škode', 'sosvetovalec za podjetja', 'specialist za administracijo in računovodstvo', 'specialist za davčno skladnost in e-račune', 'specialist za finance in računovodstvo', 'specialist za kontroling in informacijski sistem', 'specialist za obračun davkov', 'specialist za obračun plač', 'specialist za podjetja', 'specialist za sklepanje pozavarovanj', 'strokovni sodelavec kontrolinga', 'strokovni sodelavec za operativni kontroling', 'strokovni sodelavec za računovodstvo', 'strokovni sodelavec za spremljanje', 'strokovni sodelavec za spremljavo kreditnih tveganj', 'strokovni sodelovec za operativni kontroling', 'strokovnjak za računovodstvo', 'svetovalec na bančnem okencu', 'svetovalec pravnim osebam', 'svetovalec za leasing', 'számviteli', 'tax accountant', 'tax manager', 'tax senior manager', 'teller', 'treasury', 'underwriter', 'underwriting', 'upravljalec kreditnih tveganj', 'višji kreditni', 'višji specialist za finančno poročanje', 'višji svetovalec v pravosodju - računovodja', 'višji svetovalec za podjetja', 'vodja ekonomske službe', 'vodja financ', 'vodja finančne službe', 'vodja finančno računovodske službe', 'vodja finančno-računovodskega sektorja', 'vodja kartičnega poslovanja', 'vodja knjigovodstva', 'vodja kontrolinga', 'vodja majhne in srednje velike pravne osebe', 'vodja oddelka transakcijsko bančništvo', 'vodja privatnega bančništva', 'vodja računovodske službe', 'vodja sektorja kontrolinga', 'vodja upravljanja kreditnega portfelja', 'windykacji', 'účetní', 'účtovník', 'účtovníčka', 'бухгалтер', 'бухгалтерії', 'главбух', 'главный бухгалтер', 'казначей', 'касир відділення', 'кредитиране', 'счетоводител', 'финансовый аналитик', 'финансовый директор', 'фінансовий', 'экономист', 'アクチュアリー', '会計', '会计', '出納', '出纳', '审计', '審計', '投資經理', '投资经理', '會計', '理財', '稅務', '税务', '税務', '税理士', '稽核', '経理', '行业研究', '財務', '財會', '财务'],
+  'finance': ['accountant', 'accounting', 'accounts payable', 'accounts receivable', 'analitik energetskih trgov', 'associate banker', 'audit manager', 'bank teller', 'bankar', 'bankowości', 'bančni', 'billing specialist', 'bookkeeper', 'borzni posrednik', 'bérszámfejtési', 'bérszámfejtő', 'cfo', 'chief financial officer', 'claims adjuster', 'controller', 'controllers', 'controllingu', 'credit manager', 'davčni svetovalec', 'direktor financ skupine', 'f&i manager', 'fakturista', 'fakturistkinja', 'finance & insurance manager', 'finance analyst', 'finance and insurance manager', 'finance controller', 'finance director', 'finance manager', 'finance specialist', 'financial adviser', 'financial advisor', 'financial analyst', 'financial controller', 'financial manager', 'financial services professional', 'financial specialist', 'financija', 'financijama', 'financije', 'financijski analitičar', 'financijski kontrolor', 'finansija', 'finansijama', 'finansijski analitičar', 'finansijski kontrolor', 'finansowa', 'finansowej', 'finansowy', 'finansów', 'finančni kontrolor', 'finančni referent', 'finančni svetovalec', 'finančnik', 'finančno - komercialni sodelavec', 'fp&a', 'head of finance', 'internal audit', 'investor relations', 'knjigovodja', 'knjigovodstveni referent', 'knjigovođa', 'kontroler', 'kontrolingu', 'kontroller', 'kontrolor v financah', 'księgowa', 'księgowego', 'księgowej', 'księgowości', 'księgowy', 'könyvelő', 'likvidator šteta', 'loan officer', 'loan originator', 'mortgage', 'obračunski referent', 'obračunski tehnik', 'ocenjevalec kreditnih tveganj', 'payroll', 'personal banker', 'pomočnik vodje računovodsko-finančnega oddelka', 'portfolio manager', 'premium auditor', 'produktni specialist za kredite', 'pénzügyi', 'płac', 'računovodja', 'računovodkinja', 'računovodske in knjigovodske storitve', 'računovodski administrator', 'računovodski referent', 'računovodstva', 'računovodstvena referentica', 'računovodstveni referent', 'računovodstvu', 'računovođa', 'referent obračun plač', 'referent specialist za računovodstvo', 'referent za finance in računovodstvo', 'referent za obračun', 'relationship banker', 'relationship manager', 'risk manager', 'rozliczeń', 'sodelavec v obračunu', 'sodelavec v računovodskem/finančnem', 'sodelavec za obračun plač', 'sodelavec za provizijske obračune', 'sodelavec za škode', 'sosvetovalec za podjetja', 'specialist za administracijo in računovodstvo', 'specialist za davčno skladnost in e-račune', 'specialist za finance in računovodstvo', 'specialist za kontroling in informacijski sistem', 'specialist za obračun davkov', 'specialist za obračun plač', 'specialist za podjetja', 'specialist za sklepanje pozavarovanj', 'strokovni sodelavec kontrolinga', 'strokovni sodelavec za operativni kontroling', 'strokovni sodelavec za računovodstvo', 'strokovni sodelavec za spremljanje', 'strokovni sodelavec za spremljavo kreditnih tveganj', 'strokovni sodelovec za operativni kontroling', 'strokovnjak za računovodstvo', 'svetovalec na bančnem okencu', 'svetovalec pravnim osebam', 'svetovalec za leasing', 'számviteli', 'tax accountant', 'tax manager', 'tax senior manager', 'teller', 'treasury', 'underwriter', 'underwriting', 'upravljalec kreditnih tveganj', 'višji kreditni', 'višji specialist za finančno poročanje', 'višji svetovalec v pravosodju - računovodja', 'višji svetovalec za podjetja', 'vodja ekonomske službe', 'vodja financ', 'vodja finančne službe', 'vodja finančno računovodske službe', 'vodja finančno-računovodskega sektorja', 'vodja kartičnega poslovanja', 'vodja knjigovodstva', 'vodja kontrolinga', 'vodja majhne in srednje velike pravne osebe', 'vodja oddelka transakcijsko bančništvo', 'vodja privatnega bančništva', 'vodja računovodske službe', 'vodja sektorja kontrolinga', 'vodja upravljanja kreditnega portfelja', 'windykacji', 'účetní', 'účtovník', 'účtovníčka', 'бухгалтер', 'бухгалтерії', 'главбух', 'главный бухгалтер', 'казначей', 'касир відділення', 'кредитиране', 'счетоводител', 'финансовый аналитик', 'финансовый директор', 'фінансовий', 'экономист', 'アクチュアリー', '会計', '会计', '出納', '出纳', '审计', '審計', '投資經理', '投资经理', '會計', '理財', '稅務', '税务', '税務', '税理士', '稽核', '経理', '行业研究', '財務', '財會', '财务'],
   'frontend': ['angular developer', 'front end', 'front-end', 'front-end developer', 'frontend', 'frontend developer', 'react developer', 'react engineer', 'react.js developer', 'reactjs developer', 'vue developer', 'vue.js developer', 'vuejs developer', 'web前端', 'фронт', 'фронтенд', 'フロントエンジニア', 'フロントエンド', '前端工程', '前端开发', '前端開發'],
   'fullstack': ['full stack', 'full-stack', 'fullstack', 'фуллстак', 'фулстек', 'フルスタック', '全栈', '全端'],
   'hardware': ['analog & digital design', 'analog and digital design', 'analog design engineer', 'analog/digital design', 'analogue design engineer', 'asic (front end)', 'asic (front-end)', 'asic / digital design', 'asic design', 'asic digital design', 'asic front end', 'asic front-end', 'asic frontend', 'asic security digital design', 'chip design', 'cpu (front end)', 'cpu (front-end)', 'cpu front end', 'cpu front-end', 'cpu frontend', 'dft design engineer', 'digital design & verification', 'digital design - mixed-signal', 'digital design - pd', 'digital design / design verification', 'digital design and implementation', 'digital design and signal processing', 'digital design and verification', 'digital design architect', 'digital design capability architect', 'digital design electrical engineer', 'digital design engineer', 'digital design engineering', 'digital design engineers', 'digital design flow', 'digital design lead engineer', 'digital design member of technical staff', 'digital design power engineer', 'digital design rtl', 'digital design verification', 'digital design, soc', 'digital design-for-test', 'digital design/verification', 'electronics engineer', 'engineer (digital design)', 'engineer - digital design', 'engineer digital design', 'engineer for digital design', 'engineer ii-digital design', 'engineer, digital design', 'engineer-digital design', 'fpga', 'front end asic', 'front end cad', 'front end design (rtl)', 'front end design verification', 'front end design/verification', 'front end digital design', 'front end methodology', 'front end rtl', 'front end semiconductor', 'front end silicon', 'front end verification', 'front-end asic', 'front-end cad', 'front-end design (rtl)', 'front-end design verification', 'front-end design/verification', 'front-end digital design', 'front-end methodology', 'front-end rtl', 'front-end semiconductor', 'front-end silicon', 'front-end verification', 'frontend cad', 'frontend design (rtl)', 'frontend design verification', 'frontend design/verification', 'frontend methodology', 'frontend rtl', 'frontend semiconductor', 'frontend silicon', 'frontend verification', 'gpu front end', 'gpu front-end', 'gpu frontend', 'hardware', 'hardware front end', 'hardware front-end', 'hardware frontend', 'hw digital design', 'ic design', 'ic digital design', 'ic front end', 'ic front-end', 'ic frontend', 'ic設計', 'ic设计', 'ic驗證', 'layout工程', 'memory design engineer', 'mixed signal design engineer', 'mixed signal digital design', 'mixed-signal design engineer', 'pcb design', 'pcb designer', 'pcb layout', 'pcie digital design', 'phy digital design', 'physical design engineer', 'programer procesorjev', 'rf design engineer', 'rf digital design', 'rf front end', 'rf front-end', 'rf frontend', 'rfic design', 'rtl design engineer', 'rtl front end', 'rtl front-end', 'rtl frontend', 'semiconductor design', 'semiconductor front end', 'semiconductor front-end', 'semiconductor frontend', 'serdes digital design', 'silicon design', 'silicon front end', 'silicon front-end', 'silicon frontend', 'soc & digital design', 'soc design', 'soc front end', 'soc front-end', 'soc frontend', 'standard cell design', 'vlsi design', 'vlsi front end', 'vlsi front-end', 'vlsi frontend', 'wireless and digital design', '佈局工程', '回路設計', '射頻', '射频', '数字ic', '数字后端', '數位ic', '數位後端', '數位電路', '晶片設計', '模拟ic', '电子工程师', '电路设计', '硬件工程', '硬件开发', '硬體工程', '硬體研發', '芯片设计', '電子工程師', '電路設計', '類比ic', '類比電路'],
-  'healthcare': ['advanced practice provider', 'analitik v laboratorijski medicini', 'apotekar', 'autism support', 'auxiliar de enfermagem', 'babica', 'bcba', 'behavior analyst', 'behavior technician', 'behavioral health', 'bolničar', 'care aide', 'care assistant', 'care coordinator', 'care manager', 'caregiver', 'cath lab', 'clinic manager', 'clinical counselor', 'clinical lab assistant', 'clinical lab scientist', 'clinical lab technician', 'clinical laboratory assistant', 'clinical laboratory scientist', 'clinical laboratory technician', 'clinical laboratory technologist', 'clinical manager', 'clinical research', 'clinical research associate', 'clinical research coordinator', 'clinical trial', 'cna', 'cuidador', 'defektolog', 'delovni terapevt', 'dental assistant', 'dental hygienist', 'dentalna asistentica', 'dentalni asistent', 'dentalni tehničar', 'dentist', 'dentysta', 'dentystka', 'dietetik', 'dietitian', 'diplomirani zdravstvenik', 'doktor dentalne medicine', 'doktor medicine', 'doktor opće medicine', 'doktorica medicine', 'drug safety', 'edukacijski rehabilitator', 'enfermeiro', 'ep lab', 'family medicine', 'farmaceuta', 'farmaceutka', 'farmaceutkinja', 'farmaceutska tehničarka', 'farmaceutski tehničar', 'farmacevt', 'farmacevtka', 'farmacevtski tehnik', 'fiuiterapevt', 'fizioterapeutkinja', 'fizioterapeutski tehničar', 'fizioterapevt', 'fizjoterapeuta', 'fizjoterapeutka', 'gerontodomaćica', 'gerontodomaćin', 'gyógyszerész', 'histology technician', 'histotechnician', 'histotechnologist', 'home health', 'home health aide', 'hospice', 'instrumentar', 'instrumentarka', 'inženir radiologije', 'kineziolog', 'klinikai kutatási munkatárs', 'koordinator ambulante', 'koordinator operacijskih dvoran', 'language pathologist', 'lekar', 'lekarka', 'lekarz', 'lekár', 'lekárka', 'licensed practical nurse', 'liječnica', 'liječnik', 'ljekarnica', 'ljekarnik', 'logoped', 'logopedica', 'lpn', 'lékař', 'lékařka', 'magistar farmacije', 'magistra farmacije', 'med lab scientist', 'med lab tech', 'medical assistant', 'medical case manager', 'medical director', 'medical lab scientist', 'medical lab tech', 'medical lab technician', 'medical laboratory scientist', 'medical laboratory technician', 'medical laboratory technologist', 'medical science liaison', 'medical scribe', 'medical technologist', 'medication technician', 'medicinska sestra', 'medicinska sestrav', 'medicinskasestra', 'medicinski biokemik', 'medicinski tehničar', 'mental health', 'mental health associate', 'mental health counselor', 'mental health technician', 'mental health therapist', 'mri technologist', 'negovatelj', 'negovateljica', 'njegovatelj', 'njegovateljica', 'nurse', 'nurse practitioner', 'nursing', 'obsługi pacjenta', 'occupational therapist', 'optičar', 'optometric assistant', 'optometrist', 'ortodonta', 'ortodontka', 'orvos', 'paramedic', 'pathology lab assistant', 'pathology laboratory assistant', 'patient access', 'patient care', 'patient care technician', 'patient coordinator', 'patient safety', 'peka zob in diskov', 'pharmacist', 'pharmacy manager', 'pharmacy technician', 'phlebotomist', 'phlebotomy', 'physical therapist', 'physician', 'pielęgniarka', 'pielęgniarz', 'położna', 'practice manager', 'predstojnik anesteziološko', 'predstojnik kliničnega inštituta', 'predstojnik oddelka za radiologijo', 'primalja', 'primary care provider', 'pripravnik zdravstvene nege', 'professional counselor', 'psihiater', 'psiholog', 'psihologinja', 'psychiatric', 'psychiatrist', 'psychologist', 'psychotherapist', 'radiologic technologist', 'radiology technologist', 'radiološki inženir', 'ratowniczka medyczna', 'ratownik medyczny', 'rbt', 'registered nurse', 'respiratory therapist', 'reševalec', 'rn', 'sanitarni tehničar', 'scrub tech', 'sestra', 'sleep lab', 'sonographer', 'specialist družinske medicine', 'specialist klinićne logopedije', 'specialist klinične logopedije', 'specialist za klinične aplikacije', 'speech language', 'speech therapist', 'stomatolog', 'stomatologinja', 'stomatolożka', 'surgical technician', 'surgical technologist', 'szakorvos', 'tehnik zdr.nege', 'tehnik zdravstvene nege', 'therapist', 'therapy assistant', 'técnico de enfermagem', 'veterinar', 'veterinarian', 'veterinarka', 'veterinarski tehničar', 'veterinary', 'veterinary technician', 'vodja lekarne', 'vodja sanitarnega oddelka', 'vodja zdravstvene nege', 'všeobecná sestra', 'x-ray technician', 'x-ray technologist', 'xray technologist', 'zdravnica', 'zdravnik', 'zdravnika', 'zdravotná sestra', 'zdravotní sestra', 'zdravstveni hidrotehnik', 'zdravstveni sodelavec', 'zdravstveni tehnik', 'zdravstveni tehničar', 'zdravstveno - laboratorijski tehničar', 'zdravstveno laboratorijski tehničar', 'zdravstveno-laboratorijski tehničar', 'zobni asistent', 'zobotehnik', 'zobozdravnik', 'zobozdravstvena asistentka', 'zobozdravstveni asistent', 'zubar', 'zubni tehničar', 'ápoló', 'ветеринарный врач', 'врач', 'врача', 'клинический психолог', 'лекар', 'лечебной физкультуре', 'логопед', 'лікар', 'лікарка', 'медбрат', 'медицинска сестра', 'медицинская сестра', 'медицинский психолог', 'медицинский статистик', 'медсестра', 'провизор', 'провізор', 'рентгенолаборант', 'санитар', 'санитарка', 'фармацевт', 'фельдшер', 'ケアマネ', '临床协调', '临床监查', '临床研究', '介護', '作業療法士', '保健師', '医师', '医師', '居家服務', '居家照顧', '居家督導', '居服', '廠護', '心理師', '护士', '护理', '放射師', '放射線技師', '有料老人ホーム', '栄養士', '歯科助手', '歯科衛生士', '治疗师', '治療師', '治験', '照服員', '照顧服務', '營養師', '牙助', '牙科助理', '牙醫', '理学療法士', '看護', '看護師', '看護職', '美容外科', '臨床検査技師', '臨床監查', '臨床研究', '臨床開発', '药师', '薬剤師', '藥劑', '藥局', '藥師', '言語聴覚士', '診所助理', '護理', '醫事檢驗', '醫助', '醫師', '醫檢', '門診助理', '驗光'],
+  'healthcare': ['advanced practice provider', 'analitik v laboratorijski medicini', 'apotekar', 'autism support', 'auxiliar de enfermagem', 'babica', 'bcba', 'behavior analyst', 'behavior technician', 'behavioral health', 'bolničar', 'care aide', 'care assistant', 'care coordinator', 'care manager', 'caregiver', 'cath lab', 'clinic manager', 'clinical counselor', 'clinical lab assistant', 'clinical lab scientist', 'clinical lab technician', 'clinical laboratory assistant', 'clinical laboratory scientist', 'clinical laboratory technician', 'clinical laboratory technologist', 'clinical manager', 'clinical research', 'clinical research associate', 'clinical research coordinator', 'clinical trial', 'cna', 'cuidador', 'defektolog', 'delovni terapevt', 'dental assistant', 'dental hygienist', 'dentalna asistentica', 'dentalni asistent', 'dentalni tehničar', 'dentist', 'dentysta', 'dentystka', 'dietetik', 'dietitian', 'diplomirani zdravstvenik', 'doktor dentalne medicine', 'doktor medicine', 'doktor opće medicine', 'doktorica medicine', 'drug safety', 'edukacijski rehabilitator', 'enfermeiro', 'ep lab', 'family medicine', 'farmaceuta', 'farmaceutka', 'farmaceutkinja', 'farmaceutska tehničarka', 'farmaceutski tehničar', 'farmacevt', 'farmacevtka', 'farmacevtski tehnik', 'fiuiterapevt', 'fizioterapeutkinja', 'fizioterapeutski tehničar', 'fizioterapevt', 'fizjoterapeuta', 'fizjoterapeutka', 'gerontodomaćica', 'gerontodomaćin', 'gyógyszerész', 'histology technician', 'histotechnician', 'histotechnologist', 'home health', 'home health aide', 'hospice', 'instrumentar', 'instrumentarka', 'inženir radiologije', 'kineziolog', 'klinikai kutatási munkatárs', 'koordinator ambulante', 'koordinator operacijskih dvoran', 'language pathologist', 'lekar', 'lekarka', 'lekarz', 'lekár', 'lekárka', 'licensed practical nurse', 'liječnica', 'liječnik', 'ljekarnica', 'ljekarnik', 'logoped', 'logopedica', 'lpn', 'lékař', 'lékařka', 'magistar farmacije', 'magistra farmacije', 'med lab scientist', 'med lab tech', 'medical assistant', 'medical case manager', 'medical director', 'medical lab scientist', 'medical lab tech', 'medical lab technician', 'medical laboratory scientist', 'medical laboratory technician', 'medical laboratory technologist', 'medical science liaison', 'medical scribe', 'medical technologist', 'medication technician', 'medicinska sestra', 'medicinska sestrav', 'medicinskasestra', 'medicinski biokemik', 'medicinski tehničar', 'mental health', 'mental health associate', 'mental health counselor', 'mental health technician', 'mental health therapist', 'midwife', 'mri technologist', 'negovatelj', 'negovateljica', 'njegovatelj', 'njegovateljica', 'nurse', 'nurse practitioner', 'nursing', 'obsługi pacjenta', 'occupational therapist', 'optičar', 'optometric assistant', 'optometrist', 'ortodonta', 'ortodontka', 'orvos', 'paramedic', 'pathology lab assistant', 'pathology laboratory assistant', 'patient access', 'patient care', 'patient care technician', 'patient coordinator', 'patient safety', 'peka zob in diskov', 'pharmacist', 'pharmacy manager', 'pharmacy technician', 'phlebotomist', 'phlebotomy', 'physical therapist', 'physician', 'physiotherapist', 'pielęgniarka', 'pielęgniarz', 'położna', 'practice manager', 'predstojnik anesteziološko', 'predstojnik kliničnega inštituta', 'predstojnik oddelka za radiologijo', 'primalja', 'primary care provider', 'pripravnik zdravstvene nege', 'professional counselor', 'psihiater', 'psiholog', 'psihologinja', 'psychiatric', 'psychiatrist', 'psychologist', 'psychotherapist', 'radiologic technologist', 'radiology technologist', 'radiološki inženir', 'ratowniczka medyczna', 'ratownik medyczny', 'rbt', 'registered nurse', 'respiratory therapist', 'reševalec', 'rn', 'sanitarni tehničar', 'scrub tech', 'sestra', 'sleep lab', 'sonographer', 'specialist družinske medicine', 'specialist klinićne logopedije', 'specialist klinične logopedije', 'specialist za klinične aplikacije', 'speech language', 'speech therapist', 'stomatolog', 'stomatologinja', 'stomatolożka', 'surgical technician', 'surgical technologist', 'szakorvos', 'tehnik zdr.nege', 'tehnik zdravstvene nege', 'therapist', 'therapy assistant', 'técnico de enfermagem', 'veterinar', 'veterinarian', 'veterinarka', 'veterinarski tehničar', 'veterinary', 'veterinary technician', 'vodja lekarne', 'vodja sanitarnega oddelka', 'vodja zdravstvene nege', 'všeobecná sestra', 'x-ray technician', 'x-ray technologist', 'xray technologist', 'zdravnica', 'zdravnik', 'zdravnika', 'zdravotná sestra', 'zdravotní sestra', 'zdravstveni hidrotehnik', 'zdravstveni sodelavec', 'zdravstveni tehnik', 'zdravstveni tehničar', 'zdravstveno - laboratorijski tehničar', 'zdravstveno laboratorijski tehničar', 'zdravstveno-laboratorijski tehničar', 'zobni asistent', 'zobotehnik', 'zobozdravnik', 'zobozdravstvena asistentka', 'zobozdravstveni asistent', 'zubar', 'zubni tehničar', 'ápoló', 'ветеринарный врач', 'врач', 'врача', 'клинический психолог', 'лекар', 'лечебной физкультуре', 'логопед', 'лікар', 'лікарка', 'медбрат', 'медицинска сестра', 'медицинская сестра', 'медицинский психолог', 'медицинский статистик', 'медсестра', 'провизор', 'провізор', 'рентгенолаборант', 'санитар', 'санитарка', 'фармацевт', 'фельдшер', 'ケアマネ', '临床协调', '临床监查', '临床研究', '介護', '作業療法士', '保健師', '医师', '医師', '居家服務', '居家照顧', '居家督導', '居服', '廠護', '心理師', '护士', '护理', '放射師', '放射線技師', '有料老人ホーム', '栄養士', '歯科助手', '歯科衛生士', '治疗师', '治療師', '治験', '照服員', '照顧服務', '營養師', '牙助', '牙科助理', '牙醫', '理学療法士', '看護', '看護師', '看護職', '美容外科', '臨床検査技師', '臨床監查', '臨床研究', '臨床開発', '药师', '薬剤師', '藥劑', '藥局', '藥師', '言語聴覚士', '診所助理', '護理', '醫事檢驗', '醫助', '醫師', '醫檢', '門診助理', '驗光'],
   'hospitality': ['administrator/turistični delavec', 'auxiliar de cozinha', 'banquet', 'banquet server', 'bar manager', 'barist', 'barista', 'barmen', 'barmenka', 'bartender', 'beverage manager', 'busser', 'cafe manager', 'café manager', 'camareira', 'catering manager', 'chef', 'concierge', 'cook', 'copeiro', 'cozinheiro', 'crew member', 'delavec v kuhinji', 'delilec', 'delo v kuhinji', 'delo v strežbi', 'dietary aide', 'dishwasher', 'f&b manager', 'food & beverage manager', 'food and beverage manager', 'food service', 'garçom', 'giros majstor', 'gostinski delavec', 'gostinski pomočnik', 'grill majstor', 'group revenue manager', 'guest service', 'gyros majstor', 'host', 'host/hostess', 'hostess', 'hotel manager', 'hotela', 'hotelu', 'kabinsko osebje', 'kelner', 'kelnerka', 'kitchen assistant', 'kitchen manager', 'konobar', 'konobarica', 'kucharka', 'kucharz', 'kuchař', 'kuchařka', 'kuchár', 'kuchárka', 'kuhar', 'kuharica', 'kuharja', 'kuharji', 'kuharska pomočnica', 'kuharski pomočnik', 'kuhinje', 'kuhinji', 'kuhinjska pomočnica', 'kuhinjski pomočnik', 'kuhinjski pomočnk', 'kulinarik', 'kuvar', 'kuvarica', 'laundry aide', 'laundry attendant', 'laundry worker', 'line cook', 'namestnik upravitelja restavracije', 'natakar', 'natakarica', 'natakarski pomočnik', 'organizator prehrane', 'organizator šolske prehrane', 'padeiro', 'pek', 'perač posuđa', 'perač sudova', 'perač suđa', 'peračica posuđa', 'pečenjar', 'pica majstor', 'picopek', 'pincér', 'pizza majstor', 'pomivalec', 'pomoc kuchenna', 'pomoč v kuhinji', 'pomoč v strežbi', 'pomočnik natakarja', 'pomočnik v kuhinji', 'pomočnik v strežbi', 'pomočnik vodje strežbe', 'pomožni delavec v gostinstvu', 'porter', 'porters', 'poslastičar', 'poslastičarka', 'poslovodja poslovno-zabaviščnega centra', 'pralja', 'prep cook', 'pripravljalec hrane', 'referent za namestitve', 'referent za rezervacije', 'reservation specialist', 'reservations manager', 'restaurant general manager', 'restaurant manager', 'restaurant team', 'restorana', 'restoranu', 'room attendant', 'roštilj majstor', 'server', 'servir', 'servirka', 'servírka', 'slastičar', 'slastičarka', 'slaščičar', 'sobar', 'sobarica', 'sodelavec v lokalu z burgerji', 'sodelavec za dostavo in razdelitev hrane', 'somelijer', 'spremljevalec skupine', 'strežba', 'strežnica', 'strežnik', 'strokovni delavec v strežbi', 'svetovalec v turistični agenciji', 'szakács', 'szobalány', 'tehnik v kongresnem', 'travel advisor', 'travel agent', 'travel consultant', 'travel coordinator', 'travel planner', 'travel specialist', 'upravitelj restavracije', 'valet', 'vodja - šef kuhinje', 'vodja ala carda', 'vodja gostinskega lokala', 'vodja hotelirstva', 'vodja igralnega salona', 'vodja kuhinje', 'vodja lokala', 'vodja otroškega centra z restavracijo', 'vodja poslovno-zabaviščnega centra', 'vodja razdelilne kuhinje', 'vodja recepcije', 'vodja restavracije', 'vodja strežbe', 'waiter', 'waitress', 'čašník', 'čašníčka', 'číšník', 'šanker', 'šankerica', 'šankist', 'šef kuhinje', 'šefica kuhinje', 'бармен', 'буфетчик', 'буфетчица', 'гардеробщик', 'гардеробщица', 'горничная', 'горничной', 'готвач', 'кастелянша', 'кондитер', 'кухар', 'кухарка', 'кухонный рабочий', 'мойщик посуды', 'мойщица посуды', 'официант', 'официантка', 'офіціант', 'офіціантка', 'пекарь', 'повар', 'посудомойщик', 'сервитьор', 'イタリアン調理', 'キッチンスタッフ', 'フレンチ調理', 'フロントスタッフ', 'ブライダル', 'ホテル', 'ホールスタッフ', 'レストランサービス', '中華調理', '二廚', '內場', '厨师', '厨房', '吧台', '吧檯', '和食調理', '咖啡師', '外場', '宴会調理', '宾客服务', '幫廚', '廚務', '廚工', '廚師', '廚房', '房務', '服务员', '服務生', '民宿', '洋食調理', '洗碗', '烘焙', '行政主厨', '行政主廚', '行政总厨', '行政管家', '行政總廚', '行政酒廊', '西洋調理', '西點', '訂房', '調理スタッフ', '調理人', '調理師', '調理職', '調理補助', '調理部', '賓客服務', '酒店', '飯店', '飲料調製', '餐厅', '餐廳', '餐飲', '餐饮', '麵包'],
-  'hr': ['chro', 'compensation and benefits', 'compensation manager', 'działu hr', 'employee relations', 'head of people', 'hr administrator', 'hr business partner', 'hr director', 'hr direktor', 'hr generalist', 'hr help desk', 'hr manager', 'hr partner', 'hr specialist', 'hr-менеджер', 'hrbp', 'human resource', 'human resources', 'industrial relations', 'kadr', 'kadrovik', 'kadrovnik', 'kadrovske službe', 'kadrovski', 'kadrovskoj službi', 'koordinator za kadre', 'koordinator za prihode tujih delavcev', 'labor relations', 'labour relations', 'learning and development', 'ljudskih potencialov', 'ljudskih potencijala', 'ljudskih resursa', 'ljudskim resursima', 'munkaügyi', 'people & culture', 'people and culture', 'people operations', 'people ops', 'people partner', 'personalista', 'personalistka', 'personalnych', 'referent za kadre', 'referent za kadrovsko administracijo', 'strokovni sodelavec vii/2 - kadrovske zadeve', 'strokovni sodelavec za kadre', 'strokovni sodelavec za kadrovsko', 'strokovnjak za kadrovske procese', 'talent management specialist', 'training manager', 'vodja hr', 'vodja kadrovskega', 'vodja splošno-kadrovske službe', 'zasobów ludzkich', 'директор по персоналу', 'з персоналу', 'инспектор по кадрам', 'кадрів', 'менеджер по персоналу', 'специалист по кадрам', 'специалист по персоналу', 'човешки ресурси', 'эйчар', '人事', '人力資源', '人力资源', '人資', '労務', '薪資專員', '薪資管理', '薪酬'],
+  'hr': ['chro', 'compensation and benefits', 'compensation manager', 'działu hr', 'employee relations', 'head of people', 'hr administrator', 'hr assistant', 'hr business partner', 'hr director', 'hr direktor', 'hr generalist', 'hr help desk', 'hr manager', 'hr partner', 'hr specialist', 'hr-менеджер', 'hrbp', 'human resource', 'human resources', 'industrial relations', 'kadr', 'kadrovik', 'kadrovnik', 'kadrovske službe', 'kadrovski', 'kadrovskoj službi', 'koordinator za kadre', 'koordinator za prihode tujih delavcev', 'labor relations', 'labour relations', 'learning and development', 'ljudskih potencialov', 'ljudskih potencijala', 'ljudskih resursa', 'ljudskim resursima', 'munkaügyi', 'people & culture', 'people and culture', 'people operations', 'people ops', 'people partner', 'personalista', 'personalistka', 'personalnych', 'referent za kadre', 'referent za kadrovsko administracijo', 'strokovni sodelavec vii/2 - kadrovske zadeve', 'strokovni sodelavec za kadre', 'strokovni sodelavec za kadrovsko', 'strokovnjak za kadrovske procese', 'talent management specialist', 'training manager', 'vodja hr', 'vodja kadrovskega', 'vodja splošno-kadrovske službe', 'zasobów ludzkich', 'директор по персоналу', 'з персоналу', 'инспектор по кадрам', 'кадрів', 'менеджер по персоналу', 'специалист по кадрам', 'специалист по персоналу', 'човешки ресурси', 'эйчар', '人事', '人力資源', '人力资源', '人資', '労務', '薪資專員', '薪資管理', '薪酬'],
   'industrial_engineering': ['application engineer', 'application engineering manager', 'applications engineer', 'applications engineering manager', 'automation engineer', 'automatyk', 'avtomatik', 'building engineer', 'chemical engineering manager', 'civil engineer', 'civil engineering manager', 'cnc工程', 'commissioning engineer', 'commissioning manager', 'continuous improvement', 'control engineer', 'controls engineer', 'cost manager', 'ekspert tehnologije izdelkov', 'electrical engineer', 'electrical engineering manager', 'elektro inženir', 'elektroinženir', 'elektroinženjer', 'environmental engineer', 'environmental engineering manager', 'estimator', 'estimators', 'facilities engineer', 'facilities engineering manager', 'facility engineering manager', 'field engineer', 'field service engineer', 'folyamatmérnök', 'food safety', 'functional safety', 'geotechnical engineer', 'građevinska inženjerka', 'građevinski inženjer', 'gépészmérnök', 'hospital engineering manager', 'ie工程', 'industrial engineer', 'industrial engineering manager', 'instrumentation engineer', 'inżynier automatyk', 'inżynier ds. jakości', 'inżynier elektryk', 'inżynier jakości', 'inżynier mechanik', 'inżynier procesu', 'inżynier procesów', 'inżynier produkcji', 'inżynier utrzymania ruchu', 'inżynierka ds. jakości', 'inženir avtomatizacije', 'inženir elektrotehnike', 'inženir kakovosti', 'inženjer elektrotehnike', 'inženjer građevinarstva', 'inženjer građevine', 'inženjer mašinstva', 'inženjer održavanja', 'inženjer strojarstva', 'inženjerka elektrotehnike', 'inženjerka građevinarstva', 'inženýr kvality', 'inžinier kvality', 'kalkulant', 'maintenance engineer', 'maintenance engineering manager', 'manufacturing engineer', 'manufacturing engineering manager', 'mašinski inženjer', 'mechanical engineer', 'mechanical engineering manager', 'operativni gradbeni inženir', 'planning engineer', 'plant engineer', 'plant engineering manager', 'plc controller', 'plc工程', 'plc控制', 'plc程式', 'procesni inženir', 'procesni inženjer', 'procesni sistematizer', 'procesní inženýr', 'procesný inžinier', 'process engineer', 'process engineering manager', 'product safety', 'production engineer', 'project engineer', 'project engineering manager', 'quality engineer', 'quality manager', 'quantity surveyor', 'reliability engineering manager', 'resident engineer', 'rudarski inženjer', 'service engineer', 'servisni inženir', 'site engineer', 'sodelavec razvoja', 'specialist za inženiring in avtomatizacijo', 'strojarski inženjer', 'strojni inženir', 'strojárski technici', 'strokovni sodelavec za meritve', 'strokovnjak za robotiko itot', 'structural engineer', 'structural engineering manager', 'substation engineering manager', 'supplier quality engineer', 'supplier quality engineering manager', 'technolog', 'technolożka', 'tehnolog', 'tehnologinja', 'validation engineer', 'villamosmérnök', 'vodja kakovosti', 'vodja kontrole kvalitete', 'vodja razvoja in inženiringa', 'vodja sektorja kakovosti', 'vodja upravljanja kakovosti', 'инженер', 'технолог', 'інженер з якості', 'інженер-енергетик', 'サービスエンジニア', 'フィールドエンジニア', 'プロセスエンジニア', '估算人員', '估算專員', '估算工程', '儀電', '光電維運', '制御エンジニア', '制御設計', '制程工程', '制造工程', '厂务工程', '品保工程', '品管工程', '品質保証', '品質工程', '品質管理', '品質系統工程', '品质工程', '土木工程', '太陽光電維運', '太陽能維運', '工业工程', '工地工程', '工業工程', '工艺工程', '工藝工程', '廠務工程', '應用工程', '机械工程', '机电工程', '模具工程', '機械工程', '機電工程', '機電整合', '清洁验证', '營建工程', '營造工程', '环境工程', '環保工程', '環境工程', '生产工程', '生產工程', '生產技術工程', '生産エンジニア', '生産技術', '电气工程', '監造', '結構工程', '維修工程', '结构工程', '维修工程', '自动化工程', '自動化工程', '自動控制', '製程工程', '製程開發', '製造工程師', '製造技術', '設備保全', '設備工程', '設備維護工程', '设备工程', '质量工程', '鋼構工程', '電控', '電機工程', '電氣工程'],
   'intern': ['industrial placement', 'industry placement', 'intern', 'internship', 'month placement', 'placement student', 'placement year', 'student placement', 'summer analyst', 'summer placement', 'trainee', 'undergraduate placement', 'vacation scheme', 'work placement', 'year in industry', 'year placement', 'стажер', 'стажировка', 'стажёр'],
   'it_support': ['1st level support', '1st line support', '2nd level support', '2nd line support', '3rd level support', '3rd line support', 'application support', 'applications support', 'cloud support engineer', 'computer lab assistant', 'computer lab technician', 'computer laboratory technician', 'desk side support', 'deskside support', 'desktop analyst', 'desktop engineer', 'desktop support', 'desktop technician', 'end user support', 'end-user support', 'first level support', 'first line support', 'help desk', 'helpdesk', 'ict support', 'informatički tehničar', 'it field support', 'it inženir za uporabniško podporo', 'it skrbnik za podporo uporabnikom', 'it specialist', 'it support', 'it supporter', 'it technical support', 'it technician', 'it підтримки', 'it-support', 'it-supporter', 'itサポート', 'l1 support', 'l2 support', 'l3 support', 'mis主管', 'mis人員', 'mis專員', 'mis工程', 'mis系統', 'mis網管', 'mis資訊', 'noc analyst', 'noc engineer', 'noc operator', 'noc specialist', 'noc technician', 'pc support', 'računalni tehničar', 'računalnikar', 'second level support', 'second line support', 'server support', 'service desk', 'servicedesk', 'sistemski tehnik', 'software support', 'soporte informatico', 'soporte informático', 'support informatique', 'systems support', 'tech support specialist', 'technical support analyst', 'technical support engineer', 'technical support engineering', 'technical support specialist', 'technici uživatelské podpory', 'technici užívateľskej podpory', 'technology support', 'third level support', 'third line support', 'поддержки пользователей', 'тех поддержки', 'техническая поддержка', 'технической поддержки', 'технічної підтримки', 'техподдержка', 'техподдержки', 'хелпдеск', 'хелпдеска', 'テクニカルサポート', 'ヘルプデスク', '資訊人員', '資訊助理', '資訊專員'],
   'junior': ['engineer trainee', 'graduate', 'graduate engineer trainee', 'graduate trainee', 'jr', 'junior', 'management trainee', 'trainee engineer', 'джун', 'джуниор', 'младший'],
   'lead': ['lead', 'team lead', 'teamlead', 'ведущий', 'тимлид'],
   'legal': ['advokatica', 'advokatski pripravnik', 'asistent v pravno - razvojnem', 'attorney', 'attorneys', 'compliance analyst', 'compliance manager', 'compliance officer', 'contract administrator', 'contract manager', 'contracts administrator', 'contracts manager', 'corporate counsel', 'data privacy manager', 'data privacy officer', 'data protection officer', 'general counsel', 'immigration assistant', 'immigration case manager', 'immigration consultant', 'immigration paralegal', 'immigration specialist', 'javni bilježnik', 'jogász', 'lawyer', 'legal assistant', 'legal counsel', 'legal manager', 'odvetnik', 'odvetniški kandidat', 'odvjetnica', 'odvjetnik', 'odvjetnički vježbenik', 'paralegal', 'podsekretar za pravne zadeve', 'pravni svetovalec', 'pravnica', 'pravnik', 'pravosodni svetnik', 'privacy officer', 'regulatory affairs', 'sodelavec za sodne zadeve', 'strokovni sodelavec za pravne zadeve', 'strokovni sodelavec za upravno pravne zadeve', 'strokovnjak za regulativne zadeve', 'sudski savjetnik', 'svetnik v pravosodju', 'svetovalec v pravosodju', 'svetovalec v stalni arbitraži', 'urejanje pravno kadrovskh zadev', 'v pravni službi', 'višji pravosodni svetovalec', 'vodja oddelka splošne skladnosti', 'vodja pravne službe', 'vodja pravnih', 'vpisničar v pravosodnem organu', 'ügyvéd', 'комплаенс', 'корпоративный юрист', 'юрисконсульт', 'юрист', 'パラリーガル', '专利', '代書', '專利', '弁護士', '律师', '律師', '法务', '法務', '特許', '知的財産', '知財'],
-  'logistics': ['administrator v skladiščni pisarni', 'administrator za logistiko in skladišče', 'air traffic controller', 'anyagmozgató', 'blagovni manipulant', 'blagovni referent', 'car porter', 'carrier manager', 'cdl driver', 'commercial driver', 'courier', 'dealership porter', 'deklarant', 'delavec v odpremi', 'delavec v skladišču', 'delavec v zbirnem centru', 'delivery driver', 'delivery specialist', 'delo v skladišču', 'dispatcher', 'dispečer', 'dispečerka', 'disponent', 'distribution manager', 'dostavljalec', 'dostavljač', 'dostavljačica', 'dostavnik', 'driver', 'dvoriščni delavec', 'dyspozytor', 'dyspozytorka', 'działu dostaw', 'entregador', 'estoquista', 'fleet manager', 'flight attendant', 'floty', 'flotą', 'forklift', 'forklift operator', 'fulfillment associate', 'fulfillment manager', 'futár', 'gépkocsivezető', 'inventory controller', 'inventory manager', 'kierowca', 'komisionar', 'komisioner', 'kontrolor ekspeditor', 'koordinator prevoza', 'koordinator zalog', 'kurier', 'kurir', 'kurirka', 'logist', 'logistici', 'logistics manager', 'logistike', 'logistiki', 'logistiky', 'logističar', 'logističarka', 'logistični specialist', 'logistyki', 'logisztikai', 'lot porter', 'magacina', 'magacinski radnik', 'magacinu', 'magacioner', 'magazynier', 'magazynierka', 'magazynowa', 'magazynowej', 'magazynowy', 'magazynu', 'manipulant', 'marine superintendent', 'material handler', 'material manager', 'materials controller', 'materials manager', 'mednarodni transport', 'motoboy', 'motorista', 'nakladalec', 'načrtovalec oskrbovalnih verig', 'odpremnik', 'odvajač robe', 'operator wózka widłowego', 'operatorka wózka widłowego', 'order picker', 'package handler', 'packer', 'paker', 'pakerica', 'parking attendant', 'partner za dostavo', 'picker', 'pismonoša', 'pomoč v skladišču', 'pomočnik v transportnem delu skladišča', 'poštar', 'poštarica', 'pracowniczka magazynu', 'pracownik magazynu', 'prevoznik denarja', 'prevzemalec blaga', 'prometni administrator', 'prometnik v transportni pisarni', 'rakodó', 'raktári', 'raktárkezelő', 'raktáros', 'referent strojnega in avto parka', 'referent v skladišču', 'referent za logistiko', 'referent za najem vozil', 'referent za prodajno logistiko', 'rukovalac viljuškarom', 'rukovatelj viličarom', 'service porter', 'skladišna radnica', 'skladišni radnik', 'skladišnik', 'skladišta', 'skladištar', 'skladištarka', 'skladištu', 'skladiščni delavec', 'skladiščni manipulant', 'skladiščnica', 'skladiščnik', 'skladiščnika', 'skladiščno proizvodni delavec', 'skladnice', 'skladník', 'skladníčka', 'skladu', 'skrbnik skladišča', 'skrbnik voznega parka', 'skrbnik za skladišče in dostavo', 'skrbnik zalog', 'sodelavec na pošti', 'sodelavec za promet in operativo', 'sofőr', 'sortirec', 'specialist za logistiko naročil', 'specialist za načrtovanje zalog', 'spedytor', 'spedytorka', 'stock controller', 'supply chain', 'supply chain manager', 'targoncavezető', 'targoncás', 'transport manager', 'transporter', 'transportni delavec', 'truck driver', 'truck unloader', 'upravljalec skladiščnih procesov', 'usmerjevalec pošiljk', 'v mednarodnem transportu', 'viličarist', 'viličarista', 'viljuškarista', 'vodič', 'vodja nadomestnih delov', 'vodja polnilcev plina', 'vodja pošte', 'vodja pretakališč', 'vodja skladišč', 'vodja skladišča', 'vodja voznega parka', 'vodja zamrznjenega skladišča', 'vozač', 'vozačica', 'voznica', 'voznik', 'voznika', 'warehouse', 'warehouse assistant', 'warehouse associate', 'warehouse manager', 'warehouse operator', 'warehouse supervisor', 'wózka widłowego', 'wózków widłowych', 'zakladalec', 'łańcucha dostaw', 'łańcuchem dostaw', 'łańcuchu dostaw', 'řidič', 'řidička', 'šofer', 'špediter', 'вантажник', 'водитель', 'водій', 'грузчик', 'диспетчер', 'електрокарист', 'заведующий складом', 'кладовщик', 'комплектовщик', 'комплектувальник', 'комірник', 'комірниця', 'курьер', 'логист', 'логистике', 'логістики', 'мотокарист', 'приемщик', 'приёмщик', 'сборщик заказов', 'склададжия', 'складов работник', 'упаковщик', 'фасовщик', 'шофьор', 'экспедитор', 'ドライバー', '仓储', '仓库', '仓管', '倉儲', '倉庫', '倉管', '出貨', '叉车', '司机', '司機', '堆高機', '報關', '外送', '快递', '快遞', '报关', '拣货', '揀貨', '物料管理', '物流', '理貨', '船務', '貨車', '資材', '送貨', '配送', '配達', '隨車'],
+  'logistics': ['administrator v skladiščni pisarni', 'administrator za logistiko in skladišče', 'air traffic controller', 'anyagmozgató', 'blagovni manipulant', 'blagovni referent', 'car porter', 'carrier manager', 'cdl driver', 'commercial driver', 'courier', 'dealership porter', 'deklarant', 'delavec v odpremi', 'delavec v skladišču', 'delavec v zbirnem centru', 'delivery driver', 'delivery specialist', 'delo v skladišču', 'demand planner', 'dispatcher', 'dispečer', 'dispečerka', 'disponent', 'distribution manager', 'dostavljalec', 'dostavljač', 'dostavljačica', 'dostavnik', 'driver', 'dvoriščni delavec', 'dyspozytor', 'dyspozytorka', 'działu dostaw', 'entregador', 'estoquista', 'fleet manager', 'flight attendant', 'floty', 'flotą', 'forklift', 'forklift operator', 'fulfillment associate', 'fulfillment manager', 'futár', 'gépkocsivezető', 'inventory controller', 'inventory manager', 'kierowca', 'komisionar', 'komisioner', 'kontrolor ekspeditor', 'koordinator prevoza', 'koordinator zalog', 'kurier', 'kurir', 'kurirka', 'logist', 'logistici', 'logistics manager', 'logistike', 'logistiki', 'logistiky', 'logističar', 'logističarka', 'logistični specialist', 'logistyki', 'logisztikai', 'lot porter', 'magacina', 'magacinski radnik', 'magacinu', 'magacioner', 'magazynier', 'magazynierka', 'magazynowa', 'magazynowej', 'magazynowy', 'magazynu', 'manipulant', 'marine superintendent', 'material handler', 'material manager', 'materials controller', 'materials manager', 'mednarodni transport', 'motoboy', 'motorista', 'nakladalec', 'načrtovalec oskrbovalnih verig', 'odpremnik', 'odvajač robe', 'operator wózka widłowego', 'operatorka wózka widłowego', 'order picker', 'package handler', 'packer', 'paker', 'pakerica', 'parking attendant', 'partner za dostavo', 'picker', 'pismonoša', 'pomoč v skladišču', 'pomočnik v transportnem delu skladišča', 'poštar', 'poštarica', 'pracowniczka magazynu', 'pracownik magazynu', 'prevoznik denarja', 'prevzemalec blaga', 'prometni administrator', 'prometnik v transportni pisarni', 'rakodó', 'raktári', 'raktárkezelő', 'raktáros', 'referent strojnega in avto parka', 'referent v skladišču', 'referent za logistiko', 'referent za najem vozil', 'referent za prodajno logistiko', 'rukovalac viljuškarom', 'rukovatelj viličarom', 'service porter', 'skladišna radnica', 'skladišni radnik', 'skladišnik', 'skladišta', 'skladištar', 'skladištarka', 'skladištu', 'skladiščni delavec', 'skladiščni manipulant', 'skladiščnica', 'skladiščnik', 'skladiščnika', 'skladiščno proizvodni delavec', 'skladnice', 'skladník', 'skladníčka', 'skladu', 'skrbnik skladišča', 'skrbnik voznega parka', 'skrbnik za skladišče in dostavo', 'skrbnik zalog', 'sodelavec na pošti', 'sodelavec za promet in operativo', 'sofőr', 'sortirec', 'specialist za logistiko naročil', 'specialist za načrtovanje zalog', 'spedytor', 'spedytorka', 'stock controller', 'supply chain', 'supply chain manager', 'supply planner', 'targoncavezető', 'targoncás', 'transport manager', 'transporter', 'transportni delavec', 'truck driver', 'truck unloader', 'upravljalec skladiščnih procesov', 'usmerjevalec pošiljk', 'v mednarodnem transportu', 'viličarist', 'viličarista', 'viljuškarista', 'vodič', 'vodja nadomestnih delov', 'vodja polnilcev plina', 'vodja pošte', 'vodja pretakališč', 'vodja skladišč', 'vodja skladišča', 'vodja voznega parka', 'vodja zamrznjenega skladišča', 'vozač', 'vozačica', 'voznica', 'voznik', 'voznika', 'warehouse', 'warehouse assistant', 'warehouse associate', 'warehouse manager', 'warehouse operator', 'warehouse supervisor', 'wózka widłowego', 'wózków widłowych', 'zakladalec', 'łańcucha dostaw', 'łańcuchem dostaw', 'łańcuchu dostaw', 'řidič', 'řidička', 'šofer', 'špediter', 'вантажник', 'водитель', 'водій', 'грузчик', 'диспетчер', 'електрокарист', 'заведующий складом', 'кладовщик', 'комплектовщик', 'комплектувальник', 'комірник', 'комірниця', 'курьер', 'логист', 'логистике', 'логістики', 'мотокарист', 'приемщик', 'приёмщик', 'сборщик заказов', 'склададжия', 'складов работник', 'упаковщик', 'фасовщик', 'шофьор', 'экспедитор', 'ドライバー', '仓储', '仓库', '仓管', '倉儲', '倉庫', '倉管', '出貨', '叉车', '司机', '司機', '堆高機', '報關', '外送', '快递', '快遞', '报关', '拣货', '揀貨', '物料管理', '物流', '理貨', '船務', '貨車', '資材', '送貨', '配送', '配達', '隨車'],
   'manufacturing': ['agent de production', 'ajudante de produção', 'anlagenführer', 'anlagenführerin', 'asistent za proizvodnjo', 'assembler', 'assemblers', 'assembly associate', 'assembly line', 'assembly operator', 'assembly technician', 'assembly worker', 'auxiliar de produção', 'back end operator', 'back-end operator', 'bioprocesni tehnik', 'brizgalec', 'brusač', 'brusilec', 'cnc operater', 'cnc operater | cnc programer', 'cnc operaterka', 'cnc operator', 'cnc operatorica', 'cnc operátor', 'cnc posluževalec', 'cnc programer', 'cnc programer - rezkalec', 'cnc programer in nastavljalec strojev', 'cnc programer/operater', 'cnc programozó', 'cnc programátor', 'cnc人員', 'cnc儲備', 'cnc加工', 'cnc助理', 'cnc技術', 'cnc操作', 'cnc機台', 'cnc車', 'cnc銑', 'delavec - montažer', 'delavec ali delavka za mikroskopom', 'delavec finomehanik', 'delavec na ekstruziji', 'delavec na izdelavi sendvičev', 'delavec na konfekciji', 'delavec na montaži', 'delavec na pripravi vložka', 'delavec na stroju', 'delavec na žagarskem obratu', 'delavec v adjustaži', 'delavec v dvoizmenski', 'delavec v kovinarski industriji', 'delavec v kovinski industriji', 'delavec v lakirnici', 'delavec v lesni', 'delavec v pakirnici', 'delavec v prašni lakirnici', 'delavec v predelavi odpadkov', 'delavec v reciklaži', 'delavec v sirarni', 'delavec v tapetništvu', 'delavec v tovarni zdravil', 'delavec v živilski', 'delavec za lažja', 'delavec za pomožna', 'delavec za preprosta', 'delavec za razrez', 'delavec začetnik', 'delo s stroji', 'ekstruder', 'elektrikar v proizvodnji elektro omaric', 'elektro montažer', 'enostavna dela', 'fabricator', 'fabricators', 'farmacevtska delavka', 'farmacevtski delavec', 'forgácsoló', 'galvanizer', 'glodač', 'glodačica', 'grafični delavec', 'grafični operater', 'gépbeállító', 'gépkezelő', 'izdelava vzmeti', 'izdelava šablon', 'izdelovalec stavbnega pohištva', 'izvajalec razreza', 'kalibrirec na končnem prevzemu', 'kalilca orodij', 'kalilec', 'kartonažni delavec', 'kemijski delavec', 'knjigovez', 'kolorist', 'kontrola in pakiranje', 'kontrola in pregled izdelkov', 'kontroler jakości', 'kontrolerka jakości', 'kontrolor - popravljec vozila', 'kontrolor kakovosti', 'kontrolor kvaliteta', 'kontrolor kvalitete', 'kontrolor opreme', 'kontrolor v tehnološkem procesu', 'kontrolor varilnih spojev', 'kontrolorka kvalitete', 'koordinator naklada', 'kovinar', 'kovinostrugar', 'krojač', 'krojačica', 'lakiranje', 'lakirec', 'lakirničar', 'lažja dela', 'lažje fizično delo', 'lepilec', 'line operator', 'line worker', 'linijski operater', 'livar', 'ličar', 'ljevač', 'machine operator', 'manufacturing associate', 'manufacturing manager', 'manufacturing operator', 'manufacturing supervisor', 'manufacturing technician', 'manufacturing worker', 'maschinenbediener', 'maschinenbedienerin', 'maschinenführer', 'maschinenführerin', 'mesar', 'minőségellenőr', 'mlinar', 'mojster obrata', 'monter baterij', 'monter izdelkov', 'monter orodij', 'monter v proizvodnji', 'narezovalec', 'nastavljalec', 'nastavljavec', 'obdelava kovin', 'obdelovalcev kovin', 'obdelovalec', 'oblikovale kovin/orodjar/programer', 'obratovodja', 'obsluha strojů', 'odgovorni operater na kontroli', 'operador de máquina', 'operador de máquinas', 'operador de producción', 'operador de produção', 'operario de producción', 'operater cnc', 'operater kakovosti', 'operater kontrole kakovosti', 'operater kontrolne linije', 'operater kontrolnih operacij', 'operater linije', 'operater na cnc', 'operater na liniji', 'operater na mašinama', 'operater na mašini', 'operater na proizvodnoj liniji', 'operater na stroju', 'operater na vizualni kontroli', 'operater stroja', 'operater za kakovost', 'operator cnc', 'operator linii', 'operator maszyn', 'operator produkcji', 'operatorka cnc', 'operatorka maszyn', 'operatorka produkcji', 'operátor výroby', 'operátorka výroby', 'opérateur de production', 'opératrice de production', 'packaging operator', 'packaging technician', 'pakirec', 'pekar', 'pekarica', 'peskanje', 'plant manager', 'plant operator', 'plastilec', 'poklicni delavec - cnc', 'polirec', 'polnilec', 'pomočnik na lepilni liniji', 'pomočnik operaterja', 'pomočnik rezalca', 'pomožna dela', 'pomožni delavec', 'pracowniczka produkcji', 'pracownik produkcji', 'preoblikovalec', 'preprosta dela', 'press operator', 'pripravljalec orodij', 'procesni delavec', 'procesni kontrolor', 'procesni operater', 'procesni tehnik', 'procesničar', 'procesničarka', 'process controller', 'process operator', 'production associate', 'production lead', 'production line', 'production manager', 'production operator', 'production supervisor', 'production team member', 'production technician', 'production worker', 'produkcji', 'produktionshelfer', 'produktionshelferin', 'produktionsmitarbeiter', 'produktionsmitarbeiterin', 'programer cnc', 'programer cnc obdelovalnih strojev', 'programer strojev', 'programista cnc', 'programistka cnc', 'programátor cnc', 'proizvodna dela', 'proizvodna radnica', 'proizvodni delavci', 'proizvodni delavec', 'proizvodni kontrolor', 'proizvodni operater', 'proizvodni radnik', 'proizvodni tehnik', 'proizvodnja', 'proizvodnje', 'proizvodnji', 'proizvodnju', 'qc inspector', 'qc technician', 'quality control inspector', 'quality control manager', 'quality control technician', 'quality controller', 'quality inspector', 'quality technician', 'rezkalec', 'rezkar', 'ročna dela', 'ročni dodelovalec', 'sestava pohištva', 'sestavljalec', 'sestavljavec', 'seřizovač', 'seřizovačka', 'skrbnik procesnih naprav', 'sodelavec na razrezu', 'steklopihalec', 'strugar', 'svečar', 'talilec', 'tehnik kontrolor', 'tehnik v farmacevtskem podjetju', 'tehnik v mešalnici', 'tehnik za sestavo in vzdrževanje orodij', 'tehnik zaključnih operacij', 'tehnični operater', 'tehnični upravljalec linije', 'tehnološka dela', 'tehtalec', 'tehtanje', 'termelési', 'tiskanje', 'tiskar', 'tokar', 'tokarica', 'topilec', 'trabajador de producción', 'upravljalec cnc', 'upravljalec strojev', 'upravljalka strojev', 'ustawiacz', 'ustawiaczka', 'utopne kovače', 'utopni kovač', 'vezalec električne opreme', 'vizualni kontrolor', 'vodja cnc operaterjev', 'vodja izmene montaže', 'vodja izmene v grafični dodelavi', 'vodja izmene v mešalnici', 'vodja kalanderske linije', 'vodja lakirnice', 'vodja linije', 'vodja mehanske obdelave', 'vodja pakiranja', 'vodja pakirnice', 'vodja polnitev olja v steklenice', 'vodja proizvodne enote', 'vodja proizvodnega oddelka', 'vodja rafiniranih olj', 'vodja razvoja prehranskih dodatkov', 'výrobe', 'výroby', 'výrobě', 'zahtevna dela', 'zlagalec', 'összeszerelő', 'šivač', 'šivačica', 'šivilja', 'šiviljec', 'šivlja', 'živilski delavec', 'виробництва', 'виробництво', 'контролер отк', 'контролёр отк', 'машинен оператор', 'оператор линии', 'оператор производства', 'оператор производственной линии', 'оператор станка', 'оператор станков', 'оператор чпу', 'производствена линия', 'производство', 'рабочий в цех', 'рабочий на производство', 'рабочий производства', 'сборщик', 'сборщица', 'швеи', 'швея', '作業人員', '作業員', '包裝', '品保', '品檢', '品管', '塗裝', '射出', '技术员', '技術員', '操作人員', '操作员', '操作員', '操作工', '普工', '檢驗人員', '沖壓', '生产技术', '生產技術', '生產線', '生産管理', '產線', '研磨', '組立', '組裝', '组装', '裝配', '製造オペレーター', '製造スタッフ', '製造技術員', '质检员', '車床', '車縫', '銑床'],
-  'marketing': ['aeo manager', 'aeo specialist', 'affiliate manager', 'ambasador korejske kozmetike', 'answer engine optimization', 'app store optimization', 'aso specialist', 'brand manager', 'communications manager', 'community manager', 'content creator', 'content editor', 'content production assistant', 'content writer', 'conversion rate optimization', 'copywriter', 'creative strategist', 'demand generation', 'digital marketer', 'event coordinator', 'event manager', 'event production manager', 'events coordinator', 'events manager', 'events production manager', 'generative engine optimization', 'generative search optimization', 'geo manager', 'geo specialist', 'growth hacker', 'growth manager', 'growth marketer', 'influencer manager', 'istraživač tržišta', 'istraživačica tržišta', 'kreativni strateg', 'link building', 'marketing', 'marketinga', 'marketingu', 'media buyer', 'meta ads advertiser', 'meta performance specialist', 'nameščevalec oglasnih sporočil', 'paid media', 'paid search', 'paid social', 'plakater', 'plakatiranje', 'ppc manager', 'ppc specialist', 'pr manager', 'pr specialist', 'pr-менеджер', 'predstavnik za odnose z javnostmi', 'promocji', 'promoter', 'promoterka', 'promotor', 'promotorica', 'public relations', 'search engine optimization', 'seo', 'smm', 'sns運用', 'social media', 'specialist za amazon oglaševanje', 'specialist za kreativne vsebine', 'specialist za kreativno strategijo', 'spletni oglaševalec', 'strateg za družbena omrežja', 'strokovni sodelavec za odnose z javnostmi', 'strokovnjak za komuniciranje', 'tekstopisec', 'teleprodajni agent', 'vodja digitalnega marketinga', 'vodja marketinga', 'vodja strateškega upravljanja prodajnega prostora', 'бренд-менеджер', 'комьюнити-менеджер', 'контент-маркетолог', 'контент-менеджер', 'копирайтер', 'маркетинг', 'маркетингу', 'маркетолог', 'пиар-менеджер', 'пиар-специалист', 'таргетолог', 'コンテンツクリエイター', 'マーケター', 'マーケティング', '主播', '产品营销', '公关', '公關', '品牌专员', '品牌主管', '品牌企劃', '品牌公关', '品牌公關', '品牌專員', '品牌策划', '品牌經理', '品牌经理', '品牌行銷', '媒体宣传', '小編', '小编', '市场专员', '市场推广', '市场经理', '広告運用', '広報', '文案', '新媒体', '活动策划', '活動企劃', '產品行銷', '直播主', '直播助理', '直播小幫手', '直播带货', '直播帶貨', '直播运营', '直播運營', '社群經營', '营销', '行銷', '販売促進'],
+  'marketing': ['aeo manager', 'aeo specialist', 'affiliate manager', 'ambasador korejske kozmetike', 'answer engine optimization', 'app store optimization', 'aso specialist', 'brand manager', 'communications manager', 'community manager', 'content creator', 'content editor', 'content production assistant', 'content writer', 'conversion rate optimization', 'copywriter', 'creative strategist', 'demand generation', 'digital marketer', 'event coordinator', 'event manager', 'event production manager', 'events coordinator', 'events manager', 'events production manager', 'generative engine optimization', 'generative search optimization', 'geo manager', 'geo specialist', 'google ads specialist', 'growth hacker', 'growth manager', 'growth marketer', 'influencer manager', 'istraživač tržišta', 'istraživačica tržišta', 'kreativni strateg', 'link building', 'marketing', 'marketinga', 'marketingu', 'media buyer', 'meta ads advertiser', 'meta performance specialist', 'nameščevalec oglasnih sporočil', 'paid media', 'paid search', 'paid social', 'plakater', 'plakatiranje', 'ppc manager', 'ppc specialist', 'pr manager', 'pr specialist', 'pr-менеджер', 'predstavnik za odnose z javnostmi', 'promocji', 'promoter', 'promoterka', 'promotor', 'promotorica', 'public relations', 'search engine optimization', 'seo', 'smm', 'sns運用', 'social media', 'specialist za amazon oglaševanje', 'specialist za kreativne vsebine', 'specialist za kreativno strategijo', 'spletni oglaševalec', 'strateg za družbena omrežja', 'strokovni sodelavec za odnose z javnostmi', 'strokovnjak za komuniciranje', 'tekstopisec', 'teleprodajni agent', 'vodja digitalnega marketinga', 'vodja marketinga', 'vodja strateškega upravljanja prodajnega prostora', 'бренд-менеджер', 'комьюнити-менеджер', 'контент-маркетолог', 'контент-менеджер', 'копирайтер', 'маркетинг', 'маркетингу', 'маркетолог', 'пиар-менеджер', 'пиар-специалист', 'таргетолог', 'コンテンツクリエイター', 'マーケター', 'マーケティング', '主播', '产品营销', '公关', '公關', '品牌专员', '品牌主管', '品牌企劃', '品牌公关', '品牌公關', '品牌專員', '品牌策划', '品牌經理', '品牌经理', '品牌行銷', '媒体宣传', '小編', '小编', '市场专员', '市场推广', '市场经理', '広告運用', '広報', '文案', '新媒体', '活动策划', '活動企劃', '產品行銷', '直播主', '直播助理', '直播小幫手', '直播带货', '直播帶貨', '直播运营', '直播運營', '社群經營', '营销', '行銷', '販売促進'],
   'middle': ['mid', 'mid level', 'mid-level', 'middle', 'ssr', 'мидл', 'средний'],
   'ml_ai': ['ai safety', 'ai/ml', 'c++ in python ai razvijalci', 'computer vision engineer', 'deep learning', 'machine learning', 'machine learning engineer', 'ml developer', 'ml engineer', 'ml/ai', 'mlエンジニア', 'nlp engineer', 'razvojni inženir za umetno inteligenco', 'машинного навчання', '机器学习', '機器學習', '機械学習', '深度学习', '深度學習', '演算法', '算法专家', '算法工程', '算法研究', '自然語言處理', '自然语言处理', '计算机视觉', '電腦視覺'],
   'mobile': ['android', 'androidエンジニア', 'android客户端', 'android工程', 'android应用', 'android开发', 'android研发', 'android系统', 'android软件', 'android開發', 'app工程', 'app开发', 'app開發', 'flutterエンジニア', 'ios', 'iosエンジニア', 'ios客户端', 'ios工程', 'ios开发', 'ios研发', 'ios開發', 'mobilalkalmazás fejlesztő', 'mobilalkalmazás-fejlesztő', 'mobile app', 'mobile application', 'mobile applications', 'mobile apps', 'mobile architect', 'mobile automation', 'mobile developer', 'mobile engineer', 'mobile platform', 'mobile qa', 'mobile software', 'react native developer', 'xamarin', 'мобильная разработка', 'мобильное приложение', 'мобильной разработки', 'мобильный разработчик', 'мобильных приложений', 'アプリエンジニア', 'スマホアプリ', 'ネイティブアプリ', 'モバイルエンジニア', '安卓', '移动端', '鸿蒙'],
-  'network_engineering': ['hálózati mérnök', 'hálózati rendszermérnök', 'network administrator', 'network analyst', 'network design engineer', 'network engineer', 'network engineering', 'network specialist', 'network technician', 'netzwerkadministrator', 'netzwerktechniker', 'počítačových sietí', 'počítačových sítí', 'strokovni sodelavec za omrežje', 'strokovni sodelavec za telekomunikacijska omrežja', 'мережевий інженер', 'сетевой администратор', 'сетевой инженер', 'ネットワークエンジニア', 'ネットワーク構築', 'ネットワーク設計', 'ネットワーク運用', '網管', '網路工程師', '網路管理', '网管', '网络工程师'],
+  'network_engineering': ['hálózati mérnök', 'hálózati rendszermérnök', 'network administrator', 'network analyst', 'network design engineer', 'network engineer', 'network engineering', 'network specialist', 'network technician', 'netzwerkadministrator', 'netzwerktechniker', 'počítačových sietí', 'počítačových sítí', 'strokovni sodelavec za omrežje', 'мережевий інженер', 'сетевой администратор', 'сетевой инженер', 'ネットワークエンジニア', 'ネットワーク構築', 'ネットワーク設計', 'ネットワーク運用', '網管', '網路工程師', '網路管理', '网管', '网络工程师'],
   'occupational_safety': ['bhp', 'bzr', 'diplomirani inženir tehniške varnosti', 'director of safety', 'eh&s', 'ehs', 'ehs专员', 'ehs專員', 'ehs岗', 'ehs工程', 'ehs管理', 'environmental manager', 'head of safety', 'health & safety', 'health and safety', 'hse', 'hse risk', 'hseq', 'hsse', 'industrial hygiene', 'industrial hygienist', 'koordinator za varnost in zdravje', 'ochrony środowiska', 'organizator zdravstveno higienskega režima', 'qhse', 'risk control consultant', 'safety & health officer', 'safety administrator', 'safety advisor', 'safety and health officer', 'safety coordinator', 'safety director', 'safety engineer', 'safety inspector', 'safety intern', 'safety lead', 'safety manager', 'safety officer', 'safety professional', 'safety representative', 'safety risk', 'safety specialist', 'safety supervisor', 'safety technician', 'safety trainer', 'sanitarni inženir', 'sanitarni inžinir', 'she advisor', 'she coordinator', 'she manager', 'she officer', 'she specialist', 'sheq', 'shes', 'sodelavec za varnost', 'strokovni delavec za varnost in zdravje', 'varnostni inženir', 'workplace safety & health', 'workplace safety and health', 'zaštite na radu', 'zaštite od požara', 'охорони праці', 'охрана труда', 'охране труда', 'охраны труда', 'пожежної безпеки', '勞安', '安全员', '安全管理', '安全衛生', '工安', '環保人員', '環保專責', '環安', '职业安全', '職安', '職業安全'],
-  'operations': ['beszerzési', 'beszerző', 'biz ops', 'business operations', 'buyer', 'buyers', 'category manager', 'chief of staff', 'chief operating officer', 'commodity manager', 'coo', 'facilities coordinator', 'facilities manager', 'facility manager', 'head of operations', 'nabavci', 'nabave', 'nabavi', 'nabavke', 'nabavni inženir', 'nabavni referent', 'nabavni specialist', 'nabavnik', 'nabavu', 'nákupu', 'office manager', 'operation manager', 'operations analyst', 'operations controller', 'operations coordinator', 'operations manager', 'operations specialist', 'ops manager', 'procurement', 'procurement manager', 'purchasing manager', 'referent za javna naročila', 'referent za nabavo', 'sodelavec v naročanju', 'sourcing manager', 'strategic sourcing', 'strokovni sodelavec vii/2 - javna naročila', 'strokovnjak za javna naročila', 'svetovalec za javna naročila', 'vodja nabavne službe', 'vodja pisarne', 'zakupów', 'госзакупкам', 'закупкам', 'закупщик', 'закупівель', 'категорийный менеджер', 'менеджер по мто', 'операционный директор', 'операционный менеджер', 'офис-менеджер', 'специалист по закупкам', 'バイヤー', '採購', '營運', '生产计划', '生產管理', '生管', '調達', '購買', '运营', '運營', '采购'],
+  'operations': ['beszerzési', 'beszerző', 'biz ops', 'business operations', 'buyer', 'buyers', 'category manager', 'chief of staff', 'chief operating officer', 'commodity manager', 'coo', 'facilities coordinator', 'facilities manager', 'facility manager', 'head of operations', 'nabavci', 'nabave', 'nabavi', 'nabavke', 'nabavni inženir', 'nabavni referent', 'nabavni specialist', 'nabavnik', 'nabavu', 'nákupu', 'office manager', 'operation manager', 'operations analyst', 'operations controller', 'operations coordinator', 'operations manager', 'operations specialist', 'ops manager', 'procurement', 'procurement manager', 'purchasing agent', 'purchasing analyst', 'purchasing coordinator', 'purchasing manager', 'purchasing specialist', 'referent za javna naročila', 'referent za nabavo', 'sodelavec v naročanju', 'sourcing manager', 'strategic sourcing', 'strokovni sodelavec vii/2 - javna naročila', 'strokovnjak za javna naročila', 'svetovalec za javna naročila', 'vodja nabavne službe', 'vodja pisarne', 'zakupów', 'госзакупкам', 'закупкам', 'закупщик', 'закупівель', 'категорийный менеджер', 'менеджер по мто', 'операционный директор', 'операционный менеджер', 'офис-менеджер', 'специалист по закупкам', 'バイヤー', '採購', '營運', '生产计划', '生產管理', '生管', '調達', '購買', '运营', '運營', '采购'],
   'personal_services': ['aesthetician', 'auxiliar de limpeza', 'babá', 'barber', 'beauty therapist', 'caretaker', 'cleaner', 'cosmetologist', 'custodial', 'custodian', 'dadilja', 'day porter', 'delavec v avtopralnici', 'delavec v pralnici', 'delavec za ravnanje z odpadki', 'domar', 'environmental services', 'esthetician', 'faxineiro', 'fitness manager', 'frizer', 'frizerka', 'gospodinja', 'gospodinjec', 'grobar', 'groundskeeper', 'hairstylist', 'higijeničar', 'higijeničarka', 'hišnik', 'housekeeper', 'housekeeping', 'izvajalec ddd', 'janitor', 'janitorial', 'jardineiro', 'kontrolor čiščenja in vzdrževanja', 'kozmetičar', 'kozmetičarka', 'manicurist', 'manikerka', 'maser', 'maserka', 'massage therapist', 'master stylist', 'nail technician', 'negovalec delovnih oblačil', 'oskrbnik', 'pediker', 'pedikerka', 'perač automobila', 'personal trainer', 'pobiralec odpadkov', 'pogrebni delavec', 'pogrebnik', 'porteiro', 'portir', 'poslovodja čistilnega servisa', 'pralec v avtopralnici', 'pralec vozil', 'razkuževalec', 'skrbnik hotelske okolice', 'skrbnik objekta', 'smetar', 'snažilec', 'sodelavec za higieno in čistočo', 'spa manager', 'spa therapist', 'spremač', 'spremačica', 'stylist', 'takarító', 'trener personalny', 'trenerka personalna', 'vodja enostavnejšega gospodinjstva', 'vodja gospodinjstva', 'vratar', 'vzdrževalec perila', 'zelador', 'čistač', 'čistačica', 'čistelec', 'čistilec', 'čistilka', 'čiščenje', 'вахтер', 'вахтёр', 'дворник', 'консьерж', 'косметолог', 'культорганизатор', 'маникюрша', 'няня', 'парикмахер', 'рабочий зеленого хозяйства', 'рабочий зелёного хозяйства', 'садовник', 'сиделка', 'уборщик', 'уборщица', 'エステティシャン', 'ネイリスト', 'マッサージ', 'メイクアップアーティスト', 'リラクゼーション', '保洁', '保潔', '健身教練', '寵物', '按摩', '染髮', '汽車美容', '洗滌', '清掃', '清潔', '美发', '美容人員', '美容助理', '美容师', '美容師', '美容服務', '美容芳療', '美容諮詢', '美容部員', '美容顧問', '美容顾问', '美甲', '美髮', '芳療'],
   'principal': ['principal'],
   'product': ['asistent produktnega vodje', 'koordinator produkta in sistemov', 'product manager', 'product owner', 'produktni specialist', 'produktni vodja', 'vodja produktne linije', 'продакт', 'продукт-менеджер', 'プロダクトマネジャー', 'プロダクトマネージャ', '产品总监', '产品策划', '产品经理', '產品企劃', '產品經理', '產品總監'],
@@ -3067,12 +3224,14 @@ export const FACET_ALIASES = {
   'senior': ['senior', 'sr', 'сеньор', 'синьор', 'старший'],
   'skilled_trades': ['ajudante geral', 'alatničar', 'alignment technicians', 'armirač', 'asfalter', 'auto body', 'autoelektričar', 'autolakirer', 'autolimar', 'automehaničar', 'automehatroničar', 'automotive mechanic', 'automotive mechanics', 'automotive service', 'automotive technician', 'automotive technicians', 'av tehnik', 'avtoelektričar', 'avtokaroserist', 'avtoklepar', 'avtoličar', 'avtomehanik', 'avtoserviser', 'back end collision estimator', 'back end estimator', 'back end maintainer', 'back end mechanic', 'back-end collision estimator', 'back-end estimator', 'back-end maintainer', 'back-end mechanic', 'bagerist', 'bagerista', 'baštovan', 'body shop estimator', 'boilermaker', 'bravar', 'bravarka', 'brick mason', 'bricklayer', 'budowy', 'carpenter', 'cestni preglednik', 'cevar', 'cjevar', 'collision estimator', 'collision repair estimator', 'construction manager', 'delavec na prometni signalizaciji', 'delavec suhomontažnih del', 'delavec v delavnici', 'delavec v mizarski delavnici', 'delavec v prireji', 'delavec v tesarski delavnici', 'delavec v vzdrževanju', 'delovodja - gradbena operativa', 'delovodja -gradbeni tehnik', 'delovodja asfalterskih ekip', 'delovodja gradbeništva', 'delovodja gradbišča', 'delovodja na gradbišču', 'delovodja v enoti asfalterske operative', 'diesel technician', 'dimnikar', 'dimnjačar', 'dizaličar', 'electrician', 'elektrikar', 'elektrikár', 'elektrikář', 'električar', 'elektroenergetskih postrojev', 'elektroinstalater', 'elektroinštalater', 'elektromechanik', 'elektromehanik', 'elektromehaničar', 'elektromonter', 'elektromonterji', 'elektroničar', 'elektrotehnik', 'elektrotehničar', 'elektrovzrževalec', 'elektryk', 'eletricista', 'encanador', 'equipment operator', 'farbar', 'fasader', 'field service technician', 'finišerist', 'frigomehaničar', 'frigomonter', 'frigotehničar', 'front end loader', 'garderober mojster', 'general labor', 'gipsar', 'gozdar', 'gozdni delavec', 'gradbeni delavec', 'gradbeni delovodja', 'gradbeni mojster', 'gradbeni pomočnik', 'gradbeni pomožni delavec', 'gradbenik', 'gradbinec', 'građevinar', 'građevinska radnica', 'građevinski radnik', 'heavy equipment', 'hegesztő', 'hidroizolater', 'hidrotehnični delavec', 'hvac', 'hvac technician', 'hydraulik', 'instalater', 'installation technician', 'inštalater', 'inżynier budowy', 'inżynierka budowy', 'inženjer gradilišta', 'iron worker', 'ironworker', 'izolater', 'izvajalec specialnih gradbenih del', 'izvajalec srednje zahtevnih del', 'izvajalec suhomontažni del', 'kamnosek', 'karbantartó', 'keramičar', 'kierowniczka budowy', 'kierowniczka robót', 'kierownik budowy', 'kierownik robót', 'klepar', 'ključavničar', 'kmetijec', 'kmetijski delavec', 'knaufar', 'knaufer', 'komunalni delavec', 'konserwator', 'konserwatorka', 'kovač', 'kranist', 'kranista', 'krovec', 'krovopokrivač', 'krovstvo', 'kućni majstor', 'laborer', 'ladijski operater', 'lakatos', 'lakirer', 'life safety', 'limar', 'lube technician', 'machinist', 'maintenance manager', 'maintenance supervisor', 'maintenance technician', 'maintenance worker', 'mašin bravar', 'mašinbravar', 'mechanic', 'mechanics', 'mechaniczka', 'mechanik', 'mecánico', 'mecânico', 'mehanik', 'mehaničar', 'mehatronik', 'mehatroničar', 'metalostrugar', 'millwright', 'mizar', 'moler', 'montažer', 'monter', 'monterji', 'monterska ekipa', 'mornar', 'održavanja', 'održavanju', 'oil change', 'opažer', 'operater betonarne', 'operater nakladalnika v betonarni', 'orodjar', 'parketar', 'pedreiro', 'peskar', 'pintor', 'pipefitter', 'pleskar', 'plinoinstalater', 'plumber', 'polagalec', 'polagač keramike', 'polagač keramičkih pločica', 'pomoč v vzdrževanju', 'pomočnik cevarja', 'pomočnik elektroinštalaterja', 'pomočnik gozdarja', 'pomočnik izolaterja', 'pomočnik krovca', 'pomočnik mizarja', 'pomočnik monterja', 'pomočnik strojnika', 'pomočnik tesarja', 'pomočnik v elektro delavnici', 'pomočnik v gradbeništvu', 'pomočnik v mizarski delavnici', 'pomočnik vodje del', 'pomočnik vodje gradbišča', 'pomočnik vzdrževalca', 'pomožni delavec v grabeništvu', 'pomožni delavec v gradbeništvu', 'pomožni gradben delavec', 'poslovođa gradilišta', 'poslovođa na gradilištu', 'preconstruction', 'progar', 'protikorozist', 'rekviziter mojster', 'roofer', 'rukovalac građevinskim mašinama', 'rukovatelj bagerom', 'rukovatelj dizalicom', 'rukovatelj građevinskim strojevima', 'rukovatelj radnim strojem', 'rukovatelj radnim strojevima', 'rukovodilac gradilišta', 'rušenje objektov', 'rv technician', 'sadjar', 'scensko odrski mojster', 'servbiser', 'servente', 'service technician', 'service technicians', 'serviser', 'serviserka', 'servisni tehnik', 'servisni tehničar', 'servisní technik', 'servisný technik', 'serwisant', 'serwisantka', 'sheet metal', 'site manager', 'skupinovodja na gradbišču', 'skupinovodja v enoti asfalterske operative', 'slikopleskar', 'small engine technician', 'soboslikar', 'soldador', 'spawacz', 'specialist energetike', 'staklar', 'steklar', 'stolar', 'stone mason', 'strojevodja', 'strojnik', 'strojobravar', 'strokovni sodelavec za vzdrževanje', 'superintendent', 'superintendents', 'svářeč', 'szerviztechnikus', 'tapetar', 'tehnik elektro sistemov', 'tehnik energetike', 'tehnik infrastrukture', 'tehnik inženiringa lokacije', 'tehnik specialist', 'tehnik v vzdrževanju', 'tehnik varnostnih sistemov', 'tehnik vzdrževanja', 'tehnik za priklop storitev operaterja', 'tehničar održavanja', 'tehnični delavec', 'tehnični sodelavec', 'tesar', 'tire technician', 'tire technicians', 'traktorist', 'traktorista', 'técnico de motores', 'upravljalca energetskih', 'upravljalca sistemov centralnega ogrevanja', 'upravljalec asfaltne baze', 'upravljalec avtodvigal', 'upravljalec avtodvigala', 'upravljalec dvigal', 'upravljalec dvižnih naprav', 'upravljalec energetskih', 'upravljalec gm', 'upravljalec gradbenih strojev', 'upravljalec kolesnega nakladalnika', 'upravljalec kotlovskih naprav', 'upravljalec sistema', 'upravljalec spte', 'upravljalec žerjava', 'utrzymania ruchu', 'varilac', 'varilca', 'varilec', 'villanyszerelő', 'vinogradnik', 'voditelj gradilišta', 'vodja asfaltne operative', 'vodja betonarne', 'vodja del', 'vodja delavnice', 'vodja drevesnic in rastlinjakov', 'vodja energetike', 'vodja enote oskrba s pitno vodo', 'vodja enote vodovodni sistemi', 'vodja farme', 'vodja gradbišč', 'vodja gradbišča', 'vodja gradnje', 'vodja izvedbe gradbenih projektov', 'vodja izvedbenih projektov', 'vodja montaže', 'vodja programa vodovod in ogrevanje', 'vodja servisne delavnice', 'vodja servisne ekipe', 'vodja službe za vzdrževanje strojne energetike', 'vodja za montažo strojnih instalacij', 'vodja zlatarske delavnice', 'vodoinstalater', 'vodoinštalater', 'vodovodar', 'vrtlar', 'vrtlarica', 'vrtnar', 'vulkanizer', 'vzdrževalec', 'vzdrževalka', 'vzdrževanja', 'vzrževalec', 'welder', 'zavarivač', 'zidar', 'zvárač', 'építésvezető', 'údržby', 'údržbár', 'údržbář', 'ślusarz', 'šef gradilišta', 'železokrivec', 'žerjavist', 'žerjavovodja', 'žičničar', 'автомеханик', 'автомеханік', 'автослесарь', 'автослюсар', 'арматурщик', 'бетонщик', 'дорожный рабочий', 'електрик', 'зварник', 'каменщик', 'котельной', 'кровельщик', 'маляр', 'машинист', 'механик', 'механік', 'монтажник', 'монтер пути', 'монтьор', 'монтёр пути', 'облицовщик', 'плиточник', 'плотник', 'подсобный рабочий', 'рабочий по благоустройству', 'рабочий по комплексному обслуживанию', 'разнорабочий', 'сантехник', 'сварщик', 'слесарь', 'слюсар', 'стропальщик', 'токарь', 'тракторист', 'фрезеровщик', 'штукатур', 'электрик', 'электрогазосварщик', 'электромеханик', 'электромонтер', 'электромонтёр', 'электросварщик', 'メカニック', '保全室', '保全工', '保全業務', '冷凍空調', '冷氣空調', '工地', '工場保全', '技師', '据付', '整備士', '施工管理', '木工', '機器保全', '機械保全', '水電', '汽車維修', '油漆', '焊工', '焊接', '現場監督', '空調技術', '粗工', '維修人員', '維修員', '維修工', '維修技術員', '维修工', '维修技术员', '西工', '設備保全', '金型保全', '鋁門窗', '鐵工', '電気工事', '電焊'],
   'social_services': ['addiction counselor', 'assistant social', 'assistante sociale', 'assistente social', 'case worker', 'caseworker', 'chaplain', 'child protective', 'child welfare', 'community health worker', 'community liaison', 'direct support', 'direktor centra za socialno delo', 'drug and alcohol counselor', 'family advocate', 'foster care', 'guidance counselor', 'human services assistant', 'human services professional', 'human services specialist', 'human services worker', 'koordinator pomoči', 'koordinator za dolgotrajno oskrbo', 'koordinator za preprečevanje nasilja', 'lcsw', 'licsw', 'lični asistent', 'lmsw', 'mladinski delavec', 'osebna asistentka', 'osebni asistent', 'oskrbovalec', 'oskrbovalka', 'osobna asistentica', 'osobni asistent', 'outreach worker', 'parole officer', 'pastor', 'probation officer', 'psihosocialni svetovalec', 'recovery coach', 'rehabilitacijski svetovalec', 'rehabilitation counselor', 'romski pomočnik', 'school counselor', 'schulsozialarbeiter', 'schulsozialarbeiterin', 'skupinski habilitator', 'social service', 'social services', 'social work', 'social worker', 'social workers', 'socialnem varstvu', 'socialni delavec', 'socialno varstvo', 'socialno vartsvo', 'socijalna radnica', 'socijalni radnik', 'sodelavec za mladinske dejavnosti', 'sozialarbeiter', 'sozialarbeiterin', 'sozialpädagog', 'sozialpädagoge', 'sozialpädagogen', 'sozialpädagogin', 'spremljevalec gibalno oviranih otrok', 'strokovni delavec-za zaposlovanje invalidov', 'strokovni vodja izvajalca socialno varstvenih', 'substance abuse counselor', 'substance use counselor', 'support worker', 'support workers', 'svetovalec za dolgotrajno oskrbo', 'svetovalni delavec', 'trabajador social', 'trabajadora social', 'travailleur social', 'travailleuse sociale', 'uskaljevalec osebne asistence', 'usklajevalec osebne asistence', 'victim advocate', 'victim services', 'vodja mladinskih programov', 'youth care worker', 'youth counselor', 'youth worker', 'začasni spremljevalec', 'éducateur spécialisé', 'éducatrice spécialisée', 'психолог', 'социальной работе', 'социальной работы', 'социальный педагог', 'социальный работник', 'соцработник', '児童指導員', '児童発達支援', '就労支援', '放課後等デイサービス', '生活支援員', '相談員', '社会福祉士', '社工', '社會工作'],
-  'software_engineering': ['.net developer', '.net engineer', '.net fejlesztő', '.net工程', '.net开发', 'abap developer', 'abap engineer', 'abap entwickler', 'abap fejlesztő', 'adatbázis fejlesztő', 'ai native developer', 'ai native engineer', 'ai-native developer', 'ai-native engineer', 'alkalmazás fejlesztő', 'alkalmazásfejlesztő', 'anwendungsentwickler', 'aplikační programátor', 'aplikační programátoři', 'app developer', 'app engineer', 'application analyst', 'application developer', 'applications analyst', 'c# developer', 'c# engineer', 'c# fejlesztő', 'c#エンジニア', 'c#工程', 'c#开发', 'c++ developer', 'c++ engineer', 'c++工程', 'c++开发', 'c++開發', 'chief technology officer', 'cobolエンジニア', 'database developer', 'desarrollador de software', 'desarrollador java', 'desarrolladora de software', 'desarrolladora java', 'desenvolvedor de software', 'desenvolvedor java', 'desenvolvedora de software', 'desenvolvedora java', 'developer php', 'deweloper oprogramowania', 'dotnet developer', 'dotnet engineer', 'drupal developer', 'drupal engineer', 'dynamics 365 developer', 'développeur java', 'développeur salesforce', 'engenheira de software', 'engenheiro de software', 'engineering manager', 'entwickler software', 'erp developer', 'erp engineer', 'fachinformatiker anwendungsentwicklung', 'fachinformatiker für anwendungsentwicklung', 'founding developer', 'founding engineer', 'game developer', 'game engineer', 'go developer', 'go engineer', 'golang developer', 'golang engineer', 'golang开发', 'go开发', 'ingegnere del software', 'ingegnere software', 'ingeniera de software', 'ingeniero de software', 'ingénieur logiciel', 'integration developer', 'integration engineer', 'inżynier oprogramowania', 'it analyst', 'it developer', 'it engineer', 'it systems developer', 'it systems engineer', 'itエンジニア', 'it工程', 'java developer', 'java engineer', 'java entwickler', 'java fejlesztő', 'java fejlesztők', 'java-entwickler', 'javascript developer', 'javascript engineer', 'javaエンジニア', 'java工程', 'java开发', 'java開發', 'magento developer', 'magento engineer', 'mainframe developer', 'mainframe engineer', 'member of technical staff', 'member of the technical staff', 'mes developer', 'mes engineer', 'node developer', 'node engineer', 'node.js developer', 'node.js engineer', 'node.js fejlesztő', 'nodejs developer', 'nodejs engineer', 'odoo fejlesztő', 'odoo-fejlesztő', 'oracle developer', 'oracle engineer', 'pega fejlesztő', 'php developer', 'php engineer', 'php fejlesztő', 'phpエンジニア', 'php工程', 'php开发', 'php網頁', 'php開發', 'programer', 'programerka', 'programista', 'programista .net', 'programista python', 'programistka', 'programozó', 'programske opreme', 'programski inženir', 'programátor', 'programátori aplikácií', 'programátorka', 'programátoři aplikací', 'projektant aplikacji', 'projektantka aplikacji', 'python developer', 'python engineer', 'python fejlesztő', 'pythonエンジニア', 'python工程', 'python开发', 'python開發', 'rails developer', 'rails engineer', 'razvijalec', 'razvijalka', 'razvoj softvera', 'rpa developer', 'rpa engineer', 'ruby developer', 'ruby engineer', 'rubyエンジニア', 'salesforce administrator', 'salesforce consultant', 'salesforce developer', 'salesforce engineer', 'salesforceエンジニア', 'sap developer', 'sap engineer', 'sapエンジニア', 'servicenow developer', 'servicenow engineer', 'sharepoint developer', 'sharepoint engineer', 'shopify developer', 'shopify engineer', 'sistem inženjer', 'sistemski inženir', 'sistemski inženjer', 'sistemski it inženir', 'softverska inženjerka', 'softverski inženjer', 'software analyst', 'software developer', 'software development engineer', 'software engineer', 'software engineering', 'software entwickler', 'software mérnök', 'software systems developer', 'software systems engineer', 'software-entwickler', 'softwareentwickler', 'softwareingenieur', 'sviluppatore software', 'system developer', 'system engineer', 'systems developer', 'systems engineer', 'systémový inženýr', 'systémový inžinier', 'szoftver fejlesztő', 'szoftverfejlesztő', 'szoftvermérnök', 'technical analyst', 'technology analyst', 'typescript developer', 'typescript engineer', 'unityエンジニア', 'vývojári a analytici softvéru', 'vývojári softvéru', 'vývojári webových', 'vývojáři a analytici softwaru', 'vývojáři softwaru', 'vývojáři webu', 'web developer', 'web engineer', 'webfejlesztő', 'weboví vývojári', 'web開発', 'web開発エンジニア', 'wordpress developer', 'wordpress engineer', 'програмист', 'программист', 'програміст', 'разработчик', 'розробник', 'アプリケーション開発', 'アプリ開発', 'アプリ開発エンジニア', 'エンジニアリングマネジャー', 'エンジニアリングマネージャー', 'クライアントエンジニア', 'コーポレートエンジニア', 'システムエンジニア', 'システム開発', 'システム開発エンジニア', 'ソフトウェアエンジニア', 'ソフトウェア開発', 'ソフトウェア開発エンジニア', 'テックリード', 'プログラマ', 'プロダクトエンジニア', '情報システム', '社内se', '社内システム', '程序员', '程式設計', '程式開發', '系統工程', '系统工程', '資訊工程', '軟體助理工程', '軟體工程', '軟體研發', '軟體設計', '軟體開發', '软件工程', '软件开发'],
-  'solutions_engineering': ['delivery consultant', 'deployment strategist', 'dynamics 365', 'dynamics 365 consultant', 'erp specialist', 'erp svetovalec', 'fae工程', 'fae应用', 'fae應用', 'field application engineer', 'forward deployed engineer', 'forward-deployed engineer', 'hubspot crm administrator', 'integration consultant', 'inżynier ds. sprzedaży', 'inżynier sprzedaży', 'inżynierka ds. sprzedaży', 'inżynierka sprzedaży', 'inženjer prodaje', 'it logistični svetovalec', 'it svetovalec na področjih digitalne transformacije', 'it svetovalec za poslovne rešitve', 'konfigurator e-računov', 'microsoft dynamics', 'partner engineer', 'pre-sales consultant', 'pre-sales engineer', 'presales consultant', 'presales engineer', 'prodajni inženir', 'prodajni inženjer', 'prodajni tehnolog', 'prodajno razvojni inženir', 'professional services consultant', 'professional services engineer', 'sales applications engineer', 'sales engineer', 'sales engineering manager', 'sap consultant', 'sap fico', 'sap mm consultant', 'sap sd consultant', 'sap svetovalec', 'skrbnik erp-sistema odoo', 'solution consultant', 'solution design engineer', 'solution engineer', 'solutions consultant', 'solutions design engineer', 'solutions engineer', 'solutions engineering manager', 'svetovalec za implementacijo itsm rešitev', 'svetovalec za poslovno programsko opremo', 'technical consultant', 'uvajalec informacijskih tehnologij', 'пресейл', 'пресейл-инженер', 'セールスエンジニア', 'プリセールス', '售前', '業務工程', '銷售工程', '销售工程'],
+  'software_engineering': ['.net developer', '.net engineer', '.net fejlesztő', '.net工程', '.net开发', 'abap developer', 'abap engineer', 'abap entwickler', 'abap fejlesztő', 'adatbázis fejlesztő', 'ai native developer', 'ai native engineer', 'ai-native developer', 'ai-native engineer', 'alkalmazás fejlesztő', 'alkalmazásfejlesztő', 'anwendungsentwickler', 'aplikační programátor', 'aplikační programátoři', 'app developer', 'app engineer', 'application analyst', 'application developer', 'applications analyst', 'c# developer', 'c# engineer', 'c# fejlesztő', 'c#エンジニア', 'c#工程', 'c#开发', 'c++ developer', 'c++ engineer', 'c++工程', 'c++开发', 'c++開發', 'chief technology officer', 'cobolエンジニア', 'database developer', 'desarrollador de software', 'desarrollador java', 'desarrolladora de software', 'desarrolladora java', 'desenvolvedor de software', 'desenvolvedor java', 'desenvolvedora de software', 'desenvolvedora java', 'developer php', 'deweloper oprogramowania', 'dotnet developer', 'dotnet engineer', 'drupal developer', 'drupal engineer', 'dynamics 365 developer', 'développeur java', 'développeur salesforce', 'engenheira de software', 'engenheiro de software', 'engineering manager', 'entwickler software', 'erp developer', 'erp engineer', 'fachinformatiker anwendungsentwicklung', 'fachinformatiker für anwendungsentwicklung', 'founding developer', 'founding engineer', 'game developer', 'game engineer', 'go developer', 'go engineer', 'golang developer', 'golang engineer', 'golang开发', 'go开发', 'ingegnere del software', 'ingegnere software', 'ingeniera de software', 'ingeniero de software', 'ingénieur logiciel', 'integration developer', 'integration engineer', 'inżynier oprogramowania', 'it analyst', 'it developer', 'it engineer', 'it systems developer', 'it systems engineer', 'itエンジニア', 'it工程', 'java developer', 'java engineer', 'java entwickler', 'java fejlesztő', 'java fejlesztők', 'java-entwickler', 'javascript developer', 'javascript engineer', 'javaエンジニア', 'java工程', 'java开发', 'java開發', 'magento developer', 'magento engineer', 'mainframe developer', 'mainframe engineer', 'member of technical staff', 'member of the technical staff', 'mes developer', 'mes engineer', 'netsuite administrator', 'netsuite developer', 'netsuite engineer', 'node developer', 'node engineer', 'node.js developer', 'node.js engineer', 'node.js fejlesztő', 'nodejs developer', 'nodejs engineer', 'odoo fejlesztő', 'odoo-fejlesztő', 'oracle developer', 'oracle engineer', 'pega fejlesztő', 'php developer', 'php engineer', 'php fejlesztő', 'phpエンジニア', 'php工程', 'php开发', 'php網頁', 'php開發', 'programer', 'programerka', 'programista', 'programista .net', 'programista python', 'programistka', 'programozó', 'programske opreme', 'programski inženir', 'programátor', 'programátori aplikácií', 'programátorka', 'programátoři aplikací', 'projektant aplikacji', 'projektantka aplikacji', 'python developer', 'python engineer', 'python fejlesztő', 'pythonエンジニア', 'python工程', 'python开发', 'python開發', 'rails developer', 'rails engineer', 'razvijalec', 'razvijalka', 'razvoj softvera', 'rpa developer', 'rpa engineer', 'ruby developer', 'ruby engineer', 'rubyエンジニア', 'salesforce administrator', 'salesforce consultant', 'salesforce developer', 'salesforce engineer', 'salesforceエンジニア', 'sap developer', 'sap engineer', 'sapエンジニア', 'servicenow developer', 'servicenow engineer', 'sharepoint developer', 'sharepoint engineer', 'shopify developer', 'shopify engineer', 'sistem inženjer', 'sistemski inženir', 'sistemski inženjer', 'sistemski it inženir', 'softverska inženjerka', 'softverski inženjer', 'software analyst', 'software developer', 'software development engineer', 'software engineer', 'software engineering', 'software entwickler', 'software mérnök', 'software systems developer', 'software systems engineer', 'software-entwickler', 'softwareentwickler', 'softwareingenieur', 'sviluppatore software', 'system developer', 'system engineer', 'systems developer', 'systems engineer', 'systémový inženýr', 'systémový inžinier', 'szoftver fejlesztő', 'szoftverfejlesztő', 'szoftvermérnök', 'technical analyst', 'technology analyst', 'typescript developer', 'typescript engineer', 'unityエンジニア', 'vývojári a analytici softvéru', 'vývojári softvéru', 'vývojári webových', 'vývojáři a analytici softwaru', 'vývojáři softwaru', 'vývojáři webu', 'web developer', 'web engineer', 'webfejlesztő', 'weboví vývojári', 'web開発', 'web開発エンジニア', 'wordpress developer', 'wordpress engineer', 'програмист', 'программист', 'програміст', 'разработчик', 'розробник', 'アプリケーション開発', 'アプリ開発', 'アプリ開発エンジニア', 'エンジニアリングマネジャー', 'エンジニアリングマネージャー', 'クライアントエンジニア', 'コーポレートエンジニア', 'システムエンジニア', 'システム開発', 'システム開発エンジニア', 'ソフトウェアエンジニア', 'ソフトウェア開発', 'ソフトウェア開発エンジニア', 'テックリード', 'プログラマ', 'プロダクトエンジニア', '情報システム', '社内se', '社内システム', '程序员', '程式設計', '程式開發', '系統工程', '系统工程', '資訊工程', '軟體助理工程', '軟體工程', '軟體研發', '軟體設計', '軟體開發', '软件工程', '软件开发'],
+  'solutions_engineering': ['delivery consultant', 'deployment strategist', 'dynamics 365', 'dynamics 365 consultant', 'erp specialist', 'erp svetovalec', 'fae工程', 'fae应用', 'fae應用', 'field application engineer', 'forward deployed engineer', 'forward-deployed engineer', 'hubspot crm administrator', 'integration consultant', 'inżynier ds. sprzedaży', 'inżynier sprzedaży', 'inżynierka ds. sprzedaży', 'inżynierka sprzedaży', 'inženjer prodaje', 'it logistični svetovalec', 'it svetovalec na področjih digitalne transformacije', 'it svetovalec za poslovne rešitve', 'konfigurator e-računov', 'microsoft dynamics', 'netsuite consultant', 'partner engineer', 'pre-sales consultant', 'pre-sales engineer', 'presales consultant', 'presales engineer', 'prodajni inženir', 'prodajni inženjer', 'prodajni tehnolog', 'prodajno razvojni inženir', 'professional services consultant', 'professional services engineer', 'sales applications engineer', 'sales engineer', 'sales engineering manager', 'sap consultant', 'sap fico', 'sap mm consultant', 'sap sd consultant', 'sap svetovalec', 'skrbnik erp-sistema odoo', 'solution consultant', 'solution design engineer', 'solution engineer', 'solutions consultant', 'solutions design engineer', 'solutions engineer', 'solutions engineering manager', 'svetovalec za implementacijo itsm rešitev', 'svetovalec za poslovno programsko opremo', 'technical consultant', 'uvajalec informacijskih tehnologij', 'пресейл', 'пресейл-инженер', 'セールスエンジニア', 'プリセールス', '售前', '業務工程', '銷售工程', '销售工程'],
   'sre': ['site reliability', 'sre', 'sreエンジニア'],
   'staff': ['staff'],
   'support': ['agent kontakt centra', 'agent korisničke podrške', 'agent korisničkog servisa', 'agent u call centru', 'agent u kontakt centru', 'agent u pozivnom centru', 'agent v klicnem centru', 'asistent za podporo partnerjem in strankam', 'call centar operater', 'call center', 'call centra', 'call centru', 'call-центр', 'client support', 'contact center', 'customer care', 'customer service', 'customer service desk', 'customer support', 'customer support worker', 'delo v klicnem centru', 'klicni center', 'kontakt centra', 'kontakt centru', 'kontaktnem centru', 'korisnička podrška', 'korisničke podrške', 'korisničkoj podršci', 'obsługa klienta', 'obsługi klienta', 'obsługi klientów', 'operater u call centru', 'operater u kontakt centru', 'podpora strankam', 'pozivnom centru', 'predstavnik za podporo kupcem', 'referent za garancije', 'referent za odnose s strankami', 'referent za sprejem in podporo servisu', 'referent za stike s strankami', 'service advisor', 'servisni asistent', 'servisni svetovalec', 'sodelavec v svetovalnem centru', 'sodelavec za komunikacijo z nemškimi strankami', 'specialist podpore kupcem', 'specialist za podporo', 'sprejemnik na servis', 'sprejemnik servis', 'sprejemnik v kleparsko - ličarski delavnici', 'strokovni sodelavec v asistenčnem centru', 'support', 'svetovalci za podporo uporabnikom', 'svetovalec v klicnem centru', 'svetovalec za delo s strankami', 'svetovalec za podporo uporabnikom', 'svetovalec za stranke', 'technical support worker', 'tehnični svetovalec za servisno mrežo', 'telefonist', 'vodja tehnične podpore in servisa', 'ügyfélszolgálati', 'колл-центр', 'контактен център', 'обслуговування клієнтів', 'обслужване на клиенти', 'поддержка', 'поддержки', 'カスタマーサポート', 'カスタマーサービス', 'コミュニケーター', 'コールセンター', 'サポートエンジニア', '售後服務', '售服工程', '客戶服務', '客户服务', '客服'],
+  'system_administration': ['administrator systemów', 'it administrator', 'linux administrator', 'rendszergazda', 'sistemski administrator', 'skrbnik informacijskega sistema', 'skrbnik računalniških sistemov', 'skrbnik sistemov', 'skrbnika informacijskih sistemov', 'správcovia systémov', 'sysadmin', 'system administration', 'system administrator', 'systemadministrator', 'systems administration', 'systems administrator', 'systémoví administrátoři', 'windows administrator', 'адміністратор системи', 'системний адміністратор', 'системный администратор'],
   'technical_writing': ['content designer', 'content strategist', 'curriculum designer', 'documentation engineer', 'documentation manager', 'documentation specialist', 'e-learning developer', 'elearning developer', 'information developer', 'instructional design', 'instructional designer', 'interpreter', 'interpreters', 'learning designer', 'learning experience designer', 'localization engineer', 'localization manager', 'localization specialist', 'prevodilac', 'prevoditelj', 'prevoditeljica', 'strokovnjak za tehnično dokumentacijo', 'technical communicator', 'technical writer', 'technical writing', 'tehnični urednik', 'tolmač', 'translator', 'ux writer', 'ux-редактор', 'переводчик', 'разработчик документации', 'специалист по документации', 'технический писатель', 'технический редактор', 'техписатель', '翻訳', '翻譯', '翻译', '通訳'],
+  'telecommunications_engineering': ['strokovni sodelavec za telekomunikacijska omrežja', 'telecom engineer', 'telecommunication engineer', 'telecommunications engineer', 'telecommunications engineering', 'telecommunications network engineer', 'telecoms engineer', 'инженер связи'],
 } as const;
 export type FacetAliases = typeof FACET_ALIASES;
 export const COLLECTIONS = [

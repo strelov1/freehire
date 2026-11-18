@@ -5,9 +5,8 @@ import (
 	"strings"
 )
 
-// KeywordConfidence is the confidence a deterministic keyword hit reports. It is
-// high enough to clear the stage-advance threshold, since a strong phrase is a
-// firmer signal than a probabilistic LLM read.
+// KeywordConfidence is the confidence a keyword hit reports, high enough to clear
+// the stage-advance threshold.
 const KeywordConfidence = 0.95
 
 // stripTags drops HTML tags so keyword matching works on the readable text of an
@@ -22,18 +21,14 @@ type keywordRule struct {
 	phrases []string
 }
 
-// rejectionPhrases is named separately from the rule that carries it because
-// KeywordStatus reads it twice: once in list order, and once more to settle a
-// contradiction — see the rule there.
+// rejectionPhrases is a named list because KeywordStatus reads it twice: in list
+// order, and to settle a contradiction.
 //
-// "unfortunately" alone is intentionally excluded: too weak to skip the LLM on
-// (it appears in some acknowledgements) — those emails defer to the LLM instead.
+// "unfortunately" alone is excluded: it appears in some acknowledgements, so those defer to the LLM.
 //
-// The last two entries are the standard rejections that QUOTE offer vocabulary
-// ("we are unable to extend an offer at this time", "we have decided to extend an
-// offer to another candidate"). Both were measured against KeywordStatus resolving
-// to `offer`, because the phrase "extend an offer" is really in them; they are
-// listed here so the contradiction rule below has something to see.
+// The last two entries are rejections that QUOTE offer vocabulary ("unable to extend
+// an offer", "decided to extend an offer to another candidate"); they are listed so the
+// contradiction rule can see them.
 var rejectionPhrases = []string{
 	"we regret", "regret to inform", "not to proceed", "not moving forward", "not be moving forward",
 	"won't be moving forward", "won’t be moving forward", "decided not to move", "decided not to proceed",
@@ -42,21 +37,15 @@ var rejectionPhrases = []string{
 	"unable to extend an offer", "another candidate",
 }
 
-// decisiveRejectionPhrases is the subset that may VETO a positive signal, and it is a
-// subset for a reason measured on real phrasing.
+// decisiveRejectionPhrases is the subset that may VETO a positive signal. A weak
+// member of the list above is fine as a late match, but as a veto it is wrong: the same
+// words appear in good news ("decided to move forward with you", "speaking with other
+// candidates this week", "after another candidate withdrew"). SuggestStage reads the
+// implied stage whether or not it advances, so a wrong veto would offer a move to
+// `rejected` on the day someone was hired.
 //
-// A weak member of the list above is harmless as a fourth-in-order match — nothing
-// stronger matched, so "other candidates" meaning a rejection is the best reading
-// available. As a veto over a strong positive it is wrong, because the same words are
-// ordinary inside good news: "pleased to offer you … we have decided to move forward with
-// you", "invite you to an interview — we are also speaking with other candidates this
-// week", "pleased to offer you the role after another candidate withdrew". Vetoing on the
-// whole list turned every one of those into `rejection`, which does not merely mislabel:
-// SuggestStage reads the implied stage whether or not it advances, so the candidate is
-// offered a move to `rejected` on the day they were hired.
-//
-// What survives here says the sender is closing the application, in words that have no
-// benign reading, plus the two that quote offer vocabulary while refusing.
+// What remains says the sender is closing the application in words with no benign
+// reading, plus the two that quote offer vocabulary while refusing.
 var decisiveRejectionPhrases = []string{
 	"we regret", "regret to inform", "not to proceed", "not moving forward", "not be moving forward",
 	"won't be moving forward", "won’t be moving forward", "decided not to move", "decided not to proceed",
@@ -66,12 +55,10 @@ var decisiveRejectionPhrases = []string{
 
 // keywordRules is precision-first: only strong, unambiguous phrases. Rejection is
 // checked before acknowledgement so a "thank you for applying … unfortunately …"
-// email resolves to rejection, and ambiguous openers ("thank you for your
-// interest" alone) match nothing and defer to the LLM.
+// email resolves to rejection, and ambiguous openers match nothing and defer to the LLM.
 //
-// Order alone no longer decides a rejection against a POSITIVE signal — KeywordStatus
-// settles that explicitly, because there is no order of this list that reads a
-// rejection worded in offer vocabulary correctly.
+// Order does not decide a rejection against a POSITIVE signal; KeywordStatus does,
+// since no order reads a rejection worded in offer vocabulary correctly.
 var keywordRules = []keywordRule{
 	{SignalOffer, []string{"pleased to offer you", "we are pleased to offer", "job offer from", "offer of employment", "extend an offer"}},
 	{SignalAssessment, []string{"coding challenge", "take-home", "take home assignment", "technical assessment", "hackerrank", "codility", "online assessment", "coding test"}},
@@ -88,27 +75,19 @@ var keywordRules = []keywordRule{
 // ("", false) otherwise — deferring the ambiguous tail (soft/multilingual
 // rejections, bare interest openers) to the LLM. Precision over recall by design.
 //
-// Contradictory evidence is settled, not raced down the list: a text that also holds a
-// rejection phrase can never come back as a signal that ADVANCES the application. A
-// rejection is written in the vocabulary of the thing it declines ("we regret to inform
-// you we cannot extend an offer", "thank you for completing the coding challenge —
-// unfortunately we are not moving forward"), so first-match-wins over an ordered list
-// answered `offer` and `assessment` for those, and Classify's keyword fast path reports
-// 0.95 confidence, over the 0.8 the stage advance needs — a rejection moved the
-// application to `offer`.
+// A text that also holds a decisive rejection phrase never comes back as a signal that
+// ADVANCES the application: a rejection is written in the vocabulary of what it declines
+// ("we cannot extend an offer", "thank you for completing the coding challenge —
+// unfortunately we are not moving forward"), and the fast path's 0.95 confidence clears
+// the 0.8 stage-advance bar.
 //
-// The rejection is returned rather than deferring to the model: it is the safe direction
-// (StageFor gives it Advances:false, so nothing moves on it), it is the right answer for
-// every phrasing measured here, and it keeps the deterministic path deterministic. Which
-// signals "advance" is not restated here — it is read from signalStage, so a signal added
-// there is covered without a second list to keep in step.
+// The rejection is returned rather than deferring to the model because it is the safe
+// direction (StageFor gives it Advances:false). Which signals advance is read from
+// signalStage, not restated here.
 //
-// This reads the FULL body while the model path is bounded to maxBodyRunes, and that
-// asymmetry is deliberate now that it matters: a rejection line sits at the END of a long
-// quoted thread more often than at the top, and truncating to match the prompt would blind
-// this check to exactly the evidence it exists to find. The error it can produce instead —
-// a quoted old rejection outranking a fresh invitation — is bounded by decisiveRejectionPhrases,
-// which is why that list is a subset rather than the whole vocabulary.
+// This reads the FULL body while the model path is capped at maxBodyRunes: a rejection
+// often sits at the END of a long quoted thread. The resulting risk, a quoted old
+// rejection outranking a fresh invitation, is bounded by decisiveRejectionPhrases.
 func KeywordStatus(subject, body string) (StatusSignal, bool) {
 	text := strings.ToLower(stripTags.ReplaceAllString(subject+" \n "+body, " "))
 	for _, r := range keywordRules {
@@ -123,8 +102,8 @@ func KeywordStatus(subject, body string) (StatusSignal, bool) {
 	return "", false
 }
 
-// containsAny reports whether text holds any of phrases. text is already lowercased and
-// tag-stripped by the caller; the phrases are lowercase by construction.
+// containsAny reports whether text holds any of phrases. text must already be lowercased
+// and tag-stripped; the phrases are lowercase.
 func containsAny(text string, phrases []string) bool {
 	for _, p := range phrases {
 		if strings.Contains(text, p) {

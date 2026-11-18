@@ -20,11 +20,9 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// sapoemprego adapts SAPO Emprego (emprego.sapo.pt), one of Portugal's large general job boards:
-// ~23k public postings across every trade, close to half of them posted by staffing agencies,
-// ~6% filed under "Informática e Tecnologias". It is boardless and an aggregator — the employer
-// is read per posting. See the "SAPO Emprego traps" section of AGENTS.md for the measurements
-// behind each rule.
+// sapoemprego adapts SAPO Emprego (emprego.sapo.pt), a large general Portuguese job board
+// across every trade, many postings from staffing agencies. It is boardless and an aggregator;
+// the employer is read per posting. See the "SAPO Emprego traps" section of AGENTS.md.
 //
 // The posting set comes from the offers sitemap (robots.txt disallows /offers/search, the JSON
 // the listing pages page through), which carries nothing but each posting's URL and lastmod, so
@@ -54,21 +52,19 @@ const (
 	sapoempregoSitemap = sapoempregoBaseURL + "/offers.xml"
 
 	// sapoempregoRequestInterval paces every request of a run, sitemap and posting page alike, at
-	// one a second — a courtesy ceiling toward a national site, not a measured limit.
+	// one a second: a courtesy ceiling toward a national site, not a known limit.
 	sapoempregoRequestInterval = time.Second
-	// sapoempregoDetailWorkers keeps enough pages in flight that the limiter, not latency (~0.6 s
-	// a page from the crawl host, ~2 s from a laptop), sets the pace.
+	// sapoempregoDetailWorkers keeps enough pages in flight that the limiter, not latency, sets
+	// the pace.
 	sapoempregoDetailWorkers = 3
 
-	// sapoempregoFreshPerRun and sapoempregoBacklogPerRun split one run's 1,200 posting pages
-	// (~20 minutes at one a second, leaving the rest of the scheduler's default 2,400 s crawl
-	// budget to the 5 MB sitemap, the ~23k identity refreshes and the writes after the fetch,
-	// which run ~7 new rows a second from the crawl host) into hydrationLanes' two lanes.
+	// sapoempregoFreshPerRun and sapoempregoBacklogPerRun split one run's posting pages into
+	// hydrationLanes' two lanes, leaving the rest of the crawl budget to the sitemap, the
+	// identity refreshes and the writes after the fetch.
 	//
 	// The listing names no employer, so the coverage gate has nothing to judge before a page is
-	// bought, and ~8% of the catalogue is discarded unsaved on every run: ~1,300 postings from
-	// employers already covered by a non-aggregator source (GI Group alone posts 848) and ~2.5%
-	// whose employer is hidden. Newest-first alone would let those fill the budget for good.
+	// bought, and postings from employers already covered elsewhere or with a hidden employer
+	// are discarded on every run. Newest-first alone would let those fill the budget for good.
 	sapoempregoFreshPerRun    = 800
 	sapoempregoBacklogPerRun  = 400
 	sapoempregoDeadlineMargin = 5 * time.Minute
@@ -316,9 +312,7 @@ func sapoempregoJob(ld sapoempregoLD, sum sapoempregoSummary, p sapoempregoPosti
 	if code := location.NormalizeCountry(strings.TrimSpace(addr.Country)); code != "" {
 		j.Countries = []string{code}
 	}
-	if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
 	j.WorkMode = sapoempregoWorkMode(ld.JobLocationType, sum.workhome)
 	j.Remote = j.WorkMode == "remote"
 	j.EmploymentType = sapoempregoEmploymentType(ld.EmploymentType)
@@ -354,7 +348,7 @@ func sapoempregoWorkMode(locationType, workhome string) string {
 }
 
 // sapoempregoEmploymentType reads the JobPosting's employmentType (FULL_TIME or PART_TIME on
-// every posting sampled).
+// every posting).
 func sapoempregoEmploymentType(ldType string) string {
 	switch strings.ToUpper(strings.TrimSpace(ldType)) {
 	case "FULL_TIME":

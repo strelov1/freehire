@@ -8,23 +8,22 @@ import CreateApiKeyDialog from './CreateApiKeyDialog.svelte';
 // reachable from inside the dialog, and leaving for a provider does not cost the member
 // what they had already typed.
 
-const { createApiKey, reauthenticatePassword, connectedIdentities, begin, expiry, forget, user } =
-  vi.hoisted(() => ({
-    createApiKey: vi.fn(),
-    reauthenticatePassword: vi.fn(),
-    connectedIdentities: vi.fn(),
-    begin: vi.fn(),
-    expiry: vi.fn(),
-    forget: vi.fn(),
-    user: { current: null as User | null },
-  }));
+const { createApiKey, reauthenticatePassword, connectedIdentities, begin, expiry, forget, user } = vi.hoisted(() => ({
+  createApiKey: vi.fn(),
+  reauthenticatePassword: vi.fn(),
+  connectedIdentities: vi.fn(),
+  begin: vi.fn(),
+  expiry: vi.fn(),
+  forget: vi.fn(),
+  user: { current: null as User | null },
+}));
 
 const draft = vi.hoisted(() => ({ next: null as unknown }));
 
 // Hoisted with the mocks: `vi.mock` is lifted above ordinary declarations, so a class
 // declared normally here is still in its temporal dead zone when the factory runs.
 const { StubApiError } = vi.hoisted(() => ({
-  StubApiError: class StubApiError extends Error {
+  StubApiError: class extends Error {
     constructor(
       public status: number,
       message = 'failed',

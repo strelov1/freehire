@@ -85,7 +85,7 @@ implementation-shaped, not architecture-shaped:
 
 ## Relationship to PR #1658
 
-#1658 is not wasted work — it fixed a real thing (no `/match` page hop, redirects,
+PR #1658 is not wasted work — it fixed a real thing (no `/match` page hop, redirects,
 the retry race-condition bug) and should merge on its own merits. This design's
 frontend piece (dropping the `'analyzing'` branch) is a small, mechanical follow-up
 *on top of* #1658, once it's landed — not a reason to hold #1658 back or unwind it.

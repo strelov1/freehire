@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -28,11 +29,13 @@ func (r *fakeRepo) DeleteUser(_ context.Context, _ int64) error {
 	return r.deleteErr
 }
 
-// fakeBlobs records deleted keys and can fail the delete.
+// fakeBlobs records deleted keys and can fail the delete. objects is what List finds; a
+// delete removes from it.
 type fakeBlobs struct {
 	deleted []string
 	err     error
 	calls   *[]string
+	objects map[string]bool
 }
 
 func (b *fakeBlobs) Put(context.Context, string, string, io.Reader, int64) error { return nil }
@@ -44,7 +47,41 @@ func (b *fakeBlobs) Delete(_ context.Context, key string) error {
 		return b.err
 	}
 	b.deleted = append(b.deleted, key)
+	delete(b.objects, key)
 	return nil
+}
+
+func (b *fakeBlobs) List(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for k := range b.objects {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+// A CV object no pointer names any more — a failed cleanup, a process that died mid-upload —
+// still belongs to the member and goes with the account; another member's does not.
+func TestDelete_ErasesOrphanedCVObjects(t *testing.T) {
+	var calls []string
+	repo := &fakeRepo{keys: []string{"resumes/7-2-current"}, calls: &calls}
+	blobs := &fakeBlobs{calls: &calls, objects: map[string]bool{
+		"resumes/7-1-orphan": true, "resumes/7-2-current": true, "resumes/70-1-other": true,
+	}}
+	if err := New(repo, blobs, nil).Delete(context.Background(), 7); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if blobs.objects["resumes/7-1-orphan"] || blobs.objects["resumes/7-2-current"] {
+		t.Errorf("objects left = %v, want the member's CV objects gone", blobs.objects)
+	}
+	if !blobs.objects["resumes/70-1-other"] {
+		t.Error("another member's CV object was deleted")
+	}
+	if !slices.Contains(blobs.deleted, "resumes/7") {
+		t.Errorf("deleted = %v, want the legacy key named too", blobs.deleted)
+	}
 }
 
 // The order is the whole design: keys are only knowable while the rows exist, and

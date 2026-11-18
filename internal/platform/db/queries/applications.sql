@@ -1,46 +1,6 @@
 -- Queries over the application record — the durable half of what used to live in
 -- user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
 
--- name: BackfillApplicationEventLinks :execrows
--- Point one batch of pre-existing ledger events at the application they belong to.
--- Every event recorded before this change names a posting and no application, and left
--- that way it stays correlated through job_id — the reference deleting a posting clears.
---
--- Matched on (user_id, job_id) because that is the only identity those rows have. It is
--- exactly the correlation being retired, and it is sound here and nowhere else: this pass
--- runs before any posting has been cleared out from under the events it is repairing, and
--- a row whose job_id is already NULL is skipped rather than guessed at.
-WITH page AS (
-    SELECT ae.id, a.id AS application_id
-      FROM application_events ae
-      JOIN applications a ON a.user_id = ae.user_id AND a.job_id = ae.job_id
-     WHERE ae.application_id IS NULL
-       AND ae.job_id IS NOT NULL
-     ORDER BY ae.id
-     LIMIT sqlc.arg(batch_size)
-)
-UPDATE application_events ae
-   SET application_id = p.application_id
-  FROM page p
- WHERE ae.id = p.id;
-
--- name: BackfillEmailApplicationLinks :execrows
--- The same for mail. A thread linked to a posting must end up linked to the application,
--- or the first deletion detaches it from a record that is still standing.
-WITH page AS (
-    SELECT e.id, a.id AS application_id
-      FROM emails e
-      JOIN applications a ON a.user_id = e.user_id AND a.job_id = e.job_id
-     WHERE e.application_id IS NULL
-       AND e.job_id IS NOT NULL
-     ORDER BY e.id
-     LIMIT sqlc.arg(batch_size)
-)
-UPDATE emails e
-   SET application_id = p.application_id
-  FROM page p
- WHERE e.id = p.id;
-
 -- name: ListOrphanedApplications :many
 -- The caller's applications whose posting the catalogue no longer holds.
 --
@@ -64,16 +24,23 @@ SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.fol
        (SELECT count(*)
           FROM emails e
          WHERE e.application_id = a.id
-           AND e.deleted_at IS NULL) AS email_count,
-       -- Same last-activity rule as the posting-backed rows: the apply date, or the newest
-       -- linked message when that is later. Mail is reached through the application, never
-       -- through the posting, which no longer exists.
+           AND e.deleted_at IS NULL AND e.direction = 'incoming') AS email_count,
+       -- Same last-activity rule as the posting-backed rows: the apply date, the newest
+       -- linked message, or the employer's newest freehire pipeline move, whichever is
+       -- latest. Mail and events are reached through the application, never through the
+       -- posting, which no longer exists.
        (CASE WHEN a.applied_at IS NOT NULL THEN
           GREATEST(a.applied_at,
                    (SELECT max(e.received_at)
                       FROM emails e
                      WHERE e.application_id = a.id
-                       AND e.deleted_at IS NULL))
+                       AND e.deleted_at IS NULL AND e.direction = 'incoming'),
+                   (SELECT max(ev.occurred_at)
+                      FROM application_events ev
+                     WHERE ev.application_id = a.id
+                       AND ev.kind = 'stage_set'
+                       AND ev.source = 'employer'
+                       AND ev.retracted_at IS NULL))
         END)::timestamptz AS last_activity_at
   FROM applications a
  WHERE a.user_id = $1

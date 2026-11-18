@@ -11,16 +11,9 @@
  */
 
 import type { ComboboxReply, ComboboxStep } from './protocol';
-import {
-  collectQuestions,
-  comboListbox,
-  comboOptionNodes,
-  displayedValues,
-  isComboWidget,
-  isOnScreen,
-  normalizeLabel,
-  shownText,
-} from './form';
+import { collectQuestions } from './form';
+import { comboListbox, comboOptionNodes, displayedValues, isComboWidget, isOnScreen, shownText } from './comboWidget';
+import { normalizeLabel } from './fieldKeys';
 import { assertNever } from './utils';
 
 /**
@@ -101,11 +94,7 @@ export async function select(doc: Document, label: string, value: string): Promi
  * quietly wrong, since "No" sits inside "Norfolk Island" and would reinstate the
  * exact failure these primitives exist to prevent.
  */
-export function verify(
-  doc: Document,
-  label: string,
-  expected: string,
-): { status: VerifyStatus; committed: string } {
+export function verify(doc: Document, label: string, expected: string): { status: VerifyStatus; committed: string } {
   const { widget, status } = findWidget(doc, label);
   if (!widget) return { status, committed: '' };
 
@@ -205,4 +194,3 @@ async function settle(holds: () => boolean): Promise<boolean> {
   }
   return holds();
 }
-

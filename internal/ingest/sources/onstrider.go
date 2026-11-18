@@ -12,25 +12,18 @@ import (
 )
 
 // onstrider adapts Strider's careers site (www.onstrider.com), a HubSpot-hosted LATAM talent
-// marketplace. It is the DataArt shape — the sitemap enumerates every vacancy URL and each
-// vacancy page server-renders a schema.org JobPosting ld+json block, so this adapter enumerates
-// from the sitemap and maps per-vacancy details over the shared fetchDetails + ldJobPosting
-// helpers. The real employer is hidden (hiringOrganization is always "Strider"), so every
-// posting maps to the single board-file company; the adapter is boardless single-company.
+// marketplace. The sitemap lists every vacancy URL and each page server-renders a schema.org
+// JobPosting ld+json block, so it enumerates the sitemap and maps details over fetchDetails +
+// ldJobPosting. The real employer is hidden (hiringOrganization is always "Strider"), so it is
+// boardless single-company.
 //
 // Open/closed is read from the hero's data-position-open attribute, NOT from the presence of the
-// JobPosting markup. The markup was the original signal and it is far too weak: measured live
-// over the whole sitemap (308 vacancies, 2026-09-01), only 34 had dropped it while 266 of the
-// 274 readable pages were closed — so the old rule admitted a catalogue that was ~97% dead
-// links. Nothing in the visible text distinguishes them either: the page always ships BOTH the
-// "Accepting Applications" and "Closed" spans and lets CSS pick one off the same attribute, so
-// matching on the text reads "closed" for every vacancy.
+// JobPosting markup, which stays on closed pages. The visible text cannot tell either: the page
+// ships BOTH the "Accepting Applications" and "Closed" spans and CSS picks one off that attribute.
 type onstrider struct {
 	http onstriderHTTP
-	// referral is the Strider referral handle outbound links are attributed to, from
-	// ONSTRIDER_REFERRAL_HANDLE (see registry.go). Empty means unattributed: URL stays the
-	// canonical vacancy page, which is what an installation that is not a Strider referral
-	// partner — including every fork of this repository — gets.
+	// referral is the Strider referral handle (ONSTRIDER_REFERRAL_HANDLE, see registry.go) that
+	// outbound links are attributed to. Empty means unattributed: URL stays the canonical page.
 	referral string
 }
 
@@ -66,8 +59,7 @@ func (s onstrider) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("onstrider: sitemap: %w", err)
 	}
 
-	// Keep only canonical vacancy URLs: the sitemap also carries blog, marketing, localized
-	// (/pt/, /en/), and /preview-slug-…/ duplicate URLs, none of which are ingestable vacancies.
+	// The sitemap also carries blog, marketing, localized and preview duplicate URLs.
 	var urls []string
 	for _, u := range sitemap.URLs {
 		if onstriderVacancyURL(u.Loc) {
@@ -78,10 +70,9 @@ func (s onstrider) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
 	jobs := fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {
 		return s.detail(ctx, ce, u)
 	})
-	// The sitemap listed vacancies but not one detail mapped — every fetch was blocked or empty
-	// (the Cloudflare edge can 403 the prod datacenter IP for the detail pages while the CDN
-	// still serves the sitemap). Fail the board rather than return an empty success, which the
-	// post-run unseen sweep would read as "all vacancies gone" and false-close the catalogue.
+	// No detail mapped (the Cloudflare edge can 403 datacenter IPs on detail pages while the
+	// sitemap still serves). Fail rather than return an empty success, which the unseen sweep
+	// would read as "all vacancies gone".
 	if len(urls) > 0 && len(jobs) == 0 {
 		return nil, fmt.Errorf("onstrider: %d vacancy URLs but 0 mapped; treating as a fetch failure", len(urls))
 	}
@@ -121,25 +112,20 @@ func (s onstrider) detail(ctx context.Context, ce CompanyEntry, jobURL string) (
 	}, true
 }
 
-// onstriderVacancyURLPattern matches a canonical vacancy URL
-// (https://www.onstrider.com/jobs/<slug>-<8hex>). Anchoring /jobs/ directly after the host
-// excludes the /pt/ + /en/ localizations and the /preview-slug-<uuid>/… duplicate pages;
-// requiring the trailing 8-hex id excludes the /jobs listing root and marketing pages.
+// onstriderVacancyURLPattern matches https://www.onstrider.com/jobs/<slug>-<8hex>. Anchoring /jobs/
+// after the host excludes the /pt/, /en/ and preview duplicates; the 8-hex id excludes the listing root.
 var onstriderVacancyURLPattern = regexp.MustCompile(`^https?://www\.onstrider\.com/jobs/[a-z0-9-]+-[0-9a-f]{8}/?$`)
 
 // onstriderVacancyURL reports whether u is a canonical vacancy URL.
 func onstriderVacancyURL(u string) bool { return onstriderVacancyURLPattern.MatchString(u) }
 
 // onstriderPositionOpen reports whether the vacancy page states the position is still taking
-// applications, reading the hero's data-position-open attribute ("1" open, "0" closed). It is
-// the only place the page states this: both status labels are hard-coded into the markup and
-// CSS picks one off this same attribute, so the visible text says "Closed" on an open vacancy.
+// applications, reading the hero's data-position-open attribute ("1" open, "0" closed). The
+// visible text is useless: both labels are in the markup.
 //
-// A page carrying no such attribute reads as CLOSED, because its absence means the page shape
-// moved and the status is no longer stated — admitting an unknown-status vacancy is what put a
-// year of dead links in the catalogue. Fetch already fails the board when the sitemap lists
-// vacancies and none map, so a site-wide template change stops the run loudly rather than
-// closing the catalogue behind it.
+// A page without the attribute reads as CLOSED: its absence means the page shape moved, and
+// admitting unknown-status vacancies fills the catalogue with dead links. Fetch fails the board
+// when none map, so a site-wide template change stops loudly.
 func onstriderPositionOpen(root *html.Node) bool {
 	open, done := false, false
 	walk(root, func(n *html.Node) bool {
@@ -157,19 +143,14 @@ func onstriderPositionOpen(root *html.Node) bool {
 	return open
 }
 
-// onstriderReferralHandlePattern is the shape a Strider referral handle may take. The handle is
-// interpolated into a URL path, so anything else is rejected at construction rather than
-// escaped: a handle is copied from a Strider profile by hand, and a malformed one is a
-// misconfiguration to notice, not input to sanitise.
+// onstriderReferralHandlePattern is the shape a referral handle may take. It is interpolated into
+// a URL path, so anything else is rejected at construction rather than escaped.
 var onstriderReferralHandlePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-// applyURL wraps a canonical vacancy URL in the configured Strider referral link, the shape
-// Strider's own share links use: /r/<handle> on the app host, carrying the destination
-// base64-encoded in ?job=. Verified live — landing on it records the referral as the visit's
-// first touch. The plainer www.onstrider.com/jobs/<slug>?referral=<handle> form does NOT: that
-// page sets no attribution cookie of its own, so only the /r/ route earns the referral.
-//
-// An unset handle (or a URL this cannot take apart) leaves the canonical vacancy URL alone.
+// applyURL wraps a vacancy URL in Strider's share-link shape: /r/<handle> on the app host with
+// the destination base64-encoded in ?job=. Only that route records the referral; the plain
+// ?referral=<handle> form sets no attribution cookie. An unset handle (or an unparseable URL)
+// leaves the canonical URL alone.
 func (s onstrider) applyURL(jobURL string) string {
 	if s.referral == "" {
 		return jobURL
@@ -184,17 +165,14 @@ func (s onstrider) applyURL(jobURL string) string {
 }
 
 // onstriderPosting is the schema.org JobPosting decoded from a vacancy page's ld+json. identifier
-// is a PropertyValue whose value is the vacancy UUID; applicantLocationRequirements is an array
-// of Country nodes; employmentType is an array; jobLocationType is the remote signal.
+// is a PropertyValue holding the vacancy UUID; jobLocationType is the remote signal.
 type onstriderPosting struct {
 	Title           string `json:"title"`
 	Description     string `json:"description"`
 	DatePosted      string `json:"datePosted"`
 	JobLocationType string `json:"jobLocationType"`
-	// EmploymentType is raw because schema.org permits either a single string ("FULL_TIME") or
-	// an array (["PART_TIME","CONTRACTOR"]); decoding it into a fixed []string would fail on the
-	// scalar form and — since ldJobPosting drops a posting whose decode errors — silently discard
-	// an otherwise-open vacancy. firstEmploymentType parses both shapes.
+	// EmploymentType is raw because schema.org permits a string or an array; a fixed []string
+	// would fail on the scalar and ldJobPosting would drop the posting. See firstEmploymentType.
 	EmploymentType json.RawMessage `json:"employmentType"`
 	Identifier     struct {
 		Value string `json:"value"`
@@ -204,12 +182,9 @@ type onstriderPosting struct {
 	} `json:"applicantLocationRequirements"`
 }
 
-// location joins the applicant-location-requirement countries (the hidden employer means there is
-// no city, only the countries a candidate may apply from), expanding each ISO 3166-1 alpha-2 code
-// to its English country name. The expansion matters: the location parser deliberately reads a
-// bare 2-letter token as a US subdivision before an ISO country code (so "CO"→Colorado, "AR"→
-// Arkansas, "PA"→Pennsylvania), which would mis-place these LATAM postings in the US. The full
-// name resolves unambiguously to the country. An unmapped code falls back to itself.
+// location joins the applicant-location countries (there is no city), expanding each ISO alpha-2
+// code to its English name: the location parser reads a bare 2-letter token as a US subdivision
+// first ("CO" is Colorado, "PA" Pennsylvania). An unmapped code falls back to itself.
 func (p onstriderPosting) location() string {
 	var out []string
 	for _, c := range p.ApplicantLocationRequirements {
@@ -225,10 +200,7 @@ func (p onstriderPosting) location() string {
 	return strings.Join(out, ", ")
 }
 
-// onstriderCountryNames expands the ISO 3166-1 alpha-2 country codes onstrider emits into the
-// English names the location parser resolves without the US-subdivision collision. Strider is a
-// Latin-America talent marketplace, so this covers Latin America; an out-of-region code (rare for
-// this source) falls back to the raw code, which the parser handles directly when unambiguous.
+// onstriderCountryNames covers the Latin American ISO codes Strider emits; others fall back to the raw code.
 var onstriderCountryNames = map[string]string{
 	"AR": "Argentina", "BO": "Bolivia", "BR": "Brazil", "CL": "Chile",
 	"CO": "Colombia", "CR": "Costa Rica", "CU": "Cuba", "DO": "Dominican Republic",
@@ -237,9 +209,8 @@ var onstriderCountryNames = map[string]string{
 	"PY": "Paraguay", "SV": "El Salvador", "UY": "Uruguay", "VE": "Venezuela",
 }
 
-// firstEmploymentType returns the first schema.org employmentType enum, accepting either shape
-// the spec permits: a JSON array (["PART_TIME","CONTRACTOR"]) or a bare string ("FULL_TIME").
-// It returns "" when the field is absent or unparseable, leaving the value to the parser.
+// firstEmploymentType returns the first schema.org employmentType, accepting a JSON array or a
+// bare string. It returns "" when the field is absent or unparseable.
 func (p onstriderPosting) firstEmploymentType() string {
 	if len(p.EmploymentType) == 0 {
 		return ""

@@ -13,9 +13,11 @@
 package handler
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -26,6 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -37,14 +40,12 @@ func newEmailPrefsApp(queries *db.Queries) *fiber.App {
 	h := newEmailPrefsHandlers(emailprefs.NewService(queries, prefsSecret))
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	// A cookie gate that refuses everyone: these cases exercise the token-opened
-	// routes, not the signed-in ones. The throttler is nil because register builds
-	// its limiter from it and ratelimit tolerates that — throttling is not what is
-	// under test here.
+	// routes, not the signed-in ones.
 	h.register(app.Group("/api/v1"), middleware{
 		cookie: func(c *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
 		},
-	})
+	}, newContract(contractHandlers{emailPrefsHandlers: h}))
 	return app
 }
 
@@ -393,15 +394,109 @@ func TestEmailPrefs_EveryRefusalLooksTheSameAndNamesNobody(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res, body := doPrefs(t, app, http.MethodGet, "/api/v1/email-prefs?t="+tc.token, "")
-			if res.Status != http.StatusNotFound {
-				t.Errorf("status = %d, want 404 for every refusal alike", res.Status)
+			// The save carries the token in its body, where an absent one is a valid body
+			// with no token: it must get the same 404, never a 400 that tells the two apart.
+			patch := `{"news_enabled":false}`
+			if tc.token != "" {
+				patch = `{"news_enabled":false,"token":"` + tc.token + `"}`
 			}
-			for _, secret := range []string{"real-account@example.test", "Rust in Berlin", "999999"} {
-				if strings.Contains(body, secret) {
-					t.Errorf("a refusal leaked %q: %s", secret, body)
+			for _, req := range []struct{ method, target, body string }{
+				{http.MethodGet, "/api/v1/email-prefs?t=" + tc.token, ""},
+				{http.MethodPatch, "/api/v1/email-prefs", patch},
+			} {
+				res, body := doPrefs(t, app, req.method, req.target, req.body)
+				if res.Status != http.StatusNotFound {
+					t.Errorf("%s status = %d, want 404 for every refusal alike", req.method, res.Status)
+				}
+				for _, secret := range []string{"real-account@example.test", "Rust in Berlin", "999999"} {
+					if strings.Contains(body, secret) {
+						t.Errorf("%s: a refusal leaked %q: %s", req.method, secret, body)
+					}
 				}
 			}
 		})
+	}
+}
+
+// The signed-in routes run through the generated contract server, mounted behind the
+// Fiber cookie middleware. The user id that middleware stores in Locals has to reach
+// the contract handler through the adaptor, or every signed-in call would be a 401.
+func TestEmailPrefs_SignedInRoutesSeeTheCookieUser(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	userID := seedPrefsUser(t, pool, "signed-in@example.test")
+	h := newEmailPrefsHandlers(emailprefs.NewService(queries, prefsSecret))
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	h.register(app.Group("/api/v1"), middleware{
+		cookie: func(c *fiber.Ctx) error {
+			c.Locals(auth.LocalsUserID, userID)
+			return c.Next()
+		},
+	}, newContract(contractHandlers{emailPrefsHandlers: h}))
+
+	res, body := doPrefs(t, app, http.MethodPatch, "/api/v1/me/email-groups", `{"alerts_enabled":false}`)
+	if res.Status != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", res.Status, body)
+	}
+	var got prefsResp
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("decode: %v (%s)", err, body)
+	}
+	if got.Data.Email != "signed-in@example.test" || got.Data.Alerts || !got.Data.News {
+		t.Errorf("got %+v, want the cookie user's prefs with only alerts turned off", got.Data)
+	}
+}
+
+// A body the contract cannot decode is refused before any handler runs, in the same
+// {"error": msg} shape as every other refusal.
+func TestEmailPrefs_UndecodableBodyIsA400InTheUsualShape(t *testing.T) {
+	pool := startPostgres(t)
+	app := newEmailPrefsApp(db.New(pool))
+
+	res, body := doPrefs(t, app, http.MethodPatch, "/api/v1/email-prefs", `{"news_enabled":"yes"}`)
+	if res.Status != http.StatusBadRequest || body != `{"error":"invalid body"}`+"\n" {
+		t.Errorf("status = %d, body = %q; want 400 {\"error\":\"invalid body\"}", res.Status, body)
+	}
+}
+
+// Fiber answers HEAD on every Get route; a route moved into the contract must keep
+// doing so (the GET's status, no body), not fall to the generated router's 405. Both
+// requests go down one raw connection, because app.Test and net/http's client each
+// drop or retry around a body sent after HEAD: here such a body sits in front of the
+// GET's response and that response fails to parse.
+func TestEmailPrefs_HeadIsServedLikeGetWithoutABody(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	app := newEmailPrefsApp(queries)
+	token := mintPrefsToken(t, seedPrefsUser(t, pool, "head@example.test"), emailprefs.GroupNews)
+
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	go func() { _ = app.Listener(ln) }()
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	target := "/api/v1/email-prefs?t=" + token
+	if _, err := io.WriteString(conn, "HEAD "+target+" HTTP/1.1\r\nHost: x\r\n\r\n"+
+		"GET "+target+" HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	br := bufio.NewReader(conn)
+	for _, method := range []string{http.MethodHead, http.MethodGet} {
+		res, err := http.ReadResponse(br, &http.Request{Method: method})
+		if err != nil {
+			t.Fatalf("%s response: %v", method, err)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("%s: status = %d, want 200", method, res.StatusCode)
+		}
 	}
 }

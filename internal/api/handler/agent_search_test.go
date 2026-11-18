@@ -28,7 +28,7 @@ func (f *fakeDescriptions) GetJobDescriptionsByIDs(_ context.Context, ids []int6
 func agentSearchApp(s searcher, d jobDescriptions) *fiber.App {
 	h := &searchHandlers{search: s, descriptions: d}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/agent/jobs/search", h.AgentSearchJobs)
+	app.Get("/api/v1/agent/jobs/search", newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
@@ -56,7 +56,7 @@ func TestAgentSearchJobs_HydratesFullDescriptionByDefault(t *testing.T) {
 	desc := &fakeDescriptions{rows: []db.GetJobDescriptionsByIDsRow{{ID: 7, Description: "<p>the full verbatim description</p>"}}}
 	app := agentSearchApp(fake, desc)
 
-	status, body := doGet(t, app, "/agent/jobs/search?q=go&seniority=senior&limit=10&offset=20")
+	status, body := doGet(t, app, "/api/v1/agent/jobs/search?q=go&seniority=senior&limit=10&offset=20")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -93,7 +93,7 @@ func TestAgentSearchJobs_BestEffortKeepsStaleHit(t *testing.T) {
 	desc := &fakeDescriptions{rows: []db.GetJobDescriptionsByIDsRow{{ID: 1, Description: "FULL-a"}}}
 	app := agentSearchApp(fake, desc)
 
-	status, body := doGet(t, app, "/agent/jobs/search")
+	status, body := doGet(t, app, "/api/v1/agent/jobs/search")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -114,7 +114,7 @@ func TestAgentSearchJobs_FormatApplies(t *testing.T) {
 	desc := &fakeDescriptions{rows: []db.GetJobDescriptionsByIDsRow{{ID: 1, Description: "<ul><li>alpha</li></ul>"}}}
 	app := agentSearchApp(fake, desc)
 
-	status, body := doGet(t, app, "/agent/jobs/search?description_format=text")
+	status, body := doGet(t, app, "/api/v1/agent/jobs/search?description_format=text")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -130,7 +130,7 @@ func TestAgentSearchJobs_QFieldsRestrictsIdenticallyToThePublicEndpoint(t *testi
 	fake := &fakeSearcher{}
 	app := agentSearchApp(fake, &fakeDescriptions{})
 
-	status, _ := doGet(t, app, "/agent/jobs/search?q=systems&q_fields=title")
+	status, _ := doGet(t, app, "/api/v1/agent/jobs/search?q=systems&q_fields=title")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -145,7 +145,7 @@ func TestAgentSearchJobs_ReportsIgnoredParamsButNotItsOwn(t *testing.T) {
 
 	// description_format is this endpoint's own param, so it is legitimate;
 	// `region` (the facet is `regions`) is not and must be reported.
-	_, body := doGet(t, app, "/agent/jobs/search?description_format=text&region=eu")
+	_, body := doGet(t, app, "/api/v1/agent/jobs/search?description_format=text&region=eu")
 
 	meta, _ := body["meta"].(map[string]any)
 	ignored, _ := meta["ignored_params"].([]any)

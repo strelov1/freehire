@@ -1,12 +1,6 @@
 import { defineMessages } from '#lib/i18n/t.js';
 
-// One catalog for the whole Activity section rather than five. Its four tab views
-// (`SavedJobs`, `JobHistory`, `AnalysesView`, `Hidden`) carry two or three strings
-// each and are reachable from nowhere else, so they are one surface with one
-// vocabulary — splitting it per component would spread eight lines over five files
-// and make the four empty states drift apart. The route layout and its child pages
-// read the same catalog, which is why it lives here rather than under the route:
-// a `#lib` component may not import from `routes/`.
+// Shared copy for Activity's saved, viewed and hidden jobs, plus the legacy analyses route.
 export const messages = defineMessages(
   {
     // The layout's base title; each child page overrides it with its own.
@@ -15,22 +9,51 @@ export const messages = defineMessages(
     tablistLabel: 'Activity view',
     tabs: {
       saved: 'Saved',
-      history: 'History',
-      matches: 'Matches',
+      history: 'Viewed',
       hidden: 'Hidden',
+      autoApply: 'Auto-apply',
     },
     headTitles: {
       saved: 'Saved — Activity — freehire',
-      history: 'History — Activity — freehire',
+      history: 'Viewed — Activity — freehire',
       matches: 'Matches — Activity — freehire',
       hidden: 'Hidden — Activity — freehire',
+      autoApply: 'Auto-apply — Activity — freehire',
+    },
+    autoApply: {
+      description: 'All current automatic applications and submissions from the last 30 days.',
+      loadError: "Couldn't load your automatic applications.",
+      empty: 'No automatic applications yet. Start one from a job page.',
+      refresh: 'Refresh',
+      retry: 'Try again',
+      unknownCompany: 'Unknown company',
+      statuses: {
+        tailoring: 'Preparing application',
+        pending_review: 'Needs your review',
+        approved: 'Approved · awaiting submission',
+        blocked: 'Needs attention',
+        declined: 'Declined',
+        failed: 'Submission failed',
+        tailor_failed: 'CV preparation failed',
+        submitted: 'Submitted',
+      },
+      details: {
+        tailoring: 'Your CV and application answers are being prepared.',
+        pending_review: 'Review your CV and answers before approving submission.',
+        approved: 'You approved this application. It has not been submitted yet.',
+        blocked: 'Open the application to see what stopped it and what to do next.',
+        declined: 'You declined this application. It will not be submitted.',
+        failed: 'Open the application to check the outcome and available next steps.',
+        tailor_failed: 'CV preparation stopped. Open the application to try again.',
+        submitted: 'The application was submitted to the employer.',
+      },
     },
     saved: {
       loadError: "Couldn't load your saved jobs.",
       empty: 'Nothing saved yet. Jobs you save will show up here.',
     },
     history: {
-      loadError: "Couldn't load your history.",
+      loadError: "Couldn't load your viewed jobs.",
       empty: 'Nothing viewed yet. Jobs you open will show up here.',
     },
     matches: {
@@ -54,15 +77,44 @@ export const messages = defineMessages(
       tablistLabel: 'Раздел активности',
       tabs: {
         saved: 'Сохранённые',
-        history: 'История',
-        matches: 'Совпадения',
+        history: 'Просмотренные',
         hidden: 'Скрытые',
+        autoApply: 'Автоподача',
       },
       headTitles: {
         saved: 'Сохранённые — Активность — freehire',
-        history: 'История — Активность — freehire',
+        history: 'Просмотренные — Активность — freehire',
         matches: 'Совпадения — Активность — freehire',
         hidden: 'Скрытые — Активность — freehire',
+        autoApply: 'Автоподача — Активность — freehire',
+      },
+      autoApply: {
+        description: 'Все текущие автоподачи и отправленные заявки за последние 30 дней.',
+        loadError: 'Не удалось загрузить ваши автоподачи.',
+        empty: 'Автоподач пока нет. Запустите первую на странице вакансии.',
+        refresh: 'Обновить',
+        retry: 'Попробовать снова',
+        unknownCompany: 'Компания неизвестна',
+        statuses: {
+          tailoring: 'Подготовка заявки',
+          pending_review: 'Ждёт вашей проверки',
+          approved: 'Подтверждена · ждёт отправки',
+          blocked: 'Нужно ваше внимание',
+          declined: 'Отклонена',
+          failed: 'Ошибка отправки',
+          tailor_failed: 'Ошибка подготовки резюме',
+          submitted: 'Отправлена',
+        },
+        details: {
+          tailoring: 'Готовим резюме и ответы на вопросы работодателя.',
+          pending_review: 'Проверьте резюме и ответы, затем подтвердите отправку.',
+          approved: 'Вы подтвердили заявку. Она ещё не отправлена.',
+          blocked: 'Откройте заявку, чтобы узнать причину остановки и следующие шаги.',
+          declined: 'Вы отклонили эту заявку. Она не будет отправлена.',
+          failed: 'Откройте заявку, чтобы проверить результат и доступные действия.',
+          tailor_failed: 'Подготовка резюме остановилась. Откройте заявку, чтобы повторить.',
+          submitted: 'Заявка отправлена работодателю.',
+        },
       },
       saved: {
         loadError: 'Не удалось загрузить сохранённые вакансии.',

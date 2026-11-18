@@ -71,7 +71,7 @@ func newHarnessInboxFixture(t *testing.T, email string) *harnessInboxFixture {
 		paidAI: markPaidAI,
 		cookie: auth.RequireAuth(iss, testVersions),
 		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	})
+	}, newContract(contractHandlers{inboxHandlers: h}))
 
 	return &harnessInboxFixture{t: t, pool: pool, q: queries, app: app, userID: uid, cookie: cookie, key: token}
 }

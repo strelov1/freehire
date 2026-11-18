@@ -143,12 +143,10 @@ func (a arbeitsagentur) toJob(ctx context.Context, p arbeitsagenturPosting) Job 
 	}
 }
 
-// arbeitsagenturWorkMode maps the home-office flag and the detail's stated share to a work
-// mode. homeofficemoeglich means home office is POSSIBLE at a posting that names an on-site
-// location — German ads list it as a benefit, which is hybrid — so only a stated 100% is
-// remote. Measured 2026-10-29 over 305 first-party home-office postings: 228 "by arrangement"
-// (no share) and 77 with a share, 11 of them 100%. No home office maps to nothing rather than
-// onsite: an unset form field cannot be told from a choice.
+// arbeitsagenturWorkMode maps the home-office flag and the detail's stated share to a work mode.
+// homeofficemoeglich means home office is POSSIBLE at a posting that names an on-site location:
+// German ads list it as a benefit, which is hybrid, so only a stated 100% is remote. No home
+// office maps to nothing rather than onsite: an unset form field cannot be told from a choice.
 func arbeitsagenturWorkMode(homeOffice bool, percent int) string {
 	switch {
 	case !homeOffice:
@@ -196,9 +194,5 @@ func arbeitsagenturLocation(locs []arbeitsagenturLokation) string {
 
 // arbeitsagenturDate parses the "2006-01-02" publish date.
 func arbeitsagenturDate(s string) *time.Time {
-	t, err := time.Parse("2006-01-02", strings.TrimSpace(s))
-	if err != nil {
-		return nil
-	}
-	return &t
+	return parseDate(strings.TrimSpace(s))
 }

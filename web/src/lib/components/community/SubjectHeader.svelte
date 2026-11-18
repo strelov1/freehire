@@ -32,13 +32,10 @@
 
   const thing = $derived(subjectType === 'job' ? 'vacancy' : 'company');
   const absentNote = $derived(
-    absence === 'unreachable'
-      ? `This ${thing} couldn't be loaded just now`
-      : `This ${thing} is no longer listed`,
+    absence === 'unreachable' ? `This ${thing} couldn't be loaded just now` : `This ${thing} is no longer listed`,
   );
 
-  const box =
-    'flex items-center gap-3 rounded-lg border border-border bg-card px-3.5 py-3 text-left';
+  const box = 'flex items-center gap-3 rounded-lg border border-border bg-card px-3.5 py-3 text-left';
 </script>
 
 {#snippet mark(name: string)}

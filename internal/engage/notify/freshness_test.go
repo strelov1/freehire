@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -148,14 +150,21 @@ func TestDeliver_UncountableCoverAnnouncesOnlyWhatItCarries(t *testing.T) {
 // Stale matches leave the pending set BEFORE the claim reads it, in bounded
 // statements repeated until one comes back short.
 func TestDeliver_ExpiresStaleMatchesInBatchesBeforeClaiming(t *testing.T) {
-	store := &fakeStore{expireResults: []int64{expireBatch, expireBatch, 7}}
+	store := &fakeStore{
+		expireResults: []int64{expireBatch, expireBatch, 7},
+		claimed:       []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 1, Valid: true}},
+		},
+		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
+	}
 	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())
 
 	stats, err := r.Run(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"expire", "expire", "expire", "claim"}; !reflect.DeepEqual(store.calls, want) {
+	if want := []string{"expire", "expire", "expire", "candidates", "claim"}; !reflect.DeepEqual(store.calls, want) {
 		t.Errorf("calls = %v, want %v", store.calls, want)
 	}
 	if want := 2*expireBatch + 7; stats.Expired != want {

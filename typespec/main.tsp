@@ -1,0 +1,78 @@
+// The freehire HTTP API contract. Go handlers implement what ogen generates from it
+// (internal/api/apigen), so a handler that answers anything else does not compile.
+// Routes move here one group at a time; the rest are still hand-written Fiber.
+import "@typespec/http";
+import "./common.tsp";
+import "./onboarding.tsp";
+import "./email-prefs.tsp";
+import "./talent.tsp";
+import "./watchlist.tsp";
+import "./lookups.tsp";
+import "./me.tsp";
+import "./plans.tsp";
+import "./dictionary.tsp";
+import "./jd.tsp";
+import "./forms.tsp";
+import "./feedback.tsp";
+import "./answer-bank.tsp";
+import "./moderation.tsp";
+import "./contributions.tsp";
+import "./alerts.tsp";
+import "./company-feedback.tsp";
+import "./company-relations.tsp";
+import "./reports.tsp";
+import "./timeline.tsp";
+import "./profile.tsp";
+import "./conversations.tsp";
+import "./community.tsp";
+import "./buddies.tsp";
+import "./stats.tsp";
+import "./submissions.tsp";
+import "./tracking.tsp";
+import "./experience.tsp";
+import "./employer.tsp";
+import "./referrals.tsp";
+import "./billing.tsp";
+import "./plan.tsp";
+import "./direct-apply.tsp";
+import "./jobs.tsp";
+import "./change-webhooks.tsp";
+import "./catalogue.tsp";
+import "./job-wire.tsp";
+import "./companies.tsp";
+import "./search.tsp";
+import "./resume.tsp";
+import "./cv.tsp";
+import "./cv-tailoring.tsp";
+import "./mentorship.tsp";
+import "./mail.tsp";
+import "./mail-links.tsp";
+import "./fit.tsp";
+import "./autofill.tsp";
+import "./search-intent.tsp";
+import "./embeddings.tsp";
+import "./support.tsp";
+import "./assistant.tsp";
+import "./account.tsp";
+import "./docs.tsp";
+
+using Http;
+
+@service(#{ title: "freehire API" })
+@server("https://freehire.me/api/v1", "Production")
+@useAuth(CookieSession)
+namespace Freehire;
+
+// Who may call an operation, as the Fiber middleware in front of it decides (mw.cookie,
+// mw.key, none). ogen never sees this: `make api-contract` strips it from the copy ogen
+// reads, so the gates stay in the router. The default is the cookie; an operation that also
+// takes an API key says `@useAuth(SessionOrKey)`, a public one `@useAuth(NoAuth)`.
+// TestContractAuthMatchesRouter (internal/api/handler) fails when the two disagree.
+
+/** Browser session cookie set on sign-in (HttpOnly, same-origin). */
+model CookieSession is ApiKeyAuth<ApiKeyLocation.cookie, "hire_token">;
+
+/** Personal API key sent as `Authorization: Bearer <token>`. */
+model PersonalApiKey is BearerAuth;
+
+alias SessionOrKey = CookieSession | PersonalApiKey;

@@ -1,0 +1,432 @@
+{
+  "paths": {
+    "/jobs/{slug}/match-analysis/stream": {
+      "get": {
+        "summary": "Run the match analysis over Server-Sent Events.",
+        "description": "The same three-stage chain as `POST /jobs/{slug}/match-analysis`, streamed as SSE (`text/event-stream`) rather than a single JSON body. Each event’s `kind` is one of `stage_start`, `stage_done`, `thinking`, `requirements`, `dimensions`, `final`; the `final` event carries the completed `analysis` (the same shape as the match-analysis endpoints). Not a JSON endpoint.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The job `public_slug`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "data: {\"kind\":\"stage_start\",\"stage\":1,\"label\":\"Extracting requirements\"}\n\ndata: {\"kind\":\"requirements\",\"requirements\":[ { \"...\": \"...\" } ]}\n\ndata: {\"kind\":\"final\",\"analysis\":{\"overall_score\":82,\"verdict\":\"Strong Fit\",\"...\":\"...\"}}"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Fit"
+        ]
+      }
+    },
+    "/companies/{slug}": {
+      "get": {
+        "operationId": "getCompany",
+        "summary": "A company and a page of its open jobs.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The company slug.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "acme"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size for the jobs list.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 20
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip in the jobs list.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "company": {
+                      "slug": "acme",
+                      "name": "Acme",
+                      "job_count": 12,
+                      "collections": [
+                        "yc"
+                      ],
+                      "regions": [
+                        "eu"
+                      ],
+                      "countries": [
+                        "DE"
+                      ],
+                      "domains": [
+                        "fintech"
+                      ],
+                      "company_types": [
+                        "product"
+                      ],
+                      "company_sizes": [
+                        "51-200"
+                      ],
+                      "industries": [
+                        "payments"
+                      ],
+                      "year_founded": 2015,
+                      "employee_count": 120,
+                      "hq_country": "DE",
+                      "organization_type": "private",
+                      "tagline": "Payments for builders",
+                      "company_info": {
+                        "...": "..."
+                      },
+                      "remote_regions": [
+                        "eu"
+                      ],
+                      "yc_batch": [
+                        "W21"
+                      ],
+                      "yc_status": [
+                        "active"
+                      ],
+                      "yc_stage": [
+                        "series-a"
+                      ],
+                      "yc_flags": [
+                        "hiring"
+                      ],
+                      "maturity": "growth"
+                    },
+                    "jobs": [
+                      {
+                        "public_slug": "senior-go-engineer-acme-1a2b",
+                        "title": "Senior Go Engineer",
+                        "company": "Acme"
+                      }
+                    ]
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CompanyPage"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pagination parameters or pagination window exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Company not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/{slug}/closed-jobs": {
+      "get": {
+        "summary": "A company’s closed postings — the company page’s Closed tab.",
+        "description": "A page of the postings the company has closed, most recently closed first. Closed postings are not in search, so this is the only list of them. There is no total: `meta.has_more` says whether another page follows. Paging reaches the first 2000 rows (`offset + limit` ≤ 2000); a deeper page is a `400`. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The company slug.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "acme"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size (max 100).",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "20"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip; `offset + limit` may not exceed 2000.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "public_slug": "backend-engineer-acme-1a2b3c4d",
+                      "title": "Backend Engineer",
+                      "closed_at": "2026-10-01T09:00:00Z"
+                    }
+                  ],
+                  "meta": {
+                    "limit": 20,
+                    "offset": 0,
+                    "has_more": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/{slug}/hiring": {
+      "get": {
+        "summary": "How one company hires over time — the company page’s Hiring tab.",
+        "description": "The company’s postings added vs. removed per period (dense, missing periods are 0, same window rules as `/stats/jobs-activity`), its open postings now and 30 days ago, and the median days its postings stay open before an employer-side closure over the last 180 days, and the page views its postings drew over the last 30 days and the 30 before (`views`, `views_prev`: one visitor counted once per posting per day, crawlers excluded). `lifetime` is omitted below 5 such closures — absent, never 0. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The company slug.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "acme"
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "description": "One of `day`, `week`, `month` (default `day`).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "week"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Start date (UTC). Defaults to a per-granularity window before `to`.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-01-01"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "End date (UTC). Defaults to today.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-06-30"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "open": 42,
+                    "open_prev": 30,
+                    "growth": 12,
+                    "views": 2114,
+                    "views_prev": 1800,
+                    "series": [
+                      {
+                        "period": "2026-06-01",
+                        "added": 5,
+                        "removed": 2
+                      },
+                      {
+                        "period": "2026-06-08",
+                        "added": 3,
+                        "removed": 4
+                      }
+                    ],
+                    "lifetime": {
+                      "closed": 37,
+                      "median_days": 21.5
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/stats/embeddings/stream": {
+      "get": {
+        "summary": "The same document as server-sent events, one per sample.",
+        "description": "A `progress` event carrying the full document on connect and after every 15-second sample, with a `ping` event between to keep idle connections alive.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: progress\ndata: {\"eligible\":1903114,\"covered\":1897020,\"snapshot_covered\":1889512,\"queued\":6094,\"rate_per_minute\":570.4,\"eta_seconds\":641,\"snapshot_at\":\"2026-10-19T09:22:03Z\",\"measured_at\":\"2026-10-19T12:04:15Z\"}"
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/speech/transcriptions": {
+      "post": {
+        "summary": "Transcribe one short audio recording to text.",
+        "description": "Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, capped at ~8 minutes of audio (2 MB). `501` when no speech gateway is configured, `502` if the gateway call itself fails, `400` for an empty recording.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "text": "remote go engineer roles in Berlin"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Speech"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

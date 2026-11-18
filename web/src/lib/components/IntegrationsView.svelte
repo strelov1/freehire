@@ -73,7 +73,13 @@
   async function disconnectGmail() {
     try {
       await api.disconnectGmail();
-      gmail = { connected: false, available: gmail?.available, calendar_connected: false };
+      gmail = {
+        connected: false,
+        available: gmail?.available ?? false,
+        calendar_connected: false,
+        mentor_calendar_connected: false,
+        mentor_busy_sync_connected: false,
+      };
     } catch (e) {
       gmailError = errorMessage(e, 'Failed to disconnect.');
       announce(gmailError, 'assertive');
@@ -111,7 +117,10 @@
     } else if (params.get('gmail') === 'connected') {
       googleNotice = { ok: true, text: 'Gmail connected — your ATS mail will show up in the Inbox shortly.' };
     } else if (params.get('calendar') === 'connected') {
-      googleNotice = { ok: true, text: 'Calendar connected — accepted interviews will show up on the Tracking calendar.' };
+      googleNotice = {
+        ok: true,
+        text: 'Calendar connected — accepted interviews will show up on the Tracking calendar.',
+      };
     } else {
       return;
     }
@@ -335,11 +344,11 @@
             </div>
             <p class="text-xs text-muted-foreground">
               {#if hasCalendar}
-                Accepted interviews appear on the Tracking calendar. Mentors get a Meet link on
-                every booking, and their busy time stays out of their slots.
+                Accepted interviews appear on the Tracking calendar. Mentors get a Meet link on every booking, and their
+                busy time stays out of their slots.
               {:else}
-                Show accepted interviews on the Tracking calendar. For mentors: a Meet link on
-                every booking, and your busy time kept out of your slots.
+                Show accepted interviews on the Tracking calendar. For mentors: a Meet link on every booking, and your
+                busy time kept out of your slots.
               {/if}
             </p>
           </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import type { Snippet } from 'svelte';
   import { Calendar, Columns3, Flame, List, Workflow } from '@lucide/svelte';
   import { page } from '$app/state';
@@ -26,8 +27,8 @@
   // view says so on the page rather than leaving it to be discovered.
   //
   // `/my/activity` is a different section entirely (saved jobs, history, matches,
-  // hidden) and keeps that name; the two are told apart by their place in the
-  // navigation, the way every other repeated label in the account shell is.
+  // hidden) and keeps that name, so this tab is "Streak": two places in one shell
+  // both called Activity read as a duplicate.
   //
   // The strip is the same underline `TabStrip` every other account section navigates
   // with, icons included.
@@ -49,8 +50,8 @@
   <title>{s.headTitle}</title>
 </svelte:head>
 
-<div class="flex flex-col gap-4">
-  <h1 class="text-2xl font-semibold tracking-tight max-lg:sr-only">{s.title}</h1>
+<div class="flex flex-col gap-4 lg:gap-6">
+  <AccountPageHeading>{s.title}</AccountPageHeading>
 
   <TabStrip {tabs} {active} label={s.tabStripLabel} panelId={PANEL_ID} />
 

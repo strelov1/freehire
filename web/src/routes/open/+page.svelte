@@ -8,9 +8,18 @@
   import { OPEN_FAQ } from '#lib/openFaq.js';
   import { breadcrumbJsonLd, datasetJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
   import { SENIORITY_LABELS, WORK_MODE_LABELS } from '#lib/labels.js';
+  import type { EngagementStats } from '#lib/types.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
+
+  const catalogSize = $derived(data.catalogHistory.map((p) => ({ date: p.date, total: p.open_jobs })));
+  // Reconstructed days are only ever written before the first measured day
+  // (RecordReconstructedCatalogSize), so they are the series' leading run.
+  const estimatedDays = $derived.by(() => {
+    const i = data.catalogHistory.findIndex((p) => !p.reconstructed);
+    return i === -1 ? data.catalogHistory.length : i;
+  });
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/open`);
@@ -31,7 +40,7 @@
         { name: 'freehire', url: `${origin}/` },
         { name: 'Open', url: canonical },
       ]),
-    ])
+    ]),
   );
 
   const nf = new Intl.NumberFormat('en');
@@ -39,8 +48,7 @@
   // A null fallback means "omit this stat entirely". This is the transparency page: a
   // figure it cannot source should disappear from the strip rather than fall back to a
   // number baked in at build time, which is exactly the habit this page exists to break.
-  const fmt = <F extends string | null>(n: number | null, fallback: F) =>
-    n == null ? fallback : compactNf.format(n);
+  const fmt = <F extends string | null>(n: number | null, fallback: F) => (n == null ? fallback : compactNf.format(n));
 
   // "2026-09-04" → "since Sep 4, 2026", for the one figure that is not all-time.
   //
@@ -75,8 +83,7 @@
   // labels.ts already names — reading it here is what stops this page printing
   // "C level" and "Onsite" while the rest of the app prints "C-level" and "On-site".
   const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
-  const labelled = (map: Record<string, string>) => (code: string) =>
-    map[code] ?? sentenceCase(code);
+  const labelled = (map: Record<string, string>) => (code: string) => map[code] ?? sentenceCase(code);
 
   type Bar = { label: string; count: number };
   function top(facet: Record<string, number> | undefined, n: number, label: (k: string) => string): Bar[] {
@@ -97,9 +104,7 @@
   // daily rollup's first run), so `facets` is truthy even when there's nothing to
   // show. Gate the section on actual values so a not-yet-populated snapshot — or a
   // failed load — falls back to the "unavailable" message instead of empty headings.
-  const hasFacets = $derived(
-    countries.length > 0 || skills.length > 0 || seniority.length > 0 || workMode.length > 0,
-  );
+  const hasFacets = $derived(countries.length > 0 || skills.length > 0 || seniority.length > 0 || workMode.length > 0);
 
   // Remote share across the resolved work-mode buckets.
   const remoteShare = $derived.by(() => {
@@ -168,8 +173,7 @@
   // compact form at all, so the row would round some numbers and not others at a
   // threshold nobody can see. Compact notation also BOUNDS the width for good ("1.2B"
   // is four characters), which is what lets the figures keep the larger type below.
-  const engagement = $derived.by(() => {
-    const e = data.engagement;
+  const engagementCells = (e: EngagementStats | null) => {
     if (!e) return null;
     return [
       {
@@ -185,7 +189,7 @@
       { value: nf.format(e.alert_subscribers), label: 'people with job alerts on' },
       { value: nf.format(e.inboxes_connected), label: 'inboxes connected' },
     ];
-  });
+  };
 </script>
 
 {#snippet distributionBars(items: Bar[])}
@@ -207,20 +211,13 @@
 
 {#snippet sourceLink(href: string, label: string)}
   <!-- eslint-disable svelte/no-navigation-without-resolve -- renders a caller-provided href (JSON API paths on /open), not an internal route -->
-  <a
-    {href}
-    class="font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-  ><!-- eslint-enable svelte/no-navigation-without-resolve -->
+  <a {href} class="font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+    ><!-- eslint-enable svelte/no-navigation-without-resolve -->
     {label} ↗
   </a>
 {/snippet}
 
-<Seo
-  title="Open — freehire's numbers, live"
-  {description}
-  {canonical}
-  image={`${origin}/api/v1/og/open.png`}
-/>
+<Seo title="Open — freehire's numbers, live" {description} {canonical} image={`${origin}/api/v1/og/open.png`} />
 
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
@@ -230,18 +227,17 @@
 <div class="mx-auto w-full max-w-4xl px-4 py-10 sm:py-14">
   <!-- Intro -->
   <header class="dot-grid -mx-4 mb-12 px-4 pb-8 pt-4">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// open startup</p>
+    <p class="font-mono text-xs text-muted-foreground">// open startup</p>
     <h1 class="mt-4 text-4xl font-semibold tracking-tighter sm:text-5xl">All our numbers, live.</h1>
     <p class="mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-      freehire is an open, free search engine for jobs — so our metrics are open too. Every figure
-      below is pulled live from the same public API anyone (or any AI agent) can query. No dashboards
-      behind a login, no vanity rounding.
+      freehire is an open, free search engine for jobs — so our metrics are open too. Every figure below is pulled live
+      from the same public API anyone (or any AI agent) can query. No dashboards behind a login, no vanity rounding.
     </p>
   </header>
 
   <!-- A. Catalogue scale -->
   <section class="mb-14">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// the catalogue</p>
+    <p class="font-mono text-xs text-muted-foreground">// the catalogue</p>
     <!-- Wrapping flex, not a fixed grid: the strip holds five figures and drops any the
          snapshot could not measure, so a fixed column count leaves a hole in the last row
          — and with the separators drawn by the container's own colour showing through a
@@ -254,7 +250,7 @@
           <!-- A two-line label must not push its figure down: the tile is a column and the
                figure is pinned to its bottom, so every figure in a row shares one baseline. -->
           <div class="flex min-w-36 flex-1 flex-col border-b border-r border-border p-5 sm:p-6">
-            <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">{s.label}</dt>
+            <dt class="font-mono text-xs text-balance text-muted-foreground">{s.label}</dt>
             <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
               {#if s.href}
                 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- links to the JSON API endpoint, not a SvelteKit route -->
@@ -272,7 +268,7 @@
   <!-- B. Catalogue movement -->
   <section class="mb-14">
     <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// daily movement</p>
+      <p class="font-mono text-xs text-muted-foreground">// daily movement</p>
       {@render sourceLink('/api/v1/stats/jobs-activity', '/stats/jobs-activity')}
     </div>
     <h2 class="mt-3 text-xl font-semibold tracking-tight">Jobs added vs. removed</h2>
@@ -282,10 +278,33 @@
     <ActivityBars points={data.activity} />
   </section>
 
+  <!-- C. Catalogue size -->
+  {#if catalogSize.length > 0}
+    <section class="mb-14">
+      <div class="flex items-baseline justify-between">
+        <p class="font-mono text-xs text-muted-foreground">// catalogue size</p>
+        {@render sourceLink('/api/v1/stats/catalog-history', '/stats/catalog-history')}
+      </div>
+      <h2 class="mt-3 text-xl font-semibold tracking-tight">Open postings over time</h2>
+      <p class="mb-6 mt-1 text-sm text-muted-foreground">
+        How many postings you could browse at the end of each day.
+        {#if estimatedDays > 0}
+          The dashed part is reconstructed from today's records, not measured on the day.
+        {/if}
+      </p>
+      <GrowthArea
+        points={catalogSize}
+        estimated={estimatedDays}
+        label="Open postings in the catalogue over time"
+        empty="No figures yet."
+      />
+    </section>
+  {/if}
+
   <!-- F. Member growth -->
   <section class="mb-14">
     <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// members</p>
+      <p class="font-mono text-xs text-muted-foreground">// members</p>
       {@render sourceLink('/api/v1/stats/user-growth', '/stats/user-growth')}
     </div>
     <h2 class="mt-3 text-xl font-semibold tracking-tight">
@@ -294,7 +313,7 @@
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
       Cumulative registered members over time. Early days — and that's the point of showing it.
     </p>
-    <GrowthArea points={data.growth} />
+    <GrowthArea points={data.growth} label="Cumulative members over time" empty="No members yet." />
     <h3 class="mt-8 text-base font-semibold tracking-tight">New members per day</h3>
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
       Same series, not cumulative — how many people signed up on each day.
@@ -305,45 +324,50 @@
   <!-- Engagement -->
   <section class="mb-14">
     <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// engagement</p>
+      <p class="font-mono text-xs text-muted-foreground">// engagement</p>
       {@render sourceLink('/api/v1/stats/engagement', '/stats/engagement')}
     </div>
     <h2 class="mt-3 text-xl font-semibold tracking-tight">What people do here</h2>
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
-      Job pages opened by every visitor, signed in or not, and bot-filtered — counted only from the
-      day we started filtering, which is why that one carries a date. Then the signed-in interactions
-      on top, all-time: postings tracked, CVs written and tailored to a vacancy, people who turned
-      on job alerts, and inboxes wired up for application mail.
+      Job pages opened by every visitor, signed in or not, and bot-filtered — counted only from the day we started
+      filtering, which is why that one carries a date. Then the signed-in interactions on top, all-time: postings
+      tracked, CVs written and tailored to a vacancy, people who turned on job alerts, and inboxes wired up for
+      application mail.
     </p>
-    {#if engagement}
-      <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
-        {#each engagement as e (e.label)}
-          <div class="flex flex-col bg-background p-5 sm:p-6">
-            <!-- The window rides in the LABEL, above the figure, not under it: the
+    {#await data.engagement}
+      <p class="text-sm text-muted-foreground">Loading engagement figures…</p>
+    {:then stats}
+      {@const engagement = engagementCells(stats)}
+      {#if engagement}
+        <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
+          {#each engagement as e (e.label)}
+            <div class="flex flex-col bg-background p-5 sm:p-6">
+              <!-- The window rides in the LABEL, above the figure, not under it: the
                  numbers are bottom-aligned across the row by `mt-auto`, so a caption
                  below one of them would lift that cell's number out of line with its
                  seven neighbours. -->
-            <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">
-              {e.label}{#if e.note}<span class="block font-normal normal-case">{e.note}</span>{/if}
-            </dt>
-            <!-- This type size is safe only because the view count is rendered compactly:
+              <dt class="font-mono text-xs text-balance text-muted-foreground">
+                {e.label}{#if e.note}<span class="block font-normal normal-case">{e.note}</span>{/if}
+              </dt>
+              <!-- This type size is safe only because the view count is rendered compactly:
                  spelled out, its seven digits overflowed a 1/4-width cell into the
                  neighbour, and no font size fits a figure that keeps growing. Compact
                  notation is what bounds it ("1.2B" is four characters), so a figure that
                  goes exact again has to come back down to text-2xl/sm:text-3xl. -->
-            <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
-          </div>
-        {/each}
-      </dl>
-    {:else}
-      <p class="text-sm text-muted-foreground">Engagement data is unavailable right now.</p>
-    {/if}
+              <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
+            </div>
+          {/each}
+        </dl>
+      {:else}
+        <p class="text-sm text-muted-foreground">Engagement data is unavailable right now.</p>
+      {/if}
+    {/await}
   </section>
 
   <!-- C. What's inside -->
   <section class="mb-14">
     <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// what's inside</p>
+      <p class="font-mono text-xs text-muted-foreground">// what's inside</p>
       {@render sourceLink('/api/v1/stats/facets', '/stats/facets')}
     </div>
     {#if hasFacets}
@@ -362,7 +386,9 @@
         </div>
         <div>
           <h3 class="mb-4 text-sm font-semibold">
-            Work mode{#if remoteShare != null}<span class="ml-2 font-normal text-muted-foreground">{remoteShare}% remote</span>{/if}
+            Work mode{#if remoteShare != null}<span class="ml-2 font-normal text-muted-foreground"
+                >{remoteShare}% remote</span
+              >{/if}
           </h3>
           {@render distributionBars(workMode)}
         </div>
@@ -375,7 +401,7 @@
   <!-- D. Open source -->
   <section class="mb-6">
     <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// open source</p>
+      <p class="font-mono text-xs text-muted-foreground">// open source</p>
       {@render sourceLink('https://github.com/strelov1/freehire', 'github.com/strelov1/freehire')}
     </div>
     <div class="mt-6 rounded-xl border border-border p-6 sm:p-8">
@@ -383,11 +409,11 @@
         <div class="flex flex-wrap gap-x-12 gap-y-6">
           <div>
             <div class="text-3xl font-semibold tabular-nums">{nf.format(gh.stars)}</div>
-            <div class="font-mono text-xs uppercase tracking-wide text-muted-foreground">stars</div>
+            <div class="font-mono text-xs text-muted-foreground">stars</div>
           </div>
           <div>
             <div class="text-3xl font-semibold tabular-nums">{nf.format(gh.forks)}</div>
-            <div class="font-mono text-xs uppercase tracking-wide text-muted-foreground">forks</div>
+            <div class="font-mono text-xs text-muted-foreground">forks</div>
           </div>
           {#if gh.contributors != null}
             <!-- The one figure here that is about people rather than the repository, so
@@ -398,20 +424,19 @@
               <div class="text-3xl font-semibold tabular-nums group-hover:underline">
                 {nf.format(gh.contributors)}
               </div>
-              <div class="font-mono text-xs uppercase tracking-wide text-muted-foreground">contributors</div>
+              <div class="font-mono text-xs text-muted-foreground">contributors</div>
             </a>
           {/if}
           {#if gh.license}
             <div>
               <div class="text-3xl font-semibold">{gh.license}</div>
-              <div class="font-mono text-xs uppercase tracking-wide text-muted-foreground">license</div>
+              <div class="font-mono text-xs text-muted-foreground">license</div>
             </div>
           {/if}
         </div>
       {/if}
       <p class="mt-6 max-w-xl text-sm leading-relaxed text-muted-foreground">
-        The whole pipeline is open source. Missing a job source you use? Adding it is usually one
-        small adapter — <a
+        The whole pipeline is open source. Missing a job source you use? Adding it is usually one small adapter — <a
           href="https://github.com/strelov1/freehire"
           class="font-medium text-foreground underline-offset-4 hover:underline">a PR is very welcome</a
         >.
@@ -423,7 +448,7 @@
        only honest while this section renders. Kept last so the numbers stay the
        page's opening subject. -->
   <section class="mt-14">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// about these numbers</p>
+    <p class="font-mono text-xs text-muted-foreground">// about these numbers</p>
     <dl class="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each OPEN_FAQ as item (item.question)}
         <div class="bg-background p-5 sm:p-6">

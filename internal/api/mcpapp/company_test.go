@@ -27,7 +27,7 @@ func TestACompanySearchResultCarriesItsPageAndItsOpenCount(t *testing.T) {
 	}
 }
 
-func TestACompanysHomeCountryIsPublishedUppercased(t *testing.T) {
+func TestACompanyHomeCountryIsPublishedUppercased(t *testing.T) {
 	// Every geography facet is stored lowercase here while the published codes are ISO
 	// 3166-1 alpha-2 — the same trap the OJCP surface documents for a posting's country.
 	got := NewProjector(testOrigin).CompanyDetail(db.Company{

@@ -268,9 +268,7 @@ func TestLivenessExpiredSkipsAPostingTheCrawlListedSinceTheSelect(t *testing.T) 
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE jobs SET last_seen_at = now() - interval '5 days' WHERE id = $1`, job.ID); err != nil {
-		t.Fatalf("age last_seen_at: %v", err)
-	}
+	ageJob(t, pool, job.ID, 5*24*time.Hour)
 	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-72 * time.Hour), Valid: true}
 	candidates, err := q.SelectScraplingLivenessCandidates(ctx, SelectScraplingLivenessCandidatesParams{
 		Source: "wellfound", Cutoff: cutoff, MaxRows: 10,
@@ -304,9 +302,7 @@ func TestLivenessExpiredSkipsAPostingTheCrawlListedSinceTheSelect(t *testing.T) 
 	}
 
 	// Still stale: the same verdict closes it.
-	if _, err := pool.Exec(ctx, `UPDATE jobs SET last_seen_at = now() - interval '5 days' WHERE id = $1`, job.ID); err != nil {
-		t.Fatalf("age last_seen_at: %v", err)
-	}
+	ageJob(t, pool, job.ID, 5*24*time.Hour)
 	res, err := q.MarkLivenessExpired(ctx, MarkLivenessExpiredParams{ID: job.ID, Threshold: 1, SeenBefore: cutoff})
 	if err != nil || !res.ClosedAt.Valid {
 		t.Fatalf("MarkLivenessExpired on a stale posting = %+v, %v; want closed", res, err)

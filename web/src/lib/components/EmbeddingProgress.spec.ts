@@ -86,8 +86,6 @@ describe('EmbeddingProgress', () => {
     render(EmbeddingProgress, { initial: measured, streamUrl: '/stream' });
     const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
     expect(links).toContain('https://github.com/strelov1/freehire-volunteer-embed');
-    expect(links).toContain(
-      'https://github.com/strelov1/freehire-volunteer-embed/blob/main/HOW_TO_RUN_THE_CLIENT.md',
-    );
+    expect(links).toContain('https://github.com/strelov1/freehire-volunteer-embed/blob/main/HOW_TO_RUN_THE_CLIENT.md');
   });
 });

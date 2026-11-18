@@ -9,14 +9,13 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/getsentry/sentry-go"
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/tmc/langchaingo/llms"
 
@@ -89,9 +88,7 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 		return s
 	}
 
-	// mws are mounted before the route so a test can install the sentryfiber middleware
-	// the server runs in production; the existing subtests pass none and are unaffected.
-	appFor := func(store *resume.Store, an *matchanalysis.Analyzer, mws ...fiber.Handler) *fiber.App {
+	appFor := func(store *resume.Store, an *matchanalysis.Analyzer) *fiber.App {
 		h := &matchHandlers{
 			queries:     queries,
 			userProfile: userprofile.New(ownedProfile()),
@@ -103,9 +100,6 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 				plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing().WithProCeiling(plan.FeatureFit, fitProDailyForTests)), an),
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		for _, mw := range mws {
-			app.Use(mw)
-		}
 		app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 		return app
 	}
@@ -115,6 +109,9 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/stream-job/fit/stream", nil)
 		if tok != "" {
 			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tok})
+			// The shape the SPA's EventSource produces: a same-origin cookie request stamps
+			// Fetch Metadata, and the route refuses a cookie request without it.
+			req.Header.Set(headerSecFetchSite, secFetchSiteSameOrigin)
 		}
 		resp, err := app.Test(req, 5000)
 		if err != nil {
@@ -166,20 +163,13 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 
 	// The regression this whole change exists for. The handler returns nil long before the
 	// chain runs, so a chain failure never reaches RenderError — the only place the API
-	// reports to Sentry. The reader sees `stream_error` and the access log records the 200
+	// reports a returned error. The reader sees `stream_error` and the access log records the 200
 	// the stream opened with, which is why the outage looked like an empty error inbox.
-	t.Run("a failed chain reaches Sentry", func(t *testing.T) {
-		tr := &recordingTransport{}
-		if err := sentry.Init(sentry.ClientOptions{
-			Dsn:       "https://public@o0.ingest.sentry.io/0",
-			Transport: tr,
-		}); err != nil {
-			t.Fatalf("sentry.Init: %v", err)
-		}
+	t.Run("a failed chain is reported", func(t *testing.T) {
+		tr := recordExceptions(t)
 		app := appFor(
 			storeWithCV(),
 			matchanalysis.NewAnalyzer(llm.NewWithModel(&failingFitModel{})),
-			sentryfiber.New(sentryfiber.Options{Repanic: true, WaitForDelivery: true}),
 		)
 		status, body := get(t, app, token)
 		if status != fiber.StatusOK {
@@ -189,7 +179,7 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 			t.Fatalf("last event = %v, want stream_error", names)
 		}
 		if got := tr.count(); got != 1 {
-			t.Errorf("sentry events = %d, want exactly 1 for a failed chain", got)
+			t.Errorf("reported exceptions = %d, want exactly 1 for a failed chain", got)
 		}
 	})
 
@@ -202,6 +192,122 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 		}
 		if !strings.Contains(body, `"has_cv":false`) {
 			t.Errorf("meta should carry has_cv=false; body=%q", body)
+		}
+	})
+
+	// The security regression this gate exists for, asserted at the side-effect boundary
+	// rather than at the status code: a cross-site top-level navigation (browser stamps
+	// Sec-Fetch-Site: cross-site; the attacker page cannot choose the stamp) carrying the
+	// victim's valid Lax session cookie must not reserve a credit, run the model, or
+	// persist an analysis. The same-origin EventSource shape is the control that proves
+	// the refusal is the gate's doing and not the route being broken.
+	//
+	// Self-contained by a FRESH job: the earlier subtests of this suite have already
+	// analysed stream-job for this user, so their ledger and cache rows exist and a count
+	// against them would assert against somebody else's work.
+	t.Run("cross-site navigation spends nothing", func(t *testing.T) {
+		var csrfJobID int64
+		if err := pool.QueryRow(ctx,
+			`INSERT INTO jobs (source, external_id, url, title, description, company_slug, public_slug, skills, content_hash)
+			 VALUES ('test','csrf-1','http://e.test','Senior Go Engineer','Build backends.','acme','csrf-job', ARRAY['go'], 'h-csrf')
+			 RETURNING id`).Scan(&csrfJobID); err != nil {
+			t.Fatalf("seed job: %v", err)
+		}
+		model := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
+		app := appFor(storeWithCV(), matchanalysis.NewAnalyzer(llm.NewWithModel(model)))
+
+		ask := func(slug, secFetchSite string) int {
+			t.Helper()
+			req := httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/api/v1/jobs/"+slug+"/fit/stream", nil)
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+			if secFetchSite != "" {
+				req.Header.Set(headerSecFetchSite, secFetchSite)
+			}
+			resp, err := app.Test(req, 5000)
+			if err != nil {
+				t.Fatalf("stream: %v", err)
+			}
+			defer resp.Body.Close()
+			// Drained here and returned only as a status: the denial is answered before any
+			// body exists, while the CONTROL (the same-origin call) must be fully read —
+			// the SSE body is produced by a goroutine that runs the chain and writes the
+			// cache/ledger rows, so its side effects land only when the body is consumed.
+			_, _ = io.Copy(io.Discard, resp.Body)
+			return resp.StatusCode
+		}
+		// ledgerCount counts the user's fit rows in usage_ledger (plan.FeatureFit is the
+		// string "match"): the consume a reservation takes and the release a failed run
+		// writes both land there, so "the count did not move" is the shape of "nothing
+		// was reserved, nothing was refunded either".
+		ledgerCount := func() int {
+			t.Helper()
+			var n int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM usage_ledger WHERE user_id=$1 AND feature='match'`, userID).Scan(&n); err != nil {
+				t.Fatalf("read usage_ledger: %v", err)
+			}
+			return n
+		}
+		analysesFor := func(jid int64) int {
+			t.Helper()
+			var n int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_job_analysis WHERE user_id=$1 AND job_id=$2`, userID, jid).Scan(&n); err != nil {
+				t.Fatalf("read user_job_analysis: %v", err)
+			}
+			return n
+		}
+
+		// askBody issues one stream request and drains the SSE body fully, returning it.
+		// The body being readable to its end is what guarantees the writer goroutine has
+		// finished the chain — and therefore that the cache/ledger assertions below observe
+		// settled state rather than a race.
+		askBody := func(slug, tok, secFetchSite string) string {
+			t.Helper()
+			req := httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/api/v1/jobs/"+slug+"/fit/stream", nil)
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tok})
+			req.Header.Set(headerSecFetchSite, secFetchSite)
+			resp, err := app.Test(req, 10000)
+			if err != nil {
+				t.Fatalf("stream: %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != fiber.StatusOK {
+				t.Fatalf("stream status = %d, want 200", resp.StatusCode)
+			}
+			return readSSEBody(t, resp.Body)
+		}
+
+		// The hostile navigation: refused before any body exists, so the status is the
+		// whole answer and the side-effect reads below can follow immediately. The model
+		// counter is the second half of the boundary: zero calls, not merely a refusal
+		// status.
+		before := ledgerCount()
+		if status := ask("csrf-job", secFetchSiteCrossSite); status != fiber.StatusForbidden {
+			t.Fatalf("cross-site stream = %d, want 403", status)
+		}
+		if model.n != 0 {
+			t.Errorf("the refused navigation called the LLM %d times, want 0", model.n)
+		}
+		if n := ledgerCount(); n != before {
+			t.Errorf("usage_ledger rows moved %d -> %d on the refused run, want unchanged — no credit may be reserved (or refunded)", before, n)
+		}
+		if n := analysesFor(csrfJobID); n != 0 {
+			t.Errorf("user_job_analysis rows = %d after the refused run, want 0 — no analysis may be cached", n)
+		}
+
+		// The control: the same route, same cookie, same paid user — stamped the way the
+		// SPA's EventSource is — runs the chain to COMPLETION (its terminal event is the
+		// audited `final`, which only a successful cache write follows) and leaves exactly
+		// one cached analysis and one new ledger row behind. A bare 200 header would not
+		// prove the model finished; the drained body does.
+		controlBody := askBody("csrf-job", token, secFetchSiteSameOrigin)
+		if names := sseEvents(t, controlBody); len(names) == 0 || names[len(names)-1] != "final" {
+			t.Fatalf("same-origin stream last event = %v, want final (the model must complete before the cache is written)", sseEvents(t, controlBody))
+		}
+		if n := analysesFor(csrfJobID); n != 1 {
+			t.Errorf("user_job_analysis rows = %d after the same-origin run, want 1", n)
+		}
+		if n := ledgerCount(); n != before+1 {
+			t.Errorf("usage_ledger rows = %d after the same-origin run, want %d (exactly the control run's own consumption)", n, before+1)
 		}
 	})
 }

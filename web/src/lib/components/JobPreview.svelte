@@ -6,12 +6,7 @@
   // public_slug, which a draft does not have. Facet labels are resolved through the same
   // shared vocabularies the filter bar and the submit form itself use, so a code never
   // renders raw.
-  import {
-    REGION_OPTIONS,
-    WORK_MODE_OPTIONS,
-    SENIORITY_OPTIONS,
-    EMPLOYMENT_TYPE_OPTIONS,
-  } from '#lib/facets.js';
+  import { REGION_OPTIONS, WORK_MODE_OPTIONS, SENIORITY_OPTIONS, EMPLOYMENT_TYPE_OPTIONS } from '#lib/facets.js';
   import { formatSalary } from '#lib/enrichment.js';
   import { companyLogoUrl } from '#lib/logo.js';
   import { EntityLogo } from '#lib/ui/index.js';
@@ -60,12 +55,15 @@
   };
 
   const salary = $derived(
-    formatSalary({
-      salary_min: salaryMin ?? undefined,
-      salary_max: salaryMax ?? undefined,
-      salary_currency: salaryCurrency || undefined,
-      salary_period: salaryPeriod || undefined,
-    }, 'standard'),
+    formatSalary(
+      {
+        salary_min: salaryMin ?? undefined,
+        salary_max: salaryMax ?? undefined,
+        salary_currency: salaryCurrency || undefined,
+        salary_period: salaryPeriod || undefined,
+      },
+      'standard',
+    ),
   );
 
   // Draft facets: label + value pairs for whatever the submitter has filled in so far.

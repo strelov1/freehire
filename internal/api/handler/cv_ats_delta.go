@@ -2,11 +2,13 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
@@ -17,13 +19,6 @@ import (
 // reason, so the workspace renders an absence instead of an error. BaseCVID names which base
 // CV the comparison was against: the baseline is the base CV as it stands NOW, not a snapshot
 // from when the copy was made, and a number whose baseline is anonymous invites misreading.
-type atsDeltaResponse struct {
-	Available bool            `json:"available"`
-	Reason    string          `json:"reason,omitempty"`
-	BaseCVID  string          `json:"base_cv_id,omitempty"`
-	Delta     *atscheck.Delta `json:"delta,omitempty"`
-}
-
 // GetCVATSDelta serves what tailoring did to a CV's ATS readiness: the tailored copy scored
 // against the base CV it came from, with the template, the page margins and the keyword
 // baseline held identical so the difference is the document's content and nothing else.
@@ -32,83 +27,86 @@ type atsDeltaResponse struct {
 // not a tailored copy has no defined baseline and is a 409 rather than a fabricated zero.
 // Recomputed per request and never stored, so it always reflects the current documents,
 // template and scoring rules.
-func (h *cvHandlers) GetCVATSDelta(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) GetCVATSDelta(ctx context.Context, params apigen.GetCVATSDeltaParams) (*apigen.GetCVATSDeltaOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	tailored, err := h.cvStore.Get(c.Context(), id, userID)
+	tailored, err := h.cvStore.Get(ctx, id, userID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
 	// Two different reasons a CV has no comparison, and the caller cannot act on the wrong one.
 	// A pruned vacancy leaves a tailored copy with no job_id, so JobID alone cannot tell them apart.
 	if !tailored.IsTailored {
-		return fiber.NewError(fiber.StatusConflict, "this is a base CV: there is nothing to compare it against")
+		return nil, fiber.NewError(fiber.StatusConflict, "this is a base CV: there is nothing to compare it against")
 	}
 	if tailored.JobID == 0 {
-		return fiber.NewError(fiber.StatusConflict, "the vacancy this CV was tailored for no longer exists")
+		return nil, fiber.NewError(fiber.StatusConflict, "the vacancy this CV was tailored for no longer exists")
 	}
-	base, ok, err := h.cvStore.BaseCV(c.Context(), userID)
+	base, ok, err := h.cvStore.BaseFor(ctx, userID, tailored)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !ok {
-		return fiber.NewError(fiber.StatusConflict, "no base CV to compare against")
+		return nil, fiber.NewError(fiber.StatusConflict, "no base CV to compare against")
 	}
 	tmpl, err := cv.ResolveTemplate(tailored.TemplateID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
-	job, err := h.jobReader.GetJob(c.Context(), tailored.JobID)
+	job, err := h.jobReader.GetJob(ctx, tailored.JobID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Hold everything but the content constant: the base is rendered with the tailored copy's
 	// template, margins, and typography (a copy of the document — the stored base is never
 	// touched), and both sides are scored against the vacancy's own canonical skills.
 	//
-	// Typography is in that list because type size and leading decide how much text lands on a
-	// page, and the score reads the rendered PDF's text layer. Omitting it would hand the
-	// candidate a way to move their own delta by changing a font.
+	// Typography is held too: type size and leading change how much text lands on a page, so a font
+	// change would otherwise move the candidate's own delta.
 	baseDoc := base.Document
 	baseDoc.Margins = tailored.Document.Margins
 	baseDoc.Style = tailored.Document.Style
 
-	baseReport, err := h.scoreRenderedCV(c.Context(), baseDoc, tmpl, job.Skills)
+	baseReport, err := h.scoreRenderedCV(ctx, baseDoc, tmpl, job.Skills)
 	if err != nil {
-		return h.atsDeltaUnavailable(c, err)
+		return h.atsDeltaUnavailable(err)
 	}
-	tailoredReport, err := h.scoreRenderedCV(c.Context(), tailored.Document, tmpl, job.Skills)
+	tailoredReport, err := h.scoreRenderedCV(ctx, tailored.Document, tmpl, job.Skills)
 	if err != nil {
-		return h.atsDeltaUnavailable(c, err)
+		return h.atsDeltaUnavailable(err)
 	}
 
 	delta := atscheck.Compare(baseReport, tailoredReport)
-	return c.JSON(fiber.Map{"data": atsDeltaResponse{
+	rawDelta, err := json.Marshal(delta)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetCVATSDeltaOK{Data: apigen.CvAtsDelta{
 		Available: true,
-		BaseCVID:  base.ID.String(),
-		Delta:     &delta,
-	}})
+		BaseCvID:  apigen.NewOptString(base.ID.String()),
+		Delta:     rawDelta,
+	}}, nil
 }
 
 // atsDeltaUnavailable answers a scoring failure as an absent delta rather than an error: the
 // workspace this read serves must keep loading and editing when the renderer is missing or a
 // compile fails. The reason is a stable short string — the underlying error is logged, not
 // served, so a toolchain detail never reaches the client.
-func (h *cvHandlers) atsDeltaUnavailable(c *fiber.Ctx, err error) error {
+func (h *cvHandlers) atsDeltaUnavailable(err error) (*apigen.GetCVATSDeltaOK, error) {
 	reason := "could not read the rendered CV"
 	if errors.Is(err, errNoRenderer) {
 		reason = "CV rendering is not available"
 	} else {
 		log.Printf("cv ats-delta: %v", err)
 	}
-	return c.JSON(fiber.Map{"data": atsDeltaResponse{Available: false, Reason: reason}})
+	return &apigen.GetCVATSDeltaOK{Data: apigen.CvAtsDelta{Available: false, Reason: apigen.NewOptString(reason)}}, nil
 }
 
 // scoreRenderedCV scores a CV's rendered text layer for ATS readability, against `keywords`

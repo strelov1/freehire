@@ -24,68 +24,61 @@
      that already ran four deep while the right half of the page sat empty. -->
 <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-10">
   <div class="w-full max-w-xl shrink-0">
-  <!-- A real table, not a grid of divs: this is two axes crossed, and a screen reader
+    <!-- A real table, not a grid of divs: this is two axes crossed, and a screen reader
        given nine unrelated cells in source order gets none of that. `scope` is what ties
        "nothing shown" back to "under 2 criteria" and "under 2 people". -->
-  <table
-    class="w-full border-separate border-spacing-0 overflow-hidden rounded-lg border border-border text-sm"
-  >
-    <caption class="sr-only">
-      The ghost level for each combination of the convergence and witness gates
-    </caption>
-    <thead>
-      <tr>
-        <td class="border-b border-border p-3"></td>
-        <th
-          scope="col"
-          class="border-b border-l border-border p-3 text-left text-xs font-normal text-muted-foreground"
-        >
-          under {CONVERGENCE} criteria
-        </th>
-        <th
-          scope="col"
-          class="border-b border-l border-border p-3 text-left text-xs font-normal text-muted-foreground"
-        >
-          {CONVERGENCE}+ criteria fired
-        </th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each [false, true] as witnessed (witnessed)}
+    <table class="w-full border-separate border-spacing-0 overflow-hidden rounded-lg border border-border text-sm">
+      <caption class="sr-only"> The ghost level for each combination of the convergence and witness gates </caption>
+      <thead>
         <tr>
+          <td class="border-b border-border p-3"></td>
           <th
-            scope="row"
-            class={cn(
-              'p-3 text-left text-xs font-normal text-muted-foreground',
-              !witnessed && 'border-b border-border',
-            )}
+            scope="col"
+            class="border-b border-l border-border p-3 text-left text-xs font-normal text-muted-foreground"
           >
-            {witnessed ? `${WITNESS_GATE}+ people` : `under ${WITNESS_GATE} people`}
+            under {CONVERGENCE} criteria
           </th>
-          {#each [false, true] as converged (converged)}
-            {@const cell = must(
-              cells.find((c) => c.converged === converged && c.witnessed === witnessed),
-            )}
-            <td
+          <th
+            scope="col"
+            class="border-b border-l border-border p-3 text-left text-xs font-normal text-muted-foreground"
+          >
+            {CONVERGENCE}+ criteria fired
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each [false, true] as witnessed (witnessed)}
+          <tr>
+            <th
+              scope="row"
               class={cn(
-                'border-l border-border p-3',
-                !witnessed && 'border-b',
-                cell.level === 'likely' && 'text-warning-strong',
-                cell.level === 'none' && 'text-muted-foreground',
+                'p-3 text-left text-xs font-normal text-muted-foreground',
+                !witnessed && 'border-b border-border',
               )}
             >
-              {WORDING[cell.level]}
-            </td>
-          {/each}
-        </tr>
-      {/each}
-    </tbody>
+              {witnessed ? `${WITNESS_GATE}+ people` : `under ${WITNESS_GATE} people`}
+            </th>
+            {#each [false, true] as converged (converged)}
+              {@const cell = must(cells.find((c) => c.converged === converged && c.witnessed === witnessed))}
+              <td
+                class={cn(
+                  'border-l border-border p-3',
+                  !witnessed && 'border-b',
+                  cell.level === 'likely' && 'text-warning-strong',
+                  cell.level === 'none' && 'text-muted-foreground',
+                )}
+              >
+                {WORDING[cell.level]}
+              </td>
+            {/each}
+          </tr>
+        {/each}
+      </tbody>
     </table>
   </div>
 
   <p class="max-w-sm text-sm leading-relaxed text-muted-foreground">
-    The posting itself can only get you into the right-hand column. The bottom row needs
-    something only people who applied can give — which is why no amount of the first kind
-    ever reaches the strongest wording.
+    The posting itself can only get you into the right-hand column. The bottom row needs something only people who
+    applied can give — which is why no amount of the first kind ever reaches the strongest wording.
   </p>
 </div>

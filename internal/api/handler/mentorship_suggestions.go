@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/dict/normalize"
@@ -13,12 +14,9 @@ import (
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 )
 
-// mentorSuggestionResume is the one read a mentor-profile suggestion needs from the
-// résumé store: StructureForSeed, the same identity-plus-body composition cv_seed.go
-// uses to seed a new document from the candidate's CV — owned overrides applied over
-// the current extract, both identity fields (name included) and body fields alike.
-// Structured+CandidateOwned alone would miss identity: ApplyBody only ever touches the
-// five BODY fields, never FullName/Email/Phone/Location/Links.
+// mentorSuggestionResume is the one résumé read a suggestion needs: StructureForSeed, the same
+// identity-plus-body composition cv_seed.go uses. Structured+CandidateOwned alone would miss
+// identity: ApplyBody only touches the five body fields.
 type mentorSuggestionResume interface {
 	StructureForSeed(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
 }
@@ -47,11 +45,9 @@ type mentorSuggestionCompanies interface {
 	CompanyExists(ctx context.Context, slug string) (bool, error)
 }
 
-// mentorProfileSuggestions is a best-effort, per-field starting point for the
-// mentor-profile create form. Every field is independent and omitted (rather than an
-// empty string or slice) when its source has nothing to offer — see the
-// mentor-profile-prefill spec. It reads only the candidate's résumé, user profile,
-// account and experience bank; it never reads the mentor profile itself.
+// mentorProfileSuggestions is a best-effort, per-field prefill for the mentor-profile create
+// form. Each field is omitted (not empty) when its source has nothing; it never reads the
+// mentor profile itself.
 type mentorProfileSuggestions struct {
 	Name        *string  `json:"name,omitempty"`
 	Headline    *string  `json:"headline,omitempty"`
@@ -62,9 +58,8 @@ type mentorProfileSuggestions struct {
 	CompanySlug *string  `json:"company_slug,omitempty"`
 }
 
-// mentorSuggestionsHandlers composes the mentor-profile create form's prefill from four
-// unrelated blocks' own services. It depends on none of their concrete types beyond
-// what it reads, so it needs no database to test.
+// mentorSuggestionsHandlers composes the prefill from four blocks' services and needs no
+// database to test.
 type mentorSuggestionsHandlers struct {
 	resume      mentorSuggestionResume
 	userProfile mentorSuggestionUserProfile
@@ -86,27 +81,31 @@ func newMentorSuggestionsHandlers(
 	}
 }
 
-func (h *mentorSuggestionsHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/me/mentorship/profile/suggestions", mw.key, h.GetSuggestions)
+func (h *mentorSuggestionsHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/me/mentorship/profile/suggestions", mw.key, contract)
 }
 
-// GetSuggestions answers with the caller's best-effort mentor-profile prefill. It never
-// fails on missing or unreadable source data — every field simply degrades to absent —
-// so the only failure this route can report is an unauthenticated caller.
-func (h *mentorSuggestionsHandlers) GetSuggestions(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// GetMentorProfileSuggestions answers with the caller's prefill. Missing or unreadable
+// sources degrade to absent fields; only an unauthenticated caller fails.
+func (h *mentorSuggestionsHandlers) GetMentorProfileSuggestions(ctx context.Context) (*apigen.GetMentorProfileSuggestionsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": h.suggest(c.Context(), userID)})
+	in := h.suggest(ctx, userID)
+	out := apigen.MentorProfileSuggestions{Languages: in.Languages, Topics: in.Topics}
+	optNil(in.Name, out.Name.SetTo)
+	optNil(in.Headline, out.Headline.SetTo)
+	optNil(in.Bio, out.Bio.SetTo)
+	optNil(in.Timezone, out.Timezone.SetTo)
+	optNil(in.CompanySlug, out.CompanySlug.SetTo)
+	return &apigen.GetMentorProfileSuggestionsOK{Data: out}, nil
 }
 
 func (h *mentorSuggestionsHandlers) suggest(ctx context.Context, userID int64) mentorProfileSuggestions {
 	var out mentorProfileSuggestions
 
-	// Name, headline, bio and languages: StructureForSeed's identity-plus-body
-	// composition — the current résumé extract, overlaid by whatever the candidate
-	// owns, identity fields included.
+	// Name, headline, bio and languages: StructureForSeed's identity-plus-body composition.
 	var structured resumeextract.Structured
 	if stored, ok, err := h.resume.StructureForSeed(ctx, userID); err == nil && ok {
 		structured = stored
@@ -139,10 +138,8 @@ func (h *mentorSuggestionsHandlers) suggest(ctx context.Context, userID int64) m
 	return out
 }
 
-// currentEmployerSlug resolves the candidate's current job in the experience bank to a
-// company slug, but only on an EXACT catalog match — the same normalization the
-// mentor-profile create flow's company_slug foreign key would accept. An employer that
-// does not resolve is not guessed at further; it is simply absent from the suggestion.
+// currentEmployerSlug resolves the current job to a company slug only on an EXACT catalog
+// match (the normalization the company_slug foreign key accepts); otherwise it is absent.
 func (h *mentorSuggestionsHandlers) currentEmployerSlug(ctx context.Context, userID int64) string {
 	employments, err := h.experience.ListEmployments(ctx, userID)
 	if err != nil {

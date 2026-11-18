@@ -1,0 +1,267 @@
+name: Codegen
+
+# The checks that committed generated code (sqlc, the TS contracts, the HTTP contract)
+# matches its source, and the migration guard. Split out of ci.yml for size; none of them
+# feeds the `backend` or `web` gates there.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codegen-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_tasks: ${{ steps.scope.outputs.backend_tasks }}
+      web: ${{ steps.scope.outputs.web }}
+      backend: ${{ steps.scope.outputs.backend }}
+      scrapling_fetch: ${{ steps.scope.outputs.scrapling_fetch }}
+      extension: ${{ steps.scope.outputs.extension }}
+      docs: ${{ steps.scope.outputs.docs }}
+      migrations: ${{ steps.scope.outputs.migrations }}
+      contracts: ${{ steps.scope.outputs.contracts }}
+      sqlc: ${{ steps.scope.outputs.sqlc }}
+      design_system: ${{ steps.scope.outputs.design_system }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test CI scripts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
+      - name: Select required checks
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 .github/scripts/ci_changes.py --base "$BASE_SHA" --head "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+  # internal/platform/db is generated and committed. Nothing compared the two until now,
+  # so a query edited without `make sqlc` shipped the old Go and every job stayed green —
+  # the same class of gap the design-system `check:dist` step exists for.
+  #
+  # `make sqlc` rather than a pinned action, because the Makefile already holds the
+  # version (SQLC_VERSION) and it is the one developers run. Two pins would be two
+  # answers to the same question, and the drift between them would look exactly like
+  # stale generated code.
+  sqlc:
+    needs: changes
+    if: needs.changes.outputs.sqlc == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Regenerate
+        run: make sqlc
+
+      # The bare `git status --porcelain` is correct HERE and would be wrong in the
+      # pre-commit hook: a fresh clone has an empty index, so "differs from HEAD" and
+      # "is unstaged" have the same answer. See lefthook.yml for the other half.
+      - name: Assert the generated code matches the queries
+        run: |
+          if [ -n "$(git status --porcelain -- internal/platform/db)" ]; then
+            git status --porcelain -- internal/platform/db
+            git --no-pager diff -- internal/platform/db
+            echo
+            echo 'internal/platform/db is stale. Run "make sqlc" and commit the result.'
+            exit 1
+          fi
+          echo 'Generated code matches internal/platform/db/queries.'
+
+  # web/src/lib/generated is the same shape of gap the job above closes, and it was
+  # already open: contracts.ts had drifted 114 skill labels behind the dictionary,
+  # because a skill added to internal/dict never made anyone re-run the generator.
+  #
+  # That drift was invisible and nearly harmless — the SPA title-cases a label it cannot
+  # find, so a stale file rendered the same string anyway. skillDescriptions.ts has no
+  # such fallback: a description the file has not caught up with means no tooltip and no
+  # glossary page, which reads as the feature being broken rather than the file being
+  # old. One more generated file with a silent failure mode is what makes this a job.
+  #
+  # `go run ./cmd/gen-contracts` needs no toolchain of its own — tygo is a library here,
+  # not a binary — so unlike sqlc there is no version to pin in two places.
+  contracts:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Regenerate
+        run: go run ./cmd/gen-contracts
+
+      - name: Assert the generated contracts match the Go vocabularies
+        run: |
+          if [ -n "$(git status --porcelain -- web/src/lib/generated)" ]; then
+            git status --porcelain -- web/src/lib/generated
+            git --no-pager diff -- web/src/lib/generated
+            echo
+            echo 'web/src/lib/generated is stale. Run "make gen-contracts" and commit the result.'
+            exit 1
+          fi
+          echo 'Generated contracts match the Go vocabularies.'
+
+  # The HTTP contract: typespec/ compiles to openapi/api.openapi.json, and ogen turns
+  # that into internal/api/apigen, which the handlers implement (and openapi-typescript
+  # into web/src/lib/generated/api.ts, the types the web client reads). The outputs are
+  # committed, so a .tsp edit without `make api-contract` would ship the old Go and stay
+  # green; this regenerates both and fails on any difference.
+  api-contract:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Regenerate
+        run: make api-contract
+
+      - name: Assert the generated contract matches typespec/
+        run: |
+          if [ -n "$(git status --porcelain -- openapi internal/api/apigen web/src/lib/generated/api.ts)" ]; then
+            git status --porcelain -- openapi internal/api/apigen web/src/lib/generated/api.ts
+            git --no-pager diff -- openapi internal/api/apigen web/src/lib/generated/api.ts
+            echo
+            echo 'openapi/, internal/api/apigen or web/src/lib/generated/api.ts is stale. Run "make api-contract" and commit the result.'
+            exit 1
+          fi
+          echo 'Generated contract matches typespec/.'
+
+  # Fails when this pull request edits, deletes or renames a migration main already holds
+  # (escape: a `Migration-Edit:` commit trailer), and lints the migrations it ADDS.
+  #
+  # The lint covers only the added files. The applied history carries 1322
+  # findings and is never going to be fixed — "never edit an applied migration" is the
+  # rule this repository runs on, and rewriting one is a worse hazard than any finding.
+  # A migration file genuinely never changes after it lands, which makes this a far
+  # cleaner ratchet than the line-based one the Go lint uses: no baseline file to drift.
+  #
+  # Read .squawk.toml for why the invocation is split in two passes.
+  migrations:
+    needs: changes
+    if: needs.changes.outputs.migrations == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The script asks git which migrations are new since the merge base, so the
+          # base commit has to be reachable. A shallow clone would make every migration
+          # look either new or absent, and neither is a useful answer — which is why the
+          # script fails on an unresolvable base rather than reporting an empty list.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The step prints how many files it examined. On a branch with no migration that
+      # is zero, which is the honest answer — and visible, rather than a green tick over
+      # a check that found nothing to do.
+      - name: Lint new migrations
+        run: pnpm check:sql
+
+      # The allowlist is the duplicate prefixes already applied, each with its file
+      # count. A new file that reuses a number — including one more 0144 — fails here.
+      - name: Check migration numbers
+        run: |
+          node --test scripts/check-migration-numbers.test.mjs
+          node scripts/check-gitignore.mjs --self-test
+          node scripts/check-gitignore.mjs
+          pnpm check:migration-numbers
+
+  # The public API's contract against main: read scripts/check-openapi-breaking.sh for
+  # what counts as breaking and the `API-Break:` trailer that lets a deliberate break
+  # through. Its own job because it needs the whole history (the merge base) and the
+  # jobs beside it are shallow on purpose.
+  api-breaking:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Tool archives come from a cache: see "Cache tool archives" in ci.yml's backend-jobs for why.
+      - name: Cache tool archives
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ci-tools
+          key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/codegen.yml') }}
+          restore-keys: ci-tools-${{ github.job }}-
+
+      # Pinned by a digest written here, the same argument as agnix in `docs`.
+      - name: Install oasdiff
+        env:
+          OASDIFF_VERSION: 1.34.1
+          OASDIFF_SHA256: 75775f65b0adebd26a8e013af51a799342dfdc6262d89efa9e3b7bdf89657d90
+        run: |
+          f=~/.cache/ci-tools/oasdiff-${OASDIFF_VERSION}.tar.gz
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs -o "$f" \
+            "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
+          echo "${OASDIFF_SHA256}  $f" | sha256sum -c -
+          tar -xzf "$f" -C /tmp oasdiff
+
+      - name: Check for breaking API changes
+        env:
+          OASDIFF: /tmp/oasdiff
+        run: scripts/check-openapi-breaking.sh

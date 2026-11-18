@@ -2,14 +2,16 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-  <img src="docs/assets/logo-light.svg" alt="freehire" width="84" height="84">
+  <img src="docs/assets/logo-light.svg" alt="freehire.me" width="84" height="84">
 </picture>
 
-# freehire
+# [**freehire.me**](https://freehire.me/?utm_source=github&utm_medium=readme&utm_campaign=hero)
 
-### Every IT job, straight from the source.
+<!-- The tagline is a deliberate subtitle under the title, so it skips a heading level. -->
+<!-- rumdl-disable-next-line MD001 -->
+### Every tech job, straight from the source — for you and your agent.
 
-**4.7M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
+**5M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
 [**Try it live →**](https://freehire.me/?utm_source=github&utm_medium=readme&utm_campaign=hero) · [Features](docs/features.md) · [Architecture](docs/architecture.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
@@ -38,9 +40,13 @@
 </a>
 <a href="https://trendshift.io/repositories/55060?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-55060" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/55060" alt="strelov1%2Ffreehire | Trendshift" width="250" height="55"/></a>
 
+<!-- Datacircle's own badge, hotlinked so it always shows the current rank; scaled down
+     from 240x162 so it does not tower over the two badges beside it. -->
+<a href="https://datacircle.dev/best-full-job-posting-api"><img src="https://datacircle.dev/badge/best-full-job-posting-api/freehire.svg" alt="Datacircle's ranking of the best full job posting API providers" width="160" height="108"></a>
+
 <br>
 
-<img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 4.7M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
+<img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 4.9M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
 
 </div>
 
@@ -62,9 +68,9 @@
   workspace on top of the catalogue — see [Beyond the catalogue](#beyond-the-catalogue).
   Use the hosted site, run your own, or build on top.
 
-Aggregating **4.7M+ unique live postings** from **700,000+ companies** across
+Aggregating **4.9M+ unique live postings** from **700,000+ companies** across
 **168 ATS platforms**, a long tail of aggregators and direct feeds, and **97
-Telegram channels** — **421 sources** in all, see [Sources](#sources) for the full
+Telegram channels** — **437 sources** in all, see [Sources](#sources) for the full
 breakdown. Reposts of one job across boards are collapsed, so every figure here is
 what [freehire.me/jobs](https://freehire.me/jobs?utm_source=github&utm_medium=readme&utm_campaign=stats) actually shows.
 
@@ -131,9 +137,10 @@ curl localhost:8080/api/v1/jobs
 
 Migrations are applied automatically on first Postgres volume init
 (the `migrations/` folder is mounted into `/docker-entrypoint-initdb.d`).
-Changing a migration does not re-apply to an existing volume — recreate it with
-`docker compose down -v && make up`, or apply pending files manually with
-`make migrate`.
+Changing a migration does not re-apply to an existing volume. `make migrate`
+upgrades databases with recorded migration history. For older initdb volumes
+without that history, follow the transition below before upgrading. Recreating
+the volume with `docker compose down -v && make up` deletes its data.
 
 If port 8080 is already taken, pick another host port:
 
@@ -144,13 +151,38 @@ HIRE_HOST_PORT=8090 make up
 ## Local development
 
 ```bash
-docker compose up -d db   # database only
-make run                  # server on host, reads DATABASE_URL
+mise run db:up           # shared Postgres, create and migrate this checkout
+mise exec -- make run    # server on host, reads checkout DATABASE_URL
 ```
 
 Copy `.env.example` to `.env` and adjust as needed. `JWT_SECRET` is required for
 the server to start; OAuth and LLM credentials are optional (the features they
 gate stay disabled when unset).
+
+Compose uses the shared `hire` project: `make up` starts the full stack and
+`make down` removes its containers for every checkout. For checkout-specific
+work, use `mise run db:up`, then `mise exec -- make run`, `mise exec -- make psql`
+or `mise exec -- make migrate`. These commands share the checkout environment
+from `scripts/dev-env.sh`; migrations already recorded are skipped.
+
+For an older Compose database without migration history, `make migrate` refuses
+to run: the migration runner would otherwise mark every current file as applied,
+including pending changes. First identify the Git commit whose migration files
+were last applied to that database. With `DATABASE_URL` targeting that database,
+baseline only that known set, then apply the current files:
+
+```bash
+applied_commit=<commit-whose-migrations-are-already-applied>
+baseline_dir=$(mktemp -d)
+git archive "$applied_commit" migrations | tar -x -C "$baseline_dir"
+go run ./cmd/migrate -baseline -dir "$baseline_dir/migrations"
+rm -rf "$baseline_dir"
+make migrate
+```
+
+Do not guess the applied commit or baseline the current directory. If the
+applied set is unknown, recover it from the database's setup records or recreate
+a disposable development database after preserving any data you need.
 
 ## Commands
 
@@ -158,9 +190,9 @@ gate stay disabled when unset).
 make help      # list all commands
 make sqlc      # regenerate code from SQL (via Docker, no local sqlc needed)
 make tidy      # go mod tidy
-make psql      # psql inside the DB container
+make psql      # local psql at DATABASE_URL
 make reindex   # rebuild the Meilisearch index from Postgres
-make migrate   # apply migrations manually to an existing DB volume
+make migrate   # apply pending versioned migrations at DATABASE_URL
 ```
 
 ## Workers

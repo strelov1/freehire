@@ -46,7 +46,7 @@ func TestSignedInDoor_RealCredentials(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	mountSignedInDoor(app, auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}))
 	app.Get("/api/v1/jobs/search", func(c *fiber.Ctx) error { return c.SendString("results") })
-	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.ListAPIKeys)
+	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 
 	get := func(path string, set func(*http.Request)) (int, string) {
 		req := httptest.NewRequestWithContext(ctx, http.MethodGet, path, nil)

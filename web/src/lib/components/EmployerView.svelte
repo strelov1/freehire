@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { Building2, Mail, ShieldAlert } from '@lucide/svelte';
   import { api, ApiError } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -12,7 +13,7 @@
 
   // Which pane of the claimed company's dashboard this route shows; an account that has
   // not claimed a company sees the claim flow on either.
-  let { section }: { section: 'profile' | 'vacancies' } = $props();
+  let { section }: { section: 'profile' | 'vacancies' | 'applications' } = $props();
 
   const s = $derived(t(messages, locale()));
 
@@ -107,6 +108,12 @@
 
 <svelte:head><title>{s.headTitle}</title></svelte:head>
 
+{#if status !== 'ready' || phase === 'pending' || phase === 'revoked'}
+  <AccountPageHeading class="mb-6">
+    {company ? format(s.dashboardTitle, { company: company.company_name }) : s.claimTitle}
+  </AccountPageHeading>
+{/if}
+
 {#if !isAuthenticated()}
   <p class="py-12 text-center text-sm text-muted-foreground">{s.signedOut}</p>
 {:else if status === 'loading'}
@@ -116,10 +123,11 @@
 {:else if phase === 'claim'}
   <div class="flex flex-col gap-6">
     <header class="flex flex-col gap-2 border-b border-border pb-6">
-      <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-strong">
-        <Building2 class="size-3.5" /> {s.headTitle}
+      <p class="flex items-center gap-1.5 text-xs font-semibold text-brand-strong">
+        <Building2 class="size-3.5" />
+        {s.headTitle}
       </p>
-      <h1 class="text-3xl font-semibold tracking-tight">{s.claimTitle}</h1>
+      <AccountPageHeading>{s.claimTitle}</AccountPageHeading>
       <p class="max-w-2xl text-sm text-muted-foreground">{s.claimIntro}</p>
     </header>
 
@@ -143,11 +151,12 @@
         {claiming ? s.claiming : s.claimSubmit}
       </Button>
     </form>
+    <p class="max-w-sm text-xs text-muted-foreground">{s.claimTeamHint}</p>
   </div>
 {:else if phase === 'confirm'}
   <div class="flex max-w-sm flex-col gap-6">
     <header class="flex flex-col gap-2 border-b border-border pb-6">
-      <h1 class="text-2xl font-semibold tracking-tight">{s.confirmTitle}</h1>
+      <AccountPageHeading>{s.confirmTitle}</AccountPageHeading>
       <p class="text-sm text-muted-foreground">{format(s.confirmIntro, { email: company?.work_email ?? '' })}</p>
     </header>
     <form onsubmit={submitConfirm} class="flex flex-col gap-4">
@@ -186,5 +195,13 @@
     </div>
   </div>
 {:else if company}
-  <EmployerDashboard {company} tab={section} onProfileSaved={(updated) => (company = updated)} />
+  <EmployerDashboard
+    {company}
+    tab={section}
+    onProfileSaved={(updated) => {
+      // A save that finishes after the member left must not bring the dashboard back.
+      if (company) company = updated;
+    }}
+    onLeft={() => (company = null)}
+  />
 {/if}

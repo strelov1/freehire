@@ -173,3 +173,32 @@ func TestHostBackoffForgetsAnExpiredHold(t *testing.T) {
 		t.Error("an expired hold is still in the map")
 	}
 }
+
+// The Client must tell the host's backoff when a request was served, or one recovered 429
+// leaves a streak that lengthens every later refusal for the life of the process.
+func TestClientServedResponseResetsHostEscalation(t *testing.T) {
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2, backoff: newHostBackoff(time.Millisecond, time.Second)}
+
+	var out struct {
+		OK bool `json:"ok"`
+	}
+	if err := c.GetJSON(context.Background(), srv.URL, &out); err != nil {
+		t.Fatalf("GetJSON: %v", err)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("hits = %d, want 2 (429 then 200)", got)
+	}
+	if got := len(c.backoff.streak); got != 0 {
+		t.Errorf("streak entries after a served retry = %d, want 0", got)
+	}
+}

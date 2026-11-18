@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { conversationStatusLabel, counterpartName, followsNewMessages, isSendShortcut, mergeMessages, messageDays, messageJobSlugs, reportReasonLabel } from './messaging';
+import {
+  conversationStatusLabel,
+  counterpartName,
+  followsNewMessages,
+  isSendShortcut,
+  mergeMessages,
+  messageDays,
+  messageJobSlugs,
+  reportReasonLabel,
+} from './messaging';
 
 describe('message list scrolling', () => {
   it('follows new messages only while the reader is at the bottom', () => {
@@ -27,29 +36,40 @@ describe('conversation presentation', () => {
 
   it('names a buddy by handle, and an unreachable one without any', () => {
     expect(counterpartName({ persona: 'buddy', reachable: false, detail: null })).toBe('Former member');
-    expect(counterpartName({ persona: 'buddy', reachable: true, detail: { handle: 'buddy-123', card_summary: { category: '', seniority: '', country: '' } } })).toBe('buddy-123');
+    expect(
+      counterpartName({
+        persona: 'buddy',
+        reachable: true,
+        detail: { handle: 'buddy-123', card_summary: { category: '', seniority: '', country: '' } },
+      }),
+    ).toBe('buddy-123');
   });
 
   it('labels report reasons for moderators', () => {
     expect((['spam', 'harassment', 'scam', 'other'] as const).map(reportReasonLabel)).toEqual([
-      'Spam', 'Harassment', 'Scam', 'Other',
+      'Spam',
+      'Harassment',
+      'Scam',
+      'Other',
     ]);
   });
 
   it('merges polled messages by id in chronological order', () => {
-    expect(mergeMessages([{ id: 2 }, { id: 3 }], [{ id: 3 }, { id: 1 }])).toEqual([
-      { id: 1 }, { id: 2 }, { id: 3 },
-    ]);
+    expect(mergeMessages([{ id: 2 }, { id: 3 }], [{ id: 3 }, { id: 1 }])).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
   });
 });
 
 describe('messageJobSlugs', () => {
   it('finds the job pages a message links to, on this site, once each', () => {
-    const body = 'Here: https://freehire.me/jobs/staff-go-x1 and also freehire.me/jobs/staff-go-x1?ref=chat, plus /jobs/backend-y2.';
+    const body =
+      'Here: https://freehire.me/jobs/staff-go-x1 and also freehire.me/jobs/staff-go-x1?ref=chat, plus /jobs/backend-y2.';
     expect(messageJobSlugs(body)).toEqual(['staff-go-x1', 'backend-y2']);
   });
   it('finds a link wrapped in brackets or quotes', () => {
-    expect(messageJobSlugs('Look (https://freehire.me/jobs/staff-go-x1) and "/jobs/backend-y2"')).toEqual(['staff-go-x1', 'backend-y2']);
+    expect(messageJobSlugs('Look (https://freehire.me/jobs/staff-go-x1) and "/jobs/backend-y2"')).toEqual([
+      'staff-go-x1',
+      'backend-y2',
+    ]);
   });
   it('ignores other sites and other pages', () => {
     expect(messageJobSlugs('https://example.com/jobs/abc https://freehire.me/companies/gitlab')).toEqual([]);

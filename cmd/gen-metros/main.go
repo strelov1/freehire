@@ -39,9 +39,8 @@ const (
 	admin2URL = "https://download.geonames.org/export/dump/admin2Codes.txt"
 
 	// statingPopulation matches cmd/gen-cities: only places that large reach the city
-	// dictionary, so only they can be looked up. Smaller places still NAME nothing —
-	// naming uses the same set, so a metro is never named after a place the parser
-	// cannot read.
+	// dictionary, so naming uses the same set and a metro is never named after a place the
+	// parser cannot read.
 	statingPopulation = 15000
 )
 

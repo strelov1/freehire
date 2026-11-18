@@ -57,7 +57,9 @@
 
   $effect(() => {
     if (!available || !visible) return;
-    void messagingDock.refresh().catch(() => { /* the next poll catches up */ });
+    void messagingDock.refresh().catch(() => {
+      /* the next poll catches up */
+    });
     const timer = setInterval(() => void messagingDock.refresh().catch(() => {}), LIST_POLL_MS);
     return () => clearInterval(timer);
   });
@@ -98,7 +100,9 @@
         }
       }
     }
-    return () => { for (const n of made) n.inert = false; };
+    return () => {
+      for (const n of made) n.inert = false;
+    };
   }
 
   // Where focus goes once a window folds or closes: on a narrow screen back to the control
@@ -108,7 +112,8 @@
     const opener = openers[id];
     openers[id] = null;
     void tick().then(() => {
-      if (!wide.current && opener?.isConnected && !windowEls[id]?.contains(opener) && opener.checkVisibility()) opener.focus();
+      if (!wide.current && opener?.isConnected && !windowEls[id]?.contains(opener) && opener.checkVisibility())
+        opener.focus();
       else if (!closed && headerButtons[id]) headerButtons[id]?.focus();
       else listToggle?.focus();
     });
@@ -129,7 +134,9 @@
     else minimize(w.id);
   }
 
-  function onVisibility() { visible = document.visibilityState === 'visible'; }
+  function onVisibility() {
+    visible = document.visibilityState === 'visible';
+  }
   onMount(() => {
     visible = document.visibilityState === 'visible';
     document.addEventListener('visibilitychange', onVisibility);
@@ -143,7 +150,8 @@
   // its header bar alone.
   function windowLayout(minimized: boolean, sheet: boolean): string {
     if (minimized) return 'flex w-72 rounded-lg border sm:w-64 sm:rounded-b-none sm:border-b-0';
-    if (sheet) return 'fixed inset-x-0 bottom-0 top-14 z-10 flex rounded-t-lg border border-b-0 sm:static sm:z-auto sm:h-112 sm:w-80';
+    if (sheet)
+      return 'fixed inset-x-0 bottom-0 top-14 z-10 flex rounded-t-lg border border-b-0 sm:static sm:z-auto sm:h-112 sm:w-80';
     return 'hidden rounded-t-lg border border-b-0 sm:flex sm:h-112 sm:w-80';
   }
 
@@ -170,7 +178,11 @@
 {#if shown}
   <aside
     aria-label="Messaging"
-    class="pointer-events-none fixed bottom-0 right-2 z-30 flex-col items-end gap-2 sm:right-4 sm:flex-row {ownsMobileStickyCta(page.url.pathname) ? 'hidden lg:flex' : 'flex'}"
+    class="pointer-events-none fixed bottom-0 right-2 z-30 flex-col items-end gap-2 sm:right-4 sm:flex-row {ownsMobileStickyCta(
+      page.url.pathname,
+    )
+      ? 'hidden lg:flex'
+      : 'flex'}"
   >
     {#each messagingDock.windows as w (w.id)}
       {@const c = messagingDock.conversation(w.id)}
@@ -182,9 +194,16 @@
           role={modal ? 'dialog' : undefined}
           aria-modal={modal ? 'true' : undefined}
           bind:this={windowEls[w.id]}
-          class="pointer-events-auto flex-col border-border bg-background shadow-lg {windowLayout(w.minimized, sheetId === w.id)}"
+          class="pointer-events-auto flex-col border-border bg-background shadow-lg {windowLayout(
+            w.minimized,
+            sheetId === w.id,
+          )}"
         >
-          <header class="flex items-center gap-1 border-b border-border px-1 py-0.5 sm:px-2 sm:py-1.5 {w.minimized ? 'max-sm:border-b-0' : ''}">
+          <header
+            class="flex items-center gap-1 border-b border-border px-1 py-0.5 sm:px-2 sm:py-1.5 {w.minimized
+              ? 'max-sm:border-b-0'
+              : ''}"
+          >
             <button
               bind:this={headerButtons[w.id]}
               type="button"
@@ -201,7 +220,10 @@
               aria-label={w.minimized ? `Expand conversation with ${name}` : `Minimize conversation with ${name}`}
               onclick={() => toggle(w)}
             >
-              {#if w.minimized}<ChevronUp class="size-4" aria-hidden="true" />{:else}<Minus class="size-4" aria-hidden="true" />{/if}
+              {#if w.minimized}<ChevronUp class="size-4" aria-hidden="true" />{:else}<Minus
+                  class="size-4"
+                  aria-hidden="true"
+                />{/if}
             </button>
             <button
               type="button"
@@ -217,7 +239,9 @@
               <ConversationPane
                 conversation={c}
                 compact
-                onchange={(change) => { if (change !== 'accepted') messagingDock.close(c.id); }}
+                onchange={(change) => {
+                  if (change !== 'accepted') messagingDock.close(c.id);
+                }}
                 oninvite={(handle) => messagingDock.messageBuddy(handle)}
               />
             {/key}
@@ -226,7 +250,11 @@
       {/if}
     {/each}
 
-    <section bind:this={listEl} aria-label="Conversations" class="pointer-events-auto w-72 rounded-t-lg border border-b-0 border-border bg-background shadow-lg">
+    <section
+      bind:this={listEl}
+      aria-label="Conversations"
+      class="pointer-events-auto w-72 rounded-t-lg border border-b-0 border-border bg-background shadow-lg"
+    >
       <div class="flex items-center gap-1 pr-1">
         <button
           bind:this={listToggle}
@@ -241,7 +269,10 @@
             Messaging
             <UnreadBadge count={unread} />
           </span>
-          {#if messagingDock.expanded}<ChevronDown class="size-4" aria-hidden="true" />{:else}<ChevronUp class="size-4" aria-hidden="true" />{/if}
+          {#if messagingDock.expanded}<ChevronDown class="size-4" aria-hidden="true" />{:else}<ChevronUp
+              class="size-4"
+              aria-hidden="true"
+            />{/if}
         </button>
         <button
           type="button"
@@ -254,7 +285,9 @@
       </div>
       {#if messagingDock.expanded}
         <div id="messaging-dock-list" class="max-h-96 overflow-y-auto border-t border-border">
-          {#if messagingDock.conversations.length === 0}<p class="p-3 text-sm text-muted-foreground">No conversations yet.</p>{/if}
+          {#if messagingDock.conversations.length === 0}<p class="p-3 text-sm text-muted-foreground">
+              No conversations yet.
+            </p>{/if}
           <div class="divide-y divide-border">
             {#each messagingDock.conversations as c (c.id)}
               <ConversationRow
@@ -264,7 +297,10 @@
               />
             {/each}
           </div>
-          <a href={resolve('/buddies/chats')} class="block border-t border-border p-3 text-sm font-medium text-brand hover:underline">Open all chats</a>
+          <a
+            href={resolve('/buddies/chats')}
+            class="block border-t border-border p-3 text-sm font-medium text-brand hover:underline">Open all chats</a
+          >
         </div>
       {/if}
     </section>
@@ -272,7 +308,12 @@
 {/if}
 
 <BuddyInviteDialog
-  bind:open={() => messagingDock.inviteHandle !== null, (open) => { if (!open) messagingDock.inviteHandle = null; }}
+  bind:open={
+    () => messagingDock.inviteHandle !== null,
+    (open) => {
+      if (!open) messagingDock.inviteHandle = null;
+    }
+  }
   handle={messagingDock.inviteHandle ?? ''}
   onsent={(conversation) => void messagingDock.invited(conversation)}
 />

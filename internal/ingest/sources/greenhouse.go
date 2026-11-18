@@ -34,13 +34,13 @@ func (greenhouse) Provider() string { return "greenhouse" }
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
 func (greenhouse) fullBoardListing() {}
 
-// emptyBoardListing: an unknown board answers 404, and an emptied one
-// answers 200 with "jobs": [] (skedda, 2026-10-29); an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
+// emptyBoardListing: an unknown board answers 404, and an emptied one answers 200 with
+// "jobs": []; an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
 func (greenhouse) emptyBoardListing() {}
 
 func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// pay_transparency=true is what unlocks pay_input_ranges; without it the API omits
-	// the field entirely rather than returning it empty (confirmed live 2026-10-31).
+	// the field entirely rather than returning it empty.
 	url := fmt.Sprintf("%s/%s/jobs?content=true&pay_transparency=true", greenhouseBaseURL, e.Board)
 
 	var resp struct {
@@ -64,10 +64,9 @@ func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // CompanyDescription fetches the board's own "about us" text from the board-metadata
-// endpoint — distinct from the /jobs listing used by Fetch, so this costs one extra
-// request per board crawl, not per posting. Unlike the listing's content=true field,
-// this one is raw (not entity-encoded) HTML, confirmed against live boards. An
-// employer who has not filled the field in yields ("", nil), not an error.
+// endpoint, one extra request per board crawl, not per posting. Unlike the listing's
+// content=true field, this one is raw (not entity-encoded) HTML. An employer who has not
+// filled the field in yields ("", nil), not an error.
 func (g greenhouse) CompanyDescription(ctx context.Context, e CompanyEntry) (string, error) {
 	url := fmt.Sprintf("%s/%s", greenhouseBaseURL, e.Board)
 
@@ -110,6 +109,12 @@ type GreenhousePosting struct {
 	// Name is the employer's label ("Remote US", "Headquarters"). Read only by
 	// greenhouseOfficeCountry.
 	Offices []GreenhouseOffice `json:"offices"`
+	// Departments are the departments the posting is filed under. They nest: each carries
+	// its parent_id and child_ids. Read only by greenhouseTeam.
+	Departments []struct {
+		Name     string  `json:"name"`
+		ChildIDs []int64 `json:"child_ids"`
+	} `json:"departments"`
 }
 
 // GreenhousePayRange is one pay_input_ranges entry. Amounts use the currency's minor unit. The API
@@ -157,19 +162,35 @@ func MapGreenhousePosting(j GreenhousePosting) Job {
 		PostedAt:          parseRFC3339(j.UpdatedAt),
 		EmploymentType:    greenhouseMetadataEmploymentType(j.Metadata),
 		FallbackCountries: greenhouseOfficeCountry(j),
+		Team:              greenhouseTeam(j),
 	}
 	job.SalaryMin, job.SalaryMax, job.SalaryCurrency, job.SalaryPeriod = greenhouseSalary(j.PayInputRanges)
 	return job
 }
 
-// greenhouseSalary reads the first base pay range if the employer states its period. Measured
-// on the 25 largest boards (2026-10-31) about half state it; the rest ("US Salary
-// Range" at $190,000, "Pay Range" at $18) are dropped rather than given a period by
-// magnitude, because a wrong period publishes an hourly rate as a yearly salary.
+// greenhouseTeam is the posting's most specific department: the first one with no child
+// departments (a leaf of Greenhouse's department tree), else the first listed. A posting
+// normally lists one; this only decides when it lists a parent and its child, or several.
+func greenhouseTeam(j GreenhousePosting) string {
+	for _, dep := range j.Departments {
+		if name := strings.TrimSpace(dep.Name); name != "" && len(dep.ChildIDs) == 0 {
+			return name
+		}
+	}
+	for _, dep := range j.Departments {
+		if name := strings.TrimSpace(dep.Name); name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
+// greenhouseSalary reads the first base pay range if the employer states its period. A range
+// that states none ("US Salary Range" at $190,000, "Pay Range" at $18) is dropped rather than
+// given a period by magnitude, because a wrong period publishes an hourly rate as a yearly salary.
 func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, currency, period string) {
-	// The first range that is not a named bonus/commission/equity component. On the
-	// largest boards every multi-range posting lists one range per state or zone, all
-	// of them base pay, so this skips nothing today — it keeps a board that does list a
+	// The first range that is not a named bonus/commission/equity component. Multi-range
+	// postings usually list one base range per state or zone; this keeps a board that lists a
 	// bonus first from publishing the bonus as the salary.
 	selected := -1
 	title := ""
@@ -204,9 +225,8 @@ func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, c
 	if salaryMin == nil && salaryMax == nil {
 		return nil, nil, "", ""
 	}
-	// A boilerplate blurb can say "annual" over an hourly range ("$18 - $25", measured
-	// on a dozen Colorado/Washington ranges): no currency these boards publish in has a
-	// yearly salary under 1,000, so such a range is dropped, not re-labelled.
+	// A boilerplate blurb can say "annual" over an hourly range ("$18 - $25"): no currency
+	// these boards publish in has a yearly salary under 1,000, so such a range is dropped, not re-labelled.
 	if period == "year" {
 		top := 0
 		for _, b := range []*int{salaryMin, salaryMax} {
@@ -254,9 +274,8 @@ func greenhouseBasePayText(text string) string {
 }
 
 // currencyMinorUnits is how many of a currency's smallest unit make one: Greenhouse's
-// "cents" are the currency's minor unit, so a JPY range is already in yen — Anduril's
-// Tokyo range reads 20,454,000, ¥20M a year, not ¥204,540. ISO 4217 exponents 0 and 3;
-// every other currency has two.
+// "cents" are the currency's minor unit, so a JPY range is already in yen (20,454,000 is
+// ¥20M a year). ISO 4217 exponents 0 and 3; every other currency has two.
 func currencyMinorUnits(code string) float64 {
 	switch strings.ToUpper(code) {
 	case "BIF", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "PYG", "RWF", "UGX", "UYI", "VND", "VUV", "XAF", "XOF", "XPF":
@@ -295,19 +314,11 @@ func greenhousePayPeriod(text string) string {
 // not Countries, because an office is sometimes the employer's headquarters rather than
 // the hiring scope; jobderive therefore lets the title and description outrank it.
 //
-// Measured 2026-10-23 over the live listings of the 1,612 boards holding an open
-// bare-remote posting with no geography (62,172 postings, 8,737 of them bare-remote):
-// this rule pins 1,570 postings on 451 boards, 92% of them to us. Where enrichment had
-// pinned a country it agreed on 179 and disagreed on 7 — an HQ office far from the team
-// (a US team under a Greek HQ, a Tunisia role under a Barcelona office) and one office
-// label the dictionary misreads ("ID - Boise" as Indonesia). Where a title or
-// description restriction also fired it agreed 63 times and disagreed 3, all of which
-// that restriction wins.
-//
-// So it is deliberately narrow:
-//   - only a location that is a bare remote marker. "Remote - EMEA", "Americas Remote",
-//     "Europe & Remote" state a scope the dictionary cannot read, and an office there
-//     would narrow a region to one country;
+// It is deliberately narrow:
+//   - only a location that is a bare remote or bare "Hybrid" marker. "Remote - EMEA",
+//     "Americas Remote", "Europe & Remote" state a scope the dictionary cannot read, and an
+//     office there would narrow a region to one country. A hybrid role works from its
+//     offices, so there they are the place itself;
 //   - an office is read by its geocoded location, and by its label only when it has none;
 //     an office labelled just "Remote" is no place and is skipped;
 //   - every other office must resolve to a country (an "EMEA" or "Headquarters" office
@@ -315,7 +326,7 @@ func greenhousePayPeriod(text string) string {
 //     exactly one: a list of offices in several countries is the employer's footprint,
 //     not this posting's scope.
 func greenhouseOfficeCountry(j GreenhousePosting) []string {
-	if !isBareRemote(j.Location.Name) {
+	if !isBareRemote(j.Location.Name) && !isBareHybrid(j.Location.Name) {
 		return nil
 	}
 	var country string
@@ -350,12 +361,15 @@ func isBareRemote(s string) bool {
 	return false
 }
 
+// isBareHybrid is isBareRemote's counterpart for "Hybrid" alone.
+func isBareHybrid(s string) bool {
+	return strings.ToLower(strings.Trim(s, " \t()[]-–—:,.|/")) == "hybrid"
+}
+
 // greenhouseMetadataEmploymentType reads the employer-configured "Employment Type"
-// custom field a minority of Greenhouse boards carry (confirmed live: 1800contacts,
-// solidpower, carrotfertility all set it to "Full-time") — a genuine structured
-// signal, not a free-text guess: the employer explicitly labeled and typed this
-// value, the same trust level as Lever's commitment or SmartRecruiters'
-// typeOfEmployment. Most boards carry no such field at all.
+// custom field a minority of Greenhouse boards carry — a genuine structured signal, not a
+// free-text guess: the employer explicitly labeled and typed this value, the same trust
+// level as Lever's commitment or SmartRecruiters' typeOfEmployment.
 func greenhouseMetadataEmploymentType(metadata []GreenhouseMetadataField) string {
 	for _, m := range metadata {
 		if !strings.EqualFold(strings.TrimSpace(m.Name), "Employment Type") {

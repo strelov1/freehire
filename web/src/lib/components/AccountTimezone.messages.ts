@@ -5,8 +5,7 @@ import { defineMessages } from '#lib/i18n/t.js';
 export const messages = defineMessages(
   {
     heading: 'Timezone',
-    description:
-      'Used to schedule a daily search-alert digest and quiet hours at your own local time.',
+    description: 'Used to schedule a daily search-alert digest and quiet hours at your own local time.',
     selectPlaceholder: 'Select a timezone',
   },
   {

@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/strelov1/freehire/internal/ingest/rederive"
 	"github.com/strelov1/freehire/internal/job/jobhash"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -22,7 +23,7 @@ func TestDeriveRow_ResolvesThroughTheAliasRegistry(t *testing.T) {
 		Source: "adzuna", ExternalID: "1", CompanySlug: "dollar-tree",
 	}
 
-	params, changed, slugMoved := deriveRow(job, canon)
+	params, changed, slugMoved := rederive.Row(job, canon)
 
 	if params.CompanySlug != "dollar-tree" {
 		t.Errorf("CompanySlug = %q, want dollar-tree — the merge must survive a re-derive",
@@ -47,7 +48,7 @@ func TestDeriveRow_FingerprintFollowsTheCanonicalSlug(t *testing.T) {
 		Source: "adzuna", ExternalID: "1", CompanySlug: "dollartree",
 	}
 
-	params, _, _ := deriveRow(job, canon)
+	params, _, _ := rederive.Row(job, canon)
 
 	want := jobhash.RoleFingerprint(db.UpsertJobParams{
 		CompanySlug: "dollar-tree", Title: job.Title, Description: job.Description,
@@ -71,7 +72,7 @@ func TestDeriveRow_PreservesProfessionITTechHint(t *testing.T) {
 		Source: "profession", ExternalID: "itdev:1",
 	}
 
-	params, _, _ := deriveRow(job, nil)
+	params, _, _ := rederive.Row(job, nil)
 
 	want := pgconv.Bool(boolp(true))
 	if params.IsTech != want {
@@ -87,7 +88,7 @@ func TestDeriveRow_DoesNotConfuseAnotherSourceForProfessionsITBoards(t *testing.
 		Source: "greenhouse", ExternalID: "itdev:1",
 	}
 
-	params, _, _ := deriveRow(job, nil)
+	params, _, _ := rederive.Row(job, nil)
 
 	if params.IsTech.Valid {
 		t.Errorf("IsTech = %+v, want unknown — the external_id prefix coincides with a Profession board name but the source does not match", params.IsTech)
@@ -100,7 +101,7 @@ func boolp(b bool) *bool { return &b }
 // as it was, so the guard cannot alter a catalogue that has never been merged.
 func TestDeriveRow_WithNoRegistryIsUnchanged(t *testing.T) {
 	job := db.Job{ID: 1, Title: "Backend Engineer", Company: "DollarTree", Source: "adzuna", ExternalID: "1"}
-	params, _, _ := deriveRow(job, nil)
+	params, _, _ := rederive.Row(job, nil)
 	if params.CompanySlug != "dollartree" {
 		t.Errorf("CompanySlug = %q, want dollartree", params.CompanySlug)
 	}

@@ -83,11 +83,13 @@ entirely and onto the plain direct client.**
 
 `hh` is removed from `proxiedProviders` (`proxy.go`) and added to
 `firecrawlProviders` (`firecrawltier.go`) as:
+
 ```go
 "hh": func(hosted *firecrawlClient, _ HTTPClient) Source {
     return NewHHWithDetailGetter(NewClient(), hosted)
 },
 ```
+
 The build function deliberately ignores the `direct` parameter `ApplyFirecrawlEgress`
 passes in — that value is ONE shared client for every mixed-tier provider in the
 loop, and it becomes the PROXIED client whenever `SOURCES_PROXY_URL` is set at

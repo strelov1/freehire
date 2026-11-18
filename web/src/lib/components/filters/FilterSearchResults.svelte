@@ -2,7 +2,7 @@
   import { SearchX } from '@lucide/svelte';
   import { highlightParts } from '#lib/fuzzy.js';
   import { matchFilterSearch, type FilterSearchHit } from '#lib/filterSearch.js';
-  import { reportedCount } from '#lib/facets.js';
+  import { reportedCount } from '#lib/facetOptions.js';
   import type { FacetCounts } from '#lib/types.js';
   import { pillClass, pillTitle } from '../facets/pill';
 
@@ -87,7 +87,8 @@
               class={pillClass(state.included || state.excluded, state.excluded, 'px-3 py-1.5 text-sm')}
             >
               {#each highlightParts(hit.label, query) as part, i (i)}
-                {#if part.match}<mark class="rounded-sm bg-foreground/15 text-inherit">{part.text}</mark>{:else}{part.text}{/if}
+                {#if part.match}<mark class="rounded-sm bg-foreground/15 text-inherit">{part.text}</mark
+                  >{:else}{part.text}{/if}
               {/each}{#if count != null}<span class="ml-1 opacity-60 tabular-nums">{count.toLocaleString()}</span>{/if}
             </button>
           {/each}

@@ -31,7 +31,7 @@ func TestGetGlobalCompanyResponse_SumsAcrossCompanies(t *testing.T) {
 	}
 	seedReply(t, q, answered, jobA, "global-reply-1")
 
-	if _, err := q.RebuildInsightsCompanyResponse(ctx); err != nil {
+	if _, err := materializeInsightsCompanyResponse(q)(ctx); err != nil {
 		t.Fatalf("RebuildInsightsCompanyResponse: %v", err)
 	}
 
@@ -64,7 +64,7 @@ func TestGetGlobalCompanyResponse_IncludesCompaniesBelowTheirOwnGate(t *testing.
 		}
 	}
 
-	if _, err := q.RebuildInsightsCompanyResponse(ctx); err != nil {
+	if _, err := materializeInsightsCompanyResponse(q)(ctx); err != nil {
 		t.Fatalf("RebuildInsightsCompanyResponse: %v", err)
 	}
 

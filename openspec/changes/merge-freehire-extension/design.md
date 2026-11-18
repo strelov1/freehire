@@ -67,10 +67,12 @@ second commit.
 `vite: () => ({ plugins: [tailwindcss()] })` entry in `extension/wxt.config.ts`
 — mirroring `web/vite.config.ts`'s `tailwindcss()` call, not importing it.
 New `extension/entrypoints/sidepanel/app.css`:
+
 ```css
 @import "tailwindcss";
 @import "freehire-design-system/theme.css";
 ```
+
 imported once from `sidepanel/main.ts`, replacing the `:global(body)` reset
 currently inlined in `App.svelte`'s `<style>` block.
 

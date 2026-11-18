@@ -18,7 +18,6 @@ vi.mock('#lib/api.js', () => ({ api: { plans } }));
 const proMonthlyPrice = (amount_cents: number): PlansMatrix => ({
   features: [],
   enforced: [],
-  api_limits: { anonymous_per_minute: 600, anonymous_per_day: 0, api_per_minute: 1200, data_per_minute: 6000 },
   prices: [{ id: 'price_1', amount_cents, currency: 'usd', interval: 'month', default: true, tier: 'pro' }],
 });
 

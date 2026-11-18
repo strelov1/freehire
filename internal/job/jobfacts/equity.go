@@ -15,34 +15,22 @@ import (
 // promises no equity read the same, and the second is a claim the catalogue almost
 // never makes.
 //
-// Measured 2026-10-31 on 5,254 random open postings (tablesample, prod):
+// The bare word is noise: most occurrences are another sense (diversity/pay/internal/health
+// equity, private equity, brand equity, equity research). So it counts only in a
+// compensation context: next to a cash word ("salary + equity"), as the head of a
+// compensation noun ("equity grant"), after an offering verb ("all roles receive equity"),
+// or under a compensation adjective ("meaningful equity"). The instruments (stock/share
+// options, RSUs, ESOP, VSOP/virtual or phantom shares, stock grants and awards) each name an
+// offer by themselves.
 //
-//   - The bare word is noise. "equity" occurs in 4.1% of them and roughly seven in ten
-//     of those are another sense: diversity/pay/internal/health equity, private
-//     equity firms, brand equity, equity research. So the word counts only in a
-//     compensation context — next to a cash word ("salary + equity", "bonus and/or
-//     equity"), as the head of a compensation noun ("equity grant", "equity
-//     package"), after an offering verb ("all roles receive equity"), or under a
-//     compensation adjective ("meaningful equity").
-//   - The instruments are not: stock/share options, RSUs, ESOP, VSOP/virtual or phantom
-//     shares, stock grants and awards each name an equity offer by themselves.
-//   - Together they mark 2.0% of the sample (103 rows); reading every hit, 4 were wrong
-//     before the exclusions below were added (an "equity@" mail address, a legal
-//     definition of "wages" listing stock options, an "equity donation matching" perk,
-//     a wealth manager advising clients on "equity compensation"). On a second,
-//     held-out sample of 22,513 they mark 1.9% (422); of the ~145 hits read, one was
-//     wrong ("equity options" marketed as a derivative, now excluded).
-//   - 96 of the 106 also state cash pay in the text; the other ten are ordinary
-//     salaried roles listing equity among benefits. Only 18 carry a stored salary
-//     figure, so a salary FIGURE cannot be what "with salary" means — equity beside
-//     an unstated salary is still equity beside a salary. What separates the two
-//     values is the explicit equity-only statement, never the absence of a figure.
+// "With salary" cannot mean a stored salary FIGURE: equity beside an unstated salary is still
+// equity beside a salary. What separates the two values is the explicit equity-only
+// statement, never the absence of a figure.
 //
 // An employee stock PURCHASE plan (ESPP) is deliberately not equity: the employee buys
 // shares with their own pay at a discount, which is a savings benefit, not equity
-// granted as compensation. It was the most frequent instrument in the sample (0.67%,
-// mostly large retailers), so counting it would have made the facet mean "a big
-// public company" more than "this job pays in equity".
+// granted as compensation. It is the most frequent instrument, so counting it would make
+// the facet mean "a big public company" more than "this job pays in equity".
 func Equity(title, description string) string {
 	text := equityText(htmltext.ToText(description))
 	head := equityText(title)
@@ -121,9 +109,8 @@ var equityOfferRules = []*regexp.Regexp{
 
 // equityOffered reports whether the text states equity as part of the offer.
 //
-// The rules are alternations RE2 scans the whole body for, ~8ms a posting measured, so
-// each family runs only when its anchor word occurs at all — "equity" is in ~4% of
-// postings, and the instruments' stems in fewer.
+// The rules are alternations RE2 scans the whole body for (slow), so each family runs only
+// when its anchor word occurs at all.
 func equityOffered(s string) bool {
 	if strings.Contains(s, "equity") && equityWordOffered(s) {
 		return true
@@ -195,10 +182,7 @@ func offerAt(s string, loc []int, word int) bool {
 	return !reEquityLegalSentence.MatchString(sentenceAround(s, loc[0]))
 }
 
-// The equity-only statements. Measured 2026-10-31 on 699 postings a search for
-// equity-only phrasing returned (they are too rare for a random sample: 0 of 27,767
-// random open postings carried one), the explicit phrases below were each read in
-// context; the phrases dropped and why:
+// The equity-only statements. Phrases deliberately dropped, and why:
 //
 //   - "sweat equity" alone: "sweat equity ventures" is a studio's business model and
 //     "equity and shares, LTIP, sweat equity etc" a CEO search preferring a salaried

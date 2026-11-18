@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The tour's CV tailoring step (Pro). The claims follow /features/tailor.
+  // Getting started: CV tailoring (Pro). The claims follow /features/tailor.
   import { resolve } from '$app/paths';
   import { ArrowRight, ArrowUpFromLine, FileDown, ScanSearch, ShieldCheck } from '@lucide/svelte';
   import TailorWorkspacePreview from '#lib/components/TailorWorkspacePreview.svelte';

@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/platform/cache"
-	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -58,7 +60,7 @@ func (f *fakeFacetCounter) reqFilter(attr string) any {
 func facetsApp(fc facetCounter) *fiber.App {
 	h := &searchHandlers{facets: fc}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/facets", h.JobFacets)
+	app.Get("/api/v1/jobs/facets", newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
@@ -66,13 +68,13 @@ func facetsApp(fc facetCounter) *fiber.App {
 func facetsAppCached(fc facetCounter, c cache.Cache) *fiber.App {
 	h := &searchHandlers{facets: fc, cache: c}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/facets", h.JobFacets)
+	app.Get("/api/v1/jobs/facets", newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
 func TestJobFacets_DisabledReturns503(t *testing.T) {
 	app := facetsApp(nil) // search not configured
-	status, _ := doGet(t, app, "/jobs/facets")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets")
 	if status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", status)
 	}
@@ -82,7 +84,7 @@ func TestJobFacets_DisjunctiveReducesEachFacetsOwnFilter(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior&regions=latam")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&seniority=senior&regions=latam")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -122,7 +124,7 @@ func TestJobFacets_DisjunctiveDropsWholeLocationGroup(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&countries=BR&seniority=senior")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&countries=BR&seniority=senior")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -151,7 +153,7 @@ func TestJobFacets_PassesFiltersAndRequestsFacets(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?q=golang&seniority=senior&regions=latam")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?q=golang&seniority=senior&regions=latam")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -185,7 +187,7 @@ func TestJobFacets_RetiredRoleFilterIsIgnored(t *testing.T) {
 	}}
 	app := facetsApp(fake)
 
-	_, body := doGet(t, app, "/jobs/facets?role=senior_backend")
+	_, body := doGet(t, app, "/api/v1/jobs/facets?role=senior_backend")
 
 	if groups, ok := fake.got.Filter.([][]string); ok && filterHas(groups, `roles = "senior_backend"`) {
 		t.Errorf("role still filters: %#v", fake.got.Filter)
@@ -219,7 +221,7 @@ func TestJobFacets_PrunesNumericDistributionAndRekeys(t *testing.T) {
 	}}
 	app := facetsApp(fake)
 
-	_, body := doGet(t, app, "/jobs/facets")
+	_, body := doGet(t, app, "/api/v1/jobs/facets")
 	facets := body["data"].(map[string]any)["facets"].(map[string]any)
 
 	if _, present := facets["salary_min"]; present {
@@ -247,7 +249,7 @@ func TestJobFacets_ShapesResponse(t *testing.T) {
 	}}
 	app := facetsApp(fake)
 
-	status, body := doGet(t, app, "/jobs/facets")
+	status, body := doGet(t, app, "/api/v1/jobs/facets")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -285,7 +287,7 @@ func TestJobFacets_FacetsParamNarrowsTheRequest(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?work_mode=remote&facets=seniority,regions")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?work_mode=remote&facets=seniority,regions")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -317,7 +319,7 @@ func TestJobFacets_UnknownFacetIsRejected(t *testing.T) {
 	for _, name := range []string{"nonsense", "company"} {
 		fake := &fakeFacetCounter{}
 		app := facetsApp(fake)
-		status, _ := doGet(t, app, "/jobs/facets?facets="+name)
+		status, _ := doGet(t, app, "/api/v1/jobs/facets?facets="+name)
 		if status != fiber.StatusBadRequest {
 			t.Errorf("facets=%s: status = %d, want 400", name, status)
 		}
@@ -333,7 +335,7 @@ func TestJobFacets_FacetsParamRejectedWithDisjunctive(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&facets=seniority")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&facets=seniority")
 	if status != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", status)
 	}
@@ -348,7 +350,7 @@ func TestJobFacets_ReportsIgnoredParams(t *testing.T) {
 	// the listing: it does not look like a long list, it looks like a fact.
 	app := facetsApp(&fakeFacetCounter{})
 
-	_, body := doGet(t, app, "/jobs/facets?country=it")
+	_, body := doGet(t, app, "/api/v1/jobs/facets?country=it")
 
 	meta, _ := body["meta"].(map[string]any)
 	ignored, _ := meta["ignored_params"].([]any)
@@ -366,7 +368,7 @@ func TestJobFacets_CleanQueryKeepsTheBareDataEnvelope(t *testing.T) {
 	// keep that shape rather than grow an empty meta block.
 	app := facetsApp(&fakeFacetCounter{})
 
-	_, body := doGet(t, app, "/jobs/facets?q=go&facets=skills&countries=it")
+	_, body := doGet(t, app, "/api/v1/jobs/facets?q=go&facets=skills&countries=it")
 
 	if _, present := body["meta"]; present {
 		t.Errorf("meta = %v, want the key absent on a clean query", body["meta"])
@@ -380,7 +382,7 @@ func TestJobFacets_CacheServesRepeatedRequestWithoutRecomputing(t *testing.T) {
 	// Two identical requests. The first computes and populates the cache; the
 	// second must be served from it, leaving FacetCounts called exactly once.
 	for i := 0; i < 2; i++ {
-		status, _ := doGet(t, app, "/jobs/facets?q=go&seniority=senior")
+		status, _ := doGet(t, app, "/api/v1/jobs/facets?q=go&seniority=senior")
 		if status != fiber.StatusOK {
 			t.Fatalf("request %d: status = %d, want 200", i, status)
 		}
@@ -398,7 +400,7 @@ func TestJobFacets_CacheKeyStableAcrossMultiFacetRequests(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
 	app := facetsAppCached(fake, cache.NewMemory())
 
-	const q = "/jobs/facets?seniority=senior&work_mode=remote&category=backend&regions=latam"
+	const q = "/api/v1/jobs/facets?seniority=senior&work_mode=remote&category=backend&regions=latam"
 	for i := 0; i < 8; i++ {
 		status, _ := doGet(t, app, q)
 		if status != fiber.StatusOK {
@@ -415,8 +417,8 @@ func TestJobFacets_CacheKeyVariesByFilter(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
 	app := facetsAppCached(fake, cache.NewMemory())
 
-	doGet(t, app, "/jobs/facets?seniority=senior")
-	doGet(t, app, "/jobs/facets?seniority=junior")
+	doGet(t, app, "/api/v1/jobs/facets?seniority=senior")
+	doGet(t, app, "/api/v1/jobs/facets?seniority=junior")
 
 	if fake.calls != 2 {
 		t.Errorf("FacetCounts calls = %d, want 2 (distinct filters must not share a cache key)", fake.calls)
@@ -429,8 +431,8 @@ func TestJobFacets_DisjunctiveIsNotCached(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
 	app := facetsAppCached(fake, cache.NewMemory())
 
-	doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior")
-	doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior")
+	doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&seniority=senior")
+	doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&seniority=senior")
 
 	if fake.calls != 0 {
 		t.Fatalf("FacetCounts calls = %d; disjunctive should not use the FacetCounts path at all", fake.calls)
@@ -443,175 +445,74 @@ func TestJobFacets_NilCacheStillComputes(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
 	app := facetsApp(fake) // nil cache
 
-	doGet(t, app, "/jobs/facets?seniority=senior")
-	doGet(t, app, "/jobs/facets?seniority=senior")
+	doGet(t, app, "/api/v1/jobs/facets?seniority=senior")
+	doGet(t, app, "/api/v1/jobs/facets?seniority=senior")
 
 	if fake.calls != 2 {
 		t.Errorf("FacetCounts calls = %d, want 2 (no cache = always compute)", fake.calls)
 	}
 }
 
-// fakeCompanyNames answers the display-name read from a fixed map and records the
-// slugs it was asked for.
-type fakeCompanyNames struct {
-	names map[string]string
-	got   [][]string
-	err   error
+// blockingFacetCounter holds every count until release closes, so concurrent callers
+// are all in flight together.
+type blockingFacetCounter struct {
+	fakeFacetCounter
+	counts  atomic.Int32
+	release chan struct{}
 }
 
-func (f *fakeCompanyNames) CompanyNamesBySlugs(_ context.Context, slugs []string) ([]db.CompanyNamesBySlugsRow, error) {
-	f.got = append(f.got, slugs)
-	if f.err != nil {
-		return nil, f.err
+func (b *blockingFacetCounter) FacetCounts(context.Context, search.FacetParams) (search.FacetResult, error) {
+	b.counts.Add(1)
+	<-b.release
+	return search.FacetResult{Total: 42}, nil
+}
+
+func TestCachedFacetCounts_ConcurrentMissesShareOneCount(t *testing.T) {
+	fake := &blockingFacetCounter{release: make(chan struct{})}
+	c := cache.NewMemory()
+	p := search.FacetParams{Query: "go", Facets: []string{"seniority"}}
+
+	const callers = 20
+	var started, done sync.WaitGroup
+	errs := make(chan error, callers)
+	for range callers {
+		started.Add(1)
+		done.Add(1)
+		go func() {
+			defer done.Done()
+			started.Done()
+			res, err := cachedFacetCounts(context.Background(), fake, c, p)
+			if err == nil && res.Total != 42 {
+				err = fmt.Errorf("total = %d, want 42", res.Total)
+			}
+			errs <- err
+		}()
 	}
-	var out []db.CompanyNamesBySlugsRow
-	for _, s := range slugs {
-		if n, ok := f.names[s]; ok {
-			out = append(out, db.CompanyNamesBySlugsRow{Slug: s, Name: n})
+	started.Wait()
+	// Let the callers reach the flight before the first count returns.
+	time.Sleep(50 * time.Millisecond)
+	close(fake.release)
+	done.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
 		}
 	}
-	return out, nil
-}
-
-// 60 companies: co-00 posts 60 jobs, co-01 59, ... co-59 one.
-func sixtyCompanies() map[string]int64 {
-	dist := make(map[string]int64, 60)
-	for i := range 60 {
-		dist[fmt.Sprintf("co-%02d", i)] = int64(60 - i)
-	}
-	return dist
-}
-
-func TestJobFacets_CompanySlugReportsExactTotalAndNamedTop50(t *testing.T) {
-	fake := &fakeFacetCounter{distinct: 1540, res: search.FacetResult{
-		Total:  9000,
-		Facets: map[string]map[string]int64{"company_slug": sixtyCompanies(), "countries": {"BR": 10}},
-	}}
-	names := &fakeCompanyNames{names: map[string]string{"co-00": "Company Zero", "co-01": "Company One"}}
-	h := &searchHandlers{facets: fake, companyNames: names}
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/facets", h.JobFacets)
-
-	status, body := doGet(t, app, "/jobs/facets?countries=BR&facets=countries,company_slug")
-	if status != fiber.StatusOK {
-		t.Fatalf("status = %d, want 200 (%v)", status, body)
-	}
-	if !contains(fake.got.Facets, "company_slug") {
-		t.Errorf("facet query = %v, want company_slug requested", fake.got.Facets)
-	}
-	if len(fake.gotDistinct) != 1 || fake.gotDistinct[0] != "company_slug" {
-		t.Errorf("DistinctCount calls = %v, want one over company_slug", fake.gotDistinct)
-	}
-
-	data := body["data"].(map[string]any)
-	if data["companies_total"].(float64) != 1540 {
-		t.Errorf("companies_total = %v, want 1540", data["companies_total"])
-	}
-	// The trimmed list replaces the raw distribution rather than shipping both.
-	if _, present := data["facets"].(map[string]any)["company_slug"]; present {
-		t.Error("facets.company_slug should not carry the untrimmed distribution")
-	}
-	top, ok := data["top_companies"].([]any)
-	if !ok || len(top) != 50 {
-		t.Fatalf("top_companies = %#v, want 50 entries", data["top_companies"])
-	}
-	first := top[0].(map[string]any)
-	if first["slug"] != "co-00" || first["name"] != "Company Zero" || first["count"].(float64) != 60 {
-		t.Errorf("top_companies[0] = %v, want co-00 / Company Zero / 60", first)
-	}
-	for i := 1; i < len(top); i++ {
-		if top[i].(map[string]any)["count"].(float64) > top[i-1].(map[string]any)["count"].(float64) {
-			t.Fatalf("top_companies not in descending count at %d", i)
-		}
-	}
-	// A slug the companies table does not name yet still carries a display name.
-	if last := top[49].(map[string]any); last["slug"] != "co-49" || last["name"] != "co-49" {
-		t.Errorf("top_companies[49] = %v, want co-49 named by its slug", last)
-	}
-	if len(names.got) != 1 || len(names.got[0]) != 50 {
-		t.Errorf("name reads = %v, want ONE read of the 50 shown slugs", names.got)
+	if n := fake.counts.Load(); n != 1 {
+		t.Errorf("FacetCounts calls = %d, want 1", n)
 	}
 }
 
-// The names only decorate the counts: a failed read must not cost the caller the
-// facets and the exact total, so every company falls back to its slug.
-func TestJobFacets_CompanyNameReadFailureFallsBackToSlugs(t *testing.T) {
-	fake := &fakeFacetCounter{distinct: 2, res: search.FacetResult{
-		Total:  3,
-		Facets: map[string]map[string]int64{"company_slug": {"acme": 2, "globex": 1}},
-	}}
-	names := &fakeCompanyNames{err: errors.New("db down")}
-	h := &searchHandlers{facets: fake, companyNames: names}
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/facets", h.JobFacets)
+func TestCachedFacetCounts_CanceledCallerStopsWaiting(t *testing.T) {
+	fake := &blockingFacetCounter{release: make(chan struct{})}
+	defer close(fake.release)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 
-	status, body := doGet(t, app, "/jobs/facets?facets=company_slug")
-	if status != fiber.StatusOK {
-		t.Fatalf("status = %d, want 200 (%v)", status, body)
-	}
-	data := body["data"].(map[string]any)
-	if data["companies_total"].(float64) != 2 {
-		t.Errorf("companies_total = %v, want 2", data["companies_total"])
-	}
-	first := data["top_companies"].([]any)[0].(map[string]any)
-	if first["slug"] != "acme" || first["name"] != "acme" {
-		t.Errorf("top_companies[0] = %v, want acme named by its slug", first)
-	}
-}
-
-func TestJobFacets_CompanySlugNotRequestedRunsNoDistinctCount(t *testing.T) {
-	fake := &fakeFacetCounter{res: search.FacetResult{Total: 5}}
-	app := facetsApp(fake)
-
-	for _, target := range []string{"/jobs/facets", "/jobs/facets?facets=countries"} {
-		status, body := doGet(t, app, target)
-		if status != fiber.StatusOK {
-			t.Fatalf("%s: status = %d, want 200", target, status)
-		}
-		data := body["data"].(map[string]any)
-		if _, present := data["companies_total"]; present {
-			t.Errorf("%s: companies_total present without being requested", target)
-		}
-		if _, present := data["top_companies"]; present {
-			t.Errorf("%s: top_companies present without being requested", target)
-		}
-		if contains(fake.got.Facets, "company_slug") {
-			t.Errorf("%s: company_slug in the default facet set", target)
-		}
-	}
-	if len(fake.gotDistinct) != 0 {
-		t.Errorf("DistinctCount called %d times, want none", len(fake.gotDistinct))
-	}
-}
-
-func TestJobFacets_CompanySlugRefusedUnderDisjunctive(t *testing.T) {
-	fake := &fakeFacetCounter{}
-	app := facetsApp(fake)
-
-	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&facets=company_slug")
-	if status != fiber.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", status)
-	}
-	if fake.gotReqs != nil || len(fake.gotDistinct) != 0 {
-		t.Error("a refused request must reach neither counter")
-	}
-}
-
-// The distinct count rides the one-minute facet cache with the distribution.
-func TestJobFacets_CompanyCountIsCached(t *testing.T) {
-	fake := &fakeFacetCounter{distinct: 7, res: search.FacetResult{Total: 9}}
-	app := facetsAppCached(fake, cache.NewMemory())
-
-	for i := 0; i < 2; i++ {
-		status, body := doGet(t, app, "/jobs/facets?facets=company_slug")
-		if status != fiber.StatusOK {
-			t.Fatalf("request %d: status = %d", i, status)
-		}
-		if got := body["data"].(map[string]any)["companies_total"]; got != float64(7) {
-			t.Fatalf("request %d: companies_total = %v, want 7", i, got)
-		}
-	}
-	if fake.calls != 1 || len(fake.gotDistinct) != 1 {
-		t.Errorf("FacetCounts %d / DistinctCount %d calls, want 1 each", fake.calls, len(fake.gotDistinct))
+	_, err := cachedFacetCounts(ctx, fake, nil, search.FacetParams{Query: "canceled"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }

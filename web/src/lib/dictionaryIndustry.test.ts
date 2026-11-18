@@ -1,0 +1,93 @@
+import { describe, expect, it } from 'vitest';
+import { isIndustryMiss, lookupIndustry, searchIndustries, seedDictionaryReturnParams } from './dictionaryIndustry';
+
+describe('lookupIndustry', () => {
+  it('returns the canonical slug and display label for a slug or label', () => {
+    expect(lookupIndustry('food-and-beverage')).toEqual({
+      type: 'canonical',
+      slug: 'food-and-beverage',
+      label: 'Food & Beverage',
+    });
+    expect(lookupIndustry('FOOD & BEVERAGE')).toEqual({
+      type: 'canonical',
+      slug: 'food-and-beverage',
+      label: 'Food & Beverage',
+    });
+  });
+
+  it('matches Go normalization for punctuation, whitespace, and Unicode', () => {
+    expect(lookupIndustry('Food&Beverage')).toEqual({
+      type: 'canonical',
+      slug: 'food-and-beverage',
+      label: 'Food & Beverage',
+    });
+    expect(lookupIndustry('\u00a0 Food\t&  Beverage \u00a0')).toEqual({
+      type: 'canonical',
+      slug: 'food-and-beverage',
+      label: 'Food & Beverage',
+    });
+    expect(lookupIndustry('İT Services')).toEqual({
+      type: 'canonical',
+      slug: 'it-services',
+      label: 'IT Services',
+    });
+    expect(searchIndustries('İT Services')).toContainEqual({
+      slug: 'it-services',
+      label: 'IT Services',
+    });
+    expect(isIndustryMiss('İT Services')).toBe(false);
+  });
+
+  it('resolves an alias without treating it as a missing term', () => {
+    expect(lookupIndustry('finance')).toEqual({
+      type: 'alias',
+      slug: 'financial-services',
+      label: 'Financial Services',
+    });
+  });
+
+  it('marks an unknown term as a miss', () => {
+    expect(lookupIndustry('underwater basket weaving')).toEqual({ type: 'miss' });
+  });
+
+  it('searches aliases without inventing a company or job count', () => {
+    expect(searchIndustries('finance')).toContainEqual({
+      slug: 'financial-services',
+      label: 'Financial Services',
+    });
+    expect(searchIndustries('underwater basket weaving')).toEqual([]);
+  });
+
+  it('lists everything only for a blank search, never for a term that folds to nothing', () => {
+    expect(searchIndustries('').length).toBeGreaterThan(0);
+    expect(searchIndustries('!!!')).toEqual([]);
+    expect(searchIndustries('製造業')).toEqual([]);
+    expect(isIndustryMiss('製造業')).toBe(true);
+  });
+
+  it('does not offer requests the server rejects while allowing valid Unicode terms', () => {
+    expect(isIndustryMiss('!!!')).toBe(false);
+    expect(isIndustryMiss('a'.repeat(81))).toBe(false);
+    expect(isIndustryMiss('漢'.repeat(81))).toBe(false);
+    expect(isIndustryMiss('漢'.repeat(80))).toBe(true);
+    const supplementaryLetter = String.fromCodePoint(0x10400);
+    expect(isIndustryMiss(supplementaryLetter.repeat(80))).toBe(true);
+    expect(isIndustryMiss(supplementaryLetter.repeat(81))).toBe(false);
+    expect(isIndustryMiss('製造業')).toBe(true);
+  });
+
+  it('still offers a request for an exact miss when partial matches exist', () => {
+    expect(lookupIndustry('bank')).toEqual({ type: 'miss' });
+    expect(searchIndustries('bank')).toContainEqual({ slug: 'banking', label: 'Banking' });
+    expect(isIndustryMiss('bank')).toBe(true);
+    expect(isIndustryMiss('finance')).toBe(false);
+    expect(isIndustryMiss('  ')).toBe(false);
+  });
+
+  it('preserves an industry query and selected tab for sign-in return', () => {
+    const params = new URLSearchParams();
+    seedDictionaryReturnParams(params, 'industry', '  New Industry  ');
+    expect(params.get('industry')).toBe('  New Industry  ');
+    expect(params.get('tab')).toBe('industry');
+  });
+});

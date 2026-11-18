@@ -19,15 +19,13 @@ import (
 // The listing carries no body, which lives behind a per-posting detail request, so the adapter
 // hydrates (HydratingSource): a detail request is spent only on a posting the catalogue lacks.
 //
-// The listing is walked CITY BY CITY, not as one feed, and that is the load-bearing decision
-// here. The unfiltered feed pages 10 at a time ordered by publication time alone, and hundreds
-// of retail postings share one timestamp, so the order among them is not stable from page to
-// page: measured 2026-10-14, walking all 103 pages returned 1026 rows but only 884 distinct
-// postings — the same 142 missing on every walk, which the unseen sweep would close for good.
-// No sort parameter is honoured and the page size is capped at 10. Filtered to one city a
-// listing is a page or two, small enough that the instability never shows: the city walk
-// returned all 1026. It costs one request per city the site knows (~740, most of them a single
-// empty-or-short page), which is the price of a complete listing.
+// The listing is walked CITY BY CITY, not as one feed, and that is the load-bearing decision.
+// The unfiltered feed pages 10 at a time ordered by publication time alone, and hundreds of
+// retail postings share one timestamp, so their order is not stable from page to page: a full
+// walk returns duplicates and always misses the same postings, which the unseen sweep would close
+// for good. No sort parameter is honoured and the page size is capped at 10. Filtered to one city
+// a listing is a page or two, small enough that the instability never shows. It costs one request
+// per city the site knows (most a single empty-or-short page), the price of a complete listing.
 type megafon struct {
 	http JSONGetter
 }
@@ -45,9 +43,9 @@ const (
 	megafonMaxPages = 100
 	// megafonCityWorkers bounds the city walk's in-flight requests.
 	megafonCityWorkers = 4
-	// megafonNationwideCities is the number of cities past which a posting is stated as
-	// Russia-wide rather than as a list: the site's two standing retail ads are each listed in
-	// some 600 cities, while a genuinely multi-city role names a handful (19 at most, measured).
+	// megafonNationwideCities is the number of cities past which a posting is stated as Russia-wide
+	// rather than as a list: the site's two standing retail ads are each listed in some 600 cities,
+	// while a genuinely multi-city role names a handful.
 	megafonNationwideCities = 25
 )
 
@@ -100,8 +98,7 @@ type megafonPosting struct {
 }
 
 // megafonDetail is the per-posting payload: the body in three HTML sections plus the facts the
-// listing omits. The salary bounds are null on every posting sampled so far, but they are part
-// of the contract and are read when present.
+// listing omits. The salary bounds are usually null but are read when present.
 type megafonDetail struct {
 	Description  string   `json:"description"`
 	Requirements string   `json:"requirements"`

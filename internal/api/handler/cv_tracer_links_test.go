@@ -39,7 +39,7 @@ func TestCVRegister_TracerLinksToggleIsCookieOnly(t *testing.T) {
 		key:    namedGate("key"),
 		cvKey:  namedGate("cvKey"),
 		cookie: namedGate("cookie"),
-	})
+	}, cvContract(&cvHandlers{}))
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut,
 		"/api/v1/me/cvs/"+uuid.New().String()+"/tracer-links", strings.NewReader(`{"enabled":true}`))
@@ -84,7 +84,7 @@ func tracerToggleAPI(t *testing.T) (*fiber.App, uuid.UUID) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
 	h := &cvHandlers{cvStore: cv.NewStore(&cvRepo{id: id, userID: owner, data: []byte(`{}`)})}
-	h.register(api, middleware{paidAI: markPaidAI, key: signedIn(owner), cvKey: signedIn(owner), cookie: signedIn(owner)})
+	h.register(api, middleware{paidAI: markPaidAI, key: signedIn(owner), cvKey: signedIn(owner), cookie: signedIn(owner)}, cvContract(h))
 	return app, id
 }
 
@@ -166,9 +166,12 @@ func TestTracingIsInertWithoutAPublicOrigin(t *testing.T) {
 // does not report its own state invites the candidate to turn on what is already on.
 func TestTheCVReadReportsWhetherTracingIsOn(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
-		got := recordResponse(cv.Record{TracerLinksEnabled: enabled})
+		got, err := cvRecordOf(cv.Record{TracerLinksEnabled: enabled})
+		if err != nil {
+			t.Fatalf("cvRecordOf: %v", err)
+		}
 		if got.TracerLinksEnabled != enabled {
-			t.Errorf("recordResponse(enabled=%v).TracerLinksEnabled = %v", enabled, got.TracerLinksEnabled)
+			t.Errorf("cvRecordOf(enabled=%v).TracerLinksEnabled = %v", enabled, got.TracerLinksEnabled)
 		}
 	}
 }
@@ -184,7 +187,7 @@ func TestCVRegister_TracerLinkStatsAreCookieOnly(t *testing.T) {
 		key:    namedGate("key"),
 		cvKey:  namedGate("cvKey"),
 		cookie: namedGate("cookie"),
-	})
+	}, cvContract(&cvHandlers{}))
 
 	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), http.MethodGet,
 		"/api/v1/me/cvs/"+uuid.New().String()+"/tracer-links", nil))

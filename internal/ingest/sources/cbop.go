@@ -12,32 +12,30 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// cbop adapts the Centralna Baza Ofert Pracy (oferty.praca.gov.pl), Poland's public job board:
-// the offers the country's labour offices (PUP/WUP) and youth labour corps (OHP) register on
-// behalf of employers, ~18k open, every trade. It is boardless and an aggregator — the employer
-// is named per offer. See the "CBOP traps" section of AGENTS.md for the measurements behind each
-// rule.
+// cbop adapts the Centralna Baza Ofert Pracy (oferty.praca.gov.pl), Poland's public job board: the
+// offers the labour offices (PUP/WUP) and youth labour corps (OHP) register on behalf of employers,
+// every trade. It is boardless and an aggregator; the employer is named per offer. See the "CBOP traps"
+// section of AGENTS.md.
 //
 // The listing is the portal's own search API, whose rows carry the whole offer (duties,
 // requirements, contract, pay as text), so a crawl buys no detail page. The portal's HTML sits
 // behind an F5 JavaScript challenge; its API does not.
 type cbop struct {
-	http    JSONPoster
-	limiter waiter
+	http JSONPoster
 }
 
 const (
 	cbopSearchURL = "https://oferty.praca.gov.pl/portal-api/v3/oferta/wyszukiwanie?page=%d&size=%d"
 	cbopOfferURL  = "https://oferty.praca.gov.pl/portal/lista-ofert/szczegoly-oferty/"
-	// cbopPageSize is the listing page; a full walk is ~185 pages of ~250 KB.
+	// cbopPageSize is the listing page size.
 	cbopPageSize = 100
 	// cbopSplit is how a refused page is re-read: as cbopSplit pages of a tenth the size, and a
 	// refused one of those as single rows (see list).
 	cbopSplit = 10
-	// cbopMaxPages is a safety ceiling: the catalogue filled 183 pages on 2026-10-29.
+	// cbopMaxPages is a safety ceiling.
 	cbopMaxPages = 1000
 	// cbopMaxUnreadShare bounds the rows a walk may lose to refused single-row reads before the
-	// listing is no longer the whole catalogue: 5 of 18,290 were on 2026-10-29.
+	// listing is no longer the whole catalogue.
 	cbopMaxUnreadShare = 0.01
 	// cbopMaxShortShare bounds how far short of page 0's stated total a walk may end before it
 	// is taken for a page that answered short, not for offers withdrawn mid-walk.
@@ -48,7 +46,7 @@ const (
 
 // NewCBOP builds the adapter over the given client.
 func NewCBOP(c JSONPoster) Source {
-	return cbop{http: c, limiter: rate.NewLimiter(rate.Every(cbopRequestInterval), 1)}
+	return cbop{http: rateLimitedJSONPoster{inner: c, limiter: rate.NewLimiter(rate.Every(cbopRequestInterval), 1)}}
 }
 
 func (cbop) Provider() string { return "cbop" }
@@ -193,9 +191,6 @@ func (s cbop) readSplit(ctx context.Context, p, size int) (rows []cbopOffer, los
 
 // page reads one search page; nil with a nil error is the service refusing it.
 func (s cbop) page(ctx context.Context, p, size int) (*cbopResponse, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
 	var resp cbopResponse
 	if err := s.http.PostJSON(ctx, fmt.Sprintf(cbopSearchURL, p, size), struct{}{}, &resp); err != nil {
 		return nil, err

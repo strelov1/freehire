@@ -32,8 +32,7 @@ type lestaHTTP interface {
 const (
 	lestaListURL    = "https://join.lesta.team/filters?offset=%d"
 	lestaVacancyURL = "https://join.lesta.team/vacancy/%s/%d"
-	// lestaMaxPages is a safety ceiling for a listing that never reaches its own total; at 15 a
-	// page it is far above the ~40 postings the site carries. Reaching it fails the crawl.
+	// lestaMaxPages is a safety ceiling for a listing that never reaches its own total; reaching it fails the crawl.
 	lestaMaxPages = 100
 )
 

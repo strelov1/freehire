@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/job/job"
@@ -36,9 +37,9 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool, targetVersion int32
 // The search enqueue is unconditional. cmd/ingest gates its own on "inserted or changed"
 // because it replays millions of rows a pass; a moderator write is one deliberate row, and
 // ClaimSearchOutboxBatch already skips an entry whose job has since closed or become a
-// non-canonical repost. cmd/search-drain applies the CategoryUnresolved/DescriptionMissing
+// non-canonical repost. cmd/search-drain applies search.Withheld (DescriptionMissing, unseen)
 // rules on the way out, so nothing is gated here that is not gated there.
-func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID int64) (job.Job, job.Extras, error) {
+func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID int64, owner EmployerOwner) (job.Job, job.Extras, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
@@ -50,18 +51,36 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID in
 	// stamp) lives on the aggregate (job.Fields.UpsertManualParams), shared with
 	// every other write path. The mint query also folds the manual salary into the
 	// enrichment payload so it displays at once.
-	row, err := qtx.UpsertManualJob(ctx, f.UpsertManualParams(actorID))
+	if owner.UserID != 0 {
+		if err := lockActingCompany(ctx, qtx, owner); err != nil {
+			return job.Job{}, job.Extras{}, err
+		}
+	}
+	params := f.UpsertManualParams(actorID)
+	params.OwnerTeamOf = pgtype.Int8{Int64: owner.UserID, Valid: owner.UserID != 0}
+	id, err := qtx.UpsertManualJob(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The conflict's owner guard refused the update: the row is another team's.
+		return job.Job{}, job.Extras{}, ErrOwnedElsewhere
+	}
 	if err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("upsert manual job: %w", err)
 	}
 	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 		TargetVersion: r.targetVersion,
-		JobID:         row.ID,
+		JobID:         id,
 	}); err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue enrichment: %w", err)
 	}
-	if err := qtx.EnqueueSearchOutbox(ctx, row.ID); err != nil {
+	if err := qtx.EnqueueSearchOutbox(ctx, id); err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue search outbox: %w", err)
+	}
+	// The write returns the id only; the complete row (with its liveness stamps) is read back
+	// through the jobs_read view in the same transaction, so the response is what a later read
+	// would show.
+	row, err := qtx.GetJob(ctx, id)
+	if err != nil {
+		return job.Job{}, job.Extras{}, fmt.Errorf("read back manual job: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return job.Job{}, job.Extras{}, err
@@ -112,18 +131,51 @@ func (r *QueriesRepository) Update(ctx context.Context, slug string, f job.Field
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := r.q.WithTx(tx)
-	row, err := qtx.UpdateManualJob(ctx, f.UpdateManualParams(slug, actorID))
+	id, err := qtx.UpdateManualJob(ctx, f.UpdateManualParams(slug, actorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return job.Job{}, job.Extras{}, ErrJobNotFound
 	}
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
-	if err := qtx.EnqueueSearchOutbox(ctx, row.ID); err != nil {
+	if err := qtx.EnqueueSearchOutbox(ctx, id); err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue search outbox: %w", err)
+	}
+	row, err := qtx.GetJob(ctx, id)
+	if err != nil {
+		return job.Job{}, job.Extras{}, fmt.Errorf("read back manual job: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
 	return job.FromRow(row)
+}
+
+// lockActingCompany holds, for the write's transaction, the rows that make the author act for
+// the company the write was prepared for: the author's users row, then the company-account
+// row, then their membership row (absent for the claimant) — the order a user deletion takes
+// them (the user, the account it cascades to, the memberships that cascades to), so the two
+// never wait on each other in a cycle. A concurrent removal or account deletion then waits for the write and sees the
+// posting it made. ErrNoCompany when the account is gone or the author no longer acts for it.
+func lockActingCompany(ctx context.Context, q *db.Queries, owner EmployerOwner) error {
+	if _, err := q.LockAuthor(ctx, owner.UserID); errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoCompany
+	} else if err != nil {
+		return err
+	}
+	claimant, err := q.LockCompanyAccountBySlug(ctx, owner.CompanySlug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoCompany
+	}
+	if err != nil {
+		return err
+	}
+	if claimant == owner.UserID {
+		return nil
+	}
+	slug, err := q.LockActingMembership(ctx, owner.UserID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && slug != owner.CompanySlug) {
+		return ErrNoCompany
+	}
+	return err
 }

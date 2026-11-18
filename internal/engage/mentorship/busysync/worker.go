@@ -1,16 +1,11 @@
 // Package busysync reads a mentor's Google Calendar free/busy state and keeps
-// mentor_busy_intervals current with it — the calendar-sync half
-// mentor-google-meet-link's design deferred, finally shipped here.
+// mentor_busy_intervals current with it.
 //
-// It mirrors internal/application/calsync deliberately: a narrow Store over db.Queries, a
-// reader behind a factory so the worker is unit-tested with a fake, and a best-effort pass
-// in which one mentor's revoked grant does not stop the rest. It differs from calsync in
-// what it reads and how it reconciles: calsync matches individual events against
-// applications and needs their identifiers, while this package only ever needs to know
-// whether a stretch of time is occupied — so it reads Google's freeBusy endpoint (bounds
-// only, no title, no attendee, no identifier at all) and reconciles by replacing the whole
-// synced window each run rather than diffing individual rows. See
-// openspec/changes/mentor-calendar-busy-sync/design.md for why.
+// It mirrors internal/application/calsync: a narrow Store over db.Queries, a reader behind
+// a factory, and a best-effort pass in which one mentor's revoked grant does not stop the
+// rest. Unlike calsync it only needs to know whether time is occupied, so it reads the
+// freeBusy endpoint (bounds only) and replaces the whole synced window each run rather
+// than diffing rows.
 package busysync
 
 import (
@@ -23,10 +18,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 )
 
-// busyWindowDays is the fixed forward window every run reads and reconciles — not tied
-// to any mentor's own booking horizon (a per-mentor, per-session-type value), which would
-// need a join and per-mentor branching for a window a slot-engine read already narrows
-// further. Forward only: past busy time can never block a future booking.
+// busyWindowDays is the fixed forward window every run reads and reconciles, not tied to
+// a mentor's booking horizon. Forward only: past busy time never blocks a booking.
 const busyWindowDays = 60
 
 // Connection is a mentor whose grant covers busy-sync — both ids, since the grant is
@@ -36,8 +29,7 @@ type Connection struct {
 	UserID   int64
 }
 
-// BusyPeriod is one interval Google reports as occupied. Bounds only, deliberately: see
-// the package doc for why this worker never reads more.
+// BusyPeriod is one interval Google reports as occupied. Bounds only, by design.
 type BusyPeriod struct {
 	Start time.Time
 	End   time.Time
@@ -57,9 +49,8 @@ type Store interface {
 	ListConnections(ctx context.Context) ([]Connection, error)
 	RefreshToken(ctx context.Context, userID int64) (encToken string, err error)
 	// ReplaceBusyWindow reconciles one mentor's stored busy set for the window ending at
-	// windowEnd: every currently-reported period is written, and nothing else in that
-	// window survives. Transactional, so a concurrent booking attempt's ListBusy never
-	// observes a partially-reconciled set.
+	// windowEnd: reported periods are written and nothing else in the window survives.
+	// Transactional, so ListBusy never sees a partial set.
 	ReplaceBusyWindow(ctx context.Context, mentorID int64, windowEnd time.Time, periods []BusyPeriod) error
 	SetNeedsReconsent(ctx context.Context, userID int64) error
 }
@@ -80,9 +71,8 @@ func NewWorker(store Store, cipher *tokencrypt.Cipher, newReader ReaderFactory) 
 
 // RunOnce syncs every connected mentor once.
 //
-// Best-effort per mentor, and the count of failures comes back as an error so the
-// command can exit non-zero. A run that swallowed a revoked grant would look identical
-// to a run with nothing to do, which is how a broken sync stays broken for weeks.
+// Best-effort per mentor; the failure count comes back as an error so the command exits
+// non-zero, since a swallowed failure looks like a run with nothing to do.
 func (w *Worker) RunOnce(ctx context.Context) error {
 	conns, err := w.store.ListConnections(ctx)
 	if err != nil {
@@ -115,14 +105,11 @@ func (w *Worker) syncMentor(ctx context.Context, c Connection) error {
 	windowEnd := now.AddDate(0, 0, busyWindowDays)
 	periods, err := w.newReader(ctx, refresh).ListBusy(ctx, now, windowEnd)
 	if err != nil {
-		// Only the grant saying no costs the mentor their connection. A 500 or a rate
-		// limit is Google having a bad day, and the flag is SHARED with every other
-		// Google feature this account may use — treating every failure as a revocation
-		// would disconnect it during one Google incident.
+		// Only the grant saying no costs the mentor their connection: the flag is shared with
+		// every other Google feature, so a 500 or rate limit must not disconnect it.
 		//
-		// A real revocation does not arrive as a freeBusy 403 at all: the client is built
-		// from a stored refresh token, so Google refuses it at the TOKEN endpoint before
-		// this request is made. RevokedGrant covers both carriers.
+		// A real revocation is usually refused at the token endpoint, before this request is
+		// made; RevokedGrant covers both carriers.
 		if !gmailsync.RevokedGrant(err) {
 			return fmt.Errorf("list busy: %w", err)
 		}

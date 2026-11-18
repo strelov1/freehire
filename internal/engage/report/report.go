@@ -1,9 +1,8 @@
 // Package report is the job-report moderation queue: any authenticated user can flag a
 // live vacancy with a reason and details, and a moderator resolves the report (optionally
 // soft-closing the job) or dismisses it. It owns reason validation and the review state
-// machine; the Repository owns persistence. A report never creates a job — unlike the
-// submission queue there is no Minter; resolving may close the reported job through the
-// narrow JobCloser seam, so the close concern stays explicit and testable.
+// machine; the Repository owns persistence. A report never creates a job; resolving
+// may close it through the JobCloser seam.
 package report
 
 import (
@@ -28,23 +27,13 @@ var (
 	// ErrInvalid is a content-validation failure (mapped to 400); its message is
 	// user-facing.
 	ErrInvalid = errors.New("report: invalid")
-	// ErrRateLimited is a filing past the daily cap (mapped to 429).
-	ErrRateLimited = errors.New("report: too many reports today")
 )
 
-// maxDetailsLen bounds the free-text explanation so a single report cannot carry an
-// unbounded payload (the content-field convention).
+// maxDetailsLen bounds the free-text explanation.
 const maxDetailsLen = 5000
 
-// DailyCap bounds how many reports one account may file per rolling 24h window
-// (ghostreport.DailyCap's counterpart for this queue). A real job seeker does not have more
-// than a handful of postings to flag in a day, so the cap costs them nothing while bounding
-// what one account can do to the moderation queue.
-const DailyCap = 20
-
 // validReasons is the closed reason vocabulary, mirrored by the migration's CHECK and the
-// SPA. The service re-validates against it so an out-of-vocabulary value is a clean 400
-// rather than a raw constraint error.
+// SPA. The service re-validates so an unknown value is a clean 400, not a raw constraint error.
 var validReasons = map[string]bool{
 	"no_response":  true,
 	"not_relevant": true,
@@ -53,8 +42,7 @@ var validReasons = map[string]bool{
 	"other":        true,
 }
 
-// FileInput is the user-supplied content of a report. The job is identified separately (by
-// the slug the handler resolves), so it is not part of this shape.
+// FileInput is the user-supplied content of a report; the job is identified separately.
 type FileInput struct {
 	Reason          string
 	Details         string
@@ -64,10 +52,8 @@ type FileInput struct {
 // validate normalizes and checks the input, returning a trimmed copy ready to persist. A
 // reason outside the vocabulary or over-long details is ErrInvalid.
 //
-// Details are OPTIONAL, and blank is stored as absent rather than refused. The reason
-// vocabulary already states what is wrong, so the free text is elaboration — and a
-// mandatory elaboration mostly collects whatever a reporter types to get past the field,
-// which is worse than an empty one because it reaches a moderator looking like evidence.
+// Details are OPTIONAL; blank is stored as absent. A mandatory field collects filler
+// that reaches a moderator looking like evidence.
 func (in FileInput) validate() (FileInput, error) {
 	if !validReasons[in.Reason] {
 		return FileInput{}, fmt.Errorf("%w: unknown reason %q", ErrInvalid, in.Reason)
@@ -83,10 +69,8 @@ func (in FileInput) validate() (FileInput, error) {
 	}, nil
 }
 
-// Report is a stored moderation-queue report: the package domain type, decoupled from the
-// generated db row. The internal ownership columns (reported_by, reviewed_by) are dropped —
-// they are never on the wire — while created_at/reviewed_at are kept as *time.Time because
-// the handler serializes them.
+// Report is a stored moderation-queue report, decoupled from the generated db row.
+// The ownership columns (reported_by, reviewed_by) are never on the wire and are dropped.
 type Report struct {
 	ID              int64
 	JobID           int64
@@ -99,15 +83,12 @@ type Report struct {
 	CreatedAt       *time.Time
 }
 
-// ReportDetail is a Report plus the joined columns a human needs to make sense of it — the
-// reporter's email and the reported job's slug and title. The moderator queue renders them;
-// the decision path mails them.
+// ReportDetail is a Report plus the reporter's email and the reported job's slug and
+// title, for the moderator queue and the decision mail.
 type ReportDetail struct {
 	Report
-	// ReporterID is the account that filed it. Kept here rather than on Report for the
-	// same reason ReporterEmail is: Report is what the handler serializes, and the
-	// ownership columns are never on the wire. The decision path needs it to sign the
-	// reporter's own unsubscribe link.
+	// ReporterID is the account that filed it, kept off Report (which the handler
+	// serializes). The decision path signs the reporter's unsubscribe link with it.
 	ReporterID    int64
 	ReporterEmail string
 	JobSlug       string
@@ -122,31 +103,25 @@ type Repository interface {
 	ListPending(ctx context.Context) ([]ReportDetail, error)
 	MarkResolved(ctx context.Context, id, reviewedBy int64, note string) (Report, error)
 	MarkDismissed(ctx context.Context, id, reviewedBy int64, reviewReason string) (Report, error)
-	// CountFiledSince backs the daily cap: how many reports reportedBy has filed since the
-	// given cutoff.
-	CountFiledSince(ctx context.Context, reportedBy int64, since time.Time) (int, error)
 }
 
-// JobCloser soft-closes one job. The QueriesRepository satisfies it (over CloseJobByID);
-// the seam keeps Resolve testable without a database and keeps the close path explicit.
+// JobCloser soft-closes one job. QueriesRepository satisfies it; the seam keeps
+// Resolve testable without a database.
 type JobCloser interface {
 	Close(ctx context.Context, jobID int64) error
 }
 
-// The outcomes a decision notice describes. A dismissal and a resolution read differently to
-// the recipient, and a closed vacancy differently again (Decision.JobClosed).
+// The outcomes a decision notice describes.
 const (
 	OutcomeResolved  = "resolved"
 	OutcomeDismissed = "dismissed"
 )
 
 // Decision is what the reporter is told: who to reach, what they reported, and what the
-// moderator did about it. Note carries the moderator's words — the resolve note or the
-// dismissal reason — and may be empty.
+// moderator did. Note is the resolve note or dismissal reason and may be empty.
 type Decision struct {
-	// UserID is the reporter's account, used to sign their unsubscribe link. A report
-	// always has one — job_reports.reported_by is NOT NULL — so this notice is
-	// ordinary activity mail somebody may decline, not a transactional exception.
+	// UserID is the reporter's account, used to sign their unsubscribe link. It is
+	// never null, so this is activity mail the user may decline, not transactional.
 	UserID    int64
 	Email     string
 	JobTitle  string
@@ -157,9 +132,8 @@ type Decision struct {
 	JobClosed bool
 }
 
-// ReporterNotifier tells the person who filed a report what a moderator decided. MailNotifier
-// is the production implementation; the seam keeps the use cases testable without a
-// transport, and keeps the decision path independent of how the notice travels.
+// ReporterNotifier tells the person who filed a report what a moderator decided.
+// MailNotifier is the production implementation.
 type ReporterNotifier interface {
 	NotifyDecision(ctx context.Context, d Decision) error
 }
@@ -172,15 +146,13 @@ type Service struct {
 }
 
 // New creates a Service backed by the given Repository and JobCloser. It notifies no one
-// until WithNotifier is called, which is the correct behavior wherever no mail transport is
-// configured.
+// until WithNotifier is called.
 func New(repo Repository, closer JobCloser) *Service {
 	return &Service{repo: repo, closer: closer}
 }
 
-// WithNotifier attaches the channel a decision is announced over and returns the Service, so
-// the wiring reads as one expression. A Service without one still decides reports; it just
-// tells no one, the same soft skip an unconfigured notification channel makes elsewhere.
+// WithNotifier attaches the channel a decision is announced over and returns the
+// Service. Without one, reports are still decided but no one is told.
 func (s *Service) WithNotifier(n ReporterNotifier) *Service {
 	s.notifier = n
 	return s
@@ -188,33 +160,23 @@ func (s *Service) WithNotifier(n ReporterNotifier) *Service {
 
 // File validates the content and stores a pending report owned by reportedBy against
 // jobID. A second open report of the same job by the same user surfaces ErrDuplicateOpen
-// (the repository maps the unique violation); a reportedBy already at DailyCap for the
-// rolling 24h window surfaces ErrRateLimited.
+// (the repository maps the unique violation).
 func (s *Service) File(ctx context.Context, reportedBy, jobID int64, in FileInput) (Report, error) {
 	v, err := in.validate()
 	if err != nil {
 		return Report{}, err
 	}
-	filed, err := s.repo.CountFiledSince(ctx, reportedBy, time.Now().Add(-24*time.Hour))
-	if err != nil {
-		return Report{}, err
-	}
-	if filed >= DailyCap {
-		return Report{}, ErrRateLimited
-	}
 	return s.repo.Create(ctx, reportedBy, jobID, v.Reason, v.Details, v.ContactTelegram)
 }
 
-// ListPending returns the moderator review queue (with reporter email and job slug/title),
-// newest first.
+// ListPending returns the moderator review queue, newest first.
 func (s *Service) ListPending(ctx context.Context) ([]ReportDetail, error) {
 	return s.repo.ListPending(ctx)
 }
 
 // ResolveInput is a moderator's resolve decision: whether to soft-close the reported job,
-// the note explaining what was done, and whether to tell the reporter. The note is stored as
-// the review reason and quoted in the notice, so it is written for the reporter, not as an
-// internal annotation.
+// the note explaining what was done, and whether to tell the reporter. The note is
+// stored as the review reason and quoted in the notice, so write it for the reporter.
 type ResolveInput struct {
 	CloseJob       bool
 	NotifyReporter bool
@@ -228,10 +190,8 @@ type DismissInput struct {
 	Reason         string
 }
 
-// Review is the outcome of a moderator decision: the updated report, and whether the
-// reporter was actually reached. Notified is false when the moderator did not ask, when no
-// notifier is configured, and when delivery failed — the decision stands either way, so the
-// moderator can follow up by hand instead of assuming a reply was sent.
+// Review is the outcome of a moderator decision. Notified is false when the moderator
+// did not ask, no notifier is configured, or delivery failed; the decision stands either way.
 type Review struct {
 	Report   Report
 	Notified bool
@@ -295,11 +255,10 @@ func (s *Service) pending(ctx context.Context, id int64) (ReportDetail, error) {
 	return rep, nil
 }
 
-// notify announces a decision that has already been recorded, reporting whether the reporter
-// was reached. It is deliberately total: a moderator who did not ask, a Service with no
-// notifier, and a transport that failed all mean "not notified" rather than an error,
-// because a decision already written must not be undone by the announcement of it. A failure
-// is logged so an outage is visible in the server log as well as in the response.
+// notify announces a recorded decision, reporting whether the reporter was reached.
+// It never errors: not asked, no notifier, or a failed transport all mean "not
+// notified", because a written decision must not be undone by its announcement.
+// A failure is logged.
 func (s *Service) notify(ctx context.Context, asked bool, rep ReportDetail, d Decision) bool {
 	if !asked || s.notifier == nil {
 		return false
@@ -313,6 +272,5 @@ func (s *Service) notify(ctx context.Context, asked bool, rep ReportDetail, d De
 	return true
 }
 
-// statusPending is the only status that can be resolved or dismissed; the closed vocabulary
-// lives in the migration's CHECK.
+// statusPending is the only status that can be resolved or dismissed.
 const statusPending = "pending"

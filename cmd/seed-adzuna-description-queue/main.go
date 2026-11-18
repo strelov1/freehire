@@ -1,14 +1,12 @@
 // Command seed-adzuna-description-queue queues every existing, eligible Adzuna posting for a
-// full-description fetch and exits. It is the one-off half of a deliberate split: cmd/ingest
-// enqueues newly crawled Adzuna postings as they are written, which only ever reaches rows from
-// here on — the ~21k Adzuna postings already in the catalogue before this feature shipped need a
-// separate pass to queue. This command does only the queueing; cmd/hydrate-adzuna-description
-// (already built for the ongoing case) does the actual fetch-and-store, so the two run paths
-// share one Save/content_hash implementation rather than a backfill duplicating it.
+// full-description fetch and exits. It is the one-off half of a split: cmd/ingest enqueues
+// newly crawled Adzuna postings as they are written, so rows already in the catalogue need
+// this separate pass. It only queues; cmd/hydrate-adzuna-description does the fetch and
+// store, so both paths share one Save/content_hash implementation.
 //
-// Run it once. It pages every source='adzuna' row by keyset and exits; run it again later (e.g.
-// after adding a new Adzuna country board) and it costs nothing on rows already queued or already
-// hydrated — EnqueueAdzunaDescriptionCapture's own gates handle both.
+// Run it once. It pages every source='adzuna' row by keyset and exits; running it again
+// costs nothing on rows already queued or hydrated (EnqueueAdzunaDescriptionCapture's own
+// gates handle both).
 package main
 
 import (
@@ -16,7 +14,6 @@ import (
 	"log"
 
 	"github.com/strelov1/freehire/internal/ingest/adzunadesc"
-	"github.com/strelov1/freehire/internal/platform/backfillpage"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -49,20 +46,42 @@ func run() int {
 	return 0
 }
 
-// seedAll enqueues every source='adzuna' row adzunadesc.Eligible accepts. The keyset walk
-// itself (id > last seen, so concurrent writes cannot skip or repeat rows) is shared with
-// the sibling per-source passes via backfillpage.Rows.
+// batchSize bounds how many rows are read per keyset page.
+const batchSize = 500
+
+// seedAll enqueues every source='adzuna' row adzunadesc.Eligible accepts. It walks the
+// source by keyset (id > last seen, so concurrent writes cannot skip or repeat rows),
+// stopping once a page comes back short of the batch size.
 func seedAll(ctx context.Context, store jobStore) (scanned, queued int, err error) {
-	err = backfillpage.Rows(ctx, store.ListJobsBySourceAfter, "adzuna", func(j db.Job) error {
-		scanned++
-		if !adzunadesc.Eligible(j.Source, j.URL) {
-			return nil
+	var afterID int64
+	for {
+		jobs, err := store.ListJobsBySourceAfter(ctx, db.ListJobsBySourceAfterParams{
+			Source:    "adzuna",
+			AfterID:   afterID,
+			BatchSize: batchSize,
+		})
+		if err != nil {
+			return scanned, queued, err
 		}
-		if _, err := store.EnqueueAdzunaDescriptionCapture(ctx, j.ID); err != nil {
-			return err
+		if len(jobs) == 0 {
+			break
 		}
-		queued++
-		return nil
-	})
-	return scanned, queued, err
+		afterID = jobs[len(jobs)-1].ID
+
+		for _, j := range jobs {
+			scanned++
+			if !adzunadesc.Eligible(j.Source, j.URL) {
+				continue
+			}
+			if _, err := store.EnqueueAdzunaDescriptionCapture(ctx, j.ID); err != nil {
+				return scanned, queued, err
+			}
+			queued++
+		}
+
+		if len(jobs) < batchSize {
+			break
+		}
+	}
+	return scanned, queued, nil
 }

@@ -10,6 +10,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -20,8 +21,34 @@ import (
 // (Inserted/Changed) is exercised directly via q.UpsertJob below. (Named to avoid
 // the generated `upsertJob` query-string constant.)
 func ingestUpsert(ctx context.Context, q *Queries, p UpsertJobParams) (Job, error) {
+	row, err := upsertObserved(ctx, q, p)
+	if err != nil {
+		return Job{}, err
+	}
+	// The upsert returns narrow columns; the complete row is read back through jobs_read.
+	return q.GetJob(ctx, row.ID)
+}
+
+// upsertObserved is what a full write is in release B: the upsert, then the crawl's observation
+// in job_activity as the second command of the same transaction (job.Upsert in production). A
+// body is read on every full write but one the pipeline filled in from the stored row.
+func upsertObserved(ctx context.Context, q *Queries, p UpsertJobParams) (UpsertJobRow, error) {
 	row, err := q.UpsertJob(ctx, p)
-	return row.Job, err
+	if err != nil {
+		return UpsertJobRow{}, err
+	}
+	n, err := q.ObserveJobActivity(ctx, ObserveJobActivityParams{
+		JobID:        row.ID,
+		BodyRead:     row.Inserted.Bool || !p.BodyFromCatalogue,
+		ResetStrikes: row.ResetStrikes,
+	})
+	if err != nil {
+		return UpsertJobRow{}, err
+	}
+	if n != 1 {
+		return UpsertJobRow{}, fmt.Errorf("observe job %d: %d activity rows, want 1", row.ID, n)
+	}
+	return row, nil
 }
 
 func TestUpsertJobReportsInsertedAndChanged(t *testing.T) {
@@ -59,8 +86,8 @@ func TestUpsertJobReportsInsertedAndChanged(t *testing.T) {
 	if r2.Changed {
 		t.Error("unchanged re-ingest: changed = true, want false")
 	}
-	if r2.Job.ID != r1.Job.ID {
-		t.Fatalf("re-ingest created a new row (%d != %d)", r2.Job.ID, r1.Job.ID)
+	if r2.ID != r1.ID {
+		t.Fatalf("re-ingest created a new row (%d != %d)", r2.ID, r1.ID)
 	}
 
 	// Re-crawl with edited content (new hash): changed, not inserted.

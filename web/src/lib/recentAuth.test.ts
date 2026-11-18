@@ -151,20 +151,14 @@ describe('consumeReauthDraft', () => {
     // restored value goes straight into an input, so its fields have to be checked.
     // `scope` is deliberately valid here so the bad `name`/`days` are what trip the
     // rejection, not a missing field masking whether those checks still run at all.
-    storage.setItem(
-      DRAFT_KEY,
-      JSON.stringify({ surface: 'create-api-key', name: {}, days: 'x', scope: '' }),
-    );
+    storage.setItem(DRAFT_KEY, JSON.stringify({ surface: 'create-api-key', name: {}, days: 'x', scope: '' }));
 
     expect(consumeReauthDraft('create-api-key')).toBeNull();
     expect(storage.getItem(DRAFT_KEY)).toBeNull();
   });
 
   it('refuses a draft whose scope is not a string', () => {
-    storage.setItem(
-      DRAFT_KEY,
-      JSON.stringify({ surface: 'create-api-key', name: 'CI bot', days: 30, scope: 42 }),
-    );
+    storage.setItem(DRAFT_KEY, JSON.stringify({ surface: 'create-api-key', name: 'CI bot', days: 30, scope: 42 }));
 
     expect(consumeReauthDraft('create-api-key')).toBeNull();
     expect(storage.getItem(DRAFT_KEY)).toBeNull();
@@ -184,9 +178,7 @@ describe('completeProviderReauthentication', () => {
       scope: '',
     });
 
-    await expect(completeProviderReauthentication('code-from-provider')).resolves.toBe(
-      '/my/integrations/api-keys',
-    );
+    await expect(completeProviderReauthentication('code-from-provider')).resolves.toBe('/my/integrations/api-keys');
     expect(consumeReauthDraft('create-api-key')).toEqual({
       surface: 'create-api-key',
       name: 'CI bot',
@@ -201,9 +193,7 @@ describe('completeProviderReauthentication', () => {
     sessionStorage.setItem('freehire.reauth.verifier', 'verifier');
     sessionStorage.setItem('freehire.reauth.return', '/my/api-keys');
 
-    await expect(completeProviderReauthentication('code-from-provider')).resolves.toBe(
-      '/my/integrations/api-keys',
-    );
+    await expect(completeProviderReauthentication('code-from-provider')).resolves.toBe('/my/integrations/api-keys');
   });
 
   it('discards the draft when the exchange fails, leaving nothing to reopen later', async () => {

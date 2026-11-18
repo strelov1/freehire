@@ -1,24 +1,21 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/url"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// emailPrefsHandlers serve the preference page a mail links to. Every route here is
-// UNAUTHENTICATED by design: the whole point is that somebody holding one of our
-// mails can turn it off without an account, a password, or a support ticket. What
-// stands in for a session is the signed token in the link, which names one user and
-// one group of mail and nothing else.
+// emailPrefsHandlers serve the preference page a mail links to. The token routes are
+// UNAUTHENTICATED by design: whoever holds a mail can turn it off with no account. The
+// signed token in the link names one user and one group of mail and nothing else.
 //
-// No route here issues a cookie. A page reached by a forwarded link must not become
-// a way into the account.
+// No route here issues a cookie: a forwarded link must not become a way into the account.
 type emailPrefsHandlers struct {
 	prefs *emailprefs.Service
 }
@@ -27,11 +24,10 @@ func newEmailPrefsHandlers(svc *emailprefs.Service) *emailPrefsHandlers {
 	return &emailPrefsHandlers{prefs: svc}
 }
 
-// register mounts the three routes behind a shared rate limiter.
+// register mounts the token-authenticated email preference routes.
 //
-// The token rides in the QUERY only where it has nowhere else to go. nginx logs
-// query strings (freehire-ops' provision/host2/nginx/snippets/freehire-app.conf), so a never-expiring
-// credential in a URL lands in a bulk store that outlives the click:
+// The token rides in the QUERY only where it has nowhere else to go. nginx logs query
+// strings, so a never-expiring credential in a URL outlives the click:
 //
 //   - GET has no body, and the link in the mail has to carry it. The page strips it
 //     from the address bar after the first read.
@@ -40,89 +36,55 @@ func newEmailPrefsHandlers(svc *emailprefs.Service) *emailPrefsHandlers {
 //     `List-Unsubscribe=One-Click`, so the URL Gmail was handed is the only place
 //     left. The access log is switched off for that path on the host instead.
 //
-// The two /me routes are the same three switches for somebody who IS signed in, so
-// the account's own settings page shows and writes exactly what the emailed link
-// would. They share the service rather than the endpoint because only the way the
-// user is established differs — and two views that disagreed about one boolean would
-// read as the product losing a setting.
-//
-// The limiter is built here from the shared throttler, the way every other feature
-// handler that needs one does it. 30/minute is generous for somebody tapping
-// switches on one page and mean for anyone walking the id space; forging a token
-// needs the signing secret, so this bounds nuisance rather than forgery.
-func (h *emailPrefsHandlers) register(api fiber.Router, mw middleware) {
-	limiter := ratelimit.Middleware(mw.throttler, ratelimit.KeyByIP("email-prefs"), 30, time.Minute)
+// The two /me routes are the same three switches for a signed-in user. They share the
+// service, not the endpoint, because only the way the user is established differs.
+func (h *emailPrefsHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	// The handlers below implement the contract (typespec/email-prefs.tsp); each route
+	// here only names its middleware and ends in the generated server.
+	api.Get("/email-prefs", contract)
+	api.Patch("/email-prefs", contract)
+	api.Post("/email-prefs/one-click", contract)
 
-	api.Get("/email-prefs", limiter, h.Get)
-	api.Patch("/email-prefs", limiter, h.Patch)
-	api.Post("/email-prefs/one-click", limiter, h.OneClick)
-
-	api.Get("/me/email-groups", mw.cookie, h.GetMine)
-	api.Patch("/me/email-groups", mw.cookie, h.PatchMine)
+	api.Get("/me/email-groups", mw.cookie, contract)
+	api.Patch("/me/email-groups", mw.cookie, contract)
 }
 
-// emailPrefsResponse is the wire shape of the page's state. It carries the address
-// the mail already went to, the three switches, and the names of the searches those
-// switches govern — nothing else about the account reaches this response.
-type emailPrefsResponse struct {
-	Email    string                     `json:"email"`
-	Alerts   bool                       `json:"alerts_enabled"`
-	Activity bool                       `json:"activity_enabled"`
-	News     bool                       `json:"news_enabled"`
-	Searches []emailPrefsSearchResponse `json:"searches"`
-}
-
-type emailPrefsSearchResponse struct {
-	ID     int64  `json:"id"`
-	Name   string `json:"name"`
-	Active bool   `json:"active"`
-}
-
-// Get returns the preferences a valid token opens.
-func (h *emailPrefsHandlers) Get(c *fiber.Ctx) error {
-	return h.respondWithState(c, c.Query("t"))
-}
-
-// emailPrefsUpdateRequest is what the page sends back.
-//
-// The token is a body field here rather than a query parameter, so the one write
-// path that has a choice keeps the credential out of the access log.
-//
-// The switches are pointers so "absent" and "false" are different things: a partial
-// body must not read as "turn everything off". A missing switch keeps its stored
-// value, which is what stops this endpoint being a full replace — the trap the
-// contacts endpoint already fell into once.
-type emailPrefsUpdateRequest struct {
-	Token              string  `json:"token"`
-	Alerts             *bool   `json:"alerts_enabled"`
-	Activity           *bool   `json:"activity_enabled"`
-	News               *bool   `json:"news_enabled"`
-	DeactivateSearches []int64 `json:"deactivate_searches"`
-}
-
-// Patch saves the switches somebody set.
-func (h *emailPrefsHandlers) Patch(c *fiber.Ctx) error {
-	var body emailPrefsUpdateRequest
-	if err := c.BodyParser(&body); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	err := applyPatch(body,
-		func() (emailprefs.Prefs, error) { return h.prefs.Load(c.Context(), body.Token) },
-		func(in emailprefs.Update) error { return h.prefs.Save(c.Context(), body.Token, in) })
+// GetEmailPrefs returns the preferences a valid token opens.
+func (h *emailPrefsHandlers) GetEmailPrefs(ctx context.Context, params apigen.GetEmailPrefsParams) (*apigen.GetEmailPrefsOK, error) {
+	prefs, err := h.loadByToken(ctx, params.T.Value)
 	if err != nil {
-		return renderTokenError(err)
+		return nil, err
 	}
-	return h.respondWithState(c, body.Token)
+	return &apigen.GetEmailPrefsOK{Data: prefs}, nil
 }
 
-// applyPatch is the patch semantics both write routes share: read the stored state
-// first so an ABSENT switch keeps its value rather than defaulting to false, then
-// write. The two routes differ only in how they establish the user, which is what
-// the two closures carry.
-//
-// Reading first is also what validates the caller before anything is written.
+// UpdateEmailPrefs saves the switches somebody set. The token is a body field, not a
+// query parameter, to keep it out of the access log.
+func (h *emailPrefsHandlers) UpdateEmailPrefs(ctx context.Context, req *apigen.EmailPrefsTokenUpdate) (*apigen.UpdateEmailPrefsOK, error) {
+	token := req.Token.Value
+	update := apigen.EmailPrefsUpdate{
+		AlertsEnabled: req.AlertsEnabled, ActivityEnabled: req.ActivityEnabled,
+		NewsEnabled: req.NewsEnabled, DeactivateSearches: req.DeactivateSearches,
+	}
+	err := applyPatch(update,
+		func() (emailprefs.Prefs, error) { return h.prefs.Load(ctx, token) },
+		func(in emailprefs.Update) error { return h.prefs.Save(ctx, token, in) })
+	if err != nil {
+		return nil, renderTokenError(err)
+	}
+	// Answer with what was actually stored.
+	prefs, err := h.loadByToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.UpdateEmailPrefsOK{Data: prefs}, nil
+}
+
+// applyPatch is the patch semantics both write routes share: read the stored state first
+// so an ABSENT switch keeps its value rather than defaulting to false, then write. The
+// read also validates the caller before anything is written.
 func applyPatch(
-	body emailPrefsUpdateRequest,
+	body apigen.EmailPrefsUpdate,
 	load func() (emailprefs.Prefs, error),
 	save func(emailprefs.Update) error,
 ) error {
@@ -131,93 +93,84 @@ func applyPatch(
 		return err
 	}
 	return save(emailprefs.Update{
-		Alerts:             boolOr(body.Alerts, current.Alerts),
-		Activity:           boolOr(body.Activity, current.Activity),
-		News:               boolOr(body.News, current.News),
+		Alerts:             body.AlertsEnabled.Or(current.Alerts),
+		Activity:           body.ActivityEnabled.Or(current.Activity),
+		News:               body.NewsEnabled.Or(current.News),
 		DeactivateSearches: body.DeactivateSearches,
 	})
 }
 
-// OneClick is the RFC 8058 target a mail client POSTs to with no confirmation
-// screen. It turns off only the group the token names, and answers 200 on a repeat
-// so a retrying client reports success rather than an error.
-func (h *emailPrefsHandlers) OneClick(c *fiber.Ctx) error {
-	token := c.Query("t")
-	group, err := h.prefs.OneClick(c.Context(), token)
+// OneClickUnsubscribe is the RFC 8058 target a mail client POSTs to with no
+// confirmation screen. It turns off only the group the token names, and answers 200
+// on a repeat so a retrying client reports success rather than an error.
+func (h *emailPrefsHandlers) OneClickUnsubscribe(ctx context.Context, params apigen.OneClickUnsubscribeParams) (*apigen.OneClickUnsubscribeOK, error) {
+	token := params.T.Value
+	group, err := h.prefs.OneClick(ctx, token)
 	if err != nil {
-		return renderTokenError(err)
+		return nil, renderTokenError(err)
 	}
-	// The response names what was turned off and points at the full page, so
-	// somebody who meant "all of it" is one click from it. The link carries the
-	// SAME token: without it the page has no way to know whose preferences to
-	// open, and the "one click from the rest" would land on "this link is no
-	// longer valid".
-	return c.JSON(fiber.Map{"data": fiber.Map{
-		"unsubscribed_from": string(group),
-		"manage_url":        emailprefs.Path + "?t=" + url.QueryEscape(token),
-	}})
+	// The response points at the full page for somebody who meant "all of it". The link
+	// carries the SAME token, or the page could not tell whose preferences to open.
+	return &apigen.OneClickUnsubscribeOK{Data: apigen.OneClickResult{
+		UnsubscribedFrom: string(group),
+		ManageURL:        emailprefs.Path + "?t=" + url.QueryEscape(token),
+	}}, nil
 }
 
-// respondWithState reads and returns the stored state. Both the read route and the
-// write route answer through it, so a save renders what was actually stored rather
-// than what the caller hoped it had stored.
-func (h *emailPrefsHandlers) respondWithState(c *fiber.Ctx, token string) error {
-	prefs, err := h.prefs.Load(c.Context(), token)
+// loadByToken reads the stored state a token opens. Both token routes answer through it.
+func (h *emailPrefsHandlers) loadByToken(ctx context.Context, token string) (apigen.EmailPrefs, error) {
+	prefs, err := h.prefs.Load(ctx, token)
 	if err != nil {
-		return renderTokenError(err)
+		return apigen.EmailPrefs{}, renderTokenError(err)
 	}
-	return c.JSON(fiber.Map{"data": toEmailPrefsResponse(prefs)})
+	return toEmailPrefsResponse(prefs), nil
 }
 
-// toEmailPrefsResponse projects the domain shape onto the wire one. Both the
-// token-opened and the signed-in routes answer through it, so the two views cannot
-// drift apart in what they report.
-func toEmailPrefsResponse(prefs emailprefs.Prefs) emailPrefsResponse {
-	out := emailPrefsResponse{
-		Email: prefs.Email, Alerts: prefs.Alerts, Activity: prefs.Activity, News: prefs.News,
-		Searches: make([]emailPrefsSearchResponse, 0, len(prefs.Searches)),
+// toEmailPrefsResponse projects the domain shape onto the wire one for both the token and
+// signed-in routes. It carries the mail address, the three switches and the governed
+// search names; nothing else about the account reaches this response.
+func toEmailPrefsResponse(prefs emailprefs.Prefs) apigen.EmailPrefs {
+	out := apigen.EmailPrefs{
+		Email: prefs.Email, AlertsEnabled: prefs.Alerts, ActivityEnabled: prefs.Activity, NewsEnabled: prefs.News,
+		Searches: make([]apigen.EmailPrefsSearch, 0, len(prefs.Searches)),
 	}
 	for _, s := range prefs.Searches {
-		out.Searches = append(out.Searches, emailPrefsSearchResponse{ID: s.ID, Name: s.Name, Active: s.Active})
+		out.Searches = append(out.Searches, apigen.EmailPrefsSearch{ID: s.ID, Name: s.Name, Active: s.Active})
 	}
 	return out
 }
 
-// GetMine is the signed-in view of the same three switches.
-func (h *emailPrefsHandlers) GetMine(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// GetMyEmailGroups is the signed-in view of the same three switches.
+func (h *emailPrefsHandlers) GetMyEmailGroups(ctx context.Context) (*apigen.GetMyEmailGroupsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	prefs, err := h.prefs.LoadFor(c.Context(), userID)
+	prefs, err := h.prefs.LoadFor(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": toEmailPrefsResponse(prefs)})
+	return &apigen.GetMyEmailGroupsOK{Data: toEmailPrefsResponse(prefs)}, nil
 }
 
-// PatchMine writes them for a signed-in caller. Same patch semantics as the public
-// route: an absent switch keeps its stored value.
-func (h *emailPrefsHandlers) PatchMine(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// UpdateMyEmailGroups writes them for a signed-in caller. Same patch semantics as the
+// public route: an absent switch keeps its stored value.
+func (h *emailPrefsHandlers) UpdateMyEmailGroups(ctx context.Context, req *apigen.EmailPrefsUpdate) (*apigen.UpdateMyEmailGroupsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var body emailPrefsUpdateRequest
-	if err := c.BodyParser(&body); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	load := func() (emailprefs.Prefs, error) { return h.prefs.LoadFor(c.Context(), userID) }
-	if err := applyPatch(body, load, func(in emailprefs.Update) error {
-		return h.prefs.SaveFor(c.Context(), userID, in)
+	load := func() (emailprefs.Prefs, error) { return h.prefs.LoadFor(ctx, userID) }
+	if err := applyPatch(*req, load, func(in emailprefs.Update) error {
+		return h.prefs.SaveFor(ctx, userID, in)
 	}); err != nil {
-		return err
+		return nil, err
 	}
 	prefs, err := load()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": toEmailPrefsResponse(prefs)})
+	return &apigen.UpdateMyEmailGroupsOK{Data: toEmailPrefsResponse(prefs)}, nil
 }
 
 // renderTokenError maps every refusal to ONE response. A caller here is
@@ -229,12 +182,4 @@ func renderTokenError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "this link is no longer valid")
 	}
 	return err
-}
-
-// boolOr resolves an optional wire field against the value already stored.
-func boolOr(v *bool, current bool) bool {
-	if v == nil {
-		return current
-	}
-	return *v
 }

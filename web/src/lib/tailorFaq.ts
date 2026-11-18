@@ -10,12 +10,12 @@ export const TAILOR_FAQ: FaqItem[] = [
   {
     question: 'Will a recruiter be able to tell an AI wrote it?',
     answer:
-      'The words are yours to begin with. The agent reorders and rephrases what you already did, in the vacancy\'s own terms, one edit at a time — and you can see, change or undo each of them. There is no wholesale rewrite in a generic voice to give it away.',
+      "The words are yours to begin with. The agent reorders and rephrases what you already did, in the vacancy's own terms, one edit at a time — and you can see, change or undo each of them. There is no wholesale rewrite in a generic voice to give it away.",
   },
   {
-    question: 'Can it put things on my CV that aren\'t true?',
+    question: "Can it put things on my CV that aren't true?",
     answer:
-      'No. Before it writes anything, it splits the job\'s requirements into what your history covers and what it does not. The first it brings forward; the second it asks you about. Anything a model merely inferred is stored as the model\'s and cannot go into a CV until you confirm it — that check is in the code, not in a prompt.',
+      "No. Before it writes anything, it splits the job's requirements into what your history covers and what it does not. The first it brings forward; the second it asks you about. Anything a model merely inferred is stored as the model's and cannot go into a CV until you confirm it — that check is in the code, not in a prompt.",
   },
   {
     question: 'What happens to my original CV?',
@@ -30,7 +30,7 @@ export const TAILOR_FAQ: FaqItem[] = [
   {
     question: 'How much does it cost, and how do I cancel?',
     answer:
-      'Tailoring is part of Pro, which also covers cover letters, the AI assistant and auto-apply. It is billed monthly or yearly and you can cancel any time from your plan page; Pro stays on until the end of the period you paid for. Not what you expected? Email us within 14 days and we\'ll refund it.',
+      "Tailoring is part of Pro, which also covers cover letters, the AI assistant and auto-apply. It is billed monthly or yearly and you can cancel any time from your plan page; Pro stays on until the end of the period you paid for. Not what you expected? Email us within 14 days and we'll refund it.",
   },
   {
     question: 'What happens to my data?',

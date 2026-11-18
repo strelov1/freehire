@@ -56,10 +56,7 @@
       {#if data.feed}
         <!-- The curated feed owns this query; prefer it over a raw /jobs filter, which
              the list canonicalises back to bare /jobs and so cannot rank. -->
-        <a
-          href={resolve('/collections/[slug]', { slug: data.feed.slug })}
-          class="text-brand-strong hover:underline"
-        >
+        <a href={resolve('/collections/[slug]', { slug: data.feed.slug })} class="text-brand-strong hover:underline">
           Browse all {data.label} jobs →
         </a>
       {:else}

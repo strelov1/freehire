@@ -24,17 +24,15 @@ import (
 const agentLogRetention = 14 * 24 * time.Hour
 
 // processAgent applies every finished, not-yet-applied day of the agent-view log and
-// removes the applied files past retention. The cursor is the same content-signature
-// table the nginx pass uses, with the same chunked apply and resume cursor, so a re-run
-// applies nothing twice.
+// removes applied files past retention. It shares the nginx pass's content-signature
+// cursor and chunked apply, so a re-run applies nothing twice.
 func processAgent(ctx context.Context, pool *pgxpool.Pool, dir string, now time.Time) (nFiles, nViews int, err error) {
 	files, err := agentview.ListFiles(dir, now)
 	if err != nil {
 		return 0, 0, err
 	}
 	q := db.New(pool)
-	// A file that fails is reported and kept, and the files after it still apply: the days
-	// are independent, so one unreadable day must not hold every later one back.
+	// A failing file is reported and kept; the days are independent, so later ones still apply.
 	var errs []error
 	for _, f := range files {
 		applied, err := applyAgentDay(ctx, pool, q, f.Path)
@@ -78,8 +76,8 @@ func applyAgentDay(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, path 
 }
 
 // aggregateAgentFile reads one day file and its cursor signature in one pass. A file
-// with lines and not one readable line fails the run: a day that parses as nothing would
-// otherwise count nothing in silence — the trap viewlog/AGENTS.md names for nginx.
+// whose every line is unreadable fails the run rather than counting nothing in silence
+// (the trap viewlog/AGENTS.md names for nginx).
 func aggregateAgentFile(path string) (map[time.Time]map[int64]int, int64, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -100,9 +98,8 @@ func aggregateAgentFile(path string) (map[time.Time]map[int64]int, int64, error)
 	return counts, int64(h.Sum64()), nil
 }
 
-// buildAgentParams flattens counts into the batch in ascending (job, day) order — the
-// lock-order rule buildParams documents, which is also the order applyChunked's cursor
-// walks.
+// buildAgentParams flattens counts into the batch in ascending (job, day) order: the
+// lock-order rule buildParams documents, and the order applyChunked's cursor walks.
 func buildAgentParams(counts map[time.Time]map[int64]int) []db.ApplyDailyAgentViewParams {
 	var params []db.ApplyDailyAgentViewParams
 	for day, perJob := range counts {

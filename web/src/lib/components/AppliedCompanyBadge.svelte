@@ -1,3 +1,7 @@
+<script module lang="ts">
+  export const appliedCompanyTooltip = 'You already applied to a position at this company';
+</script>
+
 <script lang="ts">
   import { History } from '@lucide/svelte';
   import { cn } from '#lib/ui/index.js';
@@ -10,7 +14,7 @@
 </script>
 
 <span
-  title="You already applied to a position at this company"
+  title={appliedCompanyTooltip}
   class={cn(
     'inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground',
     className,

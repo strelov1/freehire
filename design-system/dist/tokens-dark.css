@@ -32,4 +32,9 @@
   --success-foreground: oklch(0.2 0.05 155); /** Text on the success fill. */
   --success-strong: oklch(0.8 0.15 155); /** Success text and borders on the page background and on the success tint. */
   --success-muted: oklch(0.3 0.06 155); /** Soft success tint behind success-strong text. */
+  --chart-1: #3987e5; /** Chart series, categorical slots 1-5 in fixed order (blue, orange, aqua, yellow, magenta), never cycled. Validated as a set for colour-vision deficiency and contrast against the dark surface, where all five clear 3:1. */
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
 }

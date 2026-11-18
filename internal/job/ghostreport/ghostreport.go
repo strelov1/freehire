@@ -3,14 +3,12 @@
 // never answered, and withdrawing that statement when the employer finally
 // answers.
 //
-// It is deliberately NOT internal/engage/report. That queue exists so a moderator can
-// CLOSE a job, and a claim that is merely evidence cannot be expressed as a
-// close: it needs to accumulate, to be counted beside other people's, and to be
-// retracted. Nothing here reaches a moderator, and nothing here closes anything.
+// It is not internal/engage/report, whose queue lets a moderator close a job. A claim that
+// is merely evidence must accumulate, be counted beside others, and be retractable;
+// nothing here reaches a moderator or closes anything.
 //
-// The service owns validation, the daily cap and retraction; the Repository owns
-// persistence, including the two refusals that are structural rather than checks
-// — an unverified address and a closed job insert no row at all.
+// The service owns validation and retraction; the Repository owns persistence, including
+// the structural refusals: an unverified address and a closed job insert no row.
 package ghostreport
 
 import (
@@ -30,24 +28,14 @@ var (
 	ErrDuplicate = errors.New("ghostreport: already reported")
 	// ErrNotFound is a retraction of a claim that is not there (404).
 	ErrNotFound = errors.New("ghostreport: not found")
-	// ErrRateLimited is a filing past the daily cap (429).
-	ErrRateLimited = errors.New("ghostreport: too many reports today")
-	// ErrJobClosed is a claim about a posting already taken down (409) — there is
-	// nothing left to warn anyone about.
+	// ErrJobClosed is a claim about a posting already taken down (409).
 	ErrJobClosed = errors.New("ghostreport: job is closed")
 	// ErrUnverified is a claim from an account whose address was never proven (403).
 	ErrUnverified = errors.New("ghostreport: email not verified")
 )
 
-// DailyCap bounds how many claims one account may file per day. A real job
-// seeker does not have more than a handful of silent applications to report in a
-// day, so the cap costs them nothing while bounding what one account can do to
-// the catalogue. It bounds volume; it judges no single claim.
-const DailyCap = 20
-
-// Report is a stored claim. AppliedOn is the date the reporter states they
-// applied — their word, not an observation, which is why it never reaches the
-// tracking board's applied_at.
+// Report is a stored claim. AppliedOn is the reporter's word, not an observation, so it
+// never reaches the tracking board's applied_at.
 type Report struct {
 	ID        int64
 	JobID     int64
@@ -60,7 +48,6 @@ type Report struct {
 type Repository interface {
 	Create(ctx context.Context, userID, jobID int64, appliedOn time.Time) (Report, error)
 	Retract(ctx context.Context, userID, jobID int64) error
-	CountFiledSince(ctx context.Context, userID int64, since time.Time) (int, error)
 }
 
 // Service implements the claim use cases.
@@ -69,39 +56,24 @@ type Service struct{ repo Repository }
 // New creates a Service backed by the given Repository.
 func New(repo Repository) *Service { return &Service{repo: repo} }
 
-// File records userID's claim about jobID. `now` is a parameter rather than a
-// clock of the service's own, so the date rules are testable without waiting.
-//
-// It deliberately does NOT refuse a claim too fresh to be evidence. Maturity
-// belongs to the aggregator, which reads the silence ladder; refusing here would
-// lose the report of somebody who applied three days ago and thought to tell us
-// then, and would ask them to come back on a date they will not remember.
+// File records userID's claim about jobID. It does not refuse a claim too fresh to be
+// evidence: maturity belongs to the aggregator, and refusing here would lose the report.
 func (s *Service) File(ctx context.Context, userID, jobID int64, appliedOn, now time.Time) (Report, error) {
 	if err := validateAppliedOn(appliedOn, now); err != nil {
 		return Report{}, err
 	}
-	filed, err := s.repo.CountFiledSince(ctx, userID, now.AddDate(0, 0, -1))
-	if err != nil {
-		return Report{}, err
-	}
-	if filed >= DailyCap {
-		return Report{}, ErrRateLimited
-	}
 	return s.repo.Create(ctx, userID, jobID, appliedOn)
 }
 
-// Retract withdraws userID's claim about jobID. This is how the signal
-// self-heals: an employer who answers on day 40 costs the posting its evidence.
+// Retract withdraws userID's claim about jobID, so the signal self-heals when an employer
+// finally answers.
 func (s *Service) Retract(ctx context.Context, userID, jobID int64) error {
 	return s.repo.Retract(ctx, userID, jobID)
 }
 
-// validateAppliedOn bounds the stated date to the window in which it can mean anything: not the
-// future, and not so far back that it describes a different hiring round.
-//
-// The window itself belongs to internal/application/userjob, which the tracker's dated apply reads too. Only
-// the mapping onto this package's 400-sentinel stays here, so a claim and a tracked application
-// cannot come to disagree about which dates are believable.
+// validateAppliedOn bounds the stated date to the window where it can mean anything: not
+// the future, not a different hiring round. The window lives in applydate, shared with the
+// tracker's dated apply; only the mapping onto ErrInvalid stays here.
 func validateAppliedOn(appliedOn, now time.Time) error {
 	if err := applydate.Validate(appliedOn, now); err != nil {
 		return fmt.Errorf("%w: %s", ErrInvalid, err)

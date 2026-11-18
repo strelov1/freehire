@@ -112,7 +112,7 @@ func TestSchoolSpringFetchNewMapsAPosting(t *testing.T) {
 		t.Errorf("seen posting = %+v, want a content-less refresh", refresh)
 	}
 	// The listing serves entity-encoded titles; the refresh path has no detail resource to take a
-	// decoded one from, so it must decode them itself or the catalogue filter judges "&amp;".
+	// decoded one from, so it must decode them itself or the stored title keeps "&amp;".
 	if refresh.Title != "Senior Network & Systems Engineer" {
 		t.Errorf("refresh Title = %q, want the entities decoded", refresh.Title)
 	}

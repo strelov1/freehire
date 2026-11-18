@@ -10,9 +10,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-// hrmosMaxPages bounds the listing walk. The largest live sample measured (CyberAgent Group,
-// 413 jobs at 100/page) needs 5; this leaves generous headroom the same way other per-tenant
-// paginated adapters in this package do.
+// hrmosMaxPages bounds the listing walk, with generous headroom over the largest tenant.
 const hrmosMaxPages = 50
 
 // hrmos adapts HRMOS career pages (hrmos.co), a Japanese multi-tenant ATS by Bizreach. The
@@ -120,10 +118,9 @@ func (h hrmos) detail(ctx context.Context, e CompanyEntry, link string) (Job, bo
 }
 
 // isHrmosJobLink reports whether href is a job posting link for board: exactly
-// "/pages/<board>/jobs/<jobID>" (host empty or hrmos.co). Requiring the literal "jobs"
-// segment — rather than accepting any single segment after the board — deliberately avoids
-// the class of bug herp-source's review found: a looser one-segment match also matches the
-// platform's own single-segment navigation links.
+// "/pages/<board>/jobs/<jobID>" (host empty or hrmos.co). Requiring the literal "jobs" segment,
+// rather than any single segment after the board, avoids matching the platform's own
+// single-segment navigation links.
 func isHrmosJobLink(board, href string) bool {
 	u, err := url.Parse(href)
 	if err != nil {

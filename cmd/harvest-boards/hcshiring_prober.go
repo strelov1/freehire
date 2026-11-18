@@ -7,16 +7,12 @@ import (
 )
 
 // hcshiringProber validates an HCS Hiring board (the <tenant> of <tenant>.hcshiring.com) by
-// asking the tenant's public listing how many postings it has. It mirrors the URL shape of
-// internal/ingest/sources/hcshiring.go, which is unexported, and costs one request per
-// candidate: meta.totalJobs counts the whole board on the first page, while the adapter
-// fallback would walk every ten-row page and hydrate every posting's body.
-//
-// It reports no employer name, so the seed's own supplies it. The platform does publish one
-// (/api/jobSearches' companyName), but a tenant is as often one community as the operator
-// running it: over 30 sampled boards it disagreed with the seed's employer on a third
-// ("Calveria Senior Living" is served as "AgeWell Senior Living", "Country Lane - Beggs" as
-// "Diakonos Group"), so wiring it in would reject live boards on the name gate.
+// reading meta.totalJobs from the tenant's public listing, one request per candidate. It
+// mirrors the URL shape of internal/ingest/sources/hcshiring.go, which is unexported; the
+// adapter fallback would walk every ten-row page and hydrate every posting's body. It reports no
+// employer name, so the seed's supplies it: the platform's /api/jobSearches companyName often
+// differs from the seed's employer (a tenant is as often one community as the operator), so
+// using it would reject live boards on the name gate.
 type hcshiringProber struct{}
 
 // hcsTenantPattern is one DNS label: the only board shape the adapter addresses. Anything else

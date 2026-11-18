@@ -1,7 +1,7 @@
 ## Context
 
-`internal/engage/companyfeedback` already lets a signed-in user post a 1-5 star rating
-+ closed category + free text about a company, shown under their site-wide
+`internal/engage/companyfeedback` already lets a signed-in user post a 1-5 star rating +
+closed category + free text about a company, shown under their site-wide
 pseudonymous persona. `interview` is already one of the seven categories
 (`vocab.CompanyFeedbackTypeValues`). What it doesn't do: capture the shape of
 an interview process (how many rounds, what each covered), or reduce the

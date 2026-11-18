@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SOURCE_LABELS, sourceLabel } from './facets';
+import { SOURCE_LABELS, sourceLabel } from './sourceLabels';
 import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from './logo';
 
 // The logo proxy resolves a brand from a NAME and, when given one, from an explicit
@@ -12,7 +12,7 @@ import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from './logo';
 // The domain also removes a doubt a 200 cannot: a name the proxy resolves WRONGLY answers
 // 200 with somebody else's mark, which is how `g2i` wore a stranger's logo for weeks.
 describe('source logos', () => {
-  it('asks by the platform\'s own domain when one is curated', () => {
+  it("asks by the platform's own domain when one is curated", () => {
     const url = sourceLogoUrl('SAP SuccessFactors', SOURCE_LOGO_DOMAINS.successfactors);
 
     expect(url).toContain('SAP%20SuccessFactors');

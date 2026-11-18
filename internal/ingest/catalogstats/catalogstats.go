@@ -100,7 +100,7 @@ func Sources() int { return len(sources.Taxonomy()) }
 // work — no network, no credentials, and the same answer on every host.
 func ATSPlatforms() int {
 	registry := sources.Taxonomy()
-	aggregators := sources.AggregatorProviders(registry)
+	aggregators := sources.TaxonomyAggregatorProviders()
 
 	n := 0
 	for _, provider := range sources.BoardKeyedProviders(registry) {

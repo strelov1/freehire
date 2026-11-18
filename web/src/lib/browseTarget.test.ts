@@ -17,7 +17,12 @@ describe('browseQuery', () => {
   // all of them — the same rule the in-place filter follows.
   it('carries every part of a composed suggestion', () => {
     const got = new URLSearchParams(
-      browseQuery({ facets: [['category', 'software_engineering'], ['company_slug', 'google']] }),
+      browseQuery({
+        facets: [
+          ['category', 'software_engineering'],
+          ['company_slug', 'google'],
+        ],
+      }),
     );
     expect(got.get('category')).toBe('software_engineering');
     expect(got.get('company_slug')).toBe('google');
@@ -39,9 +44,7 @@ describe('browseQuery', () => {
   // A title suggestion's plan carries a field restriction so its quoted query only
   // matches the title field — see the search-suggestions spec.
   it('carries the field restriction alongside a title query', () => {
-    const got = new URLSearchParams(
-      browseQuery({ facets: [], q: '"Founding Engineer"', qFields: ['title'] }),
-    );
+    const got = new URLSearchParams(browseQuery({ facets: [], q: '"Founding Engineer"', qFields: ['title'] }));
     expect(got.get('q')).toBe('"Founding Engineer"');
     expect(got.get('q_fields')).toBe('title');
   });

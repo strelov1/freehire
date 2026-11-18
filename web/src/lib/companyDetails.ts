@@ -108,9 +108,7 @@ export function companyFacts(company: Company): CompanyFact[] {
         .join(' · ')
     : '';
   // "NASDAQ: ACME", or just "ACME" when the exchange is unknown.
-  const stock = info.stock?.symbol
-    ? [info.stock.exchange, info.stock.symbol].filter(Boolean).join(': ')
-    : '';
+  const stock = info.stock?.symbol ? [info.stock.exchange, info.stock.symbol].filter(Boolean).join(': ') : '';
 
   // hq_country is an ISO alpha-2 code from every writer but one: employer profile edits
   // stored free text until the service began normalising it, so a city can still sit
@@ -122,9 +120,7 @@ export function companyFacts(company: Company): CompanyFact[] {
 
   return [
     company.year_founded ? { term: 'Founded', value: String(company.year_founded) } : null,
-    company.employee_count
-      ? { term: 'Employees', value: company.employee_count.toLocaleString() }
-      : null,
+    company.employee_count ? { term: 'Employees', value: company.employee_count.toLocaleString() } : null,
     headquarters,
     info.ceo ? { term: 'CEO', value: info.ceo } : null,
     company.organization_type ? { term: 'Type', value: company.organization_type } : null,

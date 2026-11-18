@@ -11,6 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const banUser = `-- name: BanUser :one
+UPDATE users
+SET banned_at = now(), ban_reason = $1, banned_by = $2,
+    token_version = token_version + 1
+WHERE id = $3 AND banned_at IS NULL AND role <> 'admin' AND id <> $2
+RETURNING id
+`
+
+type BanUserParams struct {
+	Reason  pgtype.Text `json:"reason"`
+	ActorID pgtype.Int8 `json:"actor_id"`
+	ID      int64       `json:"id"`
+}
+
+// Ban an account by hand. Advances token_version so everything bound to a generation
+// (recent-auth proofs, mobile exchange codes, OAuth grants and codes) dies with the
+// sessions, and deletes nothing else. The WHERE refuses an admin and the moderator's own
+// account here rather than in Go, so no call site can ban around the rule. No row means
+// the target is missing, already banned, an admin or the actor itself; the handler tells
+// those apart with GetUserModerationState.
+func (q *Queries) BanUser(ctx context.Context, arg BanUserParams) (int64, error) {
+	row := q.db.QueryRow(ctx, banUser, arg.Reason, arg.ActorID, arg.ID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const bumpUserTokenVersion = `-- name: BumpUserTokenVersion :one
 UPDATE users
 SET token_version = token_version + 1
@@ -62,41 +89,6 @@ func (q *Queries) ChangeUserEmail(ctx context.Context, arg ChangeUserEmailParams
 	var token_version int32
 	err := row.Scan(&token_version)
 	return token_version, err
-}
-
-const clearUserPhoto = `-- name: ClearUserPhoto :exec
-UPDATE users
-SET photo_object_key = NULL, photo_uploaded_at = NULL
-WHERE id = $1
-`
-
-// Clear the user's headshot pointer, after deleting the object from storage.
-func (q *Queries) ClearUserPhoto(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, clearUserPhoto, id)
-	return err
-}
-
-const clearUserResume = `-- name: ClearUserResume :exec
-UPDATE users
-SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL,
-    resume_embedding = NULL, resume_embedding_model = NULL,
-    resume_structured = NULL, resume_structured_model = NULL,
-    resume_structured_uploaded_at = NULL,
-    resume_countries = NULL, resume_regions = NULL, resume_cities = NULL,
-    resume_extract_status = NULL, resume_extract_detail = NULL, resume_extract_for = NULL
-WHERE id = $1
-`
-
-// Clear the user's résumé pointer (after deleting the object from storage), any
-// cached ATS review, the derived CV embedding (no CV → no recommendations), the
-// derived structured résumé (the structure must not outlive the CV it describes), and
-// the geography derived from that structure (which must not outlive it either — a
-// country left behind here would keep answering "where is this candidate" from a CV
-// that no longer exists). Candidate contacts are intentionally kept: they are
-// owner-edited identity, not an extract artifact.
-func (q *Queries) ClearUserResume(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, clearUserResume, id)
-	return err
 }
 
 const createUser = `-- name: CreateUser :one
@@ -167,6 +159,46 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
+const findUserForModeration = `-- name: FindUserForModeration :one
+SELECT id, email, username, role, banned_at, ban_reason
+FROM users
+WHERE id = $1::bigint
+   OR lower(email) = lower($2::text)
+   OR username = $2::text
+ORDER BY (id = $1::bigint) DESC
+LIMIT 1
+`
+
+type FindUserForModerationParams struct {
+	UserID int64  `json:"user_id"`
+	Query  string `json:"query"`
+}
+
+type FindUserForModerationRow struct {
+	ID        int64              `json:"id"`
+	Email     string             `json:"email"`
+	Username  pgtype.Text        `json:"username"`
+	Role      string             `json:"role"`
+	BannedAt  pgtype.Timestamptz `json:"banned_at"`
+	BanReason pgtype.Text        `json:"ban_reason"`
+}
+
+// The moderator's lookup: one account by id, exact email (case-insensitive) or username,
+// with its ban state. The query is matched against all three; an id only when numeric.
+func (q *Queries) FindUserForModeration(ctx context.Context, arg FindUserForModerationParams) (FindUserForModerationRow, error) {
+	row := q.db.QueryRow(ctx, findUserForModeration, arg.UserID, arg.Query)
+	var i FindUserForModerationRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Username,
+		&i.Role,
+		&i.BannedAt,
+		&i.BanReason,
+	)
+	return i, err
+}
+
 const getAgentsMayApply = `-- name: GetAgentsMayApply :one
 SELECT agents_may_apply FROM users WHERE id = $1
 `
@@ -179,141 +211,9 @@ func (q *Queries) GetAgentsMayApply(ctx context.Context, id int64) (bool, error)
 	return agents_may_apply, err
 }
 
-const getTalentNetworkMemberByHandle = `-- name: GetTalentNetworkMemberByHandle :one
-SELECT u.talent_handle,
-       u.timezone,
-       COALESCE(u.resume_cities, '{}')::text[] AS cities,
-       u.resume_structured,
-       u.resume_structured_uploaded_at,
-       COALESCE(p.specializations, '{}')::text[] AS specializations,
-       (u.photo_object_key IS NOT NULL AND u.photo_object_key <> '')::boolean AS has_photo
-FROM users u
-LEFT JOIN user_profiles p ON p.user_id = u.id
-WHERE u.talent_handle = $1::text
-  AND u.talent_network_visibility <> 'off'
-  AND u.resume_uploaded_at IS NOT NULL
-  AND u.resume_structured_uploaded_at = u.resume_uploaded_at
-`
-
-type GetTalentNetworkMemberByHandleRow struct {
-	TalentHandle               pgtype.Text        `json:"talent_handle"`
-	Timezone                   pgtype.Text        `json:"timezone"`
-	Cities                     []string           `json:"cities"`
-	ResumeStructured           []byte             `json:"resume_structured"`
-	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
-	Specializations            []string           `json:"specializations"`
-	HasPhoto                   bool               `json:"has_photo"`
-}
-
-// One member's card, by the handle in the public URL. Same predicate as the list, so a
-// handle nobody holds, a member who has left, and one whose extract has gone stale all
-// come back as pgx.ErrNoRows — which the handler renders as the one 404. Deciding it
-// here rather than in the caller is deliberate: three ways to be absent and one way to
-// say so is a rule that cannot be half-applied.
-//
-// Read against the DATABASE, never the snapshot the list is served from. A candidate who
-// leaves must stop resolving immediately, not when the snapshot next refreshes.
-// The ::text cast is load-bearing, not decoration: talent_handle is nullable, so without
-// it sqlc types the argument as pgtype.Text and every caller has to wrap a plain string
-// it already knows is present.
-func (q *Queries) GetTalentNetworkMemberByHandle(ctx context.Context, handle string) (GetTalentNetworkMemberByHandleRow, error) {
-	row := q.db.QueryRow(ctx, getTalentNetworkMemberByHandle, handle)
-	var i GetTalentNetworkMemberByHandleRow
-	err := row.Scan(
-		&i.TalentHandle,
-		&i.Timezone,
-		&i.Cities,
-		&i.ResumeStructured,
-		&i.ResumeStructuredUploadedAt,
-		&i.Specializations,
-		&i.HasPhoto,
-	)
-	return i, err
-}
-
-const getTalentNetworkMemberUserIDByHandle = `-- name: GetTalentNetworkMemberUserIDByHandle :one
-SELECT u.id
-FROM users u
-WHERE u.talent_handle = $1::text
-  AND u.talent_network_visibility <> 'off'
-  AND u.resume_uploaded_at IS NOT NULL
-  AND u.resume_structured_uploaded_at = u.resume_uploaded_at
-`
-
-// The same "is this handle a current member" predicate as
-// GetTalentNetworkMemberByHandle, but naming only the user id — for the public photo
-// route, which needs a headshot owner, never a public card. Kept as its own query
-// rather than widening ByHandle's result: the id is not part of the public projection
-// and has no reason to travel through the same path that assembles one.
-func (q *Queries) GetTalentNetworkMemberUserIDByHandle(ctx context.Context, handle string) (int64, error) {
-	row := q.db.QueryRow(ctx, getTalentNetworkMemberUserIDByHandle, handle)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const getTalentNetworkVisibility = `-- name: GetTalentNetworkVisibility :one
-SELECT talent_network_visibility,
-       talent_handle,
-       COALESCE((talent_network_visibility <> 'off'
-        AND talent_handle IS NOT NULL
-        AND resume_uploaded_at IS NOT NULL
-        AND resume_structured_uploaded_at = resume_uploaded_at), false)::boolean AS listed
-FROM users
-WHERE id = $1
-`
-
-type GetTalentNetworkVisibilityRow struct {
-	TalentNetworkVisibility string      `json:"talent_network_visibility"`
-	TalentHandle            pgtype.Text `json:"talent_handle"`
-	Listed                  bool        `json:"listed"`
-}
-
-// The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
-// talent_handle rides along so the page can render the public URL without a second
-// round-trip. It is NULL until the first join — a non-member has no card to link to —
-// unlike the visibility, which every row carries because 'off' is the column default.
-//
-// `listed` answers the question the settings page actually has to ask: not "am I a
-// member" but "does a visitor see me". They come apart, and the gap is a live trap — a
-// candidate who joins before uploading a CV is a member with a handle whose card 404s,
-// so a page reading membership alone tells them their profile is up when it is not.
-//
-// It repeats ListTalentNetworkMembers' predicate, which is a duplication worth naming:
-// the two must be changed together. It is not shared because the catalogue's version
-// selects rows and this one describes one row, and a caller cannot ask the first
-// "and what about me".
-//
-// COALESCE is the difference from that WHERE. There, a NULL comparison simply drops the
-// row. Here the same comparison is a column scanned into a Go bool, and
-// `resume_structured_uploaded_at = resume_uploaded_at` is NULL when the extract stamp is
-// missing — which is the ordinary state of a CV that was uploaded and not yet parsed.
-// TRUE AND NULL is NULL, so a member in that state used to 500 the settings read. Not
-// listed is the answer, the same one the catalogue already gives by excluding them.
-func (q *Queries) GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error) {
-	row := q.db.QueryRow(ctx, getTalentNetworkVisibility, id)
-	var i GetTalentNetworkVisibilityRow
-	err := row.Scan(&i.TalentNetworkVisibility, &i.TalentHandle, &i.Listed)
-	return i, err
-}
-
-const getUserATSAnalysis = `-- name: GetUserATSAnalysis :one
-SELECT resume_ats_analysis
-FROM users
-WHERE id = $1
-`
-
-// The user's cached CV ATS qualitative review (content-quality + findings), or NULL
-// when none has been computed. Derived only — never the raw CV text.
-func (q *Queries) GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, error) {
-	row := q.db.QueryRow(ctx, getUserATSAnalysis, id)
-	var resume_ats_analysis []byte
-	err := row.Scan(&resume_ats_analysis)
-	return resume_ats_analysis, err
-}
-
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language
+SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language,
+       (banned_at IS NOT NULL)::boolean AS banned
 FROM users
 WHERE lower(email) = lower($1)
 `
@@ -327,6 +227,7 @@ type GetUserByEmailRow struct {
 	PasswordHash  pgtype.Text        `json:"password_hash"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	Language      string             `json:"language"`
+	Banned        bool               `json:"banned"`
 }
 
 // Login lookup. Case-insensitive on email; returns password_hash so the handler
@@ -335,6 +236,7 @@ type GetUserByEmailRow struct {
 // and the OAuth merge policy (an unverified account is seized, not silently joined).
 // language is included so a password login's response carries the account's
 // preference the same as /auth/me, rather than reporting the zero value.
+// banned drives the sign-in refusal and the silence of the reset-code mail.
 func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, lower)
 	var i GetUserByEmailRow
@@ -347,6 +249,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.Language,
+		&i.Banned,
 	)
 	return i, err
 }
@@ -397,19 +300,6 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 		&i.OnboardingCompletedAt,
 	)
 	return i, err
-}
-
-const getUserCandidateContacts = `-- name: GetUserCandidateContacts :one
-SELECT candidate_contacts
-FROM users
-WHERE id = $1
-`
-
-func (q *Queries) GetUserCandidateContacts(ctx context.Context, id int64) ([]byte, error) {
-	row := q.db.QueryRow(ctx, getUserCandidateContacts, id)
-	var candidate_contacts []byte
-	err := row.Scan(&candidate_contacts)
-	return candidate_contacts, err
 }
 
 const getUserExperienceRequireContext = `-- name: GetUserExperienceRequireContext :one
@@ -476,140 +366,6 @@ func (q *Queries) GetUserPasswordHash(ctx context.Context, id int64) (pgtype.Tex
 	return password_hash, err
 }
 
-const getUserPhoto = `-- name: GetUserPhoto :one
-SELECT photo_object_key, photo_uploaded_at
-FROM users
-WHERE id = $1
-`
-
-type GetUserPhotoRow struct {
-	PhotoObjectKey  pgtype.Text        `json:"photo_object_key"`
-	PhotoUploadedAt pgtype.Timestamptz `json:"photo_uploaded_at"`
-}
-
-// The authenticated user's headshot pointer (object key + upload time), or NULLs when
-// no headshot is stored. The image lives in S3 under the key; this is just the pointer.
-func (q *Queries) GetUserPhoto(ctx context.Context, id int64) (GetUserPhotoRow, error) {
-	row := q.db.QueryRow(ctx, getUserPhoto, id)
-	var i GetUserPhotoRow
-	err := row.Scan(&i.PhotoObjectKey, &i.PhotoUploadedAt)
-	return i, err
-}
-
-const getUserResume = `-- name: GetUserResume :one
-SELECT resume_object_key, resume_uploaded_at
-FROM users
-WHERE id = $1
-`
-
-type GetUserResumeRow struct {
-	ResumeObjectKey  pgtype.Text        `json:"resume_object_key"`
-	ResumeUploadedAt pgtype.Timestamptz `json:"resume_uploaded_at"`
-}
-
-// The authenticated user's résumé pointer (object key + upload time), or NULLs when
-// no résumé is stored. The blob lives in S3 under the key; this is just the pointer.
-func (q *Queries) GetUserResume(ctx context.Context, id int64) (GetUserResumeRow, error) {
-	row := q.db.QueryRow(ctx, getUserResume, id)
-	var i GetUserResumeRow
-	err := row.Scan(&i.ResumeObjectKey, &i.ResumeUploadedAt)
-	return i, err
-}
-
-const getUserResumeGeography = `-- name: GetUserResumeGeography :one
-SELECT resume_countries, resume_regions, resume_cities,
-       resume_structured_uploaded_at, resume_uploaded_at
-FROM users
-WHERE id = $1
-`
-
-type GetUserResumeGeographyRow struct {
-	ResumeCountries            []string           `json:"resume_countries"`
-	ResumeRegions              []string           `json:"resume_regions"`
-	ResumeCities               []string           `json:"resume_cities"`
-	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
-	ResumeUploadedAt           pgtype.Timestamptz `json:"resume_uploaded_at"`
-}
-
-// The geography derived from the user's structured résumé, alongside the two stamps the
-// caller needs to judge freshness (the derivation's own stamp and the current résumé
-// upload time) — the same stamp-and-compare the structure read uses, so a geography
-// derived from a superseded CV reads as absent rather than being served.
-// NULL arrays mean "not known"; an empty array means the CV named a place the dictionary
-// could not resolve. The two are deliberately different answers.
-func (q *Queries) GetUserResumeGeography(ctx context.Context, id int64) (GetUserResumeGeographyRow, error) {
-	row := q.db.QueryRow(ctx, getUserResumeGeography, id)
-	var i GetUserResumeGeographyRow
-	err := row.Scan(
-		&i.ResumeCountries,
-		&i.ResumeRegions,
-		&i.ResumeCities,
-		&i.ResumeStructuredUploadedAt,
-		&i.ResumeUploadedAt,
-	)
-	return i, err
-}
-
-const getUserResumeStructured = `-- name: GetUserResumeStructured :one
-SELECT resume_structured, resume_structured_model, resume_structured_uploaded_at, resume_uploaded_at,
-       candidate_contacts, resume_extract_status, resume_extract_detail, resume_extract_for
-FROM users
-WHERE id = $1
-`
-
-type GetUserResumeStructuredRow struct {
-	ResumeStructured           []byte             `json:"resume_structured"`
-	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
-	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
-	ResumeUploadedAt           pgtype.Timestamptz `json:"resume_uploaded_at"`
-	CandidateContacts          []byte             `json:"candidate_contacts"`
-	ResumeExtractStatus        pgtype.Text        `json:"resume_extract_status"`
-	ResumeExtractDetail        pgtype.Text        `json:"resume_extract_detail"`
-	ResumeExtractFor           pgtype.Timestamptz `json:"resume_extract_for"`
-}
-
-// The user's derived structured résumé plus its provenance stamps (the LLM model and
-// the résumé upload time it was derived from), alongside the current résumé upload time
-// so the caller can tell whether the structure still describes the stored CV (served
-// only when resume_structured_uploaded_at equals resume_uploaded_at). NULLs when none.
-// Also returns candidate contacts and last extract status for Profile / seed composition.
-func (q *Queries) GetUserResumeStructured(ctx context.Context, id int64) (GetUserResumeStructuredRow, error) {
-	row := q.db.QueryRow(ctx, getUserResumeStructured, id)
-	var i GetUserResumeStructuredRow
-	err := row.Scan(
-		&i.ResumeStructured,
-		&i.ResumeStructuredModel,
-		&i.ResumeStructuredUploadedAt,
-		&i.ResumeUploadedAt,
-		&i.CandidateContacts,
-		&i.ResumeExtractStatus,
-		&i.ResumeExtractDetail,
-		&i.ResumeExtractFor,
-	)
-	return i, err
-}
-
-const getUserResumeStructuredOnly = `-- name: GetUserResumeStructuredOnly :one
-SELECT resume_structured
-FROM users
-WHERE id = $1
-`
-
-// Just the structured résumé, with none of the provenance stamps and none of the
-// contacts GetUserResumeStructured returns beside it.
-//
-// It exists so the Talent Network's handle mint can read one job title without also
-// holding the candidate's phone number and email in memory. The stamp is deliberately
-// not applied here: a handle derived from a slightly stale title is still a fine
-// handle — it is frozen at mint and opaque afterwards — whereas refusing to mint over
-// an in-flight extraction would block the join itself.
-func (q *Queries) GetUserResumeStructuredOnly(ctx context.Context, id int64) ([]byte, error) {
-	row := q.db.QueryRow(ctx, getUserResumeStructuredOnly, id)
-	var resume_structured []byte
-	err := row.Scan(&resume_structured)
-	return resume_structured, err
-}
-
 const getUserRole = `-- name: GetUserRole :one
 SELECT role
 FROM users
@@ -627,14 +383,27 @@ func (q *Queries) GetUserRole(ctx context.Context, id int64) (string, error) {
 }
 
 const getUserTokenVersion = `-- name: GetUserTokenVersion :one
-SELECT token_version
-FROM users
-WHERE id = $1
+WITH seen AS (
+    UPDATE users AS su SET last_active_at = now()
+    WHERE su.id = $1 AND su.banned_at IS NULL AND su.last_active_at < now() - interval '1 day'
+)
+SELECT u.token_version
+FROM users AS u
+WHERE u.id = $1 AND u.banned_at IS NULL
 `
 
 // The account's current session generation, read on every authenticated request to
 // decide whether a correctly-signed token was revoked. One primary-key lookup; this
 // is the price of making a stateless JWT revocable at all.
+//
+// The same statement stamps last_active_at, at most once a day, because this is the
+// one place every signed-in request passes; mail_recipient (migration 0247) reads it
+// to stop optional mail to people who have not used freehire in 180 days.
+//
+// A banned account returns no row, which every caller already reads as "session revoked"
+// (middleware.resolveSession, the introspection endpoint) or, at sign-in, as a refusal
+// (authHandlers.sessionVersion). This is the one place a ban meets every cookie and
+// Bearer-JWT credential, and a ban does not stamp last_active_at.
 func (q *Queries) GetUserTokenVersion(ctx context.Context, id int64) (int32, error) {
 	row := q.db.QueryRow(ctx, getUserTokenVersion, id)
 	var token_version int32
@@ -662,140 +431,6 @@ func (q *Queries) GetUsernameByUser(ctx context.Context, id int64) (GetUsernameB
 	var i GetUsernameByUserRow
 	err := row.Scan(&i.Username, &i.UsernameUpdatedAt)
 	return i, err
-}
-
-const isBetaTester = `-- name: IsBetaTester :one
-SELECT beta_tester
-FROM users
-WHERE id = $1
-`
-
-// Whether the account is in the beta group, on its own. GetUserByID answers it too, but
-// carries nine other columns a gate has no use for — and a gate that reads a whole user
-// row invites somebody to branch on a second field from it later.
-func (q *Queries) IsBetaTester(ctx context.Context, id int64) (bool, error) {
-	row := q.db.QueryRow(ctx, isBetaTester, id)
-	var beta_tester bool
-	err := row.Scan(&beta_tester)
-	return beta_tester, err
-}
-
-const listMembersMissingTalentHandle = `-- name: ListMembersMissingTalentHandle :many
-SELECT id
-FROM users
-WHERE talent_network_visibility <> 'off'
-  AND talent_handle IS NULL
-ORDER BY id
-`
-
-// The members who joined before handles existed, and so have no public address.
-//
-// Migration 0148 rewrote every 'public' row to 'anonymous' but could not mint a handle —
-// minting reads a job title through a Go dictionary, which SQL cannot do — so those
-// accounts, and any that were already 'anonymous', are members the catalogue cannot list
-// and whose card 404s. cmd/backfill-talent-handle walks this list once and closes it.
-//
-// No stamp gate here, unlike the catalogue's own read: a member whose CV extract is stale
-// still needs an address for when it catches up, and withholding one would make the
-// backfill's own result depend on when it happened to run.
-func (q *Queries) ListMembersMissingTalentHandle(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listMembersMissingTalentHandle)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listTalentNetworkMembers = `-- name: ListTalentNetworkMembers :many
-SELECT u.talent_handle,
-       u.timezone,
-       COALESCE(u.resume_cities, '{}')::text[] AS cities,
-       u.resume_structured,
-       u.resume_structured_uploaded_at,
-       COALESCE(p.specializations, '{}')::text[] AS specializations,
-       -- Whether the member has an uploaded headshot, never the object key itself: the
-       -- catalogue card links to the blurred photo route by the member's own handle
-       -- (talentnetwork.CatalogueMember.HasPhoto), so a card can skip requesting a photo
-       -- that GetPhoto would only 404 for.
-       (u.photo_object_key IS NOT NULL AND u.photo_object_key <> '')::boolean AS has_photo
-FROM users u
-LEFT JOIN user_profiles p ON p.user_id = u.id
-WHERE u.talent_network_visibility <> 'off'
-  AND u.talent_handle IS NOT NULL
-  AND u.resume_uploaded_at IS NOT NULL
-  AND u.resume_structured_uploaded_at = u.resume_uploaded_at
-ORDER BY u.resume_structured_uploaded_at DESC, u.talent_handle DESC
-`
-
-type ListTalentNetworkMembersRow struct {
-	TalentHandle               pgtype.Text        `json:"talent_handle"`
-	Timezone                   pgtype.Text        `json:"timezone"`
-	Cities                     []string           `json:"cities"`
-	ResumeStructured           []byte             `json:"resume_structured"`
-	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
-	Specializations            []string           `json:"specializations"`
-	HasPhoto                   bool               `json:"has_photo"`
-}
-
-// Every member the public catalogue may show, in one read. The caller projects each row
-// through talentnetwork.ProjectCard and holds the result as a snapshot — see that
-// package's doc for why the whole set is read at once rather than filtered in SQL: the
-// category and seniority a card is filtered by do not exist as columns, they are derived
-// from the job title by a dictionary that changes weekly.
-//
-// The predicate is the membership rule and nothing else:
-//
-//   - not 'off' — the candidate asked to be found;
-//   - a minted handle — without one there is no URL to link the card to, so a row in
-//     this state is mid-join, not a member;
-//   - the stamp gate (resume_structured_uploaded_at = resume_uploaded_at, both set) —
-//     the same "this structure still describes the CV on file" rule the rest of the
-//     product applies. Without it most cards would be somebody's previous CV.
-//
-// LEFT JOIN, because a candidate can join before ever saving a profile: a missing
-// user_profiles row is empty facets, not a missing member.
-//
-// Ordered here rather than by the caller so the snapshot arrives sorted, and TOTALLY:
-// two members sharing a timestamp would otherwise order arbitrarily, and an arbitrary
-// order across pages silently drops some people and repeats others.
-func (q *Queries) ListTalentNetworkMembers(ctx context.Context) ([]ListTalentNetworkMembersRow, error) {
-	rows, err := q.db.Query(ctx, listTalentNetworkMembers)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListTalentNetworkMembersRow{}
-	for rows.Next() {
-		var i ListTalentNetworkMembersRow
-		if err := rows.Scan(
-			&i.TalentHandle,
-			&i.Timezone,
-			&i.Cities,
-			&i.ResumeStructured,
-			&i.ResumeStructuredUploadedAt,
-			&i.Specializations,
-			&i.HasPhoto,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listUserBlobKeys = `-- name: ListUserBlobKeys :many
@@ -831,50 +466,6 @@ func (q *Queries) ListUserBlobKeys(ctx context.Context, id int64) ([]pgtype.Text
 			return nil, err
 		}
 		items = append(items, key)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listUsersForResumeGeoBackfill = `-- name: ListUsersForResumeGeoBackfill :many
-SELECT id, coalesce(resume_structured ->> 'location', '')::text AS location, resume_uploaded_at
-FROM users
-WHERE resume_structured IS NOT NULL
-  AND resume_uploaded_at IS NOT NULL
-  AND resume_structured_uploaded_at IS NOT DISTINCT FROM resume_uploaded_at
-  AND ($1::bigint = 0 OR id = $1::bigint)
-ORDER BY id
-`
-
-type ListUsersForResumeGeoBackfillRow struct {
-	ID               int64              `json:"id"`
-	Location         string             `json:"location"`
-	ResumeUploadedAt pgtype.Timestamptz `json:"resume_uploaded_at"`
-}
-
-// Users whose stored structured résumé currently describes their stored CV, for the
-// geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:
-// deriving geography from one would route around the staleness rule that governs the
-// structure itself. Returns the location line the derivation reads plus the stamp to
-// write under, so the worker needs no second round-trip per user.
-// The location line is coalesced to ” and cast so sqlc types it as a string rather than
-// interface{}. An absent key and an empty string are the same case — the CV stated no
-// location — and both must derive to an ABSENT geography, not to an empty resolved one.
-func (q *Queries) ListUsersForResumeGeoBackfill(ctx context.Context, userID int64) ([]ListUsersForResumeGeoBackfillRow, error) {
-	rows, err := q.db.Query(ctx, listUsersForResumeGeoBackfill, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListUsersForResumeGeoBackfillRow{}
-	for rows.Next() {
-		var i ListUsersForResumeGeoBackfillRow
-		if err := rows.Scan(&i.ID, &i.Location, &i.ResumeUploadedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -971,94 +562,6 @@ func (q *Queries) SetAgentsMayApply(ctx context.Context, arg SetAgentsMayApplyPa
 	return err
 }
 
-const setTalentHandleIfUnset = `-- name: SetTalentHandleIfUnset :execrows
-UPDATE users
-SET talent_handle = $2
-WHERE id = $1
-  AND talent_handle IS NULL
-`
-
-type SetTalentHandleIfUnsetParams struct {
-	ID           int64       `json:"id"`
-	TalentHandle pgtype.Text `json:"talent_handle"`
-}
-
-// Claims a freshly minted catalogue handle for a candidate who does not have one yet.
-//
-// The `talent_handle IS NULL` predicate is the whole mechanism, and it does two jobs.
-// It makes the mint idempotent — a member who leaves and rejoins keeps the handle they
-// already shared, and a second concurrent join claims nothing — and it makes the
-// statement's own result the answer: 0 rows means somebody already has one, which the
-// caller reads rather than re-querying and racing again.
-//
-// A collision with ANOTHER account's handle surfaces as a unique-violation from
-// users_talent_handle_key (migration 0150), not as 0 rows. The caller mints a new suffix
-// and retries — the same shape internal/identity/accounts uses to allocate a username.
-func (q *Queries) SetTalentHandleIfUnset(ctx context.Context, arg SetTalentHandleIfUnsetParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setTalentHandleIfUnset, arg.ID, arg.TalentHandle)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const setTalentNetworkVisibility = `-- name: SetTalentNetworkVisibility :exec
-UPDATE users
-SET talent_network_visibility = $2
-WHERE id = $1
-`
-
-type SetTalentNetworkVisibilityParams struct {
-	ID                      int64  `json:"id"`
-	TalentNetworkVisibility string `json:"talent_network_visibility"`
-}
-
-// Owner-scoped write of the caller's Talent Network membership ('off' or 'anonymous'
-// since migration 0148). Does not touch talent_handle: the public URL stays stable
-// across a round trip through 'off', so a candidate who already shared it once — or who
-// leaves and rejoins — never has to reshare a new one.
-//
-// The value is NOT validated here. Its authority is the CHECK constraint on the column;
-// the handler mirrors that set for a cheap 400, and this statement is the third place
-// the vocabulary would have to be repeated for no gain.
-func (q *Queries) SetTalentNetworkVisibility(ctx context.Context, arg SetTalentNetworkVisibilityParams) error {
-	_, err := q.db.Exec(ctx, setTalentNetworkVisibility, arg.ID, arg.TalentNetworkVisibility)
-	return err
-}
-
-const setUserATSAnalysis = `-- name: SetUserATSAnalysis :exec
-UPDATE users
-SET resume_ats_analysis = $2
-WHERE id = $1
-`
-
-type SetUserATSAnalysisParams struct {
-	ID                int64  `json:"id"`
-	ResumeAtsAnalysis []byte `json:"resume_ats_analysis"`
-}
-
-// Cache the derived CV ATS review for the user (keyed to their stored CV).
-func (q *Queries) SetUserATSAnalysis(ctx context.Context, arg SetUserATSAnalysisParams) error {
-	_, err := q.db.Exec(ctx, setUserATSAnalysis, arg.ID, arg.ResumeAtsAnalysis)
-	return err
-}
-
-const setUserCandidateContacts = `-- name: SetUserCandidateContacts :exec
-UPDATE users
-SET candidate_contacts = $2
-WHERE id = $1
-`
-
-type SetUserCandidateContactsParams struct {
-	ID                int64  `json:"id"`
-	CandidateContacts []byte `json:"candidate_contacts"`
-}
-
-func (q *Queries) SetUserCandidateContacts(ctx context.Context, arg SetUserCandidateContactsParams) error {
-	_, err := q.db.Exec(ctx, setUserCandidateContacts, arg.ID, arg.CandidateContacts)
-	return err
-}
-
 const setUserEmailVerified = `-- name: SetUserEmailVerified :exec
 UPDATE users
 SET email_verified = true
@@ -1111,172 +614,6 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 	return token_version, err
 }
 
-const setUserPhoto = `-- name: SetUserPhoto :exec
-UPDATE users
-SET photo_object_key = $2, photo_uploaded_at = now()
-WHERE id = $1
-`
-
-type SetUserPhotoParams struct {
-	ID             int64       `json:"id"`
-	PhotoObjectKey pgtype.Text `json:"photo_object_key"`
-}
-
-// Record (or replace) the user's headshot pointer, stamping the upload time. Owner-scoped
-// by id; the object key is derived from the id, never client input. Nothing derived hangs
-// off the image, so — unlike SetUserResume — there is no cached artefact to invalidate.
-func (q *Queries) SetUserPhoto(ctx context.Context, arg SetUserPhotoParams) error {
-	_, err := q.db.Exec(ctx, setUserPhoto, arg.ID, arg.PhotoObjectKey)
-	return err
-}
-
-const setUserResume = `-- name: SetUserResume :exec
-UPDATE users u
-SET resume_object_key = $2,
-    resume_uploaded_at = t.ts,
-    resume_ats_analysis = NULL,
-    resume_extract_status = 'pending',
-    resume_extract_detail = NULL,
-    resume_extract_for = t.ts
-FROM (SELECT now() AS ts) t
-WHERE u.id = $1
-`
-
-type SetUserResumeParams struct {
-	ID              int64       `json:"id"`
-	ResumeObjectKey pgtype.Text `json:"resume_object_key"`
-}
-
-// Record (or replace) the user's stored-résumé pointer, stamping the upload time.
-// Owner-scoped by id; the object key is derived from the id, never client input.
-// Also clears any cached ATS review so a new CV is never scored with a stale one,
-// and marks structured extract pending for this upload (background work must catch up).
-func (q *Queries) SetUserResume(ctx context.Context, arg SetUserResumeParams) error {
-	_, err := q.db.Exec(ctx, setUserResume, arg.ID, arg.ResumeObjectKey)
-	return err
-}
-
-const setUserResumeExtractFailed = `-- name: SetUserResumeExtractFailed :exec
-UPDATE users
-SET resume_extract_status = 'failed',
-    resume_extract_detail = $2,
-    resume_extract_for = $3
-WHERE id = $1 AND resume_uploaded_at = $3
-`
-
-type SetUserResumeExtractFailedParams struct {
-	ID                  int64              `json:"id"`
-	ResumeExtractDetail pgtype.Text        `json:"resume_extract_detail"`
-	ResumeExtractFor    pgtype.Timestamptz `json:"resume_extract_for"`
-}
-
-// Record that structured extract failed for the current upload. The for-stamp guard
-// drops the write when a newer upload already superseded this attempt.
-func (q *Queries) SetUserResumeExtractFailed(ctx context.Context, arg SetUserResumeExtractFailedParams) error {
-	_, err := q.db.Exec(ctx, setUserResumeExtractFailed, arg.ID, arg.ResumeExtractDetail, arg.ResumeExtractFor)
-	return err
-}
-
-const setUserResumeExtractPending = `-- name: SetUserResumeExtractPending :exec
-UPDATE users
-SET resume_extract_status = 'pending',
-    resume_extract_detail = NULL,
-    resume_extract_for = $2
-WHERE id = $1 AND resume_uploaded_at = $2
-`
-
-type SetUserResumeExtractPendingParams struct {
-	ID               int64              `json:"id"`
-	ResumeExtractFor pgtype.Timestamptz `json:"resume_extract_for"`
-}
-
-// Mark a retry of structured extract as running, clearing the stale status (typically
-// 'failed') a previous attempt left — the same transition a fresh upload makes in
-// SetUserResume, done here without touching the object key or re-stamping the upload
-// time, since a retry re-reads the SAME stored résumé rather than replacing it. The
-// for-stamp guard drops the write when a newer upload already superseded this retry.
-func (q *Queries) SetUserResumeExtractPending(ctx context.Context, arg SetUserResumeExtractPendingParams) error {
-	_, err := q.db.Exec(ctx, setUserResumeExtractPending, arg.ID, arg.ResumeExtractFor)
-	return err
-}
-
-const setUserResumeGeography = `-- name: SetUserResumeGeography :exec
-UPDATE users
-SET resume_countries = $2, resume_regions = $3, resume_cities = $4
-WHERE id = $1 AND resume_uploaded_at = $5
-`
-
-type SetUserResumeGeographyParams struct {
-	ID               int64              `json:"id"`
-	ResumeCountries  []string           `json:"resume_countries"`
-	ResumeRegions    []string           `json:"resume_regions"`
-	ResumeCities     []string           `json:"resume_cities"`
-	ResumeUploadedAt pgtype.Timestamptz `json:"resume_uploaded_at"`
-}
-
-// Persist only the derived geography for a user, under the same monotonic guard the
-// structure write uses. This is the reconciler's write path: it re-derives from an
-// already-stored structure, so it must not touch the structure or its model stamp, and
-// must still refuse to write against a CV that has been replaced since the row was read.
-func (q *Queries) SetUserResumeGeography(ctx context.Context, arg SetUserResumeGeographyParams) error {
-	_, err := q.db.Exec(ctx, setUserResumeGeography,
-		arg.ID,
-		arg.ResumeCountries,
-		arg.ResumeRegions,
-		arg.ResumeCities,
-		arg.ResumeUploadedAt,
-	)
-	return err
-}
-
-const setUserResumeStructured = `-- name: SetUserResumeStructured :execrows
-UPDATE users
-SET resume_structured = $2, resume_structured_model = $3, resume_structured_uploaded_at = $4,
-    resume_countries = $5, resume_regions = $6, resume_cities = $7,
-    resume_extract_status = 'ok', resume_extract_detail = NULL, resume_extract_for = $4
-WHERE id = $1 AND resume_uploaded_at = $4
-`
-
-type SetUserResumeStructuredParams struct {
-	ID                         int64              `json:"id"`
-	ResumeStructured           []byte             `json:"resume_structured"`
-	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
-	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
-	ResumeCountries            []string           `json:"resume_countries"`
-	ResumeRegions              []string           `json:"resume_regions"`
-	ResumeCities               []string           `json:"resume_cities"`
-}
-
-// Persist the user's derived structured résumé, stamped with the producing LLM model
-// and the résumé upload time it was derived from (passed in, not now(), so the stamp
-// matches the CV the background extraction actually read). Never the raw CV text.
-// The `resume_uploaded_at = $4` guard makes the write monotonic: a slow background
-// extraction for a since-superseded CV (its stamp no longer equals the current upload
-// time) matches no row and is dropped, so a late writer can't clobber a newer CV's
-// structure with an already-stale stamp (which Store.Structured would then hide forever).
-//
-// The candidate's geography rides in this same statement rather than a second one, so it
-// inherits that guard for free and can never end up describing a different CV than the
-// structure it was derived from. It is deterministic and costs no I/O, so there is
-// nothing to gain by deferring it — and a separate write would have to duplicate the
-// guard, which is exactly how invariants drift apart.
-// On success, extract status is marked ok for this upload stamp.
-func (q *Queries) SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setUserResumeStructured,
-		arg.ID,
-		arg.ResumeStructured,
-		arg.ResumeStructuredModel,
-		arg.ResumeStructuredUploadedAt,
-		arg.ResumeCountries,
-		arg.ResumeRegions,
-		arg.ResumeCities,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const setUsername = `-- name: SetUsername :exec
 UPDATE users
 SET username = $2, username_updated_at = now()
@@ -1318,6 +655,22 @@ type SetUsernameIfAbsentParams struct {
 // case by re-reading GetUsernameByUser.
 func (q *Queries) SetUsernameIfAbsent(ctx context.Context, arg SetUsernameIfAbsentParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setUsernameIfAbsent, arg.ID, arg.Username)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const unbanUser = `-- name: UnbanUser :execrows
+UPDATE users
+SET banned_at = NULL, ban_reason = NULL, banned_by = NULL
+WHERE id = $1 AND banned_at IS NOT NULL
+`
+
+// Lift a ban. Sessions and grants stay dead (the ban bumped token_version); the person
+// signs in again. 0 rows: the account is missing or was not banned.
+func (q *Queries) UnbanUser(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, unbanUser, id)
 	if err != nil {
 		return 0, err
 	}
@@ -1373,7 +726,7 @@ func (q *Queries) UpdateUserLanguage(ctx context.Context, arg UpdateUserLanguage
 
 const updateUserTimezone = `-- name: UpdateUserTimezone :one
 UPDATE users
-SET timezone = $2
+SET timezone = CASE WHEN $2::boolean THEN COALESCE(timezone, $3::text) ELSE $3::text END
 WHERE id = $1
 RETURNING id, email, role, beta_tester, email_verified,
           (password_hash IS NOT NULL)::boolean AS has_password,
@@ -1381,8 +734,9 @@ RETURNING id, email, role, beta_tester, email_verified,
 `
 
 type UpdateUserTimezoneParams struct {
-	ID       int64       `json:"id"`
-	Timezone pgtype.Text `json:"timezone"`
+	ID          int64       `json:"id"`
+	OnlyIfUnset bool        `json:"only_if_unset"`
+	Timezone    pgtype.Text `json:"timezone"`
 }
 
 type UpdateUserTimezoneRow struct {
@@ -1399,9 +753,10 @@ type UpdateUserTimezoneRow struct {
 
 // Set (or clear, with NULL) the account's IANA timezone name. The handler validates
 // the name against time.LoadLocation before this runs — the query itself trusts its
-// input, same as every other single-column update in this file.
+// input, same as every other single-column update in this file. Automatic adoption
+// preserves a concurrently saved preference under the row lock.
 func (q *Queries) UpdateUserTimezone(ctx context.Context, arg UpdateUserTimezoneParams) (UpdateUserTimezoneRow, error) {
-	row := q.db.QueryRow(ctx, updateUserTimezone, arg.ID, arg.Timezone)
+	row := q.db.QueryRow(ctx, updateUserTimezone, arg.ID, arg.OnlyIfUnset, arg.Timezone)
 	var i UpdateUserTimezoneRow
 	err := row.Scan(
 		&i.ID,

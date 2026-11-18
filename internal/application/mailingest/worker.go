@@ -109,6 +109,10 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 		return nil
 	}
 
+	if parsed.SystemNotification {
+		return nil
+	}
+
 	recipient, ok := pickDomainRecipient(in.Recipients, w.domain)
 	if !ok {
 		log.Printf("mailingest: message %s has no %s recipient, dropped", in.S3Key, w.domain)
@@ -120,12 +124,7 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 		return err
 	}
 	if !ok {
-		// The object key is named for the same reason the two drops above name it: a
-		// dropped message is unrecoverable from the log alone, and the raw MIME stays in
-		// S3, so the key is the only way to answer what was thrown away. This line lacked
-		// it and the sibling lines had it, which made one class of drop diagnosable in a
-		// minute and this one not at all — 178 drops a day for `notifications@` could not
-		// be told apart from bounces, auto-replies and people answering a digest.
+		// The object key is the only way to find the dropped raw MIME in S3.
 		log.Printf("mailingest: unknown recipient %s (%s), dropped", recipient, in.S3Key)
 		return nil
 	}
@@ -155,12 +154,9 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 }
 
 // pickDomainRecipient returns the first recipient on our mail domain, lowercased.
-// A message may be addressed to several recipients (To/Cc); only the one on our
-// domain identifies the target mailbox. The result is lowercased because a
-// username is always lowercase (internal/identity/username.Valid), while the
-// SMTP envelope recipient carries whatever case the sender used — matching
-// them case-sensitively would silently drop mail to e.g. "Ivan@..." vs
-// "ivan@...".
+// Only the recipient on our domain identifies the target mailbox. It is lowercased
+// because usernames are always lowercase (internal/identity/username.Valid) while
+// the envelope recipient keeps the sender's case.
 func pickDomainRecipient(recipients []string, domain string) (string, bool) {
 	domain = strings.ToLower(domain)
 	for _, r := range recipients {

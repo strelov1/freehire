@@ -29,14 +29,13 @@ import (
 //	GET /public/v1/medium/<medium>/jobs?lang=de&limit=N&offset=K   a listing: total + jobs
 //	GET /public/v1/jobs/<viewkey>                                 one posting page (JobPosting)
 //
-// The board is the MEDIUM id — one publication channel of a customer (its careers site, its
-// intranet, a regional portal such as jobiq.ch); one customer often runs several media that
-// republish the same vacancies, each under its own job id, so boards are chosen so that no two
-// list the same vacancy. The listing is read
-// whole, to its natural end (fullBoardListing), and carries each job's body in tenant-defined
-// sza_* fields. It does NOT name the employer — a group's medium lists its subsidiaries' jobs
-// (fenaco: Volg, LANDI, Ernst Sutter) — so each new job is hydrated from its page's schema.org
-// JobPosting for hiringOrganization, datePosted and employmentType.
+// The board is the MEDIUM id: one publication channel of a customer (its careers site, its
+// intranet, a regional portal such as jobiq.ch). One customer often runs several media that
+// republish the same vacancies under their own job ids, so boards are chosen so that no two list
+// the same vacancy. The listing is read whole, to its natural end (fullBoardListing), and carries
+// each job's body in tenant-defined sza_* fields. It does NOT name the employer (a group's medium
+// lists its subsidiaries' jobs), so each new job is hydrated from its page's schema.org JobPosting
+// for hiringOrganization, datePosted and employmentType.
 //
 // A job published on the medium but hosted elsewhere (its directlink is a /redirect/…/
 // external_url hop to the customer's other ATS) is not this platform's posting and is skipped.
@@ -57,16 +56,15 @@ const (
 	// prospectiveRate is one request a second across the whole run: one host serves every
 	// customer.
 	prospectiveRate = rate.Limit(1)
-	// prospectivePageSize is the listing page. The API honours any size but answers slowly:
-	// 1,000 of Coop's jobs took 66 s (2026-10-29), past even the long-timeout client.
+	// prospectivePageSize is the listing page. The API honours any size but answers slowly: a
+	// thousand jobs in one page can outlast even the long-timeout client.
 	prospectivePageSize = 200
 	// prospectiveMaxPages bounds the walk; needing more fails the crawl.
 	prospectiveMaxPages = 50
-	// prospectiveMaxNewPerBoard bounds the jobs one medium hydrates in a run, so Coop's ~2,900
-	// do not spend the run's whole budget.
+	// prospectiveMaxNewPerBoard bounds the jobs one medium hydrates in a run, so a large customer
+	// does not spend the run's whole budget.
 	prospectiveMaxNewPerBoard = 300
-	// prospectiveMaxNewPerRun bounds the jobs the whole run hydrates: 1,200 page reads at one a
-	// second is twenty minutes of the 50-minute run.
+	// prospectiveMaxNewPerRun bounds the jobs the whole run hydrates, at one page read a second.
 	prospectiveMaxNewPerRun = 1200
 	// prospectiveDeadlineMargin is the time hydration leaves the pipeline to write what it read.
 	prospectiveDeadlineMargin = 5 * time.Minute
@@ -200,12 +198,11 @@ func (s prospective) wait(ctx context.Context) error {
 	return nil
 }
 
-// list reads the medium's whole listing, page by page until a short page — the listing's natural
-// end. Any page failing fails the crawl: a truncated walk would read as closures. The stated
-// total is NOT the check: it differs from what the listing returns by a job or two even on a
-// single page (2026-10-29: 12 of 165 media, 21 stated and 20 listed), so an exact match would
-// fail those boards on every run. A medium the API does not know answers 400 (or 404), which is
-// the board gone.
+// list reads the medium's whole listing, page by page until a short page, the listing's natural
+// end. Any page failing fails the crawl: a truncated walk would read as closures. The stated total
+// is NOT the check: it can differ from what the listing returns by a job or two even on a single
+// page, so an exact match would fail those boards on every run. A medium the API does not know
+// answers 400 (or 404), which is the board gone.
 func (s prospective) list(ctx context.Context, board string) ([]prospectivePosting, error) {
 	var all []prospectiveJob
 	total := -1
@@ -295,9 +292,8 @@ func (s prospective) detail(ctx context.Context, e CompanyEntry, p prospectivePo
 		}
 		return Job{}, false
 	}
-	// Some customers' pages carry no JobPosting at all (fenaco, Helvetia, Bühler, 11 of 137
-	// media on 2026-10-29). The listing already holds the body, so such a job keeps the board's
-	// employer and the listing's dates rather than going unread forever.
+	// Some customers' pages carry no JobPosting at all. The listing already holds the body, so such
+	// a job keeps the board's employer and the listing's dates rather than going unread forever.
 	var ld prospectiveLD
 	ldJobPosting(root, &ld)
 	j, ok := prospectiveToJob(e, p, ld)
@@ -308,7 +304,7 @@ func (s prospective) detail(ctx context.Context, e CompanyEntry, p prospectivePo
 }
 
 // prospectiveBody is the order the sza_* body fields are joined in. Each customer defines its own
-// set; these are the ones that carry prose (2026-10-29, twelve media sampled).
+// set; these are the ones that carry prose.
 var prospectiveBody = []struct{ key, heading string }{
 	{"sza_introduction", ""},
 	{"sza_short_description", ""},
@@ -369,8 +365,7 @@ func prospectiveToJob(e CompanyEntry, p prospectivePosting, ld prospectiveLD) (J
 	return j, true
 }
 
-// prospectiveTag is an HTML tag inside a title: customers break long titles with <BR /> (fenaco,
-// 2026-10-29).
+// prospectiveTag is an HTML tag inside a title: customers break long titles with <BR />.
 var prospectiveTag = regexp.MustCompile(`<[^>]*>`)
 
 func prospectiveTitle(j prospectiveJob) string {

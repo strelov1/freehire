@@ -23,15 +23,21 @@ import { serialQueue } from '#lib/serialQueue.js';
 const queue = serialQueue();
 
 async function sync(): Promise<void> {
+  if (!profileStore.profile) return;
+  await savedSearches.ensureLoaded();
   const p = profileStore.profile;
   if (!p) return;
-  await savedSearches.ensureLoaded();
   const existing = savedSearches.items.find((s) => s.derived_from_profile);
   if (!existing) return;
   try {
-    await savedSearches.update(existing.id, {
-      query: filtersToParams(filtersFromProfile(p)).toString(),
-    });
+    const query = filtersToParams(filtersFromProfile(p)).toString();
+    if (!query) {
+      // Clearing the last preference must not turn a profile alert into a feed
+      // covering every job. Removing it also removes its channel subscriptions.
+      await savedSearches.remove(existing.id);
+      return;
+    }
+    await savedSearches.update(existing.id, { query });
   } catch {
     // best-effort — see module doc comment.
   }

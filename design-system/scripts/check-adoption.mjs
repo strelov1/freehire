@@ -60,7 +60,13 @@ function names(clause) {
   if (!braced) return [];
   return braced[1]
     .split(',')
-    .map((name) => name.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0].trim())
+    .map((name) =>
+      name
+        .trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)[0]
+        .trim(),
+    )
     .filter(Boolean);
 }
 
@@ -101,14 +107,17 @@ function main() {
   // record, and telling someone to rerun with --update over a stray import
   // sends them the wrong way.
   if (trespass.length > 0) {
-    console.error(`\nImport from ${DOOR} instead. It re-exports the package wholesale, so there is\nnothing reachable by naming ${PACKAGE} that is not reachable through the door.`);
+    console.error(
+      `\nImport from ${DOOR} instead. It re-exports the package wholesale, so there is\nnothing reachable by naming ${PACKAGE} that is not reachable through the door.`,
+    );
   }
   if (!ok) {
-    console.error('\nAdoption is held at exactly its baseline. A primitive gaining consumers is\ngood news the baseline has to record: rerun with --update and commit the diff.');
+    console.error(
+      '\nAdoption is held at exactly its baseline. A primitive gaining consumers is\ngood news the baseline has to record: rerun with --update and commit the diff.',
+    );
   }
   if (!ok || trespass.length > 0) process.exit(1);
   console.log('✓ adoption matches its baseline.');
 }
-
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main();

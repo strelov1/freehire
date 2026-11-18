@@ -11,13 +11,9 @@ import (
 )
 
 // energyjobline adapts EnergyJobline (www.energyjobline.com), an energy-sector job-portal
-// aggregator (oil & gas is one of its categories). It is boardless — one sitemap index
-// covers the whole site, no per-tenant board id — and an aggregator: each posting's
-// employer comes from its own schema.org JobPosting hiringOrganization, the same
-// resolution bayt.go/gulftalent.go use. For agency/recruiter-submitted postings that
-// value is the agency's own brand (e.g. "Energy Jobline ZR") rather than a confidential
-// end client — verified against the live site's own human-visible company link, not just
-// its ld+json, so it is stored as-is rather than filtered or guessed around.
+// aggregator. Boardless: one sitemap index covers the site. Each posting's employer comes from its
+// schema.org JobPosting hiringOrganization, as in bayt.go/gulftalent.go. For agency-submitted
+// postings that is the agency's own brand, not a confidential end client, and is stored as-is.
 //
 // The sitemap and the detail pages need different transports (see crawlerUserAgent and
 // energyjoblineRequestInterval), so, like clinch, the two are separate parameters rather
@@ -34,9 +30,8 @@ type energyjobline struct {
 const energyjoblineSitemapIndexURL = "https://www.energyjobline.com/sitemap.xml"
 
 // energyjoblineMaxNewPerRun is the hydration budget per run. At the pacer's 1.5 s a detail
-// page, 1200 is ~30 minutes — inside the 50-minute unit timeout with room for the sitemap
-// walk. Measured 2026-10-22 the sitemap lists ~182 000 postings against ~116 000 stored, so
-// the backlog drains over a few days of runs rather than overrunning every one of them.
+// page, 1200 is ~30 minutes, inside the 50-minute unit timeout with room for the sitemap walk.
+// The sitemap lists more postings than are stored, so the backlog drains over several runs.
 const energyjoblineMaxNewPerRun = 1200
 
 // NewEnergyJobline builds the EnergyJobline adapter: sitemap fetches the site's sitemap
@@ -60,8 +55,7 @@ func (e energyjobline) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error
 
 // FetchNew fetches detail only for a posting the catalogue does not already have, at most
 // maxNewPerRun of them; a stored posting yields a liveness-refresh job with no detail
-// request. Re-reading every page is what kept the crawl from ever finishing: ~182 000 pages
-// at 1.5 s each is days of work against a 50-minute run.
+// request. Re-reading every page never finished inside a 50-minute run.
 func (e energyjobline) FetchNew(ctx context.Context, ce CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	urls, err := e.jobURLs(ctx)
 	if err != nil {
@@ -147,10 +141,8 @@ func (e energyjobline) detail(ctx context.Context, ce CompanyEntry, link string)
 		Title:      strings.TrimSpace(p.Title),
 		Company:    company,
 		Location:   location,
-		// EnergyJobline's description carries HTML-entity-encoded markup (e.g. literal
-		// "&amp;" inside the JSON string, confirmed on a live posting), so it needs
-		// unescaping before sanitizeHTML — unlike bayt.go/gulftalent.go, whose descriptions
-		// arrive already decoded.
+		// The description carries HTML-entity-encoded markup (literal "&amp;" inside the JSON
+		// string), so it needs unescaping before sanitizeHTML, unlike bayt.go/gulftalent.go.
 		Description: sanitizeHTML(html.UnescapeString(p.Description)),
 		Remote:      isRemote(location),
 		PostedAt:    parseDate(p.DatePosted),

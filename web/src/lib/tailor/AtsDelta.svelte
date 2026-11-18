@@ -44,10 +44,7 @@
     </header>
 
     {#if view.warning}
-      <p
-        class="mb-2 rounded-lg bg-warning/10 px-2 py-1.5 text-xs text-warning-strong"
-        role="status"
-      >
+      <p class="mb-2 rounded-lg bg-warning/10 px-2 py-1.5 text-xs text-warning-strong" role="status">
         {view.warning}
       </p>
     {/if}

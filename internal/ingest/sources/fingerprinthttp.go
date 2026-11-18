@@ -19,12 +19,10 @@ import (
 
 // fingerprintHTTP is the Chrome-fingerprint transport shared by the adapters whose edge rejects
 // Go's default TLS+HTTP/2 fingerprint (Meta's edge 400s it; Bayt's and GulfTalent's Akamai/
-// Cloudflare edges 403 it). A live spike confirmed plain JA3 spoofing via utls is not enough — the
-// edge fingerprints the HTTP/2 layer too; tls-client with a Chrome profile spoofs both the JA3 and
-// the Chrome HTTP/2 fingerprint and is served normally. This is the only file in the package that
-// imports tls-client/fhttp; the fork never leaks into the rest of internal/ingest/sources. Connections
-// still dial through the safehttp SSRF guard via WithDialer (TestFingerprintHTTPBlocksInternalTarget
-// locks that contract).
+// Cloudflare edges 403 it). JA3 spoofing via utls alone is not enough, since the edge fingerprints
+// the HTTP/2 layer too; tls-client with a Chrome profile spoofs both. This is the only file in the
+// package that imports tls-client/fhttp. Connections still dial through the safehttp SSRF guard
+// via WithDialer (TestFingerprintHTTPBlocksInternalTarget locks that contract).
 //
 // Upgrade note: tls-client bundles forks of net/http (fhttp) and utls. When bumping it, re-run the
 // live adapter smoke of every consumer (an edge can tighten its fingerprint check) and re-confirm
@@ -57,9 +55,8 @@ func newFingerprintHTTP() (*fingerprintHTTP, error) {
 
 // newProxiedFingerprintHTTP builds a Chrome-fingerprint transport that egresses through the
 // proxy at proxyURL — for a source blocked by BOTH its TLS-fingerprint check AND the prod
-// datacenter IP. gulftalent is the case: a correct Chrome fingerprint from the direct
-// datacenter IP still 403s, but the same fingerprint through the residential proxy is served
-// 200 (spike-verified — via the same proxy, curl's JA3 403s while this Chrome JA3 is 200). The
+// datacenter IP (gulftalent): a correct Chrome fingerprint from the datacenter IP still 403s, but
+// the same fingerprint through the residential proxy is served. The
 // proxy dial replaces the SSRF-guarded direct dialer; the target is a fixed trusted host, so the
 // SSRF guard is moot.
 func newProxiedFingerprintHTTP(proxyURL string) (*fingerprintHTTP, error) {
@@ -79,11 +76,16 @@ func newProxiedFingerprintHTTP(proxyURL string) (*fingerprintHTTP, error) {
 // single host, a dropped detail page reappears on the next run, and a transient list-fetch failure
 // simply fails the board for that run (no jobs are closed on a single miss).
 func (c *fingerprintHTTP) get(ctx context.Context, url string) ([]byte, error) {
+	return c.getWith(ctx, url, fpHeaders())
+}
+
+// getWith is get with the caller's header set.
+func (c *fingerprintHTTP) getWith(ctx context.Context, url string, h fhttp.Header) ([]byte, error) {
 	req, err := fhttp.NewRequestWithContext(ctx, fhttp.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("sources: build request %s: %w", url, err)
 	}
-	req.Header = fpHeaders()
+	req.Header = h
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -129,7 +131,19 @@ func (c *fingerprintHTTP) GetHTML(ctx context.Context, url string) (*html.Node, 
 
 // GetJSON fetches url over the Chrome-fingerprint client and decodes its JSON body into v.
 func (c *fingerprintHTTP) GetJSON(ctx context.Context, url string, v any) error {
-	body, err := c.get(ctx, url)
+	return c.getJSONWith(ctx, url, fpHeaders(), v)
+}
+
+// FetchJSON is GetJSON sent with the headers a page's own fetch() call carries instead of a
+// navigation's. jobleads' edge serves its detail API to the fetch shape and answers the
+// navigation shape with a Cloudflare managed challenge (403, cf-mitigated: challenge) about half
+// the time: measured 2026-11-15 on the same 24 postings, 24/24 served vs 13/24.
+func (c *fingerprintHTTP) FetchJSON(ctx context.Context, url string, v any) error {
+	return c.getJSONWith(ctx, url, fpFetchHeaders(), v)
+}
+
+func (c *fingerprintHTTP) getJSONWith(ctx context.Context, url string, h fhttp.Header, v any) error {
+	body, err := c.getWith(ctx, url, h)
 	if err != nil {
 		return err
 	}
@@ -226,4 +240,12 @@ func fpPostHeaders() fhttp.Header {
 			"sec-fetch-dest", "accept-language",
 		},
 	}
+}
+
+// fpFetchHeaders is fpPostHeaders for a body-less fetch() GET: no content-type. The keys are
+// lower-case, so the entry is deleted directly; Header.Del would canonicalize and miss it.
+func fpFetchHeaders() fhttp.Header {
+	h := fpPostHeaders()
+	delete(h, "content-type")
+	return h
 }

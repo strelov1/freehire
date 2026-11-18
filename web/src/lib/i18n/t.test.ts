@@ -121,9 +121,7 @@ describe('format', () => {
   it('substitutes the same placeholder wherever a translation moved it', () => {
     // The whole reason this exists rather than a prefix/suffix catalog pair: a
     // translation is free to place the value anywhere its own grammar wants.
-    expect(format('{skill}'.concat(' обновить не удалось'), { skill: 'go' })).toBe(
-      'go обновить не удалось',
-    );
+    expect(format('{skill}'.concat(' обновить не удалось'), { skill: 'go' })).toBe('go обновить не удалось');
   });
 
   it('substitutes more than one distinct placeholder', () => {

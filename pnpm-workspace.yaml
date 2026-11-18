@@ -1,0 +1,9 @@
+# pnpm 11 structural config for the root tooling package — not a workspace definition
+# (no packages: list); web/, design-system/ and extension/ keep their own.
+overrides:
+  # undici reaches the root only through @typespec/openapi3 (its @scalar parsers), at
+  # build time, against the local typespec/ sources. Floors at the first releases that
+  # close the published advisories, the same ones web/pnpm-workspace.yaml explains:
+  # 7.30.1 for the 7.x line @scalar/json-magic 0.13 pins, 8.12.4 for the 8.x line.
+  'undici@>=7.0.0 <7.30.1': 7.30.1
+  'undici@>=8.0.0 <8.12.4': 8.12.4

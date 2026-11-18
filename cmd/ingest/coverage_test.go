@@ -17,7 +17,7 @@ type fakeAsk struct {
 	askedAfter time.Time
 }
 
-func (f *fakeAsk) ask(_ context.Context, folded, _ []string, seenAfter time.Time) ([]string, error) {
+func (f *fakeAsk) ask(_ context.Context, folded, _, _ []string, seenAfter time.Time) ([]string, error) {
 	f.askedSlugs = append(f.askedSlugs, folded)
 	f.askedAfter = seenAfter
 	return f.answer, f.err
@@ -30,7 +30,7 @@ func TestCoverageCreditsEverySpellingOfAFoldedAnswer(t *testing.T) {
 	c := &coverage{ask: fake.ask}
 
 	got, err := c.NonAggregatorCompanies(context.Background(),
-		[]string{"cfo-insights", "cfoinsights", "acme"}, []string{"himalayas"})
+		[]string{"cfo-insights", "cfoinsights", "acme"}, []string{"himalayas"}, nil)
 	if err != nil {
 		t.Fatalf("NonAggregatorCompanies: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestCoverageAnswersOnlyAboutSlugsItWasAskedFor(t *testing.T) {
 	fake := &fakeAsk{answer: []string{"cfoinsights", "someoneelse"}}
 	c := &coverage{ask: fake.ask}
 
-	got, err := c.NonAggregatorCompanies(context.Background(), []string{"cfo-insights"}, nil)
+	got, err := c.NonAggregatorCompanies(context.Background(), []string{"cfo-insights"}, nil, nil)
 	if err != nil {
 		t.Fatalf("NonAggregatorCompanies: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestCoverageAsksAboutFoldedSlugsWithinTheFreshnessWindow(t *testing.T) {
 	c := &coverage{ask: fake.ask}
 	before := time.Now()
 
-	if _, err := c.NonAggregatorCompanies(context.Background(), []string{"cfo-insights"}, nil); err != nil {
+	if _, err := c.NonAggregatorCompanies(context.Background(), []string{"cfo-insights"}, nil, nil); err != nil {
 		t.Fatalf("NonAggregatorCompanies: %v", err)
 	}
 	after := time.Now()
@@ -85,7 +85,7 @@ func TestCoverageSkipsASlugThatFoldsToNothing(t *testing.T) {
 	fake := &fakeAsk{}
 	c := &coverage{ask: fake.ask}
 
-	got, err := c.NonAggregatorCompanies(context.Background(), []string{"--"}, nil)
+	got, err := c.NonAggregatorCompanies(context.Background(), []string{"--"}, nil, nil)
 	if err != nil {
 		t.Fatalf("NonAggregatorCompanies: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestCoverageBatchesLargeRequests(t *testing.T) {
 	fake := &fakeAsk{}
 	c := &coverage{ask: fake.ask}
 
-	if _, err := c.NonAggregatorCompanies(context.Background(), slugs, nil); err != nil {
+	if _, err := c.NonAggregatorCompanies(context.Background(), slugs, nil, nil); err != nil {
 		t.Fatalf("NonAggregatorCompanies: %v", err)
 	}
 	if len(fake.askedSlugs) != 2 {
@@ -123,7 +123,7 @@ func TestCoverageReportsAQueryFailure(t *testing.T) {
 	fake := &fakeAsk{err: errors.New("connection refused")}
 	c := &coverage{ask: fake.ask}
 
-	if _, err := c.NonAggregatorCompanies(context.Background(), []string{"acme"}, nil); err == nil {
+	if _, err := c.NonAggregatorCompanies(context.Background(), []string{"acme"}, nil, nil); err == nil {
 		t.Fatal("want the query failure surfaced, got nil")
 	}
 }

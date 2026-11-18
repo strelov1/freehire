@@ -8,7 +8,7 @@
 // with a label per tool.
 
 import { format, plural, t } from '#lib/i18n/t.js';
-import type { Locale } from '#lib/locale.js';
+import type { Locale } from '#lib/i18n/locale.js';
 import { messages } from './tool-formatters.messages';
 
 export interface ToolCall {
@@ -167,7 +167,6 @@ function readList(input: unknown, key: string): string | null {
   const parts = v.filter((s): s is string => typeof s === 'string');
   return parts.length > 0 ? truncate(parts.join(', '), 60) : null;
 }
-
 
 /** How many edits one cv_edit call carried — the tool takes a batch, not a single patch. */
 function editCount(input: unknown, locale: Locale = 'en'): string | null {

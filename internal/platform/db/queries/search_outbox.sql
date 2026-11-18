@@ -120,7 +120,11 @@ WHERE id IN (
     FROM search_outbox o
     LEFT JOIN jobs j ON j.id = o.job_id
     WHERE o.failed_at IS NULL
-      AND (j.id IS NULL OR j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL)
+      -- The exact complement of ClaimSearchOutboxBatch's EXISTS (open, canonical, NOT
+      -- is_private). A private posting (a user's pasted JD) is never indexed, so its
+      -- entry can never be claimed; without OR j.is_private it stayed queued forever,
+      -- counted in depth and pinned the oldest-age gauge to its own age.
+      AND (j.id IS NULL OR j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL OR j.is_private)
     LIMIT sqlc.arg(max_rows)
 );
 
@@ -138,3 +142,61 @@ SET attempts   = attempts + 1,
                  END
 WHERE id = sqlc.arg(id)
 RETURNING attempts, failed_at;
+
+-- name: RequeueSearchOutbox :exec
+-- Queue a job whose row was rewritten after an entry may already have been claimed. Unlike
+-- EnqueueSearchOutbox it re-stamps a live entry (a new id, so the drain's completion of the
+-- claimed one does not delete it) and clears its dead-letter state, so the document is pushed
+-- again from the row as it stands now — the shape SetJobEngagement uses for the same reason.
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT j.id, COALESCE(j.posted_at, j.created_at)
+FROM jobs j
+WHERE j.id = sqlc.arg(job_id) AND j.closed_at IS NULL AND NOT j.is_private
+ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;
+
+-- name: EnqueueSearchTimeCrossings :execrows
+-- Queue the open canonical postings whose search document changed in the window
+-- (since, until] through the passage of time alone, with no write to the row:
+--   * their age crossed one of age_days — the reality class turns at fixed ages
+--     (jobreality.AgeCrossingDays) — or their posted_at age crossed one of posted_age_days,
+--     where the fake-freshness flag turns (jobreality.PostedAgeCrossingDays);
+--   * their source's unseen window ran out (search.Withheld), so the drain must take the
+--     document out. sources/unseen_seconds is that per-source map; a source absent from it
+--     is never withheld on this ground.
+-- Nothing else would ever queue them, so without this pass they waited for a full rebuild.
+-- A posting crosses at created_at + age (or last_seen_at + window), hence the bands below.
+-- One sequential pass over the open rows: last_seen_at (job_activity's, joined by primary key) is
+-- deliberately in no index (the liveness touch must stay heap-only), so the caller runs this a
+-- few times a day.
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT j.id, COALESCE(j.posted_at, j.created_at)
+FROM jobs j
+LEFT JOIN job_activity a ON a.job_id = j.id
+CROSS JOIN LATERAL (
+    SELECT (sqlc.arg(unseen_seconds)::bigint[])[array_position(sqlc.arg(sources)::text[], j.source)] AS secs
+) w
+WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
+  AND (
+    EXISTS (
+        SELECT 1 FROM unnest(sqlc.arg(age_days)::int[]) AS d(days)
+        WHERE j.created_at >  sqlc.arg(since)::timestamptz - make_interval(days => d.days)
+          AND j.created_at <= sqlc.arg(until)::timestamptz - make_interval(days => d.days)
+    )
+    OR EXISTS (
+        SELECT 1 FROM unnest(sqlc.arg(posted_age_days)::int[]) AS d(days)
+        WHERE j.posted_at >  sqlc.arg(since)::timestamptz - make_interval(days => d.days)
+          AND j.posted_at <= sqlc.arg(until)::timestamptz - make_interval(days => d.days)
+    )
+    OR (w.secs IS NOT NULL
+        AND a.last_seen_at >  sqlc.arg(since)::timestamptz - make_interval(secs => w.secs)
+        AND a.last_seen_at <= sqlc.arg(until)::timestamptz - make_interval(secs => w.secs))
+  )
+-- DO NOTHING and id order, unlike the per-row writers' re-stamp: this one statement upserts
+-- thousands of entries while every ingest transaction upserts its own, and the re-stamp's row
+-- locks taken in scan order deadlocked against them on its first prod run (2026-11-05). An
+-- entry already queued is pushed from the row as it stands when claimed. A wave already in
+-- flight at the crossing misses it and deletes its entry; the caller's next run re-covers the
+-- last hour of this window for exactly that case (cmd/reindex timeCrossingsOverlap).
+ORDER BY j.id
+ON CONFLICT (job_id) DO NOTHING;

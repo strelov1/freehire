@@ -77,14 +77,14 @@ func recoveryApp(t *testing.T) (*fiber.App, *captureMailer, *db.Queries, *auth.I
 	cookieAuth := auth.RequireAuth(iss, queries)
 	app.Post("/api/v1/auth/register", h.Register)
 	app.Post("/api/v1/auth/login", h.Login)
-	app.Post("/api/v1/auth/verify/request", cookieAuth, h.RequestEmailVerification)
-	app.Post("/api/v1/auth/verify/confirm", cookieAuth, h.ConfirmEmailVerification)
-	app.Post("/api/v1/auth/password/forgot", h.ForgotPassword)
-	app.Post("/api/v1/auth/password/reset", h.ResetPassword)
+	app.Post("/api/v1/auth/verify/request", cookieAuth, newContract(contractHandlers{authHandlers: h}))
+	app.Post("/api/v1/auth/verify/confirm", cookieAuth, newContract(contractHandlers{authHandlers: h}))
+	app.Post("/api/v1/auth/password/forgot", newContract(contractHandlers{authHandlers: h}))
+	app.Post("/api/v1/auth/password/reset", newContract(contractHandlers{authHandlers: h}))
 	app.Post("/api/v1/me/password", cookieAuth, h.ChangePassword)
-	app.Post("/api/v1/me/email", cookieAuth, h.RequestEmailChange)
+	app.Post("/api/v1/me/email", cookieAuth, newContract(contractHandlers{authHandlers: h}))
 	app.Post("/api/v1/me/email/confirm", cookieAuth, h.ConfirmEmailChange)
-	app.Get("/api/v1/auth/me", cookieAuth, h.Me)
+	app.Get("/api/v1/auth/me", cookieAuth, newContract(contractHandlers{authHandlers: h}))
 	return app, mailer, queries, iss
 }
 

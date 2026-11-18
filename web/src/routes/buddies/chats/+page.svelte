@@ -28,6 +28,12 @@
 <h1 class="sr-only">Chats</h1>
 <!-- BuddyChatView reads its initial conversation once, so a new one means a new view. -->
 {#key linked}
-  <BuddyChatView initialId={linked} oninvite={(h) => { inviteHandle = h; inviteOpen = true; }} />
+  <BuddyChatView
+    initialId={linked}
+    oninvite={(h) => {
+      inviteHandle = h;
+      inviteOpen = true;
+    }}
+  />
 {/key}
 <BuddyInviteDialog bind:open={inviteOpen} handle={inviteHandle} onsent={(conversation) => openSent(conversation.id)} />

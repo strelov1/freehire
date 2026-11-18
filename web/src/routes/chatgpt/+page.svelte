@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { MCP_CATALOG_PITCH } from '#lib/mcpCopy.js';
   import ChatGptView from '#lib/components/ChatGptView.svelte';
   import Seo from '#lib/components/Seo.svelte';
 
@@ -8,7 +9,7 @@
 
 <Seo
   title="freehire for ChatGPT — search IT jobs inside ChatGPT"
-  description="Add the freehire app to ChatGPT in one click and search the live IT job catalogue from a chat: jobs as cards, salary ranges, similar roles and which postings are still open. Free, no account needed."
+  description={`${MCP_CATALOG_PITCH} Find roles with AI, then connect your account to save jobs, track applications and manage alerts.`}
   {canonical}
 />
 

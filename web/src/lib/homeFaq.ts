@@ -1,5 +1,5 @@
 // The site's FAQ content — the single source for both the visible section
-// (HomeView.svelte) and the FAQPage JSON-LD. Google requires the schema's answers to
+// (HomeClosing.svelte) and the FAQPage JSON-LD. Google requires the schema's answers to
 // match the on-page text, so they share this. Both now render on /about, which is
 // where HomeView moved when the homepage became the job feed; the schema has to
 // follow the visible copy, so it must not be emitted from a page that no longer
@@ -11,7 +11,7 @@ export const HOME_FAQ: FaqItem[] = [
   {
     question: 'What is freehire?',
     answer:
-      'freehire is a free, open-source IT job aggregator. It pulls tech job postings straight from company career boards — Greenhouse, Lever, Ashby, Teamtailor and more — removes duplicates, and tags each role with its stack, seniority, salary and location, so you search jobs, not job boards.',
+      'freehire is a free, open-source tech job aggregator. It pulls tech job postings straight from company career boards — Greenhouse, Lever, Ashby, Teamtailor and more — removes duplicates, and tags each role with its stack, seniority, salary and location, so you search jobs, not job boards.',
   },
   {
     question: 'Is freehire free to use?',

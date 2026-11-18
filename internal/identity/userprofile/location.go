@@ -23,18 +23,15 @@ var (
 	ErrTooManyCities = errors.New("userprofile: too many cities")
 )
 
-// Caps on the free-ish list fields — sanity limits, not domain rules (mirroring
-// maxSpecializations). Countries are bounded by the ISO set; cities are free text.
+// Sanity caps on the list fields, not domain rules.
 const (
 	maxCountries = 20
 	maxCities    = 10
 )
 
-// LocationPreferences is the optional, structured "where & how I want to work" block on a
-// profile: the accepted work arrangements plus three independent, freely-combinable
-// geographic parts — the remote reach, the current base, and the relocation willingness.
-// Every field is optional; an entirely-empty block is treated as "no preferences" (stored
-// NULL). Stored whole as JSONB and echoed back verbatim.
+// LocationPreferences is the optional "where and how I want to work" block: accepted work
+// modes plus three independent geographic parts (remote reach, current base, relocation).
+// An entirely empty block is stored NULL; otherwise it is stored whole as JSONB.
 type LocationPreferences struct {
 	WorkModes  []string     `json:"work_modes,omitempty"`
 	Remote     GeoSet       `json:"remote"`
@@ -64,8 +61,7 @@ type Relocation struct {
 	Cities    []string `json:"cities,omitempty"`
 }
 
-// isEmpty reports whether the block carries no preference at all, so the service can store
-// NULL instead of a meaningless empty object.
+// isEmpty reports whether the block carries no preference, so it can be stored NULL.
 func (l LocationPreferences) isEmpty() bool {
 	return len(l.WorkModes) == 0 &&
 		len(l.Remote.Regions) == 0 && len(l.Remote.Countries) == 0 &&
@@ -74,10 +70,9 @@ func (l LocationPreferences) isEmpty() bool {
 		len(l.Relocation.Regions) == 0 && len(l.Relocation.Countries) == 0 && len(l.Relocation.Cities) == 0
 }
 
-// normalizeLocationPreferences validates and normalizes the optional location block, then
-// marshals it to JSONB. A nil input, or a block that is empty after normalization, yields a
-// nil payload (stored as NULL — "no preferences"). Any out-of-vocabulary value rejects the
-// whole save.
+// normalizeLocationPreferences validates the block and marshals it to JSONB. Nil or
+// empty-after-normalization yields a nil payload (NULL); any out-of-vocabulary value
+// rejects the whole save.
 func normalizeLocationPreferences(loc *LocationPreferences) (json.RawMessage, error) {
 	if loc == nil {
 		return nil, nil
@@ -138,9 +133,8 @@ func normalizeGeoSet(g GeoSet) (GeoSet, error) {
 	return GeoSet{Regions: regions, Countries: countries}, nil
 }
 
-// normalizeEnum lowercases, trims, and deduplicates values (first-seen order), rejecting any
-// not in the controlled vocabulary (all lowercase) with invalidErr. Lowercasing keeps the
-// dedup and membership check case-insensitive. Blanks are dropped; an empty result is valid.
+// normalizeEnum lowercases, trims and dedupes values (first-seen order), rejecting any not in
+// the lowercase vocabulary with invalidErr. Blanks are dropped.
 func normalizeEnum(values, vocab []string, invalidErr error) ([]string, error) {
 	out := make([]string, 0, len(values))
 	seen := make(map[string]struct{}, len(values))
@@ -185,12 +179,9 @@ func normalizeCountries(values []string) ([]string, error) {
 	return out, nil
 }
 
-// cleanCountryCode lowercases and trims a country code, returning "" for blank. A non-blank
-// value that is not a well-formed ISO 3166-1 alpha-2 shape is rejected. We validate shape,
-// not assignment: jobs derive their country facet from the curated location dictionary
-// (a subset that omits real countries like jm/cu), so a membership check would reject
-// countries a user legitimately picks — and a well-formed but unused code is harmless (it
-// simply matches no jobs, like an unknown city or skill).
+// cleanCountryCode lowercases and trims a country code, returning "" for blank and rejecting
+// a non-blank value that is not an ISO 3166-1 alpha-2 shape. Shape only, not membership: the
+// location dictionary omits real countries (jm, cu), and an unused code just matches no jobs.
 func cleanCountryCode(raw string) (string, error) {
 	code := strings.ToLower(strings.TrimSpace(raw))
 	if code == "" {

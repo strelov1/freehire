@@ -13,20 +13,6 @@ import (
 	"strings"
 
 	"github.com/gzuidhof/tygo/tygo"
-
-	"github.com/strelov1/freehire/internal/application/appevent"
-	"github.com/strelov1/freehire/internal/application/mailclassify"
-	"github.com/strelov1/freehire/internal/application/userjob"
-	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
-	"github.com/strelov1/freehire/internal/dict/classify"
-	"github.com/strelov1/freehire/internal/dict/industrytag"
-	"github.com/strelov1/freehire/internal/dict/location"
-	"github.com/strelov1/freehire/internal/dict/perks"
-	"github.com/strelov1/freehire/internal/dict/skilltag"
-	"github.com/strelov1/freehire/internal/dict/vocab"
-	"github.com/strelov1/freehire/internal/ingest/sources"
-	"github.com/strelov1/freehire/internal/job/collections"
-	"github.com/strelov1/freehire/internal/job/ghost"
 )
 
 const outputPath = "web/src/lib/generated/contracts.ts"
@@ -86,6 +72,7 @@ func genStructs() (string, error) {
 	matchanalysisTS := filepath.Join(tmp, "matchanalysis.ts")
 	coverletterTS := filepath.Join(tmp, "coverletter.ts")
 	resumeextractTS := filepath.Join(tmp, "resumeextract.ts")
+	resumeTS := filepath.Join(tmp, "resume.ts")
 	cvTS := filepath.Join(tmp, "cv.ts")
 	cveditTS := filepath.Join(tmp, "cvedit.ts")
 	applyformTS := filepath.Join(tmp, "applyform.ts")
@@ -174,9 +161,8 @@ func genStructs() (string, error) {
 				Path:         "github.com/strelov1/freehire/internal/candidate/coverletter",
 				OutputPath:   coverletterTS,
 				IncludeFiles: []string{"coverletter.go"},
-				// A uuid is a string on the wire. Without the mapping tygo emits `any`, and
-				// `any` in a generated contract is the one thing the generation is for
-				// avoiding — the client would lose the compile error when the shape moves.
+				// A uuid is a string on the wire; without the mapping tygo emits `any`, and the client loses
+				// the compile error when the shape moves.
 				TypeMappings: map[string]string{"uuid.UUID": "string"},
 			},
 			{
@@ -184,13 +170,8 @@ func genStructs() (string, error) {
 				// CardRole). Only card.go: catalogue.go beside it holds the serving
 				// machinery — the snapshot, the Store interface, the filter — none of
 				// which crosses the wire.
-				//
-				// Generated rather than hand-written precisely because of what these types
-				// are FOR. The card is a whitelist deciding what a stranger may see about
-				// a person; a hand-kept copy in types.ts would drift the day somebody adds
-				// a field, and drift here means a client rendering something the
-				// projection stopped sending — or a reviewer reading the copy and
-				// believing it.
+				// Generated rather than hand-written: the card is a whitelist of what a stranger may see
+				// about a person, and a hand-kept copy would drift when a field is added.
 				Path:         "github.com/strelov1/freehire/internal/candidate/talentnetwork",
 				OutputPath:   talentnetworkTS,
 				IncludeFiles: []string{"card.go"},
@@ -199,8 +180,7 @@ func genStructs() (string, error) {
 					// PeriodDate's Go name is Date, which collides with the language's own
 					// global.
 					"perioddate.PeriodDate": "{ year: number; month?: number }",
-					// An RFC3339 timestamp on the wire. Without the mapping tygo emits
-					// `any`, which is the one thing generating a contract is for avoiding.
+					// An RFC3339 timestamp on the wire; without the mapping tygo emits `any`.
 					"time.Time": "string",
 				},
 			},
@@ -211,12 +191,20 @@ func genStructs() (string, error) {
 				Path:         "github.com/strelov1/freehire/internal/candidate/resumeextract",
 				OutputPath:   resumeextractTS,
 				IncludeFiles: []string{"structured.go"},
-				// perioddate.PeriodDate is inlined rather than generated as its own type: it
-				// is two fields, shared by this package and cv below, and — unlike every
-				// other TypeMappings entry here — must NOT be named PeriodDate's Go name
-				// (Date) in TypeScript, since that collides with the language's own global
-				// Date.
+				// perioddate.PeriodDate is inlined rather than generated: it is two fields shared by this
+				// package and cv below, and its Go name (Date) would collide with TypeScript's global Date.
 				TypeMappings: map[string]string{"perioddate.PeriodDate": "{ year: number; month?: number }"},
+			},
+			{
+				// GET /me/resume and the owned overrides PUT /me/resume/contacts takes and
+				// returns. Only wire.go — the overlay rules and the store stay server-only.
+				Path:         "github.com/strelov1/freehire/internal/candidate/resume",
+				OutputPath:   resumeTS,
+				IncludeFiles: []string{"wire.go"},
+				TypeMappings: map[string]string{
+					"resumeextract.Structured": "Structured",
+					"resumeextract.Education":  "Education",
+				},
 			},
 			{
 				// The editable CV-builder document wire shape (Document + Header +
@@ -250,9 +238,8 @@ func genStructs() (string, error) {
 				// The onboarding survey wire shape (Responses). Only survey.go — store.go
 				// and repository.go are server-only.
 				//
-				// The type is `Responses` rather than the `Answers` its Go siblings use
-				// because THIS file is a flat namespace: screeninganswers already exports
-				// an `Answers`, and two packages that never collide in Go collide here.
+				// The type is `Responses`, not `Answers`: screeninganswers already exports `Answers`, and this
+				// file is one flat namespace.
 				Path:         "github.com/strelov1/freehire/internal/candidate/survey",
 				OutputPath:   surveyTS,
 				IncludeFiles: []string{"survey.go"},
@@ -307,6 +294,10 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	resumeBody, err := readBody(resumeTS)
+	if err != nil {
+		return "", err
+	}
 	cvBody, err := readBody(cvTS)
 	if err != nil {
 		return "", err
@@ -331,7 +322,7 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + coverletterBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody + "\n" + surveyBody + "\n" + talentnetworkBody, nil
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + coverletterBody + "\n" + resumeextractBody + "\n" + resumeBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody + "\n" + surveyBody + "\n" + talentnetworkBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so
@@ -374,164 +365,4 @@ func skipPreamble(lines []string) int {
 		}
 	}
 	return i
-}
-
-// genVocab emits every closed vocabulary. Source = non-boardless providers plus the
-// non-adapter sources set by other writers: "telegram" (the tg-extract worker) and the
-// moderator/bulk-import origins ("workatastartup", "remoteok", "arc"). Stages from
-// userjob; the rest from the enrich controlled vocabularies.
-//
-// An origin that started as a manual/bulk-import name can later gain a registered
-// adapter (e.g. remoteok), so it appears in both the hardcoded prefix and
-// FilterableProviders — dedup to keep SOURCE_VALUES a set. A duplicate value
-// otherwise reaches the SPA's keyed Source facet and throws each_key_duplicate.
-func genVocab() string {
-	source := dedup(append([]string{"telegram", "workatastartup", "remoteok", "arc"}, sources.FilterableProviders()...))
-
-	var b strings.Builder
-	b.WriteString(emitVocab("Source", "SOURCE_VALUES", source))
-	b.WriteString(emitVocab("Stage", "STAGE_VALUES", userjob.Stages))
-	// The ledger's event kinds. Generated for the reason the mail signals are: the panel and
-	// the calendar each render a label per kind, and a kind added in Go but missing from the
-	// SPA's map rendered as a blank row with every test green.
-	b.WriteString(emitVocab("ApplicationEventKind", "APPLICATION_EVENT_KINDS", appevent.Kinds))
-	// The ledger's event sources, generated for a reason the kinds alone do not cover: the
-	// activity grid counts a `stage_set` only when the CANDIDATE made it, which is a question
-	// about the source, not the kind. Without this vocabulary that rule is a list kept by hand,
-	// and a source added in Go would silently stop counting a candidate's action with every
-	// test green — the failure the kinds were generated to prevent, one field over.
-	b.WriteString(emitVocab("ApplicationEventSource", "APPLICATION_EVENT_SOURCES", appevent.Sources))
-	// The stage's human label and the group it belongs to, generated for the same reason the
-	// mail signals are: the board, the funnel, the drawer's selector and the home page each kept
-	// their own copy, and three of the four disagreed about what to call a settled application.
-	// Built from Stages so a stage cannot reach the SPA labelled but ungrouped.
-	stageLabels := make(map[string]string, len(userjob.Stages))
-	for _, s := range userjob.Stages {
-		stageLabels[s] = userjob.Label(s)
-	}
-	b.WriteString(emitMap("StageLabels", "STAGE_LABELS", stageLabels))
-	b.WriteString(emitStageGroups(userjob.Groups))
-	b.WriteString(emitVocab("WorkMode", "WORK_MODE_VALUES", vocab.WorkModeValues))
-	b.WriteString(emitVocab("Seniority", "SENIORITY_VALUES", vocab.SeniorityValues))
-	b.WriteString(emitVocab("Category", "CATEGORY_VALUES", vocab.CategoryValues))
-	// The technical half of the categories, generated rather than re-listed so a picker
-	// that leads with technical roles cannot drift from the split is_tech reads.
-	b.WriteString(emitVocab("TechCategory", "TECH_CATEGORY_VALUES", vocab.TechCategories))
-	// The survey's challenge answers, generated so the tour's options are checked against
-	// the list the server validates — a drifted value is an answer that is always a 400.
-	b.WriteString(emitVocab("JobChallenge", "JOB_CHALLENGE_VALUES", vocab.JobChallengeValues))
-	b.WriteString(emitVocab("EmploymentType", "EMPLOYMENT_TYPE_VALUES", vocab.EmploymentTypeValues))
-	b.WriteString(emitVocab("Relocation", "RELOCATION_VALUES", vocab.RelocationValues))
-	b.WriteString(emitVocab("EnglishLevel", "ENGLISH_LEVEL_VALUES", vocab.EnglishLevelValues))
-	b.WriteString(emitVocab("CompanyType", "COMPANY_TYPE_VALUES", vocab.CompanyTypeValues))
-	// Not a dictionary but a wire vocabulary all the same: the Talent Network catalogue's
-	// filter params. Generated because the API and the filter panes are in different
-	// languages, and a param the panes offer but the API does not read is invisible — the
-	// API reports it as ignored and WIDENS, so the visitor is shown more candidates than
-	// their own chips claim.
-	b.WriteString(emitVocab("TalentFacetParam", "TALENT_FACET_PARAMS", talentnetwork.FacetParams()))
-	// The company feedback category vocabulary (internal/engage/companyfeedback), generated
-	// so the review form's category picker can't drift from the DB CHECK constraint.
-	b.WriteString(emitVocab("CompanyFeedbackType", "COMPANY_FEEDBACK_TYPE_VALUES", vocab.CompanyFeedbackTypeValues))
-	// The report-reason vocabulary for flagging a specific feedback entry, generated
-	// so the report picker can't drift from the DB CHECK constraint.
-	b.WriteString(emitVocab("CompanyFeedbackReportReason", "COMPANY_FEEDBACK_REPORT_REASON_VALUES", vocab.CompanyFeedbackReportReasonValues))
-	b.WriteString(emitVocab("Domain", "DOMAIN_VALUES", vocab.DomainValues))
-	// The curated company-industry vocabulary (internal/dict/industrytag) — the level
-	// beneath domains. Generated in both halves, values and labels, so the filter's
-	// options cannot drift from the dictionary the column is written through.
-	b.WriteString(emitVocab("Industry", "INDUSTRY_VALUES", industrytag.Canonicals()))
-	b.WriteString(emitMap("IndustryLabels", "INDUSTRY_LABELS", industrytag.Labels()))
-	// The six AI skill-signature archetype slugs (internal/ai/aiarchetype), generated
-	// so the AI Specialization filter's valid values can't drift from the rule table.
-	b.WriteString(emitVocab("AIArchetype", "AI_ARCHETYPE_VALUES", vocab.AIArchetypeValues))
-	// The role-type vocabulary (internal/dict/roletype), generated for the same reason:
-	// the filter's one pill must not drift from the dictionary. It holds a single
-	// value, and the absence of one means "no management marker", never
-	// "individual contributor" — nothing in the SPA may label it as the latter.
-	b.WriteString(emitVocab("RoleType", "ROLE_TYPE_VALUES", vocab.RoleTypeValues))
-	// The clearance levels (internal/dict/location), so the Security clearance chips
-	// cannot offer a level the dictionary never writes.
-	b.WriteString(emitVocab("ClearanceLevel", "CLEARANCE_LEVEL_VALUES", vocab.ClearanceLevelValues))
-	// The source-type vocabulary (sources.ProviderKind's searchable kinds), so the Source
-	// pane's pills cannot offer a kind no document carries.
-	b.WriteString(emitVocab("SourceType", "SOURCE_TYPE_VALUES", vocab.SourceTypeValues))
-	// The perk vocabulary (internal/dict/perks), so the Benefits & Perks chips cannot
-	// offer a perk the dictionary never writes.
-	b.WriteString(emitVocab("Perk", "PERK_VALUES", vocab.PerkValues))
-	b.WriteString(emitMap("PerkLabels", "PERK_LABELS", perks.Labels()))
-	// The ghost criterion vocabulary. Generated for the same reason the mail signals are,
-	// with a sharper edge: the job page draws one gauge segment per criterion the payload
-	// says fired, and the rows accounting for them come from the SPA's own list. A
-	// criterion added in Go and missing there coloured a segment above a checklist that
-	// could not explain it — the interface asserting evidence it cannot show, which is the
-	// one thing this feature must never do. Generated, the omission is a type error.
-	b.WriteString(emitVocab("GhostCriterion", "GHOST_CRITERION_VALUES", ghost.CriterionCodes[:]))
-	// The classified-mail vocabulary. It is generated rather than retyped because the
-	// inbox renders a label and a badge colour per signal, and a signal added in Go
-	// but missing from the SPA's maps rendered as a blank chip with every test green.
-	// Generated, the omission is a type error instead.
-	b.WriteString(emitVocab("EmailStatusSignal", "EMAIL_STATUS_SIGNAL_VALUES", mailclassify.SignalValues))
-	b.WriteString(emitSignalStages(mailclassify.SignalValues))
-	// Country→region grouping for the hierarchical location filter, derived from the
-	// location dictionary.
-	b.WriteString(emitMap("CountryRegionMap", "COUNTRY_REGION_MAP", location.CountryToRegion()))
-	// Skill slug→display-name catalog. The skills facet is a slug vocabulary, and every
-	// surface showing one to a reader had the same choice to make: print "postgresql" or
-	// invent a prettifier. Generated from the skilltag dictionary that owns the canonical
-	// set, so one spelling serves them all and a new skill cannot arrive unlabelled.
-	b.WriteString(emitMap("SkillLabels", "SKILL_LABELS", skilltag.Labels()))
-	// Facet slug→shorthand-aliases for the picker's search: the same curated terms
-	// used to tag titles, so typing "swe" or "data engineer" finds the specialization
-	// that tags them. Keyed by category and seniority slug — the two dictionaries this
-	// is built from, and the two facets that read it.
-	b.WriteString(emitMapOfSlices("FacetAliases", "FACET_ALIASES", facetAliases()))
-	// The company-tag registry (slug, display copy, kind) — the source of truth for
-	// the /collections hub and the job-search facet, generated so the frontend copy
-	// cannot drift from the Go registry that decides membership.
-	b.WriteString(emitCollections(collections.All))
-	return b.String()
-}
-
-// roleAliases unions the curated shorthand→role aliases from the three
-// dictionaries feeding the role facet — category and seniority aliases (classify)
-// plus named-role aliases (roletag) — keyed by role slug and deduped, for the web
-// picker's alias search. Every value is a lowercase alias already used to tag
-// titles, so search and tagging stay in lockstep.
-func facetAliases() map[string][]string {
-	sets := map[string]map[string]struct{}{}
-	addAll := func(m map[string][]string) {
-		for slug, aliases := range m {
-			if sets[slug] == nil {
-				sets[slug] = map[string]struct{}{}
-			}
-			for _, a := range aliases {
-				sets[slug][a] = struct{}{}
-			}
-		}
-	}
-	addAll(classify.CategoryAliases())
-	addAll(classify.SeniorityAliases())
-
-	out := make(map[string][]string, len(sets))
-	for slug, set := range sets {
-		for a := range set {
-			out[slug] = append(out[slug], a)
-		}
-	}
-	return out
-}
-
-// dedup returns the slice with duplicates removed, preserving first-occurrence order.
-func dedup(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	out := values[:0]
-	for _, v := range values {
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		out = append(out, v)
-	}
-	return out
 }

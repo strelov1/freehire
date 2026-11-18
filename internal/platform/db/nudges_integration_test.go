@@ -59,10 +59,10 @@ func TestListFollowUpCandidates(t *testing.T) {
 
 	uidEnabled := insertUser(t, pool, "enabled@example.test")
 	uidDisabled := insertUser(t, pool, "disabled@example.test")
-	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uidEnabled, Enabled: true, DigestFrequency: "instant", Channels: []string{"email"}}); err != nil {
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uidEnabled, Enabled: true, DigestFrequency: "instant", DigestIntervalHours: 1, Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings enabled: %v", err)
 	}
-	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uidDisabled, Enabled: false, DigestFrequency: "instant", Channels: []string{"email"}}); err != nil {
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uidDisabled, Enabled: false, DigestFrequency: "instant", DigestIntervalHours: 1, Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings disabled: %v", err)
 	}
 
@@ -112,7 +112,7 @@ func TestListInterviewPrepCandidates(t *testing.T) {
 	resetNudgeTables(t, pool)
 
 	uid := insertUser(t, pool, "interview@example.test")
-	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, DigestFrequency: "instant", Channels: []string{"email"}}); err != nil {
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, DigestFrequency: "instant", DigestIntervalHours: 1, Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings: %v", err)
 	}
 
@@ -148,14 +148,14 @@ func TestListInterviewPrepCandidates(t *testing.T) {
 	}
 }
 
-func TestListJobClosedCandidates(t *testing.T) {
+func TestSettleClosedApplications(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
 	resetNudgeTables(t, pool)
 
 	uid := insertUser(t, pool, "closed@example.test")
-	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, DigestFrequency: "instant", Channels: []string{"email"}}); err != nil {
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, DigestFrequency: "instant", DigestIntervalHours: 1, Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings: %v", err)
 	}
 
@@ -166,7 +166,7 @@ func TestListJobClosedCandidates(t *testing.T) {
 
 	activeJob := insertJob(t, pool, "closed-active")
 	insertApplication(t, pool, uid, activeJob, appliedAt, "screening")
-	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = $1 WHERE id = $2", recentClose, activeJob); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = $1, closed_reason = 'employer_closed' WHERE id = $2", recentClose, activeJob); err != nil {
 		t.Fatalf("close active job: %v", err)
 	}
 
@@ -185,26 +185,36 @@ func TestListJobClosedCandidates(t *testing.T) {
 	openJob := insertJob(t, pool, "still-open")
 	insertApplication(t, pool, uid, openJob, appliedAt, "screening")
 
-	rows, err := q.ListJobClosedCandidates(ctx, 7)
+	pendingJob := insertJob(t, pool, "source-verification-pending")
+	insertApplication(t, pool, uid, pendingJob, appliedAt, "screening")
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = $1, closed_reason = 'native_source_pending' WHERE id = $2", recentClose, pendingJob); err != nil {
+		t.Fatal(err)
+	}
+
+	count, err := q.SettleClosedApplications(ctx, 7)
 	if err != nil {
-		t.Fatalf("list: %v", err)
+		t.Fatal(err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("candidates = %d, want 2 (both in-window closures; the Go-side active-stage filter drops the settled one)", len(rows))
+	if count != 1 {
+		t.Fatalf("notifications = %d, want 1", count)
 	}
-	byJob := map[int64]ListJobClosedCandidatesRow{}
-	for _, r := range rows {
-		byJob[r.JobID.Int64] = r
+	for id, want := range map[int64]string{activeJob: "expired", staleJob: "expired", settledJob: "withdrawn", openJob: "screening", pendingJob: "screening"} {
+		var stage string
+		if err := pool.QueryRow(ctx, "SELECT stage FROM applications WHERE user_id = $1 AND job_id = $2", uid, id).Scan(&stage); err != nil {
+			t.Fatal(err)
+		}
+		if stage != want {
+			t.Errorf("job %d stage = %s, want %s", id, stage, want)
+		}
 	}
-	if _, ok := byJob[activeJob]; !ok {
-		t.Errorf("missing the active application's closed job, got %+v", rows)
+	var events, nudges int
+	if err := pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM application_events WHERE job_id = $1), (SELECT count(*) FROM application_nudges WHERE job_id = $1)", pendingJob).Scan(&events, &nudges); err != nil {
+		t.Fatal(err)
 	}
-	if _, ok := byJob[settledJob]; !ok {
-		t.Errorf("missing the settled application's closed job (SQL doesn't filter stage; Go does), got %+v", rows)
+	if events != 0 || nudges != 0 {
+		t.Fatalf("source verification created closure side effects: events=%d nudges=%d", events, nudges)
 	}
-	if got := byJob[activeJob]; !got.ClosedAt.Valid || !got.ClosedAt.Time.Equal(recentClose) {
-		t.Errorf("closed_at = %v, want %v", got.ClosedAt, recentClose)
-	}
+
 }
 
 func TestRecordNudge_IsIdempotentPerEpisode(t *testing.T) {
@@ -238,9 +248,9 @@ func TestNudgeClaimAndDelivery(t *testing.T) {
 	ctx := context.Background()
 	resetNudgeTables(t, pool)
 
-	uid := insertUser(t, pool, "deliver@example.test")
+	uid := insertVerifiedUser(t, pool, "deliver@example.test")
 	jid := insertJob(t, pool, "deliver-job")
-	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, DigestFrequency: "instant", Channels: []string{"email"}}); err != nil {
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, DigestFrequency: "instant", DigestIntervalHours: 1, Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings: %v", err)
 	}
 	appliedAt := time.Now().Add(-25 * 24 * time.Hour)

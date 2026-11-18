@@ -1,36 +1,43 @@
-// Shared by both /docs/api and /docs/api/internal's +page.server.ts: plain JSON in
-// (a generated OpenAPI document), Scalar SSR HTML fragment out. The client hydrates
-// the same fragment with the same config (see scalarConfig.ts), so the two never
-// disagree about what the spec says.
-import { scalarConfigFromContent } from './scalarConfig';
+// Renders the /docs/api and /docs/api/internal Scalar fragments at BUILD time. A route
+// imports its generated OpenAPI document with a `?scalar-html` suffix and gets the
+// rendered HTML as a plain string; the client hydrates it with the same config (see
+// scalarConfig.ts), so the two never disagree about what the spec says.
+//
+// Why not at request time: rendering the 250 KB spec on a cold server process blocked
+// that worker's event loop for ~25 s in production, once per worker after every
+// deploy. Every request queued on the worker stalled with it, and job pages whose API
+// call had long since answered came back as 504s when their 10 s timeout fired first.
+//
+// Why not by prerendering the page: the root layout renders signed-in chrome from the
+// session cookie, and `frame-ancestors` only exists as a response header (see the CSP
+// in vite.config.ts) — a prerendered page would lose both.
+//
+// @scalar/server-side-rendering is imported dynamically here and nowhere in src/routes:
+// a transitive dependency (stringify-object -> is-identifier -> super-regex ->
+// make-asynchronous) starts a worker_threads.Worker at import time, which crashes
+// inside SvelteKit's build-time route analysis worker. In a Vite plugin it runs in the
+// main build process, and the server bundle never contains it at all.
+import { readFile } from 'node:fs/promises';
+import type { Plugin } from 'vite';
+import { scalarConfigFromContent } from './scalarConfig.ts';
 
-// @scalar/server-side-rendering is imported dynamically, inside the returned `load`,
-// not at module top level: one of its transitive dependencies (@scalar/snippetz's
-// stringify-object -> is-identifier -> super-regex -> make-asynchronous) spins up a
-// worker_threads.Worker as an import-time side effect. SvelteKit's build-time route
-// analysis (`analyse.js`) imports every route module inside its OWN worker thread to
-// inspect exports like `prerender` — a nested Worker created during that pass crashes
-// with "Cannot destructure property 'mod' of 'threads.workerData'" because the outer
-// worker's workerData isn't there for it to read. A dynamic import here means
-// analyse.js's static import of a route's +page.server.ts never touches that
-// dependency chain at all; `load()` itself still only runs at actual request time (or
-// once, at prerender, on real routes), where there is no such nested-worker context.
-// Confirmed by reproducing the crash with `pnpm run build` and clearing it with this
-// change.
+const SUFFIX = '?scalar-html';
 
-/** Builds a `load` for a Scalar reference page: renders `spec` to an HTML fragment
- *  once per process and memoizes it as a Promise (not just its resolved value) so
- *  concurrent first requests share one in-flight render instead of each re-running
- *  Scalar's Vue SSR renderer. `spec` depends on nothing request-specific — it's a
- *  static import at the call site — so the same fragment serves every visitor until
- *  the next deploy restarts this process anyway. */
-export function createScalarPageLoad(spec: Record<string, unknown>) {
-  let cachedScalarHtml: Promise<string> | undefined;
-  return async () => {
-    cachedScalarHtml ??= (async () => {
-      const { renderApiReferenceToString } = await import('@scalar/server-side-rendering');
-      return renderApiReferenceToString(scalarConfigFromContent(spec));
-    })();
-    return { scalarHtml: await cachedScalarHtml };
+export function scalarHtmlPlugin(): Plugin {
+  return {
+    name: 'freehire:scalar-html',
+    load: {
+      // The filter keeps the bundler from calling into JS for every other module.
+      filter: { id: /\?scalar-html$/ },
+      async handler(id) {
+        const file = id.slice(0, -SUFFIX.length);
+        this.addWatchFile(file);
+        const spec = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>;
+        const { renderApiReferenceToString } = await import('@scalar/server-side-rendering');
+        const html = await renderApiReferenceToString(scalarConfigFromContent(spec));
+        // The id still ends in .json?…; without this the bundler could take the code for JSON.
+        return { code: `export default ${JSON.stringify(html)};`, moduleType: 'js' };
+      },
+    },
   };
 }

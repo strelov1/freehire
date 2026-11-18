@@ -65,10 +65,6 @@ func newSitemapTestAppWith(jobs, companies sitemapLister) *fiber.App {
 	h := &sitemapHandlers{jobs: jobs, companies: companies}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	// A zero middleware carries a nil throttler, which ratelimit.Middleware treats as "no
-	// backend configured" and fails open — so these tests exercise the handlers rather than
-	// the limiter in front of them. That the limiter IS mounted, and mounted first, is
-	// asserted by TestPublicReadLimiters_KeyWhatTheMountedChainCanSee instead.
 	h.register(api, middleware{})
 	return app
 }

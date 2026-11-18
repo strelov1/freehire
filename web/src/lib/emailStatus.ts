@@ -11,7 +11,7 @@ import { SIGNAL_STAGE } from './generated/contracts';
 import type { EmailStatusSignal } from './generated/contracts';
 import { humanizeStage } from './stages';
 import { defineMessages, t } from './i18n/t';
-import type { Locale } from './locale';
+import type { Locale } from './i18n/locale';
 
 // The English map stays the catalog's source of truth AND a plain export — the
 // structural test (every signal but `other` has a non-empty label, see

@@ -210,10 +210,7 @@
   );
 </script>
 
-<svelte:window
-  onkeydown={visible ? dismiss : undefined}
-  onpointerdown={visible ? dismissOutside : undefined}
-/>
+<svelte:window onkeydown={visible ? dismiss : undefined} onpointerdown={visible ? dismissOutside : undefined} />
 
 <!-- The pointer handlers sit on the wrapper, not the trigger: the trigger is the
      consumer's snippet, and the wrapper has to enclose the tooltip so moving the

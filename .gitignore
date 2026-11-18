@@ -16,60 +16,48 @@ hire
 # ignored every new file under internal/migrate/, and `enrich`/`embed`/`ingest` did the same
 # to theirs. 26 package directories were shadowed this way; a new source file in one of them
 # would simply never be committed.
-# The list below is the union of every cmd/ target plus the six binaries that no longer
-# have one (prune, reslug, backfill-company-info, backfill-justjoin,
-# discord-register-commands, hire-api) — kept exhaustive on purpose: release.sh builds each
-# cmd/ target into the checkout ROOT, so an omission lands an untracked 25-55 MB binary
-# that a `git add -A` sweeps into a commit. Regenerate after adding a worker:
-#   { ls cmd; grep -E '^/[a-z0-9-]+$' .gitignore | tr -d /; } | sort -u
+# The worker entries below used to be written out three times, 22 of them twice, which is
+# how a target added to one block silently went unignored by the other two. This is now the
+# union of all three plus every current cmd/ target; 9 of the entries no longer have
+# a target and stay because a deploy host that built them still has that binary sitting in
+# its checkout root. Regenerate after adding a worker:
+#   { ls cmd; grep -E '^/[^/]+$' .gitignore | tr -d /; } | sort -u | sed 's|^|/|'
+# The 9 retired ones are backfill-company-info, backfill-engagement, backfill-justjoin, backfill-requirements, discord-register-commands, hire-api, prune, reslug and similar-backfill.
 /add-board
 /adzuna-liveness
 /apple-revoke
 /auth-cleanup
 /auto-apply
 /auto-apply-orchestrate
-/backfill-application-events
-/backfill-applications
-/backfill-blank-company
-/backfill-brazil-state-codes
-/backfill-clearance
+/backfill-catalog-history
 /backfill-company-info
 /backfill-company-info-wikipedia
 /backfill-company-names
 /backfill-company-type-hint
 /backfill-derive
 /backfill-descriptions
-/backfill-duplicate-marker-owner
-/backfill-echojobs
-/backfill-ess-urls
-/backfill-experience
-/backfill-experience-dates
+/backfill-engagement
 /backfill-justjoin
-/backfill-profession-it-tech
-/backfill-remote-perk-false-positive
-/backfill-remote-region-restriction
 /backfill-requirements
-/backfill-resume-geo
-/backfill-resume-structured
-/backfill-semantic-input-hash
-/backfill-slug-folded
-/backfill-talent-handle
 /backfill-telegram-prefilter
-/backfill-us-subdivision-collision
-/backfill-username-from-mailbox
 /billing-sync
 /broadcast
 /build-suggestions
 /cal-sync
 /capture-apply-form
+/catalog-coverage
+/catalogue-export
+/changes-webhook
 /classify-mail
-/close-apploi-misattributed
 /close-chronic-boards
+/cv-lifecycle-mail
 /cv-previews
 /discord-register-commands
 /discord-sync
+/email-events
 /embed
 /enrich
+/facetd
 /gen-cities
 /gen-contracts
 /gen-metros
@@ -115,9 +103,10 @@ hire
 /recount-companies
 /reindex
 /reindex-companies
-/rekey-gupy-boards
 /remind
 /report-classify-drift
+/report-company-website-twins
+/report-cv-letters
 /report-geo-gaps
 /report-skill-gaps
 /report-unclassified-titles
@@ -135,6 +124,8 @@ hire
 /seed-from-inventory
 /serve-probe
 /server
+/set-job-application-url
+/promote-job-source
 /similar-backfill
 /social-digest
 /sweep-tracer-clicks
@@ -179,11 +170,19 @@ hire
 
 # Agent tooling local state. `.claude/` and `.codex/` are per-machine configuration for
 # the harnesses agents run under — the same class of file as an editor's local settings —
-# and `.agents/` is what they generate. None of it is part of the tree: the shared rules
-# live in AGENTS.md, which IS committed.
+# and `skills-lock.json` is what they install. None of that belongs in the tree: the
+# shared rules live in AGENTS.md, which IS committed.
+#
+# `.agents/` is deliberately NOT ignored wholesale. It used to be, and the skills under
+# `.agents/skills/` are committed, so the rule shadowed ten tracked files and would have
+# swallowed the next one added beside them — the exact trap the worker-binary block above
+# describes, in the other direction. Local state directly under `.agents/` stays ignored;
+# the tracked subtree is re-admitted because excluding a directory stops git descending
+# into it at all, so `.agents/*` alone would still hide the skills.
 .claude/
 .codex/
-.agents/
+.agents/*
+!.agents/skills/
 skills-lock.json
 
 # Spec Kit — local-only (not part of the freehire tree). Keep on disk for personal
@@ -253,3 +252,4 @@ extension/*.zip
 
 # Local research notes (competitor scans, market notes) — kept out of the repository.
 /docs/research/
+.schemathesis/

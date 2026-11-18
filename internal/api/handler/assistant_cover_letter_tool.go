@@ -12,21 +12,15 @@ import (
 )
 
 // coverLetterDraftTool lets a tailoring session write the cover letter the vacancy's own
-// application form asks for.
-//
-// It runs the SAME letterDrafter as POST /me/cvs/:id/cover-letter and stores under the same
-// key, so the chat path and the button path cannot drift into producing different letters for
-// one pair. What differs is only how the request arrives and how a refusal is phrased.
-//
-// The vacancy is closed over rather than taken as an argument, like every other tool in a
-// tailoring session: the model has no way to address a different vacancy, not even by guessing
-// an id.
+// application form asks for. It runs the same letterDrafter and stores under the same key as
+// POST /me/cvs/:id/cover-letter, so chat and button cannot produce different letters for one pair.
+// The vacancy is closed over, not an argument: the model cannot address a different vacancy.
 func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 	return assistant.Tool{
 		Name: "cover_letter_draft",
 		Description: "Write the cover letter for the vacancy this CV is being tailored to, from the " +
-			"candidate's own banked achievements. Every claim about their experience comes from evidence they " +
-			"asserted — nothing is invented. Replaces any letter already drafted for this vacancy. " +
+			"candidate's confirmed achievements and any saved evidence selection. The candidate should review " +
+			"the result before sending. Replaces any letter already drafted for this vacancy. " +
 			"Optional \"band\": \"short\" or \"standard\" (default).",
 		Schema: map[string]any{
 			"type": "object",
@@ -45,14 +39,17 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			// A tool error is a sentence the model can act on; a nil dereference here is a
-			// panic inside the SSE writer's goroutine, where Registry.Call's error path cannot
-			// reach it. Same guard, same reason as cv_context's.
+			// A tool error is a sentence the model can act on; a nil dereference would panic inside the SSE
+			// writer's goroutine, out of Registry.Call's error path. Same guard as cv_context's.
 			drafter := h.letterDrafter()
 			if !drafter.ready() {
 				return nil, errors.New("drafting a cover letter is unavailable in this deployment")
 			}
 
+			prepared, err := drafter.prepare(ctx, userID, jobID)
+			if err != nil {
+				return nil, errors.New(letterFailureMessage(err))
+			}
 			attempt := letterAttempt(ctx, h.letter.letters, userID, jobID)
 			charge, refused, _ := chargeLetter(ctx, h.plans, userID, jobID, attempt)
 			if refused {
@@ -66,13 +63,12 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 				releaseLetterCharge(h.plans, userID, charge)
 				return nil, errors.New(letterFailureMessage(err))
 			}
-			letter, err := drafter.draft(ctx, caller, userID, jobID, toolBand(in.Band))
+			letter, err := drafter.draft(ctx, caller, userID, jobID, toolBand(in.Band), prepared)
 			if err != nil || letter == nil {
 				// Every failing path gives the charge back, so it is given back once here.
 				releaseLetterCharge(h.plans, userID, charge)
-				// The same sentence the other two paths render. Returning the raw error instead
-				// made the model relay "fitanalysis: no analysis has been run for this job" —
-				// true, and useless to relay to a candidate.
+				// The same sentence the other two paths render; the raw error ("fitanalysis: no analysis has been
+				// run for this job") is useless for the model to relay to a candidate.
 				return nil, errors.New(letterFailureMessage(err))
 			}
 			return letter, nil
@@ -88,9 +84,9 @@ func (h *assistantHandlers) letterDrafter() letterDrafter {
 	}
 }
 
-// toolBand reads the model's requested length. An unrecognised value takes the standard band
-// rather than refusing: the bands are a product decision, not a measured limit, and spending a
-// round of the turn's budget to correct a typo teaches the model nothing about the letter.
+// toolBand reads the model's requested length. An unrecognised value takes the standard band rather
+// than refusing: the bands are a product decision, and a round of budget spent correcting a typo
+// teaches the model nothing.
 func toolBand(s string) coverletter.Band {
 	if s == string(coverletter.BandShort) {
 		return coverletter.BandShort
@@ -98,10 +94,8 @@ func toolBand(s string) coverletter.Band {
 	return coverletter.BandStandard
 }
 
-// The chat path charges FeatureCoverLetter on top of the turn's own FeatureAssistant,
-// deliberately: the turn pays for the conversation, the letter pays for the three further
-// model calls the conversation triggered. Metering it as a turn alone would price a letter
-// written in chat at a fraction of the identical letter written from the button.
+// The chat path charges FeatureCoverLetter on top of the turn's FeatureAssistant, deliberately: the
+// turn pays for the conversation, the letter for the three further model calls it triggers.
 
 // resumeStore is the structured-résumé half of the candidate projection. Nil-safe: the
 // composition degrades to the bank alone, which is what a candidate with no uploaded file has.

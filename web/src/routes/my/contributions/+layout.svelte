@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import type { Snippet } from 'svelte';
   import { FileText, Link2 } from '@lucide/svelte';
   import { resolve } from '$app/paths';
@@ -28,10 +29,10 @@
 </script>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
-<div class="flex flex-col gap-6">
-  <div class="flex flex-col gap-1 max-lg:sr-only">
-    <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
-    <p class="text-sm text-muted-foreground">{s.description}</p>
+<div class="flex flex-col gap-4 lg:gap-6">
+  <div class="flex flex-col gap-1">
+    <AccountPageHeading>{s.title}</AccountPageHeading>
+    <p class="text-sm text-muted-foreground max-lg:sr-only">{s.description}</p>
   </div>
 
   <TabStrip {tabs} {active} label={s.tabsLabel} panelId={PANEL_ID} />

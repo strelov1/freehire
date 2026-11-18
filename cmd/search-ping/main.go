@@ -7,17 +7,13 @@
 //	./search-ping                 # announce
 //	./search-ping -dry-run        # print what would be sent, send nothing
 //
-// It exists because waiting does not work at this catalogue's size. Measured 2026-09-14
-// on prod: Googlebot fetched 65 distinct job pages in a day against ~690k in the
-// sitemap, and Search Console's URL Inspection answers "URL is unknown to Google" for
-// postings sampled from it — pages Google has never once fetched, while the site
-// publishes ~14k new technical postings a day.
+// It exists because waiting does not work at this catalogue's size: Google fetches far
+// fewer job pages a day than the site publishes.
 //
-// An engine with no credentials is not configured and is skipped without error, like
-// the rest of this fleet; with none configured the run is a clean no-op that never
-// opens the pool. SEARCH_PING_BATCH (default 200) bounds one run per engine, and for
-// Google it is additionally bounded by what is left of the day's quota — which this
-// worker reads from its own ledger, because the API offers no way to ask.
+// An engine with no credentials is skipped without error; with none configured the run is
+// a clean no-op that never opens the pool. SEARCH_PING_BATCH (default 200) bounds one run
+// per engine, and for Google it is also bounded by what is left of the day's quota, which
+// this worker reads from its own ledger because the API offers no way to ask.
 package main
 
 import (
@@ -38,9 +34,8 @@ import (
 
 var dryRun = flag.Bool("dry-run", false, "print the URLs each engine would be sent, send nothing")
 
-// The HTTP timeout for one announcement. Generous: both APIs are somebody else's and a
-// slow answer is not a wrong one, while a run that gives up early leaves budget unspent
-// until the next hour.
+// The HTTP timeout for one announcement. Generous: both APIs are somebody else's, and
+// giving up early leaves budget unspent until the next hour.
 const requestTimeout = 30 * time.Second
 
 func main() {
@@ -55,28 +50,23 @@ func run() int {
 		return 1
 	}
 
-	// Gated BEFORE Bootstrap, like discord-sync and billing-sync: with no engine
-	// configured there is nothing to announce, and an unconfigured deployment must run
-	// without touching the database at all. This is what makes the rollback — clear the
-	// two credentials — leave a green timer on a host that has no DATABASE_URL, which is
-	// what this worker's unit, its entry in AGENTS.md and its pull request all promise.
+	// Gated BEFORE Bootstrap, like discord-sync and billing-sync: with no engine configured
+	// an unconfigured deployment must run without touching the database, so clearing the
+	// credentials leaves a green timer on a host with no DATABASE_URL.
 	//
-	// The gate reads the environment and nothing else. Building the engines needs the
-	// signal-bound context Bootstrap has not created yet, so it waits until below.
+	// The gate reads the environment only; building the engines needs the signal-bound
+	// context Bootstrap creates, so it waits until below.
 	cfg := config.Load()
 	if !anyEngineConfigured() {
 		log.Printf("search-ping: no engine configured, nothing to do")
 		return worker.Skip("GOOGLE_INDEXING_KEY_FILE+INDEXNOW_KEY")
 	}
 
-	// After the gate, not before it: an origin nobody can fetch matters only once there
-	// is something to announce, and refusing on it first would turn an unconfigured
-	// developer checkout into an hourly red unit.
+	// After the gate, so an unconfigured developer checkout is not an hourly red unit.
 	//
-	// Every URL this worker sends is rooted at the origin, and a search engine told a
-	// localhost address learns nothing and spends a call doing it. Unlike the rest of
-	// the fleet this is not a local oddity but a wasted slice of a 200-a-day budget, so
-	// an origin that is not the public site refuses the run rather than proceeding.
+	// Every URL sent is rooted at the origin, and an engine told a localhost address spends
+	// a slice of a small daily budget learning nothing, so a non-public origin refuses the
+	// run.
 	if !*dryRun && !strings.HasPrefix(cfg.FrontendOrigin, "https://") {
 		log.Printf("search-ping: FRONTEND_ORIGIN is %q, which would announce URLs nobody can fetch; refusing", cfg.FrontendOrigin)
 		return 1
@@ -89,18 +79,16 @@ func run() int {
 	}
 	defer cleanup()
 
-	// Built with ctx, not context.Background(): Google's client refreshes its token on
-	// that context, so a SIGTERM mid-refresh should end the run rather than wait out the
-	// HTTP timeout. That is the whole reason this sits below Bootstrap and the gate above
-	// reads only the environment.
+	// Built with ctx, not context.Background(): Google's client refreshes its token on that
+	// context, so a SIGTERM mid-refresh ends the run instead of waiting out the HTTP
+	// timeout. That is why this sits below Bootstrap.
 	engines, err := configuredEngines(ctx, cfg.FrontendOrigin)
 	if err != nil {
 		log.Printf("search-ping: %v", err)
 		return 1
 	}
 	if len(engines) == 0 {
-		// Unreachable past the gate, and checked anyway: the day the two disagree, this
-		// is a clean exit rather than a runner with nothing to drive.
+		// Unreachable past the gate; a clean exit if the two ever disagree.
 		log.Printf("search-ping: no engine configured, nothing to do")
 		return 0
 	}
@@ -113,20 +101,17 @@ func run() int {
 	return report(runner.Run(ctx, int(batch)))
 }
 
-// anyEngineConfigured reports whether this deployment has been given anything to
-// announce with. It reads the environment and nothing else — no file, no network, no
-// database — because it runs before Bootstrap, so that a host with neither credential
-// never opens a pool it has no use for.
+// anyEngineConfigured reports whether this deployment has anything to announce with. It
+// reads only the environment, because it runs before Bootstrap so a host with no
+// credential never opens a pool.
 func anyEngineConfigured() bool {
 	return strings.TrimSpace(os.Getenv("GOOGLE_INDEXING_KEY_FILE")) != "" ||
 		strings.TrimSpace(os.Getenv("INDEXNOW_KEY")) != ""
 }
 
-// configuredEngines builds the engines whose configuration is present.
-//
-// A missing credential is not an error: it is how an engine ships turned off and how it
-// is rolled back. A credential that is present but unusable IS an error — the difference
-// between "not configured" and "misconfigured" is the whole point of checking.
+// configuredEngines builds the engines whose configuration is present. A missing
+// credential is not an error (it is how an engine ships off and is rolled back); a present
+// but unusable one IS.
 func configuredEngines(ctx context.Context, origin string) ([]searchping.Engine, error) {
 	var engines []searchping.Engine
 
@@ -147,9 +132,8 @@ func configuredEngines(ctx context.Context, origin string) ([]searchping.Engine,
 		return nil, err
 	}
 	if indexNow != nil {
-		// Checked once here rather than per send: IndexNow answers a key mismatch with a
-		// 403 on every submission, which reads like a broken integration instead of two
-		// copies of a public key that drifted apart.
+		// Checked once, not per send: IndexNow answers a key mismatch with a 403 on every
+		// submission, which looks like a broken integration rather than a drifted key.
 		if err := indexNow.VerifyKey(ctx); err != nil {
 			return nil, err
 		}
@@ -159,14 +143,12 @@ func configuredEngines(ctx context.Context, origin string) ([]searchping.Engine,
 	return engines, nil
 }
 
-// report logs one line per engine and decides the exit code. An engine that failed is
-// worth a non-zero exit — unlike the permanently-red ingest units, this worker runs
-// against two stable APIs, so a failure here is news.
+// report logs one line per engine and decides the exit code. A failed engine is worth a
+// non-zero exit: this worker runs against two stable APIs, so a failure is news.
 func report(reports []searchping.Report) int {
 	code := 0
 	for _, r := range reports {
-		// engine and event both, always: the passes share one allowance, so a line that
-		// named only the engine would leave "which one spent the day" unanswerable.
+		// Name engine and event both: the passes share one allowance.
 		who := fmt.Sprintf("%s/%s", r.Engine, r.Kind)
 		if r.Tier != "" {
 			who += "/" + string(r.Tier)
@@ -191,9 +173,8 @@ func report(reports []searchping.Report) int {
 	return code
 }
 
-// budgetWord distinguishes "no budget left" from "no budget at all" — 0 and unbounded
-// are the two ends of the same field, and printing 0 for both would hide an engine that
-// has spent its day.
+// budgetWord distinguishes "no budget left" from "no budget at all": 0 and unbounded are
+// the two ends of one field, and printing 0 for both would hide an engine that spent its day.
 func budgetWord(remaining int) string {
 	if remaining < 0 {
 		return "unbounded"

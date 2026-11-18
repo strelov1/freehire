@@ -1,0 +1,10 @@
+# `make api-contract` compiles this into openapi/api.openapi.json, which ogen turns
+# into internal/api/apigen. Both outputs are generated and committed; CI regenerates
+# and diffs them (the api-contract job).
+emit:
+  - '@typespec/openapi3'
+options:
+  '@typespec/openapi3':
+    output-file: api.openapi.json
+    emitter-output-dir: '{project-root}/../openapi'
+    openapi-versions: ['3.1.0']

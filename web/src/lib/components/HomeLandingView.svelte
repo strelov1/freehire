@@ -2,21 +2,23 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { ArrowRight } from '@lucide/svelte';
-  import FilterModal from './filters/FilterModal.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
   import RecentJobsFeed from './RecentJobsFeed.svelte';
   import { ROLE_PLACEHOLDER } from '#lib/placeholderRoles.js';
   import { api } from '#lib/api.js';
   import { browseQuery, planForSuggestion } from '#lib/browseTarget.js';
   import type { ApplyPlan } from '#lib/apiSuggestions.js';
-  import { countryLabel } from '#lib/facets.js';
+  import { countryLabel } from '#lib/locationOptions.js';
   import { emptyFilters, filtersToParams } from '#lib/facetModel.js';
   import type { StagedFilters } from '#lib/stagedFilters.svelte.js';
-  import { CLI_INSTALL, CLI_REPO } from '#lib/cliLinks.js';
-  import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import ExtensionPanelPreview from './ExtensionPanelPreview.svelte';
   import { starterSuggestions } from '#lib/suggestions.js';
   import { Button, ProviderIcon, SectionLabel } from '#lib/ui/index.js';
+  import McpSetup from './McpSetup.svelte';
+  import ChatExample from './ChatExample.svelte';
   import type { CatalogScale, FacetCounts } from '#lib/types.js';
+  import { formatCount } from '#lib/utils.js';
 
   // The homepage. One search box on an otherwise empty screen, and under it — for the
   // visitor who came to look rather than to search — how big the catalogue is and the
@@ -78,11 +80,14 @@
    *  into a link by the same `planForSuggestion` the dropdown applies — so which facet
    *  a craft means is answered in one place, not two. */
   const crafts = $derived<Chip[]>(
-    starterSuggestions(counts, CHIP_LIMIT).map((s) => ({
-      href: planHref(planForSuggestion(s)),
-      label: s.label,
-      count: s.count,
-    })),
+    starterSuggestions(counts, CHIP_LIMIT)
+      .map((s) => ({
+        href: planHref(planForSuggestion(s)),
+        label: s.label,
+        count: s.count,
+      }))
+      // Biggest first, as the row's own label promises.
+      .sort((a, b) => (b.count ?? 0) - (a.count ?? 0)),
   );
 
   /** Where, rather than what. Remote leads because it is the answer that is not a place;
@@ -115,6 +120,13 @@
     return { value: value.toLocaleString('en-US'), label };
   }
 
+  /** The hero's one number, live from the same snapshot as the figures below and
+   *  floored to a tenth of a million (4,968,000 → "4.9M+", never "5M+"): a "+" figure
+   *  must not overstate the catalogue. The fallback is the last measured floor. */
+  const jobsFigure = $derived(
+    scale?.unique_open_jobs ? `${formatCount(Math.floor(scale.unique_open_jobs / 1e5) * 1e5)}+` : '4.9M+',
+  );
+
   const figures = $derived(
     [
       // The de-duplicated count, the one /jobs shows — `open_jobs` counts a posting
@@ -145,13 +157,11 @@
    *
    *  `disjunctive` so each facet's numbers ignore its own selection — the same call
    *  every other host of this modal makes. */
-  const stagedCounts = (params: URLSearchParams) =>
-    api.facetCounts(params, { disjunctive: true });
+  const stagedCounts = (params: URLSearchParams) => api.facetCounts(params, { disjunctive: true });
 
   /** How many postings the staged selection would open, for the footer's Apply — read
    *  off the same count call rather than a one-row search, the way /analytics does. */
-  const previewCount = (params: URLSearchParams) =>
-    api.facetCounts(params).then((c) => c.total);
+  const previewCount = (params: URLSearchParams) => api.facetCounts(params).then((c) => c.total);
 
   function searchWithFilters(staged: StagedFilters) {
     filtersOpen = false;
@@ -159,53 +169,42 @@
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- query appended to a resolved path
     void goto(query ? `${resolve('/jobs')}?${query}` : resolve('/jobs'));
   }
-
-  let copied = $state(false);
-  let copyTimer: ReturnType<typeof setTimeout> | undefined;
-  async function copyInstall() {
-    try {
-      await navigator.clipboard.writeText(CLI_INSTALL);
-      copied = true;
-      clearTimeout(copyTimer);
-      copyTimer = setTimeout(() => (copied = false), 1600);
-    } catch {
-      // Clipboard can be blocked (no permission, insecure context) — the command is
-      // plainly visible to select by hand, so a failed copy needs no fallback.
-    }
-  }
 </script>
 
 <!-- One row of shortcuts into the catalogue. Two rows use it — the crafts and the
      places — and they differ only in what they list, so they are one shape. -->
 {#snippet chipRow(label: string, chips: Chip[])}
-  <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
-    {#each chips as chip (chip.href)}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
-      <a href={chip.href}
-        class="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-brand-strong hover:text-foreground"
-      >
-        {chip.label}
-        {#if chip.count !== undefined}
-          <span class="ml-1 text-xs tabular-nums"
-            >{chip.count.toLocaleString('en-US')}</span
-          >
-        {/if}
-      </a>
-    {/each}
-  </nav>
+  <div class="flex flex-col items-center gap-2">
+    <p class="text-xs text-muted-foreground" aria-hidden="true">{label}</p>
+    <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
+      {#each chips as chip (chip.href)}
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
+        <a
+          href={chip.href}
+          class="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-brand-strong hover:text-foreground"
+        >
+          {chip.label}
+          {#if chip.count !== undefined}
+            <span class="ml-1 text-xs tabular-nums">{chip.count.toLocaleString('en-US')}</span>
+          {/if}
+        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
+      {/each}
+    </nav>
+  </div>
 {/snippet}
 
 <!-- The one link shape this page uses twice: an onward link with an arrow that leans
      when you point at it. Written once so the two cannot drift into being two
      different-looking ways of saying "there is more of this over there". -->
 {#snippet onward(href: string, text: string)}
-  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every caller passes a resolve() result; the rule cannot see through a snippet parameter -->
-  <a {href}
-    class="group inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong transition-colors hover:text-foreground"
+  <!-- eslint-disable svelte/no-navigation-without-resolve -- every caller passes a resolve() result; the rule cannot see through a snippet parameter -->
+  <a
+    {href}
+    class="group inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
   >
     {text}
     <ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />
-  </a>
+  </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/snippet}
 
 <!-- Hero. Deliberately shorter than the viewport: `-19rem` is the 3.5rem header plus
@@ -232,9 +231,21 @@
       <h1 class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
         Every tech job, straight from the source.
       </h1>
+      <!-- The developer doors live in this one sentence rather than in a row of buttons
+           under the box: the box stays the page's only task, and the hero stays two lines. -->
       <p class="text-balance text-base leading-relaxed text-muted-foreground">
-        Indexed from company career boards, deduplicated, and tagged by stack, seniority
-        and location. Free, open source, no walls.
+        {jobsFigure} live postings. Search them here, from
+        <a
+          href={resolve('/agents')}
+          class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+          >your AI agent</a
+        >
+        or through
+        <a
+          href={resolve('/jobs-api')}
+          class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+          >the API</a
+        >. Free and open source.
       </p>
     </div>
 
@@ -266,15 +277,15 @@
     </div>
 
     {#if crafts.length > 0}
-      {@render chipRow('Browse by specialization', crafts)}
+      {@render chipRow('Biggest specializations', crafts)}
     {/if}
     {#if places.length > 1}
       <!-- Only with real countries behind it: Remote alone is a row that looks like a
            measurement and is a constant. -->
-      {@render chipRow('Browse by location', places)}
+      {@render chipRow('Locations', places)}
     {/if}
 
-    {@render onward(resolve('/jobs'), 'Browse the whole catalogue')}
+    {@render onward(resolve('/jobs'), 'See every specialization and location in the catalogue')}
   </div>
 </section>
 
@@ -284,7 +295,7 @@
        and a figure the snapshot could not measure is dropped rather than shown as a
        zero. `tabular-nums` keeps the row from twitching as the counts move. -->
   <section class="border-t border-border py-10">
-    <SectionLabel as="h2" text="the catalogue, today" />
+    <SectionLabel as="h2" text="The catalogue, today" />
     <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
       {#each figures as f (f.label)}
         <!-- `flex-col-reverse` so the number reads first and the label sits under it,
@@ -305,14 +316,12 @@
   </section>
 {/if}
 
-<RecentJobsFeed />
-
 <!-- The two places freehire runs that are not a web page. Side by side because they
      are the same offer twice — the catalogue where you already work — and stacking
      them would make the second read as an afterthought. Each card carries its own
      evidence: the CLI its install line, the extension what the panel actually does. -->
 <section class="border-t border-border py-12 sm:py-16">
-  <SectionLabel as="h2" text="take it with you" />
+  <SectionLabel as="h2" text="For your agent and your browser" />
   <!-- `grid-cols-1` is load-bearing, not the default written out: with no column template
        the single track below `lg` is `auto`, which sizes to its widest content — the
        install line in the `pre`, which does not wrap. That took the track to 416px on a
@@ -320,47 +329,19 @@
        are `repeat(N, minmax(0, 1fr))` for exactly this, and the `pre` scrolls itself. -->
   <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
     <div class="flex flex-col gap-5 rounded-xl border border-border p-6 sm:p-8">
-      <div class="flex flex-col gap-3">
-        <!-- h3: the section's own label above is its h2. -->
-        <h3 class="text-2xl font-semibold tracking-tight">
-          Search and track from the terminal.
-        </h3>
-        <p class="text-sm leading-relaxed text-muted-foreground">
-          One binary, no Go needed. Ships agent skills too, so Claude Code and any MCP
-          host can run the search, read the facets and move an application along.
-        </p>
-      </div>
+      <h3 class="text-2xl font-semibold tracking-tight">Search and track from your AI assistant.</h3>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        Add freehire to your assistant and ask for jobs in plain words.
+      </p>
+      <div class="[zoom:0.8]"><ChatExample /></div>
+      <McpSetup iconsOnly />
 
-      <figure class="overflow-hidden rounded-lg border border-border bg-secondary/40 font-mono text-xs">
-        <!-- The figure carries `font-mono text-xs`, so nothing inside restates it. -->
-        <figcaption
-          class="flex items-center gap-2 border-b border-border px-3 py-1.5 text-muted-foreground"
-        >
-          install
-          <button
-            type="button"
-            onclick={copyInstall}
-            class="ml-auto rounded-md border border-border px-2 py-0.5 font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {copied ? 'copied ✓' : 'copy'}
-          </button>
-          <!-- The button's own text change is not reliably voiced, so the result is said
-               through a region that is always mounted and only changes its words. -->
-          <span class="sr-only" role="status">{copied ? 'Install command copied' : ''}</span>
-        </figcaption>
-        <pre class="overflow-x-auto p-4 leading-relaxed">{CLI_INSTALL}</pre>
-      </figure>
-
-      <div class="mt-auto flex flex-wrap items-center gap-3">
-        <Button href={resolve('/cli')} variant="outline" size="md">What it does</Button>
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- absolute GitHub URL from #lib/cliLinks (shared with the CLI page's JSON-LD codeRepository), not a SvelteKit route -->
-        <a href={CLI_REPO}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Source
-        </a>
+      <div class="mt-auto flex flex-wrap items-center justify-end gap-3">
+        <Button href={resolve('/mcp')} variant="cta" size="md" class="group">
+          Connect your assistant
+          <ArrowRight class="size-4 transition-transform group-hover:translate-x-1" />
+        </Button>
+        <Button href={resolve('/cli')} variant="ghost" size="md">CLI docs</Button>
       </div>
     </div>
 
@@ -368,45 +349,57 @@
       <div class="flex flex-col gap-3">
         <h3 class="text-2xl font-semibold tracking-tight">Apply where you already are.</h3>
         <p class="text-sm leading-relaxed text-muted-foreground">
-          A job-application agent in Chrome's side panel, next to the posting you are
-          reading — on any site, not just the ones freehire tracks.
+          A job-application agent in Chrome's side panel, next to the posting you are reading — on any site, not just
+          the ones freehire tracks.
         </p>
       </div>
 
-      <ul class="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-        {#each EXTENSION_CLAIMS as claim (claim)}
-          <li>{claim}</li>
-        {/each}
-      </ul>
+      <!-- The same preview as /features/extension, drawn smaller: `zoom` shrinks the layout box too, unlike a transform. -->
+      <!-- Centred in whatever height the taller card beside it leaves, so the spare room
+           sits around the preview instead of as one empty band above the buttons. -->
+      <div class="flex flex-1 items-center"><div class="w-full [zoom:0.7]"><ExtensionPanelPreview /></div></div>
 
-      <div class="mt-auto flex flex-wrap items-center gap-3">
+      <div class="mt-auto flex flex-wrap items-center justify-end gap-3">
         <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="md">
           <ProviderIcon provider="chrome" class="size-4" />
           Add to Chrome
         </Button>
-        <a
-          href={resolve('/features/extension')}
-          class="text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          How it works
-        </a>
+        <Button href={EXTENSION_FIREFOX_URL} target="_blank" variant="outline" size="md">
+          <ProviderIcon provider="firefox" class="size-4" />
+          Add to Firefox
+        </Button>
       </div>
     </div>
   </div>
 </section>
+
+<RecentJobsFeed />
 
 <!-- Seeded empty and applied by navigating: see `searchWithFilters`. `savedSearches`
      is off — that tab manages the alerts a signed-in visitor saved from a list, and
      this modal has no list behind it. `counts` seeds the controls before the first
      staged fetch answers; `stagedCounts` is what keeps them right, and what gives the
      dynamic facets any options at all. -->
-<FilterModal
-  seed={emptyFilters()}
-  {counts}
-  {stagedCounts}
-  {previewCount}
-  open={filtersOpen}
-  onClose={() => (filtersOpen = false)}
-  applyLabel="Search jobs"
-  onApply={searchWithFilters}
-/>
+{#if filtersOpen}
+  {#await import('./filters/FilterModal.svelte') then { default: FilterModal }}
+    <FilterModal
+      seed={emptyFilters()}
+      {counts}
+      {stagedCounts}
+      {previewCount}
+      open={filtersOpen}
+      onClose={() => (filtersOpen = false)}
+      applyLabel="Search jobs"
+      onApply={searchWithFilters}
+    />
+  {:catch}
+    <div class="fixed inset-x-4 bottom-4 z-50 rounded-lg border border-border bg-background p-4 shadow-lg">
+      <p role="alert">Filters could not load.</p>
+      <button
+        type="button"
+        class="mt-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        onclick={() => (filtersOpen = false)}>Close</button
+      >
+    </div>
+  {/await}
+{/if}

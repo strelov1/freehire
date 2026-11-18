@@ -29,9 +29,7 @@ interface JobDeck {
  *  backend rejected is never briefly shown and then replaced. `count` is how many
  *  placeholders to draw — a count is not a slug, so reading it from the pending
  *  call's arguments does not show anything the backend has yet to validate. */
-export type DeckSlot =
-  | { status: 'pending'; count: number }
-  | { status: 'ready'; deck: JobDeck };
+export type DeckSlot = { status: 'pending'; count: number } | { status: 'ready'; deck: JobDeck };
 
 /** Split a message's tool calls into the decks to render and the calls that
  *  belong in the tool-activity list. A presenting call never appears in both: a
@@ -105,9 +103,7 @@ function acceptedSlugs(result: string): string[] | null {
 /** The call's arguments — the heading and the rationale per slug — or null if
  *  they are unreadable. Entries are keyed by slug because the receipt, not the
  *  argument order, decides what renders. */
-function authoredDeck(
-  input: unknown,
-): { heading?: string; entries: Map<string, DeckEntry> } | null {
+function authoredDeck(input: unknown): { heading?: string; entries: Map<string, DeckEntry> } | null {
   if (!isRecord(input) || !Array.isArray(input.jobs)) return null;
 
   const entries = new Map<string, DeckEntry>();

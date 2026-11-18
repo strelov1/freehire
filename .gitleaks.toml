@@ -77,3 +77,11 @@ regexes = ['''^PDX_JONB_[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]
 description = "The extension's GA4 Measurement Protocol API secret. It ships inside every published build (MV3 cannot fetch it at runtime from anywhere a reader could not), and all it permits is sending events to the site's own analytics stream — public by construction, like the gtag measurement id beside it. Matched by the variable it is assigned to, so a different key pasted into the same file still fails."
 regexTarget = "line"
 regexes = ['''WXT_GA_API_SECRET=[A-Za-z0-9_-]{16,40}''']
+
+[[allowlists]]
+description = "A git commit SHA pinned as a version: a workflow's `uses: owner/action@<sha> # vX.Y.Z` (zizmor requires every action pinned so) and a mise tool built from a commit (`rev:<sha>`). sourcegraph-access-token fires on any 40-hex string near the word sourcegraph, and the scip-typescript indexer is `@sourcegraph/scip-typescript`, so a pin beside it trips the rule. Pinned to those two line shapes, so a bare 40-hex value anywhere else is still scanned."
+regexTarget = "line"
+regexes = [
+  '''^\s*(?:-\s+)?uses:\s+[\w.-]+/[\w./-]+@[0-9a-f]{40}\s+#\s+v\S+\s*$''',
+  '''"cargo:https://github\.com/[\w.-]+/[\w.-]+" = "rev:[0-9a-f]{40}"''',
+]

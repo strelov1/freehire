@@ -1116,3 +1116,56 @@ litellm	LiteLLM is an open-source proxy and SDK that provides a unified OpenAI-c
 mastra	Mastra is an open-source TypeScript agent framework for building autonomous AI workflows, tool integrations, and evals.
 odoo	Odoo is an open-source suite of enterprise management applications covering ERP, CRM, accounting, inventory, and point of sale.
 sglang	SGLang is an open-source inference engine and structured generation runtime for serving large language models at high throughput.
+ux-design	UX design is the practice of shaping how a product works and feels for its users, covering flows, wireframes and usability.
+hr-operations	HR operations is the administrative side of human resources: employee records, onboarding paperwork, HR systems and process upkeep.
+sla-management	SLA management is the practice of defining, tracking and meeting service level agreements, the response and resolution times promised to customers.
+sap-pm	SAP PM (Plant Maintenance) is the SAP module for planning equipment maintenance, recording work orders and tracking asset history.
+preventive-maintenance	Preventive maintenance schedules inspections and servicing to reduce equipment failures before they occur.
+predictive-maintenance	Predictive maintenance uses equipment condition and performance data to anticipate failures and plan servicing.
+maintenance-planning	Maintenance planning organizes repair tasks, schedules, labor, materials and work orders for equipment and facilities.
+reliability-engineering	Reliability engineering studies failures and equipment performance to improve availability and reduce breakdowns.
+reliability-centered-maintenance	Reliability-centered maintenance (RCM) selects maintenance tasks according to asset functions, failure modes and the consequences of failure.
+condition-monitoring	Condition monitoring tracks equipment measurements and operating condition to identify deterioration and maintenance needs.
+asset-performance-management	Asset performance management (APM) combines asset condition, reliability and maintenance information to improve the performance of physical equipment.
+total-productive-maintenance	Total productive maintenance (TPM) involves operators and maintenance teams in reducing equipment losses and improving production reliability.
+overall-equipment-effectiveness	Overall equipment effectiveness (OEE) measures production equipment performance through availability, operating performance and quality.
+mtbf	Mean time between failures (MTBF) measures the average operating time between failures of a repairable system.
+mttr	Mean time to repair (MTTR) measures the average time required to repair a failed system and restore operation.
+rotating-equipment	Rotating equipment includes machinery such as pumps, compressors and turbines whose moving components require maintenance and reliability management.
+hydraulics	Hydraulics uses pressurized liquids to transmit power and control machinery, including the diagnosis and maintenance of hydraulic systems.
+pneumatics	Pneumatics uses compressed gas to transmit power and control machinery, including the diagnosis and maintenance of pneumatic systems.
+shutdown-management	Shutdown management plans and coordinates work during a scheduled interruption of plant or equipment operation.
+turnaround-management	Turnaround management coordinates major planned plant maintenance, inspections and overhauls within an agreed schedule and budget.
+hvac	HVAC covers heating, ventilation and air conditioning systems, including their design, operation and maintenance.
+mep	MEP covers the coordination of mechanical, electrical and plumbing systems in buildings and construction projects.
+iso-17025	ISO/IEC 17025 specifies competence requirements for testing and calibration laboratories, including their methods, equipment and quality controls.
+equipment-calibration	Equipment calibration compares instrument measurements with reference standards to establish measurement accuracy.
+kandji	Kandji (now Iru) is a device management platform for configuring, securing and automating fleets of Apple devices.
+tanium	Tanium is an endpoint management and security platform that inventories, patches and enforces policy on large fleets of computers in real time.
+ninjaone	NinjaOne is a remote monitoring and management platform that IT teams use to patch, monitor and support Windows, macOS and Linux devices.
+workspace-one	Workspace ONE (formerly AirWatch, now Omnissa) is a unified endpoint management platform for enrolling and managing laptops and mobile devices.
+windows-autopilot	Windows Autopilot is Microsoft's service for provisioning new Windows devices straight from the vendor into an Intune-managed configuration.
+dotnet-maui	.NET MAUI: A .NET framework for building native mobile and desktop applications from a shared codebase.
+sourcegraph	Sourcegraph: A code search and navigation platform for exploring software repositories.
+lightroom	Lightroom: An Adobe application for organizing and editing photographs.
+etix	Etix: A ticketing platform for managing event ticket sales and admission.
+design-tokens	Design Tokens: Named design values used to share colors, spacing, typography and other visual properties across interfaces.
+figma-plugins	Figma Plugins: Extensions that automate tasks or add capabilities within Figma.
+monorepo	Monorepo: A repository strategy that keeps multiple projects or packages in one version-controlled repository.
+system-integration	System Integration: Connecting software systems so they exchange data and work together.
+data-reconciliation	Data Reconciliation: Comparing records across sources to identify and resolve discrepancies.
+sop-development	SOP Development: Writing and maintaining standard operating procedures for repeatable work.
+event-ticketing	Event Ticketing: Managing the sale, distribution and validation of tickets for events.
+box-office-management	Box Office Management: Managing ticket sales, customer service and reporting for a venue or event box office.
+pos-terminals	POS Terminals: Devices used to accept payments and record transactions at the point of sale.
+cctv	CCTV: Video surveillance systems used to monitor and record activity at a site.
+structured-cabling	Structured Cabling: Installing and maintaining standardized cabling infrastructure for data and telecommunications networks.
+strategic-sourcing	Strategic Sourcing is the procurement practice of analysing spend and the supplier market to choose suppliers and negotiate contracts for the best total cost and value, rather than buying order by order.
+purchase-order-management	Purchase Order Management is creating, issuing, tracking and reconciling the purchase orders that commit a company to buying goods or services from a supplier.
+inventory-management	Inventory Management is tracking stock levels and ordering, storing and counting goods so that a business has what it needs without holding more than it should.
+supply-chain-management	Supply Chain Management is coordinating the flow of goods, information and money from suppliers through production and distribution to the customer.
+category-management	Category Management is managing a group of related products or purchased goods as one unit, setting its sourcing, pricing and supplier strategy to improve results for the whole category.
+spend-analysis	Spend Analysis is collecting and classifying what an organisation buys, from whom and at what price, to find savings and consolidate suppliers.
+rfx	RFx is the family of formal requests a buyer sends to suppliers to compare offers: a request for quotation (RFQ), proposal (RFP) or information (RFI).
+mrp	MRP (material requirements planning) is a planning method that works out which materials and components to order, and when, to meet a production schedule.
+excel	Microsoft Excel is a spreadsheet application used to organise, calculate and analyse data with formulas, pivot tables and charts.

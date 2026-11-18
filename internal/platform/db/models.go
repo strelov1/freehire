@@ -39,6 +39,13 @@ type ApiKey struct {
 	Scope       string             `json:"scope"`
 }
 
+type ApiUsageDaily struct {
+	UserID   int64       `json:"user_id"`
+	Day      pgtype.Date `json:"day"`
+	Requests int64       `json:"requests"`
+	Errors   int64       `json:"errors"`
+}
+
 type AppleGrant struct {
 	ID                     pgtype.UUID        `json:"id"`
 	UserID                 int64              `json:"user_id"`
@@ -87,6 +94,13 @@ type Application struct {
 	Notes        pgtype.Text        `json:"notes"`
 	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type ApplicationDigestDelivery struct {
+	UserID    int64              `json:"user_id"`
+	LocalWeek pgtype.Date        `json:"local_week"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	SentAt    pgtype.Timestamptz `json:"sent_at"`
 }
 
 type ApplicationEvent struct {
@@ -170,6 +184,10 @@ type AssistantSession struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	CvID            *uuid.UUID         `json:"cv_id"`
 	NarratedEventID pgtype.Int8        `json:"narrated_event_id"`
+	SearchQuery     pgtype.Text        `json:"search_query"`
+	SelectionBrief  string             `json:"selection_brief"`
+	EscalatedAt     pgtype.Timestamptz `json:"escalated_at"`
+	Helpful         pgtype.Bool        `json:"helpful"`
 }
 
 type AutoApplyEvent struct {
@@ -247,10 +265,12 @@ type BoardHealth struct {
 	Region              string             `json:"region"`
 	FirstSeenAt         pgtype.Timestamptz `json:"first_seen_at"`
 	// When this board last yielded at least one posting. Distinct from last_success_at, which an empty-but-reachable feed refreshes on every run. NULL means no yield has been observed since the column was added; consumers must not read that as an empty feed.
-	LastYieldAt        pgtype.Timestamptz `json:"last_yield_at"`
-	ListingFingerprint pgtype.Text        `json:"listing_fingerprint"`
-	QuietStreak        int32              `json:"quiet_streak"`
-	QuietUntil         pgtype.Timestamptz `json:"quiet_until"`
+	LastYieldAt                  pgtype.Timestamptz `json:"last_yield_at"`
+	ListingFingerprint           pgtype.Text        `json:"listing_fingerprint"`
+	QuietStreak                  int32              `json:"quiet_streak"`
+	QuietUntil                   pgtype.Timestamptz `json:"quiet_until"`
+	ConsecutiveBoardGoneFailures int64              `json:"consecutive_board_gone_failures"`
+	BoardGoneSince               pgtype.Timestamptz `json:"board_gone_since"`
 }
 
 // Unclassified-URL triage inbox (the link_contributions "review" case). A row is deleted once triage resolves its (provider, board) and inserts into boards.
@@ -364,6 +384,31 @@ type CandidateSurvey struct {
 	BiggestChallenges     []string           `json:"biggest_challenges"`
 }
 
+type CatalogSizeDaily struct {
+	Day           pgtype.Date        `json:"day"`
+	OpenJobs      int64              `json:"open_jobs"`
+	Reconstructed bool               `json:"reconstructed"`
+	ComputedAt    pgtype.Timestamptz `json:"computed_at"`
+}
+
+type ChangeWebhook struct {
+	ID                  int64              `json:"id"`
+	UserID              int64              `json:"user_id"`
+	URL                 string             `json:"url"`
+	Secret              string             `json:"secret"`
+	CompanySlugs        []string           `json:"company_slugs"`
+	Kinds               []string           `json:"kinds"`
+	CursorXid           int64              `json:"cursor_xid"`
+	CursorID            int64              `json:"cursor_id"`
+	ConsecutiveFailures int64              `json:"consecutive_failures"`
+	NextAttemptAt       pgtype.Timestamptz `json:"next_attempt_at"`
+	LastSuccessAt       pgtype.Timestamptz `json:"last_success_at"`
+	LastError           string             `json:"last_error"`
+	DisabledAt          pgtype.Timestamptz `json:"disabled_at"`
+	DisabledReason      string             `json:"disabled_reason"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
 type CommunityPersona struct {
 	UserID    int64              `json:"user_id"`
 	Handle    string             `json:"handle"`
@@ -423,6 +468,24 @@ type CompanyAccount struct {
 	EmailConfirmedAt pgtype.Timestamptz `json:"email_confirmed_at"`
 }
 
+type CompanyAccountInvitation struct {
+	ID          int64              `json:"id"`
+	CompanySlug string             `json:"company_slug"`
+	Email       string             `json:"email"`
+	TokenHash   []byte             `json:"token_hash"`
+	InvitedBy   int64              `json:"invited_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+}
+
+type CompanyAccountMember struct {
+	UserID      int64              `json:"user_id"`
+	CompanySlug string             `json:"company_slug"`
+	WorkEmail   string             `json:"work_email"`
+	InvitedBy   pgtype.Int8        `json:"invited_by"`
+	JoinedAt    pgtype.Timestamptz `json:"joined_at"`
+}
+
 type CompanyFeedback struct {
 	ID           int64              `json:"id"`
 	UserID       pgtype.Int8        `json:"user_id"`
@@ -443,6 +506,12 @@ type CompanyFeedbackReport struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type CompanyParent struct {
+	ChildSlug  string             `json:"child_slug"`
+	ParentSlug string             `json:"parent_slug"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type CompanyProcessReport struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
@@ -450,6 +519,19 @@ type CompanyProcessReport struct {
 	Kind        string             `json:"kind"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	RetractedAt pgtype.Timestamptz `json:"retracted_at"`
+}
+
+type CompanyRelationProposal struct {
+	ID          int64              `json:"id"`
+	Kind        string             `json:"kind"`
+	CompanySlug string             `json:"company_slug"`
+	TargetSlug  string             `json:"target_slug"`
+	Note        string             `json:"note"`
+	ProposedBy  pgtype.Int8        `json:"proposed_by"`
+	Status      string             `json:"status"`
+	DecidedBy   pgtype.Int8        `json:"decided_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	DecidedAt   pgtype.Timestamptz `json:"decided_at"`
 }
 
 type CompanySearchPing struct {
@@ -475,6 +557,12 @@ type CompanyVote struct {
 	Vote        int16              `json:"vote"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CompanyWatchlist struct {
+	UserID      int64              `json:"user_id"`
+	CompanySlug string             `json:"company_slug"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type Conversation struct {
@@ -508,14 +596,23 @@ type ConversationReport struct {
 }
 
 type CoverLetter struct {
-	UserID       int64              `json:"user_id"`
-	JobID        int64              `json:"job_id"`
-	Body         string             `json:"body"`
-	CitedAtomIds []pgtype.UUID      `json:"cited_atom_ids"`
-	Language     string             `json:"language"`
-	Model        string             `json:"model"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	UserID              int64              `json:"user_id"`
+	JobID               int64              `json:"job_id"`
+	Body                string             `json:"body"`
+	CitedAtomIds        []pgtype.UUID      `json:"cited_atom_ids"`
+	Language            string             `json:"language"`
+	Model               string             `json:"model"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	EvidenceRevision    int64              `json:"evidence_revision"`
+	EvidenceFingerprint string             `json:"evidence_fingerprint"`
+}
+
+type CoverLetterEvidence struct {
+	UserID   int64         `json:"user_id"`
+	JobID    int64         `json:"job_id"`
+	Revision int64         `json:"revision"`
+	AtomIds  []pgtype.UUID `json:"atom_ids"`
 }
 
 type CreditBalance struct {
@@ -550,6 +647,8 @@ type Cv struct {
 	IsTailored         bool               `json:"is_tailored"`
 	TracerLinksEnabled bool               `json:"tracer_links_enabled"`
 	LastClickAt        pgtype.Timestamptz `json:"last_click_at"`
+	BaseCvID           pgtype.UUID        `json:"base_cv_id"`
+	HandEdited         bool               `json:"hand_edited"`
 }
 
 type CvAppearanceDefault struct {
@@ -558,6 +657,28 @@ type CvAppearanceDefault struct {
 	Style      []byte             `json:"style"`
 	Margins    []byte             `json:"margins"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+// CV lifecycle letters: one row per account. uploaded_at is the clock anchor and never moves; holdout rows are observed but never mailed.
+type CvLifecycleEnrollment struct {
+	ID         int64              `json:"id"`
+	UserID     int64              `json:"user_id"`
+	UploadedAt pgtype.Timestamptz `json:"uploaded_at"`
+	EnrolledAt pgtype.Timestamptz `json:"enrolled_at"`
+	Holdout    bool               `json:"holdout"`
+	// active = in the sequence; unsubscribed = turned the letters off; paid = a Stripe or RevenueCat tier went live; entitled = only a granted tier is live, which is not a payment.
+	Status string `json:"status"`
+	// When the paying observation first saw a Stripe or RevenueCat tier live. NULL for a granted-only account.
+	PaidAt   pgtype.Timestamptz `json:"paid_at"`
+	ExitedAt pgtype.Timestamptz `json:"exited_at"`
+}
+
+// CV lifecycle letters step ledger. PK (user_id, step) = one claim per pair, ever; error is the transport failure that burned the step. Steps 1-3 are the CV letters, step 4 the paywall letter.
+type CvLifecycleSend struct {
+	UserID int64              `json:"user_id"`
+	Step   int16              `json:"step"`
+	SentAt pgtype.Timestamptz `json:"sent_at"`
+	Error  string             `json:"error"`
 }
 
 type CvLinkClick struct {
@@ -621,16 +742,25 @@ type DictionaryGapDaily struct {
 }
 
 type DirectApplication struct {
-	ID        int64              `json:"id"`
-	JobID     int64              `json:"job_id"`
-	UserID    int64              `json:"user_id"`
-	CvID      pgtype.UUID        `json:"cv_id"`
-	Note      string             `json:"note"`
-	Answers   []byte             `json:"answers"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	SendingAt pgtype.Timestamptz `json:"sending_at"`
-	SentAt    pgtype.Timestamptz `json:"sent_at"`
-	CvKind    string             `json:"cv_kind"`
+	ID             int64              `json:"id"`
+	JobID          int64              `json:"job_id"`
+	UserID         int64              `json:"user_id"`
+	CvID           pgtype.UUID        `json:"cv_id"`
+	Note           string             `json:"note"`
+	Answers        []byte             `json:"answers"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	SendingAt      pgtype.Timestamptz `json:"sending_at"`
+	SentAt         pgtype.Timestamptz `json:"sent_at"`
+	CvKind         string             `json:"cv_kind"`
+	Stage          string             `json:"stage"`
+	StageChangedAt pgtype.Timestamptz `json:"stage_changed_at"`
+}
+
+type DirectApplicationCv struct {
+	ApplicationID int64  `json:"application_id"`
+	Filename      string `json:"filename"`
+	ContentType   string `json:"content_type"`
+	Content       []byte `json:"content"`
 }
 
 // One freehire account bound to one Discord account, so cmd/discord-sync can keep the paid role in step with the subscription. Holds no token: the OAuth access token is used inside the callback request and never stored.
@@ -669,6 +799,9 @@ type Email struct {
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 	ApplicationID       pgtype.Int8        `json:"application_id"`
 	IcalUid             string             `json:"ical_uid"`
+	Direction           string             `json:"direction"`
+	ToAddrs             string             `json:"to_addrs"`
+	CcAddrs             string             `json:"cc_addrs"`
 }
 
 type EmailClassificationOutbox struct {
@@ -679,6 +812,22 @@ type EmailClassificationOutbox struct {
 	FailedAt  pgtype.Timestamptz `json:"failed_at"`
 	LastError string             `json:"last_error"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type EmailEvent struct {
+	MessageID  string             `json:"message_id"`
+	Type       string             `json:"type"`
+	Campaign   string             `json:"campaign"`
+	Variant    string             `json:"variant"`
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+}
+
+type EmailEventDaily struct {
+	Day      pgtype.Date `json:"day"`
+	Campaign string      `json:"campaign"`
+	Variant  string      `json:"variant"`
+	Type     string      `json:"type"`
+	Count    int64       `json:"count"`
 }
 
 type EnrichmentOutbox struct {
@@ -728,6 +877,16 @@ type ExperienceEmployment struct {
 	PeriodEndMonth   pgtype.Int2        `json:"period_end_month"`
 }
 
+type FacetdOutbox struct {
+	ID        int64              `json:"id"`
+	JobID     int64              `json:"job_id"`
+	Attempts  int64              `json:"attempts"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	FailedAt  pgtype.Timestamptz `json:"failed_at"`
+	LastError string             `json:"last_error"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type GhostReport struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
@@ -747,6 +906,16 @@ type GmailConnection struct {
 	LastSyncedAt          pgtype.Timestamptz `json:"last_synced_at"`
 	Scopes                []string           `json:"scopes"`
 	MentorBusySyncOptedIn bool               `json:"mentor_busy_sync_opted_in"`
+	SentSyncCursor        int64              `json:"sent_sync_cursor"`
+	GmailRetryAfter       pgtype.Timestamptz `json:"gmail_retry_after"`
+}
+
+type InboxDigestDelivery struct {
+	UserID    int64              `json:"user_id"`
+	LocalDay  pgtype.Date        `json:"local_day"`
+	EmailIds  []int64            `json:"email_ids"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	SentAt    pgtype.Timestamptz `json:"sent_at"`
 }
 
 // Per (provider, shard) scheduling state: when the run is next due, whether a tick has claimed it, and how the last run ended. Machine-owned; curator settings live in ingest_schedule.
@@ -867,24 +1036,33 @@ type InsightsSalaryMonthly struct {
 	P25        int32       `json:"p25"`
 	P50        int32       `json:"p50"`
 	P75        int32       `json:"p75"`
+	Seniority  string      `json:"seniority"`
+	Country    string      `json:"country"`
 }
 
 type InsightsSalaryStat struct {
-	Category   string `json:"category"`
-	Seniority  string `json:"seniority"`
-	Country    string `json:"country"`
-	Currency   string `json:"currency"`
-	Period     string `json:"period"`
-	SampleSize int32  `json:"sample_size"`
-	P25        int32  `json:"p25"`
-	P50        int32  `json:"p50"`
-	P75        int32  `json:"p75"`
+	Category   string  `json:"category"`
+	Seniority  string  `json:"seniority"`
+	Country    string  `json:"country"`
+	Currency   string  `json:"currency"`
+	Period     string  `json:"period"`
+	SampleSize int32   `json:"sample_size"`
+	P25        int32   `json:"p25"`
+	P50        int32   `json:"p50"`
+	P75        int32   `json:"p75"`
+	Quantiles  []int32 `json:"quantiles"`
 }
 
 type InsightsSkillHistory struct {
 	Skill     string      `json:"skill"`
 	WeekStart pgtype.Date `json:"week_start"`
 	OpenCount int32       `json:"open_count"`
+}
+
+type InsightsSkillNeighbour struct {
+	Skill     string `json:"skill"`
+	Neighbour string `json:"neighbour"`
+	Count     int64  `json:"count"`
 }
 
 type InsightsSkillStat struct {
@@ -923,73 +1101,66 @@ type InviteReward struct {
 }
 
 type Job struct {
-	ID                    int64              `json:"id"`
-	Source                string             `json:"source"`
-	ExternalID            string             `json:"external_id"`
-	URL                   string             `json:"url"`
-	Title                 string             `json:"title"`
-	Company               string             `json:"company"`
-	Location              string             `json:"location"`
-	Remote                bool               `json:"remote"`
-	Description           string             `json:"description"`
-	PostedAt              pgtype.Timestamptz `json:"posted_at"`
-	CreatedAt             pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	CompanySlug           string             `json:"company_slug"`
-	Enrichment            json.RawMessage    `json:"enrichment"`
-	EnrichedAt            pgtype.Timestamptz `json:"enriched_at"`
-	EnrichmentVersion     int32              `json:"enrichment_version"`
-	PublicSlug            string             `json:"public_slug"`
-	LastSeenAt            pgtype.Timestamptz `json:"last_seen_at"`
-	ClosedAt              pgtype.Timestamptz `json:"closed_at"`
-	Countries             []string           `json:"countries"`
-	Regions               []string           `json:"regions"`
-	WorkMode              string             `json:"work_mode"`
-	LivenessStrikes       int32              `json:"liveness_strikes"`
-	Skills                []string           `json:"skills"`
-	Seniority             string             `json:"seniority"`
-	Category              string             `json:"category"`
-	CreatedBy             pgtype.Int8        `json:"created_by"`
-	UpdatedBy             pgtype.Int8        `json:"updated_by"`
-	PostingLanguage       string             `json:"posting_language"`
-	EmploymentType        string             `json:"employment_type"`
-	EducationLevel        string             `json:"education_level"`
-	ExperienceYearsMin    pgtype.Int4        `json:"experience_years_min"`
-	Collections           []string           `json:"collections"`
-	ContentHash           pgtype.Text        `json:"content_hash"`
-	EnglishLevel          string             `json:"english_level"`
-	Cities                []string           `json:"cities"`
-	ViewCount             int32              `json:"view_count"`
-	AppliedCount          int32              `json:"applied_count"`
-	RoleFingerprint       pgtype.Text        `json:"role_fingerprint"`
-	SemanticEmbeddedModel pgtype.Text        `json:"semantic_embedded_model"`
-	SemanticEmbeddedHash  pgtype.Text        `json:"semantic_embedded_hash"`
-	DuplicateOf           pgtype.Int8        `json:"duplicate_of"`
-	IsTech                pgtype.Bool        `json:"is_tech"`
-	SemanticEmbedding     []float32          `json:"semantic_embedding"`
-	SalaryMinManual       pgtype.Int4        `json:"salary_min_manual"`
-	SalaryMaxManual       pgtype.Int4        `json:"salary_max_manual"`
-	SalaryCurrencyManual  string             `json:"salary_currency_manual"`
-	SalaryPeriodManual    string             `json:"salary_period_manual"`
-	UpvoteCount           int32              `json:"upvote_count"`
-	DownvoteCount         int32              `json:"downvote_count"`
-	AtsAbsentAt           pgtype.Timestamptz `json:"ats_absent_at"`
-	ClosedReason          string             `json:"closed_reason"`
-	IsPrivate             bool               `json:"is_private"`
-	SimilarJobIds         []int64            `json:"similar_job_ids"`
-	SimilarComputedAt     pgtype.Timestamptz `json:"similar_computed_at"`
-	SalaryMinSource       pgtype.Int4        `json:"salary_min_source"`
-	SalaryMaxSource       pgtype.Int4        `json:"salary_max_source"`
-	SalaryCurrencySource  string             `json:"salary_currency_source"`
-	SalaryPeriodSource    string             `json:"salary_period_source"`
-	// company_slug with hyphens removed. Maintained by every write path that sets company_slug (enforced by a test); exists so the aggregator-suppression pass can filter on a column the planner can estimate instead of an expression it cannot.
+	ID                        int64              `json:"id"`
+	Source                    string             `json:"source"`
+	ExternalID                string             `json:"external_id"`
+	URL                       string             `json:"url"`
+	Title                     string             `json:"title"`
+	Company                   string             `json:"company"`
+	Location                  string             `json:"location"`
+	Remote                    bool               `json:"remote"`
+	Description               string             `json:"description"`
+	PostedAt                  pgtype.Timestamptz `json:"posted_at"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
+	CompanySlug               string             `json:"company_slug"`
+	Enrichment                json.RawMessage    `json:"enrichment"`
+	EnrichedAt                pgtype.Timestamptz `json:"enriched_at"`
+	EnrichmentVersion         int32              `json:"enrichment_version"`
+	PublicSlug                string             `json:"public_slug"`
+	ClosedAt                  pgtype.Timestamptz `json:"closed_at"`
+	Countries                 []string           `json:"countries"`
+	Regions                   []string           `json:"regions"`
+	WorkMode                  string             `json:"work_mode"`
+	Skills                    []string           `json:"skills"`
+	Seniority                 string             `json:"seniority"`
+	Category                  string             `json:"category"`
+	CreatedBy                 pgtype.Int8        `json:"created_by"`
+	UpdatedBy                 pgtype.Int8        `json:"updated_by"`
+	PostingLanguage           string             `json:"posting_language"`
+	EmploymentType            string             `json:"employment_type"`
+	EducationLevel            string             `json:"education_level"`
+	ExperienceYearsMin        pgtype.Int4        `json:"experience_years_min"`
+	Collections               []string           `json:"collections"`
+	ContentHash               pgtype.Text        `json:"content_hash"`
+	EnglishLevel              string             `json:"english_level"`
+	Cities                    []string           `json:"cities"`
+	ViewCount                 int32              `json:"view_count"`
+	AppliedCount              int32              `json:"applied_count"`
+	RoleFingerprint           pgtype.Text        `json:"role_fingerprint"`
+	SemanticEmbeddedModel     pgtype.Text        `json:"semantic_embedded_model"`
+	SemanticEmbeddedHash      pgtype.Text        `json:"semantic_embedded_hash"`
+	DuplicateOf               pgtype.Int8        `json:"duplicate_of"`
+	IsTech                    pgtype.Bool        `json:"is_tech"`
+	SalaryMinManual           pgtype.Int4        `json:"salary_min_manual"`
+	SalaryMaxManual           pgtype.Int4        `json:"salary_max_manual"`
+	SalaryCurrencyManual      string             `json:"salary_currency_manual"`
+	SalaryPeriodManual        string             `json:"salary_period_manual"`
+	UpvoteCount               int32              `json:"upvote_count"`
+	DownvoteCount             int32              `json:"downvote_count"`
+	AtsAbsentAt               pgtype.Timestamptz `json:"ats_absent_at"`
+	ClosedReason              string             `json:"closed_reason"`
+	IsPrivate                 bool               `json:"is_private"`
+	SalaryMinSource           pgtype.Int4        `json:"salary_min_source"`
+	SalaryMaxSource           pgtype.Int4        `json:"salary_max_source"`
+	SalaryCurrencySource      string             `json:"salary_currency_source"`
+	SalaryPeriodSource        string             `json:"salary_period_source"`
 	CompanySlugFolded         pgtype.Text        `json:"company_slug_folded"`
 	DuplicateOfAggregator     pgtype.Int8        `json:"duplicate_of_aggregator"`
 	DuplicateOfRole           pgtype.Int8        `json:"duplicate_of_role"`
 	DuplicateOfFuzzy          pgtype.Int8        `json:"duplicate_of_fuzzy"`
 	RequiresClearance         pgtype.Bool        `json:"requires_clearance"`
 	RequirementsDerived       []byte             `json:"requirements_derived"`
-	HydratedAt                pgtype.Timestamptz `json:"hydrated_at"`
 	AiInterviewReports        int32              `json:"ai_interview_reports"`
 	Metros                    []string           `json:"metros"`
 	SemanticEmbeddedInputHash pgtype.Text        `json:"semantic_embedded_input_hash"`
@@ -997,8 +1168,30 @@ type Job struct {
 	ClearanceLevels           []string           `json:"clearance_levels"`
 	Equity                    pgtype.Text        `json:"equity"`
 	Perks                     []string           `json:"perks"`
-	// Source-stated last application day, inclusive; NULL when unstated.
-	ApplicationDeadline pgtype.Date `json:"application_deadline"`
+	ApplicationDeadline       pgtype.Date        `json:"application_deadline"`
+	Engagement                []string           `json:"engagement"`
+	LastSeenAt                pgtype.Timestamptz `json:"last_seen_at"`
+	HydratedAt                pgtype.Timestamptz `json:"hydrated_at"`
+	LivenessStrikes           int32              `json:"liveness_strikes"`
+	Team                      string             `json:"team"`
+	ApplicationUrl            string             `json:"application_url"`
+}
+
+type JobActivity struct {
+	JobID           int64              `json:"job_id"`
+	LastSeenAt      pgtype.Timestamptz `json:"last_seen_at"`
+	HydratedAt      pgtype.Timestamptz `json:"hydrated_at"`
+	LivenessStrikes int32              `json:"liveness_strikes"`
+	StateVersion    int64              `json:"state_version"`
+}
+
+type JobChange struct {
+	ID     int64              `json:"id"`
+	JobID  int64              `json:"job_id"`
+	Kind   string             `json:"kind"`
+	Reason string             `json:"reason"`
+	At     pgtype.Timestamptz `json:"at"`
+	Xid    int64              `json:"xid"`
 }
 
 type JobDailyStat struct {
@@ -1044,6 +1237,84 @@ type JobReport struct {
 	ReviewedBy      pgtype.Int8        `json:"reviewed_by"`
 	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type JobRow struct {
+	ID                    int64              `json:"id"`
+	Source                string             `json:"source"`
+	ExternalID            string             `json:"external_id"`
+	URL                   string             `json:"url"`
+	Title                 string             `json:"title"`
+	Company               string             `json:"company"`
+	Location              string             `json:"location"`
+	Remote                bool               `json:"remote"`
+	Description           string             `json:"description"`
+	PostedAt              pgtype.Timestamptz `json:"posted_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	CompanySlug           string             `json:"company_slug"`
+	Enrichment            json.RawMessage    `json:"enrichment"`
+	EnrichedAt            pgtype.Timestamptz `json:"enriched_at"`
+	EnrichmentVersion     int32              `json:"enrichment_version"`
+	PublicSlug            string             `json:"public_slug"`
+	ClosedAt              pgtype.Timestamptz `json:"closed_at"`
+	Countries             []string           `json:"countries"`
+	Regions               []string           `json:"regions"`
+	WorkMode              string             `json:"work_mode"`
+	Skills                []string           `json:"skills"`
+	Seniority             string             `json:"seniority"`
+	Category              string             `json:"category"`
+	CreatedBy             pgtype.Int8        `json:"created_by"`
+	UpdatedBy             pgtype.Int8        `json:"updated_by"`
+	PostingLanguage       string             `json:"posting_language"`
+	EmploymentType        string             `json:"employment_type"`
+	EducationLevel        string             `json:"education_level"`
+	ExperienceYearsMin    pgtype.Int4        `json:"experience_years_min"`
+	Collections           []string           `json:"collections"`
+	ContentHash           pgtype.Text        `json:"content_hash"`
+	EnglishLevel          string             `json:"english_level"`
+	Cities                []string           `json:"cities"`
+	ViewCount             int32              `json:"view_count"`
+	AppliedCount          int32              `json:"applied_count"`
+	RoleFingerprint       pgtype.Text        `json:"role_fingerprint"`
+	SemanticEmbeddedModel pgtype.Text        `json:"semantic_embedded_model"`
+	SemanticEmbeddedHash  pgtype.Text        `json:"semantic_embedded_hash"`
+	DuplicateOf           pgtype.Int8        `json:"duplicate_of"`
+	IsTech                pgtype.Bool        `json:"is_tech"`
+	SalaryMinManual       pgtype.Int4        `json:"salary_min_manual"`
+	SalaryMaxManual       pgtype.Int4        `json:"salary_max_manual"`
+	SalaryCurrencyManual  string             `json:"salary_currency_manual"`
+	SalaryPeriodManual    string             `json:"salary_period_manual"`
+	UpvoteCount           int32              `json:"upvote_count"`
+	DownvoteCount         int32              `json:"downvote_count"`
+	AtsAbsentAt           pgtype.Timestamptz `json:"ats_absent_at"`
+	ClosedReason          string             `json:"closed_reason"`
+	IsPrivate             bool               `json:"is_private"`
+	SalaryMinSource       pgtype.Int4        `json:"salary_min_source"`
+	SalaryMaxSource       pgtype.Int4        `json:"salary_max_source"`
+	SalaryCurrencySource  string             `json:"salary_currency_source"`
+	SalaryPeriodSource    string             `json:"salary_period_source"`
+	// company_slug with hyphens removed. Maintained by every write path that sets company_slug (enforced by a test); exists so the aggregator-suppression pass can filter on a column the planner can estimate instead of an expression it cannot.
+	CompanySlugFolded         pgtype.Text `json:"company_slug_folded"`
+	DuplicateOfAggregator     pgtype.Int8 `json:"duplicate_of_aggregator"`
+	DuplicateOfRole           pgtype.Int8 `json:"duplicate_of_role"`
+	DuplicateOfFuzzy          pgtype.Int8 `json:"duplicate_of_fuzzy"`
+	RequiresClearance         pgtype.Bool `json:"requires_clearance"`
+	RequirementsDerived       []byte      `json:"requirements_derived"`
+	AiInterviewReports        int32       `json:"ai_interview_reports"`
+	Metros                    []string    `json:"metros"`
+	SemanticEmbeddedInputHash pgtype.Text `json:"semantic_embedded_input_hash"`
+	ViaRecruiter              pgtype.Bool `json:"via_recruiter"`
+	ClearanceLevels           []string    `json:"clearance_levels"`
+	Equity                    pgtype.Text `json:"equity"`
+	Perks                     []string    `json:"perks"`
+	// Source-stated last application day, inclusive; NULL when unstated.
+	ApplicationDeadline pgtype.Date `json:"application_deadline"`
+	Engagement          []string    `json:"engagement"`
+	// Department or team the source ATS files the posting under, verbatim and trimmed; empty when unstated.
+	Team string `json:"team"`
+	// Verified application destination; empty falls back to the source posting URL. Independent of ingest and liveness.
+	ApplicationUrl string `json:"application_url"`
 }
 
 type JobSearchPing struct {
@@ -1111,6 +1382,20 @@ type LearnedAtsDomain struct {
 	OtherHits     int64              `json:"other_hits"`
 }
 
+type LinkedinPostingsRead struct {
+	PostingID   string             `json:"posting_id"`
+	ApplyMethod string             `json:"apply_method"`
+	ReadAt      pgtype.Timestamptz `json:"read_at"`
+}
+
+// The shared one-optional-letter-a-day claim. PK (user_id, day), day in UTC; source says who took it.
+type MailDayClaim struct {
+	UserID    int64              `json:"user_id"`
+	Day       pgtype.Date        `json:"day"`
+	Source    string             `json:"source"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+}
+
 type Mailbox struct {
 	ID        int64              `json:"id"`
 	UserID    int64              `json:"user_id"`
@@ -1118,7 +1403,7 @@ type Mailbox struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// Resume point of a per-company duplicate-marker pass: the last company a run finished. Machine-owned by cmd/reindex; empty after_company means start from the top.
+// Resume point of a cmd/reindex pass. Per-company duplicate-marker passes store the last company a run finished (empty means start from the top); the search-time-crossings pass stores the RFC 3339 instant its last run covered up to.
 type MarkerPassCursor struct {
 	Pass         string             `json:"pass"`
 	AfterCompany string             `json:"after_company"`
@@ -1225,16 +1510,21 @@ type Message struct {
 }
 
 type NotificationSetting struct {
-	UserID             int64              `json:"user_id"`
-	Enabled            bool               `json:"enabled"`
-	Channels           []string           `json:"channels"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	DigestFrequency    string             `json:"digest_frequency"`
-	DigestTime         pgtype.Time        `json:"digest_time"`
-	QuietHoursStart    pgtype.Time        `json:"quiet_hours_start"`
-	QuietHoursEnd      pgtype.Time        `json:"quiet_hours_end"`
-	AlertsEmailEnabled bool               `json:"alerts_email_enabled"`
-	NewsEmailEnabled   bool               `json:"news_email_enabled"`
+	UserID                     int64              `json:"user_id"`
+	Enabled                    bool               `json:"enabled"`
+	Channels                   []string           `json:"channels"`
+	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
+	DigestFrequency            string             `json:"digest_frequency"`
+	DigestTime                 pgtype.Time        `json:"digest_time"`
+	QuietHoursStart            pgtype.Time        `json:"quiet_hours_start"`
+	QuietHoursEnd              pgtype.Time        `json:"quiet_hours_end"`
+	AlertsEmailEnabled         bool               `json:"alerts_email_enabled"`
+	NewsEmailEnabled           bool               `json:"news_email_enabled"`
+	DigestIntervalHours        int16              `json:"digest_interval_hours"`
+	InboxDigestEnabled         bool               `json:"inbox_digest_enabled"`
+	InboxDigestEnabledAt       pgtype.Timestamptz `json:"inbox_digest_enabled_at"`
+	ApplicationDigestEnabled   bool               `json:"application_digest_enabled"`
+	ApplicationDigestEnabledAt pgtype.Timestamptz `json:"application_digest_enabled_at"`
 }
 
 type OauthAuthAttempt struct {
@@ -1259,14 +1549,16 @@ type OauthAuthAttempt struct {
 }
 
 type OauthAuthorizationCode struct {
-	ID            int64              `json:"id"`
-	CodeHash      string             `json:"code_hash"`
-	ClientID      string             `json:"client_id"`
-	UserID        int64              `json:"user_id"`
-	RedirectUri   string             `json:"redirect_uri"`
-	CodeChallenge string             `json:"code_challenge"`
-	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ID                 int64              `json:"id"`
+	CodeHash           string             `json:"code_hash"`
+	ClientID           string             `json:"client_id"`
+	UserID             int64              `json:"user_id"`
+	RedirectUri        string             `json:"redirect_uri"`
+	CodeChallenge      string             `json:"code_challenge"`
+	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	IssuedTokenVersion pgtype.Int4        `json:"issued_token_version"`
+	Resource           pgtype.Text        `json:"resource"`
 }
 
 type OauthClient struct {
@@ -1300,6 +1592,7 @@ type OauthGrant struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
 	LastUsedAt         pgtype.Timestamptz `json:"last_used_at"`
+	Resource           pgtype.Text        `json:"resource"`
 }
 
 // Send ledger for the founder signup sequence. PK (user_id, step) = one send per pair, ever.
@@ -1311,12 +1604,46 @@ type OnboardingEmail struct {
 	Error string `json:"error"`
 }
 
+// One row per (user, feature, job, day) a free user was refused by the paid-AI gate (402). Operator report, last 7 days by feature: SELECT h.feature, h.user_id, j.public_slug, h.day, h.created_at FROM paywall_hits h LEFT JOIN jobs j ON j.id = h.job_id WHERE h.created_at >= now() - interval '7 days' ORDER BY h.feature, h.created_at DESC. Not plan_limit_hits: that one is a metered ceiling being reached.
+type PaywallHit struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Feature   string             `json:"feature"`
+	JobID     pgtype.Int8        `json:"job_id"`
+	Day       pgtype.Date        `json:"day"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 // One row per (user, feature, day) a real plan-ceiling refusal was recorded (any tier). Feeds cmd/limit-nudge-mail's candidate query, which filters to free tier.
 type PlanLimitHit struct {
 	UserID    int64              `json:"user_id"`
 	Feature   string             `json:"feature"`
 	Day       pgtype.Date        `json:"day"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type ProblemReport struct {
+	ID              int64              `json:"id"`
+	UserID          int64              `json:"user_id"`
+	Category        string             `json:"category"`
+	Goal            string             `json:"goal"`
+	Expected        string             `json:"expected"`
+	Actual          string             `json:"actual"`
+	ToolName        string             `json:"tool_name"`
+	ErrorCode       string             `json:"error_code"`
+	Fingerprint     string             `json:"fingerprint"`
+	RequestID       string             `json:"request_id"`
+	Status          string             `json:"status"`
+	RequestCount    int32              `json:"request_count"`
+	FirstReportedAt pgtype.Timestamptz `json:"first_reported_at"`
+	LastReportedAt  pgtype.Timestamptz `json:"last_reported_at"`
+	ResolutionNote  string             `json:"resolution_note"`
+}
+
+type ProblemReportDaily struct {
+	UserID int64       `json:"user_id"`
+	Day    pgtype.Date `json:"day"`
+	Writes int32       `json:"writes"`
 }
 
 type ProcessedViewLog struct {
@@ -1424,6 +1751,7 @@ type SavedSearch struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DerivedFromProfile bool               `json:"derived_from_profile"`
+	QueryRevision      int32              `json:"query_revision"`
 }
 
 type ScreeningAnswer struct {
@@ -1551,6 +1879,7 @@ type Subscription struct {
 	StartAt          pgtype.Timestamptz `json:"start_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
+	LastSearchedAt   pgtype.Timestamptz `json:"last_searched_at"`
 }
 
 type SubscriptionMatch struct {
@@ -1563,6 +1892,7 @@ type SubscriptionMatch struct {
 	FailedAt       pgtype.Timestamptz `json:"failed_at"`
 	LastError      string             `json:"last_error"`
 	ExpiredAt      pgtype.Timestamptz `json:"expired_at"`
+	QueryRevision  int32              `json:"query_revision"`
 }
 
 type TelegramChannel struct {
@@ -1691,6 +2021,10 @@ type User struct {
 	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
 	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
 	AgentsMayApply     bool               `json:"agents_may_apply"`
+	LastActiveAt       pgtype.Timestamptz `json:"last_active_at"`
+	BannedAt           pgtype.Timestamptz `json:"banned_at"`
+	BanReason          pgtype.Text        `json:"ban_reason"`
+	BannedBy           pgtype.Int8        `json:"banned_by"`
 }
 
 type UserBlock struct {
@@ -1762,6 +2096,7 @@ type UserProfile struct {
 	Seniorities         []string           `json:"seniorities"`
 	ExcludedSources     []string           `json:"excluded_sources"`
 	ExcludedCompanies   []string           `json:"excluded_companies"`
+	JobLanguages        []string           `json:"job_languages"`
 }
 
 type UserPushToken struct {
@@ -1771,6 +2106,19 @@ type UserPushToken struct {
 	Platform   string             `json:"platform"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+}
+
+// First-touch source of an account, reported by the browser right after sign-up. One row per account; the first report wins. Independent of analytics consent.
+type UserSignupAttribution struct {
+	UserID       int64              `json:"user_id"`
+	UtmSource    pgtype.Text        `json:"utm_source"`
+	UtmMedium    pgtype.Text        `json:"utm_medium"`
+	UtmCampaign  pgtype.Text        `json:"utm_campaign"`
+	UtmContent   pgtype.Text        `json:"utm_content"`
+	UtmTerm      pgtype.Text        `json:"utm_term"`
+	ReferrerHost pgtype.Text        `json:"referrer_host"`
+	LandingPath  pgtype.Text        `json:"landing_path"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type ViewLogCursor struct {
@@ -1790,4 +2138,5 @@ type WebhookConfig struct {
 	LastSuccessAt       pgtype.Timestamptz `json:"last_success_at"`
 	DisabledAt          pgtype.Timestamptz `json:"disabled_at"`
 	ConsecutiveFailures int64              `json:"consecutive_failures"`
+	Secret              string             `json:"secret"`
 }

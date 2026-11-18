@@ -61,11 +61,7 @@ export function commit(draft: SearchDraft): SearchDraft {
  *  hundred milliseconds after first paint, so the box is briefly unowned, and anything
  *  typed into it in that window belongs to the visitor rather than to a list that
  *  never existed. */
-export function reconcile(
-  draft: SearchDraft,
-  committed: string,
-  scope: unknown = null,
-): SearchDraft {
+export function reconcile(draft: SearchDraft, committed: string, scope: unknown = null): SearchDraft {
   if (draft.scope !== null && scope !== draft.scope) return emptyDraft(committed, scope);
   if (committed !== draft.committed) return { text: committed, committed, scope };
   return scope === draft.scope ? draft : { ...draft, scope };

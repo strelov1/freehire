@@ -147,12 +147,7 @@
 
       <div class="flex items-center justify-between gap-2">
         {#if isEdit}
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={submitting}
-            onclick={() => (confirmDeleteOpen = true)}
-          >
+          <Button type="button" variant="ghost" disabled={submitting} onclick={() => (confirmDeleteOpen = true)}>
             Delete my feedback
           </Button>
         {:else}

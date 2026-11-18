@@ -46,13 +46,15 @@
       {/each}
     </div>
     {#if !compact}
-    <span class="mt-5 inline-block rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-foreground">
-      View all — 12 more
-    </span>
-    <p class="mt-6 border-t border-border pt-4 text-xs text-muted-foreground">
-      You're getting this because you set up a job alert on freehire.
-      <a href={resolve('/my/notifications/settings')} class="underline-offset-4 hover:underline">Manage notifications</a>.
-    </p>
+      <span class="mt-5 inline-block rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-foreground">
+        View all — 12 more
+      </span>
+      <p class="mt-6 border-t border-border pt-4 text-xs text-muted-foreground">
+        You're getting this because you set up a job alert on freehire.
+        <a href={resolve('/my/notifications/settings')} class="underline-offset-4 hover:underline"
+          >Manage notifications</a
+        >.
+      </p>
     {/if}
   </div>
 {/snippet}

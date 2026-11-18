@@ -49,9 +49,9 @@ export function nextSession(prev: Session | undefined, now: number): Session {
 }
 
 /** The Measurement Protocol body for one event. */
-export function buildPayload(clientId: string, sessionId: string, name: string, params: Params = {}) {
+export function buildPayload(client: string, sessionId: string, name: string, params: Params = {}) {
   return {
-    client_id: clientId,
+    client_id: client,
     events: [
       {
         name,

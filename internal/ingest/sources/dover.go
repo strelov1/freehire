@@ -9,12 +9,12 @@ import (
 
 // doverBaseURL is the Dover public career-page API root, shared by all three endpoints this
 // adapter calls: slug resolution, paginated listing, and per-posting detail. All three answer a
-// bare, unauthenticated GET with no bot protection on the data itself (verified live 2026-09-18)
+// bare, unauthenticated GET with no bot protection on the data itself
 // — only the browser apply-submission flow gates behind Cloudflare Turnstile, which this adapter
 // never touches.
 const doverBaseURL = "https://app.dover.com/api/v1"
 
-// doverListPageSize is the listing page size; the API accepts a large value (300 observed live)
+// doverListPageSize is the listing page size; the API accepts a large value (300 works)
 // and returns a "next" URL when more remain.
 const doverListPageSize = 300
 
@@ -92,7 +92,12 @@ func (s dover) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 	}), nil
 }
 
-// resolveClientID resolves a board's Dover slug to the platform's internal client id.
+// resolveClientID resolves a board's Dover slug to the platform's internal client id. Dover
+// boards all carry the company's slug — whether harvested off app.dover.com's apply/listing
+// paths or off jobs.dover.com, whose board link is /<slug>/<uuid> where the uuid may be the
+// client id OR a posting id (it can be a posting id) — so there is no uuid shortcut: the slug lookup is
+// the one supported address path, and it doubles as the existence check the jobs.dover.com
+// marketing shell (which serves ANY slug) cannot provide.
 func (s dover) resolveClientID(ctx context.Context, slug string) (string, error) {
 	var resp struct {
 		ID string `json:"id"`
@@ -218,7 +223,20 @@ type doverDetailResponse struct {
 	VisaSupport             bool              `json:"visa_support"`
 	Active                  bool              `json:"active"`
 	IsPrivate               bool              `json:"is_private"`
+
+	// Client identity fields, populated on the same endpoint (the detail carries
+	// client_id/client_name/client_domain).
+	// DoverJobDetail reuses this struct for the link-source resolver, which needs the company's
+	// own naming and client id off the posting rather than a humanized link segment.
+	ClientID     string `json:"client_id"`
+	ClientName   string `json:"client_name"`
+	ClientDomain string `json:"client_domain"`
 }
+
+// DoverJobDetail is the exported view of a posting detail for the link-source resolver
+// (internal/ingest/linksource/dover.go): the same payload the board adapter hydrates with,
+// plus the client identity the response carries.
+type DoverJobDetail = doverDetailResponse
 
 // detail fetches one posting's full detail, returning ok=false when the request fails (in which
 // case the caller falls back to the list-only job — see FetchNew).
@@ -241,6 +259,32 @@ func (d doverDetailResponse) toJob(e CompanyEntry, url string) Job {
 		URL:            url,
 		Title:          strings.TrimSpace(d.Title),
 		Company:        e.Company,
+		Description:    description,
+		WorkMode:       mode,
+		Remote:         mode == "remote",
+		Countries:      doverCountriesFromLocations(d.Locations),
+		EmploymentType: doverEmploymentType(d.Compensation.EmploymentType),
+	}
+	if d.Compensation.OpenToSharingComp && (d.Compensation.LowerBound != nil || d.Compensation.UpperBound != nil) {
+		job.SalaryMin = d.Compensation.LowerBound
+		job.SalaryMax = d.Compensation.UpperBound
+		job.SalaryCurrency = d.Compensation.CurrencyCode
+		job.SalaryPeriod = "year"
+	}
+	return job
+}
+
+// ToJob maps a detail fetched OUTSIDE a board crawl (the link-source resolver) onto a Job,
+// naming the employer from the posting's own client record instead of a catalogue entry — the
+// company fields the board-crawl mapping takes from CompanyEntry, plus the same compensation /
+// location / employment-type mapping.
+func (d doverDetailResponse) ToJob() Job {
+	mode := workplaceTypeMode(d.WorkplaceType)
+	description := sanitizeHTML(d.UserProvidedDescription) + doverDescriptionExtras(d.Compensation, d.VisaSupport)
+	job := Job{
+		ExternalID:     d.ID,
+		Title:          strings.TrimSpace(d.Title),
+		Company:        strings.TrimSpace(d.ClientName),
 		Description:    description,
 		WorkMode:       mode,
 		Remote:         mode == "remote",

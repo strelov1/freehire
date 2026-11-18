@@ -69,7 +69,7 @@ func setup(t *testing.T) (*pgxpool.Pool, *messaging.Service) {
 func seedUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
 	t.Helper()
 	var id int64
-	if err := pool.QueryRow(context.Background(), `INSERT INTO users (email) VALUES ($1) RETURNING id`, email).Scan(&id); err != nil {
+	if err := pool.QueryRow(context.Background(), `INSERT INTO users (email, email_verified) VALUES ($1, true) RETURNING id`, email).Scan(&id); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 	return id

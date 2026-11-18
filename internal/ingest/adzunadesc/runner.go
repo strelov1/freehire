@@ -71,11 +71,13 @@ type RunStats struct {
 	DeadLettered int
 }
 
-// Degraded reports whether a run deserves an alert: work abandoned (a dead letter) or a run
-// that failed everything it touched. Mirrors applyform.RunStats.Degraded — a handful of
-// transient failures per run is this worker's normal, healthy shape too.
+// Degraded reports whether a run deserves an alert: one that captured nothing while it
+// failed or abandoned what it touched. A dead letter beside captures is this queue's normal
+// shape, not a fault: Adzuna drops the JobPosting block from a posting it has taken down, so
+// 3-30% of every wave dead-letters on errNoJobPosting (measured 2026-11-05), and counting
+// that turned the unit red on every run, which is the same as never alerting.
 func (s RunStats) Degraded() bool {
-	return s.DeadLettered > 0 || (s.Captured == 0 && s.Failed > 0)
+	return s.Captured == 0 && (s.Failed > 0 || s.DeadLettered > 0)
 }
 
 // Run drains the capture queue and returns. It claims a wave, fetches each posting's

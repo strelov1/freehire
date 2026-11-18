@@ -21,7 +21,7 @@ Spec: `docs/superpowers/specs/2026-10-22-company-closed-jobs-design.md`.
 - English in all code, comments, UI copy.
 - Before committing Go: `gofmt -l .` prints nothing, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`.
 - Generated files are regenerated, never hand-edited: `make sqlc`, `pnpm run gen:api-docs`, `pnpm run gen:openapi` (in `web/`).
-- No prettier (the repo has none).
+- Format with `pnpm run format` (oxfmt), never prettier.
 
 ---
 

@@ -2,6 +2,7 @@ package reminder
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -170,3 +171,20 @@ func testLinks() *emailprefs.Links {
 // testUserID is whose mail these samples are. Any positive id will do: the token
 // only has to be mintable.
 const testUserID int64 = 7
+
+type pausedSender struct{}
+
+func (pausedSender) Send(context.Context, emailnotify.Message) error {
+	return emailnotify.ErrSendingPaused
+}
+
+// A paused SES account must soft-skip, not count an attempt toward dead-lettering.
+func TestEmailNotifier_PausedTransportSoftSkips(t *testing.T) {
+	n := NewEmailNotifier(pausedSender{}, "jobs@freehire.me", "https://freehire.me", testLinks())
+	msg := ReminderMessage{UserID: testUserID, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme", URL: "u"}
+
+	err := n.Send(context.Background(), "email", "u@x.com", []ReminderMessage{msg})
+	if !errors.Is(err, ErrChannelNotConfigured) {
+		t.Errorf("Send = %v, want a soft-skip (ErrChannelNotConfigured)", err)
+	}
+}

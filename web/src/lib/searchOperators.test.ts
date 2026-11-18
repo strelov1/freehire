@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sourceLabel } from './facets';
+import { sourceLabel } from './sourceLabels';
 import {
   activeOperator,
   companyOptions,
@@ -139,7 +139,10 @@ describe('replaceToken', () => {
 describe('operatorPlan', () => {
   it('turns resolved operators into facets and the rest into q', () => {
     expect(operatorPlan(parseOperators('company:Google source:greenhouse rust'), resolve)).toEqual({
-      facets: [['company_slug', 'google'], ['source', 'greenhouse']],
+      facets: [
+        ['company_slug', 'google'],
+        ['source', 'greenhouse'],
+      ],
       q: 'rust',
     });
   });

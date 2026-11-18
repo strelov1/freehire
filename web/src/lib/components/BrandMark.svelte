@@ -9,13 +9,7 @@
   let { class: cls = 'size-5 shrink-0' }: { class?: string } = $props();
 </script>
 
-<svg
-  viewBox="0 0 512 512"
-  class={cls}
-  fill="currentColor"
-  aria-hidden="true"
-  xmlns="http://www.w3.org/2000/svg"
->
+<svg viewBox="0 0 512 512" class={cls} fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <path
     fill-rule="evenodd"
     clip-rule="evenodd"

@@ -32,6 +32,8 @@ export const messages = defineMessages(
     },
     noGaps: 'No in-demand skills left to add for this role — your stack already reaches its open vacancies.',
     unlockPercent: '+{pct}% of the role',
+    addToProfile: 'Add {skill} to your profile',
+    addFailed: "Couldn't add {skill} — try again",
     mustHaveBadge: 'Must-have',
     marketFrequency: '{pct}% of roles',
     status: {
@@ -67,8 +69,11 @@ export const messages = defineMessages(
         addSkill: 'Добавить навык',
         topSkills: 'Топ навыков рынка',
       },
-      noGaps: 'Для этой роли больше нет востребованных навыков, которые стоило бы добавить — ваш стек уже покрывает её открытые вакансии.',
+      noGaps:
+        'Для этой роли больше нет востребованных навыков, которые стоило бы добавить — ваш стек уже покрывает её открытые вакансии.',
       unlockPercent: '+{pct}% от роли',
+      addToProfile: 'Добавить {skill} в профиль',
+      addFailed: 'Не удалось добавить {skill} — попробуйте ещё раз',
       mustHaveBadge: 'Обязательный',
       marketFrequency: '{pct}% вакансий',
       status: {

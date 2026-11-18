@@ -16,33 +16,28 @@ import (
 )
 
 // autoApplyEventPublisher publishes the two events that drive the durable orchestrator
-// run (internal/application/autoapplyorchestrate): PublishSubmit starts one
-// (openspec/changes/auto-apply-submit-trigger), PublishReviewDecided resumes one paused
-// awaiting the candidate's decision. Nil (the assistantHandlers.events zero value) is the
-// unconfigured deployment — see publishSubmit/publishReviewDecided, the only callers.
+// run (internal/application/autoapplyorchestrate): PublishSubmit starts one,
+// PublishReviewDecided resumes one paused on the candidate's decision. Nil (the
+// assistantHandlers.events zero value) is the unconfigured deployment.
 type autoApplyEventPublisher interface {
 	PublishSubmit(ctx context.Context, queueID int64) error
 	PublishReviewDecided(ctx context.Context, queueID int64, decision string) error
 }
 
-// inngestEventPublisher is the real autoApplyEventPublisher: a plain http.Client POST to
-// a self-hosted Inngest server's own event API — NOT internal/platform/safehttp, whose
-// guard specifically blocks the internal address this call must reach (see
-// openspec/changes/auto-apply-inngest-orchestration/design.md's own Decisions).
+// inngestEventPublisher is the real autoApplyEventPublisher: a plain http.Client POST to the
+// self-hosted Inngest event API. NOT internal/platform/safehttp: its guard blocks the
+// internal address this call must reach.
 type inngestEventPublisher struct {
 	baseURL    string
 	eventKey   string
 	httpClient *http.Client
 }
 
-// inngestPublishTimeout bounds one event-publish call. Short: this is a best-effort,
-// fire-and-log side effect of a request that has already done its real work (recording
-// the candidate's decision), so it must never hold that response open for long.
+// inngestPublishTimeout bounds one event-publish call. Short: best-effort and fire-and-log,
+// it must not hold the response open.
 const inngestPublishTimeout = 5 * time.Second
 
-// newInngestEventPublisher builds the real publisher, or returns nil when either setting
-// is empty — the same "absence is the off switch" convention every other optional
-// dependency in this handler package follows.
+// newInngestEventPublisher builds the real publisher, or nil when either setting is empty.
 func newInngestEventPublisher(baseURL, eventKey string) *inngestEventPublisher {
 	if baseURL == "" || eventKey == "" {
 		return nil
@@ -92,12 +87,10 @@ func (p *inngestEventPublisher) post(ctx context.Context, name string, data any)
 	return nil
 }
 
-// publishSubmit best-effort publishes auto-apply/submit so the orchestrator starts a
-// fresh run — same "log and continue" convention as publishReviewDecided below: the
-// enqueue itself already succeeded and committed, so this must never fail, or hold open,
-// the response. Detached from the request's own context (which is cancelled the moment
-// the handler returns, before a goroutine started from it would get to run) onto a fresh
-// one bounded by inngestPublishTimeout instead.
+// publishSubmit best-effort publishes auto-apply/submit so the orchestrator starts a fresh
+// run. Log and continue: the enqueue already committed, so this must never fail or hold
+// the response. Detached from the request context (cancelled when the handler returns)
+// onto one bounded by inngestPublishTimeout.
 func (h *assistantHandlers) publishSubmit(ctx context.Context, queueID int64) {
 	if h.events == nil {
 		return
@@ -112,10 +105,8 @@ func (h *assistantHandlers) publishSubmit(ctx context.Context, queueID int64) {
 }
 
 // publishReviewDecided best-effort publishes auto-apply/review.decided so a paused
-// orchestrator run resumes — the same "log and continue" convention
-// notifyTailoredCVReady (auto_apply_tailor.go) already follows: recording the candidate's
-// decision must never depend on, wait for, or fail because of this. Detached the same way
-// publishSubmit is, for the same reason.
+// orchestrator run resumes. Log and continue: recording the decision must never depend on
+// this. Detached like publishSubmit.
 func (h *assistantHandlers) publishReviewDecided(ctx context.Context, queueID int64, decision string) {
 	if h.events == nil {
 		return

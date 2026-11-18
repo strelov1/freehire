@@ -24,7 +24,7 @@ func TestClearanceRemovedFromIndexAfterDescriptionEdit(t *testing.T) {
 			row.RequiresClearance = pgtype.Bool{}
 			row.ClearanceLevels = nil
 		}
-		doc, err := FromJob(row, nil, "ats")
+		doc, err := FromJob(row, "ats")
 		if err != nil {
 			t.Fatal(err)
 		}

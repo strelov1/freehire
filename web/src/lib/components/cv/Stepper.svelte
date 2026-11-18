@@ -1,6 +1,6 @@
 <script lang="ts">
   // A −/value/+ control shared by the margin and font-size settings. Layout only: the caller
-  // owns the clamping and rounding (the pure step* helpers in #lib/tailor/geometry), so the two
+  // owns the clamping and rounding (the pure step* helpers in #lib/cvGeometry), so the two
   // settings cannot drift into different stepping behaviour.
   //
   // `display` is a string rather than a number because a value can be absent: the margin axes

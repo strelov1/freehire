@@ -15,19 +15,17 @@ import (
 )
 
 // freework adapts Free-Work (www.free-work.com), France's largest IT-only job board: freelance
-// missions (~55% of the board states a day rate) beside permanent and fixed-term roles, posted
-// mostly by IT consultancies and staffing agencies. It is boardless and an aggregator — the
-// employer is read per posting. See the "Free-Work traps" section of AGENTS.md for the
-// measurements behind each rule.
+// missions beside permanent and fixed-term roles, posted mostly by IT consultancies and staffing
+// agencies. It is boardless and an aggregator — the employer is read per posting. See the
+// "Free-Work traps" section of AGENTS.md.
 //
 // The listing is the site's own public API (API Platform, asked for plain JSON), walked
-// with a property filter that keeps a 300-posting page at ~120 KB; with every field a page of 50
-// takes ~15 s to render, so the whole board in one shape would outlast a run. The body comes from
+// with a property filter that keeps pages small; with every field a page renders too slowly
+// for the whole board to fit in a run. The body comes from
 // the posting's own resource, bought only for postings the catalogue lacks, within a per-run
 // budget; the rest are refreshed by identity.
 type freework struct {
 	get            JSONGetter
-	limiter        waiter
 	maxNewPerRun   int
 	maxPages       int
 	deadlineMargin time.Duration
@@ -48,16 +46,13 @@ const (
 	freeworkPageSize  = 300
 
 	// freeworkRequestInterval paces every request of a run at one a second — a courtesy ceiling,
-	// not a measured limit (no refusal was drawn at that pace).
+	// not a known limit.
 	freeworkRequestInterval = time.Second
 	freeworkDetailWorkers   = 2
-	// freeworkMaxPages is a safety ceiling: the board held 11,642 postings (39 pages) on
-	// 2026-10-28.
+	// freeworkMaxPages is a safety ceiling well above the board's size.
 	freeworkMaxPages = 200
-	// freeworkMaxNewPerRun bounds the posting requests of one run: ~40 listing requests (~4 s
-	// each) and 1,500 posting requests at one a second, plus the writes that follow, sit inside
-	// the scheduler's default 2,400 s crawl budget. ~400 postings are created a day, so after the
-	// first ~8 runs drain the board a run reads a few dozen.
+	// freeworkMaxNewPerRun bounds the posting requests of one run so the listing, the posting
+	// requests at one a second and the writes fit the scheduler's default 2,400 s crawl budget.
 	freeworkMaxNewPerRun   = 1500
 	freeworkDeadlineMargin = 5 * time.Minute
 )
@@ -65,8 +60,7 @@ const (
 // NewFreeWork builds the adapter over the given client.
 func NewFreeWork(c HTTPClient) Source {
 	return freework{
-		get:            c,
-		limiter:        rate.NewLimiter(rate.Every(freeworkRequestInterval), 1),
+		get:            rateLimitedJSONGetter{inner: c, limiter: rate.NewLimiter(rate.Every(freeworkRequestInterval), 1)},
 		maxNewPerRun:   freeworkMaxNewPerRun,
 		maxPages:       freeworkMaxPages,
 		deadlineMargin: freeworkDeadlineMargin,
@@ -139,7 +133,7 @@ func (s freework) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(cards))
 		for _, c := range cards {
-			companies = append(companies, freeworkClean(c.Company.Name))
+			companies = append(companies, collapseSpace(c.Company.Name))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -153,7 +147,7 @@ func (s freework) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -204,18 +198,14 @@ func (s freework) nearDeadline(ctx context.Context) bool {
 // list with no total and no "next" link, and answers any page past the end with the LAST page
 // again. So the walk ends at a short page, or at a page that names no posting it had not already
 // read. The API refuses every ordering parameter, and its default order is the publication
-// date, which a republished posting moves to the top mid-walk: a walk sees ~0.1% of the board
-// twice (deduplicated here) and, in exchange, misses as many, which is far inside the unseen
-// sweep's 48 h. Any page failing fails the crawl — a partial listing would let the
+// date, which a republished posting moves to the top mid-walk: a walk sees a few postings
+// twice (deduplicated here) and misses as many, which the 48 h unseen sweep absorbs. Any page failing fails the crawl — a partial listing would let the
 // company-scoped sweep close the postings of the employers it did see on the pages it did not.
 func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
 	listed := make(map[int64]bool) // every id a page named, for the end-of-list test
 	kept := make(map[int64]bool)   // the ids yielded, each once
 	var out []freeworkCard
 	for page := 1; page <= s.maxPages; page++ {
-		if err := s.limiter.Wait(ctx); err != nil {
-			return nil, err
-		}
 		var cards []freeworkCard
 		if err := s.get.GetJSON(ctx, fmt.Sprintf(freeworkListURL, page, freeworkPageSize), &cards); err != nil {
 			return nil, fmt.Errorf("freework: listing page %d: %w", page, err)
@@ -232,7 +222,7 @@ func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
 				listed[c.ID] = true
 				fresh++
 			}
-			if kept[c.ID] || strings.TrimSpace(c.Slug) == "" || freeworkClean(c.Title) == "" || freeworkClean(c.Company.Name) == "" {
+			if kept[c.ID] || strings.TrimSpace(c.Slug) == "" || collapseSpace(c.Title) == "" || collapseSpace(c.Company.Name) == "" {
 				continue
 			}
 			kept[c.ID] = true
@@ -244,8 +234,6 @@ func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
 	}
 	return nil, fmt.Errorf("freework: listing still not exhausted after %d pages", s.maxPages)
 }
-
-func freeworkClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // freeworkPostingURL is the posting's public page. The page is addressed by the posting slug
 // under its job family's slug; the listing does not carry the family, and the site redirects any
@@ -263,9 +251,9 @@ func freeworkBaseJob(c freeworkCard) Job {
 	j := Job{
 		ExternalID: strconv.FormatInt(c.ID, 10),
 		URL:        freeworkPostingURL("", c.Slug),
-		Title:      freeworkClean(c.Title),
-		Company:    freeworkClean(c.Company.Name),
-		Location:   freeworkClean(c.Location.Label),
+		Title:      collapseSpace(c.Title),
+		Company:    collapseSpace(c.Company.Name),
+		Location:   collapseSpace(c.Location.Label),
 	}
 	if code := strings.ToLower(strings.TrimSpace(c.Location.CountryCode)); len(code) == 2 {
 		j.Countries = []string{code}
@@ -274,9 +262,7 @@ func freeworkBaseJob(c freeworkCard) Job {
 		j.WorkMode = freeworkWorkMode(*c.RemoteMode)
 		j.Remote = j.WorkMode == "remote"
 	}
-	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(c.PublishedAt)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseRFC3339(strings.TrimSpace(c.PublishedAt))
 	return j
 }
 
@@ -284,9 +270,6 @@ func freeworkBaseJob(c freeworkCard) Job {
 // gone (404/410, or a status other than "published") or carries no usable body; an error is the
 // absence of an answer.
 func (s freework) detail(ctx context.Context, c freeworkCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	var d freeworkDetail
 	if err := s.get.GetJSON(ctx, fmt.Sprintf(freeworkDetailURL, c.Slug), &d); err != nil {
 		var se *StatusError
@@ -306,10 +289,10 @@ func (s freework) detail(ctx context.Context, c freeworkCard) (Job, bool, error)
 // title, employer or body.
 func freeworkJob(d freeworkDetail, c freeworkCard) (Job, bool) {
 	j := freeworkBaseJob(c)
-	if t := freeworkClean(d.Title); t != "" {
+	if t := collapseSpace(d.Title); t != "" {
 		j.Title = t
 	}
-	if co := freeworkClean(d.Company.Name); co != "" {
+	if co := collapseSpace(d.Company.Name); co != "" {
 		j.Company = co
 	}
 	body := strings.TrimSpace(d.Description)
@@ -327,7 +310,7 @@ func freeworkJob(d freeworkDetail, c freeworkCard) (Job, bool) {
 		family = strings.TrimSpace(d.Job.Slug)
 	}
 	j.URL = freeworkPostingURL(family, c.Slug)
-	if l := freeworkClean(d.Location.Label); l != "" {
+	if l := collapseSpace(d.Location.Label); l != "" {
 		j.Location = l
 	}
 	if code := strings.ToLower(strings.TrimSpace(d.Location.CountryCode)); len(code) == 2 {
@@ -348,7 +331,7 @@ func freeworkJob(d freeworkDetail, c freeworkCard) (Job, bool) {
 }
 
 // freeworkWorkMode reads the posting's structured remote mode: "full" is remote, "partial"
-// hybrid (two thirds of the board), "none" on-site. A null mode states nothing.
+// hybrid, "none" on-site. A null mode states nothing.
 func freeworkWorkMode(s string) string {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "full":

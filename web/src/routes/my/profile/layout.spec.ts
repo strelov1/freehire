@@ -8,14 +8,18 @@ import ProfileLayout from './+layout.svelte';
 // save a partial block over the stored one, wiping every field it did not carry — so the
 // layout must not open its gate until the résumé has loaded.
 
-const { profileStore, resumeStore } = vi.hoisted(() => ({
-  profileStore: { profile: { skills: [] } as unknown, ensureLoaded: vi.fn() },
+const { profileStore, resumeStore, auth } = vi.hoisted(() => ({
+  auth: { user: { tier: 'free' } as { tier?: string } | null },
+  profileStore: { loaded: true, profile: { skills: [] } as unknown, ensureLoaded: vi.fn(), save: vi.fn() },
   resumeStore: { meta: null, present: false, loaded: false, ensureLoaded: vi.fn() },
 }));
 
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/my/profile') } }));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
-vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
+vi.mock('#lib/auth.svelte.js', () => ({
+  isAuthenticated: () => auth.user !== null,
+  currentUser: () => auth.user,
+}));
 vi.mock('#lib/profile.svelte.js', () => ({ profileStore }));
 vi.mock('#lib/resume.svelte.js', () => ({ resumeStore }));
 vi.mock('#lib/screening.svelte.js', () => ({ screeningStore: { ensureLoaded: vi.fn() } }));
@@ -38,12 +42,54 @@ async function settle() {
 }
 
 beforeEach(() => {
+  auth.user = { tier: 'free' };
+  profileStore.loaded = true;
+  profileStore.profile = { skills: [] };
+  profileStore.save.mockReset().mockResolvedValue({ skills: [], specializations: [] });
   profileStore.ensureLoaded.mockReset().mockResolvedValue(undefined);
   resumeStore.ensureLoaded.mockReset();
   resumeStore.loaded = false;
 });
 
 describe('profile layout gate', () => {
+  it('does not overwrite a profile when its initial read failed', async () => {
+    profileStore.profile = null;
+    profileStore.loaded = false;
+    resumeStore.loaded = true;
+    resumeStore.ensureLoaded.mockResolvedValue(undefined);
+    render(ProfileLayout, { props: { children } });
+    await settle();
+    expect(profileStore.save).not.toHaveBeenCalled();
+    expect(screen.getByText("Couldn't load your profile.")).toBeTruthy();
+  });
+
+  it('initializes an empty profile before exposing autosaving fields', async () => {
+    profileStore.profile = null;
+    resumeStore.loaded = true;
+    resumeStore.ensureLoaded.mockResolvedValue(undefined);
+    const save = deferred();
+    profileStore.save.mockReturnValue(save.promise);
+    render(ProfileLayout, { props: { children } });
+    await settle();
+    expect(profileStore.save).toHaveBeenCalledWith([], [], [], [], [], [], null);
+    expect(screen.queryByText('section content')).toBeNull();
+    save.resolve();
+    await settle();
+    expect(screen.getByText('section content')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Create profile' })).toBeNull();
+  });
+
+  it('shows recovery when initializing the profile fails', async () => {
+    profileStore.profile = null;
+    resumeStore.loaded = true;
+    resumeStore.ensureLoaded.mockResolvedValue(undefined);
+    profileStore.save.mockRejectedValue(new Error('offline'));
+    render(ProfileLayout, { props: { children } });
+    await settle();
+    expect(screen.getByText("Couldn't load your profile.")).toBeTruthy();
+    expect(screen.queryByText('section content')).toBeNull();
+  });
+
   it('keeps the sections hidden until the résumé has loaded', async () => {
     const resume = deferred();
     resumeStore.ensureLoaded.mockReturnValue(resume.promise);
@@ -64,5 +110,38 @@ describe('profile layout gate', () => {
     await settle();
     expect(screen.queryByText('section content')).toBeNull();
     expect(screen.getByText("Couldn't load your profile.")).toBeTruthy();
+  });
+});
+
+describe('profile layout plan badge', () => {
+  async function open() {
+    resumeStore.loaded = true;
+    resumeStore.ensureLoaded.mockResolvedValue(undefined);
+    render(ProfileLayout, { props: { children } });
+    await settle();
+  }
+
+  it('links a known Free account to the pricing page, even while the profile loads', async () => {
+    render(ProfileLayout, { props: { children } });
+    expect(screen.getByRole('link', { name: /free plan/i }).getAttribute('href')).toBe('/pricing');
+    await settle();
+    expect(screen.getAllByRole('link', { name: /free plan/i })).toHaveLength(1);
+  });
+
+  it('shows the real paid tier and links it to the account plan', async () => {
+    auth.user = { tier: 'ultra' };
+    await open();
+    const link = screen.getByRole('link', { name: /ultra plan/i });
+    expect(link.getAttribute('href')).toBe('/my/plan');
+    expect(screen.queryByText('Free')).toBeNull();
+  });
+
+  it('does not label a signed-out or tier-less identity as Free', async () => {
+    auth.user = null;
+    await open();
+    expect(screen.queryByRole('link', { name: /plan/i })).toBeNull();
+    auth.user = {};
+    await open();
+    expect(screen.queryByRole('link', { name: /plan/i })).toBeNull();
   });
 });

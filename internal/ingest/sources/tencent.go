@@ -19,10 +19,9 @@ import (
 // postings too (SourceID 4, the posting URL on myworkdayjobs.com), and they are skipped here.
 // Every campus posting the site lists is such a copy; mainland campus hiring is a separate site.
 //
-// The crawl is scoped to the site's own 技术 (Technology, 40001) job category: our title
-// dictionary cannot read Chinese titles (classify resolved a category for 5 of 708 of them and
-// confirmed none of any category non-technical), so the source's category is what states that
-// a posting is technical, and it sets IsTechHint.
+// The crawl is scoped to the site's own 技术 (Technology, 40001) job category: our title dictionary
+// cannot read Chinese titles, so the source's category is what states that a posting is technical,
+// and it sets IsTechHint.
 //
 // The listing carries the posting's responsibilities but not its requirements, so a posting
 // the catalogue does not hold yet is hydrated from the site's own posting API (HydratingSource);
@@ -41,8 +40,8 @@ const (
 	tencentJobURL    = "https://careers.tencent.com/jobdesc.html?postId="
 	// tencentTechCategory is the site's top-level 技术 (Technology) job category.
 	tencentTechCategory = "40001"
-	// tencentPageSize is the most rows the listing request asks for: over twice the whole
-	// technical category, and a ceiling that fails the crawl when it outgrows it.
+	// tencentPageSize is the most rows the listing request asks for: well over the technical
+	// category's size, and a ceiling that fails the crawl when outgrown.
 	tencentPageSize = 2000
 	// tencentNativeSource is the SourceID of a posting authored on this site; 4 is a re-listed
 	// Workday posting.
@@ -201,9 +200,5 @@ func (s tencent) detail(ctx context.Context, e CompanyEntry, p tencentPost) (Job
 // tencentDate parses the en-us LastUpdateTime, "October 15,2026" — the posting's last update,
 // the only date the site states.
 func tencentDate(s string) *time.Time {
-	t, err := time.Parse("January 2,2006", strings.TrimSpace(s))
-	if err != nil {
-		return nil
-	}
-	return &t
+	return parseLayout("January 2,2006", strings.TrimSpace(s))
 }

@@ -7,11 +7,10 @@ import (
 	"strings"
 )
 
-// kuper adapts Kuper's public vacancy API (vacancies-api.sbermarket.ru), a single-company
-// source with no per-tenant board id (boardless). The list endpoint paginates by page and
-// carries the description inline, so no detail fan-out is needed. Each page's result is a
-// list of category blocks; the pagination block carries the page count and the vacancies
-// block carries the postings.
+// kuper adapts Kuper's public vacancy API (vacancies-api.sbermarket.ru), a single-company source
+// with no per-tenant board id (boardless). The list endpoint paginates by page and carries the
+// description inline. Each page's result is a list of category blocks: the pagination block holds
+// the page count, the vacancies block the postings.
 type kuper struct {
 	http JSONGetter
 }

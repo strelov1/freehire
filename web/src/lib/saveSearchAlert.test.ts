@@ -65,6 +65,10 @@ describe('alertName', () => {
     expect(name).toContain('Senior');
     expect(name).toContain('Backend');
   });
+  it('names the watchlist alert', () => {
+    expect(alertName('watchlist=true')).toBe('Companies I follow');
+    expect(alertName('watchlist=true&q=react')).toBe('Companies I follow · react');
+  });
   it('includes the text query and stays within 100 chars', () => {
     const name = alertName('q=react');
     expect(name).toContain('react');
@@ -145,11 +149,7 @@ const sub = (id: number, savedSearchId: number, channel: string): Subscription =
 
 // A SubscriptionsPort double. `held` is what the caller currently has; `server` is what
 // a refresh() would read back. Seeding them differently is how a stale list is staged.
-function makeSubs(opts: {
-  held?: Subscription[];
-  server?: Subscription[];
-  addImpl?: () => Promise<void>;
-}): {
+function makeSubs(opts: { held?: Subscription[]; server?: Subscription[]; addImpl?: () => Promise<void> }): {
   port: SubscriptionsPort;
   held: Subscription[];
   calls: { ensureLoaded: number; add: number; refresh: number };

@@ -29,6 +29,23 @@ import (
 // Everything else is deliberately absent: "data-engineering" → "Data Engineering" needs
 // no curation, and listing it here would only be one more line to keep true.
 var displayNames = map[string]string{
+	"dotnet-maui":     ".NET MAUI",
+	"sop-development": "SOP Development",
+	"pos-terminals":   "POS Terminals",
+	"cctv":            "CCTV",
+	"rfx":             "RFx (RFQ/RFP/RFI)",
+	"mrp":             "MRP",
+	// Industrial maintenance: acronyms and module names.
+	"sap-pm":                           "SAP PM",
+	"reliability-centered-maintenance": "Reliability-Centered Maintenance (RCM)",
+	"asset-performance-management":     "Asset Performance Management (APM)",
+	"total-productive-maintenance":     "Total Productive Maintenance (TPM)",
+	"overall-equipment-effectiveness":  "Overall Equipment Effectiveness (OEE)",
+	"mtbf":                             "MTBF",
+	"mttr":                             "MTTR",
+	"hvac":                             "HVAC",
+	"mep":                              "MEP",
+	"iso-17025":                        "ISO/IEC 17025",
 	// Occupational safety. Every one of these is an acronym or a vendor's own
 	// stylization, which is what this map is for — titleCase renders them "Osha",
 	// "Nfpa" and "Velocityehs".
@@ -44,7 +61,7 @@ var displayNames = map[string]string{
 	"lockout-tagout":                "Lockout/Tagout",
 	"job-safety-analysis":           "Job Safety Analysis (JSA)",
 	"process-safety-management":     "Process Safety Management (PSM)",
-	// batch 5 (2026-10 enrichment mining) — acronyms and vendor stylizations.
+	// Acronyms and vendor stylizations.
 	"abac":                     "ABAC",
 	"adas":                     "ADAS",
 	"adobe-experience-manager": "Adobe Experience Manager (AEM)",
@@ -75,6 +92,7 @@ var displayNames = map[string]string{
 	"freertos":                 "FreeRTOS",
 	"gdb":                      "GDB",
 	"gpu":                      "GPU",
+	"hr-operations":            "HR Operations",
 	"hris":                     "HRIS",
 	"iaas":                     "IaaS",
 	"ibm-mq":                   "IBM MQ",
@@ -381,6 +399,7 @@ var displayNames = map[string]string{
 	"newrelic":              "New Relic",
 	"nextjs":                "Next.js",
 	"nifi":                  "NiFi",
+	"ninjaone":              "NinjaOne",
 	"nodejs":                "Node.js",
 	"numpy":                 "NumPy",
 	"oauth":                 "OAuth",
@@ -437,7 +456,9 @@ var displayNames = map[string]string{
 	"tensorflow":            "TensorFlow",
 	"tensorrt":              "TensorRT",
 	"testng":                "TestNG",
+	"sla-management":        "SLA Management",
 	"threejs":               "Three.js",
+	"ux-design":             "UX Design",
 	"tiktok-ads":            "TikTok Ads",
 	"timescaledb":           "TimescaleDB",
 	"travis":                "Travis CI",
@@ -449,6 +470,7 @@ var displayNames = map[string]string{
 	"wasm":                  "WebAssembly",
 	"webgl":                 "WebGL",
 	"wordpress":             "WordPress",
+	"workspace-one":         "Workspace ONE",
 	"xgboost":               "XGBoost",
 	"zeromq":                "ZeroMQ",
 

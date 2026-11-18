@@ -18,6 +18,7 @@
     draft = $bindable(''),
     attachments = $bindable([]),
     attachable = true,
+    dictatable = true,
     queue,
     turnActive,
     disabled,
@@ -31,6 +32,9 @@
     /** Whether to offer the attach control at all. Off for a host that reads only the
      *  text, so a chosen file is never silently dropped. */
     attachable?: boolean;
+    /** Whether to offer the microphone. Off for a host whose callers may not have the
+     *  paid dictation feature, so the control never answers with an upgrade wall. */
+    dictatable?: boolean;
     queue: { id: string; text: string; attachments: Attachment[] }[];
     turnActive: boolean;
     disabled: boolean;
@@ -122,7 +126,9 @@
     {#if queue.length > 0}
       <!-- Queued messages: sent one-by-one as each turn finishes. -->
       <div class="mb-2 overflow-hidden rounded-2xl border border-border/60 bg-card">
-        <div class="px-4 py-2 text-xs font-medium text-brand">{format(s.queuedCount, { count: String(queue.length) })}</div>
+        <div class="px-4 py-2 text-xs font-medium text-brand">
+          {format(s.queuedCount, { count: String(queue.length) })}
+        </div>
         <ul class="divide-y divide-border/40 border-t border-border/40">
           {#each queue as item (item.id)}
             <li class="group flex items-start gap-3 px-4 py-2">
@@ -187,25 +193,25 @@
       class="relative flex w-full cursor-text items-end gap-2 rounded-3xl border border-border/60 bg-card px-4 py-2.5 shadow-sm transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring"
     >
       {#if attachable}
-      <input
-        bind:this={fileInput}
-        type="file"
-        accept="application/pdf,.pdf"
-        class="hidden"
-        tabindex="-1"
-        aria-hidden="true"
-        onchange={attachFile}
-      />
-      <button
-        type="button"
-        aria-label={s.attachAria}
-        title={s.attachTitle}
-        disabled={!canAttach}
-        onclick={() => fileInput?.click()}
-        class="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <Paperclip class="size-4" />
-      </button>
+        <input
+          bind:this={fileInput}
+          type="file"
+          accept="application/pdf,.pdf"
+          class="hidden"
+          tabindex="-1"
+          aria-hidden="true"
+          onchange={attachFile}
+        />
+        <button
+          type="button"
+          aria-label={s.attachAria}
+          title={s.attachTitle}
+          disabled={!canAttach}
+          onclick={() => fileInput?.click()}
+          class="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Paperclip class="size-4" />
+        </button>
       {/if}
       <textarea
         bind:this={textareaEl}
@@ -223,7 +229,7 @@
         }}
         class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1.5 text-base leading-6 text-foreground placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
       ></textarea>
-      {#if DICTATION_ENABLED && !dictationOff}
+      {#if dictatable && DICTATION_ENABLED && !dictationOff}
         <VoiceInput
           {disabled}
           onTranscript={acceptTranscript}
@@ -259,7 +265,9 @@
     <!-- The keys used to live in the placeholder, which wrapped to three lines in a narrow
          panel and inflated the box before anything was typed. Pointer devices only: a phone
          keyboard has no Shift+Enter to explain. -->
-    <p id={keysHintId} class="mt-1.5 hidden text-center text-xs text-muted-foreground/80 pointer-fine:block">{s.keysHint}</p>
+    <p id={keysHintId} class="mt-1.5 hidden text-center text-xs text-muted-foreground/80 pointer-fine:block">
+      {s.keysHint}
+    </p>
 
     {#if voiceError}
       <p class="mt-1.5 px-4 text-xs text-destructive" role="alert">{voiceError}</p>

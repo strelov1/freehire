@@ -11,12 +11,68 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const computeJobDailyStats = `-- name: ComputeJobDailyStats :many
+SELECT
+    (COALESCE(a.day, r.day))::date AS day,
+    (COALESCE(a.n, 0)::int)::integer AS added,
+    (COALESCE(r.n, 0)::int)::integer AS removed,
+    ($1::timestamptz)::timestamp with time zone AS computed_at
+FROM (
+    SELECT (created_at AT TIME ZONE 'UTC')::date AS day, count(*) AS n
+    FROM jobs
+    GROUP BY 1
+) a
+FULL OUTER JOIN (
+    SELECT (closed_at AT TIME ZONE 'UTC')::date AS day, count(*) AS n
+    FROM jobs
+    WHERE closed_at IS NOT NULL
+    GROUP BY 1
+) r ON a.day = r.day
+`
+
+type ComputeJobDailyStatsRow struct {
+	Day        pgtype.Date        `json:"day"`
+	Added      int32              `json:"added"`
+	Removed    int32              `json:"removed"`
+	ComputedAt pgtype.Timestamptz `json:"computed_at"`
+}
+
+// Compute on the read connection; publish the result separately on the writer.
+// counts jobs by their created_at day; `removed` counts jobs by their CURRENT
+// closed_at day (NULL = still open, excluded). Days are UTC calendar dates
+// (AT TIME ZONE 'UTC') so buckets are stable regardless of session timezone. The
+// FULL OUTER JOIN yields one row per day that saw either an add or a removal.
+func (q *Queries) ComputeJobDailyStats(ctx context.Context, asOf pgtype.Timestamptz) ([]ComputeJobDailyStatsRow, error) {
+	rows, err := q.db.Query(ctx, computeJobDailyStats, asOf)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeJobDailyStatsRow{}
+	for rows.Next() {
+		var i ComputeJobDailyStatsRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Added,
+			&i.Removed,
+			&i.ComputedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteAllJobDailyStats = `-- name: DeleteAllJobDailyStats :exec
 DELETE FROM job_daily_stats
 `
 
 // First half of the atomic rebuild: clear the rollup. Run in the same transaction
-// as RebuildJobDailyStats so readers never see an empty table and reopen-orphaned
+// as ComputeJobDailyStats so readers never see an empty table and reopen-orphaned
 // days (a day that had only closures, now reopened) are dropped rather than left
 // stale.
 func (q *Queries) DeleteAllJobDailyStats(ctx context.Context) error {
@@ -242,37 +298,4 @@ func (q *Queries) ListUserGrowth(ctx context.Context) ([]ListUserGrowthRow, erro
 		return nil, err
 	}
 	return items, nil
-}
-
-const rebuildJobDailyStats = `-- name: RebuildJobDailyStats :execrows
-INSERT INTO job_daily_stats (day, added, removed, computed_at)
-SELECT
-    COALESCE(a.day, r.day)  AS day,
-    COALESCE(a.n, 0)::int   AS added,
-    COALESCE(r.n, 0)::int   AS removed,
-    now()
-FROM (
-    SELECT (created_at AT TIME ZONE 'UTC')::date AS day, count(*) AS n
-    FROM jobs
-    GROUP BY 1
-) a
-FULL OUTER JOIN (
-    SELECT (closed_at AT TIME ZONE 'UTC')::date AS day, count(*) AS n
-    FROM jobs
-    WHERE closed_at IS NOT NULL
-    GROUP BY 1
-) r ON a.day = r.day
-`
-
-// Second half of the atomic rebuild: recompute every active day from jobs. `added`
-// counts jobs by their created_at day; `removed` counts jobs by their CURRENT
-// closed_at day (NULL = still open, excluded). Days are UTC calendar dates
-// (AT TIME ZONE 'UTC') so buckets are stable regardless of session timezone. The
-// FULL OUTER JOIN yields one row per day that saw either an add or a removal.
-func (q *Queries) RebuildJobDailyStats(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildJobDailyStats)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

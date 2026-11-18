@@ -43,10 +43,8 @@ func (r *Ring) Latest() (Sample, bool) {
 }
 
 // DrainRatePerMinute is how many postings left the queue per minute over the window.
-//
-// It sums only the DECREASES between consecutive samples. The hourly enqueue adds an
-// hour of postings in one step, so (first − last) / span would go negative after every
-// enqueue and take the ETA with it; what was drained is what a reader means by speed.
+// It sums only the decreases between consecutive samples: the hourly enqueue adds an hour of
+// postings in one step, so (first - last) / span would go negative after every enqueue.
 func (r *Ring) DrainRatePerMinute() (float64, bool) {
 	if len(r.samples) < 2 {
 		return 0, false

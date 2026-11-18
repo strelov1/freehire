@@ -33,7 +33,17 @@ const COMPANY_STACK_GROUPS = new Set(['field', 'ai', 'seniority', 'role', 'indus
 // collection's row. The head of an unrestricted feed is mostly staffing agencies and
 // job boards (DevOps: Manpower, Michael Page, Hunters Group); within these lists it
 // is employers a visitor recognises. Every one is an existing `collections` value.
-const NOTABLE_COLLECTIONS = ['mag7', 'bigtech', 'unicorn', 'ai', 'ai-native', 'fortune500', 'yc', 'a16z-portfolio', 'european'];
+const NOTABLE_COLLECTIONS = [
+  'mag7',
+  'bigtech',
+  'unicorn',
+  'ai',
+  'ai-native',
+  'fortune500',
+  'yc',
+  'a16z-portfolio',
+  'european',
+];
 
 // How many postings a company stack is counted over.
 const SAMPLE = 24;
@@ -64,7 +74,10 @@ async function leadingCompanies(query) {
     tally.set(key, entry);
   }
   // Stable sort: equal counts keep feed order.
-  return [...tally.values()].sort((a, b) => b.n - a.n).slice(0, STACK).map((e) => e.name);
+  return [...tally.values()]
+    .sort((a, b) => b.n - a.n)
+    .slice(0, STACK)
+    .map((e) => e.name);
 }
 
 // The countries holding the most of a regional collection's postings.
@@ -120,7 +133,11 @@ for (const c of COLLECTIONS) {
 }
 
 // Sorted keys, so a re-run that finds the same leaders produces the same file.
-const sorted = Object.fromEntries(Object.keys(stacks).sort().map((k) => [k, stacks[k]]));
+const sorted = Object.fromEntries(
+  Object.keys(stacks)
+    .sort()
+    .map((k) => [k, stacks[k]]),
+);
 await writeFile(SNAPSHOT_PATH, `${JSON.stringify(sorted, null, 2)}\n`);
 console.log(`wrote ${Object.keys(sorted).length} stacks to ${SNAPSHOT_PATH}`);
 if (failed.length > 0) {

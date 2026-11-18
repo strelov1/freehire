@@ -6,10 +6,17 @@
 
 import type { Enrichment, Job } from './types';
 import type { Card as JobCard } from './generated/contracts';
+import { ENGAGEMENT_LABELS } from './generated/contracts';
 import { countryLabel } from './facets';
 import {
-  REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
-  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
+  REGION_LABELS,
+  SENIORITY_LABELS,
+  EMPLOYMENT_LABELS,
+  WORK_MODE_LABELS,
+  JOB_CATEGORY_LABELS,
+  DOMAIN_LABELS,
+  COMPANY_TYPE_LABELS,
+  ENGLISH_LEVEL_LABELS,
   RELOCATION_LABELS,
 } from './labels';
 
@@ -79,15 +86,11 @@ export function formatSalary(e: Enrichment, notation: 'compact' | 'standard' = '
   const { salary_min, salary_max } = e;
   if (salary_min == null && salary_max == null) return null;
 
-  const symbol = e.salary_currency
-    ? (CURRENCY_SYMBOL[e.salary_currency] ?? e.salary_currency)
-    : '';
+  const symbol = e.salary_currency ? (CURRENCY_SYMBOL[e.salary_currency] ?? e.salary_currency) : '';
   const period = e.salary_period ? (PERIOD_SUFFIX[e.salary_period] ?? '') : '';
   const tail = `${symbol}${period}`;
 
-  const formatAmount = notation === 'compact'
-    ? compactAmount
-    : (n: number) => n.toLocaleString('en-US');
+  const formatAmount = notation === 'compact' ? compactAmount : (n: number) => n.toLocaleString('en-US');
 
   let amount: string;
   if (salary_min != null && salary_max != null) {
@@ -121,7 +124,7 @@ export function seniorityLabel(e: Pick<Enrichment, 'seniority'>): string | null 
  * reach or an onsite role's area). Null when regions is unknown (empty is
  * unknown, not global).
  */
-function regionLabel(job: Pick<Job, 'regions'>): string | null {
+export function regionLabel(job: Pick<Job, 'regions'>): string | null {
   if (!job.regions?.length) return null;
   return job.regions.map((r) => label(REGION_LABELS, r)).join(', ');
 }
@@ -151,12 +154,7 @@ export function cardTagsFromCard(card: JobCard): string[] {
   return tagRow(card);
 }
 
-function tagRow(f: {
-  work_mode?: string;
-  regions?: string[];
-  employment_type?: string;
-  seniority?: string;
-}): string[] {
+function tagRow(f: { work_mode?: string; regions?: string[]; employment_type?: string; seniority?: string }): string[] {
   const tags: string[] = [];
 
   const arrangement = workArrangement({ work_mode: f.work_mode ?? '' });
@@ -189,12 +187,7 @@ export function summaryFacets(job: Job): Facet[] {
 
   // A scalar facet that maps to a search filter: one clickable value, its text
   // resolved from the code via the facet's label map.
-  const link = (
-    name: string,
-    param: string,
-    code: string | null | undefined,
-    map: Record<string, string>,
-  ) => {
+  const link = (name: string, param: string, code: string | null | undefined, map: Record<string, string>) => {
     if (code) facets.push({ label: name, values: [{ text: label(map, code), href: filterHref(param, code) }] });
   };
   // An array facet (region/country/industry): one clickable value per code. When
@@ -222,12 +215,15 @@ export function summaryFacets(job: Job): Facet[] {
   plain('Location', job.location);
   links('Region', 'regions', job.regions, (r) => label(REGION_LABELS, r));
   link('Work type', 'employment_type', e.employment_type, EMPLOYMENT_LABELS);
+  // The IR35 status the posting states (internal/dict/engagement) — a UK contractor's
+  // first question, so it sits right after the work type it qualifies.
+  links('Contract terms', 'engagement', job.engagement, (v) => label(ENGAGEMENT_LABELS, v));
   link('Grade', 'seniority', e.seniority, SENIORITY_LABELS);
   plain('Experience', e.experience_years_min != null ? `${e.experience_years_min}+ yrs` : null);
   // english_level carries a 'none' sentinel that must not render as a facet.
   const english = e.english_level && e.english_level !== 'none' ? e.english_level : null;
   link('English', 'english_level', english, ENGLISH_LEVEL_LABELS);
-  link('Category', 'category', e.category, CATEGORY_LABELS);
+  link('Category', 'category', e.category, JOB_CATEGORY_LABELS);
   links('Country', 'countries', job.countries, countryLabel, true);
   link('Relocation', 'relocation', e.relocation, RELOCATION_LABELS);
   if (e.visa_sponsorship === true) {

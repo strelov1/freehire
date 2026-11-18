@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/job/collections"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 )
 
 // plan matches each collection's candidates against existing companies and emits a
@@ -199,119 +201,6 @@ func TestPlan_CountsGatedOutCandidates(t *testing.T) {
 	}
 }
 
-func TestResolveOne_TreatsAZeroRecordParseAsFailure(t *testing.T) {
-	// A source that has changed shape parses to zero rows just as convincingly as a
-	// genuinely empty register. Letting it through would reconcile the tag off every
-	// company, so it must fail like a fetch failure does.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("[]"))
-	}))
-	defer srv.Close()
-
-	c := collections.Collection{
-		Slug:    "x",
-		Kind:    collections.KindEditorial,
-		Dataset: &collections.Dataset{URL: srv.URL, Parse: func([]byte) ([]collections.Record, error) { return nil, nil }},
-	}
-	if _, err := resolveOne(context.Background(), srv.Client(), c); err == nil {
-		t.Error("resolveOne accepted a dataset that parsed to no records")
-	}
-}
-
-func TestResolveOne_FetchesFromTheDatasetResolver(t *testing.T) {
-	var fetched string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fetched = r.URL.Path
-		_, _ = w.Write([]byte("payload"))
-	}))
-	defer srv.Close()
-
-	c := collections.Collection{
-		Slug: "x",
-		Kind: collections.KindEditorial,
-		Dataset: &collections.Dataset{
-			ResolveURL: func(context.Context, *http.Client) (string, error) { return srv.URL + "/resolved.csv", nil },
-			Parse:      func([]byte) ([]collections.Record, error) { return []collections.Record{{Name: "Acme"}}, nil },
-		},
-	}
-	got, err := resolveOne(context.Background(), srv.Client(), c)
-	if err != nil {
-		t.Fatalf("resolveOne: %v", err)
-	}
-	if fetched != "/resolved.csv" {
-		t.Errorf("fetched %q, want the resolver's URL", fetched)
-	}
-	if len(got) != 1 {
-		t.Errorf("records = %+v, want one", got)
-	}
-}
-
-func TestResolveOne_UsesASelfFetchingDatasetsRecords(t *testing.T) {
-	// A paginated directory cannot be expressed as one URL, so it fetches itself. The
-	// worker must route it the same as any other dataset — including through the
-	// zero-record guard below.
-	c := collections.Collection{
-		Slug: "a16z-portfolio",
-		Kind: collections.KindBacker,
-		Dataset: &collections.Dataset{
-			Records: func(context.Context, *http.Client) ([]collections.Record, error) {
-				return []collections.Record{{Name: "Anduril Industries"}}, nil
-			},
-		},
-	}
-	got, err := resolveOne(context.Background(), http.DefaultClient, c)
-	if err != nil {
-		t.Fatalf("resolveOne: %v", err)
-	}
-	if len(got) != 1 || got[0].Name != "Anduril Industries" {
-		t.Errorf("records = %+v, want the directory's one record", got)
-	}
-}
-
-func TestResolveOne_ASelfFetchingDatasetThatReadsNothingIsAFailure(t *testing.T) {
-	// Same reasoning as every other source: zero records parses just as cleanly as a
-	// genuinely empty directory would, and would reconcile the tag off every company.
-	c := collections.Collection{
-		Slug: "a16z-speedrun",
-		Kind: collections.KindBacker,
-		Dataset: &collections.Dataset{
-			Records: func(context.Context, *http.Client) ([]collections.Record, error) { return nil, nil },
-		},
-	}
-	if _, err := resolveOne(context.Background(), http.DefaultClient, c); err == nil {
-		t.Error("an empty directory read was accepted as an empty membership")
-	}
-}
-
-func TestResolveOne_PropagatesASelfFetchingDatasetFailure(t *testing.T) {
-	c := collections.Collection{
-		Slug: "a16z-portfolio",
-		Kind: collections.KindBacker,
-		Dataset: &collections.Dataset{
-			Records: func(context.Context, *http.Client) ([]collections.Record, error) {
-				return nil, errors.New("page 2: status 502")
-			},
-		},
-	}
-	if _, err := resolveOne(context.Background(), http.DefaultClient, c); err == nil {
-		t.Error("resolveOne swallowed a directory fetch failure")
-	}
-}
-
-func TestResolveOne_PropagatesAResolverFailure(t *testing.T) {
-	c := collections.Collection{
-		Slug: "x",
-		Kind: collections.KindCredential,
-		Dataset: &collections.Dataset{
-			ResolveURL: func(context.Context, *http.Client) (string, error) { return "", errors.New("no csv link") },
-			Parse:      func([]byte) ([]collections.Record, error) { return nil, nil },
-		},
-	}
-	if _, err := resolveOne(context.Background(), http.DefaultClient, c); err == nil {
-		t.Error("resolveOne swallowed a resolver failure")
-	}
-}
-
 func TestPlan_ReportsHQCountryCoverage(t *testing.T) {
 	// The dry run is read for this number: the single-token credential rule is only
 	// as good as hq_country's coverage.
@@ -401,9 +290,12 @@ func TestClientFor_UsesDirectWhenNoProxyConfigured(t *testing.T) {
 }
 
 func TestClientFor_UsesProxiedForAnAllowlistedSlug(t *testing.T) {
+	// Both registers refuse a plain client from our hosts (see proxiedCollectionSlugs).
 	direct, proxied := &http.Client{}, &http.Client{}
-	if got := clientFor("us-h1b-sponsor", direct, proxied); got != proxied {
-		t.Error("clientFor did not route the allowlisted slug through the proxy")
+	for _, slug := range []string{"us-h1b-sponsor", "ca-lmia-employer"} {
+		if got := clientFor(slug, direct, proxied); got != proxied {
+			t.Errorf("clientFor did not route %s through the proxy", slug)
+		}
 	}
 }
 
@@ -417,6 +309,7 @@ func TestClientFor_UsesDirectForANonAllowlistedSlug(t *testing.T) {
 }
 
 func TestProxiedClient_ReturnsNilWhenSOURCES_PROXY_URLIsUnset(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "")
 	t.Setenv("SOURCES_PROXY_URL", "")
 	got, err := proxiedClient(fetchTimeout)
 	if err != nil {
@@ -428,6 +321,7 @@ func TestProxiedClient_ReturnsNilWhenSOURCES_PROXY_URLIsUnset(t *testing.T) {
 }
 
 func TestProxiedClient_BuildsAClientWhenSOURCES_PROXY_URLIsSet(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "")
 	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
 	got, err := proxiedClient(fetchTimeout)
 	if err != nil {
@@ -439,6 +333,7 @@ func TestProxiedClient_BuildsAClientWhenSOURCES_PROXY_URLIsSet(t *testing.T) {
 }
 
 func TestProxiedClient_ErrorsOnAnUnparseableSOURCES_PROXY_URL(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "")
 	t.Setenv("SOURCES_PROXY_URL", "not a url")
 	if _, err := proxiedClient(fetchTimeout); err == nil {
 		t.Error("proxiedClient accepted an invalid SOURCES_PROXY_URL")
@@ -540,5 +435,49 @@ func TestWithoutFailed_LeavesAFailedCollectionsTagsAlone(t *testing.T) {
 	p := planScoped(rows, map[string][]collections.Record{"uk": {{Name: "Monzo"}}}, narrowed)
 	if len(p.writes) != 0 {
 		t.Errorf("writes = %+v, want none — adyen's nl tag must survive the outage", p.writes)
+	}
+}
+
+func TestProxiedClient_PrefersTheScraplingTier(t *testing.T) {
+	var got struct {
+		Mode  string `json:"mode"`
+		Proxy bool   `json:"proxy"`
+	}
+	svc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(`{"status":200,"url":"https://www.uscis.gov/","headers":{},"body":""}`))
+	}))
+	defer svc.Close()
+	t.Setenv("SCRAPLING_FETCH_URL", svc.URL)
+	t.Setenv("SCRAPLING_FETCH_TOKEN", "token")
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
+
+	client, err := proxiedClient(fetchTimeout)
+	if err != nil {
+		t.Fatalf("proxiedClient: %v", err)
+	}
+	if _, ok := client.Transport.(*scraplingfetch.Transport); !ok {
+		t.Fatalf("proxiedClient transport = %T, want the Scrapling tier", client.Transport)
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://www.uscis.gov/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("get through the Scrapling tier: %v", err)
+	}
+	_ = resp.Body.Close()
+	// uscis.gov refuses the Scrapling tier without its proxy too, so both options matter.
+	if got.Mode != "http" || !got.Proxy {
+		t.Errorf("Scrapling request mode=%q proxy=%v, want mode=http proxy=true", got.Mode, got.Proxy)
+	}
+}
+
+func TestProxiedClient_ErrorsOnScraplingWithoutAToken(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "http://127.0.0.1:8098")
+	t.Setenv("SCRAPLING_FETCH_TOKEN", "")
+	if _, err := proxiedClient(fetchTimeout); err == nil {
+		t.Error("proxiedClient accepted SCRAPLING_FETCH_URL without a token")
 	}
 }

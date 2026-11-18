@@ -1,6 +1,6 @@
-// Command social-digest publishes the day's ten most-viewed postings to the social
-// channels that are configured. One run builds one day's list and exits; schedule it
-// once a day, after cmd/rollup-views has produced the day it will read.
+// Command social-digest publishes the day's ten most-viewed postings, rotating through themed
+// tops by weekday, to the social channels that are configured. One run builds one day's list and
+// exits; schedule it once a day, after cmd/rollup-views has produced the day it will read.
 //
 //	./social-digest -dry-run                 # render the post, send nothing
 //	./social-digest -day 2026-09-03          # replay one day
@@ -47,8 +47,7 @@ func main() {
 }
 
 func run() int {
-	// Parsed before the pool is opened: a typo in -day should cost nothing and say so
-	// immediately, not after a connection and a query.
+	// Parsed before the pool is opened so a typo in -day fails immediately.
 	requested, err := parseDay(*dayArg)
 	if err != nil {
 		log.Printf("social-digest: %v", err)
@@ -62,23 +61,20 @@ func run() int {
 	}
 	defer cleanup()
 
-	// The LinkedIn channel reads its credential from the database on every publish, so the
-	// token store is built from the pool this run already holds. A renewal that landed an hour
-	// ago is therefore picked up without a restart.
+	// The LinkedIn channel reads its credential from the database on every publish, so a renewal
+	// is picked up without a restart.
 	publishers := configuredPublishers(cfg, linkedinauth.NewPostgresStore(db.New(pool)))
 	if len(publishers) == 0 {
-		// Not a failure. A deployment with no channel configured is a deployment that
-		// has not turned this on, and it should look like nothing rather than like a
-		// broken worker every night.
+		// Not a failure: no channel configured means this is not turned on, and it should not look
+		// like a broken worker every night.
 		log.Printf("social-digest: no channel configured, nothing to do")
-		return worker.Skip("SOCIAL_CHANNELS")
+		// The one variable that alone turns a channel on; LinkedIn also needs its four LINKEDIN_* knobs.
+		return worker.Skip("DISCORD_DIGEST_WEBHOOK_URL")
 	}
 
-	// FRONTEND_ORIGIN defaults to localhost so that a developer's checkout runs, and
-	// every link in the published post is rooted at it. This is the one worker in the
-	// fleet whose output strangers read, so an unset origin here means ten dead links
-	// posted in public rather than a quiet local oddity. A dry run is exempt: rendering
-	// localhost links to a log is exactly what a developer's checkout is for.
+	// FRONTEND_ORIGIN defaults to localhost, and every link in the post is rooted at it. This
+	// worker's output is read by strangers, so an unset origin means dead links posted in public;
+	// a dry run is exempt.
 	if !*dryRun && !strings.HasPrefix(cfg.FrontendOrigin, "https://") {
 		log.Printf("social-digest: FRONTEND_ORIGIN is %q, which would publish links nobody can open; refusing", cfg.FrontendOrigin)
 		return 1
@@ -92,14 +88,8 @@ func run() int {
 		return 1
 	}
 	if digest.Empty() {
-		// Several different things produce an empty list, and naming only one of them
-		// would send an operator hunting the wrong cause. The one that will actually
-		// happen first is the third: page_uniques is zero for every row written before
-		// migration 0138, so the digest is empty until cmd/rollup-views has run once
-		// with the split — the whole window between deploying this and the next night.
-		log.Printf("social-digest: nothing to publish for %s. Either no posting cleared the floor of %d page views, "+
-			"or every candidate was published within the last %d days, or cmd/rollup-views has not yet run with the "+
-			"page/API split and page_uniques is still zero for that day",
+		// A day nothing clears the floor on never gets here: Build reports it as an error.
+		log.Printf("social-digest: nothing to publish for %s: every posting above the floor of %d page views was published within the last %d days",
 			digest.Day.Format(socialdigest.DayLayout), socialdigest.MinPageUniques, socialdigest.QuarantineDays)
 		return 0
 	}
@@ -108,8 +98,6 @@ func run() int {
 		return renderOnly(digest, publishers)
 	}
 
-	log.Printf("social-digest: publishing %d postings for %s to %d channel(s)",
-		len(digest.Items), digest.Day.Format(socialdigest.DayLayout), len(publishers))
 	if err := svc.Dispatch(ctx, digest, publishers); err != nil {
 		log.Printf("social-digest: %v", err)
 		return 1
@@ -117,12 +105,9 @@ func run() int {
 	return 0
 }
 
-// parseDay reads the -day flag. An empty value is the ordinary case and yields the
-// zero time, which the service reads as "discover the freshest day with data".
-//
-// It rejects rather than falls back, because a mistyped day and a day with nothing to
-// publish would otherwise look identical in the log — and the flag exists precisely to
-// replay a day somebody has a reason to care about.
+// parseDay reads the -day flag. An empty value yields the zero time, which the service reads
+// as "discover the freshest day with data". It rejects rather than falls back, so a mistyped
+// day is not mistaken for a day with nothing to publish.
 func parseDay(s string) (time.Time, error) {
 	if s == "" {
 		return time.Time{}, nil
@@ -134,16 +119,11 @@ func parseDay(s string) (time.Time, error) {
 	return d, nil
 }
 
-// configuredPublishers builds one publisher per configured channel. A channel whose
-// credential is absent is simply not in the list — there is no "disabled" state to
-// represent, and no error to report for a feature nobody turned on.
-//
-// The two channels answer "am I configured?" differently, and the difference is the shape of
-// their credentials. Discord's is a static webhook URL, so its presence is the whole answer.
-// LinkedIn's is an OAuth application whose access token EXPIRES and lives in the database, so
-// configuration means the application and the company page — never the token. Requiring a
-// stored token here would silently drop the channel from the run that was supposed to report
-// it needed signing in.
+// configuredPublishers builds one publisher per configured channel; an unconfigured channel is
+// simply absent. Discord is configured by its static webhook URL. LinkedIn's access token
+// EXPIRES and lives in the database, so configuration means the application and company page,
+// never the token: requiring a stored token would silently drop the channel from the run that
+// should report it needs signing in.
 func configuredPublishers(cfg config.Settings, tokens socialdigest.TokenSource) []socialdigest.Publisher {
 	var out []socialdigest.Publisher
 	if cfg.DiscordDigestWebhookURL != "" {
@@ -155,9 +135,8 @@ func configuredPublishers(cfg config.Settings, tokens socialdigest.TokenSource) 
 	return out
 }
 
-// renderOnly writes what each channel would send and touches nothing. It prints the
-// real payload rather than a summary: what a dry run is for is catching a list that
-// reads badly, and a summary of a post cannot read badly.
+// renderOnly writes what each channel would send and touches nothing. It prints the real
+// payload, since a dry run exists to catch a list that reads badly.
 func renderOnly(digest socialdigest.Digest, publishers []socialdigest.Publisher) int {
 	failed := 0
 	for _, p := range publishers {

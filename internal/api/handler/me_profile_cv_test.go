@@ -31,6 +31,9 @@ type fakeStructuredResume struct {
 	// values model a caller for whom nothing was derived.
 	geo   resume.Geography
 	geoOK bool
+	// written, when set, receives the Owned block SetCandidateOwned was given; setErr makes that write fail.
+	written *resume.Owned
+	setErr  error
 }
 
 func (f fakeStructuredResume) Structured(context.Context, int64) (resumeextract.Structured, bool, error) {
@@ -52,6 +55,19 @@ func (f fakeStructuredResume) CandidateOwned(context.Context, int64) (resume.Own
 		return resume.OwnedFromStructured(f.provisional), nil
 	}
 	return resume.Owned{}, nil
+}
+
+// SetCandidateOwned applies the real limits and, when a test supplied written, records the
+// block there (the fake is passed by value, so the record is a pointer the test holds).
+func (f fakeStructuredResume) SetCandidateOwned(_ context.Context, _ int64, o resume.Owned) (resume.Owned, error) {
+	if f.setErr != nil {
+		return resume.Owned{}, f.setErr
+	}
+	o.Sanitize()
+	if f.written != nil {
+		*f.written = o
+	}
+	return o, nil
 }
 
 func (f fakeStructuredResume) StructureForSeed(context.Context, int64) (resumeextract.Structured, bool, error) {
@@ -85,7 +101,7 @@ func profileAppWithResume(t *testing.T, repo *fakeProfileRepo, cv structuredResu
 	}
 	h := &profileHandlers{userProfile: userprofile.New(repo), resume: cv}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/profile", auth.RequireAuth(iss, testVersions), h.GetProfile)
+	app.Get("/api/v1/me/profile", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{profileHandlers: h}))
 	return app, token
 }
 
@@ -236,7 +252,7 @@ func TestProfileRead_DerivedLocationNullWhenNothingResolved(t *testing.T) {
 // profileDerived reads the response's derived_location block, nil when the key is null.
 func profileDerived(t *testing.T, app *fiber.App, token string) *derivedLocation {
 	t.Helper()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/profile", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/profile", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {

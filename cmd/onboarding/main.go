@@ -1,15 +1,8 @@
-// Command onboarding is the founder signup-sequence worker. One run does a single
-// pass over the five steps — greet, introduce the filter panel, ask about the
-// missing alert, introduce the extension, talk about the project — sending each
-// eligible mail once and
-// recording it. Run it on a schedule (hourly is plenty; the first step is the only
-// time-sensitive one) and it exits.
+// Command onboarding is the founder signup-sequence worker. One run does a single pass over
+// the steps (greet, filter panel, missing alert, extension, the project), sending each eligible
+// mail once and recording it. Run it hourly; it exits non-zero when any send failed.
 //
-// It exits non-zero when any send failed, so the timer's failure handling surfaces
-// a broken sender rather than the sequence quietly stopping.
-//
-// The sequence needs three things configured, and refuses to run without them
-// rather than sending something worse than nothing:
+// It refuses to run without three settings rather than send something worse than nothing:
 //
 //	AWS_REGION + NOTIFY_EMAIL_FROM   the SES transport, as for every other mail
 //	ONBOARDING_REPLY_TO              the human inbox that answers these letters
@@ -29,11 +22,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// The -to flag sends one mail to one address and exits, touching neither the
-// candidate queries nor the ledger. It exists because the copy is the part of this
-// feature most likely to change, and there is otherwise no way to see a change land
-// in a real inbox: the previews render the markup, but they cannot show what a
-// client does with it, and the sequence itself only mails people who qualify.
+// The -to flag sends one mail to one address and exits, touching neither the candidate queries
+// nor the ledger, so a copy change can be seen in a real inbox.
 //
 //	./onboarding -to you@example.com            # the welcome mail
 //	./onboarding -to you@example.com -step open_source
@@ -49,12 +39,11 @@ func main() {
 		worker.Main(sendOne)
 		return
 	}
-	worker.Main(run)
+	worker.Main(run, emailnotify.HoldKeys("onboarding")...)
 }
 
-// sendOne delivers a single mail for inspection. It shares the transport and the
-// refusal-to-run checks with the real pass, so what lands in the inbox is what the
-// sequence would have sent — a preview built any other way would be a different mail.
+// sendOne delivers a single mail for inspection, sharing the transport and refusal checks with
+// the real pass so the inbox shows what the sequence would send.
 func sendOne() int {
 	ctx := context.Background()
 	cfg := config.Load()
@@ -70,8 +59,7 @@ func sendOne() int {
 	}
 
 	mailer := onboarding.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
-	// The mail carries a real unsubscribe link for a real account, so -to needs to
-	// say whose.
+	// The mail carries a real unsubscribe link, so -to needs the account.
 	if *sendUser <= 0 {
 		log.Print("onboarding: -to also needs -to-user, the account id the address belongs to")
 		return 2
@@ -96,9 +84,8 @@ func run() int {
 		log.Print("onboarding: email transport not configured (AWS_REGION / NOTIFY_EMAIL_FROM) — nothing to do")
 		return worker.Skip("AWS_REGION+NOTIFY_EMAIL_FROM")
 	}
-	// A missing reply address is a misconfiguration, not an absent feature: these
-	// mails ask the reader a direct question. Sending them with replies going
-	// nowhere is worse than not sending them, so this is a hard stop.
+	// A missing reply address is a misconfiguration: these mails ask a direct question, so
+	// sending them with replies going nowhere is a hard stop.
 	if cfg.OnboardingReplyTo == "" {
 		log.Print("onboarding: ONBOARDING_REPLY_TO is unset — refusing to send mails that ask for a reply")
 		return 1
@@ -109,6 +96,7 @@ func run() int {
 		log.Printf("onboarding: ses: %v", err)
 		return 1
 	}
+	ses = ses.WithSendingBreaker()
 
 	mailer := onboarding.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 	runner := onboarding.New(db.New(pool), mailer, onboarding.DefaultConfig())

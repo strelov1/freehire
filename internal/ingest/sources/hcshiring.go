@@ -14,8 +14,7 @@ import (
 // <tenant>.hcshiring.com — a US healthcare ATS behind senior-living communities, rehab centres
 // and physician groups. The board is the tenant subdomain.
 //
-// The career center is an Ember single-page app over a keyless REST API on the same host
-// (verified 2026-10-20 from a residential IP and the prod crawl host alike):
+// The career center is an Ember single-page app over a keyless REST API on the same host:
 //
 //	GET /api/jobs?page=N                 {"jobs":[...], "meta":{"totalJobs","totalPages",...}}
 //	GET /api/jobDescriptions?id=<id>     {"jobDescriptions":{"description": "<html>", ...}}
@@ -43,7 +42,7 @@ func (hcshiring) fullBoardListing() {}
 const (
 	hcsApex = ".hcshiring.com"
 	// hcsMaxPages is a ceiling, not an expected end: at ten rows a page it admits 5,000
-	// postings, against 259 on the largest tenant measured, and reaching it fails the crawl.
+	// postings, and reaching it fails the crawl.
 	hcsMaxPages = 500
 )
 
@@ -63,8 +62,8 @@ type hcsListPage struct {
 }
 
 // hcsListing is one listing row. Only the fields the adapter maps are decoded; the structured
-// compensation and Google employment-type fields the record also declares were null on every
-// one of 845 postings across 31 tenants, so they are not read.
+// compensation and Google employment-type fields the record also declares are null on every
+// posting, so they are not read.
 type hcsListing struct {
 	ID             string        `json:"id"`
 	Title          string        `json:"title"`

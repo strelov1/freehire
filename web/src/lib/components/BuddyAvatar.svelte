@@ -6,7 +6,11 @@
   // buddyAvatarName), drawn the same everywhere a member appears. Never a photo — a buddy
   // handle is an anonymous identity, and any picture tied to the account, even the blurred
   // Talent Network one, would link the two.
-  let { handle, size = 'md', class: className }: { handle: string; size?: 'sm' | 'md' | 'lg'; class?: string } = $props();
+  let {
+    handle,
+    size = 'md',
+    class: className,
+  }: { handle: string; size?: 'sm' | 'md' | 'lg'; class?: string } = $props();
 </script>
 
 <Avatar name={buddyAvatarName(handle)} {size} class={className} />

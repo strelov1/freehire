@@ -37,7 +37,9 @@ describe('PlanView upgrade CTA', () => {
 // exactly when both forgot the same new feature, which is how "cover-letter" and
 // "auto-apply" reached the page as raw keys.
 const PLAN_GO = readFileSync(join(import.meta.dirname, '../../../../internal/ai/plan/plan.go'), 'utf8');
-const FEATURES = [...PLAN_GO.matchAll(/^\s*Feature\w+\s+Feature\s*=\s*"([^"]+)"/gm)].flatMap((m) => (m[1] ? [m[1]] : []));
+const FEATURES = [...PLAN_GO.matchAll(/^\s*Feature\w+\s+Feature\s*=\s*"([^"]+)"/gm)].flatMap((m) =>
+  m[1] ? [m[1]] : [],
+);
 
 describe('PlanView feature labels', () => {
   it('reads the feature list from the backend', () => {

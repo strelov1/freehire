@@ -37,3 +37,33 @@ func TestCanonicalsIsTheSortedCanonicalSet(t *testing.T) {
 		t.Errorf("Canonicals() = %q, want every key of displayNames: %q", got, want)
 	}
 }
+
+func TestSearchAliasesMapsNormalizedAliasesToCanonicalSlugs(t *testing.T) {
+	got := SearchAliases()
+	if !slices.Contains(got["financial-services"], "finance") {
+		t.Fatalf("SearchAliases()[financial-services] = %q, want finance", got["financial-services"])
+	}
+	got["financial-services"][0] = "mutated"
+	if slices.Contains(SearchAliases()["financial-services"], "mutated") {
+		t.Fatal("SearchAliases returned a slice backed by the package dictionary")
+	}
+}
+
+func TestCanonicalizeNormalizationVectors(t *testing.T) {
+	tests := []struct {
+		name  string
+		label string
+		want  []string
+	}{
+		{name: "ampersand", label: "Food&Beverage", want: []string{"food-and-beverage"}},
+		{name: "whitespace and punctuation", label: "\u00a0 Food	&  Beverage \u00a0", want: []string{"food-and-beverage"}},
+		{name: "Unicode simple lowercase", label: "İT Services", want: []string{"it-services"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Canonicalize([]string{tt.label}); !slices.Equal(got, tt.want) {
+				t.Errorf("Canonicalize(%q) = %q, want %q", tt.label, got, tt.want)
+			}
+		})
+	}
+}

@@ -77,11 +77,9 @@ func (s icims) jobLocs(ctx context.Context, host, board string) ([]string, error
 	for _, sm := range root.Sitemaps {
 		sub, err := getSitemap(ctx, s.http, sm.Loc)
 		if err != nil {
-			// A sub-sitemap's postings are part of the board's full listing, so a failure
-			// here must fail the whole crawl rather than silently return the other
-			// sub-sitemaps' postings as if they were the complete board — the same
-			// partial-success shape that forced freehire#2337's revert (see the
-			// fullBoardListing marker's bar, source.go).
+			// A sub-sitemap's postings are part of the board's full listing, so a failure here must fail
+			// the whole crawl rather than return the other sub-sitemaps' postings as the complete board
+			// (see the fullBoardListing marker's bar, source.go).
 			return nil, fmt.Errorf("icims: sub-sitemap %s: %w", sm.Loc, err)
 		}
 		entries = append(entries, sub.URLs...)

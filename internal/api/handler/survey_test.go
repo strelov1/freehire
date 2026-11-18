@@ -61,9 +61,7 @@ func surveyApp(t *testing.T, repo *fakeSurveyRepo, onb *fakeOnboardingStore) (*f
 	h := &surveyHandlers{store: survey.New(repo), onboarding: onb}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss, testVersions)
-	app.Get("/me/survey", g, h.GetSurvey)
-	app.Put("/me/survey", g, h.PutSurvey)
-	app.Post("/me/onboarding/complete", g, h.CompleteOnboarding)
+	h.register(app.Group("/api/v1"), middleware{key: g, cookie: g}, newContract(contractHandlers{surveyHandlers: h}))
 	return app, token
 }
 
@@ -91,7 +89,7 @@ func TestGetSurveyOnAnUnansweredAccountReturnsAnEmptyRecord(t *testing.T) {
 	// skip, and "no answers" must arrive as an object it can inspect field by field.
 	app, token := surveyApp(t, &fakeSurveyRepo{getErr: survey.ErrNotFound}, &fakeOnboardingStore{})
 
-	resp := doSurvey(t, app, http.MethodGet, "/me/survey", "", token)
+	resp := doSurvey(t, app, http.MethodGet, "/api/v1/me/survey", "", token)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
@@ -114,7 +112,7 @@ func TestGetSurveyOnAnUnansweredAccountReturnsAnEmptyRecord(t *testing.T) {
 func TestGetSurveyRequiresAuth(t *testing.T) {
 	app, _ := surveyApp(t, &fakeSurveyRepo{}, &fakeOnboardingStore{})
 
-	resp := doSurvey(t, app, http.MethodGet, "/me/survey", "", "")
+	resp := doSurvey(t, app, http.MethodGet, "/api/v1/me/survey", "", "")
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", resp.StatusCode)
@@ -125,7 +123,7 @@ func TestPutSurveyStoresTheStatedFields(t *testing.T) {
 	repo := &fakeSurveyRepo{}
 	app, token := surveyApp(t, repo, &fakeOnboardingStore{})
 
-	resp := doSurvey(t, app, http.MethodPut, "/me/survey", `{"job_search_stage":"searching"}`, token)
+	resp := doSurvey(t, app, http.MethodPut, "/api/v1/me/survey", `{"job_search_stage":"searching"}`, token)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
@@ -142,7 +140,7 @@ func TestPutSurveyRejectsAnOutOfVocabularyValueWith400(t *testing.T) {
 	repo := &fakeSurveyRepo{}
 	app, token := surveyApp(t, repo, &fakeOnboardingStore{})
 
-	resp := doSurvey(t, app, http.MethodPut, "/me/survey", `{"biggest_challenges":["vibes"]}`, token)
+	resp := doSurvey(t, app, http.MethodPut, "/api/v1/me/survey", `{"biggest_challenges":["vibes"]}`, token)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
@@ -155,7 +153,7 @@ func TestPutSurveyRejectsAnOutOfVocabularyValueWith400(t *testing.T) {
 func TestPutSurveyRejectsAMalformedBody(t *testing.T) {
 	app, token := surveyApp(t, &fakeSurveyRepo{}, &fakeOnboardingStore{})
 
-	resp := doSurvey(t, app, http.MethodPut, "/me/survey", `{`, token)
+	resp := doSurvey(t, app, http.MethodPut, "/api/v1/me/survey", `{`, token)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
@@ -166,7 +164,7 @@ func TestCompleteOnboardingMarksTheCaller(t *testing.T) {
 	onb := &fakeOnboardingStore{}
 	app, token := surveyApp(t, &fakeSurveyRepo{}, onb)
 
-	resp := doSurvey(t, app, http.MethodPost, "/me/onboarding/complete", "", token)
+	resp := doSurvey(t, app, http.MethodPost, "/api/v1/me/onboarding/complete", "", token)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
@@ -183,7 +181,7 @@ func TestCompleteOnboardingIsIdempotent(t *testing.T) {
 	app, token := surveyApp(t, &fakeSurveyRepo{}, onb)
 
 	for i := range 2 {
-		resp := doSurvey(t, app, http.MethodPost, "/me/onboarding/complete", "", token)
+		resp := doSurvey(t, app, http.MethodPost, "/api/v1/me/onboarding/complete", "", token)
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("call %d: status = %d, want 200", i+1, resp.StatusCode)
 		}
@@ -195,7 +193,7 @@ func TestCompleteOnboardingRequiresAuth(t *testing.T) {
 	onb := &fakeOnboardingStore{}
 	app, _ := surveyApp(t, &fakeSurveyRepo{}, onb)
 
-	resp := doSurvey(t, app, http.MethodPost, "/me/onboarding/complete", "", "")
+	resp := doSurvey(t, app, http.MethodPost, "/api/v1/me/onboarding/complete", "", "")
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", resp.StatusCode)
@@ -209,7 +207,7 @@ func TestCompleteOnboardingSurfacesAStoreFailure(t *testing.T) {
 	onb := &fakeOnboardingStore{markErr: errors.New("connection refused")}
 	app, token := surveyApp(t, &fakeSurveyRepo{}, onb)
 
-	resp := doSurvey(t, app, http.MethodPost, "/me/onboarding/complete", "", token)
+	resp := doSurvey(t, app, http.MethodPost, "/api/v1/me/onboarding/complete", "", token)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", resp.StatusCode)

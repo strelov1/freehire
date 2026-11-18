@@ -8,7 +8,6 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/identity/accounts"
-	"github.com/strelov1/freehire/internal/job/logodomain"
 )
 
 // codeIssuer is the slice of *accounts.Service this package needs: mint/mail and confirm a
@@ -43,6 +42,11 @@ type Service struct {
 
 	jobs   JobRepository
 	minter Minter
+
+	// The company team (team.go), set by WithTeam.
+	team    TeamRepository
+	invites InviteMailer
+	joinURL string
 }
 
 // New creates a Service backed by the given account Repository, code issuer, claim mailer,
@@ -124,9 +128,7 @@ func (s *Service) ConfirmClaim(ctx context.Context, userID int64, code string) (
 	if err != nil {
 		return Account{}, err
 	}
-	knownDomain := logodomain.Domain(website)
-	workDomain := emailDomain(acc.WorkEmail)
-	if !found || knownDomain == "" || knownDomain != workDomain || isAcademicDomain(workDomain) {
+	if !found || domainReviewReason(website, acc.WorkEmail) != "" {
 		return acc, nil
 	}
 	return s.repo.Activate(ctx, userID)
@@ -160,8 +162,18 @@ func (s *Service) ResendClaimCode(ctx context.Context, userID int64) (Account, e
 // ListPendingClaims is the moderator review queue: pending claims whose work email is
 // confirmed. A claim whose code was never entered is not shown — nobody proved they can read
 // that address, so there is nothing for a moderator to vouch for yet.
-func (s *Service) ListPendingClaims(ctx context.Context) ([]Account, error) {
-	return s.repo.ListPending(ctx)
+func (s *Service) ListPendingClaims(ctx context.Context) ([]PendingClaim, error) {
+	claims, err := s.repo.ListPending(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range claims {
+		claims[i].ReviewReason = domainReviewReason(claims[i].Website, claims[i].WorkEmail)
+		if claims[i].ReviewReason == "" {
+			claims[i].ReviewReason = ReviewManual
+		}
+	}
+	return claims, nil
 }
 
 // ApproveClaim activates a pending claim on a moderator's say-so and, when the company's

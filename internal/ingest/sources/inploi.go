@@ -28,9 +28,8 @@ const (
 )
 
 var (
-	inploiBoard   = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,127}$`)
-	inploiKey     = regexp.MustCompile(`\bpk_[A-Za-z0-9_-]{12,}\b`)
-	inploiSegment = regexp.MustCompile(`(?i)\\?"segment_ids\\?"\s*,\s*\\?"segment\\?"\s*,\s*\\?"(\d+)\\?"`)
+	inploiBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,127}$`)
+	inploiKey   = regexp.MustCompile(`\bpk_[A-Za-z0-9_-]{12,}\b`)
 )
 
 type inploiHTTP interface {
@@ -199,12 +198,110 @@ func inploiCareerHost(raw string) (string, error) {
 	return u.Hostname(), nil
 }
 
+// React Router serializes search configuration as a flat table: object keys and
+// values reference other cells. Resolve the schema before choosing credentials;
+// adjacent strings or an unrelated filter's default are not segment evidence.
 func inploiCreds(text string) (key, segment string) {
-	if m := inploiKey.FindString(text); m != "" {
-		key = m
-	}
-	if m := inploiSegment.FindStringSubmatch(text); len(m) == 2 {
-		segment = m[1]
+	const prefix = "window.__reactRouterContext.streamController.enqueue("
+	for _, chunk := range strings.Split(text, prefix)[1:] {
+		var encoded string
+		if json.NewDecoder(strings.NewReader(chunk)).Decode(&encoded) != nil {
+			continue
+		}
+		var table []any
+		if json.Unmarshal([]byte(encoded), &table) != nil || len(table) == 0 {
+			continue
+		}
+		var resolve func(any, map[int]bool, int) any
+		resolve = func(value any, visiting map[int]bool, depth int) any {
+			if depth > 100 {
+				return nil
+			}
+			if n, ok := value.(float64); ok {
+				i := int(n)
+				if float64(i) != n || i < 0 || i >= len(table) || visiting[i] {
+					return nil
+				}
+				// Numbers stored in cells are literal values, not another reference.
+				if _, literal := table[i].(float64); literal {
+					return table[i]
+				}
+				visiting[i] = true
+				result := resolve(table[i], visiting, depth+1)
+				delete(visiting, i)
+				return result
+			}
+			switch v := value.(type) {
+			case map[string]any:
+				result := make(map[string]any, len(v))
+				for name, child := range v {
+					if !strings.HasPrefix(name, "_") {
+						return nil
+					}
+					i, err := strconv.Atoi(name[1:])
+					if err != nil || i < 0 || i >= len(table) {
+						return nil
+					}
+					field, ok := table[i].(string)
+					if !ok {
+						return nil
+					}
+					result[field] = resolve(child, visiting, depth+1)
+				}
+				return result
+			case []any:
+				result := make([]any, len(v))
+				for i, child := range v {
+					result[i] = resolve(child, visiting, depth+1)
+				}
+				return result
+			default:
+				return value
+			}
+		}
+		root, _ := resolve(table[0], map[int]bool{}, 0).(map[string]any)
+		loaders, _ := root["loaderData"].(map[string]any)
+		for _, loader := range loaders {
+			route, _ := loader.(map[string]any)
+			page, _ := route["page"].(map[string]any)
+			sdk, _ := page["sdk"].(map[string]any)
+			pageKey, _ := sdk["apiKey"].(string)
+			if pageKey == "" || inploiKey.FindString(pageKey) != pageKey {
+				continue
+			}
+			var pageSegment string
+			valid := true
+			var walk func(any)
+			walk = func(value any) {
+				switch v := value.(type) {
+				case map[string]any:
+					if v["key"] == "segment_ids" && v["~slug"] == "jobSearchFilter" {
+						id, ok := v["defaultValue"].(string)
+						n, err := strconv.ParseUint(id, 10, 64)
+						if !ok || err != nil || n == 0 || (pageSegment != "" && pageSegment != id) {
+							valid = false
+						} else {
+							pageSegment = id
+						}
+					}
+					for _, child := range v {
+						walk(child)
+					}
+				case []any:
+					for _, child := range v {
+						walk(child)
+					}
+				}
+			}
+			walk(page["sections"])
+			if !valid || pageSegment == "" {
+				continue
+			}
+			if key != "" && (key != pageKey || segment != pageSegment) {
+				return "", ""
+			}
+			key, segment = pageKey, pageSegment
+		}
 	}
 	return key, segment
 }

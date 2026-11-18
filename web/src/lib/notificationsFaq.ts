@@ -8,7 +8,7 @@ export const NOTIFICATIONS_FAQ: FaqItem[] = [
   {
     question: 'How fast does a job alert arrive?',
     answer:
-      'Choose Instant and it goes out as soon as the next match run finds a job against your saved search, or a daily digest at a time you set — either way, over email, Telegram or push, whichever you connect.',
+      'Free accounts get new matches in one daily digest at a time you set. Pro and Ultra can also choose Instant, sent when the next match run finds a job (runs are a few minutes apart, outside quiet hours), or a batch every 1 to 23 hours. Either way it goes over email, Telegram or push, whichever you connect.',
   },
   {
     question: 'What besides new jobs sends a notification?',
@@ -18,11 +18,12 @@ export const NOTIFICATIONS_FAQ: FaqItem[] = [
   {
     question: 'Can I go quiet for part of the day?',
     answer:
-      'Yes — set quiet hours and every reminder, nudge and instant alert waits until the window ends. A daily digest is exempt, since it already fires once at a time you chose.',
+      'Yes — set quiet hours and every reminder, nudge and faster-than-daily alert waits until the window ends. A daily digest is exempt, since it already fires once at a time you chose.',
   },
   {
     question: 'Which channels are supported?',
-    answer: 'Email, Telegram, and push to the freehire mobile app — pick any combination; a channel you never connect is simply skipped, not an error.',
+    answer:
+      'Email, Telegram, and push to the freehire mobile app — pick any combination; a channel you never connect is simply skipped, not an error.',
   },
   {
     question: 'Where do I change any of this?',

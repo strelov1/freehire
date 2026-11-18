@@ -297,7 +297,7 @@ func TestSkipIsClearedBeforeTheNextRun(t *testing.T) {
 	t.Setenv(IgnorePauseEnv, "1")
 
 	Skip("LOGO_DOMAIN_MAP_OUT")
-	if code := runOrPause(func() int { return 0 }); code != 0 {
+	if code := runOrPause(func() int { return 0 }, nil); code != 0 {
 		t.Fatalf("runOrPause = %d, want 0", code)
 	}
 

@@ -14,11 +14,11 @@ import (
 // company and boardless. The site is a Kendo grid over a small keyless JSON API, all Traditional
 // Chinese.
 //
-// The listing is CAPPED at 200 rows: the unfiltered dump and an unfiltered search both stop
-// there while the board holds more (279 on 2026-10-25). The search's experience filter splits
-// the board into two disjoint halves — xp=0 returns the postings asking no experience (Exp 0 or
-// -1), xp=1 those asking at least a year — so the crawl reads both, and a half that comes back
-// at the cap fails the run rather than silently dropping its overflow.
+// The listing is CAPPED at 200 rows: the unfiltered dump and an unfiltered search both stop there
+// while the board holds more. The search's experience filter splits the board into two disjoint
+// halves (xp=0 postings asking no experience, Exp 0 or -1; xp=1 those asking at least a year), so
+// the crawl reads both, and a half that comes back at the cap fails the run rather than silently
+// dropping its overflow.
 //
 // The listing has no body; a posting the catalogue does not hold yet is hydrated from the
 // vacancy-detail endpoint (HydratingSource), whose Requirement text carries both the duties and
@@ -114,7 +114,7 @@ func (s realtek) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 	}
 	jobs := fetchDetails(list, defaultDetailWorkers, func(p realtekPost) (Job, bool) {
 		if seen(p.OppID) {
-			return Job{ExternalID: p.OppID, URL: realtekJobURL + p.OppID, Title: realtekTitle(p.Title), Company: e.Company, SeenRefresh: true}, true
+			return Job{ExternalID: p.OppID, URL: realtekJobURL + p.OppID, Title: collapseSpace(p.Title), Company: e.Company, SeenRefresh: true}, true
 		}
 		return s.detail(ctx, e, p)
 	})
@@ -167,7 +167,7 @@ func (s realtek) detail(ctx context.Context, e CompanyEntry, p realtekPost) (Job
 	if !r.Pass || r.Data == nil || r.Data.Title == nil || r.Data.Requirement == nil {
 		return Job{}, false
 	}
-	title := realtekTitle(firstNonEmpty(*r.Data.Title, p.Title))
+	title := collapseSpace(firstNonEmpty(*r.Data.Title, p.Title))
 	body := plainTextToHTML(*r.Data.Requirement)
 	if title == "" || body == "" {
 		return Job{}, false
@@ -191,5 +191,3 @@ func (s realtek) detail(ctx context.Context, e CompanyEntry, p realtekPost) (Job
 	}
 	return job, true
 }
-
-func realtekTitle(s string) string { return strings.Join(strings.Fields(s), " ") }

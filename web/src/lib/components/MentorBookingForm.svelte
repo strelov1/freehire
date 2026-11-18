@@ -4,18 +4,14 @@
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { errorMessage } from '#lib/utils.js';
-  import { signinUrl } from '#lib/signin.js';
+  import { promptSignInFor } from '#lib/signin.js';
   import { Button } from '#lib/ui/index.js';
   import type { Mentor, MentorSlot } from '#lib/types.js';
 
   // Taking one of a mentor's hours, rendered by MentorBookingView for the chosen slot.
   // `chosen`, not `slot`: a component attribute named `slot` is Svelte's legacy slot syntax.
-  let {
-    mentor,
-    chosen,
-    zone,
-    refused,
-  }: { mentor: Mentor; chosen: MentorSlot; zone: string; refused: () => void } = $props();
+  let { mentor, chosen, zone, refused }: { mentor: Mentor; chosen: MentorSlot; zone: string; refused: () => void } =
+    $props();
 
   const signedIn = $derived(Boolean(page.data.user));
 
@@ -23,13 +19,11 @@
   let booking = $state(false);
   let bookingError = $state('');
 
-  // Not promptSignIn(): that reads `page.url.search`, which lags our shallow writes, so a
+  // promptSignInFor(), not promptSignIn(): that reads `page.url.search`, which lags our shallow writes, so a
   // visitor would return from signing in with the slot no longer chosen — the one thing
   // putting it in the URL was for. Read the address bar, which is current.
   function signInAndComeBack() {
-    const returnTo = location.pathname + location.search;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
-    void goto(signinUrl({ returnTo, mode: 'login' }));
+    promptSignInFor(location.pathname + location.search);
   }
 
   async function book() {
@@ -66,8 +60,7 @@
       rows="3"
       maxlength="1000"
       class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-      placeholder="A sentence is plenty — it helps them prepare."
-    ></textarea>
+      placeholder="A sentence is plenty — it helps them prepare."></textarea>
   </label>
 
   <Button class="mt-3" disabled={booking} onclick={book}>

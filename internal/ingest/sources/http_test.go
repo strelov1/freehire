@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -586,5 +587,99 @@ func TestNewLongTimeoutClientKeepsTheOrdinaryStreamTimeout(t *testing.T) {
 	c := NewLongTimeoutClient()
 	if c.streamClient.Timeout != streamTimeout {
 		t.Errorf("streamClient.Timeout = %v, want the ordinary %v", c.streamClient.Timeout, streamTimeout)
+	}
+}
+
+// The cap is what keeps the host-wide hold bounded: workable has answered Retry-After ~65000
+// (18 h), which uncapped would freeze every board of the host until the run's deadline.
+func TestRetryAfter(t *testing.T) {
+	const fallback = 7 * time.Second
+	tests := []struct {
+		name   string
+		header string
+		want   time.Duration
+	}{
+		{"huge value is capped", "65000", 30 * time.Second},
+		{"small value is honoured", "5", 5 * time.Second},
+		{"zero is honoured", "0", 0},
+		{"exactly the cap", "30", 30 * time.Second},
+		{"surrounding space is trimmed", " 5 ", 5 * time.Second},
+		{"absent falls back", "", fallback},
+		{"garbage falls back", "soon", fallback},
+		{"http date falls back", "Wed, 21 Oct 2026 07:28:00 GMT", fallback},
+		{"negative falls back", "-3", fallback},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := &http.Response{Header: http.Header{}}
+			if tc.header != "" {
+				resp.Header.Set("Retry-After", tc.header)
+			}
+			if got := retryAfter(resp, fallback); got != tc.want {
+				t.Errorf("retryAfter(%q) = %v, want %v", tc.header, got, tc.want)
+			}
+		})
+	}
+}
+
+// France Travail answers an empty search with 204. Through the real client that must be one
+// request and a clean "nothing found", not an empty body retried and then failed as EOF.
+func TestClientGetJSONOrNoContentTreats204AsEmptySuccess(t *testing.T) {
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2}
+
+	var out struct{}
+	found, err := c.GetJSONOrNoContent(context.Background(), srv.URL, nil, &out)
+	if err != nil {
+		t.Fatalf("GetJSONOrNoContent: %v", err)
+	}
+	if found {
+		t.Error("found = true, want false for a 204")
+	}
+	if got := hits.Load(); got != 1 {
+		t.Errorf("hits = %d, want 1 — a 204 is final, not retried", got)
+	}
+}
+
+func TestClientGetXMLRequiresDocumentEnd(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		trailer string
+		valid   bool
+	}{
+		{name: "document end", valid: true},
+		{name: "whitespace", trailer: " \t\r\n", valid: true},
+		{name: "comment and processing instruction", trailer: "\n<!-- complete --> <?audit checked?>\n", valid: true},
+		{name: "extra root", trailer: `<error/>`},
+		{name: "trailing text", trailer: `temporarily unavailable`},
+		{name: "malformed trailing element", trailer: `<broken`},
+		{name: "malformed trailing comment", trailer: `<!-- broken`},
+		{name: "trailing XML declaration", trailer: `<?xml version="1.0"?>`},
+		{name: "trailing directive", trailer: `<!DOCTYPE error>`},
+		{name: "non XML whitespace", trailer: "\u00a0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(`<root><name>acme</name></root>` + tc.trailer))
+			}))
+			defer srv.Close()
+			var out struct {
+				Name string `xml:"name"`
+			}
+			c := &Client{httpClient: srv.Client()}
+			err := c.GetXML(context.Background(), srv.URL, &out)
+			if (err == nil) != tc.valid {
+				t.Fatalf("GetXML error = %v, valid document = %v", err, tc.valid)
+			}
+			if tc.valid && out.Name != "acme" {
+				t.Fatalf("decoded name = %q, want acme", out.Name)
+			}
+		})
 	}
 }

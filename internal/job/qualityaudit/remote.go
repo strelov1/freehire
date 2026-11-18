@@ -52,8 +52,10 @@ type RemotePosting struct {
 // Judgement is what the posting's own text says, as the judge read it and the grounding check
 // let through.
 type Judgement struct {
-	WorkMode  string
-	Worldwide string
+	WorkMode       string
+	Worldwide      string
+	WorkModeQuote  string
+	WorldwideQuote string
 }
 
 // JSONModel is the slice of llm.Client the judge needs.
@@ -78,19 +80,21 @@ Reply with JSON only:
  "worldwide_quote": "<the exact words of the posting that say so, or empty>"}
 
 work_mode:
-- "remote": the posting says the work is done remotely, fully or by default.
-- "hybrid": it says part of the work is done at an office or site (e.g. "2 days a week in the office").
-- "onsite": it says the work is done at an office or site, or that remote work is not offered.
+- "remote": the posting explicitly permits fully remote work, either by default or as an option. A fully remote option remains "remote" when office or hybrid arrangements are also optional.
+- "hybrid": the posting explicitly requires some regular attendance at an office or work site alongside remote work (e.g. "2 days a week in the office"). Optional office access or optional hybrid arrangements do not establish mandatory attendance.
+- "onsite": the posting explicitly requires the work to be done at an office or work site, or explicitly rules out remote work.
 - "unclear": the posting does not say, or says contradictory things you cannot settle.
 When the description states the arrangement explicitly, it outranks a bare location label.
+An office address, city label, occupation, duties, facility description, client visits, or travel requirement alone cannot establish "onsite" or "hybrid". Do not infer mandatory workplace attendance from them.
+A vague home-working benefit such as "Flexible work from home options available" alone is "unclear": it does not establish either fully remote work or mandatory hybrid attendance.
 
-worldwide:
-- "yes": the posting says the candidate may work from any country (e.g. "work from anywhere in the world").
-- "no": it limits where the candidate may live or work — to countries, a region, a city, or working hours tied to a time zone — or the work is hybrid/onsite.
-- "unclear": it does not say.
+worldwide describes geographic eligibility, not the working schedule:
+- "yes": the posting explicitly permits work from any country, including a worldwide location label. Required working, overlap, shift, or training hours in a named time zone do not contradict that geographic permission.
+- "no": it explicitly limits where the candidate must reside or be based — countries, a region, a city, or specified geographic time zones — or the work is hybrid/onsite. A role-specific geographic restriction outweighs a broad worldwide location label.
+- "unclear": it does not state geographic eligibility. Working, overlap, shift, or training hours alone do not establish where the candidate must reside.
 
 Rules:
-- Use "unclear" whenever the text does not state the answer. Never infer from the company, the industry, the job title, or what is typical.
+- Use "unclear" whenever the text does not state the answer. Never infer from the company, the industry, the job title, the occupation or duties, the presence of a facility, or what is typical.
 - Every answer other than "unclear" needs a quote copied exactly from the posting. If you cannot quote it, answer "unclear".`
 
 var (
@@ -134,10 +138,17 @@ func JudgeRemote(ctx context.Context, m JSONModel, p RemotePosting) (Judgement, 
 		return Judgement{WorkMode: ModeUnclear, Worldwide: WorldwideUnclear}, nil
 	}
 	folded := fold(text)
-	return Judgement{
+	j := Judgement{
 		WorkMode:  grounded(a.WorkMode, a.WorkModeQuote, workModes, ModeUnclear, folded),
 		Worldwide: grounded(a.Worldwide, a.WorldwideQuote, worldwides, WorldwideUnclear, folded),
-	}, nil
+	}
+	if j.WorkMode != ModeUnclear {
+		j.WorkModeQuote = a.WorkModeQuote
+	}
+	if j.Worldwide != WorldwideUnclear {
+		j.WorldwideQuote = a.WorldwideQuote
+	}
+	return j, nil
 }
 
 // grounded keeps answer only when it is in the vocabulary and, unless it is the "unclear" value,

@@ -117,7 +117,7 @@ func TestUpsertManualJob_SeedsManualSalary(t *testing.T) {
 	p.SalaryCurrencyManual = "EUR"
 	p.SalaryPeriodManual = "year"
 
-	row, err := q.UpsertManualJob(ctx, p)
+	row, err := upsertManual(ctx, q, p)
 	if err != nil {
 		t.Fatalf("UpsertManualJob: %v", err)
 	}

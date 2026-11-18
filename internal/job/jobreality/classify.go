@@ -1,9 +1,7 @@
-// Package jobreality derives a deterministic "reality" classification of a job —
-// whether it looks like a real, active opening or a perpetual ghost/evergreen
-// listing — from ingest history and text facts. It is the same "never guesses"
-// doctrine as internal/dict/location / classify / skilltag, but computed from history
-// (first-seen age, repost/mass-posting counts) rather than content alone, so it is
-// TIME-DEPENDENT and computed at index/read time, never stored.
+// Package jobreality derives a deterministic "reality" class for a job (real opening
+// versus perpetual ghost/evergreen listing) from ingest history and text facts. It
+// never guesses. It is time-dependent, so it is computed at index/read time, never
+// stored.
 package jobreality
 
 import "time"
@@ -61,11 +59,9 @@ func Classify(in Input) Result {
 	ageDays := int(in.Now.Sub(in.CreatedAt).Hours() / 24)
 
 	old := ageDays >= oldAgeDays
-	// Reposting and mass-posting must be INDEPENDENT signals: MassPostingCount (open)
-	// is a subset of RepostCount (any status), so counting both raw would let one
-	// concurrent spray fire two signals and reach the verdict alone. The repost signal
-	// therefore counts only the HISTORICAL churn — reposts beyond the concurrent open
-	// ones (roles closed and re-posted under new ids over time).
+	// Reposting and mass-posting must be independent signals. MassPostingCount (open)
+	// is a subset of RepostCount (any status), so the repost signal counts only the
+	// historical churn beyond the concurrent open postings.
 	massPosted := in.MassPostingCount >= massThreshold
 	reposted := in.RepostCount-in.MassPostingCount >= repostThreshold
 
@@ -95,4 +91,19 @@ func Classify(in Input) Result {
 			IsFakeFreshness:  fakeFreshness,
 		},
 	}
+}
+
+// AgeCrossingDays are the ages, in whole days since CreatedAt, at which Classify's answer
+// can change with nothing else moving: a job stops being fresh at freshWindowDays+1 and
+// gains the "old" signal at oldAgeDays. A search index that stores the class must refresh
+// a job at these ages, since no write to the job marks them.
+func AgeCrossingDays() []int32 {
+	return []int32{freshWindowDays + 1, oldAgeDays}
+}
+
+// PostedAgeCrossingDays are the ages, in whole days since PostedAt, at which Classify's
+// evidence changes with nothing else moving: IsFakeFreshness turns off once the posted date
+// is older than freshWindowDays.
+func PostedAgeCrossingDays() []int32 {
+	return []int32{freshWindowDays + 1}
 }

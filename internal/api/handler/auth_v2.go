@@ -5,13 +5,11 @@ import (
 	"errors"
 	"net/url"
 	"sort"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/mobileauth"
@@ -27,7 +25,7 @@ const oauthV2StateCookieName = "hire_oauth_v2_state"
 
 // errOAuthV2StateMismatch and errOAuthV2MissingCode are named so oauthV2Fail
 // can tell an ordinary CSRF-state check or a malformed provider callback (both
-// routine, not worth a Sentry report) apart from a genuine infra failure.
+// routine, not worth an error report) apart from a genuine infra failure.
 var (
 	errOAuthV2StateMismatch = errors.New("oauth v2: state mismatch")
 	errOAuthV2MissingCode   = errors.New("oauth v2: missing code")
@@ -35,7 +33,7 @@ var (
 
 // isExpectedAttemptFailure reports whether err is one of the mobileauth
 // validation sentinels — caller sent a malformed or stale attempt — rather
-// than an unexpected infra failure that should reach Sentry via RenderError.
+// than an unexpected infra failure that should be reported via RenderError.
 func isExpectedAttemptFailure(err error) bool {
 	return errors.Is(err, mobileauth.ErrInvalid) ||
 		errors.Is(err, mobileauth.ErrVerifier) ||
@@ -50,7 +48,8 @@ func isExpectedOAuthV2Failure(err error) bool {
 		errors.Is(err, mobileauth.ErrIdentity) ||
 		errors.Is(err, accounts.ErrNoVerifiedEmail) ||
 		errors.Is(err, errOAuthV2StateMismatch) ||
-		errors.Is(err, errOAuthV2MissingCode)
+		errors.Is(err, errOAuthV2MissingCode) ||
+		errors.Is(err, errAccountSuspended)
 }
 
 func (h *authHandlers) currentSessionHash(c *fiber.Ctx) ([]byte, error) {
@@ -88,25 +87,21 @@ func (h *authHandlers) registerV2(api fiber.Router, mw middleware) {
 		return c.Next()
 	}
 	g := api.Group("/auth", noStore)
-	exchangeLimit := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("oauth-v2-exchange"), 20, time.Minute)
-	passwordIPLimit := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("password-reauth-ip"), 20, time.Minute)
-	passwordUserLimit := ratelimit.Middleware(h.throttler, ratelimit.KeyByUserOrIP("password-reauth-user"), 5, time.Minute)
 	// The same-repository web bundle calls password reauthentication before
 	// protected mutations even during a schema-first rollout where mobile v2 is
 	// still disabled. Keeping this one issuance route available prevents that
 	// compatibility deploy from breaking password and API-key management.
-	g.Post("/reauth/password", passwordIPLimit, mw.cookie, passwordUserLimit, h.PasswordReauthV2)
+	g.Post("/reauth/password", mw.cookie, h.PasswordReauthV2)
 	if !h.authV2Enabled {
 		return
 	}
 	g.Get("/providers", h.ListProvidersV2)
-	startLimit := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("oauth-v2-start"), 20, time.Minute)
-	g.Get("/oauth/:provider/start", startLimit, mw.optionalCookie, h.OAuthStartV2)
+	g.Get("/oauth/:provider/start", mw.optionalCookie, h.OAuthStartV2)
 	g.Get("/oauth/:provider/callback", h.OAuthCallbackV2)
 	g.Post("/oauth/:provider/callback", h.OAuthCallbackV2)
-	g.Post("/oauth/exchange", exchangeLimit, mw.optionalCookie, h.OAuthExchangeV2)
-	g.Post("/apple/attempt", startLimit, mw.optionalCookie, h.AppleAttemptV2)
-	g.Post("/apple/exchange", exchangeLimit, mw.optionalCookie, h.AppleExchangeV2)
+	g.Post("/oauth/exchange", mw.optionalCookie, h.OAuthExchangeV2)
+	g.Post("/apple/attempt", mw.optionalCookie, h.AppleAttemptV2)
+	g.Post("/apple/exchange", mw.optionalCookie, h.AppleExchangeV2)
 	g.Get("/identities", mw.cookie, h.ListIdentitiesV2)
 	g.Delete("/identities/:provider", mw.cookie, h.UnlinkIdentityV2)
 }
@@ -210,9 +205,8 @@ func callbackWith(raw, key, value string) (string, error) {
 
 func (h *authHandlers) OAuthCallbackV2(c *fiber.Ctx) error {
 	registry, ok := h.oauth.(oauthV2Registry)
-	// `mobileAuth` is checked too because this is no longer reached only by its own
-	// route: the shared sign-in callback hands over to it, and a deployment that has
-	// not configured the attempt store must answer rather than dereference nothing.
+	// mobileAuth is checked too: the shared sign-in callback hands over here, and a
+	// deployment without the attempt store must answer rather than dereference nil.
 	if !ok || h.mobileAuth == nil {
 		return authError(503, "oauth_unavailable", "sign-in unavailable")
 	}
@@ -253,6 +247,11 @@ func (h *authHandlers) OAuthCallbackV2(c *fiber.Ctx) error {
 	if err != nil {
 		return h.oauthV2Fail(c, attempt.CallbackTarget, err)
 	}
+	if attempt.Purpose != "reauth" {
+		if _, err = h.sessionVersion(c.Context(), userID); err != nil {
+			return h.oauthV2Fail(c, attempt.CallbackTarget, err)
+		}
+	}
 	otc, err := h.mobileAuth.MintCode(c.Context(), attempt, userID)
 	if err != nil {
 		return h.oauthV2Fail(c, attempt.CallbackTarget, err)
@@ -269,11 +268,12 @@ func (h *authHandlers) oauthV2Fail(c *fiber.Ctx, target string, cause error) err
 	if errors.Is(cause, mobileauth.ErrIdentity) {
 		code = "reauth_identity_mismatch"
 	}
-	// This leg always redirects rather than returning through RenderError, so
-	// it has to open its own Sentry gate: a routine cause (bad state, expired
-	// attempt, provider rejected the code) stays silent, anything else — a DB
-	// error out of the store, the OAuth provider itself being down — is a
-	// genuine fault and must not vanish behind a generic "sign-in failed".
+	if errors.Is(cause, errAccountSuspended) {
+		code = "account_suspended"
+	}
+	// This leg always redirects instead of returning through RenderError, so it opens
+	// its own reporting gate: routine causes (bad state, expired attempt, provider
+	// rejection) stay silent; anything else is a fault and must be reported.
 	if !isExpectedOAuthV2Failure(cause) {
 		reportUnexpected(c, cause)
 	}
@@ -434,6 +434,12 @@ func (h *authHandlers) AppleExchangeV2(c *fiber.Ctx) error {
 	if attempt.Purpose == "reauth" && attempt.ExpectedTokenVersion != nil {
 		if err = h.mobileAuth.VerifyBinding(c.Context(), userID, *attempt.ExpectedTokenVersion); err != nil {
 			return authError(401, "reauth_session_mismatch", "session changed")
+		}
+	}
+	if attempt.Purpose != "reauth" {
+		// Before Apple's grant is exchanged and stored for an account that cannot sign in.
+		if _, err = h.sessionVersion(c.Context(), userID); err != nil {
+			return err
 		}
 	}
 	refreshToken, err := h.appleNative.Exchange(c.Context(), in.AuthorizationCode, clientID, attempt.NonceChallenge, claims.Subject)

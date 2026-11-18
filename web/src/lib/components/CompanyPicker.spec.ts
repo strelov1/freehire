@@ -19,6 +19,10 @@ const ringCentral: CompanyListItem = {
   slug: 'ringcentral',
   name: 'RingCentral',
   job_count: 57,
+  tagline: null,
+  industries: [],
+  hq_country: null,
+  collections: [],
   feedback_count: 0,
   feedback_rating_avg: null,
 };

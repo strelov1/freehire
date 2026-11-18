@@ -27,7 +27,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ats_boards import github_fragments, extract_slugs, emit_survivors  # noqa: E402
+from ats_boards import emit_survivors, extract_slugs, github_fragments  # noqa: E402
 
 # Provider -> the ATS host to put in a `site:` search / Common Crawl prefix.
 PROVIDER_HOSTS = {
@@ -88,7 +88,10 @@ def channel_google(host: str, query: str, limit: int) -> set[str]:
     """site:<host> <query> via Google Custom Search JSON API (env-gated)."""
     key, cx = os.environ.get("GOOGLE_CSE_KEY"), os.environ.get("GOOGLE_CSE_CX")
     if not (key and cx):
-        print("  ! google channel skipped (set GOOGLE_CSE_KEY and GOOGLE_CSE_CX)", file=sys.stderr)
+        print(
+            "  ! google channel skipped (set GOOGLE_CSE_KEY and GOOGLE_CSE_CX)",
+            file=sys.stderr,
+        )
         return set()
     q = urllib.parse.quote(f"site:{host} {query}")
     num = min(limit, 10) if limit else 10
@@ -188,8 +191,9 @@ CHANNELS = {
 }
 
 
-def collect_candidates(providers: list[str], channels: list[str], query: str,
-                       limit: int) -> dict[tuple[str, str], str]:
+def collect_candidates(
+    providers: list[str], channels: list[str], query: str, limit: int
+) -> dict[tuple[str, str], str]:
     """Run each channel for each provider; return {(provider, slug): slug}.
 
     Results are filtered to the queried provider so noise from other ATS links on a
@@ -206,8 +210,10 @@ def collect_candidates(providers: list[str], channels: list[str], query: str,
             keep = {(p, s) for (p, s) in found if p == provider}
             for p, s in keep:
                 cand.setdefault((p, s), s)
-            print(f"  [{ch}/{provider}] {len(urls)} urls -> {len(keep)} {provider} slugs",
-                  file=sys.stderr)
+            print(
+                f"  [{ch}/{provider}] {len(urls)} urls -> {len(keep)} {provider} slugs",
+                file=sys.stderr,
+            )
     return cand
 
 
@@ -215,13 +221,22 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Query-driven ATS board discovery")
     ap.add_argument("--query", default="", help="search term for this run")
     ap.add_argument("--provider", default="", help="comma list; default = all")
-    ap.add_argument("--channel", default="ddg", help="comma list from ddg,google,serping,github,cc")
-    ap.add_argument("--write", action="store_true",
-                     help="write survivors to scripts/.harvest-seeds/<provider>.json")
-    ap.add_argument("--limit", type=int, default=20, help="cap results per channel/provider")
+    ap.add_argument(
+        "--channel", default="ddg", help="comma list from ddg,google,serping,github,cc"
+    )
+    ap.add_argument(
+        "--write",
+        action="store_true",
+        help="write survivors to scripts/.harvest-seeds/<provider>.json",
+    )
+    ap.add_argument(
+        "--limit", type=int, default=20, help="cap results per channel/provider"
+    )
     args = ap.parse_args()
 
-    providers = [p.strip() for p in args.provider.split(",") if p.strip()] or list(PROVIDER_HOSTS)
+    providers = [p.strip() for p in args.provider.split(",") if p.strip()] or list(
+        PROVIDER_HOSTS
+    )
     channels = [c.strip() for c in args.channel.split(",") if c.strip()]
     bad_p = [p for p in providers if p not in PROVIDER_HOSTS]
     bad_c = [c for c in channels if c not in CHANNELS]
@@ -232,8 +247,10 @@ def main() -> int:
     if not args.query and channels != ["cc"]:
         ap.error("--query is required for keyword channels (ddg/google/github)")
 
-    print(f"== discovering: query={args.query!r} providers={providers} channels={channels} ==",
-          file=sys.stderr)
+    print(
+        f"== discovering: query={args.query!r} providers={providers} channels={channels} ==",
+        file=sys.stderr,
+    )
     cand = collect_candidates(providers, channels, args.query, args.limit)
     emit_survivors(cand, args.write)
     return 0

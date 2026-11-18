@@ -98,9 +98,8 @@ func resolve(website string, fetch fetchFunc) (provider, slug string, ok bool) {
 
 	home, err := fetch(base)
 	if err != nil {
-		// Homepage unreachable (dead domain, DNS failure, block). The careers paths
-		// live on the same host, so probing them would only burn more timeouts —
-		// give up on this company. (Dead domains dominate the unmatched long tail.)
+		// Homepage unreachable: the careers paths live on the same host, so probing them only
+		// burns timeouts. Give up on this company.
 		return "", "", false
 	}
 	if p, s, ok := detectBoard(home, base); ok {
@@ -143,15 +142,13 @@ func resolve(website string, fetch fetchFunc) (provider, slug string, ok bool) {
 	return "", "", false
 }
 
-// detectBoard finds the ATS board a fetched page belongs to. It first runs the URL-shape scan,
-// which resolves every board that names its platform somewhere in a link. Only when that comes
-// up empty does it ask whether the page IS a board: Radancy, Phenom, Jibe and Teamtailor tenants
-// serve from the employer's own domain and link out to no ATS host at all, so nothing in their
-// markup or URLs can be recognised — the vendor's bundle is the only tell, and the careers host
-// itself is the board, which is exactly how those adapters key jobs.external_id.
+// detectBoard finds the ATS board a fetched page belongs to. It first runs the URL-shape scan;
+// only when that comes up empty does it ask whether the page IS a board. Radancy, Phenom, Jibe
+// and Teamtailor tenants serve from the employer's own domain and link to no ATS host, so the
+// vendor's bundle is the only tell, and the careers host itself is the board (how those
+// adapters key jobs.external_id).
 //
-// The order matters: a careers site that merely embeds another ATS must resolve to that board,
-// not to its own host.
+// The order matters: a careers site that merely embeds another ATS must resolve to that board.
 func detectBoard(html, pageURL string) (provider, board string, ok bool) {
 	if p, s, ok := atsdetect.Detect(html); ok {
 		return p, s, true

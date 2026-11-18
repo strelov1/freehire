@@ -12,10 +12,10 @@ export const PIPELINE_FAQ: FaqItem[] = [
   {
     question: 'Why do some postings have more detail than others?',
     answer:
-      "Enrichment runs from a queue and reads the full posting text, so the depth of detail depends on how much the source itself wrote. A one-line listing stays a one-line listing — nothing here is invented to fill a gap.",
+      'Enrichment runs from a queue and reads the full posting text, so the depth of detail depends on how much the source itself wrote. A one-line listing stays a one-line listing — nothing here is invented to fill a gap.',
   },
   {
-    question: "If a job is on three boards, which one do I see?",
+    question: 'If a job is on three boards, which one do I see?',
     answer:
       "One listing, picked by preferring an employer's own ATS or careers page over an aggregator's copy of the same role. The listing still tells you where it's actually hosted.",
   },
@@ -27,6 +27,6 @@ export const PIPELINE_FAQ: FaqItem[] = [
   {
     question: 'Can search show a job that was already deleted?',
     answer:
-      "No — the index is rebuilt from the current catalogue and swapped in as a whole, never patched in place, so a search can only return what was true at that rebuild.",
+      'No — the index is rebuilt from the current catalogue and swapped in as a whole, never patched in place, so a search can only return what was true at that rebuild.',
   },
 ];

@@ -7,6 +7,9 @@
 // a reply. A chased card therefore keeps its "24d" badge and adds "chased 2d ago".
 import type { MyJob, FollowUpDraft } from './types';
 
+/** What a compose link needs; a follow-up and a reply draft both carry it. */
+type ComposeDraft = Pick<FollowUpDraft, 'recipient' | 'subject' | 'body'>;
+
 /** Whether the card offers a follow-up draft. Mirrors the server's gate exactly —
  *  it refuses anything whose silence state is not `silent` — so the button can
  *  never be shown where the request would 409. Having already chased does not
@@ -66,7 +69,7 @@ export function clipboardText(draft: FollowUpDraft): string {
 /** A `mailto:` for the candidate's default mail client. An unaddressed draft still
  *  opens a compose window with the To field left blank — that is the commonest
  *  silent application, and withholding the link there would help nobody. */
-export function mailtoHref(draft: FollowUpDraft): string {
+export function mailtoHref(draft: ComposeDraft): string {
   const to = draft.recipient ? mailtoAddress(draft.recipient) : '';
   return `mailto:${to}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
 }
@@ -84,7 +87,7 @@ function mailtoAddress(addr: string): string {
 /** Gmail's web compose (`su`, not `subject`). Worth offering beside `mailto:` because
  *  a browser whose OS registers no mail handler does nothing at all on a mailto click
  *  — a silent failure the candidate would read as the feature being broken. */
-export function gmailHref(draft: FollowUpDraft): string {
+export function gmailHref(draft: ComposeDraft): string {
   const to = draft.recipient ? `to=${encodeURIComponent(draft.recipient)}&` : '';
   return `https://mail.google.com/mail/?view=cm&fs=1&${to}su=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
 }

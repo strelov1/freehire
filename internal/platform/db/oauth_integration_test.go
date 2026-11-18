@@ -23,6 +23,10 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 	ctx := context.Background()
 
 	alice := seedAPIKeyUser(t, pool, "oauth-alice@example.test")
+	version, err := q.GetUserTokenVersion(ctx, alice)
+	if err != nil {
+		t.Fatalf("GetUserTokenVersion: %v", err)
+	}
 
 	client, err := q.RegisterOAuthClient(ctx, RegisterOAuthClientParams{
 		ClientID:     "client-test-1",
@@ -55,12 +59,13 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 	t.Run("authorization code is consumed exactly once", func(t *testing.T) {
 		const codeHash = "code-hash-1"
 		err := q.CreateOAuthAuthorizationCode(ctx, CreateOAuthAuthorizationCodeParams{
-			CodeHash:      codeHash,
-			ClientID:      "client-test-1",
-			UserID:        alice,
-			RedirectUri:   "http://127.0.0.1:9999/callback",
-			CodeChallenge: "challenge-1",
-			ExpiresAt:     pgtype.Timestamptz{Time: time.Now().Add(10 * time.Minute), Valid: true},
+			CodeHash:           codeHash,
+			ClientID:           "client-test-1",
+			UserID:             alice,
+			RedirectUri:        "http://127.0.0.1:9999/callback",
+			CodeChallenge:      "challenge-1",
+			IssuedTokenVersion: pgtype.Int4{Int32: version, Valid: true},
+			ExpiresAt:          pgtype.Timestamptz{Time: time.Now().Add(10 * time.Minute), Valid: true},
 		})
 		if err != nil {
 			t.Fatalf("CreateOAuthAuthorizationCode: %v", err)
@@ -82,12 +87,13 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 	t.Run("an expired authorization code cannot be consumed", func(t *testing.T) {
 		const codeHash = "code-hash-expired"
 		err := q.CreateOAuthAuthorizationCode(ctx, CreateOAuthAuthorizationCodeParams{
-			CodeHash:      codeHash,
-			ClientID:      "client-test-1",
-			UserID:        alice,
-			RedirectUri:   "http://127.0.0.1:9999/callback",
-			CodeChallenge: "challenge-2",
-			ExpiresAt:     pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
+			CodeHash:           codeHash,
+			ClientID:           "client-test-1",
+			UserID:             alice,
+			RedirectUri:        "http://127.0.0.1:9999/callback",
+			CodeChallenge:      "challenge-2",
+			IssuedTokenVersion: pgtype.Int4{Int32: version, Valid: true},
+			ExpiresAt:          pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
 		})
 		if err != nil {
 			t.Fatalf("CreateOAuthAuthorizationCode: %v", err)
@@ -117,24 +123,24 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 			t.Fatal("grant.ID is zero")
 		}
 
-		gotUserID, err := q.AuthenticateOAuthGrant(ctx, "token-hash-1")
+		got, err := q.AuthenticateOAuthGrant(ctx, AuthenticateOAuthGrantParams{AccessTokenHash: "token-hash-1"})
 		if err != nil {
 			t.Fatalf("AuthenticateOAuthGrant (before bump): %v", err)
 		}
-		if gotUserID != alice {
-			t.Errorf("user id = %d, want %d", gotUserID, alice)
+		if got.UserID != alice {
+			t.Errorf("user id = %d, want %d", got.UserID, alice)
 		}
 
 		if _, err := q.BumpUserTokenVersion(ctx, alice); err != nil {
 			t.Fatalf("BumpUserTokenVersion: %v", err)
 		}
 
-		if _, err := q.AuthenticateOAuthGrant(ctx, "token-hash-1"); !errors.Is(err, pgx.ErrNoRows) {
+		if _, err := q.AuthenticateOAuthGrant(ctx, AuthenticateOAuthGrantParams{AccessTokenHash: "token-hash-1"}); !errors.Is(err, pgx.ErrNoRows) {
 			t.Errorf("after bump, err = %v, want pgx.ErrNoRows", err)
 		}
 	})
 
-	t.Run("ResolveOAuthGrantTier reads the owner's plans, never touches last_used_at, and obeys the same liveness rule", func(t *testing.T) {
+	t.Run("ResolveOAuthGrantIdentity reads the owner's plans, never touches last_used_at, and obeys the same liveness rule", func(t *testing.T) {
 		carol := seedAPIKeyUser(t, pool, "oauth-carol@example.test")
 		proUntil := time.Now().Add(72 * time.Hour).UTC().Truncate(time.Second)
 		if _, err := pool.Exec(ctx, `UPDATE users SET pro_until_granted = $2 WHERE id = $1`, carol, proUntil); err != nil {
@@ -157,9 +163,9 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 			}
 		}
 
-		row, err := q.ResolveOAuthGrantTier(ctx, "token-hash-carol")
+		row, err := q.ResolveOAuthGrantIdentity(ctx, "token-hash-carol")
 		if err != nil {
-			t.Fatalf("ResolveOAuthGrantTier: %v", err)
+			t.Fatalf("ResolveOAuthGrantIdentity: %v", err)
 		}
 		if row.UserID != carol || !row.ProUntil.Time.Equal(proUntil) || row.UltraUntil.Valid || row.ApiUntilStripe.Valid {
 			t.Errorf("row = %+v, want carol with pro until %v and nothing else", row, proUntil)
@@ -172,13 +178,13 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 			t.Errorf("last_used_at = %v, want untouched: the rate limiter reads this on the hottest routes", lastUsed.Time)
 		}
 
-		if _, err := q.ResolveOAuthGrantTier(ctx, "token-hash-carol-expired"); !errors.Is(err, pgx.ErrNoRows) {
+		if _, err := q.ResolveOAuthGrantIdentity(ctx, "token-hash-carol-expired"); !errors.Is(err, pgx.ErrNoRows) {
 			t.Errorf("expired grant err = %v, want pgx.ErrNoRows", err)
 		}
 		if _, err := q.BumpUserTokenVersion(ctx, carol); err != nil {
 			t.Fatalf("BumpUserTokenVersion: %v", err)
 		}
-		if _, err := q.ResolveOAuthGrantTier(ctx, "token-hash-carol"); !errors.Is(err, pgx.ErrNoRows) {
+		if _, err := q.ResolveOAuthGrantIdentity(ctx, "token-hash-carol"); !errors.Is(err, pgx.ErrNoRows) {
 			t.Errorf("after bump, err = %v, want pgx.ErrNoRows", err)
 		}
 	})

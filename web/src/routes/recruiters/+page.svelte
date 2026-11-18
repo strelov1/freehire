@@ -16,13 +16,13 @@
         { name: 'freehire', url: `${origin}/` },
         { name: 'For recruiters', url: canonical },
       ]),
-    ])
+    ]),
   );
 </script>
 
 <Seo
   title="Post a job — freehire for recruiters"
-  description="Submit a tech job to freehire, the free, open-source IT job aggregator. Moderator-reviewed postings join one clean, searchable feed of developer roles."
+  description="Submit a tech job to freehire, the free, open-source tech job aggregator. Moderator-reviewed postings join one clean, searchable feed of developer roles."
   {canonical}
 />
 

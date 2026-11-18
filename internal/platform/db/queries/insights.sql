@@ -20,13 +20,18 @@
 -- name: DeleteAllInsightsRoleStats :exec
 DELETE FROM insights_role_stats;
 
--- name: RebuildInsightsRoleStatsGlobal :execrows
+-- name: ComputeInsightsRoleStatsGlobal :many
+-- Compute on the read connection; publish the result separately on the writer.
 -- Country-agnostic ('' bucket) role demand. open_count = jobs open now
 -- (closed_at IS NULL); open_count_prev = jobs open as of @prev_ts. The inner
 -- aggregate is wrapped so the "non-zero in either window" filter names the counts
 -- once instead of repeating the FILTER expressions in a HAVING.
-INSERT INTO insights_role_stats (category, seniority, country, open_count, open_count_prev)
-SELECT category, seniority, '', open_count, open_count_prev
+SELECT
+    (category)::text AS category,
+    (seniority)::text AS seniority,
+    ('')::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
 FROM (
     SELECT
         category,
@@ -39,10 +44,15 @@ FROM (
 ) t
 WHERE open_count > 0 OR open_count_prev > 0;
 
--- name: RebuildInsightsRoleStatsByCountry :execrows
+-- name: ComputeInsightsRoleStatsByCountry :many
+-- Compute on the read connection; publish the result separately on the writer.
 -- Per-country role demand: a job contributes once to each of its countries.
-INSERT INTO insights_role_stats (category, seniority, country, open_count, open_count_prev)
-SELECT category, seniority, country, open_count, open_count_prev
+SELECT
+    (category)::text AS category,
+    (seniority)::text AS seniority,
+    (country)::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
 FROM (
     SELECT
         category,
@@ -82,13 +92,17 @@ LIMIT sqlc.arg('lim')::int;
 -- name: DeleteAllInsightsRoleCountryStats :exec
 DELETE FROM insights_role_country_stats;
 
--- name: RebuildInsightsRoleCountryStatsGlobal :execrows
+-- name: ComputeInsightsRoleCountryStatsGlobal :many
+-- Compute on the read connection; publish the result separately on the writer.
 -- The all-countries column ('' bucket): one count per posting, however many countries
 -- it lists — grouping by category alone is what keeps a two-country posting from
 -- counting twice here. Unlike insights_role_stats it needs no seniority and counts
 -- only canonical, public postings (see migration 0214 for both).
-INSERT INTO insights_role_country_stats (category, country, open_count, open_count_prev)
-SELECT category, '', open_count, open_count_prev
+SELECT
+    (category)::text AS category,
+    ('')::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
 FROM (
     SELECT
         category,
@@ -100,11 +114,15 @@ FROM (
 ) t
 WHERE open_count > 0 OR open_count_prev > 0;
 
--- name: RebuildInsightsRoleCountryStatsByCountry :execrows
+-- name: ComputeInsightsRoleCountryStatsByCountry :many
+-- Compute on the read connection; publish the result separately on the writer.
 -- One column per country: a posting contributes once to each country it lists, and a
 -- posting with none reaches the '' bucket only.
-INSERT INTO insights_role_country_stats (category, country, open_count, open_count_prev)
-SELECT category, country, open_count, open_count_prev
+SELECT
+    (category)::text AS category,
+    (country)::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
 FROM (
     SELECT
         category,
@@ -143,140 +161,27 @@ FROM insights_role_country_stats
 WHERE category = sqlc.arg('category')::text AND country = '';
 
 -- ---------------------------------------------------------------------------
--- Role pulse (competition, time to close, inflow per category)
--- ---------------------------------------------------------------------------
-
--- name: DeleteAllInsightsRolePulse :exec
-DELETE FROM insights_role_pulse;
-
--- name: RebuildInsightsRolePulse :execrows
--- Three figures per category over canonical, public postings, each for the last 30 days
--- and the 30 before (openspec/changes/insights-role-pulse/design.md has the prod
--- measurements behind every choice below).
---
--- COMPETITION is page views over exposure. Views are job_daily_views.page_uniques, never
--- uniques (AGENTS.md "View counts"). Exposure is the posting-days a posting was OPEN ON
--- FREEHIRE inside the window: from created_at, not from LEAST(posted_at, created_at) —
--- the one figure in this file where first-seen is the right date, because nobody can view
--- a posting here before we found it, and the existence rule would charge a backlog posting
--- for weeks it was not on the site. A view on a day the posting was already closed is not
--- counted, so numerator and denominator are the same population. Both windows end on the
--- freshest COMPLETE views day (before today, UTC) rather than on now(): cmd/rollup-views
--- usually lands a day after it ends, and a now()-anchored window would set 29 days of
--- views against 30 of exposure.
---
--- TIME TO CLOSE is the median days from existence to close over closes that describe the
--- POSTING: unseen, feed_removed, probe_expired, employer_closed. Not expired (a 45-day age
--- rule — its median is 45 by construction), feed_empty or board_unreachable (our crawler's
--- health), board_retired, moderated or source_misattributed (our own decisions), or ''
--- (closed before reasons were recorded). A close dated before existence is left out, as
--- RebuildInsightsCompanyLifetime does.
---
--- INFLOW counts postings whose existence date falls in the last 30 days — the header's
--- rule, applied to "new" instead of "open at the start" — and deliberately has NO earlier
--- window. Measured 2026-10-30, the comparison was dominated by our own coverage growth:
--- a board first crawled this month shows its earlier postings only if they were still
--- open when we found it, so healthcare read +155% while stable-coverage categories
--- (devops, data_engineering) moved -1% and -20%; neither a stable-employer panel nor a
--- discovered-within-N-days rule removed it (the latter made healthcare +392%).
-WITH anchor AS (
-    -- The freshest COMPLETE day: today's row, when cmd/rollup-views has landed one, holds
-    -- part of a day's views and would be set against a full day of exposure.
-    SELECT coalesce(max(day), (now() AT TIME ZONE 'UTC')::date - 1) AS d
-    FROM job_daily_views
-    WHERE day < (now() AT TIME ZONE 'UTC')::date
-), w AS (
-    SELECT
-        d,
-        (d - 29)::timestamp AT TIME ZONE 'UTC' AS cur_start,
-        (d + 1)::timestamp  AT TIME ZONE 'UTC' AS cur_end,
-        (d - 59)::timestamp AT TIME ZONE 'UTC' AS prev_start
-    FROM anchor
-), p AS (
-    SELECT
-        j.id,
-        j.category,
-        j.created_at,
-        j.closed_at,
-        LEAST(j.posted_at, j.created_at) AS existed_at,
-        (j.closed_reason IN ('unseen', 'feed_removed', 'probe_expired', 'employer_closed')
-            AND j.closed_at >= LEAST(j.posted_at, j.created_at)) AS counted_close
-    FROM jobs j, w
-    WHERE j.category <> '' AND j.duplicate_of IS NULL AND NOT j.is_private
-      AND (j.closed_at IS NULL OR j.closed_at > LEAST(sqlc.arg('prior_start')::timestamptz, w.prev_start))
-), postings AS (
-    SELECT
-        p.category,
-        sum(GREATEST(0, EXTRACT(EPOCH FROM (LEAST(coalesce(p.closed_at, now()), w.cur_end) - GREATEST(p.created_at, w.cur_start))) / 86400.0))::float8 AS exposure_days,
-        sum(GREATEST(0, EXTRACT(EPOCH FROM (LEAST(coalesce(p.closed_at, now()), w.cur_start) - GREATEST(p.created_at, w.prev_start))) / 86400.0))::float8 AS exposure_days_prev,
-        count(*) FILTER (WHERE p.counted_close AND p.closed_at > sqlc.arg('window_start')::timestamptz) AS closed,
-        count(*) FILTER (WHERE p.counted_close AND p.closed_at > sqlc.arg('prior_start')::timestamptz AND p.closed_at <= sqlc.arg('window_start')::timestamptz) AS closed_prev,
-        (percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (p.closed_at - p.existed_at)) / 86400.0)
-            FILTER (WHERE p.counted_close AND p.closed_at > sqlc.arg('window_start')::timestamptz))::real AS median_close_days,
-        (percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (p.closed_at - p.existed_at)) / 86400.0)
-            FILTER (WHERE p.counted_close AND p.closed_at > sqlc.arg('prior_start')::timestamptz AND p.closed_at <= sqlc.arg('window_start')::timestamptz))::real AS median_close_days_prev,
-        count(*) FILTER (WHERE p.existed_at > sqlc.arg('window_start')::timestamptz) AS inflow
-    FROM p, w
-    GROUP BY p.category
-), views AS (
-    SELECT
-        p.category,
-        sum(v.page_uniques) FILTER (WHERE v.day > w.d - 30) AS views,
-        sum(v.page_uniques) FILTER (WHERE v.day <= w.d - 30) AS views_prev
-    FROM job_daily_views v
-    JOIN p ON p.id = v.job_id
-    CROSS JOIN w
-    WHERE v.day > w.d - 60 AND v.day <= w.d
-      AND (p.closed_at IS NULL OR v.day <= (p.closed_at AT TIME ZONE 'UTC')::date)
-    GROUP BY p.category
-)
-INSERT INTO insights_role_pulse (
-    category, views_through, views, views_prev, exposure_days, exposure_days_prev,
-    closed, closed_prev, median_close_days, median_close_days_prev, inflow
-)
-SELECT
-    s.category,
-    w.d,
-    coalesce(v.views, 0),
-    coalesce(v.views_prev, 0),
-    s.exposure_days,
-    s.exposure_days_prev,
-    s.closed,
-    s.closed_prev,
-    s.median_close_days,
-    s.median_close_days_prev,
-    s.inflow
-FROM postings s
-CROSS JOIN w
-LEFT JOIN views v ON v.category = s.category;
-
--- name: GetInsightsRolePulse :one
--- One category's pulse. No row means the category had nothing open or closed in either
--- window; the caller serves zeros.
-SELECT views_through, views, views_prev, exposure_days, exposure_days_prev,
-       closed, closed_prev, median_close_days, median_close_days_prev, inflow
-FROM insights_role_pulse
-WHERE category = sqlc.arg('category')::text;
-
--- ---------------------------------------------------------------------------
 -- Per-role skill demand
 -- ---------------------------------------------------------------------------
 
 -- name: DeleteAllInsightsRoleSkillStats :exec
 DELETE FROM insights_role_skill_stats;
 
--- name: RebuildInsightsRoleSkillStats :execrows
+-- name: ComputeInsightsRoleSkillStats :many
+-- Compute on the read connection; publish the result separately on the writer.
 -- The skill distribution WITHIN one role. Same shape as
--- RebuildInsightsRoleStatsByCountry's `FROM jobs, unnest(countries)` above — a job
+-- ComputeInsightsRoleStatsByCountry's `FROM jobs, unnest(countries)` above — a job
 -- contributes once per skill it carries — so its cost is one already measured in
 -- production, and `skills` is a small text[] rather than the TOASTed description.
---
 -- Open postings only: a closed posting's skills describe a vacancy nobody can apply
 -- to. No growth column, unlike the sibling rollups: "docker is up 4% within senior
 -- backend" is a second question, and answering it would need a prior-window pass
 -- over the same unnest.
-INSERT INTO insights_role_skill_stats (category, seniority, skill, open_count)
-SELECT category, seniority, skill, count(*)::int
+SELECT
+    (category)::text AS category,
+    (seniority)::text AS seniority,
+    (skill)::text AS skill,
+    (count(*)::int)::integer AS open_count
 FROM jobs, unnest(skills) AS skill
 WHERE closed_at IS NULL
   AND NOT is_private
@@ -287,21 +192,23 @@ HAVING count(*) >= sqlc.arg('min_sample')::int;
 -- name: DeleteAllInsightsRoleSkillSample :exec
 DELETE FROM insights_role_skill_sample;
 
--- name: RebuildInsightsRoleSkillSample :execrows
+-- name: ComputeInsightsRoleSkillSample :many
+-- Compute on the read connection; publish the result separately on the writer.
 -- The denominator every share in insights_role_skill_stats divides by: the role's
 -- open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of
 -- the eligible postings carry none, so dividing by the role's open count would fold
 -- our own tagging gap into every published share — and because that gap differs per
 -- role, two roles' shares would stop being comparable.
---
 -- Takes NO @min_sample, deliberately. The floor selects which SKILLS are published;
 -- applied here it would delete the denominator of a share that did clear the floor,
 -- leaving a numerator with nothing to divide by.
 -- The NOT is_private clause must stay in step with the distribution's: a numerator
 -- and a denominator counting different populations is a share that is quietly wrong
 -- rather than visibly broken.
-INSERT INTO insights_role_skill_sample (category, seniority, sample_size)
-SELECT category, seniority, count(*)::int
+SELECT
+    (category)::text AS category,
+    (seniority)::text AS seniority,
+    (count(*)::int)::integer AS sample_size
 FROM jobs
 WHERE closed_at IS NULL
   AND NOT is_private
@@ -335,10 +242,15 @@ WHERE category = sqlc.arg('category')::text
 -- name: DeleteAllInsightsSkillStats :exec
 DELETE FROM insights_skill_stats;
 
--- name: RebuildInsightsSkillStatsGlobal :execrows
+-- name: ComputeInsightsSkillStatsGlobal :many
+-- Compute on the read connection; publish the result separately on the writer.
 -- Country- and category-agnostic skill demand (both '' buckets).
-INSERT INTO insights_skill_stats (skill, category, country, open_count, open_count_prev)
-SELECT skill, '', '', open_count, open_count_prev
+SELECT
+    (skill)::text AS skill,
+    ('')::text AS category,
+    ('')::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
 FROM (
     SELECT
         skill,
@@ -349,10 +261,15 @@ FROM (
 ) t
 WHERE open_count > 0 OR open_count_prev > 0;
 
--- name: RebuildInsightsSkillStatsByCategory :execrows
+-- name: ComputeInsightsSkillStatsByCategory :many
+-- Compute on the read connection; publish the result separately on the writer.
 -- Per-category skill demand (country '' bucket).
-INSERT INTO insights_skill_stats (skill, category, country, open_count, open_count_prev)
-SELECT skill, category, '', open_count, open_count_prev
+SELECT
+    (skill)::text AS skill,
+    (category)::text AS category,
+    ('')::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
 FROM (
     SELECT
         skill,
@@ -365,10 +282,15 @@ FROM (
 ) t
 WHERE open_count > 0 OR open_count_prev > 0;
 
--- name: RebuildInsightsSkillStatsByCountry :execrows
+-- name: ComputeInsightsSkillStatsByCountry :many
+-- Compute on the read connection; publish the result separately on the writer.
 -- Per-country skill demand (category '' bucket).
-INSERT INTO insights_skill_stats (skill, category, country, open_count, open_count_prev)
-SELECT skill, '', country, open_count, open_count_prev
+SELECT
+    (skill)::text AS skill,
+    ('')::text AS category,
+    (country)::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
 FROM (
     SELECT
         skill,
@@ -427,133 +349,11 @@ ORDER BY skill, week_start DESC;
 -- Salary bands
 -- ---------------------------------------------------------------------------
 
--- name: DeleteAllInsightsSalaryStats :exec
-DELETE FROM insights_salary_stats;
-
--- name: RebuildInsightsSalaryStatsGlobal :execrows
--- Country-agnostic salary bands. CUBE(category, seniority) emits every scope the
--- endpoint can ask for — the exact (category, seniority) band, the category-only
--- band (seniority ''), the seniority-only band (category ''), and the overall band
--- (both '') — all per (currency, period), which is never aggregated across. The
--- figure per job is its EFFECTIVE salary (jobs_effective_salary, migration 0216:
--- manual, else source, else enrichment — the min/max midpoint or whichever bound is
--- present). Only bands at/above @min_sample are stored.
-INSERT INTO insights_salary_stats (category, seniority, country, currency, period, sample_size, p25, p50, p75)
-SELECT
-    coalesce(category, ''),
-    coalesce(seniority, ''),
-    '',
-    currency,
-    period,
-    count(*)::int,
-    percentile_cont(0.25) WITHIN GROUP (ORDER BY sal)::int,
-    percentile_cont(0.50) WITHIN GROUP (ORDER BY sal)::int,
-    percentile_cont(0.75) WITHIN GROUP (ORDER BY sal)::int
-FROM (
-    SELECT category, seniority, currency, period, amount AS sal
-    FROM jobs_effective_salary
-    WHERE closed_at IS NULL AND NOT is_private
-      AND category <> '' AND seniority <> ''
-) s
-WHERE sal IS NOT NULL
-GROUP BY currency, period, CUBE(category, seniority)
-HAVING count(*) >= sqlc.arg('min_sample')::int;
-
--- name: RebuildInsightsSalaryStatsByCountry :execrows
--- Per-country salary bands (same CUBE of role scope, country from unnest).
-INSERT INTO insights_salary_stats (category, seniority, country, currency, period, sample_size, p25, p50, p75)
-SELECT
-    coalesce(category, ''),
-    coalesce(seniority, ''),
-    country,
-    currency,
-    period,
-    count(*)::int,
-    percentile_cont(0.25) WITHIN GROUP (ORDER BY sal)::int,
-    percentile_cont(0.50) WITHIN GROUP (ORDER BY sal)::int,
-    percentile_cont(0.75) WITHIN GROUP (ORDER BY sal)::int
-FROM (
-    SELECT category, seniority, country, currency, period, amount AS sal
-    FROM jobs_effective_salary, unnest(countries) AS country
-    WHERE closed_at IS NULL AND NOT is_private
-      AND category <> '' AND seniority <> ''
-) s
-WHERE sal IS NOT NULL
-GROUP BY country, currency, period, CUBE(category, seniority)
-HAVING count(*) >= sqlc.arg('min_sample')::int;
-
--- name: DeleteAllInsightsSalaryMonthly :exec
-DELETE FROM insights_salary_monthly;
-
--- name: RebuildInsightsSalaryMonthly :execrows
--- The salary history: effective-salary percentiles per (category, currency, period,
--- month a posting was PUBLISHED), the current month and the eleven before it. Open and
--- closed postings alike — a posting closed since still records what was offered that
--- month — and canonical, public ones only. A month a posting belongs to is its
--- existence date (see the file header), so one found in June but published in March
--- counts in March. Months under @min_sample are not stored: a line through a handful
--- of postings a month is noise drawn as a trend.
-INSERT INTO insights_salary_monthly (category, currency, period, month, sample_size, p25, p50, p75)
-SELECT
-    category,
-    currency,
-    period,
-    month,
-    count(*)::int,
-    percentile_cont(0.25) WITHIN GROUP (ORDER BY amount)::int,
-    percentile_cont(0.50) WITHIN GROUP (ORDER BY amount)::int,
-    percentile_cont(0.75) WITHIN GROUP (ORDER BY amount)::int
-FROM (
-    -- Months are UTC calendar months, so a posting near midnight on the 1st lands in
-    -- the month the page's own UTC clock calls current, whatever the session TimeZone.
-    -- A publication date in the future (bad source data) is no month at all yet.
-    SELECT category, currency, period, amount,
-           date_trunc('month', LEAST(posted_at, created_at) AT TIME ZONE 'UTC')::date AS month
-    FROM jobs_effective_salary
-    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
-      AND LEAST(posted_at, created_at) AT TIME ZONE 'UTC' >= date_trunc('month', now() AT TIME ZONE 'UTC') - interval '11 months'
-      AND LEAST(posted_at, created_at) <= now()
-) s
-GROUP BY category, currency, period, month
-HAVING count(*) >= sqlc.arg('min_sample')::int;
-
--- name: ListInsightsSalaryHistory :many
--- One category's stored months, every (currency, period) it has.
-SELECT currency, period, month, sample_size, p25, p50, p75
-FROM insights_salary_monthly
-WHERE category = sqlc.arg('category')::text
-ORDER BY currency, period, month;
-
--- name: ListInsightsSalary :many
--- Salary bands for one role × country scope, one row per (currency, period),
--- richest samples first. Currencies are never combined.
-SELECT currency, period, sample_size, p25, p50, p75
-FROM insights_salary_stats
-WHERE category = sqlc.arg('category')
-  AND seniority = sqlc.arg('seniority')
-  AND country = sqlc.arg('country')
-ORDER BY sample_size DESC;
-
--- name: ListInsightsSalaryByCategory :many
--- All-seniority salary bands for one category (country-agnostic '' bucket), so a
--- per-category salary page is one call: one row per (seniority, currency, period),
--- richest samples first. seniority '' is the category-wide band; the named
--- seniorities are the per-grade bands. Bands below the sample floor are already
--- absent from the rollup.
-SELECT seniority, currency, period, sample_size, p25, p50, p75
-FROM insights_salary_stats
-WHERE category = sqlc.arg('category')
-  AND country = ''
-ORDER BY seniority, sample_size DESC;
-
--- ---------------------------------------------------------------------------
--- Hiring velocity (faceted)
--- ---------------------------------------------------------------------------
-
 -- name: DeleteAllInsightsVelocityDaily :exec
 DELETE FROM insights_velocity_daily;
 
--- name: RebuildInsightsVelocityDaily :execrows
+-- name: ComputeInsightsVelocityDaily :many
+-- Compute on the read connection; publish the result separately on the writer.
 -- Faceted added/removed-per-day rollup from a SINGLE scan of jobs: a CROSS JOIN
 -- LATERAL expands each job into its events instead of the previous 8 separate
 -- full-table scans (one per facet axis × added/removed), which at catalogue scale
@@ -561,25 +361,29 @@ DELETE FROM insights_velocity_daily;
 -- created_at day and (if closed) removed events on the closed_at day, across the
 -- 'all', category, seniority, and country (unnest) axes. Days are UTC calendar
 -- dates; the outer GROUP BY aggregates per (day, facet_kind, facet_value).
-INSERT INTO insights_velocity_daily (day, facet_kind, facet_value, added, removed)
-SELECT day, facet_kind, facet_value, sum(added)::int, sum(removed)::int
+SELECT
+    (day)::date AS day,
+    (facet_kind)::text AS facet_kind,
+    (facet_value)::text AS facet_value,
+    (sum(added)::int)::integer AS added,
+    (sum(removed)::int)::integer AS removed
 FROM jobs j
 CROSS JOIN LATERAL (
-    -- Added events (created_at day), scalar facet axes.
+
     SELECT (j.created_at AT TIME ZONE 'UTC')::date AS day, f.fk AS facet_kind, f.fv AS facet_value, 1 AS added, 0 AS removed
-    FROM (VALUES ('all', ''), ('category', j.category), ('seniority', j.seniority)) AS f(fk, fv)
+    FROM (SELECT 'all'::text AS fk, ''::text AS fv UNION ALL SELECT 'category', j.category UNION ALL SELECT 'seniority', j.seniority) AS f
     WHERE f.fk = 'all' OR f.fv <> ''
     UNION ALL
-    -- Added events, per country.
+
     SELECT (j.created_at AT TIME ZONE 'UTC')::date, 'country', c, 1, 0
     FROM unnest(j.countries) AS c
     UNION ALL
-    -- Removed events (closed_at day), scalar facet axes — only for closed jobs.
+
     SELECT (j.closed_at AT TIME ZONE 'UTC')::date, f.fk, f.fv, 0, 1
-    FROM (VALUES ('all', ''), ('category', j.category), ('seniority', j.seniority)) AS f(fk, fv)
+    FROM (SELECT 'all'::text AS fk, ''::text AS fv UNION ALL SELECT 'category', j.category UNION ALL SELECT 'seniority', j.seniority) AS f
     WHERE j.closed_at IS NOT NULL AND (f.fk = 'all' OR f.fv <> '')
     UNION ALL
-    -- Removed events, per country.
+
     SELECT (j.closed_at AT TIME ZONE 'UTC')::date, 'country', c, 0, 1
     FROM unnest(j.countries) AS c
     WHERE j.closed_at IS NOT NULL
@@ -601,315 +405,3 @@ LEFT JOIN insights_velocity_daily v
    AND v.facet_value = sqlc.arg('facet_value')
 GROUP BY date_trunc(sqlc.arg('unit')::text, d)
 ORDER BY date_trunc(sqlc.arg('unit')::text, d);
-
--- ---------------------------------------------------------------------------
--- Per-company hiring signal
--- ---------------------------------------------------------------------------
-
--- name: DeleteAllInsightsCompanyStats :exec
-DELETE FROM insights_company_stats;
-
--- name: RebuildInsightsCompanyStats :execrows
--- Per-(company, day) hiring velocity with a running open count, from the retained
--- jobs lifecycle. Each canonical, attributable job (company_slug <> '' AND
--- duplicate_of IS NULL) emits an added event on its created_at (UTC) day and, if
--- closed, a removed event on its closed_at (UTC) day; the inner aggregate collapses
--- those to one row per (company_slug, day), and the window SUM over (added - removed)
--- ordered by day yields open = cumulative(added) - cumulative(removed) as of that day
--- (a job is created no later than it closes, so this equals the point-in-time open
--- count). Only a company's activity days get a row.
-INSERT INTO insights_company_stats (company_slug, day, added, removed, open)
-SELECT
-    company_slug,
-    day,
-    added,
-    removed,
-    sum(added - removed) OVER (PARTITION BY company_slug ORDER BY day)::int AS open
-FROM (
-    SELECT j.company_slug, day, sum(added)::int AS added, sum(removed)::int AS removed
-    FROM jobs j
-    CROSS JOIN LATERAL (
-        -- Added event on the created_at day; removed event on the closed_at day.
-        SELECT (j.created_at AT TIME ZONE 'UTC')::date AS day, 1 AS added, 0 AS removed
-        UNION ALL
-        SELECT (j.closed_at AT TIME ZONE 'UTC')::date, 0, 1
-        WHERE j.closed_at IS NOT NULL
-    ) e
-    WHERE j.company_slug <> '' AND j.duplicate_of IS NULL
-    GROUP BY j.company_slug, day
-) daily;
-
--- ---------------------------------------------------------------------------
--- Per-company open/growth scalar (backs the /insights/companies leaderboard)
--- ---------------------------------------------------------------------------
-
--- name: DeleteAllInsightsCompanyGrowth :exec
-DELETE FROM insights_company_growth;
-
--- name: RebuildInsightsCompanyGrowth :execrows
--- One row per company with its current open-count and the open-count as of @prev_ts,
--- from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
--- insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
--- uses open-as-of @prev_ts. Companies open at neither point are dropped (HAVING) to
--- keep the table lean.
-INSERT INTO insights_company_growth (company_slug, open_count, open_count_prev)
-SELECT
-    company_slug,
-    count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-    count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
-FROM jobs
-WHERE company_slug <> '' AND duplicate_of IS NULL
-GROUP BY company_slug
-HAVING count(*) FILTER (WHERE closed_at IS NULL) > 0
-    OR count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts'))) > 0;
-
--- name: ListInsightsCompanies :many
--- The leaderboard read: companies ranked by growth (open_count - open_count_prev),
--- '-growth' (freezing) reverses it, 'open' ranks by raw size; open_count is the
--- tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).
--- company_name falls back to the slug when no companies row exists.
-SELECT
-    g.company_slug,
-    coalesce(c.name, g.company_slug) AS company_name,
-    g.open_count,
-    g.open_count_prev,
-    (g.open_count - g.open_count_prev)::int AS growth
-FROM insights_company_growth g
-LEFT JOIN companies c ON c.slug = g.company_slug
-WHERE g.open_count >= sqlc.arg('min_open')::int
-ORDER BY
-    (CASE
-        WHEN sqlc.arg('sort')::text = 'open'     THEN g.open_count
-        WHEN sqlc.arg('sort')::text = '-growth'  THEN -(g.open_count - g.open_count_prev)
-        ELSE (g.open_count - g.open_count_prev)
-    END) DESC,
-    g.open_count DESC
-LIMIT sqlc.arg('lim')::int;
-
--- name: DeleteAllInsightsCompanyResponse :exec
-DELETE FROM insights_company_response;
-
--- name: RebuildInsightsCompanyResponse :execrows
--- One row per company with an OBSERVABLE application: the applicant has a connected
--- mailbox, so a reply would have been seen. Applications from people we cannot observe
--- are excluded from BOTH sides of the ratio — counting them in the denominator would
--- report our own blind spot as the employer's silence, which is the same mistake the
--- job-level signal's mailbox gate exists to prevent.
---
--- Both sides come from application_events, not from live mail. Reading the emails table
--- made the served rate a function of the candidate's inbox hygiene: it counted messages
--- WHERE deleted_at IS NULL, so someone clearing old mail made an employer that had
--- answered them look silent, on a public page, about a named company. The ledger records
--- that the reply arrived; what later became of the message is not the employer's doing.
---
--- "Answered" is any live employer_reply event. Not a stage advance: a stage is what the
--- candidate recorded, and a company that replied to somebody who never updated their
--- board still replied. A retracted event does not count — it belongs to another employer.
---
--- The reply is paired to its application through application_id, never through job_id.
--- job_id is ON DELETE SET NULL, so once a posting is deleted both sides read NULL, the pair reduces
--- to NULL = NULL — never true — and an employer that answered is served as silent: the
--- distortion this rollup was moved onto the ledger to remove, arriving by a different
--- route. Pairing on (user_id, company_slug) instead would survive the deletion by
--- crediting one reply to every application that user made to that employer, which is
--- worse than losing it.
---
--- An event with no application_id is left out of BOTH sides rather than counted and never
--- answerable. Only rows written before the carry-over can be in that state, and
--- cmd/backfill-applications is what empties it.
---
--- The median covers answered applications only and is therefore right-censored; the
--- serving layer reports the unanswered count beside it so the number is never read as
--- "employers reply in six days" when most of the sample was never replied to. Replies
--- dated before their application (an application reconstructed from a later message, or
--- clock skew) still count as answered but are kept out of the median, where they would
--- contribute a negative duration.
-WITH observable AS (
-    SELECT ae.application_id, ae.company_slug, ae.occurred_at AS applied_at
-      FROM application_events ae
-     WHERE ae.kind = 'applied'
-       AND ae.retracted_at IS NULL
-       AND ae.company_slug <> ''
-       AND ae.application_id IS NOT NULL
-       -- Observable means "we would have seen a reply": the candidate has somewhere we
-       -- read mail. A Google grant with no mailbox address is a calendar-only consent —
-       -- it can never produce an employer_reply, so counting it would put applications in
-       -- the denominator that are structurally barred from the numerator and make named
-       -- employers read as more silent than they are. That is the exact distortion this
-       -- rollup exists to remove.
-       AND (EXISTS (SELECT 1 FROM gmail_connections gc
-                     WHERE gc.user_id = ae.user_id AND gc.status = 'connected' AND gc.email <> '')
-         OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = ae.user_id))
-), answered AS (
-    SELECT o.company_slug, o.applied_at,
-           (SELECT min(r.occurred_at)
-              FROM application_events r
-             WHERE r.application_id = o.application_id
-               AND r.kind          = 'employer_reply'
-               AND r.retracted_at IS NULL) AS replied_at
-      FROM observable o
-)
-INSERT INTO insights_company_response (company_slug, applications, answered, median_reply_days)
-SELECT company_slug,
-       count(*)::int,
-       count(*) FILTER (WHERE replied_at IS NOT NULL)::int,
-       percentile_cont(0.5) WITHIN GROUP (
-           ORDER BY EXTRACT(EPOCH FROM (replied_at - applied_at)) / 86400.0
-       ) FILTER (WHERE replied_at IS NOT NULL AND replied_at >= applied_at)::real
-  FROM answered
- GROUP BY company_slug;
-
--- name: GetCompanyResponse :one
--- The observable application counts for one company. A company with no row has no
--- observable applications at all, which the caller must treat as "not enough data"
--- rather than as a zero response rate.
-SELECT applications, answered, median_reply_days FROM insights_company_response WHERE company_slug = $1;
-
--- ---------------------------------------------------------------------------
--- Global and per-user application response rate (the reply-rate benchmark)
--- ---------------------------------------------------------------------------
-
--- name: GetGlobalCompanyResponse :one
--- The all-companies response rate, summed from the same per-company observable and
--- answered counts RebuildInsightsCompanyResponse already computed. Every company's row
--- contributes regardless of whether it individually clears its own ten-application
--- sample gate (see company-hiring-signal) — that gate protects what is safe to publish
--- about one NAMED employer, not what may contribute to an aggregate across all of them.
--- The caller applies its own sample gate to this sum.
-SELECT
-    coalesce(sum(applications), 0)::int AS applications,
-    coalesce(sum(answered), 0)::int     AS answered
-  FROM insights_company_response;
-
--- name: GetUserResponseRate :one
--- One caller's own observable/answered counts, computed live from application_events —
--- unlike the per-company/global figures, this is not read from a periodic rollup, since
--- it is scoped to one user and cheap to compute on every request (served by
--- application_events_user_occurred_idx). Same observable/answered definitions as
--- RebuildInsightsCompanyResponse: observable requires a connected mailbox, answered
--- requires a non-retracted employer_reply event. A caller with no connected mailbox has
--- zero observable applications — not a separate case, just the same predicate producing
--- zero — which is what lets the serving layer's sample gate double as the "no mailbox"
--- check.
--- No applied_at here, unlike the per-company CTE this mirrors: that one needs it for the
--- median days-to-reply, and the personal side serves no time-based metric (see design.md
--- - Non-Goals).
-WITH observable AS (
-    SELECT ae.application_id
-      FROM application_events ae
-     WHERE ae.kind = 'applied'
-       AND ae.retracted_at IS NULL
-       AND ae.user_id = $1
-       AND ae.company_slug <> ''
-       AND ae.application_id IS NOT NULL
-       AND (EXISTS (SELECT 1 FROM gmail_connections gc
-                     WHERE gc.user_id = ae.user_id AND gc.status = 'connected' AND gc.email <> '')
-         OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = ae.user_id))
-)
-SELECT
-    count(*)::int AS applications,
-    count(*) FILTER (
-        WHERE EXISTS (SELECT 1 FROM application_events r
-                       WHERE r.application_id = o.application_id
-                         AND r.kind          = 'employer_reply'
-                         AND r.retracted_at IS NULL)
-    )::int AS answered
-  FROM observable o;
-
--- ---------------------------------------------------------------------------
--- Per-company posting lifetime (backs the company page's Hiring tab)
--- ---------------------------------------------------------------------------
-
--- name: DeleteAllInsightsCompanyLifetime :exec
-DELETE FROM insights_company_lifetime;
-
--- name: RebuildInsightsCompanyLifetime :execrows
--- Median days from created_at to closed_at over each company's canonical postings
--- closed in the last 180 days. Only closures that say the POSTING is over count: it
--- dropped off a board we crawl (unseen), the source reported it taken down
--- (feed_removed), the liveness probe read its source page as expired twice
--- (probe_expired), or the employer closed it here (employer_closed). Not expired —
--- that is the age rule for sources with no close signal, which closes at 45 days
--- whatever the employer did, so it would publish our cutoff as the company's speed.
--- board_unreachable and feed_empty measure our crawler, board_retired,
--- source_misattributed and moderated our own decisions, '' is unknown. 180 days so the
--- figure describes how the company hires now, not over its whole history.
---
--- Every rollup that measures a real close reads this same list;
--- insights_close_rule_test.go fails if one of them drifts from it.
-INSERT INTO insights_company_lifetime (company_slug, closed, median_days)
-SELECT
-    company_slug,
-    count(*)::int,
-    percentile_cont(0.5) WITHIN GROUP (
-        ORDER BY EXTRACT(EPOCH FROM (closed_at - created_at)) / 86400.0
-    )::real
-FROM jobs
-WHERE company_slug <> ''
-  AND duplicate_of IS NULL
-  -- A member's private URL import carries the employer's slug and can be closed by the
-  -- orphan liveness probe (probe_expired); it is the member's, not evidence about the
-  -- company, and the company page's own reads exclude it the same way.
-  AND NOT is_private
-  AND closed_at IS NOT NULL
-  AND closed_at >= now() - interval '180 days'
-  AND closed_reason IN ('unseen', 'feed_removed', 'probe_expired', 'employer_closed')
-  -- A closure dated before its posting (a reopened row, clock skew) would add a
-  -- negative duration; the response rollup keeps the same pair out of its median.
-  AND closed_at >= created_at
-GROUP BY company_slug;
-
--- name: GetCompanyLifetime :one
--- One company's posting lifetime. No row means no qualifying closure; the caller
--- applies its own sample gate on `closed`.
-SELECT closed, median_days FROM insights_company_lifetime WHERE company_slug = $1;
-
--- name: GetCompanyGrowth :one
--- One company's open count now and as of the growth window ago. No row means nothing
--- open at either point; the caller serves zeros.
-SELECT open_count, open_count_prev FROM insights_company_growth WHERE company_slug = $1;
-
--- name: ListCompanyActivity :many
--- One company's dense added/removed series over [from, to] at the given granularity —
--- the company-scoped twin of ListJobActivity. insights_company_stats holds rows only on
--- a company's activity days, so a daily generate_series builds the gap-free calendar,
--- the LEFT JOIN on the (company_slug, day) primary key fills it (missing days → 0), and
--- date_trunc rolls days up to the bucket. `unit` is caller-validated (day/week/month).
-SELECT
-    date_trunc(sqlc.arg('unit')::text, d)::date AS period,
-    COALESCE(sum(s.added), 0)::int   AS added,
-    COALESCE(sum(s.removed), 0)::int AS removed
-FROM generate_series(sqlc.arg('from_ts')::timestamp, sqlc.arg('to_ts')::timestamp, interval '1 day') AS d
-LEFT JOIN insights_company_stats s
-       ON s.company_slug = sqlc.arg('company_slug')::text AND s.day = d::date
-GROUP BY date_trunc(sqlc.arg('unit')::text, d)
-ORDER BY date_trunc(sqlc.arg('unit')::text, d);
-
--- ---------------------------------------------------------------------------
--- Per-company posting views (backs the company page's Hiring tab)
--- ---------------------------------------------------------------------------
-
--- name: DeleteAllInsightsCompanyViews :exec
-DELETE FROM insights_company_views;
-
--- name: RebuildInsightsCompanyViews :execrows
--- page_uniques summed over each company's postings for the last 30 days and the 30
--- before. page_uniques, never uniques: uniques fuses unfiltered API reads — mostly
--- crawlers — with page opens. Duplicates are NOT filtered out: a view of a repost is
--- still attention paid to the company. One visitor counts once per posting per day, so
--- the sum is posting-views, not distinct people; the page says so.
-INSERT INTO insights_company_views (company_slug, views, views_prev)
-SELECT
-    j.company_slug,
-    COALESCE(sum(v.page_uniques) FILTER (WHERE v.day > current_date - 30), 0)::bigint,
-    COALESCE(sum(v.page_uniques) FILTER (WHERE v.day <= current_date - 30), 0)::bigint
-FROM job_daily_views v
-JOIN jobs j ON j.id = v.job_id
-WHERE v.day > current_date - 60
-  AND j.company_slug <> ''
-GROUP BY j.company_slug
-HAVING sum(v.page_uniques) > 0;
-
--- name: GetCompanyViews :one
--- One company's posting views. No row means none in either window; the caller serves zeros.
-SELECT views, views_prev FROM insights_company_views WHERE company_slug = $1;

@@ -11,16 +11,15 @@ import (
 	"golang.org/x/net/html"
 )
 
-// viterbit adapts the career sites of Viterbit, a Spanish ATS whose customers — staffing firms
-// (Temps, Staff Global Group, Trianglerrhh), hospitals (Grup Montaner), consultancies, NGOs (CEAR)
-// — publish at https://<board>.viterbit.site. The board is that label.
+// viterbit adapts the career sites of Viterbit, a Spanish ATS (staffing firms, hospitals,
+// consultancies, NGOs) whose customers publish at https://<board>.viterbit.site. The board is that label.
 //
 //	/                     every open job, one server-rendered page (a.vb-job-title cards)
 //	/<title-slug>-<id>/   one job, with a schema.org JobPosting
 //
-// The page has no pagination: the largest site measured (temps, 1,877 jobs) is one 9.5 MB page.
-// The id is the 12-character token that ends every job path; it is the only id a card carries,
-// so it is the identity a HydratingSource tests before buying the page.
+// The page has no pagination: the largest sites are one multi-megabyte page. The id is the
+// 12-character token that ends every job path; it is the only id a card carries, so it is the
+// identity a HydratingSource tests before buying the page.
 //
 // Cloudflare challenges every plain client ("Just a moment...", 403) from the crawl host, the
 // fixed proxy and a laptop alike, so on the crawl host the provider goes through the Scrapling
@@ -39,7 +38,7 @@ func (viterbit) Provider() string { return "viterbit" }
 
 const (
 	// viterbitMaxNewPerBoard bounds the bodies one board buys in a run, so the first crawl of a
-	// staffing firm's 1,877 jobs is spread over several runs instead of outliving the timeout.
+	// large staffing firm is spread over several runs instead of outliving the timeout.
 	viterbitMaxNewPerBoard = 300
 	// viterbitDetailWorkers keeps the fan-out low: every request goes through the crawl host's
 	// Scrapling service.
@@ -166,7 +165,8 @@ func (s viterbit) detail(ctx context.Context, e CompanyEntry, c viterbitCard) (J
 		EmploymentType: schemaEmploymentType(p.EmploymentType),
 		Countries:      countriesFromCodes(codes),
 	}
-	// TELECOMMUTE is the platform's remote flag; its absence says nothing about hybrid vs onsite.
+	// TELECOMMUTE is the platform's provisional remote flag; explicit hybrid arrangement
+	// prose can contradict it in jobderive. Its absence says nothing about hybrid vs onsite.
 	if strings.EqualFold(p.JobLocationType, "TELECOMMUTE") {
 		j.WorkMode, j.Remote = "remote", true
 	}

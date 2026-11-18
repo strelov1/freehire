@@ -42,14 +42,11 @@ type Registry map[string]Resolver
 // board is derivable from a job URL are here (see BoardFromURL): the board is the host
 // label (Pinpoint) or first path segment (Lever/Ashby).
 //
-// Each ATS titles its careers page differently, and the extractor is picked per source —
-// this stopped being "the same parser, different host template" the moment it was checked
-// against real boards: Pinpoint alone uses the lead-in-or-"Careers"-suffix shape
-// ExtractTitleName was built and validated for (PR #825); Lever's storefront titles the
-// page with the bare company name (jobs.lever.co/binance -> "Binance"); Ashby's titles
+// Each ATS titles its careers page differently, so the extractor is picked per source:
+// Pinpoint alone uses the lead-in-or-"Careers"-suffix shape ExtractTitleName handles; Lever's
+// storefront titles the page with the bare company name (jobs.lever.co/binance -> "Binance"); Ashby's titles
 // itself "{Name} Jobs" (jobs.ashbyhq.com/airgarage -> "AirGarage Jobs"). These two shapes
-// match cmd/harvest-boards/prober.go's storefrontEmployer, which independently discovered
-// them for the same platforms.
+// match cmd/harvest-boards/prober.go's storefrontEmployer.
 //
 // Greenhouse is intentionally absent — its job URLs are the company's own vanity careers
 // domain (e.g. a16z.com/about/jobs), so no board can be recovered from the URL; resolving
@@ -57,15 +54,13 @@ type Registry map[string]Resolver
 //
 // BambooHR is intentionally absent too: its careers page is a client-rendered SPA whose
 // static, unrendered <title> is just the platform's own boilerplate ("BambooHR"), never
-// the tenant's name — cmd/harvest-boards' bamboohrProber reached the same conclusion and
-// falls back to the slug rather than trying. A resolver wired here would always return ""
-// while looking like it was attempting something; leaving it out is the honest answer.
+// the tenant's name (cmd/harvest-boards' bamboohrProber falls back to the slug too). A
+// resolver wired here would always return "".
 //
 // join is the odd one out: its board (used by Board, not BoardFromURL — see board.go) is
 // the company's numeric join.com id, and join's own public API resolves that id straight
 // to a display name (no title-scrape needed): GET
-// https://join.com/api/public/companies/{id} -> {"name": "..."}. Confirmed live against
-// id 175014 -> "Goodweek".
+// https://join.com/api/public/companies/{id} -> {"name": "..."}.
 func NewRegistry(http httpGetter) Registry {
 	return Registry{
 		"pinpoint": newTitleResolver(http, "https://%s.pinpointhq.com", ExtractTitleName),

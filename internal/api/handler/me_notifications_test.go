@@ -22,10 +22,10 @@ func notificationsApp() (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &authHandlers{}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/notifications", auth.RequireAuth(iss, testVersions), h.GetNotifications)
-	app.Get("/api/v1/me/notifications/:id", auth.RequireAuth(iss, testVersions), h.GetNotification)
-	app.Post("/api/v1/me/notifications/:id/read", auth.RequireAuth(iss, testVersions), h.MarkNotificationRead)
-	app.Post("/api/v1/me/notifications/read-all", auth.RequireAuth(iss, testVersions), h.MarkAllNotificationsRead)
+	app.Get("/api/v1/me/notifications", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Get("/api/v1/me/notifications/:id", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Post("/api/v1/me/notifications/:id/read", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Post("/api/v1/me/notifications/read-all", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 	return app, iss
 }
 

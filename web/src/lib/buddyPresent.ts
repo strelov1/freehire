@@ -68,7 +68,12 @@ export function buddySharedCompanies(count: number): string {
  *  colour. Derived from the anonymous handle alone, so the picture links to nothing outside
  *  the buddy network — never a photo, not even the blurred Talent Network one. */
 export function buddyAvatarName(handle: string): string {
-  return handle.split('-').filter((w) => w && !/^\d+$/.test(w)).join(' ') || handle;
+  return (
+    handle
+      .split('-')
+      .filter((w) => w && !/^\d+$/.test(w))
+      .join(' ') || handle
+  );
 }
 
 /** A member's year in numbers, summed from the activity days the grid draws, so the two

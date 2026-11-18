@@ -207,9 +207,7 @@ describe('pickAttachableUpload', () => {
 
 describe('classifyAttachError', () => {
   it("gives DevTools-open a plain-language message, so 'attach' failing is actionable", () => {
-    expect(classifyAttachError('Another debugger is already attached to the tab with id: 123.')).toMatch(
-      /devtools/i,
-    );
+    expect(classifyAttachError('Another debugger is already attached to the tab with id: 123.')).toMatch(/devtools/i);
   });
 
   it('passes through an error it does not recognize', () => {

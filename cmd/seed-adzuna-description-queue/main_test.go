@@ -56,8 +56,7 @@ func TestSeedAllQueuesOnlyEligibleRows(t *testing.T) {
 }
 
 func TestSeedAllStopsOnAShortPageWithoutAnExtraQuery(t *testing.T) {
-	// A page smaller than the batch size is itself the exhaustion signal (mirrors
-	// cmd/backfill-echojobs), so a second, empty page is never queried.
+	// A page smaller than the batch size is itself the exhaustion signal, so a second, empty page is never queried.
 	store := &fakeJobStore{pages: [][]db.Job{
 		{{ID: 1, Source: "adzuna", URL: "https://www.adzuna.co.uk/jobs/details/1"}},
 	}}

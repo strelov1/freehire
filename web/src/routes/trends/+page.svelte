@@ -40,9 +40,7 @@
   <ActivityPanel initial={data.initial} load={(g) => api.jobsActivity(g)}>
     {#snippet title()}
       <h1 class="text-xl font-semibold tracking-tight">Trends</h1>
-      <p class="mt-1 text-sm text-muted-foreground">
-        New vacancies added versus postings removed over time.
-      </p>
+      <p class="mt-1 text-sm text-muted-foreground">New vacancies added versus postings removed over time.</p>
     {/snippet}
   </ActivityPanel>
 </div>

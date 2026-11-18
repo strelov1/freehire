@@ -33,15 +33,10 @@
   <header class="mb-5">
     <h1 class="text-2xl font-semibold tracking-tight">Discussions</h1>
     <p class="mt-1 text-sm text-muted-foreground">
-      Every open topic across companies and vacancies, newest first. Anonymous — people
-      post under a pseudonym, not their name. To start one, open the company or vacancy
-      it is about.
+      Every open topic across companies and vacancies, newest first. Anonymous — people post under a pseudonym, not
+      their name. To start one, open the company or vacancy it is about.
     </p>
   </header>
 
-  <DiscussionFeed
-    initialThreads={data.threads}
-    initialCursor={data.nextCursor}
-    failed={data.failed}
-  />
+  <DiscussionFeed initialThreads={data.threads} initialCursor={data.nextCursor} failed={data.failed} />
 </div>

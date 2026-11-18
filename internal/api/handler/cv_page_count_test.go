@@ -116,7 +116,7 @@ func TestCVPageCountTool_ReportsPages(t *testing.T) {
 	}
 	a := &assistantHandlers{cv: h}
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_page_count")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_page_count")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_page_count: %v", err)
@@ -148,7 +148,7 @@ func TestCVPageCountTool_RenderFailureDegradesToUnavailable(t *testing.T) {
 	}
 	a := &assistantHandlers{cv: h}
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_page_count")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_page_count")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_page_count: %v", err)

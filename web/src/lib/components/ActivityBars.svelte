@@ -92,14 +92,7 @@
     >
       <svg viewBox="0 0 {model.width} {model.height + 22}" class="w-full">
         <!-- y-axis max reference line + label -->
-        <line
-          x1={pad}
-          y1={topY}
-          x2={model.width - pad}
-          y2={topY}
-          class="stroke-border"
-          stroke-dasharray="2 3"
-        />
+        <line x1={pad} y1={topY} x2={model.width - pad} y2={topY} class="stroke-border" stroke-dasharray="2 3" />
         <text x={pad} y={topY - 4} class="fill-muted-foreground" font-size="11">
           {formatCount(model.max)}
         </text>
@@ -116,20 +109,8 @@
         {/if}
 
         {#each model.bars as bar (bar.period)}
-          <rect
-            x={bar.addedX}
-            y={bar.addedY}
-            width={model.barW}
-            height={bar.addedH}
-            class="fill-success"
-          />
-          <rect
-            x={bar.removedX}
-            y={bar.removedY}
-            width={model.barW}
-            height={bar.removedH}
-            class="fill-rose-500"
-          />
+          <rect x={bar.addedX} y={bar.addedY} width={model.barW} height={bar.addedH} class="fill-success" />
+          <rect x={bar.removedX} y={bar.removedY} width={model.barW} height={bar.removedH} class="fill-rose-500" />
         {/each}
 
         <!-- baseline -->

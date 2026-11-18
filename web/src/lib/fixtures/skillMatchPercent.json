@@ -1,0 +1,11 @@
+[
+  { "name": "half", "job": ["go", "kafka", "aws", "spark"], "held": ["go", "aws", "react"], "percent": 50 },
+  { "name": "rounds up: 2 of 3", "job": ["a", "b", "c"], "held": ["a", "b"], "percent": 67 },
+  { "name": "rounds down: 1 of 3", "job": ["go", "kafka", "aws"], "held": ["go"], "percent": 33 },
+  { "name": "rounds half up: 1 of 8", "job": ["a", "b", "c", "d", "e", "f", "g", "h"], "held": ["a"], "percent": 13 },
+  { "name": "case-insensitive", "job": ["Go", "Kafka"], "held": ["go"], "percent": 50 },
+  { "name": "full cover", "job": ["go"], "held": ["go", "aws"], "percent": 100 },
+  { "name": "no overlap", "job": ["go"], "held": ["php"], "percent": 0 },
+  { "name": "posting without skills", "job": [], "held": ["go"], "percent": 0 },
+  { "name": "reader without skills", "job": ["go"], "held": [], "percent": 0 }
+]

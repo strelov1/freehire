@@ -11,7 +11,7 @@ import (
 )
 
 func TestFromJobWritesTheSourceTypeItIsGiven(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: "greenhouse"}, nil, "ats")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: "greenhouse"}, "ats")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestAnUnclassifiedDocumentStillCarriesTheSourceTypeKey(t *testing.T) {
 	// Meilisearch's `!=` does not match a document that lacks the attribute, so with the key
 	// omitted `source_type_exclude=aggregator` would also drop every manual import and pasted
 	// link. An empty value keeps them, the same way role_type's empty value does.
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: "weblink"}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: "weblink"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

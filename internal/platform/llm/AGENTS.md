@@ -59,8 +59,10 @@ backfills, and `internal/ai/enrich`, `matchanalysis`, `resumeextract`, `atscheck
 - `GenerateJSON` (llm.go:203) / `GenerateJSONStream` (llm.go:257) — system+user prompt in
   JSON mode; the stream sibling forwards reasoning tokens to `onThinking` and returns the
   accumulated content. Output is raw — the caller unmarshals into its own contract type.
-- `Chat` (chat.go:34) — tool-calling conversation with optional streaming; the assistant's
-  turn loop runs on this.
+- `Chat` (chat.go:45) — tool-calling conversation with optional streaming; the assistant's
+  turn loop runs on this. A round that must answer in text goes under `WithoutToolCalls`
+  (chat.go:28): the tools stay in the request and tool_choice is `none`, because tool
+  definitions are part of the prompt prefix a provider caches.
 - `StripJSONFence` (llm.go:370) — recovers the first JSON value from fenced/preambled model
   output. `TrimTruncateRunes` (llm.go:419) — the one "trim + truncate by runes" helper for
   bounding untrusted/model text.

@@ -124,6 +124,50 @@ func (u ukg) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
+// FetchNew preserves the full listing but buys details only for new or body-refresh-due IDs.
+// The pipeline removes stale bodies from its seen set, so edited descriptions are re-read.
+func (u ukg) FetchNew(ctx context.Context, e CompanyEntry, seen func(string) bool) ([]Job, error) {
+	host, tenant, guid, ok := splitUKGBoard(e.Board)
+	if !ok {
+		return nil, fmt.Errorf("ukg: board %q must be <host>/<tenant>/<guid>", e.Board)
+	}
+	opps, err := u.list(ctx, host, tenant, guid)
+	if err != nil {
+		return nil, err
+	}
+	jobs := fetchDetails(opps, defaultDetailWorkers, func(o ukgOpportunity) (Job, bool) {
+		j := ukgListingJob(host, tenant, guid, e, o)
+		if seen(o.ID) {
+			j.Description = ""
+			j.SeenRefresh = true
+			return j, true
+		}
+		detail, ok := u.fetchDetail(ctx, j.URL)
+		if !ok {
+			j.Description = ""
+			j.Unreadable = true
+			return j, true
+		}
+		j.Description = sanitizeHTML(html.UnescapeString(detail.Description))
+		j.EmploymentType = ukgEmploymentType(detail.FullTime)
+		return j, true
+	})
+	var readable, newCount int
+	for _, j := range jobs {
+		if j.SeenRefresh {
+			continue
+		}
+		newCount++
+		if !j.Unreadable {
+			readable++
+		}
+	}
+	if newCount > 0 && readable == 0 {
+		return nil, fmt.Errorf("ukg: none of %d requested details could be read", newCount)
+	}
+	return jobs, nil
+}
+
 // list pages through LoadSearchResults until every posting is collected. totalCount is
 // authoritative; a page that returns no opportunities also stops the loop.
 func (u ukg) list(ctx context.Context, host, tenant, guid string) ([]ukgOpportunity, error) {
@@ -153,13 +197,20 @@ func (u ukg) list(ctx context.Context, host, tenant, guid string) ([]ukgOpportun
 // toJob maps a listing opportunity to a Job, upgrading the brief description to the full
 // body from the detail page when that fetch succeeds.
 func (u ukg) toJob(ctx context.Context, host, tenant, guid string, e CompanyEntry, o ukgOpportunity) Job {
-	url := fmt.Sprintf("https://%s/%s/JobBoard/%s/OpportunityDetail?opportunityId=%s", host, tenant, guid, o.ID)
+	j := ukgListingJob(host, tenant, guid, e, o)
 	body := o.BriefDescription
 	var employmentType string
-	if detail, ok := u.fetchDetail(ctx, url); ok {
+	if detail, ok := u.fetchDetail(ctx, j.URL); ok {
 		body = detail.Description
 		employmentType = ukgEmploymentType(detail.FullTime)
 	}
+	j.Description = sanitizeHTML(html.UnescapeString(body))
+	j.EmploymentType = employmentType
+	return j
+}
+
+func ukgListingJob(host, tenant, guid string, e CompanyEntry, o ukgOpportunity) Job {
+	url := fmt.Sprintf("https://%s/%s/JobBoard/%s/OpportunityDetail?opportunityId=%s", host, tenant, guid, o.ID)
 	location := o.location()
 	workMode := o.workMode()
 	return Job{
@@ -168,13 +219,10 @@ func (u ukg) toJob(ctx context.Context, host, tenant, guid string, e CompanyEntr
 		Title:       o.Title,
 		Company:     e.Company,
 		Location:    location,
-		Description: sanitizeHTML(html.UnescapeString(body)),
+		Description: sanitizeHTML(html.UnescapeString(o.BriefDescription)),
 		Remote:      workMode == "remote" || isRemote(location),
 		WorkMode:    workMode,
 		PostedAt:    parseRFC3339(o.PostedDate),
-		// FullTime is UKG's structured full/part-time flag; preferred over the free-text
-		// employment-type parse.
-		EmploymentType: employmentType,
 	}
 }
 

@@ -222,7 +222,7 @@ func TestCVRegister_ATSDeltaIsCookieOnly(t *testing.T) {
 		key:    namedGate("key"),
 		cvKey:  namedGate("cvKey"),
 		cookie: namedGate("cookie"),
-	})
+	}, cvContract(&cvHandlers{}))
 
 	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/cvs/"+uuid.New().String()+"/ats-delta", nil))
 	if err != nil {

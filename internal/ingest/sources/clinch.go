@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -15,18 +16,17 @@ import (
 // clinch adapts ClinchTalent / career-pages.com career sites (e.g. careers.withwaymo.com).
 // The board is the career-site host. Detail pages sit behind a RATE-BASED AWS-WAF "challenge"
 // action: a cold IP is served a handful of clean pages before the WAF flips to a 202 challenge
-// (marked "x-amzn-waf-action: challenge") and holds a long per-IP penalty. So the sitemap is
-// always parsed — a posting is reconstructed from its URL slug alone:
+// (marked "x-amzn-waf-action: challenge") and holds a long per-IP penalty. The sitemap
+// supplies posting identity and fallback metadata even when details are blocked:
 //
 //	/jobs/{title-words}-{city}-{state}-{country}[-{uuid}]
 //
-// Title and location are split out of the slug (clinchSplitSlug). The description is then
-// hydrated best-effort from each posting's detail page (div.job-description) through a paced
+// Explicit detail metadata wins; title and location fall back to the slug (clinchSplitSlug).
+// Descriptions hydrate best-effort from each detail page (div.job-description) through a paced
 // detail getter that holds the run's request rate under the WAF window. The first WAF
-// challenge LATCHES detail hydration off for the rest of the run (hammering a tripped WAF is
-// wasteful and prolongs the penalty), so the remaining postings keep the empty description
-// they would have had before. Coverage is therefore partial and back-fills across runs, and
-// the adapter is never worse than the old sitemap-only reconstruction.
+// challenge LATCHES detail hydration off for the rest of the run (hammering a tripped WAF prolongs
+// the penalty), so the remaining postings keep the empty description. Coverage is therefore partial
+// and back-fills across runs using the catalogue hydration seen-set.
 type clinch struct {
 	sitemap XMLGetter  // the career-site sitemap.xml (one request per run)
 	detail  HTMLGetter // per-posting detail pages, paced under the WAF window
@@ -41,6 +41,12 @@ func NewClinch(sitemap XMLGetter, detail HTMLGetter) Source {
 func (clinch) Provider() string { return "clinch" }
 
 func (c clinch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return c.FetchNew(ctx, e, func(string) bool { return false })
+}
+
+// FetchNew spends detail requests only on missing or due bodies; all sitemap identities
+// still yield liveness evidence when a detail cannot be read.
+func (c clinch) FetchNew(ctx context.Context, e CompanyEntry, seen func(string) bool) ([]Job, error) {
 	url := fmt.Sprintf("https://%s/sitemap.xml", e.Board)
 	sitemap, err := getSitemap(ctx, c.sitemap, url)
 	if err != nil {
@@ -56,18 +62,28 @@ func (c clinch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 		title, loc := clinchSplitSlug(slug)
 
+		id := clinchExternalID(slug)
+		known := seen(id)
 		description := ""
-		if !latched {
-			desc, challenged := c.hydrate(ctx, entry.Loc)
+		if !known && !latched {
+			detail, challenged := c.hydrate(ctx, entry.Loc)
 			if challenged {
 				latched = true // remaining postings stay sitemap-only
 			} else {
-				description = desc // "" when the fetch failed or the block was absent
+				description = detail.Description
+				if detail.Title != "" {
+					title = detail.Title
+				}
+				slugHasMoreGeography := !strings.Contains(detail.Location, ",") &&
+					strings.HasPrefix(strings.ToLower(loc), strings.ToLower(detail.Location)+",")
+				if detail.Location != "" && !slugHasMoreGeography {
+					loc = detail.Location
+				}
 			}
 		}
 
 		jobs = append(jobs, Job{
-			ExternalID:  clinchExternalID(slug),
+			ExternalID:  id,
 			URL:         entry.Loc,
 			Title:       title,
 			Company:     e.Company,
@@ -75,22 +91,53 @@ func (c clinch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Description: description,
 			Remote:      isRemote(loc),
 			PostedAt:    parseDate(entry.LastMod),
+			SeenRefresh: known,
+			Unreadable:  !known && strings.TrimSpace(description) == "",
 		})
+	}
+	for _, job := range jobs {
+		if !job.Unreadable {
+			return jobs, nil
+		}
+	}
+	if len(jobs) > 0 {
+		return nil, fmt.Errorf("clinch: %s: listed %d postings and read none of their details", e.Board, len(jobs))
 	}
 	return jobs, nil
 }
 
-// hydrate fetches a posting's detail page and returns its description. challenged reports a WAF
-// ChallengeError — the caller's signal to latch off detail hydration for the rest of the run.
+// hydrate reads explicit posting metadata and its description from a detail page.
+// The boolean reports a WAF ChallengeError — the caller's signal to latch off detail hydration for the rest of the run.
 // Any other fetch failure (or a missing description block) returns an empty description without
 // latching, so a single bad page never drops the posting or stops the crawl.
-func (c clinch) hydrate(ctx context.Context, url string) (description string, challenged bool) {
+func (c clinch) hydrate(ctx context.Context, url string) (Job, bool) {
 	node, err := c.detail.GetHTML(ctx, url)
 	if err != nil {
 		var chErr *ChallengeError
-		return "", errors.As(err, &chErr)
+		return Job{}, errors.As(err, &chErr)
 	}
-	return clinchDescription(node), false
+	detail := Job{Description: clinchDescription(node)}
+	if title := firstByClass(node, "job-title"); title != nil {
+		detail.Title = strings.Join(strings.Fields(textContent(title)), " ")
+	}
+	locations := []string{}
+	for _, class := range []string{"job-component-location", "job-location", "job-component-location-group"} {
+		walk(node, func(n *html.Node) bool {
+			if n.Type == html.ElementNode && HasClass(n, class) {
+				loc := strings.Join(strings.Fields(textContent(n)), " ")
+				if loc != "" && !slices.Contains(locations, loc) {
+					locations = append(locations, loc)
+				}
+				return false
+			}
+			return true
+		})
+		if len(locations) > 0 {
+			break
+		}
+	}
+	detail.Location = strings.Join(locations, "; ")
+	return detail, false
 }
 
 // clinchDescription returns the detail page's div.job-description block as sanitized HTML —

@@ -48,7 +48,8 @@ const BAR_FRACTION = 0.6;
 /** Build the bar model for `points`. An empty series yields an empty bar list but
  *  a valid (drawable) frame. Heights are scaled to the largest single day's
  *  `new` count. */
-export function buildSignupsChart(points: UserGrowthPoint[]): SignupsChartModel {
+// Only the day and its count are drawn, so any daily series fits (API usage reuses it).
+export function buildSignupsChart(points: Pick<UserGrowthPoint, 'date' | 'new'>[]): SignupsChartModel {
   const baselineY = PAD + PLOT_H;
   const frame: Omit<SignupsChartModel, 'bars'> = {
     width: WIDTH,

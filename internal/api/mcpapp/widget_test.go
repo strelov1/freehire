@@ -101,6 +101,16 @@ func TestTheWidgetIsServedAsAnMCPAppsResource(t *testing.T) {
 		t.Errorf("read %q (%d bytes), want the embedded page as %q", page.MIMEType, len(page.Text), widgetMIMEType)
 	}
 	assertWidgetCSP(t, "resources/read", page.Meta)
+
+	// A host that listed tools before a deploy still asks for the previous page's URI.
+	const previous = "ui://freehire/jobs-000000000000.html"
+	stale, err := session.ReadResource(ctx, &mcp.ReadResourceParams{URI: previous})
+	if err != nil {
+		t.Fatalf("resources/read of a previous URI: %v", err)
+	}
+	if len(stale.Contents) != 1 || stale.Contents[0].Text != string(widgetPage) || stale.Contents[0].URI != previous {
+		t.Errorf("a previous URI did not get the current page")
+	}
 }
 
 // Only the tools whose result the page knows how to draw may point at it: a host renders

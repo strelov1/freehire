@@ -14,10 +14,8 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -210,41 +208,5 @@ func TestUnknownKindIsRejectedByTheDatabase(t *testing.T) {
 		UserID: user, CompanySlug: "checked-co", Kind: "unpaid_test_task",
 	}); err == nil {
 		t.Fatal("a kind outside the CHECK list was accepted")
-	}
-}
-
-func TestCountRecentCompanyProcessReportsIgnoresRevivals(t *testing.T) {
-	pool := startPostgres(t)
-	q := New(pool)
-	ctx := context.Background()
-
-	seedProcessReportCompany(t, pool, "rate-co")
-	user := seedProcessReportUser(t, pool, "rated@example.com")
-	fileArg := FileCompanyProcessReportParams{UserID: user, CompanySlug: "rate-co", Kind: "ai_interview"}
-
-	if _, err := q.FileCompanyProcessReport(ctx, fileArg); err != nil {
-		t.Fatalf("file: %v", err)
-	}
-	if _, err := q.RetractCompanyProcessReport(ctx, RetractCompanyProcessReportParams{
-		UserID: user, CompanySlug: "rate-co", Kind: "ai_interview",
-	}); err != nil {
-		t.Fatalf("retract: %v", err)
-	}
-	if _, err := q.FileCompanyProcessReport(ctx, fileArg); err != nil {
-		t.Fatalf("re-file: %v", err)
-	}
-
-	// A revival takes the ON CONFLICT branch and leaves created_at untouched, so the
-	// rate window counts one genuinely new row — retract-and-refile is not a way to
-	// spend somebody else's allowance.
-	n, err := q.CountRecentCompanyProcessReports(ctx, CountRecentCompanyProcessReportsParams{
-		UserID:    user,
-		CreatedAt: pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("count recent: %v", err)
-	}
-	if n != 1 {
-		t.Fatalf("recent count = %d, want 1", n)
 	}
 }

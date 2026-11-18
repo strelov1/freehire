@@ -2,7 +2,9 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"html"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -14,12 +16,35 @@ import (
 // links a posting twice per card (title and "Learn more"), which the enumeration de-duplicates.
 func htListingHTML(jobURLs ...string) string {
 	var b strings.Builder
+	titles := make([]map[string]int64, 0)
+	ids := make([]int64, 0)
+	seen := map[string]bool{}
+	host := ""
+	for _, u := range jobURLs {
+		parsed, _ := url.Parse(u)
+		if host == "" {
+			host = parsed.Host
+		}
+		id := htJobID(u)
+		if parsed.Host != host || seen[id] {
+			continue
+		}
+		seen[id] = true
+		n, _ := strconv.ParseInt(id, 10, 64)
+		titles = append(titles, map[string]int64{"id": n})
+		ids = append(ids, n)
+	}
+	props, _ := json.Marshal(map[string]any{"showAll": true, "titles": titles, "remotePositions": []int64{}, "nonRemotePositions": ids})
+	b.WriteString(`<div data-react-class="HiringThing.Components.JobFiltersContainer" data-react-props="` + html.EscapeString(string(props)) + `"></div>`)
 	b.WriteString(`<html><body><div class="jobs-list-container">`)
 	for _, u := range jobURLs {
 		b.WriteString(`<div class="job-container"><a href="` + u + `"><h2>A job</h2></a>` +
 			`<a href="` + u + `">Learn more</a></div>`)
 	}
 	b.WriteString(`<a href="/privacy">Privacy</a></div></body></html>`)
+	if len(ids) == 0 {
+		b.WriteString(`<p data-testid="careers-no-open-positions">No open positions at this time</p>`)
+	}
 	return b.String()
 }
 
@@ -324,10 +349,10 @@ func TestHiringThingFetchNewSkipsDetailForSeenPostings(t *testing.T) {
 	}
 }
 
-func TestHiringThingFailedDetailDropsOnlyThatPosting(t *testing.T) {
+func TestHiringThingFailedDetailIsUnreadable(t *testing.T) {
 	detail := htDetailHTML(htRecord("Kept", "<p>x</p>",
 		"2026-08-17T12:30:54Z", "Orlando, FL", "US", false, htNoSalary))
-	// No route for /job/222 → GetHTML errors → that posting drops, the board survives.
+	// An unreadable listed posting withholds closure permission; it is not a removal.
 	fake := (&routedHTTP{}).
 		route("/job/111", detail).
 		route("https://b/", htListingHTML("https://b/job/111/kept", "https://b/job/222/dropped"))
@@ -336,8 +361,51 @@ func TestHiringThingFailedDetailDropsOnlyThatPosting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 1 || jobs[0].ExternalID != "111" {
-		t.Fatalf("got %v, want only the kept posting", jobs)
+	if len(readPostings(jobs)) != 1 || len(unreadableMarkers(jobs)) != 1 {
+		t.Fatalf("got %v, want one read posting and one unreadable marker", jobs)
+	}
+}
+
+func TestHiringThingClosureCapabilities(t *testing.T) {
+	s := NewHiringThing(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Fatal("complete validated native listing must support board closure")
+	}
+	if _, ok := s.(emptyBoardListing); !ok {
+		t.Fatal("explicit native empty state must support empty-board closure")
+	}
+}
+
+func TestHiringThingRejectsUnprovenListing(t *testing.T) {
+	valid := htListingHTML("https://b/job/111/role")
+	for name, body := range map[string]string{
+		"shell":                    "<html><body>Loading</body></html>",
+		"missing fields":           `<div data-react-class="HiringThing.Components.JobFiltersContainer" data-react-props="{}"></div>`,
+		"filtered":                 strings.Replace(valid, "&#34;showAll&#34;:true", "&#34;showAll&#34;:false", 1),
+		"missing rendered posting": strings.ReplaceAll(valid, "https://b/job/111/role", "/about"),
+		"missing empty state":      strings.Replace(htListingHTML(), `data-testid="careers-no-open-positions"`, `data-testid="other"`, 1),
+		"missing partition":        strings.Replace(valid, "&#34;nonRemotePositions&#34;:[111]", "&#34;nonRemotePositions&#34;:[]", 1),
+		"null collection":          strings.Replace(valid, "&#34;titles&#34;:[{&#34;id&#34;:111}]", "&#34;titles&#34;:null", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := (&routedHTTP{}).route("https://b/", body)
+			if _, err := NewHiringThing(fake).(hiringthing).FetchNew(context.Background(), CompanyEntry{Board: "b"}, func(string) bool { return true }); err == nil {
+				t.Fatal("unproven listing was accepted")
+			}
+		})
+	}
+}
+
+func TestHiringThingIncompleteDetailWithholdsClosure(t *testing.T) {
+	for _, record := range []string{`{}`, `{"title":"Role","html_description":"<p>&nbsp;</p>"}`} {
+		fake := (&routedHTTP{}).route("/job/111", htDetailHTML(record)).route("https://b/", htListingHTML("https://b/job/111/role"))
+		jobs, err := NewHiringThing(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(readPostings(jobs)) != 0 || len(unreadableMarkers(jobs)) != 1 {
+			t.Fatalf("got %+v, want unreadable marker for incomplete detail", jobs)
+		}
 	}
 }
 

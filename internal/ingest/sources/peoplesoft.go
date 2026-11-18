@@ -45,8 +45,7 @@ const (
 	// a PeopleTools field name, not tenant configuration.
 	peoplesoftLoadMore = "HRS_AGNT_RSLT_I$hdown$0"
 	// peoplesoftMaxPostbacks bounds the walk; reaching it before the stated row count fails the
-	// crawl. A postback adds 50 rows, so this covers 10,000 — the largest tenant measured holds
-	// 600.
+	// crawl. A postback adds 50 rows, so this covers 10,000.
 	peoplesoftMaxPostbacks = 200
 	// peoplesoftDetailWorkers is the posting-page fan-out. Every request of a board rides one
 	// PeopleTools session, so it stays well under the shared default.
@@ -190,6 +189,19 @@ func (s peoplesoft) hydrate(ctx context.Context, b peoplesoftBoard, e CompanyEnt
 			return Job{}, false
 		}
 		job, ok := parsePeopleSoftPosting(root, r)
+		// Reposted openings can retain the same opening ID under sequence 2.
+		// Retry only the recognizable search-page response, never a transport failure.
+		if !ok && peoplesoftIndex(root)["HRS_SCH_WRK2_HRS_JOB_OPENING_ID"] == nil {
+			if _, searchErr := parsePeopleSoftPage(root); searchErr == nil {
+				second := strings.TrimSuffix(link, "PostingSeq=1") + "PostingSeq=2"
+				if secondRoot, err := s.http.GetHTML(ctx, second); err == nil {
+					job, ok = parsePeopleSoftPosting(secondRoot, r)
+					if ok {
+						link = second
+					}
+				}
+			}
+		}
 		if !ok {
 			log.Printf("peoplesoft: %s posting %s answered no posting; deferring", b.host, r.ID)
 			return Job{}, false
@@ -394,9 +406,5 @@ func parsePeopleSoftPosting(root *html.Node, r peoplesoftRow) (Job, bool) {
 // peoplesoftDate reads the list's "Posted" date. Every tenant measured renders M/D/YYYY; any
 // other shape is left unread rather than guessed at, since 03/04 reads two ways.
 func peoplesoftDate(s string) *time.Time {
-	t, err := time.Parse("1/2/2006", strings.TrimSpace(s))
-	if err != nil {
-		return nil
-	}
-	return &t
+	return parseLayout("1/2/2006", strings.TrimSpace(s))
 }

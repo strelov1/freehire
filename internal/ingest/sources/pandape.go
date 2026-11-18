@@ -21,10 +21,9 @@ import (
 
 // pandape adapts Pandapé, the ATS InfoJobs sells in Brazil and Computrabajo sells across the
 // rest of Latin America: one <tenant>.<domain> career site per employer, and a board is that
-// tenant label. The two deployments run the same software on separate domains with separate
-// tenant namespaces (a Brazilian tenant 404s on the Latin-American domain and vice versa), so
-// each is its own provider (pandapeDomain). See the "Pandapé traps" section of AGENTS.md for
-// the measurements behind each rule.
+// tenant label. The two deployments use separate domains and tenant namespaces (a Brazilian
+// tenant 404s on the Latin-American domain), so each is its own provider (pandapeDomain). See
+// the "Pandapé traps" section of AGENTS.md.
 //
 // The career site renders its first 20 vacancies; its own "load more" button POSTs
 // /ListVacancies, which answers JSON carrying the page's vacancy cards as an HTML fragment, the
@@ -49,12 +48,11 @@ type pandapeDomain struct {
 	// host is the career-site domain every tenant is a subdomain of.
 	host string
 	// templatedJobPosting marks a deployment whose JobPosting is filled from a Brazilian
-	// template rather than from the vacancy: on the Latin-American domain every JobPosting
-	// sampled said addressCountry BR, currency BRL and employmentType partial-time (a Lima call
-	// centre's full-time job, paid in soles), and cut the last letter off a locality with no
-	// region ("Ayacuch", "Santiago Centr"), while some vacancy pages carry no JobPosting at all.
-	// There only datePosted and the salary bounds are read from it; the place comes from the
-	// card, the country from the page's own analytics props, the currency from that country.
+	// template, not from the vacancy: on the Latin-American domain it says addressCountry BR,
+	// currency BRL and partial-time whatever the vacancy is, cuts the last letter off a locality
+	// with no region ("Ayacuch"), and some pages carry none. There only datePosted and the salary
+	// bounds are read from it; the place comes from the card, the country from the page's analytics
+	// props, the currency from that country.
 	templatedJobPosting bool
 }
 
@@ -72,32 +70,26 @@ var (
 const pandapePageSize = 20
 
 // pandapeMaxPages is the pager's own window: it serves 500 pages (10,000 vacancies) and no
-// more — measured 2026-10-24 on activoschile, which states 55,483: page 500 answers 20 cards,
-// page 501 answers {"isLast": true} with no cards and no subtotal. The largest Brazilian tenant
-// (rhftalentos, 8,319 vacancies, 416 pages) fits; a tenant stating more than the window can
-// never be listed whole, so its crawl fails on the first page rather than walk 500 pages to the
-// same answer, and fullBoardListing never sweeps it on a partial list.
+// more; page 501 answers {"isLast": true} with no cards. A tenant stating more than the window
+// can never be listed whole, so its crawl fails on the first page rather than walk 500 pages,
+// and fullBoardListing never sweeps it on a partial list.
 const pandapeMaxPages = 500
 
 // PandapeListingWindow is how many vacancies the pager can list for one tenant. Exported for
 // cmd/harvest-boards, which does not propose a tenant stating more.
 const PandapeListingWindow = pandapeMaxPages * pandapePageSize
 
-// PandapeRequestInterval paces every request of a run — every tenant's listing and detail
-// pages alike, since all ~3.3k tenants are served by one origin, which answers a burst with a
-// 403 (not a 429, so the client's per-host backoff never sees it). Measured 2026-10-23 from the
-// prod address: ~2 requests a second sustained for ~40 minutes (~2.3k tenant pages) drew no
-// refusal; ~6-7 a second for one minute drew a run of 403s on detail and listing pages alike,
-// which cleared within seconds of the burst ending. Two a second is the rate that was observed
-// to pass, not a limit we know. Exported because cmd/harvest-boards probes the same origin and
-// must hold the same pace: unpaced, its 16 workers reached ~35 req/s and drew the 403.
+// PandapeRequestInterval paces every request of a run, listing and detail alike: one origin
+// serves every tenant and answers a burst with a 403 (not a 429, so the client's per-host
+// backoff never sees it). About 2 requests a second sustained passed; 6-7 a second drew 403s
+// that cleared within seconds. That is the rate observed to pass, not a known limit. Exported
+// because cmd/harvest-boards probes the same origin and must hold the same pace.
 const PandapeRequestInterval = 500 * time.Millisecond
 
-// pandapeMaxNewPerBoard bounds how many unseen vacancies one board's crawl hydrates. The first
-// crawl of the largest tenants faces thousands of bodies (randstad-brasil lists 3,827); at two
-// requests a second shared by the whole fleet, one such board would hold the run for half an
-// hour while every other board waits; 300 is two and a half minutes. The vacancies past the bound are not yielded, so
-// nothing is stored for them, and the next run hydrates the next slice.
+// pandapeMaxNewPerBoard bounds how many unseen vacancies one board's crawl hydrates, so the
+// first crawl of a huge tenant cannot hold the paced run while every other board waits.
+// Vacancies past the bound are not yielded, so nothing is stored for them; the next run
+// hydrates the next slice.
 const pandapeMaxNewPerBoard = 300
 
 // NewPandape builds the adapter for InfoJobs Brasil's Pandapé over the shared client.
@@ -335,13 +327,26 @@ type pandapeLD struct {
 	} `json:"baseSalary"`
 }
 
-// job maps a vacancy page plus its card. ok is false when the page is not a vacancy
-// page: on the Brazilian domain it carries no JobPosting; on the Latin-American one, where the
-// JobPosting is optional (templatedJobPosting), it carries no body either.
+// job maps a vacancy page plus its card. Brazilian pages without a JobPosting must
+// identify the requested vacancy and carry its main description. The Latin-American
+// deployment's JobPosting is optional and templated (templatedJobPosting).
 func (d pandapeDomain) job(root *xhtml.Node, c pandapeCard, link string, e CompanyEntry) (Job, bool) {
 	var ld pandapeLD
 	if !ldJobPosting(root, &ld) && !d.templatedJobPosting {
-		return Job{}, false
+		identity := firstByID(root, "HdnIdVacancy")
+		if c.ID == "" || identity == nil || identity.Data != "input" || Attr(identity, "type") != "hidden" || Attr(identity, "value") != c.ID {
+			return Job{}, false
+		}
+		description := firstByID(root, "description")
+		if description == nil {
+			return Job{}, false
+		}
+		body := firstByClass(description, "order-1")
+		if body == nil || strings.TrimSpace(textContent(body)) == "" {
+			return Job{}, false
+		}
+		// A failed JSON decode may have filled only some fields. Use none of them.
+		ld = pandapeLD{}
 	}
 	job := Job{
 		ExternalID:  c.ID,
@@ -372,6 +377,7 @@ func (d pandapeDomain) job(root *xhtml.Node, c pandapeCard, link string, e Compa
 		}
 	} else {
 		job.EmploymentType = pandapeEmploymentType(c.Contract, ld.EmploymentType)
+		job.Engagement = brazilRegimeEngagement(c.Contract)
 		if len(ld.JobLocation) > 0 {
 			a := ld.JobLocation[0].Address
 			// "Todo Brasil" (nationwide) postings state the country and no city; the card's own
@@ -449,7 +455,7 @@ func pandapeBody(root *xhtml.Node, ldDescription string) string {
 }
 
 // pandapeZone is the zone datePosted is written in: the platform omits the offset, and its
-// timestamps read as Brasília time (UTC-3, no daylight saving since 2019).
+// timestamps read as Brasília time (UTC-3, no daylight saving).
 var pandapeZone = time.FixedZone("BRT", -3*60*60)
 
 // pandapePostedAt parses datePosted ("2026-10-23T15:59:35.1108602", no offset).
@@ -509,13 +515,12 @@ var pandapeWeeklyHours = regexp.MustCompile(`^Jornada de (\d+) horas semanales$`
 
 // pandapeLatamCurrencies is the currency a Latin-American tenant's country pays in and the
 // symbol its cards write it with ("S/ 1,230", "1.000.000 $"). The JobPosting says BRL for
-// every one of them, so the currency is taken from the country — and only when the card's
+// every one of them, so the currency is taken from the country, and only when the card's
 // salary carries that country's own symbol, so a posting paying in dollars is never recorded
-// in pesos. The countries are the ones the tenants measured on 2026-10-24 state.
+// in pesos.
 //
-// monthlyMedian is the median monthly salary_min the open postings of that country stored on
-// 2026-10-28 (placeholders excluded; ar 1,191 salaries, cl 5,482, co 9,945, mx 8,950, pe 2,328,
-// uy 45), and is what pandapeLatamSalaryPlausible measures a monthly salary against.
+// monthlyMedian is the median monthly salary_min of that country's open postings, what
+// pandapeLatamSalaryPlausible measures a monthly salary against. Re-measure it when it drifts.
 var pandapeLatamCurrencies = map[string]struct {
 	code, symbol  string
 	monthlyMedian int
@@ -536,18 +541,14 @@ var pandapeLatamCurrencies = map[string]struct {
 //
 // Two things mark a range as not a figure:
 //
-//   - a bound that is one digit repeated, five or more times (11111, 222222, 1111111): the
-//     filler the form's required field gets. In 2026-10-28's open postings it is 127 of 1,318
-//     Argentine salaries, 44 of 89 Uruguayan, 22 of 5,504 Chilean, and nothing else. A run of nines is
-//     not filler — Chile's "999.999 $ a 1.000.000 $" is "up to a million" — and four digits are
-//     not either, since 2222 is a believable sol or peso figure.
-//   - a monthly bound under a twentieth of its country's median. Every country's genuine low
-//     end — part-time and half-wage postings, Peru's 615 (half its 1,230 minimum), Chile's
-//     200,000, Mexico's 2,090, Colombia's 296,000 — sits between a half and a sixth of its
-//     median, so a twentieth leaves three times that margin. Below it sit 184 more Argentine
-//     salaries, mostly 2,000-10,000 (a 340th to a 70th: IT leads and full-time warehouse jobs
-//     alike), plus Colombia's "1 $ a 2 $" and Mexico's "2 $ a 2.788 $". Peso inflation only ever lowers the floor relative to real pay, so a stale median
-//     admits more rather than refusing a real wage; it should be re-measured when it does.
+//   - a bound that is one digit repeated five or more times (11111, 222222, 1111111): the
+//     filler the form's required field gets. A run of nines is not filler (Chile's
+//     "999.999 $ a 1.000.000 $" is "up to a million"), and neither are four digits, since 2222
+//     is a believable sol or peso figure.
+//   - a monthly bound under a twentieth of its country's median. Genuine low ends (part-time
+//     and half-wage postings) sit between a half and a sixth of the median, so a twentieth
+//     leaves a wide margin. Peso inflation only lowers the floor relative to real pay, so a
+//     stale median admits more rather than refusing a real wage.
 //
 // No period but the month has been observed, so no other period has a floor; a country with
 // no measured median is never vouched for.

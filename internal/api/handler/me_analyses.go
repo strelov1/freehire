@@ -1,10 +1,11 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -24,14 +25,13 @@ type myAnalysisItem struct {
 }
 
 // buildAnalysisItems projects the caller's analysed-job rows into list items, flagging
-// staleness against the caller's live CV upload time, current model, and profile
-// language. Rows whose stored analysis blob is empty or corrupt are skipped (nothing to
-// show). Order is preserved (the query returns newest-first).
+// staleness against the caller's live CV upload time, current model, and profile language.
+// Rows whose stored analysis blob is empty or corrupt are skipped. Order is preserved
+// (newest first).
 //
-// live carries the caller-wide stamps; the job content hash is the one thing that varies per
-// row (each row joins its own job's current hash), so it is filled in per item rather than
-// passed in. The rule those stamps are compared by is fitanalysis's, the same one the single-
-// job read uses — this listing must not be able to disagree with the page it links to.
+// live carries the caller-wide stamps; the job content hash varies per row, so it is filled
+// in per item. The stale rule is fitanalysis's, the same one the single-job read uses, so
+// this listing cannot disagree with the page it links to.
 func buildAnalysisItems(rows []db.ListUserJobAnalysesRow, live fitanalysis.Stamps) []myAnalysisItem {
 	items := make([]myAnalysisItem, 0, len(rows))
 	for _, r := range rows {
@@ -57,18 +57,27 @@ func buildAnalysisItems(rows []db.ListUserJobAnalysesRow, live fitanalysis.Stamp
 
 // ListMyAnalyses lists the jobs the caller has run the AI fit analysis on (newest first),
 // with the caller's points balance in meta. Never calls the LLM. Cookie or API key.
-func (h *matchHandlers) ListMyAnalyses(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *matchHandlers) ListMyAnalyses(ctx context.Context) (*apigen.FitAnalysedJobs, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	rows, err := h.fit.List(c.Context(), userID)
+	rows, err := h.fit.List(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
+	cvUploadedAt, _ := h.cvUploadedAt(ctx, userID)
 	// job is the zero value: liveStamps only reads its content hash, and this listing fills
 	// that per row from the job each one joins.
-	items := buildAnalysisItems(rows, h.liveStamps(c.Context(), userID, db.Job{}, cvUploadedAt))
-	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"allowance": h.allowanceView(c.Context(), userID)}})
+	items := buildAnalysisItems(rows, h.liveStamps(ctx, userID, db.Job{}, cvUploadedAt))
+	out := &apigen.FitAnalysedJobs{Data: make([]apigen.FitAnalysedJob, len(items))}
+	for i, it := range items {
+		out.Data[i] = apigen.FitAnalysedJob{Slug: it.Slug, Title: it.Title, Company: it.Company, Closed: it.Closed,
+			OverallScore: int64(it.OverallScore), Verdict: it.Verdict, AnalysedAt: it.AnalysedAt, Stale: it.Stale}
+	}
+	// Null when the standing cannot be read, as the nil pointer always marshalled.
+	if out.Meta.Allowance, err = json.Marshal(h.allowanceView(ctx, userID)); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

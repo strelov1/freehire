@@ -22,9 +22,7 @@
     onRetry?: () => void;
   } = $props();
 
-  const fallback = $derived(
-    message ?? (state === 'error' ? 'Something went wrong.' : 'Nothing here yet.'),
-  );
+  const fallback = $derived(message ?? (state === 'error' ? 'Something went wrong.' : 'Nothing here yet.'));
 </script>
 
 {#if state === 'loading'}
@@ -38,8 +36,11 @@
     {/each}
   </div>
 {:else}
+  <!-- A dashed frame, so an empty list reads as a place that is empty rather than one grey
+       line floating in a blank pane — and lighter than a filled well. -->
   <EmptyState
     title={fallback}
+    class="rounded-xl border border-dashed border-border"
     variant={state === 'error' ? 'destructive' : 'muted'}
     action={state === 'error' && onRetry ? retry : undefined}
   />

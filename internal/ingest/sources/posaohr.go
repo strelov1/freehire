@@ -18,12 +18,11 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// posaoHR adapts posao.hr, a Croatian general job board: ~570 postings employers and staffing
+// posaoHR adapts posao.hr, a Croatian general job board: postings employers and staffing
 // agencies publish on the site itself, every trade, many of them abroad (Austria, Germany). The
 // site also republishes the public employment service's vacancies, which the hzz adapter reads
 // at their source, so those are skipped here. It is boardless and an aggregator — the employer is
-// read per posting. See the "posao.hr traps" section of AGENTS.md for the measurements behind each
-// rule.
+// read per posting. See the "posao.hr traps" section of AGENTS.md.
 //
 // The listing is the site's county pages, server-rendered HTML, fifteen cards a page, the
 // site's own postings ahead of the republished ones; a card carries the title, the employer and
@@ -55,16 +54,15 @@ const (
 	posaoHRLanguageURL = posaoHRBaseURL + "/trebam/promijeniti-jezik/hr"
 	// posaoHRAbroad is the county slice of postings outside Croatia.
 	posaoHRAbroad = "inozemstvo"
-	// posaoHRMaxPages is a safety ceiling on one county's walk: the largest (Grad Zagreb) took 16
-	// pages to reach its republished tail on 2026-10-29. Reaching it fails the crawl.
+	// posaoHRMaxPages is a safety ceiling on one county's walk (the largest, Grad Zagreb, needs
+	// about 16 pages to reach its republished tail). Reaching it fails the crawl.
 	posaoHRMaxPages = 60
 	// posaoHRRequestInterval paces every request of a run at one a second — a courtesy ceiling:
 	// two clients reading back to back drew no refusal.
 	posaoHRRequestInterval = time.Second
 	posaoHRDetailWorkers   = 2
-	// posaoHRMaxNewPerRun bounds the posting pages one run reads: the listing is ~95 pages, and
-	// 600 posting pages at one a second is ten minutes, well inside the scheduler's crawl budget.
-	// The whole catalogue (~570) fits one run.
+	// posaoHRMaxNewPerRun bounds the posting pages one run reads: at one a second, 600 pages is
+	// ten minutes, well inside the scheduler's crawl budget.
 	posaoHRMaxNewPerRun   = 600
 	posaoHRDeadlineMargin = 5 * time.Minute
 )
@@ -98,6 +96,9 @@ func (posaoHR) boardless() {}
 
 // Hundreds of employers and agencies post here, each named per posting.
 func (posaoHR) aggregator() {}
+
+// One country's market (see nationalMarket).
+func (posaoHR) marketCountries(CompanyEntry) []string { return []string{"hr"} }
 
 // posaoHRCard is one listing card: what the gate and the job need before the page is bought.
 type posaoHRCard struct {
@@ -156,7 +157,7 @@ func (s posaoHR) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ex
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[c.company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[c.company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -353,10 +354,10 @@ func posaoHRCardFrom(a, grid *html.Node) (posaoHRCard, bool) {
 	}
 	c := posaoHRCard{id: id, url: posaoHRBaseURL + u.Path}
 	if t := firstByClass(grid, "title"); t != nil {
-		c.title = posaoHRClean(textContent(t))
+		c.title = collapseSpace(textContent(t))
 	}
 	if e := firstByClass(grid, "employer"); e != nil {
-		c.company = posaoHRClean(textContent(e))
+		c.company = collapseSpace(textContent(e))
 	}
 	if l := firstByClass(grid, "location"); l != nil {
 		c.place = posaoHRCardPlace(textContent(l))
@@ -367,12 +368,10 @@ func posaoHRCardFrom(a, grid *html.Node) (posaoHRCard, bool) {
 	return c, true
 }
 
-func posaoHRClean(s string) string { return strings.Join(strings.Fields(s), " ") }
-
 // posaoHRCardPlace cleans a card's place, which the card cuts at ~30 characters with "...": the
 // cut and the separator before it are dropped. A hydrated posting takes its page's whole place.
 func posaoHRCardPlace(s string) string {
-	s = posaoHRClean(s)
+	s = collapseSpace(s)
 	if t, cut := strings.CutSuffix(s, "..."); cut {
 		s = strings.TrimRight(t, " ,/-")
 	}
@@ -428,11 +427,11 @@ func (s posaoHR) detail(ctx context.Context, c posaoHRCard) (Job, bool, error) {
 	facts := posaoHRHeader(header)
 	j := posaoHRBaseJob(c)
 	if h1 := firstByTag(root, "h1"); h1 != nil {
-		if t := posaoHRClean(textContent(h1)); t != "" {
+		if t := collapseSpace(textContent(h1)); t != "" {
 			j.Title = t
 		}
 	}
-	if place := posaoHRClean(textContent(facts["location"])); place != "" {
+	if place := collapseSpace(textContent(facts["location"])); place != "" {
 		j.Location = place
 	}
 	body := posaoHRBody(root)
@@ -513,7 +512,7 @@ func posaoHRSalary(n *html.Node) string {
 			b.WriteString(c.Data)
 		}
 	}
-	return posaoHRClean(b.String()) // Fields splits on the no-break space the site writes too
+	return collapseSpace(b.String()) // Fields splits on the no-break space the site writes too
 }
 
 // posaoHRTechCategory reports whether the posting is filed under "Informatika i
@@ -547,7 +546,7 @@ func posaoHRBody(root *html.Node) string {
 		if h2 == nil {
 			continue
 		}
-		b.WriteString("<h2>" + html.EscapeString(posaoHRClean(textContent(h2))) + "</h2>")
+		b.WriteString("<h2>" + html.EscapeString(collapseSpace(textContent(h2))) + "</h2>")
 		for _, row := range rows {
 			b.WriteString("<h3>" + html.EscapeString(row.label) + "</h3><div>" + innerHTML(row.value) + "</div>")
 		}
@@ -585,7 +584,7 @@ func posaoHRSection(root *html.Node, class string) (*html.Node, []posaoHRRow) {
 		}
 		left, right := firstByClass(n, "jobs_about_left"), firstByClass(n, "jobs_about_right")
 		if left != nil && right != nil {
-			rows = append(rows, posaoHRRow{label: strings.TrimSuffix(posaoHRClean(textContent(left)), ":"), value: right})
+			rows = append(rows, posaoHRRow{label: strings.TrimSuffix(collapseSpace(textContent(left)), ":"), value: right})
 		}
 		return false
 	})
@@ -597,7 +596,7 @@ func posaoHRRows(root *html.Node, class string) map[string]string {
 	_, rows := posaoHRSection(root, class)
 	out := make(map[string]string, len(rows))
 	for _, r := range rows {
-		out[r.label] = posaoHRClean(textContent(r.value))
+		out[r.label] = collapseSpace(textContent(r.value))
 	}
 	return out
 }

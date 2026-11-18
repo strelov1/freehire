@@ -8,6 +8,7 @@
   import { savedSearches } from '#lib/savedSearches.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
   import { ensureSaved, matchedSavedSearch, setPendingAlert } from '#lib/saveSearchAlert.js';
+  import { queryNarrows } from '#lib/filters.js';
   import { Button } from '#lib/ui/index.js';
   import AlertChannels from './AlertChannels.svelte';
 
@@ -59,6 +60,9 @@
   });
 
   const matched = $derived(matchedSavedSearch(query, savedSearches.items));
+  // A search edited down to one that no longer narrows keeps its subscriptions, so its
+  // controls stay: they are how the subscriber turns the alert off. Only a new one is out.
+  const subscribed = $derived(notifications.subscriptions.some((s) => s.saved_search_id === matched?.id));
 
   // Save the current filters (auth-gated). Standalone: no alert channel involved — once
   // it lands, `matched` flips and the channel toggles / manage link render.
@@ -85,19 +89,25 @@
   onMount(() => {
     if (autostart) void save();
   });
+
+  // The brand fill is earned by a search worth saving: on an unfiltered feed this button
+  // was the loudest thing on the page while there was nothing yet to save.
+  const saveVariant = $derived(queryNarrows(query) ? 'primary' : 'outline');
 </script>
 
 <div class="flex flex-col gap-1.5">
   {#if !isAuthenticated()}
-    <Button variant="primary" size={saveBig ? 'lg' : 'md'} onclick={save} class={saveBtnClass}>
+    <Button variant={saveVariant} size={saveBig ? 'lg' : 'md'} onclick={save} class={saveBtnClass}>
       <Bookmark class={saveBig ? 'size-[1.15rem]' : 'size-4'} aria-hidden="true" />
       Save this search
     </Button>
   {:else if !matched}
-    <Button variant="primary" size={saveBig ? 'lg' : 'md'} onclick={save} disabled={busy} class={saveBtnClass}>
+    <Button variant={saveVariant} size={saveBig ? 'lg' : 'md'} onclick={save} disabled={busy} class={saveBtnClass}>
       <Bookmark class={saveBig ? 'size-[1.15rem]' : 'size-4'} aria-hidden="true" />
       {busy ? 'Saving…' : 'Save filter'}
     </Button>
+  {:else if !queryNarrows(query) && !subscribed}
+    <p class="text-sm text-muted-foreground">Add a filter to get alerts: this search covers every job.</p>
   {:else if alerts === 'manage'}
     <Button
       variant="secondary"

@@ -2,12 +2,9 @@
 // the event identifier an ATS invitation carries in its text/calendar part.
 //
 // It is a reader, not an implementation of RFC 5545: nothing here builds calendars, and
-// the only property it understands is UID. That identifier is what makes the meeting in
-// the candidate's calendar and the invitation in their mailbox provably the same meeting,
-// which is the one link internal/application/calmatch is allowed to make without asking.
-//
-// No database access and no I/O, so the parsing rules are testable on their own — the
-// shape internal/application/appevent and internal/application/userjob already use for rules of this kind.
+// the only property it understands is UID. That identifier makes the calendar meeting and the
+// mailbox invitation provably the same meeting, the one link internal/application/calmatch may
+// make without asking. No database access and no I/O.
 package ical
 
 import (
@@ -15,28 +12,19 @@ import (
 	"strings"
 )
 
-// maxBody caps the body UID will parse, and it is a bound on work done for an
-// unauthenticated sender rather than a format rule. cmd/mail-ingest parses a message
-// BEFORE it resolves the recipient and before it acks the SQS entry, one at a time, in the
-// one Restart=always daemon on the host with no MemoryMax — so the time one text/calendar
-// part costs is time every hosted mailbox spends waiting for its own mail.
-//
-// A megabyte is far above anything an invitation carries (a full attendee list with a long
-// description is kilobytes) and far below SES's own 30 MB inbound ceiling, which is the
-// only other bound on this path. Over the cap reads as absence — the same answer every
-// other unreadable invitation already gets.
+// maxBody caps the body UID will parse: a bound on work done for an unauthenticated sender, not
+// a format rule. cmd/mail-ingest parses a message before resolving the recipient, one at a time
+// in one daemon, so a slow part delays every hosted mailbox. A megabyte is far above any real
+// invitation. Over the cap reads as absence.
 const maxBody = 1 << 20
 
 // UID returns the first UID property in the body, or "" when it carries none.
 //
-// The first PROPERTY, not the first VEVENT's: a body whose VTODO precedes its VEVENT
-// would yield the wrong one. Invitations do not arrive shaped that way — an ATS sends a
-// single VEVENT with METHOD:REQUEST — so the distinction is documented rather than
-// implemented, and the day it matters this is where to look.
+// The first PROPERTY, not the first VEVENT's: a body whose VTODO precedes its VEVENT would yield
+// the wrong one. ATS invitations are a single VEVENT, so this is documented, not implemented.
 //
-// Absence is reported as absence. The only automatic link built on this is UID equality,
-// so a confident wrong answer would attach a meeting to an application that no
-// invitation named — and the candidate would prepare for the wrong employer.
+// Absence is reported as absence: the only automatic link built on UID equality must never
+// attach a meeting to an application no invitation named.
 func UID(body []byte) string {
 	if len(body) > maxBody {
 		return ""
@@ -55,16 +43,11 @@ func UID(body []byte) string {
 
 // unfold joins RFC 5545 continuation lines back into whole ones.
 //
-// The format wraps any line longer than 75 octets and marks the continuation with a
-// leading space or tab. Real identifiers from Google and the ATS platforms are long
-// enough that this happens every time, so a line-by-line reader returns a truncated UID
-// — non-empty, well-formed, and matching no calendar event that will ever exist.
+// The format wraps lines over 75 octets with a leading space or tab. Real UIDs are long enough
+// that a line-by-line reader would return a truncated, well-formed, never-matching UID.
 //
-// The accumulator is a strings.Builder rather than `lines[len(lines)-1] += r[1:]`. Strings
-// are immutable, so that += reallocated and copied the whole logical line on every
-// continuation: quadratic in the number of continuations, measured at 70s on a 6.4 MB
-// body. maxBody bounds how much of that an unauthenticated sender may buy, but a cap alone
-// would still leave minutes of CPU inside it, and the daemon parses one message at a time.
+// The accumulator is a strings.Builder, not `+=` on the last line, which is quadratic in the
+// number of continuations; maxBody alone would still leave minutes of CPU inside the cap.
 func unfold(body []byte) []string {
 	// Tolerate bare LF as well as the CRLF the format specifies: a message that has been
 	// through a gateway is not always still canonical.
@@ -97,10 +80,9 @@ func unfold(body []byte) []string {
 
 // splitProperty separates a content line into its property name and value.
 //
-// The name may carry parameters after a semicolon (`UID;X-VENDOR=ashby:value`), which
-// are discarded — this package reads one property and has no use for their meaning. A
-// line with no colon is not a property, which is what keeps the word "UID:" inside a
-// SUMMARY from being read as one.
+// The name may carry parameters after a semicolon (`UID;X-VENDOR=ashby:value`), which are
+// discarded. A line with no colon is not a property, which keeps "UID:" inside a SUMMARY from
+// being read as one.
 func splitProperty(line string) (name, value string, ok bool) {
 	colon := strings.IndexByte(line, ':')
 	if colon < 0 {

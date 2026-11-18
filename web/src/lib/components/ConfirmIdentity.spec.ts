@@ -25,7 +25,7 @@ const { connectedIdentities, reauthenticatePassword, begin, expiry, forget, user
 // locale is what selects the English source catalogue.
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 const { StubApiError } = vi.hoisted(() => ({
-  StubApiError: class StubApiError extends Error {
+  StubApiError: class extends Error {
     constructor(
       public status: number,
       message = 'failed',

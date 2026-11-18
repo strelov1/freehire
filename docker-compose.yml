@@ -5,7 +5,10 @@ services:
     # not Alpine — pgvector has no Alpine variant — but pins the same Postgres major
     # (18) as the stock image it replaces, so the version-subdirectory volume
     # behaviour noted below is unaffected.
-    image: pgvector/pgvector:pg18
+    image: pgvector/pgvector:0.8.1-pg18
+    # Every integration-test binary of every checkout meets on this one server
+    # (TESTDB_ADMIN_URL, internal/platform/testdb), so it needs more than the default 100.
+    command: ["postgres", "-c", "max_connections=500"]
     environment:
       POSTGRES_USER: hire
       POSTGRES_PASSWORD: hire
@@ -42,7 +45,7 @@ services:
   # an optional one like Meili — no volume, since rate-limit counters are
   # ephemeral/TTL'd and losing them on restart is a fail-open no-op, not data loss.
   redis:
-    image: redis:8-alpine
+    image: redis:8.2.1-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -88,7 +91,7 @@ services:
       - s3
     entrypoint: >
       /bin/sh -c "
-      until curl -sfI -o /dev/null http://s3:9090/hire-resumes || curl -sf -o /dev/null -X PUT http://s3:9090/hire-resumes; do sleep 1; done;
+      attempt=0; until curl --max-time 10 -sfI -o /dev/null http://s3:9090/hire-resumes || curl --max-time 10 -sf -o /dev/null -X PUT http://s3:9090/hire-resumes; do attempt=$$((attempt + 1)); [ "$$attempt" -lt 30 ] || exit 1; sleep 1; done;
       exit 0;
       "
 
@@ -111,11 +114,6 @@ services:
       S3_ACCESS_KEY: "${S3_ACCESS_KEY:-s3mock}"
       S3_SECRET_KEY: "${S3_SECRET_KEY:-s3mock}"
       AWS_REGION: "${AWS_REGION:-us-east-1}"
-      # PII_FILTER_URL intentionally has no local default: it fronts a real span-detection
-      # model (services/pii-filter) with no lightweight local stand-in, so unset here is the
-      # correct out-of-the-box state — résumé structuring/import degrade gracefully without
-      # it (internal/resumeextract's Enabled() check), same as an unconfigured LLM.
-      PII_FILTER_URL: "${PII_FILTER_URL:-}"
       # LLM-backed features (enrich, fit analysis, résumé structuring, the assistant, …)
       # were silently unreachable locally: these were never passed through from .env at
       # all, so every model call degraded as "unconfigured" with no error. Empty is a
@@ -175,7 +173,7 @@ services:
     ports:
       - "${HIRE_HOST_PORT:-8080}:8080"
 
-  # SvelteKit SSR frontend. nginx (:80) fronts both the Node SSR server and the
+  # SvelteKit SSR frontend. nginx (:8080) fronts both the Node SSR server and the
   # Go API, keeping them same-origin for the auth cookie. The browser talks only
   # to this container.
   web:
@@ -190,7 +188,7 @@ services:
       # The Node SSR server fetches the Go API server-to-server (never relative).
       API_INTERNAL_URL: "http://app:8080"
     ports:
-      - "${WEB_HOST_PORT:-8090}:80"
+      - "${WEB_HOST_PORT:-8090}:8080"
     depends_on:
       - app
 

@@ -7,16 +7,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
 )
 
-// descriptionSeniorityPhrases maps a seniority grade to intent-anchored phrases
-// that signal it in a job description, checked in precedence order (highest grade
-// first, mirroring seniorityOrder). Unlike the title aliases — short, role-focused,
-// safe as bare whole words — these are tuned for PRECISION in long prose: a bare
-// "senior"/"lead"/"head of"/"staff" matches incidental text ("senior management",
-// "lead the team", "report to the head of product", "our staff"), so every phrase
-// is anchored to an unambiguous grade statement. Matching uses wordmatch, so a
-// phrase only fires on word boundaries ("as a lead" never matches "as a leading
-// provider", "technical lead" never matches "technical leadership"). The detector
-// emits nothing on a weak signal and never infers a grade from a years figure.
+// descriptionSeniorityPhrases maps a seniority grade to intent-anchored phrases that signal it in a job description, checked highest grade first (mirroring seniorityOrder). Tuned for PRECISION in long prose: a bare "senior"/"lead"/"head of"/"staff" matches incidental text ("senior management", "lead the team", "our staff"), so every phrase anchors an unambiguous grade statement. Word boundaries keep "as a lead" off "as a leading provider". The detector emits nothing on a weak signal and never infers a grade from a years figure.
 var descriptionSeniorityPhrases = []struct {
 	grade   string
 	phrases []string
@@ -55,20 +46,7 @@ var descriptionSeniorityPhrases = []struct {
 	}},
 }
 
-// descriptionNonTechPhrases maps a confidently non-technical category to
-// role-statement phrases that signal it in a job description, checked in order
-// (first match wins). Like the seniority phrases — and unlike the bare title
-// aliases — these are tuned for PRECISION in long prose: a bare "sales"/"support"
-// matches incidental text ("work with our sales team", "our support engineers"),
-// so every phrase is a full role noun. Anchors that could shadow a technical role
-// are deliberately absent: there is no loose "hiring a sales" (it would fire on
-// "sales engineer"), and the manager phrases name only back-office roles —
-// engineering/product/project/data manager forms are never listed, because those
-// are technical categories. Each manager phrase resolves the function it names, the
-// way the title dictionary files it ("Office Manager" and "Operations Manager" are
-// `operations`, "HR Manager" `hr`); "general manager" names no function and is not
-// here, now that there is no management category to file it under. Matching uses
-// wordmatch on word boundaries. Values are the vocab.NonTechCategories members.
+// descriptionNonTechPhrases maps a confidently non-technical category to role-statement phrases, checked in order (first match wins). Tuned for PRECISION like the seniority phrases: a bare "sales"/"support" matches incidental text ("work with our sales team"), so every phrase is a full role noun. Anchors that could shadow a technical role are absent: no loose "hiring a sales" (it would fire on "sales engineer"), and the manager phrases name only back-office roles, never engineering/product/project/data manager. Each manager phrase resolves the function it names, as the title dictionary files it ("Office Manager" is `operations`, "HR Manager" `hr`); "general manager" names no function and is absent. Values are vocab.NonTechCategories members.
 var descriptionNonTechPhrases = []struct {
 	category string
 	phrases  []string
@@ -94,13 +72,7 @@ var descriptionNonTechPhrases = []struct {
 	{"hr", []string{"hr manager"}},
 }
 
-// NonTechFromDescription derives a confidently non-technical category
-// (vocab.NonTechCategories) from a job description's prose, returning "" when no
-// anchored non-technical role statement is present. It resolves ONLY non-technical
-// categories — a technical role yields "" — and never guesses: it is the
-// lowest-priority category source (after the structured signal and the title
-// dictionary), so it only fills a category the title left empty, feeding the
-// AI-enrichment cost gate without risking a technical job's enrichment.
+// NonTechFromDescription derives a confidently non-technical category (vocab.NonTechCategories) from a job description's prose, "" when no anchored role statement is present. A technical role yields "". It is the lowest-priority category source (after the structured signal and the title dictionary): it only fills a category the title left empty, feeding the AI-enrichment cost gate without risking a technical job's enrichment.
 func NonTechFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, c := range descriptionNonTechPhrases {
@@ -134,11 +106,7 @@ func SeniorityFromDescription(desc string) string {
 	return ""
 }
 
-// mentorVerbs are the words that make an entry grade the people a role looks after
-// rather than the role itself: "serves as a guide and mentor for junior-level software
-// development engineers" is a prod "Backend Software Engineer 3" posting, served as
-// junior off that line. Every senior posting that mentors says so, so the guard reads
-// only the two entry grades — a higher grade's phrases are not what a role mentors.
+// mentorVerbs are the words that make an entry grade the people a role looks after rather than the role itself ("serves as a guide and mentor for junior-level software development engineers" is not a junior role). Every senior posting that mentors says so, so the guard reads only the two entry grades.
 var mentorVerbs = []string{
 	// No "mentorship": the noun is a benefit the role receives ("we offer mentorship in
 	// this entry-level position"), not a role it plays.

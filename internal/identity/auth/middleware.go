@@ -7,80 +7,75 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
-// LocalsUserID is the c.Locals key under which RequireAuth and RequireAuthOrKey
-// store the authenticated user id. Handlers read it via UserID; it is exported
-// because a websocket handler is handed a Conn rather than a Ctx and has to read
-// the inherited local by key.
+// LocalsUserID is the c.Locals key for the authenticated user id. Exported because a
+// websocket handler gets a Conn, not a Ctx, and reads the local by key.
 const LocalsUserID = "auth.userID"
 
-// localsViaAPIKey is set true by RequireAuthOrKey when the request authenticated with an
-// API key rather than the session cookie. Handlers read it via ViaAPIKey to give
-// programmatic callers (e.g. the CV-tailoring agent) a narrower view than the owner's own
-// browser session.
+// localsSessionVersion holds the tv claim resolveSession validated. Set only there.
+const localsSessionVersion = "auth.sessionVersion"
+
+// localsViaAPIKey is set by RequireAuthOrKey for API-key requests, so handlers can give
+// programmatic callers a narrower view than a browser session.
 const localsViaAPIKey = "auth.viaAPIKey"
 
-// localsKeyScope holds the authenticating key's scope. Absent for cookie sessions, which
-// are unscoped by construction — a browser session is the owner themselves.
+// localsKeyScope holds the authenticating key's scope; absent for unscoped cookie sessions.
 const localsKeyScope = "auth.keyScope"
 
-// localsViaCookie is set true whenever the request authenticated with the website's own
-// session cookie, as opposed to a Bearer credential (a session JWT — the browser
-// extension's carrier — or an API key). Handlers read it via ViaCookie to confine a
-// capability to the extension's own connection, the same way localsViaAPIKey narrows one
-// to a programmatic caller.
+// localsViaCookie is set when the request authenticated with the website's session cookie
+// rather than a Bearer credential (extension JWT or API key).
 const localsViaCookie = "auth.viaCookie"
 
-// Scopes an API key can carry. ScopeFull is everything a key may do and is what a
-// user-created key gets by default; ScopeCV is the CV surface a tailoring agent needs
-// and nothing else, so a credential handed to an external agent cannot reach the rest
-// of the account. ScopeEmbed is for the volunteer-embed-mvp service (a separate repo):
-// a key with this scope is validated only against api_keys directly by that service —
-// it grants nothing on freehire's own API surface.
+// Scopes an API key can carry. ScopeFull is the default for user-created keys; ScopeCV is
+// only the CV surface, so a key handed to an external agent cannot reach the rest of the
+// account. ScopeEmbed is validated by the volunteer-embed service directly against
+// api_keys and grants nothing on this API.
 const (
 	ScopeFull  = "full"
 	ScopeCV    = "cv"
 	ScopeEmbed = "embed"
 )
 
-// ViaAPIKey reports whether the request authenticated via an API key (Bearer) rather than
-// the session cookie. False for cookie auth and for requests that did not pass through
-// RequireAuthOrKey.
+// ViaAPIKey reports whether the request authenticated via an API key. False for cookie
+// auth and requests that skipped RequireAuthOrKey.
 func ViaAPIKey(c *fiber.Ctx) bool {
 	via, _ := c.Locals(localsViaAPIKey).(bool)
 	return via
 }
 
-// KeyScope returns the authenticating key's scope, or "" when the caller is a cookie
-// session (or did not pass through a key-accepting middleware).
+// ViaAPIKeyFromContext is ViaAPIKey for a contract handler holding the request context.
+func ViaAPIKeyFromContext(ctx context.Context) bool {
+	via, _ := ctx.Value(localsViaAPIKey).(bool)
+	return via
+}
+
+// KeyScope returns the authenticating key's scope, or "" for a cookie session.
 func KeyScope(c *fiber.Ctx) string {
 	scope, _ := c.Locals(localsKeyScope).(string)
 	return scope
 }
 
-// ViaCookie reports whether the request authenticated via the website's session cookie,
-// as opposed to a Bearer credential. False for a Bearer session JWT, false for an API
-// key, and false for a request that did not pass through RequireAuth or
-// RequireAuthOrScopedKey.
+// ViaCookie reports whether the request authenticated via the website's session cookie.
+// False for a Bearer JWT, an API key, or a request that skipped the auth middleware.
 func ViaCookie(c *fiber.Ctx) bool {
 	via, _ := c.Locals(localsViaCookie).(bool)
 	return via
 }
 
-// IsExtensionBearer reports whether the request authenticated as a Bearer session
-// JWT — neither the website's cookie nor an API key. That carrier is the browser
-// extension's own: it holds the session JWT the connect flow minted and presents it
-// as a Bearer header because a browser cannot send a cross-origin cookie.
-//
-// This is the single definition every caller that must confine a capability to the
-// extension's own connection shares (the assistant's browse-preset page tool,
-// agent-driven autofill — both reach a browser-tool channel keyed by user id, not by
-// how the request that reached it authenticated). Re-deriving "not cookie, not API
-// key" inline at each call site is exactly the kind of duplication that drifts the
-// moment one of them is edited and the other is not.
+// IsExtensionBearer reports whether the request authenticated as a Bearer session JWT,
+// neither cookie nor API key: the browser extension's carrier, since it cannot send a
+// cross-origin cookie. It is the single definition for confining a capability to the
+// extension's own connection; do not re-derive it inline.
 func IsExtensionBearer(c *fiber.Ctx) bool {
 	return !ViaCookie(c) && !ViaAPIKey(c)
+}
+
+// IsExtensionBearerFromContext is IsExtensionBearer for a contract handler.
+func IsExtensionBearerFromContext(ctx context.Context) bool {
+	cookie, _ := ctx.Value(localsViaCookie).(bool)
+	return !cookie && !ViaAPIKeyFromContext(ctx)
 }
 
 type sessionResult int
@@ -92,16 +87,14 @@ const (
 	sessionInfraError
 )
 
-// TokenVersionLoader resolves an authenticated user id to its current session
-// generation. Like RoleLoader it returns a primitive so this package needs no database
-// import; it is satisfied directly by *db.Queries (GetUserTokenVersion).
+// TokenVersionLoader resolves a user id to its current session generation (satisfied by
+// *db.Queries.GetUserTokenVersion).
 type TokenVersionLoader interface {
 	GetUserTokenVersion(ctx context.Context, id int64) (int32, error)
 }
 
-// RequireAuth returns middleware that validates the auth cookie and stores the
-// resolved user id in the request locals. It responds 401 on a missing,
-// expired, invalid, or revoked token, and 503 on database infrastructure errors.
+// RequireAuth validates the auth cookie and stores the user id in locals. It responds 401
+// on a missing, expired, invalid or revoked token and 503 on database errors.
 func RequireAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		token := c.Cookies(CookieName)
@@ -121,16 +114,12 @@ func RequireAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler {
 	}
 }
 
-// OptionalCookieAuth returns middleware that attaches the caller's user id when a
-// valid session cookie is present and otherwise passes through anonymously. It is
-// OptionalAuth without the Bearer path: for a surface a leaked API key must not
-// reach (the mail inbox), admitting a key here would widen that key's reach for no
-// gain — the only caller is a browser returning from a provider redirect, which
-// carries a cookie or nothing.
+// OptionalCookieAuth attaches the user id for a valid session cookie and otherwise passes
+// through anonymously. It is OptionalAuth without the Bearer path, for surfaces a leaked
+// API key must not reach.
 //
-// The OAuth-style callbacks mount this rather than RequireAuth: they are top-level
-// navigations, so a 401 renders JSON into the browser and strands the user, while an
-// anonymous pass-through lets the handler redirect back with an error marker.
+// OAuth-style callbacks mount it instead of RequireAuth: they are top-level navigations,
+// where a 401 would render JSON, so the handler redirects back with an error marker.
 func OptionalCookieAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
@@ -142,8 +131,7 @@ func OptionalCookieAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler 
 	}
 }
 
-// resolveSession validates a cookie token and confirms it was not revoked, returning the
-// user id it authenticates and a classification result.
+// resolveSession validates a cookie token and confirms it was not revoked.
 func resolveSession(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, token string) (int64, sessionResult, error) {
 	id, version, err := iss.Parse(token)
 	if err != nil {
@@ -159,22 +147,42 @@ func resolveSession(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, toke
 	if current != version {
 		return 0, sessionRevoked, nil
 	}
+	c.Locals(localsSessionVersion, version)
 	return id, sessionOK, nil
 }
 
-// UserID returns the authenticated user id stored by RequireAuth or
-// RequireAuthOrKey. The second result is false when the request did not pass
-// through either middleware.
+// SessionVersion returns the generation the authenticated session was minted under (the
+// tv claim the middleware validated). A handler recording session-scoped authority must
+// bind this value, not a fresh read of users.token_version: a revocation landing in
+// between would capture the new generation into a credential it meant to kill. Not ok
+// when there is no session.
+func SessionVersion(c *fiber.Ctx) (int32, error) {
+	v, ok := c.Locals(localsSessionVersion).(int32)
+	if !ok {
+		return 0, ErrNoSession
+	}
+	return v, nil
+}
+
+// UserID returns the authenticated user id; false when the request skipped the middleware.
 func UserID(c *fiber.Ctx) (int64, bool) {
 	id, ok := c.Locals(LocalsUserID).(int64)
 	return id, ok
 }
 
-// APIKeyIdentity is what a live API key resolves to: its owner and the scope it was
-// minted with. It is a plain struct so this package needs no database import.
+// UserIDFromContext is UserID for a net/http handler behind Fiber's adaptor (the
+// contract server); the adaptor passes the fasthttp RequestCtx on as the context.
+func UserIDFromContext(ctx context.Context) (int64, bool) {
+	id, ok := ctx.Value(LocalsUserID).(int64)
+	return id, ok
+}
+
+// APIKeyIdentity is what a live API key resolves to: its owner and scope.
 type APIKeyIdentity struct {
-	UserID int64
-	Scope  string
+	UserID     int64
+	Scope      string
+	KeyID      int64
+	OAuthGrant bool
 }
 
 // APIKeyAuthenticator resolves a presented API-key hash to its owner and scope,
@@ -183,46 +191,45 @@ type APIKeyAuthenticator interface {
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (APIKeyIdentity, error)
 }
 
-// RequireAuthOrKey returns middleware that authenticates a request by either the
-// session cookie (the existing JWT path) or an `Authorization: Bearer <key>` **full-scope**
-// API key, storing the resolved user id in the same locals as RequireAuth — so every
-// handler behind it works unchanged. The cookie is tried first, leaving the
-// browser path identical; a missing or invalid cookie falls through to the key.
-// It responds 401 when neither credential resolves. A key-lookup failure that is
-// not "no such key" (pgx.ErrNoRows) is a real error and is returned — it must not
-// be masked as a 401.
+// RequireAuthOrKey authenticates by the session cookie or a full-scope Bearer API key,
+// storing the user id in the same locals as RequireAuth. The cookie is tried first; a
+// missing or invalid one falls through to the key. 401 when neither resolves. A key-lookup
+// failure other than pgx.ErrNoRows is returned, never masked as a 401.
 //
-// Full-scope-only is the default on purpose: a route added later is confined to
-// unrestricted credentials unless it deliberately opts into RequireAuthOrScopedKey, so a
-// narrow agent credential can never reach a new endpoint by accident.
+// Full-scope-only is the default so a new route is closed to narrow agent credentials
+// unless it opts into RequireAuthOrScopedKey.
 func RequireAuthOrKey(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator) fiber.Handler {
 	return RequireAuthOrScopedKey(iss, versions, keys)
 }
 
-// RequireAuthOrScopedKey is RequireAuthOrKey that additionally admits keys carrying one of
-// the given narrow scopes. A full-scope key is always admitted. A live key whose scope is
-// not admitted here is 403 (insufficient scope) rather than 401 — the credential is real,
-// it is simply not allowed on this surface, and conflating the two would send an agent into
-// a re-authentication loop it can never win.
+// RequireAuthOrScopedKey is RequireAuthOrKey that also admits keys with one of the given
+// scopes. A live key with a non-admitted scope gets 403, not 401, so an agent does not
+// loop on re-authentication it can never win.
 func RequireAuthOrScopedKey(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator, allowed ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "unknown"})
 		if token := c.Cookies(CookieName); token != "" {
 			id, res, _ := resolveSession(c, iss, versions, token)
 			if res == sessionOK {
 				c.Locals(LocalsUserID, id)
 				c.Locals(localsViaCookie, true)
+				observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "session", UserID: id})
 				return c.Next()
 			}
 			if res == sessionInfraError {
+				observability.LogAuthFailure(c, fiber.StatusServiceUnavailable, "session_lookup_failed")
 				return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 			}
 		}
 		b, ok, err := resolveBearer(c, iss, versions, keys)
 		if err != nil {
+			observability.LogAuthFailure(c, fiber.StatusServiceUnavailable, "credential_lookup_failed")
 			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 		}
 		if ok {
+			observability.IdentifyRequest(c, observability.RequestIdentity{Kind: b.credentialType, UserID: b.userID, KeyID: b.keyID, Scope: b.scope})
 			if b.viaKey && !scopeAllowed(b.scope, allowed) {
+				observability.LogAuthFailure(c, fiber.StatusForbidden, "insufficient_scope")
 				return fiber.NewError(fiber.StatusForbidden, "api key scope is insufficient for this endpoint")
 			}
 			c.Locals(LocalsUserID, b.userID)
@@ -232,12 +239,16 @@ func RequireAuthOrScopedKey(iss *Issuer, versions TokenVersionLoader, keys APIKe
 			}
 			return c.Next()
 		}
+		reason := "invalid_or_expired_credential"
+		if c.Get(fiber.HeaderAuthorization) == "" && c.Cookies(CookieName) == "" {
+			reason = "missing_credential"
+		}
+		observability.LogAuthFailure(c, fiber.StatusUnauthorized, reason)
 		return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
 	}
 }
 
-// scopeAllowed reports whether a key's scope may pass. ScopeFull passes everywhere;
-// anything else must be listed explicitly by the route's middleware.
+// scopeAllowed reports whether a key's scope may pass; ScopeFull always, others if listed.
 func scopeAllowed(scope string, allowed []string) bool {
 	if scope == ScopeFull {
 		return true
@@ -250,15 +261,11 @@ func scopeAllowed(scope string, allowed []string) bool {
 	return false
 }
 
-// OptionalAuth returns middleware that attaches the caller's user id when a valid
-// session cookie or API key is present, and otherwise passes through anonymously.
-// An absent, expired, or unknown credential simply leaves no user id in locals, so
-// a public read still succeeds. Used on the job/company detail reads to overlay the
-// caller's own vote without gating the page behind sign-in.
+// OptionalAuth attaches the user id for a valid session cookie or API key and otherwise
+// passes through anonymously, so public reads still succeed.
 //
-// Asymmetry Note: Cookie DB errors silently degrade to guest mode so public feed access
-// is preserved during database outages. Conversely, explicit Bearer API key lookup failures
-// (e.g. DB outage) return HTTP 503 so programmatic API clients receive actionable status.
+// Cookie DB errors degrade to guest mode to keep public reads up in an outage; a Bearer
+// API key lookup failure returns 503 so programmatic clients get an actionable status.
 func OptionalAuth(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
@@ -267,9 +274,8 @@ func OptionalAuth(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthentic
 				return c.Next()
 			}
 		}
-		// No scope gate here: an under-scoped key on a public read only enriches the
-		// response with its own owner's overlay. A presented Bearer key lookup failure
-		// (DB down, etc.) is real and returned as 503 — it must not be silently degraded.
+		// No scope gate: an under-scoped key on a public read only adds its owner's overlay.
+		// A key lookup failure is returned as 503, not degraded.
 		b, ok, err := resolveBearer(c, iss, versions, keys)
 		if err != nil {
 			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
@@ -285,18 +291,14 @@ func OptionalAuth(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthentic
 	}
 }
 
-// RoleLoader resolves an authenticated user id to its current role. It is satisfied
-// directly by *db.Queries (GetUserRole), so this package needs no database import.
+// RoleLoader resolves a user id to its current role (satisfied by *db.Queries.GetUserRole).
 type RoleLoader interface {
 	GetUserRole(ctx context.Context, id int64) (string, error)
 }
 
-// RequireRole returns middleware that authorizes a request by the caller's role. It
-// runs AFTER an authentication middleware (RequireAuth/RequireAuthOrKey) has stored the
-// user id, reads that id, loads the current role from the database, and rejects unless
-// it matches. The role is read fresh per request (not from the token) so a role change
-// takes effect immediately. Failures fail closed: a missing user id or a role-load error
-// (e.g. the token's user no longer exists) is a 401; a role that does not match is a 403.
+// RequireRole authorizes by the caller's role. It runs after an authentication middleware
+// and reads the role fresh from the database so a change takes effect immediately. It
+// fails closed: a missing user id or role-load error is 401, a mismatched role 403.
 func RequireRole(loader RoleLoader, role string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, ok := UserID(c)
@@ -317,28 +319,22 @@ func RequireRole(loader RoleLoader, role string) fiber.Handler {
 	}
 }
 
-// resolveBearer authenticates an `Authorization: Bearer <token>` credential,
-// accepting EITHER a session JWT or an API key. The browser extension presents
-// its session JWT here (it has no cross-origin cookie), so a JWT bearer is a full
-// session — viaKey is false; only an actual API key sets viaKey. Returns ok=false
-// when there is no bearer or neither interpretation resolves. An API-key lookup
-// failure that is not "no such key" (pgx.ErrNoRows) is a real error and is
-// returned — it must not be silently masked as an unauthenticated request.
+// resolveBearer authenticates a Bearer credential, a session JWT or an API key. A JWT
+// bearer (the extension) is a full session; only an API key sets viaKey. ok=false when
+// nothing resolves. A key-lookup failure other than pgx.ErrNoRows is returned, not masked.
 func resolveBearer(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator) (bearerIdentity, bool, error) {
 	return resolveCredential(c, iss, versions, keys, bearerToken(c))
 }
 
-// resolveCredential interprets one opaque credential string as either a session JWT or
-// an API key. Split from resolveBearer because the websocket handshake carries the same
-// credential in a subprotocol rather than a header, and both must agree on what a token
-// means.
+// resolveCredential interprets one credential as a session JWT or an API key. Split from
+// resolveBearer because the websocket handshake carries it in a subprotocol.
 func resolveCredential(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator, tok string) (bearerIdentity, bool, error) {
 	if tok == "" {
 		return bearerIdentity{}, false, nil
 	}
 	id, res, err := resolveSession(c, iss, versions, tok)
 	if res == sessionOK {
-		return bearerIdentity{userID: id}, true, nil
+		return bearerIdentity{userID: id, credentialType: "session"}, true, nil
 	}
 	if res == sessionInfraError {
 		return bearerIdentity{}, false, err
@@ -346,32 +342,36 @@ func resolveCredential(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, k
 	identity, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(tok))
 	switch {
 	case err == nil:
-		return bearerIdentity{userID: identity.UserID, viaKey: true, scope: identity.Scope}, true, nil
+		kind := "api_key"
+		if identity.OAuthGrant {
+			kind = "oauth_grant"
+		}
+		return bearerIdentity{userID: identity.UserID, viaKey: true, scope: identity.Scope, keyID: identity.KeyID, credentialType: kind}, true, nil
 	case errors.Is(err, pgx.ErrNoRows):
-		// No live key matches — no credential resolved.
+		// No live key matches.
 		return bearerIdentity{}, false, nil
 	default:
-		// A lookup failure (DB down, etc.) is real: surface it to the caller.
+		// A real lookup failure: surface it.
 		return bearerIdentity{}, false, err
 	}
 }
 
-// bearerIdentity is what a Bearer credential resolved to. viaKey distinguishes an API
-// key (scoped, flagged to handlers) from a session JWT (a full session, like the cookie).
+// bearerIdentity is what a Bearer credential resolved to; viaKey marks an API key as
+// opposed to a session JWT.
 type bearerIdentity struct {
-	userID int64
-	viaKey bool
-	scope  string
+	userID         int64
+	viaKey         bool
+	scope          string
+	keyID          int64
+	credentialType string
 }
 
-// bearerToken extracts the credential from an `Authorization: Bearer <token>`
-// header, returning "" when the header is absent or not a Bearer scheme.
+// bearerToken extracts the Bearer credential, or "" when absent.
 func bearerToken(c *fiber.Ctx) string {
 	const prefix = "Bearer "
 	h := c.Get(fiber.HeaderAuthorization)
 	if len(h) > len(prefix) && strings.EqualFold(h[:len(prefix)], prefix) {
-		// A Bearer credential carries no internal whitespace; trim any the client
-		// or a proxy added around it so a valid key is not silently mismatched.
+		// Trim whitespace a client or proxy added so a valid key still matches.
 		return strings.TrimSpace(h[len(prefix):])
 	}
 	return ""

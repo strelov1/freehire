@@ -19,8 +19,8 @@ func oauthGrantsApp() *fiber.App {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &authHandlers{}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/oauth-grants", auth.RequireAuth(iss, testVersions), h.ListOAuthGrants)
-	app.Delete("/api/v1/me/oauth-grants/:id", auth.RequireAuth(iss, testVersions), h.RevokeOAuthGrant)
+	app.Get("/api/v1/me/oauth-grants", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Delete("/api/v1/me/oauth-grants/:id", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 	return app
 }
 

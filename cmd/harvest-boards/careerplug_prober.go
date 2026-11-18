@@ -14,9 +14,8 @@ import (
 // so the prober returns an empty name.
 type careerplugProber struct{}
 
-// careerplugJobLink captures a posting's numeric id from a CareerPlug job link (/jobs/<id>),
-// so duplicate links to the same posting (title + row) count once and pagination/listing
-// links are ignored.
+// careerplugJobLink captures a posting's numeric id from a job link (/jobs/<id>), so duplicate
+// links to one posting count once and pagination links are ignored.
 var careerplugJobLink = regexp.MustCompile(`/jobs/(\d+)`)
 
 func (careerplugProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {

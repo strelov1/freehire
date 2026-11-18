@@ -33,7 +33,7 @@ func testLinks() *emailprefs.Links {
 	return emailprefs.NewLinks("limitnudge-test-secret-padded-to-32b", "https://freehire.me")
 }
 
-func newMailer(sender Sender) *Mailer {
+func newMailer(sender emailnotify.Sender) *Mailer {
 	return NewMailer(sender, "billing@freehire.me", "ilya@freehire.me", "https://freehire.me", testLinks())
 }
 

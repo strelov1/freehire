@@ -11,10 +11,11 @@ export const messages = defineMessages(
       '/my/profile': 'Profile',
       '/my/activity': 'Activity',
       '/my/tracking': 'Tracking',
+      '/my/watchlist': 'Watchlist',
       '/my/inbox': 'Inbox',
       '/my/market-pulse': 'Market Pulse',
       '/my/assistant': 'Agent',
-      '/my/cvs': 'Tailor',
+      '/my/cvs': 'Tailor CV',
       '/my/talent-network': 'Talent Network',
       '/my/referrals': 'Referral requests',
       '/my/referrals/offers': 'Offers to refer',
@@ -24,6 +25,7 @@ export const messages = defineMessages(
       '/my/mentorship/bookings': 'Booked with you',
       '/my/mentorship/schedule': 'Schedule',
       '/my/mentorship/profile': 'Mentor profile',
+      '/my/api': 'API',
       '/my/notifications': 'Notifications',
       '/my/integrations': 'Integrations',
       '/my/contributions': 'Contributions',
@@ -36,28 +38,20 @@ export const messages = defineMessages(
       expandSidebar: 'Expand sidebar',
       collapseSidebar: 'Collapse sidebar',
       accountSections: 'Account sections',
-      workspace: 'Workspace',
       settings: 'Settings',
     },
     // Keyed by WorkspaceId / NavGroupId; accountNav.ts carries no English copy of these.
     workspaces: {
-      seeker: 'Job search',
+      seeker: 'My job search',
       buddies: 'Interview buddies',
       mentor: 'Mentor',
       referrer: 'Referrer',
       employer: 'Employer',
-    },
-    workspaceHints: {
-      seeker: 'Your profile and applications',
-      buddies: 'Anonymous peers in the same search',
-      mentor: 'Sessions you give',
-      referrer: 'Refer candidates to your company',
-      employer: 'Your company and vacancies',
+      api: 'API',
     },
     // `main` has no heading: it is the workspace itself.
     navGroups: {
-      found: 'Get found · anonymous',
-      help: 'Get help',
+      network: 'Network',
       settings: 'Settings',
     },
     rail: {
@@ -71,10 +65,11 @@ export const messages = defineMessages(
         '/my/profile': 'Профиль',
         '/my/activity': 'Активность',
         '/my/tracking': 'Трекинг',
+        '/my/watchlist': 'Избранные компании',
         '/my/inbox': 'Входящие',
         '/my/market-pulse': 'Пульс рынка',
         '/my/assistant': 'Агент',
-        '/my/cvs': 'Адаптация CV',
+        '/my/cvs': 'Адаптация резюме',
         '/my/talent-network': 'Сеть талантов',
         '/my/referrals': 'Запросы рекомендаций',
         '/my/referrals/offers': 'Готов рекомендовать',
@@ -84,6 +79,7 @@ export const messages = defineMessages(
         '/my/mentorship/bookings': 'Записи к вам',
         '/my/mentorship/schedule': 'Расписание',
         '/my/mentorship/profile': 'Профиль ментора',
+        '/my/api': 'API',
         '/my/notifications': 'Уведомления',
         '/my/integrations': 'Интеграции',
         // Vacancies the user submitted for review — not posts they published.
@@ -102,26 +98,18 @@ export const messages = defineMessages(
         expandSidebar: 'Развернуть панель',
         collapseSidebar: 'Свернуть панель',
         accountSections: 'Разделы аккаунта',
-        workspace: 'Кабинет',
         settings: 'Настройки',
       },
       workspaces: {
-        seeker: 'Поиск работы',
+        seeker: 'Мой поиск работы',
         buddies: 'Бадди для интервью',
         mentor: 'Ментор',
         referrer: 'Рекомендатель',
         employer: 'Работодатель',
-      },
-      workspaceHints: {
-        seeker: 'Ваш профиль и отклики',
-        buddies: 'Анонимные коллеги в том же поиске',
-        mentor: 'Сессии, которые вы проводите',
-        referrer: 'Рекомендуете кандидатов в свою компанию',
-        employer: 'Ваша компания и вакансии',
+        api: 'API',
       },
       navGroups: {
-        found: 'Вас находят · анонимно',
-        help: 'Помощь',
+        network: 'Сеть',
         settings: 'Настройки',
       },
       rail: {
@@ -134,10 +122,6 @@ export const messages = defineMessages(
 
 /** A nav item's translated label, falling back to its English default (the
  *  literal from accountNav.ts) if this catalog has no entry for its href. */
-export function navLabel(
-  resolved: { navItems: Record<string, string> },
-  href: string,
-  fallback: string,
-): string {
+export function navLabel(resolved: { navItems: Record<string, string> }, href: string, fallback: string): string {
   return resolved.navItems[href] ?? fallback;
 }

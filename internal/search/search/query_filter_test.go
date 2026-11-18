@@ -1,11 +1,10 @@
 package search
 
 import (
-	"fmt"
-	"math"
 	"net/url"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -164,83 +163,6 @@ func TestFilterFromValues_VisaBoolAndNumeric(t *testing.T) {
 	}
 }
 
-func TestFilterFromValues_ExperienceYearsMax(t *testing.T) {
-	got := normalizeGroups(t, FilterFromValues(vals("experience_years_max=3")))
-	want := [][]string{{`enrichment.experience_years_min <= 3`}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
-}
-
-func TestFilterFromValues_ExperienceYearsClosedRange(t *testing.T) {
-	got := normalizeGroups(t, FilterFromValues(vals("experience_years_min=2&experience_years_max=5")))
-	want := [][]string{
-		{`enrichment.experience_years_min <= 5`},
-		{`enrichment.experience_years_min >= 2`},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
-}
-
-// experience_include_unspecified widens each experience bound to also admit the
-// postings that state no requirement at all — most of the catalogue, which a
-// bound otherwise drops. It is an OR inside the bound's own group, so it never
-// widens anything else in the query.
-func TestFilterFromValues_ExperienceIncludeUnspecified(t *testing.T) {
-	got := normalizeGroups(t, FilterFromValues(vals("experience_years_min=2&experience_years_max=5&experience_include_unspecified=true")))
-	want := [][]string{
-		{`enrichment.experience_years_min <= 5`, `enrichment.experience_years_min NOT EXISTS`},
-		{`enrichment.experience_years_min >= 2`, `enrichment.experience_years_min NOT EXISTS`},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
-}
-
-// On its own the modifier bounds nothing, so it must not invent a filter: a query
-// carrying only it is the whole catalogue, and Narrows has to say so.
-func TestFilterFromValues_ExperienceIncludeUnspecifiedAloneIsNoFilter(t *testing.T) {
-	if got := FilterFromValues(vals("experience_include_unspecified=true")); got != nil {
-		t.Errorf("got %v, want no filter", got)
-	}
-}
-
-// experience_only_seniority_unspecified confines each experience bound to the postings
-// that carry no level: a labelled one passes the bound whatever years it states, so it
-// is answered by the seniority facet alone. Paired with seniority_include_unspecified it
-// reads "one of these levels, or no level and within the bound" — the entry-level
-// profile alert, which an independent AND of the two cannot express (freehire#3655).
-func TestFilterFromValues_ExperienceOnlySeniorityUnspecified(t *testing.T) {
-	got := normalizeGroups(t, FilterFromValues(vals("seniority=intern&seniority_include_unspecified=true&experience_years_max=1&experience_only_seniority_unspecified=true")))
-	want := [][]string{
-		{`enrichment.experience_years_min <= 1`, `enrichment.seniority EXISTS`},
-		{`enrichment.seniority = "intern"`, `enrichment.seniority NOT EXISTS`},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
-}
-
-// Both experience modifiers OR into the same bound group, so together a bound admits
-// a labelled posting, an unstated one, or one within the bound.
-func TestFilterFromValues_ExperienceModifiersCombine(t *testing.T) {
-	got := normalizeGroups(t, FilterFromValues(vals("experience_years_min=2&experience_include_unspecified=true&experience_only_seniority_unspecified=true")))
-	want := [][]string{
-		{`enrichment.experience_years_min >= 2`, `enrichment.experience_years_min NOT EXISTS`, `enrichment.seniority EXISTS`},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
-}
-
-// Like the other modifier, alone it bounds nothing.
-func TestFilterFromValues_ExperienceOnlySeniorityUnspecifiedAloneIsNoFilter(t *testing.T) {
-	if got := FilterFromValues(vals("experience_only_seniority_unspecified=true")); got != nil {
-		t.Errorf("got %v, want no filter", got)
-	}
-}
-
 // seniority_include_unspecified ORs the postings with no level into the included
 // levels' own group. Most of the catalogue carries no level, so "intern" alone is a
 // narrow slice of what an intern can apply to (freehire#3397).
@@ -262,17 +184,6 @@ func TestFilterFromValues_SeniorityIncludeUnspecifiedNeedsAnIncludedLevel(t *tes
 	}
 	got := normalizeGroups(t, FilterFromValues(vals("seniority_exclude=senior&seniority_include_unspecified=true")))
 	want := [][]string{{`enrichment.seniority != "senior"`}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
-}
-
-// Zero is the entry-level selector, not an absent value: `experience_years_max=0`
-// asks for the postings that state no prior experience is required. A guard that
-// treats the bound as falsy would silently drop the one filter juniors need.
-func TestFilterFromValues_ExperienceYearsMaxZero(t *testing.T) {
-	got := normalizeGroups(t, FilterFromValues(vals("experience_years_max=0")))
-	want := [][]string{{`enrichment.experience_years_min <= 0`}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
@@ -332,24 +243,6 @@ func TestFilterFromValues_RetiredManagementCategory(t *testing.T) {
 	}
 	if got := UnknownParams(vals("category=management"), nil); len(got) != 0 {
 		t.Errorf("UnknownParams = %v, want none", got)
-	}
-}
-
-func TestFilterFromValues_ExperienceYearsMaxNegative(t *testing.T) {
-	for _, raw := range []string{"-1", "-10"} {
-		got := normalizeGroups(t, FilterFromValues(vals("experience_years_max="+raw)))
-		if len(got) != 0 {
-			t.Errorf("experience_years_max=%q: got %v, want no filter group", raw, got)
-		}
-	}
-}
-
-func TestFilterFromValues_ExperienceYearsMaxUnparseable(t *testing.T) {
-	for _, raw := range []string{"", "abc", "3.5"} {
-		got := normalizeGroups(t, FilterFromValues(vals("experience_years_max="+raw)))
-		if len(got) != 0 {
-			t.Errorf("experience_years_max=%q: got %v, want no filter group", raw, got)
-		}
 	}
 }
 
@@ -465,115 +358,6 @@ func TestFilterFromValues_LocationFacetsORTogether(t *testing.T) {
 	}
 }
 
-func TestFilterFromValues_PostedWithinDays(t *testing.T) {
-	// now is injected so the cutoff is deterministic. posted_within_days=N restricts
-	// to posted_ts >= now - N*86400 (posted within the last N days).
-	now := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
-	cutoff := now.Unix() - 7*86400
-
-	got := normalizeGroups(t, filterFromValues(vals("posted_within_days=7"), now))
-	want := [][]string{{fmt.Sprintf("posted_ts >= %d", cutoff)}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("posted_within_days=7: got %v, want %v", got, want)
-	}
-
-	// It ANDs with other facets as its own group.
-	got = normalizeGroups(t, filterFromValues(vals("seniority=senior&posted_within_days=7"), now))
-	want = [][]string{
-		{`enrichment.seniority = "senior"`},
-		{fmt.Sprintf("posted_ts >= %d", cutoff)},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("composed: got %v, want %v", got, want)
-	}
-}
-
-func TestFilterFromValues_PostedWithinDaysInvalidIgnored(t *testing.T) {
-	// Absent, empty, zero, negative, and non-numeric values impose no date restriction.
-	now := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
-	for _, q := range []string{"", "posted_within_days=", "posted_within_days=0", "posted_within_days=-3", "posted_within_days=soon"} {
-		if got := filterFromValues(vals(q), now); got != nil {
-			t.Errorf("filterFromValues(%q) = %v, want nil (no date filter)", q, got)
-		}
-	}
-}
-
-func TestFilterFromValues_OpenWithinDays(t *testing.T) {
-	// open_within_days=N restricts to created_ts >= now - N*86400 — how long the
-	// posting has been in the catalogue, which is a different question from
-	// posted_within_days and answered by a different field.
-	now := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
-	cutoff := now.Unix() - 7*86400
-
-	got := normalizeGroups(t, filterFromValues(vals("open_within_days=7"), now))
-	want := [][]string{{fmt.Sprintf("created_ts >= %d", cutoff)}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("open_within_days=7: got %v, want %v", got, want)
-	}
-
-	// It ANDs with other facets as its own group. normalizeGroups sorts, so the
-	// expectation is in sorted order, not insertion order.
-	got = normalizeGroups(t, filterFromValues(vals("seniority=senior&open_within_days=7"), now))
-	want = [][]string{
-		{fmt.Sprintf("created_ts >= %d", cutoff)},
-		{`enrichment.seniority = "senior"`},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("composed: got %v, want %v", got, want)
-	}
-}
-
-func TestFilterFromValues_BothDateBoundsCompose(t *testing.T) {
-	// The two bounds are independent and AND together. This is the case the pair
-	// exists for: a wide "open within 30 days" alongside a narrow "posted within 3",
-	// which a single bound cannot express.
-	now := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
-	openCutoff := now.Unix() - 30*86400
-	postedCutoff := now.Unix() - 3*86400
-
-	got := normalizeGroups(t, filterFromValues(vals("open_within_days=30&posted_within_days=3"), now))
-	want := [][]string{
-		{fmt.Sprintf("created_ts >= %d", openCutoff)},
-		{fmt.Sprintf("posted_ts >= %d", postedCutoff)},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("both bounds: got %v, want %v", got, want)
-	}
-}
-
-func TestFilterFromValues_OpenWithinDaysInvalidIgnored(t *testing.T) {
-	// Same rule as posted_within_days: absent, empty, zero, negative, and non-numeric
-	// values impose no restriction rather than matching nothing.
-	now := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
-	for _, q := range []string{"open_within_days=", "open_within_days=0", "open_within_days=-3", "open_within_days=soon"} {
-		if got := filterFromValues(vals(q), now); got != nil {
-			t.Errorf("filterFromValues(%q) = %v, want nil (no date filter)", q, got)
-		}
-	}
-}
-
-func TestFilterFromValues_AbsurdDayCountsImposeNoBound(t *testing.T) {
-	// A day count large enough to overflow time.Duration used to WRAP: the cutoff
-	// landed in the future and the query matched nothing, so the most permissive input
-	// anyone could type produced the most restrictive result. Both bounds share the
-	// arithmetic, so both are checked.
-	now := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
-	for _, param := range []string{"open_within_days", "posted_within_days"} {
-		for _, n := range []int{maxWithinDays + 1, 106752, 200000, math.MaxInt32} {
-			q := fmt.Sprintf("%s=%d", param, n)
-			if got := filterFromValues(vals(q), now); got != nil {
-				t.Errorf("filterFromValues(%q) = %v, want nil (bound beyond the catalogue is no bound)", q, got)
-			}
-		}
-		// The largest honoured value still produces a cutoff in the PAST — the guard
-		// must sit below the wrap, not at it.
-		q := fmt.Sprintf("%s=%d", param, maxWithinDays)
-		if got := filterFromValues(vals(q), now); got == nil {
-			t.Errorf("filterFromValues(%q) = nil, want the bound at the documented maximum", q)
-		}
-	}
-}
-
 func TestFilterFromValues_NonNumericSalaryIgnored(t *testing.T) {
 	// A non-numeric value must not emit a bogus `>= 0` fragment.
 	if got := FilterFromValues(vals("salary_min=abc")); got != nil {
@@ -608,6 +392,13 @@ func TestNarrows(t *testing.T) {
 		{"posted_within_days=7", true},
 		{"skills_exclude=php", true},
 		{"countries=de&sort=created_at", true},
+		// A modifier alone reads nothing, like every other modifier.
+		{"work_mode_remote_anywhere=true", false},
+		{"work_mode_remote_regions=eu&work_mode_remote_countries=us", false},
+		// The watchlist narrows to a company set only its owner can resolve.
+		{"watchlist=true", true},
+		{"watchlist=false", false},
+		{"watchlist=1", false},
 	}
 	for _, c := range cases {
 		if got := Narrows(vals(c.query)); got != c.want {
@@ -658,6 +449,73 @@ func TestFilterFromValues_SkillsResolveThroughDictionary(t *testing.T) {
 		got := normalizeGroups(t, FilterFromValues(vals(tc.query)))
 		if want := [][]string{{tc.want}}; !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: got %v, want %v", tc.query, got, want)
+		}
+	}
+}
+
+func TestFilterFromValues_CaseInsensitiveSpecialValues(t *testing.T) {
+	for _, query := range []string{
+		"visa_sponsorship=true", "visa_sponsorship=false",
+		"regions=eu", "regions=none", "regions_exclude=eu", "regions_exclude=none",
+		"category=management", "category_exclude=management",
+		"seniority=senior&seniority_include_unspecified=true",
+		"experience_years_max=2&experience_include_unspecified=true",
+		"experience_years_max=2&experience_only_seniority_unspecified=true",
+		"skills=go,rust&skills_mode=and",
+		"work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true",
+		"work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true&work_mode_mode=and",
+		"work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true&work_mode_remote_regions=eu",
+	} {
+		t.Run(query, func(t *testing.T) {
+			canonical := vals(query)
+			// Change every value separately so a modifier cannot hide another branch's failure.
+			for key, values := range canonical {
+				if key == "skills" || key == "work_mode" || key == "countries" || key == "seniority" || key == "experience_years_max" {
+					continue
+				}
+				for _, transform := range []func(string) string{func(s string) string { return strings.ToUpper(s[:1]) + s[1:] }, strings.ToUpper, func(s string) string { return " " + strings.ToUpper(s) + " " }} {
+					mixed := vals(query)
+					for i, value := range values {
+						mixed[key][i] = transform(value)
+					}
+					got := normalizeGroups(t, FilterFromValues(mixed))
+					want := normalizeGroups(t, FilterFromValues(canonical))
+					if !reflect.DeepEqual(got, want) {
+						t.Errorf("%s=%q: got %v, want %v", key, mixed[key], got, want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestFilterFromValues_InvalidVisaSponsorship(t *testing.T) {
+	for _, value := range []string{"yes", "1"} {
+		if got := FilterFromValues(url.Values{"visa_sponsorship": {value}}); got != nil {
+			t.Errorf("visa_sponsorship=%s: got %v, want no filter", value, got)
+		}
+	}
+}
+
+func TestWantsWatchlistCaseInsensitive(t *testing.T) {
+	for _, value := range []string{"true", "True", " TRUE "} {
+		v := url.Values{WatchlistParam: {value}}
+		if !WantsWatchlist(v) || !Narrows(v) {
+			t.Errorf("watchlist=%q must narrow to the watchlist", value)
+		}
+	}
+}
+
+func TestFilterFromValues_SeniorityAndIncludesUnspecified(t *testing.T) {
+	for _, mode := range []string{"and", "AND", " And "} {
+		v := url.Values{"seniority": {"intern", "junior"}, "seniority_mode": {mode}, SeniorityIncludeUnspecifiedParam: {"True"}}
+		got := normalizeGroups(t, FilterFromValues(v))
+		want := [][]string{
+			{`enrichment.seniority = "intern"`, `enrichment.seniority NOT EXISTS`},
+			{`enrichment.seniority = "junior"`, `enrichment.seniority NOT EXISTS`},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("mode=%q: got %v, want %v", mode, got, want)
 		}
 	}
 }

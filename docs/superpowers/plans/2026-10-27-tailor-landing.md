@@ -22,7 +22,7 @@ Worktree: `/Users/i_strelov/Projects/hire-wt-tailor-landing`, branch `tailor-lan
 - `TailorWorkspacePreview.svelte` stays unchanged, because the onboarding tour uses it.
 - Every demo number and bullet is illustrative and labelled "example". An "after" bullet may only restate facts its "before" bullet already holds. The demo must not show tailoring that adds facts.
 - The tailor page's server load must not read cookies. A shared cache keys the HTML on the URL alone.
-- There is no prettier in the repo. Never run `npx prettier`.
+- Format with `pnpm run format` (oxfmt). Never run `npx prettier`.
 - knip fails on any export nothing imports. Export only what another file uses.
 
 ---

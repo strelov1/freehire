@@ -36,7 +36,7 @@ describe('buildSkillDetailChart', () => {
     expect(m.max).toBe(100);
   });
 
-  it('carries each point\'s own week and count for the hover tooltip', () => {
+  it("carries each point's own week and count for the hover tooltip", () => {
     const m = buildSkillDetailChart([pt('2026-08-03', 10), pt('2026-08-10', 20)]);
     expect(m.points.map((p) => [p.weekStart, p.openCount])).toEqual([
       ['2026-08-03', 10],

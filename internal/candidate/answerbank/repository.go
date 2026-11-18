@@ -6,9 +6,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// Queries is the generated surface this repository needs — an interface rather than
-// *db.Queries so a caller can substitute one, the same shape
-// internal/candidate/experience's own repository takes.
+// Queries is the generated surface this repository needs, an interface so a caller can
+// substitute one.
 type Queries interface {
 	UpsertScreeningAnswer(ctx context.Context, arg db.UpsertScreeningAnswerParams) error
 	ListScreeningAnswers(ctx context.Context, userID int64) ([]db.ScreeningAnswerBank, error)

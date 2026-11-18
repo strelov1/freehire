@@ -6,20 +6,7 @@
 
 import type { PeriodDate } from './types';
 
-const MONTH_NAMES = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** Renders a single boundary, e.g. "Mar 2021" or "2018" for a year-only date. */
 export function formatPeriodDate(d: PeriodDate | undefined): string {

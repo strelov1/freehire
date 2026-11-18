@@ -3,6 +3,7 @@
   import type { Snippet } from 'svelte';
   import type { ATSReport } from '#lib/types.js';
   import { announce } from '#lib/announce.svelte.js';
+  import { atsTone as tone } from '#lib/atsScore.js';
 
   // The CV ATS-readiness report from the backend: an overall score out of 100 built
   // from five weighted categories, each with per-item point attribution, plus the
@@ -15,12 +16,6 @@
   const strong = $derived(report.strong_keywords ?? []);
   const recommended = $derived(report.recommended_keywords ?? []);
   const suggestions = $derived(report.suggestions ?? []);
-
-  function tone(score: number): string {
-    if (score >= 75) return 'text-primary';
-    if (score >= 50) return 'text-warning-strong';
-    return 'text-destructive';
-  }
 
   // Copy the suggestions as an LLM-ready prompt so the user can paste them into a
   // chat and have the model apply them to the CV.
@@ -43,7 +38,7 @@
 <div class="flex flex-col gap-6">
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div class="flex min-w-0 flex-col gap-1">
-      <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">CV readiness</h2>
+      <h2 class="text-sm font-semibold text-muted-foreground">CV readiness</h2>
       <p class="text-sm text-muted-foreground">
         How well an ATS reads your CV and whether it carries this role's keywords.
       </p>
@@ -118,7 +113,7 @@
     <div class="grid gap-4 sm:grid-cols-2">
       {#if strong.length > 0}
         <div class="flex flex-col gap-2">
-          <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Strong keywords</h3>
+          <h3 class="text-xs font-semibold text-muted-foreground">Strong keywords</h3>
           <div class="flex flex-wrap gap-1.5">
             {#each strong as s (s)}
               <span class="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-primary">{s}</span>
@@ -128,12 +123,14 @@
       {/if}
       {#if recommended.length > 0}
         <div class="flex flex-col gap-2">
-          <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <h3 class="text-xs font-semibold text-muted-foreground">
             Recommended keywords ({recommended.length})
           </h3>
           <div class="flex flex-wrap gap-1.5">
             {#each recommended as s (s)}
-              <span class="rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive-strong">{s}</span>
+              <span class="rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive-strong"
+                >{s}</span
+              >
             {/each}
           </div>
         </div>
@@ -145,7 +142,7 @@
   {#if suggestions.length > 0}
     <div class="flex flex-col gap-2">
       <div class="flex items-center justify-between gap-3">
-        <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Suggestions</h3>
+        <h3 class="text-xs font-semibold text-muted-foreground">Suggestions</h3>
         <button
           type="button"
           onclick={copySuggestions}

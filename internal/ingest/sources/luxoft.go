@@ -28,8 +28,7 @@ func (luxoft) Provider() string { return "luxoft" }
 // (serving the same links forever) cannot loop; the no-new-links check ends it sooner.
 const lxMaxPages = 100
 
-// lxPerPage requests the largest page size Luxoft's listing offers, to keep the number of
-// listing fetches low (~1400 jobs / 60 ≈ 24 pages).
+// lxPerPage requests the largest page size Luxoft's listing offers, to keep listing fetches low.
 const lxPerPage = 60
 
 func (l luxoft) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {

@@ -5,9 +5,13 @@ import type { Conversation } from './types';
 describe('buddy member actions', () => {
   const summary = { category: '', seniority: '', country: '' };
   const conv = (id: number, handle: string, status_for_me: Conversation['status_for_me']) =>
-    ({ id, status_for_me, counterpart: { persona: 'buddy', reachable: true, detail: { handle, card_summary: summary } } } as const);
+    ({
+      id,
+      status_for_me,
+      counterpart: { persona: 'buddy', reachable: true, detail: { handle, card_summary: summary } },
+    }) as const;
   const gone = (id: number, status_for_me: Conversation['status_for_me']) =>
-    ({ id, status_for_me, counterpart: { persona: 'buddy', reachable: false, detail: null } } as const);
+    ({ id, status_for_me, counterpart: { persona: 'buddy', reachable: false, detail: null } }) as const;
 
   it('invites a member with no conversation yet', () => {
     expect(messageActionFor([conv(1, 'someone-else', 'open')], 'buddy-1')).toEqual({ kind: 'invite' });
@@ -35,13 +39,18 @@ describe('buddy member actions', () => {
 
   it('words the three feed events', () => {
     expect((['applied', 'interview', 'offer'] as const).map(buddyFeedEventLabel)).toEqual([
-      'Applied to', 'Interviewing at', 'Got an offer from',
+      'Applied to',
+      'Interviewing at',
+      'Got an offer from',
     ]);
   });
 
   it('labels each action', () => {
     expect((['invite', 'open', 'sent', 'reply'] as const).map(messageActionLabel)).toEqual([
-      'Message', 'Message', 'Invitation sent', 'Reply to invitation',
+      'Message',
+      'Message',
+      'Invitation sent',
+      'Reply to invitation',
     ]);
   });
 });

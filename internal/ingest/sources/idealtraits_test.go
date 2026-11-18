@@ -139,6 +139,9 @@ func TestIdealTraitsOnsitePosting(t *testing.T) {
 }
 
 func TestIdealTraitsEmptyBoard(t *testing.T) {
+	if _, ok := NewIdealTraits(nil).(emptyBoardListing); !ok {
+		t.Fatal("explicit jobcount zero must support empty-board closure")
+	}
 	fake := (&routedHTTP{}).route("ODczOQ==/careers?page=1", idealtraitsFixture(t, "listing_8739_empty.json"))
 	jobs, err := NewIdealTraits(fake).Fetch(context.Background(), CompanyEntry{Board: "8739", Company: "Cragin & Pike"})
 	if err != nil {
@@ -146,6 +149,23 @@ func TestIdealTraitsEmptyBoard(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Errorf("got %d jobs from a board with no openings", len(jobs))
+	}
+}
+
+func TestIdealTraitsRejectsUnprovenEmptyListing(t *testing.T) {
+	for _, body := range []string{`{}`, `{"joblist":""}`, `{"jobcount":0}`, `{"joblist":null,"jobcount":0}`, `{"joblist":"","jobcount":null}`, `{"joblist":"","jobcount":-1}`, `{"joblist":"<p>Loading</p>","jobcount":0}`} {
+		fake := (&routedHTTP{}).route("careers?page=1", body)
+		if _, err := NewIdealTraits(fake).Fetch(context.Background(), CompanyEntry{Board: "8739"}); err == nil {
+			t.Errorf("unproven empty listing accepted: %s", body)
+		}
+	}
+}
+
+func TestIdealTraitsLaterListingFailureFailsBoard(t *testing.T) {
+	listing := strings.Replace(idealtraitsFixture(t, "listing_1162292.json"), `"jobcount":5`, `"jobcount":6`, 1)
+	fake := (&routedHTTP{}).route("careers?page=1", listing).routeErr("careers?page=2", errors.New("connection reset"))
+	if _, err := NewIdealTraits(fake).Fetch(context.Background(), idealtraitsComma()); err == nil {
+		t.Fatal("later page failure accepted a partial listing")
 	}
 }
 

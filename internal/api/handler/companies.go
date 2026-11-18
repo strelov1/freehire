@@ -7,10 +7,12 @@ import (
 	"log"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -22,56 +24,80 @@ import (
 // filterable list, the subindustry vocabulary, and the single-company detail.
 type companiesHandlers struct {
 	queries *db.Queries
-	// companySearch is the company-search backend backing GET /api/v1/companies,
-	// kept separate from the jobs search so the companies index stays fully decoupled
-	// from it. Nil when Meilisearch is unconfigured, or on any query error, the list
-	// falls back to the Postgres substring path so /companies never depends on
-	// Meilisearch being up.
+	// companySearch backs GET /api/v1/companies, separate from the jobs search. Nil when Meilisearch is unconfigured;
+	// on nil or any query error the list falls back to the Postgres substring path.
 	companySearch companySearcher
+	// subindustries holds the vocabulary CompanySubindustries serves.
+	subindustries subindustryCache
 }
 
 func newCompaniesHandlers(queries *db.Queries, companySearch companySearcher) *companiesHandlers {
-	return &companiesHandlers{queries: queries, companySearch: companySearch}
+	return &companiesHandlers{
+		queries:       queries,
+		companySearch: companySearch,
+		subindustries: subindustryCache{load: queries.CompanySubindustries, now: time.Now},
+	}
 }
 
-func (h *companiesHandlers) register(api fiber.Router, mw middleware) {
-	readLimit := publicReadLimiter(mw.public)
-	api.Get("/companies", readLimit, h.ListCompanies)
-	api.Get("/companies/subindustries", readLimit, h.CompanySubindustries)
-	api.Get("/companies/:slug", readLimit, mw.optional, h.GetCompany)
-	api.Get("/companies/:slug/hiring", readLimit, h.CompanyHiring)
-	api.Get("/companies/:slug/closed-jobs", readLimit, h.CompanyClosedJobs)
+// The detail, hiring and closed-jobs reads stay Fiber routes: a slug a merge retired answers with a 301 the contract does not model.
+func (h *companiesHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/companies", contract)
+	api.Get("/companies/subindustries", contract)
+	api.Get("/companies/by-domain", contract)
+	api.Get("/companies/:slug", mw.optional, h.GetCompany)
+	api.Get("/companies/:slug/hiring", h.CompanyHiring)
+	api.Get("/companies/:slug/closed-jobs", h.CompanyClosedJobs)
 }
 
-// companySearcher is the company-search backend the list handler depends on.
-// *search.Client satisfies it; the unit tests inject a fake. A nil companySearcher
-// (Meilisearch unconfigured) routes every request to the Postgres path, as does any
-// search error — see ListCompanies.
+// companySearcher is the company-search backend the list handler depends on (*search.Client; tests inject a fake).
+// Nil, or any search error, routes to the Postgres path (see ListCompanies).
 type companySearcher interface {
 	SearchCompanies(ctx context.Context, p search.CompanySearchParams) (search.CompanyResult, error)
 }
 
-// companyDetailResponse is the public shape of a company together with a page of
-// its jobs. Its Jobs field is []jobview.Job, not []db.Job, so the internal job
-// id cannot leak through this endpoint; its Company is a companyView, not a raw
-// db.Company, so the internal bookkeeping columns cannot leak either — both types
-// enforce the DTO mapping.
+// companyDetailResponse is a company with a page of its jobs. Jobs is []jobview.Job and Company a companyView, so the
+// internal job id and bookkeeping columns cannot leak.
 type companyDetailResponse struct {
 	Company companyView   `json:"company"`
 	Jobs    []jobview.Job `json:"jobs"`
-	// ReferralAvailable is true when the company has at least one approved employee
-	// referrer, so the company page can show the "ask for a referral" affordance.
+	// ReferralAvailable is true when the company has an approved employee referrer.
 	ReferralAvailable bool `json:"referral_available"`
-	// Response is how many of the applications we can OBSERVE the outcome of were
-	// answered. Absent below the sample gate — which is nearly every company today,
-	// and the correct answer rather than an unfinished one.
+	// Response is how many of the applications whose outcome we can OBSERVE were answered. Absent below the sample gate.
 	Response *companyResponse `json:"response,omitempty"`
+	// Parent owns this company and Subsidiaries are the companies it owns (company_parents). They stay separate
+	// companies with their own jobs. Both are omitted when there are none.
+	Parent       *companyRef  `json:"parent,omitempty"`
+	Subsidiaries []companyRef `json:"subsidiaries,omitempty"`
 }
 
-// companyView is the public projection of a company for the detail endpoint. It
-// mirrors db.Company minus the purely-internal bookkeeping columns (created_at,
-// updated_at, is_reference, company_info_at), so those never leak onto
-// GET /api/v1/companies/:slug. Every field the company page renders is kept.
+// companyRef names a related company for a link: enough to render it, nothing more.
+type companyRef struct {
+	Slug     string `json:"slug"`
+	Name     string `json:"name"`
+	JobCount int32  `json:"job_count"`
+}
+
+// companyRelatives reads a company's parent and subsidiaries in one query. Best-effort like the referral flag:
+// a failed read leaves the links out and never fails the company page.
+func companyRelatives(ctx context.Context, q *db.Queries, slug string) (parent *companyRef, subs []companyRef) {
+	rows, err := q.ListCompanyRelatives(ctx, slug)
+	if err != nil {
+		log.Printf("companies: relatives of %q: %v", slug, err)
+		return nil, nil
+	}
+	for _, r := range rows {
+		ref := companyRef{Slug: r.Slug, Name: r.Name, JobCount: r.JobCount}
+		if r.Role == "parent" {
+			parent = &ref
+			continue
+		}
+		subs = append(subs, ref)
+	}
+	return parent, subs
+}
+
+// companyView is the public projection of a company for the detail endpoint: db.Company minus the internal
+// bookkeeping columns (created_at, updated_at, is_reference, company_info_at).
 type companyView struct {
 	Slug         string   `json:"slug"`
 	Name         string   `json:"name"`
@@ -83,12 +109,8 @@ type companyView struct {
 	CompanyTypes []string `json:"company_types"`
 	CompanySizes []string `json:"company_sizes"`
 	Industries   []string `json:"industries"`
-	// The nullable columns are pointers, not pgtype: this file's own companyListItem says
-	// why ("without putting a persistence vocabulary on a public contract"), and the two
-	// company endpoints answered the same logical fields through two different encodings
-	// until they agreed. The wire is unchanged — pgtype's MarshalJSON already emitted a bare
-	// number/string or null — but the shape of GET /companies/:slug is now decided here
-	// rather than by a pgx minor version.
+	// Nullable columns are pointers, not pgtype, so the wire shape is decided here rather than by a pgx version
+	// (companyListItem explains why). The wire output is the same as pgtype's.
 	YearFounded      *int            `json:"year_founded"`
 	EmployeeCount    *int            `json:"employee_count"`
 	HqCountry        *string         `json:"hq_country"`
@@ -101,21 +123,16 @@ type companyView struct {
 	YcStage          []string        `json:"yc_stage"`
 	YcFlags          []string        `json:"yc_flags"`
 	Maturity         *string         `json:"maturity"`
-	// UpvoteCount/DownvoteCount are the company's materialized public thumbs counters,
-	// served straight from the companies columns. MyVote is the caller's own vote
-	// (-1, 0, 1), caller-scoped — set only on the auth-aware detail read, 0 otherwise.
+	// UpvoteCount/DownvoteCount are the materialized thumbs counters. MyVote is the caller's own vote (-1, 0, 1),
+	// set only on the auth-aware detail read, 0 otherwise.
 	UpvoteCount   int32 `json:"upvote_count"`
 	DownvoteCount int32 `json:"downvote_count"`
 	MyVote        int32 `json:"my_vote"`
-	// FeedbackCount/FeedbackRatingAvg are the company's materialized feedback
-	// counters (internal/engage/companyfeedback), the same read-straight-from-the-row
-	// shape as UpvoteCount/DownvoteCount above.
+	// FeedbackCount/FeedbackRatingAvg are the materialized feedback counters (internal/engage/companyfeedback).
 	FeedbackCount     int32    `json:"feedback_count"`
 	FeedbackRatingAvg *float32 `json:"feedback_rating_avg"`
-	// AIInterviewReports is how many people have reported that this company screens
-	// with an AI interviewer (internal/engage/processreport). Omitted at zero: the
-	// count is what the label must always be shown with, so no reports has to be an
-	// absent field rather than a zero a badge could render beside.
+	// AIInterviewReports is how many people reported an AI interviewer (internal/engage/processreport). Omitted at zero:
+	// the count must always be shown with the label, so no reports is an absent field, not a zero.
 	AIInterviewReports int32 `json:"ai_interview_reports,omitempty"`
 }
 
@@ -153,33 +170,23 @@ func companyViewFrom(c db.Company) companyView {
 	}
 }
 
-// ListCompanies returns a page of companies with their denormalized job counts,
-// most active first. An optional `q` query param filters by a case-insensitive
-// name substring, and repeatable facet params — collections/regions/countries/
-// domains/company_type/company_size/remote_regions/yc_batch/yc_status — filter
-// against the company's denormalized facet arrays by array overlap (OR within a
-// facet, AND across facets), composably with `q`. `remote_regions` is the
-// job-derived remote-hiring facet; `yc_batch`/`yc_status` are the curated YC
-// directory facets. meta.total reports the count matching the full filter so
-// pagination is correct.
-func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
-	limit, offset, err := pageParams(c)
+// ListCompanies returns a page of companies with denormalized job counts, most active first. `q` filters by a
+// case-insensitive name substring; the repeatable facet params (collections, regions, countries, domains, company_type,
+// company_size, remote_regions, yc_batch, yc_status) overlap the denormalized facet arrays (OR within a facet, AND across,
+// composable with `q`). meta.total counts the full filter.
+func (h *companiesHandlers) ListCompanies(ctx context.Context, params apigen.ListCompaniesParams) (*apigen.ListCompaniesOK, error) {
+	limit, offset, err := contractPageWindowed(ctx, defaultLimit, maxLimit)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	search := c.Query("q")
-	// sort=rating orders by feedback_rating_avg (see ListCompanies in
-	// internal/platform/db/queries/companies.sql); any other value (including absent)
-	// is the existing job_count DESC, name ordering. Forces the Postgres path
-	// below regardless of any filter present — rating isn't a Meili-sortable
-	// attribute yet (see companySettings' doc comment).
-	sort := c.Query("sort")
-	vals := queryValues(c)
+	search := params.Q.Or("")
+	// sort=rating orders by feedback_rating_avg; any other value is job_count DESC, name. Forces the Postgres path
+	// because rating isn't a Meili-sortable attribute yet (see companySettings).
+	sort := params.Sort.Or("")
+	vals := contractQuery(ctx)
 
-	// Parse each facet once and feed both queries, so their WHERE clauses can't
-	// drift. The query param names (company_type/company_size singular) differ from
-	// the plural db columns; every facet is a non-nil slice so pgx sends '{}', not
-	// NULL — NULL would defeat the cardinality() short-circuit.
+	// Parse each facet once and feed both queries so their WHERE clauses can't drift. Every facet is a non-nil slice so pgx
+	// sends '{}', not NULL, which would defeat the cardinality() short-circuit.
 	collections := facetValues(vals, "collections")
 	regions := facetValues(vals, "regions")
 	countries := facetValues(vals, "countries")
@@ -195,33 +202,24 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	maturity := facetValues(vals, "maturity")
 	subindustries := facetValues(vals, "subindustries")
 
-	// One list feeds both isCompanyFilter calls below. They used to be written out
-	// separately and the second forgot `industries`, so a request filtered only by
-	// industry was counted as unfiltered and answered with the catalogue-wide planner
-	// estimate instead of its own total — silently, since the argument is variadic.
+	// One list feeds both isCompanyFilter calls: a second hand-written list once forgot `industries` and miscounted the
+	// request as unfiltered, silently since the argument is variadic.
 	facets := [][]string{collections, regions, countries, domains, industries,
 		companyTypes, companySizes, remoteRegions, ycBatch, ycStatus, ycStage,
 		ycFlags, maturity, subindustries}
 
-	// Company search is served by the Meilisearch companies index when configured and
-	// a filter (q or any facet) is present — it gives relevance-first, typo-tolerant
-	// ranking with job_count as the tiebreaker. The unfiltered catalogue keeps the
-	// Postgres ordering (job_count DESC, name) and its O(1) total estimate, so it is
-	// deliberately not routed to Meili. On ANY Meili error the request falls through to
-	// the Postgres substring path below, so /companies never depends on Meili being up.
-	//
-	// sort=rating also stays off Meili even when a filter is present: rating isn't a
-	// Meili-sortable attribute yet (see companySettings), so routing there would
-	// silently ignore the caller's requested order instead of honouring it.
+	// Meilisearch serves the list when configured and a filter (q or any facet) is present: relevance-first, typo-tolerant,
+	// job_count as tiebreaker. The unfiltered catalogue stays on Postgres (job_count DESC, name; O(1) total estimate). Any Meili
+	// error falls through to Postgres. sort=rating also stays off Meili, which would silently ignore that order.
 	if h.companySearch != nil && sort != "rating" && isCompanyFilter(search, facets...) {
-		items, total, err := h.companyHitsViaMeili(c.Context(), search, vals, limit, offset)
+		items, total, err := h.companyHitsViaMeili(ctx, search, vals, limit, offset)
 		if err == nil {
-			return listResponseWithIgnored(c, items, total, limit, offset, ignoredCompanyParams(c), nil)
+			return companyListPage(items, total, limit, offset, vals)
 		}
 		log.Printf("companies: meili search fell back to postgres (q=%q): %v", search, err)
 	}
 
-	companies, err := h.queries.ListCompanies(c.Context(), db.ListCompaniesParams{
+	companies, err := h.queries.ListCompanies(ctx, db.ListCompaniesParams{
 		Search:        search,
 		Collections:   collections,
 		Regions:       regions,
@@ -242,16 +240,14 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 		Offset:        int32(offset),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// The unfiltered catalogue count(*) is a cold-cache heap scan (~17s on prod — see
-	// EstimateHiringCompanies); every facet/search filter narrows to an index and keeps
-	// it cheap. So a filtered request gets the exact count (accurate pagination total),
-	// and the pathological unfiltered case gets the O(1) planner estimate, as /jobs does.
+	// The unfiltered count(*) is a cold-cache heap scan (tens of seconds on prod, see EstimateHiringCompanies); filters narrow
+	// to an index. So a filtered request gets the exact count and the unfiltered case the O(1) planner estimate, as /jobs does.
 	var total int64
 	if isCompanyFilter(search, facets...) {
-		total, err = h.queries.CountCompanies(c.Context(), db.CountCompaniesParams{
+		total, err = h.queries.CountCompanies(ctx, db.CountCompaniesParams{
 			Search:        search,
 			Collections:   collections,
 			Regions:       regions,
@@ -269,22 +265,21 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 			Subindustries: subindustries,
 		})
 	} else {
-		total, err = h.queries.EstimateHiringCompanies(c.Context())
+		total, err = h.queries.EstimateHiringCompanies(ctx)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	items := make([]companyListItem, len(companies))
+	items := make([]apigen.CompanyListItem, len(companies))
 	for i, row := range companies {
 		items[i] = companyListItemFromRow(row)
 	}
-	return listResponseWithIgnored(c, items, total, limit, offset, ignoredCompanyParams(c), nil)
+	return companyListPage(items, total, limit, offset, vals)
 }
 
-// isCompanyFilter reports whether a /companies request carries any name search or facet
-// constraint — the exact-vs-estimate meta.total gate in ListCompanies. Every facet arrives
-// as a non-nil slice, so len == 0 means unset.
+// isCompanyFilter reports whether a /companies request carries any name search or facet constraint: the exact-vs-estimate
+// meta.total gate in ListCompanies. Every facet is a non-nil slice, so len == 0 means unset.
 func isCompanyFilter(search string, facets ...[]string) bool {
 	if search != "" {
 		return true
@@ -297,84 +292,47 @@ func isCompanyFilter(search string, facets ...[]string) bool {
 	return false
 }
 
-// subindustryFacet is one option in the company subindustry vocabulary: a clean YC
-// subindustry leaf and the number of companies carrying it.
-type subindustryFacet struct {
-	Value string `json:"value"`
-	Count int64  `json:"count"`
-}
-
-// CompanySubindustries serves the distinct subindustry vocabulary with company counts,
-// most common first, backing the searchable "Industry" facet's option list. Counts are
-// unconditional (they do not reflect other active list filters).
-func (h *companiesHandlers) CompanySubindustries(c *fiber.Ctx) error {
-	rows, err := h.queries.CompanySubindustries(c.Context())
-	if err != nil {
-		return err
-	}
-	out := make([]subindustryFacet, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, subindustryFacet{Value: r.Value.String, Count: r.Count})
-	}
-	return c.JSON(fiber.Map{"data": out})
-}
-
-// facetValues reads the repeatable values of one facet query param, dropping empty
-// entries and always returning a non-nil slice (so pgx encodes '{}' rather than
-// NULL for an absent facet, keeping the SQL cardinality() short-circuit true).
-func facetValues(vals url.Values, key string) []string {
-	out := make([]string, 0, len(vals[key]))
-	for _, v := range vals[key] {
-		// Comma-joined and repeated must mean the same thing, because the Meilisearch path
-		// this backend must agree with splits (search.CompanyFilterFromValues) and the job
-		// search always has. Both paths used to take `countries=DE,BR` as ONE literal value:
-		// measured against production on 2026-09-18, DE alone answered 16,586 companies and
-		// BR alone 3,897, while DE,BR answered zero — an empty answer rather than an error,
-		// which reads as "there are no such companies".
-		for _, part := range strings.Split(v, ",") {
-			if part != "" {
-				out = append(out, part)
-			}
-		}
-	}
-	return out
-}
-
-// lookupCompany reads the company a :slug route names. A slug a merge retired keeps
-// working, rather than becoming a dead end that also drops whatever the page had earned
-// in search: the response is already written as a 301 to the canonical slug and
-// redirected is true. The alias lookup runs only AFTER the miss, so a live company
-// always wins over a stale alias — a company that came back is never shadowed by the
-// row that once retired it. An unknown slug returns pgx.ErrNoRows, which RenderError
-// maps to 404.
+// lookupCompany reads the company a :slug route names. A slug a merge retired keeps working: the 301 to the canonical
+// slug is already written and redirected is true. The alias lookup runs only AFTER the miss, so a live company
+// always wins over a stale alias. An unknown slug returns pgx.ErrNoRows, which RenderError maps to 404.
 func (h *companiesHandlers) lookupCompany(c *fiber.Ctx, slug string) (company db.Company, redirected bool, err error) {
-	company, err = h.queries.GetCompany(c.Context(), slug)
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return company, false, err
-	}
-	canonical, aliasErr := h.queries.GetCompanySlugAlias(c.Context(), slug)
-	switch {
-	case aliasErr == nil:
+	company, canonical, err := companyBySlugOrAlias(c.Context(), h.queries, slug)
+	if canonical != "" {
 		return company, true, c.Redirect(companyPath(c, canonical), fiber.StatusMovedPermanently)
-	case !errors.Is(aliasErr, pgx.ErrNoRows):
-		// A database failure is not "no such company". Reporting it as 404 would tell a
-		// crawler to drop a page that exists, and hide the outage from the error rate.
-		return company, false, aliasErr
 	}
 	return company, false, err
 }
 
-// GetCompany returns a single company together with a page of its jobs. The
-// company is read from companies and its jobs from a single-table filter on
-// company_slug — no join between the two tables.
+// companySlugReader is what resolving a company slug reads. *db.Queries satisfies it.
+type companySlugReader interface {
+	GetCompany(ctx context.Context, slug string) (db.Company, error)
+	GetCompanySlugAlias(ctx context.Context, aliasSlug string) (string, error)
+}
+
+// companyBySlugOrAlias reads a company by slug, falling back to the alias a merge left behind (then canonical is the
+// live slug and the company is zero). The alias lookup runs only after the miss. An unknown slug returns pgx.ErrNoRows.
+func companyBySlugOrAlias(ctx context.Context, q companySlugReader, slug string) (company db.Company, canonical string, err error) {
+	company, err = q.GetCompany(ctx, slug)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return company, "", err
+	}
+	canonical, aliasErr := q.GetCompanySlugAlias(ctx, slug)
+	switch {
+	case aliasErr == nil:
+		return company, canonical, err
+	case !errors.Is(aliasErr, pgx.ErrNoRows):
+		// A database failure is not "no such company": a 404 would tell a crawler to drop a live page and hide the outage.
+		return company, "", aliasErr
+	}
+	return company, "", err
+}
+
+// GetCompany returns a single company with a page of its jobs: companies, then a single-table filter on company_slug, no join.
 func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 
-	// The pagination window is checked before the company lookup, not after it. A refused
-	// request must cost nothing: reading the query params first means a caller paging past
-	// the window cannot make this endpoint touch the database at all, whatever it pages
-	// through. It also keeps the refusal uniform across the list endpoints, which is what
-	// their shared guard asserts.
+	// The pagination window is checked before the company lookup so a refused request costs no database work and the
+	// refusal stays uniform across the list endpoints (their shared guard asserts it).
 	limit, offset, err := pageParams(c)
 	if err != nil {
 		return err
@@ -399,41 +357,36 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 		return err
 	}
 
-	// Referral availability: best-effort — a lookup error degrades to false (block hidden),
-	// never failing the company read.
+	// Referral availability is best-effort: a lookup error degrades to false (block hidden).
 	referralAvailable, _ := h.queries.CompanyHasApprovedReferrer(c.Context(), slug)
 
 	view := companyViewFrom(company)
-	// Caller's own thumbs vote, overlaid only when signed in (OptionalAuth attaches
-	// the id on this public read). Best-effort: a lookup error leaves my_vote 0.
+	// The caller's own thumbs vote, overlaid only when signed in (OptionalAuth). Best-effort: an error leaves my_vote 0.
 	if userID, ok := auth.UserID(c); ok {
 		if mv, err := h.queries.GetCompanyVote(c.Context(), db.GetCompanyVoteParams{UserID: userID, CompanySlug: slug}); err == nil {
 			view.MyVote = int32(mv)
 		}
 	}
 
+	parent, subsidiaries := companyRelatives(c.Context(), h.queries, slug)
+
 	return c.JSON(fiber.Map{"data": companyDetailResponse{
 		Company:           view,
 		Jobs:              views,
 		ReferralAvailable: referralAvailable,
 		Response:          companyResponseRate(c.Context(), h.queries, slug),
+		Parent:            parent,
+		Subsidiaries:      subsidiaries,
 	}})
 }
 
-// closedJobsWindow bounds how deep the Closed tab may page (offset+limit), far tighter than
-// the shared maxPageWindow. Even walking jobs_closed_company_closed_at_idx in order, every
-// skipped offset is a random heap fetch of a closed row — cold on prod a ~10k offset took
-// 6.4s — and nobody reads ten thousand closed postings. 2000 is the site's own FEED_WINDOW
-// (web/src/lib/pagination.ts), so the web pager never asks for a page this refuses.
+// closedJobsWindow bounds how deep the Closed tab may page (offset+limit), far tighter than maxPageWindow: each skipped
+// offset is a random heap fetch of a closed row. 2000 is the site's FEED_WINDOW (web/src/lib/pagination.ts), so the pager never asks for more.
 const closedJobsWindow = 2000
 
-// CompanyClosedJobs serves the company page's Closed tab: a page of the postings this company
-// has closed, most recently closed first, from Postgres — closed rows are never in the search
-// index.
-//
-// It answers has_more instead of a total. A large employer holds hundreds of thousands of
-// closed rows, and an exact count over them is the cost this endpoint exists to avoid; one
-// extra row fetched past the page says the same thing for free.
+// CompanyClosedJobs serves the Closed tab: a page of the postings this company has closed, most recent first, from Postgres
+// (closed rows are never in the search index). It answers has_more instead of a total: an exact count over a large
+// employer's closed rows is the cost to avoid, and one extra fetched row says the same.
 func (h *companiesHandlers) CompanyClosedJobs(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 
@@ -470,11 +423,9 @@ func (h *companiesHandlers) CompanyClosedJobs(c *fiber.Ctx) error {
 	})
 }
 
-// companyHitsViaMeili runs the ranked company search and projects each hit onto the list wire
-// shape — the same type the Postgres path serves, so the two cannot disagree. meta.total is
-// Meilisearch's estimated filtered total, which backs list pagination exactly as CountCompanies
-// does on the Postgres path.
-func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query string, vals url.Values, limit, offset int) ([]companyListItem, int64, error) {
+// companyHitsViaMeili runs the ranked company search and projects each hit onto the list wire shape, the same type the
+// Postgres path serves. meta.total is Meilisearch's estimated filtered total.
+func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query string, vals url.Values, limit, offset int) ([]apigen.CompanyListItem, int64, error) {
 	res, err := h.companySearch.SearchCompanies(ctx, search.CompanySearchParams{
 		Query:  query,
 		Filter: search.CompanyFilterFromValues(vals),
@@ -484,102 +435,11 @@ func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query strin
 	if err != nil {
 		return nil, 0, err
 	}
-	items := make([]companyListItem, len(res.Hits))
+	items := make([]apigen.CompanyListItem, len(res.Hits))
 	for i, h := range res.Hits {
 		items[i] = companyListItemFromDoc(h)
 	}
 	return items, res.Total, nil
-}
-
-// companyListItem is the public projection of a company for the list endpoint. It exists so the
-// response shape is owned here rather than by sqlc: served straight, a generated row makes
-// `make sqlc` an API-changing operation — a renamed column or a changed SELECT alias would
-// rewrite the public JSON with nothing to compile against. Both backends project onto this one
-// type, so a field added for one cannot be silently missing from the other.
-//
-// The nullable columns are *string rather than pgtype.Text: identical on the wire in all three
-// states ("x", "", null — pinned by the golden bodies in companies_test.go), without putting a
-// persistence vocabulary on a public contract. A plain string would collapse null into "" and
-// change the response for every company with no tagline.
-type companyListItem struct {
-	Slug        string   `json:"slug"`
-	Name        string   `json:"name"`
-	JobCount    int32    `json:"job_count"`
-	Tagline     *string  `json:"tagline"`
-	Industries  []string `json:"industries"`
-	HqCountry   *string  `json:"hq_country"`
-	Collections []string `json:"collections"`
-	// FeedbackCount/FeedbackRatingAvg are the company's materialized feedback
-	// counters (internal/engage/companyfeedback) — the same fields the single-company
-	// detail view (companyView) already serves.
-	FeedbackCount     int32    `json:"feedback_count"`
-	FeedbackRatingAvg *float32 `json:"feedback_rating_avg"`
-	// AIInterviewReports is how many people have reported that this company screens
-	// with an AI interviewer (internal/engage/processreport). Omitted at zero: the
-	// count is what the label must always be shown with, so no reports has to be an
-	// absent field rather than a zero a badge could render beside.
-	AIInterviewReports int32 `json:"ai_interview_reports,omitempty"`
-}
-
-// companyListItemFromRow projects the Postgres read onto the wire shape. The row already carries
-// null-ness, so the two nullable columns pass through as-is.
-func companyListItemFromRow(r db.ListCompaniesRow) companyListItem {
-	return companyListItem{
-		Slug:               r.Slug,
-		Name:               r.Name,
-		JobCount:           r.JobCount,
-		Tagline:            pgconv.TextPtr(r.Tagline),
-		Industries:         r.Industries,
-		HqCountry:          pgconv.TextPtr(r.HqCountry),
-		Collections:        r.Collections,
-		FeedbackCount:      r.FeedbackCount,
-		FeedbackRatingAvg:  pgconv.Float4Ptr(r.FeedbackRatingAvg),
-		AIInterviewReports: r.AiInterviewReports,
-	}
-}
-
-// companyListItemFromDoc projects a company search document onto the same shape, carrying the
-// two rules the search path has always needed. A document stores an absent scalar as the empty
-// string, which must serialize as null like the Postgres NULL; and an absent array arrives nil,
-// which must serialize as [] like the Postgres '{}'. Collections drive the backer marks, so an
-// array that came back null instead would make those marks disappear the moment a user searched.
-func companyListItemFromDoc(d search.CompanyDocument) companyListItem {
-	return companyListItem{
-		Slug:              d.Slug,
-		Name:              d.Name,
-		JobCount:          d.JobCount,
-		Tagline:           presentOrNil(d.Tagline),
-		Industries:        orEmpty(d.Industries),
-		HqCountry:         presentOrNil(d.HqCountry),
-		Collections:       orEmpty(d.Collections),
-		FeedbackCount:     d.FeedbackCount,
-		FeedbackRatingAvg: presentOrNilFloat(d.FeedbackRatingAvg),
-	}
-}
-
-// presentOrNilFloat treats 0 as absent — CompanyDocument's "no rating" sentinel
-// (see its doc comment): a real average is never 0, since ratings are 1-5.
-func presentOrNilFloat(f float32) *float32 {
-	if f == 0 {
-		return nil
-	}
-	return &f
-}
-
-// presentOrNil treats the empty string as absent — the search document's way of spelling NULL.
-func presentOrNil(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-// orEmpty normalizes a nil array so it serializes as [] rather than null.
-func orEmpty(v []string) []string {
-	if v == nil {
-		return []string{}
-	}
-	return v
 }
 
 // companiesParams are the listing's own params: the name query, the sort
@@ -587,21 +447,23 @@ func orEmpty(v []string) []string {
 var companiesParams = []string{"q", "sort", "limit", "offset"}
 
 // ignoredCompanyParams reports the query params this listing did not filter on.
-//
-// Separate from the jobs endpoints' ignoredParams because the vocabularies are
-// separate: a company search reads its own facet list and none of the
-// `_exclude` / `_mode` conventions, so a jobs facet sent here is ignored and has
-// to be named as such.
-func ignoredCompanyParams(c *fiber.Ctx) []search.UnknownParam {
-	return search.UnknownCompanyParams(queryValues(c), companiesParams)
+// Separate from the jobs endpoints' ignoredParams because the vocabularies differ: a company search reads its own facet list
+// and none of the `_exclude` / `_mode` conventions, so a jobs facet sent here is ignored and named as such.
+func ignoredCompanyParams(query url.Values) []search.UnknownParam {
+	return search.UnknownCompanyParams(query, companiesParams)
 }
 
-// companyPath is the request's own path with its :slug segment swapped for the canonical
-// slug, everything after it (a sub-resource such as /hiring) and the query string
-// preserved. The segment is located through the matched route's pattern, so it holds
-// whatever the route nests under the slug. Built from the live path rather than a
-// hardcoded prefix so a mounted-elsewhere API redirects within itself; escaped because
-// the slug reaches the Location header.
+// companyListPage is the list envelope: the items and the params the filter did not read.
+func companyListPage(items []apigen.CompanyListItem, total int64, limit, offset int, query url.Values) (*apigen.ListCompaniesOK, error) {
+	return &apigen.ListCompaniesOK{Data: items, Meta: apigen.ListMeta{
+		Total: total, Limit: int64(limit), Offset: int64(offset),
+		IgnoredParams: contractIgnoredParams(ignoredCompanyParams(query)),
+	}}, nil
+}
+
+// companyPath is the request's own path with its :slug segment swapped for the canonical slug, keeping any sub-resource
+// (such as /hiring) and the query string. The segment is located through the matched route's pattern; built from the live
+// path so a mounted-elsewhere API redirects within itself; escaped because the slug reaches the Location header.
 func companyPath(c *fiber.Ctx, canonical string) string {
 	segments := strings.Split(c.Path(), "/")
 	for i, part := range strings.Split(c.Route().Path, "/") {

@@ -7,21 +7,18 @@ import (
 	"unicode/utf8"
 )
 
-// Partials returns a fresh template set carrying the shared building blocks every
-// mail body is assembled from. A feature package parses its own body template into
-// this set and calls the blocks by name:
+// Partials returns a fresh template set of the shared blocks every mail body is
+// assembled from. A feature package parses its own body into it and calls the
+// blocks by name:
 //
 //	var tpl = template.Must(mailtpl.Partials().New("verify").Parse(`
 //	  {{template "p" "Confirm your email address with this code:"}}
 //	  {{template "code" .Code}}
 //	`))
 //
-// The set is returned by value (a fresh clone per call) because parsing into a
-// shared set would let one package's body template become visible to another's.
-//
-// Why named partials rather than exported helper functions returning template.HTML:
-// a helper has to be called from Go, which pushes markup back out of the templates
-// and into the render functions — exactly the shape the six mails were in before.
+// A fresh clone is returned per call so one package's body template is not visible
+// to another's. Blocks are named partials, not helpers returning template.HTML,
+// which would push markup back out of templates into Go.
 func Partials() *template.Template {
 	t, err := partials.Clone()
 	if err != nil {
@@ -34,14 +31,12 @@ func Partials() *template.Template {
 
 // partials holds the block definitions. Cloned, never executed.
 //
-// Each block takes the dot as its whole argument, so a call site reads
-// {{template "code" .Code}} rather than needing a wrapper struct — except the two
-// button blocks, which need two values and take a Link.
+// Each block takes the dot as its whole argument, except the two button blocks,
+// which take a Link.
 //
-// "button-right" nests a second table inside a right-aligned cell rather than
-// setting text-align on one: a table sized to its content is what keeps the button
-// hugging its label, and align= on the cell is the only right-alignment Outlook
-// honours reliably.
+// "button-right" nests a table in a right-aligned cell: a content-sized table keeps
+// the button hugging its label, and align= on the cell is the only right-alignment
+// Outlook honours reliably.
 var partials = template.Must(template.New("partials").Funcs(funcs).Parse(`
 {{define "signature"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;">
   <tr>
@@ -101,11 +96,8 @@ type Link struct {
 
 // IconLink is the argument to "icon-button": a call to action wearing a brand mark.
 //
-// The icon must be a light-on-transparent PNG, because the partial tags it with
-// m-logo — the class the dark stylesheet inverts. That inversion is not decoration:
-// in dark mode the button fill lightens and its label darkens, so a mark that
-// stayed light would disappear. One asset, tracking the label, instead of two that
-// can drift.
+// The icon must be a light-on-transparent PNG: the partial tags it m-logo, which the
+// dark stylesheet inverts so the mark follows the label colour.
 type IconLink struct {
 	URL     string
 	Label   string
@@ -124,18 +116,14 @@ type ImageLink struct {
 	Width int
 }
 
-// LinkedInURL is the profile the sign-off points at. It lives beside DiscordURL for
-// the same reason: the letters that carry the signature are from one person, and two
-// copies of his profile are two things that can disagree.
+// LinkedInURL is the profile the sign-off points at, kept beside DiscordURL so the
+// signature has one copy.
 const LinkedInURL = "https://www.linkedin.com/in/istrelov/"
 
 // TextLink is the argument to "p-link": a sentence that ends in a link.
 //
-// It exists because a mail gets exactly one button. A second filled button beside
-// the first does not read as "and also" — it reads as two equal choices, and the
-// reader makes neither. The secondary ask therefore goes out as a line of prose
-// with the link inside it, which is also the only shape a partial can offer: "p"
-// escapes its argument, so a link cannot be smuggled into one.
+// A mail gets one button; the secondary ask goes out as prose with the link inside.
+// "p" escapes its argument, so a link cannot be put in one.
 type TextLink struct {
 	// Text is the lead-in, rendered before the link and escaped.
 	Text string
@@ -144,11 +132,8 @@ type TextLink struct {
 	Label string
 }
 
-// Job is the argument to the "job-row" partial: one vacancy as every mail shows it.
-//
-// It is a mailtpl type rather than each feature's own because a job looks the same
-// in a digest, a reminder and a nudge, and it stopped looking the same the moment
-// three packages each described it in their own markup.
+// Job is the argument to the "job-row" partial: one vacancy as every mail shows it,
+// shared by digests, reminders and nudges.
 type Job struct {
 	Title   string
 	Company string
@@ -166,9 +151,8 @@ const companyLogoBase = "https://logo.freehire.me/"
 
 // NewJob builds a Job, resolving the company's logo URL and its fallback monogram.
 //
-// The monogram rides in the image's alt text, which is the only fallback email
-// affords: there is no onerror hook to swap in a placeholder the way the SPA does,
-// so a blocked or missing image has to degrade into something readable by itself.
+// The monogram rides in the image's alt text: email has no onerror hook, so a
+// blocked or missing image must degrade into something readable by itself.
 func NewJob(title, company, salary, url string) Job {
 	j := Job{Title: title, Company: company, Salary: salary, URL: url}
 	if company != "" {
@@ -179,9 +163,8 @@ func NewJob(title, company, salary, url string) Job {
 	return j
 }
 
-// funcs lets a body template build a Link inline — {{template "button" (mailLink
-// .URL "Open")}} — instead of the calling package pre-assembling one in Go and
-// threading it through its data struct just to reach a partial.
+// funcs lets a body template build a Link inline, {{template "button" (mailLink
+// .URL "Open")}}, without pre-assembling one in Go.
 var funcs = template.FuncMap{
 	"mailLink": func(url, label string) Link { return Link{URL: url, Label: label} },
 	"mailIconLink": func(url, label, iconURL string) IconLink {

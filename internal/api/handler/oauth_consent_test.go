@@ -37,3 +37,24 @@ func TestOAuthConsentPage_NamesRedirectHostAndFlagsUnverifiedName(t *testing.T) 
 		t.Errorf("consent page does not say the client name is unverified:\n%s", page)
 	}
 }
+
+// The resource a client asked for must survive the consent round trip, or the
+// POST that mints the code would bind nothing.
+func TestOAuthConsentPage_CarriesResourceOnlyWhenBound(t *testing.T) {
+	params := authorizeParams{ClientID: "cid", RedirectURI: "https://app.example.com/cb", Resource: "/api/v1/mcp"} // the bound PATH, as resolveAuthorizeResource stores it
+	page, err := oauthConsentPage("Claude", "me@example.com", "https://freehire.me", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(page, `name="resource" value="https://freehire.me/api/v1/mcp"`) {
+		t.Errorf("consent form dropped the resource:\n%s", page)
+	}
+	params.Resource = ""
+	page, err = oauthConsentPage("Claude", "me@example.com", "https://freehire.me", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(page, `name="resource"`) {
+		t.Errorf("an unbound request must not emit a resource field:\n%s", page)
+	}
+}

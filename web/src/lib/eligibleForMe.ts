@@ -19,7 +19,10 @@ export type GeoSource = { kind: 'country'; code: string } | { kind: 'region'; co
  *  edge country header (already resolved server-side by the existing
  *  `geo-default-scope` `/geo/region` endpoint — this function never sees a raw
  *  country code for that path). Neither present resolves to `null`. */
-export function resolveGeoSource(profileCountry: string | null | undefined, edgeRegion: string | null | undefined): GeoSource {
+export function resolveGeoSource(
+  profileCountry: string | null | undefined,
+  edgeRegion: string | null | undefined,
+): GeoSource {
   const country = profileCountry?.trim().toLowerCase();
   if (country) return { kind: 'country', code: country };
   const region = edgeRegion?.trim().toLowerCase();
@@ -53,5 +56,8 @@ export function eligibleForMeValues(source: GeoSource): EligibleForMeValues {
 export function isEligibleForMeOn(source: GeoSource, includedCountries: string[], includedRegions: string[]): boolean {
   if (!source) return false;
   const values = eligibleForMeValues(source);
-  return values.countries.every((c) => includedCountries.includes(c)) && values.regions.every((r) => includedRegions.includes(r));
+  return (
+    values.countries.every((c) => includedCountries.includes(c)) &&
+    values.regions.every((r) => includedRegions.includes(r))
+  );
 }

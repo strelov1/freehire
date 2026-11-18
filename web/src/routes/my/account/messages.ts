@@ -12,8 +12,7 @@ export const messages = defineMessages(
       heading: 'Email',
       change: 'Change email',
       dialogTitle: 'Change email',
-      providersNote:
-        'Google and other sign-in providers already linked to this account keep working after the change.',
+      providersNote: 'Google and other sign-in providers already linked to this account keep working after the change.',
       newEmailLabel: 'New email',
       confirmPrompt: 'Your email is how you sign in, so confirm it is you before changing it.',
       sendCode: 'Send confirmation code',
@@ -105,8 +104,7 @@ export const messages = defineMessages(
         isSet: 'Задан',
         change: 'Сменить пароль',
         dialogTitle: 'Смена пароля',
-        subheading:
-          'При смене пароля все остальные устройства выходят из аккаунта. Здесь вы останетесь в системе.',
+        subheading: 'При смене пароля все остальные устройства выходят из аккаунта. Здесь вы останетесь в системе.',
         noPasswordNotice:
           'Этот аккаунт входит через провайдера и не имеет пароля. Чтобы добавить его — ещё один способ входа, независимый от провайдера — выйдите из аккаунта, выберите «Забыли пароль?» на экране входа и задайте пароль с помощью кода, который мы отправим на почту.',
         currentPasswordLabel: 'Текущий пароль',
@@ -130,8 +128,7 @@ export const messages = defineMessages(
       },
       dangerZone: {
         heading: 'Опасная зона',
-        description:
-          'Безвозвратно удалите аккаунт и всё, что с ним связано. Это действие нельзя отменить.',
+        description: 'Безвозвратно удалите аккаунт и всё, что с ним связано. Это действие нельзя отменить.',
       },
     },
   },

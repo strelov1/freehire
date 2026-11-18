@@ -50,16 +50,12 @@ describe('buildLocationPreferences', () => {
   });
 
   it('drops relocation targets when the user is not open to relocating', () => {
-    const loc = buildLocationPreferences(
-      fields({ workModes: ['onsite'], relocOpen: false, relocCities: ['Berlin'] }),
-    );
+    const loc = buildLocationPreferences(fields({ workModes: ['onsite'], relocOpen: false, relocCities: ['Berlin'] }));
     expect(loc?.relocation).toEqual({ open: false });
   });
 
   it('drops relocation targets for a user who takes no physical work', () => {
-    const loc = buildLocationPreferences(
-      fields({ workModes: ['remote'], relocOpen: true, relocCities: ['Berlin'] }),
-    );
+    const loc = buildLocationPreferences(fields({ workModes: ['remote'], relocOpen: true, relocCities: ['Berlin'] }));
     expect(loc?.relocation).toEqual({ open: false });
   });
 

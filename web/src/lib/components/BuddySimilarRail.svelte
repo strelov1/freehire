@@ -16,10 +16,14 @@
     let cancelled = false;
     people = [];
     api.listBuddySimilar(limit + 1).then(
-      (s) => { if (!cancelled) people = s.filter((m) => m.handle !== skip).slice(0, limit); },
+      (s) => {
+        if (!cancelled) people = s.filter((m) => m.handle !== skip).slice(0, limit);
+      },
       () => {},
     );
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   });
 </script>
 
@@ -36,7 +40,9 @@
           <li class="flex flex-col gap-0.5 py-2.5">
             <BuddyIdentity handle={person.handle} summary={person.card_summary} size="sm" />
             {#if person.shared_companies.length}
-              <span class="pl-11 text-xs text-muted-foreground">{buddySharedCompanies(person.shared_companies.length)}</span>
+              <span class="pl-11 text-xs text-muted-foreground"
+                >{buddySharedCompanies(person.shared_companies.length)}</span
+              >
             {/if}
           </li>
         {/each}

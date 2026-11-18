@@ -16,16 +16,7 @@ import { CATEGORY_LABELS, SENIORITY_LABELS, categoryLabel, titleCase } from './l
 export const MIN_CATEGORY_OPEN = 25;
 
 /** Seniority tokens in rank order. '' is the category-wide band. */
-const SENIORITY_ORDER = [
-  'intern',
-  'junior',
-  'middle',
-  'senior',
-  'lead',
-  'staff',
-  'principal',
-  'c_level',
-] as const;
+const SENIORITY_ORDER = ['intern', 'junior', 'middle', 'senior', 'lead', 'staff', 'principal', 'c_level'] as const;
 
 /** The seniority label for an /insights table row. Every real token resolves through
  *  the shared vocabulary; the empty string is this capability's own category-wide
@@ -98,17 +89,8 @@ export function roleAddressExists(category: string, seniority: string): boolean 
 /** Whether a role deserves its own leaf page: a real address carrying enough open
  *  postings that a distribution over them means something. Takes the role's OWN
  *  open-count, so it can be asked of a single-role read as readily as of a ranking. */
-export function roleQualifies(
-  roles: InsightRole[],
-  category: string,
-  seniority: string,
-  openCount: number,
-): boolean {
-  return (
-    roleAddressExists(category, seniority) &&
-    isCovered(roles, category) &&
-    openCount >= MIN_CATEGORY_OPEN
-  );
+export function roleQualifies(roles: InsightRole[], category: string, seniority: string, openCount: number): boolean {
+  return roleAddressExists(category, seniority) && isCovered(roles, category) && openCount >= MIN_CATEGORY_OPEN;
 }
 
 /** The qualifying roles WITHIN a ranking — what the sitemap lists.
@@ -168,6 +150,57 @@ export function formatSalary(amount: number, currency: string): string {
   }
 }
 
+/** The role × grade × country scope the salary rollup is stored at; '' is every value. */
+export interface SalaryScope {
+  category: string;
+  seniority: string;
+  country: string;
+}
+
+/** Read the salary scope off search filter params (/analytics). The rollup holds one
+ *  value per part, so two values in a part, or an exclusion, have no figure: null.
+ *  `partial` says other filters are set that the figure does not reflect. */
+export function salaryScopeFromParams(p: URLSearchParams): { scope: SalaryScope; partial: boolean } | null {
+  const parts = { category: 'category', seniority: 'seniority', country: 'countries' } as const;
+  const scope: SalaryScope = { category: '', seniority: '', country: '' };
+  for (const [key, param] of Object.entries(parts) as [keyof SalaryScope, string][]) {
+    const values = (p.get(param) ?? '').split(',').filter(Boolean);
+    if (values.length > 1 || p.has(`${param}_exclude`)) return null;
+    scope[key] = (values[0] ?? '').toLowerCase();
+  }
+  const own = new Set([...Object.values(parts), 'sort']);
+  const partial = [...p.keys()].some((k) => !own.has(k));
+  return { scope, partial };
+}
+
+/** The scope's own bands, richest sample first: a category-only answer also carries
+ *  per-seniority rows, which belong to narrower scopes. */
+export function scopeBands(bands: InsightSalaryBand[], scope: SalaryScope, limit = 3): InsightSalaryBand[] {
+  return bands
+    .filter((b) => b.seniority === scope.seniority)
+    .sort((a, b) => b.sample_size - a.sample_size)
+    .slice(0, limit);
+}
+
+/** A salary answer with the scope it was fetched for (`salaryScopeKey`); `bands` is
+ *  null when that read failed. */
+export interface FetchedSalary {
+  key: string;
+  bands: InsightSalaryBand[] | null;
+}
+
+export function salaryScopeKey(s: SalaryScope): string {
+  return `${s.category}|${s.seniority}|${s.country}`;
+}
+
+/** What the salary card shows for `scope`: 'pending' until an answer for this very
+ *  scope lands, so another scope's figures never sit under its name; null when that
+ *  read failed; else the scope's own bands. */
+export function salaryView(fetched: FetchedSalary, scope: SalaryScope): InsightSalaryBand[] | null | 'pending' {
+  if (fetched.key !== salaryScopeKey(scope)) return 'pending';
+  return fetched.bands && scopeBands(fetched.bands, scope);
+}
+
 // --- Deterministic auto-intro sentences (no LLM) -----------------------------
 
 /** Pick the richest yearly band for the intro figure, preferring the category-wide
@@ -190,7 +223,10 @@ export function salaryIntro(category: string, bands: InsightSalaryBand[]): strin
 export function skillsIntro(category: string, skills: InsightSkill[]): string {
   const label = categoryLabel(category);
   if (skills.length === 0) return `The most in-demand skills for ${label} roles on freehire.`;
-  const top = skills.slice(0, 3).map((s) => s.skill).join(', ');
+  const top = skills
+    .slice(0, 3)
+    .map((s) => s.skill)
+    .join(', ');
   return `The most in-demand skills for ${label} roles right now are ${top} — ranked across ${skills.reduce((n, s) => n + s.open_count, 0)} open postings.`;
 }
 

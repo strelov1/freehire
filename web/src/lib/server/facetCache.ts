@@ -19,7 +19,7 @@ const DEFAULT_CAPACITY = 5_000;
  *  concurrent renders share one request; a rejection is dropped so the next render asks
  *  again. The disjunctive mode reads a visitor's live selection and is never cached — the
  *  Go handler declines to cache it for the same reason. */
-export function createFacetCache(capacity = DEFAULT_CAPACITY): (live: FacetCountsFn) => FacetCountsFn {
+export function createFacetCache(capacity = DEFAULT_CAPACITY, ttlMs = TTL_MS): (live: FacetCountsFn) => FacetCountsFn {
   const entries = new Map<string, { at: number; value: Promise<FacetCounts> }>();
 
   return (live) => (params, opts) => {
@@ -29,7 +29,7 @@ export function createFacetCache(capacity = DEFAULT_CAPACITY): (live: FacetCount
     const key = `${params.toString()}|${opts?.facets?.join(',') ?? ''}`;
     const now = Date.now();
     const hit = entries.get(key);
-    if (hit && now - hit.at < TTL_MS) return hit.value;
+    if (hit && now - hit.at < ttlMs) return hit.value;
 
     entries.delete(key);
     if (entries.size >= capacity) {
@@ -47,3 +47,10 @@ export function createFacetCache(capacity = DEFAULT_CAPACITY): (live: FacetCount
 
 /** The one cache every server render in this process shares. */
 export const withFacetCache = createFacetCache();
+
+/** A day-long cache, kept apart so its entries and the ten-minute ones never evict each
+ *  other, for a distribution that is both expensive and slow-moving: the skills facet,
+ *  ~1,100 values, 100-700 ms of engine time per call. A page that shows a few of its
+ *  top values loses nothing to a day's staleness, and a crawler sweeping the long tail
+ *  of such pages is what starved the engine into 500s on 2026-11-07 and 08. */
+export const withDailyFacetCache = createFacetCache(DEFAULT_CAPACITY, 24 * 60 * 60_000);

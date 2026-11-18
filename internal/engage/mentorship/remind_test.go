@@ -282,3 +282,44 @@ func TestWithoutANotifierNothingIsClaimed(t *testing.T) {
 		t.Errorf("claimed %d reminders with no way to send them", repo.claimed)
 	}
 }
+
+type cancellingReminderNotifier struct {
+	Notifier
+	cancel context.CancelFunc
+}
+
+func (n cancellingReminderNotifier) BookingReminder(context.Context, Booking, time.Duration) error {
+	n.cancel()
+	return context.Canceled
+}
+
+type cancellationCheckingReminderRepo struct {
+	Repository
+	t        *testing.T
+	released bool
+}
+
+func (r *cancellationCheckingReminderRepo) ReleaseReminderClaim(ctx context.Context, id uuid.UUID, offset time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		r.t.Fatalf("release context cancelled: %v", err)
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		r.t.Fatal("release has no deadline")
+	}
+	r.released = true
+	return r.Repository.ReleaseReminderClaim(ctx, id, offset)
+}
+
+func TestCancelledReminderDeliveryReleasesClaim(t *testing.T) {
+	base := newFakeRepo()
+	booking := remindableBooking(t, 30*time.Minute)
+	base.bookings[booking.ID] = booking
+	repo := &cancellationCheckingReminderRepo{Repository: base, t: t}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	service := New(repo, Config{Notifier: cancellingReminderNotifier{Notifier: &fakeNotifier{}, cancel: cancel}, Now: func() time.Time { return reminderNow }})
+	_, _ = service.SendDueReminders(ctx, 100)
+	if !repo.released {
+		t.Fatal("failed delivery retained its claim")
+	}
+}

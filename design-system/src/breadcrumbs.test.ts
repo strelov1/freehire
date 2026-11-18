@@ -6,10 +6,7 @@ import { must } from './test-utils';
 describe('Breadcrumbs', () => {
   it('renders every hub item as a link and the current item as unlinked text', () => {
     const { getByText } = render(Breadcrumbs, {
-      items: [
-        { name: 'Talent Network', href: '/talent' },
-        { name: 'DevOps Engineer' },
-      ],
+      items: [{ name: 'Talent Network', href: '/talent' }, { name: 'DevOps Engineer' }],
     });
 
     const hub = getByText('Talent Network');

@@ -63,6 +63,17 @@ FROM jobs
 WHERE company_slug <> ''
 GROUP BY company_slug;
 
+-- name: ListCompaniesForMergeBySlugs :many
+-- ListCompaniesForMerge for the slugs a person named (--exact-slugs), read through the
+-- company_slug index. The whole-table read groups 22.8M rows and did not finish in 50 minutes
+-- under prod's load on 2026-11-03, so a merge of three slugs could not be planned at all.
+SELECT company_slug AS slug,
+       ((array_agg(company ORDER BY created_at DESC, id DESC))[1])::text AS name,
+       count(*) FILTER (WHERE closed_at IS NULL)::int AS job_count
+FROM jobs
+WHERE company_slug = ANY(@slugs::text[])
+GROUP BY company_slug;
+
 -- name: RekeyCompanySlugChunk :execrows
 -- Move one chunk of a retired slug's jobs onto the canonical slug.
 --

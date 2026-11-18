@@ -8,19 +8,15 @@ import (
 	"github.com/strelov1/freehire/internal/dict/normalize"
 )
 
-// hit is one (provider, board) the resolve step wants written to a seed: either detected on a
-// company's careers page, or — with expectID set — guessed offline for a company whose pages
-// yielded nothing.
+// hit is one (provider, board) the resolve step wants written to a seed: detected on a
+// company's careers page, or, with expectID set, guessed offline.
 type hit struct{ provider, slug, company, expectID string }
 
 // guessedCandidates proposes seed entries for a company the careers walk could not resolve,
 // pairing every candidate slug with every provider the posting id's shape allows. It performs
-// no I/O and yields nothing without an id, because the id is the only thing that makes a
-// guessed slug safe to propose — harvest-boards keeps such a candidate only if the platform
-// reports a live posting carrying it.
-//
-// The fan-out is bounded by construction: at most maxCandidateSlugs slugs times the providers
-// one id shape can belong to (never more than two).
+// no I/O and yields nothing without an id: the id is what makes a guessed slug safe, since
+// harvest-boards keeps such a candidate only if the platform reports a live posting carrying
+// it. The fan-out is at most maxCandidateSlugs slugs times two providers.
 func guessedCandidates(site companySite) []hit {
 	providers := providersForID(site.ExternalID)
 	if len(providers) == 0 {
@@ -36,16 +32,13 @@ func guessedCandidates(site companySite) []hit {
 	return out
 }
 
-// hostKeyedVendorDomain names, for the platforms that key a board by the whole careers HOST
-// rather than by a bare slug (atsboard's modeHost), the vendor domain a tenant sits under. A
-// guess for such a platform must be a host: its prober fetches https://<board>/jobs, so a bare
-// slug names no host at all and the probe can only ever answer no — measured against prod,
-// 3925 of 3926 stored teamtailor boards are hosts.
+// hostKeyedVendorDomain names, for platforms that key a board by the whole careers HOST
+// (atsboard's modeHost), the vendor domain a tenant sits under. A guess for such a platform
+// must be a host: its prober fetches https://<board>/jobs, so a bare slug can only answer no.
 //
-// Only the id-prefix platforms need an entry, since only they can be guessed offline at all
-// (see providersForID); Greenhouse, Lever and Ashby key a board by the bare slug and are
-// absent, which is what leaves their guesses untouched. A tenant on its own custom domain
-// stays underivable either way — nothing in a company's name says `career.medius.com`.
+// Only the id-prefix platforms need an entry, since only they can be guessed offline (see
+// providersForID); Greenhouse, Lever and Ashby key by bare slug. A tenant on its own custom
+// domain stays underivable.
 var hostKeyedVendorDomain = map[string]string{"teamtailor": "teamtailor.com"}
 
 // boardFor shapes a guessed slug into the board key its platform actually uses.
@@ -56,10 +49,8 @@ func boardFor(provider, slug string) string {
 	return slug
 }
 
-// maxCandidateSlugs bounds how many board slugs one company may propose. The slugs are
-// guesses; the point of bounding them is that each one costs a probe at harvest-boards, and
-// past three the guesses stop being informed by anything (a fourth spelling of a name we
-// already tried three ways is not new evidence).
+// maxCandidateSlugs bounds how many board slugs one company may propose. Each guess costs a
+// probe at harvest-boards, and past three the guesses add no new evidence.
 const maxCandidateSlugs = 3
 
 // careersHostPrefixes are the sub-domains a company puts its careers site on. Their labels
@@ -69,17 +60,14 @@ var careersHostPrefixes = map[string]bool{
 	"work": true, "join": true, "apply": true, "www": true,
 }
 
-// candidateSlugs proposes the board slugs a company might use, drawn from what we already know
-// about it: the label of its own domain, the slug of its platform profile (with and without a
-// legal-form tail), and its normalized name. It performs no I/O.
+// candidateSlugs proposes the board slugs a company might use: the label of its own domain,
+// the slug of its platform profile (with and without a legal-form tail), and its normalized
+// name. It performs no I/O.
 //
-// These are guesses and are only safe to emit alongside an expected posting id, which
-// harvest-boards checks against the platform's live postings — a slug that happens to be some
-// other employer's real board is then rejected on evidence rather than accepted on a
-// resemblance. Results are sorted and de-duplicated so a run's seeds are deterministic.
-// The order is the order of confidence, and the cap cuts from the tail: a company's own domain
-// label is the best guess, its profile slug next, and a slug folded out of its display name
-// last — so a bounded list keeps the guesses most likely to be right.
+// These are guesses, safe to emit only alongside an expected posting id, which harvest-boards
+// checks against the platform's live postings. Results are sorted and de-duplicated so seeds
+// are deterministic. The order is confidence order and the cap cuts from the tail: own domain
+// label, then profile slug, then a slug folded out of the display name.
 func candidateSlugs(site companySite) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -95,13 +83,12 @@ func candidateSlugs(site companySite) []string {
 		add(s)
 	}
 	// Both spellings of the name: boards are registered hyphenated (`delivery-hero`) about as
-	// often as run together (`deliveryhero`), and neither is derivable from the other.
+	// often as run together (`deliveryhero`).
 	//
-	// The name goes through BoardNameSlug rather than trimLegalForm(Slug(name)) below: trimming
-	// the NAME's words sees a tail the slug has already broken up ("Acme S.p.A." is `acme-s-p-a`
-	// by then, whose last segment is `a`), and repeats, so a compound form comes off whole
-	// ("Atlassian Pty Ltd" → `atlassian`, not `atlassian-pty`). trimLegalForm stays for the
-	// profile slugs, which arrive as slugs and have no name to go back to.
+	// BoardNameSlug rather than trimLegalForm(Slug(name)): trimming after slugging sees a tail
+	// the slug already broke up ("Acme S.p.A." is `acme-s-p-a`), and BoardNameSlug repeats, so a
+	// compound form comes off whole ("Atlassian Pty Ltd" → `atlassian`). trimLegalForm stays
+	// for profile slugs, which have no name to go back to.
 	nameSlug := normalize.BoardNameSlug(site.Name)
 	add(nameSlug)
 	add(strings.ReplaceAll(nameSlug, "-", ""))
@@ -122,8 +109,7 @@ func trimLegalForm(slug string) string {
 }
 
 // lastSegment splits a slug before its final hyphen, so trimLegalForm can judge that segment
-// on its own. Returns ok=false for a slug with no hyphen — there is no tail to consider, and
-// trimming the whole thing would leave nothing to guess a board from.
+// alone. ok=false for a slug with no hyphen: trimming the whole thing would leave nothing.
 func lastSegment(slug string) (head, tail string, ok bool) {
 	i := strings.LastIndexByte(slug, '-')
 	if i <= 0 {
@@ -169,9 +155,8 @@ func profileSlugs(profileURL string) []string {
 	}
 	slug := m[1]
 	out := []string{slug}
-	// Both spellings are worth trying: the profile keeps the form the board drops, but a
-	// board is occasionally registered WITH it, so the trimmed slug is an extra candidate
-	// rather than a replacement.
+	// Try both: the profile keeps the form the board drops, but a board is occasionally
+	// registered WITH it.
 	if bare := trimLegalForm(slug); bare != slug {
 		out = append(out, bare)
 	}
@@ -191,12 +176,9 @@ var (
 var knownPrefixes = map[string]bool{"teamtailor": true, "greenhouse": true, "lever": true, "ashby": true}
 
 // providersForID narrows an ATS-native posting id to the providers whose id space it could
-// belong to, so a candidate slug is only proposed to boards that could plausibly hold it.
-//
-// A shape that narrows to nothing yields nothing: fanning a guess across every provider would
-// spend probes proportional to the provider count for no added evidence. The narrowing is a
-// heuristic and is never trusted on its own — it only decides which boards get asked, and the
-// id itself decides the answer.
+// belong to, so a candidate slug is only proposed to boards that could hold it. A shape that
+// narrows to nothing yields nothing: fanning out would spend probes for no added evidence.
+// A heuristic only: it decides which boards get asked, and the id itself decides the answer.
 func providersForID(externalID string) []string {
 	id := strings.ToLower(strings.TrimSpace(externalID))
 	switch {

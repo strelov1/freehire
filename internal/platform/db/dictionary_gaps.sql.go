@@ -7,32 +7,7 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
-
-const claimDictionaryGapWrite = `-- name: ClaimDictionaryGapWrite :one
-INSERT INTO dictionary_gap_daily (user_id, day, writes)
-VALUES ($1, $2, 1)
-ON CONFLICT (user_id, day) DO UPDATE
-SET writes = dictionary_gap_daily.writes + 1
-WHERE dictionary_gap_daily.writes < 20
-RETURNING writes
-`
-
-type ClaimDictionaryGapWriteParams struct {
-	UserID int64       `json:"user_id"`
-	Day    pgtype.Date `json:"day"`
-}
-
-// The daily cap: claims one of a user's 20 writes for the UTC day, and returns no row
-// once they are spent, which the caller turns into a 429.
-func (q *Queries) ClaimDictionaryGapWrite(ctx context.Context, arg ClaimDictionaryGapWriteParams) (int32, error) {
-	row := q.db.QueryRow(ctx, claimDictionaryGapWrite, arg.UserID, arg.Day)
-	var writes int32
-	err := row.Scan(&writes)
-	return writes, err
-}
 
 const recordDictionaryGap = `-- name: RecordDictionaryGap :one
 INSERT INTO dictionary_gaps (kind, raw_term, normalized_term, submitted_by)

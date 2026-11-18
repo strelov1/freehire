@@ -3,23 +3,21 @@ package sources
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
 	"golang.org/x/net/html"
 )
 
-// pageup adapts PageUp People career sites — a multi-tenant ATS common in AU/UK/NZ higher
-// education. Every tenant is served keylessly through the canonical host
-// careers.pageuppeople.com/<instID>/, so the board is the numeric institution id (e.g.
-// "513"). The listing endpoint returns a JSON envelope whose "results" field is a rendered
-// HTML fragment; the row wrapper differs per tenant (a <tr> table, a <li> list, or a <div>
-// card), so parsing keys on the cross-tenant-stable a.job-link anchor and pairs each job
-// with the location and summary that follow it in document order. Most tenants' listings
-// carry a usable summary; a minority render nothing of the kind, so a job that comes out of
-// pageupParseListing with no description gets one more fetch against its own detail page
-// (see detailDescription) — bounded so tenants whose listing already has a summary never
-// pay the extra request. Posted date is not exposed by either endpoint.
+// pageup adapts PageUp People career sites, a multi-tenant ATS. Every tenant is served keylessly
+// through careers.pageuppeople.com/<instID>/, except verified custom board 1023.
+// The board remains the numeric institution id. The
+// listing endpoint returns a JSON envelope whose "results" is a rendered HTML fragment; the row
+// wrapper differs per tenant (<tr>, <li> or <div>), so parsing keys on the stable a.job-link
+// anchor and pairs each job with the location and summary that follow it in document order. A
+// job with no listing summary gets one more fetch against its detail page (detailDescription).
+// Posted date is not exposed by either endpoint.
 type pageup struct {
 	http pageupHTTP
 }
@@ -45,32 +43,40 @@ var pageupXHR = map[string]string{"X-Requested-With": "XMLHttpRequest"}
 // pageupJobRe extracts the stable numeric job id from a job-link href of the form
 // /<instID>/cw/en/job/<jobID>/<slug>.
 var pageupJobRe = regexp.MustCompile(`/cw/en/job/(\d+)/`)
+var pageupNorthMemorialJobRe = regexp.MustCompile(`^/nmh/en-us/job/(\d+)/`)
 
 // pageupEnvelope is the search endpoint's JSON envelope; results is an HTML fragment.
 type pageupEnvelope struct {
 	Results string `json:"results"`
-	Count   int    `json:"count"`
+	Count   *int   `json:"count"`
 }
 
 func (p pageup) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	url := fmt.Sprintf("%s/%s/cw/en/search/?page-items=1000", pageupHost, e.Board)
+	searchURL := fmt.Sprintf("%s/%s/cw/en/search/?page-items=1000", pageupHost, e.Board)
+	if e.Board == "1023" {
+		searchURL = "https://jobs.northmemorial.com/nmh/en-us/search/?page-items=1000"
+	}
 	var env pageupEnvelope
-	if err := p.http.GetJSONWithHeaders(ctx, url, pageupXHR, &env); err != nil {
+	if err := p.http.GetJSONWithHeaders(ctx, searchURL, pageupXHR, &env); err != nil {
 		return nil, fmt.Errorf("pageup: search %s: %w", e.Board, err)
 	}
 	jobs, err := pageupParseListing(env.Results, e.Board)
 	if err != nil {
 		return nil, fmt.Errorf("pageup: parse %s: %w", e.Board, err)
 	}
+	if e.Board == "1023" && env.Count == nil {
+		return nil, fmt.Errorf("pageup: search %s: missing count", e.Board)
+	}
+	if env.Count != nil && len(jobs) != *env.Count {
+		return nil, fmt.Errorf("pageup: incomplete listing %s: recognized %d of %d", e.Board, len(jobs), *env.Count)
+	}
 	for i := range jobs {
 		jobs[i].Company = e.Company
 	}
 
-	// Some tenants' listing rows carry no summary of any shape (e.g. board 798) — the
-	// full text lives only on the job's own detail page. Others carry a summary that's
-	// just a short teaser rather than the posting body (pageupAlwaysDetailBoards). Fan
-	// out for both, so tenants whose listing summary already IS the full text never pay
-	// the extra request.
+	// Some tenants' rows carry no summary (the text lives only on the detail page); others only
+	// a short teaser (pageupAlwaysDetailBoards). Fan out for both, so tenants whose summary is
+	// the full text never pay the extra request.
 	var need []int
 	for i, j := range jobs {
 		if j.Description == "" || pageupAlwaysDetailBoards[e.Board] {
@@ -90,21 +96,17 @@ func (p pageup) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return jobs, nil
 }
 
-// pageupDetailDescriptionID is the container the detail page's XHR envelope wraps the full
-// posting body in, on tenants whose listing omits a summary (confirmed on board 798). It
-// is a platform template id, not something a tenant's own theme reliably reuses — a tenant
-// whose detail markup uses a different container (board 709, which needs no detail fetch
-// since its listing already carries a summary) simply yields "" here, same as a fetch
-// failure: the posting keeps its empty description rather than being dropped.
+// pageupDetailDescriptionID is the container the detail page's XHR envelope wraps the posting
+// body in. A tenant theme with a different container yields "" here, like a fetch failure: the
+// posting keeps an empty description rather than being dropped.
 const pageupDetailDescriptionID = "job-details"
 
-// pageupAlwaysDetailBoards are tenants whose listing summary is a short teaser (one or two
-// sentences) rather than the actual posting body, so the "already has a summary" skip would
-// otherwise leave every job on the board stuck with that teaser. Confirmed on board 889
-// (Flight Centre): its listing row's "summary" carries a marketing blurb, while the full
-// posting lives in the same #job-details container the no-summary tenants use.
+// pageupAlwaysDetailBoards are tenants whose listing summary is a short marketing teaser, so the
+// "already has a summary" skip would leave every job stuck with it; the full posting is in the
+// same #job-details container.
 var pageupAlwaysDetailBoards = map[string]bool{
-	"889": true,
+	"889":  true,
+	"1023": true,
 }
 
 // detailDescription fetches one job's detail page and returns its sanitized description
@@ -125,15 +127,18 @@ func (p pageup) detailDescription(ctx context.Context, jobURL string) string {
 	return sanitizeHTML(innerHTML(node))
 }
 
-// pageupParseListing parses a search-results HTML fragment into jobs. It walks the DOM in
-// document order: an a.job-link starts a new job (id/title/url), and the location and
-// summary that follow before the next job-link are attached to it — a pairing that holds
-// across the <tr> and <li> tenant layouts, whose only reliable common anchor is the link.
+// pageupParseListing parses a search-results HTML fragment into jobs. An a.job-link starts a new
+// job, and the location and summary that follow before the next job-link attach to it; the link
+// is the only anchor common to the <tr> and <li> layouts.
 func pageupParseListing(fragment, board string) ([]Job, error) {
-	// A tenant that renders rows returns bare <tr>s meant to be injected into an existing
-	// <table>; parsing them without that context foster-parents the cells out and drops the
-	// summary row, so supply the table wrapper. The <li> layout carries no <tr> and parses
-	// as-is.
+	base := pageupHost
+	jobRe := pageupJobRe
+	if board == "1023" {
+		base = "https://jobs.northmemorial.com"
+		jobRe = pageupNorthMemorialJobRe
+	}
+	// Bare <tr>s meant for an existing <table> lose their cells to foster-parenting and drop the
+	// summary row, so supply the table wrapper.
 	if strings.Contains(fragment, "<tr") {
 		fragment = "<table>" + fragment + "</table>"
 	}
@@ -145,9 +150,23 @@ func pageupParseListing(fragment, board string) ([]Job, error) {
 		jobs []Job
 		cur  *Job
 	)
+	seen := map[string]int{}
 	flush := func() {
 		if cur != nil && cur.ExternalID != "" {
-			jobs = append(jobs, *cur)
+			if i, ok := seen[cur.ExternalID]; ok {
+				if jobs[i].Title == "" {
+					jobs[i].Title = cur.Title
+				}
+				if jobs[i].Location == "" {
+					jobs[i].Location = cur.Location
+				}
+				if jobs[i].Description == "" {
+					jobs[i].Description = cur.Description
+				}
+			} else {
+				seen[cur.ExternalID] = len(jobs)
+				jobs = append(jobs, *cur)
+			}
 		}
 		cur = nil
 	}
@@ -158,7 +177,11 @@ func pageupParseListing(fragment, board string) ([]Job, error) {
 		switch {
 		case n.Data == "a" && HasClass(n, "job-link"):
 			href := Attr(n, "href")
-			m := pageupJobRe.FindStringSubmatch(href)
+			parsed, err := url.Parse(href)
+			if err != nil || (parsed.IsAbs() && parsed.Scheme+"://"+parsed.Host != base) {
+				return true
+			}
+			m := jobRe.FindStringSubmatch(parsed.Path)
 			if m == nil {
 				return true // a nav/back link, not a posting
 			}
@@ -166,7 +189,7 @@ func pageupParseListing(fragment, board string) ([]Job, error) {
 			cur = &Job{
 				ExternalID: m[1],
 				Title:      textContent(n),
-				URL:        pageupHost + href,
+				URL:        base + parsed.RequestURI(),
 			}
 		case cur == nil:
 			// nothing to attach yet
@@ -174,8 +197,7 @@ func pageupParseListing(fragment, board string) ([]Job, error) {
 			cur.Location = textContent(n)
 		case (HasClass(n, "jobs-summary") || HasClass(n, "summary")) && cur.Description == "":
 			cur.Description = textContent(n)
-		// Some tenants render the summary as a bare <p> with no class at all (e.g. board
-		// 709); catch it too, so long as nothing has claimed the description yet.
+		// Some tenants render the summary as a bare classless <p>.
 		case n.Data == "p" && Attr(n, "class") == "" && cur.Description == "":
 			cur.Description = textContent(n)
 		}

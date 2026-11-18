@@ -64,9 +64,7 @@ describe('clipboardText', () => {
   // The draft is pasted into a mail client, where the subject is a separate field.
   // Labelling it keeps it from silently becoming the first line of the body.
   it('carries the subject labelled, above the body', () => {
-    expect(clipboardText(draft)).toBe(
-      'Subject: Following up: Go Engineer application\n\nHello,\n\nI applied…',
-    );
+    expect(clipboardText(draft)).toBe('Subject: Following up: Go Engineer application\n\nHello,\n\nI applied…');
   });
 
   it('adds the recipient only when one is known', () => {

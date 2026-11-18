@@ -2,22 +2,16 @@ package searchdrain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
 	"github.com/strelov1/freehire/internal/platform/outbox"
 )
 
-// DeletionStore is the persistence the deletion runner needs — the same lease/retry shape as
-// Store, minus Jobs and Reap.
-//
-// There is no Jobs: a removal identifies its document by primary key, and by the time an
-// entry is drained the job row may be gone (a hard delete). That is an expected
-// case here, not a corruption to route around.
-//
-// There is no Reap either. Store.Reap exists because the indexing claim skips entries whose
-// job closed or became a repost, which strands them forever. This claim skips nothing, so
-// nothing strands; dead-lettered entries are cleaned on their own schedule.
+// DeletionStore is the persistence the deletion runner needs: Store's lease/retry shape minus Jobs and Reap.
+// There is no Jobs because a removal is identified by primary key and the job row may already be hard-deleted.
+// There is no Reap because this claim skips nothing, so nothing strands.
 type DeletionStore interface {
 	Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error)
 	Complete(ctx context.Context, entries []Claimed) error
@@ -33,16 +27,15 @@ type Deleter interface {
 
 // DeletionStats reports what a deletion run did.
 type DeletionStats struct {
+	// Claimed includes waves deferred for lease-expiry retry.
+	Claimed      int
 	Deleted      int
 	Failed       int
 	DeadLettered int
 }
 
 // DeletionRunner drains the removal queue wave by wave until no claimable entries remain.
-//
-// It is a sibling of Runner rather than a phase inside it: the two share a queue shape and an
-// index, but nothing else. This one builds no documents, loads no rows, and reaps nothing, so
-// folding it in would mean a Runner whose Store half-applies to half its work.
+// It is a sibling of Runner, not a phase in it: they share only the queue shape and the index.
 type DeletionRunner struct {
 	Store   DeletionStore
 	Deleter Deleter
@@ -51,25 +44,37 @@ type DeletionRunner struct {
 // Run drains the removal queue. A failure on a single entry is recorded and never aborts the
 // run.
 func (r DeletionRunner) Run(ctx context.Context, opt RunOptions) (DeletionStats, error) {
+	return r.run(ctx, opt, false)
+}
+
+func (r DeletionRunner) run(ctx context.Context, opt RunOptions, oneWave bool) (DeletionStats, error) {
 	rn := &deletionRun{store: r.Store, deleter: r.Deleter, opt: opt}
 
-	_, err := outbox.RunBatch(ctx, claimFunc(r.Store.Claim), outbox.RunOptions{
+	_, err := outbox.RunBatch(ctx, claimFunc(func(ctx context.Context, batch, lease int) ([]Claimed, error) {
+		if oneWave && rn.stats.Claimed > 0 {
+			return nil, nil
+		}
+		entries, err := r.Store.Claim(ctx, batch, lease)
+		rn.stats.Claimed += len(entries)
+		return entries, err
+	}), outbox.RunOptions{
 		BatchSize:    opt.BatchSize,
 		LeaseSeconds: opt.LeaseSeconds,
 		MaxPerRun:    opt.MaxPerRun,
 		OnWave: func(outbox.Stats) {
-			log.Printf("search-drain: progress deleted=%d failed=%d dead=%d",
-				rn.stats.Deleted, rn.stats.Failed, rn.stats.DeadLettered)
+			if !oneWave {
+				log.Printf("search-drain: progress deleted=%d failed=%d dead=%d",
+					rn.stats.Deleted, rn.stats.Failed, rn.stats.DeadLettered)
+			}
 		},
-	}, rn.processWave, rn.unreachableFallback)
+	}, rn.processWave, nil)
 	if err != nil {
 		return rn.stats, fmt.Errorf("claim deletions: %w", err)
 	}
 	return rn.stats, nil
 }
 
-// claimFunc adapts a bare Claim method to outbox.Claimer, which the indexing Store satisfies
-// wholesale only because it happens to carry the other methods too.
+// claimFunc adapts a bare Claim method to outbox.Claimer.
 type claimFunc func(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error)
 
 func (f claimFunc) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
@@ -86,22 +91,16 @@ type deletionRun struct {
 func (rn *deletionRun) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, error) {
 	before := rn.stats
 	rn.processBatch(ctx, batch)
-	return outbox.Stats{
+	delta := outbox.Stats{
 		Succeeded:    rn.stats.Deleted - before.Deleted,
 		Failed:       rn.stats.Failed - before.Failed,
 		DeadLettered: rn.stats.DeadLettered - before.DeadLettered,
-	}, nil
+	}
+	delta.Deferred = len(batch) - delta.Succeeded - delta.Failed - delta.DeadLettered
+	return delta, nil
 }
 
-// unreachableFallback satisfies outbox.RunBatch's Processor parameter. processWave never
-// returns an error, so this is never called; panicking documents the invariant rather than
-// fabricating an outcome.
-func (rn *deletionRun) unreachableFallback(context.Context, Claimed) outbox.Outcome {
-	panic("search-drain: outer per-item fallback invoked, but processWave never returns an error")
-}
-
-// processBatch removes a whole wave as one index task, falling back to per-item removal if
-// that fails — with one exception, mirroring the indexing runner.
+// processBatch removes a wave as one index task, falling back to per-item removal if that fails.
 func (rn *deletionRun) processBatch(ctx context.Context, entries []Claimed) {
 	if len(entries) == 0 {
 		return
@@ -119,14 +118,16 @@ func (rn *deletionRun) processBatch(ctx context.Context, entries []Claimed) {
 		return
 	}
 
-	// A call context that ended is not a per-document defect: the wave is skipped whole and
-	// left claimed, so its lease expiry retries it fresh. Falling back here would turn one
-	// slow call into BatchSize equally slow ones, all competing for the same disk — the
-	// shape that produced a real outage on the indexing side (see the incident note in
-	// AGENTS.md).
+	// An ended call context is not a per-document defect: leave the wave claimed so lease expiry
+	// retries it. Falling back would turn one slow call into BatchSize slow ones.
 	if ctxErr := callCtx.Err(); ctxErr != nil {
 		log.Printf("search-drain: deletion wave of %d abandoned (%v), skipping (lease will retry): %v",
 			len(entries), ctxErr, err)
+		return
+	}
+
+	if errors.Is(err, ErrSkipWave) {
+		log.Printf("search-drain: deletion wave of %d left claimed for lease-expiry retry: %v", len(entries), err)
 		return
 	}
 
@@ -141,20 +142,21 @@ func (rn *deletionRun) processOne(ctx context.Context, entry Claimed) {
 	defer cancel()
 
 	if err := rn.deleter.DeleteBatch(callCtx, []int64{entry.JobID}); err != nil {
-		// Same rule as the wave above, one entry down: a call that was abandoned taught
-		// us nothing about this entry, so it keeps its attempt budget and its claim.
+		// Same rule as the wave: an abandoned call keeps the entry's attempt budget and claim.
 		if ctxErr := callCtx.Err(); ctxErr != nil {
 			log.Printf("search-drain: deletion for job %d abandoned (%v), leaving claimed: %v",
 				entry.JobID, ctxErr, err)
+			return
+		}
+		if errors.Is(err, ErrSkipWave) {
+			log.Printf("search-drain: deletion for job %d left claimed for lease-expiry retry: %v", entry.JobID, err)
 			return
 		}
 		dead, failErr := rn.store.Fail(ctx, entry.OutboxID, err.Error(), rn.opt.MaxAttempts)
 		if failErr != nil {
 			log.Printf("search-drain: record deletion failure for job %d: %v", entry.JobID, failErr)
 		}
-		// One entry, one outcome — dead-lettered OR failed, never both, matching the
-		// indexing runner's failN. Counting it twice made a single exhausted entry read
-		// as two problems in the run's own summary line and in the exit code's inputs.
+		// One outcome per entry: dead-lettered or failed, never both.
 		if failErr == nil && dead {
 			rn.stats.DeadLettered++
 			return
@@ -169,12 +171,8 @@ func (rn *deletionRun) processOne(ctx context.Context, entry Claimed) {
 	rn.stats.Deleted++
 }
 
-// callContext bounds one index operation, or returns the parent unchanged when no timeout is
-// configured.
-//
-// Whether the call context ended is the whole classification, so the two branches must not
-// differ in whether one exists: the untimed branch returns the parent, which is exactly
-// what "the run is being cancelled" needs it to report.
+// callContext bounds one index operation, or returns the parent unchanged when no timeout is set.
+// The untimed branch returns the parent so cancellation still reads as an ended context.
 func (rn *deletionRun) callContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if rn.opt.CallTimeout <= 0 {
 		return ctx, func() {}

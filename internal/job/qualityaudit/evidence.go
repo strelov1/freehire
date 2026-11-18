@@ -1,9 +1,7 @@
-// Package qualityaudit measures, by sampling, how accurate what the catalogue shows is: whether
-// a posting we serve is still live at its source, and whether a posting we tag remote says so
-// itself. It MEASURES and never acts — nothing here closes, reopens or retags a posting; the
-// lifecycle workers own those writes. cmd/quality-audit runs it weekly and publishes the counts.
-//
-// See openspec/changes/add-sampled-quality-audit/design.md for why each rule is what it is.
+// Package qualityaudit measures, by sampling, how accurate the catalogue is: whether a
+// served posting is still live at its source, and whether a posting tagged remote says
+// so itself. It only measures; the lifecycle workers own closing, reopening and
+// retagging. cmd/quality-audit runs it weekly and publishes the counts.
 package qualityaudit
 
 import (
@@ -17,8 +15,8 @@ import (
 type Outcome int
 
 const (
-	// Unmeasured: the audit holds no trustworthy evidence either way. It is a count of its own,
-	// never folded into Live — a source the audit cannot read must not look healthy.
+	// Unmeasured: the audit holds no trustworthy evidence either way. Counted on its own,
+	// never folded into Live.
 	Unmeasured Outcome = iota
 	// Live: the source answered 2xx on the posting's own URL, on a host that 404s a posting it
 	// does not have.
@@ -27,8 +25,7 @@ const (
 	Dead
 )
 
-// Reason says why a posting is Unmeasured. It goes to the run log, never to a gauge label: the
-// gauges count only sampled/live/dead and the remainder is the unmeasured share.
+// Reason says why a posting is Unmeasured. The fixed vocabulary bounds metric cardinality.
 type Reason string
 
 const (
@@ -43,12 +40,18 @@ const (
 	ReasonCanceled     Reason = "canceled"     // the run was stopped first
 )
 
-// readStatus reads one answer by its status alone. Bodies are never read: the shared body
-// classifier read arbeitnow's live ".ch" pages ("no longer accepting applications from the UK")
-// as closed, and a body is where a site's wording, language and A/B test all live.
+// UnmeasuredReasons is the bounded set of coverage failures, in exposition order.
+var UnmeasuredReasons = [...]Reason{
+	ReasonNoAnswer, ReasonMoved, ReasonRefused, ReasonUncalibrated, ReasonRobots,
+	ReasonBudget, ReasonStatusBlind, ReasonBadURL, ReasonCanceled,
+}
+
+// readStatus reads one answer by its status alone. Bodies are never read: the shared
+// body classifier misread arbeitnow's live ".ch" pages ("no longer accepting
+// applications from the UK") as closed.
 //
-// A 2xx counts as live only when it is still the posting's own page. Greenhouse sends a closed
-// posting to its board with a 200, so a 2xx that arrived somewhere else proves nothing.
+// A 2xx counts as live only when it is still the posting's own page: Greenhouse sends
+// a closed posting to its board with a 200.
 func readStatus(requested *url.URL, status int, final *url.URL) (Outcome, Reason) {
 	switch {
 	case status == http.StatusNotFound || status == http.StatusGone:
@@ -68,9 +71,9 @@ func readStatus(requested *url.URL, status int, final *url.URL) (Outcome, Reason
 	}
 }
 
-// samePage reports whether final is still requested: same host (case folded) and same path (a
-// trailing slash ignored). The query is ignored — a tracking parameter added on the way is not a
-// different posting, while a posting id living in the query is checked by the canary instead.
+// samePage reports whether final is still the requested page: same host (case folded)
+// and path (trailing slash ignored). The query is ignored; a posting id living in the
+// query is checked by the canary instead.
 func samePage(requested, final *url.URL) bool {
 	if final == nil {
 		return false
@@ -79,20 +82,18 @@ func samePage(requested, final *url.URL) bool {
 		strings.TrimSuffix(requested.EscapedPath(), "/") == strings.TrimSuffix(final.EscapedPath(), "/")
 }
 
-// minCanaryToken is the shortest posting id the canary will rewrite. A short id collides with a
-// real posting too easily, and a canary that hits one answers 200 and marks a good host
-// uncalibrated — coverage lost, but for nothing.
+// minCanaryToken is the shortest posting id the canary will rewrite: a short id
+// collides with a real posting and would wrongly mark a good host uncalibrated.
 const minCanaryToken = 5
 
-// canaryURL builds the address of a posting that cannot exist: the stored URL with its posting
-// id — the last ":"-segment of external_id — replaced by a random token of the same shape. A
-// host that answers it 404/410 has shown that its 404 means "no such posting", which is what
-// lets its other answers count. ok is false when the id is too short or does not appear after
-// the host, and then this posting cannot calibrate its host.
+// canaryURL builds the address of a posting that cannot exist: the stored URL with its
+// posting id (the last ":"-segment of external_id) replaced by a random token of the
+// same shape. A host that answers it 404/410 has shown its 404 means "no such posting".
+// ok is false when the id is too short or does not appear after the host.
 //
-// The token keeps its shape — digits stay digits (never gaining a leading zero), hex stays hex,
-// separators stay put — so a router that validates the id's format still routes the canary to
-// the posting handler rather than to a generic 404 page that would prove nothing about it.
+// The token keeps its shape (digits stay digits, never gaining a leading zero; hex
+// stays hex; separators stay put) so a router that validates the id's format still
+// routes the canary to the posting handler rather than a generic 404.
 func canaryURL(raw, externalID string, rng *rand.Rand) (string, bool) {
 	token := externalID[strings.LastIndex(externalID, ":")+1:]
 	if len(token) < minCanaryToken {

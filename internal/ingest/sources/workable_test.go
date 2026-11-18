@@ -3,9 +3,59 @@ package sources
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+// TestWorkableFetchMergesRepeatedLocations keeps one write per posting while
+// retaining every country and distinct place listed under its shortcode.
+func TestWorkableFetchMergesRepeatedLocations(t *testing.T) {
+	fake := &fakeHTTP{body: `{"jobs":[
+		{"shortcode":"MULTI","title":"Backend Engineer","url":"https://apply.workable.com/j/MULTI",
+		 "description":"<p>Build services.</p>","telecommuting":true,"type":"Full-time",
+		 "published_on":"2026-11-01","city":"Berlin","country":"Germany"},
+		{"shortcode":"OTHER","title":"Data Engineer","city":"London","country":"United Kingdom"},
+		{"shortcode":"MULTI","title":"Backend Engineer","city":"Paris","country":"France"},
+		{"shortcode":"MULTI","title":"Backend Engineer","country":"United Kingdom"},
+		{"shortcode":"MULTI","title":"Backend Engineer","city":"Berlin","country":"Germany"},
+		{"shortcode":"MULTI","title":"Backend Engineer"}
+	]}`}
+	jobs, err := NewWorkable(fake).Fetch(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("got %d postings, want one per shortcode", len(jobs))
+	}
+	if jobs[0].ExternalID != "MULTI" || jobs[1].ExternalID != "OTHER" {
+		t.Fatalf("posting identities or first-seen order changed: %q, %q", jobs[0].ExternalID, jobs[1].ExternalID)
+	}
+	j := jobs[0]
+	if j.Location != "Berlin, Germany; Paris, France; United Kingdom" {
+		t.Errorf("Location = %q, want each distinct non-empty place", j.Location)
+	}
+	if !reflect.DeepEqual(j.Countries, []string{"de", "fr", "gb"}) {
+		t.Errorf("Countries = %v, want all three structured countries", j.Countries)
+	}
+	if j.URL != "https://apply.workable.com/j/MULTI" || j.Company != "Acme" || j.Description != "<p>Build services.</p>" ||
+		!j.Remote || j.WorkMode != "remote" || j.EmploymentType != "full_time" || j.PostedAt == nil {
+		t.Errorf("shared posting fields were lost: %+v", j)
+	}
+	if jobs[1].Location != "London, United Kingdom" || !reflect.DeepEqual(jobs[1].Countries, []string{"gb"}) {
+		t.Errorf("locations leaked between postings: %+v", jobs[1])
+	}
+}
+
+// TestWorkableFetchRejectsMissingShortcode prevents unidentified rows from being
+// merged into one posting or mistaken for an empty board that permits closures.
+func TestWorkableFetchRejectsMissingShortcode(t *testing.T) {
+	fake := &fakeHTTP{body: `{"jobs":[{"title":"Backend Engineer"}]}`}
+	jobs, err := NewWorkable(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	if err == nil || len(jobs) != 0 {
+		t.Fatalf("unidentified listing returned jobs=%d, error=%v; want a failed listing", len(jobs), err)
+	}
+}
 
 func TestWorkableProvider(t *testing.T) {
 	if got := NewWorkable(nil).Provider(); got != "workable" {

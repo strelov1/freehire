@@ -92,7 +92,7 @@ func TestCrawlDeadlineSweepsOnlyTheBoardsItFinished(t *testing.T) {
 	budget := runBudget{timeout: time.Hour, reserve: 10 * time.Minute}
 	sweepCtx, cancelSweep := budget.sweepContext(parent, time.Now())
 	defer cancelSweep()
-	if failed := sweep(sweepCtx, q, registry, runStats, crawled, nil, true); failed != 0 {
+	if failed := sweep(sweepCtx, q, registry, runStats, crawled, nil, true, false); failed != 0 {
 		t.Fatalf("sweep reported %d failures — a context cancelled with the crawl must not reach it", failed)
 	}
 

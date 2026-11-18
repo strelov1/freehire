@@ -3,7 +3,6 @@ package referral
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -190,13 +189,6 @@ func (r *QueriesRepository) CreateRequest(ctx context.Context, in RequestInput) 
 		return Request{}, err
 	}
 	return requestFromRow(row), nil
-}
-
-// CountRequestsSince counts a seeker's requests created at or after the cutoff.
-func (r *QueriesRepository) CountRequestsSince(ctx context.Context, seekerID int64, since time.Time) (int64, error) {
-	return r.q.CountReferralRequestsSince(ctx, db.CountReferralRequestsSinceParams{
-		SeekerUserID: seekerID, Since: pgconv.Timestamptz(&since),
-	})
 }
 
 // GetRequest returns a request by id; ok is false when it does not exist.

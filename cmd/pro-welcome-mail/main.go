@@ -1,29 +1,16 @@
 // Command pro-welcome-mail welcomes every account newly entitled to a paying tier (Pro or
-// Ultra) with a one-time, personal email — see openspec/changes/welcome-pro-subscribers.
-// One run does a single pass and exits; run it every 10 minutes, independent of
-// cmd/billing-sync/cmd/discord-sync's hourly cadence, so a purchase confirmation does not
-// read as broken by arriving an hour late.
+// Ultra) with a one-time, personal email. One run does a single pass and exits non-zero when
+// any send failed; run it every 10 minutes, independent of cmd/billing-sync's hourly cadence.
 //
-// It exits non-zero when any send failed, so the timer's failure handling surfaces a
-// broken sender rather than the pass quietly welcoming nobody.
-//
-// It is its own worker rather than a pass inside cmd/billing-sync for the same layering
-// reason cmd/discord-sync is: internal/identity/billing is layer identity, this mails
-// through internal/engage/prowelcome which is layer engage, and identity must not import
-// engage.
+// It is its own worker, not a pass inside cmd/billing-sync, for layering: identity/billing must
+// not import engage, which this mails through (as cmd/discord-sync).
 //
 // Needs:
 //
-//	AWS_REGION + NOTIFY_EMAIL_FROM   the SES transport, as for every other mail. Missing
-//	                                  either is a no-op that never opens the pool — the
-//	                                  gate runs BEFORE worker.Bootstrap, same as
-//	                                  cmd/discord-sync, not after.
-//	ONBOARDING_REPLY_TO              the same human inbox the founder signup sequence
-//	                                  already answers from — one reply address, not a
-//	                                  second one that could disagree with it. Missing this
-//	                                  is a hard failure (exit 1), not a soft no-op: this
-//	                                  letter asks for a reply, and sending it with nowhere
-//	                                  for that reply to land is worse than not sending it.
+//	AWS_REGION + NOTIFY_EMAIL_FROM   the SES transport. Missing either is a no-op that never
+//	                                  opens the pool (the gate runs before worker.Bootstrap).
+//	ONBOARDING_REPLY_TO              the founder sequence's reply inbox. Missing it is a hard
+//	                                  failure (exit 1): this letter asks for a reply.
 //	FRONTEND_ORIGIN, JWT_SECRET       where the logo/portrait resolve and the
 //	                                  unsubscribe link is signed
 //
@@ -43,22 +30,17 @@ import (
 )
 
 func main() {
-	worker.Main(run)
+	worker.Main(run, emailnotify.HoldKeys("pro-welcome-mail")...)
 }
 
 func run() int {
-	// Gate before Bootstrap, not after — the same reason cmd/discord-sync does: with no
-	// mail transport there is nothing to send, and an unconfigured deployment must run
-	// without touching the database at all.
+	// Gate before Bootstrap: an unconfigured deployment must not touch the database.
 	cfg := config.Load()
 	if cfg.AWSRegion == "" || cfg.NotifyEmailFrom == "" {
 		log.Print("pro-welcome-mail: email transport not configured (AWS_REGION / NOTIFY_EMAIL_FROM) — nothing to do")
 		return worker.Skip("AWS_REGION+NOTIFY_EMAIL_FROM")
 	}
-	// A missing reply address is a misconfiguration, not an absent feature: this letter
-	// asks for a reply. Sending it with replies going nowhere is worse than not sending
-	// it — the same hard stop cmd/onboarding takes for the sequence it shares the inbox
-	// with.
+	// A missing reply address is a hard stop, as in cmd/onboarding: this letter asks for a reply.
 	if cfg.OnboardingReplyTo == "" {
 		log.Print("pro-welcome-mail: ONBOARDING_REPLY_TO is unset — refusing to send a letter that asks for a reply")
 		return 1
@@ -82,6 +64,7 @@ func run() int {
 		log.Printf("pro-welcome-mail: ses: %v", err)
 		return 1
 	}
+	ses = ses.WithSendingBreaker()
 
 	mailer := prowelcome.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin,
 		emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))

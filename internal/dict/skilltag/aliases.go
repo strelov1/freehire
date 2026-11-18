@@ -2,18 +2,16 @@ package skilltag
 
 import "slices"
 
-// aliasIndex inverts every alias tier at once: canonical → the spellings the parser
-// accepts for it. Built at init, because the tables it reads are package-level and the
-// answer never changes at runtime.
+// aliasIndex inverts every alias tier at once: canonical → the spellings the parser accepts for
+// it. Built at init; the tables never change at runtime.
 //
-// The tiers do not resolve under the same conditions — a résumé acronym is not accepted
-// on job text, a category-scoped one only inside its categories — and the index
-// deliberately flattens that. Its consumer is the glossary, which answers "what else is
-// this called?", not the parser, which answers "may I resolve this here?". Anything
-// that needs the second question must go through Parse.
+// The tiers resolve under different conditions (a résumé acronym is not accepted on job text, a
+// category-scoped one only inside its categories) and the index flattens that: its consumer is
+// the glossary ("what else is this called?"), not the parser. Anything that needs "may I resolve
+// this here?" must go through Parse.
 //
-// Spellings are kept verbatim: the acronym tiers are case-sensitive, and "SAFe" written
-// as "safe" would name the ordinary English word the table exists to avoid.
+// Spellings are kept verbatim: the acronym tiers are case-sensitive, and "SAFe" written as "safe"
+// would name the ordinary English word the table exists to avoid.
 var aliasIndex = func() map[string][]string {
 	index := map[string][]string{}
 	add := func(canonical, alias string) {
@@ -36,8 +34,8 @@ var aliasIndex = func() map[string][]string {
 		add(scoped.canonical, alias)
 	}
 
-	// Sorted then compacted: the tiers overlap ("RAG" is in two acronym tables), and
-	// sorting is needed anyway because map iteration would reorder the list per build.
+	// Sorted then compacted: the tiers overlap ("RAG" is in two acronym tables), and map iteration
+	// would reorder the list per build.
 	for canonical, aliases := range index {
 		slices.Sort(aliases)
 		index[canonical] = slices.Compact(aliases)
@@ -45,16 +43,12 @@ var aliasIndex = func() map[string][]string {
 	return index
 }()
 
-// Aliases is every spelling the PARSER accepts for a canonical skill, sorted and
-// without repeats — "k8s" and "kubernetes", "c++" and "c/c++", "RAG" and "retrieval
-// augmented generation". Empty for a slug the dictionary does not know.
+// Aliases is every spelling the PARSER accepts for a canonical skill, sorted and without
+// repeats ("k8s" and "kubernetes", "c++" and "c/c++"). Empty for an unknown slug.
 //
-// "The parser", not "resolves to it": Canonicalize additionally admits a bare canonical
-// through canonicalSet, and a canonical is not automatically an alias of itself
-// (canonicalize.go). This lists the alias tables and nothing else.
-//
-// The glossary renders this as the skill's other names, which is why the order is fixed
-// rather than map order: the same page must read the same way on every build.
+// It lists the alias tables and nothing else: Canonicalize also admits a bare canonical through
+// canonicalSet, and a canonical is not automatically an alias of itself (canonicalize.go). The
+// order is fixed so the glossary page reads the same on every build.
 func Aliases(canonical string) []string {
 	return slices.Clone(aliasIndex[canonical])
 }

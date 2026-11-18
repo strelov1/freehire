@@ -1,7 +1,11 @@
 <script lang="ts">
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import { messages } from './FacetSection.messages';
   import type { Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
-  import { dynamicLabel, dynamicOptions, reportedCount, type FacetDef, type FacetOption, type FacetStore } from '#lib/facets.js';
+  import { dynamicLabel, type FacetDef, type FacetOption, type FacetStore } from '#lib/facets.js';
+  import { dynamicOptions, reportedCount } from '#lib/facetOptions.js';
   import type { FacetCounts } from '#lib/types.js';
   import PillGroup from './PillGroup.svelte';
   import RemoteSearchSelect from './RemoteSearchSelect.svelte';
@@ -21,8 +25,16 @@
     counts,
     expand = false,
     empty,
-  }: { def: FacetDef; store: FacetStore; counts?: FacetCounts | null; expand?: boolean; empty?: Snippet<[string]> } = $props();
+  }: {
+    def: FacetDef;
+    store: FacetStore;
+    counts?: FacetCounts | null;
+    expand?: boolean;
+    empty?: Snippet<[string]>;
+  } = $props();
 
+  const prompts: Partial<Record<string, string>> = $derived(t(messages, locale()));
+  const placeholder = $derived(def.placeholder ? prompts[def.param] : undefined);
   const st = $derived(store.facet(def.param));
   const total = $derived(st.include.length + st.exclude.length);
   // Excludable facets cycle through the exclude state; the rest only toggle include.
@@ -34,7 +46,8 @@
   // values absent from the current distribution are still listed so they stay
   // removable.
   const selectOptions = $derived.by((): FacetOption[] => {
-    if (def.dynamic) return dynamicOptions(def.param, counts?.facets?.[def.param] ?? {}, [...st.include, ...st.exclude]);
+    if (def.dynamic)
+      return dynamicOptions(def.param, counts?.facets?.[def.param] ?? {}, [...st.include, ...st.exclude]);
     const dist = counts?.facets?.[def.param];
     const base = def.options ?? [];
     return dist ? base.map((o) => ({ ...o, count: reportedCount(dist[o.value] ?? 0) })) : base;
@@ -87,7 +100,7 @@
       include={st.include}
       exclude={st.exclude}
       excludable={def.excludable}
-      placeholder={def.placeholder}
+      {placeholder}
       cap={def.cap}
       searchAliases={def.searchAliases}
       techIcons={def.techIcons}
@@ -101,7 +114,7 @@
       search={def.remote}
       include={st.include}
       exclude={st.exclude}
-      placeholder={def.placeholder}
+      {placeholder}
       {onToggle}
       fallbackLabel={(v) => dynamicLabel(def.param, v)}
       {expand}
@@ -111,7 +124,7 @@
       tokens={st.include}
       onAdd={(v) => store.add(def.param, v)}
       onRemove={(v) => store.remove(def.param, v)}
-      placeholder={def.placeholder}
+      {placeholder}
     />
   {/if}
 </div>

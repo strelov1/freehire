@@ -15,29 +15,25 @@ import (
 	"github.com/strelov1/freehire/internal/identity/username"
 )
 
-// The moderation statuses a profile can hold. Pausing is NOT one of them: it is the
-// mentor's own switch and lives in its own field, because status records what a MODERATOR
-// decided. Folded together, a mentor resuming would have to remember the moderator's
-// decision and a moderator acting on a paused profile would silently unpause it.
+// The moderation statuses a profile can hold. Pausing is not one: it is the mentor's own
+// switch in its own field, because status records what a moderator decided.
 const (
 	StatusPending  = "pending"
 	StatusApproved = "approved"
 	StatusRejected = "rejected"
-	// StatusWithdrawn is a mentor who has left. The row SURVIVES it: bookings and reviews
-	// reference the profile ON DELETE CASCADE, so deleting would erase every session that
-	// ever happened — and a session belongs to both people who were in it, not to whether
-	// the mentor is still here. Not permanent: Reactivate sends it back to StatusPending.
+	// StatusWithdrawn is a mentor who has left. The row survives: bookings and reviews
+	// cascade-delete with it, and a session belongs to both people in it. Reactivate sends
+	// it back to StatusPending.
 	StatusWithdrawn = "withdrawn"
 )
 
-// The sentinels the profile use cases raise, each carrying the HTTP status the handler's
-// one error switch maps it to — the convention internal/engage/referral established.
+// The sentinels the profile use cases raise, each with the HTTP status the handler maps it
+// to (the convention of internal/engage/referral).
 var (
 	// ErrInvalidProfile → 422. A submission that could never yield a working profile.
 	ErrInvalidProfile = errors.New("mentorship: invalid profile")
-	// ErrProfileNotFound → 404. No profile, or one belonging to somebody else — the two
-	// are deliberately the same answer, so an endpoint never confirms that a profile
-	// exists to a caller who does not own it.
+	// ErrProfileNotFound → 404. No profile, or somebody else's: deliberately the same
+	// answer.
 	ErrProfileNotFound = errors.New("mentorship: profile not found")
 	// ErrAlreadyAMentor → 409. One profile per account.
 	ErrAlreadyAMentor = errors.New("mentorship: this account already has a mentor profile")
@@ -47,15 +43,13 @@ var (
 	ErrCompanyNotFound = errors.New("mentorship: company not found")
 	// ErrProfileNotPending → 409. A decision on a profile already decided.
 	ErrProfileNotPending = errors.New("mentorship: profile is not pending")
-	// ErrProfileNotWithdrawn → 409. Resubmission is only for a withdrawn profile —
-	// forcing a pending, rejected or approved one back to review out of turn is refused
-	// rather than treated as a no-op, symmetric with ErrProfileNotPending.
+	// ErrProfileNotWithdrawn → 409. Resubmission is only for a withdrawn profile; other
+	// statuses are refused, not treated as a no-op.
 	ErrProfileNotWithdrawn = errors.New("mentorship: profile is not withdrawn")
 )
 
-// slugPattern is the shape of a profile's public address, deliberately identical to the
-// one users.username carries (migration 0128): lowercase, digits, single hyphens between
-// them, 3–30 characters.
+// slugPattern is the shape of a profile's public address, identical to users.username:
+// lowercase, digits, single hyphens between them, 3–30 characters.
 var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // Profile is a mentor as the product talks about one.
@@ -64,12 +58,11 @@ type Profile struct {
 	UserID      int64
 	CompanySlug string
 	CompanyName string
-	// Slug is the profile's public address. It is fixed at creation — an explicit choice,
-	// or one SubmitProfile derived from DisplayName — and never changes afterward, because
-	// changing it would 404 every link anybody has already shared.
+	// Slug is the profile's public address, fixed at creation (explicit, or derived from
+	// DisplayName) because changing it would 404 every shared link.
 	Slug string
-	// DisplayName is the name the public sees. Required, and the reason this profile is
-	// not a referral offer: a referral is anonymous by design, a mentor is chosen.
+	// DisplayName is the name the public sees. Required: a mentor is named, unlike a
+	// referral.
 	DisplayName string
 	Headline    string
 	Bio         string
@@ -78,14 +71,11 @@ type Profile struct {
 	Timezone    string
 	Session     slots.SessionParams
 	MeetingURL  string
-	// ShowPhoto is the mentor's own opt-in to serve their account's stored CV headshot
-	// on their public directory card and profile page. Off by default: the account
-	// headshot is a job-search photo a mentor may not want reused here without asking.
+	// ShowPhoto is the mentor's opt-in to serve their stored CV headshot on their public
+	// card and profile. Off by default: it is a job-search photo.
 	ShowPhoto bool
-	// Seniority is optional and, when set, one of vocab.SeniorityValues — the platform's
-	// one seniority vocabulary, not a second mentor-only list. Empty means unset, never
-	// a value of its own: a mentor who leaves it blank is simply unaffected by a
-	// directory search narrowed by seniority.
+	// Seniority is optional and, when set, one of vocab.SeniorityValues. Empty means unset,
+	// never a value of its own.
 	Seniority   string
 	Status      string
 	Paused      bool
@@ -95,30 +85,25 @@ type Profile struct {
 	CreatedAt   time.Time
 }
 
-// There is no Published() helper on this type, and that is deliberate. The publication
-// predicate lives in the SQL, where the directory, the public read and every other reader
-// share one copy of it — a Go method saying the same thing would be a second copy, free to
-// drift, and the first caller to reach for it would be a reader that should have been a
-// query.
+// There is deliberately no Published() helper: the publication predicate lives in the SQL,
+// shared by every reader, and a Go copy could drift.
 
 // PendingProfile is a queue entry: the profile plus what the moderator needs beside it.
 type PendingProfile struct {
 	Profile
 	// HasApprovedReferralOffer says this account is already an approved referrer for the
-	// same company. It is EVIDENCE for the human deciding and never a gate — nothing in
-	// this package approves a profile automatically, and a test holds that.
+	// same company. Evidence for the moderator, never a gate; a test holds that.
 	HasApprovedReferralOffer bool
 }
 
 // ProfileInput is a submission or an edit. On an edit the slug and the company are
-// ignored: the first must stay stable, and changing the second is a new claim about where
-// somebody works, which is a new profile and a new decision.
+// ignored: the slug must stay stable, and a new company is a new claim needing a new
+// decision.
 type ProfileInput struct {
 	UserID      int64
 	CompanySlug string
-	// Slug is the requested public address. On a submission (never on an edit, which
-	// ignores it), an empty Slug is not a refusal: SubmitProfile derives one from
-	// DisplayName instead of requiring the caller to invent one.
+	// Slug is the requested public address. On a submission an empty Slug is not a refusal:
+	// SubmitProfile derives one from DisplayName. Edits ignore it.
 	Slug        string
 	DisplayName string
 	Headline    string
@@ -131,17 +116,14 @@ type ProfileInput struct {
 	ShowPhoto   bool
 	// Seniority is optional; see Profile.Seniority for what an empty value means.
 	Seniority string
-	// HasCalendarLink says the caller holds a connected calendar.events grant at
-	// submission time, resolved by the handler the same way GmailStatus already does.
-	// A mentor who has one gets a real Meet link minted per booking, so their own
-	// meeting_url field is no longer the only way a session gets a link — see
-	// validateMeetingURL.
+	// HasCalendarLink says the caller holds a connected calendar.events grant at submission
+	// time, resolved by the handler. Such a mentor gets a Meet link per booking, so
+	// meeting_url may be empty (see validateMeetingURL).
 	HasCalendarLink bool
 }
 
 // DirectoryFilter narrows the public directory. An empty field means unfiltered, matching
-// the SQL's "NULL means unfiltered" — a filter that meant "match nothing" when absent
-// would empty the directory.
+// the SQL's "NULL means unfiltered".
 type DirectoryFilter struct {
 	CompanySlug string
 	Topic       string
@@ -150,37 +132,27 @@ type DirectoryFilter struct {
 	// Query narrows by a case-insensitive substring match against a mentor's name or
 	// headline. Empty means unfiltered, same as every other field here.
 	Query string
-	// NoReviewsOnly narrows to mentors with zero reviews. false (the zero value) is
-	// itself "unfiltered" — there is no separate "explicitly false" state to confuse it
-	// with, unlike the string fields above.
+	// NoReviewsOnly narrows to mentors with zero reviews. false means unfiltered.
 	NoReviewsOnly bool
 	Limit         int32
 }
 
-// maxSlugAttempts bounds SubmitProfile's collision-suffix search over a slug it derived
-// itself, so a pathological run of taken addresses fails loudly instead of looping
-// forever. Mirrors accounts.maxUsernameAttempts's reasoning for the same search over
-// account usernames.
+// maxSlugAttempts bounds SubmitProfile's collision-suffix search over a derived slug so a
+// run of taken addresses fails instead of looping. Mirrors accounts.maxUsernameAttempts.
 const maxSlugAttempts = 100
 
-// SubmitProfile records a mentor profile, awaiting moderation. Everything that could stop
-// it working is refused here rather than at the first booking: a zone that does not
-// resolve has no schedule, a session that cannot yield a slot has no availability, and a
-// meeting link that is not a link has no meeting.
+// SubmitProfile records a mentor profile, awaiting moderation. Anything that would stop it
+// working (an unresolvable zone, a session yielding no slot, a bad meeting link) is
+// refused here rather than at the first booking.
 //
-// An empty Slug is not one of those refusals: it means the mentor left the address to
-// the system, which derives one from DisplayName — already required on this same
-// submission — using the same sanitisation rule an account username applies. A slug the
-// mentor typed themselves is never touched this way; only a derived one gets a silent
-// numeric-suffix retry on collision, because retrying an explicit choice would hand the
-// mentor a URL that quietly differs from what they typed.
+// An empty Slug is derived from DisplayName with the account-username sanitisation. Only
+// a derived slug gets a numeric-suffix retry on collision; retrying one the mentor typed
+// would hand them a URL that differs from their choice.
 func (s *Service) SubmitProfile(ctx context.Context, in ProfileInput) (Profile, error) {
 	derived := strings.TrimSpace(in.Slug) == ""
 	if derived {
-		// DisplayName's words are hyphen-joined before sanitizing, unlike
-		// username.Sanitize's usual inputs (an email local-part, a legacy handle) which
-		// never contain spaces to begin with — "Jane Doe" should become "jane-doe", not
-		// "janedoe".
+		// Hyphen-joined before sanitizing, since username.Sanitize's usual inputs have no
+		// spaces: "Jane Doe" should become "jane-doe", not "janedoe".
 		in.Slug = username.Sanitize(strings.Join(strings.Fields(in.DisplayName), "-"))
 	}
 	if err := validateProfile(in, true); err != nil {
@@ -272,30 +244,20 @@ func (s *Service) Directory(ctx context.Context, f DirectoryFilter) ([]Profile, 
 	return s.repo.ListPublishedProfiles(ctx, f)
 }
 
-// There is deliberately NO "does this company have a mentor?" call here.
-//
-// A vacancy page asking that is asking the directory a narrower question, and Directory
-// already answers it: filter by company, take one, look at the count. Adding a second way
-// to ask meant a second copy of the publication predicate — and the integration test that
-// existed to check the two agreed was the sign that they could stop agreeing. The
-// dead-code guard found the method unreachable before a caller was written, which was the
-// moment to remove it rather than find it a caller.
+// There is deliberately no "does this company have a mentor?" call: Directory answers it
+// (filter by company, take one), and a second query would duplicate the publication
+// predicate.
 
 // Withdraw takes a mentor off the marketplace.
 //
-// It MARKS the profile withdrawn rather than deleting it. Bookings and reviews reference
-// the profile row ON DELETE CASCADE, so a delete would erase every session that ever
-// happened — and the spec requires the opposite: "SHALL retain past bookings as history
-// rather than deleting them". A session that took place belongs to both people who were
-// in it, not to whether the mentor is still here.
+// It marks the profile withdrawn rather than deleting it: bookings and reviews cascade, and
+// past sessions must be retained as history.
 //
-// The order is still load-bearing, and is the same shape referral's withdrawal uses:
-// cancel the future bookings and tell their seekers FIRST. A seeker who learns their
-// session is off from an empty calendar has been told by nobody.
+// Order is load-bearing, as in referral's withdrawal: cancel future bookings and tell
+// their seekers first.
 //
-// Notification failure does not fail the withdrawal. By the time it could, the
-// cancellations have already committed; refusing here would strand a mentor who cannot
-// leave and sessions that are already cancelled.
+// Notification failure does not fail the withdrawal: the cancellations have already
+// committed.
 func (s *Service) Withdraw(ctx context.Context, userID int64) error {
 	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
@@ -307,9 +269,8 @@ func (s *Service) Withdraw(ctx context.Context, userID int64) error {
 		return err
 	}
 	s.notifyCancelled(ctx, cancelled, CancelledByMentor, reasonMentorWithdrew)
-	// Best-effort, same as a single Cancel(): a cancelled session that minted a real
-	// Meet event must not leave that event live on the mentor's own calendar after
-	// everyone has been told the session is off.
+	// Best-effort, as in Cancel(): a cancelled session's Meet event must not stay live on
+	// the mentor's calendar.
 	for _, booking := range cancelled {
 		s.deleteMeetEventBestEffort(ctx, booking)
 	}
@@ -317,10 +278,8 @@ func (s *Service) Withdraw(ctx context.Context, userID int64) error {
 	return s.repo.WithdrawProfile(ctx, userID)
 }
 
-// Reactivate resubmits a withdrawn profile for moderation, moving it back to `pending`
-// and clearing the pause switch. It is not a way to force review out of turn: a profile
-// that is pending, rejected or approved was never withdrawn, and ErrProfileNotWithdrawn
-// refuses those rather than silently doing nothing.
+// Reactivate resubmits a withdrawn profile for moderation, moving it back to `pending` and
+// clearing the pause switch. Any other status gets ErrProfileNotWithdrawn.
 func (s *Service) Reactivate(ctx context.Context, userID int64) (Profile, error) {
 	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
@@ -347,11 +306,8 @@ func validateProfile(in ProfileInput, creating bool) error {
 	if len(in.Languages) == 0 {
 		return fmt.Errorf("%w: at least one language is required", ErrInvalidProfile)
 	}
-	// Optional: an empty value is always valid, unlike topics/languages above. Only a
-	// non-empty value outside the platform's one seniority vocabulary is refused. Trimmed
-	// before the vocabulary check for the same reason DisplayName/Headline trim above —
-	// normaliseProfile trims it too, but a caller other than the frontend's fixed <select>
-	// must not be refused for whitespace before that ever runs.
+	// Optional: empty is valid; only a non-empty value outside the seniority vocabulary is
+	// refused. Trimmed first so a non-frontend caller is not refused for whitespace.
 	if seniority := strings.TrimSpace(in.Seniority); seniority != "" && !slices.Contains(vocab.SeniorityValues, seniority) {
 		return fmt.Errorf("%w: %q is not a recognised seniority level", ErrInvalidProfile, in.Seniority)
 	}
@@ -372,14 +328,9 @@ func validateProfile(in ProfileInput, creating bool) error {
 	return nil
 }
 
-// validateMentorZone refuses a zone the slot engine could not use.
-//
-// The shape check is what does the work, and it is not decoration: time.LoadLocation
-// accepts several names that are not a person's zone. "Local" returns the SERVER's zone,
-// so a mentor's stated hours would be read in the host's clock and every slot would be
-// wrong in a way nothing in the response reveals. "EST" and "Factory" resolve too, and
-// mean something other than a place. Requiring a slash — or exactly "UTC" — admits the
-// IANA names and nothing else.
+// validateMentorZone refuses a zone the slot engine could not use. The shape check matters:
+// time.LoadLocation accepts "Local" (the server's zone, silently wrong for every slot),
+// "EST" and "Factory". Requiring a slash, or exactly "UTC", admits only IANA names.
 func validateMentorZone(name string) error {
 	if name == "" {
 		return fmt.Errorf("%w: a timezone is required", ErrInvalidProfile)
@@ -393,15 +344,12 @@ func validateMentorZone(name string) error {
 	return nil
 }
 
-// validateMeetingURL shape-checks the link, in the manner of referral's LinkedIn check:
-// http(s) and parseable, never fetched. A scheme check specifically — a javascript: URL
-// rendered as a link on a public profile is a click away from being executed.
+// validateMeetingURL shape-checks the link like referral's LinkedIn check: http(s) and
+// parseable, never fetched. The scheme check matters: a javascript: URL on a public
+// profile is one click from executing.
 //
-// An empty link is refused UNLESS the mentor holds a connected calendar.events grant: in
-// that case a real link is minted per booking, so the static field has nothing left to
-// guarantee. A non-empty link is validated identically either way — a mentor who fills it
-// in anyway still gets a real URL check, not a free pass because they also have a
-// calendar.
+// An empty link is refused unless the mentor holds a connected calendar.events grant (a
+// link is then minted per booking). A non-empty link is validated either way.
 func validateMeetingURL(raw string, hasCalendarLink bool) error {
 	if strings.TrimSpace(raw) == "" {
 		if hasCalendarLink {

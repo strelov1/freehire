@@ -3,15 +3,13 @@ package classify
 import (
 	"strings"
 
-	"github.com/strelov1/freehire/internal/dict/roletype"
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
 )
 
 // nonTechTitleTerms is a curated set of confidently non-technical role nouns
 // found in job titles, beyond the business functions the categoryTable already
-// resolves (marketing/sales/support). It exists to place the
-// large tail of non-engineering roles that generic ATS boards pour into the
-// catalogue — healthcare, trades, hospitality, retail, logistics, education,
+// resolves (marketing/sales/support). It places the tail of non-engineering roles
+// that generic ATS boards carry — healthcare, trades, hospitality, retail, logistics, education,
 // personal care, facilities — which the tech-focused categoryTable leaves empty.
 //
 // The same doctrine as the rest of classify: whole-word match, never guess. Two
@@ -25,9 +23,8 @@ import (
 var nonTechTitleTerms = []string{
 	// Healthcare & care. "…technician" collides with IT/field-service technician, so
 	// only anchored forms ("pharmacy technician", "surgical technician") are listed.
-	// The behavior-technician cluster is the largest single unclassified group in the
-	// catalogue (~26k), all ABA therapy; "rbt" is its universal abbreviation and is not
-	// a word in any technical title.
+	// Behavior technician is ABA therapy; "rbt" is its abbreviation and is not a word
+	// in any technical title.
 	"behavior technician", "registered behavior technician", "rbt",
 	"behavioral health", "speech language pathologist", "language pathologist",
 	"therapy assistant", "care aide", "care assistant", "social worker",
@@ -127,23 +124,20 @@ var nonTechTitleTerms = []string{
 	"babá", "motorista", "motoboy", "entregador", "vigilante", "camareira",
 	"recepcionista",
 
-	// ---- Second mining wave (cmd/mine-titles over the residual mass, 2026-07-28) ----
+	// ---- Second mining wave (cmd/mine-titles over the residual mass) ----
 	//
-	// The report ranks clusters by volume, and volume alone would have wrecked the
-	// catalogue: its largest groups were "team member", "systems engineer" (80
-	// sources), "team lead" (93), "tech lead" (78), "technical lead" (65),
-	// "software engineering" (55), "product management", "data center", and the bare
-	// seniorities "vice president"/"senior director"/"senior associate". Those name
-	// the roles this board exists to carry and are deliberately absent. So are the
+	// Deliberately absent although frequent: "team member", "systems engineer", "team
+	// lead", "tech lead", "technical lead", "software engineering", "product
+	// management", "data center" and the bare seniorities "vice president"/"senior
+	// director"/"senior associate" — they name roles this board exists to carry. So are the
 	// borderline "quality/process/project/service engineer" and "service technician",
 	// which are mostly industrial but collide with QA and IT field-service titles;
 	// they need their own decision, not a bulk import.
 	//
-	// Absent for a different reason: "banco de talentos" (29 sources), "general
-	// application" (34), "ausbildung zum" (18), "jovem aprendiz", "sökes till". These
-	// are not non-technical roles but ABSENT ones — speculative-application
-	// placeholders — and a technical company's talent pool matches them exactly.
-	// "são paulo" (23 sources) is a city, and "and older" is the tail of an age
+	// Absent for a different reason: "banco de talentos", "general application",
+	// "ausbildung zum", "jovem aprendiz", "sökes till". These are not non-technical
+	// roles but speculative-application placeholders, and a technical company's talent
+	// pool matches them exactly. "são paulo" is a city, and "and older" is the tail of an age
 	// requirement; neither is a role at all.
 	//
 	// Non-software engineering. Anchored to a physical discipline, so a software role
@@ -181,54 +175,6 @@ var nonTechTitleTerms = []string{
 	"environmental services", "community liaison",
 	// The Spanish/Portuguese and Russian tails of the same wave
 	"auxiliar administrativo", "охране труда", "охрана труда",
-}
-
-// ConfirmedNonTech reports whether a title states a non-technical role AND nothing
-// places it in the catalogue. It exists because IsNonTech alone is not a safe basis for
-// turning a posting away: the dictionary matches its terms anywhere in a title, and it
-// was written on the contract stated above — consulted only after the tech check. The
-// ingest filter, which refuses on this signal, goes through here so the precedence
-// cannot be forgotten.
-//
-// Any resolved category vetoes the refusal, technical or not. The catalogue is broader
-// than IT: a posting the title dictionary files under a facet — `healthcare`, `retail`,
-// `industrial_engineering`, any of them — belongs in it and is searchable under that
-// facet; only `is_tech=false` follows from the placement. So a "Registered Nurse" is
-// kept (healthcare), while a title that names a non-technical role the dictionary
-// cannot FILE is still refused, because a posting no facet reaches is one search
-// excludes anyway (search.CategoryUnresolved). Growing the catalogue is therefore a
-// dictionary change: give the role a category and the next crawl admits it.
-//
-// The role_type facet is the other placement, and it vetoes for the same reason: a
-// "General Manager" names no craft, but roletype marks it a people manager, search
-// keeps it on that facet, and refusing it here would turn away a posting search would
-// have shown. The two gates must agree — a posting is kept iff some facet reaches it.
-func ConfirmedNonTech(title string, hasTechEvidence bool) bool {
-	if hasTechEvidence || Parse(title).Category != "" || roletype.Derive(title) != "" || NamesManager(title) {
-		return false
-	}
-	return IsNonTech(title)
-}
-
-// managerWords are the bare "manager" nouns NamesManager looks for, in the languages the
-// catalogue carries them.
-var managerWords = []string{"manager", "managerin", "менеджер"}
-
-// NamesManager reports whether a title names a manager of SOME kind, whatever it manages.
-// It is deliberately not a category and not the people_manager marker: 40% of bare
-// "manager" titles manage a thing, not people, and the rest name no craft — "Case
-// Manager", "Property Manager", "Service Manager", a bare "Менеджер". Retiring the
-// `management` category left ~2.9% of the open catalogue with no facet at all, and the
-// owner chose to keep those postings reachable by keyword search rather than lose them,
-// so both catalogue gates (here and search.CategoryUnresolved) admit a title this names.
-func NamesManager(title string) bool {
-	lower := strings.ToLower(title)
-	for _, w := range managerWords {
-		if wordmatch.Contains(lower, w, wordmatch.UnicodeBoundary) {
-			return true
-		}
-	}
-	return false
 }
 
 // NonTechTerms returns the curated non-tech title terms. Exposed so the catalogue

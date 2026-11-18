@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -29,7 +30,6 @@ type fakeOJCPStore struct {
 	liveness    []db.ListJobLivenessBySlugsRow
 	livenessErr error
 	// The reads the ChatGPT app's market tools need beyond the job itself.
-	similarIDs   []int64
 	jobsByID     []db.Job
 	salary       []db.ListInsightsSalaryRow
 	salaryByCat  []db.ListInsightsSalaryByCategoryRow
@@ -40,6 +40,10 @@ func (f fakeOJCPStore) GetJobBySlug(context.Context, string) (db.Job, error) {
 	return f.job, f.jobErr
 }
 
+func (f fakeOJCPStore) ListJobsBySlugCode(context.Context, string) ([]db.Job, error) {
+	return nil, nil
+}
+
 func (f fakeOJCPStore) GetApplyFormByJobID(context.Context, int64) (db.GetApplyFormByJobIDRow, error) {
 	return f.form, f.formErr
 }
@@ -48,8 +52,8 @@ func (f fakeOJCPStore) GetCompany(context.Context, string) (db.Company, error) {
 	return f.company, f.compErr
 }
 
-func (f fakeOJCPStore) GetSimilarJobIDs(context.Context, int64) (db.GetSimilarJobIDsRow, error) {
-	return db.GetSimilarJobIDsRow{SimilarJobIds: f.similarIDs}, nil
+func (f fakeOJCPStore) GetJobDuplicateOwner(context.Context, int64) (int64, error) {
+	return f.job.ID, nil
 }
 
 func (f fakeOJCPStore) GetJobsByIDs(context.Context, []int64) ([]db.Job, error) {
@@ -357,5 +361,61 @@ func TestOJCPSearchReportsSearchBeingUnavailable(t *testing.T) {
 	}
 	if _, present := body["error_code"]; !present {
 		t.Errorf("body = %v, want the OJCP error envelope", body)
+	}
+}
+
+// The loader OJCP and similar_jobs share must refuse what the
+// anonymous surfaces refuse, as an ordinary miss.
+func TestPublishedJobBySlug_RefusesUnpublished(t *testing.T) {
+	closed := pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	for name, job := range map[string]db.Job{
+		"private":   {ID: 1, IsPrivate: true},
+		"closed":    {ID: 2, ClosedAt: closed},
+		"duplicate": {ID: 3, DuplicateOf: pgtype.Int8{Int64: 9, Valid: true}},
+	} {
+		if _, err := publishedJobBySlug(context.Background(), fakeOJCPStore{job: job}, "s"); !errors.Is(err, pgx.ErrNoRows) {
+			t.Errorf("%s: err = %v, want pgx.ErrNoRows", name, err)
+		}
+	}
+	if got, err := publishedJobBySlug(context.Background(), fakeOJCPStore{job: db.Job{ID: 4}}, "s"); err != nil || got.ID != 4 {
+		t.Errorf("open job: %+v, %v", got, err)
+	}
+}
+
+// get_job must answer for every slug search_jobs can hand out: the index trails the database,
+// so a hit may have closed or been folded into a duplicate since it was pushed.
+func TestAgentJobBySlug_ServesWhatSearchCanReturn(t *testing.T) {
+	closed := pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	dupOf := pgtype.Int8{Int64: 9, Valid: true}
+	for name, tc := range map[string]struct {
+		store  fakeOJCPStore
+		wantID int64
+	}{
+		"closed is served":                {fakeOJCPStore{job: db.Job{ID: 2, ClosedAt: closed}}, 2},
+		"duplicate becomes canonical":     {fakeOJCPStore{job: db.Job{ID: 3, DuplicateOf: dupOf}, jobsByID: []db.Job{{ID: 9}}}, 9},
+		"private canonical is not leaked": {fakeOJCPStore{job: db.Job{ID: 3, DuplicateOf: dupOf}, jobsByID: []db.Job{{ID: 9, IsPrivate: true}}}, 3},
+		"missing canonical serves itself": {fakeOJCPStore{job: db.Job{ID: 3, DuplicateOf: dupOf}}, 3},
+	} {
+		got, err := agentJobBySlug(context.Background(), tc.store, "s")
+		if err != nil || got.ID != tc.wantID {
+			t.Errorf("%s: got id %d, err %v; want id %d", name, got.ID, err, tc.wantID)
+		}
+	}
+	if _, err := agentJobBySlug(context.Background(), fakeOJCPStore{job: db.Job{ID: 1, IsPrivate: true}}, "s"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Errorf("private: err = %v, want pgx.ErrNoRows", err)
+	}
+}
+
+func TestSlugFromLink(t *testing.T) {
+	for in, want := range map[string]string{
+		"a-job-t35nijto": "a-job-t35nijto",
+		"https://freehire.me/jobs/a-job-abcdefgh":                "a-job-abcdefgh",
+		"https://freehire.me/jobs/a-job-abcdefgh/":               "a-job-abcdefgh",
+		"https://freehire.me/jobs/a-job-abcdefgh?ref=b-t35nijto": "a-job-abcdefgh",
+		" https://freehire.me/jobs/a-job-abcdefgh#apply ":        "a-job-abcdefgh",
+	} {
+		if got := slugFromLink(in); got != want {
+			t.Errorf("slugFromLink(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

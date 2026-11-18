@@ -79,3 +79,90 @@ func TestGetProfileTool_TellsTheAgentToSendTheUserToTheProfilePage(t *testing.T)
 		t.Errorf("result should point the agent at the profile page:\n%s", blob)
 	}
 }
+
+func TestMaskAccountEmail(t *testing.T) {
+	cases := map[string]string{
+		"jane@gmail.com": "j***@gmail.com",
+		"a@x.io":         "a***@x.io",
+		"élan@mail.ru":   "é***@mail.ru",
+		"@x.io":          "",
+		"no-at-sign":     "",
+		"":               "",
+	}
+	for in, want := range cases {
+		if got := maskAccountEmail(in); got != want {
+			t.Errorf("maskAccountEmail(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestNoProfileNextNamesTheAccountOnlyWhenKnown(t *testing.T) {
+	if got := noProfileNext("j***@gmail.com"); !strings.Contains(got, "j***@gmail.com") || !strings.Contains(got, "reconnect") || !strings.Contains(got, "/my/profile") {
+		t.Errorf("next = %q", got)
+	}
+	if got := noProfileNext(""); strings.Contains(got, "connected as") {
+		t.Errorf("next names an account it does not know: %q", got)
+	}
+}
+
+func TestGetProfileTool_ReturnsSenioritiesAndJobLanguages(t *testing.T) {
+	repo := savedProfile()
+	repo.getRet.Seniorities = []string{"senior"}
+	repo.getRet.JobLanguages = []string{"en", "pt"}
+	h := assistantWithProfile(repo, nil)
+
+	out, err := toolByName(t, h.assistantDiscoveryTools(), "get_profile").
+		Run(context.Background(), 1, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("get_profile: %v", err)
+	}
+	blob, _ := json.Marshal(out)
+	// update_profile replaces these lists whole, so the agent must be able to read them first.
+	for _, want := range []string{`"seniorities":["senior"]`, `"job_languages":["en","pt"]`} {
+		if !strings.Contains(string(blob), want) {
+			t.Errorf("get_profile is missing %s:\n%s", want, blob)
+		}
+	}
+}
+
+func TestGetProfileTool_ServesTheBackgroundAndKeepsCVAsItsAlias(t *testing.T) {
+	h := assistantWithProfile(savedProfile(), fakeStructuredResume{
+		ok: true, ret: resumeextract.Structured{Headline: "Staff Backend Engineer"},
+	})
+	out, err := toolByName(t, h.assistantDiscoveryTools(), "get_profile").
+		Run(context.Background(), 1, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("get_profile: %v", err)
+	}
+	var got struct {
+		Background, CV *resumeextract.Professional
+	}
+	blob, _ := json.Marshal(out)
+	if err := json.Unmarshal(blob, &struct {
+		B **resumeextract.Professional `json:"background"`
+		C **resumeextract.Professional `json:"cv"`
+	}{&got.Background, &got.CV}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Background == nil || got.CV == nil || got.Background.Headline != "Staff Backend Engineer" || got.CV.Headline != got.Background.Headline {
+		t.Errorf("background and its deprecated cv alias must carry the same data:\n%s", blob)
+	}
+}
+
+func TestGetProfileTool_NoPreferencesRowStillServesTheSavedText(t *testing.T) {
+	repo := &fakeProfileRepo{getErr: userprofile.ErrNotFound}
+	h := assistantWithProfile(repo, fakeStructuredResume{
+		ok: true, ret: resumeextract.Structured{Headline: "Staff Backend Engineer"},
+	})
+	out, err := toolByName(t, h.assistantDiscoveryTools(), "get_profile").
+		Run(context.Background(), 1, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("get_profile: %v", err)
+	}
+	blob, _ := json.Marshal(out)
+	// update_profile can save the headline without a preferences row; hiding it behind
+	// "no profile yet" would make the agent write it again.
+	if !strings.Contains(string(blob), `"background":{"headline":"Staff Backend Engineer"`) || !strings.Contains(string(blob), `"next"`) {
+		t.Errorf("want the saved text and the no-preferences hint:\n%s", blob)
+	}
+}

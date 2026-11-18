@@ -31,7 +31,7 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 func truncate(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		"TRUNCATE search_delete_outbox, jobs, companies, board_health RESTART IDENTITY CASCADE"); err != nil {
+		"TRUNCATE search_delete_outbox, jobs, companies, board_health, boards RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
@@ -61,6 +61,11 @@ func seedChronicBoard(t *testing.T, pool *pgxpool.Pool, provider, board string, 
 // tests: Adzuna-shaped providers register the same board name once per country.
 func seedBoardHealthRegion(t *testing.T, pool *pgxpool.Pool, provider, board, region string, daysSinceSuccess int) {
 	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO boards (provider, board, region, company, status)
+		 VALUES ($1, $2, $3, 'Acme', 'active')`, provider, board, region); err != nil {
+		t.Fatalf("seed catalog board %s/%s/%s: %v", provider, board, region, err)
+	}
 	lastSuccess := time.Now().Add(-time.Duration(daysSinceSuccess) * 24 * time.Hour)
 	_, err := pool.Exec(context.Background(),
 		`INSERT INTO board_health (provider, board, region, consecutive_failures, first_seen_at, last_success_at)
@@ -93,7 +98,7 @@ func TestCloseChronicBoardsDryRunTouchesNothing(t *testing.T) {
 		t.Fatalf("report = %+v, want 1 board and 1 job", report)
 	}
 
-	after, err := q.GetJob(ctx, job.Job.ID)
+	after, err := q.GetJob(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}
@@ -134,7 +139,7 @@ func TestCloseChronicBoardsApplyClosesExactlyTheChronicJobs(t *testing.T) {
 		t.Fatalf("report = %+v, want exactly 1 board past the 60-day closure window and 1 job closed", report)
 	}
 
-	chronicAfter, err := q.GetJob(ctx, chronic.Job.ID)
+	chronicAfter, err := q.GetJob(ctx, chronic.ID)
 	if err != nil {
 		t.Fatalf("get chronic: %v", err)
 	}
@@ -142,7 +147,7 @@ func TestCloseChronicBoardsApplyClosesExactlyTheChronicJobs(t *testing.T) {
 		t.Fatalf("chronic job = %+v, want closed with reason board_unreachable", chronicAfter)
 	}
 
-	shortAfter, err := q.GetJob(ctx, shortOfClosure.Job.ID)
+	shortAfter, err := q.GetJob(ctx, shortOfClosure.ID)
 	if err != nil {
 		t.Fatalf("get short-of-closure: %v", err)
 	}
@@ -150,7 +155,7 @@ func TestCloseChronicBoardsApplyClosesExactlyTheChronicJobs(t *testing.T) {
 		t.Fatal("a board chronic-for-visibility but short of the closure window must stay open")
 	}
 
-	siblingAfter, err := q.GetJob(ctx, sibling.Job.ID)
+	siblingAfter, err := q.GetJob(ctx, sibling.ID)
 	if err != nil {
 		t.Fatalf("get sibling: %v", err)
 	}
@@ -185,7 +190,7 @@ func TestCloseChronicBoardsHandlesBoardlessProvider(t *testing.T) {
 		t.Fatalf("report = %+v, want 1 board and 1 job", report)
 	}
 
-	after, err := q.GetJob(ctx, uberJob.Job.ID)
+	after, err := q.GetJob(ctx, uberJob.ID)
 	if err != nil {
 		t.Fatalf("get uber job: %v", err)
 	}
@@ -224,7 +229,7 @@ func TestCloseChronicBoardsSkipsRegionAmbiguousBoardNames(t *testing.T) {
 		t.Fatalf("report = %+v, want 0 jobs affected — the ambiguous board must not be touched", report)
 	}
 
-	after, err := q.GetJob(ctx, job.Job.ID)
+	after, err := q.GetJob(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}

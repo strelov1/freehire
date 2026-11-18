@@ -210,7 +210,9 @@
               {#if industry || hq}
                 <div class="flex flex-wrap gap-1.5">
                   {#if industry}<Badge variant="secondary">{industry}</Badge>{/if}
-                  {#if hq}<Badge variant="secondary" class="gap-1.5"><CountryFlag code={company.hq_country ?? ''} label={hq} />{hq}</Badge>{/if}
+                  {#if hq}<Badge variant="secondary" class="gap-1.5"
+                      ><CountryFlag code={company.hq_country ?? ''} label={hq} />{hq}</Badge
+                    >{/if}
                 </div>
               {/if}
             </div>

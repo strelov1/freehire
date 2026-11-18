@@ -236,12 +236,14 @@ Expected: PASS for all of:
 - [ ] **Step 6: Run the full integration vet gate and the plain test suite**
 
 Run, in order:
+
 ```bash
 go vet -tags=integration ./...
 go build ./...
 go vet ./...
 go test ./...
 ```
+
 Expected: all four succeed with no output beyond normal build/test noise. The last
 two confirm `internal/candidate/experience/store_test.go`'s fake-repo-based tests
 (`TestStoreAddAtomReportsAnAlreadyBankedClaim` etc.) are unaffected — they exercise

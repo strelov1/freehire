@@ -6,7 +6,7 @@
 // lets this module be unit-tested under the node-environment vitest config.
 
 import { Marked } from 'marked';
-import DOMPurify from 'isomorphic-dompurify';
+import { addHook, removeHook, sanitize } from 'isomorphic-dompurify';
 
 const md = new Marked({ gfm: true, breaks: true });
 
@@ -19,11 +19,39 @@ const md = new Marked({ gfm: true, breaks: true });
 // same reason. Notably absent: `img` and `input` (GFM task lists render a checkbox —
 // a form control, and losing it costs one glyph).
 const ALLOWED_TAGS = [
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  'p', 'br', 'hr', 'blockquote', 'pre', 'code', 'div', 'span',
-  'ul', 'ol', 'li', 'dl', 'dt', 'dd',
-  'table', 'thead', 'tbody', 'tr', 'th', 'td',
-  'strong', 'em', 'b', 'i', 'u', 'del', 's',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'p',
+  'br',
+  'hr',
+  'blockquote',
+  'pre',
+  'code',
+  'div',
+  'span',
+  'ul',
+  'ol',
+  'li',
+  'dl',
+  'dt',
+  'dd',
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
+  'strong',
+  'em',
+  'b',
+  'i',
+  'u',
+  'del',
+  's',
   'a',
 ];
 
@@ -54,15 +82,15 @@ function openLinksInNewTab(node: Element) {
 /** Render one markdown string from the model to sanitized HTML for `{@html}`. */
 export function renderMarkdown(text: string): string {
   const html = md.parse(text, { async: false }) as string;
-  DOMPurify.addHook('afterSanitizeAttributes', openLinksInNewTab);
+  addHook('afterSanitizeAttributes', openLinksInNewTab);
   try {
-    return DOMPurify.sanitize(html, {
+    return sanitize(html, {
       ALLOWED_TAGS,
       ALLOWED_ATTR,
       ALLOWED_URI_REGEXP,
       ALLOW_DATA_ATTR: false,
     });
   } finally {
-    DOMPurify.removeHook('afterSanitizeAttributes');
+    removeHook('afterSanitizeAttributes');
   }
 }

@@ -12,11 +12,10 @@ import (
 )
 
 // meincheckinProber validates a CHECK-IN tenant (the <board> of www.mein-check-in.de/<board>) by
-// reading the start page the adapter reads — asked of www (which serves its own tenants and
-// redirects the sparkasse. ones), then of vr. (whose tenants www does not know). Its menu links
-// every open position and its <title> names the employer ("<name> Onlinebewerbung"); a tenant
-// neither host knows is a 404. It mirrors internal/ingest/sources/meincheckin.go, which is
-// unexported.
+// reading the start page the adapter reads, asked of www (its own tenants; it redirects the
+// sparkasse. ones), then of vr. (tenants www does not know). The menu links every open position
+// and the <title> names the employer ("<name> Onlinebewerbung"); a tenant neither host knows is
+// a 404. It mirrors internal/ingest/sources/meincheckin.go, which is unexported.
 type meincheckinProber struct{}
 
 var (

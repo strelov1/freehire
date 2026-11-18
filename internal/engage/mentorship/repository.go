@@ -19,10 +19,9 @@ import (
 // Compile-time proof that QueriesRepository satisfies Repository.
 var _ Repository = (*QueriesRepository)(nil)
 
-// The constraint names the adapter translates. They are matched by NAME rather than by
-// "it was a unique violation", because mentors carries two — one account may hold one
-// profile, and one profile owns one public address — and telling a mentor "that address
-// is taken" when they in fact already have a profile sends them to fix the wrong thing.
+// The constraint names the adapter translates. They are matched by name, not as "a unique
+// violation", because mentors carries two (one profile per account, one address per
+// profile) and the wrong message sends the mentor to fix the wrong thing.
 const (
 	constraintOneProfilePerUser = "mentors_user_id_key"
 	constraintProfileSlug       = "mentors_slug_key"
@@ -30,11 +29,9 @@ const (
 
 // QueriesRepository is the production Repository over sqlc-generated *db.Queries.
 //
-// Almost every write here is a single statement, so the guards live in the SQL and are
-// translated into this package's sentinels rather than wrapped in a transaction. The one
-// exception is replacing the recurring week — a delete plus a set of inserts that is one
-// edit from the mentor's point of view — which is why the pool is held alongside the
-// queries.
+// Almost every write is a single statement, so the guards live in the SQL and are
+// translated into this package's sentinels. The exception is replacing the recurring week
+// (delete plus inserts), which is why the pool is held alongside the queries.
 type QueriesRepository struct {
 	q    *db.Queries
 	pool *pgxpool.Pool
@@ -76,8 +73,7 @@ func (r *QueriesRepository) CreateProfile(ctx context.Context, in ProfileInput) 
 				return Profile{}, ErrSlugTaken
 			}
 		}
-		// The only foreign key exercised on insert is company_slug — user_id is the
-		// authenticated caller and decided_by is not set here.
+		// The only foreign key exercised on insert is company_slug.
 		if pgerr.IsForeignKeyViolation(err) {
 			return Profile{}, ErrCompanyNotFound
 		}
@@ -128,8 +124,7 @@ func (r *QueriesRepository) PublishedProfileBySlug(ctx context.Context, slug str
 }
 
 // UpdateProfile applies an edit. The no-row case is the owner guard failing, which is
-// reported as "not found" rather than "not yours" — an endpoint must not confirm that
-// somebody else's profile exists.
+// reported as "not found", never "not yours", so another's profile is not confirmed.
 func (r *QueriesRepository) UpdateProfile(ctx context.Context, in ProfileInput) (Profile, error) {
 	row, err := r.q.UpdateMentorProfile(ctx, db.UpdateMentorProfileParams{
 		UserID:             in.UserID,
@@ -231,8 +226,8 @@ func (r *QueriesRepository) ListPublishedProfiles(ctx context.Context, f Directo
 }
 
 // CancelFutureBookings ends every confirmed session still ahead, returning them so their
-// seekers can be told. It is called BEFORE the profile is deleted: the ON DELETE CASCADE
-// would otherwise take these rows and nobody could be notified.
+// seekers can be told. Called before the profile is deleted, since the cascade would take
+// these rows.
 func (r *QueriesRepository) CancelFutureBookings(ctx context.Context, mentorID, cancelledBy int64, reason string) ([]Booking, error) {
 	rows, err := r.q.CancelFutureBookingsForMentor(ctx, db.CancelFutureBookingsForMentorParams{
 		MentorID: mentorID, CancelledBy: cancelledBy, CancelReason: reason,
@@ -243,20 +238,16 @@ func (r *QueriesRepository) CancelFutureBookings(ctx context.Context, mentorID, 
 	out := make([]Booking, 0, len(rows))
 	for _, row := range rows {
 		booking := bookingFromRow(row.MentorBooking)
-		// The seeker's address comes back with the row: every one of these bookings needs
-		// a notification, and fetching addresses one at a time afterwards would be a
-		// query per cancelled session.
+		// The seeker's address comes back with the row to avoid a query per booking.
 		booking.SeekerEmail = row.SeekerEmail
 		out = append(out, booking)
 	}
 	return out, nil
 }
 
-// WithdrawProfile marks the profile withdrawn. It does NOT delete the row: bookings and
-// reviews reference it ON DELETE CASCADE, so deleting would erase the history this
-// feature promises to keep. It is idempotent — the SQL carries no status guard — so zero
-// rows here means only that the caller has no profile at all, which Service.Withdraw has
-// already ruled out via ownProfile; this remains a race guard, not the ordinary path.
+// WithdrawProfile marks the profile withdrawn; it does not delete the row, since the
+// cascade would erase booking history. Idempotent (no status guard in the SQL), so zero
+// rows means only a race: Service.Withdraw already checked via ownProfile.
 func (r *QueriesRepository) WithdrawProfile(ctx context.Context, userID int64) error {
 	rows, err := r.q.WithdrawMentorProfile(ctx, userID)
 	if err != nil {
@@ -268,10 +259,8 @@ func (r *QueriesRepository) WithdrawProfile(ctx context.Context, userID int64) e
 	return nil
 }
 
-// ReactivateProfile moves a withdrawn profile back to pending. Service.Reactivate has
-// already confirmed the profile is withdrawn, so zero rows here means only a race with
-// another writer — ErrProfileNotFound is the same "somebody else changed this between
-// our read and our write" answer the rest of the package gives.
+// ReactivateProfile moves a withdrawn profile back to pending. Service.Reactivate already
+// confirmed the status, so zero rows means a race with another writer (ErrProfileNotFound).
 func (r *QueriesRepository) ReactivateProfile(ctx context.Context, userID int64) (Profile, error) {
 	row, err := r.q.ReactivateMentorProfile(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -328,10 +317,8 @@ func bookingFromRow(row db.MentorBooking) Booking {
 	}
 }
 
-// GetMentorCalendarGrant reads a mentor's Google grant for the calendar write CreateMeetEvent
-// is about to attempt. Any status other than 'connected' — needs_reconsent included —
-// answers not-found, since both mean the same thing to the caller: skip the event, leave
-// the booking's link empty.
+// GetMentorCalendarGrant reads a mentor's Google grant for the calendar write. Any status
+// other than 'connected' (needs_reconsent included) answers not-found: skip the event.
 func (r *QueriesRepository) GetMentorCalendarGrant(ctx context.Context, userID int64) (string, []string, bool, error) {
 	row, err := r.q.GetGoogleGrantForWrite(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -346,8 +333,8 @@ func (r *QueriesRepository) GetMentorCalendarGrant(ctx context.Context, userID i
 	return row.RefreshTokenEnc, row.Scopes, true, nil
 }
 
-// SetBookingCalendarEvent records the Meet-carrying event a booking's calendar write
-// created, replacing the mentor's static MeetingURL snapshot with Google's own link.
+// SetBookingCalendarEvent records the Meet event a booking's calendar write created,
+// replacing the static MeetingURL snapshot with Google's link.
 func (r *QueriesRepository) SetBookingCalendarEvent(ctx context.Context, bookingID uuid.UUID, meetingURL, eventID string) error {
 	return r.q.SetMentorBookingCalendarEvent(ctx, db.SetMentorBookingCalendarEventParams{
 		ID:            pgtype.UUID{Bytes: bookingID, Valid: true},
@@ -356,9 +343,8 @@ func (r *QueriesRepository) SetBookingCalendarEvent(ctx context.Context, booking
 	})
 }
 
-// MarkCalendarGrantNeedsReconsent flags a revocation-shaped calendar-write failure via the
-// same status column and mechanism gmailsync.dbStore.SetNeedsReconsent already uses for the
-// read-side grants: one grant, one shared health flag.
+// MarkCalendarGrantNeedsReconsent flags a revocation-shaped calendar-write failure through
+// the same status as gmailsync.dbStore.SetNeedsReconsent: one grant, one health flag.
 func (r *QueriesRepository) MarkCalendarGrantNeedsReconsent(ctx context.Context, userID int64) error {
 	return r.q.SetGmailStatus(ctx, db.SetGmailStatusParams{UserID: userID, Status: "needs_reconsent"})
 }
@@ -385,8 +371,7 @@ func optionalText(s string) pgtype.Text {
 	return pgtype.Text{String: s, Valid: true}
 }
 
-// numericFloat reads an aggregate average, treating an absent one as zero — the query
-// already COALESCEs, so this is the belt to that pair of braces.
+// numericFloat reads an aggregate average, treating an absent one as zero.
 func numericFloat(n pgtype.Numeric) float64 {
 	if !n.Valid {
 		return 0

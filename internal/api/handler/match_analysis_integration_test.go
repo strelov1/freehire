@@ -176,8 +176,8 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 		h := fitAPI(pool, queries, iss, store, an)
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		g := auth.RequireAuth(iss, testVersions)
-		app.Get("/api/v1/jobs/:slug/fit", g, h.GetMatchAnalysis)
-		app.Post("/api/v1/jobs/:slug/fit", g, markPaidAI(plan.FeatureFit), h.PostMatchAnalysis)
+		app.Get("/api/v1/jobs/:slug/fit", g, newContract(contractHandlers{matchHandlers: h}))
+		app.Post("/api/v1/jobs/:slug/fit", g, markPaidAI(plan.FeatureFit), newContract(contractHandlers{matchHandlers: h}))
 		return app
 	}
 
@@ -320,8 +320,8 @@ func TestMatchAnalysisAllowance(t *testing.T) {
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		g := auth.RequireAuth(iss, testVersions)
-		app.Get("/api/v1/jobs/:slug/fit", g, h.GetMatchAnalysis)
-		app.Post("/api/v1/jobs/:slug/fit", g, markPaidAI(plan.FeatureFit), h.PostMatchAnalysis)
+		app.Get("/api/v1/jobs/:slug/fit", g, newContract(contractHandlers{matchHandlers: h}))
+		app.Post("/api/v1/jobs/:slug/fit", g, markPaidAI(plan.FeatureFit), newContract(contractHandlers{matchHandlers: h}))
 		app.Get("/api/v1/jobs/:slug/fit/stream", g, markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 		return app
 	}
@@ -434,6 +434,9 @@ func TestMatchAnalysisAllowance(t *testing.T) {
 
 		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/sb-new/fit/stream", nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		// The SPA's EventSource shape: a same-origin cookie request stamps Fetch Metadata,
+		// and the route refuses a cookie request without it.
+		req.Header.Set(headerSecFetchSite, secFetchSiteSameOrigin)
 		resp, err := app.Test(req, 5000)
 		if err != nil {
 			t.Fatalf("stream: %v", err)

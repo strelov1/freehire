@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,9 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 func TestBoardHealth_FailureCooldownSelfHeal(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `INSERT INTO boards (provider,board,company,status) VALUES ('greenhouse','acme','Acme','active')`); err != nil {
+		t.Fatal(err)
+	}
 	h := newBoardHealth(pool)
 
 	// Never seen → eligible.
@@ -37,7 +41,7 @@ func TestBoardHealth_FailureCooldownSelfHeal(t *testing.T) {
 
 	// The first two failures stay below the threshold — no cooldown, cron retries.
 	for i := 0; i < 2; i++ {
-		if err := h.RecordFailure(ctx, "greenhouse", "acme", "", "boom"); err != nil {
+		if err := h.RecordFailure(ctx, "greenhouse", "acme", "", errors.New("boom")); err != nil {
 			t.Fatalf("RecordFailure: %v", err)
 		}
 	}
@@ -46,7 +50,7 @@ func TestBoardHealth_FailureCooldownSelfHeal(t *testing.T) {
 	}
 
 	// The third consecutive failure crosses the threshold → cooldown is set.
-	if err := h.RecordFailure(ctx, "greenhouse", "acme", "", "boom again"); err != nil {
+	if err := h.RecordFailure(ctx, "greenhouse", "acme", "", errors.New("boom again")); err != nil {
 		t.Fatalf("RecordFailure: %v", err)
 	}
 	until, cooled, err := cooldownOf(h, ctx, "greenhouse", "acme", "")
@@ -87,7 +91,7 @@ func TestBoardHealth_CooledBoardsAndClear(t *testing.T) {
 	cool := func(provider, board string) {
 		t.Helper()
 		for i := 0; i < 3; i++ { // crosses the cooldown threshold
-			if err := h.RecordFailure(ctx, provider, board, "", "boom"); err != nil {
+			if err := h.RecordFailure(ctx, provider, board, "", errors.New("boom")); err != nil {
 				t.Fatalf("RecordFailure %s/%s: %v", provider, board, err)
 			}
 		}
@@ -142,7 +146,7 @@ func TestBoardHealth_RegionDisambiguates(t *testing.T) {
 	h := newBoardHealth(pool)
 
 	for i := 0; i < 3; i++ { // crosses the cooldown threshold
-		if err := h.RecordFailure(ctx, "adzuna", "it-jobs", "gb", "boom"); err != nil {
+		if err := h.RecordFailure(ctx, "adzuna", "it-jobs", "gb", errors.New("boom")); err != nil {
 			t.Fatalf("RecordFailure gb: %v", err)
 		}
 	}
@@ -180,12 +184,19 @@ func TestBoardHealth_RegionDisambiguates(t *testing.T) {
 func TestBoardHealth_ListUnhealthyBoardsCapsRowsNotCount(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+INSERT INTO boards (provider,board,company,status) VALUES
+ ('greenhouse','b1','b1','active'), ('greenhouse','b2','b2','active'),
+ ('greenhouse','b3','b3','active'), ('greenhouse','b4','b4','active'),
+ ('greenhouse','b5','b5','active')`); err != nil {
+		t.Fatal(err)
+	}
 	h := newBoardHealth(pool)
 
 	// Five unhealthy boards, descending failure counts so the ordering is unambiguous.
 	for i, board := range []string{"b1", "b2", "b3", "b4", "b5"} {
 		for j := 0; j <= 5-i; j++ {
-			if err := h.RecordFailure(ctx, "greenhouse", board, "", "boom"); err != nil {
+			if err := h.RecordFailure(ctx, "greenhouse", board, "", errors.New("boom")); err != nil {
 				t.Fatalf("RecordFailure %s: %v", board, err)
 			}
 		}
@@ -222,12 +233,18 @@ func TestBoardHealth_ListUnhealthyBoardsCapsRowsNotCount(t *testing.T) {
 func TestBoardHealth_ChronicIsDistinctFromMerelyCooling(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+INSERT INTO boards (provider,board,company,status) VALUES
+ ('paylocity','recently-broken','Recent','active'),
+ ('paylocity','long-dead','Chronic','active')`); err != nil {
+		t.Fatal(err)
+	}
 	h := newBoardHealth(pool)
 
 	// A board that started failing recently — real API, so its last_success_at/first_seen_at
 	// land within the last few seconds, nowhere near the 30-day chronic window.
 	for i := 0; i < 3; i++ {
-		if err := h.RecordFailure(ctx, "paylocity", "recently-broken", "", "boom"); err != nil {
+		if err := h.RecordFailure(ctx, "paylocity", "recently-broken", "", errors.New("boom")); err != nil {
 			t.Fatalf("RecordFailure recently-broken: %v", err)
 		}
 	}
@@ -241,7 +258,7 @@ func TestBoardHealth_ChronicIsDistinctFromMerelyCooling(t *testing.T) {
 		t.Fatalf("backdate long-dead: %v", err)
 	}
 	for i := 0; i < 3; i++ {
-		if err := h.RecordFailure(ctx, "paylocity", "long-dead", "", "boom"); err != nil {
+		if err := h.RecordFailure(ctx, "paylocity", "long-dead", "", errors.New("boom")); err != nil {
 			t.Fatalf("RecordFailure long-dead: %v", err)
 		}
 	}

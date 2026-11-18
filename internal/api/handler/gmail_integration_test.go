@@ -56,10 +56,10 @@ func TestGmailInboxEndToEnd(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	ra := auth.RequireAuth(iss, testVersions)
-	app.Get("/api/v1/me/gmail", ra, h.GmailStatus)
-	app.Delete("/api/v1/me/gmail", ra, h.GmailDisconnect)
-	app.Get("/api/v1/me/inbox", ra, h.GetInbox)
-	app.Get("/api/v1/me/emails/:id", ra, h.GetEmail)
+	app.Get("/api/v1/me/gmail", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Delete("/api/v1/me/gmail", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Get("/api/v1/me/inbox", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Get("/api/v1/me/emails/:id", ra, newContract(contractHandlers{inboxHandlers: h}))
 
 	do := func(method, path string) (int, map[string]any) {
 		r := httptest.NewRequest(method, path, nil)

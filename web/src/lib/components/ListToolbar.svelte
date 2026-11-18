@@ -30,6 +30,7 @@
   // too, and without the key every page link re-announced the same "1,234 jobs".
   let {
     total,
+    atLeast = false,
     unit,
     settled,
     announceKey,
@@ -38,6 +39,8 @@
     leading,
   }: {
     total: number | null;
+    /** The total is a minimum, not a count: shown as "N+" and spoken as "at least N". */
+    atLeast?: boolean;
     unit: string;
     settled?: boolean;
     announceKey?: string;
@@ -52,7 +55,7 @@
   // with `total` (they are removed while the list reloads), and a live region inserted
   // together with its text is not announced — so the announcement lives in ONE region
   // that is always mounted, and only its text changes.
-  const message = $derived(resultCountMessage(total, unit, settled));
+  const message = $derived(resultCountMessage(total, unit, settled, atLeast));
 
   // Empty at mount: the count the page was rendered with is not news, and announcing it
   // on every page load would talk over the page title. Every later change is spoken. The
@@ -106,9 +109,9 @@
          figure stays in the title. -->
     <span
       class="shrink-0 whitespace-nowrap text-sm text-muted-foreground"
-      title="{total.toLocaleString()} {unit}"
+      title="{atLeast ? 'At least ' : ''}{total.toLocaleString()} {unit}"
     >
-      <span class="font-semibold tabular-nums text-foreground">{formatCount(total)}</span>
+      <span class="font-semibold tabular-nums text-foreground">{formatCount(total)}{atLeast ? '+' : ''}</span>
       {unit}
     </span>
   {/if}
@@ -141,7 +144,7 @@
     {#if leading}<div class="mr-auto">{@render leading()}</div>{/if}
     {#if total !== null}
       <span class="text-sm text-muted-foreground">
-        <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
+        <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}{atLeast ? '+' : ''}</span>
         {unit}
       </span>
     {/if}

@@ -6,7 +6,12 @@ run the local `freehire` CLI; it calls the hosted HTTPS API described by
 
 ## Files
 
-- `web/static/openapi.yaml` - OpenAPI schema to import into a GPT Action.
+- `web/static/openapi.yaml` - OpenAPI schema to import into a GPT Action. It is
+  generated, never edited by hand: `pnpm run gen:api-docs` in `web/` builds it
+  (`web/scripts/chatgptSchema.mjs`) from the TypeSpec contract, the hand-written
+  supplement for routes outside it (`getCompany`, the OJCP routes), the filter
+  vocabulary in `web/src/lib/docs/filters.ts` and the info prose in
+  `web/scripts/chatgpt-openapi-info.md`. CI fails when it is stale.
 
 There is no `ai-plugin.json`. It was removed in 2026-09: the ChatGPT plugin
 format it belonged to is retired, nothing dialled it, and it actively broke the
@@ -32,10 +37,11 @@ https://freehire.me/openapi.yaml
 
 1. Create or edit a custom GPT.
 2. Add an Action and import the OpenAPI schema from `https://freehire.me/openapi.yaml`.
-3. Leave authentication set to **None**. `openapi.yaml` declares only the eight
+3. Leave authentication set to **None**. `openapi.yaml` declares only the twelve
    public read operations — `searchJobs`, `agentSearchJobs`, `getJobFacets`,
-   `getJob`, `getSimilarJobs`, `searchCompanies`, `getCompany`, `searchCities` —
-   and every one of them works without a key. The authenticated tracking surface
+   `getSuggestions`, `getJob`, `getSimilarJobs`, `searchCompanies`, `getCompany`,
+   `searchCities` and the three OJCP reads (`ojcpSearchJobs`, `ojcpJobDetail`,
+   `ojcpEmployerContext`) — and every one of them works without a key. The authenticated tracking surface
    is not in the schema, so a GPT cannot reach it; adding it back is a separate
    decision, and until then the GPT searches but does not write.
 4. Under **Capabilities**, turn **Web Search off**. If it stays on, the GPT tends

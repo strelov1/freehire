@@ -19,7 +19,7 @@ import (
 // also gone from the JSON, because a rebuild is the only thing that removes it from the
 // live index and a field still marshalled would quietly put it back.
 func TestFromJob_NoLongerCarriesRoles(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Seniority: "senior", Category: "backend", Title: "Senior Backend Engineer"}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Seniority: "senior", Category: "backend", Title: "Senior Backend Engineer"}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestFromJob_NoLongerCarriesRoles(t *testing.T) {
 }
 
 func TestFromJob_RoleTypeDerivedButIndexOnly(t *testing.T) {
-	mgr, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Head of Platform Engineering"}, nil, "")
+	mgr, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Head of Platform Engineering"}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestFromJob_RoleTypeDerivedButIndexOnly(t *testing.T) {
 
 	// An unresolved title carries no value — and is still indexed. Empty means "no
 	// marker in the title", never "individual contributor".
-	ic, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Backend Engineer"}, nil, "")
+	ic, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Backend Engineer"}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -86,44 +86,27 @@ func TestFromJob_RoleTypeDerivedButIndexOnly(t *testing.T) {
 	}
 }
 
-func TestCategoryUnresolved(t *testing.T) {
-	tests := []struct {
+// A posting no category resolved carries the residual "other" bucket (#4412); a resolved
+// category is never overwritten.
+func TestFromJobDefaultsCategoryToOther(t *testing.T) {
+	for _, tt := range []struct {
 		name string
 		job  db.Job
-		want bool
+		want string
 	}{
-		{"dict resolved category wins regardless of enrichment", db.Job{Category: "backend"}, false},
-		// A vacancy a verified employer published here is never hidden for an unrecognised
-		// title: the employer pressed Publish, and a silent absence from search is a control
-		// that lies. The filter exists for crawled rows nobody vouched for.
-		{"employer-published, title no dictionary knows", db.Job{Source: "employer", Title: "Wizard of Things"}, false},
-		{"dict empty, no enrichment at all", db.Job{}, true},
-		{"dict empty, enrichment present but no category", db.Job{Enrichment: []byte(`{"summary":"x"}`)}, true},
-		{"dict empty, LLM also says other", db.Job{Enrichment: []byte(`{"category":"other"}`)}, true},
-		{"dict empty, LLM found a real category", db.Job{Enrichment: []byte(`{"category":"hardware"}`)}, false},
-		{"dict empty, malformed enrichment JSON", db.Job{Enrichment: []byte(`not json`)}, true},
-		{"dict empty, no enrichment, is_tech unknown", db.Job{IsTech: pgtype.Bool{}}, true},
-		{"dict empty, no enrichment, is_tech false", db.Job{IsTech: pgtype.Bool{Valid: true, Bool: false}}, true},
-		{"dict empty, no enrichment, is_tech true → confirmed technical, stays searchable", db.Job{IsTech: pgtype.Bool{Valid: true, Bool: true}}, false},
-		{"dict empty, LLM also says other, is_tech true → still stays searchable", db.Job{Enrichment: []byte(`{"category":"other"}`), IsTech: pgtype.Bool{Valid: true, Bool: true}}, false},
-		{"dict resolved category wins even with is_tech false", db.Job{Category: "backend", IsTech: pgtype.Bool{Valid: true, Bool: false}}, false},
-		// The role_type facet is a placement of its own: a General Manager names no
-		// craft, but the facet reaches it, so it stays searchable.
-		{"no category, but the title names a people manager", db.Job{Title: "General Manager", IsTech: pgtype.Bool{Valid: true, Bool: false}}, false},
-		{"no category, Russian head of department", db.Job{Title: "Начальник отдела кадров"}, false},
-		// A manager title with no marker and no craft is reached by no facet, but it is
-		// kept for keyword search (classify.NamesManager).
-		{"no category, manager title with no people marker", db.Job{Title: "Case Manager", IsTech: pgtype.Bool{Valid: true, Bool: false}}, false},
-		{"no category, bare manager", db.Job{Title: "Manager"}, false},
-		{"no category, bare Russian manager", db.Job{Title: "Менеджер"}, false},
-		{"no category, the word inside another word is not a manager", db.Job{Title: "Managerial Accountant Trainee"}, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := CategoryUnresolved(tt.job); got != tt.want {
-				t.Errorf("CategoryUnresolved(%+v) = %v, want %v", tt.job, got, tt.want)
-			}
-		})
+		{"resolved", db.Job{Category: "skilled_trades"}, "skilled_trades"},
+		{"unresolved", db.Job{}, "other"},
+		{"LLM said other", db.Job{Enrichment: []byte(`{"category":"other"}`)}, "other"},
+		{"LLM category, empty column", db.Job{Enrichment: []byte(`{"category":"logistics"}`)}, "logistics"},
+		{"tech, no category", db.Job{IsTech: pgtype.Bool{Valid: true, Bool: true}}, "other"},
+	} {
+		doc, err := FromJob(tt.job, "")
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if got := doc.Enrichment.Category; got != tt.want {
+			t.Errorf("%s: category = %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }
 
@@ -191,7 +174,7 @@ func TestFromJob_AIArchetypeDerivedButIndexOnly(t *testing.T) {
 	doc, err := FromJob(db.Job{
 		ID: 1, PublicSlug: "s", Category: "ai_engineering",
 		Skills: []string{"rag", "langchain", "langgraph", "vector-databases"},
-	}, nil, "")
+	}, "")
 
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
@@ -204,7 +187,7 @@ func TestFromJob_AIArchetypeDerivedButIndexOnly(t *testing.T) {
 	nonAI, err := FromJob(db.Job{
 		ID: 2, PublicSlug: "s2", Category: "backend",
 		Skills: []string{"rag", "langchain", "langgraph", "vector-databases"},
-	}, nil, "")
+	}, "")
 
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
@@ -244,7 +227,7 @@ func TestFromJob_DocumentFlattensIDAndViewToTopLevelJSON(t *testing.T) {
 	// and the embedded jobview.Job must flatten (no nesting) so its fields are
 	// the searchable attributes. A json tag on the embedded field would break
 	// this. Enrichment itself stays a nested object (filtered via dot paths).
-	doc, err := FromJob(db.Job{ID: 42, Title: "Go Dev", PublicSlug: "go-dev-acme-x"}, nil, "")
+	doc, err := FromJob(db.Job{ID: 42, Title: "Go Dev", PublicSlug: "go-dev-acme-x"}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -275,7 +258,7 @@ func TestFromJob_PostedTSIsEffectiveDateEpoch(t *testing.T) {
 	created := pgtype.Timestamptz{Time: time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC), Valid: true}
 	past := pgtype.Timestamptz{Time: time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC), Valid: true}
 
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: past}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: past}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -284,7 +267,7 @@ func TestFromJob_PostedTSIsEffectiveDateEpoch(t *testing.T) {
 	}
 
 	future := pgtype.Timestamptz{Time: time.Now().Add(48 * time.Hour), Valid: true}
-	docFuture, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created, PostedAt: future}, nil, "")
+	docFuture, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created, PostedAt: future}, "")
 	if err != nil {
 		t.Fatalf("FromJob future: %v", err)
 	}
@@ -324,7 +307,7 @@ func TestFromJob_CreatedTSIsFirstSeenEpoch(t *testing.T) {
 	// whose source restates its date as today. posted_ts follows the source; created_ts
 	// must not.
 	rewritten := pgtype.Timestamptz{Time: time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC), Valid: true}
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: rewritten}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: rewritten}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -337,7 +320,7 @@ func TestFromJob_CreatedTSIsFirstSeenEpoch(t *testing.T) {
 
 	// An undated source: posted_ts falls back to created_at, so the two agree. That is
 	// not a bug to guard against — it is the same instant, honestly reported twice.
-	docUndated, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created}, nil, "")
+	docUndated, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created}, "")
 	if err != nil {
 		t.Fatalf("FromJob undated: %v", err)
 	}
@@ -372,7 +355,7 @@ func TestFromJob_CapsIndexedDescription(t *testing.T) {
 	// serves the full text from Postgres. A long description is trimmed to at most
 	// maxIndexedDescriptionRunes runes; a short one is left verbatim.
 	long := strings.Repeat("alpha beta ", 600) // ~6000 runes
-	doc, err := FromJob(db.Job{ID: 1, Title: "Go Dev", Description: long}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, Title: "Go Dev", Description: long}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -384,7 +367,7 @@ func TestFromJob_CapsIndexedDescription(t *testing.T) {
 	}
 
 	short := "Build backend services in Go."
-	docShort, err := FromJob(db.Job{ID: 2, Title: "Go Dev", Description: short}, nil, "")
+	docShort, err := FromJob(db.Job{ID: 2, Title: "Go Dev", Description: short}, "")
 	if err != nil {
 		t.Fatalf("FromJob short: %v", err)
 	}
@@ -399,5 +382,48 @@ func TestMergeClosureGeographyWidensMetros(t *testing.T) {
 	d.MergeClosureGeography(jobview.ClosureGeo{Metros: []string{"Detroit (US)", "Sacramento (US)"}})
 	if !slices.Equal(d.Metros, []string{"Detroit (US)", "Sacramento (US)"}) {
 		t.Errorf("Metros = %v", d.Metros)
+	}
+}
+
+func TestFromJob_DuplicateStatusIsInternal(t *testing.T) {
+	for _, duplicate := range []bool{false, true} {
+		row := db.Job{ID: 42, Title: "Engineer", PublicSlug: "engineer", DuplicateOf: pgtype.Int8{Int64: 7, Valid: duplicate}}
+		doc, err := FromJob(row, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := fields["is_duplicate"].(bool); got != duplicate {
+			t.Errorf("duplicate=%t: indexed marker=%v", duplicate, fields["is_duplicate"])
+		}
+		public, err := json.Marshal(doc.Job)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(public), "is_duplicate") {
+			t.Fatal("internal duplicate marker leaked into public job")
+		}
+	}
+}
+
+// The archetype follows the category the document publishes: a posting the model filed under
+// an AI category, with an empty dictionary column, still gets its archetype (#4412).
+func TestFromJobDerivesArchetypeFromThePublishedCategory(t *testing.T) {
+	doc, err := FromJob(db.Job{
+		Skills:     []string{"pytorch", "tensorflow"},
+		Enrichment: []byte(`{"category":"ai_engineering"}`),
+	}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.AIArchetype != "ml_trainer_researcher" {
+		t.Errorf("archetype = %q, want ml_trainer_researcher", doc.AIArchetype)
 	}
 }

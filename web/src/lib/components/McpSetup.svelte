@@ -1,37 +1,16 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import { siClaude, siCursor } from 'simple-icons';
-  import { CHATGPT_APP_URL, OPENAI_MARK } from '#lib/appLinks.js';
+  import { CHATGPT_APP_URL, MCP_PATH, OPENAI_MARK } from '#lib/appLinks.js';
   import { sourceLogoUrl } from '#lib/logo.js';
   import { announce } from '#lib/announce.svelte.js';
   import { glyphColorFor } from '#lib/markColor.js';
   import { EntityLogo } from '#lib/ui/index.js';
 
-  // Pick an assistant, then follow its steps — the setup half of /mcp, shared with the
-  // onboarding tour. `compact` draws smaller host tiles for a narrow column;
-  // `initialMode` lets a signed-in surface open on the account connector.
-  let { compact = false, initialMode = 'anonymous' }: { compact?: boolean; initialMode?: 'anonymous' | 'account' } =
-    $props();
-
-  // The two hosted MCP servers. They are separate on purpose: a host only offers
-  // sign-in when the server answers 401, so the anonymous one can never lead to the
-  // account one — the visitor picks which connector they are adding, here.
-  type Mode = 'anonymous' | 'account';
-  const servers = $derived({
-    anonymous: {
-      url: `${page.url.origin}/api/v1/mcp`,
-      label: 'No sign-in',
-      desc: 'Search jobs and employers, read postings, salary ranges and market breakdowns. Read-only.',
-    },
-    account: {
-      url: `${page.url.origin}/api/v1/mcp/account`,
-      label: 'With your account',
-      desc: 'Search jobs and employers, plus your profile, your skills against the market, and saving, applying and moving jobs on your board.',
-    },
-  });
-  // svelte-ignore state_referenced_locally
-  let mode = $state<Mode>(initialMode);
-  const url = $derived(servers[mode].url);
+  // One hosted connection, signed in with OAuth when it is added.
+  let { compact = false, iconsOnly = false }: { compact?: boolean; iconsOnly?: boolean } = $props();
+  const url = $derived(`${page.url.origin}${MCP_PATH}`);
 
   // One tile per host. `domain` is what the logo proxy resolves the mark from — by
   // name alone "Cursor" or "Grok" is ambiguous. `directory` is a one-click install from the host's own directory, drawn in that
@@ -58,16 +37,16 @@
       id: 'claude',
       label: 'Claude',
       domain: 'claude.ai',
-      // Our Claude listing is the account connector, so it signs the visitor in.
+      // Keep the original directory listing when connecting an account.
       directory: {
-        url: 'https://claude.ai/directory/manage/freehire',
+        url: 'https://claude.ai/directory/freehire',
         brand: siClaude,
-        note: 'One click, signs in with freehire',
+        note: 'Open the freehire listing',
       },
       steps: [
         'Open Settings, then Connectors.',
         'Choose Add custom connector.',
-        'Name it freehire, paste the address, and choose Add.',
+        'Name it freehire, paste the address, and choose Add, then sign in to freehire when asked.',
         'Start a new chat, turn the freehire connector on, and ask a job question.',
       ],
     },
@@ -76,16 +55,17 @@
       label: 'ChatGPT',
       domain: 'chatgpt.com',
       mono: true,
-      // The published app is the no-sign-in connector; the steps below still add either one.
+      // Search and personal access use the same original app.
       directory: {
         url: CHATGPT_APP_URL,
         brand: OPENAI_MARK,
-        note: 'One click, search with no sign-in',
+        note: 'One click, then sign in to freehire',
       },
       steps: [
-        'Open Settings, then Apps & Connectors.',
-        'Under Advanced settings, turn on Developer mode.',
-        'Choose Create, name it freehire, and paste the address.',
+        'The directory listing above and a custom connection are separate install options. Custom connections require your ChatGPT workspace to allow adding MCP servers and using the tools you need.',
+        'Open Plugins and choose Add, then Add custom MCP server.',
+        'Name it freehire and paste the address.',
+        'Choose OAuth, then sign in to freehire and approve the connection.',
         'In a new chat, pick freehire from the + menu and ask a job question.',
       ],
     },
@@ -98,7 +78,7 @@
       steps: [
         'Open Connect apps in the sidebar.',
         'Add a custom app, name it freehire, and paste the address.',
-        'If Grok Bot asks you to authorize, finish the sign-in in your browser.',
+        'Grok Bot asks you to sign in to freehire; finish it in your browser.',
         'In a chat, type @ and pick freehire, then ask a job question.',
       ],
     },
@@ -106,8 +86,21 @@
       id: 'claude-code',
       label: 'Claude Code',
       domain: 'claude.ai',
+      logo: '/brands/claude-code.svg',
       steps: ['Run this once in your terminal, then ask Claude Code a job question.'],
       snippet: (u) => `claude mcp add --transport http freehire ${u}`,
+    },
+    {
+      id: 'codex',
+      label: 'Codex',
+      domain: 'openai.com',
+      logo: '/brands/codex.svg',
+      mono: true,
+      steps: [
+        'Run the command below in your terminal to add freehire to Codex.',
+        'Run codex mcp list to verify the server is configured, then start a new Codex session and ask a job question.',
+      ],
+      snippet: (u) => `codex mcp add freehire --url ${u}`,
     },
     {
       // Gemini's own web app has no way to add an MCP server; its CLI does.
@@ -135,7 +128,9 @@
 }`,
     },
   ];
-  let host = $state('claude');
+  // A link from elsewhere (the homepage icons) names the host to open on; anything unknown falls back to Claude.
+  const requestedHost = page.url.searchParams.get('host');
+  let host = $state(hosts.find((h) => h.id === requestedHost)?.id ?? 'claude');
   const selected = $derived(hosts.find((h) => h.id === host));
 
   // One copy confirmation at a time, keyed by the text that was copied.
@@ -166,140 +161,179 @@
   </button>
 {/snippet}
 
-<!-- Setup: which assistant, then which connector. Every host's panel stays in the
-     HTML, `hidden` when unselected, so crawlers and agents read all of them. -->
-<section class={compact ? '' : 'rounded-2xl border border-border bg-secondary/20 p-5 sm:p-8'}>
-  <div class={['flex flex-wrap items-end justify-between gap-3', compact && 'min-h-14']}>
-    <h2 class="text-sm text-muted-foreground">Pick your assistant</h2>
-    {#if compact && selected?.directory}
-      <!-- The selected host's one-click install, lifted above the picker: it needs no
-           address or steps at all, so it leads whenever the host has one. -->
-      {@const d = selected.directory}
-      <div class="flex flex-col items-end gap-1.5">
-        <!-- eslint-disable svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
-        <a
-          href={d.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
-          style:background-color="#{d.brand.hex}"
-          style:color={glyphColorFor(`#${d.brand.hex}`)}
-        >
-          <svg viewBox={d.brand.viewBox ?? '0 0 24 24'} class="size-4 fill-current" aria-hidden="true"><path d={d.brand.path} /></svg>
-          Add to {selected?.label} ↗
-        </a>
-        <!-- eslint-enable svelte/no-navigation-without-resolve -->
-        <span class="text-xs text-muted-foreground">{d.note}</span>
-      </div>
-    {/if}
-  </div>
-  <div class={['mt-4 grid gap-3', compact ? 'grid-cols-3 gap-2 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5']} role="group" aria-label="Assistant">
+{#if iconsOnly}
+  <!-- Just the marks, each a way into the full setup on /mcp. They wrap rather than scroll:
+       a hidden-scrollbar row cut its last mark mid-word at the card edge ("Cc…"). -->
+  <nav class="flex flex-wrap gap-x-5 gap-y-2" aria-label="Assistants">
     {#each hosts as h (h.id)}
-      <button
-        type="button"
-        aria-pressed={host === h.id}
-        onclick={() => (host = h.id)}
-        class={[
-          'flex flex-col items-center rounded-xl border-2 transition-colors',
-          compact ? 'gap-1.5 px-1 py-2.5' : 'gap-3 px-3 py-5',
-          host === h.id ? 'border-foreground bg-secondary/60' : 'border-border bg-background hover:bg-secondary/40',
-        ]}
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() path plus the host query -->
+      <a
+        href={`${resolve('/mcp')}?host=${h.id}`}
+        class="flex shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <EntityLogo
           name={h.label}
           src={h.logo ?? sourceLogoUrl(h.label, h.domain) ?? undefined}
-          size={compact ? 'md' : 'lg'}
+          size="xs"
           shape="square"
           class={h.mono ? 'dark:invert' : undefined}
         />
-        <span class={['font-medium text-foreground', compact ? 'whitespace-nowrap text-xs' : 'text-base']}>{h.label}</span>
-      </button>
+        {h.label}
+      </a>
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
     {/each}
-  </div>
-
-  {#each hosts as h (h.id)}
-    <div hidden={h.id !== host} class={compact ? 'mt-6' : 'mt-8'}>
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <h3 class={['font-semibold tracking-tight', compact ? 'text-base' : 'text-xl']}>Add it to {h.label}</h3>
-        {#if h.directory && !compact}
-          <div class="flex flex-col items-end gap-1.5">
-            <!-- eslint-disable svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
-            <a
-              href={h.directory.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
-              style:background-color="#{h.directory.brand.hex}"
-              style:color={glyphColorFor(`#${h.directory.brand.hex}`)}
-            >
-              <svg viewBox={h.directory.brand.viewBox ?? '0 0 24 24'} class="size-4 fill-current" aria-hidden="true"
-                ><path d={h.directory.brand.path} /></svg
-              >
-              Add to {h.label} ↗
-            </a>
-            <!-- eslint-enable svelte/no-navigation-without-resolve -->
-            <span class="text-xs text-muted-foreground">{h.directory.note}</span>
-          </div>
-        {/if}
-      </div>
-
-      <div class="max-w-2xl">
-      <div class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Connector">
-        {#each Object.entries(servers) as [id, server] (id)}
-          <button
-            type="button"
-            aria-pressed={mode === id}
-            onclick={() => (mode = id as Mode)}
-            class={[
-              'rounded-full border px-3 py-1 text-sm font-medium transition-colors',
-              mode === id
-                ? 'border-foreground bg-foreground text-background'
-                : 'border-border text-muted-foreground hover:text-foreground',
-            ]}
+  </nav>
+{:else}
+  <!-- Setup: one address, with instructions for each assistant. Every host's panel stays in the
+     HTML, `hidden` when unselected, so crawlers and agents read all of them. -->
+  <section class={compact ? '' : 'rounded-2xl border border-border bg-secondary/20 p-5 sm:p-8'}>
+    <div class={['flex flex-wrap items-end justify-between gap-3', compact && 'min-h-14']}>
+      <h2 class="text-sm text-muted-foreground">Pick your assistant</h2>
+      {#if compact && selected?.directory}
+        <!-- The selected host's one-click install, lifted above the picker: it needs no
+           address or steps at all, so it leads whenever the host has one. -->
+        {@const d = selected.directory}
+        <div class="flex flex-col items-end gap-1.5">
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
+          <a
+            href={d.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+            style:background-color="#{d.brand.hex}"
+            style:color={glyphColorFor(`#${d.brand.hex}`)}
           >
-            {server.label}
-          </button>
-        {/each}
-      </div>
-      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{servers[mode].desc}</p>
-
-      <div class="mt-4 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
-        <code class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">{url}</code>
-        {@render copyButton(url, 'connector address')}
-      </div>
-
-      <div class="mt-5">
-        <ol class="space-y-3">
-          {#each h.steps as step, i (i)}
-            <li class="flex gap-4">
-              <span
-                class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background"
-                >{i + 1}</span
-              >
-              <span class={['leading-relaxed text-muted-foreground', compact && 'text-sm']}>{step}</span>
-            </li>
-          {/each}
-        </ol>
-        {#if h.snippet}
-          {@const text = h.snippet(url)}
-          <figure class="mt-5 overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">
-            <figcaption
-              class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
+            <svg viewBox={d.brand.viewBox ?? '0 0 24 24'} class="size-4 fill-current" aria-hidden="true"
+              ><path d={d.brand.path} /></svg
             >
-              <span class="font-mono">{h.file ?? 'terminal'}</span>
-              <span class="ml-auto">{@render copyButton(text, `${h.label} setup`)}</span>
-            </figcaption>
-            <pre class="overflow-x-auto p-4 font-mono text-sm leading-relaxed">{text}</pre>
-          </figure>
-        {/if}
-        {#if mode === 'account'}
-          <p class="mt-5 text-sm leading-relaxed text-muted-foreground">
-            The first time it is used, your assistant opens a freehire sign-in page and asks you to approve the
-            connection.
-          </p>
-        {/if}
-      </div>
-      </div>
+            Add to {selected?.label} ↗
+          </a>
+          <!-- eslint-enable svelte/no-navigation-without-resolve -->
+          <span class="text-xs text-muted-foreground">{d.note}</span>
+        </div>
+      {/if}
     </div>
-  {/each}
-</section>
+    <div
+      class="mt-4 flex gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      role="group"
+      aria-label="Assistant"
+    >
+      {#each hosts as h (h.id)}
+        <button
+          type="button"
+          aria-pressed={host === h.id}
+          onclick={() => (host = h.id)}
+          class={[
+            'flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors',
+            host === h.id
+              ? 'border-border bg-background text-foreground shadow-sm'
+              : 'border-transparent text-muted-foreground hover:text-foreground',
+          ]}
+        >
+          <EntityLogo
+            name={h.label}
+            src={h.logo ?? sourceLogoUrl(h.label, h.domain) ?? undefined}
+            size="xs"
+            shape="square"
+            class={h.mono ? 'dark:invert' : undefined}
+          />
+          {h.label}
+        </button>
+      {/each}
+    </div>
+
+    {#each hosts as h (h.id)}
+      <div hidden={h.id !== host} class={compact ? 'mt-6' : 'mt-8'}>
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <h3 class={['font-semibold tracking-tight', compact ? 'text-base' : 'text-xl']}>Add it to {h.label}</h3>
+          {#if h.directory && !compact}
+            <div class="flex flex-col items-end gap-1.5">
+              <!-- eslint-disable svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
+              <a
+                href={h.directory.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+                style:background-color="#{h.directory.brand.hex}"
+                style:color={glyphColorFor(`#${h.directory.brand.hex}`)}
+              >
+                <svg viewBox={h.directory.brand.viewBox ?? '0 0 24 24'} class="size-4 fill-current" aria-hidden="true"
+                  ><path d={h.directory.brand.path} /></svg
+                >
+                Add to {h.label} ↗
+              </a>
+              <!-- eslint-enable svelte/no-navigation-without-resolve -->
+              <span class="text-xs text-muted-foreground">{h.directory.note}</span>
+            </div>
+          {/if}
+        </div>
+
+        <div class="max-w-2xl">
+          <p class="mt-4 text-sm leading-relaxed text-muted-foreground">
+            One connection for search and your account: jobs, employers and market data, plus your profile, saved jobs,
+            tracking and alerts. Your assistant asks you to sign in to freehire when you add it.
+          </p>
+
+          <div class="mt-4 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
+            <code class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">{url}</code>
+            {@render copyButton(url, 'connector address')}
+          </div>
+          <p class="mt-2 text-xs text-muted-foreground">
+            No API key needed. Approve account access in your browser and revoke it from Connected devices at any time.
+          </p>
+
+          <div class="mt-5">
+            <ol class="space-y-3">
+              {#each h.steps as step, i (i)}
+                <li class="flex gap-4">
+                  <span
+                    class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background"
+                    >{i + 1}</span
+                  >
+                  <span class={['leading-relaxed text-muted-foreground', compact && 'text-sm']}>{step}</span>
+                </li>
+              {/each}
+            </ol>
+            {#if h.snippet}
+              {@const text = h.snippet(url)}
+              <figure class="mt-5 overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">
+                <figcaption
+                  class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
+                >
+                  <span class="font-mono">{h.file ?? 'terminal'}</span>
+                  <span class="ml-auto">{@render copyButton(text, `${h.label} setup`)}</span>
+                </figcaption>
+                <pre class="overflow-x-auto p-4 font-mono text-sm leading-relaxed">{text}</pre>
+              </figure>
+            {/if}
+            <p class="mt-5 text-sm leading-relaxed text-muted-foreground">
+              {#if h.id === 'codex'}
+                Then run <code>codex mcp login freehire</code> and approve the connection in your browser.
+              {:else if h.id === 'claude-code'}
+                Then use <code>/mcp</code> inside Claude Code and choose Authenticate for freehire, and approve the connection
+                in your browser.
+              {:else}
+                If your assistant does not open sign-in on its own, use its sign-in or authentication control and
+                approve the freehire connection in your browser.
+              {/if}
+            </p>
+          </div>
+        </div>
+      </div>
+    {/each}
+
+    {#if !compact}
+      {@const agentPrompt = `Add the freehire MCP server to ${selected?.label ?? 'this assistant'}. Its address is ${url} (streamable HTTP transport) and it requires OAuth sign-in: start it and let me approve access in my browser. When it is connected, run one job search to confirm it works, then tell me it is ready.`}
+      <div class="mt-8 max-w-2xl">
+        <h3 class="text-sm font-medium">Or copy this and send it to your agent</h3>
+        <figure class="mt-3 overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">
+          <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
+            <span>prompt</span>
+            <span class="ml-auto">{@render copyButton(agentPrompt, 'agent prompt')}</span>
+          </figcaption>
+          <p class="p-4 text-sm leading-relaxed">{agentPrompt}</p>
+        </figure>
+      </div>
+    {/if}
+  </section>
+{/if}

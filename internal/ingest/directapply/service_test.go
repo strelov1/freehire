@@ -110,7 +110,14 @@ func (r *fakeRepo) Release(_ context.Context, id int64) error {
 	return nil
 }
 
-type fakeEmployers struct{ err error }
+type fakeEmployers struct {
+	err       error
+	teammates map[int64]bool // users who act for the harness employer's company
+}
+
+func (e fakeEmployers) Teammates(_ context.Context, userID, otherID int64) (bool, error) {
+	return userID == otherID || userID == employerID && e.teammates[otherID], nil
+}
 
 func (e fakeEmployers) ActiveAccount(_ context.Context, userID int64) (employer.Account, error) {
 	if e.err != nil {
@@ -229,6 +236,9 @@ func TestApply_DeliversToTheEmployerAndUpdatesTheCandidatesRecords(t *testing.T)
 	if len(h.repo.sent) != 1 {
 		t.Error("the delivered application is not stamped sent")
 	}
+	if rec := h.repo.records[1]; string(rec.CVFile.Content) != "%PDF" || rec.CVFile.Filename != "cv.pdf" {
+		t.Errorf("recorded CV file = %+v, want the file the employer was mailed", rec.CVFile)
+	}
 	if len(h.tracker.applied) != 1 || h.tracker.applied[0] != slug {
 		t.Errorf("tracking = %v, want the vacancy marked applied", h.tracker.applied)
 	}
@@ -268,6 +278,10 @@ func TestApply_Refusals(t *testing.T) {
 		"deleted employer account": {setup: func(h *harness) { h.emp.err = employer.ErrNotFound }, want: ErrClosed},
 		"the employer's own vacancy": {
 			setup: func(h *harness) { h.repo.vacancy.EmployerID = candidateID },
+			want:  ErrNotFound,
+		},
+		"a vacancy of the candidate's own company team": {
+			setup: func(h *harness) { h.emp.teammates = map[int64]bool{candidateID: true} },
 			want:  ErrNotFound,
 		},
 	}

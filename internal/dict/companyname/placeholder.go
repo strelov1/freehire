@@ -5,52 +5,54 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"maps"
+	"net"
+	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 )
 
 // NewPlaceholderRegistry wires the resolvers for a board whose company is still its own board
-// id — a "<host>/<site>" path or a GUID that a harvest wrote into boards.company verbatim and
+// id — a bare host, a "<host>/<site>" path, or a GUID that a harvest wrote into boards.company verbatim and
 // every posting then carried as its employer's public name. Unlike NewRegistry, the input is
 // the board id itself (no URL to parse, no slug to compare against), and each resolver reads
 // the name the ATS states for exactly that board, so AcceptPlaceholder needs no confidence
 // match — the same argument join's id lookup makes in Accept.
 //
-// Measured 2026-10-23 on 15 random placeholder boards per provider:
-//   - paylocity (2,069 boards): the listing page titles itself "{Name} - Job Opportunities", 15/15.
-//   - ukgready (774): format-settings, which the adapter already reads for the currency, carries
-//     company.name, 15/15.
-//   - oracle (746): the candidate-experience site's og:site_name is whatever the employer named
-//     the site — usually the employer, often with a careers tail, sometimes only its purpose
-//     ("Student Casual"). ExtractOracleSiteName keeps 11/15 and refuses the rest. Oracle's own
-//     recruitingCESites API was tried first and is worse: "Candidate Experience site" or nothing.
+// What each resolver reads, and why:
+//   - paylocity: the listing page titles itself "{Name} - Job Opportunities".
+//   - ukgready: format-settings, which the adapter already reads for the currency, carries
+//     company.name.
+//   - oracle: the candidate-experience site's og:site_name is whatever the employer named the
+//     site, sometimes only its purpose ("Student Casual"); ExtractOracleSiteName refuses those.
+//     The recruitingCESites API is worse: "Candidate Experience site" or nothing.
+//   - dayforce: the careers page's Next.js data names the tenant as
+//     candidateCorrespondenceClientName; ExtractDayforceClientName refuses a department
+//     ("Human Resources") or nothing.
+//   - ukg: the job board's header logo alt text carries the brand;
+//     ExtractUKGBrandName refuses a missing logo or the unconfigured "Default Brand".
+//   - taleo: the career section's footer copyright names the employer ("© 2018 by Hyatt
+//     Corporation"), else the header logo's alt text ("Marcus Careers").
+//     ExtractTaleoCopyright is preferred: a legal line, where alt text is whatever a designer
+//     typed. The section's <title> is "Job Search" on every board.
+//   - hiringroom: the portal titles itself with the employer's name on both layouts
+//     (ExtractHiringRoomTitle). A tenant whose public portal is off answers 404 and stays as is.
+//   - zohorecruit: the careers page's og:site_name is the employer, while its <title> is free
+//     text the tenant typed ("Jobs at Careers"). A host-shaped name would also keep the
+//     aggregator suppression from pairing a posting with its copy, since
+//     "scrumconnect.zohorecruit.eu" and "Scrumconnect Limited" fold to different company slugs.
+//   - successfactors, teamtailor: the host titles its root page "Jobs at {Name}", or states
+//     the name in og:site_name on /jobs.
 //
-// Measured 2026-10-24 on 15 more each:
-//   - dayforce (486): the careers page's Next.js data names the tenant as
-//     candidateCorrespondenceClientName, the sender of the candidate's mail, 13/15 — the others
-//     named a department ("Human Resources") or nothing; ExtractDayforceClientName refuses those.
-//   - ukg (1,152): the job board's header logo carries the brand as its alt text, 11/15 — the
-//     others had no logo or the unconfigured "Default Brand"; ExtractUKGBrandName refuses those.
-//   - taleo (226, every one swept): the career section's footer copyright names the employer on
-//     83 ("© 2018 by Hyatt Corporation"), and the header logo's alt text on 59 more or the same
-//     ones ("Marcus Careers") — 113 boards between them. ExtractTaleoCopyright is preferred: a
-//     legal line, where the alt text is whatever a designer typed ("The black version of the
-//     Stantec logo"). The section's <title> is "Job Search" on every one.
+// These resolvers only run for a board whose stored company exactly equals its board id
+// (ListPlaceholderCompanyBoards). The query excludes SuccessFactors hubs because their root
+// title names the hub, not its tenants.
 //
-// Measured 2026-10-28 on hiringroom's placeholder boards (the Argentina harvest wrote 352 tenant
-// labels as their company): the portal titles itself with the employer's name on both layouts
-// (ExtractHiringRoomTitle). A tenant whose public portal is off answers 404 and stays as it is.
-//
-// Measured 2026-10-28 on zohorecruit (693 of 4,708 live boards carried their careers host as the
-// company): the careers page's og:site_name is the employer, 20/20 sampled, while its <title> is
-// free text the tenant typed ("Jobs at Careers"). The host-shaped name also kept the aggregator
-// suppression from pairing a posting with its WhatJobs copy, since "scrumconnect.zohorecruit.eu"
-// and "Scrumconnect Limited" fold to different company slugs.
-//
-// Deliberately absent, each having been tried against live boards: adp (neither the listing nor the requisition detail names the client), and workday (the
-// detail's hiringOrganization is a per-posting legal entity — Dover's postings name
-// "Engineered Controls International, LLC" — so it would split one employer per subsidiary).
+// Deliberately absent: adp (neither the listing nor the requisition detail names the client),
+// and workday (the detail's hiringOrganization is a per-posting legal entity, so it would split
+// one employer per subsidiary).
 func NewPlaceholderRegistry(http httpGetter) Registry {
 	return Registry{
 		"paylocity": newTitleResolver(http, "https://recruiting.paylocity.com/recruiting/jobs/All/%s", func(title string) string {
@@ -62,8 +64,89 @@ func NewPlaceholderRegistry(http httpGetter) Registry {
 		"ukg":      ukgResolver{http: http},
 		"taleo":    taleoResolver{http: http},
 		// The portal's /jobs redirects to /portal on the newer layout; the client follows it.
-		"hiringroom":  newTitleResolver(http, "https://%s.hiringroom.com/jobs", ExtractHiringRoomTitle),
-		"zohorecruit": zohoResolver{http: http},
+		"hiringroom": newTitleResolver(http, "https://%s.hiringroom.com/jobs", ExtractHiringRoomTitle),
+		// SuccessFactors and Teamtailor boards are career-site hosts. Their own pages
+		// state the employer as a title or og:site_name, respectively.
+		"successfactors": successfactorsResolver{http: http},
+		"teamtailor":     teamtailorResolver{http: http},
+		"zohorecruit":    zohoResolver{http: http},
+		"paycor":         newTitleResolver(http, "https://recruitingbypaycor.com/career/CareerHome.action?clientId=%s", ExtractPaycorTitle),
+	}
+}
+
+// hostOnlyBoard admits only bare, ASCII DNS hostnames with at least two labels. It refuses
+// URL components, ports, IP literals, malformed labels, and single-label hosts rather than
+// treating arbitrary board text as a career-site host. The production HTTP client separately
+// blocks non-public resolved addresses and rechecks redirects.
+func hostOnlyBoard(board string) bool {
+	if board == "" || len(board) > 253 || net.ParseIP(board) != nil {
+		return false
+	}
+	u, err := url.Parse("//" + board)
+	if err != nil || u.User != nil || u.Port() != "" || u.Host != board ||
+		u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return false
+	}
+	labels := strings.Split(board, ".")
+	if len(labels) < 2 {
+		return false
+	}
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+type successfactorsResolver struct{ http textGetter }
+
+func (r successfactorsResolver) Name(ctx context.Context, board string) (string, error) {
+	if !hostOnlyBoard(board) {
+		return "", nil
+	}
+	name, err := newTitleResolver(r.http, "https://%s/", ExtractTitleName).Name(ctx, board)
+	if err != nil {
+		return "", err
+	}
+	return employerNameFromHostPage(name), nil
+}
+
+// teamtailorResolver reads the employer name from the Teamtailor career site's
+// Open Graph metadata. The board is the career-site host itself.
+type teamtailorResolver struct{ http textGetter }
+
+func (r teamtailorResolver) Name(ctx context.Context, board string) (string, error) {
+	if !hostOnlyBoard(board) {
+		return "", nil
+	}
+	body, err := r.http.GetText(ctx, "https://"+board+"/jobs")
+	if err != nil {
+		return "", err
+	}
+	m := ogSiteName.FindStringSubmatch(body)
+	if m == nil {
+		return "", nil
+	}
+	return employerNameFromHostPage(html.UnescapeString(m[1])), nil
+}
+
+// employerNameFromHostPage rejects exact career-site boilerplate and platform labels that can be
+// page metadata, not the employer, without blacklisting words that may occur in longer names.
+func employerNameFromHostPage(name string) string {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	switch normalized {
+	case "careers", "jobs", "job search", "job opportunities", "career opportunities":
+		return ""
+	case "teamtailor", "successfactors", "sap successfactors":
+		return ""
+	default:
+		return strings.TrimSpace(name)
 	}
 }
 
@@ -96,6 +179,60 @@ func ExtractHiringRoomTitle(title string) string {
 		return clean(strings.TrimSuffix(strings.TrimSpace(rest), "!"))
 	}
 	return ExtractSuffixName(title, " | Portal externo")
+}
+
+// paycorTitleLabels are the section labels and stock site names a branded Paycor CareerHome
+// title puts beside the employer ("Careers | Acme", "Acme : About Us"), lower-cased.
+var paycorTitleLabels = map[string]bool{
+	"careers": true, "jobs": true, "employment": true, "join our team": true, "about us": true,
+	"who we are": true, "feedback": true, "applicant tracking": true, "current openings": true,
+	"current opportunities": true, "career opportunities": true, "employment opportunities": true,
+	"job opportunities": true, "open positions": true, "mysite": true,
+}
+
+// paycorTemplatePlaceholders are the template's stock names a tenant never filled in. Unlike a
+// label they are never cut off a part: a title left holding one names nobody.
+var paycorTemplatePlaceholders = map[string]bool{"company name": true, "add company name": true}
+
+// paycorTitleLabelOrder fixes the order labels are cut in, so a title reads the same every run.
+var paycorTitleLabelOrder = slices.Sorted(maps.Keys(paycorTitleLabels))
+
+// paycorTitleSeparator splits a Paycor title into parts: a pipe, or a dash or colon standing
+// apart from its neighbours (never the hyphen inside "RNDC-IL" or "Coca-Cola").
+var paycorTitleSeparator = regexp.MustCompile(`\s*\|\s*|\s+[-–—:](?:\s+|$)`)
+
+// ExtractPaycorTitle reads the employer out of a Paycor CareerHome <title>. The branded
+// template titles the listing with the employer, alone or beside section labels ("Careers -
+// Acme", "Acme : About Us", "Careers at Acme", "Acme Careers"); the plain template has no
+// title. A label is dropped whole, as a "<label> at" lead-in or as a trailing word. A title
+// with two parts that are not labels (a name and a slogan) is refused rather than guessed
+// between.
+func ExtractPaycorTitle(title string) string {
+	name := ""
+	for _, part := range paycorTitleSeparator.Split(html.UnescapeString(title), -1) {
+		part = strings.Join(strings.Fields(part), " ")
+		if paycorTitleLabels[strings.ToLower(part)] {
+			continue
+		}
+		for _, label := range paycorTitleLabelOrder {
+			if rest, ok := cutPrefixFold(part, label+" at "); ok {
+				part = rest
+			}
+			if rest, ok := cutSuffixFold(part, " "+label); ok {
+				part = rest
+			}
+		}
+		if part == "" || paycorTitleLabels[strings.ToLower(part)] {
+			continue
+		}
+		// A second candidate is ambiguous; an all-lower-case one is a stray word ("neighorhood").
+		if name != "" || paycorTemplatePlaceholders[strings.ToLower(part)] ||
+			!strings.ContainsFunc(part, unicode.IsUpper) {
+			return ""
+		}
+		name = part
+	}
+	return name
 }
 
 // AcceptPlaceholder decodes and validates a candidate resolved for a placeholder board. No
@@ -141,141 +278,6 @@ func (r ukgreadyResolver) Name(ctx context.Context, board string) (string, error
 		return "", err
 	}
 	return s.Company.Name, nil
-}
-
-type oracleResolver struct{ http textGetter }
-
-var ogSiteName = regexp.MustCompile(`(?i)<meta[^>]+property="og:site_name"[^>]+content="([^"]*)"`)
-
-func (r oracleResolver) Name(ctx context.Context, board string) (string, error) {
-	host, site, ok := splitHostBoard(board)
-	if !ok {
-		return "", nil
-	}
-	body, err := r.http.GetText(ctx, fmt.Sprintf("https://%s/hcmUI/CandidateExperience/en/sites/%s/requisitions", host, site))
-	if err != nil {
-		return "", err
-	}
-	m := ogSiteName.FindStringSubmatch(body)
-	if m == nil {
-		return "", nil
-	}
-	return ExtractOracleSiteName(html.UnescapeString(m[1])), nil
-}
-
-// oracleSiteLeads, oracleSiteMarkers and oracleSiteTails are what an Oracle site name wraps
-// around the employer, measured on every site name the prod runs met (677 distinct, 2026-10-24):
-// a lead-in ("Working at Signature Aviation", "Jobs @ Carmeuse"), a marker after which nothing
-// names the employer any more ("EXL Talent Acquisition Team", "Mayo Career Site US", "Dollar
-// General External Career Site"), or a tail ("Mountaire Jobs", "Chubb External"). A marker cuts
-// the name at its FIRST occurrence, so what follows it never survives; every marker is a phrase
-// no employer's own name carries. A tail is cut only at the END: a single word such as
-// "Career" inside a name is part of it ("Summit Career College"), and cutting there would state
-// a different employer — such a name is refused by its purpose word instead.
-var (
-	oracleSiteLeads = []string{
-		"Working at ", "Job Listings at ", "Careers at ", "Jobs at ", "Jobs @ ", "Search Jobs - ",
-	}
-	oracleSiteMarkers = []string{
-		" Careers Site", " Career Site", "CareerSite", " Career Portal", " Careers Portal",
-		" Career Section", " Careers Section", " Career Website", " Career Connection",
-		" Careers Center", " Careers(", " Opportunities", " Candidate Experience", " Candidate Site",
-		" External Career", " External Site", " Talent Acquisition", " Recruitment Team",
-		" Job Openings", " Job Listings", " Staff Positions", " Employment", " Human Resources",
-		" Campus", " Experienced", " Referral", " Minimal", " - Carrière", " - Student", " - NEW",
-		" Professional Careers", " Interns",
-	}
-	oracleSiteTails = []string{
-		" Careers", " Career", " External", " Internal", " Jobs", " Job", " Site", " Portal",
-	}
-)
-
-// oracleSiteWords mark a site named for its PURPOSE rather than its employer — "Student
-// Casual", "Work with us", "Sitio de carrera Laureate". Checked after the wrapping is cut, so
-// they only ever refuse a name with nothing but the purpose left in it.
-var oracleSiteWords = map[string]bool{
-	"career": true, "careers": true, "carrera": true, "sitio": true, "site": true, "page": true,
-	"applicant": true, "applicants": true, "student": true, "casual": true, "graduate": true,
-	"apprenticeship": true, "recruitment": true, "candidate": true, "experience": true,
-	"external": true, "internal": true, "portal": true, "job": true, "jobs": true, "work": true,
-	"talent": true, "talento": true, "search": true, "generic": true, "posting": true,
-	"testing": true,
-}
-
-// oracleSiteLoneWords are names that are a real word but no employer when they stand alone —
-// "Global", "Schools", "Church" — the site's audience, not its owner.
-var oracleSiteLoneWords = map[string]bool{
-	"global": true, "schools": true, "church": true, "executive": true, "clerk": true,
-	"llp": true, "aerospace": true, "anywhere": true, "all": true, "corporate": true,
-	"vision": true, "academy": true,
-}
-
-// ExtractOracleSiteName turns an Oracle candidate-experience site name into the employer's
-// name. A name split by "|" is read part by part, and the parts that name an employer must
-// agree: "Careers | BXP" has one, "Verisk Careers | Verisk" two that match, while "Local Truck
-// Driving Jobs | Centerline Drivers" has two that differ — and so would "Careers at Acme |
-// North America", where choosing either side by its shape could state a region as the
-// employer. Disagreement is refused. Refusing costs the board nothing: it simply keeps the
-// placeholder it already had.
-func ExtractOracleSiteName(name string) string {
-	found := ""
-	for _, part := range strings.Split(name, "|") {
-		got := extractOracleSitePart(part)
-		switch {
-		case got == "":
-		case found == "":
-			found = got
-		case !strings.EqualFold(found, got):
-			return ""
-		}
-	}
-	return found
-}
-
-// extractOracleSitePart drops a lead-in, cuts at the first marker and a tail, then refuses what
-// is left if it still names the site's purpose, stands alone as a generic word, or is a
-// configuration identifier (an underscore — "POLK_BoCC_Career Site", "Innergex_EN").
-func extractOracleSitePart(name string) string {
-	name = strings.Join(strings.Fields(name), " ")
-	if strings.Contains(name, "_") {
-		return ""
-	}
-	for _, lead := range oracleSiteLeads {
-		if len(name) > len(lead) && strings.EqualFold(name[:len(lead)], lead) {
-			name = name[len(lead):]
-			break
-		}
-	}
-	// A lowercase article is wrapping ("the Myriad Genetics Candidate site"); a capitalised one
-	// is the employer's own ("The Kroger Co.").
-	name = strings.TrimPrefix(name, "the ")
-	low := strings.ToLower(name)
-	for _, marker := range oracleSiteMarkers {
-		if i := strings.Index(low, strings.ToLower(marker)); i >= 0 {
-			name, low = name[:i], low[:i]
-		}
-	}
-	name = strings.TrimRight(name, " -–—")
-	// Tails stack ("Chubb External Jobs"), so cut until none is left.
-	for cut := true; cut; {
-		cut = false
-		for _, tail := range oracleSiteTails {
-			if rest, ok := cutSuffixFold(name, tail); ok {
-				name, cut = strings.TrimRight(rest, " -–—"), true
-				break
-			}
-		}
-	}
-	tokens := words.FindAllString(name, -1)
-	for _, w := range tokens {
-		if oracleSiteWords[strings.ToLower(w)] {
-			return ""
-		}
-	}
-	if len(tokens) == 1 && oracleSiteLoneWords[strings.ToLower(tokens[0])] {
-		return ""
-	}
-	return name
 }
 
 type dayforceResolver struct{ http textGetter }

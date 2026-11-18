@@ -5,12 +5,9 @@ import (
 	"slices"
 )
 
-// systemPrompt pairs with the response schema (proposal.go): the schema fixes the
-// shape and the closed vocabularies, this fixes the meaning.
-//
-// It says nothing about the values of the open vocabularies. Those are checked against
-// the real dictionaries afterwards, and a prompt that also described them would be a
-// second, slowly-diverging copy of a dictionary that already exists.
+// systemPrompt pairs with the response schema (proposal.go): the schema fixes the shape
+// and closed vocabularies, this fixes the meaning. It does not describe open-vocabulary
+// values; the dictionaries check those afterwards.
 const systemPrompt = `You turn a person's description of the job they want into search filters for a job board.
 
 Capture everything they asked for, and nothing they did not. Both halves matter and they fail differently:
@@ -64,10 +61,8 @@ query must be English whatever language they wrote in. It is matched word for wo
 
 summary is one plain sentence describing the search you built, in the person's own terms. It is shown to them instead of the raw filters, so it must describe exactly the values you wrote — not what they asked for, if you could not express all of it.`
 
-// sortedFacetNames orders a facet map's names so a rendered search always reads the
-// same way. The order reaches both the model (when refining) and the person (in the
-// preview), and a set that reshuffles between two identical requests reads as
-// instability rather than as an answer.
+// sortedFacetNames orders facet names so identical requests render identically, to both
+// the model and the preview.
 func sortedFacetNames(facets map[string][]string) []string {
 	return slices.Sorted(maps.Keys(facets))
 }

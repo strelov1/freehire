@@ -55,6 +55,7 @@ func TestEmptiedBoardClosesItsPostingsOnlyForAnAdapterThatProvesEmpty(t *testing
 		wantClose bool
 	}{
 		{"greenhouse", true},
+		{"workday", true},
 		{"smartrecruiters", false},
 	}
 	for _, tc := range cases {
@@ -100,7 +101,7 @@ func TestEmptiedBoardClosesItsPostingsOnlyForAnAdapterThatProvesEmpty(t *testing
 			if err != nil {
 				t.Fatalf("run: %v", err)
 			}
-			if failed := sweep(ctx, q, registry, runStats, crawled, nil, false); failed != 0 {
+			if failed := sweep(ctx, q, registry, runStats, crawled, nil, false, false); failed != 0 {
 				t.Fatalf("sweep reported %d failures", failed)
 			}
 

@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math"
 	"regexp"
@@ -15,7 +16,7 @@ import (
 )
 
 // idealtraits adapts IdealTraits career sites (app.idealtraits.com), a hiring platform used
-// almost entirely by US insurance agencies. Live-verified 2026-10-20.
+// almost entirely by US insurance agencies.
 //
 // The board is the employer's numeric BUSINESS id, decimal ("1162292"). The platform's own
 // career site is "/<slug>/<base64 of that id>/careers": the id is the identity and the slug is
@@ -29,9 +30,8 @@ import (
 // "X-Requested-With: XMLHttpRequest" answers JSON — {"joblist": <the cards' HTML>, "jobcount":
 // <the board's total>} — for any slug, without the redirect, and a page past the end answers an
 // empty joblist rather than the 404 the plain HTML page gives. A board with no openings answers
-// jobcount 0. Every board sampled (39 of them, 1-5 postings each) fit one page, so a second page
-// has not been observed carrying cards; the walk therefore trusts jobcount rather than a page
-// size, and fails the crawl when the pages it read do not add up to it.
+// jobcount 0. The walk trusts jobcount rather than a page size, and fails the crawl when the pages
+// it read do not add up to it.
 //
 // A posting page carries a schema.org JobPosting ld+json (title, HTML body, datePosted,
 // employmentType, a single street address, baseSalary) and a "Remote Type" field the ld+json
@@ -58,6 +58,8 @@ func (idealtraits) Provider() string { return "idealtraits" }
 // reports, and fails the crawl on any page error or shortfall. See the fullBoardListing
 // interface for the bar.
 func (idealtraits) fullBoardListing() {}
+
+func (idealtraits) emptyBoardListing() {}
 
 const idealtraitsOrigin = "https://app.idealtraits.com"
 
@@ -89,7 +91,7 @@ func (s idealtraits) FetchNew(ctx context.Context, e CompanyEntry, seen func(ext
 	return fetchDetails(postings, defaultDetailWorkers, func(p idealtraitsPosting) (Job, bool) {
 		if seen(p.id) {
 			// Identity and the card's title only: the pipeline refreshes liveness without
-			// rewriting content, and the title is what the catalogue filter weighs on a refresh.
+			// rewriting content.
 			return Job{ExternalID: p.id, URL: p.url, Title: p.title, Company: e.Company, SeenRefresh: true}, true
 		}
 		return s.detail(ctx, e, p)
@@ -115,6 +117,24 @@ func IdealTraitsJobCount(ctx context.Context, c HeaderJSONGetter, board string) 
 type idealtraitsPage struct {
 	JobList  string `json:"joblist"`
 	JobCount int    `json:"jobcount"`
+}
+
+func (p *idealtraitsPage) UnmarshalJSON(raw []byte) error {
+	var v struct {
+		JobList  *string `json:"joblist"`
+		JobCount *int    `json:"jobcount"`
+	}
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return err
+	}
+	if v.JobList == nil || v.JobCount == nil || *v.JobCount < 0 {
+		return fmt.Errorf("idealtraits: listing requires joblist and a nonnegative jobcount")
+	}
+	if *v.JobCount == 0 && strings.TrimSpace(*v.JobList) != "" {
+		return fmt.Errorf("idealtraits: empty listing carries unexpected card markup")
+	}
+	p.JobList, p.JobCount = *v.JobList, *v.JobCount
+	return nil
 }
 
 // idealtraitsPosting is one listing card: the posting's id, its page, and the title it states.
@@ -152,6 +172,8 @@ func (s idealtraits) list(ctx context.Context, board string) ([]idealtraitsPosti
 		}
 		if total < 0 {
 			total = p.JobCount
+		} else if p.JobCount != total {
+			return nil, fmt.Errorf("idealtraits: listing %s changed jobcount during pagination", board)
 		}
 		cards, err := idealtraitsCards(p.JobList)
 		if err != nil {

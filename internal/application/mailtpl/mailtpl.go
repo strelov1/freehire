@@ -2,14 +2,10 @@
 // into: the branded header, the white card, and the fine-print footer. Feature
 // packages (emailnotify, reminder, referral, report, nudge) supply only the part
 // that differs — a heading and a body fragment — and this package supplies
-// everything a recipient recognises as "a mail from freehire".
+// everything a recipient recognises as "a mail from freehire". Branding is not a
+// per-feature decision, so it does not live in per-feature code.
 //
-// Why one package rather than a shell per feature: the six transactional mails
-// were written independently and drifted, from a fully laid-out digest down to
-// bare <p> tags with no wrapper at all. Branding is not a per-feature decision,
-// so it does not live in per-feature code.
-//
-// Email rendering constraints this file obeys, and why each one matters:
+// Email rendering constraints this file obeys:
 //   - Layout is a nested <table>, not flexbox or grid. Outlook's Word rendering
 //     engine supports neither.
 //   - Every style is inline. The one <style> block is the dark-mode override,
@@ -28,25 +24,18 @@ import (
 	"strings"
 )
 
-// DiscordURL is the community invite. It lives here, in the shell, because the
-// shell's own footer carries it into every mail we send — and because the letters
-// that also name it in their copy have to name the same room. It was mirrored in
-// two mail packages before that, and a mirror is a link that can disagree with
-// itself.
+// DiscordURL is the community invite. It lives in the shell because the footer
+// carries it into every mail and letters that name it in their copy must name the
+// same room.
 //
 // It must be an invite that never expires, has no use cap, and opens on a channel a
-// stranger can read. A mail is read weeks after it is sent, and a default Discord
-// invite dies after seven days: the letter would keep going out and keep landing on
-// "Invite Invalid", which looks exactly like a project that has folded. The first
-// one that went out opened on #github, where the repository's webhook posts, so
-// everyone who accepted it arrived in a stream of bot messages.
+// stranger can read (not #github, which is a stream of webhook bot messages). A mail
+// is read weeks after it is sent, and a default invite dies after seven days.
 const DiscordURL = "https://discord.gg/79cgB9RRfx"
 
 // Palette, converted from design-system/tokens/color.tokens.json. The tokens are
-// authored in oklch and mail clients cannot parse that function, so the values are
-// converted to sRGB hex here. Keep this block in step with the tokens by hand: a
-// build-time conversion would buy nothing, because the palette changes about once
-// a year and a silent drift is caught by the golden previews.
+// oklch, which mail clients cannot parse, so the values are sRGB hex. Keep this block
+// in step with the tokens by hand; the golden previews catch drift.
 const (
 	colorPage   = "#f0f0f0" // --muted: the canvas behind the card
 	colorCard   = "#ffffff" // --card
@@ -54,8 +43,7 @@ const (
 	colorMuted  = "#505050" // --muted-foreground
 	colorBorder = "#e4e4e4" // --border
 
-	// The brand tokens are authored in hex already — they are a named palette
-	// (oats green), not a computed scale — so these are copies, not conversions.
+	// The brand tokens are already hex, so these are copies, not conversions.
 	colorBrand       = "#5b6f00" // --brand: CTA fill
 	colorBrandFg     = "#f3f6e2" // --brand-foreground: text on the CTA
 	colorBrandStrong = "#4c5c00" // --brand-strong: links, which need the contrast
@@ -76,13 +64,10 @@ const (
 	darkBrandMuted  = "#2e3318" // --brand-muted
 )
 
-// fontStack mirrors the --font-sans token. Mail clients get no web fonts, so the
-// system stack is the whole typographic decision.
+// fontStack mirrors the --font-sans token; mail clients get no web fonts.
 //
-// The multi-word families are quoted with apostrophes, not double quotes: this
-// string is interpolated into a style="..." attribute, and html/template parses
-// the result as HTML, where an inner double quote ends the attribute. CSS accepts
-// either quote character, so the apostrophes cost nothing.
+// Multi-word families use apostrophes because this string is interpolated into a
+// style="..." attribute, where an inner double quote would end the attribute.
 const fontStack = `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif`
 
 // Layout renders bodies into the shared shell. It is immutable and safe to share.
@@ -98,13 +83,11 @@ func New(baseURL string) *Layout {
 // Body is the per-mail content the shell wraps.
 //
 // Content and Footer are template.HTML: they arrive already rendered by the calling
-// package's own html/template, which escaped the user- and source-derived values
-// inside them. Passing a string built by concatenation would defeat that escaping,
-// so the type is the reminder.
+// package's html/template, which escaped user- and source-derived values. Passing a
+// concatenated string would defeat that escaping.
 type Body struct {
 	// Preheader is the one-line summary mail clients show next to the subject in
-	// the inbox list. Left empty, the client shows whatever text comes first —
-	// usually the logo's alt text or a stray link.
+	// the inbox list; left empty, the client shows whatever text comes first.
 	Preheader string
 	// Heading is the <h1>. Plain text; escaped here.
 	Heading string
@@ -114,24 +97,15 @@ type Body struct {
 	// Optional.
 	Footer template.HTML
 	// UnsubscribeURL is where this recipient turns THIS kind of mail off, without
-	// signing in. Set on every non-essential mail; empty on an essential one — a
-	// verification or password-reset code, sent because they just asked for it, for
-	// which there is no setting that would stop them and offering one invites a
-	// click that changes nothing.
+	// signing in. Set on every non-essential mail; empty on an essential one (a
+	// verification or password-reset code they just asked for).
 	//
-	// This replaced a separate Essential bool. Two fields answering one question can
-	// disagree, and a mail marked essential while carrying a link, or the reverse,
-	// had no defined meaning. One field cannot contradict itself.
+	// The shell renders it and does not build it: signing the token needs
+	// internal/engage/emailprefs, a layer above, and one caller minting it once keeps
+	// the List-Unsubscribe header and the footer in agreement.
 	//
-	// The shell renders it and does not build it. Signing the token needs
-	// internal/engage/emailprefs, which sits a layer above this package — and the
-	// constraint produces the right design anyway, since the same URL has to reach
-	// the List-Unsubscribe header too, and one caller minting it once is what keeps
-	// the header and the footer from disagreeing.
-	//
-	// This field is not what ENFORCES the rule: a mail that reaches the transport
-	// silenceable and linkless is refused there, which also covers the mails that
-	// build their own HTML and never touch this shell.
+	// This field does not ENFORCE the rule: the transport refuses a silenceable,
+	// linkless mail, which also covers mails that never touch this shell.
 	UnsubscribeURL string
 }
 
@@ -154,13 +128,11 @@ func (l *Layout) Render(b Body) string { return l.RenderScheme(b, SchemeAuto) }
 
 // RenderScheme is Render with the colour scheme pinned.
 //
-// Pinning exists for review, not for sending: a preview has to show both designs
-// side by side, and the reviewer's own OS setting is not a control. Nothing in the
-// send path passes anything but SchemeAuto.
+// Pinning is for review previews, not sending: nothing in the send path passes
+// anything but SchemeAuto.
 //
-// It returns no error. The only way Execute can fail here is a malformed shell —
-// the data cannot cause it — and that is ruled out at package load by the check
-// below, so a caller would have nothing to do with an error but ignore it.
+// It returns no error: Execute can only fail on a malformed shell, which the check
+// in init rules out at package load.
 func (l *Layout) RenderScheme(b Body, s Scheme) string {
 	var buf bytes.Buffer
 	_ = shell.Execute(&buf, shellData{
@@ -176,15 +148,11 @@ func (l *Layout) RenderScheme(b Body, s Scheme) string {
 
 // PinScheme rewrites an already-rendered document to a fixed colour scheme.
 //
-// It exists for previews. The mails are rendered by their own packages, each of
-// which builds its Layout internally, so a reviewer has no seam to pass a scheme
-// through — and threading one through six constructors would put a review-only
-// concern into the send path. Rewriting afterwards keeps it out.
+// It exists for previews: each mail package builds its own Layout internally, and
+// threading a scheme through them would put a review-only concern into the send path.
 //
-// The rewrite is exact-literal, not a parse: this package emitted the document, so
-// it knows the byte-for-byte strings it is replacing. A miss is reported rather
-// than ignored, because a silently unpinned preview is a preview that quietly shows
-// the wrong thing.
+// The rewrite is exact-literal, not a parse, since this package emitted the document.
+// A miss is reported, because a silently unpinned preview shows the wrong thing.
 func PinScheme(document string, s Scheme) (string, error) {
 	if s == SchemeAuto {
 		return document, nil
@@ -201,32 +169,26 @@ func PinScheme(document string, s Scheme) (string, error) {
 
 // darkCSS is the stylesheet each scheme emits.
 //
-// Light emits nothing at all: the layout is already light inline, so the override
-// has nothing to say. Dark emits the same rules unconditionally — the media query
-// is the only difference between "when the reader prefers dark" and "always".
+// Light emits nothing: the layout is already light inline. Dark emits the same rules
+// unconditionally; the media query is the only difference from Auto.
 var darkCSS = map[Scheme]template.HTML{
 	SchemeAuto:  template.HTML(`<style>@media (prefers-color-scheme: dark) {` + darkRules + `}</style>`), //nolint:gosec // a package constant, no data reaches it
 	SchemeLight: "",
 	SchemeDark:  template.HTML(`<style>` + darkRules + `</style>`), //nolint:gosec // same
 }
 
-// colorSchemeMeta tells the client which schemes the document supports. Claiming
-// "light dark" while pinned to one would invite the client to adapt a design that
-// cannot adapt.
+// colorSchemeMeta tells the client which schemes the document supports; claiming
+// "light dark" while pinned would invite it to adapt a design that cannot adapt.
 var colorSchemeMeta = map[Scheme]string{
 	SchemeAuto:  "light dark",
 	SchemeLight: "light",
 	SchemeDark:  "dark",
 }
 
-// Package load runs the shell once so a malformed template is a startup panic
-// rather than a silently empty mail body.
-//
-// This is not paranoia: html/template does its HTML parse at first Execute, not at
-// Parse, and Execute reports the failure by returning an error with nothing
-// written. A shell that ended an attribute early — a double quote inside a
-// style="..." value, say — would therefore mail every recipient a blank page while
-// every send call reported success.
+// Package load runs the shell once so a malformed template is a startup panic.
+// html/template parses HTML at first Execute, not at Parse, so a shell that ended an
+// attribute early (a double quote inside style="...") would otherwise mail every
+// recipient a blank page while every send reported success.
 func init() {
 	probe := shellData{
 		Body:        Body{Heading: "h", Content: "<p></p>", Footer: "f"},
@@ -238,10 +200,9 @@ func init() {
 	}
 }
 
-// logoPath is the mark served for mail. It is a copy rather than a reuse of
-// /pwa-192x192.png because a PWA icon is free to gain a maskable safe-area or
-// change shape, while a mail already in someone's archive keeps loading this URL
-// forever.
+// logoPath is the mark served for mail. It is a copy of, not a reuse of,
+// /pwa-192x192.png: that icon may change shape, while mail in an archive keeps
+// loading this URL forever.
 const logoPath = "/email-logo.png"
 
 // shellData is what the shell template renders from.
@@ -256,34 +217,26 @@ type shellData struct {
 	DarkCSS template.HTML
 }
 
-// settingsPath is the one page that governs every notification channel, so it is
-// the honest destination for "turn these off" regardless of which mail asks.
+// settingsPath is the one page that governs every notification channel.
 const settingsPath = "/my/notifications"
 
 // darkStyles repaints the mail when the reader's client is in dark mode.
 //
-// What works where, because it decides the whole shape of this block:
+// Client support:
 //
-//   - Apple Mail (macOS, iOS) and Outlook.com honour prefers-color-scheme. They are
-//     what this block is for.
-//   - Gmail — web and app — does not support prefers-color-scheme at all. In dark
-//     mode it applies its own colour inversion, which nothing in a message can
-//     steer. Gmail readers therefore see either the light design or Gmail's
-//     algorithmic take on it; that is a client limitation, not a gap here.
-//   - Outlook on Windows ignores the whole <style> block, so it stays light —
-//     which is correct, since it has no dark mode to match.
+//   - Apple Mail and Outlook.com honour prefers-color-scheme; this block is for them.
+//   - Gmail does not support it and applies its own inversion, which nothing in a
+//     message can steer.
+//   - Outlook on Windows ignores the whole <style> block and stays light.
 //
-// Every rule needs !important: the layout is styled inline, and an inline style
-// beats a stylesheet rule of any specificity without it.
+// Every rule needs !important because inline styles beat any stylesheet rule.
 //
-// The logo is inverted rather than swapped for a second file. The usual trick — two
-// images, one hidden per scheme — misfires in clients that ignore display:none and
-// shows both. An invert() only ever applies where the media query matched, and the
-// mark is a two-tone circle, so inverting it produces exactly the light-on-dark
-// version we would otherwise have to draw and ship.
+// The logo is inverted rather than swapped for a second image: two images with one
+// hidden per scheme misfire in clients that ignore display:none, and the mark is a
+// two-tone circle.
 //
-// The rules are held without their wrapper so RenderScheme can emit them either
-// inside the media query (what gets sent) or bare (a pinned dark preview).
+// The rules are held without their wrapper so RenderScheme can emit them inside the
+// media query (sent mail) or bare (pinned dark preview).
 const darkRules = `
   .m-page   { background: ` + darkPage + ` !important; }
   .m-card   { background: ` + darkCard + ` !important; border-color: ` + darkBorder + ` !important; }
@@ -300,9 +253,8 @@ const darkRules = `
   .m-logo   { filter: invert(1); }
 `
 
-// shell is the chrome. The logo carries an empty alt and the wordmark is live text
-// beside it, so a client with images disabled shows a clean "freehire" rather than
-// a broken-image placeholder spelling the same word twice.
+// shell is the chrome. The logo has an empty alt and the wordmark is live text, so
+// a client with images disabled shows "freehire" once, not a broken-image placeholder.
 var shell = template.Must(template.New("shell").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>

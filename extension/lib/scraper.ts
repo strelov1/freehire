@@ -25,10 +25,7 @@ export function extractSnapshot(doc: Document): PageSnapshot {
  * This is the natural seam to make smarter per job board later.
  */
 export function extractHeadline(doc: Document): string {
-  const ogTitle = doc
-    .querySelector('meta[property="og:title"]')
-    ?.getAttribute('content')
-    ?.trim();
+  const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')?.trim();
   if (ogTitle) return ogTitle;
 
   const h1 = doc.querySelector('h1')?.textContent?.trim();

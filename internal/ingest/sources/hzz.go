@@ -17,17 +17,16 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// hzz adapts the job exchange of the Croatian Employment Service (Hrvatski zavod za
-// zapošljavanje, burzarada.hzz.hr): every vacancy a Croatian employer registers with the public
-// service, ~7.5k open at a time, ~500 new each weekday, every trade, mostly local employers and the
-// public sector. It is boardless and an aggregator — the employer is read per posting. See the
-// "HZZ traps" section of AGENTS.md for the measurements behind each rule.
+// hzz adapts the job exchange of the Croatian Employment Service (Hrvatski zavod za zapošljavanje,
+// burzarada.hzz.hr): every vacancy a Croatian employer registers with the public service, every
+// trade, mostly local employers and the public sector. Boardless and an aggregator; the employer
+// is read per posting. See the "HZZ traps" section of AGENTS.md.
 //
 // The listing is the site's own RSS: one feed per county (21 of them) together names every
-// domestic vacancy, with its title, category and publication day. The employer and the whole
-// body are only on the vacancy's print page, bought for vacancies the catalogue lacks, newest
-// first, within a per-run budget; the rest are refreshed by identity. The IT category's feed is
-// read as well, only to mark its vacancies technical.
+// domestic vacancy, with its title, category and publication day. The employer and the whole body
+// are only on the vacancy's print page, bought for vacancies the catalogue lacks, newest first,
+// within a per-run budget; the rest are refreshed by identity. The IT category's feed is read only
+// to mark its vacancies technical.
 type hzz struct {
 	http           hzzGetter
 	limiter        waiter
@@ -57,10 +56,9 @@ const (
 	// courtesy ceiling toward a public service, not a measured limit.
 	hzzRequestInterval = time.Second
 	hzzDetailWorkers   = 2
-	// hzzMaxNewPerRun bounds the print pages one run buys: 1,200 at one a second is 20 minutes,
-	// plus ~22 feed requests and the writes that follow, inside the scheduler's default 2,400 s
-	// crawl budget. ~500 vacancies arrive each weekday, so a run every few hours keeps up and a
-	// cold catalogue (~7.5k) is taken in about seven runs, newest first.
+	// hzzMaxNewPerRun bounds the print pages one run buys, so the run (at one request a second, plus
+	// the feed requests and the writes) fits the scheduler's default 2,400 s crawl budget. A cold
+	// catalogue is taken in slices, newest first.
 	hzzMaxNewPerRun   = 1200
 	hzzDeadlineMargin = 5 * time.Minute
 )
@@ -82,6 +80,15 @@ func (hzz) boardless() {}
 
 // Thousands of employers post here, each named per vacancy.
 func (hzz) aggregator() {}
+
+// The 21 county feeds name every domestic vacancy on each run and any one failing fails the
+// crawl, so a stored vacancy no feed names is gone. Without this the company-scoped sweep never
+// reaches the vacancies of an employer that left the feeds entirely (3.6k of 10.7k open on
+// 2026-11-15, freehire#4412).
+func (hzz) fullCatalog() {}
+
+// One country's market (see nationalMarket).
+func (hzz) marketCountries(CompanyEntry) []string { return []string{"hr"} }
 
 // hzzPosting is one vacancy the feeds name.
 type hzzPosting struct {
@@ -120,10 +127,6 @@ func (s hzz) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(extern
 		base := hzzBaseJob(p)
 		if seen(base.ExternalID) {
 			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if base.Title != "" && gate.Rejected != nil && gate.Rejected(base) {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -238,9 +241,8 @@ type hzzFeedDoc struct {
 
 var hzzVacancyID = regexp.MustCompile(`WebSifra=(\d+)`)
 
-// hzzFeedItems reads a feed's vacancies. About one item in twenty has an empty title; most of
-// those are open vacancies (34 of 40 sampled) and the rest expired, so it is listed all the same
-// and its title is read from its page.
+// hzzFeedItems reads a feed's vacancies. A few items have an empty title; most are open vacancies,
+// so they are listed all the same and the title is read from the page.
 func hzzFeedItems(feed hzzFeedDoc) []hzzPosting {
 	var out []hzzPosting
 	for _, it := range feed.Items {
@@ -467,9 +469,9 @@ func hzzExperienceYears(s string) (int, bool) {
 var hzzEuro = regexp.MustCompile(`^(\d[\d.]*)(?:,\d{1,2})?\s*€$`)
 
 // hzzSalary reads the structured "Bruto plaća" field, "1210 €": the employer's stated monthly
-// gross pay in euros — the form asks for the monthly gross figure. Croatia's minimum gross wage
-// is ~970 € a month, so a figure far below it is a placeholder, and one above the ceiling is a
-// typo or an annual figure; both are dropped rather than stored as a month's pay.
+// gross pay in euros. A figure far below Croatia's minimum gross wage (~970 €) is a placeholder,
+// and one above the ceiling is a typo or an annual figure; both are dropped rather than stored as
+// a month's pay.
 func hzzSalary(s string) (int, bool) {
 	m := hzzEuro.FindStringSubmatch(strings.TrimSpace(s))
 	if m == nil {

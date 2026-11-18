@@ -125,6 +125,10 @@ func TestNSZHydratesUnseenVacancies(t *testing.T) {
 	if teacher.PostedAt == nil || !teacher.PostedAt.Equal(want) {
 		t.Errorf("posted = %v, want the period's first day %v", teacher.PostedAt, want)
 	}
+	wantBy := time.Date(2026, 11, 28, 0, 0, 0, 0, nszBelgrade)
+	if teacher.ApplicationDeadline == nil || !teacher.ApplicationDeadline.Equal(wantBy) {
+		t.Errorf("apply by = %v, want the period's closing day %v", teacher.ApplicationDeadline, wantBy)
+	}
 	if teacher.EmploymentType != "" || teacher.IsTechHint {
 		t.Errorf("employment/tech = %q / %v, want neither for a fixed-term teacher", teacher.EmploymentType, teacher.IsTechHint)
 	}
@@ -158,10 +162,10 @@ func TestNSZHydratesUnseenVacancies(t *testing.T) {
 	}
 }
 
-func TestNSZRefreshesSeenAndSparesGatedVacancies(t *testing.T) {
+func TestNSZRefreshesSeenVacancies(t *testing.T) {
 	s, fake := newTestNSZ(t)
 	seen := func(id string) bool { return id == "104454" }
-	gate := DetailGate{Rejected: func(j Job) bool { return j.ExternalID == "104097" }}
+	gate := DetailGate{}
 	jobs, err := s.FetchNewGated(context.Background(), CompanyEntry{Provider: "nsz"}, seen, gate)
 	if err != nil {
 		t.Fatalf("FetchNewGated: %v", err)
@@ -170,11 +174,8 @@ func TestNSZRefreshesSeenAndSparesGatedVacancies(t *testing.T) {
 	if j := got["104454"]; !j.SeenRefresh || j.Description != "" || j.Title != "Vaspitač u predškolskoj ustanovi" {
 		t.Errorf("a stored vacancy must be refreshed by identity, in Latin: %+v", j)
 	}
-	if got["104097"].Description != "" {
-		t.Error("a rejected vacancy must be yielded body-less")
-	}
 	for _, id := range fake.detCalls {
-		if id == "104454" || id == "104097" {
+		if id == "104454" {
 			t.Errorf("vacancy page bought for %s, which needed none", id)
 		}
 	}
@@ -298,8 +299,9 @@ func TestNSZSplitEmployer(t *testing.T) {
 	for in, want := range map[string][2]string{
 		"Завод за геријатрију и палијативно збрињавање  Београд-Савски Венац": {"Завод за геријатрију и палијативно збрињавање", "Београд-Савски Венац"},
 		"JELENA BABIĆ PR KESTEN 2 BEOGRAD  Београд-Раковица":                  {"JELENA BABIĆ PR KESTEN 2 BEOGRAD", "Београд-Раковица"},
-		"“MINACORD MEDIA”  Београд":                                           {"“MINACORD MEDIA”", "Београд"},
-		"Dom zdravlja Niš":                                                    {"Dom zdravlja Niš", ""},
+
+		"“MINACORD MEDIA”  Београд": {"“MINACORD MEDIA”", "Београд"},
+		"Dom zdravlja Niš":          {"Dom zdravlja Niš", ""},
 	} {
 		employer, town := nszSplitEmployer(in)
 		if employer != want[0] || town != want[1] {

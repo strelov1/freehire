@@ -21,7 +21,7 @@ func TestFromDomain_DirectApply(t *testing.T) {
 		wantFlag bool
 	}{
 		"on-site employer vacancy": {
-			row:      db.Job{Source: job.EmployerSource, ExternalID: job.DirectApplyPrefix + "0b6f", Title: "Dev", Company: "Acme", CreatedBy: pgtype.Int8{Int64: 9, Valid: true}},
+			row:      db.Job{Source: job.EmployerSource, ExternalID: job.DirectApplyPrefix + "0b6f", Title: "Dev", Company: "Acme", CreatedBy: pgtype.Int8{Int64: 9, Valid: true}, ApplicationUrl: "https://ats.example.org/1"},
 			wantFlag: true,
 		},
 		"employer vacancy linking out": {

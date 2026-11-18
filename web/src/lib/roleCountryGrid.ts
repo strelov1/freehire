@@ -1,5 +1,5 @@
 import type { InsightRoleCountryCell } from './api';
-import { countrySlug } from './facets';
+import { countrySlug } from './countrySlugs';
 import { MIN_PAIR_OPEN, categoryLandingLink } from './roleLandings';
 
 /** The all-countries column's key — the empty string the endpoint uses for it. */

@@ -241,6 +241,7 @@ function readAuthor(author) {
     login: author.login,
     id: author.databaseId ?? 0,
     avatarUrl: author.avatarUrl,
+    // oxlint-disable-next-line no-underscore-dangle -- `__typename` is the GraphQL field's own name
     accountType: author.__typename,
   };
 }
@@ -271,10 +272,9 @@ async function pageAll(token, query, read) {
  *  to this file. Needs a token with access to the repository's collaborators, which the
  *  workflow's own token has. */
 async function fetchAdmins(token) {
-  const res = await fetch(
-    `https://api.github.com/repos/${REPO.owner}/${REPO.name}/collaborators?per_page=100`,
-    { headers: { authorization: `bearer ${token}`, accept: 'application/vnd.github+json' } },
-  );
+  const res = await fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.name}/collaborators?per_page=100`, {
+    headers: { authorization: `bearer ${token}`, accept: 'application/vnd.github+json' },
+  });
 
   if (!res.ok) throw new Error(`github collaborators ${res.status} ${await res.text()}`);
 

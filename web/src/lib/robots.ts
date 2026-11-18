@@ -56,6 +56,9 @@ export const DISALLOWED = [
   '/jobs/*/discussion',
   '/companies/*/discussion',
   '/companies/*/closed',
+  // A redirect to LinkedIn linked from every job page: nothing to index, and each
+  // fetch costs two API reads (the job and its company).
+  '/jobs/*/people',
 ];
 
 // Search crawlers additionally lose /api/, and only they. The invitation in the
@@ -82,10 +85,7 @@ const group = (agent: string, disallowed: readonly string[]) =>
 // form to Google — which is why the two lists are composed here rather than written
 // out twice.
 export function robotsBody(origin: string): string {
-  const groups = [
-    group('*', DISALLOWED),
-    ...SEARCH_CRAWLERS.map((agent) => group(agent, SEARCH_CRAWLER_DISALLOWED)),
-  ];
+  const groups = [group('*', DISALLOWED), ...SEARCH_CRAWLERS.map((agent) => group(agent, SEARCH_CRAWLER_DISALLOWED))];
 
   return `${groups.join('\n\n')}
 

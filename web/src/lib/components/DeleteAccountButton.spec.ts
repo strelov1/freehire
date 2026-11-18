@@ -34,7 +34,7 @@ const {
 const draft = vi.hoisted(() => ({ next: null as unknown }));
 
 const { StubApiError } = vi.hoisted(() => ({
-  StubApiError: class StubApiError extends Error {
+  StubApiError: class extends Error {
     constructor(
       public status: number,
       message = 'failed',
@@ -70,9 +70,7 @@ function signedIn(hasPassword: boolean): void {
 }
 
 function dialog(): HTMLElement {
-  const open = screen
-    .getAllByRole('dialog', { hidden: true })
-    .find((d) => (d as HTMLDialogElement).open);
+  const open = screen.getAllByRole('dialog', { hidden: true }).find((d) => (d as HTMLDialogElement).open);
   if (!open) throw new Error('no dialog is open');
   return open;
 }
@@ -158,9 +156,7 @@ describe('DeleteAccountButton — surviving the provider round trip', () => {
 
     await openDialog();
 
-    expect(
-      await within(dialog()).findByRole('button', { name: 'Confirm with google' }),
-    ).toBeTruthy();
+    expect(await within(dialog()).findByRole('button', { name: 'Confirm with google' })).toBeTruthy();
   });
 
   it('carries no typed address across the trip, only the instruction to reopen', async () => {
@@ -218,8 +214,6 @@ describe('DeleteAccountButton — surviving the provider round trip', () => {
 
     expect(forget).toHaveBeenCalled();
     expect(goto).not.toHaveBeenCalled();
-    expect(
-      await within(dialog()).findByRole('button', { name: 'Confirm with google' }),
-    ).toBeTruthy();
+    expect(await within(dialog()).findByRole('button', { name: 'Confirm with google' })).toBeTruthy();
   });
 });

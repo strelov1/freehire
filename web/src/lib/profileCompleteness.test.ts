@@ -13,6 +13,7 @@ const profile = (patch: Partial<UserProfile> = {}): UserProfile => ({
   excluded_skills: [],
   excluded_sources: [],
   excluded_companies: [],
+  job_languages: [],
   location_preferences: null,
   derived_location: null,
   cv: null,
@@ -26,7 +27,7 @@ const resume = (patch: Partial<ResumeMeta> = {}): ResumeMeta => ({
   present: true,
   uploaded_at: null,
   structured: null,
-  contacts: null,
+  structure_pending: false,
   ...patch,
 });
 
@@ -59,8 +60,7 @@ const fullScreening = { notice_period_days: 30 };
 const bankWithRole = { employments: [{ atoms: [] }], unplaced: [] } as unknown as ExperienceBank;
 const emptyBank: ExperienceBank = { employments: [], unplaced: [] };
 
-const complete = (input: Parameters<typeof getProfileCompleteness>[0]) =>
-  getProfileCompleteness(input);
+const complete = (input: Parameters<typeof getProfileCompleteness>[0]) => getProfileCompleteness(input);
 
 describe('getProfileCompleteness', () => {
   it('reports an empty profile as 0 of 6', () => {
@@ -175,9 +175,7 @@ describe('getProfileCompleteness', () => {
 
   it('treats a stated false as a screening answer', () => {
     expect(complete({ profile: profile(), screening: {} }).screening).toBe(false);
-    expect(complete({ profile: profile(), screening: { willing_to_relocate: false } }).screening).toBe(
-      true,
-    );
+    expect(complete({ profile: profile(), screening: { willing_to_relocate: false } }).screening).toBe(true);
   });
 
   it('never counts the avoid lists as a missing section', () => {

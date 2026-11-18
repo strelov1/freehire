@@ -4,368 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
-
-// --- fakes ---------------------------------------------------------------
-
-type fakeSearcher struct {
-	// byQuery maps a query's "q" value to the hits it should return; queries are
-	// keyed by the parsed q so a test can return different hits per query.
-	results []search.SearchResult
-	// errs is indexed by call number like results: a non-nil entry fails that one
-	// query, which is how the per-query isolation can be exercised without failing
-	// them all. err fails every call.
-	errs  []error
-	err   error
-	calls []search.SearchParams
-}
-
-func (f *fakeSearcher) Search(ctx context.Context, p search.SearchParams) (search.SearchResult, error) {
-	f.calls = append(f.calls, p)
-	// A real index client fails a cancelled call rather than serving it, which is what
-	// makes a cancelled pass look like every query failing.
-	if err := ctx.Err(); err != nil {
-		return search.SearchResult{}, err
-	}
-	i := len(f.calls) - 1
-	if f.err != nil {
-		return search.SearchResult{}, f.err
-	}
-	if i < len(f.errs) && f.errs[i] != nil {
-		return search.SearchResult{}, f.errs[i]
-	}
-	if i < len(f.results) {
-		return f.results[i], nil
-	}
-	return search.SearchResult{}, nil
-}
-
-type recordedMatch struct{ sub, job int64 }
-
-type fakeStore struct {
-	// unlinkedTelegram records the user ids a delivery forgot the Telegram chat
-	// for, so a test can assert the 403 path unlinks exactly once per user.
-	unlinkedTelegram  []int64
-	unlinkTelegramErr error
-
-	// disabledWebhooks records the user ids a delivery disabled the webhook
-	// destination for, mirroring unlinkedTelegram for the webhook channel's own
-	// "recipient gone" signal (a 410 response).
-	disabledWebhooks  []int64
-	disableWebhookErr error
-
-	// recordedWebhookSuccesses records the user ids a successful webhook
-	// delivery stamped last_success_at for.
-	recordedWebhookSuccesses []int64
-
-	// recordedWebhookFailures records every RecordWebhookDeliveryFailure call a
-	// non-410 webhook send error made, so a test can assert both that it
-	// happened (and with which user/threshold) and that other channels never
-	// trigger it.
-	recordedWebhookFailures []db.RecordWebhookDeliveryFailureParams
-	// webhookFailureResult is what the next RecordWebhookDeliveryFailure call
-	// returns, standing in for the row the real UPDATE ... RETURNING would —
-	// a test sets Enabled: false to simulate this call crossing the threshold.
-	webhookFailureResult db.RecordWebhookDeliveryFailureRow
-	webhookFailureErr    error
-
-	// deliveryErr and digestJobsErr fail the two reads deliverOne makes before it can
-	// send anything. Neither burns a delivery attempt, so the counter is the only trace
-	// they leave.
-	deliveryErr   error
-	digestJobsErr error
-
-	active      []db.ListActiveSubscriptionsRow
-	recorded    []recordedMatch
-	recordCalls int // how many times RecordSubscriptionMatches was called, not how many pairs
-	claimed     []db.ClaimSubscriptionMatchesRow
-	delivery    map[int64]db.GetSubscriptionForDeliveryRow
-	digestJobs  map[int64]db.GetJobsForDigestRow
-
-	// excludedSkills maps a user id to their avoid-skills preference; a user id absent from
-	// this map has no profile row, mirroring the real query.
-	excludedSkills map[int64][]string
-
-	notified   []db.MarkMatchesNotifiedParams
-	failures   []db.RecordMatchDeliveryFailureParams
-	released   []db.ReleaseMatchClaimParams
-	digestSent []int64
-
-	recordedNotifications []db.RecordNotificationParams
-	recordNotificationErr error
-	// nextNotificationID is the id the next RecordNotification hands back, so a
-	// test can assert the digest carried it; deletedNotifications records the
-	// ids a failed send withdrew.
-	nextNotificationID   int64
-	deletedNotifications []int64
-	// notificationsByDedupKey stands in for the partial unique index on
-	// (user_id, dedup_key). The fake enforces it rather than ignoring it: a
-	// store that accepted every insert would report a key that dedupes nothing
-	// as working, which is the bug these tests exist to catch.
-	notificationsByDedupKey map[string]int64
-	// beforeDedupRead fires between the conflicting insert and the read that
-	// follows it, which is the only window a SECOND notify process can act in.
-	// deliver() is one sequential goroutine, so nothing a single pass does can
-	// open that window — a test that wants it has to say so.
-	beforeDedupRead func(*fakeStore)
-	// expireCalls records every ExpireStaleSubscriptionMatches call; expireResults
-	// is what successive calls return (0 once exhausted) and expireErr fails them.
-	// calls logs the order of the expire and claim statements, since expiring
-	// AFTER the claim would hand a stale match to a digest.
-	expireCalls   []db.ExpireStaleSubscriptionMatchesParams
-	expireResults []int64
-	expireErr     error
-	calls         []string
-
-	// coveredCount is what CountCoveredMatches answers and coveredErr fails it;
-	// coveredCounts and coveredMarked record the cutoffs each was asked about.
-	coveredCount  int64
-	coveredErr    error
-	coveredCounts []db.CountCoveredMatchesParams
-	coveredMarked []db.MarkCoveredMatchesNotifiedParams
-
-	// recordNotificationErrOnce fails only the FIRST record, so a test can
-	// deliver with no row in hand and still observe what the send path does
-	// about it afterwards.
-	recordNotificationErrOnce error
-}
-
-func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSubscriptionsRow, error) {
-	return s.active, nil
-}
-
-func (s *fakeStore) ListUserProfilesExcludedSkills(_ context.Context, userIDs []int64) ([]db.ListUserProfilesExcludedSkillsRow, error) {
-	out := make([]db.ListUserProfilesExcludedSkillsRow, 0, len(userIDs))
-	for _, id := range userIDs {
-		skills, ok := s.excludedSkills[id]
-		if !ok {
-			continue
-		}
-		out = append(out, db.ListUserProfilesExcludedSkillsRow{UserID: id, ExcludedSkills: skills})
-	}
-	return out, nil
-}
-
-func (s *fakeStore) RecordSubscriptionMatches(_ context.Context, a db.RecordSubscriptionMatchesParams) (int64, error) {
-	s.recordCalls++
-	var n int64
-	for i, subID := range a.SubscriptionIds {
-		jobID := a.JobIds[i]
-		known := false
-		for _, m := range s.recorded {
-			if m.sub == subID && m.job == jobID {
-				known = true // already recorded → idempotent no-op
-				break
-			}
-		}
-		if known {
-			continue
-		}
-		s.recorded = append(s.recorded, recordedMatch{subID, jobID})
-		n++
-	}
-	return n, nil
-}
-
-func (s *fakeStore) ClaimSubscriptionMatches(context.Context, db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error) {
-	s.calls = append(s.calls, "claim")
-	return s.claimed, nil
-}
-
-func (s *fakeStore) ExpireStaleSubscriptionMatches(_ context.Context, a db.ExpireStaleSubscriptionMatchesParams) (int64, error) {
-	s.calls = append(s.calls, "expire")
-	s.expireCalls = append(s.expireCalls, a)
-	if s.expireErr != nil {
-		return 0, s.expireErr
-	}
-	i := len(s.expireCalls) - 1
-	if i < len(s.expireResults) {
-		return s.expireResults[i], nil
-	}
-	return 0, nil
-}
-
-func (s *fakeStore) CountCoveredMatches(_ context.Context, a db.CountCoveredMatchesParams) (int64, error) {
-	s.coveredCounts = append(s.coveredCounts, a)
-	return s.coveredCount, s.coveredErr
-}
-
-func (s *fakeStore) MarkCoveredMatchesNotified(_ context.Context, a db.MarkCoveredMatchesNotifiedParams) (int64, error) {
-	s.coveredMarked = append(s.coveredMarked, a)
-	return s.coveredCount, nil
-}
-
-func (s *fakeStore) GetSubscriptionForDelivery(_ context.Context, id int64) (db.GetSubscriptionForDeliveryRow, error) {
-	return s.delivery[id], s.deliveryErr
-}
-
-func (s *fakeStore) GetJobsForDigest(_ context.Context, ids []int64) ([]db.GetJobsForDigestRow, error) {
-	if s.digestJobsErr != nil {
-		return nil, s.digestJobsErr
-	}
-	out := make([]db.GetJobsForDigestRow, 0, len(ids))
-	for _, id := range ids {
-		if j, ok := s.digestJobs[id]; ok {
-			out = append(out, j)
-		}
-	}
-	return out, nil
-}
-
-func (s *fakeStore) MarkMatchesNotified(_ context.Context, a db.MarkMatchesNotifiedParams) (int64, error) {
-	s.notified = append(s.notified, a)
-	return int64(len(a.JobIds)), nil
-}
-
-func (s *fakeStore) RecordMatchDeliveryFailure(_ context.Context, a db.RecordMatchDeliveryFailureParams) error {
-	s.failures = append(s.failures, a)
-	return nil
-}
-
-func (s *fakeStore) ReleaseMatchClaim(_ context.Context, a db.ReleaseMatchClaimParams) error {
-	s.released = append(s.released, a)
-	return nil
-}
-
-func (s *fakeStore) MarkDigestSent(_ context.Context, id int64) error {
-	s.digestSent = append(s.digestSent, id)
-	return nil
-}
-
-func (s *fakeStore) RecordNotification(_ context.Context, a db.RecordNotificationParams) (int64, error) {
-	s.recordedNotifications = append(s.recordedNotifications, a)
-	if s.recordNotificationErr != nil {
-		return 0, s.recordNotificationErr
-	}
-	if s.recordNotificationErrOnce != nil {
-		err := s.recordNotificationErrOnce
-		s.recordNotificationErrOnce = nil
-		return 0, err
-	}
-	// ON CONFLICT ... DO NOTHING RETURNING id: a key already recorded inserts
-	// nothing and yields no row.
-	if _, taken := s.notificationsByDedupKey[a.DedupKey.String]; taken && a.DedupKey.Valid {
-		return 0, pgx.ErrNoRows
-	}
-	if s.nextNotificationID == 0 {
-		s.nextNotificationID = 1
-	}
-	id := s.nextNotificationID
-	s.nextNotificationID++
-	if a.DedupKey.Valid {
-		if s.notificationsByDedupKey == nil {
-			s.notificationsByDedupKey = make(map[string]int64)
-		}
-		s.notificationsByDedupKey[a.DedupKey.String] = id
-	}
-	return id, nil
-}
-
-func (s *fakeStore) GetNotificationIDByDedupKey(_ context.Context, a db.GetNotificationIDByDedupKeyParams) (int64, error) {
-	if s.beforeDedupRead != nil {
-		s.beforeDedupRead(s)
-	}
-	id, ok := s.notificationsByDedupKey[a.DedupKey.String]
-	if !ok {
-		return 0, pgx.ErrNoRows
-	}
-	return id, nil
-}
-
-func (s *fakeStore) DeleteNotification(_ context.Context, id int64) error {
-	s.deletedNotifications = append(s.deletedNotifications, id)
-	// A withdrawn row frees its key, so the retry that follows records afresh
-	// rather than reading back an id that no longer exists.
-	for key, recorded := range s.notificationsByDedupKey {
-		if recorded == id {
-			delete(s.notificationsByDedupKey, key)
-		}
-	}
-	return nil
-}
-
-func (s *fakeStore) DeleteTelegramLink(_ context.Context, userID int64) (int64, error) {
-	s.unlinkedTelegram = append(s.unlinkedTelegram, userID)
-	if s.unlinkTelegramErr != nil {
-		return 0, s.unlinkTelegramErr
-	}
-	return 1, nil
-}
-
-func (s *fakeStore) DisableWebhookConfig(_ context.Context, userID int64) (int64, error) {
-	s.disabledWebhooks = append(s.disabledWebhooks, userID)
-	if s.disableWebhookErr != nil {
-		return 0, s.disableWebhookErr
-	}
-	return 1, nil
-}
-
-func (s *fakeStore) RecordWebhookDeliverySuccess(_ context.Context, userID int64) error {
-	s.recordedWebhookSuccesses = append(s.recordedWebhookSuccesses, userID)
-	return nil
-}
-
-func (s *fakeStore) RecordWebhookDeliveryFailure(_ context.Context, a db.RecordWebhookDeliveryFailureParams) (db.RecordWebhookDeliveryFailureRow, error) {
-	s.recordedWebhookFailures = append(s.recordedWebhookFailures, a)
-	if s.webhookFailureErr != nil {
-		return db.RecordWebhookDeliveryFailureRow{}, s.webhookFailureErr
-	}
-	return s.webhookFailureResult, nil
-}
-
-type fakeNotifier struct {
-	err  error
-	sent []Digest
-}
-
-// Send records the digest even when it fails, so a test can assert what the
-// channel was handed on the failure path too.
-func (n *fakeNotifier) Send(_ context.Context, _, _ string, d Digest) error {
-	n.sent = append(n.sent, d)
-	return n.err
-}
-
-// failAfterNotifier lets the first `succeed` sends through and fails every one
-// after, so a test can put one channel's success and the next channel's failure
-// in the same pass — which is what makes "who may withdraw the shared row"
-// observable.
-type failAfterNotifier struct {
-	succeed int
-	err     error
-	sent    []Digest
-}
-
-func (n *failAfterNotifier) Send(_ context.Context, _, _ string, d Digest) error {
-	n.sent = append(n.sent, d)
-	if len(n.sent) > n.succeed {
-		return n.err
-	}
-	return nil
-}
-
-// --- helpers -------------------------------------------------------------
-
-func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
-
-func rfc(t time.Time) *string { s := t.Format(time.RFC3339); return &s }
-
-func hit(id int64, created time.Time) search.JobDocument {
-	return search.JobDocument{ID: id, Job: jobview.Job{CreatedAt: rfc(created)}}
-}
-
-func hitWithSkills(id int64, created time.Time, skills ...string) search.JobDocument {
-	return search.JobDocument{ID: id, Job: jobview.Job{CreatedAt: rfc(created), Skills: skills}}
-}
 
 // --- tests ---------------------------------------------------------------
 
@@ -397,6 +45,26 @@ func TestMatch_SharedQueryHitsIndexOnce(t *testing.T) {
 // One query, many subscribers, many hits: the review finding was that matchQuery issued
 // one sequential RecordSubscriptionMatch round trip per (hit, subscription) pair. It must
 // now record the whole batch in a single call, regardless of how many pairs that is.
+func TestMatch_ForwardsEachSubscriptionsQueryRevision(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := &fakeStore{
+		active: []db.ListActiveSubscriptionsRow{
+			{ID: 1, Query: "seniority=senior", QueryRevision: 3, StartAt: ts(base)},
+			{ID: 2, Query: "seniority=senior", QueryRevision: 5, StartAt: ts(base)},
+		},
+	}
+	searcher := &fakeSearcher{results: []search.SearchResult{
+		{Hits: []search.JobDocument{hit(100, base.Add(time.Hour))}},
+	}}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recordedRevisions) != 2 || store.recordedRevisions[1] != 3 || store.recordedRevisions[2] != 5 {
+		t.Errorf("revisions forwarded per subscription = %v, want {1:3, 2:5}", store.recordedRevisions)
+	}
+}
+
 func TestMatch_BatchesMatchesIntoOneCallPerQuery(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	store := &fakeStore{
@@ -470,6 +138,67 @@ func TestMatch_ExcludedSkillIsNotRecorded(t *testing.T) {
 	}
 	if len(store.recorded) != 0 {
 		t.Errorf("recorded = %+v, want none (job carries the subscriber's avoided skill)", store.recorded)
+	}
+}
+
+func TestMatch_MinSkillMatchIsPerSubscriber(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := &fakeStore{
+		active: []db.ListActiveSubscriptionsRow{
+			{ID: 1, UserID: 1, Query: "seniority=senior&min_skill_match=70", StartAt: ts(base)},
+			{ID: 2, UserID: 2, Query: "seniority=senior&min_skill_match=70", StartAt: ts(base)},
+			{ID: 3, UserID: 3, Query: "seniority=senior&min_skill_match=70", StartAt: ts(base)}, // no profile
+		},
+		heldSkills: map[int64][]string{1: {"go"}, 2: {"go", "kafka", "aws"}},
+	}
+	searcher := &fakeSearcher{results: []search.SearchResult{
+		{Hits: []search.JobDocument{hitWithSkills(100, base.Add(time.Hour), "go", "kafka", "aws", "sql")}},
+	}}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := map[int64]bool{}
+	for _, rec := range store.recorded {
+		got[rec.sub] = true
+	}
+	// 1 holds 25% of the job, 2 holds 75%, and 3 has no skills to compute a percent from.
+	if got[1] || !got[2] || !got[3] || len(store.recorded) != 2 {
+		t.Errorf("recorded = %+v, want subscriptions 2 and 3", store.recorded)
+	}
+}
+
+// The expected values mirror the computeClientMatch cases in web/src/lib/jobMatch.test.ts:
+// the digest and the job list must agree on what clears a threshold.
+func TestMeetsSkillMatch(t *testing.T) {
+	cases := []struct {
+		name string
+		job  []string
+		held []string
+		min  int
+		want bool
+	}{
+		{"half clears 50", []string{"go", "kafka", "aws", "spark"}, []string{"go", "aws", "react"}, 50, true},
+		{"half misses 55", []string{"go", "kafka", "aws", "spark"}, []string{"go", "aws", "react"}, 55, false},
+		{"case-insensitive", []string{"Go", "Kafka"}, []string{"go"}, 50, true},
+		{"rounds up: 2 of 3 is 67", []string{"a", "b", "c"}, []string{"a", "b"}, 67, true},
+		{"no threshold", []string{"go"}, []string{"php"}, 0, true},
+		{"job without skills stays", nil, []string{"go"}, 90, true},
+		{"reader without skills stays", []string{"go"}, nil, 90, true},
+	}
+	for _, c := range cases {
+		if got := meetsSkillMatch(c.job, c.held, c.min); got != c.want {
+			t.Errorf("%s: meetsSkillMatch = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestMinSkillMatch(t *testing.T) {
+	for raw, want := range map[string]int{"70": 70, " 70 ": 70, "100": 100, "1": 1, "0": 0, "101": 0, "-5": 0, "abc": 0, "": 0} {
+		if got := minSkillMatch(url.Values{"min_skill_match": {raw}}); got != want {
+			t.Errorf("minSkillMatch(%q) = %d, want %d", raw, got, want)
+		}
 	}
 }
 
@@ -672,8 +401,8 @@ func TestDeliver_UnlinkedTelegramIsSoftSkipped(t *testing.T) {
 	if len(notifier.sent) != 0 {
 		t.Errorf("sent = %d, want 0 (unlinked → no send)", len(notifier.sent))
 	}
-	if len(store.released) != 1 {
-		t.Errorf("released = %d, want 1 (claim released for retry)", len(store.released))
+	if len(store.claimParams) != 0 || len(store.released) != 0 {
+		t.Errorf("claims = %d, released = %d, want 0/0 (an undeliverable subscription is never leased)", len(store.claimParams), len(store.released))
 	}
 	if len(store.failures) != 0 {
 		t.Errorf("failures = %d, want 0 (soft-skip is not a failed attempt)", len(store.failures))
@@ -903,660 +632,5 @@ func TestRecipient_PushWithoutDeviceIsNotDeliverable(t *testing.T) {
 	}
 	if dest != "" {
 		t.Errorf("recipient dest = %q, want empty", dest)
-	}
-}
-
-// --- delivery timing (frequency + quiet hours) ---------------------------
-
-func pgTime(hh, mm int) pgtype.Time {
-	return pgtype.Time{Microseconds: int64(hh)*int64(time.Hour/time.Microsecond) + int64(mm)*int64(time.Minute/time.Microsecond), Valid: true}
-}
-
-func TestDeliverOne_InstantDeferredDuringQuietHours(t *testing.T) {
-	fixedNow := time.Date(2026, 8, 14, 23, 0, 0, 0, time.UTC) // inside 22:00-08:00
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {
-				ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 1, Valid: true},
-				DigestFrequency: "instant", Timezone: pgtype.Text{String: "UTC", Valid: true},
-				QuietHoursStart: pgTime(22, 0), QuietHoursEnd: pgTime(8, 0),
-			},
-		},
-		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-	r.now = func() time.Time { return fixedNow }
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(notifier.sent) != 0 {
-		t.Errorf("sent = %d, want 0 (deferred during quiet hours)", len(notifier.sent))
-	}
-	if len(store.released) != 1 {
-		t.Errorf("released = %d, want 1 (claim released to retry later)", len(store.released))
-	}
-	if len(store.notified) != 0 || len(store.failures) != 0 {
-		t.Errorf("notified=%d failures=%d, want 0/0 (a deferral is neither)", len(store.notified), len(store.failures))
-	}
-}
-
-func TestDeliverOne_InstantDeliversOutsideQuietHours(t *testing.T) {
-	fixedNow := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC) // outside 22:00-08:00
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {
-				ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 1, Valid: true},
-				DigestFrequency: "instant", Timezone: pgtype.Text{String: "UTC", Valid: true},
-				QuietHoursStart: pgTime(22, 0), QuietHoursEnd: pgTime(8, 0),
-			},
-		},
-		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-	r.now = func() time.Time { return fixedNow }
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(notifier.sent) != 1 {
-		t.Errorf("sent = %d, want 1 (outside quiet hours)", len(notifier.sent))
-	}
-}
-
-func TestDeliverOne_DailyDeferredBeforeDigestTime(t *testing.T) {
-	fixedNow := time.Date(2026, 8, 14, 8, 0, 0, 0, time.UTC) // before 09:00
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {
-				ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 1, Valid: true},
-				DigestFrequency: "daily", DigestTime: pgTime(9, 0), Timezone: pgtype.Text{String: "UTC", Valid: true},
-			},
-		},
-		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-	r.now = func() time.Time { return fixedNow }
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(notifier.sent) != 0 {
-		t.Errorf("sent = %d, want 0 (before the daily digest time)", len(notifier.sent))
-	}
-	if len(store.released) != 1 {
-		t.Errorf("released = %d, want 1", len(store.released))
-	}
-}
-
-func TestDeliverOne_DailyDueDeliversAndStampsLastSent(t *testing.T) {
-	fixedNow := time.Date(2026, 8, 14, 9, 5, 0, 0, time.UTC) // after 09:00
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {
-				ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 1, Valid: true},
-				DigestFrequency: "daily", DigestTime: pgTime(9, 0), Timezone: pgtype.Text{String: "UTC", Valid: true},
-			},
-		},
-		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-	r.now = func() time.Time { return fixedNow }
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(notifier.sent) != 1 {
-		t.Fatalf("sent = %d, want 1 (due, first send today)", len(notifier.sent))
-	}
-	if len(store.digestSent) != 1 || store.digestSent[0] != 1 {
-		t.Errorf("digestSent = %v, want [1] (last_digest_sent_at stamped)", store.digestSent)
-	}
-}
-
-func TestDeliverOne_DailyAlreadySentTodayDefers(t *testing.T) {
-	fixedNow := time.Date(2026, 8, 14, 18, 0, 0, 0, time.UTC)
-	sentEarlierToday := time.Date(2026, 8, 14, 9, 5, 0, 0, time.UTC)
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {
-				ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 1, Valid: true},
-				DigestFrequency: "daily", DigestTime: pgTime(9, 0), Timezone: pgtype.Text{String: "UTC", Valid: true},
-				LastDigestSentAt: pgtype.Timestamptz{Time: sentEarlierToday, Valid: true},
-			},
-		},
-		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-	r.now = func() time.Time { return fixedNow }
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(notifier.sent) != 0 {
-		t.Errorf("sent = %d, want 0 (already sent earlier today)", len(notifier.sent))
-	}
-}
-
-func TestDeliverOne_DailyIgnoresQuietHours(t *testing.T) {
-	fixedNow := time.Date(2026, 8, 14, 23, 0, 0, 0, time.UTC) // inside quiet hours AND past digest time
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {
-				ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 1, Valid: true},
-				DigestFrequency: "daily", DigestTime: pgTime(9, 0), Timezone: pgtype.Text{String: "UTC", Valid: true},
-				QuietHoursStart: pgTime(22, 0), QuietHoursEnd: pgTime(8, 0),
-			},
-		},
-		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-	r.now = func() time.Time { return fixedNow }
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(notifier.sent) != 1 {
-		t.Errorf("sent = %d, want 1 (daily digest is exempt from quiet hours)", len(notifier.sent))
-	}
-}
-
-// --- record-then-send ordering -------------------------------------------
-
-// deliverySubscription is the minimal Telegram-deliverable subscription the
-// ordering tests below all need.
-func deliverySubscription() map[int64]db.GetSubscriptionForDeliveryRow {
-	return map[int64]db.GetSubscriptionForDeliveryRow{
-		1: {ID: 1, UserID: 42, Channel: ChannelTelegram, SavedSearchName: "Go", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
-	}
-}
-
-// ErrRecipientGone means different things on different channels: a Telegram bot
-// that was blocked, or (per the webhook channel's own mapping, see
-// internal/engage/webhooknotify) a destination that answered 410 Gone. deliverOne
-// must dispatch the "forget this recipient" side effect by channel — a webhook's
-// 410 must disable the webhook config, never the user's unrelated Telegram link.
-func TestDeliver_RecipientGoneOnWebhookDisablesWebhookNotTelegram(t *testing.T) {
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {
-				ID: 1, UserID: 42, Channel: ChannelWebhook, SavedSearchName: "Go",
-				WebhookUrl: pgtype.Text{String: "https://example.com/hook", Valid: true}, WebhookEnabled: true,
-			},
-		},
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID: 42,
-	}
-	r := New(store, &fakeSearcher{}, &fakeNotifier{err: ErrRecipientGone}, DefaultConfig())
-
-	stats, err := r.Run(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stats.SoftSkips != 1 || stats.Failed != 0 {
-		t.Errorf("SoftSkips = %d, Failed = %d, want 1 and 0", stats.SoftSkips, stats.Failed)
-	}
-	if len(store.disabledWebhooks) != 1 || store.disabledWebhooks[0] != 42 {
-		t.Errorf("disabledWebhooks = %v, want [42]", store.disabledWebhooks)
-	}
-	if len(store.unlinkedTelegram) != 0 {
-		t.Errorf("unlinkedTelegram = %v, want none — a webhook 410 must not touch the Telegram link", store.unlinkedTelegram)
-	}
-}
-
-// A successful webhook delivery stamps the destination's last_success_at, so
-// the settings page can show "last delivered …" — the counterpart to
-// disableWebhook on the failure side.
-func TestDeliver_SuccessfulWebhookRecordsDeliverySuccess(t *testing.T) {
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {
-				ID: 1, UserID: 42, Channel: ChannelWebhook, SavedSearchName: "Go",
-				WebhookUrl: pgtype.Text{String: "https://example.com/hook", Valid: true}, WebhookEnabled: true,
-			},
-		},
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID: 42,
-	}
-	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(store.recordedWebhookSuccesses) != 1 || store.recordedWebhookSuccesses[0] != 42 {
-		t.Errorf("recordedWebhookSuccesses = %v, want [42]", store.recordedWebhookSuccesses)
-	}
-}
-
-// A webhook send that fails WITHOUT answering 410 Gone (a 404, a 500, a
-// timeout) must still count toward the destination's auto-disable threshold
-// — otherwise a simply-dead destination (wrong URL, service retired, no 410
-// in sight) fails every pass forever instead of being disabled once, the
-// freehire incident this mechanism exists to prevent.
-func TestDeliver_NonGoneWebhookFailureCountsTowardAutoDisable(t *testing.T) {
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {
-				ID: 1, UserID: 42, Channel: ChannelWebhook, SavedSearchName: "Go",
-				WebhookUrl: pgtype.Text{String: "https://example.com/hook", Valid: true}, WebhookEnabled: true,
-			},
-		},
-		digestJobs:           map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID:   42,
-		webhookFailureResult: db.RecordWebhookDeliveryFailureRow{ConsecutiveFailures: 1, Enabled: true},
-	}
-	cfg := DefaultConfig()
-	r := New(store, &fakeSearcher{}, &fakeNotifier{err: errors.New("webhooknotify: destination responded 404")}, cfg)
-
-	stats, err := r.Run(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Unlike a 410 (soft-skip), this attempt genuinely failed and must still
-	// be counted — only FUTURE passes stop trying once the destination is
-	// disabled.
-	if stats.Failed != 1 {
-		t.Errorf("Failed = %d, want 1", stats.Failed)
-	}
-	if len(store.recordedWebhookFailures) != 1 {
-		t.Fatalf("recordedWebhookFailures = %v, want exactly one call", store.recordedWebhookFailures)
-	}
-	if got := store.recordedWebhookFailures[0]; got.UserID != 42 || got.MaxFailures != cfg.WebhookMaxConsecutiveFailures {
-		t.Errorf("recordedWebhookFailures[0] = %+v, want UserID 42, MaxFailures %d", got, cfg.WebhookMaxConsecutiveFailures)
-	}
-	// This is the non-410 path: it must never go through disableWebhook,
-	// which is reserved for a destination that explicitly answered Gone.
-	if len(store.disabledWebhooks) != 0 {
-		t.Errorf("disabledWebhooks = %v, want none — a plain 404 is not a 410", store.disabledWebhooks)
-	}
-}
-
-// A non-webhook channel's failure (Telegram, email, push) must never count
-// toward the webhook auto-disable threshold — it belongs only to the webhook
-// channel, same restriction as RecordWebhookDeliverySuccess.
-func TestDeliver_NonWebhookFailureDoesNotCountTowardAutoDisable(t *testing.T) {
-	store := &fakeStore{
-		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery:           deliverySubscription(),
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID: 42,
-	}
-	r := New(store, &fakeSearcher{}, &fakeNotifier{err: errors.New("telegram: boom")}, DefaultConfig())
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(store.recordedWebhookFailures) != 0 {
-		t.Errorf("recordedWebhookFailures = %v, want none for a telegram delivery", store.recordedWebhookFailures)
-	}
-}
-
-// A successful Telegram (or any non-webhook) delivery must not touch the
-// webhook success stamp — it belongs only to the webhook channel.
-func TestDeliver_SuccessfulTelegramDoesNotRecordWebhookSuccess(t *testing.T) {
-	store := &fakeStore{
-		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery:           deliverySubscription(),
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID: 42,
-	}
-	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(store.recordedWebhookSuccesses) != 0 {
-		t.Errorf("recordedWebhookSuccesses = %v, want none for a telegram delivery", store.recordedWebhookSuccesses)
-	}
-}
-
-func TestDeliver_DigestCarriesItsNotificationID(t *testing.T) {
-	store := &fakeStore{
-		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}, {SubscriptionID: 1, JobID: 11}},
-		delivery:           deliverySubscription(),
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}, 11: {ID: 11, Title: "B", PublicSlug: "b"}},
-		nextNotificationID: 42,
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(notifier.sent) != 1 {
-		t.Fatalf("digests sent = %d, want 1", len(notifier.sent))
-	}
-	if notifier.sent[0].NotificationID != 42 {
-		t.Errorf("NotificationID = %d, want 42 — the digest must be recorded before it is sent", notifier.sent[0].NotificationID)
-	}
-	if len(store.deletedNotifications) != 0 {
-		t.Errorf("deleted = %v, want none on a successful delivery", store.deletedNotifications)
-	}
-}
-
-func TestDeliver_FailedSendWithdrawsItsNotification(t *testing.T) {
-	store := &fakeStore{
-		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery:           deliverySubscription(),
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID: 42,
-	}
-	r := New(store, &fakeSearcher{}, &fakeNotifier{err: errors.New("telegram down")}, DefaultConfig())
-
-	stats, err := r.Run(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stats.Failed != 1 {
-		t.Errorf("Failed = %d, want 1", stats.Failed)
-	}
-	if len(store.deletedNotifications) != 1 || store.deletedNotifications[0] != 42 {
-		t.Errorf("deleted = %v, want [42] — an undelivered digest must not sit in the history", store.deletedNotifications)
-	}
-	if len(store.notified) != 0 {
-		t.Errorf("notified = %d, want 0 (a failed send leaves matches pending)", len(store.notified))
-	}
-	if len(store.failures) != 1 {
-		t.Errorf("failures = %d, want 1", len(store.failures))
-	}
-}
-
-// One saved search on two channels is one event: the second channel joins the
-// row the first recorded instead of adding an indistinguishable second one, and
-// both messages link at the same page (freehire#3020).
-func TestDeliver_SecondChannelOfOneSavedSearchJoinsTheSameNotification(t *testing.T) {
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}, {SubscriptionID: 2, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {ID: 1, UserID: 42, SavedSearchID: 7, Channel: ChannelTelegram, SavedSearchName: "My profile", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
-			2: {ID: 2, UserID: 42, SavedSearchID: 7, Channel: ChannelEmail, SavedSearchName: "My profile", AccountEmail: "a@example.test"},
-		},
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID: 42,
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-
-	stats, err := r.Run(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stats.Delivered != 2 {
-		t.Fatalf("Delivered = %d, want 2 — both channels still send", stats.Delivered)
-	}
-	if len(store.notificationsByDedupKey) != 1 {
-		t.Errorf("distinct notification rows = %d, want 1 for one event on two channels", len(store.notificationsByDedupKey))
-	}
-	if len(notifier.sent) != 2 {
-		t.Fatalf("digests sent = %d, want 2", len(notifier.sent))
-	}
-	if notifier.sent[0].NotificationID != 42 || notifier.sent[1].NotificationID != 42 {
-		t.Errorf("NotificationIDs = %d and %d, want both 42 — each channel links at the one recorded event",
-			notifier.sent[0].NotificationID, notifier.sent[1].NotificationID)
-	}
-}
-
-// The channel that JOINED an existing row must not withdraw it when its own
-// send fails: the row belongs to the channel that recorded it, whose digest
-// went out. Withdrawing here is how a third failing channel would erase the
-// history of the two that arrived.
-func TestDeliver_JoiningChannelDoesNotWithdrawAnotherChannelsNotification(t *testing.T) {
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}, {SubscriptionID: 2, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {ID: 1, UserID: 42, SavedSearchID: 7, Channel: ChannelTelegram, SavedSearchName: "My profile", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
-			2: {ID: 2, UserID: 42, SavedSearchID: 7, Channel: ChannelEmail, SavedSearchName: "My profile", AccountEmail: "a@example.test"},
-		},
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID: 42,
-	}
-	// Telegram (claimed first) succeeds; email then fails.
-	notifier := &failAfterNotifier{succeed: 1, err: errors.New("ses down")}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-
-	stats, err := r.Run(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stats.Delivered != 1 || stats.Failed != 1 {
-		t.Fatalf("Delivered = %d, Failed = %d, want 1 and 1", stats.Delivered, stats.Failed)
-	}
-	if len(store.deletedNotifications) != 0 {
-		t.Errorf("deleted = %v, want none — the Telegram digest that DID arrive keeps its history row",
-			store.deletedNotifications)
-	}
-}
-
-// A digest that WAS received must leave a history row, even when the record
-// taken before the send came back with nothing. Reaching this needs a second
-// notify process — deliver() is one sequential goroutine, so within a pass the
-// creator has finished sending and withdrawing before any joiner records — and
-// the cost is invisible: the send succeeds, the person gets the message, and
-// the history simply does not mention it.
-func TestDeliver_DeliveredDigestIsRecordedEvenIfItsRowVanishedFirst(t *testing.T) {
-	store := &fakeStore{
-		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}, {SubscriptionID: 2, JobID: 10}},
-		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
-			1: {ID: 1, UserID: 42, SavedSearchID: 7, Channel: ChannelTelegram, SavedSearchName: "My profile", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
-			2: {ID: 2, UserID: 42, SavedSearchID: 7, Channel: ChannelEmail, SavedSearchName: "My profile", AccountEmail: "a@example.test"},
-		},
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID: 42,
-	}
-	// Stand in for the other process withdrawing its row in the window between
-	// this channel's conflicting insert and its read.
-	store.beforeDedupRead = func(s *fakeStore) {
-		s.beforeDedupRead = nil
-		clear(s.notificationsByDedupKey)
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-
-	stats, err := r.Run(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stats.Delivered != 2 {
-		t.Fatalf("Delivered = %d, want 2", stats.Delivered)
-	}
-	if len(store.notificationsByDedupKey) != 1 {
-		t.Errorf("notification rows = %d, want 1 — the second channel's digest was delivered and must be in the history",
-			len(store.notificationsByDedupKey))
-	}
-}
-
-// The same invariant on the plainer path: the pre-send record simply failed.
-// The digest still went out, so the history must still name it.
-func TestDeliver_DeliveredDigestIsRecordedAfterAFailedPreSendWrite(t *testing.T) {
-	store := &fakeStore{
-		claimed:                   []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery:                  deliverySubscription(),
-		digestJobs:                map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID:        42,
-		recordNotificationErrOnce: errors.New("database having a moment"),
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(notifier.sent) != 1 || notifier.sent[0].NotificationID != 0 {
-		t.Fatalf("sent = %d digests, first NotificationID = %d; want 1 sent with a zero id (the write failed before it)",
-			len(notifier.sent), notifier.sent[0].NotificationID)
-	}
-	if len(store.notificationsByDedupKey) != 1 {
-		t.Errorf("notification rows = %d, want 1 — a delivered digest belongs in the history even when the first write failed",
-			len(store.notificationsByDedupKey))
-	}
-}
-
-func TestDeliver_SoftSkippedChannelWithdrawsItsNotification(t *testing.T) {
-	store := &fakeStore{
-		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery:           deliverySubscription(),
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID: 42,
-	}
-	r := New(store, &fakeSearcher{}, &fakeNotifier{err: ErrChannelNotConfigured}, DefaultConfig())
-
-	stats, err := r.Run(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stats.SoftSkips != 1 {
-		t.Errorf("SoftSkips = %d, want 1", stats.SoftSkips)
-	}
-	if len(store.deletedNotifications) != 1 || store.deletedNotifications[0] != 42 {
-		t.Errorf("deleted = %v, want [42] — nothing was delivered, so nothing belongs in the history", store.deletedNotifications)
-	}
-}
-
-func TestDeliver_RecordFailureSendsWithoutANotificationID(t *testing.T) {
-	store := &fakeStore{
-		claimed:               []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery:              deliverySubscription(),
-		digestJobs:            map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		recordNotificationErr: errors.New("insert failed"),
-	}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(notifier.sent) != 1 {
-		t.Fatalf("digests sent = %d, want 1 (a recording failure must not block the send)", len(notifier.sent))
-	}
-	if notifier.sent[0].NotificationID != 0 {
-		t.Errorf("NotificationID = %d, want 0", notifier.sent[0].NotificationID)
-	}
-	if len(store.deletedNotifications) != 0 {
-		t.Errorf("deleted = %v, want none — there is no row to withdraw", store.deletedNotifications)
-	}
-}
-
-func TestDeliver_DigestRecordsEveryMatchedJob(t *testing.T) {
-	claimed := make([]db.ClaimSubscriptionMatchesRow, 0, 67)
-	jobs := make(map[int64]db.GetJobsForDigestRow, 67)
-	for i := range int64(67) {
-		claimed = append(claimed, db.ClaimSubscriptionMatchesRow{SubscriptionID: 1, JobID: i})
-		jobs[i] = db.GetJobsForDigestRow{ID: i, Title: "Job", PublicSlug: "job"}
-	}
-	store := &fakeStore{claimed: claimed, delivery: deliverySubscription(), digestJobs: jobs}
-	notifier := &fakeNotifier{}
-	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	d := notifier.sent[0]
-	if d.Total != 67 || len(d.Jobs) != 67 {
-		t.Errorf("digest Total=%d Jobs=%d, want 67/67", d.Total, len(d.Jobs))
-	}
-	if len(d.Listed()) != ListLimit {
-		t.Errorf("Listed = %d, want %d", len(d.Listed()), ListLimit)
-	}
-
-	var recorded []SnapshotJob
-	if err := json.Unmarshal(store.recordedNotifications[0].Jobs, &recorded); err != nil {
-		t.Fatalf("snapshot did not unmarshal: %v", err)
-	}
-	if len(recorded) != 67 {
-		t.Errorf("recorded snapshot carries %d jobs, want 67", len(recorded))
-	}
-}
-
-// A claimed id whose job row is gone (pruned) must still be stamped notified,
-// or it is re-claimed on every pass forever.
-func TestDeliver_ClaimedIDWithNoJobRowIsStillNotified(t *testing.T) {
-	store := &fakeStore{
-		claimed:    []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}, {SubscriptionID: 1, JobID: 99}},
-		delivery:   deliverySubscription(),
-		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-	}
-	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if len(store.notified) != 1 || len(store.notified[0].JobIds) != 2 {
-		t.Errorf("notified = %+v, want both ids (the pruned one included)", store.notified)
-	}
-}
-
-// The bug these guard: a subscriber who blocked the Telegram bot answered every
-// send with 403. The digest counted a delivery failure, the run exited non-zero,
-// and freehire-notify.service sat in `failed` — one stranger muting a bot turning
-// a worker red every five minutes, forever, because nothing ever concluded that
-// the chat was not coming back.
-func TestDeliver_RecipientGoneUnlinksTelegramAndSoftSkips(t *testing.T) {
-	store := &fakeStore{
-		claimed:            []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery:           deliverySubscription(),
-		digestJobs:         map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		nextNotificationID: 42,
-	}
-	r := New(store, &fakeSearcher{}, &fakeNotifier{err: ErrRecipientGone}, DefaultConfig())
-
-	stats, err := r.Run(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stats.SoftSkips != 1 || stats.Failed != 0 {
-		t.Errorf("SoftSkips = %d, Failed = %d, want 1 and 0 — a chat that will never accept us is not a delivery failure to retry", stats.SoftSkips, stats.Failed)
-	}
-	if len(store.unlinkedTelegram) != 1 || store.unlinkedTelegram[0] != 42 {
-		t.Errorf("unlinkedTelegram = %v, want [42] — the link is what has to go, so every later send soft-skips instead of re-failing", store.unlinkedTelegram)
-	}
-	if len(store.failures) != 0 {
-		t.Errorf("failures = %v, want none — burning attempts toward the dead-letter limit cannot help here", store.failures)
-	}
-	// The matches go back to pending rather than being stamped notified: nobody
-	// received them, and they are owed over whatever channel comes next.
-	if len(store.released) != 1 {
-		t.Errorf("released = %v, want the claim released", store.released)
-	}
-	if len(store.notified) != 0 {
-		t.Errorf("notified = %v, want none — the digest was never delivered", store.notified)
-	}
-	if len(store.deletedNotifications) != 1 || store.deletedNotifications[0] != 42 {
-		t.Errorf("deleted = %v, want [42] — nothing was delivered, so nothing belongs in the history", store.deletedNotifications)
-	}
-}
-
-// The unlink is best-effort: it changes what the NEXT pass does, and this pass
-// soft-skips either way. A store that refuses must not turn the skip back into a
-// failure, or the red-worker loop returns by another door.
-func TestDeliver_RecipientGoneSoftSkipsEvenIfUnlinkFails(t *testing.T) {
-	store := &fakeStore{
-		claimed:           []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
-		delivery:          deliverySubscription(),
-		digestJobs:        map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
-		unlinkTelegramErr: errors.New("boom"),
-	}
-	r := New(store, &fakeSearcher{}, &fakeNotifier{err: ErrRecipientGone}, DefaultConfig())
-
-	stats, err := r.Run(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stats.SoftSkips != 1 || stats.Failed != 0 {
-		t.Errorf("SoftSkips = %d, Failed = %d, want 1 and 0", stats.SoftSkips, stats.Failed)
 	}
 }

@@ -2,19 +2,17 @@ package location
 
 import (
 	"html"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 )
 
-// descriptionWorkModePhrases maps a work mode to anchored phrases that signal it
-// in a job description, checked in priority order (hybrid beats remote, remote
-// beats onsite, when several appear). Unlike workModeMarkers — which scan a short
-// location string and can use loose tokens — these are tuned for PRECISION over
-// recall in long prose: a bare "remote"/"hybrid"/"in office" matches far too much
-// ("remote team", "hybrid cloud", "snacks in office"), so every phrase is anchored
-// to an unambiguous work-arrangement statement. The detector emits nothing on a
-// weak signal (never guesses), consistent with the curated-dictionary doctrine.
+// descriptionWorkModePhrases maps a work mode to anchored phrases that signal it in a job
+// description, checked in priority order (hybrid beats remote, remote beats onsite). Tuned for
+// precision over recall in long prose: a bare "remote"/"hybrid"/"in office" matches far too
+// much ("remote team", "hybrid cloud", "snacks in office"), so every phrase is anchored to an
+// unambiguous arrangement statement. A weak signal emits nothing.
 var descriptionWorkModePhrases = []struct {
 	mode    string
 	phrases []string
@@ -31,7 +29,7 @@ var descriptionWorkModePhrases = []struct {
 		"remote role", "remote job", "remote opportunity", "remote vacancy",
 		"this position is remote", "role is remote", "position is remote",
 		// The home-working register administrative and virtual-assistant postings
-		// actually use, alongside the corporate register above (nontech-derive-coverage).
+		// actually use, alongside the corporate register above.
 		"work from home", "work-from-home", "home-based", "home based", "telecommute",
 		"virtual position",
 	}},
@@ -169,14 +167,11 @@ func startsWordAny(s string, from int, words []string) bool {
 	return false
 }
 
-// phraseMatches reports whether p occurs in text (already lowercased) unguarded. A
-// travelPerkPhrases match that IS qualified, or an allowancePhrases match that counts a
-// perk ("45 work-from-anywhere days"), or any match qualifying collectiveNouns ("fully
-// remote teams"), does not end the search for p — the same
-// "scan past a qualified match" property RemoteContradicted's loop has for denial phrases
-// (see TestRemoteContradictedReadsPastAQualifiedDenial): a description may hedge one
-// occurrence of "work from anywhere" as a bounded perk and state another, unqualified one
-// plainly, and the unqualified one still stands.
+// phraseMatches reports whether p occurs in text (already lowercased) unguarded. A match
+// qualified by travelPerkPhrases, counted by allowancePhrases ("45 work-from-anywhere days"),
+// or qualifying collectiveNouns ("fully remote teams") does not end the search for p: a
+// description may hedge one occurrence as a bounded perk and state another plainly, and that
+// one still stands (see TestRemoteContradictedReadsPastAQualifiedDenial).
 func phraseMatches(text, p string) bool {
 	guarded := travelPerkPhrases[p]
 	rest := text
@@ -188,7 +183,9 @@ func phraseMatches(text, p string) bool {
 		}
 		start, end := offset+i, offset+i+len(p)
 		perk := (guarded && travelPerkQualified(text, start, end)) ||
-			(allowancePhrases[p] && opensWithNoun(text[end:], allowanceUnits))
+			(allowancePhrases[p] && opensWithNoun(text[end:], allowanceUnits)) ||
+			((p == "work from home" || p == "work-from-home") &&
+				(strings.HasPrefix(text[end:], " options available") || boundedHomeWeek.MatchString(text[end:])))
 		if !perk && !opensWithNoun(text[end:], collectiveNouns) {
 			return true
 		}
@@ -197,27 +194,21 @@ func phraseMatches(text, p string) bool {
 	}
 }
 
-// travelPerkPhrases are the remote-family phrases that are ALSO a common idiom for a
-// bounded travel/PTO allowance ("the freedom to work from anywhere in the world for up
-// to a month") rather than the posting's own work arrangement. Measured over prod
-// postings mentioning "work from anywhere" (freehire#2696): no other phrase in
-// descriptionWorkModePhrases showed this ambiguity — "100% remote"/"fully remote"/etc.
-// are not idioms for a bounded benefit ("100% remote for up to X days" is not a sentence
-// employers write), so guarding them would only cost coverage with no measured gain. The
-// same "measured evidence, not symmetry" doctrine remoteDenialPhrases' comment applies to
-// "on-site only"/"must be onsite" below.
+var boundedHomeWeek = regexp.MustCompile(`^ up to (?:[1-4]|one|two|three|four) days?(?:\s*/\s*| per | a )week\b`)
+
+// travelPerkPhrases are the remote-family phrases that are ALSO a common idiom for a bounded
+// travel/PTO allowance ("the freedom to work from anywhere in the world for up to a month")
+// rather than the posting's own arrangement. No other phrase in descriptionWorkModePhrases
+// showed this ambiguity, so guarding them would only cost coverage.
 var travelPerkPhrases = map[string]bool{
 	"work from anywhere": true,
 	"work-from-anywhere": true,
 }
 
 // allowancePhrases are the home-working phrases that also serve as an ADJECTIVE on a counted
-// perk — "45 work-from-anywhere days", "one work-from-home day each week" — rather than a
-// statement of the posting's arrangement. Both sentences are real (job_reports, 2026-10): a
-// Workable posting whose own workplace field says hybrid, and a Teamtailor one whose
-// remoteStatus says hybrid, each served as remote because the perk line matched. No nearby
-// qualifier is needed for this shape: a phrase immediately followed by the unit it counts is
-// never the sentence an employer writes to say the job itself is remote.
+// perk ("45 work-from-anywhere days", "one work-from-home day each week") rather than the
+// posting's arrangement. No nearby qualifier is needed: a phrase immediately followed by the
+// unit it counts is never the sentence that says the job itself is remote.
 var allowancePhrases = map[string]bool{
 	"work from anywhere": true,
 	"work-from-anywhere": true,
@@ -228,12 +219,10 @@ var allowancePhrases = map[string]bool{
 // allowanceUnits are the nouns a counted home-working perk is measured in.
 var allowanceUnits = []string{"days", "day", "weeks", "week"}
 
-// collectiveNouns are the plural nouns an arrangement phrase can qualify without stating
-// this posting's arrangement: "experience working with distributed or fully remote teams"
-// describes teams in general — the candidate's past, the people they will meet — and was
-// served as remote on a prod posting whose own title said "Barcelona Hybrid". Only the
-// plural: "we are a fully remote team" is the employer describing itself, which is the
-// statement the phrase list exists to read.
+// collectiveNouns are the plural nouns an arrangement phrase can qualify without stating this
+// posting's arrangement: "experience working with distributed or fully remote teams" describes
+// teams in general. Only the plural: "we are a fully remote team" is the employer describing
+// itself, which the phrase list exists to read.
 var collectiveNouns = []string{"teams"}
 
 // opensWithNoun reports whether rest (the lowercased text right after a phrase) opens with
@@ -255,21 +244,15 @@ func opensWithNoun(rest string, nouns []string) bool {
 	return false
 }
 
-// travelPerkQualifiers mark a travelPerkPhrases match as a bounded allowance rather than
-// an unconditional statement — the same "usually unambiguous but sometimes qualified"
-// shape as remoteDenialPhrases/denialQualifiers below, applied here to a phrase that FILLS
-// a blank instead of overruling a stated one. "up to" alone is a broad enough marker
-// (unlike denialQualifiers, which had to enumerate distinct scoping shapes): every
-// disqualifying prod sentence found carries it ("for up to a month", "up to 12 days",
-// "allowing up to 20 remote days"), and it is inherently a bounded-quantity phrase. Unlike
-// a denial qualifier, which only ever follows the phrase it scopes, this one appears on
-// EITHER side of the match in real postings ("work from anywhere ... for up to a month"
-// and "up to 12 days work from anywhere"), so both directions are checked.
+// travelPerkQualifiers mark a travelPerkPhrases match as a bounded allowance rather than an
+// unconditional statement. "up to" alone is broad enough: it is inherently a bounded-quantity
+// phrase ("for up to a month", "up to 12 days"). Unlike a denial qualifier, it appears on
+// EITHER side of the match ("work from anywhere ... for up to a month", "up to 12 days work
+// from anywhere"), so both directions are checked.
 var travelPerkQualifiers = []string{"up to"}
 
-// travelPerkQualifierWindow reuses denialQualifierWindow's value: the observed distances
-// in production sentences are well inside it, and a second, unmeasured window constant
-// would be an invented number rather than evidence.
+// travelPerkQualifierWindow reuses denialQualifierWindow's value: observed distances are well
+// inside it.
 const travelPerkQualifierWindow = denialQualifierWindow
 
 // travelPerkQualified reports whether a bounded-duration qualifier appears within
@@ -281,31 +264,27 @@ func travelPerkQualified(text string, start, end int) bool {
 	return containsAny(before, travelPerkQualifiers) || containsAny(after, travelPerkQualifiers)
 }
 
-// remoteDenialPhrases are the sentences with which a posting denies remote work outright.
-// They are a SEPARATE, much smaller list from descriptionWorkModePhrases' onsite family, and
-// deliberately so: that list fills a work mode nothing else stated, while this one OVERRULES a
-// remote one an ATS or a location string already stated (see jobderive). A phrase strong enough
-// to fill a blank is not automatically strong enough to overrule a stated value, so this list
-// admits only sentences whose whole purpose is to say the job is not remote.
+// remoteDenialPhrases are the sentences with which a posting denies remote work outright. A
+// SEPARATE, much smaller list than descriptionWorkModePhrases' onsite family: that one fills a
+// work mode nothing else stated, while this one OVERRULES a remote one an ATS or location
+// string already stated (see jobderive), so it admits only sentences whose whole purpose is to
+// say the job is not remote.
 //
-// Two families that look like they belong here are absent, both on measured evidence over ~9.8k
-// prod postings the catalogue serves as remote:
+// Two families are absent on purpose:
 //
-//   - "fully on-site" / "fully in-office" — every live hit was one employer writing "fully
-//     on-site FOR THE FIRST 90 DAYS … after successful completion", a trial period in a posting
-//     that is remote afterwards. The phrase reads absolute in a list and is routinely qualified
-//     in prose.
-//   - "on-site only" / "must be onsite" — they matched nothing at all across the sample, so they
-//     buy no coverage, and both have an obvious false-positive shape ("parking on-site only",
-//     "must be onsite for quarterly planning"). An entry that cannot be shown to help and can be
-//     argued to hurt does not go in.
+//   - "fully on-site" / "fully in-office": routinely qualified in prose, e.g. "fully on-site
+//     FOR THE FIRST 90 DAYS … after successful completion", a trial period in a posting that
+//     is remote afterwards.
+//   - "on-site only" / "must be onsite": they buy no coverage and have obvious false-
+//     positive shapes ("parking on-site only", "must be onsite for quarterly planning").
 //
-// The "100% on-site" family is the one absolute-sounding phrase kept, because the guard below
-// covers exactly the qualification that disqualified "fully on-site".
+// The "100% on-site" family is kept, because denialQualifiers covers exactly the qualification
+// that disqualified "fully on-site".
 var remoteDenialPhrases = []string{
 	"100% on-site", "100% onsite", "100 % on-site", "100 % onsite",
 	"100 percent on-site", "100 percent onsite",
 	"not a remote position", "not a remote role", "not a remote job", "not a remote opportunity",
+	"not a remote work-from-home role",
 	"position is not remote", "role is not remote", "job is not remote",
 	"does not offer remote", "does not offer a remote",
 	"do not offer remote", "do not offer a remote",
@@ -313,12 +292,10 @@ var remoteDenialPhrases = []string{
 	"remote work is not available", "remote work is not an option", "remote work is not offered",
 }
 
-// denialQualifiers scope a denial to something OTHER than this posting's arrangement — a trial
-// period before remote work opens up, or the permanent role an internship might lead to. Each
-// entry comes from a real posting that the unqualified list read backwards: two ADP postings
-// ("fully on-site for the first 90 days … after successful completion") and a DoD SkillBridge
-// internship whose own header says "This is a remote position" and whose body adds "this is not
-// a remote job IF HIRED afterward".
+// denialQualifiers scope a denial to something OTHER than this posting's arrangement: a trial
+// period before remote work opens up, or the permanent role an internship might lead to
+// ("fully on-site for the first 90 days … after successful completion", "this is not a remote
+// job IF HIRED afterward").
 var denialQualifiers = []string{
 	"for the first", "after the first", "for the initial", "after the initial",
 	"after successful", "if hired", "once hired",
@@ -334,9 +311,8 @@ const denialQualifierWindow = 60
 // caller uses it to overrule a "remote" the ordinary precedence produced, and "not remote"
 // does not distinguish onsite from hybrid on its own.
 //
-// The caller is expected to ask only about a posting already resolved as remote (jobderive
-// does), which is what keeps the markup fold below off the ~97% of the catalogue that could
-// not be affected by the answer.
+// The caller asks only about a posting already resolved as remote (jobderive does), which
+// keeps the markup fold below off the rest of the catalogue.
 func RemoteContradicted(desc string) bool {
 	text := foldMarkup(desc)
 	for _, p := range remoteDenialPhrases {
@@ -371,12 +347,11 @@ func containsAny(s string, subs []string) bool {
 }
 
 // foldMarkup renders a stored description down to the lowercased, single-spaced prose the
-// denial phrases are written against. Descriptions are HTML, and where an editor put a
-// <strong> or an &nbsp; is not information: prod carries both "This is not a
-// <strong>REMOTE POSITION</strong>" and "This is&nbsp;not a remote position", and matching
-// the raw string would read the first as silent. WorkModeFromDescription above does match
-// raw, and stays that way — it fills a blank, so a phrase it misses costs a facet nobody had;
-// a phrase THIS misses costs a wrong facet left standing.
+// denial phrases are written against. Where an editor put a <strong> or an &nbsp; is not
+// information ("This is not a <strong>REMOTE POSITION</strong>", "This is&nbsp;not a remote
+// position"), and matching the raw string would read the first as silent.
+// WorkModeFromDescription matches raw on purpose: it fills a blank, so a missed phrase costs a
+// facet nobody had; a phrase THIS misses leaves a wrong facet standing.
 func foldMarkup(desc string) string {
 	text := html.UnescapeString(stripTags(desc))
 	var b strings.Builder

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import type { Snippet } from 'svelte';
   import { FileText, LayoutTemplate, Type } from '@lucide/svelte';
   import { page } from '$app/state';
@@ -22,9 +23,7 @@
   // behind them is shared (see cvAppearance.svelte.ts), so a tab switch keeps an
   // unsaved edit.
   //
-  // Starting a tailored CV is an action on the section, not one of its views, so it
-  // stays a button beside the strip — and stays reachable from every tab, which is why
-  // the dialog is mounted here rather than inside the list.
+  // The layout owns the intake dialog for section-wide and base-specific actions.
   const SECTIONS = $derived([
     { id: 'list', label: s.sections.list, href: '/my/cvs', icon: FileText },
     { id: 'template', label: s.sections.template, href: '/my/cvs/template', icon: LayoutTemplate },
@@ -36,17 +35,21 @@
   const tabs = $derived(SECTIONS.map((sec) => ({ ...sec, href: resolve(sec.href) })));
 </script>
 
-<div class="flex max-w-3xl flex-col gap-6">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-    <div class="flex flex-col gap-1 max-lg:sr-only">
-      <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
-      <p class="text-sm text-muted-foreground">
+<div class="flex flex-col gap-4 lg:gap-6">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div class="min-w-0 flex-1 flex flex-col gap-1">
+      <AccountPageHeading>{s.title}</AccountPageHeading>
+      <p class="text-sm text-muted-foreground max-lg:sr-only">
         {s.description}
       </p>
     </div>
-    <div class="shrink-0">
-      <Button variant="outline" onclick={openCvIntake}>{s.tailorForJob}</Button>
-    </div>
+    <Button
+      variant="ghost"
+      onclick={() => openCvIntake()}
+      class="self-start shrink-0 rounded-lg bg-foreground px-3 text-background hover:bg-foreground hover:text-background hover:opacity-90"
+    >
+      {s.tailorForJob}
+    </Button>
   </div>
 
   <TabStrip {tabs} {active} label={s.tabStripLabel} panelId={PANEL_ID} />
@@ -57,5 +60,5 @@
 </div>
 
 {#if cvIntakeDialog.open}
-  <JdIntakeDialog onClose={closeCvIntake} />
+  <JdIntakeDialog onClose={closeCvIntake} baseCvId={cvIntakeDialog.baseCvId} />
 {/if}

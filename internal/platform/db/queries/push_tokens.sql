@@ -12,8 +12,11 @@ ON CONFLICT (token) DO UPDATE
 RETURNING *;
 
 -- name: ListPushTokensForUser :many
--- The caller's own registered devices, for a test send or a future delivery.
-SELECT * FROM user_push_tokens WHERE user_id = $1;
+-- The caller's own registered devices, for a test send or a future delivery. A banned
+-- account has none: every push sender reads its devices here, so this is the one gate.
+SELECT t.* FROM user_push_tokens t
+JOIN users u ON u.id = t.user_id
+WHERE t.user_id = $1 AND u.banned_at IS NULL;
 
 -- name: UserHasPushToken :one
 -- Whether the account has at least one registered device — the precondition for

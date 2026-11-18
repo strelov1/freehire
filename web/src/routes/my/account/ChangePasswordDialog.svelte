@@ -20,12 +20,7 @@
   // Stores which message to show, not the resolved string — so a language switch
   // while an error is visible re-renders it in the new language instead of
   // leaving behind a snapshot from whichever locale was active when it occurred.
-  type PasswordErrorKey =
-    | 'mismatchError'
-    | 'wrongCurrentPassword'
-    | 'weakPassword'
-    | 'staleSession'
-    | 'genericError';
+  type PasswordErrorKey = 'mismatchError' | 'wrongCurrentPassword' | 'weakPassword' | 'staleSession' | 'genericError';
   let changeErrorKey = $state<PasswordErrorKey | null>(null);
 
   // Typed passwords never outlive the dialog. Hangs off `open` because Dialog has three
@@ -88,14 +83,7 @@
     </label>
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-muted-foreground">{s.password.newPasswordLabel}</span>
-      <Input
-        type="password"
-        bind:value={password}
-        required
-        minlength={8}
-        maxlength={72}
-        autocomplete="new-password"
-      />
+      <Input type="password" bind:value={password} required minlength={8} maxlength={72} autocomplete="new-password" />
     </label>
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-muted-foreground">{s.password.repeatPasswordLabel}</span>

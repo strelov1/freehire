@@ -6,22 +6,10 @@
 // ingest-layer package never has to import the AI-enrichment layer just to
 // reference a canonical value.
 //
-// Keeping the vocabularies here as one definition prevents value fragmentation
-// (e.g. "senior" vs "Senior" vs "sr") across those layers. ISO-standard fields
-// (countries, salary_currency, posting_language) and the open skills field have
-// no bundled closed vocabulary here.
+// One definition prevents value fragmentation ("senior" vs "Senior" vs "sr").
+// ISO-standard fields (countries, salary_currency, posting_language) and the open
+// skills field have no closed vocabulary here.
 package vocab
-
-import "regexp"
-
-// The two EquityValues, named because the derivation writes them.
-const (
-	// EquityWithSalary: equity is offered beside cash pay. A salary FIGURE is not
-	// required — most postings that offer equity state no figure.
-	EquityWithSalary = "salary_and_equity"
-	// EquityOnly: the posting states that equity is the whole compensation.
-	EquityOnly = "equity_only"
-)
 
 // Controlled vocabularies. Each is the ordered, canonical list of allowed
 // values for one enum field. They are exported so the enrichment prompt, the
@@ -71,6 +59,24 @@ var (
 		"unlimited_pto", "health_insurance", "mental_health",
 		"learning_budget", "home_office_stipend", "sabbatical", "sign_on_bonus",
 	}
+	// EngagementValues are the legal terms a posting states it engages its worker on —
+	// the `engagement` facet, matched by internal/dict/engagement from explicit text
+	// only. It answers "employee or own business, and on what tax footing", which
+	// employment_type (how long and how many hours) does not: a Polish B2B role is
+	// full_time, a UK Inside IR35 role is a contract taxed like a salary. Multi-valued,
+	// because a posting may offer more than one ("Inside or Outside IR35", "CLT ou PJ").
+	// Each value is one market's own term, grouped by market in the order below.
+	EngagementValues = []string{
+		"ir35_outside", "ir35_inside",
+		"w2", "1099", "c2c", "contract_to_hire",
+		"b2b", "uop", "umowa_zlecenie", "umowa_o_dzielo",
+		"clt", "pj",
+		"tk", "gph", "samozanyaty", "ip",
+		"freiberuflich", "arbeitnehmerueberlassung",
+		"zzp",
+		"auto_entrepreneur", "portage_salarial",
+		"autonomo", "monotributo",
+	}
 	EnglishLevelValues = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
 	// EquityValues answer "does this job pay in equity?" — derived from the posting's
 	// text by internal/job/jobfacts.Equity. There is no "no equity" value: a posting the
@@ -98,7 +104,7 @@ var (
 		// instead of leaving it unfilterable.
 		"software_engineering",
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
-		"network_engineering",
+		"network_engineering", "system_administration", "telecommunications_engineering",
 		// "it_support" is the help desk and service desk: desktop, deskside and
 		// end-user support, the L1/L2/L3 tiers, the technical support engineer of a
 		// software product. It was split out of `support` in 2026-10, which held it
@@ -117,11 +123,10 @@ var (
 		// design stay where they are.
 		// "industrial_engineering" is the engineering seat a factory, plant, utility
 		// or field-service organisation staffs — manufacturing, process, quality,
-		// maintenance, controls, commissioning, reliability, field service. It is a
-		// sibling of `engineering_design`, not a slice of it: draughting is drawing
-		// the thing, this is making and running it, and a Quality Engineer is not a
-		// draughtsman. Half the population it names is Russian (`Инженер`,
-		// `Инженер-технолог`, `Инженер ПТО`) and carried no English alias at all.
+		// maintenance, controls, commissioning, reliability, field service. A sibling
+		// of `engineering_design`, not a slice: draughting is drawing the thing, this is
+		// making and running it. Many of its titles are Russian (`Инженер`,
+		// `Инженер-технолог`, `Инженер ПТО`) with no English alias.
 		"design", "creative", "engineering_design", "industrial_engineering",
 		// "occupational_safety" is the health, safety and environment seat — the
 		// profession that spells itself HSE, EHS, HSSE, QHSE, HSEQ, SHE, SHEQ and
@@ -168,31 +173,20 @@ var (
 		// security — that is `security`, and the two must never share a facet.
 		"public_safety",
 		"marketing", "sales", "support",
-		// IT-company roles added by expand-role-taxonomy (4 technical, 6 business)
+		// IT-company roles: 4 technical, 6 business.
 		"business_analysis", "solutions_engineering", "developer_relations", "technical_writing",
 		"recruiting", "hr", "finance", "legal", "operations", "customer_success",
 		"other",
 	}
 	// NonTechCategories are the CategoryValues for confidently non-technical roles: a
 	// member feeds `jobderive.deriveIsTech` to `is_tech = false`, and the enrichment
-	// enqueue gate (`internal/platform/db/queries/jobs.sql`'s EnqueueJobEnrichment /
-	// `enrichment.sql`'s EnqueuePendingJobs) reads `is_tech IS TRUE`, so a confirmed
-	// non-tech role never consumes LLM budget. That gate is stricter than this list
-	// alone: it ALSO excludes `is_tech IS NULL` — a category the title dictionary and
-	// description left unresolved in either direction — which used to enqueue by
-	// default (the reasoning then: "never silently skip a tech job the dictionary
-	// missed"). Measured at catalogue scale that unresolved bucket was ~65% of the
-	// open catalogue and enrichment returned nothing useful for ~91% of it (broad
-	// multi-industry ATS crawls), so the coverage it bought no longer justified the
-	// spend — see the enqueue queries' comments for the full reasoning. The back-office
-	// IT-company roles (recruiting/hr/finance/legal/operations/customer_success) join
-	// this set: surfaced as facets but kept out of the LLM enrich budget, like
-	// marketing/sales.
-	// `engineering_design` — mechanical, electrical, civil and architectural draughting
-	// — joins them for the same reason: it is engineering, but not the IT work this
-	// catalogue serves, so it is filterable without spending LLM or embedding budget on
-	// it. Membership here never makes a posting refusable: the ingest filter
-	// (`classify.ConfirmedNonTech`) keeps every posting that resolves ANY category.
+	// enqueue gate (`EnqueueJobEnrichment` / `EnqueuePendingJobs`) reads
+	// `is_tech IS TRUE`, so a confirmed non-tech role never consumes LLM budget. The
+	// gate is stricter than this list: it ALSO excludes `is_tech IS NULL` (category left
+	// unresolved), which enriched almost nothing useful. The back-office roles
+	// (recruiting/hr/finance/legal/operations/customer_success) and `engineering_design`
+	// (draughting: engineering, but not the IT work this catalogue serves) join this
+	// set: filterable facets, kept out of the LLM and embedding budget.
 	NonTechCategories = []string{
 		"marketing", "sales", "support",
 		"recruiting", "hr", "finance", "legal", "operations", "customer_success",
@@ -204,29 +198,22 @@ var (
 	// TechCategories are the CategoryValues for recognized technical roles: every
 	// category that is neither a NonTechCategories member nor the residual "other".
 	// It is the single source of truth for "is this a technical category?" that the
-	// is_tech derivation reads, so the tech/non-tech/other split stays in one place;
-	// a test asserts the three sets partition CategoryValues exactly. Product/design/
-	// project_management — and the IT-product-adjacent business_analysis/
-	// solutions_engineering/developer_relations/technical_writing — count as technical
-	// here (IT-industry roles), so they are enriched; the back-office roles are not.
-	// TechCategories are the categories a TECH COMPANY staffs, which is not the same
-	// question as "is this a technical craft" — and reading it as the second is a trap
-	// with a measurement attached. It carries `product`, `project_management`, `design`,
-	// `creative` and `business_analysis`, correct on a software employer's board and
-	// wrong anywhere the population is not software: an adapter that used it to decide
-	// whether to STORE a posting from a general-population job board took in 23 project
-	// managers (construction, manufacturing, HR payroll), 13 business analysts, 11
-	// product managers and 13 artists and designers out of 159 — plus 45 that came
-	// through the bare `analyst` alias under `data_analytics`, which on a finance board
-	// is VAT, credit control and valuation. Of the same 159, `classify.IsTech` accepted
-	// 17. See internal/ingest/sources/profession.go.
+	// is_tech derivation reads; a test asserts the three sets partition CategoryValues
+	// exactly. Product/design/project_management and the IT-product-adjacent business
+	// roles count as technical here, so they are enriched; the back-office roles are not.
 	//
-	// For "is the CRAFT technical", reach for `classify.IsTech` (strict, software-anchored,
-	// never guesses) and treat this list as the facet vocabulary it is.
+	// These are the categories a TECH COMPANY staffs, not "is this a technical craft":
+	// `product`, `project_management`, `design`, `creative` and `business_analysis` are
+	// wrong anywhere the population is not software, and the bare `analyst` alias under
+	// `data_analytics` is VAT and credit control on a finance board. Do not use it to
+	// decide whether to STORE a posting from a general job board (see
+	// internal/ingest/sources/profession.go). For "is the CRAFT technical", use
+	// `classify.IsTech` (strict, software-anchored) and treat this list as the facet
+	// vocabulary.
 	TechCategories = []string{
 		"software_engineering",
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
-		"network_engineering", "it_support",
+		"network_engineering", "system_administration", "telecommunications_engineering", "it_support",
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
 		"qa", "security", "hardware", "embedded", "blockchain", "architecture",
 		"design", "creative", "product", "project_management",
@@ -320,116 +307,25 @@ var (
 		"ml_trainer_researcher", "fullstack_ai_engineer", "devops_infra_engineer",
 	}
 	// JobSearchStageValues is how far along the candidate says they are, asked once in
-	// onboarding (internal/candidate/survey). Ordered by commitment rather than by
-	// urgency: `exploring` sits last because someone who says the search is not a
-	// priority is the least engaged, not the earliest — the earliest is `not_started`,
-	// who has decided to start and has not yet.
+	// onboarding (internal/candidate/survey). Ordered by commitment, not urgency:
+	// `exploring` is last (least engaged); `not_started` has decided to start and has
+	// not yet.
 	//
-	// This is about the candidate, not about a posting, so unlike every vocabulary above
-	// it reaches no facet, no filter and no enrichment prompt. It lives here anyway for
-	// the reason the package exists: one definition, so the Go validator and the wizard's
-	// option list cannot drift into two spellings of the same answer.
+	// About the candidate, not a posting: it reaches no facet, filter or enrichment
+	// prompt. It lives here so the Go validator and the wizard's option list share one
+	// definition.
 	JobSearchStageValues = []string{"not_started", "searching", "employed_looking", "exploring"}
 	// JobChallengeValues are the things a candidate says are in their way. Several may be
-	// picked since migration 0207 (the tour shows what helps with each), except
-	// JobChallengeJustStarting, which says nothing is hard yet and so stands alone.
+	// picked, except JobChallengeJustStarting, which stands alone.
 	//
-	// `english` keeps its identifier but is worded "Language requirements" from 0207 on, so
-	// answers before that deploy mean English only. The five values after it came out of
-	// the free-text notes "other" collected (job fit, remote, visa, first job, nothing yet).
+	// `english` is worded "Language requirements" since migration 0207; earlier answers
+	// mean English only.
 	//
-	// `other` is load-bearing, not filler: it is the ONLY value a free-text note may
-	// accompany, so the survey can collect an unanticipated answer without letting a note
-	// contradict a coded one. TestJobChallengeHasOther locks it.
+	// `other` is the ONLY value a free-text note may accompany, so a note cannot
+	// contradict a coded answer. TestJobChallengeHasOther locks it.
 	JobChallengeValues = []string{
 		"english", "recruiter_contact", "working_abroad", "technical_interviews",
 		"job_fit", "remote_flexible", "visa_sponsorship", "first_job",
 		JobChallengeJustStarting, JobChallengeOther,
 	}
 )
-
-// RetiredCategoryManagement is the category value that no longer exists. Saved
-// searches, alert subscriptions, shared links and user profiles written before its
-// retirement still carry it, so the two places that read stored values know it by
-// name: the search filter answers it with role_type=people_manager (the axis it was
-// a proxy for), and a profile save drops it from the specializations. Nothing may
-// write it again — it is deliberately absent from CategoryValues.
-const RetiredCategoryManagement = "management"
-
-// The values of ClearanceLevelValues, named for the dictionary that writes them.
-const (
-	ClearanceConfidential = "confidential"
-	ClearanceSecret       = "secret"
-	ClearanceTopSecret    = "top_secret"
-	ClearanceTSSCI        = "ts_sci"
-	ClearancePublicTrust  = "public_trust"
-	ClearanceInterim      = "interim"
-	ClearanceOther        = "other"
-)
-
-// JobChallengeOther is the JobChallengeValues member that admits a written note. Named
-// rather than spelled inline because two places depend on the exact string — the survey's
-// note gate and the vocabulary itself — and a literal in both is a silent drift waiting
-// to happen.
-const JobChallengeOther = "other"
-
-// JobChallengeJustStarting is the answer that nothing is hard yet. It cannot sit beside
-// another answer — the survey rejects the pair — so, like JobChallengeOther, the code
-// that enforces it names it rather than spelling the string.
-const JobChallengeJustStarting = "just_starting"
-
-// currencyRE matches a well-formed ISO 4217 currency code.
-var currencyRE = regexp.MustCompile(`^[A-Z]{3}$`)
-
-// IsCurrencyCode reports whether s is a well-formed ISO 4217 code. Shape only: this
-// package documents salary_currency as a deliberately open ISO-standard field, with no
-// closed dictionary to check membership against, so format is the only guarantee
-// available — and callers must not read a true here as "this currency exists".
-//
-// It lives here rather than beside its first caller because it now has two, in blocks
-// that cannot import each other (internal/ingest/screeninganswers holds the desired
-// salary, internal/candidate/survey the current income). The alternative was a second
-// regexp literal, which is how this repository ended up with four disagreeing copies of
-// the legal-form vocabulary.
-func IsCurrencyCode(s string) bool { return currencyRE.MatchString(s) }
-
-// MaxExperienceYears is the largest years-of-experience figure believed to be a
-// statement about the CANDIDATE. It lives here rather than beside any one parser
-// because THREE independent producers write this facet and each could exceed it on
-// its own: a source adapter's structured field, the description parse in
-// internal/job/jobfacts, and the enrichment model in internal/ai/enrich.
-//
-// The failure it bounds is not hallucination. "N years of experience" in a posting can
-// describe the candidate, the employer, or the product, and the three are syntactically
-// identical — only the subject separates them, and no producer is told whose number to
-// take. Measured on prod 2026-09-05: a KLA listing reading "With over 40 years of
-// semiconductor process control experience, chipmakers around the world rely on KLA"
-// stored 40 (the COMPANY's age), and seven smartrecruiters postings stored 84 from a
-// structured field whose descriptions contain no such number at all.
-//
-// A figure past this is DROPPED, never clamped: a clamp would state a requirement the
-// posting never made, while an absent field correctly says "not stated".
-//
-// 25 is where the evidence puts the line, and both sides of it were checked against
-// prod rather than guessed.
-//
-// At and below it, postings really do say this about the candidate: "18+ years of
-// progressively responsible experience", "Minimum of 25 years progressively senior
-// experience" (a Programme Director), "25+ years of investment management experience"
-// (a Senior Portfolio Manager).
-//
-// At and above 30, they do not. Every sampled row at exactly 30 — and there are 19,145
-// of them — is the EMPLOYER's age: "for the past 30 years our long-term commitment to
-// team members has been unsurpassed", "With over 30 years of expertise across Private
-// Equity", "maintained an A+ rating ... for over 30 years". Two of those postings are a
-// Dining Room Server and a Driver.
-//
-// The round-number shape of the whole tail says the same thing: 30 (19,145), 40
-// (12,043), 50 (9,437), 35 (3,194), 45 (2,446). Careers are not round; anniversaries
-// are.
-//
-// An earlier draft of this constant said 30 and cited the same 25-year postings as its
-// reason for being generous. That was measured on the enrichment BLOB, which holds the
-// model's value — 29 rows. The served facet is the COLUMN, written by two other
-// producers, and it carried 28,864. Measure the field a reader actually sees.
-const MaxExperienceYears = 25

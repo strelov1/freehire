@@ -325,11 +325,8 @@ func (c *Client) postForm(ctx context.Context, endpoint string, form url.Values,
 // Apple identity, verifying the returned id token against the nonce, the subject the
 // caller submitted, and the client id.
 //
-// It returns the token alone. It used to return a Grant carrying Subject, ClientID and
-// Claims beside it, and nothing outside this package ever read any of the three — the
-// caller (handler.exchangeApple) takes the refresh token and gets the identity from its
-// own Verify, because the identity has to be established BEFORE the exchange to decide
-// whether to attempt one at all.
+// It returns the token alone: the caller establishes identity with its own Verify before
+// deciding whether to exchange at all.
 func (c *Client) Exchange(ctx context.Context, code, clientID, expectedNonce, submittedSubject string) (string, error) {
 	if code == "" || submittedSubject == "" {
 		return "", ErrExchange

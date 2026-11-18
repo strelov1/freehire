@@ -4,21 +4,16 @@
   import { page } from '$app/state';
   import { Badge, Card, Skeleton } from '#lib/ui/index.js';
   import {
-    addMonths,
     browserTimezone,
     daysWithSlots,
     firstOpenMonth,
     groupSlotsByLocalDay,
-    monthGrid,
-    monthOf,
     openingSlotWindow,
     slotLocalTime,
     slotWindowForMonth,
-    todayIn,
-    weekdayOrder,
-    weekdayShortLabel,
     withSearchParams,
   } from '#lib/mentorship.js';
+  import { addMonths, monthGrid, monthOf, todayIn, weekdayOrder, weekdayShortLabel } from '#lib/mentorshipCalendar.js';
   import type { MentorSlot, MentorSlots } from '#lib/types.js';
 
   // A month of open slots and the day's hours, for whoever offers them: a mentor on their
@@ -41,7 +36,7 @@
 
   // How often an open page re-asks for the slots. Derived, not chosen: the endpoint caches
   // a computed window for one minute, so a faster poll is answered from the same entry and
-  // spends the visitor's share of a rate limit for an identical answer. cal.com polls every
+  // repeats an identical read. cal.com polls every
   // five minutes and holds a reservation system besides; we need neither, because the
   // database refuses the second booking outright.
   const REFRESH_MS = 60_000;
@@ -103,8 +98,7 @@
   // page showing one date and about to book another.
   const pickDay = (day: string) => setParams({ date: day, slot: null });
   const pickSlot = (slot: MentorSlot) => setParams({ slot: slot.starts_at });
-  const stepMonth = (delta: number) =>
-    setParams({ month: addMonths(month, delta), date: null, slot: null });
+  const stepMonth = (delta: number) => setParams({ month: addMonths(month, delta), date: null, slot: null });
 
   // Browser back/forward over our own shallow entries. Read the address bar rather than
   // `page.url`, which lags exactly here — the same reason urlSynced.svelte.ts does.

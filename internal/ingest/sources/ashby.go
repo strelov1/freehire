@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // ashbyBaseURL is the Ashby public job-board API root.
@@ -23,13 +24,13 @@ func (ashby) Provider() string { return "ashby" }
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
 func (ashby) fullBoardListing() {}
 
-// emptyBoardListing: an unknown board answers 404, and an emptied one
-// answers 200 with "jobs": [] (umbrel, 2026-10-29); an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
+// emptyBoardListing: an unknown board answers 404, and an emptied one answers 200 with "jobs": [];
+// an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
 func (ashby) emptyBoardListing() {}
 
 func (a ashby) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	// includeCompensation=true is required — omitted, the API silently drops the
-	// compensation object entirely rather than erroring (confirmed live 2026-08-14).
+	// includeCompensation=true is required: omitted, the API silently drops the compensation
+	// object rather than erroring.
 	url := fmt.Sprintf("%s/%s?includeCompensation=true", ashbyBaseURL, e.Board)
 
 	var resp struct {
@@ -64,6 +65,8 @@ type AshbyPosting struct {
 	IsRemote        bool   `json:"isRemote"`
 	WorkplaceType   string `json:"workplaceType"`
 	EmploymentType  string `json:"employmentType"`
+	Department      string `json:"department"`
+	Team            string `json:"team"`
 	Address         struct {
 		PostalAddress struct {
 			AddressCountry string `json:"addressCountry"`
@@ -118,6 +121,8 @@ func MapAshbyPosting(j AshbyPosting) Job {
 		Countries:      countryFromCode(j.Address.PostalAddress.AddressCountry),
 		PostedAt:       parseRFC3339(j.PublishedAt),
 		EmploymentType: ashbyEmploymentType(j.EmploymentType),
+		// team is the narrower label, nested under department on Ashby.
+		Team: firstNonEmpty(strings.TrimSpace(j.Team), strings.TrimSpace(j.Department)),
 	}
 	if c, ok := ashbySalaryComponent(j.Compensation); ok {
 		if period := ashbySalaryPeriod(c.Interval); period != "" {
@@ -153,10 +158,10 @@ func ashbySalaryComponent(comp *AshbyCompensation) (AshbyCompensationComponent, 
 	return AshbyCompensationComponent{}, false
 }
 
-// ashbySalaryPeriod maps Ashby's compensation interval ("1 YEAR", "1 HOUR", confirmed
-// live; "1 MONTH"/"1 DAY" by the same convention, "NONE" for non-recurring
-// equity/bonus components) onto freehire's salary_period vocabulary. Unrecognized maps
-// to "" so the caller drops the whole component rather than mislabelling its period.
+// ashbySalaryPeriod maps Ashby's compensation interval ("1 YEAR", "1 HOUR", "1 MONTH", "1 DAY";
+// "NONE" for non-recurring equity/bonus components) onto freehire's salary_period vocabulary.
+// Unrecognized maps to "" so the caller drops the whole component rather than mislabelling its
+// period.
 func ashbySalaryPeriod(interval string) string {
 	switch interval {
 	case "1 YEAR":

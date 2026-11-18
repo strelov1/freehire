@@ -14,14 +14,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// Tracer observes LLM generations. A nil Tracer is a valid no-op: callers guard
-// their calls with a nil check, so an unconfigured worker holds a nil Tracer and
-// performs no tracing work.
+// Tracer observes LLM generations. A nil Tracer is a valid no-op; callers nil-check.
 //
-// Lifecycle contract (satisfied by the run-once workers): all Observe calls
-// happen-before Shutdown — the worker drains its LLM work, then defers a single
-// Shutdown. Observe after Shutdown is not supported; Shutdown itself is safe to
-// call more than once.
+// All Observe calls must happen-before Shutdown; Observe after Shutdown is unsupported.
+// Shutdown is safe to call more than once.
 type Tracer interface {
 	// Observe records one generation. It never blocks the caller and never fails:
 	// delivery is best-effort and asynchronous.
@@ -108,10 +104,8 @@ func (t *langfuseTracer) loop() {
 	flush()
 }
 
-// Shutdown stops accepting generations and waits for the buffer to flush, or for
-// ctx to expire. It returns only ctx errors; send failures are already swallowed.
-// The channel close is guarded by a sync.Once so a duplicate Shutdown is a safe
-// wait rather than a close-of-closed-channel panic.
+// Shutdown stops accepting generations and waits for the buffer to flush or ctx to expire.
+// The sync.Once makes a duplicate Shutdown a wait, not a double-close panic.
 func (t *langfuseTracer) Shutdown(ctx context.Context) error {
 	t.closeOnce.Do(func() { close(t.ch) })
 	select {
@@ -122,9 +116,7 @@ func (t *langfuseTracer) Shutdown(ctx context.Context) error {
 	}
 }
 
-// send encodes the generations and POSTs them to the ingestion endpoint under
-// HTTP Basic auth. A non-2xx response or transport error is returned to the
-// caller, which decides how to handle it (the async loop logs and drops).
+// send POSTs the generations to the ingestion endpoint under HTTP Basic auth.
 func (t *langfuseTracer) send(ctx context.Context, gens []Generation) error {
 	body, err := encodeBatch(gens)
 	if err != nil {
@@ -145,8 +137,7 @@ func (t *langfuseTracer) send(ctx context.Context, gens []Generation) error {
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("langfuse: ingestion returned %s", resp.Status)
 	}
-	// Ingestion answers 207 with per-event validation errors in the body, not the
-	// status. Surface them (best-effort log) so silently dropped events are visible.
+	// A 207 carries per-event validation errors in the body; log them so drops are visible.
 	if resp.StatusCode == http.StatusMultiStatus {
 		logIngestionErrors(resp.Body)
 	}
@@ -169,9 +160,10 @@ func logIngestionErrors(body io.Reader) {
 }
 
 // Generation is one observed LLM call, handed to a Tracer. A non-nil Err records
-// the call at error level; a nil Usage means the provider reported no token counts
-// (recorded as absent rather than zero). Source labels the originating workload
-// (e.g. "enrich" / "telegram").
+// the call at error level, or at warning level when Cancelled says our own caller
+// abandoned it; a nil Usage means the provider reported no token counts (recorded
+// as absent rather than zero). Source labels the originating workload (e.g.
+// "enrich" / "telegram").
 type Generation struct {
 	Model  string
 	System string
@@ -182,20 +174,21 @@ type Generation struct {
 	End    time.Time
 	Err    error
 	Source string
+	// Cancelled marks a failed call whose caller cancelled it (a worker shutting
+	// down mid-call, a user leaving a chat) rather than one the model or gateway
+	// failed. It is not an outage, so it must not count among the failed
+	// generations the error-rate alert watches.
+	Cancelled bool
 }
 
 // Usage is the token accounting for a single call.
 //
-// CachedInput is the part of Input the provider served from its prompt cache. It is the
-// figure that decides what a replayed conversation actually costs — the assistant sends
-// its whole transcript every round, so a provider that caches the prefix and one that
-// does not differ by far more than their per-token prices suggest.
+// CachedInput is the part of Input served from the provider's prompt cache; it decides what a
+// replayed conversation costs.
 //
-// Zero does not mean "no cache". langchaingo writes the underlying key from a
-// zero-valued struct, so a provider that reports nothing and one that hit nothing both
-// arrive as zero, and this layer cannot tell them apart. A caller that needs the
-// distinction draws it across a run — every round of a run reporting zero against a
-// prefix that should have been warm is evidence about the provider; one call is not.
+// Zero does not mean "no cache": langchaingo writes the key from a zero-valued struct, so
+// "reported nothing" and "hit nothing" are indistinguishable. Draw the distinction across a
+// run, not from one call.
 type Usage struct {
 	Input       int
 	Output      int
@@ -232,21 +225,12 @@ func encodeBatch(gens []Generation) ([]byte, error) {
 	return json.Marshal(ingestionRequest{Batch: events})
 }
 
-// usageBuckets renders a Usage as Langfuse's usageDetails, whose contract is that every
-// key is a separate NON-OVERLAPPING bucket: each token is counted under exactly one.
-//
-// The provider does not report them that way. An OpenAI-shaped `prompt_tokens` counts the
-// cached prefix inside itself, so copying both figures across would bill that prefix
-// twice — once at the full input rate and once at the cache-read rate. The subtraction
-// here is the whole reason this is not a field-by-field copy.
-//
-// No total is sent: Langfuse derives it from the buckets, and a total we computed
-// ourselves would be a fourth number free to disagree with the three it was built from.
+// usageBuckets renders a Usage as Langfuse's usageDetails, whose keys are NON-OVERLAPPING
+// buckets. `prompt_tokens` includes the cached prefix, so copying both figures would bill it
+// twice; hence the subtraction. No total is sent: Langfuse derives it.
 func usageBuckets(u Usage) map[string]int {
-	// A cached count larger than the prompt it is part of is not a reading we can split —
-	// the subtraction would yield a negative bucket, which Langfuse would price as
-	// written. Pass the prompt through whole instead: an unsplit measurement is worse
-	// than a split one and far better than an invented one.
+	// A cached count above the prompt cannot be split (a negative bucket would be priced
+	// as written); pass the prompt through whole.
 	if u.CachedInput <= 0 || u.CachedInput > u.Input {
 		return map[string]int{"input": u.Input, "output": u.Output}
 	}
@@ -280,6 +264,9 @@ func newGenerationBody(g Generation, traceID string) generationBody {
 	}
 	if g.Err != nil {
 		b.Level = "ERROR"
+		if g.Cancelled {
+			b.Level = "WARNING"
+		}
 		b.StatusMessage = g.Err.Error()
 	}
 	return b

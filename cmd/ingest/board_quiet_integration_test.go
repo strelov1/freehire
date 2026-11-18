@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -112,7 +113,7 @@ func TestBoardHealth_ClearCooldownsKeepsQuietPauses(t *testing.T) {
 		}
 	}
 	for i := 0; i < 3; i++ { // a cooled board of the same provider, so there is something to clear
-		if err := h.RecordFailure(ctx, "ashby", "broken", "", "boom"); err != nil {
+		if err := h.RecordFailure(ctx, "ashby", "broken", "", errors.New("boom")); err != nil {
 			t.Fatalf("RecordFailure: %v", err)
 		}
 	}

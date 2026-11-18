@@ -35,12 +35,6 @@ var noticeHTML = template.Must(mailtpl.Partials().New("messageUnread").Parse(`
 {{template "p" .Line}}
 {{template "button" (mailLink .URL "Open the chat")}}`))
 
-// EmailSender is the slice of the SES transport the notifier needs; *emailnotify.Client
-// satisfies it.
-type EmailSender interface {
-	Send(ctx context.Context, m emailnotify.Message) error
-}
-
 // TelegramSender is the slice of the Telegram client the notifier needs;
 // *telegramnotify.Client satisfies it.
 type TelegramSender interface {
@@ -65,7 +59,7 @@ type NotifyResult struct {
 // NotifierConfig wires a Notifier. Email and Telegram may each be nil, disabling that
 // channel.
 type NotifierConfig struct {
-	Email    EmailSender
+	Email    emailnotify.Sender
 	From     string
 	Telegram TelegramSender
 	Links    *emailprefs.Links

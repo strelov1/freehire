@@ -49,7 +49,7 @@ func newTestService(t *testing.T) (*Service, *pgxpool.Pool) {
 		`TRUNCATE company_feedback, company_feedback_reports, companies, users RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	return New(db.New(pool), pool, fakePersonas{}, Config{}), pool
+	return New(db.New(pool), pool, fakePersonas{}), pool
 }
 
 // Hide now reads the company slug (GetCompanyFeedbackSlug, unlocked) BEFORE locking

@@ -7,10 +7,7 @@ import (
 	"sync"
 )
 
-// French location lines, measured 2026-10-28 over 33k open postings placed in France
-// (wttj, flatchr, werecruit, smartrecruiters, teamtailor, workday, eures, recruitee,
-// lever, join, workable, greenhouse, personio, whatjobs-fr). What the parser missed came
-// in a few shapes, each handled here:
+// French location lines come in a few shapes the parser used to miss, each handled here:
 //
 //   - a compound town written with spaces instead of hyphens ("Aix en Provence",
 //     "Boulogne Billancourt", "Issy les Moulineaux, France"), which the tables know only

@@ -12,31 +12,24 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// Extras is the read-only projection data that rides on the jobs row but is NOT
-// part of the Job aggregate's invariants: the engagement counters (materialized
-// from user_jobs) and the collection slugs (denormalized from the company). Keeping
-// them out of Job preserves a clean write surface — the New factory never sees them
-// — while the read path still gets them in one load. Zero on a fresh New; populated
-// only by FromRow. It lives here (not in jobview) so a load can return it without
-// the domain importing the wire layer.
+// Extras is the read-only projection data on the jobs row that is not part of the Job
+// aggregate's invariants: engagement counters (from user_jobs) and collection slugs
+// (from the company). Zero on a fresh New; populated only by FromRow. It lives here, not
+// in jobview, so a load can return it without the domain importing the wire layer.
 type Extras struct {
 	ViewCount     int32
 	AppliedCount  int32
 	UpvoteCount   int32
 	DownvoteCount int32
 	Collections   []string
-	// AIInterviewReports is how many people have reported that this job's COMPANY
-	// screens with an AI interviewer, denormalized onto the posting the same way
-	// Collections is. Zero means nobody has, which is why the wire shape omits it
-	// rather than serving a 0 that would render as a label with no reports.
+	// AIInterviewReports is how many people reported that this job's COMPANY screens with
+	// an AI interviewer. Zero means nobody has, so the wire shape omits it.
 	AIInterviewReports int32
 }
 
-// FromRow is the anti-corruption mapping from a persistence row to the domain
-// Job plus its read-only Extras. It is the hydration path used by the jobview
-// projection shim; it never derives (a stored row already carries its facets), so it
-// does not bypass the New construction invariant. It is the single place the domain
-// depends on the db row shape.
+// FromRow maps a persistence row to the domain Job plus its Extras. It never derives (a
+// stored row already carries its facets), so it does not bypass New's invariant. It is the
+// single place the domain depends on the db row shape.
 func FromRow(r db.Job) (Job, Extras, error) {
 	j, err := jobFromRow(r)
 	if err != nil {
@@ -45,9 +38,8 @@ func FromRow(r db.Job) (Job, Extras, error) {
 	return j, extrasFromRow(r), nil
 }
 
-// jobFromRow maps the aggregate-owned fields of a persistence row into a domain
-// Job: pgtype scalars become domain types and the enrichment JSONB is decoded into
-// the typed, raw (pre-fold) Enrichment.
+// jobFromRow maps the aggregate-owned fields of a row into a domain Job, decoding the
+// enrichment JSONB into the raw (pre-fold) Enrichment.
 func jobFromRow(r db.Job) (Job, error) {
 	var e enrich.Enrichment
 	if len(r.Enrichment) > 0 {
@@ -59,6 +51,7 @@ func jobFromRow(r db.Job) (Job, error) {
 		Source:              r.Source,
 		ExternalID:          r.ExternalID,
 		URL:                 r.URL,
+		ApplicationURL:      r.ApplicationUrl,
 		Title:               r.Title,
 		Company:             r.Company,
 		CompanySlug:         r.CompanySlug,
@@ -68,6 +61,7 @@ func jobFromRow(r db.Job) (Job, error) {
 		Description:         r.Description,
 		PostedAt:            tsPtr(r.PostedAt),
 		ApplicationDeadline: pgconv.DatePtr(r.ApplicationDeadline),
+		Team:                r.Team,
 
 		Countries: r.Countries,
 		Regions:   r.Regions,
@@ -84,6 +78,7 @@ func jobFromRow(r db.Job) (Job, error) {
 		Equity:            pgconv.TextString(r.Equity),
 		ClearanceLevels:   r.ClearanceLevels,
 		Perks:             r.Perks,
+		Engagement:        r.Engagement,
 
 		PostingLanguage:    r.PostingLanguage,
 		EmploymentType:     r.EmploymentType,
@@ -109,9 +104,8 @@ func jobFromRow(r db.Job) (Job, error) {
 	}}, nil
 }
 
-// extrasFromRow pulls the read-only projection data (engagement counters +
-// denormalized collection slugs) off a persistence row. Kept separate from
-// jobFromRow so the aggregate mapping stays free of non-aggregate fields.
+// extrasFromRow pulls the read-only projection data off a row, apart from jobFromRow so
+// the aggregate mapping stays free of non-aggregate fields.
 func extrasFromRow(r db.Job) Extras {
 	return Extras{
 		ViewCount:     r.ViewCount,
@@ -124,12 +118,9 @@ func extrasFromRow(r db.Job) Extras {
 	}
 }
 
-// requirementsFromRow decodes the deterministically derived requirements column. A
-// row that yields nothing, a row written before migration 0139, and a row whose
-// payload cannot be decoded all come back nil: each means "no derived list", and the
-// projection treats them alike. A decode error is deliberately not fatal — this
-// column is a display convenience, and failing a whole job read over it would trade a
-// missing section for a missing posting.
+// requirementsFromRow decodes the derived requirements column. An empty, pre-migration or
+// undecodable value all come back nil ("no derived list"). A decode error is not fatal:
+// the column is a display convenience, not worth failing the job read.
 func requirementsFromRow(r db.Job) []enrich.Requirement {
 	if len(r.RequirementsDerived) == 0 {
 		return nil
@@ -141,8 +132,8 @@ func requirementsFromRow(r db.Job) []enrich.Requirement {
 	return reqs
 }
 
-// manualSalaryFromRow projects the authoritative manual-salary columns onto a Salary,
-// or nil when the row carries no manual salary (neither bound set — the presence signal).
+// manualSalaryFromRow projects the manual-salary columns onto a Salary, or nil when
+// neither bound is set.
 func manualSalaryFromRow(r db.Job) *Salary {
 	if !r.SalaryMinManual.Valid && !r.SalaryMaxManual.Valid {
 		return nil

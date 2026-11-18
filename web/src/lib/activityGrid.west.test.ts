@@ -16,7 +16,14 @@ import { buildActivityGrid, rangeForWindow, WINDOW_DAYS } from './activityGrid';
 import type { TimelineEvent } from './types';
 
 const event = (occurredAt: string, id = 1): TimelineEvent =>
-  ({ id, kind: 'applied', source: 'user', observed: true, occurred_at: occurredAt, company_slug: 'acme' }) as TimelineEvent;
+  ({
+    id,
+    kind: 'applied',
+    source: 'user',
+    observed: true,
+    occurred_at: occurredAt,
+    company_slug: 'acme',
+  }) as TimelineEvent;
 
 const TODAY = new Date(2026, 8, 16); // 16 September 2026, local
 

@@ -15,4 +15,4 @@
 </svelte:head>
 
 <!-- Same board as /my/tracking, but opened on the given application's drawer. -->
-<JobBoard initialId={data.id} initial={data.board} />
+<JobBoard initialItem={data.initialItem} initialAutoApply={data.autoApply} initialId={data.id} initial={data.board} />

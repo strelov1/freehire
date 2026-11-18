@@ -5,9 +5,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/minio/minio-go/v7"
 
@@ -38,6 +40,16 @@ func (f *fakeBlobs) Get(_ context.Context, key string) (io.ReadCloser, error) {
 		return nil, minio.ErrorResponse{Code: minio.NoSuchKey}
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
+}
+
+func (f *fakeBlobs) List(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for k := range f.objs {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeBlobs) Delete(_ context.Context, key string) error {
@@ -121,7 +133,7 @@ func (r *fakeRepo) Get(_ context.Context, userID int64) (db.GetUserResumeRow, er
 	}
 	return db.GetUserResumeRow{
 		ResumeObjectKey:  pgtype.Text{String: key, Valid: true},
-		ResumeUploadedAt: pgtype.Timestamptz{Valid: true},
+		ResumeUploadedAt: r.uploadedAt[userID],
 	}, nil
 }
 
@@ -166,6 +178,10 @@ func (r *fakeRepo) SetExtractFailed(_ context.Context, userID int64, detail stri
 	r.extractDet[userID] = detail
 	r.extractFor[userID] = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
 	return nil
+}
+
+func (r *fakeRepo) WithUploadLock(_ context.Context, _ int64, fn func(Repository) error) error {
+	return fn(r)
 }
 
 func (r *fakeRepo) SetExtractPending(_ context.Context, userID int64, uploadedAt time.Time) error {
@@ -220,6 +236,151 @@ func TestStore_PutStatusTextRoundTrip(t *testing.T) {
 	}
 	if text != "Go and PostgreSQL" {
 		t.Errorf("Text = %q, want the stored text", text)
+	}
+}
+
+// PutIfAbsent stores a first résumé and refuses a second, leaving the first in place.
+func TestStore_PutIfAbsentStoresOnlyAFirstResume(t *testing.T) {
+	s := New(newFakeBlobs(), newFakeRepo())
+	ctx := context.Background()
+	if _, err := s.PutIfAbsent(ctx, 7, "text/plain", []byte("first")); err != nil {
+		t.Fatalf("first PutIfAbsent: %v", err)
+	}
+	if _, err := s.PutIfAbsent(ctx, 7, "text/plain", []byte("second")); !errors.Is(err, ErrAlreadyStored) {
+		t.Fatalf("second PutIfAbsent err = %v, want ErrAlreadyStored", err)
+	}
+	if text, _ := s.Text(ctx, 7); text != "first" {
+		t.Errorf("stored text = %q, want the first", text)
+	}
+}
+
+// racingRepo lands another upload's pointer the moment the lock is taken: what a concurrent
+// upload that won the lock first looks like to the one waiting behind it.
+type racingRepo struct {
+	*fakeRepo
+	blobs *fakeBlobs
+}
+
+func (r racingRepo) WithUploadLock(ctx context.Context, userID int64, fn func(Repository) error) error {
+	r.blobs.objs["resumes/7-winner"] = []byte("winner")
+	if err := r.Set(ctx, userID, "resumes/7-winner"); err != nil {
+		return err
+	}
+	return fn(r.fakeRepo)
+}
+
+// The refusal that decides is the one under the lock, after this upload's object is written:
+// it must leave the winner's object untouched and delete its own, so nothing is orphaned.
+func TestStore_PutIfAbsentRefusedUnderTheLockLeavesNoOrphan(t *testing.T) {
+	blobs := newFakeBlobs()
+	s := New(blobs, racingRepo{fakeRepo: newFakeRepo(), blobs: blobs})
+	if _, err := s.PutIfAbsent(context.Background(), 7, "text/plain", []byte("loser")); !errors.Is(err, ErrAlreadyStored) {
+		t.Fatalf("PutIfAbsent err = %v, want ErrAlreadyStored", err)
+	}
+	if len(blobs.objs) != 1 || string(blobs.objs["resumes/7-winner"]) != "winner" {
+		t.Errorf("objects = %v, want only the winner's, untouched", blobs.objs)
+	}
+}
+
+// Each upload has its own object; replacing one deletes the object the pointer left, and a
+// delete removes the one it names — including a row still on the old fixed key.
+func TestStore_ObjectsFollowThePointer(t *testing.T) {
+	blobs, repo := newFakeBlobs(), newFakeRepo()
+	blobs.objs["resumes/7"] = []byte("legacy")
+	repo.ptr[7] = "resumes/7"
+	s := New(blobs, repo)
+	ctx := context.Background()
+
+	if _, err := s.Put(ctx, 7, "text/plain", []byte("new")); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, legacy := blobs.objs["resumes/7"]; legacy || len(blobs.objs) != 1 || string(blobs.objs[repo.ptr[7]]) != "new" {
+		t.Fatalf("after replace objects = %v, pointer %q; want only the new object", blobs.objs, repo.ptr[7])
+	}
+	if err := s.Delete(ctx, 7); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if len(blobs.objs) != 0 {
+		t.Errorf("after delete objects = %v, want none", blobs.objs)
+	}
+}
+
+// A pointer write that fails leaves no object behind: the one just written is deleted.
+func TestStore_FailedPointerWriteDeletesTheNewObject(t *testing.T) {
+	blobs := newFakeBlobs()
+	s := New(blobs, failingUploadRepo{newFakeRepo()})
+	if _, err := s.Put(context.Background(), 7, "text/plain", []byte("CV")); err == nil {
+		t.Fatal("Put succeeded with a failing pointer write")
+	}
+	if len(blobs.objs) != 0 {
+		t.Errorf("objects = %v, want the orphan deleted", blobs.objs)
+	}
+}
+
+// ambiguousCommitRepo writes the pointer and then reports a failure, as a COMMIT whose reply
+// was lost after the server committed it does.
+type ambiguousCommitRepo struct{ *fakeRepo }
+
+func (r ambiguousCommitRepo) WithUploadLock(_ context.Context, _ int64, fn func(Repository) error) error {
+	if err := fn(r.fakeRepo); err != nil {
+		return err
+	}
+	return errors.New("commit reply lost")
+}
+
+// The upload reports the failure, but the object the pointer now names is kept: deleting it
+// would leave the pointer naming nothing.
+func TestStore_AmbiguousCommitKeepsTheObjectThePointerNames(t *testing.T) {
+	blobs, repo := newFakeBlobs(), newFakeRepo()
+	s := New(blobs, ambiguousCommitRepo{repo})
+	if _, err := s.Put(context.Background(), 7, "text/plain", []byte("CV")); err == nil {
+		t.Fatal("Put hid the commit failure")
+	}
+	if got := string(blobs.objs[repo.ptr[7]]); got != "CV" {
+		t.Errorf("the object the pointer names = %q, want it kept", got)
+	}
+}
+
+// deletedAccountRepo is an upload racing account deletion: the user row is gone by the time
+// the pointer is written, so the write fails and the account no longer exists to read.
+type deletedAccountRepo struct{ *fakeRepo }
+
+func (deletedAccountRepo) WithUploadLock(context.Context, int64, func(Repository) error) error {
+	return pgx.ErrNoRows
+}
+
+func (deletedAccountRepo) Get(context.Context, int64) (db.GetUserResumeRow, error) {
+	return db.GetUserResumeRow{}, pgx.ErrNoRows
+}
+
+// An upload whose account was deleted meanwhile leaves no object behind: no row is left that
+// could ever name it.
+func TestStore_UploadAfterAccountDeletionDiscardsTheObject(t *testing.T) {
+	blobs := newFakeBlobs()
+	if _, err := New(blobs, deletedAccountRepo{newFakeRepo()}).Put(context.Background(), 7, "text/plain", []byte("CV")); err == nil {
+		t.Fatal("Put succeeded for a deleted account")
+	}
+	if len(blobs.objs) != 0 {
+		t.Errorf("objects left = %v, want none", blobs.objs)
+	}
+}
+
+// failingDeleteBlobs refuses every delete.
+type failingDeleteBlobs struct{ *fakeBlobs }
+
+func (failingDeleteBlobs) Delete(context.Context, string) error { return errors.New("storage down") }
+
+// Deleting a CV succeeds once its pointer is cleared; the object's removal is best-effort, so
+// a storage failure there neither fails the call nor brings the CV back.
+func TestStore_DeleteSucceedsWhenTheObjectDeleteFails(t *testing.T) {
+	repo := newFakeRepo()
+	repo.ptr[7] = "resumes/7-1-x"
+	s := New(failingDeleteBlobs{newFakeBlobs()}, repo)
+	if err := s.Delete(context.Background(), 7); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if meta, _ := s.Status(context.Background(), 7); meta.Present {
+		t.Error("the CV is still present after Delete")
 	}
 }
 

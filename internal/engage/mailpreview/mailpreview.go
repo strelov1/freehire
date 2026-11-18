@@ -1,30 +1,25 @@
 // Package mailpreview renders every outgoing freehire email against fixed sample
 // data, so the design can be reviewed without sending anything.
 //
-// It exists because email is the one surface with no dev server: the templates run
-// inside cron workers, against real accounts, and the result lands in someone's
-// inbox. Rendering them here turns "what does the password-reset mail look like?"
-// into a file you can open.
+// Email has no dev server (templates run inside cron workers), so rendering here
+// gives each mail a file you can open.
 //
 // The samples feed two consumers: cmd/mail-preview writes them to disk for
 // Storybook, and mailpreview_test.go asserts the committed files still match, so a
-// template change that nobody re-previews fails the build rather than quietly
-// leaving Storybook showing last month's design.
+// template change nobody re-previewed fails the build.
 //
-// Adding a mail: write a renderer and list it in `renderers`. Nothing else needs
-// to change — the contact sheet, the Storybook gallery and the staleness test all
-// read that list, and TestEveryRendererIsRegistered reads the package's own source
-// so a renderer left out of the slice fails rather than disappearing.
+// Adding a mail: write a renderer and list it in `renderers`; the contact sheet,
+// Storybook gallery and staleness test all read that list, and
+// TestEveryRendererIsRegistered fails if a renderer is left out of it.
 //
-// What no test here can see is a mail that has no renderer AT ALL — a notifier
-// somewhere in engage that nobody wrote a sample for. The set is a human
-// judgement about what the product sends, so "every outgoing mail" above is an
+// No test sees a mail with no renderer AT ALL, so "every outgoing mail" is an
 // intent, not a checked invariant.
 package mailpreview
 
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/broadcast"
@@ -39,15 +34,9 @@ import (
 )
 
 // DefaultBaseURL is what the committed previews link to: the preview directory
-// itself, not the production origin.
-//
-// Relative is the useful default because it makes the output self-contained — the
-// logo travels with the files, so the previews render correctly opened straight off
-// disk and inside Storybook, neither of which can reach a host that has not been
-// deployed yet. The real URLs are still visible in each preview's plain-text panel,
-// which is where you would check a link anyway.
-//
-// Pass -base=https://freehire.me to see the production URLs in the markup.
+// itself, so the logo travels with the files and the output renders off disk and in
+// Storybook. Real URLs show in each preview's plain-text panel; pass
+// -base=https://freehire.me to see them in the markup.
 const DefaultBaseURL = "."
 
 // Sample is one rendered mail.
@@ -65,8 +54,7 @@ type Sample struct {
 	// reviewer can see both without changing their own OS setting.
 	LightHTML string
 	DarkHTML  string
-	// Text is the plain-text alternative, shown beside the HTML so the two can be
-	// compared — a text body that has drifted from the HTML is invisible otherwise.
+	// Text is the plain-text alternative, shown beside the HTML to compare the two.
 	Text string
 }
 
@@ -87,6 +75,7 @@ func Samples(baseURL string) ([]Sample, error) {
 // renderers is the list of mails. Each drives the real notifier through the capture
 // sender, so a sample is what production would send, not a hand-written copy of it.
 var renderers = []func(string) (Sample, error){
+	inboxDigestSample,
 	discordInviteSample,
 	interviewBuddiesSample,
 	welcomeSample,
@@ -101,7 +90,10 @@ var renderers = []func(string) (Sample, error){
 	emailChangeSample,
 	emailChangedSample,
 	directApplicationSample,
+	applicationStatusSample,
+	teamInviteSample,
 	digestSample,
+	digestBundleSample,
 	savedJobReminderSample,
 	savedJobReminderBatchSample,
 	followUpNudgeSample,
@@ -112,13 +104,11 @@ var renderers = []func(string) (Sample, error){
 	reportDismissedSample,
 }
 
-// capture is a Sender that keeps the last message instead of delivering it. One
-// method now satisfies every mail package's sender interface, because they all name
-// the same emailnotify.Message.
+// capture is a Sender that keeps the last message instead of delivering it; it
+// satisfies every mail package's sender interface.
 //
-// It deliberately does NOT call Message.validate: a preview renders what a sender
-// produced, and refusing to render a mail with no way out of it would hide the very
-// mistake a reviewer opened the contact sheet to see.
+// It deliberately does NOT call Message.validate: refusing to render a mail with no
+// way out would hide the very mistake a reviewer opened the sheet to see.
 type capture struct {
 	subject, html, text string
 }
@@ -128,26 +118,22 @@ func (c *capture) Send(_ context.Context, m emailnotify.Message) error {
 	return nil
 }
 
-// previewSecret signs the unsubscribe links in a preview. It is a fixed string and
-// not a secret: these mails are never sent, and a preview whose token changed on
-// every run would make the committed files differ from themselves and fail the
-// staleness test for no reason. It is long enough to clear emailprefs' own floor,
-// which exists so a worker started without JWT_SECRET fails closed rather than
-// mailing dead links.
+// previewSecret signs the unsubscribe links in a preview. Fixed and not a secret:
+// the mails are never sent, and a varying token would fail the staleness test. It is
+// long enough to clear emailprefs' minimum secret length.
 const previewSecret = "mail-preview-not-a-real-secret-000"
 
-// previewLinks is the signer every sample passes to its notifier, so the footer's
-// Unsubscribe link renders exactly as production would draw it.
+// previewLinks is the link maker every sample passes to its notifier.
 func previewLinks(baseURL string) *emailprefs.Links {
 	return emailprefs.NewLinks(previewSecret, baseURL)
 }
 
-// previewUserID is the account every sample is addressed to. Fixed for the same
-// reason the secret is: a varying id would produce a varying token.
+// previewUserID is the account every sample is addressed to. Fixed, like the secret,
+// so tokens do not vary.
 const previewUserID int64 = 1
 
-// sample runs send against a fresh capture and packages what it produced, together
-// with the two pinned-scheme variants the contact sheet toggles between.
+// sample runs send against a fresh capture and packages the result with the two
+// pinned-scheme variants.
 func sample(name, title string, send func(*capture) error) (Sample, error) {
 	c := &capture{}
 	if err := send(c); err != nil {
@@ -167,8 +153,7 @@ func sample(name, title string, send func(*capture) error) (Sample, error) {
 	}, nil
 }
 
-// One-off campaigns. They live here for the same reason the sequence does: the
-// copy is the deliverable, and it should be readable before it reaches anyone.
+// One-off campaigns.
 func campaignSample(name, title, campaignName, baseURL string) (Sample, error) {
 	return sample(name, title, func(c *capture) error {
 		campaign, ok := broadcast.Lookup(campaignName)
@@ -190,8 +175,7 @@ func interviewBuddiesSample(baseURL string) (Sample, error) {
 		"interview-buddies", baseURL)
 }
 
-// The signup sequence. Its Sender takes a Reply-To, which capture also satisfies —
-// these are the only mails that ask for an answer.
+// The signup sequence, the only mails that ask for an answer (Reply-To).
 func onboardingSample(name, title string, step onboarding.Step, baseURL string) (Sample, error) {
 	return sample(name, title, func(c *capture) error {
 		return onboarding.NewMailer(c, "notifications@freehire.me", "ilya@freehire.me", baseURL, previewLinks(baseURL)).
@@ -279,14 +263,42 @@ func directApplicationSample(baseURL string) (Sample, error) {
 	})
 }
 
-// digestSample deliberately mixes jobs with and without a salary, and sets Total
-// above the number of jobs listed, so the preview shows both the sparse row and the
-// overflow button rather than only the tidy case. A digest counting more than it
-// carries links that button to the saved search's live results.
+// applicationStatusSample is a rejection with the employer's own words — the letter whose
+// tone matters most, and the one carrying every part (lead, quoted message, link).
+func applicationStatusSample(baseURL string) (Sample, error) {
+	return sample("application-status", "Candidate / Employer's answer", func(c *capture) error {
+		return emailnotify.NewApplicationMailer(c, "hi@freehire.me", baseURL).
+			SendStatusUpdate(context.Background(), emailnotify.ApplicationStatusMail{
+				To:          "someone@example.com",
+				ReplyTo:     "hiring@acme.example",
+				CompanyName: "Acme",
+				JobTitle:    "Senior Platform Engineer",
+				JobURL:      baseURL + "/jobs/senior-platform-engineer-acme-9f3c",
+				Stage:       "rejected",
+				Message:     "Thank you for the time you put into this. We chose someone with more on-call experience, and would be glad to hear from you again next year.",
+			})
+	})
+}
+
+// teamInviteSample is the invitation a colleague receives to join a company's team.
+func teamInviteSample(baseURL string) (Sample, error) {
+	return sample("team-invite", "Employer / Team invitation", func(c *capture) error {
+		return emailnotify.NewTeamInviteMailer(c, "hi@freehire.me", baseURL).
+			SendTeamInvitation(context.Background(), emailnotify.TeamInvitation{
+				To:          "someone@acme.example",
+				CompanyName: "Acme",
+				InvitedBy:   "hiring@acme.example",
+				Link:        baseURL + "/my/employer/join?token=sample",
+				ExpiresAt:   time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC),
+			})
+	})
+}
+
+// digestSample deliberately mixes jobs with and without a salary and sets Total above
+// the jobs listed, so the preview shows the sparse row and the overflow button.
 func digestSample(baseURL string) (Sample, error) {
 	return sample("subscription-digest", "Alerts / Subscription digest", func(c *capture) error {
 		d := notify.Digest{
-			UserID:          previewUserID,
 			SavedSearchName: "Senior Go, remote in Europe",
 			SearchQuery:     "q=go&seniority=senior&remote=europe",
 			Total:           14,
@@ -299,7 +311,36 @@ func digestSample(baseURL string) (Sample, error) {
 			},
 		}
 		return emailnotify.NewNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
-			Send(context.Background(), notify.ChannelEmail, "someone@example.com", d)
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", notify.Message{UserID: previewUserID, Digests: []notify.Digest{d}})
+	})
+}
+
+// digestBundleSample is one person's due digests in one mail: a section per alert,
+// one of them overflowing to its saved search.
+func digestBundleSample(baseURL string) (Sample, error) {
+	return sample("subscription-digest-bundle", "Alerts / Several alerts in one digest", func(c *capture) error {
+		m := notify.Message{UserID: previewUserID, Digests: []notify.Digest{
+			{
+				SavedSearchName: "Senior Go, remote in Europe",
+				SearchQuery:     "q=go&seniority=senior&remote=europe",
+				Total:           14,
+				Jobs: []notify.DigestJob{
+					{Title: "Senior Backend Engineer (Go)", Company: "Fingerprint", Slug: "senior-backend-engineer-go-fingerprint",
+						SalaryMin: 120000, SalaryMax: 160000, SalaryCurrency: "EUR", SalaryPeriod: "year"},
+					{Title: "Staff Engineer, Platform", Company: "Speechify", Slug: "staff-engineer-platform-speechify"},
+				},
+			},
+			{
+				SavedSearchName: "My profile",
+				Total:           1,
+				NotificationID:  42,
+				Jobs: []notify.DigestJob{
+					{Title: "Frontend Engineer (React)", Company: "Avenga", Slug: "frontend-engineer-react-avenga"},
+				},
+			},
+		}}
+		return emailnotify.NewNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", m)
 	})
 }
 
@@ -315,8 +356,7 @@ func savedJobReminderSample(baseURL string) (Sample, error) {
 	})
 }
 
-// savedJobReminderBatchSample is the shape a day of saves produces, and the one
-// worth looking at: the single-job mail above is now the special case.
+// savedJobReminderBatchSample is the shape a day of saves produces.
 func savedJobReminderBatchSample(baseURL string) (Sample, error) {
 	return sample("saved-job-reminder-batch", "Tracking / Saved-job reminders (batch)", func(c *capture) error {
 		return reminder.NewEmailNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
@@ -342,9 +382,7 @@ func followUpNudgeSample(baseURL string) (Sample, error) {
 	})
 }
 
-// followUpNudgeBatchSample is the shape a pass with several quiet applications
-// produces, and the one worth looking at: the single-nudge mail above is now the
-// special case.
+// followUpNudgeBatchSample is the shape a pass with several quiet applications produces.
 func followUpNudgeBatchSample(baseURL string) (Sample, error) {
 	return sample("nudge-follow-up-batch", "Tracking / Nudge: follow up (batch)", func(c *capture) error {
 		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).

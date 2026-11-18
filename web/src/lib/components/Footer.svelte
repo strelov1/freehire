@@ -1,6 +1,7 @@
 <script lang="ts">
   import { APP_STORE_URL } from '#lib/appLinks.js';
   import { resolve } from '$app/paths';
+  import { Trophy } from '@lucide/svelte';
   import { reopen } from '#lib/consent.svelte.js';
   import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
   import { POPULAR_COLLECTIONS } from '#lib/popularCollections.js';
@@ -49,6 +50,8 @@
         { label: 'Discussions', href: resolve('/discussions') },
         { label: 'Blog', href: resolve('/blog') },
         { label: 'Insights', href: resolve('/insights') },
+        { label: 'Salaries', href: resolve('/salaries') },
+        { label: 'Salary analytics', href: resolve('/analytics') },
         { label: 'Hiring signal', href: resolve('/insights/companies') },
         { label: 'Trends', href: resolve('/trends') },
         { label: 'For AI agents', href: resolve('/agents') },
@@ -96,6 +99,16 @@
   const popular = POPULAR_COLLECTIONS;
 
   const year = new Date().getFullYear();
+
+  const compactLinks = [
+    { label: 'Jobs', href: resolve('/jobs') },
+    { label: 'Pricing', href: resolve('/pricing') },
+    { label: 'Jobs API', href: resolve('/jobs-api') },
+    { label: 'Support', href: resolve('/support') },
+    { label: 'Status', href: resolve('/status') },
+    { label: 'Privacy', href: resolve('/privacy') },
+    { label: 'Terms', href: resolve('/terms') },
+  ];
 
   // Product Hunt "featured" badge. Two embed URLs — one per theme — swapped by the
   // `dark` class variant rather than by reading themeStore, so the right one is
@@ -146,9 +159,9 @@
 
   // Compact: the account shell (/my/*) is an app-like surface with its own sidebar
   // nav, so the four link columns, the popular-collections strip and the Product
-  // Hunt badge below are marketing chrome that doesn't belong there — only the
-  // bottom bar (copyright, cookie settings, social links, open-source note) still
-  // applies. Full-bleed account routes (/my/assistant/*, /tailor/*) render no
+  // Hunt badge below give way to a short list of essential site links and the
+  // bottom bar (copyright, cookie settings, social links, open-source note).
+  // Full-bleed account routes (/my/assistant/*, /tailor/*) render no
   // footer at all, compact or otherwise — see routes/+layout.svelte's hideFooter.
   let { compact = false }: { compact?: boolean } = $props();
 </script>
@@ -161,16 +174,14 @@
              get a title without adding headings to the page outline. -->
         {#each groups as group (group.title)}
           <nav class="flex flex-col gap-3" aria-label={group.title}>
-            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <p class="text-xs font-medium text-muted-foreground">
               {group.title}
             </p>
             <ul class="flex flex-col gap-2">
               {#each group.links as link (link.href)}
                 <li>
                   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal route already passed through resolve() when building `groups`; the linter can't trace it via the variable -->
-                  <a href={link.href}
-                    class="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                  >
+                  <a href={link.href} class="text-sm text-muted-foreground transition-colors hover:text-foreground">
                     {link.label}
                   </a>
                 </li>
@@ -184,11 +195,12 @@
            discover links by parsing markup, and these landing pages had none from the
            homepage at all. -->
       <nav class="mt-8 border-t border-border pt-6" aria-label="Popular collections">
-        <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Popular</p>
+        <p class="text-xs font-medium text-muted-foreground">Popular</p>
         <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-2">
           {#each popular as collection (collection.slug)}
             <li>
-              <a href={resolve('/collections/[slug]', { slug: collection.slug })}
+              <a
+                href={resolve('/collections/[slug]', { slug: collection.slug })}
                 class="text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 {collection.title}
@@ -200,14 +212,20 @@
 
       <!-- The badge and the store buttons are one size, w-64 h-14 (256x56): the
            badge is a 250x54 image, so object-contain scales it to the box instead
-           of an arbitrary h-[54px], which check:tokens refuses. A wide viewport wraps
-           them; a narrow one scrolls them sideways as a carousel, bleeding to the
-           screen edge, so no button is squeezed or stacked into a tall column. -->
+           of an arbitrary h-[54px], which check:tokens refuses. They never wrap: a wide
+           viewport splits one row into five equal columns; a narrower one scrolls them
+           sideways as a carousel, bleeding to the screen edge. -->
       <div
-        class="-mx-4 mt-8 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+        class="-mx-4 mt-8 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 xl:mx-0 xl:grid xl:grid-cols-5 xl:overflow-visible xl:px-0"
       >
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
-        <a href={productHunt.href} target="_blank" rel="noopener noreferrer" class="h-14 w-64 shrink-0 snap-start">
+        <!-- Greyed until hovered: in full colour the red badge was the loudest thing in the footer. -->
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
+        <a
+          href={productHunt.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="h-14 w-64 shrink-0 xl:w-auto snap-start opacity-70 grayscale transition hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0"
+        >
           <img
             src={productHunt.light}
             alt={productHunt.alt}
@@ -224,26 +242,63 @@
             loading="lazy"
             class="hidden size-full object-contain dark:block"
           />
-        </a>
+        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
+
+        <!-- Datacircle's benchmark ranking, drawn like the store buttons: their own badge
+             is a 240x162 card that does not fit this strip. shortcut: "#1" is typed here
+             (as in /jobs-api's static/brands/datacircle-ranked.svg); change both if the
+             ranking moves. -->
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- external ranking page opened in a new tab; not an internal route -->
+        <a
+          href="https://datacircle.dev/best-full-job-posting-api"
+          target="_blank"
+          rel="noopener"
+          class="inline-flex h-14 w-64 shrink-0 xl:w-auto snap-start items-center gap-3 rounded-lg border border-border px-4 text-foreground transition-colors hover:bg-muted"
+        >
+          <Trophy class="size-7 shrink-0" aria-hidden="true" />
+          <span class="flex flex-col leading-tight">
+            <span class="text-xs text-muted-foreground">Ranked by Datacircle</span>
+            <span class="text-sm font-semibold">#1 Job Postings API</span>
+          </span>
+        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 
         {#each stores as store (store.href)}
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external store listing opened in a new tab; not an internal route -->
-          <a href={store.href}
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- external store listing opened in a new tab; not an internal route -->
+          <a
+            href={store.href}
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex h-14 w-64 shrink-0 snap-start items-center gap-3 rounded-lg border border-border px-4 text-foreground transition-colors hover:bg-muted"
+            class="inline-flex h-14 w-64 shrink-0 xl:w-auto snap-start items-center gap-3 rounded-lg border border-border px-4 text-foreground transition-colors hover:bg-muted"
           >
             <ProviderIcon provider={store.provider} class="size-7 shrink-0" />
             <span class="flex flex-col leading-tight">
-              <span class="text-xs uppercase tracking-wider text-muted-foreground">
+              <span class="text-xs text-muted-foreground">
                 {store.kicker}
               </span>
               <span class="text-sm font-semibold">{store.name}</span>
             </span>
-          </a>
+          </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
         {/each}
       </div>
     </div>
+  {/if}
+
+  {#if compact}
+    <nav class="mx-auto max-w-6xl px-4 pt-4" aria-label="Essential links">
+      <ul class="flex flex-wrap gap-x-5 gap-y-1">
+        {#each compactLinks as link (link.href)}
+          <li>
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- internal route already passed through resolve() in compactLinks -->
+            <a
+              href={link.href}
+              class="inline-flex min-h-8 items-center rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {link.label}
+            </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
+          </li>
+        {/each}
+      </ul>
+    </nav>
   {/if}
 
   <!-- Bottom bar: copyright + social links on the left, open-source note on the
@@ -257,31 +312,29 @@
         <p>© {year}</p>
         <!-- Re-opens the consent banner so a prior cookie choice can be changed —
              withdrawal as easy as granting (GDPR). -->
-        <button
-          type="button"
-          onclick={reopen}
-          class="text-muted-foreground transition-colors hover:text-foreground"
-        >
+        <button type="button" onclick={reopen} class="text-muted-foreground transition-colors hover:text-foreground">
           Cookie settings
         </button>
         <div class="flex items-center gap-3">
           {#each SOCIAL_LINKS as social (social.provider)}
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
-            <a href={social.href}
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
+            <a
+              href={social.href}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={social.label}
               class="text-muted-foreground transition-colors hover:text-foreground"
             >
               <ProviderIcon provider={social.provider} />
-            </a>
+            </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
           {/each}
         </div>
       </div>
       <p>
         Free &amp; open-source.
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external repository URL opened in a new tab; not an internal route -->
-        <a href="https://github.com/strelov1/freehire"
+        <a
+          href="https://github.com/strelov1/freehire"
           target="_blank"
           rel="noopener noreferrer"
           class="font-medium text-foreground transition-colors hover:text-muted-foreground"

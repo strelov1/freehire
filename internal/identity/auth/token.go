@@ -12,48 +12,53 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// Issuer mints and verifies stateless HS256 JWTs that carry the user id as the
-// subject and the account's session generation as a private claim. One Issuer is
-// built from the configured secret and TTL and shared across requests.
+// Issuer mints and verifies stateless HS256 JWTs carrying the user id (subject) and the
+// account's session generation (private claim).
 type Issuer struct {
 	secret []byte
 	ttl    time.Duration
 }
 
-// sessionClaims is the token payload: the registered claims plus the account's
-// token version. The version is what makes a stateless token revocable — bumping
-// the column strands every token minted under the old value.
-//
-// TokenVersion is a pointer so an absent claim is distinguishable from zero.
-// Accounts start at version 1, so a token minted before versioning existed — which
-// decodes to a missing claim — is rejected rather than silently matching.
+// sessionClaims is the token payload. The token version makes a stateless token revocable:
+// bumping the column strands older tokens. TokenVersion is a pointer so a missing claim
+// (a pre-versioning token) is rejected instead of matching zero.
 type sessionClaims struct {
 	jwt.RegisteredClaims
 	TokenVersion *int32 `json:"tv,omitempty"`
 }
 
-// ErrNoTokenVersion reports a correctly signed token that predates session
-// versioning. It is distinct from a signature or expiry failure so a caller can tell
-// "revoked by the release" apart from "forged".
+// ErrNoTokenVersion reports a correctly signed token that predates session versioning,
+// distinct from a forged or expired one.
 var ErrNoTokenVersion = errors.New("auth: token carries no version claim")
 
-// ErrNoSessionID reports a valid legacy session minted before per-session JTIs
-// were introduced. Such a token may remain usable for ordinary requests during
-// rollout, but it cannot safely bind a recent-auth proof until it is rotated.
+// ErrNoSession reports a request that passed through no session middleware.
+var ErrNoSession = errors.New("auth: no session")
+
+// ErrNoSessionID reports a legacy session without a JTI. It works for ordinary requests
+// but cannot bind a recent-auth proof until rotated.
 var ErrNoSessionID = errors.New("auth: token carries no session id")
 
-// NewIssuer returns an Issuer signing with secret and stamping each token to
-// expire after ttl.
+// NewIssuer returns an Issuer signing with secret; tokens expire after ttl.
 func NewIssuer(secret string, ttl time.Duration) *Issuer {
 	return &Issuer{secret: []byte(secret), ttl: ttl}
 }
 
-// TTL is the token lifetime; the cookie helpers use it as the cookie's max-age
-// so the browser and the token expire together.
+// TTL is the token lifetime, also used as the cookie max-age.
 func (i *Issuer) TTL() time.Duration { return i.ttl }
 
-// Issue returns a signed token for userID stamped with the account's current
-// tokenVersion, expiring after the Issuer's TTL.
+// ExpiresAt verifies the session token and reports its signed expiry for introspection.
+func (i *Issuer) ExpiresAt(token string) (time.Time, error) {
+	claims, err := i.parseClaims(token)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if claims.ExpiresAt == nil {
+		return time.Time{}, nil
+	}
+	return claims.ExpiresAt.Time, nil
+}
+
+// Issue returns a signed token for userID stamped with tokenVersion.
 func (i *Issuer) Issue(userID int64, tokenVersion int32) (string, error) {
 	sessionIDBytes := make([]byte, 16)
 	if _, err := rand.Read(sessionIDBytes); err != nil {
@@ -104,10 +109,8 @@ func (i *Issuer) parseClaims(token string) (*sessionClaims, error) {
 	return claims, nil
 }
 
-// Parse verifies a token's signature and expiry and returns its subject user id
-// and version claim. It rejects any token not signed with HMAC (guarding against
-// algorithm confusion), any whose subject is not a valid id, and any carrying no
-// version claim.
+// Parse verifies signature and expiry and returns the user id and version claim. It
+// rejects non-HMAC algorithms (algorithm confusion), invalid subjects and a missing version.
 func (i *Issuer) Parse(token string) (int64, int32, error) {
 	claims, err := i.parseClaims(token)
 	if err != nil {

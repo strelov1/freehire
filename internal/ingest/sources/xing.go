@@ -19,10 +19,9 @@ import (
 )
 
 // xing adapts XING Jobs (www.xing.com/jobs), the DACH region's professional-network job board:
-// ~520k public postings from tens of thousands of employers in Germany, Austria and Switzerland,
-// ~40% of them applied to on XING itself rather than on an employer's ATS. It is boardless and
-// an aggregator — the employer is read per posting. See the "XING traps" section of AGENTS.md
-// for the measurements behind each rule.
+// postings from tens of thousands of employers in Germany, Austria and Switzerland, many applied
+// to on XING itself rather than on an employer's ATS. It is boardless and an aggregator, the
+// employer read per posting. See the "XING traps" section of AGENTS.md.
 //
 // robots.txt disallows the search and the GraphQL API, so the posting set comes from the job
 // sitemaps, which carry nothing but each posting's URL. Every fact is bought with the posting
@@ -51,33 +50,30 @@ const (
 	// is the job sitemap index the site-wide sitemap.xml.gz names; the other job sitemaps there
 	// list search landing pages (roles, skills, cities), not postings.
 	xingSitemapIndex = xingBaseURL + "/jobs/sitemap.xml.gz"
-	// xingMaxSitemapBytes caps one decompressed sitemap. A 50,000-URL file inflates to ~7 MB;
-	// the cap only stops a runaway body from exhausting the worker.
+	// xingMaxSitemapBytes caps one decompressed sitemap; it only stops a runaway body from
+	// exhausting the worker.
 	xingMaxSitemapBytes = 64 << 20
 )
 
 // xingRequestInterval paces every request of a run, sitemap and posting page alike, through one
-// limiter: one a second, courtesy toward the site rather than a limit we measured. A posting
-// page is ~360 KB and answered in ~0.5 s from the crawl host; 400 pages at 1/s drew no refusal.
+// limiter: one a second, courtesy toward the site rather than a measured limit.
 const xingRequestInterval = time.Second
 
 // xingDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the pace.
 const xingDetailWorkers = 2
 
-// xingFreshPerRun and xingBacklogPerRun split one run's 2,000 detail requests (~35 minutes at
-// one a second, inside the 50-minute run timeout) into two lanes.
+// xingFreshPerRun and xingBacklogPerRun split one run's detail requests (sized to fit the run
+// timeout at one a second) into two lanes.
 //
 // The fresh lane takes the newest unseen ids, so a posting published since the last run is read
-// before any backlog: ~7,000 new ids reach the sitemaps a day, ~900 per three-hour run.
+// before any backlog.
 //
-// The backlog lane takes a window of the remaining unseen ids that moves every hour. It exists
-// because ~27% of XING's postings come from employers whose own ATS board we already crawl
-// (arbeitsagentur, join, personio, ...): the pipeline's aggregator-coverage gate discards those
-// unsaved, so they stay unseen and are bought again on every run. Newest-first alone would then
-// stall the backlog for good once the discarded postings above it outnumbered the budget —
-// after ~8,000 hydrations. The moving window always reaches older postings; what it re-reads in
-// passing is the cost of not keeping a record of declined ids, which nothing in the pipeline
-// does.
+// The backlog lane takes a window of the remaining unseen ids that moves every hour. A large
+// share of XING's postings come from employers whose own ATS board we already crawl: the
+// pipeline's aggregator-coverage gate discards those unsaved, so they stay unseen and are bought
+// again on every run. Newest-first alone would stall the backlog for good once the discarded
+// postings above it outnumbered the budget. The moving window always reaches older postings;
+// what it re-reads in passing is the cost of not keeping a record of declined ids.
 const (
 	xingFreshPerRun   = 1200
 	xingBacklogPerRun = 800
@@ -301,7 +297,7 @@ type xingDescription struct {
 	WeOfferC        string `json:"weOfferContent"`
 }
 
-// xingITDiscipline is XING's own "IT und Softwareentwicklung" discipline (~8% of postings).
+// xingITDiscipline is XING's own "IT und Softwareentwicklung" discipline.
 const xingITDiscipline = "1011"
 
 // xingDetail maps a posting page to a Job. ok is false for a page carrying no live posting, and
@@ -432,9 +428,9 @@ func (d xingDescription) html() string {
 }
 
 // xingWorkMode maps the posting's remoteOptions. FULL_REMOTE is remote and PARTLY_REMOTE hybrid.
-// NON_REMOTE is not read as onsite: it is the form's default, set on 5% of sampled postings
-// whose own text offers home office — one titled "100% Remote deutschlandweit" — so it says
-// nothing, and the pipeline's location and description reading decides.
+// NON_REMOTE is not read as onsite: it is the form's default, set on postings whose own text
+// offers home office, so it says nothing and the pipeline's location and description reading
+// decides.
 func xingWorkMode(opts []string) string {
 	mode := ""
 	for _, o := range opts {

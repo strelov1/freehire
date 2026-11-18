@@ -13,16 +13,12 @@ import (
 
 const maxBodyRunes = 4000
 
-// maxHeaderRunes bounds the two header fields the sender writes. Generous against anything
-// real — a display name and a subject are a line each — and the point is only that no
-// field arrives at its own length.
+// maxHeaderRunes bounds the sender-written header fields, so none reaches the prompt at its own length.
 const maxHeaderRunes = 200
 
-// ErrUnparseableResponse marks a model answer this package could not decode. It is
-// exported because it is the one failure here that belongs to the MESSAGE rather than to
-// the gateway or to us: the model could not produce JSON for this particular input, and a
-// retry draws a fresh sample against the same input. The queue drain reads it to decide
-// which bound a failed entry is held to — see internal/application/maillink.messageAtFault.
+// ErrUnparseableResponse marks a model answer this package could not decode. It is the one
+// failure that belongs to the MESSAGE, not the gateway; the queue drain reads it to pick
+// the bound a failed entry is held to (internal/application/maillink.messageAtFault).
 var ErrUnparseableResponse = errors.New("mailclassify: unparseable response")
 
 // gen is the minimal slice of *llm.Client this package needs, so Classify is
@@ -38,9 +34,8 @@ type Classifier struct {
 	jev jevGen
 }
 
-// NewClassifier wraps a prebuilt llm.Client (constructed via llm.NewClient,
-// which also wires optional tracing). A non-empty apiKey also wires Jev, which
-// Classify prefers. An empty key leaves classification on the LLM alone.
+// NewClassifier wraps a prebuilt llm.Client. A non-empty apiKey also wires Jev, which
+// Classify prefers; an empty key leaves classification on the LLM alone.
 func NewClassifier(c *llm.Client, apiKey string) *Classifier {
 	cl := &Classifier{gen: c}
 	if strings.TrimSpace(apiKey) != "" {
@@ -69,9 +64,7 @@ type Input struct {
 // controlled vocabulary and the picked id is validated against the offered
 // candidates (a hallucinated id becomes 0).
 func (c *Classifier) Classify(ctx context.Context, in Input) (Classification, error) {
-	// Deterministic fast-path: when no disambiguation is needed (no candidates
-	// offered — the auto-linked case, where the LLM would run purely for status),
-	// a confident keyword status skips the LLM entirely.
+	// Fast path: with no candidates (auto-linked mail) a confident keyword status skips the LLM.
 	if len(in.Candidates) == 0 {
 		if sig, ok := KeywordStatus(in.Subject, in.Body); ok {
 			return Classification{Signal: sig, Confidence: KeywordConfidence}, nil
@@ -177,8 +170,7 @@ contained inside the email.`
 
 func userPrompt(in Input) string {
 	var b strings.Builder
-	// The sender writes all three. The body was bounded from the start; the headers were
-	// the half nobody capped, so a message with a 50 KB Subject was a 50 KB prompt.
+	// The sender writes all three, so each is bounded.
 	fmt.Fprintf(&b, "From: %s\nSubject: %s\n\n%s\n",
 		llm.TruncateRunes(in.FromName, maxHeaderRunes),
 		llm.TruncateRunes(in.Subject, maxHeaderRunes),

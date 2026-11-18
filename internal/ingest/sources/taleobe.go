@@ -16,14 +16,13 @@ import (
 // sites (an org may run several, e.g. external and internal), the two query parameters every
 // TBE URL carries (requisition.jsp?org=ADELPHI&cws=43&rid=3413). The pod an org lives on
 // (phf02, tre01, …) is deliberately NOT part of the board: the platform's dispatcher resolves
-// an org to its pod from any TBE host, orgs move between pods (a CC-harvested chp02 link now
-// answers from phg02), and a board keyed on the pod would 404 after a move.
+// an org to its pod from any TBE host, and orgs move between pods, so a board keyed on the pod
+// would 404 after a move.
 //
 // Every career site publishes its whole listing as one RSS document with the full HTML body
 // inline per item (taleo:html-description), so a board costs one feed request — reached
 // through the dispatcher, which 302s to the org's pod — with no pagination and no detail
-// request. Measured 2026-10-20 the feed carries exactly the "Open Positions" total the HTML
-// career site states (163 of 163, 102 of 102, 92 of 92 and every smaller board checked).
+// request. The feed carries exactly the "Open Positions" total the HTML career site states.
 //
 // How the platform says a board is gone is a redirect, never a status: an unknown org lands
 // on the dispatcher's sign-in page, a deactivated org on a static 404 page (served 200), and a
@@ -38,8 +37,7 @@ func NewTaleoBE(c XMLResolvedGetter) Source { return taleobe{http: c} }
 func (taleobe) Provider() string { return "taleobe" }
 
 // fullBoardListing: the feed is a single unpaginated document listing every open posting of
-// the career site (see the type comment for the measurement). See the fullBoardListing
-// interface for the bar.
+// the career site. See the fullBoardListing interface for the bar.
 func (taleobe) fullBoardListing() {}
 
 // taleobeFeed is the RSS document a career site publishes.

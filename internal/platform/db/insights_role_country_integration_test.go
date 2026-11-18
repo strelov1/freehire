@@ -39,10 +39,10 @@ func rebuildRoleCountries(t *testing.T, ctx context.Context, q *Queries, prev pg
 	if err := q.DeleteAllInsightsRoleCountryStats(ctx); err != nil {
 		t.Fatalf("delete role-country: %v", err)
 	}
-	if _, err := q.RebuildInsightsRoleCountryStatsGlobal(ctx, prev); err != nil {
+	if _, err := materializeInsightsRoleCountryStatsGlobal(q)(ctx, prev); err != nil {
 		t.Fatalf("rebuild role-country global: %v", err)
 	}
-	if _, err := q.RebuildInsightsRoleCountryStatsByCountry(ctx, prev); err != nil {
+	if _, err := materializeInsightsRoleCountryStatsByCountry(q)(ctx, prev); err != nil {
 		t.Fatalf("rebuild role-country by country: %v", err)
 	}
 }

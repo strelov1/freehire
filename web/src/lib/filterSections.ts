@@ -1,3 +1,4 @@
+import { SPECIALIZATION_ALIASES } from './specializationAliases';
 // Presentation groupings for the filter modal.
 //
 // - RAIL_SECTIONS: the three headings the modal's left rail groups facets under.
@@ -8,9 +9,9 @@
 // group is a compile error (svelte-check): a newly added backend category can't
 // silently fall out of the modal.
 
-import { CATEGORY_VALUES, FACET_ALIASES, type Category } from './generated/contracts';
-import { optionMatches } from './facets';
-import { categoryLabel } from './labels';
+import { CATEGORY_VALUES, type Category } from './generated/contracts';
+import { optionMatches } from './facetOptions';
+import { JOB_CATEGORY_LABELS, categoryLabel } from './labels';
 
 // `SAVED` heads the job modal's "My filters" tab; `FILTERS` heads the (single-section)
 // company modal rail. Both ride the same shell as the job sections below.
@@ -46,6 +47,8 @@ const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
   devops: 'Engineering',
   sre: 'Engineering',
   network_engineering: 'Engineering',
+  system_administration: 'Engineering',
+  telecommunications_engineering: 'Engineering',
   // The help desk runs the IT estate beside devops and the network, so it sits with
   // them rather than with customer `support` in the go-to-market group.
   it_support: 'Engineering',
@@ -120,7 +123,7 @@ export const CATEGORY_GROUPS: CategorySection[] = CATEGORY_GROUP_ORDER.map((name
   name,
   options: CATEGORY_VALUES.filter((v) => CATEGORY_GROUP[v] === name).map((value) => ({
     value,
-    label: categoryLabel(value),
+    label: JOB_CATEGORY_LABELS[value] ?? categoryLabel(value),
   })),
 })).filter((s) => s.options.length > 0);
 
@@ -131,7 +134,7 @@ export function searchCategoryGroups(query: string): CategorySection[] {
   if (!query.trim()) return CATEGORY_GROUPS;
   return CATEGORY_GROUPS.map((g) => ({
     ...g,
-    options: g.options.filter((o) => optionMatches(o, query, FACET_ALIASES)),
+    options: g.options.filter((o) => optionMatches(o, query, SPECIALIZATION_ALIASES)),
   })).filter((g) => g.options.length > 0);
 }
 
@@ -238,6 +241,7 @@ export const RAIL: RailEntry[] = [
   { key: 'company_slug', label: 'Company', section: 'ROLE', kind: 'facet', facetParam: 'company_slug' },
   { key: 'source', label: 'Source', section: 'ROLE', kind: 'facet', facetParam: 'source' },
   { key: 'salary', label: 'Salary', section: 'PAY & BENEFITS', kind: 'salary' },
+  { key: 'perks', label: 'Benefits & Perks', section: 'PAY & BENEFITS', kind: 'facet', facetParam: 'perks' },
   { key: 'language', label: 'Language', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'language' },
   { key: 'relocation', label: 'Relocation', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'relocation' },
 ];

@@ -38,14 +38,38 @@ describe('reduceMatchEvent', () => {
     s = reduceMatchEvent(s, 'thinking', { stage: 1, thinking: 'The ' });
     s = reduceMatchEvent(s, 'thinking', { stage: 1, thinking: 'candidate' });
     expect(s.thinking).toBe('The candidate');
-    s = reduceMatchEvent(s, 'requirements', { requirements: [{ text: 'Go', priority: 'required', status: 'covered', evidence: '', evidence_strength: 'metric' }] });
+    s = reduceMatchEvent(s, 'requirements', {
+      requirements: [
+        { text: 'Go', priority: 'required', status: 'covered', evidence: '', evidence_strength: 'metric' },
+      ],
+    });
     expect(s.requirements).toHaveLength(1);
     expect(s.requirements[0]?.evidence_strength).toBe('metric'); // graded strength survives the reducer to the ledger cue
     s = reduceMatchEvent(s, 'stage_done', { stage: 1 });
     expect(s.stages[0]?.state).toBe('done');
-    s = reduceMatchEvent(s, 'dimensions', { analysis: { overall_score: 50, verdict: 'Moderate Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: '' } });
+    s = reduceMatchEvent(s, 'dimensions', {
+      analysis: {
+        overall_score: 50,
+        verdict: 'Moderate Fit',
+        dimensions: [],
+        requirement_match: [],
+        strengths: [],
+        gaps: [],
+        recommendation: '',
+      },
+    });
     expect(s.analysis?.overall_score).toBe(50);
-    s = reduceMatchEvent(s, 'final', { analysis: { overall_score: 71, verdict: 'Good Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: 'Apply.' } });
+    s = reduceMatchEvent(s, 'final', {
+      analysis: {
+        overall_score: 71,
+        verdict: 'Good Fit',
+        dimensions: [],
+        requirement_match: [],
+        strengths: [],
+        gaps: [],
+        recommendation: 'Apply.',
+      },
+    });
     expect(s.done).toBe(true);
     expect(s.analysis?.overall_score).toBe(71);
     expect(s.stages.every((x) => x.state === 'done')).toBe(true);
@@ -62,7 +86,17 @@ describe('reduceMatchEvent', () => {
     s = reduceMatchEvent(s, 'stage_done', { stage: 2 });
     s = reduceMatchEvent(s, 'stage_done', { stage: 3 });
     expect(s.stages.every((x) => x.state === 'done')).toBe(true);
-    s = reduceMatchEvent(s, 'final', { analysis: { overall_score: 71, verdict: 'Good Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: 'Apply.' } });
+    s = reduceMatchEvent(s, 'final', {
+      analysis: {
+        overall_score: 71,
+        verdict: 'Good Fit',
+        dimensions: [],
+        requirement_match: [],
+        strengths: [],
+        gaps: [],
+        recommendation: 'Apply.',
+      },
+    });
     expect(s.done).toBe(true);
     expect(s.analysis?.overall_score).toBe(71);
   });
@@ -109,11 +143,9 @@ describe('reduceMatchEvent', () => {
   });
 
   it('ignores a malformed requirements payload (not an array)', () => {
-    const seeded = reduceMatchEvent(
-      initMatchStream(),
-      'requirements',
-      { requirements: [{ text: 'Go', priority: 'required', status: 'covered', evidence: '' }] },
-    );
+    const seeded = reduceMatchEvent(initMatchStream(), 'requirements', {
+      requirements: [{ text: 'Go', priority: 'required', status: 'covered', evidence: '' }],
+    });
     // A present-but-wrong-typed frame must not overwrite good data with a non-array
     // that a component would then .filter() on and crash.
     const next = reduceMatchEvent(seeded, 'requirements', { requirements: { bogus: true } });
@@ -122,11 +154,17 @@ describe('reduceMatchEvent', () => {
   });
 
   it('ignores a malformed analysis payload (not an object)', () => {
-    const seeded = reduceMatchEvent(
-      initMatchStream(),
-      'dimensions',
-      { analysis: { overall_score: 50, verdict: 'Moderate Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: '' } },
-    );
+    const seeded = reduceMatchEvent(initMatchStream(), 'dimensions', {
+      analysis: {
+        overall_score: 50,
+        verdict: 'Moderate Fit',
+        dimensions: [],
+        requirement_match: [],
+        strengths: [],
+        gaps: [],
+        recommendation: '',
+      },
+    });
     const next = reduceMatchEvent(seeded, 'final', { analysis: 'nope' });
     expect(next.analysis).toEqual(seeded.analysis);
     expect(next.done).toBe(true); // final is still terminal

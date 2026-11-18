@@ -6,11 +6,9 @@ import (
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
 )
 
-// degreeTiers is the education ladder in strictly increasing order; a tier's rank
-// is its index. Each tier lists the normalized aliases that resolve to it (see
-// degreeNormalize). The job-side controlled vocabulary only ever requires none /
-// bachelor / master / phd; the extra tiers (ged, associate) exist so a free-text
-// résumé degree still ranks correctly against those requirements.
+// degreeTiers is the education ladder in increasing order; a tier's rank is its index. Each
+// tier lists the normalized aliases that resolve to it. The job-side vocabulary only requires
+// none / bachelor / master / phd; ged and associate exist so a free-text CV degree still ranks.
 var degreeTiers = []struct {
 	name    string
 	aliases []string
@@ -36,11 +34,10 @@ func buildDegreeIndex() map[string]int {
 	return m
 }
 
-// degreeMatch resolves a free-text résumé degree to its ladder rank. It first
-// tries a whole-string hit, then falls back to whole-word containment of any
-// alias of length >= 3 (so "Bachelor of Science in Computer Science" still ranks
-// as bachelor), taking the highest rank matched. Two-letter abbreviations (ba, ms)
-// resolve only via the exact path to avoid matching stray words in prose.
+// degreeMatch resolves a free-text CV degree to its ladder rank: a whole-string hit first, then
+// whole-word containment of any alias of length >= 3 (so "Bachelor of Science in Computer
+// Science" ranks as bachelor), taking the highest rank. Two-letter abbreviations (ba, ms) match
+// only exactly, to avoid stray words in prose.
 func degreeMatch(degree string) (int, bool) {
 	norm := degreeNormalize(degree)
 	if norm == "" {
@@ -63,17 +60,15 @@ func degreeMatch(degree string) (int, bool) {
 	return best, found
 }
 
-// degreeRank resolves a degree name (canonical enrichment value or free-text
-// résumé degree) to its ladder rank. ok is false for anything unrecognized, so an
-// unmatched degree never satisfies or blocks a requirement by accident.
+// degreeRank resolves a degree name to its ladder rank. ok is false for anything unrecognized,
+// so an unmatched degree never satisfies or blocks a requirement by accident.
 func degreeRank(name string) (int, bool) {
 	rank, ok := degreeIndex[degreeNormalize(name)]
 	return rank, ok
 }
 
-// degreeNormalize lowercases and drops dots/apostrophes (so "B.A." == "ba",
-// "Ph.D." == "phd", "master's" == "masters") while collapsing every other
-// non-alphanumeric run to a single space.
+// degreeNormalize lowercases and drops dots and apostrophes ("B.A." == "ba", "master's" ==
+// "masters"), collapsing every other non-alphanumeric run to a single space.
 func degreeNormalize(name string) string {
 	var b strings.Builder
 	b.Grow(len(name))

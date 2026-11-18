@@ -23,9 +23,8 @@ type pacedVerdict struct {
 }
 
 // pacedPass is a source probed one request at a time instead of on applyVerdicts' fan-out:
-// one whose rate limit is per IP and shared with the crawl, which reads the same site from
-// the same host, so the pacing has to hold across the whole pass rather than per goroutine,
-// and a refusal has to end the pass before it holds the crawl in the limit too.
+// its rate limit is per IP and shared with the crawl, so pacing must hold across the whole
+// pass and a refusal must end it before it holds the crawl in the limit too.
 type pacedPass struct {
 	source string
 	// interval spaces consecutive probes.
@@ -39,11 +38,8 @@ type pacedPass struct {
 // applyPaced probes a bounded sample of one source's candidates one at a time, spaced by
 // p.interval, and stops at the first refusal.
 //
-// The sample puts a candidate already carrying a strike first and shuffles the rest. Shuffled,
-// so successive runs reach every row of a backlog bigger than one run rather than re-reading
-// the same first slice; struck first, because a close takes two consecutive Expired reads and
-// a struck row left to the shuffle would wait for the dice to come round again — on a backlog
-// several runs deep that doubles how long a dead posting stays open.
+// The sample puts struck candidates first (a close takes two consecutive Expired reads) and
+// shuffles the rest so successive runs reach every row of a backlog bigger than one run.
 func (s *stats) applyPaced(ctx context.Context, queries *db.Queries, candidates []candidate, p pacedPass) {
 	if len(candidates) == 0 {
 		return
@@ -74,9 +70,8 @@ func (s *stats) applyPaced(ctx context.Context, queries *db.Queries, candidates 
 	}
 }
 
-// applyPacedPasses runs every pass at once, each over its own source's candidates. Each pass
-// paces itself against its own site, and no two passes share a site, so running them side by
-// side keeps the run as long as its slowest pass rather than the sum of them.
+// applyPacedPasses runs every pass at once over its own source's candidates. No two passes
+// share a site, so the run lasts as long as the slowest pass, not the sum.
 func (s *stats) applyPacedPasses(ctx context.Context, queries *db.Queries, bySource map[string][]candidate, passes []pacedPass) {
 	var wg sync.WaitGroup
 	for _, p := range passes {

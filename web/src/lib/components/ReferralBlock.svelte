@@ -55,15 +55,12 @@
   }
 </script>
 
-<section
-  class="flex items-center gap-4 rounded-lg border border-brand/25 bg-brand-muted px-4 py-3.5"
->
+<section class="flex items-center gap-4 rounded-lg border border-brand/25 bg-brand-muted px-4 py-3.5">
   <Handshake class="size-6 shrink-0 text-brand-strong" />
   <div class="min-w-0 flex-1">
     <h3 class="text-sm font-semibold text-brand-strong">Referral available at {companyName}</h3>
     <p class="text-xs text-brand-strong/80">
-      An employee here can refer you. The referrer stays anonymous and reaches out to you
-      directly if interested.
+      An employee here can refer you. The referrer stays anonymous and reaches out to you directly if interested.
     </p>
   </div>
   <Button variant="primary" size="sm" onclick={ask} disabled={loading}>Ask for a referral</Button>

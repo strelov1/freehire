@@ -20,10 +20,10 @@ import (
 // every posting under exactly one sub-category, so the boards partition rather than overlap.
 //
 // The listing is the public Algolia index the site's own search page queries. Its search key is
-// published at /api/env and is fetched fresh on every crawl rather than hard-coded, because it is
-// the site's to rotate. The key is referer-locked to the site, so every query sends its Referer.
+// published at /api/env and fetched fresh on every crawl, because it is the site's to rotate. The
+// key is referer-locked to the site, so every query sends its Referer.
 //
-// Algolia serves at most 1,000 hits per query (paginationLimitedTo), far fewer than a technical
+// Algolia serves at most 1,000 hits per query (paginationLimitedTo), fewer than a technical
 // sub-category holds, so the walk partitions the board by published_at_timestamp into half-open
 // windows small enough to read in one request — see collect. That walk is also what earns
 // fullBoardListing: every window's hits are checked against the index's own exact count for that
@@ -32,10 +32,9 @@ import (
 //
 // The hit carries no body, so this is a HydratingSource: the posting's description comes from
 // WTTJ's public posting API, one request per NEW posting. The same response carries the
-// employer's own apply URL, which becomes Job.URL when present. No metering observed: a full
-// 7,557-posting board hydrated at 16-way concurrency in 8 minutes (2026-10-15) with no 429,
-// only 16 client timeouts — so no pacer is wired, and the fan-out stays at the shared 8-way
-// default rather than the width that started timing out.
+// employer's own apply URL, which becomes Job.URL when present. No metering observed at 16-way
+// concurrency, but 16 client timeouts appeared, so no pacer is wired and the fan-out stays at the
+// shared 8-way default.
 type wttj struct {
 	http wttjHTTP
 }
@@ -69,7 +68,7 @@ const (
 )
 
 // wttjAttributes is what a hit is asked for. Restricting it keeps a 1,000-hit window near 1 MB
-// instead of the several MB the index's full documents (logos, benefits, highlights) weigh.
+// instead of several MB of full documents (logos, benefits, highlights).
 var wttjAttributes = []string{
 	"objectID", "name", "slug", "organization.name", "organization.slug", "offices", "remote",
 	"contract_type", "experience_level_minimum", "salary_minimum", "salary_maximum",
@@ -119,7 +118,7 @@ func (c wttjCreds) headers() map[string]string {
 }
 
 // wttjQueryResult is the slice of an Algolia query response the walk reads. NbHits is exact for
-// a filter-only query (exhaustiveNbHits was true on every board probed).
+// a filter-only query.
 type wttjQueryResult struct {
 	Hits   []wttjHit `json:"hits"`
 	NbHits int       `json:"nbHits"`
@@ -177,14 +176,13 @@ func (s wttj) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrate(ctx, hits, seen, nil, nil), nil
+	return s.hydrate(ctx, hits, seen, nil), nil
 }
 
-// FetchNewGated is FetchNew told which postings the pipeline will discard anyway. A measured
-// third of a technical board applies through an ATS freehire already crawls first-party
-// (greenhouse, ashby, smartrecruiters, lever, workday, workable — 1,000 data postings sampled
-// 2026-10-14), and those postings are never stored, so without the coverage answer their
-// bodies would be bought and thrown away on every run.
+// FetchNewGated is FetchNew told which postings the pipeline will discard anyway. A large share
+// of a technical board applies through an ATS freehire already crawls first-party, and those
+// postings are never stored, so without the coverage answer their bodies would be bought and
+// thrown away on every run.
 func (s wttj) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	hits, err := s.list(ctx, e.Board)
 	if err != nil {
@@ -198,22 +196,21 @@ func (s wttj) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(exter
 		}
 		covered = gate.Covered(names)
 	}
-	return s.hydrate(ctx, hits, seen, covered, gate.Rejected), nil
+	return s.hydrate(ctx, hits, seen, covered), nil
 }
 
 // hydrate maps the listed hits to Jobs. A seen posting is a liveness refresh with no request; a
-// posting the pipeline will discard — its employer covered, or its title rejected as
-// non-technical — is yielded body-less for the pipeline to count; every other posting costs one
+// posting the pipeline will discard — its employer covered — is yielded body-less for the pipeline to count; every other posting costs one
 // posting-API request.
 func (s wttj) hydrate(ctx context.Context, hits []wttjHit, seen func(string) bool,
-	covered map[string]bool, rejected func(Job) bool) []Job {
+	covered map[string]bool) []Job {
 	return fetchDetails(hits, defaultDetailWorkers, func(h wttjHit) (Job, bool) {
 		base := h.toJob()
 		if seen(h.ObjectID) {
 			base.SeenRefresh = true
 			return base, true
 		}
-		if covered[h.Organization.Name] || (rejected != nil && rejected(base)) {
+		if covered[h.Organization.Name] {
 			return base, true
 		}
 		return s.withDetail(ctx, h, base)
@@ -357,7 +354,7 @@ func (w *wttjWalk) keep(hits []wttjHit) {
 
 // query runs one Algolia query over the board, optionally narrowed to the half-open timestamp
 // window win. hitsPerPage 0 is a count. distinct is turned off explicitly: the index has an
-// attributeForDistinct configured, and with distinct on, a board of 7,577 postings answers 1,531.
+// attributeForDistinct configured, and with distinct on the board answers far fewer postings.
 func (w *wttjWalk) query(ctx context.Context, win *[2]int64, hitsPerPage int) (wttjQueryResult, error) {
 	if w.budget <= 0 {
 		return wttjQueryResult{}, fmt.Errorf("wttj: board %q: query budget of %d exhausted before the walk ended",

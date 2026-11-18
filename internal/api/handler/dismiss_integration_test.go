@@ -59,8 +59,8 @@ func TestDismissUndismissEndpoints(t *testing.T) {
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
-	app.Post("/api/v1/jobs/:slug/dismiss", keyAuth, h.DismissJob)
-	app.Delete("/api/v1/jobs/:slug/dismiss", keyAuth, h.UndismissJob)
+	app.Post("/api/v1/jobs/:slug/dismiss", keyAuth, newContract(contractHandlers{trackingHandlers: h}))
+	app.Delete("/api/v1/jobs/:slug/dismiss", keyAuth, newContract(contractHandlers{trackingHandlers: h}))
 
 	type interaction struct {
 		JobID       int64   `json:"job_id"`

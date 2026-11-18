@@ -25,9 +25,8 @@ type Store struct {
 func NewStore(q queries) *Store { return &Store{q: q} }
 
 // Slugs returns the hiring companies the user has worked at and left, resolved by Resolve's
-// rules. An empty answer is a real one — nothing banked, or nothing that resolves — and the
-// caller must narrow to nothing rather than drop the filter. Three small reads, each
-// index-backed: the bank by user, the registry by folded key, companies by folded slug.
+// rules. An empty answer is real (nothing banked, or nothing resolves): the caller must
+// narrow to nothing rather than drop the filter.
 func (s *Store) Slugs(ctx context.Context, userID int64) ([]string, error) {
 	rows, err := s.q.ListPastEmployerNames(ctx, userID)
 	if err != nil {

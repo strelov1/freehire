@@ -39,9 +39,11 @@ Two things changed since that document was written, both relevant to this design
 ### The `fullBoardListing` marker is a Go interface, not data
 
 Alongside `selfClosing`/`fullCatalog`/`sweepGrace` in `internal/ingest/sources/source.go`:
+
 ```go
 type fullBoardListing interface{ fullBoardListing() }
 ```
+
 An adapter type implements it (typically a zero-cost marker method) to opt in. `registry.go`
 gains `FullBoardListingProviders() map[string]bool` alongside the existing
 `SelfClosingProviders`/`FullCatalogProviders`/`SweepGraceWindows` helpers, built the same way —

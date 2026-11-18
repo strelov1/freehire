@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  autoApplyButtonState,
-  jobCtaPlan,
-  type AutoApplyButtonState,
-  type JobCtaPlan,
-} from './autoApplyButton';
+import { autoApplyButtonState, jobCtaPlan, type AutoApplyButtonState, type JobCtaPlan } from './autoApplyButton';
 
 describe('autoApplyButtonState', () => {
   it('hides the button for an ATS auto-apply cannot queue against at all', () => {

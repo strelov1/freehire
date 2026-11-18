@@ -256,18 +256,22 @@ func TestPosaoHRReadsNewestFirstWithinTheBudget(t *testing.T) {
 func TestPosaoHRGateSparesThePostingPage(t *testing.T) {
 	f := &posaoHRFake{}
 	gate := DetailGate{
-		Covered:  func([]string) map[string]bool { return map[string]bool{"Pepco Croatia d.o.o.": true} },
-		Rejected: func(j Job) bool { return j.ExternalID == phHSM },
+		Covered: func([]string) map[string]bool { return map[string]bool{"Pepco Croatia d.o.o.": true} },
 	}
 	jobs, err := newTestPosaoHR(f).FetchNewGated(context.Background(), phEntry, phSeen(phCGP, phITEXIM), gate)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := f.postingRequests(); len(got) != 1 || !strings.HasSuffix(got[0], "/"+phBent+"/") {
-		t.Errorf("posting requests = %v, want only Bent's", got)
+	// Two detail workers fetch concurrently, so the requests arrive in either order.
+	got := f.postingRequests()
+	saw := func(id string) bool {
+		return slices.ContainsFunc(got, func(u string) bool { return strings.HasSuffix(u, "/"+id+"/") })
+	}
+	if len(got) != 2 || !saw(phBent) || !saw(phHSM) {
+		t.Errorf("posting requests = %v, want HSM's and Bent's", got)
 	}
 	byID := phByID(t, jobs)
-	if byID[phPepco].Description != "" || byID[phHSM].Description != "" {
+	if byID[phPepco].Description != "" {
 		t.Error("a gated posting was hydrated")
 	}
 }

@@ -11,6 +11,16 @@ run:
 linters:
   default: standard
   enable:
+    - gosec
+    - errorlint
+    - nilerr
+    - rowserrcheck
+    - durationcheck
+    - copyloopvar
+    - usestdlibvars
+    - wastedassign
+    - testifylint
+    - thelper
     - bodyclose
     - sqlclosecheck
     - noctx
@@ -202,6 +212,8 @@ linters:
         - confidencial
         - administr
         - hybrides
+        # Turkish title vocabulary (internal/dict/classify/turkish*.go).
+        - personel
         # French title vocabulary (internal/dict/classify/french.go).
         - affaires
         - ambulancier

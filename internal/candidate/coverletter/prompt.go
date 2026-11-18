@@ -10,8 +10,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// The prompts are functions rather than constants so they are testable on their own, the same
-// shape enrich and atscheck keep.
+// The prompts are functions rather than constants so they are testable on their own.
 
 func selectSystemPrompt() string {
 	var b strings.Builder
@@ -65,16 +64,31 @@ func draftSystemPrompt(band Band, bounds Bounds) string {
 	return b.String()
 }
 
+// draftUserPrompt gives both cover letters and referral messages the bounded job,
+// candidate projection, and offered evidence; referral profiles remain quoted data.
 func draftUserPrompt(in Input, atoms []experience.Atom, language string) (string, error) {
 	var b strings.Builder
-	b.WriteString("Write the letter in this language (ISO code): " + language + ".\n")
-	b.WriteString("It is the language of the VACANCY. The employer reads this letter, not the candidate.\n\n")
+	if in.Referral != nil {
+		b.WriteString("Write the message in this language (ISO code): " + language + ".\n")
+		b.WriteString("The recipient reads this message; use the vacancy's language.\n\n")
+	} else {
+		b.WriteString("Write the letter in this language (ISO code): " + language + ".\n")
+		b.WriteString("It is the language of the VACANCY. The employer reads this letter, not the candidate.\n\n")
+	}
 	b.WriteString(vacancyBlock(in))
-	b.WriteString("\nREQUIREMENTS THE CV UNDERSELLS (this is what the letter is for):\n")
+	if in.Referral != nil {
+		b.WriteString("\nREQUIREMENTS THE CV UNDERSELLS:\n")
+	} else {
+		b.WriteString("\nREQUIREMENTS THE CV UNDERSELLS (this is what the letter is for):\n")
+	}
 	b.WriteString(requirementList(in.Context.MissingHave))
 	b.WriteString("\nGENUINE GAPS (claim no experience with these):\n")
 	b.WriteString(requirementList(in.Context.MissingGap))
-	b.WriteString("\nACHIEVEMENTS THE LETTER MAY STAND ON:\n")
+	if in.Referral != nil {
+		b.WriteString("\nBANKED ACHIEVEMENTS:\n")
+	} else {
+		b.WriteString("\nACHIEVEMENTS THE LETTER MAY STAND ON:\n")
+	}
 	blob, err := json.Marshal(atomsForPrompt(atoms))
 	if err != nil {
 		return "", fmt.Errorf("coverletter: marshal atoms: %w", err)
@@ -87,6 +101,7 @@ func draftUserPrompt(in Input, atoms []experience.Atom, language string) (string
 	}
 	b.WriteString(llm.TruncateRunes(string(cand), maxCandidateRunes))
 	b.WriteString("\n")
+	b.WriteString(referralProfileBlock(in.Referral))
 	return b.String(), nil
 }
 
@@ -112,10 +127,8 @@ func auditSystemPrompt(band Band, bounds Bounds) string {
 	return b.String()
 }
 
-// auditUserPrompt carries BOTH the letter and the achievements it is meant to be checked
-// against. Sending the letter alone would ask the skeptic to verify support against a list it
-// was never given, which makes the one cut it must always make unenforceable — the stage
-// would still shorten the letter and silently pass every invented claim.
+// auditUserPrompt carries BOTH the letter and the achievements it is checked against. The
+// letter alone would leave the skeptic unable to cut invented claims while still shortening it.
 func auditUserPrompt(drafted Letter, atoms []experience.Atom) (string, error) {
 	blob, err := json.Marshal(atomsForPrompt(atoms))
 	if err != nil {
@@ -159,8 +172,7 @@ func requirementList(reqs []matchanalysis.Requirement) string {
 }
 
 // promptAtom is the shape an atom takes in a prompt. Provenance is deliberately absent: only
-// publishable atoms ever reach here, so naming the label would invite the model to reason
-// about a distinction that has already been decided.
+// publishable atoms reach here, and naming the label would invite the model to reason about it.
 type promptAtom struct {
 	ID      string   `json:"id"`
 	Claim   string   `json:"claim"`

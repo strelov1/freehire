@@ -56,10 +56,8 @@ func (w *Worker) claim(ctx context.Context) (job, error) {
 	return j, err
 }
 
-// Stats reports what a run did. A count of jobs touched is not an outcome: a run that gave
-// up on every revocation it claimed used to print the same number as a run that revoked
-// them all, and exit 0 either way. A permanently failed `unlink` also strands its
-// user_identities row in revocation_pending, where nothing can ever unlink it again.
+// Stats reports what a run did. A count of jobs touched is not an outcome: a permanently
+// failed `unlink` strands its user_identities row in revocation_pending for good.
 type Stats struct {
 	Processed int
 	Revoked   int
@@ -130,9 +128,8 @@ func (w *Worker) complete(ctx context.Context, j job) error {
 			return err
 		}
 	} else if j.reason == "exchange_compensation" {
-		// Finalization uses the compensation job ID as the grant ID. A crash
-		// before disarm can therefore remove exactly the revoked grant, while a
-		// later successful retry has a different ID and is never touched.
+		// The compensation job ID doubles as the grant ID, so a crash before disarm removes
+		// exactly the revoked grant and a later retry (different ID) is untouched.
 		if _, err = tx.Exec(ctx, `DELETE FROM apple_grants WHERE id=$1`, j.grantID); err != nil {
 			return err
 		}

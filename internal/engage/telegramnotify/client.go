@@ -16,19 +16,15 @@ import (
 // surface — so a plain http.Client is used.
 const defaultAPIBase = "https://api.telegram.org"
 
-// ErrChatUnreachable wraps every 403 the Bot API answers a send with: the bot was
-// blocked, the account was deactivated, the bot was removed from the group, or it
-// was never allowed to open the conversation. All four say the same thing — this
-// chat will not accept messages again — and none of them is fixed by retrying.
+// ErrChatUnreachable wraps every 403 the Bot API answers a send with (bot blocked, account
+// deactivated, bot removed, conversation never allowed): this chat will not accept messages
+// again, and retrying does not help.
 //
-// Matched on the status code rather than the description text, which is prose
-// Telegram is free to reword: a rule keyed to "Forbidden: bot was blocked by the
-// user" stops firing the day that sentence changes, and stops silently.
+// Matched on the status code, not the description text, which Telegram may reword.
 var ErrChatUnreachable = errors.New("telegramnotify: chat unreachable")
 
-// Client is a thin Telegram Bot API client over net/http for the handful of
-// methods this feature needs (sendMessage, setWebhook). It deliberately avoids a
-// bot-framework dependency: the surface is tiny and we use a webhook, not polling.
+// Client is a thin Telegram Bot API client over net/http for the methods this feature needs
+// (sendMessage, setWebhook), avoiding a bot-framework dependency.
 type Client struct {
 	token string
 	base  string
@@ -40,8 +36,7 @@ func NewClient(token string) *Client {
 	return NewClientWithBase(token, defaultAPIBase)
 }
 
-// NewClientWithBase builds a Client against a custom API base. Used by tests
-// (pointing at a stub server) and would also serve a self-hosted Bot API.
+// NewClientWithBase builds a Client against a custom API base, e.g. a test stub server.
 func NewClientWithBase(token, baseURL string) *Client {
 	return &Client{token: token, base: baseURL, http: &http.Client{Timeout: 10 * time.Second}}
 }
@@ -103,10 +98,9 @@ func (c *Client) call(ctx context.Context, method string, payload map[string]any
 	return nil
 }
 
-// withoutURL drops the request URL from a net/http error. The Bot API puts the
-// bot token in the path, *url.Error quotes that path verbatim, and the error text
-// is persisted to subscription_matches.last_error and logged. The cause it wraps
-// (a timeout, a refused dial) is kept, so errors.Is/As still see it.
+// withoutURL drops the request URL from a net/http error: the bot token is in the path,
+// *url.Error quotes it verbatim, and the error text is persisted and logged. The wrapped cause
+// is kept for errors.Is/As.
 func withoutURL(err error) error {
 	var ue *url.Error
 	if errors.As(err, &ue) {

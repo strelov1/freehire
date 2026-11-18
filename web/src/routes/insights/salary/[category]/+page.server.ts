@@ -21,7 +21,7 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   // full hour.
   const [rawBands, history] = await Promise.all([
     api.insightsSalaryByCategory(category),
-    api.insightsSalaryHistory(category).catch(() => null),
+    api.insightsSalaryHistory({ category, seniority: '', country: '' }).catch(() => null),
   ]);
   const bands = sortBandsBySeniority(rawBands);
   setHeaders({ 'cache-control': `public, max-age=0, s-maxage=${history ? 3600 : 60}` });

@@ -147,8 +147,7 @@ WHERE job_id = sqlc.arg(job_id);
 -- name: ListApplyFormsForJobs :many
 -- The captured forms of a BATCH of jobs, for the search-index writers that count each
 -- form's questions onto its document (applyform.QuestionCounts). One call per writer
--- batch, never one per document — the same shape ListSemanticChunksForJobs gives the
--- description vectors. A job with no captured form simply has no row.
+-- batch, never one per document. A job with no captured form simply has no row.
 SELECT job_id, provider, payload
 FROM apply_forms
 WHERE job_id = ANY(sqlc.arg(job_ids)::bigint[]);

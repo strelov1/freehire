@@ -7,44 +7,15 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/strelov1/freehire/internal/platform/observability"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// Version is what this server reports itself as. It is the app's version, not the
-// catalogue's and not OJCP's.
+// Version is what this server reports itself as: the app's version, not OJCP's.
 const Version = "1.0"
 
-// serverInstructions is what the model is told before it picks a tool.
-//
-// Four things belong here and nowhere else. The first is that this is an aggregator, so a
-// posting is attributed rather than offered as ours. The second is which tool answers which
-// question, and in what ORDER: tool descriptions may not point at other tools (Anthropic's
-// directory policy), so this is the one place the model learns that, and
-// TestTheInstructionsIntroduceEveryTool keeps it complete. The order is the search strategy
-// adapted from openings-mcp's job-search skill (MIT): shortlist from previews and read only
-// the final few in full, recheck liveness before presenting, and fix a value the search did
-// not understand from the vocabulary instead of telling the person nothing exists. The third
-// is the OR: geography filters union, so asking for Germany and Lisbon returns both rather
-// than their intersection — a model that assumes AND will describe the results wrongly and
-// confidently, and nothing in a result would reveal it.
-//
-// Everything a single tool can say about itself lives in its description instead, where the
-// model reads it at the moment of the call: the synonym OR, filters-not-query, loosening one
-// constraint at a time and the result table are search_jobs', and when to send `semantic`
-// (measured 2026-10-21 over 34 queries: a need described in words went from 3.3 to 7.4
-// relevant hits of 10, a non-tech query fell from 9.2 to 7.0) is search_jobs' and its field's.
-//
-// Kept under 512 characters, which the Apps SDK guidance asks for and a test enforces.
-const serverInstructions = "freehire aggregates job postings and attributes each to the board it " +
-	"came from: name the source and link the employer's posting. search_jobs finds postings: " +
-	"shortlist from its previews, call get_job only for the final 5-10, and check_jobs_open " +
-	"before presenting them. similar_jobs finds more like one; " +
-	"salary_stats/job_market_stats: pay and market; search_companies/get_company: employers. " +
-	"Geography filters union. A value in ignored_params was not understood: take one from " +
-	"list_filter_values and retry."
-
-// Tool names. Unlike the OJCP transport's, they feed no manifest — there is nothing here
-// that ADVERTISES a tool separately from registering it, so they are constants only because
-// the tests name them, not because a second list needs keeping in step.
+// Tool names. Unlike the OJCP transport's, they feed no manifest; they are constants only
+// because the tests name them.
 const (
 	toolSearchJobs      = "search_jobs"
 	toolGetJob          = "get_job"
@@ -63,13 +34,12 @@ const (
 	toolFilterValues = "list_filter_values"
 )
 
-// readOnly is every tool's annotation block, written once.
+// ReadOnly is every tool's annotation block, written once.
 //
 // All four read, none writes, and all reach a catalogue that changes outside the
-// conversation. Incorrect annotation of exactly these hints is a named rejection reason in
-// OpenAI's submission guidelines, so sharing one value is not merely tidy: it removes the
-// copy-paste from which a write tool would inherit a read-only claim.
-func readOnly() *mcp.ToolAnnotations {
+// conversation. Wrong hints are a rejection reason in OpenAI's submission guidelines; one
+// shared value stops a write tool inheriting a read-only claim by copy-paste.
+func ReadOnly() *mcp.ToolAnnotations {
 	destructive, openWorld := false, true
 	return &mcp.ToolAnnotations{
 		ReadOnlyHint:    true,
@@ -78,43 +48,26 @@ func readOnly() *mcp.ToolAnnotations {
 	}
 }
 
-// Handler builds the HTTP handler serving these tools over MCP's streamable transport.
-// Mount it with Fiber's adaptor at the path the app declares as its MCP endpoint.
-//
-// STATELESS, and that is the whole reason this surface works at all for the caller it was
-// built for. Measured from a packet capture of OpenAI's app scanner (2026-09-18): it sends
-// one request — `server/discover`, declaring protocol version 2026-07-28 — and stops. That
-// is the SEP-2575 lifecycle, where the version and client identity ride in `_meta` on every
-// request instead of being established once.
-//
-// The session-based transport cannot serve that lifecycle, and the SDK says so beside its
-// own code: it filters 2026-07-28 out of the versions it advertises. The result was a
-// `server/discover` answer marked complete that omitted the very version the caller had
-// just declared — reported by the portal as "MCP server/discover response was inconsistent",
-// which it was.
-//
-// Stateless costs this surface nothing it uses. Every tool is a read: a request in, an
-// answer out, no server-to-client call, nothing to remember between requests. What it gives
-// up is the GET event stream and DELETE (405 in this mode), neither of which any tool here
-// has ever needed. The handshake lifecycle still works, so clients that send `initialize`
-// are unaffected — see discovery_test.go, which holds both lifecycles to that promise.
-//
-// origin is the site's own address, which the server's icons and website link are built
-// from.
-func Handler(r Reader, origin string) http.Handler {
-	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
-		return newServer(r, origin)
-	}, &mcp.StreamableHTTPOptions{Stateless: true})
-}
-
-func newServer(r Reader, origin string) *mcp.Server {
+func newCatalogueServer(r Reader, origin, instructions string, next nextHints) *mcp.Server {
 	server := mcp.NewServer(Identity("freehire", Version, origin),
-		&mcp.ServerOptions{Instructions: serverInstructions, CompletionHandler: completePromptArgument})
+		&mcp.ServerOptions{
+			Instructions:      instructions,
+			CompletionHandler: completePromptArgument,
+			// Lists are fixed for this per-request server. The SDK otherwise
+			// advertises listChanged and accepts subscriptions that never update.
+			Capabilities: &mcp.ServerCapabilities{
+				Logging:   &mcp.LoggingCapabilities{}, //nolint:staticcheck // Preserve the SDK default for older MCP clients.
+				Tools:     &mcp.ToolCapabilities{},
+				Prompts:   &mcp.PromptCapabilities{},
+				Resources: &mcp.ResourceCapabilities{},
+			},
+		})
+	ObserveServer(server, surfaceMCP)
 
 	addPrompts(server)
 	addWidget(server)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addCatalogueTool(server, &mcp.Tool{
 		Name:  toolSearchJobs,
 		Title: "Search jobs",
 		Description: "Search freehire's catalogue of IT job postings. Use for any question " +
@@ -124,143 +77,56 @@ func newServer(r Reader, origin string) *mcp.Server {
 			"mode, seniority and skills go in their filters, never in the query. If suspiciously " +
 			"few results come back, loosen one constraint at a time and say which. Present " +
 			"results as a table of title, company, location, posted date and link (the employer's " +
-			"posting and ours), naming the source. Set semantic for a need described in words " +
-			"(\"keep our payment systems secure\"), not for a job title or a non-technical role, " +
-			"where plain keywords answer better.",
-		Annotations: readOnly(),
+			"posting and ours), naming the source.",
+		Annotations: ReadOnly(),
 		Meta:        rendersInWidget(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchJobsResult, error) {
-		return toolResult(r.SearchJobs(ctx, in))
+		out, err := r.SearchJobs(ctx, in)
+		if err == nil {
+			out.Next = next.search
+		}
+		return toolResult(out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addCatalogueTool(server, &mcp.Tool{
 		Name:  toolGetJob,
 		Title: "Read one job posting",
 		Description: "Read one posting in full by the slug a search result carries: the whole " +
 			"description, the stated requirements, which applicant tracking system handles " +
 			"applications, and whether the posting still looks live — when it was last seen " +
-			"open, a reality class, and any observed signs that it is not being filled.",
-		Annotations: readOnly(),
+			"open, a reality class, and any observed signs that it is not being filled. A closed " +
+			"posting carries closed_at.",
+		Annotations: ReadOnly(),
 		Meta:        rendersInWidget(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in JobDetailInput) (*mcp.CallToolResult, JobResult, error) {
-		return toolResult(r.JobDetail(ctx, in.Slug))
+		out, err := r.JobDetail(ctx, in.Slug)
+		if err == nil {
+			out.Next = next.job
+		}
+		return toolResult(out, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  toolSearchCompanies,
-		Title: "Search employers",
-		Description: "Find employers in freehire's catalogue by name or by where they hire, " +
-			"with how many postings each has open. Use when the question is about a company " +
-			"rather than about a role.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in CompanySearchInput) (*mcp.CallToolResult, SearchCompaniesResult, error) {
-		return toolResult(r.SearchCompanies(ctx, in))
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
+	addCatalogueTool(server, &mcp.Tool{
 		Name:  toolGetCompany,
 		Title: "Read one employer",
 		Description: "Read what freehire holds about one employer by the slug a result " +
 			"carries: what they do, which industries they are in, where they are based, and how " +
 			"many postings they have open.",
-		Annotations: readOnly(),
+		Annotations: ReadOnly(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in CompanyDetailInput) (*mcp.CallToolResult, CompanyResult, error) {
 		return toolResult(r.CompanyDetail(ctx, in.Slug))
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  toolCheckJobsOpen,
-		Title: "Check whether postings are still open",
-		Description: "Check whether postings are still open, by the slugs search results carry — " +
-			"up to 50 per call. Use before acting on a saved shortlist: each posting answers " +
-			"open, closed or not_found, with when it closed or was last seen live.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in CheckJobsOpenInput) (*mcp.CallToolResult, JobsOpenResult, error) {
-		check, unchecked := openCheckSlugs(in.Slugs)
-		states, err := r.CheckJobsOpen(ctx, check)
-		return toolResult(JobsOpenResult{Jobs: states, Unchecked: unchecked}, err)
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  toolSearch,
-		Title: "Search jobs (research)",
-		Description: "Search freehire's IT job postings by free text. Returns matching postings " +
-			"as {id, title, url}.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ResearchQuery) (*mcp.CallToolResult, ResearchResults, error) {
-		found, err := r.SearchJobs(ctx, SearchInput{Query: in.Query})
-		return toolResult(researchResults(found), err)
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  toolFetch,
-		Title: "Read one job posting (research)",
-		Description: "Read one posting in full by an id search returned: its full text, " +
-			"the employer, the board it came from and whether it still looks live.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ResearchID) (*mcp.CallToolResult, ResearchDocument, error) {
-		job, err := r.JobDetail(ctx, in.ID)
-		return toolResult(researchDocument(job), err)
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  toolSimilarJobs,
-		Title: "Find similar postings",
-		Description: "Postings most similar to one posting, by its slug, nearest first — for " +
-			"\"show me more like this\". Empty for the newest postings, whose neighbours are " +
-			"not computed yet.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SimilarJobsInput) (*mcp.CallToolResult, SimilarJobsResult, error) {
-		return toolResult(r.SimilarJobs(ctx, in.Slug, similarLimit(in.Limit)))
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  toolSalaryStats,
-		Title: "Salary ranges",
-		Description: "Salary percentiles (25th, median, 75th) from open postings that state " +
-			"pay, scoped by role family, seniority and country, with the sample size behind " +
-			"each figure. Currencies and pay periods are reported separately, never converted.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SalaryInput) (*mcp.CallToolResult, SalaryStatsResult, error) {
-		return toolResult(r.SalaryStats(ctx, in))
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  toolMarketStats,
-		Title: "Job market breakdown",
-		Description: "How many open postings match a set of filters, and their most common " +
-			"role families, seniorities, skills, work modes, countries and regions. Takes the " +
-			"same filters as a job search.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, MarketStatsResult, error) {
-		return toolResult(r.MarketStats(ctx, in))
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:  toolFilterValues,
-		Title: "List filter values",
-		Description: "The values one job-search filter accepts — skills, categories, " +
-			"seniorities, sources, countries and the rest — each with how many open " +
-			"postings carry it, most common first. A value not listed matches no posting. " +
-			"Use it before filtering on a value you are not sure of.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in FilterValuesInput) (*mcp.CallToolResult, FilterValuesResult, error) {
-		counts, err := r.FacetCounts(ctx)
-		if err != nil {
-			return toolResult(FilterValuesResult{}, err)
-		}
-		return toolResult(FilterValues(in, counts), nil)
-	})
+	registerCatalogueTools(server, r)
 
 	return server
 }
 
-// Identity is how a server introduces itself: its name, and the logo and website a client
-// shows beside it in its list of connections. Every freehire MCP server introduces itself
-// through this, so all of them carry the same face.
+// Identity is how every freehire MCP server introduces itself: its name, and the logo and
+// website a client shows in its list of connections.
 //
-// With no origin it is the name alone. An icon is a URL the client fetches, and a path
-// with no host is one it cannot — the same rule the projector follows for job links.
+// With no origin it is the name alone: an icon is a URL the client fetches, and a path with
+// no host is one it cannot.
 func Identity(name, version, origin string) *mcp.Implementation {
 	id := &mcp.Implementation{Name: name, Title: "freehire", Version: version}
 	origin = strings.TrimSuffix(origin, "/")
@@ -280,18 +146,14 @@ func Identity(name, version, origin string) *mcp.Implementation {
 // toolResult renders a failure the way this audience can act on: an error RESULT carrying a
 // sentence, never a JSON-RPC protocol error.
 //
-// That is the opposite of the OJCP transport beside it, and deliberately. There a failure
-// must reach the wire as a code an agent branches on; here the caller is a language model,
-// and a protocol error surfaces to a ChatGPT user as a generic failure with nothing to do
-// next. An error result is text the model reads: "no posting with that identifier" leads it
-// to search instead of retrying.
+// Unlike the OJCP transport, which needs a code an agent branches on, the caller here is a
+// language model: a protocol error reaches a ChatGPT user as a generic failure, while an
+// error result is text that leads the model to search instead of retrying.
 //
-// The generic branch discloses nothing. What went wrong inside this deployment is ours, not
-// a caller's — but it stays an ERROR rather than an empty answer, which would read as a
-// catalogue holding nothing.
+// The generic branch discloses nothing internal, but stays an ERROR rather than an empty
+// answer, which would read as an empty catalogue.
 //
-// It takes a reader call's two return values directly, so every tool wraps its own read in
-// one expression and no call site can forget the branch.
+// It takes a reader call's two return values directly so no call site can forget the branch.
 func toolResult[T any](out T, err error) (*mcp.CallToolResult, T, error) {
 	if err == nil {
 		return nil, out, nil
@@ -303,8 +165,41 @@ func toolResult[T any](out T, err error) (*mcp.CallToolResult, T, error) {
 	if errors.As(err, &notFound) {
 		message = notFound.Error() + "; search for it instead"
 	}
+	if errors.Is(err, search.ErrTooManyAlternatives) {
+		message = "the query has more than 5 OR alternatives; split them into several searches of at most 5 each and combine the results"
+	}
+	diagnostics := map[string]any{"error_code": publicErrorCode(err)}
+	// Not the not-found message: it names the caller's slug.
+	if !errors.As(err, &notFound) {
+		diagnostics[reasonKey] = message
+	}
+	if errors.Is(err, search.ErrTooManyAlternatives) {
+		diagnostics[badArgsKey] = []string{"query"}
+	}
 	return &mcp.CallToolResult{
+		Meta:    mcp.Meta{diagnosticsMetaKey: diagnostics},
 		IsError: true,
 		Content: []mcp.Content{&mcp.TextContent{Text: message}},
 	}, zero, nil
+}
+
+func publicErrorCode(err error) string {
+	var notFound NotFoundError
+	if errors.As(err, &notFound) {
+		return "not_found"
+	}
+	if errors.Is(err, search.ErrTooManyAlternatives) {
+		return "invalid_request"
+	}
+	return observability.ErrorCode(err)
+}
+
+// StatelessHandler serves a freshly built MCP server per request over the streamable
+// transport. Stateless because a stateful session derives its tool contexts from the
+// `initialize` request, whose fasthttp RequestCtx the Fiber adaptor recycles after that
+// request ends: later calls would read another request's user values and misattribute
+// agent view counts.
+func StatelessHandler(newServer func() *mcp.Server) http.Handler {
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return newServer() },
+		&mcp.StreamableHTTPOptions{Stateless: true})
 }

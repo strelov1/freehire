@@ -12,7 +12,9 @@ describe.each(['trap', 'menu'] as const)('focus restore (%s)', (kind) => {
     const trigger = screen.getByRole('button', { name: 'Open' });
     trigger.focus();
     await fireEvent.click(trigger);
-    const inner = screen.getByRole(kind === 'trap' ? 'button' : 'menuitem', { name: kind === 'trap' ? 'Inner' : 'Item' });
+    const inner = screen.getByRole(kind === 'trap' ? 'button' : 'menuitem', {
+      name: kind === 'trap' ? 'Inner' : 'Item',
+    });
     inner.focus();
     await fireEvent.click(inner);
     expect(document.activeElement).toBe(trigger);

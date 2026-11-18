@@ -14,8 +14,9 @@ The factory is injected, so the pool's tests need no browser.
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable, Hashable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Hashable, List, Optional
+from typing import Any
 
 
 class PoolBusy(Exception):
@@ -50,11 +51,11 @@ class SessionPool:
         *,
         max_sessions: int,
         idle_ttl: float,
-        acquire_timeout: Optional[float] = None,
+        acquire_timeout: float | None = None,
         per_session: int = 1,
-        max_age: Optional[float] = None,
-        max_uses: Optional[int] = None,
-        use_timeout: Optional[float] = None,
+        max_age: float | None = None,
+        max_uses: int | None = None,
+        use_timeout: float | None = None,
         clock: Callable[[], float] = time.monotonic,
     ):
         if max_sessions < 1 or per_session < 1:
@@ -71,7 +72,7 @@ class SessionPool:
         self._ttl = idle_ttl
         self._acquire_timeout = acquire_timeout
         self._clock = clock
-        self._entries: List[_Entry] = []
+        self._entries: list[_Entry] = []
         self._opening = 0  # slots reserved by a session still being opened
         self._closed = False
         self._cond = asyncio.Condition()
@@ -87,7 +88,7 @@ class SessionPool:
                 result = await fn(entry.session)
             else:
                 result = await asyncio.wait_for(fn(entry.session), self._use_timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await self._discard(entry)
             raise UseTimedOut(f"a use ran past {self._use_timeout}s") from None
         except BaseException:
@@ -97,9 +98,13 @@ class SessionPool:
         return result
 
     async def _acquire(self, key: Hashable) -> _Entry:
-        deadline = None if self._acquire_timeout is None else self._clock() + self._acquire_timeout
+        deadline = (
+            None
+            if self._acquire_timeout is None
+            else self._clock() + self._acquire_timeout
+        )
         evicted = None
-        expired: List[_Entry] = []
+        expired: list[_Entry] = []
         async with self._cond:
             while True:
                 if self._closed:
@@ -122,7 +127,9 @@ class SessionPool:
                     break
                 await self._wait(deadline)
             if e is None:
-                self._opening += 1  # from here on the slot is ours until the session is registered
+                self._opening += (
+                    1  # from here on the slot is ours until the session is registered
+                )
         if e is not None:
             for x in expired:
                 await _close_quietly(x.session)
@@ -132,7 +139,9 @@ class SessionPool:
             for x in expired:
                 await _close_quietly(x.session)
             if evicted is not None:
-                await _close_quietly(evicted.session)  # outside the lock: closing a browser is slow
+                await _close_quietly(
+                    evicted.session
+                )  # outside the lock: closing a browser is slow
             session = await self._factory(key)
         except BaseException:
             async with self._cond:
@@ -146,7 +155,14 @@ class SessionPool:
                 closed = True
             else:
                 now = self._clock()
-                entry = _Entry(key=key, session=session, in_use=1, last_used=now, created_at=now, uses=1)
+                entry = _Entry(
+                    key=key,
+                    session=session,
+                    in_use=1,
+                    last_used=now,
+                    created_at=now,
+                    uses=1,
+                )
                 self._entries.append(entry)
                 closed = False
         if closed:
@@ -154,19 +170,23 @@ class SessionPool:
             raise PoolClosed("the pool closed while the session was opening")
         return entry
 
-    async def _wait(self, deadline: Optional[float]) -> None:
+    async def _wait(self, deadline: float | None) -> None:
         if deadline is None:
             await self._cond.wait()
             return
         remaining = deadline - self._clock()
         if remaining <= 0:
-            raise PoolBusy(f"no browser session came free within {self._acquire_timeout}s")
+            raise PoolBusy(
+                f"no browser session came free within {self._acquire_timeout}s"
+            )
         try:
             await asyncio.wait_for(self._cond.wait(), remaining)
-        except asyncio.TimeoutError:
-            raise PoolBusy(f"no browser session came free within {self._acquire_timeout}s") from None
+        except TimeoutError:
+            raise PoolBusy(
+                f"no browser session came free within {self._acquire_timeout}s"
+            ) from None
 
-    def _retire_expired(self) -> List[_Entry]:
+    def _retire_expired(self) -> list[_Entry]:
         """Retire every session past its age or use limit; return the idle ones, removed, for
         the caller to close outside the lock. A busy one closes when its last use releases."""
         now = self._clock()
@@ -209,7 +229,11 @@ class SessionPool:
         """Close every idle session unused for longer than the idle TTL."""
         now = self._clock()
         async with self._cond:
-            stale = [e for e in self._entries if e.in_use == 0 and now - e.last_used > self._ttl]
+            stale = [
+                e
+                for e in self._entries
+                if e.in_use == 0 and now - e.last_used > self._ttl
+            ]
             for e in stale:
                 self._entries.remove(e)
             if stale:

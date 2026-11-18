@@ -16,30 +16,26 @@ import (
 )
 
 // gradcracker adapts Gradcracker (www.gradcracker.com), the UK board for STEM graduate jobs,
-// placements and internships. It is a multi-company aggregator crawled as ONE boardless
-// catalogue: the board would naturally be a discipline, but a posting is listed under every
-// discipline it accepts — 1,018 of electronic-electrical's 1,350 postings were also on
-// computing-technology's 1,455 (2026-10-18) — and the pipeline namespaces external_id by the
-// board string, so a board per discipline would store each of those postings twice. One crawl
-// walks every discipline in gradcrackerDisciplines and keeps each posting once.
+// placements and internships. A multi-company aggregator crawled as ONE boardless catalogue: a
+// posting is listed under every discipline it accepts and the pipeline namespaces external_id by
+// the board string, so a board per discipline would store each posting twice. One crawl walks
+// every discipline in gradcrackerDisciplines and keeps each posting once.
 //
-// The listing card states everything but the body (title, employer, location, salary,
-// deadline, degree, start, duration, accepted disciplines); the posting page carries the body.
-// Neither carries schema.org JobPosting. It is a HydratingSource — a posting the catalogue
-// holds is refreshed from its card and costs no posting-page request — and CoverageGated, so
-// no body is bought for a posting the pipeline will discard.
+// The listing card states everything but the body (title, employer, location, salary, deadline,
+// degree, start, duration, accepted disciplines); the posting page carries the body. Neither
+// carries schema.org JobPosting. It is a HydratingSource (a held posting is refreshed from its
+// card, no posting-page request) and CoverageGated (no body is bought for a posting the pipeline
+// will discard).
 //
-// Every crawl reads every listing page of every discipline or fails, which is what makes it a
-// fullCatalog: a stored posting no listing names is gone. The proof is the listing's own
-// count: the walk must reach the page past the last (404) AND read as many cards as the
-// listing's "Show N results" states, otherwise the run fails instead of sweeping on a
-// shrunken catalogue.
+// Every crawl reads every listing page of every discipline or fails, which makes it a
+// fullCatalog: a stored posting no listing names is gone. The proof is the listing's own count:
+// the walk must reach the page past the last (404) AND read as many cards as the listing's
+// "Show N results" states, otherwise the run fails instead of sweeping a shrunken catalogue.
 //
-// Every path sits behind Cloudflare. Go's default TLS fingerprint and curl are answered with a
-// managed challenge (403 "Just a moment...") from a residential IP and from both of our hosts;
-// the Chrome-fingerprint transport (fingerprintHTTP) is served 200, keyless. The edge also
-// RATE-limits per IP — see gradcrackerRequestInterval — and blocks an IP that exceeds it for
-// about an hour, so the first refusal ends the run's hydration.
+// Every path sits behind Cloudflare. Go's default TLS fingerprint and curl get a managed
+// challenge (403 "Just a moment..."); the Chrome-fingerprint transport (fingerprintHTTP) is
+// served 200, keyless. The edge also RATE-limits per IP (see gradcrackerRequestInterval) and
+// blocks an IP that exceeds it for about an hour, so the first refusal ends the run's hydration.
 type gradcracker struct {
 	http HTMLGetter
 	// maxNewPerRun bounds how many posting pages one run hydrates; the rest are deferred
@@ -49,21 +45,18 @@ type gradcracker struct {
 
 const (
 	gradcrackerBaseURL = "https://www.gradcracker.com"
-	// gradcrackerMaxPages is a safety ceiling on one discipline's walk (80 cards a page;
-	// computing-technology was 19 pages on 2026-10-18). Reaching it fails the run.
+	// gradcrackerMaxPages is a safety ceiling on one discipline's walk (80 cards a page).
+	// Reaching it fails the run.
 	gradcrackerMaxPages = 60
-	// gradcrackerRequestInterval paces every request one run makes, listing and posting
-	// pages alike, through one limiter: the edge counts the IP, not the path. Measured
-	// 2026-10-18: at one request per 3s (and per 0.5s, with or without a cookie jar) the
-	// edge served ~35 and then refused every path from that IP for 55-65 minutes — from the
-	// crawl host, fsn and a residential IP alike; at one per 10s it served 60 posting pages
-	// from one IP and the full 37-page listing walk plus the sitemap from another, without
-	// a single refusal. The pace stays at the measured one rather than above it.
+	// gradcrackerRequestInterval paces every request one run makes, listing and posting pages
+	// alike, through one limiter: the edge counts the IP, not the path. Faster paces (3s, 0.5s)
+	// got the IP refused on every path for about an hour; 10s ran without a refusal. Do not go
+	// below it.
 	gradcrackerRequestInterval = 10 * time.Second
 	gradcrackerRequestBurst    = 1
-	// gradcrackerDefaultMaxNewPerRun is the per-run hydration budget: at the pace above,
-	// ~33 minutes on top of the ~6-minute listing walk, inside the 50-minute run timeout.
-	// Steady state needs a few dozen; the first crawl (~1,800 postings) accretes over runs.
+	// gradcrackerDefaultMaxNewPerRun is the per-run hydration budget: ~33 minutes at the pace
+	// above, inside the 50-minute run timeout. Steady state needs a few dozen; the first crawl
+	// accretes over runs.
 	gradcrackerDefaultMaxNewPerRun = 200
 )
 
@@ -249,7 +242,7 @@ func (g gradcracker) hydrate(ctx context.Context, fresh []gradcrackerCard, gate 
 	deferred := 0
 	for _, c := range fresh {
 		switch j := c.job(); {
-		case covered[c.Company] || (gate.Rejected != nil && gate.Rejected(j)):
+		case covered[c.Company]:
 			out = append(out, j)
 		case len(toHydrate) < g.maxNewPerRun:
 			toHydrate = append(toHydrate, c)
@@ -368,7 +361,7 @@ func parseGradcrackerCard(article *html.Node) (gradcrackerCard, bool) {
 	if h2 := firstByTag(article, "h2"); h2 != nil {
 		if a := firstByTag(h2, "a"); a != nil {
 			c.URL = gradcrackerAbsURL(Attr(a, "href"))
-			c.Title = gradcrackerText(textContent(a))
+			c.Title = collapseSpace(textContent(a))
 		}
 	}
 	m := gradcrackerPostingMatch(c.URL)
@@ -378,16 +371,16 @@ func parseGradcrackerCard(article *html.Node) (gradcrackerCard, bool) {
 	c.Type, c.ID = m[1], m[2]
 	if fig := firstByTag(article, "figure"); fig != nil {
 		if img := firstByTag(fig, "img"); img != nil {
-			c.Company = gradcrackerText(Attr(img, "alt"))
+			c.Company = collapseSpace(Attr(img, "alt"))
 		}
 	}
 	if h3 := firstByTag(article, "h3"); h3 != nil {
-		c.Disciplines = strings.TrimSuffix(gradcrackerText(textContent(h3)), ".")
+		c.Disciplines = strings.TrimSuffix(collapseSpace(textContent(h3)), ".")
 	}
 	walk(article, func(n *html.Node) bool {
 		if n.Type == html.ElementNode && n.Data == "dt" {
 			if dd := nextElement(n); dd != nil && dd.Data == "dd" {
-				c.Facts = append(c.Facts, gradcrackerFact{Label: gradcrackerText(textContent(n)), Value: gradcrackerText(textContent(dd))})
+				c.Facts = append(c.Facts, gradcrackerFact{Label: collapseSpace(textContent(n)), Value: collapseSpace(textContent(dd))})
 			}
 			return false
 		}
@@ -455,7 +448,3 @@ func gradcrackerBody(root *html.Node) (string, bool) {
 	}
 	return strings.TrimSpace(innerHTML(body)), true
 }
-
-// gradcrackerText collapses whitespace runs: the cards are server-rendered with deep
-// indentation inside every element.
-func gradcrackerText(s string) string { return strings.Join(strings.Fields(s), " ") }

@@ -13,32 +13,17 @@ import (
 	"github.com/strelov1/freehire/internal/job/liveness"
 )
 
-// jobtech (Arbetsförmedlingen) closes its own postings from JobStream's change feed: each run
-// reads the last 72h of changes and closes every ad the feed reports removed. A removal the
-// crawl fails to apply inside those 72h is never sent again, and nothing else closes the ad —
-// the source is self-closing, so the unseen sweep skips it, and a live ad that does not change
-// is not re-sent either, so going unseen says nothing. From 2026-10-27 the crawl applied no
-// removal at all (its read of the feed ended before them; see sources/jobtech.go), and on
-// 2026-10-31 32.7k of its 46.5k open rows had gone unseen for a week. This pass is the backstop
-// for a removal the feed carried and the crawl missed.
+// jobtech (Arbetsförmedlingen) closes its own postings from JobStream's change feed: each run reads the last 72h of changes and closes every ad reported removed. A removal the crawl fails to apply inside those 72h is never sent again, and nothing else closes the ad: the source is self-closing, so the unseen sweep skips it, and a live unchanged ad is not re-sent. This pass is the backstop for a removal the feed carried and the crawl missed.
 //
-// The evidence is JobSearch's per-ad endpoint, the same service's API keyed on the ad id: it
-// answers a live ad with `"removed": false`, a recent removal with `"removed": true`, and an ad
-// removed long enough ago with 404. The stored url is Platsbanken's page, a client-rendered app
-// that answers 200 for any id. Of 200 stale rows sampled on 2026-10-31, 53 answered 404 and the
-// rest 200; the removed ones among those were removals of the last two days.
+// The evidence is JobSearch's per-ad endpoint, keyed on the ad id: a live ad answers `"removed": false`, a recent removal `"removed": true`, and one removed long ago 404. The stored url is Platsbanken's client-rendered page, which answers 200 for any id.
 
 // jobtechAdAPI is JobSearch's per-ad endpoint. Keyless (open government data).
 const jobtechAdAPI = "https://jobsearch.api.jobtechdev.se/ad/%s"
 
 const (
-	// jobtechProbeInterval spaces jobtech probes. The API answered 40 back-to-back requests
-	// from the crawl host in ~115 ms each without a refusal (2026-10-31); this keeps the pass
-	// near three a second.
+	// jobtechProbeInterval spaces jobtech probes at about three a second; the API took back-to-back requests without a refusal.
 	jobtechProbeInterval = 200 * time.Millisecond
-	// jobtechMaxProbesPerRun bounds one run to ~45 minutes. ~41k open rows were unseen past the
-	// sweep window when this landed, ~11k of them dead; at two runs a day and two reads per
-	// close, the dead backlog is worked off in about four days.
+	// jobtechMaxProbesPerRun bounds one run to ~45 minutes.
 	jobtechMaxProbesPerRun = 8000
 	// jobtechReadLimit bounds how much of an answer is read. An ad is a few KB of JSON.
 	jobtechReadLimit = 1 << 20

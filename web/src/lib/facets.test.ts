@@ -1,17 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { COLLECTIONS, AI_ARCHETYPE_VALUES, ROLE_TYPE_VALUES } from './generated/contracts';
-import {
-  rankOptionMatches,
-  cityOption,
-  collapseCities,
-  countryFromSlug,
-  countryLabel,
-  countrySlug,
-  COUNTRY_OPTIONS,
-  dynamicLabel,
-  FACETS,
-  slugifiedCountries,
-} from './facets';
+import { countryLabel, COUNTRY_OPTIONS, dynamicLabel, FACETS } from './facets';
+import { countryFromSlug, countrySlug, slugifiedCountries } from './countrySlugs';
+import { rankOptionMatches, cityOption, collapseCities } from './facetOptions';
 
 const collectionOptions = () => FACETS.find((f) => f.param === 'collections')?.options ?? [];
 
@@ -44,9 +35,7 @@ describe('the role_type facet', () => {
   // that it is not. Labelling the excluded state "individual contributor" would turn
   // a known unknown into a false claim, so no label here may say it.
   it('never labels any value as individual contributor', () => {
-    const labels = (FACETS.find((f) => f.param === 'role_type')?.options ?? []).map((o) =>
-      o.label.toLowerCase(),
-    );
+    const labels = (FACETS.find((f) => f.param === 'role_type')?.options ?? []).map((o) => o.label.toLowerCase());
     for (const label of labels) {
       expect(label).not.toContain('individual contributor');
       expect(label).not.toMatch(/\bic\b/);

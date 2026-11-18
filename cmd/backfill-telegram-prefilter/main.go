@@ -1,29 +1,20 @@
 // Command backfill-telegram-prefilter re-offers the Telegram posts the crawl's prefilter
-// declined, for the case its markers have since widened.
+// declined, for when its markers have since widened.
 //
 // A declined post is stamped extracted_at by InsertTelegramPost at INSERT time and nothing
-// revisits it, so widening the markers reaches NEW posts only. Measured on prod 2026-09-23,
-// over the 15,203 posts the filter had declined to date: 96 of them (all one channel)
-// already matched the marker set and were simply crawled under an older one, and the
-// Spanish `empresa:` marker that landed the same day left 6,335 more behind it — 42% of
-// everything the filter had ever refused, and real vacancies carrying a LinkedIn or Workday
-// link. That is what this pass is for, and it is worth running after any marker change.
+// revisits it, so widening the markers reaches NEW posts only. Run this after any marker change.
 //
-// It reports by default and writes only under --apply, like cmd/merge-companies: the
-// markers are hand-maintained, so a wave is meant to be read before it runs. The report
-// names the channels it would reach, which is the check that matters — a widening that
-// suddenly admits a channel nobody intended is visible there and nowhere else.
+// It reports by default and writes only under --apply, like cmd/merge-companies: the markers are
+// hand-maintained, so read the report first. It names the channels it would reach, which is how
+// a widening that admits an unintended channel becomes visible.
 //
-// It decides with telegram.AdmitsPost, the same function the crawl calls, so this pass
-// cannot requeue what the next crawl would refuse. It needs no reindex and touches no
-// search index: a requeued post re-enters the extraction queue and reaches the catalogue
-// through cmd/tg-extract's ordinary write path.
+// It decides with telegram.AdmitsPost, the function the crawl calls, so it cannot requeue what
+// the next crawl would refuse. It needs no reindex: a requeued post re-enters the extraction
+// queue and reaches the catalogue through cmd/tg-extract's ordinary write path.
 //
-// Idempotent and free to interrupt: the UPDATE repeats the read's predicate, so a post
-// already requeued — or claimed by the extractor since this run read it — no longer matches
-// and the statement changes nothing. A bounded run prints the key to continue from.
-//
-// Needs only DATABASE_URL.
+// Idempotent and free to interrupt: the UPDATE repeats the read's predicate, so a post already
+// requeued, or claimed by the extractor since the read, matches nothing. A bounded run prints
+// the key to continue from. Needs only DATABASE_URL.
 package main
 
 import (
@@ -49,27 +40,24 @@ func run() int {
 	apply := flag.Bool("apply", false, "actually requeue; without it the run only reports what it would")
 	flag.Parse()
 
-	// Unset is unbounded and 0 is refused, the strict-reader rule every one-off pass
-	// follows: an operator who typed a number would never notice it being ignored.
+	// Unset is unbounded and 0 is refused, the strict-reader rule every one-off pass follows.
 	maxScan, err := worker.EnvInt64("BACKFILL_TG_PREFILTER_MAX", 0)
 	if err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
 
-	// Where a previous bounded run stopped, EXCLUSIVE — the pass starts at the row after
-	// this key. Without these the bound is a trap and not a bound: a refused post never
-	// leaves the predicate, so a second run from the top rescans what the first rejected,
-	// and a dry run repeats its report forever.
+	// Where a previous bounded run stopped, EXCLUSIVE. Without it the bound is a trap: a
+	// refused post never leaves the predicate, so a second run from the top rescans what the
+	// first rejected.
 	afterChannel := os.Getenv("BACKFILL_TG_PREFILTER_AFTER_CHANNEL")
 	afterMsgID, err := worker.EnvInt64("BACKFILL_TG_PREFILTER_AFTER_MSG_ID", 0)
 	if err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
-	// Half a cursor silently starts from the wrong place: a channel with no message id
-	// re-reads that channel whole, and an id with no channel is applied to the first
-	// channel alphabetically. Neither looks like a mistake in the output.
+	// Half a cursor silently starts from the wrong place (a channel with no message id re-reads
+	// that channel whole; an id with no channel applies to the first channel alphabetically).
 	if (afterChannel == "") != (afterMsgID == 0) {
 		log.Printf("config: BACKFILL_TG_PREFILTER_AFTER_CHANNEL and _AFTER_MSG_ID are one cursor — set both or neither")
 		return 1
@@ -84,10 +72,9 @@ func run() int {
 
 	runner := telegram.RefilterRunner{
 		Store: &refilterStore{q: db.New(pool)},
-		// The same registry cmd/tg-ingest hands its crawl, so a post admitted by its
-		// stored links here is admitted by the crawl there.
+		// The registry cmd/tg-ingest hands its crawl, so admission here matches the crawl.
 		Links: linkMatcher{reg: linksource.All(sources.NewClient())},
-		// The same judge the crawl uses, for the same reason as the registry above.
+		// The same judge the crawl uses.
 		Judge:        telegram.JudgeFromKey(cfg.TypesafeAPIKey),
 		Apply:        *apply,
 		Max:          maxScan,
@@ -122,8 +109,8 @@ func run() int {
 		log.Printf("  channel %s: %d", ch, stats.ByChannel[ch])
 	}
 
-	// One report, on every exit path, saying whether there is more — never inferred from
-	// a row count. cmd/backfill-derive documents why.
+	// One report on every exit path, saying whether there is more; never inferred from a row
+	// count (see cmd/backfill-derive).
 	if stats.Stopped {
 		log.Printf("stopped on BACKFILL_TG_PREFILTER_MAX; continue with "+
 			"BACKFILL_TG_PREFILTER_AFTER_CHANNEL=%s BACKFILL_TG_PREFILTER_AFTER_MSG_ID=%d",
@@ -151,8 +138,7 @@ func (s *refilterStore) ListRejected(ctx context.Context, afterChannel string, a
 	out := make([]telegram.StoredPost, 0, len(rows))
 	for _, r := range rows {
 		p := telegram.StoredPost{Channel: r.Channel, MsgID: r.MsgID, Text: r.Text}
-		// A links column that will not decode is not worth failing the run for: the text
-		// still decides, and AdmitsPost simply sees no links.
+		// An undecodable links column is not worth failing the run: the text still decides.
 		if len(r.Links) > 0 {
 			if err := json.Unmarshal(r.Links, &p.Links); err != nil {
 				log.Printf("telegram refilter: %s/%d has unreadable links, deciding on text alone: %v", r.Channel, r.MsgID, err)
@@ -169,9 +155,9 @@ func (s *refilterStore) Requeue(ctx context.Context, channel string, msgID int64
 
 var _ telegram.RefilterStore = (*refilterStore)(nil)
 
-// linkMatcher adapts the linksource registry to telegram.LinkMatcher. It is the same
-// adapter cmd/tg-ingest carries; the two are four lines each and live beside the binary
-// that constructs the registry, rather than in a shared package neither block owns.
+// linkMatcher adapts the linksource registry to telegram.LinkMatcher. cmd/tg-ingest carries
+// the same four lines, beside the binary that constructs the registry, rather than in a shared
+// package neither block owns.
 type linkMatcher struct {
 	reg []linksource.Source
 }

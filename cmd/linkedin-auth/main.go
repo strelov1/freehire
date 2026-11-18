@@ -8,16 +8,9 @@
 //	./linkedin-auth -token AQV... -expires-in 5184000
 //	                                     # store a token minted in the Developer Portal instead
 //
-// WHY THIS IS A COMMAND AND NOT A ROUTE. The sign-in is one person, on one host, a handful of
-// times a year. A route would mean a callback handler, a state cookie, an admin authorization
-// rule and a page — a login flow for an audience of one — and it would put the ability to
-// re-point our company page's publisher behind whatever that route's authorization turned out
-// to be. A command needs SSH to the production host, which is the authorization we already have.
+// This is a command, not a route: the sign-in is one person on one host a few times a year. A route would need a callback handler, state cookie and admin authorization, and would put the ability to re-point the company page's publisher behind that route's authorization. A command needs SSH to the production host, which is the authorization we already have.
 //
-// The -token form exists because the LinkedIn Developer Portal has its own token generator,
-// which needs no redirect URL at all. That is the shortest path to a first token, and the flow
-// it skips (-url then -code) is the one that also yields a refresh token when the application
-// is entitled to one.
+// The -token form exists because the LinkedIn Developer Portal has its own token generator needing no redirect URL: the shortest path to a first token. The -url then -code flow it skips is the one that also yields a refresh token when the application is entitled to one.
 //
 // Needs DATABASE_URL and the four LINKEDIN_* values.
 package main
@@ -43,10 +36,7 @@ var (
 	status    = flag.Bool("status", false, "report the stored credential and when it expires")
 )
 
-// defaultExpiresIn is LinkedIn's documented access-token lifetime, used when -token is stored
-// without an explicit one. A guess, and deliberately not a longer one: a stored expiry that
-// overshoots the real one turns the renewal warning into a warning that arrives after the
-// channel has already stopped.
+// defaultExpiresIn is LinkedIn's documented access-token lifetime, used when -token is stored without an explicit one. Deliberately not longer: an overshooting expiry makes the renewal warning arrive after the channel has stopped.
 const defaultExpiresIn = 60 * 24 * 60 * 60
 
 func main() {
@@ -67,8 +57,7 @@ func run() int {
 		RedirectURI:  cfg.LinkedInRedirectURI,
 	}
 
-	// -url is answered before the database is opened. It reads nothing and writes nothing, and
-	// an operator printing the sign-in address on a laptop should not need DATABASE_URL.
+	// -url is answered before the database is opened: it reads and writes nothing, so printing the address needs no DATABASE_URL.
 	if *showURL {
 		fmt.Println(creds.AuthorizeURL(time.Now().UTC().Format("20060102150405")))
 		fmt.Println()
@@ -99,10 +88,7 @@ func run() int {
 	return 1
 }
 
-// exchange turns an authorization code into a stored credential, and says plainly whether a
-// refresh token came with it. That one line is the answer to the question this whole feature's
-// design hangs on — whether the token can be renewed by a worker or must be re-granted by a
-// person — and it is knowable only from this response.
+// exchange turns an authorization code into a stored credential and says whether a refresh token came with it: whether a worker can renew the token or a person must re-grant it is knowable only from this response.
 func exchange(ctx context.Context, creds linkedinauth.Credentials, store linkedinauth.Store, code string) int {
 	tok, err := creds.Exchange(ctx, nil, code)
 	if err != nil {
@@ -127,9 +113,7 @@ func exchange(ctx context.Context, creds linkedinauth.Credentials, store linkedi
 	return 0
 }
 
-// storeRaw records a token minted elsewhere. Its expiry is not knowable from the token itself,
-// so it is taken from the flag and defaulted rather than inferred — the alternative is storing
-// no expiry, which would disable every warning this feature has.
+// storeRaw records a token minted elsewhere. Its expiry is not knowable from the token, so it comes from the flag with a default; storing none would disable every expiry warning.
 func storeRaw(ctx context.Context, store linkedinauth.Store, token string, seconds int64) int {
 	if seconds <= 0 {
 		seconds = defaultExpiresIn
@@ -148,9 +132,7 @@ func storeRaw(ctx context.Context, store linkedinauth.Store, token string, secon
 	return 0
 }
 
-// reportStatus prints what is stored WITHOUT printing the credential. An operator needs the
-// dates and whether a renewal is possible; the token itself would only ever be read into a
-// shell history or a screenshot.
+// reportStatus prints what is stored WITHOUT printing the credential, which would only end up in shell history or a screenshot.
 func reportStatus(ctx context.Context, store linkedinauth.Store) int {
 	tok, ok, err := store.Load(ctx)
 	if err != nil {

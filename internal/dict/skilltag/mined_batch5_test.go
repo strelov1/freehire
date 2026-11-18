@@ -56,8 +56,8 @@ func TestParse_MinedBatch5(t *testing.T) {
 			[]string{"gpu"}, nil},
 		{"hr generalist", "HR generalist maintaining employee records in our HRIS.",
 			nil, []string{"hris"}},
-		{"facilities planner", "Maintenance planner scheduling work orders in the CMMS.",
-			nil, []string{"cmms"}},
+		{"facilities planner", "Maintenance planner scheduling work orders in the CMMS; react to urgent requests.",
+			[]string{"cmms"}, []string{"react"}},
 		{"perforce as an adverb", "The team must perforce travel to the client site weekly.",
 			nil, []string{"perforce"}},
 

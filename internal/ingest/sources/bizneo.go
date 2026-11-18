@@ -27,7 +27,7 @@ import (
 // title, the body in one or more .general-content blocks, and a side card of labelled fields
 // (Ubicación, Modalidad de trabajo, Jornada laboral …) whose labels sit in the title attribute.
 // Some sites also emit a schema.org JobPosting, the only place a posting's date appears; most do
-// not (measured 2026-10-27: 1 of 33 live sites), so the page itself is what the adapter reads and
+// not, so the page itself is what the adapter reads and
 // the JobPosting only adds to it.
 //
 // The posting slug is the identity: the card links to nothing else, so it is the only id a
@@ -43,12 +43,10 @@ func NewBizneo(c HTMLGetter) Source { return bizneo{http: c} }
 func (bizneo) Provider() string { return "bizneo" }
 
 // bizneoRequestInterval paces the whole provider: every career site is served by one edge,
-// which answered 429 to three listings and thirteen posting pages in the first crawl
-// (2026-10-27) at the shared client's eight detail workers. Two requests a second covers the
-// ~600 postings and their pages in a few minutes.
+// which answers 429 at the shared client's eight detail workers.
 const bizneoRequestInterval = 500 * time.Millisecond
 
-// bizneoMaxPages caps the ?page=N walk; the largest site seen (somos-grupo-mas) has 19 pages.
+// bizneoMaxPages caps the ?page=N walk.
 const bizneoMaxPages = 100
 
 // bizneoBoard is a career-site host: one or more labels under bizneo.cloud, or a customer's own
@@ -148,14 +146,14 @@ func bizneoCards(base *url.URL, root *html.Node) []bizneoCard {
 		ref.RawQuery, ref.Fragment = "", ""
 		c := bizneoCard{slug: slug, url: ref.String()}
 		if t := firstByClass(n, "title"); t != nil {
-			c.title = bizneoText(textContent(t))
+			c.title = collapseSpace(textContent(t))
 		}
 		if d := firstByClass(n, "details"); d != nil {
 			for sp := d.FirstChild; sp != nil; sp = sp.NextSibling {
 				if sp.Type != html.ElementNode || sp.Data != "span" || HasClass(sp, "aggregation") {
 					continue
 				}
-				v := bizneoText(textContent(sp))
+				v := collapseSpace(textContent(sp))
 				if m := bizneoWorkMode(v); m != "" {
 					c.mode = m
 				} else if c.city == "" {
@@ -201,7 +199,7 @@ func (s bizneo) detail(ctx context.Context, e CompanyEntry, c bizneoCard) (Job, 
 	fields := bizneoFields(root)
 	title := c.title
 	if h := firstByTag(root, "h1"); h != nil {
-		title = firstNonEmpty(bizneoText(textContent(h)), title)
+		title = firstNonEmpty(collapseSpace(textContent(h)), title)
 	}
 	mode := firstNonEmpty(bizneoWorkMode(fields["Modalidad de trabajo"]), bizneoWorkMode(fields["Modalidade de trabalho"]),
 		bizneoWorkMode(fields["Modalità di lavoro"]), bizneoWorkMode(fields["Work modality"]), c.mode)
@@ -246,7 +244,7 @@ func bizneoFields(root *html.Node) map[string]string {
 		var vals []string
 		walk(n, func(m *html.Node) bool {
 			if m.Type == html.ElementNode && m.Data == "span" {
-				if v := bizneoText(textContent(m)); v != "" {
+				if v := collapseSpace(textContent(m)); v != "" {
 					vals = append(vals, v)
 				}
 				return false
@@ -286,6 +284,3 @@ func bizneoEmploymentType(v string) string {
 	}
 	return ""
 }
-
-// bizneoText collapses the whitespace the templates indent their text with.
-func bizneoText(s string) string { return strings.Join(strings.Fields(s), " ") }

@@ -19,17 +19,10 @@ var ErrListCap = errors.New("cvedit: this edit would drop existing CV content")
 // the full sentence.
 const ListCapCode = "bullet_cap"
 
-// refuseIfSanitizeDropsContent returns ErrListCap when the applied document
-// already exceeds the per-role bullet ceiling. Comparing applied vs after by
-// index is unsafe: Sanitize also drops empty experience/project rows, which
-// shifts later roles and looks like bullet loss.
-// Dropping whitespace-only bullets is allowed — that is cleanup, not content loss.
-//
-// It reads ONE document — the pre-Sanitize one — and takes no second state, though it
-// carried an unread `after` parameter until 2026-09-06. The parameter was the lie: it
-// said the guard compares before with after, and the two callers passed different
-// nonsense (`after`, and `State{}`) at the exact place where the guard-versus-Sanitize
-// order is what makes CommitDocument's check work at all.
+// refuseIfSanitizeDropsContent returns ErrListCap when the applied document already exceeds
+// the per-role bullet ceiling. It reads ONE document, the pre-Sanitize one: comparing with the
+// sanitized result by index is unsafe, since Sanitize also drops empty rows and shifts later
+// roles. Dropping whitespace-only bullets is cleanup, not content loss.
 func refuseIfSanitizeDropsContent(applied State) error {
 	for i, e := range applied.Experience {
 		if countNonEmpty(e.Bullets) > cv.MaxBullets {
@@ -44,21 +37,16 @@ func refuseIfSanitizeDropsContent(applied State) error {
 	return nil
 }
 
-// ListCapRemedy is the model-facing half of a list-cap refusal: the correction the agent can
-// act on inside the turn. It is separated from the candidate-facing half because the banner
-// must not tell a person to "set an existing bullet" — that is an instruction to a tool.
+// ListCapRemedy is the model-facing half of a list-cap refusal; the candidate-facing banner
+// must not tell a person to "set an existing bullet", which is an instruction to a tool.
 //
-// Exported because the SPA's own alert strips exactly this trailing sentence off the tool
-// error (web/src/lib/assistant/bulletCapAlert.ts). TestListCapWireShape pins it, so rewording
-// it here fails a Go test instead of silently degrading a banner in another language's build.
+// Exported because the SPA strips exactly this sentence off the tool error
+// (web/src/lib/assistant/bulletCapAlert.ts); TestListCapWireShape pins it.
 const ListCapRemedy = "Set an existing bullet or remove one before inserting"
 
 // ListCapError is a refused list-cap edit as DATA: which role is at the ceiling and what the
-// ceiling was. Both audiences are rendered FROM those fields — the model reads Error(), the
-// candidate reads UserMessage() — so neither is recovered by cutting the other's prose.
-//
-// It used to be one English sentence that two other layers took apart with string surgery.
-// Rewording it broke a banner and an SPA parser with no test failing anywhere.
+// ceiling was. Both audiences render from those fields (model: Error(), candidate:
+// UserMessage()), so neither parses the other's prose.
 type ListCapError struct {
 	// Where names the role or project at the ceiling, as the candidate would recognise it
 	// on their own CV ("Staff Engineer at Contoso", "project Atlas").
@@ -124,8 +112,7 @@ func projectLabel(p cv.Project, i int) string {
 }
 
 // UserListCapMessage turns a list-cap refusal into the sentence shown to the candidate, or ""
-// when err is not one. It reads the error's FIELDS — no cutting of its own prose, which is
-// what used to make rewording the message a silent break.
+// when err is not one.
 func UserListCapMessage(err error) string {
 	var capErr *ListCapError
 	if !errors.As(err, &capErr) {

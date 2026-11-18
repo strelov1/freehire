@@ -311,9 +311,9 @@ describe('the fill_simple frame hire actually sends', () => {
 
 describe('mergeComboboxReplies', () => {
   it('keeps the frame that holds the widget over the frames that do not', () => {
-    expect(
-      mergeComboboxReplies([{ status: 'not_found' }, { status: 'opened' }, { status: 'not_found' }]),
-    ).toEqual({ status: 'opened' });
+    expect(mergeComboboxReplies([{ status: 'not_found' }, { status: 'opened' }, { status: 'not_found' }])).toEqual({
+      status: 'opened',
+    });
   });
 
   it('reports not-found when no frame holds the widget', () => {

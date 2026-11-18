@@ -185,8 +185,7 @@ func TestInfojobsBRHydratesOnlyWhatTheGateLeaves(t *testing.T) {
 	f.pages[link] = ijbrFixture(t, "detail.html")
 	seen := map[string]bool{"12149475": true}
 	gate := DetailGate{
-		Covered:  func([]string) map[string]bool { return map[string]bool{"REPOR BRASIL": true} },
-		Rejected: func(j Job) bool { return j.ExternalID == "12027100" },
+		Covered: func([]string) map[string]bool { return map[string]bool{"REPOR BRASIL": true} },
 	}
 	g := ijbrAdapter(f)
 	g.maxNewPerBoard = 1
@@ -213,9 +212,6 @@ func TestInfojobsBRHydratesOnlyWhatTheGateLeaves(t *testing.T) {
 	if j, ok := byID["12146881"]; !ok || j.Description != "" {
 		t.Errorf("a covered posting must be yielded body-less, got %+v (ok=%v)", j, ok)
 	}
-	if j, ok := byID["12027100"]; !ok || j.Description != "" {
-		t.Errorf("a rejected posting must be yielded body-less, got %+v (ok=%v)", j, ok)
-	}
 	j := byID["12151206"]
 	if j.Company != "Youtility Center do Brasil" || j.Location != "Rio Branco, AC, Brasil" || j.WorkMode != "onsite" || j.EmploymentType != "full_time" {
 		t.Errorf("job = %+v", j)
@@ -231,7 +227,7 @@ func TestInfojobsBRHydratesOnlyWhatTheGateLeaves(t *testing.T) {
 	if j.PostedAt == nil || !j.PostedAt.Equal(want) {
 		t.Errorf("posted = %v, want %v", j.PostedAt, want)
 	}
-	// Past the per-board bound: listed, unseen, not covered, not rejected — and not yielded.
+	// Past the per-board bound: listed, unseen, not covered — and not yielded.
 	for _, id := range []string{"11939284", "11925370", "10492430"} {
 		if _, ok := byID[id]; ok {
 			t.Errorf("posting %s past the bound was yielded", id)

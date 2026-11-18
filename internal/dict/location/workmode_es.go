@@ -9,9 +9,7 @@ import (
 )
 
 // spanishWorkModePhrases is the Spanish counterpart of dutchWorkModePhrases, built from
-// the Spanish-language crawl (infojobs, occ, pandapelatam, teamtailor, factorial,
-// getonbrd, torre, hiringroom, personio, eures: ~25k open postings on 2026-10-27, of which
-// the ~6k that carry no structured work mode are what this list fills).
+// the Spanish-language crawl; it fills postings with no structured work mode.
 //
 // Spanish states the arrangement more often than German or Dutch do ("Modalidad:
 // híbrida", "100% remoto", "modalidad presencial"), but home working is still listed as a
@@ -31,12 +29,12 @@ import (
 //     remota" — a technical service or a way of working with a team, not the arrangement.
 //   - bare "híbrido": "entornos tecnológicos híbridos", "aplicaciones nativas/híbridas".
 //   - bare "presencial": "clases presenciales o en línea" (a tutoring platform's
-//     boilerplate, ~5k rows), "entrevista presencial", "formación presencial". Only the
+//     boilerplate), "entrevista presencial", "formación presencial". Only the
 //     work-model forms count.
 //   - "trabajo desde casa": the LinkedIn line "Hay opciones de teletrabajo/trabajo desde
 //     casa disponibles" is an option, read through "teletrabajo" as hybrid; alone it is
 //     as often a remote call-centre post as a perk.
-//   - "desde cualquier lugar": the "work from anywhere" perk shape (freehire#2696).
+//   - "desde cualquier lugar": the "work from anywhere" perk shape.
 //   - bare "home office": German and English prose reach this list too, and "Home Office
 //     ist leider nicht möglich" or "equip your home office" are not a Spanish offer. Only
 //     the Spanish forms around it count ("2 días de home office", "apoyo de home office").

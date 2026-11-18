@@ -54,10 +54,10 @@ func TestSanitizeCapsArrays(t *testing.T) {
 	t.Cleanup(func() { SetMaxBullets(prev) })
 
 	doc := Document{}
-	for i := 0; i < maxExperience+10; i++ {
+	for i := 0; i < MaxExperience+10; i++ {
 		doc.Experience = append(doc.Experience, ExperienceItem{Role: "eng"})
 	}
-	for i := 0; i < maxSkillGroups+10; i++ {
+	for i := 0; i < MaxSkillGroups+10; i++ {
 		doc.Skills = append(doc.Skills, SkillGroup{Group: "g", Items: []string{"go"}})
 	}
 	bullets := make([]string, MaxBullets+10)
@@ -68,10 +68,10 @@ func TestSanitizeCapsArrays(t *testing.T) {
 
 	doc.Sanitize()
 
-	if len(doc.Experience) > maxExperience {
+	if len(doc.Experience) > MaxExperience {
 		t.Errorf("Experience not capped: %d", len(doc.Experience))
 	}
-	if len(doc.Skills) > maxSkillGroups {
+	if len(doc.Skills) > MaxSkillGroups {
 		t.Errorf("Skills not capped: %d", len(doc.Skills))
 	}
 	for _, e := range doc.Experience {

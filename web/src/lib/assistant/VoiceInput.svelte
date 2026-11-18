@@ -109,27 +109,27 @@
     chunks = [];
     keeping = false;
     recorder = new MediaRecorder(stream, { mimeType: container.mimeType });
-    recorder.ondataavailable = (event) => {
+    recorder.addEventListener('dataavailable', (event) => {
       if (event.data.size > 0) chunks.push(event.data);
-    };
+    });
     // Without this a recorder that fails mid-capture leaves the component stuck in
     // `recording` with the microphone still open and no control that ends it.
-    recorder.onerror = () => {
+    recorder.addEventListener('error', () => {
       keeping = false;
       release();
       recorder = null;
       chunks = [];
       phase = 'idle';
       onError('The recording stopped unexpectedly.');
-    };
-    recorder.onstop = () => {
+    });
+    recorder.addEventListener('stop', () => {
       release();
       const captured = chunks;
       chunks = [];
       recorder = null;
       if (keeping) void send(captured, container);
       else phase = 'idle';
-    };
+    });
     recorder.start();
     phase = 'recording';
 
@@ -147,7 +147,7 @@
   function stop(keep: boolean) {
     if (phase !== 'recording') return;
     keeping = keep;
-    // Ask the recorder to stop rather than tearing down here: `onstop` is where the
+    // Ask the recorder to stop rather than tearing down here: the `stop` event is where the
     // captured chunks arrive, and releasing the stream first would lose the tail.
     recorder?.stop();
   }

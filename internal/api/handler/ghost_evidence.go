@@ -9,23 +9,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// ghostEvidenceFor gathers the outcome evidence for a page of jobs in two queries
-// rather than two per card. The returned map is sparse — only jobs anyone applied to
-// or reported appear in it — so a page with no evidence costs two empty result sets.
+// ghostEvidenceFor gathers the outcome evidence for a page of jobs in two queries. The
+// map is sparse: only jobs anyone applied to or reported appear.
 //
-// Shared by the job read paths and the search path, which need the same evidence from
-// different starting shapes. Two copies of this drifted apart the moment one of them
-// gained the closed-job check.
+// Shared by the job read paths and the search path, so the closed-job check lives once.
 //
-// Best-effort: a lookup failure yields no evidence, which downgrades or removes the
-// signal rather than failing the read. That is the honest direction — a missing lookup
-// is a gap in what we know, and the signal's whole discipline is to say nothing where
-// it has not observed.
-//
-// Best-effort is not silent, though. Losing these two reads takes the whole outcome
-// tier out of the verdict — LevelLikely needs evidence and becomes unreachable — and
-// there is no QueryTracer in internal/platform/db, so a swallowed error left no trace
-// anywhere: the badge simply stopped appearing and every page still answered 200.
+// Best-effort: a lookup failure yields no evidence and downgrades the signal rather than
+// failing the read. It is logged, though: losing these reads makes LevelLikely unreachable
+// and the badge would silently stop appearing.
 func ghostEvidenceFor(ctx context.Context, q *db.Queries, jobIDs []int64) map[int64]ghost.Evidence {
 	if q == nil || len(jobIDs) == 0 {
 		return nil
@@ -58,14 +49,12 @@ func ghostEvidenceFor(ctx context.Context, q *db.Queries, jobIDs []int64) map[in
 	return ghost.Aggregate(time.Now(), apps, reports)
 }
 
-// logGhostLookup records a best-effort ghost-signal read that failed, saying whether
-// the page simply went away or the database did.
+// logGhostLookup records a failed best-effort ghost-signal read, saying whether the page
+// went away or the database did.
 //
-// It classifies on the CONTEXT, not on the error — the idiom searchdrain and embed
-// settled on. A reader who navigates away cancels the request, every in-flight query
-// fails with it, and counting those as faults would bury the one line that means
-// something under the commonest event on the site. Reading ctx.Err() answers that
-// without needing the driver to cooperate with errors.Is.
+// It classifies on the context, not the error (as searchdrain and embed do): a reader who
+// navigates away cancels every in-flight query, and counting those as faults would bury
+// the real ones.
 func logGhostLookup(ctx context.Context, stage string, jobs int, err error) {
 	if cause := ctx.Err(); cause != nil {
 		log.Printf("ghost: %s for %d jobs abandoned (%v) — signal omitted", stage, jobs, cause)

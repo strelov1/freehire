@@ -24,13 +24,12 @@ func pgTimestamptz(t time.Time) pgtype.Timestamptz {
 }
 
 // ageJob backdates a job's last_seen_at so sweep cutoffs can be exercised
-// without sleeping.
+// without sleeping. The stamp is the posting's job_activity row.
 func ageJob(t *testing.T, pool *pgxpool.Pool, id int64, seenAgo time.Duration) {
 	t.Helper()
-	_, err := pool.Exec(context.Background(),
-		"UPDATE jobs SET last_seen_at = now() - $2::interval WHERE id = $1",
-		id, seenAgo.String())
-	if err != nil {
+	if _, err := pool.Exec(context.Background(),
+		"UPDATE job_activity SET last_seen_at = now() - $2::interval WHERE job_id = $1",
+		id, seenAgo.String()); err != nil {
 		t.Fatalf("backdate last_seen_at: %v", err)
 	}
 }

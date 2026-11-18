@@ -7,6 +7,12 @@ from the achievement atoms the candidate has actually asserted. It owns the thre
 the wire shape and its sanitize pass, the evidence gathering, and the single stored draft per
 (candidate, vacancy).
 
+The referral-message path reuses the chain's evidence gate, prompt input, bounds, and citation
+sanitizer. It takes the top four `Gather` results into one draft call, requesting the message
+and the IDs it cites together. A response without a usable cited achievement fails. The profile
+and result live only in the request; no cover-letter store is used. Generation tracing is
+disabled for this path so the contact text is not copied into traces.
+
 Of the 402,117 open postings whose apply form we have captured, 209,297 ask for a letter and
 172,783 of those accept it as text. The remaining 36,514 (recruitee, ashby) take a file upload
 only — the letter is still useful there, but by hand.
@@ -24,6 +30,10 @@ only — the letter is still useful there, but by hand.
   like a working gate. Checking the finished prose instead would mean matching sentences back
   to atoms, the fuzzy problem the gate exists to avoid; a model that never sees an inferred
   atom cannot cite one. A caller cannot skip it, which is why it is not a parameter.
+- **A referral draft must cite an offered achievement.** `Gather` ranks the bank evidence,
+  `Publishable` removes inferred claims, and the one-call result passes through `Sanitize`.
+  An empty or unknown citation is a failure, not a message shown as supported. The short
+  referral path does not run the cover letter's select and audit stages.
 - **The letter is written in the language of the VACANCY.** This inverts `matchanalysis`, which
   writes in the candidate's profile language, and the inversion is the point: an analysis is
   the candidate reading themselves, a letter is read by the employer. `LanguageOf` falls back
@@ -53,6 +63,22 @@ only — the letter is still useful there, but by hand.
   `""` — an empty letter, persisted, with nothing failing. `MaxCited: 0` is worse: `Sanitize`
   stops at `len(kept) == MaxCited`, never true after the first append, so the cap does not
   default — it disappears.
+
+## Candidate-selected evidence
+
+`Store.GetSelection` / `SaveSelection` own a revisioned selection per `(user_id, job_id)`.
+Absence preserves automatic Gather behavior; an existing empty selection blocks drafting.
+The reference array intentionally survives atom deletion so invalid evidence requires review.
+Updates use optimistic revisions, including competing first saves, and accept at most 50
+unique owned publishable atoms. Review and save perform no model call or allowance charge.
+
+The shared handler drafter prepares and freezes evidence before charging on HTTP and assistant
+paths. Explicit mode also removes achievement prose from the professional projection and fit
+analysis; otherwise excluded facts could re-enter through those inputs. The chain's provenance
+and citation gates still apply. A stored draft records the selection revision and atom
+fingerprint used at generation, and changed explicit evidence marks it outdated. Legacy drafts
+without fingerprints have unknown evidence freshness. Citations identify letter-level support;
+they are not sentence-level verification.
 
 ## How it works
 

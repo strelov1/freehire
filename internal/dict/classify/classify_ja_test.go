@@ -9,7 +9,7 @@ import (
 
 // Japanese titles the dictionary could not read at all until now. hrmos alone carried 35,458
 // open postings with 731 in search, because a title the dictionary cannot categorise is
-// dropped from the index by search.CategoryUnresolved and never enriched — is_tech stays
+// dropped from the index (until #4412; now filed under "other") and never enriched — is_tech stays
 // NULL, EnqueuePendingJobs skips it, and nothing ever revisits the decision.
 //
 // Every title below is a real open posting. The glued ones (シニア+データサイエンティスト,

@@ -56,7 +56,7 @@ function pad(n: number): string {
 /** The reader's own calendar date for an instant. Local accessors, deliberately: the
  *  UTC ones would file a late-evening event on the previous day for anyone east of
  *  Greenwich, and on the next one for anyone west of it. */
-function dayKey(d: Date): string {
+export function calendarDayKey(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
@@ -68,7 +68,7 @@ function dayKey(d: Date): string {
 function groupByLocalDay<T>(items: T[], instantOf: (item: T) => string): Map<string, T[]> {
   const byDay = new Map<string, T[]>();
   for (const item of items) {
-    const key = dayKey(new Date(instantOf(item)));
+    const key = calendarDayKey(new Date(instantOf(item)));
     const bucket = byDay.get(key);
     if (bucket) bucket.push(item);
     else byDay.set(key, [item]);
@@ -117,12 +117,12 @@ export function buildCalendarMonth(
 
   const { first, last } = gridBounds(year, month);
   const cells = Math.round((last.getTime() - first.getTime()) / MS_PER_DAY) + 1;
-  const todayKey = dayKey(today);
+  const todayKey = calendarDayKey(today);
 
   const days: CalendarDay[] = [];
   for (let i = 0; i < cells; i++) {
     const date = addDays(first, i);
-    const key = dayKey(date);
+    const key = calendarDayKey(date);
     days.push({
       key,
       date,
@@ -160,13 +160,30 @@ export function rangeForMonth(year: number, month: number): { from: string; to: 
   return { from: from.toISOString(), to: new Date(to.getTime() - 1).toISOString() }; // …less an instant
 }
 
+/** Monday-first week containing the anchor, using local calendar arithmetic across DST. */
+export function buildCalendarWeek(
+  anchor: Date,
+  events: TimelineEvent[],
+  interviews: ScheduledInterview[] = [],
+  today: Date = new Date(),
+): CalendarDay[] {
+  const month = buildCalendarMonth(anchor.getFullYear(), anchor.getMonth(), events, interviews, today);
+  return month.weeks.find((week) => week.some((day) => day.key === calendarDayKey(anchor))) ?? [];
+}
+
+/** Fetch a week with one margin day on either side for readers across timezones. */
+export function rangeForWeek(anchor: Date): { from: string; to: string } {
+  const monday = addDays(anchor, -mondayIndex(anchor));
+  return {
+    from: addDays(monday, -1).toISOString(),
+    to: new Date(addDays(monday, 8).getTime() - 1).toISOString(),
+  };
+}
+
 /** splitDayEvents divides a cell's marks into the ones it shows and a count of the rest.
  *  A bulk-apply evening is ordinary behaviour, and a cell that silently dropped the tail
  *  would under-report the day. */
-export function splitDayEvents(
-  events: TimelineEvent[],
-  cap: number,
-): { shown: TimelineEvent[]; remaining: number } {
+export function splitDayEvents(events: TimelineEvent[], cap: number): { shown: TimelineEvent[]; remaining: number } {
   return { shown: events.slice(0, cap), remaining: Math.max(0, events.length - cap) };
 }
 

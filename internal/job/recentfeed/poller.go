@@ -15,8 +15,7 @@ type Store interface {
 }
 
 // Poller drains recent_feed_outbox on a fixed interval inside the long-lived
-// cmd/server process and publishes the grouped result to a Broadcaster. See
-// design.md, "Poller runs inside cmd/server, not as a separate cmd/*-drain binary".
+// cmd/server process and publishes the grouped result to a Broadcaster.
 type Poller struct {
 	store       Store
 	broadcaster *Broadcaster
@@ -61,9 +60,7 @@ func (p *Poller) Poll(ctx context.Context) error {
 	for i, r := range rows {
 		postings[i] = Posting{Title: r.Title, CompanyName: r.Company, CompanySlug: r.CompanySlug, JobSlug: r.PublicSlug}
 	}
-	// Stamped once, here, rather than inside Group: Group stays a pure function
-	// of its input, and every entry from one poll tick reports the same
-	// instant regardless of how long grouping itself took.
+	// Stamped here, not in Group, so Group stays pure and one tick's entries share an instant.
 	now := time.Now()
 	for _, e := range Group(postings) {
 		e.ProducedAt = now

@@ -14,7 +14,7 @@ import (
 
 // exemptFromBootstrap lists the cmd/ binaries that open a database pool without going
 // through worker.Bootstrap, with the reason. Every other pool-opening binary must use
-// the shared bootstrap: it is what initializes Sentry, derives the SIGTERM-cancellable
+// the shared bootstrap: it is what initializes error reporting, derives the SIGTERM-cancellable
 // context, and returns the cleanup that closes the pool. Two backfills drifted out of
 // that rule without anything failing, which is why the rule is a test and not a comment.
 var exemptFromBootstrap = map[string]string{
@@ -62,7 +62,7 @@ func TestPoolOpeningCommandsUseSharedBootstrap(t *testing.T) {
 			continue
 		}
 		if !usesBootstrap {
-			t.Errorf("cmd/%s opens a database pool without worker.Bootstrap: it gets no Sentry init, "+
+			t.Errorf("cmd/%s opens a database pool without worker.Bootstrap: it gets no error-reporting init, "+
 				"no SIGTERM-cancellable context, and its deferred cleanup is at the mercy of os.Exit. "+
 				"Convert it to worker.Main(run) + worker.Bootstrap, or add it to exemptFromBootstrap with a reason.", name)
 			continue

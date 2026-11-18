@@ -5,7 +5,7 @@
   import { companyLabel } from '#lib/mentorship.js';
   import { errorMessage, formatDate } from '#lib/utils.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
-  import { Badge, Button, Card } from '#lib/ui/index.js';
+  import { Badge, Button, Card, onImageError } from '#lib/ui/index.js';
   import type { PendingMentorProfile } from '#lib/types.js';
   import { SvelteSet } from 'svelte/reactivity';
   import States from './States.svelte';
@@ -56,9 +56,7 @@
 <div class="flex flex-col gap-4">
   <div>
     <h2 class="text-sm font-medium">Mentor profiles</h2>
-    <p class="text-muted-foreground mt-1 text-sm">
-      Oldest first. Approving one publishes it; nothing else does.
-    </p>
+    <p class="text-muted-foreground mt-1 text-sm">Oldest first. Approving one publishes it; nothing else does.</p>
   </div>
 
   {#if status === 'loading'}
@@ -103,9 +101,7 @@
                  for the same company. The spec is explicit that an approved offer does not
                  approve a mentor profile, so this is shown and nothing acts on it. -->
             {#if profile.has_approved_referral_offer}
-              <p class="text-muted-foreground text-sm">
-                Already an approved referrer for this company.
-              </p>
+              <p class="text-muted-foreground text-sm">Already an approved referrer for this company.</p>
             {/if}
 
             <div>
@@ -125,7 +121,7 @@
                     src={`/api/v1/mentorship/profiles/${profile.id}/photo`}
                     alt=""
                     class="h-16 w-16 shrink-0 rounded-full object-cover"
-                    onerror={() => photoFailed.add(profile.id)}
+                    {@attach onImageError(() => photoFailed.add(profile.id))}
                   />
                 {/if}
                 <div class="flex flex-col gap-2">
@@ -151,11 +147,7 @@
             {/if}
 
             <div class="flex gap-2">
-              <Button
-                size="sm"
-                disabled={acting === profile.id}
-                onclick={() => decide(profile, 'approved')}
-              >
+              <Button size="sm" disabled={acting === profile.id} onclick={() => decide(profile, 'approved')}>
                 Approve
               </Button>
               <Button

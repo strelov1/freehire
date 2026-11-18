@@ -22,9 +22,8 @@ const (
 	teclaJobURL  = "https://app.tecla.io/job?id=%d"
 	// teclaMaxPages bounds pagination so a wrong or missing countPages cannot loop.
 	teclaMaxPages = 100
-	// teclaDateLayout matches the zone-less createdAt tecla emits ("2026-05-25T17:02:00.864421").
-	// The .9 fractional form parses any sub-second width (or none), so the digit count is not
-	// load-bearing — the conventional 9-nine form just states "arbitrary precision".
+	// teclaDateLayout matches the zone-less createdAt tecla emits ("2026-05-25T17:02:00.864421");
+	// the .9 fractional form accepts any sub-second width.
 	teclaDateLayout = "2006-01-02T15:04:05.999999999"
 )
 

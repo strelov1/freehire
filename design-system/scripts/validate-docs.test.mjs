@@ -16,10 +16,7 @@ describe('propsFrom', () => {
   });
 
   it('reads a single-line destructure', () => {
-    expect(propsFrom(`let { code, label }: { code: string; label: string } = $props();`)).toEqual([
-      'code',
-      'label',
-    ]);
+    expect(propsFrom(`let { code, label }: { code: string; label: string } = $props();`)).toEqual(['code', 'label']);
   });
 
   // The call site writes class=, never className=, so className is the wrong name
@@ -31,10 +28,7 @@ describe('propsFrom', () => {
   // Input documents its passthrough as a prop called '...rest'. Keep that spelling:
   // it is the one entry that tells a reader the component forwards anything else.
   it('names the rest spread the way the docs already do', () => {
-    expect(propsFrom(`let { value = $bindable(), ...rest } = $props();`)).toEqual([
-      'value',
-      '...rest',
-    ]);
+    expect(propsFrom(`let { value = $bindable(), ...rest } = $props();`)).toEqual(['value', '...rest']);
   });
 
   // The inline type annotation is a second brace block between the destructure and

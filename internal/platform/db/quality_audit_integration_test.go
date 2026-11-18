@@ -46,7 +46,7 @@ func TestQualityAuditSamplesOnlyTheShownCatalogue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("remote sample: %v", err)
 	}
-	if got := slugsOf(remote, func(r SampleRemoteAuditJobsRow) string { return r.PublicSlug }); got != "job-a,job-b" {
+	if got := slugsOf(remote, func(r SampleRemoteAuditJobsRow) string { return r.PublicSlug }); got != "job-b" {
 		t.Errorf("remote sample = %s, want the open public remote postings of src", got)
 	}
 	for _, r := range remote {
@@ -55,11 +55,19 @@ func TestQualityAuditSamplesOnlyTheShownCatalogue(t *testing.T) {
 		}
 	}
 
+	global, err := q.SampleRemoteAuditJobs(ctx, SampleRemoteAuditJobsParams{Source: "src", Fraction: 1, MaxRows: 10, OnlyGlobal: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := slugsOf(global, func(r SampleRemoteAuditJobsRow) string { return r.PublicSlug }); got != "job-a" {
+		t.Fatalf("global stratum = %s", got)
+	}
+
 	counts, err := q.CountOpenRemoteJobsBySource(ctx, 2)
 	if err != nil {
 		t.Fatalf("count: %v", err)
 	}
-	if len(counts) != 1 || counts[0] != (CountOpenRemoteJobsBySourceRow{Source: "src", RemoteJobs: 2}) {
+	if len(counts) != 1 || counts[0] != (CountOpenRemoteJobsBySourceRow{Source: "src", RemoteJobs: 2, GlobalJobs: 1}) {
 		t.Errorf("counts = %+v, want src:2 only (other is under the floor)", counts)
 	}
 }

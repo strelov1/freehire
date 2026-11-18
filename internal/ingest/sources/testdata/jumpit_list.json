@@ -1,0 +1,153 @@
+{
+  "code": "",
+  "message": "",
+  "status": 200,
+  "result": {
+    "totalCount": 5,
+    "positions": [
+      {
+        "id": 55441892,
+        "jobCategory": "SW/솔루션",
+        "logo": "https://cdn.jumpit.co.kr/lg/images/hmlee_4/20211906151921216_313_304.webp",
+        "imagePath": "https://cdn.jumpit.co.kr/lg/images/yjlee_3945/20210623160633989_1013_517.webp",
+        "title": "SAP ABAP 개발 및 운영 담당자",
+        "companyName": "지에스아이티엠",
+        "techStacks": [
+          "ABAP",
+          "ERP",
+          "SAP"
+        ],
+        "viewCount": 10,
+        "newcomer": false,
+        "minCareer": 1,
+        "maxCareer": 10,
+        "locations": [
+          "서울 종로구"
+        ],
+        "alwaysOpen": false,
+        "closedAt": "2026-11-29T23:59:59",
+        "serialNumber": "1018623426",
+        "encodedSerialNumber": "MTAxODYyMzQyNg==",
+        "celebration": 50,
+        "scraped": false,
+        "applied": false
+      },
+      {
+        "id": 55482651,
+        "jobCategory": "HW/임베디드",
+        "logo": "https://cdn.jumpit.co.kr/images/jnyoon_106/20265724105747392_189_189.png",
+        "imagePath": "https://cdn.jumpit.co.kr/images/company/7038101581/20252026102038995/t1j3wq93_pfnd-1e0k7er_workenv-bg.jpg",
+        "title": "Robot Controls Engineer",
+        "companyName": "셀틱스테크놀로지",
+        "techStacks": [
+          "C#",
+          "C++",
+          "Python",
+          "Embedded",
+          "RTOS"
+        ],
+        "viewCount": 5,
+        "newcomer": false,
+        "minCareer": 7,
+        "maxCareer": 15,
+        "locations": [
+          "경기 용인시 처인구"
+        ],
+        "alwaysOpen": false,
+        "closedAt": "2026-12-03T23:59:59",
+        "serialNumber": "7038101581",
+        "encodedSerialNumber": "NzAzODEwMTU4MQ==",
+        "celebration": 50,
+        "scraped": false,
+        "applied": false
+      },
+      {
+        "id": 55451145,
+        "jobCategory": "인공지능/머신러닝",
+        "logo": "https://cdn.jumpit.co.kr/lg/images/jnyoon_106/20255024125006227_189_189.webp",
+        "imagePath": "https://cdn.jumpit.co.kr/images/327076/20252924112955219/profile-image.jpg",
+        "title": "IT/AI부문(전문연구요원 포함)신입",
+        "companyName": "연합인포맥스",
+        "techStacks": [
+          "Azure DevOps",
+          "Python",
+          "AWS",
+          "GCP",
+          "AZURE"
+        ],
+        "scrapCount": 1,
+        "viewCount": 56,
+        "newcomer": true,
+        "minCareer": 0,
+        "maxCareer": 0,
+        "locations": [
+          "서울 종로구"
+        ],
+        "alwaysOpen": false,
+        "closedAt": "2026-12-01T23:59:59",
+        "serialNumber": "1018158798",
+        "encodedSerialNumber": "MTAxODE1ODc5OA==",
+        "celebration": 50,
+        "scraped": false,
+        "applied": false
+      },
+      {
+        "id": 55425594,
+        "jobCategory": "서버/백엔드 개발자,프론트엔드 개발자",
+        "logo": "https://cdn.jumpit.co.kr/images/327345/20254525144548048/profile-image.png",
+        "imagePath": "https://cdn.jumpit.co.kr/images/327345/20255425145433659/profile-image.jpg",
+        "title": "웹 개발자 채용[과장]",
+        "companyName": "건강누리",
+        "techStacks": [
+          "HTML5",
+          "JavaScript",
+          "Uniform CSS"
+        ],
+        "scrapCount": 1,
+        "viewCount": 44,
+        "newcomer": false,
+        "minCareer": 6,
+        "maxCareer": 12,
+        "locations": [
+          "서울 영등포구"
+        ],
+        "alwaysOpen": false,
+        "closedAt": "2026-11-27T23:59:59",
+        "serialNumber": "5048187997",
+        "encodedSerialNumber": "NTA0ODE4Nzk5Nw==",
+        "celebration": 50,
+        "scraped": false,
+        "applied": false
+      },
+      {
+        "id": 55366649,
+        "jobCategory": "devops/시스템 엔지니어",
+        "logo": "https://cdn.jumpit.co.kr/lg/images/hmlee_4/20223119093117622_800_800.webp",
+        "imagePath": "https://cdn.jumpit.co.kr/lg/images/syyun_26773/20220524180504227_1080_899.webp",
+        "title": "[일본] FDE(SW) - Solutions Architect",
+        "companyName": "올거나이즈코리아",
+        "techStacks": [
+          "Linux",
+          "Python",
+          "AI/인공지능",
+          "K8S",
+          "Infra"
+        ],
+        "viewCount": 16,
+        "newcomer": false,
+        "minCareer": 1,
+        "maxCareer": 20,
+        "locations": [
+          "아시아·중동 일본 도쿄"
+        ],
+        "alwaysOpen": false,
+        "closedAt": "2026-11-20T23:59:59",
+        "serialNumber": "7338101035",
+        "encodedSerialNumber": "NzMzODEwMTAzNQ==",
+        "celebration": 50,
+        "scraped": false,
+        "applied": false
+      }
+    ]
+  }
+}

@@ -12,33 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const companiesWithApprovedReferrer = `-- name: CompaniesWithApprovedReferrer :many
-SELECT DISTINCT company_slug FROM referral_offers
-WHERE status = 'approved' AND company_slug = ANY($1::text[])
-`
-
-// The subset of the given company slugs that are referral-eligible — for annotating a
-// job/company list in one round-trip instead of a query per row.
-func (q *Queries) CompaniesWithApprovedReferrer(ctx context.Context, slugs []string) ([]string, error) {
-	rows, err := q.db.Query(ctx, companiesWithApprovedReferrer, slugs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var company_slug string
-		if err := rows.Scan(&company_slug); err != nil {
-			return nil, err
-		}
-		items = append(items, company_slug)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const companyHasApprovedReferrer = `-- name: CompanyHasApprovedReferrer :one
 SELECT EXISTS (
     SELECT 1 FROM referral_offers WHERE company_slug = $1 AND status = 'approved'
@@ -52,24 +25,6 @@ func (q *Queries) CompanyHasApprovedReferrer(ctx context.Context, companySlug st
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
-}
-
-const countReferralRequestsSince = `-- name: CountReferralRequestsSince :one
-SELECT count(*) FROM referral_requests
-WHERE seeker_user_id = $1 AND created_at >= $2
-`
-
-type CountReferralRequestsSinceParams struct {
-	SeekerUserID int64              `json:"seeker_user_id"`
-	Since        pgtype.Timestamptz `json:"since"`
-}
-
-// How many requests a seeker has created since a cutoff — the per-day cap check.
-func (q *Queries) CountReferralRequestsSince(ctx context.Context, arg CountReferralRequestsSinceParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countReferralRequestsSince, arg.SeekerUserID, arg.Since)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
 }
 
 const createReferralOffer = `-- name: CreateReferralOffer :one
@@ -271,10 +226,10 @@ func (q *Queries) GetReferralRequest(ctx context.Context, id uuid.UUID) (Referra
 }
 
 const listApprovedReferrerRecipients = `-- name: ListApprovedReferrerRecipients :many
-SELECT o.user_id, u.email, t.chat_id
+SELECT o.user_id, mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS email, t.chat_id
 FROM referral_offers o
 JOIN users u ON u.id = o.user_id
-LEFT JOIN telegram_links t ON t.user_id = o.user_id
+LEFT JOIN telegram_links t ON t.user_id = o.user_id AND u.banned_at IS NULL
 WHERE o.company_slug = $1 AND o.status = 'approved'
 `
 
@@ -285,8 +240,8 @@ type ListApprovedReferrerRecipientsRow struct {
 }
 
 // The notify fan-out targets: every approved referrer of a company with their email and
-// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
-// optional Telegram ping.
+// linked Telegram chat (NULL when unlinked). Email is ” when mail_recipient (0247) says
+// the address may not be mailed; chat_id drives the optional Telegram ping.
 func (q *Queries) ListApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]ListApprovedReferrerRecipientsRow, error) {
 	rows, err := q.db.Query(ctx, listApprovedReferrerRecipients, companySlug)
 	if err != nil {

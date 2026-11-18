@@ -101,6 +101,47 @@ func TestParse_BCSHeadsAndFields(t *testing.T) {
 		// Without the diacritics, as some boards print them.
 		{"Vozac kamiona", "logistics"},
 		{"Racunovodja (m/z)", "finance"},
+		// The hzz/infostud/mojposao tail, measured 2026-11-10 (#4412): the teaching and
+		// care aides, the allied health degrees, the farm, forest, sawmill and
+		// construction trades, the shop counters, real estate, civil protection.
+		{"POMOĆNIK/CA U NASTAVI", "education"},
+		{"POMOĆNIK/POMOĆNICA ZA DJECU S TEŠKOĆAMA U RAZVOJU", "education"},
+		{"KNJIŽNIČAR/KNJIŽNIČARKA", "education"},
+		{"TRENER/ICA PLIVANJA", "education"},
+		{"POMOĆNI/A RADNIK/CA ZA NJEGU, SKRB I PRATNJU", "healthcare"},
+		{"RADNIK/RADNICA ZA POMOĆ U KUĆI", "healthcare"},
+		{"PRVOSTUPNIK/CA SESTRINSTVA", "healthcare"},
+		{"PRVOSTUPNIK/PRVOSTUPNICA FIZIOTERAPIJE", "healthcare"},
+		{"PRVOSTUPNIK/PRVOSTUPNICA RADIOLOŠKE TEHNOLOGIJE", "healthcare"},
+		{"MAGISTAR/MAGISTRA PSIHOLOGIJE", "healthcare"},
+		{"POLJOPRIVREDNI RADNIK/POLJOPRIVREDNA RADNICA", "skilled_trades"},
+		{"ŠUMSKI SJEKAČ/ŠUMSKA SJEKAČICA", "skilled_trades"},
+		{"Diplomirani inženjer poljoprivrede - stočarski smer", "science"},
+		{"DRVOPRERAĐIVAČKI RADNIK/DRVOPRERAĐIVAČKA RADNICA", "manufacturing"},
+		{"RADNIK/RADNICA NA PILANI", "manufacturing"},
+		{"GRAĐEVINSKI TEHNIČAR/GRAĐEVINSKA TEHNIČARKA", "skilled_trades"},
+		{"RADNIK NISKOGRADNJE", "skilled_trades"},
+		{"INŽENJER / INŽENJERKA NISKOGRADNJE", "industrial_engineering"},
+		{"RUKOVATELJ/RUKOVATELJICA GRAĐEVINSKIM STROJEVIMA", "skilled_trades"},
+		{"RUKOVATELJ/RUKOVATELJICA ALATNIM STROJEVIMA", "manufacturing"},
+		{"RUKOVATELJ/RUKOVATELJICA VILIČAROM", "logistics"},
+		{"RADNIK/RADNICA NA MONTAŽI", "manufacturing"},
+		{"Radnik u butiku", "retail"},
+		{"TRGOVAČKI RADNIK/TRGOVAČKA RADNICA", "retail"},
+		{"RADNIK/RADNICA NA GASTRO ODJELU", "retail"},
+		{"Radnik na kasi u marketu", "retail"},
+		{"AGENT / AGENTICA PRI POSREDOVANJU U PROMETU NEKRETNINAMA", "sales"},
+		{"Stručno-komercijalni saradnik", "sales"},
+		{"Radnik u turističkoj agenciji", "hospitality"},
+		{"OPERATIVNI/A DJELATNIK/CA ZA SIGURNOST I CIVILNU ZAŠTITU", "public_safety"},
+		{"ZAPOVJEDNIK / ZAPOVJEDNICA VATROGASNE POSTROJBE", "public_safety"},
+		{"SANITARNI/A INŽENJER/KA", "occupational_safety"},
+		{"Specijalista za bezbednost i zdravlje na radu", "occupational_safety"},
+		{"Specijalista za obračun zarada", "finance"},
+		{"Specijalista za planiranje materijala i carine", "logistics"},
+		{"Referent za odnose s javnošću (m/ž)", "marketing"},
+		{"HR Specijalista (m/ž)", "hr"},
+		{"DJELATNIK / DJELATNICA ZA ČIŠĆENJE", "personal_services"},
 	}
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.want {
@@ -131,6 +172,17 @@ func TestParse_BCSUnresolved(t *testing.T) {
 		"Inženjer",
 		"Razvojni inženjer",
 		"Developer",
+		// What the 2026-11-10 pass (#4412) left alone, as English does: the branch, the
+		// bare administrator, waste work, the "strojar" (machine or plant operator, the
+		// title rarely says which); the fire-equipment service shop, and psychology as
+		// an academic field rather than the psychologist.
+		"Voditelj poslovnice (m/ž)",
+		"DJELATNIK/DJELATNICA POSLOVNICE",
+		"ADMINISTRATOR/ICA",
+		"RADNIK/RADNICA U GOSPODARENJU OTPADOM",
+		"Strojar/ka",
+		"RADNIK / RADNICA U SERVISU VATROGASNE OPREME I VULKANIZACIJE",
+		"ASISTENT/ICA, U ZNANSTVENOM PODRUČJU DRUŠTVENIH ZNANOSTI, POLJE PSIHOLOGIJA",
 	} {
 		if got := Parse(title).Category; got != "" {
 			t.Errorf("Parse(%q).Category = %q, want unresolved", title, got)

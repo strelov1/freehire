@@ -57,12 +57,7 @@
   );
 </script>
 
-<Seo
-  title="{who.login} — freehire contributors"
-  {description}
-  {canonical}
-  image={`${canonical}/og.png`}
-/>
+<Seo title="{who.login} — freehire contributors" {description} {canonical} image={`${canonical}/og.png`} />
 
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
@@ -70,10 +65,7 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-3xl px-4 py-10 sm:py-14">
-  <a
-    href={resolve('/contributors')}
-    class="font-mono text-xs uppercase tracking-widest text-muted-foreground hover:underline"
-  >
+  <a href={resolve('/contributors')} class="font-mono text-xs text-muted-foreground hover:underline">
     ← all contributors
   </a>
 
@@ -104,7 +96,7 @@
     <dl class="-mb-px -mr-px flex flex-wrap">
       {#each stats as stat (stat.label)}
         <div class="flex min-w-36 flex-1 flex-col border-b border-r border-border p-5">
-          <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">
+          <dt class="font-mono text-xs text-balance text-muted-foreground">
             {stat.label}
           </dt>
           <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums">{stat.value}</dd>
@@ -115,7 +107,7 @@
 
   {#if who.recentPullRequests.length > 0}
     <section class="mt-12">
-      <SectionLabel text="merged" />
+      <SectionLabel text="Merged" />
       <h2 class="mt-3 text-xl font-semibold tracking-tight">
         {who.recentPullRequests.length === who.mergedPullRequests
           ? 'Every pull request'
@@ -130,10 +122,7 @@
               <span class="font-mono text-xs text-muted-foreground">#{pr.number}</span>
               <span class="ml-2">{pr.title}</span>
             </a>
-            <time
-              class="shrink-0 font-mono text-xs uppercase tracking-wide text-muted-foreground"
-              datetime={pr.mergedAt}
-            >
+            <time class="shrink-0 font-mono text-xs text-muted-foreground" datetime={pr.mergedAt}>
               {day(pr.mergedAt)}
             </time>
           </li>
@@ -144,9 +133,7 @@
 
   <section class="mt-12 rounded-xl border border-border bg-muted/30 p-6">
     <h2 class="text-lg font-semibold tracking-tight">Share this page</h2>
-    <p class="mt-1 text-sm text-muted-foreground">
-      It is yours — your work, your link, your face on the preview card.
-    </p>
+    <p class="mt-1 text-sm text-muted-foreground">It is yours — your work, your link, your face on the preview card.</p>
     <!-- eslint-disable svelte/no-navigation-without-resolve -- both are external share intents, not SvelteKit routes -->
     <div class="mt-4 flex flex-wrap gap-3">
       <a

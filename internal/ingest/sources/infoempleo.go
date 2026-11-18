@@ -16,16 +16,14 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"golang.org/x/time/rate"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
 // infoempleo adapts Infoempleo (www.infoempleo.com), one of Spain's large general job boards:
-// ~8k public postings across every trade, most of them posted by staffing agencies (ETTs) and
-// recruitment consultancies, a few percent technical. It is boardless and an aggregator — the
-// employer is read per posting. See the "Infoempleo traps" section of AGENTS.md for the
-// measurements behind each rule.
+// every trade, most postings from staffing agencies (ETTs) and recruitment consultancies.
+// Boardless and an aggregator; the employer is read per posting. See the "Infoempleo traps"
+// section of AGENTS.md.
 //
 // The listing is the site's own paginated /trabajo/ walk, 20 cards a page, which spell each
 // posting's title, employer, place, contract and remote arrangement — everything but the body.
@@ -33,7 +31,6 @@ import (
 // catalogue lacks, newest id first, within a per-run budget; the rest are refreshed by identity.
 type infoempleo struct {
 	http         HTMLGetter
-	limiter      waiter
 	maxNewPerRun int
 	maxPages     int
 	// deadlineMargin is how much of the run's deadline hydration leaves to the pipeline: a
@@ -53,13 +50,13 @@ const (
 	// infoempleoDetailWorkers keeps enough pages in flight that the limiter, not latency, sets
 	// the pace.
 	infoempleoDetailWorkers = 2
-	// infoempleoMaxPages is a safety ceiling on the walk: the listing ran to ~390 pages on
-	// 2026-10-27 and answers an empty page (HTTP 200, no cards) past its end.
+	// infoempleoMaxPages is a safety ceiling on the walk; the listing answers an empty page (HTTP
+	// 200, no cards) past its end.
 	infoempleoMaxPages = 800
-	// infoempleoMaxNewPerRun bounds how many unseen postings one run reads: the ~390-page walk
-	// takes ~7 minutes at one a second and 900 posting pages ~15 more, well inside the
-	// scheduler's default 2,400 s crawl budget. The first runs face the whole catalogue, so it is
-	// taken in slices, newest first; a posting past the bound is read by a later run.
+	// infoempleoMaxNewPerRun bounds how many unseen postings one run reads, so the listing walk plus
+	// the page reads fit the scheduler's default 2,400 s crawl budget. The first runs face the whole
+	// catalogue, so it is taken in slices, newest first; a posting past the bound is read by a later
+	// run.
 	infoempleoMaxNewPerRun   = 900
 	infoempleoDeadlineMargin = 5 * time.Minute
 )
@@ -67,8 +64,7 @@ const (
 // NewInfoempleo builds the adapter over the given client.
 func NewInfoempleo(c HTMLGetter) Source {
 	return infoempleo{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(infoempleoRequestInterval), 1),
+		http:           pacedHTMLGetter(c, infoempleoRequestInterval, 1),
 		maxNewPerRun:   infoempleoMaxNewPerRun,
 		maxPages:       infoempleoMaxPages,
 		deadlineMargin: infoempleoDeadlineMargin,
@@ -113,7 +109,7 @@ func (s infoempleo) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 
 // FetchNewGated walks the whole listing, refreshes the postings already stored, and reads up to
 // maxNewPerRun of the rest, newest id first. A posting the pipeline will discard anyway — its
-// employer already covered by a non-aggregator source, or its title rejected — is judged on its
+// employer already covered by a non-aggregator source — is judged on its
 // card and yielded body-less without a request. A posting whose page cannot be read is not
 // yielded; a later run tries again.
 func (s infoempleo) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
@@ -139,7 +135,7 @@ func (s infoempleo) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[c.company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[c.company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -191,12 +187,6 @@ func (s infoempleo) list(ctx context.Context) ([]infoempleoCard, error) {
 	seen := make(map[int64]bool)
 	var out []infoempleoCard
 	for page := 1; page <= s.maxPages; page++ {
-		if err := s.limiter.Wait(ctx); err != nil {
-			if page == 1 {
-				return nil, err
-			}
-			break
-		}
 		u := infoempleoListURL
 		if page > 1 {
 			u = fmt.Sprintf("%spagina_%d/", infoempleoListURL, page)
@@ -266,7 +256,7 @@ func infoempleoCardFrom(n *html.Node) (infoempleoCard, bool) {
 	fact := func(class string) string {
 		if f := firstByClass(n, class); f != nil {
 			if span := firstByTag(f, "span"); span != nil {
-				return infoempleoClean(textContent(span))
+				return collapseSpace(textContent(span))
 			}
 		}
 		return ""
@@ -274,22 +264,20 @@ func infoempleoCardFrom(n *html.Node) (infoempleoCard, bool) {
 	c := infoempleoCard{
 		id:         id,
 		url:        infoempleoBaseURL + href,
-		title:      infoempleoClean(textContent(a)),
+		title:      collapseSpace(textContent(a)),
 		place:      fact("offer-location"),
 		contract:   fact("offer-contract-fact"),
 		remote:     fact("offer-remote-fact"),
 		experience: fact("offer-experience-fact"),
 	}
 	if co := firstByClass(n, "company-name"); co != nil {
-		c.company = infoempleoClean(textContent(co))
+		c.company = collapseSpace(textContent(co))
 	}
 	if c.title == "" {
 		return infoempleoCard{}, false
 	}
 	return c, true
 }
-
-func infoempleoClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // infoempleoBaseJob is the body-less Job a card alone supports: the identity, and the facts the
 // gate judges on.
@@ -348,9 +336,6 @@ func (ld infoempleoLD) places() []infoempleoPlace {
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410) or a page carrying no usable posting; an error is the absence of an answer.
 func (s infoempleo) detail(ctx context.Context, c infoempleoCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
 		var se *StatusError
@@ -380,7 +365,7 @@ var infoempleoYears = regexp.MustCompile(`(\d+)\s+años?`)
 // title, employer or body.
 func infoempleoJob(ld infoempleoLD, c infoempleoCard) (Job, bool) {
 	j := infoempleoBaseJob(c)
-	if t := infoempleoClean(ld.Title); t != "" {
+	if t := collapseSpace(ld.Title); t != "" {
 		j.Title = t
 	}
 	if co := strings.TrimSpace(ld.HiringOrganization.Name); co != "" {
@@ -408,9 +393,7 @@ func infoempleoJob(ld infoempleoLD, c infoempleoCard) (Job, bool) {
 	if len(places) > 0 {
 		j.Location = strings.Join(places, "; ")
 	}
-	if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
 	j.WorkMode = infoempleoWorkMode(ld.JobLocationType, c.remote)
 	j.Remote = j.WorkMode == "remote"
 	j.EmploymentType = infoempleoEmploymentType(ld.EmploymentType, c.contract)

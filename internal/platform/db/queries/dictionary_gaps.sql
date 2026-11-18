@@ -10,13 +10,3 @@ ON CONFLICT (kind, normalized_term) WHERE status IN ('pending', 'accepted')
 DO UPDATE SET request_count = dictionary_gaps.request_count + 1,
               last_requested_at = now()
 RETURNING request_count, status;
-
--- The daily cap: claims one of a user's 20 writes for the UTC day, and returns no row
--- once they are spent, which the caller turns into a 429.
--- name: ClaimDictionaryGapWrite :one
-INSERT INTO dictionary_gap_daily (user_id, day, writes)
-VALUES ($1, $2, 1)
-ON CONFLICT (user_id, day) DO UPDATE
-SET writes = dictionary_gap_daily.writes + 1
-WHERE dictionary_gap_daily.writes < 20
-RETURNING writes;

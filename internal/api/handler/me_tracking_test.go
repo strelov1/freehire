@@ -27,7 +27,7 @@ func meJobsApp(t *testing.T) (*fiber.App, string) {
 	}
 	h := &trackingHandlers{}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 	return app, token
 }
 
@@ -47,14 +47,14 @@ func getMeTracking(t *testing.T, app *fiber.App, path, token string) int {
 
 func TestListMyJobs_RequiresAuth(t *testing.T) {
 	app, _ := meJobsApp(t)
-	if got := getMeTracking(t, app, "/me/tracking", ""); got != fiber.StatusUnauthorized {
+	if got := getMeTracking(t, app, "/api/v1/me/tracking", ""); got != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", got)
 	}
 }
 
 func TestListMyJobs_UnknownFilter(t *testing.T) {
 	app, token := meJobsApp(t)
-	if got := getMeTracking(t, app, "/me/tracking?filter=bogus", token); got != fiber.StatusBadRequest {
+	if got := getMeTracking(t, app, "/api/v1/me/tracking?filter=bogus", token); got != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", got)
 	}
 }

@@ -14,17 +14,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
-// constraintNoOverlap is the EXCLUDE constraint that guarantees a mentor's confirmed
-// bookings cannot share an instant. Its violation is the LOST RACE, and it is translated
-// into the same ErrSlotUnavailable a stale page gets: to a seeker the two events are
-// identical, and letting a constraint violation reach the handler would answer an
-// ordinary outcome with a 500.
+// constraintNoOverlap is the EXCLUDE constraint that stops a mentor's confirmed bookings
+// sharing an instant. Its violation is the lost race and is translated to
+// ErrSlotUnavailable, not a 500.
 const constraintNoOverlap = "mentor_bookings_no_overlap"
 
 // ListAvailability reads every availability row for a mentor, in both shapes. A row the
-// domain cannot represent — one carrying both a weekday and a date, which the CHECK
-// forbids — is SKIPPED rather than failing the read: a single corrupt row must not make a
-// mentor unbookable, and the schema is what stops one existing in the first place.
+// domain cannot represent (weekday and date together, which the CHECK forbids) is skipped
+// so one corrupt row cannot make a mentor unbookable.
 func (r *QueriesRepository) ListAvailability(ctx context.Context, mentorID int64) ([]slots.Rule, error) {
 	rows, err := r.q.ListMentorAvailability(ctx, mentorID)
 	if err != nil {
@@ -36,16 +33,14 @@ func (r *QueriesRepository) ListAvailability(ctx context.Context, mentorID int64
 		if !ok {
 			continue
 		}
-		// Labelled with its row, or the cabinet can show an override and never delete it.
+		// Labelled with its row id so the cabinet can delete an override.
 		out = append(out, rule.WithID(row.ID))
 	}
 	return out, nil
 }
 
 // ReplaceWeeklyAvailability swaps the recurring week in one transaction, leaving dated
-// overrides alone. A transaction because the delete and the inserts are one edit: half of
-// it applied is a mentor with an emptier week than they asked for, and the window between
-// the two is a window in which they are bookable at hours they just removed.
+// overrides alone. Transactional so a half-applied edit never makes removed hours bookable.
 func (r *QueriesRepository) ReplaceWeeklyAvailability(ctx context.Context, mentorID int64, rules []slots.Rule) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -88,9 +83,8 @@ func (r *QueriesRepository) DeleteAvailabilityRule(ctx context.Context, ruleID, 
 	return nil
 }
 
-// ListBusy is both halves of the mentor's occupied time: their confirmed bookings and the
-// intervals read from their calendar. The second is empty until that sync ships, and it
-// is unioned here rather than in SQL so the seam stays one query per source.
+// ListBusy is the mentor's occupied time: confirmed bookings plus synced calendar
+// intervals, unioned here rather than in SQL so each source stays one query.
 func (r *QueriesRepository) ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]slots.Interval, error) {
 	booked, busy, err := r.listBusyByKind(ctx, mentorID, from, to)
 	if err != nil {
@@ -99,9 +93,8 @@ func (r *QueriesRepository) ListBusy(ctx context.Context, mentorID int64, from, 
 	return append(booked, busy...), nil
 }
 
-// ListBusyByKind is ListBusy's two sources kept apart, for a caller — the mentor's own
-// calendar breakdown — that needs to say WHICH kind of occupied a moment is. The public
-// slot engine has no such caller and keeps using ListBusy's flat union.
+// ListBusyByKind is ListBusy's two sources kept apart, for the mentor's own calendar
+// breakdown.
 func (r *QueriesRepository) ListBusyByKind(ctx context.Context, mentorID int64, from, to time.Time) (booked, busy []slots.Interval, err error) {
 	return r.listBusyByKind(ctx, mentorID, from, to)
 }
@@ -153,11 +146,10 @@ func (r *QueriesRepository) CreateBooking(ctx context.Context, row BookingRow) (
 		SeekerTimezone: row.SeekerTimezone,
 		MeetingUrl:     row.MeetingURL,
 	}
-	// Even a single-row insert can lose a true race with 40P01 rather than 23P01: two
-	// inserts into the GiST exclusion index each place their entry, then each waits on
-	// the other's uncommitted one, and Postgres breaks the cycle by aborting one (measured:
-	// 3 of 30 barrier-forced races). The aborted statement wrote nothing, so it is run
-	// again: the retry waits for the survivor's commit and then meets the EXCLUDE plainly.
+	// A single-row insert can lose a true race with 40P01 rather than 23P01: two inserts
+	// into the GiST exclusion index each wait on the other's uncommitted entry and Postgres
+	// aborts one. The aborted statement wrote nothing, so it is retried and then meets the
+	// EXCLUDE plainly.
 	var created db.MentorBooking
 	var err error
 	for range createBookingAttempts {
@@ -166,24 +158,20 @@ func (r *QueriesRepository) CreateBooking(ctx context.Context, row BookingRow) (
 		}
 	}
 	if err != nil {
-		// An EXCLUDE violation carries SQLSTATE 23P01, NOT a unique violation's 23505 —
-		// reaching for IsUniqueViolation here would miss it and turn "somebody took that
-		// hour" into a 500. Matched by name so a second exclusion constraint on this
-		// table could never be answered with this one's message.
+		// An EXCLUDE violation is SQLSTATE 23P01, not 23505, so IsUniqueViolation would miss
+		// it. Matched by name so another exclusion constraint is never mistaken for this one.
 		if name, ok := pgerr.ExclusionViolationConstraint(err); ok && name == constraintNoOverlap {
 			return Booking{}, ErrSlotUnavailable
 		}
 		return Booking{}, err
 	}
 
-	// Re-read, exactly as the cancellation path does and for the same reason: the INSERT
-	// returns this table's columns only, and the confirmation this write exists to trigger
-	// has to reach BOTH parties in BOTH of their timezones — none of which is on
-	// mentor_bookings. Returning the bare inserted row sends the confirmation to two empty
-	// addresses, which a notifier skips, so it reaches nobody and says nothing.
+	// Re-read as the cancellation path does: the INSERT returns only this table's columns,
+	// and the confirmation needs both parties' addresses and timezones. The bare row would
+	// reach nobody.
 	//
-	// A failed re-read falls back to the inserted row: the booking is real and committed,
-	// and losing its confirmation beats losing the hour.
+	// A failed re-read falls back to the inserted row: the booking is committed, and losing
+	// its confirmation beats losing the hour.
 	if full, found, err := r.BookingByID(ctx, uuid.UUID(created.ID.Bytes)); err == nil && found {
 		return full, nil
 	}
@@ -210,10 +198,8 @@ func (r *QueriesRepository) BookingByID(ctx context.Context, id uuid.UUID) (Book
 	return booking, true, nil
 }
 
-// CancelBooking applies the statement's three guards. A no-row result means one of them
-// refused, and all three answer ErrBookingNotFound: a stranger must not be able to tell
-// "not yours" from "does not exist", and a seeker learning their own session has already
-// started is told by the page, not by a distinct error here.
+// CancelBooking applies the statement's three guards. A no-row result means one refused,
+// and all answer ErrBookingNotFound so a stranger cannot tell "not yours" from "missing".
 func (r *QueriesRepository) CancelBooking(ctx context.Context, id uuid.UUID, actorID int64, reason string) (Booking, error) {
 	row, err := r.q.CancelMentorBooking(ctx, db.CancelMentorBookingParams{
 		ID: pgtype.UUID{Bytes: id, Valid: true}, CancelledBy: actorID, CancelReason: reason,
@@ -225,14 +211,11 @@ func (r *QueriesRepository) CancelBooking(ctx context.Context, id uuid.UUID, act
 		return Booking{}, err
 	}
 
-	// The statement returns the booking's own columns and nothing else, while the
-	// cancellation notice has to address BOTH parties in BOTH zones. The re-read supplies
-	// them, and is the whole answer rather than a source of fields to copy across: the
-	// UPDATE has committed, so it reads back the same row with more of it.
+	// The statement returns only the booking's own columns, while the notice must address
+	// both parties in both zones; the re-read supplies them.
 	//
-	// A failed re-read falls back to what the statement returned — a correct booking that
-	// nobody can be notified about, which beats failing a cancellation that has already
-	// happened.
+	// A failed re-read falls back to the statement's row: it beats failing a cancellation
+	// that has already happened.
 	if full, found, err := r.BookingByID(ctx, id); err == nil && found {
 		return full, nil
 	}
@@ -251,10 +234,7 @@ func (r *QueriesRepository) ListBookingsBySeeker(ctx context.Context, seekerID i
 	for _, row := range rows {
 		booking := bookingFromRow(row.MentorBooking)
 		booking.MentorSlug = row.MentorSlug
-		// The headline says WHO the session is with. The query has selected it all along
-		// and this loop dropped it, so every row of a seeker's list came back naming
-		// nobody — while the single-session read set it and looked right, and the unit
-		// tests passed because the fake repository fills the field itself.
+		// The headline says who the session is with.
 		booking.MentorHeadline = row.Headline
 		out = append(out, booking)
 	}
@@ -299,9 +279,8 @@ func (r *QueriesRepository) UpsertReview(ctx context.Context, review Review, see
 	}, nil
 }
 
-// ListBookingsDueForReminder is the reminder worker's page. The query carries the three
-// predicates that matter — confirmed, not yet started, not already reminded at this offset
-// — so nothing here re-derives them.
+// ListBookingsDueForReminder is the reminder worker's page. The query carries the
+// predicates (confirmed, not started, not yet reminded at this offset).
 func (r *QueriesRepository) ListBookingsDueForReminder(ctx context.Context, offset, floor time.Duration, limit int32) ([]Booking, error) {
 	rows, err := r.q.ListBookingsDueForReminder(ctx, db.ListBookingsDueForReminderParams{
 		OffsetMinutes: int32(offset / time.Minute),
@@ -320,18 +299,17 @@ func (r *QueriesRepository) ListBookingsDueForReminder(ctx context.Context, offs
 		booking.MentorHeadline = row.Headline
 		booking.MentorEmail = row.MentorEmail
 		booking.SeekerEmail = row.SeekerEmail
-		// The mentor's CURRENT link, not the booking's snapshot. A reminder is read minutes
-		// before the session, so a corrected link is the useful one — the opposite trade
-		// from the invitation, which must not be rewritten after somebody has filed it.
+		// The mentor's current link, not the booking's snapshot: a reminder is read minutes
+		// before the session, so a corrected link is the useful one.
 		booking.MeetingURL = row.MentorMeetingUrl
 		out = append(out, booking)
 	}
 	return out, nil
 }
 
-// ClaimReminder records one reminder as sent and reports whether THIS caller won it. The
-// insert is ON CONFLICT DO NOTHING against a composite primary key, so two concurrent runs
-// cannot both come back true — which is the entire idempotency guarantee.
+// ClaimReminder records one reminder as sent and reports whether this caller won it. The
+// insert is ON CONFLICT DO NOTHING on a composite primary key, so two concurrent runs
+// cannot both get true.
 func (r *QueriesRepository) ClaimReminder(ctx context.Context, bookingID uuid.UUID, offset time.Duration) (bool, error) {
 	rows, err := r.q.RecordReminderSent(ctx, db.RecordReminderSentParams{
 		BookingID:     pgtype.UUID{Bytes: bookingID, Valid: true},
@@ -343,9 +321,8 @@ func (r *QueriesRepository) ClaimReminder(ctx context.Context, bookingID uuid.UU
 	return rows == 1, nil
 }
 
-// ReleaseReminderClaim deletes the claim so the next run may take it again. It is only
-// ever called after a delivery that failed, and a delete that matches nothing — because a
-// concurrent run already succeeded — is not an error.
+// ReleaseReminderClaim deletes the claim after a failed delivery so the next run may take
+// it again. A delete matching nothing is not an error.
 func (r *QueriesRepository) ReleaseReminderClaim(ctx context.Context, bookingID uuid.UUID, offset time.Duration) error {
 	_, err := r.q.DeleteReminderClaim(ctx, db.DeleteReminderClaimParams{
 		BookingID:     pgtype.UUID{Bytes: bookingID, Valid: true},

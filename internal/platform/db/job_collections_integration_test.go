@@ -25,7 +25,7 @@ func insertCompanyWithCollections(t *testing.T, pool *pgxpool.Pool, slug, name s
 }
 
 // insertJobForCompany seeds an ordinary, SEARCHABLE posting: public, with a body and
-// a resolved category. Those last two are not decoration — RefreshCompanyFacets scopes
+// a resolved category. Public and bodied are not decoration — RefreshCompanyFacets scopes
 // its counts to what the job search index will hold, so a row missing either would be
 // counted by no company. Tests that want an unsearchable row ask for one by name.
 func insertJobForCompany(t *testing.T, pool *pgxpool.Pool, externalID, companySlug string) {
@@ -42,7 +42,7 @@ func insertJobForCompany(t *testing.T, pool *pgxpool.Pool, externalID, companySl
 
 // insertUnsearchableJob seeds a posting the job search index drops, so it must not
 // reach a company's counts or facets either. `flaw` picks which exclusion to trip:
-// "private", "no-body", or "uncategorized".
+// "private" or "no-body".
 func insertUnsearchableJob(t *testing.T, pool *pgxpool.Pool, externalID, companySlug, flaw string) {
 	t.Helper()
 	body, category, private := "We are hiring.", "backend", false
@@ -51,10 +51,6 @@ func insertUnsearchableJob(t *testing.T, pool *pgxpool.Pool, externalID, company
 		private = true
 	case "no-body":
 		body = ""
-	case "uncategorized":
-		// Both halves must miss: search.CategoryUnresolved accepts the enrichment's
-		// category when the column is empty, and treats "other" as no answer.
-		category = ""
 	default:
 		t.Fatalf("insertUnsearchableJob: unknown flaw %q", flaw)
 	}

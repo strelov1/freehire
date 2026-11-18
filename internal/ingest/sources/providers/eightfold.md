@@ -1,0 +1,5 @@
+**Eightfold traps** (`eightfold`):
+
+- **It hydrates since 2026-10-29, and gave up `StreamingSource` to do so** (the pipeline prefers `FetchStream`, which has no `seen`). Its list serves ten positions per request and its detail one, all under one ~1 req/s pace per shard, so re-reading every stored body kept 24 of 25 runs in a fortnight on their crawl deadline and the Microsoft board (~2,400 positions) never finished, never qualified for the board-scoped sweep, and left 6,054 rows open with 2,641 unseen for 14+ days.
+- **A run hydrates at most `eightfoldMaxNewPerBoard` new positions per board**, a random sample so a run of never-stored (rejected) positions cannot hold the budget, so a cold board converges over several runs instead of spending the shard and saving nothing; an `INGEST_REFETCH_ALL` repair reaches only that many per board per run. A failed detail still ingests list-only.
+- **The prod datacenter IP is blocklisted**: eightfold 403s every prod-IP request while a residential IP is served, which is why it is in `proxiedProviders`.

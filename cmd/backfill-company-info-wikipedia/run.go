@@ -47,17 +47,13 @@ func (r result) processed() int64 { return int64(r.Matched + r.Rejected + r.Fail
 // pageSize bounds how many candidates one ListMissing call requests at a time.
 const pageSize = int32(200)
 
-// runBackfill pages through eligible companies, looks each one up, and — only
-// when apply is true — writes the outcome. It stops once maxPerRun companies
-// have been processed (matched + rejected + failed) or no eligible companies
-// remain.
+// runBackfill pages through eligible companies, looks each one up, and writes the outcome only
+// when apply is true. It stops after maxPerRun companies (matched + rejected + failed) or when
+// none remain.
 //
-// A per-company failure (a Lookup, Fill, or MarkChecked error) is counted and
-// stepped over rather than aborting the run — the same convention
-// backfill-talent-handle and discord-sync use. It is NOT marked checked, so it
-// stays eligible and is retried on the next run; only ListMissing itself failing
-// (the run cannot read its own work) is fatal. onFail, if non-nil, is called with
-// each skipped company's slug and error so the caller can log it.
+// A per-company failure (Lookup, Fill or MarkChecked) is counted and stepped over, and the
+// company is NOT marked checked, so it is retried next run; only ListMissing failing is fatal.
+// onFail, if non-nil, receives each skipped company's slug and error.
 func runBackfill(ctx context.Context, st store, m matcher, apply bool, maxPerRun int64, onFail func(slug string, err error)) (result, error) {
 	var res result
 	afterSlug := ""

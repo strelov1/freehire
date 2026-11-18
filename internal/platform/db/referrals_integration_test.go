@@ -10,7 +10,6 @@ package db
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -275,32 +274,4 @@ func TestReferralRequests(t *testing.T) {
 		}
 	})
 
-	t.Run("per-day cap count", func(t *testing.T) {
-		reset(t)
-		seeker := insertUser(t, pool, "seeker@example.test")
-		referrer := insertUser(t, pool, "ref@example.test")
-		insertCompany(t, pool, "acme", "acme")
-		insertCompany(t, pool, "globex", "globex")
-		approvedOffer(t, referrer, "acme")
-		approvedOffer(t, referrer, "globex")
-
-		for _, slug := range []string{"acme", "globex"} {
-			if _, err := q.CreateReferralRequest(ctx, CreateReferralRequestParams{
-				SeekerUserID: seeker, CompanySlug: slug, CvKind: "original",
-				ContactEmail: text("seeker@example.test"),
-			}); err != nil {
-				t.Fatalf("create request %s: %v", slug, err)
-			}
-		}
-
-		n, err := q.CountReferralRequestsSince(ctx, CountReferralRequestsSinceParams{
-			SeekerUserID: seeker, Since: pgtype.Timestamptz{Time: time.Unix(0, 0), Valid: true},
-		})
-		if err != nil {
-			t.Fatalf("count: %v", err)
-		}
-		if n != 2 {
-			t.Errorf("count since epoch = %d, want 2", n)
-		}
-	})
 }

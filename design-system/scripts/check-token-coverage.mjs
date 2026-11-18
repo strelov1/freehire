@@ -78,7 +78,7 @@ const ALLOWED = [
     kind: 'Tailwind arbitrary value',
     reason:
       "the xs tile (size-5, promoted from CompanyLogo's smallest call sites) is too small " +
-      "for any stock text size — 9px is a deliberate one-off, not a value worth a token",
+      'for any stock text size — 9px is a deliberate one-off, not a value worth a token',
   },
   {
     file: 'provider-icon.svelte',
@@ -89,19 +89,11 @@ const ALLOWED = [
       'currentColor instead)',
   },
   {
-    file: 'section-label.svelte',
-    kind: 'Tailwind arbitrary value',
-    reason:
-      '0.2em tracking for one mono heading style; Tailwind\'s own scale tops out at ' +
-      'tracking-widest (0.1em) and no other primitive needs this value',
-  },
-  {
     file: 'dialog.svelte',
     kind: 'Tailwind arbitrary value',
     reason:
-      "sm:max-h-[calc(100vh-3rem)] mirrors FilterModalShell's own mobile-takeover cap " +
-      '(web/src, not subject to this radius) exactly; no token expresses a dvh-safe ' +
-      'viewport-minus-margin reserve, and the two are meant to move together',
+      'viewport-relative width and height leave safe margins around compact dialogs ' +
+      'on mobile and bound long content; fixed scale tokens cannot express these reserves',
   },
 ];
 
@@ -126,7 +118,9 @@ function fail(message) {
 // The package radius: zero, and it stays zero.
 function checkPackage() {
   const used = new Set();
-  const files = readdirSync(packageSrc).filter((f) => f.endsWith('.svelte')).sort();
+  const files = readdirSync(packageSrc)
+    .filter((f) => f.endsWith('.svelte'))
+    .toSorted();
 
   for (const file of files) {
     for (const hit of hitsIn(readFileSync(join(packageSrc, file), 'utf-8'), RADII.package)) {

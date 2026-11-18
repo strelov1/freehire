@@ -92,8 +92,7 @@ func TestPlacementsThatContradictTheirNameArePinned(t *testing.T) {
 		"llm":           "platform",  // transport, not AI: it knows nothing of the domain
 		"llmschema":     "platform",  // same
 		"catalogstats":  "ingest",    // imports nothing from job; counts the adapter registry
-		"ratelimit":     "api",       // HTTP middleware, and it imports auth
-		"realtime":      "api",       // same
+		"realtime":      "api",       // HTTP transport
 		"ghost":         "job",       // the posting's reality, not an application's
 		"ghostreport":   "job",       // same
 		"jobreality":    "job",       // same

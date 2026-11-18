@@ -44,7 +44,7 @@ describe('ScreeningAnswersForm — autosave', () => {
     expect(screen.queryByRole('button', { name: /Afghanistan/ })).toBeNull();
   });
 
-  it('finds a country by its name in the reader\'s language', async () => {
+  it("finds a country by its name in the reader's language", async () => {
     page.data.locale = 'ru';
     render(ScreeningAnswersForm, { props: { answers: {} } });
 

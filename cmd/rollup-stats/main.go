@@ -1,6 +1,5 @@
-// Command rollup-stats is the standalone daily-activity rollup worker. It fully
-// recomputes job_daily_stats and the Trends & Insights rollups (insights_*) from
-// the jobs table and swaps them in atomically.
+// Command rollup-stats computes the daily-activity and Trends & Insights rollups
+// on the analytics reader and publishes their results atomically on the primary.
 //
 // job_daily_stats holds one row per UTC calendar day with that day's `added` (jobs
 // created) and `removed` (jobs whose current closed_at falls on it). The insights_*
@@ -11,8 +10,8 @@
 // sample floor (minSalarySample).
 //
 // It is a run-once-and-exit worker (cron-scheduled intra-day, ~every few hours, so
-// the current day's data stays fresh without a live-overlay query): every clear and
-// rebuild runs inside one transaction, so a reader never sees a table mid-rebuild
+// the current day's data stays fresh without a live-overlay query). Computation
+// precedes one primary publication transaction, so readers keep the previous snapshot
 // and orphaned rows (e.g. a reopened job) vanish in the same step. Re-running is
 // safe. It exits non-zero if the rebuild transaction fails, so cron can alert.
 package main
@@ -22,11 +21,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/ingest/catalogstats"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/isoweek"
 	"github.com/strelov1/freehire/internal/platform/worker"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -49,12 +45,8 @@ const (
 	skillHistoryRetentionWeeks = 26
 	// defaultMinRoleSkillSample is the smallest number of a role's postings a skill
 	// must appear in to be published in that role's distribution. Unlike the floors
-	// above it is overridable per run (ROLE_SKILL_MIN_SAMPLE), because its correct
-	// value is not yet known: the rollup is new, and the intended way to set it is to
-	// read the first production run's output. A floor guessed in advance has already
-	// gone wrong once here — cmd/social-digest shipped at 10, which selected exactly
-	// one posting in a day and had to be lowered to 3 — and there it took a deploy to
-	// correct. Fold it back into a constant once a value has proven itself.
+	// above it is overridable per run (ROLE_SKILL_MIN_SAMPLE), because its correct value is not
+	// yet known: set it from a production run's output. Fold it back into a constant once proven.
 	defaultMinRoleSkillSample = 5
 )
 
@@ -70,73 +62,45 @@ func run() int {
 	}
 	defer cleanup()
 
-	// The catalogue-scale snapshot is published FIRST, ahead of the rollups. It reads
-	// nothing they write, and it is the figure every public surface quotes (the
-	// homepage, /open, the OG card): behind the rollups' single long transaction, one
-	// slow or failed rebuild left it hours stale while /jobs, read live from
-	// Meilisearch, kept moving — the homepage said 4.8M beside a catalogue showing
-	// 5.17M. It is a separate concern with its own failure mode, so it never changes
-	// this run's exit code.
-	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(pool))
-
-	// The clear + rebuild run in one transaction so the swap is atomic: readers keep
-	// seeing the previous rollups until commit, and orphaned rows vanish in the same step.
-	tx, err := pool.Begin(ctx)
+	analytics, err := worker.AnalyticsPool(ctx, pool)
 	if err != nil {
-		log.Printf("begin: %v", err)
+		log.Printf("analytics database: %v", err)
 		return 1
 	}
-	defer tx.Rollback(ctx)
+	defer analytics.Close()
+	// The catalogue-scale snapshot goes FIRST: it reads nothing the rollups write, and behind
+	// their long transaction one slow or failed rebuild left the public figures hours stale.
+	// It is a separate concern with its own failure mode and never changes this run's exit code.
+	done := worker.Stage("catalogue snapshot")
+	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(analytics), db.New(pool))
+	done()
 
-	// The recompute runs several large full-table aggregates (the insights_*
-	// rebuilds unnest arrays and compute percentiles over the whole catalogue). At
-	// the OLTP-default work_mem (a few MB) their sorts/hash aggregates spill to disk
-	// and the run drags for many minutes. Raise work_mem for this batch transaction
-	// only (SET LOCAL — scoped to this connection's transaction, reset on commit) so
-	// the aggregates stay in memory.
-	if _, err := tx.Exec(ctx, "SET LOCAL work_mem = '256MB'"); err != nil {
-		log.Printf("set work_mem: %v", err)
-		return 1
+	// A failed rollup still fails the run, but does not take the snapshots below with
+	// it: they read other data, and skipping them lets the public figures expire.
+	exit := 0
+	if err := rebuildRollups(ctx, analytics, pool); err != nil {
+		log.Printf("rebuild rollups: %v", err)
+		exit = 1
 	}
-
-	q := db.New(pool).WithTx(tx)
-
-	if err := q.DeleteAllJobDailyStats(ctx); err != nil {
-		log.Printf("clear rollup: %v", err)
-		return 1
-	}
-	days, err := q.RebuildJobDailyStats(ctx)
-	if err != nil {
-		log.Printf("rebuild rollup: %v", err)
-		return 1
-	}
-
-	if err := rebuildInsights(ctx, q); err != nil {
-		log.Printf("rebuild insights: %v", err)
-		return 1
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		log.Printf("commit: %v", err)
-		return 1
-	}
-
-	log.Printf("rollup-stats: rebuilt job_daily_stats (%d active day rows) and insights_* rollups", days)
 
 	// So does the per-source snapshot behind the public /sources page, for the same
 	// reason and on the same terms.
-	rebuildSourceStats(ctx, pool, cfg.MeiliURL, cfg.MeiliKey)
+	done = worker.Stage("source stats")
+	rebuildSourceStats(ctx, analytics, pool, cfg.MeiliURL, cfg.MeiliKey)
+	done()
 
 	// And the embedding-coverage snapshot behind /embeddings: a scan over every open
 	// posting, which is why it is here and never on a request path.
-	rebuildEmbedProgress(ctx, pool, cfg.RedisURL)
+	done = worker.Stage("embed progress")
+	rebuildEmbedProgress(ctx, analytics, cfg.RedisURL)
+	done()
 
-	return 0
+	return exit
 }
 
 // publish measures the catalogue and stores the snapshot every public surface reads.
 // Every failure here is logged and swallowed — see the call site.
-func publish(ctx context.Context, redisURL, meiliURL, meiliKey string, q *db.Queries) {
+func publish(ctx context.Context, redisURL, meiliURL, meiliKey string, q, writer *db.Queries) {
 	c, closeCache, err := snapshotCache(redisURL)
 	if err != nil {
 		log.Printf("rollup-stats: catalogue snapshot not published: %v", err)
@@ -152,13 +116,10 @@ func publish(ctx context.Context, redisURL, meiliURL, meiliKey string, q *db.Que
 		log.Printf("rollup-stats: telegram channel count unavailable, publishing without it: %v", err)
 	}
 
-	// Same tolerance as the channel count: no MEILI_MASTER_KEY, or an unreachable
-	// Meilisearch, costs this one figure rather than the snapshot. Unlike
-	// cmd/rollup-facets, Meilisearch is not this worker's job — the rollups above are —
-	// so a missing key is not fatal here. Unlike the channel count, though, a failure
-	// here keeps the PREVIOUSLY published figure (resolveUniqueOpenJobs) rather than
-	// falling back to zero: a bare zero would misrepresent a transient outage as "no
-	// unique jobs," which is a worse-labelled number than a slightly stale real one.
+	// Same tolerance as the channel count: no MEILI_MASTER_KEY, or an unreachable Meilisearch, costs
+	// this one figure, not the snapshot (Meilisearch is not this worker's job, unlike cmd/rollup-facets).
+	// A failure keeps the PREVIOUSLY published figure (resolveUniqueOpenJobs), not zero: a bare zero would
+	// misrepresent a transient outage as "no unique jobs".
 	previous := catalogstats.Load(ctx, c, q).UniqueOpenJobs
 	unique := previous
 	if meiliKey == "" {
@@ -175,122 +136,10 @@ func publish(ctx context.Context, redisURL, meiliURL, meiliKey string, q *db.Que
 		unique = resolveUniqueOpenJobs(previous, fresh, ferr)
 	}
 
-	if err := publishSnapshot(ctx, q, c, channels, unique); err != nil {
+	if err := publishSnapshot(ctx, q, c, writer, channels, unique); err != nil {
 		log.Printf("rollup-stats: catalogue snapshot not published: %v", err)
 		return
 	}
 
 	log.Printf("rollup-stats: published the catalogue-scale snapshot")
-}
-
-// rebuildInsights clears and recomputes the insights_* rollups inside the
-// caller's transaction. prevTs (the growth-window start) and minSalarySample are
-// passed to the SQL so the window and sample floor live here, not in the queries.
-func rebuildInsights(ctx context.Context, q *db.Queries) error {
-	prevTs := pgtype.Timestamptz{Time: time.Now().UTC().AddDate(0, 0, -growthWindowDays), Valid: true}
-
-	if err := q.DeleteAllInsightsRoleStats(ctx); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsRoleStatsGlobal(ctx, prevTs); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsRoleStatsByCountry(ctx, prevTs); err != nil {
-		return err
-	}
-
-	// The role × country grid: the same demand without the seniority axis, over
-	// canonical postings only (migration 0214 says why it is a table of its own).
-	if err := q.DeleteAllInsightsRoleCountryStats(ctx); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsRoleCountryStatsGlobal(ctx, prevTs); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsRoleCountryStatsByCountry(ctx, prevTs); err != nil {
-		return err
-	}
-
-	// The role pulse: competition, time to close and inflow per category, for the
-	// growth window and the one before it. Competition anchors its own windows on the
-	// last complete views day (see the query); the other two use these.
-	if err := q.DeleteAllInsightsRolePulse(ctx); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsRolePulse(ctx, db.RebuildInsightsRolePulseParams{
-		WindowStart: prevTs,
-		PriorStart:  pgtype.Timestamptz{Time: prevTs.Time.AddDate(0, 0, -growthWindowDays), Valid: true},
-	}); err != nil {
-		return err
-	}
-
-	// Per-role skill demand, and separately the denominator its shares divide by.
-	// The floor reaches the distribution only: applied to the sample it would delete
-	// the denominator of a share that did clear it.
-	minRoleSkillSample, err := worker.EnvInt32("ROLE_SKILL_MIN_SAMPLE", defaultMinRoleSkillSample)
-	if err != nil {
-		return err
-	}
-	if err := q.DeleteAllInsightsRoleSkillStats(ctx); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsRoleSkillStats(ctx, minRoleSkillSample); err != nil {
-		return err
-	}
-	if err := q.DeleteAllInsightsRoleSkillSample(ctx); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsRoleSkillSample(ctx); err != nil {
-		return err
-	}
-
-	if err := q.DeleteAllInsightsSkillStats(ctx); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsSkillStatsGlobal(ctx, prevTs); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsSkillStatsByCategory(ctx, prevTs); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsSkillStatsByCountry(ctx, prevTs); err != nil {
-		return err
-	}
-
-	// insights_skill_history is append-only (unlike the delete-and-reinsert rollups
-	// above), so it is written, not cleared, reading the global skill bucket this
-	// same transaction just rebuilt. ON CONFLICT DO NOTHING in the query makes this
-	// safe to call every intra-day run: only the first run of an ISO week inserts.
-	weekStart := pgtype.Date{Time: isoweek.Start(time.Now().UTC()), Valid: true}
-	if _, err := q.SnapshotInsightsSkillHistory(ctx, weekStart); err != nil {
-		return err
-	}
-	cutoff := pgtype.Date{Time: time.Now().UTC().AddDate(0, 0, -skillHistoryRetentionWeeks*7), Valid: true}
-	if _, err := q.PruneInsightsSkillHistory(ctx, cutoff); err != nil {
-		return err
-	}
-
-	if err := q.DeleteAllInsightsSalaryStats(ctx); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsSalaryStatsGlobal(ctx, minSalarySample); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsSalaryStatsByCountry(ctx, minSalarySample); err != nil {
-		return err
-	}
-	if err := q.DeleteAllInsightsSalaryMonthly(ctx); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsSalaryMonthly(ctx, minSalaryMonthSample); err != nil {
-		return err
-	}
-
-	if err := q.DeleteAllInsightsVelocityDaily(ctx); err != nil {
-		return err
-	}
-	if _, err := q.RebuildInsightsVelocityDaily(ctx); err != nil {
-		return err
-	}
-	return nil
 }

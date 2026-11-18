@@ -23,7 +23,7 @@ import (
 
 // jobteaser adapts JobTeaser (www.jobteaser.com), the European careers platform of business and
 // engineering schools: internships, work-study, graduate programmes and first jobs at large
-// employers (KPMG, Capgemini, BNP Paribas, L'Oréal), ~32k open postings across six languages.
+// employers (KPMG, Capgemini, BNP Paribas, L'Oréal), across six languages.
 // It is an aggregator — the employer is read per posting — whose board is the LANGUAGE a posting
 // is published in ("fr", "de", "en", ...), the prefix of its URL; one posting has one primary
 // language, so the boards partition the catalogue. See the "JobTeaser traps" section of
@@ -31,7 +31,7 @@ import (
 //
 // The posting set is the job-ads sitemaps, which carry each posting's URL and when it was last
 // touched. The URL spells the employer and the title after the posting's id, and the companies
-// sitemap names the employers with a company page (68% of the French postings), so a posting of an
+// sitemap names the employers with a company page, so a posting of an
 // employer freehire already covers first-party is skipped before its page is bought. The pages
 // sit behind a Cloudflare challenge that only the Scrapling tier's browser passes (see
 // scraplingProviders); the sitemaps are on a CDN with no challenge and stay on a plain client.
@@ -59,12 +59,11 @@ const (
 	// jobteaserDetailWorkers keeps three pages in flight on the Scrapling browser session, which
 	// serves up to four tabs at once.
 	jobteaserDetailWorkers = 3
-	// jobteaserFreshPerRun and jobteaserBacklogPerRun split one run's 400 posting pages (~8 s
-	// each over three tabs, ~18 minutes, plus ~2 minutes for the first page's challenge) into
+	// jobteaserFreshPerRun and jobteaserBacklogPerRun split one run's posting pages, sized to the
+	// crawl budget (~8 s a page over three tabs, plus the first page's challenge), into
 	// hydrationLanes' two lanes. A posting whose employer the companies sitemap does not name
-	// (a third of the French ones) cannot be judged before its page is bought, and one the
-	// pipeline then discards unsaved would be bought again on every run; the moving backlog
-	// lane keeps those from filling the budget for good. ~700 French postings are touched a day.
+	// cannot be judged before its page is bought, and one the pipeline then discards unsaved would
+	// be bought again on every run; the moving backlog lane keeps those from filling the budget.
 	jobteaserFreshPerRun    = 300
 	jobteaserBacklogPerRun  = 100
 	jobteaserDeadlineMargin = 5 * time.Minute
@@ -184,7 +183,7 @@ func (s jobteaser) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(
 			jobs = append(jobs, base)
 			continue
 		}
-		if (p.employer != "" && covered[p.employer]) || (gate.Rejected != nil && gate.Rejected(base)) {
+		if p.employer != "" && covered[p.employer] {
 			jobs = append(jobs, base)
 			continue
 		}

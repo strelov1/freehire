@@ -11,10 +11,7 @@ const SALARY_SAMPLE_GATE = 3;
 
 /** The n most frequent values of one facet distribution, most common first. Ties break
  *  by value so the order is stable between renders. Zero counts are not "values". */
-export function topEntries(
-  dist: Record<string, number> | undefined,
-  n: number,
-): { value: string; count: number }[] {
+export function topEntries(dist: Record<string, number> | undefined, n: number): { value: string; count: number }[] {
   return Object.entries(dist ?? {})
     .filter(([, count]) => count > 0)
     .sort(([a, x], [b, y]) => y - x || a.localeCompare(b))
@@ -32,10 +29,7 @@ export function dominantCurrency(dist: Record<string, number> | undefined): stri
 /** The pay range across `sample` postings already narrowed to one currency and period:
  *  the lowest stated floor to the highest stated ceiling. A posting that states only one
  *  bound still counts, so either side falls back to the other. */
-export function salaryRange(
-  stats: FacetCounts['stats'],
-  sample: number,
-): { min: number; max: number } | null {
+export function salaryRange(stats: FacetCounts['stats'], sample: number): { min: number; max: number } | null {
   if (sample < SALARY_SAMPLE_GATE) return null;
   const floor = stats.salary_min ?? stats.salary_max;
   const ceiling = stats.salary_max ?? stats.salary_min;

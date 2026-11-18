@@ -4,7 +4,14 @@
 process.env.TZ = 'Europe/Warsaw'; // UTC+2 in summer
 
 import { describe, it, expect } from 'vitest';
-import { buildCalendarMonth, rangeForMonth, splitDayEvents } from './calendarModel';
+import {
+  buildCalendarMonth,
+  buildCalendarWeek,
+  calendarDayKey,
+  rangeForMonth,
+  rangeForWeek,
+  splitDayEvents,
+} from './calendarModel';
 import type { ScheduledInterview, TimelineEvent } from './types';
 
 const event = (occurredAt: string, over: Partial<TimelineEvent> = {}): TimelineEvent => ({
@@ -67,9 +74,7 @@ describe('buildCalendarMonth', () => {
   });
 
   it('keeps an event whose kind it does not recognise', () => {
-    const month = buildCalendarMonth(2026, 7, [
-      event('2026-08-13T09:00:00Z', { kind: 'interview_scheduled' }),
-    ]);
+    const month = buildCalendarMonth(2026, 7, [event('2026-08-13T09:00:00Z', { kind: 'interview_scheduled' })]);
 
     expect(dayAt(month, '2026-08-13').events).toHaveLength(1);
   });
@@ -143,12 +148,7 @@ describe('buildCalendarMonth with arranged meetings', () => {
   });
 
   it('keeps meetings apart from events on the same day', () => {
-    const month = buildCalendarMonth(
-      2026,
-      7,
-      [event('2026-08-13T09:00:00Z')],
-      [interview('2026-08-13T15:00:00Z')],
-    );
+    const month = buildCalendarMonth(2026, 7, [event('2026-08-13T09:00:00Z')], [interview('2026-08-13T15:00:00Z')]);
     const day = dayAt(month, '2026-08-13');
 
     expect(day.events).toHaveLength(1);
@@ -178,11 +178,44 @@ describe('buildCalendarMonth with arranged meetings', () => {
   });
 
   it('orders a day’s meetings oldest first', () => {
-    const month = buildCalendarMonth(2026, 7, [], [
-      interview('2026-08-13T15:00:00Z', { id: 2 }),
-      interview('2026-08-13T09:00:00Z', { id: 1 }),
-    ]);
+    const month = buildCalendarMonth(
+      2026,
+      7,
+      [],
+      [interview('2026-08-13T15:00:00Z', { id: 2 }), interview('2026-08-13T09:00:00Z', { id: 1 })],
+    );
 
     expect(dayAt(month, '2026-08-13').interviews.map((i) => i.id)).toEqual([1, 2]);
+  });
+});
+
+describe('weekly calendar', () => {
+  it('includes all seven days across a year boundary, even empty ones', () => {
+    const days = buildCalendarWeek(new Date(2027, 0, 1), []);
+    expect(days.map((day) => day.key)).toEqual([
+      '2026-12-28',
+      '2026-12-29',
+      '2026-12-30',
+      '2026-12-31',
+      '2027-01-01',
+      '2027-01-02',
+      '2027-01-03',
+    ]);
+  });
+
+  it('places local events in the week spanning a daylight-saving transition', () => {
+    const days = buildCalendarWeek(new Date(2026, 9, 25), [event('2026-10-24T22:30:00Z')]);
+    expect(days).toHaveLength(7);
+    expect(days[6]?.key).toBe('2026-10-25');
+    expect(days[6]?.events).toHaveLength(1);
+    expect(new Set(days.map((day) => day.key)).size).toBe(7);
+  });
+
+  it('fetches the entire week plus local margin days across a month boundary', () => {
+    const range = rangeForWeek(new Date(2026, 10, 1));
+    expect(calendarDayKey(new Date(range.from))).toBe('2026-10-25');
+    expect(calendarDayKey(new Date(range.to))).toBe('2026-11-02');
+    expect(new Date(range.from).getHours()).toBe(0);
+    expect(new Date(range.to).getHours()).toBe(23);
   });
 });

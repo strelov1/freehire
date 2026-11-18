@@ -5,12 +5,9 @@
 //
 //	migrate [-dir migrations] [-baseline]   # needs DATABASE_URL
 //
-// Deploy procedure: run it BEFORE deploying code that reads new schema (same
-// rule the migration comments already state), after merging the migration file.
-// A database that predates the runner (schema present, schema_migrations empty)
-// is baselined automatically — every on-disk file is recorded as applied
-// without re-executing it — so the first prod run is a no-op beyond creating
-// schema_migrations. -baseline forces that recording explicitly.
+// Run it before deploying code that reads new schema. A database that predates the runner
+// (schema present, schema_migrations empty) is baselined automatically: every on-disk file is
+// recorded as applied without re-executing it. -baseline forces that recording.
 package main
 
 import (

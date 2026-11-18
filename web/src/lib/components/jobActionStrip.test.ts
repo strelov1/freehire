@@ -25,6 +25,8 @@ import { describe, expect, it } from 'vitest';
 // regression that produced the bug: a call to action landing back in the strip. Those are
 // the widest controls on the row and the reason it overflowed.
 const JOB_VIEW = readFileSync(join(import.meta.dirname, 'JobView.svelte'), 'utf8');
+// The strip is its own component; JobView renders it in two places.
+const ACTION_STRIP = readFileSync(join(import.meta.dirname, 'JobActionStrip.svelte'), 'utf8');
 
 /** The body of a `{#snippet name(...)}` … `{/snippet}` block. Snippets do not nest in this
  *  file, so the first closing tag is the matching one. */
@@ -36,17 +38,17 @@ function snippetBody(name: string): string {
 }
 
 const CTA_SNIPPETS = ['applyCta', 'autoApplyCta'] as const;
-const QUIET_CONTROLS = ['reportButton', 'saveButton'] as const;
+const QUIET_CONTROLS = ['Report this job', '<JobSaveButton'] as const;
 
 describe('the job page action strip', () => {
-  const strip = snippetBody('actionStrip');
+  const strip = ACTION_STRIP.slice(ACTION_STRIP.indexOf('</script>'));
   const ctaGroup = snippetBody('ctaGroup');
 
   // Guards the audit itself: renaming either snippet would otherwise leave every
   // assertion below passing over an empty string, which is the failure mode of every
   // test that greps.
   it('finds the two snippets it audits', () => {
-    expect(strip, 'actionStrip snippet not found in JobView.svelte').not.toBe('');
+    expect(strip, 'markup not found in JobActionStrip.svelte').not.toBe('');
     expect(ctaGroup, 'ctaGroup snippet not found in JobView.svelte').not.toBe('');
   });
 
@@ -70,7 +72,7 @@ describe('the job page action strip', () => {
   // when the `applyCta` button is not.
   it('carries the phone-only link out, hidden from lg up', () => {
     expect(strip).toContain('lg:hidden');
-    expect(strip).toContain('cta.external.label');
+    expect(strip).toContain('applyLabel');
   });
 });
 
@@ -78,7 +80,9 @@ describe('the job page action strip', () => {
  *  the title is scrolled away. Anchored on the icon-only Save only it renders, and cut at
  *  the row's own closing tag — nothing inside it opens a `div`. */
 function pinnedHeaderButtons(): string {
-  const open = JOB_VIEW.indexOf("{@render saveButton('size-9 rounded-md px-0', true)}");
+  const open = JOB_VIEW.indexOf(
+    '<JobSaveButton {saved} onclick={onSaveClick} className="size-9 rounded-md px-0" iconOnly />',
+  );
   if (open === -1) return '';
   const close = JOB_VIEW.indexOf('</div>', open);
   return close === -1 ? '' : JOB_VIEW.slice(open, close);
@@ -140,12 +144,16 @@ describe('the job page call-to-action row', () => {
     expect(stickyBar()).toContain('@render tailorCta(');
   });
 
+  // The scroll offset lives in JobScrollPadding, which JobView renders with the phone's
+  // sign-in feedback element.
   it('adds the visible sign-in feedback height to the phone scroll offset', () => {
-    expect(JOB_VIEW).toContain("'--job-scroll-pad-feedback-height'");
-    expect(JOB_VIEW).toContain('feedback.getBoundingClientRect().height + gap');
-    expect(JOB_VIEW).toContain('observer.observe(feedback)');
-    expect(JOB_VIEW).toContain("root.style.removeProperty('--job-scroll-pad-feedback-height')");
-    expect(JOB_VIEW).toContain('var(--job-scroll-pad-feedback-height, 0px)');
+    const padding = readFileSync(join(import.meta.dirname, 'JobScrollPadding.svelte'), 'utf8');
+    expect(JOB_VIEW).toContain('feedbackEl={mobileSignInFeedback}');
+    expect(padding).toContain("'--job-scroll-pad-feedback-height'");
+    expect(padding).toContain('feedback.getBoundingClientRect().height + gap');
+    expect(padding).toContain('observer.observe(feedback)');
+    expect(padding).toContain("root.style.removeProperty('--job-scroll-pad-feedback-height')");
+    expect(padding).toContain('var(--job-scroll-pad-feedback-height, 0px)');
   });
 
   // The bar holds two buttons at `flex-1`. A third would either shrink all three past
@@ -167,9 +175,7 @@ describe('the job page call-to-action row', () => {
     ['the pinned header', () => pinnedHeader],
   ])('renders tailorCta last in %s', (_where, region) => {
     const source = region();
-    const order = ['autoApplyCta', 'applyCta', 'tailorCta'].map((s) =>
-      source.indexOf(`@render ${s}(`),
-    );
+    const order = ['autoApplyCta', 'applyCta', 'tailorCta'].map((s) => source.indexOf(`@render ${s}(`));
     expect(order.every((i) => i !== -1)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });

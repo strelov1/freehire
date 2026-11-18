@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -11,10 +12,8 @@ import (
 // jibe adapts Jibe career sites (the career-site product fronting iCIMS, e.g.
 // github.careers). The board is the site's public host (e.g. "www.github.careers"),
 // forming the JSON listing API "https://<board>/api/jobs". That list endpoint already
-// carries the full posting HTML in "description", so there is no per-job detail fetch —
-// the separate responsibilities/qualifications fields are redundant re-extractions of
-// the same body (verified: every posting's description already contains them) and are
-// intentionally not appended.
+// carries the full posting HTML in "description", so there is no per-job detail fetch; the
+// separate responsibilities/qualifications fields repeat the body and are not appended.
 
 // jibePageLimit is the listing page size. The API reports the catalogue total, so the
 // crawl pages until every posting is collected.
@@ -53,6 +52,9 @@ type jibePosting struct {
 	FullLocation       string `json:"full_location"`
 	HiringOrganization string `json:"hiring_organization"`
 	PostedDate         string `json:"posted_date"`
+	MetaData           struct {
+		CanonicalURL string `json:"canonical_url"`
+	} `json:"meta_data"`
 	// Tags holds the values of every tag slot ("tags", "tags1" … "tags9"), one slice per slot.
 	// The slots are the tenant's own free fields, so they are collected generically.
 	Tags [][]string `json:"-"`
@@ -84,10 +86,9 @@ func (p *jibePosting) UnmarshalJSON(b []byte) error {
 // jibeWorkplaceTags maps a tag value, lowercased, to a work mode. Jibe has no workplace field
 // of its own — the record's location_type is a geocoding setting ("LAT_LNG", "ANY") on every
 // sampled posting — so a tenant that states the arrangement puts it in one of its free tag
-// slots, and which slot differs per tenant. Every entry is a label a live board publishes (189
-// boards, 2026-10-30; about a quarter of postings carry one). Labels that offer a choice
-// ("Onsite or Hybrid Required", "Remote / Hybrid / In-Office", "Remote Optional") or a
-// permission ("Virtual Permitted") are absent, so they state nothing.
+// slots, and which slot differs per tenant. Every entry is a label a live board publishes.
+// Labels that offer a choice ("Onsite or Hybrid Required", "Remote / Hybrid / In-Office",
+// "Remote Optional") or a permission ("Virtual Permitted") are absent, so they state nothing.
 var jibeWorkplaceTags = map[string]string{
 	"remote": "remote", "fully remote": "remote", "remote - us": "remote",
 	"remote within the united states": "remote", "remote within location state only": "remote",
@@ -127,9 +128,9 @@ func jibeWorkMode(tags [][]string) string {
 func (s jibe) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	var jobs []Job
 	for page := 1; ; page++ {
-		url := fmt.Sprintf("https://%s/api/jobs?page=%d&limit=%d", e.Board, page, jibePageLimit)
+		listURL := fmt.Sprintf("https://%s/api/jobs?page=%d&limit=%d", e.Board, page, jibePageLimit)
 		var listing jibeListing
-		if err := s.http.GetJSON(ctx, url, &listing); err != nil {
+		if err := s.http.GetJSON(ctx, listURL, &listing); err != nil {
 			return nil, fmt.Errorf("jibe: list board %s: %w", e.Board, err)
 		}
 		if len(listing.Jobs) == 0 {
@@ -149,6 +150,19 @@ func (s jibe) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return jobs, nil
 }
 
+// jibeJobURL returns the posting's public page. Sites differ in where they serve it
+// (/careers-home/jobs/<id>, /<site>/jobs/<id>), so the canonical URL the API states wins.
+// It comes from a third-party response and ends up in an href, so only an https URL with a
+// host and no userinfo is accepted; the host may differ from the board for custom domains.
+// Otherwise it falls back to /jobs/<id>, which Jibe redirects to the right path.
+func jibeJobURL(board, id, canonical string) string {
+	if u, err := url.Parse(strings.TrimSpace(canonical)); err == nil &&
+		u.Scheme == "https" && u.Hostname() != "" && u.User == nil {
+		return u.String()
+	}
+	return fmt.Sprintf("https://%s/jobs/%s", board, url.PathEscape(id))
+}
+
 // toJob maps one Jibe posting to the normalized Job shape. The id is the posting slug
 // (the public job-page path segment), falling back to req_id. A posting with neither has
 // no dedup key — it would collide on a bare ".../jobs/" URL — so it is dropped (ok=false).
@@ -161,7 +175,7 @@ func (s jibe) toJob(e CompanyEntry, p jibePosting) (Job, bool) {
 	workMode := jibeWorkMode(p.Tags)
 	return Job{
 		ExternalID:  id,
-		URL:         fmt.Sprintf("https://%s/careers-home/jobs/%s", e.Board, id),
+		URL:         jibeJobURL(e.Board, id, p.MetaData.CanonicalURL),
 		Title:       strings.TrimSpace(p.Title),
 		Company:     firstNonEmpty(p.HiringOrganization, e.Company),
 		Location:    location,

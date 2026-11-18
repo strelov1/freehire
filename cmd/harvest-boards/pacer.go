@@ -14,19 +14,13 @@ type waiter interface {
 	Wait(ctx context.Context) error
 }
 
-// pacedClient wraps the probe transport with a shared limiter so a run's AGGREGATE request
-// rate to one platform stays under its per-IP window budget, independent of worker count.
-//
-// The worker pool bounds how many requests are in flight; it does not bound how many go out
-// per minute. A harvest is a far denser traffic shape than the ingest crawl the platforms are
-// used to — the first orphan harvest put ~15k probes at Workable in minutes, and partway
-// through it began answering with an HTML challenge instead of JSON. The prober reads a
-// non-JSON body as a dead board, so the candidates arriving during the penalty window were
-// not judged absent, they were never judged at all: a silently truncated harvest that looks
-// like a complete one.
-//
-// Every verb is gated, not just the JSON ones, so a provider whose prober scrapes HTML or
-// posts a query shares the same bucket.
+// pacedClient wraps the probe transport with a shared limiter so a run's AGGREGATE request rate
+// to one platform stays under its per-IP window budget, independent of worker count. The worker
+// pool bounds requests in flight, not per minute, and a harvest is far denser than the crawl
+// the platforms are used to. A platform that answers with an HTML challenge mid-run gets read
+// as a dead board by the prober, so the candidates arriving in the penalty window are never
+// judged at all: a silently truncated harvest that looks complete. Every verb is gated, so a
+// prober that scrapes HTML or posts a query shares the same bucket.
 type pacedClient struct {
 	inner   httpClient
 	limiter waiter
@@ -82,22 +76,22 @@ func (c pacedClient) PostJSONWithHeaders(ctx context.Context, url string, header
 }
 
 // paced wraps a client to admit at most ratePerSec requests per second, or returns it
-// unchanged when ratePerSec is zero — an unpaced run stays the default, since most platforms
-// answer a whole harvest without complaint and pacing only lengthens it.
+// unchanged when ratePerSec is zero: most platforms answer a whole harvest without complaint
+// and pacing only lengthens it.
 func paced(c httpClient, ratePerSec float64) httpClient {
 	if ratePerSec <= 0 {
 		return c
 	}
-	// Burst 1: the point is the total per window, and a burst bucket would let a fresh run
-	// fire its whole allowance at once — which is the shape that drew the challenge.
+	// Burst 1: the point is the total per window; a larger burst would let a fresh run fire its
+	// whole allowance at once, the shape that draws a challenge.
 	return pacedClient{inner: c, limiter: rate.NewLimiter(rate.Limit(ratePerSec), 1)}
 }
 
 // rateCappedProber is the optional half of the prober contract for a platform whose origin
 // refuses a fast client in a way the refusal counter cannot see. Pandapé answers a burst with
-// 403, not 429, so the counter reads every refused probe as an answered, absent board and the
-// harvest comes back short with every check green. Such a prober names its own ceiling, and
-// the run never exceeds it whatever -pace says.
+// 403, not 429, so every refused probe reads as an answered, absent board and the harvest comes
+// back short with every check green. Such a prober names its own ceiling, which the run never
+// exceeds whatever -pace says.
 type rateCappedProber interface {
 	maxRequestsPerSecond() float64
 }

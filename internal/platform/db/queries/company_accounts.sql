@@ -3,28 +3,24 @@
 -- the whole race guard: two concurrent claims on the same slug both attempt this insert, one
 -- succeeds, and the loser's caller maps the unique violation to a clean conflict — see
 -- pgerr.IsUniqueViolation. user_id is the table's primary key, so a user who already holds
--- an account (in any status) also fails here, on the primary-key conflict.
+-- an account (in any status) also fails here, on the primary-key conflict. A user who is a
+-- member of another company's team (migration 0271) is refused too, by writing no row: a user
+-- acts for at most one company.
 INSERT INTO company_accounts (user_id, company_slug, company_name, work_email)
-VALUES (@user_id, @company_slug, @company_name, @work_email)
+SELECT @user_id, @company_slug, @company_name, @work_email
+WHERE NOT EXISTS (SELECT 1 FROM company_account_members m WHERE m.user_id = @user_id)
 RETURNING *;
-
--- name: GetCompanyAccountByUserID :one
--- The one account a user may hold, in whatever status it is in. Every employer-facing
--- capability check reads this and then inspects status itself, rather than a second query
--- per status, since a pending/revoked account needs to be distinguishable in the refusal.
-SELECT *
-FROM company_accounts
-WHERE user_id = @user_id;
 
 -- name: ListPendingCompanyAccounts :many
 -- The moderator review queue: every claim that could not auto-activate (unknown or
 -- mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 -- whose code was never entered is not reviewable — nobody has shown they can read that
 -- address — so it stays out of the queue (migration 0181).
-SELECT *
-FROM company_accounts
-WHERE status = 'pending' AND email_confirmed_at IS NOT NULL
-ORDER BY created_at;
+SELECT sqlc.embed(ca), COALESCE(c.company_info->>'website', '')::text AS website
+FROM company_accounts ca
+LEFT JOIN companies c ON c.slug = ca.company_slug
+WHERE ca.status = 'pending' AND ca.email_confirmed_at IS NOT NULL
+ORDER BY ca.created_at;
 
 -- name: ConfirmCompanyAccountEmail :one
 -- Records that the claimant consumed the code mailed to work_email. COALESCE keeps the

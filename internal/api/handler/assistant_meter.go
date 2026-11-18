@@ -7,25 +7,18 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
 )
 
-// A turn is the unit charged, not the model call.
-//
-// One turn ran 7.1 model calls on average in production, and that number is invisible to
-// the person who asked the question — it depends on how many tools the model decided to
-// reach for. Charging per call would make two identical-looking requests cost differently
-// for reasons the candidate can neither see nor influence.
-//
-// Which allowance a turn draws on depends on the preset, and the split is not cosmetic.
-// The tailoring workspace is metered by its OWN two bounds (a daily session count and a
-// per-session turn ceiling), so a turn inside it consumes no assistant allowance: charging
-// it twice would let the daily assistant allowance decide how deep one CV may be edited.
-// Every other preset draws on the shared assistant allowance, chat and profile together —
-// they are the same conversation surface pointed at different things, and a per-preset
-// allowance would only teach a candidate which name to type.
+// A turn is the unit charged, not the model call: the call count depends on how many tools the model
+// reaches for, and charging per call would make identical-looking requests cost differently.
+// Which allowance a turn draws on depends on the preset. The tailoring workspace is metered by its OWN
+// two bounds (daily sessions, per-session turns), so a turn inside it takes no assistant allowance;
+// charging both would let the daily assistant allowance decide how deep one CV may be edited. Every
+// other preset draws on the shared assistant allowance, chat and profile together.
 
 // turnCharge is what a metered turn took, so the caller can give it back if the turn
 // produces nothing. A zero value means nothing was charged and a release is a no-op.
@@ -34,22 +27,13 @@ type turnCharge struct {
 	ref     string
 }
 
-// meterTurn decides whether a turn may run and takes what it costs, BEFORE the stream
-// opens. That ordering is the point: a 402 written after the headers are out is an event
-// inside a 200, invisible to anything that checks status codes, and the SPA would render
-// an empty answer instead of an upgrade prompt.
-//
-// It returns what was charged, whether it refused, and the error from writing that refusal.
-//
-// The middle value is load-bearing and cannot be inferred from the error: writing a 402
-// through Fiber SUCCEEDS, so a refusal that has been written returns a nil error. Deciding
-// by the error alone would let a refused turn fall through and open its stream anyway —
-// which is exactly what happened once, and what the test asserting no event stream on a
-// 402 now catches.
-//
-// Metering fails OPEN. A counter that cannot be read logs and lets the turn through
-// uncharged: bookkeeping must never be able to refuse a legitimate question, and an
-// uncharged turn is a smaller wrong than a candidate stopped by our accounting.
+// meterTurn decides whether a turn may run and takes what it costs, BEFORE the stream opens: a 402
+// written after the headers is an event inside a 200, and the SPA would render an empty answer instead of
+// an upgrade prompt. It returns what was charged, whether it refused, and the error from writing the
+// refusal. The middle value is load-bearing: writing a 402 through Fiber SUCCEEDS, so a written refusal
+// returns a nil error, and deciding by the error alone would open the stream anyway (a test asserts no
+// event stream on a 402). Metering fails OPEN: a counter that cannot be read logs and lets the turn
+// through uncharged, since bookkeeping must never refuse a legitimate question.
 func (h *assistantHandlers) meterTurn(c *fiber.Ctx, sess assistant.Session) (turnCharge, bool, error) {
 	turns, ok := h.sessionTurns(c, sess)
 	if !ok {
@@ -64,9 +48,8 @@ func (h *assistantHandlers) meterTurn(c *fiber.Ctx, sess assistant.Session) (tur
 		if d.Allowed {
 			return turnCharge{}, false, nil
 		}
-		// The refusal reports the tailoring STANDING, not the turn count. What the
-		// candidate has to act on is whether they can spend another of today's sessions to
-		// continue — and that answer, with its reset instant, only the standing carries.
+		// The refusal reports the tailoring STANDING, not the turn count: the candidate acts on whether they can
+		// spend another of today's sessions, and only the standing carries that and its reset instant.
 		st, err := h.plans.Standing(c.Context(), sess.UserID, plan.FeatureTailor)
 		if err != nil {
 			log.Printf("plan: tailoring standing for user %d: %v", sess.UserID, err)
@@ -74,31 +57,28 @@ func (h *assistantHandlers) meterTurn(c *fiber.Ctx, sess assistant.Session) (tur
 		}
 		return turnCharge{}, true, refuseSessionCeiling(c, sess.ID.String(), d, st)
 	}
-	// The turn about to be recorded is the next one. Charging it under that number is what
-	// lets the retry below land on the same reference and consume nothing further.
-	return h.chargeTurn(c, sess, turns+1)
+	// The turn about to be recorded is the next one; charging under that number lets the retry below land
+	// on the same reference and consume nothing further.
+	return h.chargeTurn(c, sess, turns+1, true)
 }
 
-// meterRetry is meterTurn for a resumed turn: the user message already exists, so the turn
-// being paid for is the one already counted rather than the next one.
+// meterRetry is meterTurn for a resumed turn: the message already exists, so the turn paid for is the
+// one already counted, not the next.
 func (h *assistantHandlers) meterRetry(c *fiber.Ctx, sess assistant.Session) (turnCharge, bool, error) {
 	turns, ok := h.sessionTurns(c, sess)
 	if !ok || turns == 0 {
 		return turnCharge{}, false, nil
 	}
 	if sess.Preset == assistant.PresetTailor {
-		// A retry of a tailoring turn re-runs work inside a ceiling that was already
-		// checked when the message was first sent. Checking it again against a turn count
-		// that now includes that message would refuse the retry of the very turn the
-		// ceiling admitted.
+		// A retry re-runs work inside a ceiling checked when the message was first sent; checking it again
+		// against a count that includes that message would refuse the very turn the ceiling admitted.
 		return turnCharge{}, false, nil
 	}
-	return h.chargeTurn(c, sess, turns)
+	return h.chargeTurn(c, sess, turns, false)
 }
 
-// sessionTurns is how many turns the session has run, and whether metering can proceed at
-// all. A deployment with no meter and a count that cannot be read both answer false, and
-// the turn then runs uncharged — the fail-open rule above.
+// sessionTurns is how many turns the session has run, and whether metering can proceed. No meter or an
+// unreadable count both answer false and the turn runs uncharged (the fail-open rule above).
 func (h *assistantHandlers) sessionTurns(c *fiber.Ctx, sess assistant.Session) (int, bool) {
 	if h.plans == nil {
 		return 0, false
@@ -111,19 +91,32 @@ func (h *assistantHandlers) sessionTurns(c *fiber.Ctx, sess assistant.Session) (
 	return int(turns), true
 }
 
-// chargeTurn takes one assistant allowance for turn number n of this session. The number
-// is what makes a retry idempotent: a resumed turn appends no second user message, so it
-// charges under the reference the original charge was filed with and takes nothing more.
-//
-// A charge handle comes back ONLY when this request really took an allowance. Consume also
-// answers yes for a reference already paid for, and handing back a handle then would arm a
-// release over somebody else's charge — a turn refused the session's slot computes the
-// reference of the turn QUEUED ahead of it, because that one has not appended its message
-// yet, and would refund a turn that is still going to run.
-func (h *assistantHandlers) chargeTurn(c *fiber.Ctx, sess assistant.Session, n int) (turnCharge, bool, error) {
-	ref := sess.ID.String() + "#turn-" + strconv.Itoa(n)
-	d, err := h.plans.Consume(c.Context(), sess.UserID, plan.FeatureAssistant, ref)
+// chargeTurn takes one assistant allowance for turn number n of this session. The number makes a retry
+// idempotent: a resumed turn appends no second user message, so it charges under the original reference.
+// fresh says this request brings a NEW message. n is read from the persisted count, and a running or
+// queued turn has not appended its message yet, so a second new message would compute the first one's
+// reference, find it paid for and run free. A fresh charge therefore moves to the next number while its
+// reference is taken (reserveTurnRef); a resume must not.
+// A charge handle comes back ONLY when this request really took an allowance. Consume also answers yes
+// for a reference already paid for, and a handle then would arm a release over somebody else's charge.
+func (h *assistantHandlers) chargeTurn(c *fiber.Ctx, sess assistant.Session, n int, fresh bool) (turnCharge, bool, error) {
+	consume := func(ref string) (plan.Decision, error) {
+		return h.plans.Consume(c.Context(), sess.UserID, plan.FeatureAssistant, ref)
+	}
+	var (
+		ref string
+		d   plan.Decision
+		err error
+	)
+	if fresh {
+		ref, d, err = reserveTurnRef(sess.ID, n, consume)
+	} else {
+		ref = turnRef(sess.ID, n)
+		d, err = consume(ref)
+	}
 	switch {
+	case err == nil && d.Charge == 0 && fresh:
+		return turnCharge{}, true, fiber.NewError(fiber.StatusConflict, errTurnQueueFull.Error())
 	case err == nil && d.Charge == 0:
 		return turnCharge{}, false, nil // already paid for — this request owes nothing back
 	case err == nil:
@@ -136,18 +129,41 @@ func (h *assistantHandlers) chargeTurn(c *fiber.Ctx, sess assistant.Session, n i
 	}
 }
 
-// turnReleaseTimeout bounds the detached cleanup. Generous for two small statements, and
-// short enough that a wedged database cannot pile up goroutines behind it.
+func turnRef(session uuid.UUID, n int) string {
+	return session.String() + "#turn-" + strconv.Itoa(n)
+}
+
+// turnRefAttempts is how many consecutive turn numbers a new message may try: a session runs one turn
+// and queues one (turnRegistry.claim), so at most two reservations can be ahead of a third request.
+const turnRefAttempts = 3
+
+// reserveTurnRef consumes the first reference from turn number first onward that no other reservation
+// holds. The ledger's uniqueness decides, under the usage row's lock, so requests computing the same
+// number cannot both take it. If every attempt charged nothing, each was already paid for and the
+// caller refuses rather than letting the turn run free.
+func reserveTurnRef(session uuid.UUID, first int, consume func(ref string) (plan.Decision, error)) (string, plan.Decision, error) {
+	var (
+		ref string
+		d   plan.Decision
+		err error
+	)
+	for i := 0; i < turnRefAttempts; i++ {
+		ref = turnRef(session, first+i)
+		d, err = consume(ref)
+		if err != nil || d.Charge > 0 {
+			return ref, d, err
+		}
+	}
+	return ref, d, nil
+}
+
+// turnReleaseTimeout bounds the detached cleanup: short enough that a wedged database cannot pile up goroutines.
 const turnReleaseTimeout = 5 * time.Second
 
-// releaseTurn gives back what a turn took when it produced nothing the candidate can use.
-// Safe to call blind: a zero charge releases nothing, and a release of something never
-// charged is a no-op in the store.
-//
-// It runs on a detached context on purpose. A client that disconnects mid-turn cancels the
-// request context, the turn fails with it, and a release on that same context could not
-// even open its transaction — leaving the candidate charged for an answer they never got,
-// in exactly the case this exists for.
+// releaseTurn gives back what a turn took when it produced nothing usable. Safe to call blind: a zero
+// charge releases nothing. It runs on a detached context on purpose: a client disconnect cancels the
+// request context, and a release on it could not even open its transaction, leaving the candidate
+// charged for an answer they never got.
 func (h *assistantHandlers) releaseTurn(sess assistant.Session, charge turnCharge) {
 	if h.plans == nil || charge.ref == "" {
 		return
@@ -159,24 +175,19 @@ func (h *assistantHandlers) releaseTurn(sess assistant.Session, charge turnCharg
 	}
 }
 
-// refuseSessionCeiling writes the 402 for a session that has run as far as it paid for.
-//
-// It names the TAILORING allowance rather than the assistant one, because spending another
-// of today's sessions is what the candidate does about it — pointing them at the assistant
-// allowance would send them to look at a number that is not the one stopping them.
-//
-// The session and its turn ceiling ride along, so the workspace can say which conversation
-// stopped and offer to extend that one rather than guessing.
+// refuseSessionCeiling writes the 402 for a session that has run as far as it paid for. It names the
+// TAILORING allowance, not the assistant one, because spending another of today's sessions is what the
+// candidate does about it. The session and its turn ceiling ride along so the workspace can offer to
+// extend that conversation.
 func refuseSessionCeiling(c *fiber.Ctx, sessionID string, d plan.TurnDecision, st plan.Standing) error {
 	body := fiber.Map{
 		"error":     "This CV editing session has run as far as today's session covers.",
 		"allowance": viewStanding(st),
 		"session":   fiber.Map{"id": sessionID, "turns": d.Turns, "ceiling": d.Ceiling},
 	}
-	// Extending spends another of today's sessions, so it is only offered when spending one
-	// would actually go through. Offering it otherwise is a button that answers 402 — and
-	// asking Exhausted instead would withhold the offer while the allowance is only being
-	// counted, which is a refusal shadow mode exists to prevent.
+	// Extending spends another of today's sessions, so it is offered only when that would go through
+	// (otherwise a button that answers 402). Asking Exhausted instead would withhold the offer while the
+	// allowance is only being counted, a refusal shadow mode exists to prevent.
 	body["can_extend"] = !st.Refuses()
 	return c.Status(fiber.StatusPaymentRequired).JSON(body)
 }

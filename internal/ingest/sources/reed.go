@@ -47,7 +47,7 @@ const (
 )
 
 // reedKeywords is the curated IT/technology slice. The bare "IT" keyword is deliberately
-// omitted (it matches "IT support" and stray mentions, ~33k noisy hits); these terms keep
+// omitted (it matches "IT support" and stray mentions); these terms keep
 // the crawl to software/data/devops/cloud roles. Overlap across terms is deduped by job id,
 // and our classify/skilltag dictionaries drop anything non-IT that slips through.
 var reedKeywords = []string{

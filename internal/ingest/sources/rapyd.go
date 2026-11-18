@@ -9,12 +9,11 @@ import (
 	"golang.org/x/net/html"
 )
 
-// rapyd adapts the Rapyd careers site (www.rapyd.net), a self-hosted WordPress/WPBakery
-// section rather than a third-party ATS: the /company/careers-search/ listing enumerates
-// postings as /company/careers/positions/<slug>/ links, and each position page is
-// server-rendered HTML (no schema.org JobPosting block). The board is the career-site host;
-// the title, location and description come from a per-job detail fetch (bounded
-// concurrency), like the other HTML-detail adapters (globalpayments, successfactors).
+// rapyd adapts the Rapyd careers site (www.rapyd.net), a self-hosted WordPress/WPBakery section
+// rather than a third-party ATS: the /company/careers-search/ listing enumerates postings as
+// /company/careers/positions/<slug>/ links, and each position page is server-rendered HTML (no
+// schema.org JobPosting block). The board is the career-site host; the title, location and
+// description come from a per-job detail fetch (bounded concurrency).
 type rapyd struct {
 	http HTMLGetter
 }

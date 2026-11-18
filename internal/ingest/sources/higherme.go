@@ -19,11 +19,10 @@ import (
 // by brand lists the brand's postings with title, body, requirements, salary and location
 // inline, so a whole board is one paged call with no per-posting detail fetch.
 //
-// The employer is the configured company, not the posting's: HigherMe states a per-posting
-// company, but it is the platform's internal ACCOUNT label ("Huey Magoo's | Orlando Restaurant
-// Concepts LLC", "Dunkin' | THG Patterson, LLC") — one per franchisee location group, so a brand
-// board would scatter across a dozen pipe-suffixed company names. The brand is what the career
-// page presents as the employer.
+// The employer is the configured company, not the posting's: the per-posting company is the
+// platform's internal ACCOUNT label ("Huey Magoo's | Orlando Restaurant Concepts LLC"), one per
+// franchisee group, so a brand board would scatter across pipe-suffixed company names. The brand
+// is what the career page presents as the employer.
 type higherme struct {
 	http JSONGetter
 }
@@ -41,8 +40,8 @@ const (
 	highermeAPI = "https://api.higherme.com/classic"
 	// highermePageSize is the listing's own ceiling: a larger limit is silently clamped to 100.
 	highermePageSize = 100
-	// highermeMaxPages bounds the walk against a listing that never reports its last page. The
-	// largest brand seen holds a few hundred postings, so this is far above any real board.
+	// highermeMaxPages bounds the walk against a listing that never reports its last page; it is
+	// far above any real board.
 	highermeMaxPages = 50
 )
 

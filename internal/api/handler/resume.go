@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -9,10 +10,11 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/api/ratelimit"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/resume"
@@ -23,18 +25,16 @@ import (
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
-// resumeHandlers serves the résumé/CV surfaces: skill extraction, stored-résumé
-// management (store/status/delete), the profile verdict (live market coverage), and
-// the CV ATS-readiness report. resume.Store is nil-safe: a nil blob (S3
-// unconfigured) yields a disabled service whose Enabled() is false, so the
-// upload/verdict paths degrade to in-request parsing.
+// resumeHandlers serves the résumé/CV surfaces: skill extraction, stored-résumé management,
+// the profile verdict and the CV ATS-readiness report. resume.Store is nil-safe: with no
+// blob (S3 unconfigured) Enabled() is false and the upload/verdict paths parse in-request.
 type resumeHandlers struct {
 	resume *resume.Store
-	// structuredExtractor derives the read-only structured résumé from an uploaded CV
-	// (best-effort, background). Its client is nil when the LLM is unconfigured;
-	// extraction then no-ops and the profile simply shows no structured section.
+	// structuredExtractor derives the structured résumé in the background; with the LLM
+	// unconfigured it no-ops and the profile shows no structured section.
 	structuredExtractor *resumeextract.Extractor
 	// facets backs the market-coverage computations (verdict + ATS report).
 	facets facetCounter
@@ -43,14 +43,12 @@ type resumeHandlers struct {
 	// llm binds the model client and the credential resolver, so the extraction and the
 	// ATS review are both spent under the account that asked for them.
 	llm llmBinding
-	// atsAnalyzer runs the optional LLM qualitative review for the CV ATS report.
-	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
+	// atsAnalyzer runs the optional LLM review for the ATS report; a no-op when the LLM is unconfigured.
 	atsAnalyzer *atscheck.Analyzer
 	// atsCache reads/writes the per-user cached CV ATS review (backed by *db.Queries).
 	atsCache atsReviewStore
-	// bank receives the work history of every successfully-extracted CV and serves it back
-	// on the status read. Nil when the queries are unavailable; both then no-op, exactly
-	// like the other best-effort derivations.
+	// bank receives the work history of every extracted CV and serves it back on the status
+	// read. Nil when the queries are unavailable; both then no-op.
 	bank experienceBank
 }
 
@@ -66,10 +64,8 @@ func newResumeHandlers(resumeStore *resume.Store, structuredExtractor *resumeext
 	}
 }
 
-// newExperienceBank builds the bank the upload path feeds, or nil when there are no
-// queries to build it over — a nil bank is the "banking disabled" state the import
-// already tolerates. Wired with profileSkills so an atom the upload imports also folds
-// its skills into the same profile the upload's owner searches with.
+// newExperienceBank builds the bank the upload path feeds, or nil (banking disabled) without
+// queries. profileSkills folds an imported atom's skills into the owner's profile.
 func newExperienceBank(queries *db.Queries, profileSkills experience.ProfileSkills) experienceBank {
 	if queries == nil {
 		return nil
@@ -77,68 +73,44 @@ func newExperienceBank(queries *db.Queries, profileSkills experience.ProfileSkil
 	return experience.NewStore(experience.NewQueriesRepository(queries)).SetProfileSkills(profileSkills)
 }
 
-func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
-	// The résumé verdict is a profile sub-resource: GET computes the live
-	// market-coverage verdict from the profile's skills against the selected role.
-	// Cookie-only and session-scoped, like the profile it hangs off (no profile → 404).
-	api.Get("/me/profile/verdict", mw.cookie, h.GetResumeVerdict)
-	// The CV ATS-readiness report is a sibling profile sub-resource: GET scores the
-	// caller's stored CV (structure + role keyword-match); POST runs the optional LLM
-	// qualitative review over it and caches it. Cookie-only, session-scoped.
-	api.Get("/me/profile/ats-report", mw.cookie, h.GetATSReport)
-	api.Post("/me/profile/ats-report", mw.cookie, mw.paidAI(unmeteredAI), h.PostATSReport)
+func (h *resumeHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	// The verdict is a profile sub-resource, cookie-only like the profile (no profile → 404).
+	api.Get("/me/profile/verdict", mw.cookie, contract)
+	// ATS report: GET scores the stored CV (structure + role keyword-match); POST runs and caches
+	// the optional LLM review.
+	api.Get("/me/profile/ats-report", mw.cookie, contract)
+	api.Post("/me/profile/ats-report", mw.cookie, mw.paidAI(unmeteredAI), contract)
 
-	// Resume skill extraction takes an optional session. Signed in, it feeds the profile
-	// edit modal and the onboarding wizard (extracted skills merge into the profile), and
-	// when S3 storage is configured it also stores the résumé once (the single upload
-	// point); when not, it stays stateless (parsed and discarded, only canonical slugs
-	// returned). Signed out — the AI search lets a visitor attach a CV — it is always
-	// stateless and calls no model, so a guest costs PDF parsing and nothing else, bounded
-	// per address. The /me/ path stays: renaming it would break the profile and onboarding
-	// callers for no behavioural gain.
+	// Optional session. Signed in with S3 configured, it also stores the résumé (the single upload
+	// point); otherwise it is stateless. Signed out (the AI search lets a visitor attach a CV) it
+	// is always stateless and calls no model, bounded per address.
 	//
-	// Open to free, like PUT /me/resume below, and deliberately NOT behind mw.paidAI. The
-	// structured extraction it kicks off in the background for a signed-in caller is a
-	// model call, and the one every account gets (plan.WithFreeAI): without it the
-	// experience bank stays empty, and somebody who uploads before paying finds every paid
-	// feature with nothing to read.
-	api.Post("/me/resume/extract", mw.optional, resumeExtractGuestLimiter(mw.throttler), h.ExtractResumeProfile)
+	// Deliberately NOT behind mw.paidAI, like PUT /me/resume: the background structured extraction
+	// is the model call every account gets (plan.WithFreeAI); without it the experience bank
+	// stays empty for anyone who uploads before paying.
+	api.Post("/me/resume/extract", mw.optional, h.ExtractResumeProfile)
 
-	// Résumé storage (cookie-only): store the résumé once so the verdict's coherence can
-	// reuse it without a second upload. PUT stores/replaces, GET reports status (enabled +
-	// present + uploaded_at), DELETE removes it. 501 from PUT/DELETE when S3 is
-	// unconfigured — the SPA then falls back to per-request upload on the verdict page.
+	// Résumé storage, cookie-only; PUT stays on Fiber because the upload is multipart-or-JSON.
+	// 501 from PUT/DELETE when S3 is unconfigured.
 	api.Put("/me/resume", mw.cookie, h.PutResume)
-	api.Get("/me/resume", mw.cookie, h.GetResume)
-	api.Put("/me/resume/contacts", mw.cookie, h.PutResumeContacts)
-	api.Post("/me/resume/contacts/replace-from-cv", mw.cookie, h.ReplaceResumeContactsFromCV)
-	api.Delete("/me/resume", mw.cookie, h.DeleteResume)
+	api.Get("/me/resume", mw.cookie, contract)
+	api.Put("/me/resume/contacts", mw.cookie, contract)
+	api.Post("/me/resume/contacts/replace-from-cv", mw.cookie, contract)
+	api.Delete("/me/resume", mw.cookie, contract)
 	// The retry runs the same free extraction again, so it is open to free as well.
-	api.Post("/me/resume/retry-extract", mw.cookie, h.RetryResumeExtract)
+	api.Post("/me/resume/retry-extract", mw.cookie, contract)
 
-	// Stateless market-coverage: score a caller-supplied skill list (request body)
-	// against the facet-filtered market. Cookie or API key — the CLI drives it with
-	// a key. No user data is stored; it is the stateless sibling of the CV verdict.
-	api.Post("/market/coverage", mw.key, h.MarketCoverage)
+	// Stateless market-coverage of a caller-supplied skill list; cookie or key (the CLI uses a key).
+	api.Post("/market/coverage", mw.key, contract)
 
-	// The public CV roast: no session, no API key. It is the landing page for search
-	// traffic that has never heard of us, so an account gate here would spend the visit
-	// to gain nothing — the same reason /jobs/find is public and first. Stores nothing
-	// and calls no model; the model review and tailoring are what the account is for.
-	// IP-limited, since there is no caller to key by.
-	api.Post("/cv/roast", cvRoastLimiter(mw.throttler), h.RoastCV)
-}
+	// The public CV roast: no session or key, since it is the landing page for cold search
+	// traffic. Stores nothing and calls no model. IP-limited, as there is no caller to key by.
+	api.Post("/cv/roast", h.RoastCV)
 
-// guestResumeExtractsPerHour bounds how many CVs one signed-out address may have parsed
-// per hour. The call is no model, only a pdftotext fork, so the budget is looser than the
-// AI search's own guest interpretations it serves beside. A first guess.
-const guestResumeExtractsPerHour = 20
-
-// resumeExtractGuestLimiter budgets signed-out extraction per address and leaves a
-// signed-in caller unbudgeted, as they always were. Mounted after mw.optional.
-func resumeExtractGuestLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return memberOrGuestLimiter(nil,
-		ratelimit.Middleware(throttler, ratelimit.KeyByIP("resumeextract-guest"), guestResumeExtractsPerHour, time.Hour))
+	// The CV-first onboarding's read (model parse, dictionary profile, ATS score), storing
+	// nothing. The one model call a guest gets (plan.WithFreeAI), bounded per address by the
+	// operations gateway; never behind mw.paidAI.
+	api.Post("/onboarding/cv", mw.optional, h.ParseOnboardingCV)
 }
 
 // resumeTextRequest is the JSON body for the pasted-text path.
@@ -164,25 +136,18 @@ type cvProfile struct {
 	Categories []string
 }
 
-// errResumeNoText is returned when a résumé file parsed cleanly but yielded no text —
-// a scanned or image-only PDF with no selectable text layer. The message names the real
-// cause (not a bare "empty") so the user knows to upload a text-based PDF or paste the
-// text, rather than assuming the file was rejected for its size.
+// errResumeNoText is the message for a PDF that parsed but yielded no text (a scan or image);
+// it names the cause so the user pastes text instead of assuming a size rejection.
 const errResumeNoText = "couldn't read any text from this PDF — it looks like a scan or image. Upload a text-based PDF, or paste your résumé text instead."
 
-// headlineRunes bounds the résumé "headline" fed to the title dictionaries: wide enough to
-// clear the name + contact preamble and reach the title (and a few summary words), tight
-// enough that the career-history section below can't reach in and over-promote the grade.
+// headlineRunes bounds the résumé "headline" fed to the title dictionaries: wide enough to reach
+// the title past the name and contacts, tight enough to keep career history out.
 const headlineRunes = 120
 
-// resumeHeadline returns the top of a résumé as a single flowing string — the name, title,
-// and the start of the summary — with contact/metadata tokens (email, phone, profile URL,
-// bare numbers, punctuation) dropped. The title dictionary (classify) runs over this, not
-// the whole CV, so a grade or role word buried in the career history
-// ("reported to the Head of Eng", a past Director role) can't over-promote the current
-// role. It collapses all whitespace first because PDF text extraction is unreliable about
-// line breaks — a two-column or table header often comes out one token per line — so a
-// line-based scan would stall on the name and never reach the title.
+// resumeHeadline returns the top of a résumé (name, title, start of the summary) as one string
+// with contact/metadata tokens dropped. The title dictionary runs over this, not the whole CV,
+// so a past "Director" role can't over-promote the grade. Whitespace is collapsed first because
+// PDF extraction often yields one token per line, which would stall a line-based scan.
 func resumeHeadline(text string) string {
 	var kept []string
 	runes := 0
@@ -198,10 +163,8 @@ func resumeHeadline(text string) string {
 	return strings.Join(kept, " ")
 }
 
-// looksLikeContactToken reports whether a whitespace-delimited résumé token is
-// contact/metadata noise rather than a title word: an email, a profile URL, or a token
-// with no letters at all (a "|" separator, a phone fragment, a bare number). Dropping these
-// keeps the headline landing on the actual role, not the candidate's inbox.
+// looksLikeContactToken reports whether a résumé token is contact/metadata noise rather than a
+// title word: an email, a profile URL, or a token with no letters (a "|", a phone fragment).
 func looksLikeContactToken(tok string) bool {
 	lower := strings.ToLower(tok)
 	if strings.Contains(lower, "@") {
@@ -220,10 +183,8 @@ func looksLikeContactToken(tok string) bool {
 	return true // no letters → punctuation / phone digits / bare number
 }
 
-// resumeProfile derives a cvProfile from résumé text using only the existing
-// dictionaries — skilltag for skills over the whole text (skills appear anywhere), and
-// classify over the headline (the current title + summary top) for the seniority grade
-// and the categories the résumé spans. No LLM.
+// resumeProfile derives a cvProfile from résumé text with the dictionaries only (no LLM):
+// skilltag over the whole text, classify over the headline.
 func resumeProfile(text string) cvProfile {
 	skills := skilltag.Parse(text, skilltag.WithResumeAcronyms())
 	if skills == nil {
@@ -241,17 +202,11 @@ func resumeProfile(text string) cvProfile {
 	}
 }
 
-// ExtractResumeProfile turns an uploaded résumé into a structured profile — canonical
-// skill slugs plus the dictionary-resolved seniority grade and the categories it spans —
-// all via the deterministic dictionaries (no LLM). It accepts a PDF (multipart/form-data field
-// "file") or plain text (application/json {text}), dispatched by Content-Type. When S3
-// storage is configured it also stores the résumé once — the single upload point, so the
-// verdict's coherence can reuse it without a second upload; storing is best-effort here
-// (a hiccup must not fail extraction, this endpoint's contract). When storage is
-// unconfigured the résumé is parsed and discarded (only the derived fields are returned).
-// A signed-out caller is served too, and for them nothing is stored or derived: the
-// bytes die with the request. Oversize bodies are rejected by the server's global
-// BodyLimit (413) before this handler runs; the web client also guards the size up front.
+// ExtractResumeProfile turns an uploaded résumé into skill slugs, a seniority grade and
+// categories via the dictionaries (no LLM). It accepts a PDF (multipart field "file") or text
+// (JSON {text}), dispatched by Content-Type. For a signed-in caller with S3 configured it also
+// stores the résumé, best-effort (a hiccup must not fail extraction); a signed-out caller's
+// bytes die with the request. Oversize bodies are rejected by the global BodyLimit (413).
 func (h *resumeHandlers) ExtractResumeProfile(c *fiber.Ctx) error {
 	userID, signedIn := auth.UserID(c)
 	if !signedIn {
@@ -271,13 +226,9 @@ func (h *resumeHandlers) ExtractResumeProfile(c *fiber.Ctx) error {
 	prof := resumeProfile(up.Text)
 
 	if signedIn && h.resume.Enabled() {
-		if meta, err := h.resume.Put(c.Context(), userID, up.ContentType, up.Data); err != nil {
-			// Best-effort: log (never the résumé bytes) and still return the profile.
+		// Best-effort: log (never the résumé bytes) and still return the profile.
+		if _, err := h.storeCV(c.Context(), userID, up); err != nil {
 			log.Printf("resume: store on extract failed for user %d: %v", userID, err)
-		} else {
-			// This is the résumé-upload path the app actually uses, so it is where the CV
-			// gets structured for the profile.
-			h.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
 		}
 	}
 
@@ -290,27 +241,11 @@ func (h *resumeHandlers) ExtractResumeProfile(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": data})
 }
 
-// resumeMetaResponse is the wire shape for résumé status: whether storage is enabled at
-// all, whether the caller has a résumé stored, and when it was uploaded (RFC3339, nil
-// when absent). Structured carries the read-only structured résumé for the profile view
-// (banked experience + current or provisional contacts). StructurePending is true when a
-// résumé is present but its structured stamp does not match the upload yet.
-type resumeMetaResponse struct {
-	Enabled          bool                      `json:"enabled"`
-	Present          bool                      `json:"present"`
-	UploadedAt       *string                   `json:"uploaded_at"`
-	Structured       *resumeextract.Structured `json:"structured"`
-	StructurePending bool                      `json:"structure_pending"`
-	ParseStatus      string                    `json:"parse_status,omitempty"`
-	ParseDetail      string                    `json:"parse_detail,omitempty"`
-	// Contacts is the wire name for historical/API-stability reasons; the Go/DB concept
-	// underneath is resume.Owned, which now also carries headline/summary/languages/
-	// certifications — see resume/owned.go.
-	Contacts *resume.Owned `json:"contacts,omitempty"`
-}
-
-func newResumeMeta(enabled bool, m resume.Meta) resumeMetaResponse {
-	out := resumeMetaResponse{Enabled: enabled, Present: m.Present}
+// newResumeMeta builds the wire shape for résumé status. UploadedAt is RFC3339 or nil;
+// StructurePending is true when a résumé is present but its structured stamp does not match
+// the upload yet.
+func newResumeMeta(enabled bool, m resume.Meta) resume.MetaResponse {
+	out := resume.MetaResponse{Enabled: enabled, Present: m.Present}
 	if m.UploadedAt != nil {
 		s := m.UploadedAt.UTC().Format(time.RFC3339)
 		out.UploadedAt = &s
@@ -319,8 +254,7 @@ func newResumeMeta(enabled bool, m resume.Meta) resumeMetaResponse {
 }
 
 // PutResume stores (or replaces) the caller's résumé in object storage and records the
-// pointer, returning the résumé metadata. 501 when storage is unconfigured (the SPA then
-// falls back to per-request upload on the verdict page). Cookie-only.
+// pointer. 501 when storage is unconfigured. Cookie-only.
 func (h *resumeHandlers) PutResume(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -336,40 +270,56 @@ func (h *resumeHandlers) PutResume(c *fiber.Ctx) error {
 	if strings.TrimSpace(up.Text) == "" {
 		return fiber.NewError(fiber.StatusBadRequest, errResumeNoText)
 	}
-	meta, err := h.resume.Put(c.Context(), userID, up.ContentType, up.Data)
+	meta, err := h.storeCV(c.Context(), userID, up)
 	if err != nil {
 		return err
 	}
-	// Derive the structured résumé in the background: it must not block the upload
-	// response (best-effort, off the response path). The structure is stamped with
-	// this upload's time so it is served only while it describes the current CV.
-	h.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
 	return c.JSON(fiber.Map{"data": newResumeMeta(true, meta)})
 }
 
-// deriveResumeArtifacts kicks the background best-effort derivation a fresh upload feeds:
-// the structured résumé (profile view + fit context). Runs detached on its own timeout
-// context. Defined once so the two upload paths (PutResume, ExtractResumeProfile) can't
-// drift out of sync.
+// storeCV is the CV upload use case every entry point shares (PutResume, the extract path and,
+// as storeFirstCV, the MCP add_cv tool): store the bytes, then derive the structured résumé in
+// the background, stamped with this upload's time so it is served only while it describes the
+// current CV. The derivation marks its own model call free (plan.WithFreeAI).
+func (h *resumeHandlers) storeCV(ctx context.Context, userID int64, up resumeUpload) (resume.Meta, error) {
+	return h.storeAndDerive(ctx, userID, up, h.resume.Put)
+}
+
+// storeFirstCV is storeCV for an account with no CV yet, and resume.ErrAlreadyStored for one
+// that has one — decided under the per-user lock every upload takes.
+func (h *resumeHandlers) storeFirstCV(ctx context.Context, userID int64, up resumeUpload) (resume.Meta, error) {
+	return h.storeAndDerive(ctx, userID, up, h.resume.PutIfAbsent)
+}
+
+func (h *resumeHandlers) storeAndDerive(ctx context.Context, userID int64, up resumeUpload,
+	put func(context.Context, int64, string, []byte) (resume.Meta, error)) (resume.Meta, error) {
+	meta, err := put(ctx, userID, up.ContentType, up.Data)
+	if err != nil {
+		return resume.Meta{}, err
+	}
+	h.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
+	return meta, nil
+}
+
+// deriveResumeArtifacts kicks the detached, best-effort derivation of the structured résumé.
+// RetryResumeExtract re-runs it over the bytes already stored.
 //
-// Intentionally does NOT write cvs rows. Applying the seed into a base or tailored CV is
-// the candidate's explicit Reset from résumé on the tailor workspace — or, for a *new*
-// vacancy bootstrap only, TailorCV's stale-base refresh when base.updated_at predates
-// resume_uploaded_at. Upload itself never mutates cvs.
+// Intentionally does NOT write cvs rows: seeding a base or tailored CV is the candidate's
+// explicit Reset from résumé (or TailorCV's stale-base refresh); upload never mutates cvs.
 func (h *resumeHandlers) deriveResumeArtifacts(userID int64, text string, uploadedAt *time.Time) {
 	go h.extractStructuredResume(userID, text, uploadedAt)
 }
 
-// extractStructuredResume derives the read-only structured résumé from the just-uploaded
-// CV and persists it, stamped with uploadedAt (the résumé upload time it was derived
-// from, captured up front so the stamp matches the CV actually read — Store.Structured
-// serves only on a stamp match). Background + best-effort: an unconfigured LLM, a missing
-// upload time, or any extraction/persist error is logged (never the CV text/bytes) and
-// swallowed, so the upload and the deterministic extractors are untouched. Runs on its
-// own timeout context (the request's is gone once the upload responded).
+// extractStructuredResume derives the structured résumé from the just-uploaded CV and persists
+// it, stamped with uploadedAt (captured up front so the stamp matches the CV actually read;
+// Store.Structured serves only on a stamp match). Best-effort: an unconfigured LLM, a missing
+// upload time, or any error is logged (never the CV text) and swallowed. Runs on its own
+// timeout context because the request's is gone.
 func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uploadedAt *time.Time) {
+	success := false
+	defer func() { observability.RecordCVExtraction(success) }()
 	if h.structuredExtractor == nil || !h.structuredExtractor.Enabled() {
-		log.Printf("resume structured: user %d: skipped — extractor disabled (LLM or PII detector unset)", userID)
+		log.Printf("resume structured: user %d: skipped — extractor disabled (LLM unset)", userID)
 		if uploadedAt != nil {
 			_ = h.resume.MarkExtractFailed(context.Background(), userID, "extractor unavailable", *uploadedAt)
 		}
@@ -400,6 +350,7 @@ func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uplo
 		_ = h.resume.MarkExtractFailed(ctx, userID, "persist failed", *uploadedAt)
 		return
 	}
+	success = true
 	h.importExperience(ctx, userID, st, uploadedAt.UTC().Format(time.RFC3339))
 }
 
@@ -409,26 +360,34 @@ func wireParseStatus(es resume.ExtractStatus) (status string, pending bool) {
 	return es.Status, es.Status == resume.ExtractStatusPending || es.Status == resume.ExtractStatusFailed
 }
 
+// resumeDataOK answers GetResume with the value as the Go type marshals it.
+func resumeDataOK(v any) (*apigen.GetResumeOK, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetResumeOK{Data: raw}, nil
+}
+
 // GetResume reports whether the caller has a stored résumé (and when). Always 200:
-// unconfigured storage or no résumé is a normal state the SPA renders (it decides between
-// "re-run coherence" and a single upload prompt). Cookie-only.
+// unconfigured storage or no résumé is a normal state. Cookie-only.
 // Identity composition follows internal/candidate/resume/AGENTS.md: owned contacts as a block,
 // current structure for semantic sections, provisional contacts while pending.
-func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *resumeHandlers) GetResume(ctx context.Context) (*apigen.GetResumeOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !h.resume.Enabled() {
-		return c.JSON(fiber.Map{"data": newResumeMeta(false, resume.Meta{})})
+		return resumeDataOK(newResumeMeta(false, resume.Meta{}))
 	}
-	meta, err := h.resume.Status(c.Context(), userID)
+	meta, err := h.resume.Status(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp := newResumeMeta(true, meta)
 
-	row, err := h.resume.StructuredRow(c.Context(), userID)
+	row, err := h.resume.StructuredRow(ctx, userID)
 	if err != nil {
 		log.Printf("resume structured row: user %d: %v", userID, err)
 	} else {
@@ -437,7 +396,7 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 		resp.ParseDetail = es.Detail
 	}
 
-	if owned, err := h.resume.CandidateOwned(c.Context(), userID); err != nil {
+	if owned, err := h.resume.CandidateOwned(ctx, userID); err != nil {
 		log.Printf("resume owned: user %d: %v", userID, err)
 	} else if !owned.Empty() {
 		contacts := owned
@@ -445,21 +404,18 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 	}
 
 	var st resumeextract.Structured
-	if pr, err := h.resume.ProfileReadForUser(c.Context(), userID); err != nil {
+	if pr, err := h.resume.ProfileReadForUser(ctx, userID); err != nil {
 		log.Printf("resume structured read: user %d: %v", userID, err)
 	} else {
 		if pr.Pending {
 			resp.StructurePending = true
 		}
-		// pr.Structure already carries only identity fields when !pr.Current (see
-		// ProfileReadForUser / provisionalContacts) — nothing further to strip here.
+		// pr.Structure already carries only identity fields when !pr.Current.
 		st = pr.Structure
 		st.Experience = nil
-		// Owned overrides win as a block on the composed view, field by field — a
-		// candidate's own edit to any of these, not just identity, must survive showing
-		// up next to whatever the latest extract says. Identity and body are gated
-		// separately: a candidate who has only ever edited their summary has blank owned
-		// identity fields, which must NOT blank out a real name/email from the extract.
+		// Owned overrides win over the latest extract, field by field. Identity and body are gated
+		// separately: blank owned identity fields (only a summary was edited) must NOT blank a
+		// real name/email from the extract.
 		if resp.Contacts != nil {
 			if !resp.Contacts.IdentityEmpty() {
 				st.FullName = resp.Contacts.FullName
@@ -472,7 +428,7 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 		}
 	}
 	if h.bank != nil {
-		history, err := h.bank.SeedHistory(c.Context(), userID)
+		history, err := h.bank.SeedHistory(ctx, userID)
 		if err != nil {
 			log.Printf("resume seed history: user %d: %v", userID, err)
 		} else {
@@ -483,47 +439,55 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 	if resumeStructureWorthServing(st) {
 		resp.Structured = &st
 	}
-	return c.JSON(fiber.Map{"data": resp})
+	return resumeDataOK(resp)
 }
 
-// PutResumeContacts replaces the candidate's owned overrides without a CV upload — the
-// route name predates Owned growing past identity fields; the body now accepts
-// headline/summary/languages/certifications too (resume.Owned, see owned.go).
-func (h *resumeHandlers) PutResumeContacts(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// PutResumeContacts replaces the candidate's owned overrides without a CV upload. The route
+// name predates resume.Owned growing past identity: the body also takes
+// headline/summary/languages/certifications.
+func (h *resumeHandlers) PutResumeContacts(ctx context.Context, req jx.Raw) (*apigen.PutResumeContactsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var in resume.Owned
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid contacts body")
+	if err := json.Unmarshal(req, &in); err != nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid contacts body")
 	}
-	out, err := h.resume.SetCandidateOwned(c.Context(), userID, in)
+	out, err := h.resume.SetCandidateOwned(ctx, userID, in)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": out})
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.PutResumeContactsOK{Data: raw}, nil
 }
 
 // ReplaceResumeContactsFromCV overwrites every owned override from the current structured
 // résumé — a full reset, not just identity fields.
-func (h *resumeHandlers) ReplaceResumeContactsFromCV(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *resumeHandlers) ReplaceResumeContactsFromCv(ctx context.Context) (*apigen.ReplaceResumeContactsFromCvOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	st, ok, err := h.resume.Structured(c.Context(), userID)
+	st, ok, err := h.resume.Structured(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !ok {
-		return fiber.NewError(fiber.StatusConflict, "no current structured résumé to copy contacts from")
+		return nil, fiber.NewError(fiber.StatusConflict, "no current structured résumé to copy contacts from")
 	}
-	out, err := h.resume.ReplaceOwnedFromStructured(c.Context(), userID, st)
+	out, err := h.resume.ReplaceOwnedFromStructured(ctx, userID, st)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": out})
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.ReplaceResumeContactsFromCvOK{Data: raw}, nil
 }
 
 // resumeStructureWorthServing reports whether the composed structure has anything the
@@ -541,50 +505,43 @@ func resumeStructureWorthServing(st resumeextract.Structured) bool {
 
 // DeleteResume removes the caller's stored résumé (object + pointer). 501 when storage is
 // unconfigured. Cookie-only.
-func (h *resumeHandlers) DeleteResume(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *resumeHandlers) DeleteResume(ctx context.Context) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
 	if !h.resume.Enabled() {
 		return fiber.NewError(fiber.StatusNotImplemented, "résumé storage is not available")
 	}
-	if err := h.resume.Delete(c.Context(), userID); err != nil {
-		return err
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return h.resume.Delete(ctx, userID)
 }
 
-// RetryResumeExtract re-derives the structured résumé from the candidate's already-stored
-// upload, without requiring them to submit the file again: it re-reads the stored bytes the
-// same way every other reader of them does (resume.Store.TextAndUploadedAt, one pointer read
-// so the text and the stamp it is derived under can never mismatch) and runs the same
-// background derivation an upload triggers.
+// RetryResumeExtract re-derives the structured résumé from the already-stored upload. It reads
+// text and stamp in one pointer read (resume.Store.TextAndUploadedAt) so they cannot mismatch.
 //
-// Marks the extract pending BEFORE kicking off that background derivation — without this, a
-// client polling GET /me/resume right after this call returns would see the PREVIOUS
-// attempt's "failed" status (nothing else clears it) and mistake it for the retry's own
-// outcome, when the retry has barely started. Cookie-only.
-func (h *resumeHandlers) RetryResumeExtract(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// Marks the extract pending BEFORE the background derivation starts; otherwise a client polling
+// GET /me/resume would see the PREVIOUS attempt's "failed" status and mistake it for this
+// retry's outcome. Cookie-only.
+func (h *resumeHandlers) RetryResumeExtract(ctx context.Context) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
 	if !h.resume.Enabled() {
 		return fiber.NewError(fiber.StatusNotImplemented, "résumé storage is not available")
 	}
-	text, uploadedAt, err := h.resume.TextAndUploadedAt(c.Context(), userID)
+	text, uploadedAt, err := h.resume.TextAndUploadedAt(ctx, userID)
 	if errors.Is(err, resume.ErrNotStored) {
 		return fiber.NewError(fiber.StatusConflict, "no résumé stored to retry")
 	}
 	if err != nil {
 		return err
 	}
-	if err := h.resume.MarkExtractPending(c.Context(), userID, uploadedAt); err != nil {
+	if err := h.resume.MarkExtractPending(ctx, userID, uploadedAt); err != nil {
 		return err
 	}
 	h.deriveResumeArtifacts(userID, text, &uploadedAt)
-	return c.SendStatus(fiber.StatusAccepted)
+	return nil
 }
 
 // readResumeUpload reads a résumé from the request into its original bytes, content type,
@@ -612,15 +569,12 @@ func readResumeUpload(c *fiber.Ctx) (resumeUpload, error) {
 		return resumeUpload{}, fiber.NewError(fiber.StatusBadRequest, "cannot read resume file")
 	}
 	defer f.Close()
-	// Buffer the upload: the raw bytes go to storage and the same bytes (as a ReaderAt)
-	// feed the PDF parser. The server's 8MB BodyLimit bounds this.
+	// Buffered because the raw bytes go to storage and the PDF parser reads them too; bounded by BodyLimit.
 	data, err := io.ReadAll(f)
 	if err != nil {
 		return resumeUpload{}, fiber.NewError(fiber.StatusBadRequest, "cannot read resume file")
 	}
-	// An undecodable or non-PDF input is a 400 (not a 500): it is bad client input,
-	// not a server fault. ExtractPDFText's deferred recover already turns the parser's
-	// panic on a malformed stream into an error, so every failure lands here.
+	// Bad client input is a 400, not a 500; ExtractPDFText recovers parser panics into errors.
 	text, err := resume.ExtractPDFText(data)
 	if err != nil {
 		return resumeUpload{}, fiber.NewError(fiber.StatusBadRequest, "invalid PDF")

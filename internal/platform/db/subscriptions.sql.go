@@ -11,140 +11,12 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const claimSubscriptionMatches = `-- name: ClaimSubscriptionMatches :many
-WITH claimable AS (
-    SELECT m.subscription_id, m.job_id
-    FROM subscriptions s
-    CROSS JOIN LATERAL (
-        SELECT mm.subscription_id, mm.job_id
-        FROM subscription_matches mm
-        WHERE mm.subscription_id = s.id
-          AND mm.notified_at IS NULL
-          AND mm.failed_at IS NULL
-          AND mm.expired_at IS NULL
-          AND (mm.claimed_at IS NULL
-               OR mm.claimed_at < now() - make_interval(secs => $1::int))
-        ORDER BY mm.matched_at DESC, mm.job_id DESC
-        LIMIT $2
-        FOR UPDATE SKIP LOCKED
-    ) m
-    WHERE s.active
-    -- A backstop, not the working bound: per_subscription x active subscriptions is what
-    -- a pass normally claims. This only caps a pathological subscription count.
-    LIMIT $3
-)
-UPDATE subscription_matches m
-SET claimed_at = now()
-FROM claimable c
-WHERE m.subscription_id = c.subscription_id AND m.job_id = c.job_id
-RETURNING m.subscription_id, m.job_id, m.matched_at
-`
-
-type ClaimSubscriptionMatchesParams struct {
-	LeaseSeconds    int32 `json:"lease_seconds"`
-	PerSubscription int32 `json:"per_subscription"`
-	BatchSize       int32 `json:"batch_size"`
-}
-
-type ClaimSubscriptionMatchesRow struct {
-	SubscriptionID int64              `json:"subscription_id"`
-	JobID          int64              `json:"job_id"`
-	MatchedAt      pgtype.Timestamptz `json:"matched_at"`
-}
-
-// Lease pending, live matches for active subscriptions by stamping claimed_at,
-// AT MOST per_subscription of them per subscription, so one busy subscription cannot
-// starve the rest. FOR UPDATE OF the match rows with SKIP LOCKED lets overlapping passes
-// take disjoint rows so a digest is sent at most once; the lease predicate reclaims rows
-// whose sender died (stale claimed_at), so no separate reaper is needed. The digest is
-// sent OUTSIDE this claim's transaction, so no network call is held inside a row lock.
-//
-// The per-subscription cap is the whole point. This used to be one flat
-// `ORDER BY subscription_id, matched_at LIMIT batch_size` over every pending row, which
-// reads as "oldest first" but is really "lowest subscription id first": a subscription
-// whose filter matches most of the catalogue fills the batch every pass and every
-// higher id is never reached. Measured on prod 2026-09-04 — one subscription with an
-// EMPTY query held 248k pending matches, the queue was 1.14M deep, and subscriptions
-// above it had attempts=0 since the day they were created. Nothing was broken; they were
-// simply never in a batch.
-//
-// A LATERAL per subscription, rather than a window function, because FOR UPDATE cannot
-// be used with window functions — and the row lock is what makes concurrent passes safe.
-//
-// NEWEST first within the subscription, and matched_at is returned so the caller knows
-// where the claim stopped. A digest carries what fits and COUNTS the rest (see
-// CountCoveredMatches / MarkCoveredMatchesNotified), so what fits has to be the freshest.
-// This used to be oldest first, and a `daily` subscription matching more than one digest
-// holds a day never caught up: it mailed the oldest 200 every morning, three weeks behind
-// (subscription 256 on 2026-10-22 was being sent matches from 2026-10-01).
-//
-// Stale matches are not filtered here: ExpireStaleSubscriptionMatches runs first in every
-// pass and takes them out of the pending set, so the predicate stays the plain pending one
-// the partial index subscription_matches_pending_matched_idx is built on.
-func (q *Queries) ClaimSubscriptionMatches(ctx context.Context, arg ClaimSubscriptionMatchesParams) ([]ClaimSubscriptionMatchesRow, error) {
-	rows, err := q.db.Query(ctx, claimSubscriptionMatches, arg.LeaseSeconds, arg.PerSubscription, arg.BatchSize)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ClaimSubscriptionMatchesRow{}
-	for rows.Next() {
-		var i ClaimSubscriptionMatchesRow
-		if err := rows.Scan(&i.SubscriptionID, &i.JobID, &i.MatchedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const countCoveredMatches = `-- name: CountCoveredMatches :one
-SELECT count(*)
-FROM subscription_matches
-WHERE subscription_id = $1
-  AND notified_at IS NULL
-  AND failed_at IS NULL
-  AND expired_at IS NULL
-  AND (matched_at, job_id) < ($2::timestamptz, $3::bigint)
-`
-
-type CountCoveredMatchesParams struct {
-	SubscriptionID  int64              `json:"subscription_id"`
-	BeforeMatchedAt pgtype.Timestamptz `json:"before_matched_at"`
-	BeforeJobID     int64              `json:"before_job_id"`
-}
-
-// How many pending matches a digest will COVER without carrying: the subscription's
-// pending matches strictly older than the oldest one the claim took. The claim reads
-// newest first, so these are exactly the ones that did not fit; the digest counts them in
-// its Total and its "and N more" tail, and MarkCoveredMatchesNotified stamps the same set
-// once the digest has gone out. The two statements share this predicate and must keep
-// sharing it, or the digest would announce one number and retire another.
-//
-// (matched_at, job_id) as a row comparison because one RecordSubscriptionMatches batch
-// stamps every row it writes with the same now(): matched_at alone ties constantly.
-//
-// Deliberately NO lease predicate. A lease is measured against now(), and the send sits
-// between the count and the mark, so a lease lapsing during a slow send would let the
-// mark retire a row the count left out. Without it the two read the same set; a row
-// another (overlapping, hand-run) pass happens to hold is counted here and delivered
-// there, which is a repeat, not a lie.
-func (q *Queries) CountCoveredMatches(ctx context.Context, arg CountCoveredMatchesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countCoveredMatches, arg.SubscriptionID, arg.BeforeMatchedAt, arg.BeforeJobID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createSubscription = `-- name: CreateSubscription :one
 INSERT INTO subscriptions (user_id, saved_search_id, channel, destination)
 SELECT ss.user_id, ss.id, $1, $2
 FROM saved_searches ss
 WHERE ss.id = $3 AND ss.user_id = $4
-RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at, last_digest_sent_at
+RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at, last_digest_sent_at, last_searched_at
 `
 
 type CreateSubscriptionParams struct {
@@ -177,6 +49,7 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 		&i.StartAt,
 		&i.CreatedAt,
 		&i.LastDigestSentAt,
+		&i.LastSearchedAt,
 	)
 	return i, err
 }
@@ -205,6 +78,33 @@ func (q *Queries) DeactivateEmailSubscription(ctx context.Context, arg Deactivat
 	return result.RowsAffected(), nil
 }
 
+const deactivateSubscriptions = `-- name: DeactivateSubscriptions :execrows
+UPDATE subscriptions s SET active = false
+FROM saved_searches ss
+WHERE ss.id = s.saved_search_id
+  AND s.id = ANY($1::bigint[])
+  AND s.active
+  AND ss.query = $2
+`
+
+type DeactivateSubscriptionsParams struct {
+	Ids   []int64 `json:"ids"`
+	Query string  `json:"query"`
+}
+
+// Pause the given subscriptions. The matching worker calls it for a saved search
+// whose query the search can no longer execute: such a subscription fails every
+// pass and can never deliver, and the owner can fix the search and resume it.
+// Only while the saved search still holds the query the worker judged: an owner who
+// fixed it after the worker read it must not find the fixed alert paused.
+func (q *Queries) DeactivateSubscriptions(ctx context.Context, arg DeactivateSubscriptionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deactivateSubscriptions, arg.Ids, arg.Query)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteSubscription = `-- name: DeleteSubscription :execrows
 DELETE FROM subscriptions
 WHERE id = $1 AND user_id = $2
@@ -226,63 +126,14 @@ func (q *Queries) DeleteSubscription(ctx context.Context, arg DeleteSubscription
 	return result.RowsAffected(), nil
 }
 
-const expireStaleSubscriptionMatches = `-- name: ExpireStaleSubscriptionMatches :execrows
-WITH stale AS (
-    SELECT m.subscription_id, m.job_id
-    FROM subscription_matches m
-    JOIN jobs j ON j.id = m.job_id
-    WHERE m.notified_at IS NULL
-      AND m.failed_at IS NULL
-      AND m.expired_at IS NULL
-      AND (m.claimed_at IS NULL
-           OR m.claimed_at < now() - make_interval(secs => $1::int))
-      AND (m.matched_at < now() - make_interval(secs => $2::int)
-           OR j.closed_at IS NOT NULL)
-    LIMIT $3
-    FOR UPDATE OF m SKIP LOCKED
-)
-UPDATE subscription_matches m
-SET expired_at = now()
-FROM stale s
-WHERE m.subscription_id = s.subscription_id AND m.job_id = s.job_id
-`
-
-type ExpireStaleSubscriptionMatchesParams struct {
-	LeaseSeconds     int32 `json:"lease_seconds"`
-	FreshnessSeconds int32 `json:"freshness_seconds"`
-	BatchSize        int32 `json:"batch_size"`
-}
-
-// Take up to batch_size STALE matches out of the pending set by stamping expired_at: a
-// match older than the freshness window, or one whose job has closed. A stale match is
-// never delivered — nobody wants a three-week-old posting announced as new, least of all
-// one that has already closed — and it is neither notified (nobody was told) nor failed
-// (nothing was attempted), so it gets a terminal state of its own (migration 0193).
-//
-// This is what bounds the pending set for a subscription that cannot be delivered at all
-// (push with no device, an unlinked Telegram chat, a disabled webhook): its matches used
-// to wait forever, and a user who relinked would have been sent the OLDEST 200 of them.
-//
-// Bounded per statement so the first pass after deploy — a backlog of tens of thousands —
-// is a series of short statements rather than one long one holding row locks on a busy
-// host; the caller repeats it until a batch comes back short. A match currently leased by
-// another pass is left to that pass, and SKIP LOCKED steps over one being claimed now.
-func (q *Queries) ExpireStaleSubscriptionMatches(ctx context.Context, arg ExpireStaleSubscriptionMatchesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, expireStaleSubscriptionMatches, arg.LeaseSeconds, arg.FreshnessSeconds, arg.BatchSize)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const getAlertChannelState = `-- name: GetAlertChannelState :one
 SELECT COALESCE(ns.alerts_email_enabled, true)::boolean AS email_alerts_enabled,
-       EXISTS(SELECT 1 FROM telegram_links tl WHERE tl.user_id = u.id) AS telegram_linked,
-       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = u.id) AS has_push_device,
+       (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM telegram_links tl WHERE tl.user_id = u.id))::boolean AS telegram_linked,
+       (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = u.id))::boolean AS has_push_device,
        COALESCE(wc.enabled, false)::boolean AS webhook_enabled
 FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
-LEFT JOIN webhook_configs wc ON wc.user_id = u.id
+LEFT JOIN webhook_configs wc ON wc.user_id = u.id AND u.banned_at IS NULL
 WHERE u.id = $1
 `
 
@@ -311,164 +162,73 @@ func (q *Queries) GetAlertChannelState(ctx context.Context, id int64) (GetAlertC
 	return i, err
 }
 
-const getJobsForDigest = `-- name: GetJobsForDigest :many
-SELECT id, title, company, public_slug, url, posted_at,
-       COALESCE((enrichment->>'salary_min')::int, 0)::int AS salary_min,
-       COALESCE((enrichment->>'salary_max')::int, 0)::int AS salary_max,
-       COALESCE(enrichment->>'salary_currency', '')::text AS salary_currency,
-       COALESCE(enrichment->>'salary_period', '')::text   AS salary_period
-FROM jobs
-WHERE id = ANY($1::bigint[])
-ORDER BY COALESCE(posted_at, created_at) DESC
+const getSubscriptionTarget = `-- name: GetSubscriptionTarget :one
+SELECT s.channel, ss.query
+FROM subscriptions s
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+WHERE s.id = $1 AND s.user_id = $2
 `
 
-type GetJobsForDigestRow struct {
-	ID             int64              `json:"id"`
-	Title          string             `json:"title"`
-	Company        string             `json:"company"`
-	PublicSlug     string             `json:"public_slug"`
-	URL            string             `json:"url"`
-	PostedAt       pgtype.Timestamptz `json:"posted_at"`
-	SalaryMin      int32              `json:"salary_min"`
-	SalaryMax      int32              `json:"salary_max"`
-	SalaryCurrency string             `json:"salary_currency"`
-	SalaryPeriod   string             `json:"salary_period"`
+type GetSubscriptionTargetParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
 }
 
-// The display fields for the jobs in a digest, freshest first. Salary fields are
-// projected out of the enrichment JSONB (absent keys → NULL) so a card can render
-// a compensation line only when one is known.
-func (q *Queries) GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJobsForDigestRow, error) {
-	rows, err := q.db.Query(ctx, getJobsForDigest, jobIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetJobsForDigestRow{}
-	for rows.Next() {
-		var i GetJobsForDigestRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Company,
-			&i.PublicSlug,
-			&i.URL,
-			&i.PostedAt,
-			&i.SalaryMin,
-			&i.SalaryMax,
-			&i.SalaryCurrency,
-			&i.SalaryPeriod,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type GetSubscriptionTargetRow struct {
+	Channel string `json:"channel"`
+	Query   string `json:"query"`
 }
 
-const getSubscriptionForDelivery = `-- name: GetSubscriptionForDelivery :one
-SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_digest_sent_at,
-       ss.name AS saved_search_name,
-       ss.query AS saved_search_query,
-       u.email AS account_email,
+// What an owner-scoped subscription delivers: its channel and its saved search's
+// query. Resuming a paused subscription re-applies the gates a new one passes, and
+// these are what they read. No matching owner-scoped row returns no row (404).
+func (q *Queries) GetSubscriptionTarget(ctx context.Context, arg GetSubscriptionTargetParams) (GetSubscriptionTargetRow, error) {
+	row := q.db.QueryRow(ctx, getSubscriptionTarget, arg.ID, arg.UserID)
+	var i GetSubscriptionTargetRow
+	err := row.Scan(&i.Channel, &i.Query)
+	return i, err
+}
+
+const listActiveSubscriptions = `-- name: ListActiveSubscriptions :many
+SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query, ss.query_revision,
+       s.last_digest_sent_at, s.last_searched_at,
        u.timezone AS timezone,
-       tl.chat_id AS telegram_chat_id,
-       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id) AS has_push_device,
-       wc.url AS webhook_url,
-       COALESCE(wc.enabled, false) AS webhook_enabled,
-       COALESCE(ns.digest_frequency, 'instant')::text AS digest_frequency,
-       ns.digest_time AS digest_time,
+       -- EFFECTIVE frequency, not the stored one: faster than daily is a paid benefit (a live
+       -- pro_until or ultra_until, whichever source granted it), so a Free account reads as
+       -- 'daily' at its stored time whatever it kept or had before an entitlement expired.
+       -- A webhook is a program's endpoint, not a person's digest, and keeps the stored value.
+       -- The same expression gates ClaimSubscriptionMatches; the three must agree.
+       (CASE WHEN s.channel = 'webhook'
+                  OR COALESCE(u.pro_until > now(), false) OR COALESCE(u.ultra_until > now(), false)
+             THEN COALESCE(ns.digest_frequency, 'daily') ELSE 'daily' END)::text AS digest_frequency,
+       COALESCE(ns.digest_interval_hours, 1)::int AS digest_interval_hours,
+       COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 JOIN users u ON u.id = s.user_id
-LEFT JOIN telegram_links tl ON tl.user_id = s.user_id
-LEFT JOIN webhook_configs wc ON wc.user_id = s.user_id
-LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
-WHERE s.id = $1
-`
-
-type GetSubscriptionForDeliveryRow struct {
-	ID               int64              `json:"id"`
-	UserID           int64              `json:"user_id"`
-	SavedSearchID    int64              `json:"saved_search_id"`
-	Channel          string             `json:"channel"`
-	Destination      pgtype.Text        `json:"destination"`
-	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
-	SavedSearchName  string             `json:"saved_search_name"`
-	SavedSearchQuery string             `json:"saved_search_query"`
-	AccountEmail     string             `json:"account_email"`
-	Timezone         pgtype.Text        `json:"timezone"`
-	TelegramChatID   pgtype.Int8        `json:"telegram_chat_id"`
-	HasPushDevice    bool               `json:"has_push_device"`
-	WebhookUrl       pgtype.Text        `json:"webhook_url"`
-	WebhookEnabled   bool               `json:"webhook_enabled"`
-	DigestFrequency  string             `json:"digest_frequency"`
-	DigestTime       pgtype.Time        `json:"digest_time"`
-	QuietHoursStart  pgtype.Time        `json:"quiet_hours_start"`
-	QuietHoursEnd    pgtype.Time        `json:"quiet_hours_end"`
-}
-
-// The delivery context for one subscription: channel + destination, the saved
-// search id (which subscriptions of the same search share, and the notification
-// centre's dedup key is built on — see notify.digestDedupKey), the saved
-// search name (for the digest heading) and query (where a digest too large to carry
-// whole sends its "and N more" tail), the user's account email (the email
-// channel's live recipient), the user's linked Telegram chat (NULL when unlinked
-// → the worker soft-skips telegram delivery rather than failing it), whether
-// the user has at least one registered push device (the push channel's live
-// deliverability check, same soft-skip role as the Telegram link), the user's
-// webhook destination (URL, NULL or disabled → the worker soft-skips webhook
-// delivery the same way), and the delivery-timing context
-// (live, not snapshotted, same as the channel checks above) — the account's
-// timezone and its saved-search digest frequency settings, read via
-// internal/application/deliverywindow before a digest is sent.
-func (q *Queries) GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error) {
-	row := q.db.QueryRow(ctx, getSubscriptionForDelivery, id)
-	var i GetSubscriptionForDeliveryRow
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.SavedSearchID,
-		&i.Channel,
-		&i.Destination,
-		&i.LastDigestSentAt,
-		&i.SavedSearchName,
-		&i.SavedSearchQuery,
-		&i.AccountEmail,
-		&i.Timezone,
-		&i.TelegramChatID,
-		&i.HasPushDevice,
-		&i.WebhookUrl,
-		&i.WebhookEnabled,
-		&i.DigestFrequency,
-		&i.DigestTime,
-		&i.QuietHoursStart,
-		&i.QuietHoursEnd,
-	)
-	return i, err
-}
-
-const listActiveSubscriptions = `-- name: ListActiveSubscriptions :many
-SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query
-FROM subscriptions s
-JOIN saved_searches ss ON ss.id = s.saved_search_id
 LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
 WHERE s.active
   AND (s.channel <> 'email' OR COALESCE(ns.alerts_email_enabled, true))
 `
 
 type ListActiveSubscriptionsRow struct {
-	ID          int64              `json:"id"`
-	UserID      int64              `json:"user_id"`
-	Channel     string             `json:"channel"`
-	Destination pgtype.Text        `json:"destination"`
-	StartAt     pgtype.Timestamptz `json:"start_at"`
-	Query       string             `json:"query"`
+	ID                  int64              `json:"id"`
+	UserID              int64              `json:"user_id"`
+	Channel             string             `json:"channel"`
+	Destination         pgtype.Text        `json:"destination"`
+	StartAt             pgtype.Timestamptz `json:"start_at"`
+	Query               string             `json:"query"`
+	QueryRevision       int32              `json:"query_revision"`
+	LastDigestSentAt    pgtype.Timestamptz `json:"last_digest_sent_at"`
+	LastSearchedAt      pgtype.Timestamptz `json:"last_searched_at"`
+	Timezone            pgtype.Text        `json:"timezone"`
+	DigestFrequency     string             `json:"digest_frequency"`
+	DigestIntervalHours int32              `json:"digest_interval_hours"`
+	DigestTime          pgtype.Time        `json:"digest_time"`
+	QuietHoursStart     pgtype.Time        `json:"quiet_hours_start"`
+	QuietHoursEnd       pgtype.Time        `json:"quiet_hours_end"`
 }
 
 // Every active subscription with the data the matching worker needs: the saved
@@ -488,6 +248,11 @@ type ListActiveSubscriptionsRow struct {
 // account never opened the settings page, which is not the same as opting out. Same
 // reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
 // inner join — see migration 0153 for why one column could not answer both.
+//
+// It also carries the delivery-timing context (the same COALESCE defaults as
+// GetSubscriptionForDelivery and ClaimSubscriptionMatches) and the two stamps the
+// worker uses to skip a search whose result could not be sent this pass — see
+// notify.searchDue.
 func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error) {
 	rows, err := q.db.Query(ctx, listActiveSubscriptions)
 	if err != nil {
@@ -504,6 +269,15 @@ func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubs
 			&i.Destination,
 			&i.StartAt,
 			&i.Query,
+			&i.QueryRevision,
+			&i.LastDigestSentAt,
+			&i.LastSearchedAt,
+			&i.Timezone,
+			&i.DigestFrequency,
+			&i.DigestIntervalHours,
+			&i.DigestTime,
+			&i.QuietHoursStart,
+			&i.QuietHoursEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -517,10 +291,12 @@ func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubs
 
 const listSubscriptionDeliveryStats = `-- name: ListSubscriptionDeliveryStats :many
 SELECT m.subscription_id,
-       count(*) FILTER (WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL) AS pending,
+       count(*) FILTER (WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL
+                        AND m.query_revision = ss.query_revision) AS pending,
        max(m.notified_at)::timestamptz AS last_delivered_at
 FROM subscription_matches m
 JOIN subscriptions s ON s.id = m.subscription_id
+JOIN saved_searches ss ON ss.id = s.saved_search_id
 WHERE s.user_id = $1
 GROUP BY m.subscription_id
 `
@@ -635,7 +411,7 @@ func (q *Queries) ListSubscriptionUpdates(ctx context.Context, arg ListSubscript
 }
 
 const listSubscriptions = `-- name: ListSubscriptions :many
-SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.active, s.start_at, s.created_at, s.last_digest_sent_at, ss.name AS saved_search_name, ss.query AS saved_search_query
+SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.active, s.start_at, s.created_at, s.last_digest_sent_at, s.last_searched_at, ss.name AS saved_search_name, ss.query AS saved_search_query
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 WHERE s.user_id = $1
@@ -652,6 +428,7 @@ type ListSubscriptionsRow struct {
 	StartAt          pgtype.Timestamptz `json:"start_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
+	LastSearchedAt   pgtype.Timestamptz `json:"last_searched_at"`
 	SavedSearchName  string             `json:"saved_search_name"`
 	SavedSearchQuery string             `json:"saved_search_query"`
 }
@@ -677,6 +454,7 @@ func (q *Queries) ListSubscriptions(ctx context.Context, userID int64) ([]ListSu
 			&i.StartAt,
 			&i.CreatedAt,
 			&i.LastDigestSentAt,
+			&i.LastSearchedAt,
 			&i.SavedSearchName,
 			&i.SavedSearchQuery,
 		); err != nil {
@@ -728,115 +506,52 @@ func (q *Queries) ListUserEmailSubscriptions(ctx context.Context, userID int64) 
 	return items, nil
 }
 
-const markCoveredMatchesNotified = `-- name: MarkCoveredMatchesNotified :execrows
-UPDATE subscription_matches
-SET notified_at = now()
-WHERE subscription_id = $1
-  AND notified_at IS NULL
-  AND failed_at IS NULL
-  AND expired_at IS NULL
-  AND (matched_at, job_id) < ($2::timestamptz, $3::bigint)
+const markSubscriptionsSearched = `-- name: MarkSubscriptionsSearched :exec
+UPDATE subscriptions SET last_searched_at = $1
+WHERE id = ANY($2::bigint[])
 `
 
-type MarkCoveredMatchesNotifiedParams struct {
-	SubscriptionID  int64              `json:"subscription_id"`
-	BeforeMatchedAt pgtype.Timestamptz `json:"before_matched_at"`
-	BeforeJobID     int64              `json:"before_job_id"`
+type MarkSubscriptionsSearchedParams struct {
+	SearchedAt pgtype.Timestamptz `json:"searched_at"`
+	Ids        []int64            `json:"ids"`
 }
 
-// Stamp notified_at on the matches a delivered digest counted without carrying — the set
-// CountCoveredMatches measured before the send, under the same predicate. notified_at is
-// honest here: the digest the person received announced these postings in its count and
-// linked to the saved search that lists them. Re-queuing them instead is what kept a
-// busy `daily` subscription mailing the same backlog, oldest first, day after day.
-func (q *Queries) MarkCoveredMatchesNotified(ctx context.Context, arg MarkCoveredMatchesNotifiedParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markCoveredMatchesNotified, arg.SubscriptionID, arg.BeforeMatchedAt, arg.BeforeJobID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const markDigestSent = `-- name: MarkDigestSent :exec
-UPDATE subscriptions
-SET last_digest_sent_at = now()
-WHERE id = $1
-`
-
-// Stamp the subscription's last daily-digest send instant, so
-// internal/application/deliverywindow.DigestDue reads "already sent today" on any later pass
-// within the same local calendar day. Only called after a successful `daily`-mode
-// delivery — `instant`-mode subscriptions never touch this column.
-func (q *Queries) MarkDigestSent(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, markDigestSent, id)
-	return err
-}
-
-const markMatchesNotified = `-- name: MarkMatchesNotified :execrows
-UPDATE subscription_matches
-SET notified_at = now()
-WHERE subscription_id = $1
-  AND job_id = ANY($2::bigint[])
-`
-
-type MarkMatchesNotifiedParams struct {
-	SubscriptionID int64   `json:"subscription_id"`
-	JobIds         []int64 `json:"job_ids"`
-}
-
-// Stamp notified_at on the jobs that were just delivered for a subscription, so
-// they leave the pending queue and are never sent again.
-func (q *Queries) MarkMatchesNotified(ctx context.Context, arg MarkMatchesNotifiedParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markMatchesNotified, arg.SubscriptionID, arg.JobIds)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const recordMatchDeliveryFailure = `-- name: RecordMatchDeliveryFailure :exec
-UPDATE subscription_matches
-SET attempts   = attempts + 1,
-    last_error = $1,
-    failed_at  = CASE
-                     WHEN attempts + 1 >= $2::int THEN now()
-                     ELSE NULL
-                 END
-WHERE subscription_id = $3
-  AND job_id = ANY($4::bigint[])
-`
-
-type RecordMatchDeliveryFailureParams struct {
-	LastError      string  `json:"last_error"`
-	MaxAttempts    int32   `json:"max_attempts"`
-	SubscriptionID int64   `json:"subscription_id"`
-	JobIds         []int64 `json:"job_ids"`
-}
-
-// Count a failed delivery for a subscription's claimed jobs: bump attempts, record
-// the error, and dead-letter (set failed_at) once attempts reach the max. claimed_at
-// is left in place — its expiry gates the retry to a later pass and doubles as the
-// crash reaper, mirroring enrichment_outbox.
-func (q *Queries) RecordMatchDeliveryFailure(ctx context.Context, arg RecordMatchDeliveryFailureParams) error {
-	_, err := q.db.Exec(ctx, recordMatchDeliveryFailure,
-		arg.LastError,
-		arg.MaxAttempts,
-		arg.SubscriptionID,
-		arg.JobIds,
-	)
+// Stamp the subscriptions whose saved search the matching stage just ran and
+// recorded. searched_at is the instant the pass STARTED, not now(): the next
+// search pages back to it, so a posting indexed while this pass ran is covered.
+func (q *Queries) MarkSubscriptionsSearched(ctx context.Context, arg MarkSubscriptionsSearchedParams) error {
+	_, err := q.db.Exec(ctx, markSubscriptionsSearched, arg.SearchedAt, arg.Ids)
 	return err
 }
 
 const recordSubscriptionMatches = `-- name: RecordSubscriptionMatches :execrows
-INSERT INTO subscription_matches (subscription_id, job_id)
-SELECT unnest($1::bigint[]) AS subscription_id,
-       unnest($2::bigint[]) AS job_id
-ON CONFLICT (subscription_id, job_id) DO NOTHING
+INSERT INTO subscription_matches (subscription_id, job_id, query_revision)
+SELECT s.id, pairs.job_id, pairs.query_revision
+FROM (
+    SELECT unnest($1::bigint[]) AS subscription_id,
+           unnest($2::bigint[]) AS job_id,
+           unnest($3::int[]) AS query_revision
+) pairs
+JOIN subscriptions s ON s.id = pairs.subscription_id
+JOIN saved_searches ss ON ss.id = s.saved_search_id AND ss.query_revision = pairs.query_revision
+FOR KEY SHARE OF s
+FOR SHARE OF ss
+ON CONFLICT (subscription_id, job_id) DO UPDATE
+SET query_revision = EXCLUDED.query_revision,
+    matched_at     = now(),
+    claimed_at     = NULL,
+    attempts       = 0,
+    last_error     = '',
+    failed_at      = NULL,
+    expired_at     = NULL
+WHERE subscription_matches.query_revision < EXCLUDED.query_revision
+  AND subscription_matches.notified_at IS NULL
 `
 
 type RecordSubscriptionMatchesParams struct {
 	SubscriptionIds []int64 `json:"subscription_ids"`
 	JobIds          []int64 `json:"job_ids"`
+	QueryRevisions  []int32 `json:"query_revisions"`
 }
 
 // Record that a batch of (subscription, job) pairs matched, one round trip for
@@ -851,39 +566,32 @@ type RecordSubscriptionMatchesParams struct {
 // query analyzer cannot type the latter (see jobs.sql's MarkFuzzyDuplicatesForCompany,
 // same pattern for the same reason); Postgres runs same-length SELECT-list set-returning
 // functions in lockstep, pairing subscription_ids[i] with job_ids[i].
+//
+// Subscriptions may be deleted after ListActiveSubscriptions but before this write.
+// Join their current rows so one unsubscribe cannot fail the entire query group's
+// batch. Lock those parents through the insert: an existence check alone still races
+// with a DELETE that commits after this statement takes its snapshot.
+//
+// Each pair carries the query revision its search ran under (a third aligned array), and a
+// pair is recorded only while the saved search is still at that revision: an edit that
+// commits between the pass reading the query and recording its hits must not let the old
+// query's results in after the edit cleared the pending set. The saved search row is locked
+// through the insert for the same reason as the subscription. On conflict, a still-pending
+// row of an OLDER revision is reset to the new one, or a job the new query also matches
+// would stay blocked behind the leftover row claiming ignores.
 func (q *Queries) RecordSubscriptionMatches(ctx context.Context, arg RecordSubscriptionMatchesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, recordSubscriptionMatches, arg.SubscriptionIds, arg.JobIds)
+	result, err := q.db.Exec(ctx, recordSubscriptionMatches, arg.SubscriptionIds, arg.JobIds, arg.QueryRevisions)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
 }
 
-const releaseMatchClaim = `-- name: ReleaseMatchClaim :exec
-UPDATE subscription_matches
-SET claimed_at = NULL
-WHERE subscription_id = $1
-  AND job_id = ANY($2::bigint[])
-`
-
-type ReleaseMatchClaimParams struct {
-	SubscriptionID int64   `json:"subscription_id"`
-	JobIds         []int64 `json:"job_ids"`
-}
-
-// Release the lease on a subscription's claimed jobs without counting an attempt,
-// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
-// a later pass instead of waiting out the lease.
-func (q *Queries) ReleaseMatchClaim(ctx context.Context, arg ReleaseMatchClaimParams) error {
-	_, err := q.db.Exec(ctx, releaseMatchClaim, arg.SubscriptionID, arg.JobIds)
-	return err
-}
-
 const setSubscriptionActive = `-- name: SetSubscriptionActive :one
 UPDATE subscriptions
 SET active = $1
 WHERE id = $2 AND user_id = $3
-RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at, last_digest_sent_at
+RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at, last_digest_sent_at, last_searched_at
 `
 
 type SetSubscriptionActiveParams struct {
@@ -907,6 +615,7 @@ func (q *Queries) SetSubscriptionActive(ctx context.Context, arg SetSubscription
 		&i.StartAt,
 		&i.CreatedAt,
 		&i.LastDigestSentAt,
+		&i.LastSearchedAt,
 	)
 	return i, err
 }

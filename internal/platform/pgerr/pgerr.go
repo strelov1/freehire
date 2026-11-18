@@ -1,7 +1,6 @@
-// Package pgerr classifies PostgreSQL errors by SQLSTATE so callers can branch on a
-// specific database condition (a unique or foreign-key violation) without each one
-// re-deriving the *pgconn.PgError unwrap. It is the single home for the SQLSTATE
-// constants the repositories and the central error handler share.
+// Package pgerr classifies PostgreSQL errors by SQLSTATE so callers can branch on a specific
+// condition without re-deriving the *pgconn.PgError unwrap. It is the single home for the
+// SQLSTATE constants the repositories and the central error handler share.
 package pgerr
 
 import (
@@ -10,23 +9,26 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// IsPostgresError reports whether err wraps a server-side PostgreSQL error.
+// Diagnostic logs use this coarse classification without exposing SQL or messages.
+func IsPostgresError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr)
+}
+
 // SQLSTATE codes the app branches on.
 const (
 	codeUniqueViolation      = "23505"
 	codeForeignKeyViolation  = "23503"
 	codeSerializationFailure = "40001"
-	// codeDeadlockDetected is 40P01: PostgreSQL broke a lock cycle by killing one of
-	// the transactions in it. Like 40001 it says nothing was wrong with the work —
-	// only that two writers wanted the same rows in opposite orders — so the answer is
-	// to run it again.
+	// codeDeadlockDetected is 40P01: PostgreSQL killed one transaction in a lock cycle. Like
+	// 40001 it says nothing was wrong with the work, so run it again.
 	codeDeadlockDetected = "40P01"
-	// codeDataCorrupted is XX001 (data_corrupted): a row cannot be read because its
-	// on-disk storage is damaged — most visibly a "missing chunk number N for toast
-	// value ..." on a broken TOAST pointer.
+	// codeDataCorrupted is XX001: a row cannot be read because its on-disk storage is
+	// damaged (e.g. "missing chunk number N for toast value").
 	codeDataCorrupted = "XX001"
 	// codeExclusionViolation is 23P01: an EXCLUDE constraint refused the row. It is NOT
-	// 23505 — a caller checking only for a unique violation will miss it entirely, and
-	// the refusal will surface as a 500 for what is usually an ordinary outcome.
+	// 23505, so a caller checking only for a unique violation misses it and returns a 500.
 	codeExclusionViolation = "23P01"
 )
 
@@ -55,41 +57,32 @@ func IsSerializationFailure(err error) bool {
 // IsDeadlock reports whether err is (or wraps) a deadlock PostgreSQL resolved by
 // aborting this transaction (SQLSTATE 40P01).
 //
-// It is a transient condition, not a defect in the statement: the same work
-// succeeds on a retry once the other writer has moved on. A caller that treats it
-// as a hard failure stops doing its job for as long as nobody reads the log — which
-// is what happened to cmd/rollup-views, silently, for two days.
+// It is transient: the same work succeeds on a retry. Treating it as a hard failure silently
+// stalled cmd/rollup-views.
 func IsDeadlock(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == codeDeadlockDetected
 }
 
 // IsDataCorrupted reports whether err is (or wraps) a Postgres data-corruption error
-// (SQLSTATE XX001). It is deliberately narrow: recognizing the condition is this package's
-// job, but deciding what to do about it is the caller's — internal/platform/worker's resilient scan
-// is what chooses to skip such a row, and only XX001 opts a read into that path, so every
-// other failure still surfaces unchanged.
+// (SQLSTATE XX001). Deliberately narrow: this package recognizes the condition, the caller
+// decides what to do (internal/platform/worker's resilient scan skips such a row, and only
+// XX001 opts a read into that path).
 func IsDataCorrupted(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == codeDataCorrupted
 }
 
 // ExclusionViolationConstraint reports the name of the violated constraint when err is
-// (or wraps) an EXCLUDE-constraint violation — a row that overlaps one already there, on
-// whatever operator the constraint names. ok is false for anything else.
+// (or wraps) an EXCLUDE-constraint violation. ok is false for anything else.
 //
-// SQLSTATE 23P01, and that is the trap this exists for: an EXCLUDE constraint is the
-// natural way to say "these two cannot overlap", and its violation is NOT a unique
-// violation's 23505. A caller reaching for IsUniqueViolation, because that is the
-// familiar one, will not match it — and the refusal reaches the handler unclassified.
-// The first user is mentorship's no-double-booking guarantee, where the violation is an
-// ORDINARY outcome (somebody else took the hour) that must become a domain error rather
-// than a 500.
+// SQLSTATE 23P01, NOT a unique violation's 23505: a caller reaching for IsUniqueViolation
+// will not match it and the refusal reaches the handler unclassified. The first user is
+// mentorship's no-double-booking guarantee, where the violation is an ordinary outcome
+// that must become a domain error rather than a 500.
 //
-// There is deliberately no bare IsExclusionViolation beside it. Every caller so far has
-// to know WHICH constraint fired before it can say what happened, so a boolean would be
-// an answer nobody can act on — and the dead-code guard caught it as unreachable the
-// moment it was written for symmetry with the classifiers above.
+// There is deliberately no bare IsExclusionViolation: every caller needs to know WHICH
+// constraint fired, and an unused one fails the dead-code guard.
 func ExclusionViolationConstraint(err error) (name string, ok bool) {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != codeExclusionViolation {

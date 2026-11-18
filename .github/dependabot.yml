@@ -13,6 +13,8 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "build(deps)"
     open-pull-requests-limit: 5
 
   - package-ecosystem: npm
@@ -21,6 +23,8 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "build(deps)"
     open-pull-requests-limit: 5
     groups:
       # @scalar/server-side-rendering renders /docs/api on the server with its OWN
@@ -38,6 +42,8 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "build(deps)"
     open-pull-requests-limit: 5
 
   - package-ecosystem: npm
@@ -46,6 +52,8 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "build(deps)"
     open-pull-requests-limit: 5
 
   - package-ecosystem: github-actions
@@ -54,3 +62,5 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "ci"

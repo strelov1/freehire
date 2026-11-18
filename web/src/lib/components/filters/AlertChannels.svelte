@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { ApiError } from '#lib/api.js';
   import { notifications } from '#lib/notifications.svelte.js';
+  import PushNoDeviceNote from '#lib/components/PushNoDeviceNote.svelte';
   import { ProviderIcon } from '#lib/ui/index.js';
 
   // The unified per-search alert control: one toggle chip per delivery channel
@@ -35,6 +36,17 @@
   const pushSub = $derived(notifications.forSavedSearch(savedSearchId, 'push'));
   const webhook = $derived(notifications.webhook);
   const webhookSub = $derived(notifications.forSavedSearch(savedSearchId, 'webhook'));
+
+  // The no-device note sends the user to the phone; when they come back to this tab,
+  // re-read so the note goes away without a reload.
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') notifications.refreshPushDevice().catch(() => {});
+  };
+  $effect(() => {
+    if (!pushSub || notifications.hasPushDevice) return;
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  });
 
   // Telegram: unsubscribe if on; else subscribe. Only ever called while linked — the
   // chip renders as a link to Integrations instead of this button while it isn't.
@@ -102,26 +114,31 @@
 
   // A chip: filled brand tint when on, neutral outline when off; the leading glyph is a
   // check once subscribed, otherwise the channel mark.
-  const chipClass = (on: boolean) =>
-    [
-      'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
-      on
-        ? 'border-transparent bg-brand-muted text-brand-strong'
-        : 'border-border bg-background text-muted-foreground hover:border-muted-foreground/40',
-    ];
+  const chipClass = (on: boolean) => [
+    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
+    on
+      ? 'border-transparent bg-brand-muted text-brand-strong'
+      : 'border-border bg-background text-muted-foreground hover:border-muted-foreground/40',
+  ];
 </script>
 
 <div class="flex flex-col gap-1.5">
   <div class="flex flex-wrap items-center gap-2">
     {#if showLabel}
-      <span class="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <span class="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
         <Bell class="size-3.5" aria-hidden="true" /> Alerts
       </span>
     {/if}
 
     {#if tg.enabled}
       {#if tg.linked}
-        <button type="button" onclick={toggleTelegram} disabled={busy !== null} aria-pressed={tgSub != null} class={chipClass(tgSub != null)}>
+        <button
+          type="button"
+          onclick={toggleTelegram}
+          disabled={busy !== null}
+          aria-pressed={tgSub != null}
+          class={chipClass(tgSub != null)}
+        >
           {#if tgSub}
             <Check class="size-3.5" aria-hidden="true" />
           {:else}
@@ -137,7 +154,13 @@
       {/if}
     {/if}
 
-    <button type="button" onclick={toggleEmail} disabled={busy !== null} aria-pressed={emailSub != null} class={chipClass(emailSub != null)}>
+    <button
+      type="button"
+      onclick={toggleEmail}
+      disabled={busy !== null}
+      aria-pressed={emailSub != null}
+      class={chipClass(emailSub != null)}
+    >
       {#if emailSub}
         <Check class="size-3.5" aria-hidden="true" />
       {:else}
@@ -147,7 +170,13 @@
     </button>
 
     {#if notifications.hasPushDevice || pushSub}
-      <button type="button" onclick={togglePush} disabled={busy !== null} aria-pressed={pushSub != null} class={chipClass(pushSub != null)}>
+      <button
+        type="button"
+        onclick={togglePush}
+        disabled={busy !== null}
+        aria-pressed={pushSub != null}
+        class={chipClass(pushSub != null)}
+      >
         {#if pushSub}
           <Check class="size-3.5" aria-hidden="true" />
         {:else}
@@ -158,7 +187,13 @@
     {/if}
 
     {#if webhook?.enabled}
-      <button type="button" onclick={toggleWebhook} disabled={busy !== null} aria-pressed={webhookSub != null} class={chipClass(webhookSub != null)}>
+      <button
+        type="button"
+        onclick={toggleWebhook}
+        disabled={busy !== null}
+        aria-pressed={webhookSub != null}
+        class={chipClass(webhookSub != null)}
+      >
         {#if webhookSub}
           <Check class="size-3.5" aria-hidden="true" />
         {:else}
@@ -177,6 +212,10 @@
       </a>
     {/if}
   </div>
+
+  {#if pushSub && !notifications.hasPushDevice}
+    <PushNoDeviceNote />
+  {/if}
 
   {#if error}
     <p class="text-xs text-destructive">{error}</p>

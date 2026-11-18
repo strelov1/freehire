@@ -1,0 +1,8 @@
+**Dualoo traps** (`dualoo`; live-verified 2026-10-29):
+
+- **A Swiss ATS for SMEs, municipalities and care homes, all on `jobs.dualoo.com`**: a posting is `/portal/<code>/<uuid>/detail` under its employer's careers portal or `/link/<uuid>/detail`, and one posting is often listed in BOTH forms — the UUID is the identity, the portal URL is kept. Boardless: `/sitemap_index.xml` names one sitemap per customer (472, ~8.9k postings on 2026-10-29).
+- **The vendor's own test tenants publish to the live index** (`michele-testing-ag` with 39 duplicated postings, `test-language-prod`, date-named smoke tests like `25-1-26-dualoo-ag`); `dualooTestSitemap` skips them by sitemap name. `dualoo-ag` itself is a real employer.
+- **The sitemaps answer 406 to `Accept: application/xml` alone** (they serve `text/xml`), which is why the shared XML getters now send `application/xml, text/xml`.
+- **robots.txt disallows the apply forms and ~550 portals by code; the sitemap index names none of those portals**, so walking the index reads only what robots allows. Do not add a portal-page listing next to it without re-checking that list.
+- **The JobPosting splits the body into self-headed blocks**: `description`, `responsibilities` ("Ihre Aufgaben"), `skills` ("Ihr Profil"), `jobBenefits` ("Wir bieten") — concatenated as they come. `TEMPORARY` is a fixed-term ("befristet") post and states nothing on its own. A removed posting answers **404**.
+- **The listing alone is ~470 requests**: everything is paced at one a second (about eight minutes of listing), then `hydrationLanes` of 900 newest + 300 backlog unseen pages, stopping 5 minutes before the deadline. A customer sitemap that fails is skipped, not fatal — its postings are simply unlisted for a run — unless every one fails.

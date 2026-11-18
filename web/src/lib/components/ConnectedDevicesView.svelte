@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { invalidateAll } from '$app/navigation';
   import { api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -90,6 +91,7 @@
       await api.revokeOAuthGrant(grant.id);
       grantsData.value = grantsData.value.filter((g) => g.id !== grant.id);
       revokePassword = '';
+      await invalidateAll();
     } catch (error) {
       throw new Error(revokeIdentity?.handleRefusal(error) ?? s.errors.revokeFailed, {
         cause: error,
@@ -103,6 +105,16 @@
     <div class="flex flex-col gap-1">
       <h2 class="text-lg font-semibold tracking-tight">{s.title}</h2>
       <p class="text-sm text-muted-foreground">{s.intro}</p>
+    </div>
+
+    <div class="flex flex-col gap-1.5 rounded-lg border border-border px-4 py-3">
+      <span class="text-sm font-medium">{s.ask.title}</span>
+      <span class="text-xs text-muted-foreground">{s.ask.intro}</span>
+      <ul class="flex list-disc flex-col gap-0.5 pl-5 text-sm">
+        {#each s.ask.examples as example (example)}
+          <li>{example}</li>
+        {/each}
+      </ul>
     </div>
 
     <div class="flex items-start justify-between gap-4 rounded-lg border border-border px-4 py-3">

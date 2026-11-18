@@ -54,12 +54,17 @@ var (
 	ErrMailUnavailable = errors.New("employer: claim-mail delivery is not configured")
 )
 
-// Account is one user's claim on one company, decoupled from the generated db row.
+// Account is one claim on one company, decoupled from the generated db row, as the user
+// reading it acts for it. UserID is always the claimant's — the account's address in the
+// moderator and admin actions. For a member of the company's team (team.go) Member is true
+// and WorkEmail is the member's own address, since that is where the member's vacancies'
+// applications go and what candidates reply to.
 type Account struct {
 	UserID      int64
 	CompanySlug string
 	CompanyName string
 	WorkEmail   string
+	Member      bool
 	Status      string
 	VerifiedAt  *time.Time
 	// EmailConfirmedAt is when the claimant consumed the code mailed to WorkEmail; nil
@@ -86,7 +91,7 @@ type Repository interface {
 	GetByUserID(ctx context.Context, userID int64) (Account, error)
 	// ListPending is the moderator review queue, oldest first: pending claims whose work
 	// email is confirmed.
-	ListPending(ctx context.Context) ([]Account, error)
+	ListPending(ctx context.Context) ([]PendingClaim, error)
 	// ConfirmEmail records that the claimant consumed the work-email code.
 	// ErrClaimNotPending when the account is missing or not pending.
 	ConfirmEmail(ctx context.Context, userID int64) (Account, error)

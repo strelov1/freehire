@@ -2,34 +2,63 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
+	"strings"
 
 	"golang.org/x/net/html"
 )
 
 // softgarden adapts softgarden career sites. The board is the tenant subdomain (e.g.
-// "bundesdruckerei"), so the career site is "<board>.softgarden.io". The root page is a
-// server-rendered (Apache Wicket) listing whose anchors link each posting at
-// /job/<id>/<slug>?jobDbPVId=<n>; each job page carries a schema.org JobPosting ld+json
-// block, so the description comes from a per-job detail fetch (bounded-concurrency), like
-// the other schema.org detail adapters.
+// "bundesdruckerei").
 //
-// The listing is a single page: softgarden paginates via a Wicket AJAX callback rather than
-// a stable ?page=N URL, so a tenant with more postings than the first page holds is truncated
-// to that page. In practice softgarden tenants are small; the seam for AJAX pagination is here
-// if a large tenant ever needs it.
+// The primary path is the tenant's machine feed, "<board>.career.softgarden.de/jobs.feed.json":
+// a schema.org DataFeed of JobPosting items that carries every open posting WITH its full
+// description in one request, so a tenant costs one fetch however many postings it holds and
+// is never truncated to a first page.
+//
+// A tenant whose feed is not served (400/404 — the feed host does not always carry the same
+// tenant name as "<board>.softgarden.io") falls back to the legacy HTML path: the root page
+// of "<board>.softgarden.io" is a server-rendered (Apache Wicket) listing whose anchors link
+// each posting at /job/<id>/<slug>?jobDbPVId=<n>, and each job page carries a schema.org
+// JobPosting ld+json block, so the description comes from a per-job detail fetch
+// (bounded-concurrency). That listing is a single page: softgarden paginates via a Wicket
+// AJAX callback rather than a stable ?page=N URL, so a large tenant is truncated to it.
+//
+// Both paths yield the same native posting id, so a board moving between them updates its
+// stored rows in place.
 type softgarden struct {
-	http HTMLGetter
+	http softgardenHTTP
+}
+
+// softgardenHTTP is the transport roles the adapter needs: the JSON feed, and HTML for the
+// legacy fallback.
+type softgardenHTTP interface {
+	HTMLGetter
+	JSONGetter
 }
 
 // NewSoftgarden builds the softgarden adapter over the given HTTP client.
-func NewSoftgarden(c HTMLGetter) Source { return softgarden{http: c} }
+func NewSoftgarden(c softgardenHTTP) Source { return softgarden{http: c} }
 
 func (softgarden) Provider() string { return "softgarden" }
 
 func (s softgarden) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	jobs, err := s.fetchFeed(ctx, e)
+	var se *StatusError
+	if errors.As(err, &se) && (se.Code == http.StatusBadRequest || se.Code == http.StatusNotFound) {
+		return s.fetchListing(ctx, e) // this tenant has no feed under that name
+	}
+	return jobs, err
+}
+
+// fetchListing is the legacy path: the HTML listing, then one detail page per posting.
+func (s softgarden) fetchListing(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// base carries the scheme+host; the listing's relative job hrefs ("../job/…") resolve
 	// against it into fetchable absolute URLs.
 	base, err := url.Parse(fmt.Sprintf("https://%s.softgarden.io/", e.Board))
@@ -101,3 +130,70 @@ type sgPosting struct {
 	DatePosted  string      `json:"datePosted"`
 	JobLocation schemaPlace `json:"jobLocation"`
 }
+
+// sgFeed is the part of a softgarden jobs.feed.json the adapter reads: a schema.org DataFeed
+// whose items are JobPostings.
+type sgFeed struct {
+	Items []struct {
+		Item sgFeedPosting `json:"item"`
+	} `json:"dataFeedElement"`
+}
+
+type sgFeedPosting struct {
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	Description string `json:"description"`
+	DatePosted  string `json:"datePosted"`
+	Identifier  struct {
+		Value json.Number `json:"value"`
+	} `json:"identifier"`
+	// jobLocation is one Place or an array of them.
+	JobLocation schemaPlaces `json:"jobLocation"`
+}
+
+// fetchFeed reads the tenant's whole board from its jobs.feed.json. A posting without a
+// native id fails the read: it cannot be stored, and returning the rest as a successful crawl
+// would let the unseen-sweep close the posting it stands for.
+func (s softgarden) fetchFeed(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	board := strings.ToLower(e.Board) // DNS labels are case-insensitive
+	if !sgTenant.MatchString(board) {
+		return nil, fmt.Errorf("softgarden: invalid board %q", e.Board)
+	}
+	var feed sgFeed
+	if err := s.http.GetJSON(ctx, fmt.Sprintf("https://%s.career.softgarden.de/jobs.feed.json", board), &feed); err != nil {
+		return nil, fmt.Errorf("softgarden: feed %s: %w", e.Board, err)
+	}
+
+	jobs := make([]Job, 0, len(feed.Items))
+	for _, it := range feed.Items {
+		p := it.Item
+		id := p.Identifier.Value.String()
+		if id == "" {
+			return nil, fmt.Errorf("softgarden: feed %s: posting %q has no native id", e.Board, p.Title)
+		}
+		var locations []string
+		for _, pl := range p.JobLocation {
+			if loc := pl.Address.Location(); loc != "" && !slices.Contains(locations, loc) {
+				locations = append(locations, loc)
+			}
+		}
+		location := strings.Join(locations, "; ")
+		// As on the listing path: remote is inferred from the location only, never the title.
+		remote := isRemote(location)
+		jobs = append(jobs, Job{
+			ExternalID:  id,
+			URL:         p.URL,
+			Title:       p.Title,
+			Company:     e.Company,
+			Location:    location,
+			Description: sanitizeHTML(p.Description),
+			Remote:      remote,
+			WorkMode:    workModeFromRemote(remote),
+			PostedAt:    parseRFC3339(p.DatePosted),
+		})
+	}
+	return jobs, nil
+}
+
+// sgTenant bounds a board to a DNS label, since it is spliced into a hostname.
+var sgTenant = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

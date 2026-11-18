@@ -6,7 +6,9 @@ import type { BuddyCompany, BuddySimilar } from './types.js';
  *  "who else applied to GitLab", the people worth asking what that loop is like. Busiest
  *  company first, ties by name so the order is stable as more members load. A shared
  *  company is the similar list's own (both applied in the last 90 days). */
-export function buddiesByCompany(members: readonly BuddySimilar[]): { company: BuddyCompany; members: BuddySimilar[] }[] {
+export function buddiesByCompany(
+  members: readonly BuddySimilar[],
+): { company: BuddyCompany; members: BuddySimilar[] }[] {
   const groups = new Map<string, { company: BuddyCompany; members: BuddySimilar[] }>();
   for (const m of members) {
     for (const c of m.shared_companies) {
@@ -15,5 +17,7 @@ export function buddiesByCompany(members: readonly BuddySimilar[]): { company: B
       else groups.set(c.slug, { company: c, members: [m] });
     }
   }
-  return [...groups.values()].sort((a, b) => b.members.length - a.members.length || a.company.name.localeCompare(b.company.name));
+  return [...groups.values()].sort(
+    (a, b) => b.members.length - a.members.length || a.company.name.localeCompare(b.company.name),
+  );
 }

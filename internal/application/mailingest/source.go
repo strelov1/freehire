@@ -15,8 +15,7 @@ type Inbound struct {
 
 // InboundSource is the transport abstraction the worker consumes. Receive returns
 // a batch (possibly empty); Ack marks a message done so it is not redelivered.
-// Keeping the worker behind this interface makes the transport swappable (SES
-// today) and the pipeline testable without AWS.
+// The interface keeps the transport swappable (SES today) and the pipeline testable without AWS.
 type InboundSource interface {
 	Receive(ctx context.Context) ([]Inbound, error)
 	Ack(ctx context.Context, handle string) error

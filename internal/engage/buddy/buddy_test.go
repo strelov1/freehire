@@ -24,6 +24,7 @@ func TestRankingKeys(t *testing.T) {
 		{"nothing known", Inputs{}, Keys{}},
 		{"cv geography wins", Inputs{Countries: []string{"de"}, Regions: []string{"eu"}, BaseCountry: "us"}, Keys{Countries: []string{"de"}, Regions: []string{"eu"}}},
 		{"empty-but-known cv geography is kept", Inputs{Countries: []string{}, BaseCountry: "us"}, Keys{Countries: []string{}}},
+		{"regions without countries suppress the base fallback", Inputs{Regions: []string{"eu"}, BaseCountry: "us"}, Keys{Regions: []string{"eu"}}},
 		{"base country fallback", Inputs{BaseCountry: "us"}, Keys{Countries: []string{"us"}}},
 	}
 	for _, tt := range tests {

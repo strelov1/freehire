@@ -18,8 +18,7 @@ import (
 // which answers {"vacancies": [...], "count": <total>}. A vacancy carries its whole posting —
 // title, location, publish date and the full HTML body in every language it is written in —
 // so the listing is the crawl and no detail request is made. `filters` is required: without
-// it the endpoint answers 500. Verified 2026-10-19 from a residential IP and the prod
-// datacenter IP alike.
+// it the endpoint answers 500.
 //
 // The board is the tenant slug (`molslinjen`) or, for a site on a customer domain, that host
 // (`midtjob.dk`); emplyHost tells them apart by the dot, and BoardDedupeKey folds a slug and
@@ -42,12 +41,11 @@ func (emply) fullBoardListing() {}
 const (
 	emplyCareerApex = ".career.emply.com"
 	emplyListPath   = "/api/integration/vacancy/get-page"
-	// emplyPageSize is the count asked per page. The endpoint honours far larger values
-	// (midtjob.dk answered all 305 vacancies to count=1000), so this only keeps one response
-	// to a sane size; the walk does not depend on it being honoured.
+	// emplyPageSize is the count asked per page. The endpoint honours far larger values, so this
+	// only keeps one response to a sane size; the walk does not depend on it being honoured.
 	emplyPageSize = 100
 	// emplyMaxPages is a ceiling, not an expected end: reaching it before the count is read
-	// fails the crawl. The largest site measured held 305 vacancies.
+	// fails the crawl.
 	emplyMaxPages = 100
 )
 

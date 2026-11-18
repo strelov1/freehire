@@ -1,0 +1,32 @@
+id: exit-only-from-main
+snapshots:
+  "package search\nfunc f() { log.Panicln(\"x\") }\n":
+    labels:
+    - source: log.Panicln("x")
+      style: primary
+      start: 26
+      end: 42
+    - source: log.Panicln
+      style: secondary
+      start: 26
+      end: 37
+  "package search\nfunc f() { os.Exit(1) }\n":
+    labels:
+    - source: os.Exit(1)
+      style: primary
+      start: 26
+      end: 36
+    - source: os.Exit
+      style: secondary
+      start: 26
+      end: 33
+  "package search\nfunc f(err error) { log.Fatalf(\"x: %v\", err) }\n":
+    labels:
+    - source: "log.Fatalf(\"x: %v\", err)"
+      style: primary
+      start: 35
+      end: 59
+    - source: log.Fatalf
+      style: secondary
+      start: 35
+      end: 45

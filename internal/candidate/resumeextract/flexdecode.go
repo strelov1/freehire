@@ -7,12 +7,9 @@ import (
 	"strings"
 )
 
-// truncInt decodes from a JSON number OR a string ("5", "5+ years"), taking the
-// LEADING integer and TRUNCATING any fraction — never rounding, unlike flexjson.Int
-// (round-half): a stray "5.9" must not inflate the candidate's years of experience.
-// total_years is prompted as an integer, but the model can return it as a string or a
-// phrase; a string there would abort the whole decode. Non-numeric or empty input
-// yields 0.
+// truncInt decodes from a JSON number OR a string ("5", "5+ years"), taking the LEADING
+// integer and TRUNCATING any fraction, unlike flexjson.Int (round-half): "5.9" must not
+// inflate years of experience. Non-numeric or empty input yields 0.
 type truncInt int
 
 func (f *truncInt) UnmarshalJSON(b []byte) error {
@@ -29,7 +26,7 @@ func (f *truncInt) UnmarshalJSON(b []byte) error {
 		*f = truncInt(leadingInt(s))
 		return nil
 	}
-	// JSON number: parse as float first so "5.0" (or a stray decimal) truncates cleanly.
+	// Parse as float first so "5.0" truncates cleanly.
 	n, err := strconv.ParseFloat(string(b), 64)
 	if err != nil {
 		return err
@@ -53,8 +50,8 @@ func leadingInt(s string) int {
 	return n
 }
 
-// UnmarshalJSON tolerates a string/phrase "total_years" (e.g. "5+ years") via truncInt,
-// then delegates the rest to the normal struct decode via an alias (no recursion).
+// UnmarshalJSON tolerates a string "total_years" ("5+ years") via truncInt; the alias
+// avoids recursion.
 func (s *Structured) UnmarshalJSON(b []byte) error {
 	type alias Structured
 	aux := struct {

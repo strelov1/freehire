@@ -1,19 +1,13 @@
 // Package calsync reads a candidate's calendar for the interviews their applications
 // have earned, and stores nothing else.
 //
-// It mirrors internal/application/gmailsync deliberately: a narrow Store over db.Queries, a reader
-// behind a factory so the worker is unit-tested with a fake, and a best-effort pass in
-// which one candidate's revoked grant does not stop the rest. The two syncs share a
-// Google grant and nothing else — different APIs, different windows, different
-// persistence — so they are separate packages rather than one with a mode.
+// It mirrors internal/application/gmailsync (narrow Store, reader behind a factory, best-effort
+// pass per candidate) but shares only the Google grant with it, so it is a separate package.
 //
-// The rule that matters here is what does NOT happen. A calendar holds medical
-// appointments, family, a current employer's meetings, and interviews with employers the
-// candidate never told us about. The window is read into memory, matched, and discarded;
-// only a meeting internal/application/calmatch could attach to one of the candidate's own
-// applications is written. The schema enforces the same thing from below —
-// application_interviews.application_id is NOT NULL — so a mistake here cannot become a
-// stored dentist appointment.
+// A calendar holds private appointments and meetings with employers the candidate never told us
+// about. The window is read into memory, matched, and discarded; only a meeting
+// internal/application/calmatch could attach to one of the candidate's own applications is
+// written. application_interviews.application_id NOT NULL enforces this from below.
 package calsync
 
 import (
@@ -27,42 +21,32 @@ import (
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 )
 
-// The window read on each run: enough behind to recover interviews already sat, enough
-// ahead to hold anything arranged. One page for a normal calendar.
+// The window read on each run: behind enough to recover interviews already sat, ahead enough
+// to hold anything arranged.
 const windowDays = 90
 
-// SourceGoogleCalendar names where a meeting was read from, in the manner of
-// application_events.source. A subscribed ICS feed would be a second value and nothing
-// else would change.
+// SourceGoogleCalendar names where a meeting was read from, like application_events.source.
 const SourceGoogleCalendar = "calendar_google"
 
 // StatusConfirmed is the only status this worker writes: a meeting the invitation's own
-// identifier attached. The schema also knows `cancelled`, which the cancel path sets.
+// identifier attached. The cancel path sets `cancelled`.
 //
-// There is no `suggested`. A weaker tier would need a way for the candidate to confirm or
-// dismiss what it produced, and until that exists a guess would be permanent — see
-// internal/application/calmatch for what the first attempt at one actually did.
+// There is no `suggested`: without a way for the candidate to confirm or dismiss it, a guess
+// would be permanent (see internal/application/calmatch).
 const StatusConfirmed = "confirmed"
 
-// Connection is a candidate whose Google grant covers the calendar. The query filters on
-// the recorded scopes, so a grant that predates the calendar consent never reaches here
-// and never costs an API call to discover.
-//
-// Only the id: gmailsync carries the address to skip the candidate's own replies to a
-// thread, and a calendar has no equivalent notion. A field nobody reads is a question the
-// next reader has to answer.
+// Connection is a candidate whose Google grant covers the calendar. The query filters on the
+// recorded scopes, so a grant that predates the calendar consent never costs an API call.
 type Connection struct {
 	UserID int64
 }
 
-// Meeting is one calendar entry as the reader returns it — the fields needed to keep an
-// appointment, and none of the ones that describe a private life. No attendees and no
-// description. Title is carried because a matched meeting shows one; nothing MATCHES on
-// it, which is the difference between a label and evidence.
+// Meeting is one calendar entry as the reader returns it. No attendees and no description.
+// Title is shown for a matched meeting; nothing matches on it.
 type Meeting struct {
 	UID string
-	// ProviderID is the calendar provider's own event id — a different thing from UID,
-	// and the only identifier a cancellation is guaranteed to carry.
+	// ProviderID is the provider's own event id, distinct from UID and the only identifier a
+	// cancellation is guaranteed to carry.
 	ProviderID string
 	Title      string
 	StartsAt   time.Time
@@ -84,8 +68,7 @@ type StoredInterview struct {
 	Status        string
 }
 
-// CalendarReader reads one candidate's events over a window. Behind an interface so the
-// worker's rules are tested without Google.
+// CalendarReader reads one candidate's events over a window.
 type CalendarReader interface {
 	ListEvents(ctx context.Context, from, to time.Time) ([]Meeting, error)
 }
@@ -93,19 +76,14 @@ type CalendarReader interface {
 // ReaderFactory builds a reader from a decrypted refresh token.
 type ReaderFactory func(ctx context.Context, refreshToken string) CalendarReader
 
-// Store is the persistence the worker needs — a subset of db.Queries.
-//
-// There is deliberately no way to store an unattached meeting: the only write it offers
-// carries an application id, so the privacy rule is not something a caller has to
-// remember.
+// Store is the persistence the worker needs — a subset of db.Queries. It has no way to store an
+// unattached meeting: the only write carries an application id.
 type Store interface {
 	ListCalendarConnections(ctx context.Context) ([]Connection, error)
 	RefreshToken(ctx context.Context, userID int64) (encToken string, err error)
 	Candidates(ctx context.Context, userID int64) ([]calmatch.Candidate, error)
 	UpsertInterview(ctx context.Context, in StoredInterview) error
-	// CancelInterview matches on either identifier: a cancellation may name the meeting
-	// by its iCalUID or by the provider's own event id, and Google guarantees only the
-	// second.
+	// CancelInterview matches on either the iCalUID or the provider's event id.
 	CancelInterview(ctx context.Context, userID int64, eventID string) error
 	SetNeedsReconsent(ctx context.Context, userID int64) error
 }
@@ -126,9 +104,8 @@ func NewWorker(store Store, cipher *tokencrypt.Cipher, newReader ReaderFactory) 
 
 // RunOnce syncs every connected candidate once.
 //
-// Best-effort per candidate, and the count of failures comes back as an error so the
-// command can exit non-zero. A run that swallowed a revoked grant would look identical
-// to a run with nothing to do, which is how a broken sync stays broken for weeks.
+// Best-effort per candidate; the failure count comes back as an error so the command exits
+// non-zero. Swallowed failures would look like a run with nothing to do.
 func (w *Worker) RunOnce(ctx context.Context) error {
 	users, err := w.store.ListCalendarConnections(ctx)
 	if err != nil {
@@ -147,9 +124,8 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 	return nil
 }
 
-// cancelKey names the meeting a cancellation refers to. The iCalUID when it survived,
-// the provider's own id otherwise — a deleted event is documented to carry only the
-// second, and the store matches on either.
+// cancelKey names the meeting a cancellation refers to: the iCalUID when it survived, else the
+// provider's id (a deleted event carries only that).
 func cancelKey(ev Meeting) string {
 	if ev.UID != "" {
 		return ev.UID
@@ -171,14 +147,10 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 	events, err := w.newReader(ctx, refresh).
 		ListEvents(ctx, now.AddDate(0, 0, -windowDays), now.AddDate(0, 0, windowDays))
 	if err != nil {
-		// Only the grant saying no costs the candidate their connection. A 500 or a rate
-		// limit is Google having a bad day, and the flag is SHARED with mail — treating
-		// every failure as a revocation would disconnect every mailbox we hold during one
-		// Google incident, each needing a restricted-scope consent to restore.
-		//
-		// A real revocation does not arrive as a calendar 403 at all: the client is built
-		// from a stored refresh token, so Google refuses it at the TOKEN endpoint before
-		// this request is made. RevokedGrant covers both carriers.
+		// Only a revoked grant disconnects the candidate. The flag is shared with mail, so
+		// treating a 500 or rate limit as revocation would disconnect every mailbox during a
+		// Google incident. A real revocation is refused at the token endpoint, not as a
+		// calendar 403; RevokedGrant covers both.
 		if !gmailsync.RevokedGrant(err) {
 			return fmt.Errorf("list events: %w", err)
 		}
@@ -195,11 +167,9 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 
 	for _, ev := range events {
 		if ev.Cancelled {
-			// Ahead of the match gate, not behind it: Google guarantees only the
-			// provider's own id for a cancelled event, never the iCalUID Resolve keys
-			// on, so gating on Resolve first would drop every cancellation whose UID
-			// didn't survive. Marking beats storing: the row may already exist, and an
-			// organiser who called a meeting off has not scheduled a new one.
+			// Before the match gate: a cancelled event carries only the provider id, not the
+			// iCalUID Resolve keys on, so gating first would drop it. Marking beats storing:
+			// the row may already exist.
 			if err := w.store.CancelInterview(ctx, u.UserID, cancelKey(ev)); err != nil {
 				return fmt.Errorf("cancel %s: %w", cancelKey(ev), err)
 			}
@@ -207,26 +177,20 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 		}
 		match := calmatch.Resolve(calmatch.Event{UID: ev.UID}, candidates)
 		if match.ApplicationID == 0 {
-			// Not this candidate's business with us. It is not stored, not logged, and
-			// not counted — the window was read into memory and is discarded with it.
+			// Not this candidate's business with us: not stored, logged or counted.
 			continue
 		}
 		if !match.Tier.Links() {
-			// Resolved to an application by something weaker than the invitation's own
-			// identifier. There is nothing weaker today, and the guard stays so that
-			// adding one cannot start writing rows before somebody decides it may.
+			// Resolved by something weaker than the invitation's identifier. None exists today;
+			// the guard keeps a new tier from writing rows before it is decided.
 			continue
 		}
 		if err := w.store.UpsertInterview(ctx, StoredInterview{
 			UserID:        u.UserID,
 			ApplicationID: match.ApplicationID,
 			UID:           ev.UID,
-			// The provider's own event id, which is a different thing from the UID and
-			// the ONLY identifier a cancellation is guaranteed to carry. Omitting it
-			// stored an empty column for every meeting, which made the second half of
-			// CancelApplicationInterview's match unreachable: a cancelled occurrence of a
-			// recurring series arrives with no iCalUID, matched nothing, and left the
-			// meeting standing as confirmed forever.
+			// Must be stored: a cancelled occurrence of a recurring series arrives with no
+			// iCalUID, so CancelApplicationInterview can only match on this.
 			ProviderID: ev.ProviderID,
 			Title:      ev.Title,
 			StartsAt:   ev.StartsAt,

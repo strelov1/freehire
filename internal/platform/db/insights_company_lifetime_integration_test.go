@@ -37,7 +37,7 @@ func rebuildLifetime(t *testing.T, ctx context.Context, q *Queries) {
 	if err := q.DeleteAllInsightsCompanyLifetime(ctx); err != nil {
 		t.Fatalf("delete lifetime: %v", err)
 	}
-	if _, err := q.RebuildInsightsCompanyLifetime(ctx); err != nil {
+	if _, err := materializeInsightsCompanyLifetime(q)(ctx); err != nil {
 		t.Fatalf("rebuild lifetime: %v", err)
 	}
 }

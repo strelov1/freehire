@@ -9,69 +9,64 @@
 // boardless) already happened when it entered the boards table — see
 // internal/ingest/boardcatalog — so this worker does not re-validate before crawling.
 //
-// Each crawl's new or content-changed jobs are queued (search_outbox, atomically
-// with their write) for the live facet search index; cmd/search-drain builds and
-// pushes the documents on its own schedule. Routing every write through that queue —
-// instead of pushing to Meilisearch directly from inside this worker, one of ~169
-// independent per-board processes — collapses many small, expensive index merges into
-// few, cheap ones. The batch reindex stays the index's source of truth.
+// Each crawl's new or content-changed jobs are queued (search_outbox, atomically with their
+// write) for the live facet search index; cmd/search-drain pushes the documents on its own
+// schedule, which batches many small index merges. The batch reindex stays the source of truth.
 package main
 
 import (
-	"cmp"
 	"context"
-	"fmt"
 	"log"
 	"os"
-	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	sweeppolicy "github.com/strelov1/freehire/internal/ingest/sweep"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/externalid"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// staleAfter is the DEFAULT grace window before an unseen job is closed. An adapter declares
-// its own window instead — wider for one that crawls only a slice of its catalogue, narrower
-// for one whose full-board crawl makes an unseen reading positive evidence — see sweepWindowFor.
-// Shared with cmd/liveness's staleCutoff via sources.DefaultSweepGrace, since liveness's
-// probeDespiteRegistered backstop only picks up what this sweep has already had a chance
-// to close and must not drift out of sync with it.
-const staleAfter = sources.DefaultSweepGrace
+// staleAfter is the DEFAULT grace window; see sweeppolicy.StaleAfter.
+const staleAfter = sweeppolicy.StaleAfter
 
 func main() {
 	worker.Main(run)
 }
 
 func run() int {
-	// The unit's timeout is measured from when it started, which is as close to here as this
-	// process can observe — so the crawl deadline is measured from here too.
+	// The unit's timeout is measured from its start, as close to here as this process can
+	// observe, so the crawl deadline is too.
 	started := time.Now()
 
-	// The provider to crawl. Accept it as the first positional argument (cron passes the
-	// provider name) or via INGEST_PROVIDER. An optional --shard=i/n (or the SHARD env)
-	// crawls only a round-robin slice of that provider's boards, so a provider with too
-	// many boards to finish in one timeout (workday) is spread across several staggered
-	// runs. --board=<id> (optionally narrowed further by --region=<code>) is the operator's
-	// hand-run equivalent: resync one company/keyword — e.g. one jobleads keyword, one
-	// workday tenant — without waiting for or disturbing the rest of the provider's crawl.
+	// The provider to crawl: first positional argument or INGEST_PROVIDER. An optional
+	// --shard=i/n (or SHARD env) crawls a round-robin slice of its boards, spreading a
+	// provider too big for one timeout (workday) over several runs. --board=<id> (optionally
+	// narrowed by --region=<code>) is the operator's hand-run: resync one company/keyword
+	// without disturbing the rest of the crawl.
 	var provider, shardSpec, boardFilter, regionFilter string
+	var reconcileLinkedIn bool
+	var reconcileAfter int64
 	for _, a := range os.Args[1:] {
 		switch {
+		case a == "--reconcile-linkedin":
+			reconcileLinkedIn = true
+		case strings.HasPrefix(a, "--reconcile-after="):
+			var err error
+			reconcileAfter, err = strconv.ParseInt(strings.TrimPrefix(a, "--reconcile-after="), 10, 64)
+			if err != nil || reconcileAfter < 0 {
+				log.Print("config: --reconcile-after needs a non-negative posting id")
+				return 2
+			}
 		case strings.HasPrefix(a, "--shard="):
 			shardSpec = strings.TrimPrefix(a, "--shard=")
 		case a == "--shard":
-			// The value must be attached (--shard=i/n); a space-separated form would
-			// otherwise swallow the next arg (the provider name) as the selector's value.
+			// The value must be attached (--shard=i/n); a space-separated form would swallow
+			// the provider name as the selector's value.
 			log.Print("config: --shard needs an attached value, e.g. --shard=2/6")
 			return 1
 		case strings.HasPrefix(a, "--board="):
@@ -98,25 +93,28 @@ func run() int {
 		log.Print("config: no provider given (pass it as an argument or set INGEST_PROVIDER)")
 		return 1
 	}
+	if (reconcileLinkedIn && (provider != "linkedin" || shardSpec != "" || boardFilter != "" || regionFilter != "")) || (!reconcileLinkedIn && reconcileAfter != 0) {
+		log.Print("config: ownership reconciliation requires linkedin without board, region or shard filters")
+		return 2
+	}
 
 	registry := sources.All(sources.NewClient())
-	// Route the IP-blocklisted providers through the egress proxy when one is configured
-	// (SOURCES_PROXY_URL). No-op when unset; a set-but-invalid value fails the run here,
-	// before the DB is touched.
+	// Route IP-blocklisted providers through SOURCES_PROXY_URL when set; a set-but-invalid
+	// value fails the run here, before the DB is touched.
 	if err := sources.ApplyProxyEgress(registry); err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
-	// LAST, and the order is load-bearing: the Scrapling tier deliberately takes its providers
-	// off the proxy and fingerprint transports wired above. See ApplyScraplingEgress.
-	// A no-op without SCRAPLING_FETCH_URL, which is also the rollback.
+	// LAST, and the order is load-bearing: the Scrapling tier takes its providers off the proxy
+	// and fingerprint transports wired above (see ApplyScraplingEgress). No-op without
+	// SCRAPLING_FETCH_URL.
 	if err := sources.ApplyScraplingEgress(registry); err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
 
-	// Resolved before the DB is touched, like every other config read here: a bad value should
-	// stop the run, not produce a quiet ordinary crawl where a repair was intended.
+	// Resolved before the DB is touched: a bad value must stop the run, not start an ordinary
+	// crawl where a repair was intended.
 	hydrationWindow, err := hydrationRetryWindowFor(os.Getenv("HYDRATION_RETRY_DAYS"))
 	if err != nil {
 		log.Printf("config: %v", err)
@@ -134,14 +132,25 @@ func run() int {
 	if refetchAll {
 		log.Printf("ingest: INGEST_REFETCH_ALL — every listed posting is treated as new, so stored rows are re-written, not just refreshed")
 	}
-	bodies, err := bodyRefreshFor(os.Getenv("BODY_REFRESH_DAYS"), os.Getenv("BODY_REFRESH_SLICE"), time.Now())
+	recentWindow, err := recentWindowFor(os.Getenv("INGEST_RECENT_DAYS"))
 	if err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
-	if bodies.enabled() {
+	if recentWindow > 0 {
+		log.Printf("ingest: INGEST_RECENT_DAYS — recent-only run over the last %v: boards without a date filter are skipped, nothing is closed and no board health is recorded", recentWindow)
+	} else {
+		log.Printf("ingest: full crawl")
+	}
+	bodies, err := sweeppolicy.BodyRefreshFor(os.Getenv("BODY_REFRESH_DAYS"), os.Getenv("BODY_REFRESH_SLICE"), time.Now())
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	bodies = bodies.WithProviderDefault(provider, time.Now()).WithDetailReread(provider, time.Now())
+	if bodies.Enabled() {
 		log.Printf("ingest: re-reading stored bodies older than %s, slice %d of %d",
-			bodies.cutoff.Format(time.DateOnly), bodies.slot, bodies.slices)
+			bodies.Cutoff.Format(time.DateOnly), bodies.Slot, bodies.Slices)
 	}
 	seen := seenPolicy{hydrationWindow: hydrationWindow, refetchAll: refetchAll, bodies: bodies}
 	budget, err := runBudgetFor(os.Getenv("INGEST_RUN_TIMEOUT_SECONDS"), os.Getenv("INGEST_SWEEP_RESERVE_SECONDS"))
@@ -164,14 +173,12 @@ func run() int {
 	}
 	sourceCfg := sources.Config{Provider: provider, Sources: boards}
 
-	// Computed against the FULL, unsharded board list — see pipeline.AmbiguousBoardNames for
-	// why sharding (below) can otherwise hide a region-ambiguous board from the board-scoped
-	// close's per-run safety check.
+	// Computed against the FULL, unsharded board list: sharding can otherwise hide a
+	// region-ambiguous board (see pipeline.AmbiguousBoardNames).
 	crossShardAmbiguousBoards := pipeline.AmbiguousBoardNames(boards, registry)
 
-	// Narrow to one board (optionally one region), if requested. A typo here must not look
-	// like a legitimate empty targeted run (see the sweep's own note on those below) — an
-	// operator who asked for a specific board and got zero boards back needs to see why.
+	// Narrow to one board (optionally one region). A typo must not look like a legitimate
+	// empty targeted run; an operator who got zero boards back needs to see why.
 	if boardFilter != "" || regionFilter != "" {
 		full := len(sourceCfg.Sources)
 		sourceCfg = sourceCfg.FilterBoard(boardFilter, regionFilter)
@@ -196,707 +203,97 @@ func run() int {
 		log.Printf("ingest: shard %d/%d — crawling %d of %d boards for %s", i, n, len(sourceCfg.Sources), full, provider)
 	}
 
-	// Start the boards waited on longest, so a run cut short by its deadline rotates through
-	// the catalog instead of starving the same tail every time (see orderOldestRunFirst).
-	// Best-effort: without the read the catalog order stands, which is only less fair.
+	// Start the boards waited on longest, so a deadline-cut run rotates through the catalog
+	// (see orderOldestRunFirst). Best-effort: without the read the catalog order stands.
 	if lastRun, err := loadLastRuns(ctx, db.New(pool), provider); err != nil {
 		log.Printf("ingest: read last crawl times for %s, keeping catalog order: %v", provider, err)
 	} else {
 		orderOldestRunFirst(sourceCfg.Sources, lastRun)
 	}
 
-	// crawled records the company slugs each provider actually wrote this run, so the
-	// post-run sweep scopes its closes to them (see the sweep below and crawledSet).
+	// crawled records the company slugs each provider wrote this run; the sweep scopes to them.
 	crawled := newCrawledSet()
-	// tally records which of the two writes each persisted posting took, so the run says how far
-	// the cheap path actually reached rather than leaving it to be assumed (see writeTally).
+	// tally records which of the two writes each posting took (see writeTally).
 	tally := newWriteTally()
 	store := newDBStore(pool, enrich.Version, crawled, tally, seen)
 	runner := pipeline.Runner{
 		Registry:    registry,
 		Store:       store,
+		Outbound:    newNativeDiscovery(pool, registry, store),
 		BoardHealth: newBoardHealth(pool),
-		// The coverage gate reads the same pool: last_seen_at decides the answer, and no
-		// index can hold it (see coverage.go). It was Meili-backed and gated on MeiliKey;
-		// every production ingest unit already carried that key, so the gate is on for the
-		// same runs as before — only a local run without search configured gains it.
-		Coverage: newCoverage(pool),
-		// Same object as Store: the alias registry is a read the store's pool already
-		// serves, and the pipeline asks for it once per board run.
-		Aliases: store,
+		// Same object as Store: its pool already serves the alias registry.
+		Aliases:      store,
+		RecentWindow: recentWindow,
+		WriteReserve: budget.writeReserve(),
 	}
 
 	crawlCtx, cancelCrawl := budget.crawlContext(ctx, started)
+	if reconcileLinkedIn {
+		defer cancelCrawl()
+		report, err := reconcileLinkedInOwnership(crawlCtx, db.New(pool), registry["linkedin"], runner.Outbound, reconcileAfter)
+		log.Printf("ingest: LinkedIn ownership reconciliation: %+v error=%v", report, err)
+		if err != nil || report.More {
+			return 1
+		}
+		return 0
+	}
 	runStats, crawlErr := runner.Run(crawlCtx, sourceCfg.Sources)
 	cancelCrawl()
 
-	// Everything after the crawl runs on its own context, detached from the crawl's: the crawl
-	// deadline exists precisely so this part still runs, and a context that died with the crawl
-	// would cancel every close the run had already earned (see runBudget).
+	// Everything after the crawl runs on its own context, detached from the crawl's, so the
+	// crawl deadline does not cancel closes the run already earned (see runBudget).
 	sweepCtx, cancelSweep := budget.sweepContext(ctx, started)
 	defer cancelSweep()
 
-	// A crawl that stopped early — its deadline, or a signal — still persisted everything it
-	// read and still proved the boards it finished; the sweep below narrows itself to those.
+	// A crawl stopped early (deadline or signal) still persisted what it read; the sweep below
+	// narrows itself to the boards it finished.
 	truncated := crawlErr != nil
 	if truncated {
 		log.Printf("ingest: crawl stopped before every board was reached (%v) — sweeping only the boards it finished", crawlErr)
 	}
 
 	total := runStats.Total()
-	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d interrupted=%d cooled=%d quiet=%d truncated=%t",
-		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected, total.Unreadable, total.Interrupted, total.Cooled, total.Quiet, truncated)
+	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d unreadable=%d interrupted=%d cooled=%d quiet=%d recent_unsupported=%d truncated=%t outbound_discoveries=%d",
+		strconv.Quote(provider), len(runStats), total.Ingested, total.Failed, total.Skipped, total.Unreadable, total.Interrupted, total.Cooled, total.Quiet, total.RecentUnsupported, truncated, total.Discovered)
 
-	// A provider at 0% took the cheap write for nothing all run — a hashed field is churning
-	// between crawls, which costs a full row rewrite AND a pointless index push every pass.
+	// A provider at 0% never took the cheap write: a hashed field churns between crawls,
+	// costing a full row rewrite and an index push every pass.
 	if s := tally.summary(); s != "" {
 		log.Printf("ingest writes: provider=%s %s", provider, s)
 	}
 
-	// A failed board is counted in total.Failed; surface it (and any sweep failure
-	// below) through the exit code so cron alerts on a degraded run.
-	failed := total.Failed
-	// A truncated run did not crawl what it was asked to, which is a degraded run however
-	// cleanly it stopped; the exit code says so, as it did when the unit's timeout killed it.
+	// The exit code says whether the RUN is broken, not whether a board is: see crawlReachedNothing.
+	var failed int
+	if crawlReachedNothing(total) {
+		failed++
+	}
+	// A truncated run did not crawl what it was asked to: degraded however cleanly it stopped.
 	if truncated {
 		failed++
 	}
 
-	// Post-run sweep (job-lifecycle spec): per provider, close that provider's open jobs
-	// unseen for the whole grace window — but only for the companies this run actually
-	// crawled (crawled.slugs). Scoped per provider so one provider's run never closes
-	// another's jobs; guarded per provider (only those that ingested at least one job) so
-	// a total crawl outage cannot mass-close a catalogue; and scoped per company so a
-	// PARTIAL run (a subset of a provider's boards — a targeted run, or a full crawl of a
-	// huge provider that timed out mid-way) closes only what it saw, never the boards it
-	// never reached.
+	// Post-run sweep (job-lifecycle spec): per provider, close open jobs unseen for the whole
+	// grace window, only for companies this run crawled (crawled.slugs). Per provider so one
+	// run never closes another's jobs; only providers that ingested a job, so a total outage
+	// cannot mass-close a catalogue; per company so a PARTIAL run closes only what it saw.
 	//
-	// Trade-off (deliberate under-close): a company is swept only when the run wrote a job
-	// for it, so a board that fetched but returned zero postings, or a company removed from
-	// the board file, is NOT retired here — its open jobs leak until a later crawl reopens
-	// or closes them. Board sources have no liveness backstop (the liveness probe skips
-	// registered providers), so this is accepted to avoid the far worse over-close: closing
-	// live jobs of boards a partial/timed-out run never reached.
+	// Deliberate under-close: a company is swept only when the run wrote a job for it, so a
+	// board that returned zero postings, or a removed company, is NOT retired here and its
+	// open jobs leak until a later crawl. Board sources have no liveness backstop, and this
+	// beats closing live jobs of boards a partial run never reached.
 	//
-	// A TRUNCATED run skips the company scope (and the source scope) and closes only through
-	// the board scope. A company is not a board: one employer can sit on several boards of one
-	// provider (a workday tenant's several career sites), and a crawl stopped by its deadline
-	// reaches the same leading boards every cycle — so a company written by a board it finished
-	// would close the stale postings of that company's boards it never reaches, run after run,
-	// with nothing re-crawling them to reopen them. The board scope has no such gap: it closes
-	// only within a board the run read to completion (pipeline.boardQualifies, which an
-	// interrupted board fails). Before the crawl deadline existed a timed-out run swept nothing
-	// at all, so this withholds nothing a run used to do.
+	// A TRUNCATED run skips the company and source scopes and closes only through the board
+	// scope. One employer can sit on several boards of a provider, and a deadline-stopped crawl
+	// reaches the same leading boards every cycle, so a company-scoped close would retire the
+	// unreached boards' postings run after run. The board scope closes only within a board read
+	// to completion (pipeline.boardQualifies, which an interrupted board fails).
 	queries := db.New(pool)
-	failed += sweep(sweepCtx, queries, registry, runStats, crawled, crossShardAmbiguousBoards, truncated)
+	failed += sweep(sweepCtx, queries, registry, runStats, crawled, crossShardAmbiguousBoards, truncated, recentWindow > 0)
 
-	// Surface which boards are failing / cooled without grepping logs — one line naming them,
-	// their failure count, and when they next become eligible. After the sweep rather than
-	// before it: these are reports, and the closes are what the reserve is for.
+	// One line naming failing/cooled boards, their failure count and next eligibility. After
+	// the sweep: the closes are what the reserve is for.
 	logUnhealthyBoards(sweepCtx, queries)
 	logChronicBoards(sweepCtx, queries)
 
 	return worker.ExitCode(failed, 0)
-}
-
-// sweep runs the post-crawl stale-job closes for every provider in runStats and returns how many
-// of them failed. ctx must be the sweep's own context (runBudget.sweepContext), never the crawl's.
-// truncated narrows every provider to the board scope — see the comment at its call site.
-func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources.Source, runStats pipeline.RunStats, crawled *crawledSet, crossShardAmbiguousBoards map[string]bool, truncated bool) int {
-	var failed int
-	now := time.Now()
-	// A slice-crawled source (e.g. whatjobs) declares a window wider than staleAfter: its crawl
-	// reaches only a keyword's first pages, so a posting that drifted deeper reads as unseen and
-	// the default window would close it and reopen it on the next run. A full-board source with a
-	// reliably tight crawl cadence (e.g. gem) may instead declare one narrower, since its unseen
-	// reading is already positive evidence rather than a guess about how deep the crawl got.
-	grace := sources.SweepGraceWindows(registry)
-	// A self-closing source (e.g. jobtech) manages its own closes from its stream, so the
-	// unseen sweep must skip it: it re-reports only changed ads, and the cutoff would wrongly
-	// close every still-open ad it did not touch this run.
-	selfClosing := make(map[string]bool)
-	for _, p := range sources.SelfClosingProviders(registry) {
-		selfClosing[p] = true
-	}
-	// A fullCatalog source (e.g. habr_career) lists its whole catalogue each run, so a clean run
-	// may close its unseen jobs by source alone — retiring a company that vanished from the feed,
-	// which the company-scoped close leaks. Gated on a zero-Failed run below (a truncated crawl,
-	// which such adapters surface as an error, must not source-close what it never reached).
-	fullCatalog := make(map[string]bool)
-	for _, p := range sources.FullCatalogProviders(registry) {
-		fullCatalog[p] = true
-	}
-	// A fullBoardListing provider's adapter is registered as structurally proving it lists a
-	// board to completion (freehire#2328), so the sweep may close within its boards — see
-	// sweepableBoards for the full gate, including why a sweepGrace or fullCatalog provider is
-	// excluded even when registered.
-	fullBoardListing := sources.FullBoardListingProviders(registry)
-	// A sliceBoardListing provider (e.g. whatjobs) reads each board only to a page budget, so it
-	// cannot prove a full listing — but its grace window absorbs that, so its finished boards
-	// close within themselves on that window (see sweepableBoards).
-	sliceBoardListing := sources.SliceBoardListingProviders(registry)
-	// An emptyBoardListing provider's adapter answers an emptied board distinguishably from a
-	// failed fetch, so a finished board that listed nothing joins its board scope too.
-	emptyBoardListing := sources.EmptyBoardListingProviders(registry)
-	for _, provider := range sweepableProviders(runStats) {
-		if selfClosing[provider] {
-			continue
-		}
-		_, hasGrace := grace[provider]
-		window := sweepWindowFor(grace, provider)
-		cutoff := pgtype.Timestamptz{Time: now.Add(-window), Valid: true}
-		if !truncated {
-			bySource := sweepBySource(runStats[provider], fullCatalog[provider])
-			companySlugs := sweepableCompanies(crawled.slugs(provider), runStats[provider])
-			closed, skipped, err := sweepProvider(ctx, queries, provider, cutoff, companySlugs, runStats[provider].SkippedBoards, bySource)
-			if err != nil {
-				// Count and continue: one provider's sweep failure must not skip the rest,
-				// but the run still exits non-zero.
-				failed++
-				log.Printf("close stale jobs (%s): %v", provider, err)
-				continue
-			}
-			if skipped > 0 {
-				failed++
-				log.Printf("close stale jobs (%s): closed %d, skipped %d unclosable row(s) — see preceding lines for their ids", provider, closed, skipped)
-			}
-			log.Printf("closed %d stale %s jobs (unseen for %s)", closed, provider, window)
-		}
-
-		// Board-scoped close (job-lifecycle spec, freehire#2328): the company scope above
-		// leaks a company whose LAST posting drops off a board this run still crawled — that
-		// company's slug never re-enters companySlugs, so its row never closes under either
-		// scope so far. This closes it directly, per board the run structurally proved it
-		// covered (runStats[provider].QualifyingBoards) on a provider whose adapter is
-		// registered as listing a board to completion, or as a bounded slice whose grace window
-		// stands in for that proof — see sweepableBoards for the full gate. Reuses this
-		// provider's own cutoff: the default for a complete listing, the grace window for a slice.
-		boards := sweepableBoards(runStats[provider], boardScope{
-			hasGrace:          hasGrace,
-			fullCatalog:       fullCatalog[provider],
-			fullBoardListing:  fullBoardListing[provider],
-			sliceBoardListing: sliceBoardListing[provider],
-			emptyBoardListing: emptyBoardListing[provider],
-			regionScoped:      sources.ScopesBoardsByRegion(registry[provider]),
-		}, crossShardAmbiguousBoards)
-		if len(boards) > 0 {
-			boardClosed, boardFailed := sweepBoards(ctx, queries, provider, cutoff, boards, registry[provider])
-			log.Printf("closed %d stale %s jobs across %d finished board(s) (unseen for %s)", boardClosed, provider, len(boards), window)
-			if boardFailed > 0 {
-				failed++
-			}
-		}
-	}
-	return failed
-}
-
-// defaultSweepReserve is how much of the run's timeout is held back from the crawl for what
-// follows it. Measured on the crawl host over 2026-10-21..23, from each run's "ingest done" line
-// to its last close: the slowest sweeps were workday shards at 570-582s (the company-scope UPDATE
-// alone 377-471s of it) and vagas at 1054s; nearly every other provider finished inside two
-// minutes. Ten minutes covers workday's; a provider whose sweep runs longer (vagas) sets
-// INGEST_SWEEP_RESERVE_SECONDS rather than taxing every crawl for it.
-const defaultSweepReserve = 10 * time.Minute
-
-// runBudget splits a run's timeout between the crawl and the sweep that follows it.
-//
-// The unit's timeout is a hard kill: systemd sends SIGTERM, the signal context cancels, and
-// whatever was in flight dies with it. When the crawl was what ran long, the sweep was what died
-// — from 2026-10-18, when the crawl moved a WireGuard hop away from the database, 0 of 33
-// greenhouse runs, 0 of 31 smartrecruiters and 0 of 29 ukg runs reached it, and ~307k dead
-// workday postings stayed open behind boards board_health called healthy. So the crawl gets a
-// deadline of its own, reserve short of the timeout, and stops there; the sweep then has the
-// reserve to itself.
-//
-// timeout is zero when INGEST_RUN_TIMEOUT_SECONDS is unset — a process cannot read its own
-// unit's TimeoutStartSec — and the crawl then has no deadline of its own, exactly as before. The
-// scheduler passes the value with every launch (ingestsched.SystemdLauncher); a static unit must
-// set it in its environment, net of any time a wrapper may spend waiting for a slot.
-type runBudget struct {
-	timeout time.Duration
-	reserve time.Duration
-}
-
-// runBudgetFor resolves INGEST_RUN_TIMEOUT_SECONDS and INGEST_SWEEP_RESERVE_SECONDS. A set value
-// must be a positive number of seconds, and the reserve must leave the crawl something: a reserve
-// at or past the timeout would end every crawl before its first board, a misconfiguration that
-// reads exactly like a quiet fleet.
-func runBudgetFor(timeoutEnv, reserveEnv string) (runBudget, error) {
-	b := runBudget{reserve: defaultSweepReserve}
-	if reserveEnv != "" {
-		secs, err := strconv.Atoi(reserveEnv)
-		if err != nil || secs <= 0 {
-			return runBudget{}, fmt.Errorf("INGEST_SWEEP_RESERVE_SECONDS must be a positive number of seconds, got %q", reserveEnv)
-		}
-		b.reserve = time.Duration(secs) * time.Second
-	}
-	if timeoutEnv == "" {
-		return b, nil
-	}
-	secs, err := strconv.Atoi(timeoutEnv)
-	if err != nil || secs <= 0 {
-		return runBudget{}, fmt.Errorf("INGEST_RUN_TIMEOUT_SECONDS must be a positive number of seconds, got %q", timeoutEnv)
-	}
-	b.timeout = time.Duration(secs) * time.Second
-	if b.reserve >= b.timeout {
-		return runBudget{}, fmt.Errorf("INGEST_SWEEP_RESERVE_SECONDS (%s) must be shorter than INGEST_RUN_TIMEOUT_SECONDS (%s), or no crawl can start",
-			b.reserve, b.timeout)
-	}
-	return b, nil
-}
-
-// crawlContext bounds the crawl at reserve short of the run's timeout. Without a known timeout
-// it is parent, cancellable.
-func (b runBudget) crawlContext(parent context.Context, started time.Time) (context.Context, context.CancelFunc) {
-	if b.timeout == 0 {
-		return context.WithCancel(parent)
-	}
-	return context.WithDeadline(parent, started.Add(b.timeout-b.reserve))
-}
-
-// sweepContext is what the sweep runs on: detached from parent's cancellation, so neither the
-// crawl's deadline nor a signal that stopped the crawl cancels a close, and bounded by the run's
-// timeout — the moment the unit kills the process anyway. Without a known timeout it is bounded
-// by the reserve from now, which is what the reserve exists to give it.
-//
-// Detaching from the SIGNAL too is deliberate. A close is one atomic statement, so the worst a
-// later kill can do is roll the one in flight back; honouring the signal instead would discard
-// the closes a run already earned in exactly the case — a timed-out run on a unit that does not
-// yet pass its timeout — this exists to fix.
-func (b runBudget) sweepContext(parent context.Context, started time.Time) (context.Context, context.CancelFunc) {
-	detached := context.WithoutCancel(parent)
-	if b.timeout == 0 {
-		return context.WithTimeout(detached, b.reserve)
-	}
-	return context.WithDeadline(detached, started.Add(b.timeout))
-}
-
-// sweepBoards closes every qualifying board's unseen jobs in one statement per url scope — one
-// scan of the provider's open rows rather than one round trip per board (see
-// CloseUnseenJobsForBoards for the measurement). Every provider but a region-scoped one has a
-// single scope, ”; a region-scoped one (jobstreet) gets one statement per region, narrowed to
-// the url prefix its postings live on (sources.BoardURLPrefix). sweepableBoards has already
-// cleared the region of every board of an unscoped provider.
-func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, boards []pipeline.BoardRef, src sources.Source) (closed int64, failed int) {
-	byScope := make(map[string][]string)
-	var scopes []string
-	for _, b := range boards {
-		urlPattern := ""
-		if b.Region != "" {
-			prefix, ok := sources.BoardURLPrefix(src, b.Region)
-			if !ok {
-				// The crawl itself fails on a region its adapter does not know, so this board
-				// cannot have qualified; refuse rather than close it unscoped.
-				failed++
-				log.Printf("close stale jobs (%s board %q): no url scope for region %q", provider, b.Board, b.Region)
-				continue
-			}
-			urlPattern = externalid.LikePrefix(prefix)
-		}
-		if _, seen := byScope[urlPattern]; !seen {
-			scopes = append(scopes, urlPattern)
-		}
-		byScope[urlPattern] = append(byScope[urlPattern], b.Board)
-	}
-	for _, urlPattern := range scopes {
-		n, f := sweepBoardScope(ctx, queries, provider, cutoff, byScope[urlPattern], urlPattern)
-		closed += n
-		failed += f
-	}
-	return closed, failed
-}
-
-// sweepBoardScope closes the unseen jobs of boards sharing one url scope in one statement. If
-// that statement fails it falls back to one statement per board, so a row Postgres cannot write
-// (the 2026-08-11 incident sweepRowByRow exists for) blocks only its own board rather than every
-// board of the run. failed counts the boards whose close failed.
-func sweepBoardScope(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, boards []string, urlPattern string) (closed int64, failed int) {
-	patterns := make([]string, len(boards))
-	for i, board := range boards {
-		patterns[i] = externalid.BoardPattern(board)
-	}
-	closed, err := queries.CloseUnseenJobsForBoards(ctx, db.CloseUnseenJobsForBoardsParams{
-		Source:        provider,
-		Cutoff:        cutoff,
-		BoardPatterns: patterns,
-		UrlPattern:    urlPattern,
-	})
-	if err == nil {
-		return closed, 0
-	}
-	// An ended context would fail every per-board statement the same way; say so once.
-	if ctx.Err() != nil {
-		log.Printf("close stale jobs (%s, %d boards): %v", provider, len(boards), err)
-		return 0, len(boards)
-	}
-	log.Printf("close stale jobs (%s, %d boards): batched close failed (%v), falling back to one board at a time", provider, len(boards), err)
-	for i, board := range boards {
-		n, err := queries.CloseUnseenJobsForBoard(ctx, db.CloseUnseenJobsForBoardParams{
-			Source:       provider,
-			Cutoff:       cutoff,
-			BoardPattern: patterns[i],
-			UrlPattern:   urlPattern,
-		})
-		if err != nil {
-			failed++
-			log.Printf("close stale jobs (%s board %q): %v", provider, board, err)
-			continue
-		}
-		closed += n
-	}
-	return closed, failed
-}
-
-// boardScope is the per-provider registry facts sweepableBoards gates on, resolved by the caller
-// — the same convention sweepBySource uses, rather than re-deriving them from the raw registry
-// maps.
-type boardScope struct {
-	hasGrace, fullCatalog, fullBoardListing, sliceBoardListing, emptyBoardListing, regionScoped bool
-}
-
-// sweepableBoards returns, sorted and de-duplicated, the boards of one provider the
-// board-scoped close may retire this run: those the run structurally proved it covered
-// (stats.QualifyingBoards, see pipeline.boardQualifies), gated on the provider's markers.
-//
-// fullBoardListing must be true: a provider whose adapter is not registered as listing a
-// board to completion never contributes to the board scope, however its crawl went — see
-// sources.fullBoardListing for the bar an adapter must clear to earn it. hasGrace and
-// fullCatalog exclude a provider even when registered, for the same reasons sweepBySource
-// excludes them from the source-scoped close: a sweepGrace provider's crawl deliberately
-// reaches only a slice of the catalogue, so a board-scoped close on the default window would
-// close postings that merely drifted past the crawl's depth; a fullCatalog provider already
-// closes by source alone on a clean run, strictly broader than board scope (and today's
-// fullCatalog adapters are boardless besides, so this exclusion is belt-and-braces). Callers
-// gate on shouldSweep first, same as sweepBySource.
-//
-// sliceBoardListing is the other way in, and it requires hasGrace instead of excluding it: such
-// an adapter (whatjobs) reads a board only to a page budget, so it never proves a full listing,
-// and the grace window is what stands in for the proof — the board-scoped close then runs on
-// that window, not the default, so a posting that merely sat past the budget is back before it
-// ends. Without it a whatjobs posting closed only through the company scope, which leaked every
-// posting whose company had drifted out of all the keyword slices (sources.sliceBoardListing).
-//
-// crossShardAmbiguous excludes a board name this run's own Stats saw as unambiguous but that
-// is region-ambiguous across the FULL, unsharded catalog (pipeline.AmbiguousBoardNames,
-// computed by the caller before sharding): sources.Config.Shard groups boards by company
-// slug, not by board name, so a board's two region-variant rows can land in separate shard
-// processes — each running its own Runner.Run and seeing only one region, concluding on its
-// own that the board is unambiguous. Refusing here is what catches what a single Run() call
-// structurally cannot.
-//
-// emptyBoardListing adds the boards the run finished whose listing named nothing
-// (stats.EmptyBoards, see pipeline.boardListedEmpty) — an employer that took every posting down.
-// boardQualifies refuses them, because on most adapters an empty answer cannot be told from a
-// broken crawl, and their last postings then waited 30 days for the empty-feed net; an adapter
-// carrying sources.emptyBoardListing has proven that it can tell them apart. Only on a complete
-// listing: a slice that came back empty says nothing about the rest of the board.
-//
-// regionScoped keeps each board's region, for an adapter whose board ids repeat across regions
-// and whose close narrows each to its region by posting URL (sources.RegionScopedBoards). Every
-// other provider's region is cleared, so its board scope stays keyed on the board id alone.
-//
-// De-duplication guards against a board legitimately appearing twice in one run (a repeated
-// board-file entry, or one board id recurring across independent regional slices) double-
-// counting the close and its log line.
-func sweepableBoards(stats pipeline.Stats, scope boardScope, crossShardAmbiguous map[string]bool) []pipeline.BoardRef {
-	complete := scope.fullBoardListing && !scope.hasGrace
-	slice := scope.sliceBoardListing && scope.hasGrace
-	if scope.fullCatalog || (!complete && !slice) {
-		return nil
-	}
-	boards := slices.Clone(stats.QualifyingBoards)
-	if complete && scope.emptyBoardListing {
-		boards = append(boards, stats.EmptyBoards...)
-	}
-	if !scope.regionScoped {
-		for i := range boards {
-			boards[i].Region = ""
-		}
-	}
-	slices.SortFunc(boards, func(a, b pipeline.BoardRef) int {
-		return cmp.Or(strings.Compare(a.Board, b.Board), strings.Compare(a.Region, b.Region))
-	})
-	boards = slices.Compact(boards)
-	boards = slices.DeleteFunc(boards, func(b pipeline.BoardRef) bool { return crossShardAmbiguous[b.Board] })
-	if len(boards) == 0 {
-		return nil
-	}
-	return boards
-}
-
-// sweepableCompanies narrows the crawled-company scope to the companies this run may actually
-// close within: those it wrote a job for (crawled), minus the ones a board withheld because its
-// crawl did not read what it listed (pipeline.Stats.UnprovenCompanies).
-//
-// The subtraction is what keeps the two halves of the fix honest. A board whose detail requests
-// died still WRITES everything it did manage to read — those rows' last_seen_at moves, their
-// content is refreshed, their company enters the crawled set exactly as before — and only the
-// permission to retire that company's unseen rows is withheld. Recording and closing are
-// separate decisions, and only the second one lacks the evidence.
-//
-// It withholds by COMPANY rather than by board because the crawled scope is the only handle the
-// provider-wide CloseUnseenJobs has; a company under two boards, one of which read cleanly, is
-// still withheld, which is the conservative reading and the correct one — the other board's
-// unread postings belong to that same company.
-//
-// Returns nil rather than an empty slice when nothing is left, which the close reads as an
-// empty text[] and matches no row (`company_slug = ANY('{}')`), i.e. it closes nothing.
-//
-// A failed covered refresh (Stats.RefreshFailed) withholds the whole scope. Those rows keep their
-// old last_seen_at while the listing named them, their company can still be in the crawled set
-// through another board's refresh, and a covered row is never written again to reopen it.
-func sweepableCompanies(crawled []string, stats pipeline.Stats) []string {
-	if stats.RefreshFailed > 0 {
-		return nil
-	}
-	if len(stats.UnprovenCompanies) == 0 {
-		return crawled
-	}
-	unproven := make(map[string]bool, len(stats.UnprovenCompanies))
-	for _, slug := range stats.UnprovenCompanies {
-		unproven[slug] = true
-	}
-	kept := slices.DeleteFunc(slices.Clone(crawled), func(slug string) bool { return unproven[slug] })
-	if len(kept) == 0 {
-		return nil
-	}
-	return kept
-}
-
-// sweepableProviders returns, sorted, the providers in a run that ingested at least one
-// job — the only ones safe to sweep (a zero-ingest provider proves only that its crawl
-// failed). Sorting gives a deterministic sweep order across runs and tests.
-func sweepableProviders(rs pipeline.RunStats) []string {
-	providers := make([]string, 0, len(rs))
-	for provider, s := range rs {
-		if shouldSweep(s) {
-			providers = append(providers, provider)
-		}
-	}
-	sort.Strings(providers)
-	return providers
-}
-
-// shouldSweep reports whether the run saw enough of the world to justify closing
-// jobs: a run that ingested nothing proves only that the crawl failed. A stored row the
-// coverage gate refreshed counts too: on an aggregator whose every employer is crawled
-// first-hand nothing is ingested, yet the crawl plainly worked, and those rows' companies are
-// already in the crawled scope waiting for this sweep.
-func shouldSweep(stats pipeline.Stats) bool {
-	return stats.Ingested > 0 || stats.Refreshed > 0
-}
-
-// sweepBySource reports whether a provider's run may close its unseen jobs by source alone,
-// dropping the crawled-company scope. Only a fullCatalog source qualifies (it lists the whole
-// catalogue each run, so an unseen job is truly gone), and only when the run had zero board
-// failures: a fullCatalog adapter errors a truncated crawl, so Failed>0 means the listing was
-// incomplete and a source-scoped close would mass-close the postings it never reached. Such a run
-// falls back to the safe company-scoped CloseUnseenJobs. Callers gate on shouldSweep first.
-//
-// A posting the crawl could not READ disqualifies it too, and here with no tolerance at all
-// (unlike the board scope's maxUnreadablePercent): this is the broadest close in the system, it
-// drops the company scope that sweepableCompanies uses to withhold anything, and no fullCatalog
-// adapter emits the marker today — so the strict reading costs nothing now and is the one that
-// stays right if one ever does.
-//
-// So does a board crawled without the catalogue's seen-set (Stats.SeenUnknown): every stored
-// posting then reads as new, and a hydrating adapter with a detail budget refreshes none of
-// those past it, so the source scope would close live postings the listing named.
-//
-// And so does a covered posting whose refresh failed (Stats.RefreshFailed): the listing named
-// it, but its stored row keeps its old last_seen_at, and a covered row is never written again,
-// so a wrong close would never be undone by a later crawl.
-func sweepBySource(stats pipeline.Stats, fullCatalog bool) bool {
-	return fullCatalog && stats.Failed == 0 && stats.Unreadable == 0 && stats.SeenUnknown == 0 &&
-		stats.RefreshFailed == 0
-}
-
-// sweepWindowFor reports how long a provider's unseen jobs are spared before the sweep closes
-// them: the window its adapter declared (sources.SweepGraceWindows), wider or narrower than
-// staleAfter, else staleAfter itself. The override is per-provider so one feed's drift tolerance
-// (or one full-board crawl's tighter cadence) never changes the sweep for every other provider.
-func sweepWindowFor(grace map[string]time.Duration, provider string) time.Duration {
-	if w, ok := grace[provider]; ok {
-		return w
-	}
-	return staleAfter
-}
-
-// hydrationRetryWindowFor resolves how long a stored row with no description keeps being
-// re-offered to a hydrating adapter for another detail fetch (see pipeline.SeenLookup). An
-// empty value means the default, pipeline.HydrationRetryWindow.
-//
-// HYDRATION_RETRY_DAYS widens it for a deliberate repair run: the default window is measured
-// from created_at, so a backlog that accumulated before the retry existed has already aged past
-// it and no ordinary crawl will ever re-fetch those bodies. `HYDRATION_RETRY_DAYS=365 ingest
-// sources/hh.yml` re-offers every body-less row of that provider instead. Expect the run to be
-// slower by one detail request per such row (hh's detail pages are ~1 MB), and expect to repeat
-// it: a run that hits its systemd timeout still persists what it hydrated, and the rows it
-// fixed leave the set, so successive runs shrink the backlog rather than redoing it.
-//
-// An unparseable or non-positive value is an error rather than a fallback to the default. This
-// is set by hand for a one-off, where silently ingesting with the default would look exactly
-// like a repair run that found nothing to repair.
-func hydrationRetryWindowFor(env string) (time.Duration, error) {
-	if env == "" {
-		return pipeline.HydrationRetryWindow, nil
-	}
-	days, err := strconv.Atoi(env)
-	if err != nil || days <= 0 {
-		return 0, fmt.Errorf("HYDRATION_RETRY_DAYS must be a positive number of days, got %q", env)
-	}
-	return time.Duration(days) * 24 * time.Hour, nil
-}
-
-// bodyRefresh is the resolved "re-read a stale body" policy: how old a stored body may be
-// before a hydrating crawl fetches it again, and which slice of the catalogue this run takes.
-// See dbStore.ExistingExternalIDs and migration 0144.
-type bodyRefresh struct {
-	// cutoff is the age boundary: a row hydrated before it is stale. Meaningless while
-	// disabled, since slot then matches nothing.
-	cutoff time.Time
-	// slices is how many runs a full sweep of the catalogue takes; always positive, because
-	// it is a modulus.
-	slices int64
-	// slot is the slice this run takes, or bodyRefreshDisabledSlot.
-	slot int64
-}
-
-// bodyRefreshDisabledSlot is a slot no row can hash to: the predicate computes
-// abs(hashtext(external_id)) % slices, which is never negative. Disabling the feature is
-// therefore a parameter value rather than a second query, so there is one predicate to reason
-// about and no branch that could disagree with the other.
-const bodyRefreshDisabledSlot = -1
-
-// bodyRefreshDefaultSlices is how many runs a full sweep takes when BODY_REFRESH_SLICE is unset.
-const bodyRefreshDefaultSlices = 30
-
-func (b bodyRefresh) enabled() bool { return b.slot != bodyRefreshDisabledSlot }
-
-// bodyRefreshFor resolves BODY_REFRESH_DAYS and BODY_REFRESH_SLICE.
-//
-// It exists because a hydrating adapter fetches a posting's detail only while the catalogue
-// does not already hold it: once stored, a posting's body is never read again, so an employer
-// editing their own posting — adding "this position is 100% on-site", moving the location,
-// stating a salary — reaches us never (freehire#2555). BODY_REFRESH_DAYS is how old a stored
-// body may get before the next crawl re-reads it.
-//
-// Unset means disabled, and that is the shipped default: turning this on costs one detail
-// request per re-read posting against a host whose crawl fleet is already its own bottleneck,
-// so it is enabled deliberately, one provider at a time, with the cost watched. A set value
-// must be a positive number of days — an unparseable one fails the run rather than quietly
-// crawling as before, which is the same contract every other hand-set knob here has.
-//
-// BODY_REFRESH_SLICE bounds one run: a posting belongs to one slice for its whole life, and a
-// run takes the slice named by the day of the year, so a full sweep takes SLICE days and no
-// single run faces a provider's entire catalogue (1.27M postings on workday). Setting it
-// without BODY_REFRESH_DAYS is an error rather than a no-op: a knob that silently does nothing
-// reads exactly like a refresh that found nothing to refresh.
-func bodyRefreshFor(days, slice string, now time.Time) (bodyRefresh, error) {
-	if days == "" {
-		if slice != "" {
-			return bodyRefresh{}, fmt.Errorf("BODY_REFRESH_SLICE=%q has no effect without BODY_REFRESH_DAYS", slice)
-		}
-		return bodyRefresh{slices: 1, slot: bodyRefreshDisabledSlot}, nil
-	}
-	n, err := strconv.Atoi(days)
-	if err != nil || n <= 0 {
-		return bodyRefresh{}, fmt.Errorf("BODY_REFRESH_DAYS must be a positive number of days, got %q", days)
-	}
-	slices := int64(bodyRefreshDefaultSlices)
-	if slice != "" {
-		s, err := strconv.Atoi(slice)
-		if err != nil || s <= 0 {
-			return bodyRefresh{}, fmt.Errorf("BODY_REFRESH_SLICE must be a positive number of runs, got %q", slice)
-		}
-		slices = int64(s)
-	}
-	return bodyRefresh{
-		cutoff: now.AddDate(0, 0, -n),
-		slices: slices,
-		slot:   int64(now.YearDay()) % slices,
-	}, nil
-}
-
-// refetchAllFor resolves INGEST_REFETCH_ALL, the repair switch that empties the seen-set so a
-// crawl re-WRITES the provider's stored rows instead of only refreshing their liveness (see
-// dbStore.ExistingExternalIDs). It is what carries an adapter fix to the postings ingested before
-// it: the ordinary crawl never rewrites them, and re-deriving from the database cannot recover a
-// field the adapter read wrong, because what the database stored is the wrong reading.
-//
-// Set it by hand for one run and expect the crawl to cost one detail request per stored posting.
-// Nothing is lost if a detail request fails — UpsertJob keeps the stored description when the
-// incoming one is empty — so a run that hits its systemd timeout can simply be repeated.
-//
-// Anything other than the two accepted spellings is an error rather than a quiet false: this is a
-// hand-set one-off, where an ordinary crawl would look exactly like a repair that found nothing.
-func refetchAllFor(env string) (bool, error) {
-	switch env {
-	case "":
-		return false, nil
-	case "1", "true":
-		return true, nil
-	default:
-		return false, fmt.Errorf("INGEST_REFETCH_ALL must be 1 or true when set, got %q", env)
-	}
-}
-
-// sweepProvider closes one provider's unseen jobs: the bulk UPDATE (CloseUnseenJobs or
-// CloseUnseenJobsBySource) is the fast path, and on error it falls back to sweepRowByRow
-// so a single row Postgres can't write doesn't block the rest of the provider — see
-// sweepRowByRow for why that happens. skipped is always 0 unless the fallback ran.
-// skippedBoards (pipeline.Stats.SkippedBoards) are left out of either scope: the run did not look
-// at them, so their rows' age says nothing about whether they are still listed.
-func sweepProvider(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, companySlugs, skippedBoards []string, bySource bool) (closed int64, skipped int, err error) {
-	if bySource {
-		closed, err = queries.CloseUnseenJobsBySource(ctx, db.CloseUnseenJobsBySourceParams{
-			Source:               provider,
-			Cutoff:               cutoff,
-			SkippedBoardPatterns: skippedBoards,
-		})
-	} else {
-		closed, err = queries.CloseUnseenJobs(ctx, db.CloseUnseenJobsParams{
-			Source:               provider,
-			Cutoff:               cutoff,
-			CompanySlugs:         companySlugs,
-			SkippedBoardPatterns: skippedBoards,
-		})
-	}
-	if err == nil {
-		return closed, 0, nil
-	}
-	log.Printf("close stale jobs (%s): bulk close failed (%v), falling back to row-by-row", provider, err)
-	closed, skipped, err = sweepRowByRow(ctx, queries, provider, cutoff, companySlugs, skippedBoards, bySource)
-	if err != nil {
-		return 0, 0, fmt.Errorf("row-by-row fallback failed: %w", err)
-	}
-	return closed, skipped, nil
-}
-
-// sweepRowByRow is the bulk sweep's fallback when the single-statement UPDATE fails: it
-// fetches the same candidate set and closes each row in its own statement, so one row
-// Postgres can't write (e.g. a heap/index-corrupted jobs_pkey value — see the 2026-08-11
-// incident, where one such row blocked greenhouse's sweep on every run) is skipped by
-// itself instead of aborting every other closeable row in the provider. Slower than the
-// bulk path by design: it only runs once the fast path has already failed.
-func sweepRowByRow(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, companySlugs, skippedBoards []string, bySource bool) (closed int64, skipped int, err error) {
-	var ids []int64
-	if bySource {
-		ids, err = queries.UnseenJobIDsBySource(ctx, db.UnseenJobIDsBySourceParams{Source: provider, Cutoff: cutoff, SkippedBoardPatterns: skippedBoards})
-	} else {
-		ids, err = queries.UnseenJobIDs(ctx, db.UnseenJobIDsParams{Source: provider, Cutoff: cutoff, CompanySlugs: companySlugs, SkippedBoardPatterns: skippedBoards})
-	}
-	if err != nil {
-		return 0, 0, fmt.Errorf("list candidates: %w", err)
-	}
-	for _, id := range ids {
-		n, err := queries.CloseUnseenJobByID(ctx, id)
-		if err != nil {
-			skipped++
-			log.Printf("close stale jobs (%s): skipping id=%d, still unclosable: %v", provider, id, err)
-			continue
-		}
-		closed += n
-	}
-	return closed, skipped, nil
 }

@@ -5,27 +5,28 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 )
 
 // jobleadsHTTP is the transport surface jobleads needs: a Chrome-fingerprint JSON POST for
-// the search endpoint and a JSON GET for the detail endpoint. fingerprintHTTP satisfies it,
-// and pacedJobleadsPoster wraps it without widening the interface.
+// the search endpoint and a fetch()-shaped JSON GET for the detail endpoint. fingerprintHTTP
+// satisfies it, and pacedJobleadsPoster wraps it without widening the interface.
 type jobleadsHTTP interface {
 	PostJSON(ctx context.Context, url string, body, v any) error
-	GetJSON(ctx context.Context, url string, v any) error
+	FetchJSON(ctx context.Context, url string, v any) error
 }
 
 // jobleads adapts jobleads.com, a multi-country job aggregator. Its search API is
 // keyword-first and POST-only: an entry's BOARD is the search keyword, its REGION the
 // country filter (alpha-2 code), the same board-as-slice shape as whatjobs/hh. Cloudflare
-// rejects the default Go TLS+HTTP2 fingerprint (403 for plain-Go, 200 to a Chrome-shaped
-// one — verified live 2026-08-30), so the transport is fingerprintHTTP; keyless, no
-// cookies. `totalResultCount` is page-scoped, the vdb ranking rotates between runs, and
-// on-topic density decays fast (96% topical p1 → ~0% p50, measured) — hence the walk's
-// `added == 0`/`jobleadsMaxPages` bounds and the 14-day sweepGrace.
+// country filter (alpha-2 code), the same board-as-slice shape as whatjobs/hh. Cloudflare
+// rejects the default Go TLS+HTTP2 fingerprint, so the transport is fingerprintHTTP; keyless, no
+// cookies. `totalResultCount` is page-scoped, the vdb ranking rotates between runs and on-topic
+// density decays fast with page depth, hence the walk's `added == 0`/`jobleadsMaxPages` bounds
+// and the 14-day sweepGrace.
 //
 // The detail API is paywalled for a logged-out caller: `description` is always "" and
 // `company` the "Solo per membri registrati" placeholder, so neither is read. The body is
@@ -38,34 +39,39 @@ type jobleads struct {
 	// maxNewPerBoard bounds how many new postings one board hydrates per run; non-positive
 	// takes jobleadsMaxNewPerBoard.
 	maxNewPerBoard int
+	// details caches a fetched description by feed id for the adapter's life (one registry
+	// build, i.e. one ingest run). The keyword windows of one country overlap heavily and the
+	// pipeline stores a row per board (ids are board-namespaced), so every board that lists a
+	// new posting still yields it, but only the first one pays the detail request. nil (a
+	// literal jobleads{}) disables the cache.
+	details *sync.Map
 }
 
 const (
-	jobleadsBaseURL    = "https://www.jobleads.com"
-	jobleadsSearchURL  = jobleadsBaseURL + "/job-search/search"
-	jobleadsDetailURL  = jobleadsBaseURL + "/api/v3/job/detailsForAppNew/en/%s"
-	jobleadsPageSize   = 100
+	jobleadsBaseURL   = "https://www.jobleads.com"
+	jobleadsSearchURL = jobleadsBaseURL + "/job-search/search"
+	jobleadsDetailURL = jobleadsBaseURL + "/api/v3/job/detailsForAppNew/en/%s"
+	// jobleadsPageSize is the largest page the search serves (limit 1000 answered 1000 in every
+	// one of 41 markets, ~1 s, measured 2026-11-15). The search is the stricter-limited endpoint,
+	// so a big page buys the same depth for a tenth of the requests.
+	jobleadsPageSize   = 1000
 	jobleadsSweepGrace = 14 * 24 * time.Hour
-	// jobleadsMaxPages bounds the page walk, measured live 2026-08-30. (1) The loop-safety
-	// every paged adapter carries (adp's "bound the paging so a tenant that ignores $skip
-	// can't loop"). (2) The relevance cutoff: the vdb's on-topic density decays fast
-	// ("Frontend Developer" IT: 96% p1 → 7% p25 → ~0% p50), so page 50 keeps the walk inside
-	// the genuinely-dev pool — a posting cut here reappears near the top of another
-	// keyword's window, and the 14-day sweepGrace absorbs the partial walk. The walk still
-	// ends on an empty page before this when a real window is shallower.
-	jobleadsMaxPages = 50
-	// jobleadsMaxNewPerBoard bounds one board's detail requests per run. Every board's search
-	// pages and details share one ~1 req/s limiter (pacedJobleadsPoster), and a board writes
-	// nothing until its crawl returns: after twelve days unread (2026-10-09 to 10-21) the 19
-	// boards' new postings outlasted the unit's 50 minutes on every run, so none finished and
-	// nothing was stored. 19 boards x 60 details plus up to 50 search pages each is ~35
-	// minutes; the rest are deferred — not yielded, so not stored and still new — to the run
-	// three hours later.
-	jobleadsMaxNewPerBoard = 60
+	// jobleadsMaxPages bounds the page walk: loop safety, and a relevance cutoff since on-topic
+	// density decays fast with depth. A posting cut here reappears in another keyword's window and
+	// the 14-day sweepGrace absorbs the partial walk. A real, shallower window ends the walk on an
+	// empty page first.
+	jobleadsMaxPages = 5 // 5,000 postings deep, as 50 pages of 100 were
+	// jobleadsMaxNewPerBoard bounds one board's detail requests per run. All boards share one
+	// ~2 req/s limiter (pacedJobleadsPoster) and a board writes nothing until its crawl returns, so
+	// an unbounded backlog outlasts the unit's time budget and stores nothing; a run cut by its
+	// deadline closes nothing either (jobleads has no board scope). 779 boards (19 keywords x 41
+	// markets) x 25 details plus 5 search pages each is ~23k requests, ~3.2 h at 2 req/s. The
+	// rest are deferred (not yielded, still new) to a later run.
+	jobleadsMaxNewPerBoard = 25
 )
 
 // NewJobleads builds the JobLeads adapter over the given transport.
-func NewJobleads(c jobleadsHTTP) Source { return jobleads{http: c} }
+func NewJobleads(c jobleadsHTTP) Source { return jobleads{http: c, details: &sync.Map{}} }
 
 func (jobleads) Provider() string { return "jobleads" }
 
@@ -82,7 +88,7 @@ func (jobleads) aggregator() {}
 func (jobleads) sweepGrace() time.Duration { return jobleadsSweepGrace }
 
 // jobleadsSearchReq is the site's own frontend request. engineOptions IS load-bearing:
-// every 200 verified live carried engineType "vdbSearch", so the adapter always states it.
+// every 200 carried engineType "vdbSearch", so the adapter always states it.
 type jobleadsSearchReq struct {
 	Keywords      []string         `json:"keywords"`
 	Filters       []jobleadsFilter `json:"filters,omitempty"`
@@ -102,7 +108,7 @@ type jobleadsFilter struct {
 }
 
 // jobleadsCountryFilter is the location filter that scopes a search to one market; the
-// bare alpha-2 code suffices (a geo circle is optional — verified live).
+// bare alpha-2 code suffices (a geo circle is optional).
 func jobleadsCountryFilter(alpha2 string) jobleadsFilter {
 	return jobleadsFilter{
 		Key:      "location",
@@ -132,7 +138,7 @@ type jobleadsPosting struct {
 }
 
 // walk pages a board's keyword search, calling handle for every usable posting. The walk
-// ends on a page with none (a post-window page answers empty — measured), on a later page's
+// ends on a page with none (a post-window page answers empty), on a later page's
 // failure (canonical rule: first-page failure is board-level, a later one ends the walk
 // with what it has), or at jobleadsMaxPages.
 func (s jobleads) walk(ctx context.Context, e CompanyEntry, handle func(jobleadsPosting) bool) error {
@@ -194,6 +200,14 @@ func (s jobleads) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 			jobs = append(jobs, base)
 			return true
 		}
+		// Another board already fetched it: free, so outside the budget.
+		if s.details != nil {
+			if d, ok := s.details.Load(p.ID); ok {
+				base.Description = d.(string)
+				jobs = append(jobs, base)
+				return true
+			}
+		}
 		// A deferred posting still counts as found, so the walk goes on to refresh the seen
 		// postings further down the window.
 		if hydrated == budget {
@@ -207,6 +221,9 @@ func (s jobleads) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 				log.Printf("jobleads: detail %s failed; ingesting list-only: %v", p.ID, err)
 			} else {
 				base.Description = d.description()
+				if s.details != nil {
+					s.details.Store(p.ID, base.Description)
+				}
 			}
 		}
 		jobs = append(jobs, base)
@@ -242,25 +259,24 @@ func (s jobleads) search(ctx context.Context, e CompanyEntry, page int) ([]joble
 // fetchDetail reads one posting's public detail payload, keyed on the canonical hash the
 // posting's own slug carries. The feed's "external-<hex>" id is NOT that key — it is a
 // variant-scoped internal handle (the slug hash serves 200 while the feed id serves 404 on
-// the same posting, verified live 2026-08-30).
+// the same posting).
 func (s jobleads) fetchDetail(ctx context.Context, detailID string) (jobleadsDetail, error) {
 	var resp struct {
 		Payload struct {
 			Content jobleadsDetail `json:"content"`
 		} `json:"payload"`
 	}
-	if err := s.http.GetJSON(ctx, fmt.Sprintf(jobleadsDetailURL, detailID), &resp); err != nil {
+	if err := s.http.FetchJSON(ctx, fmt.Sprintf(jobleadsDetailURL, detailID), &resp); err != nil {
 		return jobleadsDetail{}, err
 	}
 	return resp.Payload.Content, nil
 }
 
-// jobleadsDetailID extracts the slug's canonical hash — the maximal trailing hex run of
-// the path's last segment ("/it/job/<title>--<hex>"). The slug hash is 33 hex while the
-// feed id (confirmed 32 hex) equals it minus one leading char for the canonical variant, so
-// a fixed-length cut truncates and the feed id must never be used (see fetchDetail). A
-// link whose trailing run is too short to be a hash answers "" and the caller skips the
-// detail call rather than burning a 404.
+// jobleadsDetailID extracts the slug's canonical hash: the maximal trailing hex run of the
+// path's last segment ("/it/job/<title>--<hex>"). The feed id is the hash minus one leading
+// char, so a fixed-length cut truncates and the feed id must never be used (see fetchDetail). A
+// run too short to be a hash answers "" and the caller skips the detail call rather than burning
+// a 404.
 func jobleadsDetailID(jobLink string) string {
 	s := strings.TrimSuffix(jobLink, "/")
 	i := len(s)
@@ -363,12 +379,13 @@ func (d jobleadsDetail) description() string {
 }
 
 // pacedJobleadsPoster wraps the fingerprint transport with ONE fresh limiter shared across
-// one registry build, so every board's search pages and detail fan-out compete for the same
-// token bucket (both paths hit the same Cloudflare-scored edge). The rate is deliberately
-// gentle: the true window budget is unknown — under-shooting only lengthens a run, while
-// over-shooting re-enters the bot-scoring that 403s/429s the edge (~2 req/s served clean;
-// a burstier ~20 req/s verification run 429'd the detail endpoint on the spot, measured
-// 2026-09-04). The pace stays on the clean side of that.
+// one registry build, so every board's search pages and detail fan-out share one token bucket
+// (both hit the same Cloudflare-scored edge). The rate is deliberately gentle: a burst
+// re-enters the bot-scoring that 403s/429s the edge, while under-shooting only lengthens a run.
+// Measured 2026-11-15 from the crawl host, 60 s each: 2 req/s served every request, 5 req/s had
+// 75% of searches refused (429). A rotating proxy does not lift it: the edge limits the client,
+// not the address (5 req/s through a fresh exit per request still lost 45% of searches, and
+// details at 10-20 req/s plateaued at ~1.4 served a second), and its exits draw extra 403s.
 func pacedJobleadsPoster(c jobleadsHTTP) jobleadsHTTP {
 	return pacedJobleads{
 		c:   c,
@@ -377,7 +394,7 @@ func pacedJobleadsPoster(c jobleadsHTTP) jobleadsHTTP {
 }
 
 const (
-	jobleadsRequestInterval = time.Second // ~1 req/s
+	jobleadsRequestInterval = 500 * time.Millisecond // ~2 req/s
 	jobleadsRequestBurst    = 1
 )
 
@@ -395,9 +412,9 @@ func (p pacedJobleads) PostJSON(ctx context.Context, url string, body, v any) er
 	return p.c.PostJSON(ctx, url, body, v)
 }
 
-func (p pacedJobleads) GetJSON(ctx context.Context, url string, v any) error {
+func (p pacedJobleads) FetchJSON(ctx context.Context, url string, v any) error {
 	if err := p.lim.Wait(ctx); err != nil {
 		return err
 	}
-	return p.c.GetJSON(ctx, url, v)
+	return p.c.FetchJSON(ctx, url, v)
 }

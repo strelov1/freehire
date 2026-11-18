@@ -1,5 +1,7 @@
+import { startErrorTelemetry } from '../lib/telemetry';
 import { extractSnapshot, hasJobPostingMarkup } from '../lib/scraper';
-import { extractForm, extractUploads, fillByLabel, revealField } from '../lib/form';
+import { extractForm, extractUploads, fillByLabel } from '../lib/form';
+import { revealField } from '../lib/revealField';
 import { runStep } from '../lib/combobox';
 import { debounce } from '../lib/debounce';
 import type { RuntimeMessage } from '../lib/protocol';
@@ -7,6 +9,19 @@ import type { RuntimeMessage } from '../lib/protocol';
 /** How long the page waits for typing to stop before telling the panel its form
  *  changed. One re-read when the user pauses, not one per keystroke. */
 const FORM_CHANGE_QUIET_MS = 400;
+
+// Answers the user types themselves must move the panel's counter, or it
+// reports a form as less finished than it is. One delegated listener rather
+// than one per control: an ATS form re-renders constantly, and per-control
+// listeners would have to be re-attached on every render (and leak the ones
+// they replaced). The panel is told only that something changed — it re-reads
+// the form, which is the one account that cannot drift.
+const notifyPanel = () => {
+  void browser.runtime.sendMessage({ kind: 'FORM_CHANGED' } satisfies RuntimeMessage).catch(() => {
+    // No panel listening (it is closed, or this frame outlived it). Nothing
+    // to do: the next open re-reads the form anyway.
+  });
+};
 
 /** Whether a node is, or contains, something the panel would ask about. Keeps the
  *  observer below from waking the panel for every unrelated re-render — an ATS
@@ -27,6 +42,7 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   allFrames: true,
   main() {
+    startErrorTelemetry('content');
     browser.runtime.onMessage.addListener((message: RuntimeMessage) => {
       switch (message.kind) {
         case 'GET_PAGE_SNAPSHOT':
@@ -70,26 +86,12 @@ export default defineContentScript({
         case 'COMBOBOX_STEP':
           // The only asynchronous handler here: a widget re-renders when its
           // framework decides to, so the step awaits the result.
-          return runStep(document, message.step).then(
-            (reply): RuntimeMessage => ({ kind: 'COMBOBOX_REPLY', reply }),
-          );
+          return runStep(document, message.step).then((reply): RuntimeMessage => ({ kind: 'COMBOBOX_REPLY', reply }));
         default:
           return undefined;
       }
     });
 
-    // Answers the user types themselves must move the panel's counter, or it
-    // reports a form as less finished than it is. One delegated listener rather
-    // than one per control: an ATS form re-renders constantly, and per-control
-    // listeners would have to be re-attached on every render (and leak the ones
-    // they replaced). The panel is told only that something changed — it re-reads
-    // the form, which is the one account that cannot drift.
-    const notifyPanel = () => {
-      void browser.runtime.sendMessage({ kind: 'FORM_CHANGED' } satisfies RuntimeMessage).catch(() => {
-        // No panel listening (it is closed, or this frame outlived it). Nothing
-        // to do: the next open re-reads the form anyway.
-      });
-    };
     const announce = debounce(notifyPanel, FORM_CHANGE_QUIET_MS);
     document.addEventListener('input', announce, true);
     document.addEventListener('change', announce, true);

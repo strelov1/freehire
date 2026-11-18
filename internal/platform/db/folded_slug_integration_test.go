@@ -108,60 +108,6 @@ func TestCompanySlugFoldedFollowsARename(t *testing.T) {
 	}
 }
 
-// The backfill's contract: it fills rows that predate the column, it is idempotent, and
-// re-running it writes nothing. The last part is what makes it safe to run repeatedly
-// on a 7.4M-row table without bloating it.
-func TestCompanySlugFoldedBackfill(t *testing.T) {
-	pool := startPostgres(t)
-	q := New(pool)
-	ctx := context.Background()
-	truncate(t, pool)
-
-	p := ingestParams("acme:backfill", "Backend Engineer")
-	p.CompanySlug, p.Company = "old-rows-ltd", "Old Rows Ltd"
-	job, err := ingestUpsert(ctx, q, p)
-	if err != nil {
-		t.Fatalf("upsert: %v", err)
-	}
-	// Simulate a row written before the column existed.
-	if _, err := pool.Exec(ctx, `UPDATE jobs SET company_slug_folded = NULL WHERE id = $1`, job.ID); err != nil {
-		t.Fatalf("clear folded: %v", err)
-	}
-
-	bounds, err := q.CompanySlugFoldedBackfillBounds(ctx)
-	if err != nil {
-		t.Fatalf("bounds: %v", err)
-	}
-	if bounds.Remaining != 1 {
-		t.Fatalf("remaining = %d, want 1", bounds.Remaining)
-	}
-
-	n, err := q.BackfillCompanySlugFoldedChunk(ctx, BackfillCompanySlugFoldedChunkParams{
-		FromID: bounds.MinID, ToID: bounds.MaxID + 1,
-	})
-	if err != nil {
-		t.Fatalf("backfill: %v", err)
-	}
-	if n != 1 {
-		t.Fatalf("backfill filled %d rows, want 1", n)
-	}
-	if got := foldedOf(ctx, t, q, job.ID); got != "oldrowsltd" {
-		t.Fatalf("folded after backfill = %q, want %q", got, "oldrowsltd")
-	}
-
-	// Second pass must be a no-op: the IS DISTINCT FROM guard is the difference between
-	// "safe to re-run" and "rewrites 7.4M rows every time".
-	again, err := q.BackfillCompanySlugFoldedChunk(ctx, BackfillCompanySlugFoldedChunkParams{
-		FromID: bounds.MinID, ToID: bounds.MaxID + 1,
-	})
-	if err != nil {
-		t.Fatalf("backfill again: %v", err)
-	}
-	if again != 0 {
-		t.Fatalf("re-run wrote %d rows, want 0 — the guard is not holding", again)
-	}
-}
-
 // The suppression pass must keep working while the backfill is still in flight: a row
 // with a NULL folded column is simply not matched, never mismatched.
 func TestSuppressionIgnoresUnbackfilledRows(t *testing.T) {

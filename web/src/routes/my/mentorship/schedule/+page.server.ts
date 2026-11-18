@@ -15,9 +15,6 @@ export const load: PageServerLoad = async ({ fetch, request, parent }) => {
   requireMentorProfile((await parent()).profile);
 
   const api = serverApi(fetch, request.headers.get('cookie'));
-  const [availability, calendar] = await Promise.all([
-    api.myMentorAvailability(),
-    api.myMentorCalendar(),
-  ]);
+  const [availability, calendar] = await Promise.all([api.myMentorAvailability(), api.myMentorCalendar()]);
   return { availability, calendar };
 };

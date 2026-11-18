@@ -59,8 +59,7 @@ func screeningAnswersApp(t *testing.T, repo *fakeScreeningAnswersRepo) (*fiber.A
 	h := &screeningAnswersHandlers{store: screeninganswers.New(repo)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss, testVersions)
-	app.Get("/me/screening-answers", g, h.GetScreeningAnswers)
-	app.Put("/me/screening-answers", g, h.PutScreeningAnswers)
+	h.register(app.Group("/api/v1"), middleware{key: g, cookie: g}, newContract(contractHandlers{screeningAnswersHandlers: h}))
 	return app, token
 }
 
@@ -68,9 +67,9 @@ func doScreeningAnswers(t *testing.T, app *fiber.App, method, body, token string
 	t.Helper()
 	var r *http.Request
 	if body == "" {
-		r = httptest.NewRequestWithContext(context.Background(), method, "/me/screening-answers", nil)
+		r = httptest.NewRequestWithContext(context.Background(), method, "/api/v1/me/screening-answers", nil)
 	} else {
-		r = httptest.NewRequestWithContext(context.Background(), method, "/me/screening-answers", strings.NewReader(body))
+		r = httptest.NewRequestWithContext(context.Background(), method, "/api/v1/me/screening-answers", strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	}
 	if token != "" {
@@ -239,5 +238,27 @@ func TestPutScreeningAnswers_ClearRefusesAFieldAlsoStated(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+// A null in the patch reads as absent, as the old json.Unmarshal into pointers did: it
+// keeps the stored answer, and is neither a 400 nor a clear.
+func TestPutScreeningAnswers_NullKeepsTheStoredAnswer(t *testing.T) {
+	repo := &fakeScreeningAnswersRepo{
+		getRet:    screeninganswers.Answers{VisaSponsorshipNeeded: boolPtr(true)},
+		upsertRet: screeninganswers.Answers{VisaSponsorshipNeeded: boolPtr(true), WillingToRelocate: boolPtr(false)},
+	}
+	app, token := screeningAnswersApp(t, repo)
+	resp := doScreeningAnswers(t, app, fiber.MethodPut,
+		`{"visa_sponsorship_needed":null,"authorized_countries":null,"clear":null,"willing_to_relocate":false}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if v := repo.upserted.VisaSponsorshipNeeded; v == nil || !*v {
+		t.Errorf("upserted VisaSponsorshipNeeded = %v, want the stored true kept", v)
+	}
+	if v := repo.upserted.WillingToRelocate; v == nil || *v {
+		t.Errorf("upserted WillingToRelocate = %v, want false", v)
 	}
 }

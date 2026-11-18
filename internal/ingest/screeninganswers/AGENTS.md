@@ -53,12 +53,14 @@ OpenSpec change).
   Never defaulted. Which fields it may answer is decided in `internal/api/atsapply/consent.go`.
 
 ## How it works
+
 ```
 Sanitize (normalize country codes + currency case)
   → Validate (reject malformed input, naming the bad value)
     → Store.Update: Repository.UpdateLocked(userID, merge) — one transaction:
         Ensure row exists → SELECT ... FOR UPDATE → merge → Upsert → commit
 ```
+
 `screeninganswers.go` holds the wire shape (`Answers`) and the pure `Sanitize`/`Validate`/
 `Merge` functions — no database, unit-testable without one. `store.go` is the owner-scoped
 `Store` over a narrow `Repository`; `repository.go` adapts `*db.Queries` + the pool to it,

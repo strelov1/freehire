@@ -8,6 +8,7 @@ const profile: UserProfile = {
   excluded_skills: [],
   excluded_sources: [],
   excluded_companies: [],
+  job_languages: [],
   location_preferences: null,
   derived_location: null,
   cv: null,
@@ -37,7 +38,8 @@ vi.mock('#lib/notifications.svelte.js', () => ({
 }));
 
 vi.mock('#lib/filters.js', async () => {
-  const { filtersFromProfile, filtersToParams } = await import('./facetModel');
+  const { filtersToParams } = await import('./facetModel');
+  const { filtersFromProfile } = await import('./profileFilters');
   return { filtersFromProfile, filtersToParams };
 });
 
@@ -80,5 +82,25 @@ describe('enableProfileAlert', () => {
     const { enableProfileAlert } = await import('./profileAlert');
     await expect(enableProfileAlert(profile, 'email')).rejects.toThrow('nope');
     expect(remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('incomplete profile alerts', () => {
+  const empty = { ...profile, specializations: [], skills: [] };
+
+  it('rejects an empty profile before creating a search or subscribing', async () => {
+    const { canEnableProfileAlert, enableProfileAlert } = await import('./profileAlert');
+    expect(canEnableProfileAlert(empty)).toBe(false);
+    expect(canEnableProfileAlert(null)).toBe(false);
+    await expect(enableProfileAlert(empty, 'email')).rejects.toThrow('Add a role');
+    expect(create).not.toHaveBeenCalled();
+    expect(subscribe).not.toHaveBeenCalled();
+  });
+
+  it('allows a skill-only profile and ignores a non-filtering seniority selection', async () => {
+    const { canEnableProfileAlert } = await import('./profileAlert');
+    const { SENIORITY_VALUES } = await import('./generated/contracts');
+    expect(canEnableProfileAlert({ ...empty, skills: ['go'] })).toBe(true);
+    expect(canEnableProfileAlert({ ...empty, seniorities: [...SENIORITY_VALUES] })).toBe(false);
   });
 });

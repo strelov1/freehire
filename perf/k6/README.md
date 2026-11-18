@@ -124,19 +124,9 @@ One iteration walks one company end to end, so a step's `rate` is **companies pe
 second**. The custom summary reports postings/s, MiB/s, and the projected hours
 for a full pass over the live company count.
 
-**The rate limiter is the trap here.** `agent/jobs/search` is capped at 300/min
-(5 r/s) per caller and the cheap reads at 600/min, keyed by user-or-IP
-(`internal/api/handler/public_read_limit.go`). A single-machine run therefore
-measures the limiter, not the host, unless you say otherwise. `cmd/server` trusts
-`X-Real-IP` from a peer inside `ratelimit.TrustedCIDRs`, and
-`internal/api/ratelimit.trusted` then counts the **claimed** address — so
-`SCRAPER_SPOOF_IP=1` (the default) gives each VU its own budget from
-documentation-only address space (RFC 5737) and the run reports what the box can
-serve. Set `SCRAPER_SPOOF_IP=0` to measure the throttled path instead — a real
-answer to the different question "how fast can one outside client drain us".
-A 429 during extraction fails the `not throttled` check rather than passing
-silently, so a misconfigured run is visible in the summary instead of reading as
-a low ceiling.
+The extraction benchmark targets the application's idle API directly. Gateway
+traffic policy belongs to the deployment repository; a gateway refusal fails the
+`not throttled` check so it cannot silently masquerade as low application capacity.
 
 Same siting rule as `PROFILE=saturation`: point it at the **idle** colour's API
 port on the prod host, never the live origin. It has its own `FORCE_SCRAPER`

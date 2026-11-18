@@ -4,13 +4,7 @@
   import JobsView from '#lib/components/JobsView.svelte';
   import Seo from '#lib/components/Seo.svelte';
   import { skillLabel } from '#lib/facets.js';
-  import {
-    breadcrumbJsonLd,
-    collectionHeading,
-    collectionPageJsonLd,
-    jobListItems,
-    jsonLdScript,
-  } from '#lib/seo.js';
+  import { breadcrumbJsonLd, collectionHeading, collectionPageJsonLd, jobListItems, jsonLdScript } from '#lib/seo.js';
   import { backerBadges } from '#lib/backers.js';
   import type { PageData } from './$types';
 
@@ -48,18 +42,13 @@
   // mirroring the company landing.
   const jsonLd = $derived(
     jsonLdScript([
-      collectionPageJsonLd(
-        heading,
-        data.collection.description,
-        canonical,
-        jobListItems(data.initial.items, origin)
-      ),
+      collectionPageJsonLd(heading, data.collection.description, canonical, jobListItems(data.initial.items, origin)),
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },
         { name: 'Collections', url: `${origin}/collections` },
         { name: heading, url: base },
       ]),
-    ])
+    ]),
   );
 </script>
 
@@ -98,10 +87,7 @@
          one param, and one param cannot be both a category and a skill. -->
     {#if data.glossaryLink}
       <p class="mt-3 text-sm">
-        <a
-          href={resolve('/skills/[slug]', { slug: data.glossaryLink })}
-          class="text-brand-strong hover:underline"
-        >
+        <a href={resolve('/skills/[slug]', { slug: data.glossaryLink })} class="text-brand-strong hover:underline">
           What is {skillLabel(data.glossaryLink)}? — the glossary entry →
         </a>
       </p>
@@ -111,11 +97,6 @@
   <!-- Remount on slug change so the seeded paginator/filters start fresh per
        collection (mirrors the company page). -->
   {#key data.slug}
-    <JobsView
-      initial={data.initial}
-      scope={data.collection.params}
-      {excludeFacets}
-      currentPage={data.pageNumber}
-    />
+    <JobsView initial={data.initial} scope={data.collection.params} {excludeFacets} currentPage={data.pageNumber} />
   {/key}
 </div>

@@ -104,6 +104,7 @@ VALUES ($1, $2, $3, $4,
         $5, $6, $7, $8,
         $9, $10, $11,
         $12)
+ON CONFLICT (provider, lower(board), region) WHERE status IN ('pending', 'active') DO NOTHING
 RETURNING id, provider, board, region, company, hub, tenants, url, status, submitted_by, surface, rejected_reason, created_at, activated_at
 `
 
@@ -125,8 +126,8 @@ type InsertBoardParams struct {
 // Insert a board row. Callers that pass status='active' also pass a non-null
 // activated_at (a curator addition via cmd/add-board); every other caller passes NULL,
 // for both status='pending' and status='rejected'. A collision with an existing
-// 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
-// the caller maps that to a duplicate-board error.
+// 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — returns no row without aborting the caller's
+// transaction; the repository maps that to a duplicate-board error.
 func (q *Queries) InsertBoard(ctx context.Context, arg InsertBoardParams) (Board, error) {
 	row := q.db.QueryRow(ctx, insertBoard,
 		arg.Provider,
@@ -254,6 +255,7 @@ FROM boards
 WHERE provider = ANY($1::text[])
   AND status IN ('pending', 'active')
   AND lower(company) = lower(board)
+  AND NOT (provider = 'successfactors' AND hub)
 ORDER BY provider, id
 `
 
@@ -264,8 +266,9 @@ type ListPlaceholderCompanyBoardsRow struct {
 }
 
 // Live boards whose company is still the board id itself — what a harvest writes when it
-// never resolved the tenant's display name, so the id ("<host>/<site>", a GUID) becomes the
-// employer's public name on every posting. cmd/backfill-company-names resolves the real name
+// never resolved the tenant's display name, so the id (a host, "<host>/<site>", a GUID) becomes the
+// employer's public name on every posting. SuccessFactors hubs are excluded: their root careers
+// page names the hub, not the tenants behind its host. cmd/backfill-company-names resolves the real name
 // from the ATS by that exact id and writes it back through RenameSlugBoardCompany. Limited to
 // the providers that have a resolver, since a board no resolver can read is not work.
 func (q *Queries) ListPlaceholderCompanyBoards(ctx context.Context, providers []string) ([]ListPlaceholderCompanyBoardsRow, error) {
@@ -339,31 +342,6 @@ type RetireBoardParams struct {
 // Retire a live (pending or active) board without deleting its row.
 func (q *Queries) RetireBoard(ctx context.Context, arg RetireBoardParams) (int64, error) {
 	result, err := q.db.Exec(ctx, retireBoard, arg.Provider, arg.Lower, arg.Region)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const retireProviderBoards = `-- name: RetireProviderBoards :execrows
-UPDATE boards
-SET status = 'retired'
-WHERE provider = $1
-  AND status IN ('pending', 'active')
-`
-
-// Retire EVERY live board of one provider in one statement.
-//
-// Separate from RetireBoard rather than looping it: this is used when the provider itself is
-// withdrawn, not when a board is found dead, and the populations differ by three orders of
-// magnitude — apploi alone carries 5833 boards (migration 0165). A loop would be 5833 round
-// trips to say one thing.
-//
-// Deliberately does NOT touch 'rejected': a rejected board failed insert-time validation and
-// never became live, so calling it retired would erase why it is there. Idempotent — the
-// status predicate means a re-run matches nothing.
-func (q *Queries) RetireProviderBoards(ctx context.Context, provider string) (int64, error) {
-	result, err := q.db.Exec(ctx, retireProviderBoards, provider)
 	if err != nil {
 		return 0, err
 	}

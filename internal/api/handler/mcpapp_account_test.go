@@ -3,30 +3,51 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/api/mcpapp"
 )
 
 const testMCPOrigin = "https://freehire.example"
 
+// stampUser plays the authentication middleware: every request arrives as user 42.
+type stampUser struct{ userID string }
+
+func (s stampUser) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set(mcpapp.AccountUserIDHeader, s.userID)
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+// connectMCPTools serves tools to userID over the MCP server /mcp mounts.
+func connectMCPTools(t *testing.T, tools []assistant.Tool, userID string) *mcp.ClientSession {
+	t.Helper()
+	server := httptest.NewServer(mcpapp.Handler(tools, testMCPOrigin, nil))
+	t.Cleanup(server.Close)
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(t.Context(),
+		&mcp.StreamableClientTransport{Endpoint: server.URL, HTTPClient: &http.Client{Transport: stampUser{userID}}}, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
 func mcpAccountApp(assistants *assistantHandlers) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	// A nil throttler fails open (ratelimit.Middleware's documented behavior),
-	// so the zero-value middleware needs no fake here.
-	mw := middleware{}
-	api := app.Group("/api/v1")
-	mountMCPAccount(api, mw, assistants, testMCPOrigin, nil)
+	mountMCP(app.Group("/api/v1"), assistants, &mcpappHandlers{origin: testMCPOrigin})
 	return app
 }
 
 func TestMCPAccountMount_RejectsMissingBearer(t *testing.T) {
 	app := mcpAccountApp(&assistantHandlers{})
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/mcp/account", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/mcp", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
@@ -41,18 +62,20 @@ func TestMCPAccountMount_RejectsMissingBearer(t *testing.T) {
 // resource_metadata pointer, and a client that does not fall back to guessing the
 // well-known path has no other way to find our authorization server.
 func TestMCPAccountMount_UnauthorizedNamesResourceMetadata(t *testing.T) {
-	const wantMetadata = `resource_metadata="` + testMCPOrigin + `/.well-known/oauth-protected-resource"`
+	const wantMetadata = `resource_metadata="` + testMCPOrigin + mcpapp.ResourceMetadataPath + `"`
 	cases := map[string]struct {
 		authorization string
 		wantError     bool
 	}{
+		// The first request of a connector being added: it must be told to sign in, never
+		// served anonymously, or Claude.ai and Grok add the connector without sign-in.
 		"no bearer at all": {authorization: ""},
 		"not a bearer":     {authorization: "Basic Zm9vOmJhcg=="},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			app := mcpAccountApp(&assistantHandlers{})
-			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/mcp/account", nil)
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/mcp", nil)
 			if tc.authorization != "" {
 				req.Header.Set(fiber.HeaderAuthorization, tc.authorization)
 			}
@@ -76,12 +99,13 @@ func TestMCPAccountMount_UnauthorizedNamesResourceMetadata(t *testing.T) {
 }
 
 // The signed-in MCP server announces each tool's effect from the tool's own Effect, and a
-// client skips the confirmation prompt on a read. Walks the set mountMCPAccount actually
+// client skips the confirmation prompt on a read. Walks the set mountMCP actually
 // serves, so a tool added to it must be classified here to pass — which is the point: the
 // decision is one a person makes once, looking at what the tool does.
 func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 	want := map[string]assistant.Effect{
 		"get_profile": assistant.EffectReads,
+		"get_plan":    assistant.EffectReads,
 		"facets":      assistant.EffectReads,
 		"search_jobs": assistant.EffectReads,
 		"get_job":     assistant.EffectReads,
@@ -92,6 +116,15 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"apply_job":   assistant.EffectAdds,
 		"unsave_job":  assistant.EffectOverwrites,
 		"track_job":   assistant.EffectOverwrites,
+		// Files a moderation report; changes nothing the person already had.
+		"report_job":              assistant.EffectAdds,
+		"suggest_dictionary_term": assistant.EffectAdds,
+		"report_problem":          assistant.EffectAdds,
+		// Replaces whichever preference lists the call sends.
+		"update_profile": assistant.EffectOverwrites,
+		// Stores a first CV and refuses to replace one, so nothing held is lost.
+		"add_cv":           assistant.EffectAdds,
+		"get_setup_status": assistant.EffectReads,
 
 		"auto_apply_list":       assistant.EffectReads,
 		"auto_apply_get":        assistant.EffectReads,
@@ -106,6 +139,9 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"answer_bank_delete":    assistant.EffectOverwrites,
 		"screening_answers_set": assistant.EffectOverwrites,
 
+		// Lists headers without touching read_at.
+		"list_unread_mail": assistant.EffectReads,
+
 		"list_subscriptions":   assistant.EffectReads,
 		"subscription_updates": assistant.EffectReads,
 		// Adds a saved search (or reuses one) and a subscription; removes nothing.
@@ -114,6 +150,22 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"unsubscribe": assistant.EffectOverwrites,
 		// Replaces the alert's search, name, channels or paused state.
 		"update_subscription": assistant.EffectOverwrites,
+
+		"buddy_status":            assistant.EffectReads,
+		"buddy_mock_hosts":        assistant.EffectReads,
+		"buddy_mock_slots":        assistant.EffectReads,
+		"buddy_mock_list":         assistant.EffectReads,
+		"buddy_mock_schedule_get": assistant.EffectReads,
+		"buddy_join":              assistant.EffectAdds,
+		"buddy_mock_book":         assistant.EffectAdds,
+		// Adds one dated row; the weekly rules and other overrides stay.
+		"buddy_mock_schedule_add_override": assistant.EffectAdds,
+		// Closes conversations and cancels every upcoming mock.
+		"buddy_leave":                    assistant.EffectOverwrites,
+		"buddy_mock_cancel":              assistant.EffectOverwrites,
+		"buddy_mock_settings_set":        assistant.EffectOverwrites,
+		"buddy_mock_schedule_set_weekly": assistant.EffectOverwrites,
+		"buddy_mock_schedule_delete":     assistant.EffectOverwrites,
 	}
 	for _, tool := range mcpAccountTools(&assistantHandlers{}, testMCPOrigin) {
 		effect, known := want[tool.Name]
@@ -130,6 +182,17 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 			t.Errorf("%s: served on the MCP account server without a Title", tool.Name)
 		}
 	}
+}
+
+// get_plan is read-only and GET /me/plan is open to a key over REST, so a full-scope key
+// reads it too.
+func TestMCPKeyTools_ServeGetPlan(t *testing.T) {
+	for _, tool := range mcpKeyTools(&assistantHandlers{}, testMCPOrigin) {
+		if tool.Name == "get_plan" {
+			return
+		}
+	}
+	t.Fatal("get_plan is not served to a full-scope API key")
 }
 
 // present_jobs renders cards only inside freehire's own chat and forbids the model from
@@ -196,5 +259,30 @@ func TestMCPKeyTools_ServeAlertsButNotAutoApply(t *testing.T) {
 	}
 	if served[presentJobsToolName] {
 		t.Errorf("%s served to an API key", presentJobsToolName)
+	}
+}
+
+// Every buddy route is cookie-only, so a leaked API key cannot book or read a member's mocks;
+// the account server keeps that line and serves the buddy tools to OAuth grants only.
+func TestMCPKeyTools_ServeNoBuddyTool(t *testing.T) {
+	served := map[string]bool{}
+	for _, tool := range mcpKeyTools(&assistantHandlers{}, testMCPOrigin) {
+		served[tool.Name] = true
+	}
+	granted := map[string]bool{}
+	for _, tool := range mcpAccountTools(&assistantHandlers{}, testMCPOrigin) {
+		granted[tool.Name] = true
+	}
+	buddyTools := (*buddyHandlers)(nil).mcpTools()
+	if len(buddyTools) != 13 {
+		t.Fatalf("buddy tools = %d, want 13", len(buddyTools))
+	}
+	for _, tool := range buddyTools {
+		if served[tool.Name] {
+			t.Errorf("%s: a buddy tool served to an API key", tool.Name)
+		}
+		if !granted[tool.Name] {
+			t.Errorf("%s: a buddy tool missing from the OAuth grant's set", tool.Name)
+		}
 	}
 }

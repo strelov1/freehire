@@ -6,14 +6,9 @@ import (
 	"github.com/strelov1/freehire/internal/job/silence"
 )
 
-// Application is one candidate application: an application whose owner has a
-// connected mailbox, selected by the database. The mailbox gate is the database's
-// job because it is a join; everything below is a rule, and rules belong where
-// their single source is.
-//
-// LastActivityAt is the application's apply date or the newest message linked to
-// it, whichever is later — the same derivation the tracking board reads, not a
-// second definition of it.
+// Application is one candidate application whose owner has a connected mailbox; the
+// database applies that gate (a join). LastActivityAt is the apply date or the newest
+// linked message, whichever is later, as the tracking board derives it.
 type Application struct {
 	JobID                int64
 	UserID               int64
@@ -22,34 +17,28 @@ type Application struct {
 	HasPendingSuggestion bool
 }
 
-// Report is one non-retracted ghost report. AppliedOn is the date the reporter
-// states they applied; the claim is not evidence until that date has aged past
-// the threshold below.
+// Report is one non-retracted ghost report. AppliedOn is the stated apply date; the claim
+// is not evidence until it has aged past the threshold below.
 type Report struct {
 	JobID     int64
 	UserID    int64
 	AppliedOn time.Time
 }
 
-// Evidence is the per-job outcome tally Classify reads. Contributors counts
-// DISTINCT people across both channels, which is why it cannot be derived from
-// the other two fields: one person filing a report about a job they also applied
-// to here is one witness, and the sum would say two.
+// Evidence is the per-job outcome tally Classify reads. Contributors counts DISTINCT people
+// across both channels, so it is not the sum of the other fields: applying and reporting
+// is one witness.
 type Evidence struct {
 	Contributors       int
 	SilentApplications int
 	Reports            int
 }
 
-// Aggregate tallies outcome evidence per job. The returned map holds only jobs
-// with at least one unit of evidence — sparse by construction rather than by the
-// caller filtering, so a catalogue-wide lookup stays proportional to the evidence
-// rather than to the catalogue.
+// Aggregate tallies outcome evidence per job. The returned map holds only jobs with at
+// least one unit of evidence, so a catalogue-wide lookup scales with the evidence.
 //
-// Both channels are judged by internal/application/userjob's silence ladder rather than by
-// numbers of their own. Restating the ladder here would let a change to it
-// disagree silently with the personal tracking board — the same application
-// judged twice, by two ladders, with nothing binding them.
+// Both channels use internal/job/silence's ladder, so this cannot disagree with the
+// personal tracking board about the same application.
 func Aggregate(now time.Time, apps []Application, reports []Report) map[int64]Evidence {
 	evidence := make(map[int64]Evidence)
 	contributors := make(map[int64]map[int64]struct{})
@@ -66,10 +55,8 @@ func Aggregate(now time.Time, apps []Application, reports []Report) map[int64]Ev
 	}
 
 	for _, app := range apps {
-		// silence.StateFor is the whole judgement: it returns no state for a
-		// terminal stage, reads an unset stage as `applied`, softens a silence
-		// into a question when unconfirmed mail contradicts it, and applies the
-		// stage's own threshold. Only an outright `silent` is a fact.
+		// StateFor is the whole judgement (terminal stages, unconfirmed-mail softening,
+		// per-stage thresholds). Only an outright `silent` is a fact.
 		state := silence.StateFor(app.Stage, silence.Days(now, app.LastActivityAt), app.HasPendingSuggestion)
 		if state != silence.Silent {
 			continue
@@ -93,11 +80,9 @@ func Aggregate(now time.Time, apps []Application, reports []Report) map[int64]Ev
 	return evidence
 }
 
-// appliedThresholdDays is the span a stated claim must clear before it counts,
-// read from the silence ladder rather than restated. A person reporting that
-// nobody answered is making the same assertion the board makes about a tracked
-// application, so it must clear the same bar — measured at 21 days over 92
-// observed applications.
+// appliedThresholdDays is the span a stated claim must clear before it counts. A report
+// that nobody answered makes the same assertion as a tracked application, so it clears
+// the same silence-ladder bar.
 func appliedThresholdDays() (int, bool) {
 	return silence.ThresholdDays("applied")
 }

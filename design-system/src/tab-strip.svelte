@@ -195,7 +195,8 @@
 <!-- The label and its optional glyph, shared by both elements a tab can be. -->
 {#snippet body(t: (typeof tabs)[number])}
   {@const Icon = t.icon}
-  {#if Icon}<Icon class="size-4" aria-hidden="true" />{/if}
+  <!-- Text only on a phone: the icons cost the width that cut the last label ("Scree…"). -->
+  {#if Icon}<Icon class="size-4 max-sm:hidden" aria-hidden="true" />{/if}
   {t.label}
   {#if t.attention}
     <span data-attention class="size-1.5 rounded-full bg-brand" aria-hidden="true"></span>
@@ -210,7 +211,7 @@
     role="tablist"
     aria-label={label}
     style={maskStyle}
-    class="flex gap-4 overflow-x-auto border-b border-border sm:gap-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    class="relative flex gap-4 overflow-x-auto border-b border-border sm:gap-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
   >
     {#each tabs as t, i (t.id)}
       {@const cls = cn(

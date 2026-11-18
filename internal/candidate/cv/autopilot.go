@@ -1,9 +1,8 @@
 package cv
 
-// AutopilotStatus is what an autopilot run made of one requirement. The vocabulary is
-// fixed and small on purpose: the panel renders each value, and a value it cannot render
-// is worse than a refused write. Nothing is coerced — an unrecognised status is reported
-// back to the model with the valid ones named, which is how it corrects itself mid-turn.
+// AutopilotStatus is what an autopilot run made of one requirement. The vocabulary is fixed
+// because the panel must render each value. Nothing is coerced: an unrecognised status is
+// reported back to the model with the valid ones named, so it can correct itself.
 type AutopilotStatus string
 
 const (
@@ -13,6 +12,8 @@ const (
 	// AutopilotClosedCandidate: the candidate confirmed it in conversation after the
 	// run, their words were banked, and the bullet cites that record.
 	AutopilotClosedCandidate AutopilotStatus = "closed_candidate"
+	// AutopilotPartial means related evidence exists, but part of the requirement is unverified.
+	AutopilotPartial AutopilotStatus = "partial"
 	// AutopilotOpen: the bank holds nothing for it. This is the remainder worth asking about.
 	AutopilotOpen AutopilotStatus = "open"
 	// AutopilotNotReached: the run ended (step cap, cancellation) before reaching it.
@@ -23,6 +24,7 @@ const (
 var AutopilotStatuses = []string{
 	string(AutopilotClosedBank),
 	string(AutopilotClosedCandidate),
+	string(AutopilotPartial),
 	string(AutopilotOpen),
 	string(AutopilotNotReached),
 }
@@ -32,4 +34,5 @@ type AutopilotEntry struct {
 	Requirement string          `json:"requirement"`
 	Status      AutopilotStatus `json:"status"`
 	Note        string          `json:"note,omitempty"`
+	Unverified  string          `json:"unverified,omitempty"`
 }

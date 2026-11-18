@@ -13,6 +13,8 @@ import (
 type dbStore struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
+	// reapDue, when set, decides whether Reap runs at all (see reapgate.go); nil reaps every call.
+	reapDue func(context.Context) bool
 }
 
 func newDBStore(pool *pgxpool.Pool) *dbStore {
@@ -47,6 +49,9 @@ func (s *dbStore) Complete(ctx context.Context, entries []searchdrain.Claimed) e
 }
 
 func (s *dbStore) Reap(ctx context.Context, maxRows int) (int64, error) {
+	if s.reapDue != nil && !s.reapDue(ctx) {
+		return 0, nil
+	}
 	return s.q.DeleteIneligibleSearchOutbox(ctx, int32(maxRows))
 }
 
@@ -62,11 +67,9 @@ func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, maxAt
 	return row.FailedAt.Valid, nil
 }
 
-// deletionStore adapts the generated queries + pool to searchdrain.DeletionStore.
-//
-// A separate type rather than more methods on dbStore: the two queues are different tables
-// with the same shape, so one type carrying both would need Claim/Complete/Fail twice under
-// invented names, and every call site would have to remember which was which.
+// deletionStore adapts the generated queries + pool to searchdrain.DeletionStore. It is a
+// separate type because the two queues are different tables with the same shape, and one
+// type would need Claim/Complete/Fail twice under invented names.
 type deletionStore struct {
 	q *db.Queries
 }

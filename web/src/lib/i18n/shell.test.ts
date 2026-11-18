@@ -24,8 +24,8 @@ describe('account nav label catalog', () => {
   // A section whose Russian label is legitimately the same word as its English
   // one belongs here, so that "translated to identical text" stays a deliberate,
   // reviewed statement rather than something the drift check cannot tell from
-  // "nobody wrote a translation". Empty today.
-  const SAME_IN_RUSSIAN = new Set<string>();
+  // "nobody wrote a translation". "API" is the product's name in both languages.
+  const SAME_IN_RUSSIAN = new Set<string>(['/my/api']);
 
   it('has an English label for every navigation section', () => {
     const missing = hrefs.filter((href) => !(href in en));
@@ -37,12 +37,8 @@ describe('account nav label catalog', () => {
     // source, so an untranslated section is present but still English — the
     // per-key fallback working as designed. Equality with the English label is
     // therefore the signal, and the only one available from a merged catalog.
-    const untranslated = hrefs.filter(
-      (href) => href in en && !SAME_IN_RUSSIAN.has(href) && ru[href] === en[href],
-    );
-    expect(untranslated, 'navigation sections still showing their English label in Russian').toEqual(
-      [],
-    );
+    const untranslated = hrefs.filter((href) => href in en && !SAME_IN_RUSSIAN.has(href) && ru[href] === en[href]);
+    expect(untranslated, 'navigation sections still showing their English label in Russian').toEqual([]);
   });
 
   it('English label matches the navigation item it renders for', () => {

@@ -2,34 +2,25 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/application/agentview"
-	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// The ChatGPT app's MCP surface: what loads the data the tools answer with.
-//
-// Nothing here decides the SHAPE of an answer — that is internal/api/mcpapp's projector.
-// This is the other half of the same split the OJCP handlers make: load the way the
-// neighbouring handlers load, hand the values to a projection that knows nothing about
-// Fiber or Postgres.
-//
-// It reuses ojcpStore rather than declaring an identical interface beside it. The two
-// surfaces read exactly the same three rows, and a second interface with the same methods
-// would be a second thing to keep in step for no gain.
+// The ChatGPT app's MCP surface: what loads the data the tools answer with. The shape of an
+// answer is internal/api/mcpapp's projector; this loads the way the neighbouring handlers do
+// and hands values to a projection that knows nothing about Fiber or Postgres. It reuses
+// ojcpStore because both surfaces read the same three rows.
 
 // mcpappStore is what the app's surface reads: the OJCP surface's store plus the one batch
 // read check_jobs_open needs. *db.Queries satisfies it; tests inject a fake.
@@ -47,8 +38,8 @@ type mcpappHandlers struct {
 	companySearch companySearcher
 	store         mcpappStore
 	// attachReality hangs the liveness signals (reality and ghost) on the posting get_job
-	// reads. A field for the reason ojcpHandlers' is one: the real lookup needs the concrete
-	// *db.Queries, and a test must still drive the seam. Nil leaves the signals off.
+	// reads. A field because the real lookup needs the concrete *db.Queries and a test must
+	// still drive the seam. Nil leaves the signals off.
 	attachReality func(ctx context.Context, row db.Job, view *jobview.Job)
 	// facets and cache back job_market_stats with the website's facet read and its cache
 	// slots. Set after construction by the router, like ojcpHandlers.signer; nil facets
@@ -56,9 +47,6 @@ type mcpappHandlers struct {
 	facets    facetCounter
 	cache     cache.Cache
 	projector mcpapp.Projector
-	// semantic answers search_jobs' opt-in `semantic: true`; the same value the OJCP and
-	// agent search surfaces hold.
-	semantic semanticSearch
 	// origin is the site's address; the MCP server builds its icon and website link from it.
 	origin string
 }
@@ -77,21 +65,6 @@ func newMCPAppHandlers(s searcher, cs companySearcher, store mcpappStore, origin
 	return h
 }
 
-func (h *mcpappHandlers) register(api fiber.Router, mw middleware) {
-	// `All` because MCP's streamable transport uses POST to call and GET to open the
-	// server-to-client stream.
-	//
-	// The path is /api/v1/mcp and cannot be a bare /mcp: nginx routes /api/ here and
-	// everything else to the SPA, so a route at a bare path never receives a request. That
-	// was found the only way it could be — deployed, with the OJCP manifest answering 404
-	// at its well-known path while the API path beside it answered 200.
-	//
-	// Public and unauthenticated like the other job reads, under the same agent-search rate
-	// limit the OJCP endpoints use. A separate figure here would be a second answer to "how
-	// hard may a machine ask", with nothing deciding which one is right.
-	api.All("/mcp", chatAgentLimiter(mw.public), agentViews(h.agentViews, agentview.SurfaceMCP), adaptor.HTTPHandler(mcpapp.Handler(h, h.origin)))
-}
-
 // SearchJobs answers `search_jobs`.
 func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) (mcpapp.SearchJobsResult, error) {
 	if h.search == nil {
@@ -100,94 +73,45 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 
 	values := in.QueryValues()
 	limit, offset := in.Page()
-
-	params := search.SearchParams{
-		Query:  values.Get("q"),
-		Filter: search.FilterFromValues(values),
-		Limit:  limit,
-		Offset: offset,
-	}
-	ignored := in.Unsupported()
-	res, outcome, err := h.semantic.search(ctx, h.search, params, in.WantsSemantic())
-	if outcome == semanticDropped {
-		// Nothing to embed, so the flag was not honoured and says so like any dropped filter.
-		ignored = append(ignored, "semantic")
-	}
+	res, outcome, err := runAgentSearch(ctx, h.search, values, limit, offset, in.WantsSemantic())
 	if err != nil {
 		return mcpapp.SearchJobsResult{}, err
 	}
+	// A dropped semantic flag had no text to apply to, so it says so like any dropped filter.
+	ignored := outcome.noted(in.Unsupported())
 
-	// The hits carry the index's truncated description and are NOT rehydrated from Postgres.
-	// /agent/jobs/search does rehydrate, deliberately, because a programmatic consumer
-	// reading whole bodies is what it is for. Here it would spend the turn's context on ten
-	// full descriptions the model reduces to a line each; get_job reads the one that was
-	// picked.
+	// The hits carry the index's truncated description and are not rehydrated from Postgres
+	// (/agent/jobs/search does, for programmatic readers). Here it would spend the turn's
+	// context on ten full descriptions; get_job reads the one picked.
 	jobs := make([]mcpapp.JobSummary, 0, len(res.Hits))
 	for _, hit := range res.Hits {
 		jobs = append(jobs, h.projector.JobSummary(hit.Job))
 	}
 
-	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 	return mcpapp.SearchJobsResult{
 		Query:             values.Get("q"),
 		Total:             int(res.Total),
 		Offset:            offset,
 		Jobs:              jobs,
 		IgnoredParams:     ignored,
-		Semantic:          outcome.wire(mcpapp.SemanticApplied, mcpapp.SemanticUnavailable),
+		Semantic:          outcome.wire(mcpapp.SemanticUnavailable),
 		TotalIsLowerBound: res.TotalIsLowerBound,
 	}, nil
 }
 
 // JobDetail answers `get_job`.
 func (h *mcpappHandlers) JobDetail(ctx context.Context, slug string) (mcpapp.JobResult, error) {
-	row, err := h.store.GetJobBySlug(ctx, slug)
+	// A private posting answers NOT FOUND rather than forbidden (see agentJobBySlug).
+	row, view, err := loadAgentJob(ctx, func(ctx context.Context, slug string) (db.Job, error) {
+		return agentJobBySlug(ctx, h.store, slug)
+	}, h.attachReality, slug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return mcpapp.JobResult{}, mcpapp.NotFoundError{What: "posting"}
 		}
 		return mcpapp.JobResult{}, err
 	}
-	// The same predicate the OJCP surface applies, and for the same reason: GetJobBySlug
-	// carries none of its own, and a refused posting must answer NOT FOUND rather than
-	// forbidden — whether a private posting exists under some slug is not an anonymous
-	// caller's business.
-	if !publishedToAgents(row) {
-		return mcpapp.JobResult{}, mcpapp.NotFoundError{What: "posting"}
-	}
-
-	view, err := jobview.FromRow(row)
-	if err != nil {
-		return mcpapp.JobResult{}, err
-	}
-	// Computed here, on read, rather than taken from the index: the index's reality class
-	// is frozen at push time, and the ghost signal is never stored at all.
-	if h.attachReality != nil {
-		h.attachReality(ctx, row, &view)
-	}
-	agentview.Record(ctx, agentview.KindDetail, []int64{row.ID})
-	return h.projector.JobDetail(view, h.applyFormFor(ctx, row.ID)), nil
-}
-
-// applyFormFor reads the posting's captured application form, or nil where there is none.
-//
-// Best-effort, exactly as on the OJCP surface: most of the catalogue has no captured form,
-// and a store that cannot answer must not turn a job read into a failure — the posting
-// simply says nothing about what applying will ask for, which is the honest answer when we
-// do not know.
-func (h *mcpappHandlers) applyFormFor(ctx context.Context, jobID int64) *applyform.Form {
-	row, err := h.store.GetApplyFormByJobID(ctx, jobID)
-	if err != nil {
-		return nil
-	}
-	var form applyform.Form
-	if err := json.Unmarshal(row.Payload, &form); err != nil {
-		return nil
-	}
-	if form.Provider == "" {
-		form.Provider = row.Provider
-	}
-	return &form
+	return h.projector.JobDetail(view, applyFormFor(ctx, h.store, row.ID)), nil
 }
 
 // SearchCompanies answers `search_companies`.
@@ -237,13 +161,12 @@ func (h *mcpappHandlers) CompanyDetail(ctx context.Context, slug string) (mcpapp
 
 // CheckJobsOpen answers `check_jobs_open`: one state per slug, in the order asked.
 //
-// closed is reported as closed — telling a shortlist which postings went down is the point
-// of the tool, which is why it does not reuse publishedToAgents (that predicate refuses a
-// closed posting outright). Private and duplicate postings answer not_found, the same
-// indistinguishability get_job keeps.
+// closed is reported as closed (telling a shortlist which postings went down is the point),
+// so it does not reuse publishedToAgents. Private and duplicate postings answer not_found,
+// as get_job does.
 //
-// A failed lookup is an error, never a page of not_found: "none of your postings exist" is a
-// confident, wrong answer a person would act on.
+// A failed lookup is an error, never a page of not_found: that would be a confident, wrong
+// answer.
 func (h *mcpappHandlers) CheckJobsOpen(ctx context.Context, slugs []string) ([]mcpapp.JobOpenState, error) {
 	rows, err := h.store.ListJobLivenessBySlugs(ctx, slugs)
 	if err != nil {
@@ -284,24 +207,20 @@ func utcRFC3339(ts pgtype.Timestamptz) string {
 }
 
 // SimilarJobs answers `similar_jobs`.
-//
 // The source posting is checked against publishedToAgents first: answering a private slug
-// with its neighbours, while an unknown one answers not found, would tell an anonymous caller
-// the private posting exists. The neighbours pass the same predicate — the website's rule
-// plus duplicates, which no tool on this surface publishes.
+// with its neighbours, while an unknown one answers not found, would reveal that the private
+// posting exists. The neighbours pass the same predicate (the website's rule plus
+// duplicates, which no tool here publishes).
 func (h *mcpappHandlers) SimilarJobs(ctx context.Context, slug string, limit int) (mcpapp.SimilarJobsResult, error) {
-	row, err := h.store.GetJobBySlug(ctx, slug)
+	row, err := publishedJobBySlug(ctx, h.store, slug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return mcpapp.SimilarJobsResult{}, mcpapp.NotFoundError{What: "posting"}
 		}
 		return mcpapp.SimilarJobsResult{}, err
 	}
-	if !publishedToAgents(row) {
-		return mcpapp.SimilarJobsResult{}, mcpapp.NotFoundError{What: "posting"}
-	}
 
-	views, err := similarViews(ctx, h.store, row.ID, limit, publishedToAgents)
+	views, err := similarViews(ctx, h.search, h.store, row, limit, publishedToAgents)
 	if err != nil {
 		return mcpapp.SimilarJobsResult{}, err
 	}

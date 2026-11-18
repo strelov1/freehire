@@ -51,7 +51,7 @@ func TestRunnerReportsFaultToTheStore(t *testing.T) {
 			}}
 
 			o := opts()
-			if _, err := (Runner{Provider: prov, Store: store}).Run(context.Background(), o); err != nil {
+			if _, err := (Runner{Provider: prov, Store: store, wait: noWait}).Run(context.Background(), o); err != nil {
 				t.Fatalf("Run: %v", err)
 			}
 

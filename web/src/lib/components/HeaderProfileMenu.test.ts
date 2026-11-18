@@ -60,9 +60,13 @@ describe('HeaderProfileMenu', () => {
     expect(SOURCE).toContain('closedOverlay(closeSelf)');
   });
 
-  it('shows a direct, labelled Sign-in action with no dropdown when signed out', () => {
+  // Labelled from sm (the visitor's main action, not a utility glyph); the word is
+  // screen-reader-only on a phone, so the button keeps its accessible name at every width.
+  it('shows a labelled Sign-in action with no dropdown when signed out', () => {
     const signedOutBranch = SOURCE.slice(SOURCE.indexOf('{:else}'));
-    expect(signedOutBranch).toMatch(/\/>\s*Sign in\s*<\/button>/);
+    expect(signedOutBranch).toContain('title="Sign in"');
+    expect(signedOutBranch).toMatch(/<LogIn[^>]*aria-hidden="true"[^>]*\/>/);
+    expect(signedOutBranch).toContain('<span class="max-sm:sr-only">Sign in</span>');
     expect(signedOutBranch).toContain('onclick={signIn}');
     expect(signedOutBranch).not.toContain('aria-haspopup="menu"');
   });

@@ -4,21 +4,16 @@ import (
 	"context"
 	"io"
 	"log"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
-// transcriber is internal/ai/speech seen from here. An interface rather than the
-// concrete client so the handler's tests can assert that a refused request never
-// reaches the metered upstream — which is the point of most of them.
+// transcriber is internal/ai/speech seen from here. An interface so the handler's tests
+// can assert that a refused request never reaches the metered upstream.
 type transcriber interface {
 	Transcribe(ctx context.Context, audio []byte, filename string) (string, error)
 }
@@ -40,51 +35,21 @@ func newSpeechHandlers(stt transcriber, plans *plan.Store) *speechHandlers {
 	return &speechHandlers{stt: stt, plans: plans}
 }
 
-// transcriptionsPerHour bounds how many recordings one caller may transcribe per
-// hour. It bounds the RATE; the daily dictation allowance bounds the volume, and the two
-// are not interchangeable — a burst of sixty in a minute and sixty spread over a day are
-// different problems. Sixty is far past anyone dictating into a chat and far below
-// anything worth doing with a stolen session.
-const transcriptionsPerHour = 60
-
-// perCallerLimiter throttles per authenticated caller rather than per address — an IP
-// key is lifted by any rotating proxy pool, and the cost being defended here is a
-// metered upstream. Mounted AFTER the auth gate so the user id is resolved. Shared
-// with voice mode's token-minting endpoint (assistant_interview_voice.go), which
-// meters a different upstream behind the same per-caller shape.
-func perCallerLimiter(max int) fiber.Handler {
-	return limiter.New(limiter.Config{
-		Max:        max,
-		Expiration: time.Hour,
-		KeyGenerator: func(c *fiber.Ctx) string {
-			if id, ok := auth.UserID(c); ok {
-				return "user:" + strconv.FormatInt(id, 10)
-			}
-			return "ip:" + c.IP()
-		},
-	})
-}
-
 func (h *speechHandlers) register(api fiber.Router, mw middleware) {
-	// The same gate as POST /assistant/sessions/:id/messages. The microphone lives in
-	// the composer that posts messages, so a client allowed to send one is allowed to
-	// transcribe for it; a narrower rule here would leave the control dead in the
-	// extension's side panel for no gain.
-	api.Post("/speech/transcriptions", mw.key, perCallerLimiter(transcriptionsPerHour), mw.paidAI(plan.FeatureDictation), h.PostTranscription)
+	// The same gate as POST /assistant/sessions/:id/messages: the microphone lives in the
+	// composer that posts messages, so a client allowed to send one may transcribe for it (a
+	// narrower rule would leave the control dead in the extension's side panel).
+	api.Post("/speech/transcriptions", mw.key, mw.paidAI(plan.FeatureDictation), h.PostTranscription)
 }
 
-// maxAudioUpload bounds one recording. At the ~32 kbit/s the browser's opus encoder
-// produces this is around eight minutes of speech — well past a dictated message and
-// well under the server's global body limit, which is what actually stops anything
-// larger (fasthttp has read the whole body by the time FormFile runs). The client
-// stops recording sooner still, so this is the backstop rather than the common path.
+// maxAudioUpload bounds one recording: around eight minutes at the ~32 kbit/s the
+// browser's opus encoder produces. The server's global body limit is what actually stops
+// larger ones (fasthttp has read the whole body by the time FormFile runs); the client
+// stops sooner still, so this is a backstop.
 const maxAudioUpload = 2 << 20
 
-// PostTranscription turns one uploaded recording into text.
-//
-// Nothing is stored and nothing is sent: the caller gets the words back and decides
-// what to do with them. An empty result is a 200 — that is what silence transcribes
-// to, and the composer appends nothing.
+// PostTranscription turns one uploaded recording into text. Nothing is stored. An empty
+// result is a 200: that is what silence transcribes to, and the composer appends nothing.
 func (h *speechHandlers) PostTranscription(c *fiber.Ctx) error {
 	if h.stt == nil {
 		return fiber.NewError(fiber.StatusNotImplemented, "transcription is not configured")
@@ -97,16 +62,14 @@ func (h *speechHandlers) PostTranscription(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// A transcription is a model call that never passes through the user-call binding, so
-	// it makes the binding's check itself: a route that reached here without the paid gate
-	// is our bug, and it must not send audio upstream on anybody's account.
+	// A transcription is a model call that bypasses the user-call binding, so it makes the
+	// binding's check itself: a route reaching here without the paid gate is our bug and must
+	// not send audio upstream on anybody's account.
 	if err := requirePaidCall(c.UserContext()); err != nil {
 		return err
 	}
 	// Charged before the audio goes upstream, and given back below if nothing usable comes
-	// out. The rate limiter above bounds how FAST a caller may ask; this bounds how much
-	// they may have in a day — and the two answer differently on purpose, 429 against 402,
-	// because one clears in seconds and the other clears tomorrow.
+	// out. This charge bounds how much the caller may transcribe in a day.
 	charge, refused, err := h.chargeTranscription(c, userID)
 	if refused {
 		return err
@@ -115,30 +78,28 @@ func (h *speechHandlers) PostTranscription(c *fiber.Ctx) error {
 	text, err := h.stt.Transcribe(c.Context(), audio, filename)
 	if err != nil {
 		h.releaseTranscription(c, userID, charge)
-		// Every failure from here is the gateway's: a refusal, a fault, an answer we
-		// could not read. The caller did nothing wrong and has no remedy, so it is a
-		// 502 rather than anything that blames them.
+		// Every failure from here is the gateway's (refusal, fault, unreadable answer), so a 502
+		// rather than anything blaming the caller.
 		return fiber.NewError(fiber.StatusBadGateway, "transcription failed")
 	}
-	// Silence transcribes to nothing, and nothing is not what the candidate was charged
-	// for. The 200 stands — an empty result is a real answer, and the composer appends
-	// nothing — but the allowance goes back.
+	// Silence transcribes to nothing, and nothing is not what the candidate was charged for:
+	// the 200 stands, but the allowance goes back.
 	if strings.TrimSpace(text) == "" {
 		h.releaseTranscription(c, userID, charge)
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"text": text}})
 }
 
-// chargeTranscription takes one dictation allowance, reporting what it charged and — when
-// the plan says no — the refusal to write.
+// chargeTranscription takes one dictation allowance, reporting what it charged and, when
+// the plan says no, the refusal to write.
 //
-// The reference is a fresh id rather than anything derived from the audio: two recordings
-// of the same words are two dictations, and keying them alike would make the second free.
-// That also means a retry after a 502 is charged again, which is correct — the release
-// below has already given the first one back.
+// The reference is a fresh id, not derived from the audio: two recordings of the same
+// words are two dictations, and keying them alike would make the second free. A retry
+// after a 502 is therefore charged again, which is correct since the release has returned
+// the first.
 //
-// Fails open, like every other meter on a request path: a counter that cannot be read logs
-// and lets the recording through uncharged.
+// Fails open like every other request-path meter: an unreadable counter logs and lets the
+// recording through uncharged.
 func (h *speechHandlers) chargeTranscription(c *fiber.Ctx, userID int64) (ref string, refused bool, err error) {
 	if h.plans == nil {
 		return "", false, nil
@@ -159,10 +120,9 @@ func (h *speechHandlers) chargeTranscription(c *fiber.Ctx, userID int64) (ref st
 // releaseTranscription gives the allowance back for a recording that produced nothing.
 // Safe to call blind: an empty reference releases nothing.
 //
-// It runs on a DETACHED context, for the reason the assistant's release does: a client
-// that walks away mid-upload cancels the request context, and a release on that same
-// context could not open its own transaction — leaving the candidate charged for a
-// transcription they never received, in exactly the case this exists for.
+// It runs on a DETACHED context, as the assistant's release does: a client that walks away
+// mid-upload cancels the request context, and a release on it could not open its own
+// transaction, leaving the candidate charged for nothing.
 func (h *speechHandlers) releaseTranscription(_ *fiber.Ctx, userID int64, ref string) {
 	if h.plans == nil || ref == "" {
 		return
@@ -186,14 +146,10 @@ var audioContainers = map[string]bool{
 	"mp3":  true,
 }
 
-// safeAudioFilename derives the name to forward from the one the client sent.
-//
-// Only the extension survives, and only from a fixed list. The gateway identifies the
-// container by extension, so that much has to travel — but the rest of the client's
-// string must not, because Go's multipart writer escapes quotes in a filename and NOT
-// CRLF: a crafted name would inject header lines into the request this server makes.
-// Rebuilding the name from an allowlisted extension closes that without needing to
-// reason about what else a filename might carry.
+// safeAudioFilename derives the name to forward from the one the client sent. Only the
+// extension survives, and only from a fixed list: the gateway identifies the container by
+// extension, but Go's multipart writer escapes quotes in a filename and NOT CRLF, so a
+// crafted name would inject header lines into the upstream request.
 func safeAudioFilename(name string) (string, bool) {
 	dot := strings.LastIndex(name, ".")
 	if dot < 0 {
@@ -222,8 +178,8 @@ func readAudioUpload(c *fiber.Ctx) ([]byte, string, error) {
 		return nil, "", fiber.NewError(fiber.StatusBadRequest, "cannot read audio file")
 	}
 	defer f.Close()
-	// Capped on the read, not on the part's declared size: that number is the client's
-	// claim, not a promise about what the stream delivers.
+	// Capped on the read, not on the part's declared size: that is the client's claim, not a
+	// promise about what the stream delivers.
 	audio, err := io.ReadAll(io.LimitReader(f, maxAudioUpload+1))
 	if err != nil {
 		return nil, "", fiber.NewError(fiber.StatusBadRequest, "cannot read audio file")
@@ -231,8 +187,8 @@ func readAudioUpload(c *fiber.Ctx) ([]byte, string, error) {
 	if len(audio) > maxAudioUpload {
 		return nil, "", fiber.NewError(fiber.StatusBadRequest, "recording is too long")
 	}
-	// A recording with nothing in it is a client bug, and spending a metered call to
-	// have the gateway tell us so would answer 502 for something we can see here.
+	// A recording with nothing in it is a client bug; spending a metered call to have the
+	// gateway say so would answer 502 for something visible here.
 	if len(audio) == 0 {
 		return nil, "", fiber.NewError(fiber.StatusBadRequest, "the recording is empty")
 	}

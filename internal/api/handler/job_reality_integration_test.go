@@ -44,7 +44,7 @@ func TestGetJob_ServesRealitySignal(t *testing.T) {
 
 	h := &jobsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/:slug", h.GetJob)
+	mountJobsContract(app, h, middleware{})
 
 	getReality := func(t *testing.T, slug string) map[string]any {
 		t.Helper()

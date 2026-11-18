@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { cn } from './cn.js';
+  import { onImageError } from './image-error.js';
 
   let {
     name,
@@ -68,15 +69,6 @@
     void src;
     failed = false;
   });
-
-  // SSR sends the raw <img>, so the browser fetches it before hydration wires `onerror`. When
-  // the src 404s (a genuine miss), that error event fires before the handler exists and is
-  // lost — leaving an empty broken image until a reload. On mount, an already-complete image
-  // with no intrinsic width is that missed failure, so fall back to the initials render
-  // straight away.
-  function catchMissedError(node: HTMLImageElement) {
-    if (node.complete && node.naturalWidth === 0) failed = true;
-  }
 </script>
 
 {#if src && !failed}
@@ -87,13 +79,12 @@
     {src}
     alt={shape === 'square' ? '' : (name ?? '')}
     loading="lazy"
-    class={cn(shapeClass, 'object-cover', sizes[size], className)}
-    onerror={() => (failed = true)}
-    {@attach catchMissedError}
+    class={cn('shrink-0', shapeClass, 'object-cover', sizes[size], className)}
+    {@attach onImageError(() => (failed = true))}
   />
 {:else if !name && fallbackIcon}
   <div
-    class={cn('flex items-center justify-center text-muted-foreground', shapeClass, sizes[size], className)}
+    class={cn('flex shrink-0 items-center justify-center text-muted-foreground', shapeClass, sizes[size], className)}
     aria-hidden="true"
   >
     {@render fallbackIcon()}
@@ -103,7 +94,7 @@
        prohibits naming, and the initials would be spelled out instead of the
        name. Without a name it conveys nothing, so keep it out of the tree. -->
   <div
-    class={cn('flex items-center justify-center font-medium', shapeClass, sizes[size], className)}
+    class={cn('flex shrink-0 items-center justify-center font-medium', shapeClass, sizes[size], className)}
     style="background-color: {bg}; color: {fg}"
     role={name ? 'img' : undefined}
     aria-label={name}

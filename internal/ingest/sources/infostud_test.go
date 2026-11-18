@@ -58,7 +58,7 @@ func infostudFixture(name string) string {
 
 func newInfostudTest(f *infostudFake) infostud {
 	s := NewInfostud(f).(infostud)
-	s.limiter = noWait{}
+	s.http = f
 	return s
 }
 
@@ -136,6 +136,18 @@ func TestInfostudFetchNewGated(t *testing.T) {
 	for _, j := range jobs {
 		if len(j.FallbackCountries) != 1 || j.FallbackCountries[0] != "rs" {
 			t.Errorf("%s fallback countries = %v, want [rs]", j.ExternalID, j.FallbackCountries)
+		}
+	}
+	// The posting pages in the fixtures predate the page's own expirationDate, so each
+	// posting's deadline comes from its search card's.
+	wantBy := map[string]time.Time{
+		"761195": time.Date(2026, 11, 13, 0, 0, 0, 0, infostudBelgrade),
+		"759819": time.Date(2026, 11, 5, 0, 0, 0, 0, infostudBelgrade),
+		"763959": time.Date(2026, 11, 10, 0, 0, 0, 0, infostudBelgrade),
+	}
+	for id, want := range wantBy {
+		if j := got[id]; j.ApplicationDeadline == nil || !j.ApplicationDeadline.Equal(want) {
+			t.Errorf("%s apply by = %v, want the card's expirationDate %v", id, j.ApplicationDeadline, want)
 		}
 	}
 }

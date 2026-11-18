@@ -40,14 +40,12 @@ const (
 	paycomPortalBase = "https://www.paycomonline.net/v4/ats/web.php/portal"
 	paycomPageSize   = 50
 	// paycomMaxPages bounds pagination so a miscounted total can't loop forever. Reaching it
-	// before the stated total fails the crawl (fullBoardListing): the largest board measured
-	// 2026-10-29 stated 2,705 postings, 55 pages.
+	// before the stated total fails the crawl (fullBoardListing).
 	paycomMaxPages = 200
 	// paycomNoSuchBoard is the portal's own answer for a client key it no longer serves,
-	// delivered as a short page under HTTP 200. Matched on the leading clause alone, without
-	// the surrounding markup or the rest of the sentence: the notice read "Job board does not
-	// exist." until 2026-10 and "Job board does not exist or is unavailable at this time." since,
-	// and the trailing period of the old constant silently stopped matching the new one.
+	// delivered as a short page under HTTP 200. Matched on the leading clause alone, without the
+	// surrounding markup or the rest of the sentence: the notice's wording has changed before, and
+	// a trailing period in the constant silently stopped matching.
 	paycomNoSuchBoard = "Job board does not exist"
 )
 
@@ -98,8 +96,7 @@ func (s paycom) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // listJobIDs pages the previews search (skip/take) and returns every posting id, first-seen
 // order, once the distinct ids read reach the total the search states. Anything short of that
 // is an error rather than a partial listing: a failed page, a page that comes back empty before
-// the total, or the page cap. Until 2026-10-29 each of those ended enumeration with the ids
-// gathered so far, which is why paycom could not earn fullBoardListing.
+// the total, or the page cap.
 func (s paycom) listJobIDs(ctx context.Context, mantle string, auth map[string]string) ([]string, error) {
 	var ids []string
 	seen := make(map[string]bool)

@@ -110,14 +110,10 @@ function normalize(s: string): string {
  *  `/my/tracking/[id]` opens its drawer by matching this id against the loaded rows, so a
  *  link built from the bare integer matches nothing and fails silently — the drawer simply
  *  does not open, with no error to notice. */
-export function boardRefFor(e: {
-  job_slug?: string;
-  application_id?: number;
-}): string | null {
+export function boardRefFor(e: { job_slug?: string; application_id?: number }): string | null {
   if (e.job_slug) return e.job_slug;
   return e.application_id ? `a${e.application_id}` : null;
 }
-
 
 export type BoardSort = 'default' | 'company' | 'added' | 'deadline';
 
@@ -134,11 +130,12 @@ export function parseBoardSort(value: string | null): BoardSort {
 /** Sort a copy: drag-and-drop owns the original arrays. Unknown dates sort last. */
 export function sortBoardItems(items: BoardItem[], sort: BoardSort): BoardItem[] {
   if (sort === 'default') return items;
-  const date = (item: MyJob) =>
-    sort === 'deadline' ? item.job?.application_deadline : item.added_to_board_at;
+  const date = (item: MyJob) => (sort === 'deadline' ? item.job?.application_deadline : item.added_to_board_at);
   return [...items].sort((a, b) => {
     if (sort === 'company') {
-      return (a.job?.company || a.company_slug).localeCompare(b.job?.company || b.company_slug, undefined, { sensitivity: 'base' });
+      return (a.job?.company || a.company_slug).localeCompare(b.job?.company || b.company_slug, undefined, {
+        sensitivity: 'base',
+      });
     }
     const left = Date.parse(date(a) ?? '');
     const right = Date.parse(date(b) ?? '');

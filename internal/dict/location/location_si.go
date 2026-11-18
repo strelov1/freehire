@@ -2,13 +2,13 @@ package location
 
 import "strings"
 
-// Slovenian location lines, measured 2026-10-29 over 2,900 open MojeDelo postings (the
-// national board, freehire#3861). MojeDelo writes the town alone and the country beside
-// it, so ParseIn already named most towns through the small-places table; what read
-// nothing was the rest of the Slovenian vocabulary:
+// Slovenian location lines (MojeDelo, the national board). MojeDelo writes the town alone
+// beside the country, so ParseIn already names most towns through the small-places table; what
+// read nothing was the rest of the vocabulary:
+//
 //
 //   - a statistical or traditional REGION in place of a town ("Osrednjeslovenska",
-//     "Savinjska", "Gorenjska regija", "Jugovzhodna Slovenija" — 136 of the lines);
+//     "Savinjska", "Gorenjska regija", "Jugovzhodna Slovenija");
 //   - the country written as an area ("Celotna Slovenija", "po celi Sloveniji") and the
 //     countries abroad in Slovenian ("Nemcija", "Francija");
 //   - the area around a town ("Ljubljana in okolica", "Celje z okolico", "okolica
@@ -18,16 +18,16 @@ import "strings"
 //     ("Hoče", "Kozina", "Boštanj", "Brnik", "Lenart" for Lenart v Slovenskih Goricah);
 //   - "Ribnica", whose main-table reading is Rîbnița in Moldova.
 //
-// And a bare town from a source that states no country named nothing at all: the main
-// table holds nine Slovenian places, so "Kamnik" or "Krško" placed no posting. The
-// Slovenian TOWNS (the settlements with town status) are therefore read like a main-table
-// city — named, and stating Slovenia when nothing else in the line states a country —
-// except those another country also has a place of: see slovenianTowns.
+// The main table holds only nine Slovenian places, so a bare town from a source that states no
+// country ("Kamnik", "Krško") named nothing. The Slovenian TOWNS (settlements with town
+// status) are therefore read like a main-table city: named, and stating Slovenia when nothing
+// else in the line states a country, except those another country also has a place of (see
+// slovenianTowns).
 
 // slovenianCountryNames are the countries in Slovenian, where the BCS names
 // (bcsCountryNames) spell them differently, and Slovenia written as an area. "Avstrija",
-// "Hrvaška", "Nemčija" and "Madžarska" go into nameToCountry with the Optius adapter
-// (#3867); their spellings without diacritics are here. Absent on
+// "Hrvaška", "Nemčija" and "Madžarska" go into nameToCountry with the Optius adapter;
+// their spellings without diacritics are here. Absent on
 // purpose: "Tujina" (abroad) names no country; "ZDA" (the United States) and the plain
 // "Svica" (Switzerland) are also villages in Switzerland and Croatia; "Kras", "Primorska"
 // and "Štajerska" are below, withheld.
@@ -64,15 +64,13 @@ var slovenianRegions = []string{
 // slovenianRegionsOnlyWithRegija are slovenianRegions read only with "regija" beside them.
 var slovenianRegionsOnlyWithRegija = map[string]bool{"koroška": true}
 
-// slovenianTowns are the settlements with town status (Statistical Office of Slovenia,
-// via Wikipedia's list of cities and towns in Slovenia) below the main table's
-// population floor. Each is read as a city that states Slovenia when the line states no
-// other country, the way a main-table city is. Left out: every town another country also
-// has a populated place of, by GeoNames' full dumps of the neighbours (HR, BA, RS, ME,
-// MK, AT, IT, HU, CZ, SK, PL, DE, CH) and cities500 worldwide — Jesenice (Czech and
-// Croatian), Ruše (Ruse), Ribnica (Rîbnița), Brežice, Žalec, Tržič, Piran, Laško and
-// Železniki. Those still name the town wherever the line states Slovenia, through the
-// small-places table. Names are GeoNames' spellings, which the small-places table uses.
+// slovenianTowns are the settlements with town status below the main table's population floor.
+// Each is read as a city that states Slovenia when the line states no other country, like a
+// main-table city.
+//
+// Left out: every town another country also has a populated place of (Jesenice, Ruše, Ribnica,
+// Brežice, Žalec, Tržič, Piran, Laško, Železniki). Those still name the town wherever the line
+// states Slovenia, through the small-places table. Names are GeoNames' spellings.
 var slovenianTowns = []string{
 	"Kamnik", "Domžale", "Nova Gorica", "Škofja Loka", "Izola", "Murska Sobota", "Logatec",
 	"Postojna", "Vrhnika", "Slovenska Bistrica", "Kočevje", "Grosuplje", "Slovenj Gradec",
@@ -108,17 +106,15 @@ var ljubljanaDistricts = []string{
 	"vižmarje", "brod", "vižmarje-brod",
 }
 
-// slovenianSmallPlaces are Slovenian places the small-places table lacks, keyed by the
-// name a line writes: municipalities whose seat GeoNames names otherwise or puts under its
-// floor, and the villages MojeDelo's postings name. Like the table, each names a city only
-// once the line has stated Slovenia (or the caller's countries do), so a namesake abroad
-// costs nothing. A municipality is named as itself ("Bohinj", "Loška Dolina", "Bloke"),
-// not as its seat, whose name is often a generic one ("Nova Vas", "Videm") shared with
-// villages elsewhere in Slovenia — except where the seat's name is the municipality's
-// with a qualifier, which GeoNames already uses ("Brezovica" is Brezovica pri Ljubljani,
-// "Lenart" Lenart v Slovenskih Goricah; the other Brezovicas are villages). A
-// municipality written "A - B" splits into its two places at the separator, so the
-// halves are listed.
+// slovenianSmallPlaces are Slovenian places the small-places table lacks, keyed by the name a
+// line writes: municipalities whose seat GeoNames names otherwise or puts under its floor, and
+// villages MojeDelo's postings name. Like the table, each names a city only once the line has
+// stated Slovenia (or the caller's countries do).
+//
+// A municipality is named as itself ("Bohinj", "Loška Dolina"), not as its seat, whose name is
+// often generic ("Nova Vas", "Videm") — except where the seat's name is the municipality's
+// with a qualifier, which GeoNames already uses ("Brezovica" is Brezovica pri Ljubljani). A
+// municipality written "A - B" splits at the separator, so both halves are listed.
 var slovenianSmallPlaces = map[string]string{
 	// Municipalities and their seats.
 	"bloke":                              "Bloke",
@@ -177,13 +173,11 @@ var slovenianSmallPlaces = map[string]string{
 	"zgornji brnik":          "Zgornji Brnik",
 }
 
-// contestedSmallPlaces names a contested main-table alias in a country whose own place of
-// the name sits below the main table's floor: "Ribnica" is Rîbnița in Moldova first, so
-// "Ribnica, Slovenija" and MojeDelo's "Ribnica" (whose country is Slovenia) named no city.
-// Listed by hand, not read off the small-places table: that table keeps one row per name
-// and country, so it cannot tell a town from the several villages of its name ("Salem"
-// in the US). "Ribnica" is checked: the municipality seat (3,600 people) beside two
-// hamlets of 14 and 123.
+// contestedSmallPlaces names a contested main-table alias in a country whose own place of the
+// name sits below the main table's floor: "Ribnica" is Rîbnița in Moldova first, so "Ribnica,
+// Slovenija" named no city. Listed by hand, not read off the small-places table: that table
+// keeps one row per name and country, so it cannot tell a town from the several villages of
+// its name ("Salem" in the US).
 var contestedSmallPlaces = map[[2]string]string{
 	{"ribnica", "si"}: "Ribnica",
 }

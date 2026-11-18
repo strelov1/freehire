@@ -4,20 +4,16 @@ package cv
 
 import (
 	"math"
-	"strings"
 
 	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// This file holds ONLY the wire shape (Document + its section types) and the sanitizer,
-// so cmd/gen-contracts can generate the TypeScript type from this file alone without
-// dragging in the server-only Renderer/Store (mirrors resumeextract.go's structured.go
-// vs resumeextract.go split).
+// This file holds ONLY the wire shape (Document + section types) and the sanitizer, so
+// cmd/gen-contracts can generate the TypeScript type without the server-only Renderer/Store.
 
-// Field bounds for untrusted CV content. The Document is user-editable and — in the
-// follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
-// and the prompt-injection guard (same invariant as enrich/resumeextract).
+// Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+// Sanitize is both the persistence guard and the prompt-injection guard.
 const (
 	maxNameRunes     = 120
 	maxLocationRunes = 160
@@ -27,25 +23,24 @@ const (
 	maxBulletRunes   = 600
 	maxShortRunes    = 200 // role, company, degree, field, dates, language name/level, links, names
 
-	maxExperience     = 30
-	maxEducation      = 20
-	maxSkillGroups    = 20
+	// The section ceilings Sanitize truncates to, exported (and generated into the web
+	// contracts) so the editor can refuse an Add past them instead of dropping a row silently.
+	MaxExperience     = 30
+	MaxEducation      = 20
+	MaxSkillGroups    = 20
 	maxSkillItems     = 60
-	maxLanguages      = 20
-	maxProjects       = 30
-	maxCertifications = 30
+	MaxLanguages      = 20
+	MaxProjects       = 30
+	MaxCertifications = 30
 	maxLinks          = 20
 
-	// DefaultMaxBullets is the per-experience / per-project bullet ceiling when
-	// CV_MAX_BULLETS is unset. Writers must refuse growth past MaxBullets rather
-	// than let Sanitize drop trailing content silently.
+	// DefaultMaxBullets is the per-experience / per-project bullet ceiling when CV_MAX_BULLETS
+	// is unset. Writers must refuse growth past MaxBullets rather than let Sanitize drop it.
 	DefaultMaxBullets = 20
 )
 
-// MaxBullets is the hard ceiling on bullets per experience (and per project).
-// Sanitize keeps the first MaxBullets and drops the rest. Mutable so a deployment
-// can raise or lower it via CV_MAX_BULLETS without a code change; SetMaxBullets
-// is the only writer.
+// MaxBullets is the hard ceiling on bullets per experience (and per project); Sanitize keeps
+// the first MaxBullets. Mutable via CV_MAX_BULLETS; SetMaxBullets is the only writer.
 var MaxBullets = DefaultMaxBullets
 
 // SetMaxBullets sets the per-role bullet ceiling. Values below 1 fall back to
@@ -57,9 +52,8 @@ func SetMaxBullets(n int) {
 	MaxBullets = n
 }
 
-// Page margins are in inches. Sanitize clamps each side to this résumé-sane band and
-// defaults a zero (unset) side to defaultMargin, so a fresh skeleton and an old document
-// with no margin field both render at half an inch.
+// Page margins are in inches. Sanitize clamps each side to this band and defaults an unset
+// (zero) side to defaultMargin.
 const (
 	defaultMargin = 0.5
 	minMargin     = 0.25
@@ -80,9 +74,8 @@ const (
 // not filled in are left empty rather than invented, and Sanitize drops empty entries.
 type Document struct {
 	Margins Margins `json:"margins"`
-	// No omitempty: it does nothing on a struct (encoding/json only omits false, 0, nil, and
-	// empty strings/slices/maps), so the tag would promise clients an absence they never see
-	// while making the generated TypeScript optional for no reason.
+	// No omitempty: it does nothing on a struct, so the tag would only make the generated
+	// TypeScript optional.
 	Style          Style            `json:"style"`
 	Header         Header           `json:"header"`
 	Summary        string           `json:"summary,omitempty"`
@@ -95,8 +88,7 @@ type Document struct {
 }
 
 // Margins is the CV's per-side page margin in inches, applied identically to the HTML
-// preview and the Typst-rendered PDF. Sanitize clamps each side and defaults an unset
-// (zero) side to defaultMargin.
+// preview and the Typst PDF. Sanitize clamps each side and defaults an unset side.
 type Margins struct {
 	Top    float64 `json:"top"`
 	Right  float64 `json:"right"`
@@ -105,23 +97,15 @@ type Margins struct {
 }
 
 // Style is the CV's typography: the typeface, the base type size in points, and the line
-// height as a leading multiple of the em. It is part of the document, so it persists with
-// the CV, is copied when the CV is tailored, and is not clobbered by field-level patches.
+// height as a leading multiple of the em. It is part of the document, so it persists, is
+// copied when the CV is tailored, and is not clobbered by field-level patches.
 //
-// A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO. This is
-// the opposite of Margins, which resolves an unset side to a concrete 0.5in, and the
-// difference is deliberate on both counts:
+// A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO, unlike
+// Margins. Resolving defaults here would bake the current template's typography into every
+// document on its next save and stop a template switch from changing leading.
 //
-//   - Every CV written before this type existed has no style block, so it renders exactly as
-//     it did. There is nothing to migrate.
-//   - A template stays a whole design choice. Switching to a template with looser leading
-//     actually loosens the leading, because that value was never frozen into the document.
-//
-// Resolving defaults here — the natural thing to do by analogy with clampMargin — would
-// silently bake the current template's typography into every document on its next save.
-//
-// FontFamily is a registry id (see fonts.go), never a renderer's own face name: the renderer
-// resolves it on its own copy of the document at render time.
+// FontFamily is a registry id (see fonts.go), never a renderer's face name; the renderer
+// resolves it on its own copy at render time.
 type Style struct {
 	FontFamily string  `json:"font_family,omitempty"`
 	FontSize   float64 `json:"font_size,omitempty"`   // points
@@ -131,9 +115,8 @@ type Style struct {
 // sanitized returns the style with each SET value clamped to its band, and every unset
 // (zero) value left unset.
 func (s Style) sanitized() Style {
-	// A face we cannot render is dropped, not refused: Sanitize repairs a document rather
-	// than failing it, the same way an out-of-range margin is clamped. The fonts endpoint
-	// exists so a client never has to guess an id.
+	// A face we cannot render is dropped, not refused: Sanitize repairs rather than fails, like
+	// a clamped margin.
 	if !knownFontID(s.FontFamily) {
 		s.FontFamily = ""
 	}
@@ -190,28 +173,20 @@ type Header struct {
 }
 
 // withoutContacts returns a copy of the document carrying only the parts of the header a
-// model may see. Location stays: it is not an identifier, and a tailoring agent reasons
-// about it when the vacancy is tied to a place. Everything else goes — a name, an address,
-// a number, and a personal profile URL all name the candidate equally.
+// model may see. Location stays (a tailoring agent reasons about it); a name, address,
+// number and personal profile URL all name the candidate and go.
 //
-// It REBUILDS the header from what is allowed through rather than clearing the fields it
-// knows to be identifiers, so a field added to Header is withheld until someone decides
-// otherwise here. A list of what to remove discloses whatever it has not been taught about,
-// which is the reading internal/candidate/resumeextract already rejected for its own projection
-// (structured.go: "A blacklist ... would disclose that new field by default, which is the
-// wrong way round"). This projection reaches the same models, so it follows the same rule.
-//
-// The receiver is a value, so the stored document is untouched — only the copy handed
-// to a reader is stripped.
+// It REBUILDS the header from what is allowed through rather than clearing known identifiers,
+// so a field added to Header is withheld until someone decides otherwise (a blacklist would
+// disclose it by default; see resumeextract structured.go). The receiver is a value, so the
+// stored document is untouched.
 func (d Document) withoutContacts() Document {
 	d.Header = Header{Location: d.Header.Location}
 	return d
 }
 
 // Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
-// (year, optional month) — the same shared type experience.Employment and
-// resumeextract.Experience use. Rendering to PDF formats this back to display text
-// (see renderer.go); no template deals with the structured value directly.
+// (year, optional month), formatted to display text at render time (see renderer.go).
 type ExperienceItem struct {
 	Role     string                 `json:"role,omitempty"`
 	Company  string                 `json:"company,omitempty"`
@@ -276,40 +251,40 @@ func (d *Document) Sanitize() {
 	d.Margins = d.Margins.sanitized()
 	d.Style = d.Style.sanitized()
 
-	d.Header.FullName = clip(d.Header.FullName, maxNameRunes)
-	d.Header.Email = clip(d.Header.Email, maxEmailRunes)
-	d.Header.Phone = clip(d.Header.Phone, maxPhoneRunes)
-	d.Header.Location = clip(d.Header.Location, maxLocationRunes)
-	d.Header.Links = limit(nonEmpty(mapStrings(d.Header.Links, maxShortRunes)), maxLinks)
+	d.Header.FullName = llm.TrimTruncateRunes(d.Header.FullName, maxNameRunes)
+	d.Header.Email = llm.TrimTruncateRunes(d.Header.Email, maxEmailRunes)
+	d.Header.Phone = llm.TrimTruncateRunes(d.Header.Phone, maxPhoneRunes)
+	d.Header.Location = llm.TrimTruncateRunes(d.Header.Location, maxLocationRunes)
+	d.Header.Links = llm.Limit(llm.NonEmpty(mapStrings(d.Header.Links, maxShortRunes)), maxLinks)
 
-	d.Summary = clip(d.Summary, maxSummaryRunes)
+	d.Summary = llm.TrimTruncateRunes(d.Summary, maxSummaryRunes)
 
-	d.Experience = limit(mapEntries(d.Experience, sanitizeExperience), maxExperience)
-	d.Education = limit(mapEntries(d.Education, sanitizeEducation), maxEducation)
-	d.Skills = limit(mapEntries(d.Skills, sanitizeSkillGroup), maxSkillGroups)
-	d.Languages = limit(mapEntries(d.Languages, sanitizeLanguage), maxLanguages)
-	d.Projects = limit(mapEntries(d.Projects, sanitizeProject), maxProjects)
-	d.Certifications = limit(mapEntries(d.Certifications, sanitizeCertification), maxCertifications)
+	d.Experience = llm.Limit(mapEntries(d.Experience, sanitizeExperience), MaxExperience)
+	d.Education = llm.Limit(mapEntries(d.Education, sanitizeEducation), MaxEducation)
+	d.Skills = llm.Limit(mapEntries(d.Skills, sanitizeSkillGroup), MaxSkillGroups)
+	d.Languages = llm.Limit(mapEntries(d.Languages, sanitizeLanguage), MaxLanguages)
+	d.Projects = llm.Limit(mapEntries(d.Projects, sanitizeProject), MaxProjects)
+	d.Certifications = llm.Limit(mapEntries(d.Certifications, sanitizeCertification), MaxCertifications)
 }
 
 func sanitizeExperience(e ExperienceItem) (ExperienceItem, bool) {
-	e.Role = clip(e.Role, maxShortRunes)
-	e.Company = clip(e.Company, maxShortRunes)
-	e.Location = clip(e.Location, maxShortRunes)
+	e.Role = llm.TrimTruncateRunes(e.Role, maxShortRunes)
+	e.Company = llm.TrimTruncateRunes(e.Company, maxShortRunes)
+	e.Location = llm.TrimTruncateRunes(e.Location, maxShortRunes)
 	e.Start = perioddate.Sanitize(e.Start)
 	e.End = perioddate.Sanitize(e.End)
-	e.Summary = clip(e.Summary, maxBulletRunes)
-	e.Bullets = limit(nonEmpty(mapStrings(e.Bullets, maxBulletRunes)), MaxBullets)
-	e.Stack = limit(nonEmpty(mapStrings(e.Stack, maxShortRunes)), maxSkillItems)
+	e.Summary = llm.TrimTruncateRunes(e.Summary, maxBulletRunes)
+	e.Bullets = llm.Limit(llm.NonEmpty(mapStrings(e.Bullets, maxBulletRunes)), MaxBullets)
+	e.Stack = llm.Limit(llm.NonEmpty(mapStrings(e.Stack, maxShortRunes)), maxSkillItems)
 	keep := e.Role != "" || e.Company != "" || e.Location != "" ||
 		e.Start != nil || e.End != nil || e.Summary != "" || len(e.Bullets) > 0
 	return e, keep
 }
 
 func sanitizeEducation(e EducationItem) (EducationItem, bool) {
-	e.Institution = clip(e.Institution, maxShortRunes)
-	e.Degree = clip(e.Degree, maxShortRunes)
-	e.Field = clip(e.Field, maxShortRunes)
+	e.Institution = llm.TrimTruncateRunes(e.Institution, maxShortRunes)
+	e.Degree = llm.TrimTruncateRunes(e.Degree, maxShortRunes)
+	e.Field = llm.TrimTruncateRunes(e.Field, maxShortRunes)
 	e.Start = perioddate.Sanitize(e.Start)
 	e.End = perioddate.Sanitize(e.End)
 	keep := e.Institution != "" || e.Degree != "" || e.Field != "" || e.Start != nil || e.End != nil
@@ -317,50 +292,35 @@ func sanitizeEducation(e EducationItem) (EducationItem, bool) {
 }
 
 func sanitizeSkillGroup(g SkillGroup) (SkillGroup, bool) {
-	g.Group = clip(g.Group, maxShortRunes)
-	g.Items = limit(nonEmpty(mapStrings(g.Items, maxShortRunes)), maxSkillItems)
+	g.Group = llm.TrimTruncateRunes(g.Group, maxShortRunes)
+	g.Items = llm.Limit(llm.NonEmpty(mapStrings(g.Items, maxShortRunes)), maxSkillItems)
 	keep := g.Group != "" || len(g.Items) > 0
 	return g, keep
 }
 
 func sanitizeLanguage(l Language) (Language, bool) {
-	l.Name = clip(l.Name, maxShortRunes)
-	l.Level = clip(l.Level, maxShortRunes)
+	l.Name = llm.TrimTruncateRunes(l.Name, maxShortRunes)
+	l.Level = llm.TrimTruncateRunes(l.Level, maxShortRunes)
 	return l, l.Name != "" || l.Level != ""
 }
 
 func sanitizeProject(p Project) (Project, bool) {
-	p.Name = clip(p.Name, maxShortRunes)
-	p.Link = clip(p.Link, maxShortRunes)
-	p.Bullets = limit(nonEmpty(mapStrings(p.Bullets, maxBulletRunes)), MaxBullets)
+	p.Name = llm.TrimTruncateRunes(p.Name, maxShortRunes)
+	p.Link = llm.TrimTruncateRunes(p.Link, maxShortRunes)
+	p.Bullets = llm.Limit(llm.NonEmpty(mapStrings(p.Bullets, maxBulletRunes)), MaxBullets)
 	return p, p.Name != "" || p.Link != "" || len(p.Bullets) > 0
 }
 
 func sanitizeCertification(c Certification) (Certification, bool) {
-	c.Name = clip(c.Name, maxShortRunes)
-	c.Issuer = clip(c.Issuer, maxShortRunes)
+	c.Name = llm.TrimTruncateRunes(c.Name, maxShortRunes)
+	c.Issuer = llm.TrimTruncateRunes(c.Issuer, maxShortRunes)
 	c.Year = perioddate.Sanitize(c.Year)
 	return c, c.Name != "" || c.Issuer != "" || c.Year != nil
 }
 
 // --- small helpers (mirror internal/candidate/resumeextract) ---
 
-// clip trims s and truncates to at most max runes on a rune boundary, trimming again so
-// a mid-word cut never leaves a trailing space.
-func clip(s string, max int) string {
-	return strings.TrimSpace(llm.TruncateRunes(strings.TrimSpace(s), max))
-}
-
-// limit returns at most n elements of s (nil-safe, preserves order).
-func limit[T any](s []T, n int) []T {
-	if len(s) > n {
-		return s[:n]
-	}
-	return s
-}
-
-// mostRecent returns at most n elements of s, keeping the LAST n rather than the first
-// — see Seed's own use for why a seeded bullet list is capped this way.
+// mostRecent returns at most n elements of s, keeping the LAST n (see Seed's own use).
 func mostRecent[T any](s []T, n int) []T {
 	if len(s) > n {
 		return s[len(s)-n:]
@@ -383,18 +343,7 @@ func mapEntries[T any](in []T, fn func(T) (T, bool)) []T {
 func mapStrings(in []string, max int) []string {
 	out := make([]string, len(in))
 	for i, v := range in {
-		out[i] = clip(v, max)
-	}
-	return out
-}
-
-// nonEmpty drops blank strings, preserving order; returns nil when nothing remains.
-func nonEmpty(in []string) []string {
-	var out []string
-	for _, v := range in {
-		if v != "" {
-			out = append(out, v)
-		}
+		out[i] = llm.TrimTruncateRunes(v, max)
 	}
 	return out
 }

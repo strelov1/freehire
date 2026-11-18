@@ -92,9 +92,13 @@
     <div class="flex items-center justify-between">
       <!-- Focusable from script only: where focus lands once the control holding it has
            removed itself and no chip is left (see `removeThenRefocus`). -->
-      <h2 bind:this={heading} tabindex="-1" class="text-base font-semibold tracking-tight outline-none">Filters</h2>
+      <h2 bind:this={heading} tabindex="-1" class="text-xs font-medium text-muted-foreground outline-none">Filters</h2>
       {#if active > 0}
-        <button type="button" class="relative text-xs text-muted-foreground transition-colors after:absolute after:-inset-1 hover:text-foreground" onclick={() => removeThenRefocus(onReset, null)}>Clear all</button>
+        <button
+          type="button"
+          class="relative text-xs text-muted-foreground transition-colors after:absolute after:-inset-1 hover:text-foreground"
+          onclick={() => removeThenRefocus(onReset, null)}>Clear all</button
+        >
       {/if}
     </div>
     {#if description}
@@ -110,26 +114,30 @@
     <SlidersHorizontal class="size-4" />
     <span>All filters</span>
     {#if active > 0}
-      <span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-brand-foreground">{active}</span>
+      <span
+        class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-xs font-semibold text-brand-foreground"
+        >{active}</span
+      >
     {/if}
   </button>
 
   {@render afterButton?.()}
 
   {#if groups.length === 0}
-    <div class="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+    <div class="px-1 text-sm text-muted-foreground">
       No filters yet.<br />Open <b>All filters</b> to refine.
     </div>
   {:else}
     {#each groups as g (g.label)}
       <div class="flex flex-col gap-2">
         <div class="flex items-center gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</span>
+          <span class="text-xs font-semibold text-muted-foreground">{g.label}</span>
           <button
             type="button"
             aria-label="Clear {g.label}"
             onclick={(e) => {
-              const first = e.currentTarget.parentElement?.nextElementSibling?.querySelector('[data-chip-remove]') ?? null;
+              const first =
+                e.currentTarget.parentElement?.nextElementSibling?.querySelector('[data-chip-remove]') ?? null;
               removeThenRefocus(() => g.chips.forEach((c) => c.remove()), chipIndex(first));
             }}
             class={removeButtonClass}
@@ -142,7 +150,9 @@
             <span
               class={[
                 'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium',
-                c.exclude ? 'border-destructive/30 bg-destructive/15 text-destructive-strong line-through' : 'border-transparent bg-brand-muted text-brand-strong',
+                c.exclude
+                  ? 'border-destructive/30 bg-destructive/15 text-destructive-strong line-through'
+                  : 'border-transparent bg-brand-muted text-brand-strong',
               ]}
             >
               {#if c.slug}<SkillIcon slug={c.slug} />{/if}

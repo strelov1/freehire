@@ -32,7 +32,6 @@ type hiringroomHTTP interface {
 
 const (
 	// hiringroomMaxPages bounds the walk; reaching it before the stated total fails the crawl.
-	// The largest portal measured holds 241 vacancies (13 pages).
 	hiringroomMaxPages = 200
 )
 
@@ -82,12 +81,10 @@ func (s hiringroom) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 	return s.hydrate(ctx, board, e, cards, seen)
 }
 
-// portalOff reports whether the tenant has switched its public portal off. Such a tenant's
-// pager still lists every vacancy while /jobs and every vacancy page answer 404, so without
-// this check each run would request every listed vacancy only to be told it is not public —
-// 388 requests a run for one tenant measured on 2026-10-28, when 63 of 357 harvested tenants
-// had their portal off. /jobs is the legacy portal and redirects to /portal on the newer
-// layout, so it answers for both.
+// portalOff reports whether the tenant has switched its public portal off. Such a tenant's pager
+// still lists every vacancy while /jobs and every vacancy page answer 404, so without this check
+// each run would request every listed vacancy only to be told it is not public. /jobs is the
+// legacy portal and redirects to /portal on the newer layout, so it answers for both.
 func (s hiringroom) portalOff(ctx context.Context, board string) (bool, error) {
 	_, err := s.http.GetHTML(ctx, "https://"+board+".hiringroom.com/jobs")
 	if err == nil {
@@ -194,10 +191,9 @@ func parseHiringRoomCards(fragment string) ([]hiringroomCard, error) {
 // and read none of them fails.
 //
 // A page the platform answers 404/410 for is not unreadable but unpublished: a tenant can switch
-// its public portal off (its /jobs then 404s, /portal still redirects there) while the pager
-// keeps listing every vacancy, and each vacancy page 404s. Measured 2026-10-28 on 71 of 317
-// Argentine and Latin American tenants. Those vacancies are skipped and do not count towards the
-// "read none" failure — the platform has answered that there is nothing public to read.
+// its public portal off (its /jobs then 404s, /portal still redirects there) while the pager keeps
+// listing every vacancy, and each vacancy page 404s. Those vacancies are skipped and do not count
+// towards the "read none" failure: the platform has answered that there is nothing public to read.
 func (s hiringroom) hydrate(ctx context.Context, board string, e CompanyEntry, cards []hiringroomCard, seen func(string) bool) ([]Job, error) {
 	var wanted, read atomic.Int64
 	jobs := fetchDetails(cards, defaultDetailWorkers, func(c hiringroomCard) (Job, bool) {

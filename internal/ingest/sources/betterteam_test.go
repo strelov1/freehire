@@ -2,6 +2,8 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -17,6 +19,45 @@ func btListingHTML(jobHrefs ...string) string {
 	}
 	b.WriteString(`</ul></body></html>`)
 	return b.String()
+}
+
+func btNativeListingHTML(slugs ...string) string {
+	nodes := []any{map[string]int{"_1": 2}, "loaderData", map[string]int{"_3": 4}, "routes/CareersPage", map[string]int{"_5": 6}, "jobs", nil, "slug"}
+	refs := make([]int, 0, len(slugs))
+	for _, slug := range slugs {
+		refs = append(refs, len(nodes))
+		nodes = append(nodes, map[string]int{"_7": len(nodes) + 1}, slug)
+	}
+	nodes[6] = refs
+	payload, _ := json.Marshal(nodes)
+	encoded, _ := json.Marshal(string(payload))
+	return `<script>window.__reactRouterContext.streamController.enqueue(` + string(encoded) + `);</script>`
+}
+
+func TestBetterteamNativeListingPreservesPlatformSlugs(t *testing.T) {
+	detail := btDetailHTML("Expert", "<p>Expert work.</p>", "", "", "")
+	fake := (&routedHTTP{}).route("/remote-expert-", detail).route("/markets-expert", detail).
+		route("b.betterteam.com/", btNativeListingHTML("remote-expert-(md-do)-44", "markets-expert"))
+	jobs, err := NewBetterteam(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 2 || jobs[0].ExternalID != "remote-expert-(md-do)-44" || jobs[1].ExternalID != "markets-expert" {
+		t.Fatalf("got %+v, want the two native slugs unchanged", jobs)
+	}
+}
+
+func TestBetterteamRejectsNativeCeilingAndMalformedState(t *testing.T) {
+	slugs := make([]string, 300)
+	for i := range slugs {
+		slugs[i] = fmt.Sprintf("expert-%d", i)
+	}
+	for _, body := range []string{btNativeListingHTML(slugs...), `<script>window.__reactRouterContext.streamController.enqueue("[]");</script>`, `<script>window.__reactRouterContext.streamController.enqueue("{}");</script>`, `<script>window.__reactRouterContext.streamController.enqueue(null);</script>`} {
+		fake := (&routedHTTP{}).route("b.betterteam.com/", body)
+		if _, err := NewBetterteam(fake).Fetch(context.Background(), CompanyEntry{Board: "b"}); err == nil {
+			t.Fatal("a capped or unproven native listing was accepted")
+		}
+	}
 }
 
 // btDetailHTML builds a Betterteam job page carrying a schema.org JobPosting ld+json block.
@@ -48,11 +89,30 @@ func TestBTJobID(t *testing.T) {
 		"/about-us":                                    "", // no trailing numeric id
 		"/careers":                                     "", // no trailing id
 		"https://x.betterteam.com/a/b-12":              "", // not a single segment
+		"/remote-expert-%28md-do%29-44":                "remote-expert-(md-do)-44",
+		"/specialty%2Fradiology-321":                   "specialty/radiology-321",
 	}
 	for u, want := range cases {
 		if got := btJobID(u); got != want {
 			t.Errorf("btJobID(%q) = %q, want %q", u, got, want)
 		}
+	}
+}
+
+func TestBetterteamRejectsKnownListingCeiling(t *testing.T) {
+	hrefs := make([]string, 300)
+	for i := range hrefs {
+		hrefs[i] = fmt.Sprintf("/remote-expert-%%28md-do%%29-%d", i)
+	}
+	fake := (&routedHTTP{}).route("b.betterteam.com/", btListingHTML(hrefs...))
+	if _, err := NewBetterteam(fake).Fetch(context.Background(), CompanyEntry{Board: "b"}); err == nil {
+		t.Fatal("the known 300-job ceiling was accepted as complete")
+	}
+	if fake.calls != 1 {
+		t.Fatalf("made %d requests, want only the capped listing", fake.calls)
+	}
+	if _, ok := NewBetterteam(nil).(fullBoardListing); ok {
+		t.Fatal("Betterteam must not claim complete listing support")
 	}
 }
 

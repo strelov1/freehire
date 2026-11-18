@@ -2,7 +2,8 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import Seo from '#lib/components/Seo.svelte';
-  import { articleJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { jsonLdScript } from '#lib/seo.js';
+  import { articleJsonLd } from '#lib/seoAppJsonLd.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -34,17 +35,12 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
-  <a
-    href={resolve('/blog')}
-    class="text-sm text-muted-foreground hover:text-foreground"
-  >
-    ← Blog
-  </a>
+  <a href={resolve('/blog')} class="text-sm text-muted-foreground hover:text-foreground"> ← Blog </a>
 
   <article class="mt-4">
     <header class="mb-6">
       <div class="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-        <span class="rounded-full border border-border px-2 py-0.5 font-medium uppercase tracking-wide">
+        <span class="rounded-full border border-border px-2 py-0.5 font-medium">
           {data.meta.type}
         </span>
         <time datetime={data.meta.date}>{formatDate(data.meta.date)}</time>

@@ -191,7 +191,7 @@ func TestCommunityListingsCursorOnlyOnFullPage(t *testing.T) {
 	// A page size of 2 keeps the fixture small; the rule under test is
 	// "rows == page size", not the production number.
 	const pageSize = 2
-	app := newCommunityApp(queries, iss, community.Config{PageSize: pageSize, ThreadCap: 100, ReplyCap: 100})
+	app := newCommunityApp(queries, iss, community.Config{PageSize: pageSize})
 
 	subjectListURL := "/api/v1/threads?subject_type=" + community.SubjectCompany + "&subject_slug=acme"
 

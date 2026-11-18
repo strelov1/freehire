@@ -3,10 +3,24 @@ package subscription
 import (
 	"context"
 	"errors"
+	"net/url"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/engage/notify"
+	"github.com/strelov1/freehire/internal/search/search"
 )
+
+func TestCreateRefusesAnExistingSearchThatCannotRun(t *testing.T) {
+	query := url.Values{"q": {"go OR rust OR java OR python OR ruby OR php"}}.Encode()
+	repo := &fakeRepo{savedSearchQuery: query}
+	_, err := New(repo).Create(context.Background(), 1, 2, ChannelEmail)
+	if !errors.Is(err, search.ErrTooManyAlternatives) {
+		t.Fatalf("error = %v, want ErrTooManyAlternatives", err)
+	}
+	if repo.created != nil {
+		t.Fatal("subscribed to an existing search that the matcher cannot execute")
+	}
+}
 
 // createArgs captures the primitive params Create is handed, so a test can assert them
 // without a db.* params struct.
@@ -27,6 +41,10 @@ type fakeRepo struct {
 	savedSearchErr   error
 	// hasPushDevice is whether the account has a registered device.
 	hasPushDevice bool
+	// channel is the subscription's channel a resume reads back (email when unset).
+	channel string
+	// setActive records the value SetActive reached the repository with.
+	setActive *bool
 }
 
 func (r *fakeRepo) HasPushDevice(context.Context, int64) (bool, error) {
@@ -50,8 +68,13 @@ func (r *fakeRepo) Create(_ context.Context, userID, savedSearchID int64, channe
 	return Subscription{Channel: channel}, nil
 }
 
-func (r *fakeRepo) SetActive(context.Context, int64, int64, bool) (Subscription, error) {
-	return Subscription{}, nil
+func (r *fakeRepo) Target(context.Context, int64, int64) (string, string, error) {
+	return r.channel, r.savedSearchQuery, r.savedSearchErr
+}
+
+func (r *fakeRepo) SetActive(_ context.Context, _, _ int64, active bool) (Subscription, error) {
+	r.setActive = &active
+	return Subscription{Active: active}, nil
 }
 
 func (r *fakeRepo) Delete(context.Context, int64, int64) error { return nil }
@@ -158,5 +181,86 @@ func TestCreate_PushNeedsARegisteredDevice(t *testing.T) {
 	repo.hasPushDevice = true
 	if _, err := New(repo).Create(context.Background(), 1, 2, notify.ChannelPush); err != nil {
 		t.Fatalf("Create(push) with a device: err = %v, want nil", err)
+	}
+}
+
+// A resume passes the gates a new subscription does: the matcher pauses one whose
+// query it cannot run, and switching it back on unchanged would fail every pass again.
+func TestResumeRefusesWhatCreateWouldRefuse(t *testing.T) {
+	cases := []struct {
+		name string
+		repo *fakeRepo
+		want error
+	}{
+		{"query the matcher cannot run",
+			&fakeRepo{channel: ChannelEmail, savedSearchQuery: url.Values{"q": {"go OR rust OR java OR python OR ruby OR php"}}.Encode()},
+			search.ErrTooManyAlternatives},
+		{"unfiltered search", &fakeRepo{channel: ChannelEmail, savedSearchQuery: ""}, ErrUnfilteredSearch},
+		{"push with no device", &fakeRepo{channel: notify.ChannelPush, savedSearchQuery: "seniority=senior"}, ErrNoPushDevice},
+		{"missing subscription", &fakeRepo{savedSearchErr: ErrNotFound}, ErrNotFound},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := New(c.repo).SetActive(context.Background(), 1, 2, true)
+			if !errors.Is(err, c.want) {
+				t.Fatalf("error = %v, want %v", err, c.want)
+			}
+			if c.repo.setActive != nil {
+				t.Fatal("resumed a subscription that cannot deliver")
+			}
+		})
+	}
+}
+
+// Pausing needs no gate, and a runnable subscription resumes.
+func TestSetActivePausesFreelyAndResumesARunnableOne(t *testing.T) {
+	repo := &fakeRepo{savedSearchQuery: "q=go&seniority=senior"}
+	if _, err := New(repo).SetActive(context.Background(), 1, 2, false); err != nil || repo.setActive == nil || *repo.setActive {
+		t.Fatalf("pause: err=%v reached=%v", err, repo.setActive)
+	}
+	repo = &fakeRepo{channel: ChannelEmail, savedSearchQuery: "q=go&seniority=senior"}
+	if _, err := New(repo).SetActive(context.Background(), 1, 2, true); err != nil || repo.setActive == nil || !*repo.setActive {
+		t.Fatalf("resume: err=%v reached=%v", err, repo.setActive)
+	}
+}
+
+func TestCreateAndResumeRefuseInvalidVisaFilters(t *testing.T) {
+	for _, value := range []string{"yes", "1", "false,true", " "} {
+		for _, resume := range []bool{false, true} {
+			t.Run(value+"/"+map[bool]string{false: "create", true: "resume"}[resume], func(t *testing.T) {
+				query := url.Values{"work_mode": {"remote"}, "visa_sponsorship": {value}}.Encode()
+				repo := &fakeRepo{savedSearchQuery: query, channel: ChannelEmail}
+				svc := New(repo)
+				var err error
+				if resume {
+					_, err = svc.SetActive(context.Background(), 1, 2, true)
+				} else {
+					_, err = svc.Create(context.Background(), 1, 2, ChannelEmail)
+				}
+				if !errors.Is(err, search.ErrBadQuery) {
+					t.Errorf("error = %v, want ErrBadQuery for a visa filter the matching worker would pause", err)
+				}
+				if repo.created != nil || repo.setActive != nil {
+					t.Error("invalid query reached subscription writer")
+				}
+			})
+		}
+	}
+}
+
+func TestCreateAndResumeAcceptValidOrAbsentVisaFilters(t *testing.T) {
+	for _, values := range [][]string{nil, {""}, {"true"}, {"false"}, {" TRUE "}, {"False"}, {"true", "yes"}} {
+		query := url.Values{"work_mode": {"remote"}, "visa_sponsorship": values}.Encode()
+		repo := &fakeRepo{savedSearchQuery: query, channel: ChannelEmail}
+		svc := New(repo)
+		if _, err := svc.Create(context.Background(), 1, 2, ChannelEmail); err != nil {
+			t.Errorf("create %q: %v", values, err)
+		}
+		if _, err := svc.SetActive(context.Background(), 1, 2, true); err != nil {
+			t.Errorf("resume %q: %v", values, err)
+		}
+		if repo.created == nil || repo.setActive == nil {
+			t.Errorf("valid query %q did not reach subscription writers", values)
+		}
 	}
 }

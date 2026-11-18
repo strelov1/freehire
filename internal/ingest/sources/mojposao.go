@@ -19,11 +19,10 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// mojposao adapts MojPosao, Alma Career's job board on its "borg" platform: mojposao.hr,
-// Croatia's largest commercial board (every trade, ~6% IT), and its Bosnian sibling mojposao.ba.
-// A board is the market's domain; both serve the same API, which picks the market by the x-app
-// header. It is an aggregator — the employer is read per posting. See the "MojPosao traps"
-// section of AGENTS.md for the measurements behind each rule.
+// mojposao adapts MojPosao, Alma Career's job board on its "borg" platform: mojposao.hr (Croatia)
+// and mojposao.ba (Bosnia). Both serve the same API, which picks the market by the x-app header.
+// It is an aggregator: the employer is read per posting. See the "MojPosao traps" section of
+// AGENTS.md.
 //
 // The listing is the web app's own search API, 100 postings a request; it names the title,
 // employer and place of every open posting but carries only a snippet of the body. The body,
@@ -66,12 +65,10 @@ const (
 	// a one-second crawl delay.
 	mojposaoRequestInterval = time.Second
 	mojposaoDetailWorkers   = 2
-	// mojposaoMaxPages is a safety ceiling: the Croatian catalogue was 1,449 postings (15 pages)
-	// on 2026-10-28, the Bosnian one 531.
+	// mojposaoMaxPages is a safety ceiling on the pages walked.
 	mojposaoMaxPages = 100
-	// mojposaoMaxNewPerRun bounds the posting requests of one run: ~15 listing requests and
-	// 1,200 posting requests at one a second sit well inside the scheduler's default 2,400 s
-	// crawl budget, and cover the whole catalogue's cold start in about two runs.
+	// mojposaoMaxNewPerRun bounds the posting requests of one run so it fits the scheduler's
+	// default crawl budget at one request a second; a cold start takes about two runs.
 	mojposaoMaxNewPerRun   = 1200
 	mojposaoDeadlineMargin = 5 * time.Minute
 
@@ -110,6 +107,14 @@ func (mojposao) Provider() string { return "mojposao" }
 // Thousands of employers post here, each named per posting.
 func (mojposao) aggregator() {}
 
+// Each board is one country's market (see nationalMarket): mojposao.hr Croatia, mojposao.ba Bosnia.
+func (mojposao) marketCountries(e CompanyEntry) []string {
+	if m, ok := mojposaoMarkets[strings.ToLower(strings.TrimSpace(e.Board))]; ok {
+		return []string{m.country}
+	}
+	return nil
+}
+
 // mojposaoCard is one search result: what the gate and the job need before the body is bought.
 type mojposaoCard struct {
 	ID           string      `json:"id"`
@@ -121,9 +126,8 @@ type mojposaoCard struct {
 }
 
 // mojposaoOrg is a posting's employer. An employer that hides its name is not an object but the
-// bare string "incognito" (4 of 1,449 postings on 2026-10-28); it decodes to an empty name, and
-// such a posting is dropped — filing it under the label would invent one employer collecting
-// every anonymous posting.
+// bare string "incognito"; it decodes to an empty name, and such a posting is dropped: filing it
+// under the label would invent one employer collecting every anonymous posting.
 type mojposaoOrg struct {
 	Name string `json:"name"`
 }
@@ -175,6 +179,7 @@ type mojposaoDetail struct {
 	WorkTypes              []string    `json:"workTypes"`
 	EmploymentTypes        []string    `json:"employmentTypes"`
 	RequiredWorkExperience string      `json:"requiredWorkExperience"`
+	EndsAt                 string      `json:"endsAt"`
 	RootPosition           *struct {
 		ID int `json:"id"`
 	} `json:"rootPosition"`
@@ -209,7 +214,7 @@ func (s mojposao) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(e
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(cards))
 		for _, c := range cards {
-			companies = append(companies, mojposaoClean(c.Organization.Name))
+			companies = append(companies, collapseSpace(c.Organization.Name))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -222,9 +227,7 @@ func (s mojposao) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(e
 			jobs = append(jobs, base)
 			continue
 		}
-		// Only coverage is judged before the body is bought. The catalogue filter is not: the
-		// search result lacks the root position that sets IsTechHint, so a technical posting
-		// with a terse title would be turned away on the card that the posting itself admits.
+		// Only coverage is judged before the body is bought.
 		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
@@ -312,7 +315,7 @@ func (s mojposao) list(ctx context.Context, m mojposaoMarket) ([]mojposaoCard, e
 				if c.Organization.Name == "" {
 					c.Organization = g.Organization
 				}
-				if c.ID == "" || seen[c.ID] || mojposaoClean(c.Title) == "" || mojposaoClean(c.Organization.Name) == "" {
+				if c.ID == "" || seen[c.ID] || collapseSpace(c.Title) == "" || collapseSpace(c.Organization.Name) == "" {
 					continue
 				}
 				seen[c.ID] = true
@@ -322,8 +325,6 @@ func (s mojposao) list(ctx context.Context, m mojposaoMarket) ([]mojposaoCard, e
 	}
 	return out, nil
 }
-
-func mojposaoClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // mojposaoPostingURL is the posting's public page. The page resolves by the id; the slug is the
 // site's own.
@@ -340,9 +341,9 @@ func mojposaoBaseJob(c mojposaoCard, m mojposaoMarket) Job {
 	j := Job{
 		ExternalID:        c.ID,
 		URL:               mojposaoPostingURL(m, c.ID, c.Slug),
-		Title:             mojposaoClean(c.Title),
-		Company:           mojposaoClean(c.Organization.Name),
-		Location:          mojposaoClean(c.Location),
+		Title:             collapseSpace(c.Title),
+		Company:           collapseSpace(c.Organization.Name),
+		Location:          collapseSpace(c.Location),
 		FallbackCountries: []string{m.country},
 	}
 	if t, ok := mojposaoTime(c.PublishedAt); ok {
@@ -377,10 +378,10 @@ func (s mojposao) detail(ctx context.Context, m mojposaoMarket, c mojposaoCard) 
 // employer or body.
 func mojposaoJob(d mojposaoDetail, c mojposaoCard, m mojposaoMarket) (Job, bool) {
 	j := mojposaoBaseJob(c, m)
-	if t := mojposaoClean(d.Title); t != "" {
+	if t := collapseSpace(d.Title); t != "" {
 		j.Title = t
 	}
-	if co := mojposaoClean(d.Organization.Name); co != "" {
+	if co := collapseSpace(d.Organization.Name); co != "" {
 		j.Company = co
 	}
 	j.Description = mojposaoBody(d)
@@ -390,7 +391,7 @@ func mojposaoJob(d mojposaoDetail, c mojposaoCard, m mojposaoMarket) (Job, bool)
 	if d.Slug != "" {
 		j.URL = mojposaoPostingURL(m, c.ID, d.Slug)
 	}
-	if place := mojposaoClean(d.Location.Summary); place != "" {
+	if place := collapseSpace(d.Location.Summary); place != "" {
 		j.Location = place
 	}
 	j.Countries = mojposaoCountries(d)
@@ -405,12 +406,20 @@ func mojposaoJob(d mojposaoDetail, c mojposaoCard, m mojposaoMarket) (Job, bool)
 		j.ExperienceYearsMin = &years
 	}
 	j.IsTechHint = d.RootPosition != nil && d.RootPosition.ID == mojposaoITPosition
+	// endDate is the last day's end in the source's local time (22:59:59Z in winter, 21:59:59Z
+	// in summer), so its UTC date is that last day either way. Unlike a posted_at it may
+	// legitimately sit today or tomorrow, so it is not run through NotFuture; a stale one past
+	// today closes the posting on the write.
+	if t, ok := mojposaoTime(d.EndsAt); ok {
+		t = t.UTC()
+		j.ApplicationDeadline = &t
+	}
 	return j, true
 }
 
 // mojposaoBody joins the posting's three text sections under the headings the site's own page
 // gives them, and leads with the salary line the page shows when the employer published one. A
-// posting whose sections are all empty — every Bosnian one sampled — carries its body only as the
+// posting whose sections are all empty (every Bosnian one) carries its body only as the
 // designed HTML ad, which is read instead.
 func mojposaoBody(d mojposaoDetail) string {
 	var b strings.Builder
@@ -443,7 +452,7 @@ func mojposaoBody(d mojposaoDetail) string {
 
 // mojposaoInlineTag matches the inline emphasis employers type into the otherwise plain-text
 // sections ("<b>prvi kontakt</b>"), after escaping; mojposaoOtherTag is any other tag, which is
-// dropped (a stray "<div>{BENEFITS_2}</div>" template remnant was measured).
+// dropped (e.g. a stray "<div>{BENEFITS_2}</div>" template remnant).
 var (
 	mojposaoInlineTag = regexp.MustCompile(`&lt;(/?)(b|strong|i|em|u)&gt;`)
 	mojposaoOtherTag  = regexp.MustCompile(`&lt;/?[a-zA-Z][a-zA-Z0-9]*( [^&]*)?/?&gt;`)

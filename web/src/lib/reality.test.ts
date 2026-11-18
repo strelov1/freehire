@@ -11,7 +11,6 @@ const base = (over: Partial<Reality>): Reality => ({
   ...over,
 });
 
-
 describe('realityBadge', () => {
   it('returns null for a fresh job (no badge)', () => {
     expect(realityBadge(base({ class: 'fresh' }))).toBeNull();

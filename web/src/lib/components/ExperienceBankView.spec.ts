@@ -52,6 +52,10 @@ const ringCentral: CompanyListItem = {
   slug: 'ringcentral',
   name: 'RingCentral',
   job_count: 57,
+  tagline: null,
+  industries: [],
+  hq_country: null,
+  collections: [],
   feedback_count: 0,
   feedback_rating_avg: null,
 };
@@ -63,7 +67,7 @@ const bankWithOneJob: ExperienceBank = {
       kind: 'job',
       company: 'Acme',
       role: 'Engineer',
-      atoms: [{ id: 'a1', claim: 'Shipped things', provenance: 'manual' }],
+      atoms: [{ id: 'a1', claim: 'Shipped things', provenance: 'manual', needs_context: false, needs_metrics: false }],
     },
   ],
   unplaced: [],
@@ -72,6 +76,7 @@ const bankWithOneJob: ExperienceBank = {
 const resumeOk: ResumeMeta = {
   enabled: true,
   present: true,
+  structure_pending: false,
   uploaded_at: '2026-10-01T00:00:00Z',
   structured: null,
   parse_status: 'ok',
@@ -142,9 +147,7 @@ describe('ExperienceBankView add-job form', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
-      expect(createExperienceEmployment).toHaveBeenCalledWith(
-        expect.objectContaining({ current: false }),
-      ),
+      expect(createExperienceEmployment).toHaveBeenCalledWith(expect.objectContaining({ current: false })),
     );
   });
 
@@ -165,6 +168,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValue({
       enabled: true,
       present: true,
+      structure_pending: true,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -187,6 +191,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValue({
       enabled: true,
       present: false,
+      structure_pending: false,
       uploaded_at: null,
       structured: null,
     } satisfies ResumeMeta);
@@ -201,6 +206,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValue({
       enabled: true,
       present: true,
+      structure_pending: true,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -220,6 +226,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValueOnce({
       enabled: true,
       present: true,
+      structure_pending: true,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -236,6 +243,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
       getResume.mockResolvedValue({
         enabled: true,
         present: true,
+        structure_pending: false,
         uploaded_at: '2026-10-01T00:00:00Z',
         structured: null,
         parse_status: 'ok',
@@ -259,6 +267,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValueOnce({
       enabled: true,
       present: true,
+      structure_pending: true,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -275,6 +284,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
       getResume.mockResolvedValue({
         enabled: true,
         present: true,
+        structure_pending: true,
         uploaded_at: '2026-10-01T00:00:00Z',
         structured: null,
         parse_status: 'pending',

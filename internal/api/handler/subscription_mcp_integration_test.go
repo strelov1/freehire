@@ -135,7 +135,7 @@ func TestSubscriptionMCP_SubscribeListUpdateUnsubscribe(t *testing.T) {
 	if s := item["search"].(map[string]any); s["salary_min"] != float64(80000) || s["filters"].(map[string]any)["skills"].([]any)[0] != "go" {
 		t.Fatalf("structured search = %v", s)
 	}
-	if sched := list["delivery_schedule"].(map[string]any); sched["digest_frequency"] != "instant" {
+	if sched := list["delivery_schedule"].(map[string]any); sched["digest_frequency"] != "daily" || sched["digest_time"] != "09:00" {
 		t.Fatalf("delivery_schedule = %v", sched)
 	}
 
@@ -227,5 +227,63 @@ func TestSubscriptionMCP_SubscribeListUpdateUnsubscribe(t *testing.T) {
 	a.ok("unsubscribe", map[string]any{"id": alertID})
 	if alerts := a.ok("list_subscriptions", map[string]any{})["alerts"].([]any); len(alerts) != 0 {
 		t.Fatalf("alerts after unsubscribe = %v", alerts)
+	}
+}
+
+// A refusal written for the caller reaches the agent word for word: the account server shows
+// only a *fiber.Error's text and replaces any other error with a generic sentence, so a
+// message left a plain error would arrive as "something went wrong".
+func TestMCPAccount_CallerRefusalsReachTheAgentVerbatim(t *testing.T) {
+	pool, h := newSubscriptionMCPFixture(t)
+	mcpc := newMCPToolCaller(t, h, seedOAuthUser(t, pool, "mcp-refusal-text@example.test"))
+
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+		want string
+	}{
+		{"track_job", map[string]any{"slug": "any"}, "nothing to change — pass a stage, a note, or both"},
+		{"update_subscription", map[string]any{"id": 987654}, "this account has no job alert with id 987654 — call list_subscriptions for the ids"},
+		{"subscription_updates", map[string]any{"since": "yesterday"}, "since must be an RFC 3339 time such as 2026-10-20T00:00:00Z: "},
+	} {
+		// A prefix, so the standard library's parse wording after it can change freely.
+		if text, failed := mcpc.call(tc.tool, tc.args); !failed || !strings.HasPrefix(text, tc.want) {
+			t.Errorf("%s = %q failed=%v, want %q", tc.tool, text, failed, tc.want)
+		}
+	}
+}
+
+// The schedule shown beside the alerts is the one that takes effect: a Free account that
+// kept instant or interval is daily (faster is a paid benefit), at its stored time.
+func TestSubscriptionMCP_DeliveryScheduleIsTheEffectiveOne(t *testing.T) {
+	pool, h := newSubscriptionMCPFixture(t)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name, grant, freq string
+		want, wantTime    string
+	}{
+		{"free instant", "", "instant", "daily", "07:30"},
+		{"free interval", "", "interval", "daily", "07:30"},
+		{"paid instant", "pro_until_granted = now() + interval '1 day'", "instant", "instant", ""},
+		{"paid interval", "ultra_until_revenuecat = now() + interval '1 day'", "interval", "interval", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			userID := seedOAuthUser(t, pool, strings.ReplaceAll(tc.name, " ", "-")+"@example.test")
+			if _, err := pool.Exec(ctx, `INSERT INTO notification_settings (user_id, digest_frequency, digest_time, digest_interval_hours) VALUES ($1, $2, '07:30', 3)`, userID, tc.freq); err != nil {
+				t.Fatalf("settings: %v", err)
+			}
+			if tc.grant != "" {
+				if _, err := pool.Exec(ctx, `UPDATE users SET `+tc.grant+` WHERE id = $1`, userID); err != nil {
+					t.Fatalf("grant: %v", err)
+				}
+			}
+			got, err := h.deliverySchedule(ctx, userID, testMCPOrigin)
+			if err != nil {
+				t.Fatalf("deliverySchedule: %v", err)
+			}
+			if got.DigestFrequency != tc.want || got.DigestTime != tc.wantTime || (tc.want != "interval") != (got.DigestIntervalHours == 0) {
+				t.Fatalf("schedule = %+v, want %s at %q", got, tc.want, tc.wantTime)
+			}
+		})
 	}
 }

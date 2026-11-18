@@ -8,7 +8,9 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ fetch, setHeaders }) => {
   setHeaders({ 'cache-control': 'public, max-age=300' });
 
-  const catalog = await serverApi(fetch).catalogScale().catch(() => null);
+  const catalog = await serverApi(fetch)
+    .catalogScale()
+    .catch(() => null);
 
   return {
     scale: {

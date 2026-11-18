@@ -1,5 +1,6 @@
 // Utilities
 export { cn } from './cn.js';
+export { onImageError } from './image-error.js';
 export { lockScroll, unlockScroll } from './scroll-lock.js';
 
 // Primitives

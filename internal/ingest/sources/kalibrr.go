@@ -15,7 +15,7 @@ import (
 // postings each name their own employer. Board-based aggregator: a board is one of the
 // platform's COUNTRY markets ("Indonesia", "Philippines"), and every board is read through the
 // platform's own "IT and Software" job function, which is what keeps a general board on its
-// technical slice — 249 of 1,553 Indonesian and 190 of 812 Philippine postings on 2026-10-15.
+// technical slice.
 //
 // The listing is the public JSON search the site's own job board calls. A row carries the whole
 // posting, body included, so a board is one request and no hydration. The search ignores a
@@ -24,8 +24,8 @@ import (
 //
 // fullBoardListing: the board is read in ONE request whose row count must equal the source's own
 // reported count, every row distinct; a board larger than kalibrrLimit FAILS rather than paging
-// (offset paging under the default relevance sort repeats and skips rows — 1,553 rows paged by
-// 500 came back as 1,420 distinct). See the Kalibrr traps in AGENTS.md.
+// (offset paging under the default relevance sort repeats and skips rows). See the Kalibrr
+// traps in AGENTS.md.
 type kalibrr struct {
 	http JSONGetter
 }

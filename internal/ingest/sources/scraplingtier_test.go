@@ -1,9 +1,20 @@
 package sources
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/time/rate"
 
 	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 )
@@ -22,7 +33,7 @@ func TestScraplingTierCarriesTheMeasuredProviders(t *testing.T) {
 		got = append(got, name)
 	}
 	sort.Strings(got)
-	want := []string{"bayt", "cadremploi", "cleverstaff", "echojobs", "epreselec", "gulftalent", "hh", "infojobs", "instahyre", "job104", "jobteaser", "kontur", "neogov", "occ", "pracuj", "startupjobs", "turijobs", "vagas", "viterbit", "wantapply", "wellfound", "wuzzuf"}
+	want := []string{"bayt", "cadremploi", "clearedjobs", "cleverstaff", "clinch", "cryptojobslist", "echojobs", "epreselec", "foundit", "glints", "gradcracker", "gulftalent", "hh", "infojobs", "infojobsbr", "instahyre", "job104", "jobteaser", "kariyernet", "kontur", "levtech", "linkedin", "neogov", "njoyn", "occ", "pageup", "pracuj", "rwb", "senior", "spainjobs", "startupjobs", "turijobs", "vagas", "viterbit", "wantapply", "wellfound", "wuzzuf"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("scraplingProviders = %v, want %v", got, want)
 	}
@@ -73,28 +84,43 @@ func TestApplyScraplingEgressRewiresOnlyRegisteredProviders(t *testing.T) {
 // down a path that is refused (gulftalent's sitemap to http+proxy got a challenge).
 func TestScraplingRoutesAreTheMeasuredOnes(t *testing.T) {
 	want := map[string]scraplingRoute{
-		"infojobs":    {scraplingfetch.ModeBrowser, true},
-		"bayt":        {scraplingfetch.ModeBrowser, false},
-		"gulftalent":  {scraplingfetch.ModeBrowser, false},
-		"wantapply":   {scraplingfetch.ModeBrowser, false},
-		"wellfound":   {scraplingfetch.ModeHTTP, true},
-		"hh":          {scraplingfetch.ModeHTTP, false},
-		"startupjobs": {scraplingfetch.ModeBrowser, false},
-		"cleverstaff": {scraplingfetch.ModeHTTP, false},
-		"kontur":      {scraplingfetch.ModeHTTP, true},
-		"neogov":      {scraplingfetch.ModeHTTP, true},
-		"echojobs":    {scraplingfetch.ModeBrowser, true},
-		"wuzzuf":      {scraplingfetch.ModeBrowser, false},
-		"occ":         {scraplingfetch.ModeBrowser, false},
-		"vagas":       {scraplingfetch.ModeHTTP, true},
-		"instahyre":   {scraplingfetch.ModeHTTP, false},
-		"epreselec":   {scraplingfetch.ModeHTTP, true},
-		"turijobs":    {scraplingfetch.ModeHTTP, false},
-		"cadremploi":  {scraplingfetch.ModeHTTP, false},
-		"pracuj":      {scraplingfetch.ModeHTTP, false},
-		"jobteaser":   {scraplingfetch.ModeBrowser, false},
-		"viterbit":    {scraplingfetch.ModeHTTP, false},
-		"job104":      {scraplingfetch.ModeHTTP, true},
+		"clinch":         {scraplingfetch.ModeHTTP, true},
+		"pageup":         {scraplingfetch.ModeHTTP, true},
+		"rwb":            {scraplingfetch.ModeBrowser, false},
+		"senior":         {scraplingfetch.ModeHTTP, true},
+		"gradcracker":    {scraplingfetch.ModeHTTP, false},
+		"infojobsbr":     {scraplingfetch.ModeHTTP, true},
+		"spainjobs":      {scraplingfetch.ModeHTTP, true},
+		"infojobs":       {scraplingfetch.ModeBrowser, true},
+		"bayt":           {scraplingfetch.ModeBrowser, false},
+		"gulftalent":     {scraplingfetch.ModeBrowser, false},
+		"wantapply":      {scraplingfetch.ModeBrowser, false},
+		"wellfound":      {scraplingfetch.ModeHTTP, true},
+		"hh":             {scraplingfetch.ModeHTTP, false},
+		"startupjobs":    {scraplingfetch.ModeBrowser, false},
+		"cleverstaff":    {scraplingfetch.ModeHTTP, false},
+		"kontur":         {scraplingfetch.ModeHTTP, true},
+		"neogov":         {scraplingfetch.ModeHTTP, true},
+		"njoyn":          {scraplingfetch.ModeHTTP, true},
+		"linkedin":       {scraplingfetch.ModeHTTP, true},
+		"echojobs":       {scraplingfetch.ModeBrowser, true},
+		"wuzzuf":         {scraplingfetch.ModeBrowser, false},
+		"occ":            {scraplingfetch.ModeBrowser, false},
+		"vagas":          {scraplingfetch.ModeHTTP, true},
+		"instahyre":      {scraplingfetch.ModeHTTP, false},
+		"epreselec":      {scraplingfetch.ModeHTTP, true},
+		"turijobs":       {scraplingfetch.ModeHTTP, false},
+		"cadremploi":     {scraplingfetch.ModeHTTP, false},
+		"clearedjobs":    {scraplingfetch.ModeHTTP, true},
+		"pracuj":         {scraplingfetch.ModeHTTP, false},
+		"jobteaser":      {scraplingfetch.ModeBrowser, false},
+		"viterbit":       {scraplingfetch.ModeHTTP, false},
+		"cryptojobslist": {scraplingfetch.ModeHTTP, false},
+		"levtech":        {scraplingfetch.ModeHTTP, true},
+		"foundit":        {scraplingfetch.ModeHTTP, true},
+		"glints":         {scraplingfetch.ModeHTTP, false},
+		"kariyernet":     {scraplingfetch.ModeHTTP, true},
+		"job104":         {scraplingfetch.ModeHTTP, true},
 	}
 	for name, p := range scraplingProviders {
 		if p.route != want[name] {
@@ -216,5 +242,143 @@ func TestOCCPostingJSONStaysOffTheTier(t *testing.T) {
 	}
 	if any(split.HTMLGetter) == any(split.JSONGetter) {
 		t.Error("the posting JSON goes through the same client as the listing")
+	}
+}
+
+func TestScraplingClientAllowsTimeForBrowserChallenges(t *testing.T) {
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	for _, tc := range []struct {
+		mode scraplingfetch.Mode
+		want time.Duration
+	}{{scraplingfetch.ModeHTTP, 90 * time.Second}, {scraplingfetch.ModeBrowser, 5 * time.Minute}} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				deadline, ok := req.Context().Deadline()
+				remaining := time.Until(deadline)
+				if !ok || remaining < tc.want-time.Second || remaining > tc.want {
+					t.Errorf("fetch deadline has %s remaining, want approximately %s", remaining, tc.want)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"status":200,"url":"https://example.com","headers":{},"body":"b2s="}`))}, nil
+			})
+			c, err := newScraplingClient(scraplingfetch.Config{URL: "http://127.0.0.1:8098", Token: "test"}, scraplingRoute{mode: tc.mode})
+			if err != nil {
+				t.Fatal(err)
+			}
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp, err := c.httpClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+		})
+	}
+}
+
+func TestScraplingAggregatorBudgetsAndPacing(t *testing.T) {
+	scraplingEnv(t)
+	reg := map[string]Source{
+		"gradcracker": NewGradcracker(nil, 0),
+		"infojobsbr":  NewInfoJobsBR(nil),
+		"spainjobs":   NewSpainJobs(nil),
+	}
+	if err := ApplyScraplingEgress(reg); err != nil {
+		t.Fatal(err)
+	}
+	g := reg["gradcracker"].(gradcracker)
+	paced, ok := g.http.(rateLimitedHTMLGetter)
+	if !ok {
+		t.Fatalf("Gradcracker getter %T is not paced", g.http)
+	}
+	limiter := paced.limiter.(*rate.Limiter)
+	if limiter.Limit() != rate.Every(10*time.Second) || limiter.Burst() != 1 || g.maxNewPerRun != 200 {
+		t.Fatal("Gradcracker pacing or hydration budget changed")
+	}
+	if c, ok := paced.inner.(*Client); !ok || !isScrapling(c) {
+		t.Fatal("Gradcracker bypasses Scrapling")
+	}
+	i := reg["infojobsbr"].(infojobsBR)
+	il := i.limiter.(*rate.Limiter)
+	if il.Limit() != rate.Every(infojobsBRRequestInterval) || il.Burst() != 1 || i.maxNewPerBoard != 80 {
+		t.Fatal("InfoJobs pacing or hydration budget changed")
+	}
+	s := reg["spainjobs"].(spainjobs)
+	sl := s.limiter.(*rate.Limiter)
+	if sl.Limit() != rate.Every(time.Second) || sl.Burst() != 1 || s.maxNewPerRun != 1500 || s.deadlineMargin != 5*time.Minute {
+		t.Fatal("SpainJobs pacing or hydration budget changed")
+	}
+	if c, ok := s.http.(*Client); !ok || !isScrapling(c) {
+		t.Fatal("SpainJobs bypasses Scrapling")
+	}
+}
+
+// Run the real listing walk over the wire transport: without the bootstrap cookie the
+// origin repeats page one, so a jar-less rebuild must fail this test.
+func TestScraplingInfoJobsBRRetainsSessionAcrossFragments(t *testing.T) {
+	pages := acreFake(t).pages
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			URL, Mode string
+			Proxy     bool
+			Headers   map[string]string
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Error(err)
+			w.WriteHeader(400)
+			return
+		}
+		calls++
+		if req.Mode != "http" || !req.Proxy {
+			t.Error("wrong InfoJobs route")
+		}
+		key := req.URL
+		headers := map[string]string{}
+		if key == ijbrAcre {
+			headers["Set-Cookie"] = "ab_session_id=test-session; Path=/; Secure; HttpOnly"
+		} else {
+			if req.Headers["Cookie"] != "ab_session_id=test-session" {
+				t.Error("session cookie missing from fragment")
+				w.WriteHeader(400)
+				return
+			}
+			u, err := url.Parse(key)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			key = u.Query().Get("url")
+		}
+		body, ok := pages[key]
+		if !ok {
+			t.Errorf("unexpected URL %s", req.URL)
+			w.WriteHeader(400)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":  200,
+			"url":     req.URL,
+			"headers": headers,
+			"body":    base64.StdEncoding.EncodeToString([]byte(body)),
+		})
+	}))
+	defer server.Close()
+	t.Setenv("SCRAPLING_FETCH_URL", server.URL)
+	t.Setenv("SCRAPLING_FETCH_TOKEN", "test")
+	reg := map[string]Source{"infojobsbr": NewInfoJobsBR(nil)}
+	if err := ApplyScraplingEgress(reg); err != nil {
+		t.Fatal(err)
+	}
+	s := reg["infojobsbr"].(infojobsBR)
+	s.limiter = noWait{}
+	cards, err := s.list(context.Background(), "ac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cards) != 7 || calls != 3 {
+		t.Fatalf("cards=%d calls=%d, want seven Acre postings across three pages", len(cards), calls)
 	}
 }

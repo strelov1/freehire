@@ -14,8 +14,8 @@ import (
 // magnit adapts Magnit Tech's careers API (magnit.tech), the IT arm of the Magnit retail group:
 // a single-company source with no per-tenant board id (boardless). The listing carries every
 // structured field but no description, which lives behind a per-posting detail request, so the
-// adapter hydrates (HydratingSource) — a detail is spent only on a posting the catalogue does
-// not already hold. Measured 2026-10-14: 43 postings, all on one listing page at per_page=50.
+// adapter hydrates (HydratingSource): a detail is spent only on a posting the catalogue does not
+// already hold. The whole catalogue fits one listing page at per_page=50.
 //
 // The API refuses curl's default User-Agent with a 403 and answers the project's own; the
 // SPA's HTML routes do the same, which is why nothing here reads a page.
@@ -130,8 +130,7 @@ func (m magnit) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 }
 
 // list walks the listing until the API reports no further page. Any page failing fails the
-// crawl: the whole catalogue fits one page today, so a later page failing is not a shape this
-// source has ever produced, and the first page is the board.
+// crawl; the first page is the board.
 func (m magnit) list(ctx context.Context) ([]magnitItem, error) {
 	var items []magnitItem
 	for page := 1; page <= magnitMaxPages; page++ {
@@ -222,11 +221,10 @@ func magnitBody(d magnitDetail) string {
 }
 
 // magnitWorkMode maps the work-format labels to a work mode. The vocabulary is small and
-// employer-curated (measured 2026-10-14: four labels across 43 postings) and every label says
-// its arrangement in words: "удаленно" (remote), "гибрид" (hybrid), "офис" (on-site). A label
-// such as "Москва и Краснодар (гибрид/офис), другие города - удаленно" offers more than one,
-// and the broadest arrangement a posting offers wins, as it does in workModeFromRemoteHybrid —
-// a candidate filtering for remote work can take this job.
+// employer-curated and every label says its arrangement in words: "удаленно" (remote), "гибрид"
+// (hybrid), "офис" (on-site). A label offering more than one ("Москва и Краснодар (гибрид/офис),
+// другие города - удаленно") takes the broadest arrangement, as in workModeFromRemoteHybrid, so a
+// candidate filtering for remote work can take this job.
 func magnitWorkMode(formats []magnitNamed) string {
 	mode := ""
 	rank := map[string]int{"": 0, "onsite": 1, "hybrid": 2, "remote": 3}

@@ -56,10 +56,7 @@ describe('raw palette utility', () => {
   });
 
   it('finds one behind a variant prefix', () => {
-    expect(find(kind, 'class="hover:bg-blue-700 dark:text-rose-400"')).toEqual([
-      'bg-blue-700',
-      'text-rose-400',
-    ]);
+    expect(find(kind, 'class="hover:bg-blue-700 dark:text-rose-400"')).toEqual(['bg-blue-700', 'text-rose-400']);
   });
 
   it('leaves a semantic token utility alone', () => {

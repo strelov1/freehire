@@ -17,7 +17,9 @@ const {
   expiry,
   forget,
   user,
+  invalidateAll,
 } = vi.hoisted(() => ({
+  invalidateAll: vi.fn(),
   listApiKeys: vi.fn(),
   revokeApiKey: vi.fn(),
   createApiKey: vi.fn(),
@@ -32,7 +34,7 @@ const {
 // Hoisted with the mocks: `vi.mock` is lifted above ordinary declarations, so a class
 // declared normally here is still in its temporal dead zone when the factory runs.
 const { StubApiError } = vi.hoisted(() => ({
-  StubApiError: class StubApiError extends Error {
+  StubApiError: class extends Error {
     constructor(
       public status: number,
       message = 'failed',
@@ -42,6 +44,7 @@ const { StubApiError } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock('$app/navigation', () => ({ invalidateAll }));
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('#lib/api.js', () => ({
@@ -90,6 +93,7 @@ function openDialog(): HTMLElement {
 }
 
 beforeEach(() => {
+  invalidateAll.mockReset().mockResolvedValue(undefined);
   draft.next = null;
   begin.mockReset();
   forget.mockReset();
@@ -129,6 +133,7 @@ describe('ApiKeysView — revoking', () => {
 
     expect(reauthenticatePassword).toHaveBeenCalledWith('hunter2');
     expect(revokeApiKey).toHaveBeenCalledWith(7);
+    await vi.waitFor(() => expect(invalidateAll).toHaveBeenCalledOnce());
   });
 
   it('offers a provider confirmation inside the dialog to an account with no password', async () => {
@@ -138,9 +143,7 @@ describe('ApiKeysView — revoking', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
 
-    expect(
-      await within(openDialog()).findByRole('button', { name: 'Confirm with google' }),
-    ).toBeTruthy();
+    expect(await within(openDialog()).findByRole('button', { name: 'Confirm with google' })).toBeTruthy();
   });
 
   it('carries which key was being revoked across a provider round trip', async () => {
@@ -149,9 +152,7 @@ describe('ApiKeysView — revoking', () => {
     await screen.findByText('CI bot');
     await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
 
-    await fireEvent.click(
-      await within(openDialog()).findByRole('button', { name: 'Confirm with google' }),
-    );
+    await fireEvent.click(await within(openDialog()).findByRole('button', { name: 'Confirm with google' }));
 
     expect(begin).toHaveBeenCalledWith('google', '/my/integrations/api-keys', {
       surface: 'revoke-api-key',
@@ -183,6 +184,7 @@ describe('ApiKeysView — revoking', () => {
     await fireEvent.click(within(openDialog()).getByRole('button', { name: 'Revoke' }));
 
     expect(forget).toHaveBeenCalled();
+    expect(invalidateAll).not.toHaveBeenCalled();
     expect(screen.getByText('CI bot')).toBeTruthy();
   });
 });
@@ -200,8 +202,9 @@ describe('ApiKeysView — creating', () => {
     expect(await screen.findByLabelText('Name')).toBeTruthy();
   });
 
-  it('shows the plaintext token once, after a key is created', async () => {
+  it('keeps a new token available before a potentially failing account refresh', async () => {
     signedIn(true);
+    invalidateAll.mockRejectedValue(new Error('account refresh failed'));
     createApiKey.mockResolvedValue({ ...key, id: 8, name: 'deploy', token: 'plaintext-token-shown-once' });
     render(ApiKeysView);
     await screen.findByText('CI bot');
@@ -216,6 +219,7 @@ describe('ApiKeysView — creating', () => {
     await fireEvent.click(within(openDialog()).getByRole('button', { name: 'Create key' }));
 
     expect(await screen.findByText('plaintext-token-shown-once')).toBeTruthy();
+    expect(invalidateAll).not.toHaveBeenCalled();
   });
 });
 
@@ -231,6 +235,19 @@ describe('ApiKeysView — the one-time secret', () => {
     await fireEvent.click(within(openDialog()).getByRole('button', { name: 'Create key' }));
     await screen.findByText('plaintext-token-shown-once');
   }
+
+  it('keeps an uncopied token when another key is revoked before an account refresh', async () => {
+    await createKey();
+    invalidateAll.mockRejectedValue(new Error('account refresh failed'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
+    const dialog = openDialog();
+    await fireEvent.input(within(dialog).getByLabelText('Password'), { target: { value: 'hunter2' } });
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }));
+
+    await vi.waitFor(() => expect(screen.queryByText('CI bot')).toBeNull());
+    expect(screen.getByText('plaintext-token-shown-once')).toBeTruthy();
+    expect(invalidateAll).not.toHaveBeenCalled();
+  });
 
   it('says a failed copy failed and selects the token for a manual one', async () => {
     await createKey();
@@ -253,6 +270,7 @@ describe('ApiKeysView — the one-time secret', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Yes, dismiss' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Yes, dismiss' }));
     expect(screen.queryByText('plaintext-token-shown-once')).toBeNull();
+    await vi.waitFor(() => expect(invalidateAll).toHaveBeenCalledOnce());
     // The panel took the focused control with it; focus lands on the nearest one left.
     expect(document.activeElement?.textContent?.trim()).toBe('Create key');
   });

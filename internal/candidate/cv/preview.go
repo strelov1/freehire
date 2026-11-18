@@ -8,9 +8,8 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/perioddate"
 )
 
-// sampleDocument is the fixed résumé rendered into every template's preview thumbnail. It is
-// deliberately generic (a fictional engineer) and sized to fit one A4 page so each preview is
-// a single .svg. Kept small on purpose — previews are illustrative, not a full CV.
+// sampleDocument is the fixed résumé rendered into every template's preview thumbnail:
+// generic (a fictional engineer) and sized to fit one A4 page, so each preview is one .svg.
 func sampleDocument() Document {
 	return Document{
 		Margins: DefaultMargins(),
@@ -42,9 +41,8 @@ func sampleDocument() Document {
 }
 
 // GeneratePreviews renders the sample document through every registered template to SVG and
-// writes <outDir>/<id>.svg, returning the template ids written. It iterates the registry so the
-// preview set can never drift from it. Dev-only (invoked by cmd/cv-previews); the SVGs are
-// committed so the frontend serves them statically.
+// writes <outDir>/<id>.svg, returning the ids written. Iterating the registry keeps the set
+// from drifting. Dev-only (cmd/cv-previews); the SVGs are committed.
 func GeneratePreviews(ctx context.Context, r *TypstRenderer, outDir string) ([]string, error) {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return nil, err

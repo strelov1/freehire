@@ -58,7 +58,9 @@
                 <JobRow {job}>
                   {#snippet footer()}
                     {#if job.closed_at}
-                      <span class="whitespace-nowrap text-xs text-muted-foreground">Closed {closedOn(job.closed_at)}</span>
+                      <span class="whitespace-nowrap text-xs text-muted-foreground"
+                        >Closed {closedOn(job.closed_at)}</span
+                      >
                     {/if}
                   {/snippet}
                 </JobRow>
@@ -69,14 +71,18 @@
           <nav class="mt-6 flex justify-between text-sm" aria-label="Closed positions pages">
             {#if data.pageNumber > 1}
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- pathname comes from page.url, already resolved (see Pagination.svelte) -->
-              <a class="underline hover:text-foreground" href={pageHref(pathname, noParams, data.pageNumber - 1)}>← Newer</a>
+              <a class="underline hover:text-foreground" href={pageHref(pathname, noParams, data.pageNumber - 1)}
+                >← Newer</a
+              >
             {:else}
               <span></span>
             {/if}
             <!-- The API stops at the feed window; past MAX_PAGE the next page would 404. -->
             {#if data.closed.hasMore && pageWithinWindow(data.pageNumber + 1)}
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- as above -->
-              <a class="underline hover:text-foreground" href={pageHref(pathname, noParams, data.pageNumber + 1)}>Older →</a>
+              <a class="underline hover:text-foreground" href={pageHref(pathname, noParams, data.pageNumber + 1)}
+                >Older →</a
+              >
             {/if}
           </nav>
         {/if}

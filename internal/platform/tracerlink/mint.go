@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Repository is the owner-scoped storage this service needs. Kept to the two calls the mint
-// path makes, so a caller can stand it in without a database.
+// Repository is the owner-scoped storage this service needs, so a caller can stand it in
+// without a database.
 type Repository interface {
 	// Upsert returns the token already standing for this (CV, position, destination), minting
 	// the offered one if there is none. It writes nothing for a CV the user does not own.
@@ -36,11 +36,10 @@ type Hrefs struct {
 
 // Mint issues a token for every traceable link of a CV and returns where each one should point.
 //
-// It runs on every download, because the PDF is never stored — so the repository's upsert must be
-// idempotent, and a second download of an unchanged CV must produce the tokens the first one did.
+// It runs on every download (the PDF is never stored), so the upsert must be idempotent: an
+// unchanged CV yields the same tokens.
 //
-// A link that fails to mint is left out rather than failing the render: a CV the candidate can
-// download with one link untraced is worth more than no CV at all.
+// A link that fails to mint is left out rather than failing the render.
 func (m *Minter) Mint(ctx context.Context, cvID uuid.UUID, userID int64, baseURL, prefix string,
 	headerLinks, projectLinks []string) Hrefs {
 	out := Hrefs{
@@ -64,14 +63,13 @@ func (m *Minter) Mint(ctx context.Context, cvID uuid.UUID, userID int64, baseURL
 	return out
 }
 
-// QueriesRepository adapts the generated sqlc queries to Repository. It lives here rather than in
-// the handler so the mint path has one home.
+// QueriesRepository adapts the generated sqlc queries to Repository.
 type QueriesRepository struct {
 	upsert func(ctx context.Context, cvID uuid.UUID, userID int64, token, sourcePath, destURL, destHash string) (string, error)
 }
 
-// NewRepository wraps the caller's upsert. Taking a function rather than the *db.Queries keeps
-// this package free of the database import, which is what lets its tests run without one.
+// NewRepository wraps the caller's upsert. Taking a function rather than *db.Queries keeps
+// this package free of the database import.
 func NewRepository(upsert func(ctx context.Context, cvID uuid.UUID, userID int64, token, sourcePath, destURL, destHash string) (string, error)) Repository {
 	return QueriesRepository{upsert: upsert}
 }

@@ -1,22 +1,14 @@
-// Package fitanalysis is the fit-analysis use cases: reading the cached analysis for a
-// (candidate, job), running the three-stage chain over it, the allowance rule that decides
-// which runs are charged, and the coalescing that keeps two concurrent callers for one pair
-// from paying for two chains.
+// Package fitanalysis holds the fit-analysis use cases: the cached read, the three-stage chain
+// run, the allowance rule that decides which runs are charged, and the coalescing that keeps two
+// concurrent callers for one pair from paying twice.
 //
-// It exists because the chain has four entry points and only one of them speaks HTTP: the
-// cached read and the on-demand run behind the API, the tailoring workspace's streamed run,
-// and the autopilot's two invisible halves — a cold-start fill and a post-run refresh — that
-// execute after the request, from a detached goroutine, with no fiber ctx at all. A rule
-// written where one of those callers happens to reach it is a rule the other three never
-// meet; that is how the metering, the staleness stamp and the coalescing came to live on a
-// Fiber handler, reachable only through a *fiber.Ctx and testable only through the tagged
-// handler tests.
+// The chain has four entry points and only one speaks HTTP (the API run, the tailoring stream,
+// and the autopilot's cold-start fill and post-run refresh, which run detached with no fiber
+// ctx), so these rules live here rather than on a handler.
 //
-// The prompt chain itself, the Analysis type and its sanitize ceilings stay in
-// internal/candidate/matchanalysis — this package orchestrates that domain, it does not
-// replace it. What stays with the caller is transport: resolving a slug to a job, binding
-// the candidate's gateway credential, framing SSE, and rendering the 402 that
-// RefusedError describes.
+// The prompt chain, the Analysis type and its sanitize ceilings stay in
+// internal/candidate/matchanalysis. Transport (slug to job, gateway credential, SSE framing,
+// rendering the 402 from RefusedError) stays with the caller.
 package fitanalysis
 
 import (
@@ -37,11 +29,8 @@ import (
 )
 
 // Store reads and writes the per-(candidate, job) cached fit analysis. *db.Queries satisfies
-// it; a fake backs the DB-less tests.
-//
-// It trades the generated row types deliberately, the same way internal/ai/embed's ports do:
-// the rows are wide projections this package only ever reads fields off, and restating them
-// as domain structs would buy a mapping layer nobody reads.
+// it; a fake backs the DB-less tests. It uses the generated row types directly: they are
+// read-only projections, so domain structs would add a mapping layer for nothing.
 type Store interface {
 	GetUserJobAnalysis(ctx context.Context, arg db.GetUserJobAnalysisParams) (db.GetUserJobAnalysisRow, error)
 	UpsertUserJobAnalysis(ctx context.Context, arg db.UpsertUserJobAnalysisParams) error
@@ -61,9 +50,7 @@ type Meter interface {
 }
 
 // RefusedError refuses a run the candidate's plan does not allow right now. It carries the
-// decision because the refusal has to be renderable — the SPA shows what is left, when the
-// day resets, and where to upgrade — and carrying it here is what lets the decision live
-// outside the transport that formats it.
+// Decision so the caller can render what is left, when the day resets and where to upgrade.
 type RefusedError struct {
 	Decision plan.Decision
 }
@@ -79,33 +66,27 @@ type Request struct {
 	UserID int64
 	Job    db.Job
 
-	// Analyzer spends under the candidate's own gateway credential. It is bound by the
-	// caller rather than here because minting a credential is a network call, and a
-	// streaming caller must make it BEFORE its headers go out — afterwards it would stall a
-	// stream the client is already reading.
+	// Analyzer spends under the candidate's own gateway credential. The caller binds it: minting
+	// is a network call a streaming caller must make BEFORE its headers go out.
 	Analyzer *matchanalysis.Analyzer
 
 	// Input is the assembled chain input. Its Language is also the language the cache is
 	// stamped with, so the two can never disagree.
 	Input matchanalysis.Input
 
-	// CVUploadedAt stamps the cache with the CV that was actually analysed. Captured by the
-	// caller up front: the chain takes seconds, and re-reading it afterwards would risk
-	// stamping a newer CV's time on an older CV's analysis.
+	// CVUploadedAt stamps the cache with the CV actually analysed. The caller captures it up
+	// front: the chain takes seconds, and a later re-read could stamp a newer CV's time on an
+	// older analysis.
 	CVUploadedAt *time.Time
 
-	// Reserved says THIS caller has already paid for the run (Reserve's answer), not the
-	// leader's. Two callers racing for one never-analysed job each reserve, and consumption
-	// is idempotent per (candidate, feature, job), so both collapse into a single ledger row
-	// — two tabs on the same job is neither a double charge nor a discount.
-	//
-	// A run that produces nothing releases what it took, so a failed analysis still costs
-	// nothing.
+	// Reserved says THIS caller already paid for the run (Reserve's answer). Consumption is
+	// idempotent per (candidate, feature, job), so two racing callers collapse into one ledger
+	// row. A run that produces nothing releases what it took.
 	Reserved bool
 
-	// Claim is this caller's role in the coalesced compute, from Claim. Nil means the caller
-	// is not coalescing at all (the plain POST run), which races nothing today because the
-	// two paths that can collide — the visible stream and the autopilot's fill — both claim.
+	// Claim is this caller's role in the coalesced compute, from Claim. Nil means not
+	// coalescing (the plain POST run); the two paths that can collide, the visible stream and
+	// the autopilot fill, both claim.
 	Claim *Claim
 }
 
@@ -117,10 +98,8 @@ type Service struct {
 	coalesce coordinator
 }
 
-// New builds the service over the analysis cache, the plan meter, and the analyzer whose
-// model identifies a cached row. The analyzer here is the UNBOUND one: it answers ModelID for
-// the stamps, while every actual compute runs under the per-candidate analyzer the caller
-// puts in Request.Analyzer.
+// New builds the service. The analyzer is the UNBOUND one: it answers ModelID for the stamps,
+// while every compute runs under the per-candidate analyzer in Request.Analyzer.
 func New(store Store, meter Meter, analyzer *matchanalysis.Analyzer) *Service {
 	return &Service{store: store, meter: meter, analyzer: analyzer}
 }
@@ -132,11 +111,9 @@ func (s *Service) ModelID() string { return s.analyzer.ModelID() }
 // leader/follower contract.
 func (s *Service) Claim(userID, jobID int64) *Claim { return s.coalesce.Claim(userID, jobID) }
 
-// Standing reports where the candidate stands on their fit-analysis allowance today, or nil
-// on a DB error (logged), with no meter wired, or on a nil service. Best-effort: a transient
-// hiccup must neither block a legitimate analysis nor refuse the caller — the atomic Consume
-// remains the real ceiling, and a caller assembled without a fit service (a fixture
-// exercising an adjacent surface) reads as "standing unknown" rather than panicking.
+// Standing reports where the candidate stands on today's fit-analysis allowance, or nil on a DB
+// error (logged), with no meter wired, or on a nil service. Best-effort: the atomic Consume is
+// the real ceiling.
 func (s *Service) Standing(ctx context.Context, userID int64) *plan.Standing {
 	if s == nil || s.meter == nil {
 		return nil
@@ -149,25 +126,15 @@ func (s *Service) Standing(ctx context.Context, userID int64) *plan.Standing {
 	return &st
 }
 
-// Reserve decides whether this run is chargeable and, if it is, TAKES the allowance before
-// the chain starts. The atomic consumption is the gate.
+// Reserve decides whether this run is chargeable and, if so, TAKES the allowance before the
+// chain starts; the atomic consumption is the gate (its row lock arbitrates concurrent runs).
 //
-// It used to check what was left and charge afterwards, which is a check-then-act: two
-// concurrent runs for two never-analysed jobs could both pass a check only one of them could
-// afford, and the loser's charge then failed silently — after its analysis had been computed,
-// cached and served. Consuming first makes the counter's own row lock the arbiter, so the
-// second run is refused rather than given away.
+// A run is chargeable only when it would be the candidate's FIRST analysis of that job, so
+// recomputes are free. A refused run returns RefusedError before the LLM is touched and before
+// a streaming caller opens its response, so the refusal can still be a status.
 //
-// A run is chargeable only when it would be the candidate's FIRST analysis of that job, so a
-// recompute is always free and an analysis cached before metering shipped re-runs for nothing.
-// A run the plan does not allow is refused with RefusedError, before the LLM is touched and
-// before a streaming caller opens its response — so the refusal can still be a status rather
-// than an event on a stream that already returned 200.
-//
-// Metering fails OPEN. An unreachable counter logs and lets the run through unreserved,
-// exactly as the balance read always did: bookkeeping must never be able to refuse a
-// legitimate analysis, and an uncharged run is a smaller wrong than a candidate blocked by
-// our accounting.
+// Metering fails OPEN: an unreachable counter logs and lets the run through unreserved. An
+// uncharged run is a smaller wrong than a candidate blocked by our accounting.
 func (s *Service) Reserve(ctx context.Context, userID, jobID int64) (reserved bool, err error) {
 	isNew, err := s.isNew(ctx, userID, jobID)
 	if err != nil || !isNew {
@@ -184,10 +151,8 @@ func (s *Service) Reserve(ctx context.Context, userID, jobID int64) (reserved bo
 		log.Printf("plan: reserving a fit analysis for user %d job %d: %v", userID, jobID, err)
 		return false, nil
 	}
-	// True even when the consumption no-opped on an already-charged ref. isNew said there is
-	// no analysis for this job, so a charge standing against it has bought the candidate
-	// nothing — and releasing it if this run also fails is the right answer, not a refund of
-	// somebody else's work.
+	// True even when the consumption no-opped on an already-charged ref: no analysis exists, so
+	// that charge bought nothing and releasing it if this run fails is correct.
 	return true, nil
 }
 
@@ -204,19 +169,16 @@ func (s *Service) isNew(ctx context.Context, userID, jobID int64) (bool, error) 
 	return false, err
 }
 
-// Cached serves the analysis already computed for (candidate, job), never calling the LLM,
-// together with the stamps it was computed under. It answers a nil analysis when none is
-// cached or the stored blob is unreadable — the caller then re-offers a compute.
+// Cached serves the analysis already computed for (candidate, job), never calling the LLM, with
+// the stamps it was computed under. It answers a nil analysis when none is cached or the stored
+// blob is unreadable.
 //
-// The stamps come back rather than a ready-made staleness verdict so the caller assembles the
-// live ones only when there is something to judge: most jobs a candidate opens were never
-// analysed, and reading a profile language to date an analysis that does not exist would put
-// a query on the commonest read there is. The rule those stamps are compared BY still lives
-// here — Stamps.Fresh — so no caller restates which fields matter.
+// Stamps come back instead of a staleness verdict so the caller builds the live ones only when
+// there is something to judge (most opened jobs were never analysed). The comparison rule stays
+// in Stamps.Fresh.
 //
-// The returned analysis is the UNCAPPED one the chain produced: the hard-constraint ceiling is
-// recomputed and applied by the caller on every read, so a dictionary change takes effect
-// without any cache invalidation.
+// The analysis is the UNCAPPED one; the caller recomputes and applies the hard-constraint
+// ceiling on every read, so dictionary changes need no cache invalidation.
 func (s *Service) Cached(ctx context.Context, userID, jobID int64) (*matchanalysis.Analysis, Stamps, error) {
 	row, err := s.store.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -238,7 +200,7 @@ func (s *Service) List(ctx context.Context, userID int64) ([]db.ListUserJobAnaly
 }
 
 // Run executes the chain for r and leaves the result in the cache, charging the candidate
-// when r.Chargeable says this caller owes one.
+// when r.Reserved says this caller owes one.
 //
 // emit receives each progress event as it resolves; a nil emit runs the chain without
 // streaming, which is the only difference between the on-demand endpoint and the streamed one.
@@ -250,32 +212,22 @@ func (s *Service) List(ctx context.Context, userID int64) ([]db.ListUserJobAnaly
 // chain, the cache write and the debit still wakes a waiting follower instead of stranding
 // that pair behind a leader that never finishes.
 //
-// The two gates below answer DIFFERENT questions and are therefore two flags, not one. A
-// single `succeeded` was set after the cache write without looking at it, so a failed write
-// was published to followers as a success — and Follow, whose whole discipline is not to
-// trust the cache unless the leader says so, then served whatever older row was there as
-// this run's live result.
+// The two gates below answer different questions, so they are two flags: a failed cache write
+// must not be published to followers as success, or Follow would serve an older row as this
+// run's result.
 func (s *Service) Run(ctx context.Context, r Request, emit func(matchanalysis.Event)) (*matchanalysis.Analysis, error) {
-	// cached: did the CACHE end up holding this run's result? That is the only thing a
-	// follower can read, so it is what the claim publishes.
+	// cached: did the CACHE end up holding this run's result? That is what the claim publishes.
 	cached := false
 	if r.Claim.IsLeader() {
 		defer func() { r.Claim.Release(cached) }()
 	}
-	// produced: did the chain yield an analysis THIS caller is about to be handed? Nothing
-	// produced means nothing owed — and whoever RAN THE CHAIN says so for everyone. Only a
-	// leader or a caller that is not coalescing at all reaches Run (a follower goes to
-	// Follow), so this is exactly the caller that knows the outcome. It releases the ref
-	// rather than just its own reservation: when the leader is the free autopilot pre-run, the
-	// charge standing against that ref belongs to a follower about to be told there is nothing.
+	// produced: did the chain yield an analysis this caller will be handed? If not, nothing is
+	// owed, and the caller that ran the chain (leader or non-coalescing; followers go to Follow)
+	// releases the ref for everyone: when the leader is the free autopilot pre-run, the standing
+	// charge belongs to a follower about to be told there is nothing.
 	//
-	// It is deliberately NOT `cached`. An allowance buys having the analysis, and a caller
-	// that received one got what it paid for even if the write behind it failed — Follow's
-	// own comment names that case. Refunding on a failed write would void a charge the
-	// returned result earned.
-	//
-	// Deferred so a panic anywhere below — in the chain, the emit callback or the cache write
-	// — gives the credit back too.
+	// Deliberately NOT `cached`: a caller that received an analysis got what it paid for even if
+	// the cache write failed. Deferred so a panic also gives the credit back.
 	produced := false
 	defer func() {
 		if !produced {
@@ -301,28 +253,24 @@ func (s *Service) Run(ctx context.Context, r Request, emit func(matchanalysis.Ev
 	return analysis, nil
 }
 
-// ErrUnavailable reports that no analysis can be served: the concurrent leader of this pair
-// failed, or what it left behind is unreadable. It is deliberately one error for both — the
-// caller's answer is the same and neither case tells the candidate anything actionable.
+// ErrUnavailable reports that no analysis can be served: the leader failed or left an
+// unreadable row. One error for both; the caller's answer is the same.
 var ErrUnavailable = errors.New("fitanalysis: analysis unavailable")
 
-// Follow is the graceful degrade for the caller that lost the race for (candidate, job): it
-// waits for the leader and returns the analysis that landed in the cache, so this caller
-// serves a real result instead of paying for a second identical chain.
+// Follow is the degrade for the caller that lost the race for (candidate, job): it waits for
+// the leader and returns the analysis that landed in the cache instead of paying for a second
+// chain.
 //
-// The leader's success is checked before the cache is trusted at all. A leader whose attempt
-// failed leaves an OLDER (or absent) row behind, not a fresh one, and reading it
-// unconditionally would serve a stale analysis dressed up as this run's live result — a
-// follower must report the same failure the leader saw, not paper over it.
+// The leader's success is checked before the cache is trusted: a failed leader leaves an OLDER
+// or absent row, which would be served as this run's live result.
 //
-// It still charges when r.Chargeable says this caller owes a credit. Following the free
-// autopilot pre-run is exactly the case that must still charge a genuinely new analysis.
+// It still charges when r.Reserved says this caller owes a credit (e.g. following the free
+// autopilot pre-run).
 func (s *Service) Follow(ctx context.Context, r Request) (*matchanalysis.Analysis, error) {
 	if !r.Claim.wait() {
-		// No release here, deliberately. The debit is per (candidate, job) and this caller
-		// shares it with the leader, so giving it back could void a charge the leader's own
-		// result earned — a leader whose CACHE WRITE failed still returned its analysis to
-		// whoever paid for it. The leader releases on failure for everyone; see Run.
+		// No release: the debit is shared with the leader, and a leader whose cache write failed
+		// still returned its analysis to whoever paid. The leader releases on failure for
+		// everyone; see Run.
 		return nil, ErrUnavailable
 	}
 	row, err := s.store.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: r.UserID, JobID: r.Job.ID})
@@ -333,31 +281,21 @@ func (s *Service) Follow(ctx context.Context, r Request) (*matchanalysis.Analysi
 	return analysis, nil
 }
 
-// Ensure computes and caches the analysis when none is cached yet. It exists for the
-// cold-start autopilot run, whose first tool call reads the cache and errors without one —
-// this is what lets that run start without requiring the candidate to have produced an
-// analysis first.
+// Ensure computes and caches the analysis when none is cached yet, for the cold-start autopilot
+// run whose first tool call reads the cache and errors without one.
 //
-// It REPORTS whether the caller ended up with an analysis, and that is the point. The fill
-// used to be best-effort and silent, so an autopilot run whose chain failed proceeded with no
-// requirement list at all: measured on production 2026-08-25..09-08, 57 of 159 runs — 36% —
-// went out that way, spending a turn's tokens editing a CV against nothing while cv_context
-// answered "no analysis has been run for this job". Nothing anywhere said so.
+// It REPORTS whether the caller ended up with an analysis: a silently failed fill sent
+// autopilot runs out with no requirement list, editing a CV against nothing.
 //
-// It never charges — this path is unmetered, tracked only by the same LLM spend attribution
-// every call already carries (see the tailor-coldstart-autopilot design's "no new metering"
-// decision) — so r.Chargeable is ignored here rather than trusted.
+// It never charges (this path is unmetered), so r.Reserved is ignored.
 //
 // r.Claim decides the coalescing: the tailoring workspace's visible stream starts at the same
-// cold start this runs at, so both routinely race for the identical pair. A follower waits
-// and then reads the cache like anyone else — the leader's outcome IS this function's concern
-// now, because a follower that reported success on a failed leader would hand the run the
-// same empty plan by a quieter route.
+// cold start, so both routinely race for one pair. A follower waits, then reads the cache; the
+// leader's outcome matters, since a follower reporting success on a failed leader would hand
+// the run the same empty plan.
 //
 // The answer is taken from the CACHE rather than from which branch ran, so leader, follower,
-// cache hit and unconfigured analyzer are all answered by one question: is there a row to
-// walk? A path analysis would have to be kept in step with every future branch; this cannot
-// drift.
+// cache hit and unconfigured analyzer are all answered by one question: is there a row to walk?
 func (s *Service) Ensure(ctx context.Context, r Request) error {
 	if !r.Claim.IsLeader() {
 		r.Claim.wait()
@@ -366,9 +304,9 @@ func (s *Service) Ensure(ctx context.Context, r Request) error {
 	succeeded := false
 	defer func() {
 		r.Claim.Release(succeeded)
-		// This half never charges, but it can LEAD a paying caller. When it produces nothing,
-		// the follower waiting on it gets nothing either, and the charge standing against this
-		// ref is that follower's — so the leader gives it back on their behalf.
+		// This half never charges, but it can LEAD a paying caller. When it produces nothing, the
+		// charge standing against this ref is the waiting follower's, so the leader gives it back
+		// on their behalf.
 		if !succeeded {
 			s.release(ctx, r.UserID, r.Job.ID)
 		}
@@ -376,7 +314,7 @@ func (s *Service) Ensure(ctx context.Context, r Request) error {
 
 	if _, err := s.store.GetUserJobAnalysis(ctx,
 		db.GetUserJobAnalysisParams{UserID: r.UserID, JobID: r.Job.ID}); err == nil {
-		succeeded = true // already cached — nothing to compute, and a good row for a follower to read
+		succeeded = true // already cached: a good row for a follower to read
 		return nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("matchanalysis: checking cache before an autopilot run, user %d job %d: %v",
@@ -390,9 +328,9 @@ func (s *Service) Ensure(ctx context.Context, r Request) error {
 	return nil
 }
 
-// cachedAnalysisPresent answers whether a row a run can walk is in the cache now. It is what
-// a follower asks after its leader has finished, and it deliberately asks the STORE rather
-// than the leader: the leader reports through the claim only that it is done.
+// cachedAnalysisPresent answers whether a row a run can walk is in the cache now. A follower
+// asks it after its leader finishes, and it asks the STORE: the leader reports only that it is
+// done.
 func (s *Service) cachedAnalysisPresent(ctx context.Context, r Request) error {
 	_, err := s.store.GetUserJobAnalysis(ctx,
 		db.GetUserJobAnalysisParams{UserID: r.UserID, JobID: r.Job.ID})
@@ -405,22 +343,19 @@ func (s *Service) cachedAnalysisPresent(ctx context.Context, r Request) error {
 	return nil
 }
 
-// Refresh UNCONDITIONALLY recomputes the chain and overwrites the cache, even when nothing was
-// cached or an analysis was already there. This is what repeals the
-// fit-analysis-post-autopilot-verify design's predecessor rule that the fit analysis is a
-// frozen snapshot of the base profile. It never charges, for the same reason Ensure does not.
+// Refresh UNCONDITIONALLY recomputes the chain and overwrites the cache, even when an analysis
+// was already there. It never charges, for the same reason Ensure does not.
 func (s *Service) Refresh(ctx context.Context, r Request) {
 	s.compute(ctx, r, "post-autopilot refresh")
 }
 
 // compute runs the chain and caches what it produced, reporting whether the cache is left
-// holding this call's own result — which is what a coalescing follower waits to learn. It
-// never charges: both callers are the autopilot's own unmetered halves.
+// holding this call's own result, which a coalescing follower waits to learn. It never charges:
+// both callers are the autopilot's unmetered halves.
 //
-// Unlike Run, one flag is the whole answer here. Neither caller is handed the analysis, so
-// there is no caller who got what they paid for: if the write failed, the follower gets
-// nothing and the charge standing against the ref — theirs, not this half's — is given back
-// on their behalf, which is what Ensure's defer does with this return value.
+// Unlike Run, one flag is the whole answer: neither caller is handed the analysis, so if the
+// write failed the follower gets nothing and Ensure's defer gives back the charge on their
+// behalf.
 func (s *Service) compute(ctx context.Context, r Request, stage string) bool {
 	analysis, err := r.Analyzer.Analyze(ctx, r.Input)
 	if err != nil {
@@ -433,21 +368,16 @@ func (s *Service) compute(ctx context.Context, r Request, stage string) bool {
 	return s.Cache(ctx, r.UserID, r.Job, r.CVUploadedAt, r.Input.Language, analysis) == nil
 }
 
-// Cache upserts the analysis stamped with the analysed CV's upload time, the job content
-// hash, the language it was written in, and the model that produced it. It takes a plain
-// context (never a request's) so a caller streaming over SSE can cache after its handler has
-// returned. Best-effort towards the CALLER: it logs, and the caller that already holds the
-// analysis returns it regardless.
+// Cache upserts the analysis stamped with the analysed CV's upload time, the job content hash,
+// the language it was written in, and the model that produced it. It takes a plain context
+// (never a request's) so a caller streaming over SSE can cache after its handler has returned.
+// Best-effort towards the CALLER, which logs and keeps its own analysis.
 //
-// It still reports the failure, because one other party cannot see it and has to: a
-// coalescing FOLLOWER reads what this wrote, so a leader whose write failed leaves an older
-// or absent row that the follower would otherwise serve as this run's live result. Follow
-// already refuses to trust the cache unless the leader says it succeeded — this is what
-// makes "succeeded" able to mean the write, and not merely the chain.
+// It still returns the failure because a coalescing FOLLOWER reads what this wrote: a failed
+// write leaves an older or absent row that Follow would otherwise serve as this run's result.
 //
-// What it stores is the UNCAPPED analysis. The hard-constraint ceiling is applied to the
-// served copy only, by the caller, so a dictionary change takes effect on the next read with
-// no cache invalidation.
+// It stores the UNCAPPED analysis; the caller applies the hard-constraint ceiling to the served
+// copy only, so dictionary changes need no cache invalidation.
 func (s *Service) Cache(ctx context.Context, userID int64, job db.Job, cvUploadedAt *time.Time, language string, analysis *matchanalysis.Analysis) error {
 	blob, err := json.Marshal(analysis)
 	if err != nil {
@@ -469,28 +399,24 @@ func (s *Service) Cache(ctx context.Context, userID int64, job db.Job, cvUploade
 	return nil
 }
 
-// release gives back a credit reserved for a run that produced nothing, and is best-effort:
-// the candidate is already being told the analysis is unavailable, and a failure to return
-// their point is not something to fail them a second time over. It is idempotent, so every
-// failure path may call it without first working out whether it owes one.
+// release gives back a credit reserved for a run that produced nothing. Best-effort (the
+// candidate is already being told the analysis is unavailable) and idempotent, so every failure
+// path may call it without working out whether it owes one.
 func (s *Service) release(ctx context.Context, userID, jobID int64) {
 	if s.meter == nil {
 		return
 	}
-	// The cleanup has to survive the cancellation that caused it. A client that disconnects
-	// mid-run cancels the request context, the chain fails with it, and a release on that same
-	// context cannot even open its transaction — leaving the candidate charged for an analysis
-	// they never received, in exactly the case this exists for.
+	// The cleanup must survive the cancellation that caused it: a client disconnect cancels the
+	// request context, and a release on that context could not open its transaction.
 	detached := context.WithoutCancel(ctx)
 
-	// An allowance buys HAVING the analysis, not the attempt that produced it. A later run
-	// that fails — a recompute, the autopilot's refresh — must not give back what an EARLIER
-	// run paid, so a release stops when an analysis exists for the pair.
+	// An allowance buys HAVING the analysis, not the attempt that produced it. A failed later
+	// run (recompute, autopilot refresh) must not give back what an EARLIER run paid, so a
+	// release stops when an analysis exists for the pair.
 	//
-	// A service with no store cannot answer that question and simply releases: it is the
-	// nil-degrades-rather-than-panics rule the reads already follow, and a tool runs inside an
-	// SSE writer's goroutine where a panic reaches no recover. A read that FAILS releases too —
-	// an unanswered question is not a yes, and leaving a candidate charged is the worse error.
+	// A service with no store simply releases (a tool runs in an SSE writer's goroutine where a
+	// panic reaches no recover). A read that FAILS releases too: leaving a candidate charged is
+	// the worse error.
 	if s.store != nil {
 		read, cancelRead := context.WithTimeout(detached, releaseTimeout)
 		analysis, _, err := s.Cached(read, userID, jobID)
@@ -500,8 +426,7 @@ func (s *Service) release(ctx context.Context, userID, jobID int64) {
 		}
 	}
 
-	// Its own budget, not the read's leftovers: a slow cache read must not spend the deadline
-	// the refund needs and leave the reservation standing.
+	// Its own budget, not the read's leftovers: a slow read must not starve the refund.
 	write, cancel := context.WithTimeout(detached, releaseTimeout)
 	defer cancel()
 	if err := s.meter.Release(write, userID, plan.FeatureFit, debitRef(jobID)); err != nil {
@@ -509,8 +434,8 @@ func (s *Service) release(ctx context.Context, userID, jobID int64) {
 	}
 }
 
-// releaseTimeout bounds the detached cleanup. Generous for two small statements, and short
-// enough that a wedged database cannot pile up goroutines behind it.
+// releaseTimeout bounds the detached cleanup: generous for two small statements, short enough
+// that a wedged database cannot pile up goroutines.
 const releaseTimeout = 5 * time.Second
 
 // debitRef identifies what a match credit was spent on. One charge per job, ever.

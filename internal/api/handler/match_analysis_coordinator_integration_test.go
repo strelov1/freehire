@@ -160,6 +160,8 @@ type asyncCall struct {
 
 // startStream issues a GET to path with the caller's auth cookie in a goroutine, returning
 // immediately so the test can interleave a second concurrent call before this one completes.
+// The request carries the SPA's same-origin Fetch Metadata stamp: a cookie request without
+// it is refused by the route before any coordinator behaviour is exercised.
 func startStream(t *testing.T, app *fiber.App, path, token string) *asyncCall {
 	t.Helper()
 	call := &asyncCall{done: make(chan struct{})}
@@ -167,6 +169,7 @@ func startStream(t *testing.T, app *fiber.App, path, token string) *asyncCall {
 		defer close(call.done)
 		req := httptest.NewRequest(fiber.MethodGet, path, nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		req.Header.Set(headerSecFetchSite, secFetchSiteSameOrigin)
 		resp, err := app.Test(req, 5000)
 		if err != nil {
 			t.Errorf("stream request %s: %v", path, err)

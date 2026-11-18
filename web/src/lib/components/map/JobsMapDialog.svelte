@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Globe, RotateCcw } from '@lucide/svelte';
+  import { RotateCcw } from '@lucide/svelte';
   import { Button, Dialog } from '#lib/ui/index.js';
   import { api } from '#lib/api.js';
   import { dynamicLabel } from '#lib/facets.js';
@@ -105,24 +105,34 @@
       .filter(([code]) => countries.length === 0 || countries.includes(code))
       .flatMap(([code, count]): MapPlace[] => {
         const at = COUNTRY_CENTROIDS[code];
-        return at ? [{ key: `country:${code}`, label: dynamicLabel('countries', code), count, lat: at[0], lng: at[1] }] : [];
+        return at
+          ? [{ key: `country:${code}`, label: dynamicLabel('countries', code), count, lat: at[0], lng: at[1] }]
+          : [];
       }),
   );
 
   const cityPlaces = $derived(
     focusCountry && cityTable && cityLayer?.country === focusCountry
-      ? placeCities(focusCountry, cityLayer.cities, cityTable).map(
-          (c): MapPlace => ({ key: `city:${c.name}`, label: c.name, count: c.count, lat: c.lat, lng: c.lng }),
-        )
+      ? placeCities(focusCountry, cityLayer.cities, cityTable).map((c): MapPlace => ({
+          key: `city:${c.name}`,
+          label: c.name,
+          count: c.count,
+          lat: c.lat,
+          lng: c.lng,
+        }))
       : [],
   );
 
   const places = $derived(cityPlaces.length ? cityPlaces : countryPlaces);
   const total = $derived(counts?.total ?? null);
-  const worldwide = $derived(counts?.facets.regions?.[WORLDWIDE_REGION] ?? 0);
   const countryTotal = $derived((focusCountry && counts?.facets.countries?.[focusCountry]) || total || 0);
   // A posting listing two cities counts in both, so the sum can pass the country's total.
-  const placed = $derived(Math.min(countryTotal, cityPlaces.reduce((n, c) => n + c.count, 0)));
+  const placed = $derived(
+    Math.min(
+      countryTotal,
+      cityPlaces.reduce((n, c) => n + c.count, 0),
+    ),
+  );
 
   const maxCount = $derived(Math.max(1, ...places.slice(0, 10).map((p) => p.count)));
   // The dialog's subtitle: how much is on the map, for the place in focus when there is one.
@@ -131,11 +141,14 @@
   const summary = $derived.by(() => {
     if (total === null || loading || failed) return undefined;
     if (focusCountry) {
-      return format(plural(loc, total, s.summaryIn), { count: fmt(total), country: dynamicLabel('countries', focusCountry) });
+      return format(plural(loc, total, s.summaryIn), {
+        count: fmt(total),
+        country: dynamicLabel('countries', focusCountry),
+      });
     }
     const n = countryPlaces.length;
-    const places = format(plural(loc, n, s.countries), { count: fmt(n) });
-    return format(plural(loc, total, s.summary), { count: fmt(total), places });
+    const placesText = format(plural(loc, n, s.countries), { count: fmt(n) });
+    return format(plural(loc, total, s.summary), { count: fmt(total), places: placesText });
   });
 
   function pick(place: MapPlace) {
@@ -157,21 +170,12 @@
     if (!wasOnlySelection) store.add('countries', value);
   }
 
+  // Also drops a worldwide filter set elsewhere: with no toggle here, this is its way out.
   function worldView() {
     drilled = null;
+    store.remove('regions', WORLDWIDE_REGION);
     store.clearFacet('countries');
     store.clearFacet('cities');
-  }
-
-  // "Anywhere" ORs with the places like any location facet, so leaving them set would
-  // widen the list to both; turning worldwide on drops them instead.
-  function toggleWorldwide() {
-    if (worldwideOn) {
-      store.remove('regions', WORLDWIDE_REGION);
-      return;
-    }
-    store.add('regions', WORLDWIDE_REGION);
-    worldView();
   }
 </script>
 
@@ -183,21 +187,10 @@
          the sheet; centring a short map in it left the screen mostly empty. -->
     <div class="flex flex-col gap-4">
       <div class="flex flex-wrap items-center gap-2">
-        {#if countries.length || cities.length}
+        {#if countries.length || cities.length || worldwideOn}
           <Button variant="outline" size="sm" onclick={worldView}>
             <RotateCcw class="size-3.5" />
             {s.worldView}
-          </Button>
-        {/if}
-        {#if worldwide > 0 || worldwideOn}
-          <Button
-            variant={worldwideOn ? 'primary' : 'outline'}
-            size="sm"
-            aria-pressed={worldwideOn}
-            onclick={toggleWorldwide}
-          >
-            <Globe class="size-3.5" />
-            {format(s.remoteWorldwide, { count: fmt(worldwide) })}
           </Button>
         {/if}
         <span class="ml-auto text-xs text-muted-foreground" aria-live="polite">
@@ -230,7 +223,8 @@
               >
                 <span class="min-w-0 flex-1 truncate">{place.label}</span>
                 <span class="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                  <span class="block h-full rounded-full bg-brand" style:width="{(place.count / maxCount) * 100}%"></span>
+                  <span class="block h-full rounded-full bg-brand" style:width="{(place.count / maxCount) * 100}%"
+                  ></span>
                 </span>
                 <span class="w-14 shrink-0 text-right tabular-nums text-muted-foreground">{fmt(place.count)}</span>
               </button>
@@ -239,7 +233,9 @@
         </ul>
       {/if}
 
-      <div class="sticky bottom-0 -mx-6 -mb-6 mt-2 border-t border-border bg-card px-6 py-4 pb-safe sm:flex sm:justify-end">
+      <div
+        class="sticky bottom-0 -mx-6 -mb-6 mt-2 border-t border-border bg-card px-6 py-4 pb-safe sm:flex sm:justify-end"
+      >
         <Button variant="cta" size="lg" class="w-full sm:w-auto" onclick={() => (open = false)}>
           <!-- No figure while the map catches up with a click: the count from before it
                would describe a list that is no longer the one behind the dialog. -->

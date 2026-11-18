@@ -17,11 +17,10 @@ import (
 // page one of the complete list the adapter walks, which states the tenant's number of open
 // positions. It mirrors internal/ingest/sources/concludis.go, which is unexported.
 //
-// A tenant that publishes on its own site instead redirects the list there, so the page that
-// comes back carries no concludis count and the candidate is skipped. The employer is the first
-// entry of the list page's keywords meta, which every live tenant measured (2026-10-25, 28 of
-// 28) fills with its company name (one pads it with byte-order marks) — or with its own label,
-// which names nobody and is dropped.
+// A tenant that publishes on its own site redirects the list there, so the page carries no
+// concludis count and the candidate is skipped. The employer is the first entry of the list
+// page's keywords meta, which live tenants fill with the company name (one pads it with
+// byte-order marks) or with its own label, which names nobody and is dropped.
 type concludisProber struct{}
 
 const concludisListURL = "https://%s.concludis.de/prj/lst/a181a603769c1f98ad927e7367c7aa51/GesamtlisteOffenePositionen.htm"

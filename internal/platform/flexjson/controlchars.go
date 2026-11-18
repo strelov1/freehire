@@ -6,18 +6,12 @@ var jsonControlCharEscapes = map[byte]string{'\n': `\n`, '\r': `\r`, '\t': `\t`}
 
 const hexDigits = "0123456789abcdef"
 
-// SanitizeControlChars escapes raw control bytes (0x00-0x1F) found INSIDE a JSON string
-// literal. Some sites template-render their embedded JSON by interpolating raw HTML into
-// a string without escaping its newlines, which is invalid JSON — Go's decoder rejects it
-// ("invalid character '\n' in string literal") where a lenient decoder (e.g. Python's
-// json.loads(strict=False)) would accept it; live-verified on cryptocurrencyjobs.co.
-// Control bytes outside a string (insignificant whitespace between tokens) are left
-// untouched.
+// SanitizeControlChars escapes raw control bytes (0x00-0x1F) found inside a JSON string literal.
+// Some sites interpolate raw HTML into embedded JSON without escaping newlines, which Go's decoder
+// rejects. Control bytes outside a string (whitespace between tokens) are left untouched.
 //
-// This is the same tolerance the scalar types above provide, applied one layer earlier:
-// there the decode survives a field of the wrong type, here it survives a byte no decoder
-// should have been handed. Both exist because encoding/json abandons the whole document on
-// the first thing it dislikes, so a single stray byte otherwise discards a whole record.
+// It is the byte-level counterpart of the scalar types: encoding/json abandons the whole document
+// on the first thing it dislikes.
 func SanitizeControlChars(raw []byte) []byte {
 	out := make([]byte, 0, len(raw))
 	inString, escaped := false, false

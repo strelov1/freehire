@@ -32,7 +32,9 @@ describe('Footer compact mode', () => {
     expect(guardAt, 'expected an {#if !compact} guard before the link groups').toBeGreaterThan(-1);
 
     const producthuntAt = SOURCE.indexOf('productHunt.href');
-    expect(GUARD_END, 'expected the {#if !compact} guard to still be open at the Product Hunt badge').toBeGreaterThan(producthuntAt);
+    expect(GUARD_END, 'expected the {#if !compact} guard to still be open at the Product Hunt badge').toBeGreaterThan(
+      producthuntAt,
+    );
   });
 
   it('still renders the bottom bar (copyright, cookie settings, social, open-source note) unconditionally', () => {

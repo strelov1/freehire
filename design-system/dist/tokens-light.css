@@ -32,6 +32,11 @@
   --success-foreground: oklch(0.25 0.06 155); /** Text on the success fill (4.6:1). */
   --success-strong: oklch(0.48 0.13 155); /** Success text and borders on the page (6.0:1) and on the success tint (5.3:1). */
   --success-muted: oklch(0.95 0.05 155); /** Soft success tint behind success-strong text. */
+  --chart-1: #2a78d6; /** Chart series, categorical slots 1-5 in fixed order (blue, orange, aqua, yellow, magenta), never cycled. Validated as a set for colour-vision deficiency and contrast against the light surface; slots 3-5 fall under 3:1 on light, so a chart using them carries a legend and a table of its figures. */
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
   --spacing-0: 0; /** No spacing. */
   --spacing-1: 0.25rem; /** 4px — tight icon gap. */
   --spacing-2: 0.5rem; /** 8px — compact padding. */

@@ -219,6 +219,15 @@ func TestHZZCountyFeedFailureFailsTheCrawl(t *testing.T) {
 	}
 }
 
+func TestHZZIsAFullCatalog(t *testing.T) {
+	src := Source(hzz{})
+	fc, ok := src.(fullCatalog)
+	if !ok {
+		t.Fatal("hzz lists the whole exchange each run, so it must be swept by source")
+	}
+	fc.fullCatalog() // the marker is an empty method; the changed-line coverage gate wants it run
+}
+
 func TestHZZTechFeedFailureCostsOnlyTheMark(t *testing.T) {
 	f := &hzzFake{techErr: errors.New("boom")}
 	jobs, err := newTestHZZ(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
@@ -260,25 +269,6 @@ func TestHZZBudgetAndDeadlineDefer(t *testing.T) {
 	}
 	if len(f.pages) != 0 {
 		t.Errorf("read %d pages inside the deadline margin", len(f.pages))
-	}
-}
-
-func TestHZZRejectedTitleCostsNoPage(t *testing.T) {
-	f := &hzzFake{}
-	gate := DetailGate{Rejected: func(Job) bool { return true }}
-	jobs, err := newTestHZZ(f).FetchNewGated(context.Background(), CompanyEntry{}, func(string) bool { return false }, gate)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// 167016223's feed title is rejected: yielded body-less, no page. The two title-less
-	// vacancies cannot be judged before their page and are read.
-	if len(f.pages) != 2 || len(jobs) != 2 {
-		t.Errorf("pages %v, jobs %d: a rejected vacancy is yielded body-less without a page", f.pages, len(jobs))
-	}
-	for _, p := range f.pages {
-		if p == hzzPostingURL(167016223) {
-			t.Error("the rejected vacancy's page was bought")
-		}
 	}
 }
 

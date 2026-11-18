@@ -31,7 +31,7 @@ func intentApp(t *testing.T, h *intentHandlers, userID int64) *fiber.App {
 		}
 		return c.Next()
 	})
-	app.Post("/api/v1/search/interpret", h.InterpretSearch)
+	app.Post("/api/v1/search/interpret", refuseEncodedGuestBody, newContract(contractHandlers{intentHandlers: h}))
 	return app
 }
 
@@ -315,61 +315,6 @@ func TestInterpretSearchSpendsAsTheSignedInCaller(t *testing.T) {
 	auths, features := model.calls()
 	if len(auths) == 0 || auths[0] != "Bearer sk-user-7" || features[0] != tagSearchIntent {
 		t.Fatalf("calls = %v / %v, want the caller's own credential tagged %q", auths, features, tagSearchIntent)
-	}
-}
-
-// Drives the real register: a guest spends a per-IP budget of 10 an hour, a signed-in
-// caller a per-user budget of 40, and the two are separate keys — a guest exhausting an
-// address must not lock out a member behind it, nor the reverse.
-func TestInterpretSearchBudgetsGuestsByIPAndMembersByUser(t *testing.T) {
-	h := newIntentHandlers(llmBinding{client: modelSayingJSON(t,
-		`{"summary":"Senior Go roles.","seniority":["senior"],"skills":["Golang"]}`)})
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError, ProxyHeader: fiber.HeaderXForwardedFor})
-	optional := func(c *fiber.Ctx) error {
-		if c.Get("X-Test-User") != "" {
-			c.Locals(auth.LocalsUserID, int64(7))
-		}
-		return c.Next()
-	}
-	refuse := func(c *fiber.Ctx) error { return fiber.NewError(fiber.StatusUnauthorized, "auth gate ran") }
-	h.register(app.Group("/api/v1"), middleware{
-		optional: optional, cookie: refuse, key: refuse, throttler: newTestThrottler(t),
-	})
-
-	post := func(ip string, member bool) int {
-		req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost,
-			"/api/v1/search/interpret", strings.NewReader(`{"text":"senior go"}`))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(fiber.HeaderXForwardedFor, ip)
-		if member {
-			req.Header.Set("X-Test-User", "1")
-		}
-		resp, err := app.Test(req, -1)
-		if err != nil {
-			t.Fatalf("request: %v", err)
-		}
-		defer resp.Body.Close()
-		return resp.StatusCode
-	}
-
-	for i := 1; i <= guestSearchIntentsPerHour; i++ {
-		if got := post("203.0.113.7", false); got != fiber.StatusOK {
-			t.Fatalf("guest call %d = %d, want 200", i, got)
-		}
-	}
-	if got := post("203.0.113.7", false); got != fiber.StatusTooManyRequests {
-		t.Fatalf("guest call %d = %d, want 429", guestSearchIntentsPerHour+1, got)
-	}
-	if got := post("203.0.113.8", false); got != fiber.StatusOK {
-		t.Fatalf("a guest on another address = %d, want 200 — the budget is per IP", got)
-	}
-	for i := 1; i <= searchIntentsPerHour; i++ {
-		if got := post("203.0.113.7", true); got != fiber.StatusOK {
-			t.Fatalf("member call %d from the exhausted address = %d, want 200 — budgets must not share a key", i, got)
-		}
-	}
-	if got := post("203.0.113.9", true); got != fiber.StatusTooManyRequests {
-		t.Fatalf("member call %d = %d, want 429 — the member budget is per user, not per IP", searchIntentsPerHour+1, got)
 	}
 }
 

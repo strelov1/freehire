@@ -37,12 +37,19 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository 
 	return &QueriesRepository{q: q, pool: pool}
 }
 
+// InsertPending reserves the slug, under the per-user actor lock (LockEmployerActor) that
+// keeps a concurrent invitation acceptance from making the same user a member elsewhere.
 func (r *QueriesRepository) InsertPending(ctx context.Context, userID int64, companySlug, companyName, workEmail string) (Account, error) {
-	row, err := r.q.InsertPendingCompanyAccount(ctx, db.InsertPendingCompanyAccountParams{
-		UserID:      userID,
-		CompanySlug: companySlug,
-		CompanyName: companyName,
-		WorkEmail:   workEmail,
+	var row db.CompanyAccount
+	err := r.asActor(ctx, userID, func(q *db.Queries) error {
+		var err error
+		row, err = q.InsertPendingCompanyAccount(ctx, db.InsertPendingCompanyAccountParams{
+			UserID:      userID,
+			CompanySlug: companySlug,
+			CompanyName: companyName,
+			WorkEmail:   workEmail,
+		})
+		return err
 	})
 	if name, ok := pgerr.UniqueViolationConstraint(err); ok {
 		if name == "company_accounts_pkey" {
@@ -50,31 +57,47 @@ func (r *QueriesRepository) InsertPending(ctx context.Context, userID int64, com
 		}
 		return Account{}, ErrCompanyAlreadyClaimed
 	}
+	// No row: the user is a member of another company's team.
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Account{}, ErrAlreadyHasAccount
+	}
 	if err != nil {
 		return Account{}, err
 	}
 	return fromRow(row), nil
 }
 
+// GetByUserID reads the account the user acts for, as its claimant or as a member. A
+// member's Account is the company's, with WorkEmail set to the member's own address.
 func (r *QueriesRepository) GetByUserID(ctx context.Context, userID int64) (Account, error) {
-	row, err := r.q.GetCompanyAccountByUserID(ctx, userID)
+	row, err := r.q.GetCompanyAccountForUser(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Account{}, ErrNotFound
 	}
 	if err != nil {
 		return Account{}, err
 	}
-	return fromRow(row), nil
+	return Account{
+		UserID:           row.UserID,
+		CompanySlug:      row.CompanySlug,
+		CompanyName:      row.CompanyName,
+		WorkEmail:        row.ActingEmail,
+		Member:           row.Member,
+		Status:           row.Status,
+		VerifiedAt:       pgconv.TimePtr(row.VerifiedAt),
+		EmailConfirmedAt: pgconv.TimePtr(row.EmailConfirmedAt),
+		CreatedAt:        row.CreatedAt.Time,
+	}, nil
 }
 
-func (r *QueriesRepository) ListPending(ctx context.Context) ([]Account, error) {
+func (r *QueriesRepository) ListPending(ctx context.Context) ([]PendingClaim, error) {
 	rows, err := r.q.ListPendingCompanyAccounts(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Account, len(rows))
+	out := make([]PendingClaim, len(rows))
 	for i, row := range rows {
-		out[i] = fromRow(row)
+		out[i] = PendingClaim{Account: fromRow(row.CompanyAccount), Website: row.Website}
 	}
 	return out, nil
 }
@@ -199,28 +222,10 @@ func (r *QueriesRepository) UpdateCompanyProfile(ctx context.Context, slug strin
 	return nil
 }
 
-// Owner reports who created the job at (jobSource, externalID) — the URL-collision guard
-// CreateVacancy runs before ever delegating to the Minter.
-func (r *QueriesRepository) Owner(ctx context.Context, externalID string) (int64, bool, error) {
-	row, err := r.q.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{
-		Source:     jobSource,
-		ExternalID: externalID,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, false, nil
-	}
-	if err != nil {
-		return 0, false, err
-	}
-	// created_by is NOT NULL for every jobSource row (Create always stamps it), so an
-	// invalid value here would be a bug in the write path, not a case to handle quietly.
-	return row.CreatedBy.Int64, true, nil
-}
-
-// BySlug loads an employer-owned job by its public slug. Scoped in Go, not SQL, matching
-// moderation.QueriesRepository.BySlug's own shape: a missing row, a different owner, a
-// different source, or (defensively — jobSource rows are never private) is_private all
-// collapse to the one ErrJobNotFound the caller cannot distinguish further anyway.
+// BySlug loads a job of the actor's company team by its public slug. Scoped in Go, not
+// SQL, matching moderation.QueriesRepository.BySlug's own shape: a missing row, a creator
+// outside the team, a different source, or (defensively — jobSource rows are never private)
+// is_private all collapse to the one ErrJobNotFound the caller cannot distinguish further.
 func (r *QueriesRepository) BySlug(ctx context.Context, actorID int64, slug string) (job.Job, job.Extras, error) {
 	row, err := r.q.GetJobBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -229,10 +234,22 @@ func (r *QueriesRepository) BySlug(ctx context.Context, actorID int64, slug stri
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
-	if row.Source != jobSource || !row.CreatedBy.Valid || row.CreatedBy.Int64 != actorID || row.IsPrivate {
+	if row.Source != jobSource || !row.CreatedBy.Valid || row.IsPrivate {
+		return job.Job{}, job.Extras{}, ErrJobNotFound
+	}
+	ours, err := r.Teammates(ctx, actorID, row.CreatedBy.Int64)
+	if err != nil {
+		return job.Job{}, job.Extras{}, err
+	}
+	if !ours {
 		return job.Job{}, job.Extras{}, ErrJobNotFound
 	}
 	return job.FromRow(row)
+}
+
+// Teammates reports whether other is actorID or acts for the same company (employer_team).
+func (r *QueriesRepository) Teammates(ctx context.Context, actorID, otherID int64) (bool, error) {
+	return r.q.EmployerTeamIncludes(ctx, db.EmployerTeamIncludesParams{ActorID: actorID, OtherID: otherID})
 }
 
 // ListMine returns every jobSource-authored job actorID created, newest first, mapping each
@@ -271,15 +288,20 @@ func (r *QueriesRepository) Update(ctx context.Context, actorID int64, slug stri
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := r.q.WithTx(tx)
-	row, err := qtx.UpdateEmployerJob(ctx, f.UpdateEmployerParams(slug, actorID))
+	id, err := qtx.UpdateEmployerJob(ctx, f.UpdateEmployerParams(slug, actorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return job.Job{}, job.Extras{}, ErrJobNotFound
 	}
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
-	if err := qtx.EnqueueSearchOutbox(ctx, row.ID); err != nil {
+	if err := qtx.EnqueueSearchOutbox(ctx, id); err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue search outbox: %w", err)
+	}
+	// The write returns the id only; read the complete row back in the same transaction.
+	row, err := qtx.GetJob(ctx, id)
+	if err != nil {
+		return job.Job{}, job.Extras{}, fmt.Errorf("read back employer job: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return job.Job{}, job.Extras{}, err
@@ -361,4 +383,23 @@ func websiteOf(companyInfo json.RawMessage) string {
 func (r *QueriesRepository) Reopen(ctx context.Context, actorID int64, slug string) (bool, error) {
 	n, err := r.q.ReopenEmployerJob(ctx, db.ReopenEmployerJobParams{PublicSlug: slug, ActorID: actorID})
 	return n > 0, err
+}
+
+// asActor runs fn in a transaction holding userID's employer-actor lock, so a claim and an
+// invitation acceptance for the same user never both pass their "acts for no company yet"
+// checks.
+func (r *QueriesRepository) asActor(ctx context.Context, userID int64, fn func(q *db.Queries) error) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := r.q.WithTx(tx)
+	if err := q.LockEmployerActor(ctx, userID); err != nil {
+		return err
+	}
+	if err := fn(q); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

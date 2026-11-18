@@ -1,12 +1,28 @@
-import { PUBLIC_SENTRY_DSN, PUBLIC_SENTRY_ENVIRONMENT } from '$app/env/public';
+import { OTEL_EXPORTER_OTLP_LOGS_ENDPOINT, OTEL_EXPORTER_OTLP_ENDPOINT } from '$app/env/private';
+import { PUBLIC_OTEL_ENVIRONMENT, PUBLIC_OTEL_SERVICE_VERSION } from '$app/env/public';
+import { createErrorTelemetry } from '#lib/errorTelemetry.js';
 import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
-import * as Sentry from '@sentry/sveltekit';
 import { hasSessionCookie } from '#lib/authCookie.js';
 import { cachePolicy, variesOnCookie } from '#lib/httpCache.js';
-import { isTranslatedLocale, LOCALE_COOKIE } from '#lib/locale.js';
-import { isTransientNoise } from '#lib/sentryNoise.js';
+import { isTranslatedLocale, LOCALE_COOKIE } from '#lib/i18n/locale.js';
 import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '#lib/referral.js';
+
+const otelEndpoint =
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT ||
+  (OTEL_EXPORTER_OTLP_ENDPOINT ? `${OTEL_EXPORTER_OTLP_ENDPOINT.replace(/\/$/, '')}/v1/logs` : undefined);
+const telemetry = createErrorTelemetry({
+  endpoint: otelEndpoint,
+  service: 'freehire-web-ssr',
+  environment: PUBLIC_OTEL_ENVIRONMENT,
+  version: PUBLIC_OTEL_SERVICE_VERSION,
+  logToConsole: true,
+});
+// adapter-node emits this before graceful shutdown; each export has a 3s timeout.
+if (telemetry)
+  process.once('sveltekit:shutdown', () => {
+    void telemetry.shutdown();
+  });
 
 // Resolves the account-section locale for `<html lang>` before the response
 // streams. Path-gated: only `/my/**` may render non-English — every other route
@@ -32,41 +48,11 @@ import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '#
 const locale: Handle = async ({ event, resolve }) => {
   const onAccountSection = event.url.pathname === '/my' || event.url.pathname.startsWith('/my/');
   const cookieLocale = event.cookies.get(LOCALE_COOKIE);
-  event.locals.locale =
-    onAccountSection && isTranslatedLocale(cookieLocale) ? cookieLocale : 'en';
+  event.locals.locale = onAccountSection && isTranslatedLocale(cookieLocale) ? cookieLocale : 'en';
   return resolve(event, {
     transformPageChunk: ({ html }) => html.replace('%lang%', event.locals.locale),
   });
 };
-
-// Same opt-in, env-gated init as the client: no PUBLIC_SENTRY_DSN ⇒ no init, and
-// SSR runs unchanged. Errors-only, PII off. The server reports to the same
-// (frontend) Sentry project as the browser.
-if (PUBLIC_SENTRY_DSN) {
-  Sentry.init({
-    dsn: PUBLIC_SENTRY_DSN,
-    environment: PUBLIC_SENTRY_ENVIRONMENT || 'development',
-    tracesSampleRate: 0,
-    // v11 replaced the single `sendDefaultPii: false` switch with per-category
-    // defaults that collect by default (cookies, headers, query params, user info
-    // all `true` out of the box) — denying each by name is what `sendDefaultPii:
-    // false` used to do in one flag. `stackFrameVariables` is denied too: a local
-    // variable can hold exactly the kind of value (a token, an email) PII-off was
-    // for, and v11 added it as its own always-on category.
-    dataCollection: {
-      userInfo: false,
-      cookies: false,
-      httpHeaders: false,
-      urlQueryParams: false,
-      stackFrameVariables: false,
-    },
-    // The same filter the browser half applies, and it matters MORE here: an SSR `load`
-    // that could not read the API in ten seconds reports once per visitor per page, so a
-    // slow afternoon arrives as thousands of identical events carrying no stack to act on.
-    // See #lib/sentryNoise.
-    beforeSend: (event, hint) => (isTransientNoise(hint?.originalException) ? null : event),
-  });
-}
 
 // Label server-rendered HTML for shared caches (a CDN, or nginx's own cache):
 // anonymous public pages may be held and replayed, anything tied to a person may
@@ -201,27 +187,26 @@ const permissionsPolicy: Handle = async ({ event, resolve }) => {
   return response;
 };
 
-// sentryHandle scopes each SSR request; it is a passthrough when init was skipped.
-export const handle = sequence(
-  Sentry.sentryHandle(),
-  permissionsPolicy,
-  preloadPolicy,
-  locale,
-  cacheControl,
-  attribution,
-);
+export const handle = sequence(permissionsPolicy, preloadPolicy, locale, cacheControl, attribution);
 
-// Reports uncaught SSR errors to Sentry; inert when init was skipped above.
-// Sentry already declines to capture a 4xx, but its default handler still
-// logged every one's stack — scanners probing for xmlrpc.php and old PWA
-// installs asking for the removed manifest buried the real errors in the
-// journal. A 4xx is the request's fault, not ours, so it is not logged.
+// Reports uncaught SSR errors to the OTLP endpoint, or logs them without one.
+// SvelteKit's default handler logged every 4xx's stack — scanners probing for
+// xmlrpc.php and old PWA installs asking for the removed manifest buried the real
+// errors in the journal. A 4xx is the request's fault, not ours, so it is not logged.
 //
 // SvelteKit 3 passes `kind` and no `status`: a thrown exception is 'unknown', and every
-// other kind carries its status on `error`. Reading the old `status` field compiles —
-// Sentry's wrapper types the input loosely — and is always undefined, which is how every
-// 404 came back into the journal.
-export const handleError = Sentry.handleErrorWithSentry<HandleServerError>((input) => {
+// other kind carries its status on `error`. The old `status` field is always
+// undefined, which is how every 404 came back into the journal.
+const reportError: HandleServerError = (input) => {
   if (input.kind !== 'unknown' && input.error.status >= 400 && input.error.status < 500) return;
+  if (otelEndpoint) {
+    telemetry?.capture(input.error, {
+      route: input.event.route.id,
+      method: input.event.request.method,
+      kitError: input.kind !== 'unknown',
+    });
+    return;
+  }
   console.error((input.error as Error | undefined)?.stack ?? input.error);
-});
+};
+export const handleError: HandleServerError = reportError;

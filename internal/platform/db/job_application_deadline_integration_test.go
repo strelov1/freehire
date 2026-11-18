@@ -28,7 +28,7 @@ func TestApplicationDeadlinePreventsReopening(t *testing.T) {
 				t.Fatal(err)
 			}
 			if write == "touch" {
-				_, err = q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID})
+				_, err = q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID, AllowReopen: true})
 			} else {
 				_, err = ingestUpsert(ctx, q, p)
 			}
@@ -63,7 +63,7 @@ func TestApplicationDeadlineExpiresOnTouch(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID}); err != nil {
+			if _, err := q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID, AllowReopen: true}); err != nil {
 				t.Fatal(err)
 			}
 			if got := isClosed(t, pool, row.ID); got != tc.closed {
@@ -185,7 +185,7 @@ func TestApplicationDeadlineUpsertQueuesExpiredExistingPosting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reopened.Job.ClosedAt.Valid || !reopened.Changed {
+	if reopened.ClosedAt.Valid || !reopened.Changed {
 		t.Error("deadline extension must reopen and signal a search update even with identical content")
 	}
 	if countDeletionQueue(t, pool) != 0 {
@@ -237,11 +237,16 @@ func TestApplicationDeadlineChangesSignalSearchUpdate(t *testing.T) {
 			if row.Changed != tc.changed {
 				t.Errorf("Changed = %v, want %v", row.Changed, tc.changed)
 			}
-			if row.Job.ClosedAt.Valid {
+			if row.ClosedAt.Valid {
 				t.Error("posting with a future deadline must stay open")
 			}
-			if !row.Job.ApplicationDeadline.Valid || row.Job.ApplicationDeadline.Time.Format("2006-01-02") != tc.stored.Time.Format("2006-01-02") {
-				t.Errorf("stored deadline = %v, want %v", row.Job.ApplicationDeadline, tc.stored)
+			// The upsert returns narrow columns; the stored deadline is read back as the view shows it.
+			stored, err := q.GetJob(ctx, row.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !stored.ApplicationDeadline.Valid || stored.ApplicationDeadline.Time.Format("2006-01-02") != tc.stored.Time.Format("2006-01-02") {
+				t.Errorf("stored deadline = %v, want %v", stored.ApplicationDeadline, tc.stored)
 			}
 		})
 	}
@@ -264,7 +269,7 @@ func TestApplicationDeadlineExpiryDoesNotQueuePrivatePosting(t *testing.T) {
 				t.Fatal(err)
 			}
 			if write == "touch" {
-				_, err = q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID})
+				_, err = q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID, AllowReopen: true})
 			} else {
 				p.Title = "Updated private posting"
 				row, err = ingestUpsert(ctx, q, p)

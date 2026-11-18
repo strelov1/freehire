@@ -315,3 +315,59 @@ func TestPersonioDoesNotFallBackOnATransientXMLFailure(t *testing.T) {
 		t.Fatal("Fetch succeeded on a 503 from the XML feed")
 	}
 }
+
+func TestPersonioRejectsNonNativeListing(t *testing.T) {
+	for _, body := range []string{`<html></html>`, `<workzag-jobs><position><name>Missing ID</name></position></workzag-jobs>`} {
+		_, err := NewPersonio(&fakeHTTP{body: body}).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+		if err == nil {
+			t.Fatalf("invalid native listing succeeded: %s", body)
+		}
+	}
+}
+func TestPersonioEmptyListingMarker(t *testing.T) {
+	if _, ok := NewPersonio(nil).(emptyBoardListing); !ok {
+		t.Fatal("missing explicit empty contract")
+	}
+}
+
+func TestPersonioSearchRequiresNativeArray(t *testing.T) {
+	for _, body := range []string{`null`, `{}`, `[{"id":0,"name":"Broken"}]`, `[{"id":1,"name":"One"},{"id":1,"name":"Again"}]`} {
+		fake := (&routedHTTP{}).routeErr("/xml", &StatusError{Code: 404}).route("search.json", body)
+		jobs, err := NewPersonio(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+		if err == nil || len(jobs) != 0 {
+			t.Fatalf("invalid fallback succeeded: %s: %v %v", body, jobs, err)
+		}
+	}
+	fake := (&routedHTTP{}).routeErr("/xml", &StatusError{Code: 404}).route("search.json", `[]`)
+	jobs, err := NewPersonio(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	if err != nil || len(jobs) != 0 {
+		t.Fatalf("native empty fallback failed: %v %v", jobs, err)
+	}
+}
+
+func TestPersonioRejectsUnexpectedXMLRootContent(t *testing.T) {
+	for name, body := range map[string]string{
+		"error child":           `<workzag-jobs><error>temporarily unavailable</error></workzag-jobs>`,
+		"unknown child":         `<workzag-jobs><unknown/></workzag-jobs>`,
+		"error beside position": `<workzag-jobs><position><id>1</id><name>Engineer</name></position><error>partial listing</error></workzag-jobs>`,
+		"root text":             `<workzag-jobs>temporarily unavailable</workzag-jobs>`,
+		"root CDATA":            `<workzag-jobs><![CDATA[temporarily unavailable]]></workzag-jobs>`,
+		"malformed root":        `<workzag-jobs><position>`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			jobs, err := NewPersonio(&fakeHTTP{body: body}).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+			if err == nil || len(jobs) != 0 {
+				t.Fatalf("invalid XML listing returned %d jobs, error %v", len(jobs), err)
+			}
+		})
+	}
+}
+
+func TestPersonioAcceptsVerifiedEmptyXMLForms(t *testing.T) {
+	for _, body := range []string{`<workzag-jobs/>`, "<?xml version=\"1.0\"?><workzag-jobs>\n\t <!-- no positions --> </workzag-jobs>"} {
+		jobs, err := NewPersonio(&fakeHTTP{body: body}).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+		if err != nil || len(jobs) != 0 {
+			t.Fatalf("native empty XML returned %d jobs, error %v", len(jobs), err)
+		}
+	}
+}

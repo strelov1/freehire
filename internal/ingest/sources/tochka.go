@@ -9,12 +9,11 @@ import (
 	"strings"
 )
 
-// tochka adapts Tochka Bank's own careers site (hr.tochka.com), a single-company source with
-// no per-tenant board id (boardless). The site is a Next.js App Router app with no public API:
-// the listing page server-renders only its first 20 vacancies and fetches the rest through a
-// server action, so the vacancies are enumerated from the public sitemap (every
-// /vacancies/catalog/<slug>/ page — 43 on 2026-10-14, matching the listing's own total), and
-// each one is read from its page:
+// tochka adapts Tochka Bank's own careers site (hr.tochka.com), a single-company source with no
+// per-tenant board id (boardless). The site is a Next.js App Router app with no public API: the
+// listing page server-renders only its first 20 vacancies and fetches the rest through a server
+// action, so the vacancies are enumerated from the public sitemap (every /vacancies/catalog/<slug>/
+// page) and each one is read from its page:
 //
 //   - the RSC flight carries the vacancy object — every body section, salary bounds, work
 //     format, city, experience band, category and specialization. Long sections arrive as

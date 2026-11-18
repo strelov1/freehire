@@ -1,0 +1,152 @@
+import type { InsightRole, InsightRoleCountryCell } from '../../src/lib/api-types.ts';
+import type { CatalogScale, Company, FacetCounts, Job, PlansMatrix, SourceEntry } from '../../src/lib/types.ts';
+
+// Invented data only. Typed against the app's own wire types so a field the pages
+// start requiring shows up here as a type error rather than a half-rendered page.
+
+export const JOB_SLUG = 'senior-backend-engineer-acme-1a2b3c4d';
+export const COMPANY_SLUG = 'acme';
+
+const NOW = '2026-11-01T09:00:00Z';
+
+export const job: Job = {
+  public_slug: JOB_SLUG,
+  source: 'greenhouse',
+  manually_added: false,
+  external_id: '1001',
+  url: 'https://boards.example.com/acme/jobs/1001',
+  title: 'Senior Backend Engineer',
+  company: 'Acme',
+  company_slug: COMPANY_SLUG,
+  location: 'Berlin, Germany',
+  description:
+    '<p>Acme builds logistics software. You will design and run the services behind it.</p>' +
+    '<h2>Requirements</h2><ul><li>5+ years of Go</li><li>PostgreSQL in production</li></ul>',
+  countries: ['DE', 'US'],
+  regions: [],
+  work_mode: 'hybrid',
+  skills: ['go', 'postgresql', 'event-driven-architecture'],
+  cities: ['Berlin'],
+  metros: [],
+  collections: [],
+  perks: [],
+  engagement: [],
+  posted_at: NOW,
+  created_at: NOW,
+  updated_at: NOW,
+  last_seen_at: NOW,
+  enrichment: {
+    summary: 'Backend role on a logistics platform.',
+    work_mode: 'hybrid',
+    employment_type: 'full_time',
+    seniority: 'senior',
+    category: 'backend',
+    skills: ['go', 'postgresql'],
+    salary_min: 90000,
+    salary_max: 120000,
+    salary_currency: 'EUR',
+    salary_period: 'year',
+  },
+  enrichment_version: 1,
+  view_count: 120,
+  applied_count: 4,
+  upvote_count: 0,
+  downvote_count: 0,
+  my_vote: 0,
+};
+
+export const company: Company = {
+  slug: COMPANY_SLUG,
+  name: 'Acme',
+  collections: [],
+  created_at: NOW,
+  updated_at: NOW,
+  industries: ['logistics'],
+  year_founded: 2012,
+  employee_count: 250,
+  hq_country: 'DE',
+  tagline: 'Logistics software for mid-size carriers.',
+  upvote_count: 0,
+  downvote_count: 0,
+  my_vote: 0,
+  feedback_count: 0,
+  feedback_rating_avg: null,
+};
+
+export const facetCounts: FacetCounts = {
+  total: 1,
+  facets: {
+    category: { backend: 1 },
+    countries: { DE: 1, US: 1 },
+  },
+  stats: {},
+};
+
+export const catalogScale: CatalogScale = {
+  open_jobs: 1,
+  unique_open_jobs: 1,
+  companies: 1,
+  sources: 1,
+  ats_platforms: 1,
+  telegram_channels: 0,
+  computed_at: NOW,
+  exact: true,
+};
+
+export const plans: PlansMatrix = {
+  features: [
+    {
+      feature: 'fit_analysis',
+      free: { limit: 0, unlimited: false },
+      pro: { limit: 10, unlimited: false },
+      ultra: { limit: 0, unlimited: true },
+    },
+  ],
+  prices: [
+    { id: 'price_pro_month', amount_cents: 1200, currency: 'USD', interval: 'month', default: true, tier: 'pro' },
+    { id: 'price_ultra_month', amount_cents: 2900, currency: 'USD', interval: 'month', default: true, tier: 'ultra' },
+  ],
+  enforced: [],
+};
+
+// /insights: the hub lists a category once its roles clear MIN_CATEGORY_OPEN.
+const INSIGHT_CATEGORIES = ['software_engineering', 'backend', 'frontend', 'devops', 'data_science', 'mobile'];
+
+export const insightRoles: InsightRole[] = INSIGHT_CATEGORIES.map((category, i) => ({
+  category,
+  seniority: 'senior',
+  open_count: 5000 - i * 500,
+  growth: 0.1,
+}));
+
+// The role × country grid at its real width (ten countries), with gaps and one country
+// whose count jumped, so the screen-reader-only text it prints is on the page too.
+const GRID_COUNTRIES = ['US', 'RU', 'BR', 'DE', 'GB', 'IN', 'FR', 'CA', 'NL', 'PL'];
+
+export const roleCountries = {
+  data: INSIGHT_CATEGORIES.flatMap((category, i) =>
+    GRID_COUNTRIES.filter((_, j) => (i + j) % 4 !== 0).map((country, j): InsightRoleCountryCell => ({
+      category,
+      country,
+      open_count: 150000 - i * 9000 - j * 7000,
+      open_count_prev: country === 'BR' ? 40000 : 140000 - i * 8000 - j * 6000,
+    })),
+  ),
+  meta: { countries: GRID_COUNTRIES },
+};
+
+export const sources: SourceEntry[] = ['greenhouse', 'job104', 'workday', 'nsz'].map((source, i) => ({
+  source,
+  kind: i === 1 ? 'aggregator' : 'ats',
+  adapter: true,
+  jobs: { open: 129118, browsable: 101234, ats_matched: 0, ats_unmatched: 301472, measured_at: NOW },
+  health: {
+    status: 'operational',
+    total_boards: 4200,
+    healthy_boards: 4100,
+    cooled_boards: 3,
+    last_run: NOW,
+    last_success: NOW,
+    ingested_total: 301472,
+  },
+}));

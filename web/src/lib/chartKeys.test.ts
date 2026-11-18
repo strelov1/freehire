@@ -28,4 +28,3 @@ describe('nearestIndexByX', () => {
     expect(nearestIndexByX([], 5)).toBeNull();
   });
 });
-

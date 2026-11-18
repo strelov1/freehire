@@ -47,17 +47,16 @@ func (recruitify) fullBoardListing() {}
 
 const (
 	recruitifyAPI = "https://api.recruitify.ai/apply"
-	// recruitifyMaxPages bounds the walk; the largest portal measured on 2026-10-28 (Link Group,
-	// 257 postings) needs 11 pages. Needing more than this fails the crawl.
+	// recruitifyMaxPages bounds the walk; needing more than this fails the crawl.
 	recruitifyMaxPages = 200
-	// recruitifyPoland is the platform's country id for Poland, the only one measured: every
+	// recruitifyPoland is the platform's country id for Poland, the only one mapped: every
 	// posting it marks with it is in a Polish city. Other ids (188 rides on "Remote" postings)
 	// are not mapped — a guess at an id would file a posting in the wrong country.
 	recruitifyPoland = 139
 )
 
 // recruitifyRequestInterval paces every request to api.recruitify.ai, the single host behind
-// every portal. Unmeasured, so it takes the conservative side like every unmeasured pace here.
+// every portal. The real limit is unknown, so the pace is conservative.
 const (
 	recruitifyRequestInterval = 500 * time.Millisecond // ~2 req/s
 	recruitifyRequestBurst    = 1

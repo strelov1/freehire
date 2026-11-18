@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,6 +24,7 @@ type stubReminderRepo struct {
 	settings reminder.Settings
 	upserts  int
 	cancels  int
+	paid     bool
 }
 
 func (r *stubReminderRepo) GetSettings(context.Context, int64) (reminder.Settings, error) {
@@ -66,11 +68,11 @@ func remindersApp(settings reminder.Settings) (*fiber.App, *auth.Issuer, *stubRe
 	}
 	app := fiber.New()
 	gate := auth.RequireAuth(iss, testVersions)
-	app.Post("/jobs/:slug/apply", gate, h.MarkApplied)
-	app.Post("/jobs/:slug/save", gate, h.SaveJob)
-	app.Delete("/jobs/:slug/save", gate, h.UnsaveJob)
-	app.Get("/me/notification-settings", gate, h.GetNotificationSettings)
-	app.Put("/me/notification-settings", gate, h.UpdateNotificationSettings)
+	app.Post("/api/v1/jobs/:slug/apply", gate, newContract(contractHandlers{trackingHandlers: h}))
+	app.Post("/api/v1/jobs/:slug/save", gate, newContract(contractHandlers{trackingHandlers: h}))
+	app.Delete("/api/v1/jobs/:slug/save", gate, newContract(contractHandlers{trackingHandlers: h}))
+	app.Get("/api/v1/me/notification-settings", gate, newContract(contractHandlers{trackingHandlers: h}))
+	app.Put("/api/v1/me/notification-settings", gate, newContract(contractHandlers{trackingHandlers: h}))
 	return app, iss, repo
 }
 
@@ -95,12 +97,12 @@ func do(t *testing.T, app *fiber.App, method, path, token, body string) *http.Re
 
 func TestNotificationSettings_RequiresAuth(t *testing.T) {
 	app, _, _ := remindersApp(reminder.Settings{})
-	getResp := do(t, app, fiber.MethodGet, "/me/notification-settings", "", "")
+	getResp := do(t, app, fiber.MethodGet, "/api/v1/me/notification-settings", "", "")
 	defer getResp.Body.Close()
 	if got := getResp.StatusCode; got != fiber.StatusUnauthorized {
 		t.Errorf("GET status = %d, want 401", got)
 	}
-	putResp := do(t, app, fiber.MethodPut, "/me/notification-settings", "", `{"enabled":false}`)
+	putResp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", "", `{"enabled":false}`)
 	defer putResp.Body.Close()
 	if got := putResp.StatusCode; got != fiber.StatusUnauthorized {
 		t.Errorf("PUT status = %d, want 401", got)
@@ -110,7 +112,7 @@ func TestNotificationSettings_RequiresAuth(t *testing.T) {
 func TestSaveJob_SchedulesReminderWhenEnabled(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, Channels: []string{"email"}})
 	token, _ := iss.Issue(7, testTokenVersion)
-	saveResp := do(t, app, fiber.MethodPost, "/jobs/go-dev/save", token, "")
+	saveResp := do(t, app, fiber.MethodPost, "/api/v1/jobs/go-dev/save", token, "")
 	defer saveResp.Body.Close()
 	if got := saveResp.StatusCode; got != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", got)
@@ -123,7 +125,7 @@ func TestSaveJob_SchedulesReminderWhenEnabled(t *testing.T) {
 func TestSaveJob_DisabledRuleSchedulesNothing(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{Enabled: false})
 	token, _ := iss.Issue(7, testTokenVersion)
-	resp := do(t, app, fiber.MethodPost, "/jobs/go-dev/save", token, "")
+	resp := do(t, app, fiber.MethodPost, "/api/v1/jobs/go-dev/save", token, "")
 	defer resp.Body.Close()
 	if repo.upserts != 0 || repo.cancels != 0 {
 		t.Errorf("disabled-rule save must be a no-op: upserts=%d cancels=%d", repo.upserts, repo.cancels)
@@ -133,9 +135,9 @@ func TestSaveJob_DisabledRuleSchedulesNothing(t *testing.T) {
 func TestApplyAndUnsave_CancelReminder(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, Channels: []string{"email"}})
 	token, _ := iss.Issue(7, testTokenVersion)
-	applyResp := do(t, app, fiber.MethodPost, "/jobs/go-dev/apply", token, "")
+	applyResp := do(t, app, fiber.MethodPost, "/api/v1/jobs/go-dev/apply", token, "")
 	defer applyResp.Body.Close()
-	unsaveResp := do(t, app, fiber.MethodDelete, "/jobs/go-dev/save", token, "")
+	unsaveResp := do(t, app, fiber.MethodDelete, "/api/v1/jobs/go-dev/save", token, "")
 	defer unsaveResp.Body.Close()
 	if repo.cancels != 2 {
 		t.Errorf("apply + unsave must each cancel, got %d cancels", repo.cancels)
@@ -145,7 +147,7 @@ func TestApplyAndUnsave_CancelReminder(t *testing.T) {
 func TestUpdateNotificationSettings_RejectsEnabledWithoutChannels(t *testing.T) {
 	app, iss, _ := remindersApp(reminder.Settings{})
 	token, _ := iss.Issue(7, testTokenVersion)
-	resp := do(t, app, fiber.MethodPut, "/me/notification-settings", token, `{"enabled":true,"channels":[]}`)
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"enabled":true,"channels":[]}`)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
@@ -153,7 +155,7 @@ func TestUpdateNotificationSettings_RejectsEnabledWithoutChannels(t *testing.T) 
 }
 
 func TestNotificationSettingsResponse_Shape(t *testing.T) {
-	raw, err := json.Marshal(toNotificationSettingsResponse(reminder.Settings{Enabled: true}))
+	raw, err := json.Marshal(notificationSettingsOut(reminder.Settings{Enabled: true}, false))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -162,7 +164,7 @@ func TestNotificationSettingsResponse_Shape(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if _, leaked := fields["user_id"]; leaked {
-		t.Error("notificationSettingsResponse must not include user_id")
+		t.Error("the notification settings must not include user_id")
 	}
 	if got := string(fields["channels"]); got != "[]" {
 		t.Errorf("channels = %s, want [] for a nil slice", got)
@@ -177,24 +179,24 @@ func TestNotificationSettingsResponse_Shape(t *testing.T) {
 func TestNotificationSettingsResponse_FormatsTimesAsHHMM(t *testing.T) {
 	digestTime := 9 * time.Hour
 	start, end := 22*time.Hour, 8*time.Hour
-	resp := toNotificationSettingsResponse(reminder.Settings{
+	resp := notificationSettingsOut(reminder.Settings{
 		DigestFrequency: "daily", DigestTime: &digestTime,
 		QuietHoursStart: &start, QuietHoursEnd: &end,
-	})
-	if resp.DigestTime == nil || *resp.DigestTime != "09:00" {
+	}, false)
+	if resp.DigestTime.Null || resp.DigestTime.Value != "09:00" {
 		t.Errorf("DigestTime = %v, want \"09:00\"", resp.DigestTime)
 	}
-	if resp.QuietHoursStart == nil || *resp.QuietHoursStart != "22:00" {
+	if resp.QuietHoursStart.Null || resp.QuietHoursStart.Value != "22:00" {
 		t.Errorf("QuietHoursStart = %v, want \"22:00\"", resp.QuietHoursStart)
 	}
-	if resp.QuietHoursEnd == nil || *resp.QuietHoursEnd != "08:00" {
+	if resp.QuietHoursEnd.Null || resp.QuietHoursEnd.Value != "08:00" {
 		t.Errorf("QuietHoursEnd = %v, want \"08:00\"", resp.QuietHoursEnd)
 	}
 }
 
 func TestNotificationSettingsResponse_NilTimesOmitted(t *testing.T) {
-	resp := toNotificationSettingsResponse(reminder.Settings{})
-	if resp.DigestTime != nil || resp.QuietHoursStart != nil || resp.QuietHoursEnd != nil {
+	resp := notificationSettingsOut(reminder.Settings{}, false)
+	if !resp.DigestTime.Null || !resp.QuietHoursStart.Null || !resp.QuietHoursEnd.Null {
 		t.Errorf("resp = %+v, want all nil times when unset", resp)
 	}
 }
@@ -203,7 +205,7 @@ func TestUpdateNotificationSettings_ParsesHHMM(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{})
 	token, _ := iss.Issue(7, testTokenVersion)
 	body := `{"enabled":false,"digest_frequency":"daily","digest_time":"09:00","quiet_hours_start":"22:00","quiet_hours_end":"08:00"}`
-	resp := do(t, app, fiber.MethodPut, "/me/notification-settings", token, body)
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, body)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
@@ -219,7 +221,7 @@ func TestUpdateNotificationSettings_ParsesHHMM(t *testing.T) {
 func TestUpdateNotificationSettings_RejectsMalformedTime(t *testing.T) {
 	app, iss, _ := remindersApp(reminder.Settings{})
 	token, _ := iss.Issue(7, testTokenVersion)
-	resp := do(t, app, fiber.MethodPut, "/me/notification-settings", token, `{"digest_frequency":"daily","digest_time":"not-a-time"}`)
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"digest_frequency":"daily","digest_time":"not-a-time"}`)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
@@ -229,9 +231,140 @@ func TestUpdateNotificationSettings_RejectsMalformedTime(t *testing.T) {
 func TestUpdateNotificationSettings_RejectsDailyWithoutDigestTime(t *testing.T) {
 	app, iss, _ := remindersApp(reminder.Settings{})
 	token, _ := iss.Issue(7, testTokenVersion)
-	resp := do(t, app, fiber.MethodPut, "/me/notification-settings", token, `{"digest_frequency":"daily"}`)
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"digest_frequency":"daily"}`)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestUpdateNotificationSettings_PreservesOmittedInboxConsent(t *testing.T) {
+	hour := 9 * time.Hour
+	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, Channels: []string{"email"}, InboxDigestEnabled: true, DigestFrequency: "interval", DigestTime: &hour})
+	token, _ := iss.Issue(7, testTokenVersion)
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"enabled":true,"channels":["email"],"digest_frequency":"interval","digest_time":null}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	if !repo.settings.InboxDigestEnabled || repo.settings.DigestTime == nil || *repo.settings.DigestTime != 9*time.Hour {
+		t.Fatalf("legacy save changed inbox consent/time: %+v", repo.settings)
+	}
+}
+
+func TestUpdateNotificationSettings_ExplicitInboxOptOut(t *testing.T) {
+	hour := 9 * time.Hour
+	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, Channels: []string{"email"}, InboxDigestEnabled: true, DigestFrequency: "daily", DigestTime: &hour})
+	token, _ := iss.Issue(7, testTokenVersion)
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"enabled":true,"channels":["email"],"digest_frequency":"daily","digest_time":"09:00","inbox_digest_enabled":false}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	if repo.settings.InboxDigestEnabled {
+		t.Fatal("explicit inbox opt-out was ignored")
+	}
+}
+
+func (r *stubReminderRepo) HasPaidPlan(context.Context, int64) (bool, error) { return r.paid, nil }
+
+func TestInboxDigestEnableRequiresPaidTier(t *testing.T) {
+	for _, paid := range []bool{false, true} {
+		app, iss, repo := remindersApp(reminder.Settings{})
+		repo.paid = paid
+		token, _ := iss.Issue(7, testTokenVersion)
+		resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"enabled":true,"channels":["email"],"digest_frequency":"daily","digest_time":"09:00","inbox_digest_enabled":true}`)
+		want := fiber.StatusPaymentRequired
+		if paid {
+			want = fiber.StatusOK
+		}
+		if resp.StatusCode != want {
+			t.Fatalf("paid=%v status=%d want=%d", paid, resp.StatusCode, want)
+		}
+		resp.Body.Close()
+	}
+}
+
+func TestApplicationDigestConsentSurvivesLegacySettingsUpdate(t *testing.T) {
+	hour := 9 * time.Hour
+	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, Channels: []string{"email"}, ApplicationDigestEnabled: true, DigestFrequency: "interval", DigestTime: &hour})
+	token, _ := iss.Issue(7, testTokenVersion)
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"enabled":true,"channels":["email"],"digest_frequency":"interval"}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	if !repo.settings.ApplicationDigestEnabled || repo.settings.DigestTime == nil || *repo.settings.DigestTime != hour {
+		t.Fatalf("legacy update lost consent/time: %+v", repo.settings)
+	}
+}
+
+func putSettings(t *testing.T, app *fiber.App, token, body string) (int, string) {
+	t.Helper()
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, body)
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(raw)
+}
+
+func TestFreeAccountGetsPaymentRequiredForFasterAlerts(t *testing.T) {
+	for _, freq := range []string{`"digest_frequency":"instant"`, `"digest_frequency":"interval","digest_interval_hours":2`} {
+		app, iss, repo := remindersApp(reminder.Settings{DigestFrequency: "daily"})
+		token, _ := iss.Issue(7, testTokenVersion)
+		status, body := putSettings(t, app, token, `{"enabled":true,"channels":["email"],"digest_time":"09:00",`+freq+`}`)
+		if status != fiber.StatusPaymentRequired || !strings.Contains(body, "Saved-search alerts faster than daily need Pro or Ultra") {
+			t.Errorf("%s: status=%d body=%s, want 402 naming the paid alert benefit", freq, status, body)
+		}
+		if repo.settings.DigestFrequency != "daily" {
+			t.Errorf("%s: refused request stored %q", freq, repo.settings.DigestFrequency)
+		}
+	}
+}
+
+func TestFreeAccountWithHistoricalFastPreferenceKeepsEditingSettings(t *testing.T) {
+	hour := 9 * time.Hour
+	app, iss, repo := remindersApp(reminder.Settings{
+		Enabled: true, Channels: []string{"email"}, DigestFrequency: "instant", DigestTime: &hour, DigestIntervalHours: 1,
+	})
+	token, _ := iss.Issue(7, testTokenVersion)
+
+	// The page reads the account, and the unrelated edit sends the whole rule back.
+	get := do(t, app, fiber.MethodGet, "/api/v1/me/notification-settings", token, "")
+	defer get.Body.Close()
+	raw, _ := io.ReadAll(get.Body)
+	var read struct {
+		Data struct {
+			DigestFrequency       string `json:"digest_frequency"`
+			FasterAlertsAvailable bool   `json:"faster_alerts_available"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &read); err != nil {
+		t.Fatalf("decode %s: %v", raw, err)
+	}
+	if read.Data.DigestFrequency != "instant" || read.Data.FasterAlertsAvailable {
+		t.Fatalf("read = %+v, want the stored instant preference flagged as unavailable", read.Data)
+	}
+
+	// The page spreads what it read into the write, so the response-only flag rides along.
+	status, body := putSettings(t, app, token, `{"enabled":true,"channels":["email","telegram"],"digest_frequency":"instant","faster_alerts_available":false,"digest_time":"09:00","digest_interval_hours":1,"quiet_hours_start":"22:00","quiet_hours_end":"08:00"}`)
+	if status != fiber.StatusOK {
+		t.Fatalf("unrelated edit refused: %d %s", status, body)
+	}
+	if repo.settings.DigestFrequency != "instant" {
+		t.Fatalf("preference rewritten to %q; it must survive for a renewal", repo.settings.DigestFrequency)
+	}
+	// Opting out stays open too.
+	if status, body := putSettings(t, app, token, `{"enabled":false,"channels":[],"digest_frequency":"instant","digest_time":"09:00"}`); status != fiber.StatusOK {
+		t.Fatalf("opt-out refused: %d %s", status, body)
+	}
+}
+
+func TestPaidAccountReadsFasterAlertsAvailableAndMayChoose(t *testing.T) {
+	app, iss, repo := remindersApp(reminder.Settings{DigestFrequency: "daily"})
+	repo.paid = true
+	token, _ := iss.Issue(7, testTokenVersion)
+	status, body := putSettings(t, app, token, `{"enabled":true,"channels":["email"],"digest_frequency":"instant","digest_time":"09:00"}`)
+	if status != fiber.StatusOK || !strings.Contains(body, `"faster_alerts_available":true`) || !strings.Contains(body, `"digest_frequency":"instant"`) {
+		t.Fatalf("paid instant: %d %s", status, body)
 	}
 }

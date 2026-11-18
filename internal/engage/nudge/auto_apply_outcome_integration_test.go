@@ -3,7 +3,7 @@
 // Integration tests for add-auto-apply-outcome-notifications: the three new
 // candidate scans read the right rows and exclude the wrong ones, and MATCH
 // stays idempotent across two passes over an unchanged terminal row — the same
-// guarantee ListInterviewPrepCandidates/ListJobClosedCandidates already have,
+// guarantee ListInterviewPrepCandidates/SettleClosedApplications already have,
 // proven here against a real Postgres rather than the in-memory fakeStore.
 //
 // Run with: go test -tags=integration ./internal/engage/nudge/

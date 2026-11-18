@@ -1,14 +1,13 @@
 package handler
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/jdresolve"
 )
 
@@ -22,34 +21,8 @@ func newJDResolveHandlers(resolver *jdresolve.Resolver) *jdResolveHandlers {
 	return &jdResolveHandlers{resolver: resolver}
 }
 
-func (h *jdResolveHandlers) register(api fiber.Router, mw middleware) {
-	api.Post("/me/jd/resolve", mw.cookie, jdURLLimiter(mw.throttler), h.Resolve)
-}
-
-// jdURLLimiterPerHour bounds how many outbound-fetching url requests one user may submit
-// to this endpoint per hour — sized the same as contributionsPerHour since the underlying
-// risk (an unbounded endpoint fetching a caller-supplied URL is an outbound-fetch amplifier
-// and a timing oracle for public hosts) is identical. A DEDICATED limiter, not
-// contributionLimiter itself: job_slug and text requests make no outbound fetch at all, so
-// sharing /jobs/resolve's counter would throttle a tailoring session that never once
-// touched the network, and vice versa.
-const jdURLLimiterPerHour = contributionsPerHour
-
-// jdURLLimiter throttles only the url branch: it reads the already-buffered body (cheap,
-// and it does not consume it — c.BodyParser in Resolve reads it again the normal way) and
-// skips rate-limiting entirely when it names no url, so a job_slug or pasted-text request
-// never spends this budget. A body that fails to parse here is not limited either; Resolve's
-// own BodyParser call rejects it as a 400 right after, unmetered. This skip is route-specific
-// and doesn't generalize into ratelimit.Middleware, so it stays a thin wrapper around it.
-func jdURLLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	limitURLBranch := ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("jdresolve"), jdURLLimiterPerHour, time.Hour)
-	return func(c *fiber.Ctx) error {
-		var in jdResolveRequest
-		if err := json.Unmarshal(c.Body(), &in); err != nil || strings.TrimSpace(in.URL) == "" {
-			return c.Next()
-		}
-		return limitURLBranch(c)
-	}
+func (h *jdResolveHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Post("/me/jd/resolve", mw.cookie, contract)
 }
 
 // jdResolveRequest is exactly one of JobSlug/URL/Text. Title/Company are optional hints
@@ -61,10 +34,6 @@ type jdResolveRequest struct {
 	Text    string `json:"text"`
 	Title   string `json:"title"`
 	Company string `json:"company"`
-}
-
-type jdResolveResponse struct {
-	JobSlug string `json:"job_slug"`
 }
 
 // jdResolveError maps the jdresolve sentinels onto HTTP statuses. Anything else (e.g. a
@@ -83,18 +52,18 @@ func jdResolveError(err error) error {
 // Resolve turns the request's job_slug/url/text into a job usable by the tailor
 // workspace. Exactly one of the three is required; anything else is a 400 before any
 // resolution is attempted.
-func (h *jdResolveHandlers) Resolve(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *jdResolveHandlers) ResolveJobDescription(ctx context.Context, req *apigen.JobDescriptionSource) (*apigen.ResolveJobDescriptionOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in jdResolveRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	in := jdResolveRequest{
+		JobSlug: strings.TrimSpace(req.JobSlug.Value),
+		URL:     strings.TrimSpace(req.URL.Value),
+		Text:    strings.TrimSpace(req.Text.Value),
+		Title:   req.Title.Value,
+		Company: req.Company.Value,
 	}
-	in.JobSlug = strings.TrimSpace(in.JobSlug)
-	in.URL = strings.TrimSpace(in.URL)
-	in.Text = strings.TrimSpace(in.Text)
 
 	present := 0
 	for _, v := range []string{in.JobSlug, in.URL, in.Text} {
@@ -103,10 +72,10 @@ func (h *jdResolveHandlers) Resolve(c *fiber.Ctx) error {
 		}
 	}
 	if present != 1 {
-		return fiber.NewError(fiber.StatusBadRequest, "exactly one of job_slug, url, or text is required")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "exactly one of job_slug, url, or text is required")
 	}
 
-	slug, err := h.resolver.Resolve(c.Context(), userID, jdresolve.Request{
+	slug, err := h.resolver.Resolve(ctx, userID, jdresolve.Request{
 		JobSlug: in.JobSlug,
 		URL:     in.URL,
 		Text:    in.Text,
@@ -114,7 +83,7 @@ func (h *jdResolveHandlers) Resolve(c *fiber.Ctx) error {
 		Company: strings.TrimSpace(in.Company),
 	})
 	if err != nil {
-		return jdResolveError(err)
+		return nil, jdResolveError(err)
 	}
-	return c.JSON(fiber.Map{"data": jdResolveResponse{JobSlug: slug}})
+	return &apigen.ResolveJobDescriptionOK{Data: apigen.ResolvedJob{JobSlug: slug}}, nil
 }

@@ -74,7 +74,9 @@ def test_concurrent_uses_of_one_key_open_parallel_sessions_under_the_cap():
         return s
 
     async def go():
-        return await asyncio.gather(*(pool.run(("ex.com", None), work) for _ in range(5)))
+        return await asyncio.gather(
+            *(pool.run(("ex.com", None), work) for _ in range(5))
+        )
 
     run(go())
     assert len(f.made) == 2  # never past the cap
@@ -271,7 +273,9 @@ def test_one_session_serves_up_to_per_session_uses_at_once():
         return s
 
     async def go():
-        return await asyncio.gather(*(pool.run(("ex.com", None), work) for _ in range(3)))
+        return await asyncio.gather(
+            *(pool.run(("ex.com", None), work) for _ in range(3))
+        )
 
     got = run(go())
     assert len(f.made) == 1 and all(s is f.made[0] for s in got)
@@ -286,7 +290,9 @@ def test_past_per_session_a_second_session_opens():
         return s
 
     async def go():
-        return await asyncio.gather(*(pool.run(("ex.com", None), work) for _ in range(4)))
+        return await asyncio.gather(
+            *(pool.run(("ex.com", None), work) for _ in range(4))
+        )
 
     run(go())
     assert len(f.made) == 2
@@ -311,13 +317,17 @@ def test_a_failed_use_retires_a_shared_session_after_its_other_tabs_finish():
         await asyncio.sleep(0.001)
         with pytest.raises(RuntimeError):
             await pool.run(("ex.com", None), boom)
-        after = await pool.run(("ex.com", None), lambda s: _ret(s))  # must not get the retired one
+        after = await pool.run(
+            ("ex.com", None), lambda s: _ret(s)
+        )  # must not get the retired one
         await t
         return after
 
     after = run(go())
     first = f.made[0]
-    assert seen_closed_mid_use == [False]  # the neighbour tab finished on an open session
+    assert seen_closed_mid_use == [
+        False
+    ]  # the neighbour tab finished on an open session
     assert first.closed and after is not first
 
 

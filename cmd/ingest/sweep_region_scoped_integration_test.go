@@ -103,7 +103,7 @@ func TestRegionScopedBoardClosesOnlyTheMarketTheRunFinished(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if failed := sweep(ctx, q, registry, runStats, crawled, crossShard, false); failed != 0 {
+	if failed := sweep(ctx, q, registry, runStats, crawled, crossShard, false, false); failed != 0 {
 		t.Fatalf("sweep reported %d failures", failed)
 	}
 

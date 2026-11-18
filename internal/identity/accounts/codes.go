@@ -12,67 +12,57 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Purposes a mailed code can serve. They share one store keyed by (user, purpose), so a
-// pending verification and a pending reset never overwrite each other.
+// Purposes a mailed code can serve. One store is keyed by (user, purpose), so pending
+// codes of different purposes do not overwrite each other.
 const (
 	PurposeVerifyEmail   = "verify_email"
 	PurposeResetPassword = "password_reset"
-	// PurposeVerifyWorkEmail is internal/ingest/employer's — a company-account claim's work
-	// email, which is never the account's own `users.email` and carries no MarkEmailVerified
-	// side effect on confirm (see ConfirmCode). Named here, not in that package, so every
-	// purpose sharing this one code store stays enumerated in one place.
+	// PurposeVerifyWorkEmail is the employer package's work-email claim: never the account's
+	// own email, no MarkEmailVerified on confirm (see ConfirmCode).
 	PurposeVerifyWorkEmail = "verify_work_email"
-	// PurposeChangeEmail moves the account to a new address. Unlike every other purpose
-	// its code is mailed to an address the account does not hold yet, so the row records
-	// that address (StoredCode.Target) and the confirm step applies exactly it.
+	// PurposeChangeEmail moves the account to a new address. Its code goes to an address not
+	// yet held, so the row records it (StoredCode.Target) and confirm applies exactly it.
 	PurposeChangeEmail = "change_email"
 )
 
 const (
-	// codeTTL bounds how long a mailed code is usable. Long enough to switch to a mail
-	// client and back, short enough that a code sitting in an inbox is not a standing key.
+	// codeTTL bounds how long a mailed code is usable.
 	codeTTL = 15 * time.Minute
 
-	// maxCodeAttempts is how many wrong guesses a code survives. Six digits is a million
-	// possibilities; five tries makes online guessing hopeless without frustrating a human
-	// who mistyped. It bounds the guessing rate only together with resendCooldown, which is
-	// why a burnt code keeps its row (see consumeCodeTx).
+	// maxCodeAttempts is how many wrong guesses a six-digit code survives. It bounds
+	// guessing only together with resendCooldown, which is why a burnt code keeps its row
+	// (see consumeCodeTx).
 	maxCodeAttempts = 5
 
-	// resendCooldown keeps the endpoint from being used to flood an address with mail.
+	// resendCooldown stops the endpoint flooding an address with mail.
 	resendCooldown = 60 * time.Second
 )
 
 var (
-	// ErrNoCode is returned by a CodeStore when nothing is outstanding for that purpose.
+	// ErrNoCode means nothing is outstanding for that purpose.
 	ErrNoCode = errors.New("accounts: no outstanding code")
 
-	// ErrInvalidCode covers a wrong, already-consumed, or burnt code. It deliberately does
-	// not say which: a caller learns only that this code does not work.
+	// ErrInvalidCode covers a wrong, consumed or burnt code, deliberately without saying which.
 	ErrInvalidCode = errors.New("accounts: invalid code")
 
-	// ErrCodeExpired is separate from ErrInvalidCode because the remedy differs — the
-	// caller should request a new code rather than re-read the mail.
+	// ErrCodeExpired is separate from ErrInvalidCode because the remedy is a new code.
 	ErrCodeExpired = errors.New("accounts: code expired")
 
 	// ErrResendTooSoon reports a resend inside the cooldown window.
 	ErrResendTooSoon = errors.New("accounts: code was just sent")
 
-	// ErrMailUnavailable reports that no outbound mail transport is configured, so no code
-	// can be delivered. Surfaced as 503 — never as a silent success.
+	// ErrMailUnavailable reports no mail transport; surfaced as 503, never a silent success.
 	ErrMailUnavailable = errors.New("accounts: email delivery is not configured")
 
 	// ErrSameEmail reports an email change to the address the account already holds.
 	ErrSameEmail = errors.New("accounts: that is already the account's email")
 
-	// ErrAlreadyVerified reports a verification request for an account that is already
-	// verified, so the client can stop prompting.
+	// ErrAlreadyVerified reports a verification request for an already verified account.
 	ErrAlreadyVerified = errors.New("accounts: email already verified")
 )
 
-// StoredCode is one outstanding code as the store holds it: the hash (never the code),
-// when it dies, how many wrong guesses it has taken, and when it was issued (which is
-// what the resend cooldown reads).
+// StoredCode is one outstanding code: the hash (never the code), expiry, wrong-guess
+// count, and issue time (read by the resend cooldown).
 type StoredCode struct {
 	Hash      string
 	ExpiresAt time.Time
@@ -84,10 +74,9 @@ type StoredCode struct {
 
 // CodeStore persists at most one outstanding code per (user, purpose).
 //
-// Begin must return a REAL transaction. Every code path here reads the outstanding code
-// FOR UPDATE and writes under that lock, which is what bounds guessing to five attempts
-// and what makes "spend the code and reset the password" one act; an implementation that
-// answered (nil, nil) would turn both into properties of how the store was built.
+// Begin must return a real transaction: every code path reads the code FOR UPDATE and
+// writes under that lock, which bounds guessing and makes "spend the code and reset the
+// password" one act.
 type CodeStore interface {
 	UpsertCode(ctx context.Context, userID int64, purpose, codeHash, target string, expiresAt time.Time) error
 	Code(ctx context.Context, userID int64, purpose string) (StoredCode, error)
@@ -98,22 +87,18 @@ type CodeStore interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
-// CodeMailer delivers the transactional account mails. It is a port so accounts stays free
-// of the AWS/SES dependency graph.
+// CodeMailer delivers the transactional account mails.
 type CodeMailer interface {
 	SendVerificationCode(ctx context.Context, email, code string) error
 	SendPasswordResetCode(ctx context.Context, email, code string) error
 	// SendEmailChangeCode mails the code that proves control of a NEW address.
 	SendEmailChangeCode(ctx context.Context, email, code string) error
-	// SendEmailChangedNotice tells the OLD address the account moved away from it — the
-	// one signal a member whose session was hijacked would still receive. It never names
-	// the new address.
+	// SendEmailChangedNotice tells the old address the account moved away; the one signal a
+	// hijacked member would still get. It never names the new address.
 	SendEmailChangedNotice(ctx context.Context, oldEmail string) error
 }
 
-// WithCodes enables the code-backed flows (email verification, password reset). Without
-// it the Service still registers and authenticates; the code endpoints report the feature
-// unavailable rather than pretending a mail was sent.
+// WithCodes enables the code-backed flows (verification, reset, email change).
 func (s *Service) WithCodes(codes CodeStore, mailer CodeMailer) {
 	s.codes = codes
 	s.mailer = mailer
@@ -122,8 +107,8 @@ func (s *Service) WithCodes(codes CodeStore, mailer CodeMailer) {
 // codesEnabled reports whether both the store and a transport are wired.
 func (s *Service) codesEnabled() bool { return s.codes != nil && s.mailer != nil }
 
-// newCode returns a six-digit code from a cryptographically secure source. Six digits is
-// safe here only because the code is short-lived and attempt-limited — both enforced below.
+// newCode returns a six-digit code from a secure source; safe only because codes are
+// short-lived and attempt-limited.
 func newCode() (string, error) {
 	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
 	if err != nil {
@@ -132,10 +117,9 @@ func newCode() (string, error) {
 	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
-// issueCode mints, stores, and returns a fresh code for one purpose, refusing a resend
-// inside the cooldown. The code is stored only as a hash — a stolen snapshot must not
-// yield live codes. It checks resend cooldown and upserts code atomically inside a transaction.
-// target is the address a PurposeChangeEmail code is mailed to, empty for every other purpose.
+// issueCode mints and stores a fresh code, refusing a resend inside the cooldown; the
+// check and upsert are one transaction. Only a hash is stored. target is set only for
+// PurposeChangeEmail.
 func (s *Service) issueCode(ctx context.Context, userID int64, purpose, target string) (string, error) {
 	tx, err := s.codes.Begin(ctx)
 	if err != nil {
@@ -171,9 +155,8 @@ func (s *Service) issueCode(ctx context.Context, userID int64, purpose, target s
 	return code, nil
 }
 
-// consumeCodeTx checks a presented code against the outstanding one using GetEmailCodeForUpdate
-// inside a transaction, and returns the consumed code so a caller can read what it was
-// issued for (StoredCode.Target).
+// consumeCodeTx checks a presented code against the outstanding one and returns it
+// (for StoredCode.Target). A wrong guess bumps attempts; the caller must commit that.
 func (s *Service) consumeCodeTx(ctx context.Context, store CodeStore, userID int64, purpose, presented string) (StoredCode, error) {
 	stored, err := store.GetEmailCodeForUpdate(ctx, userID, purpose)
 	if errors.Is(err, ErrNoCode) {
@@ -197,9 +180,8 @@ func (s *Service) consumeCodeTx(ctx context.Context, store CodeStore, userID int
 	return stored, store.DeleteCode(ctx, userID, purpose)
 }
 
-// IssueVerificationCode mails a fresh email-verification code to the account's address.
-// Reports ErrMailUnavailable when no transport is configured and ErrResendTooSoon inside
-// the cooldown. A thin wrapper over IssueCode, fixing the purpose and the mailer method.
+// IssueVerificationCode mails a fresh verification code. Reports ErrMailUnavailable
+// without a transport and ErrResendTooSoon inside the cooldown.
 func (s *Service) IssueVerificationCode(ctx context.Context, userID int64, email string) error {
 	if !s.codesEnabled() {
 		return ErrMailUnavailable
@@ -207,17 +189,11 @@ func (s *Service) IssueVerificationCode(ctx context.Context, userID int64, email
 	return s.IssueCode(ctx, userID, PurposeVerifyEmail, email, s.mailer.SendVerificationCode)
 }
 
-// IssueCode mints, stores, and delivers a fresh code for an arbitrary purpose, refusing a
-// resend inside the cooldown exactly like IssueVerificationCode/IssuePasswordReset. Delivery
-// goes through the caller-supplied send func rather than a CodeMailer method fixed by this
-// package, which is what lets a caller outside accounts' own three purposes (see
-// internal/ingest/employer, PurposeVerifyWorkEmail) share this rate-limited, attempt-bounded
-// code store without this package knowing anything about that caller's mail copy.
+// IssueCode mints, stores and delivers a code for an arbitrary purpose through the
+// caller's send func, so outside callers share the rate-limited, attempt-bounded store.
 //
-// Minting and sending are deliberately not one guarded transaction: a send failure (a
-// transport outage) is returned to the caller with the code already stored, so a retry
-// inside the cooldown is a resend of mail, not a second mint — the same shape
-// IssueVerificationCode already had before this method existed.
+// Minting and sending are not one transaction: a send failure leaves the code stored, so
+// a retry inside the cooldown is refused rather than minting a second code.
 func (s *Service) IssueCode(ctx context.Context, userID int64, purpose, email string, send func(ctx context.Context, email, code string) error) error {
 	if s.codes == nil {
 		return ErrMailUnavailable
@@ -229,13 +205,9 @@ func (s *Service) IssueCode(ctx context.Context, userID int64, purpose, email st
 	return send(ctx, email, code)
 }
 
-// ConfirmCode checks a presented code against the one outstanding for (userID, purpose) and
-// consumes it on success, with the same attempt-bounding and expiry rules ConfirmVerification
-// uses. Unlike ConfirmVerification, it carries no side effect on success — "what verified
-// means" is entirely the caller's to decide, which is why this is a separate method rather
-// than a parameter ConfirmVerification also takes: bundling an arbitrary caller action into
-// ConfirmVerification's own transaction would couple this package to that caller's failure
-// modes, for no benefit over the caller doing its own write after a plain ConfirmCode success.
+// ConfirmCode checks and consumes the code outstanding for (userID, purpose), with
+// ConfirmVerification's attempt and expiry rules but no side effect: what a confirmed
+// code means is the caller's to decide.
 func (s *Service) ConfirmCode(ctx context.Context, userID int64, purpose, code string) error {
 	if s.codes == nil {
 		return ErrMailUnavailable
@@ -250,8 +222,7 @@ func (s *Service) ConfirmCode(ctx context.Context, userID int64, purpose, code s
 	_, consumeErr := s.consumeCodeTx(ctx, txStore, userID, purpose, code)
 	if consumeErr != nil {
 		if errors.Is(consumeErr, ErrInvalidCode) {
-			// Same reasoning as ConfirmVerification: the failed guess must be kept, so the
-			// attempt bump is committed even though the confirmation itself is refused.
+			// Commit the attempt bump even though the confirmation is refused.
 			if err := tx.Commit(ctx); err != nil {
 				return fmt.Errorf("commit the failed attempt: %w", err)
 			}
@@ -278,13 +249,9 @@ func (s *Service) ConfirmVerification(ctx context.Context, userID int64, code st
 	_, consumeErr := s.consumeCodeTx(ctx, txStore, userID, PurposeVerifyEmail, code)
 	if consumeErr != nil {
 		if errors.Is(consumeErr, ErrInvalidCode) {
-			// The failed guess is kept: the attempt counter is what bounds guessing, and
-			// rolling it back with the refusal would make the five-attempt limit unreachable.
-			//
-			// A commit that FAILS is therefore not a detail to swallow — it rolls the attempt
-			// back, and answering "wrong code" would hand the guesser that attempt for free.
-			// The limit is a security control, so an unrecorded attempt has to read as a
-			// failure of ours rather than as a verdict on their code.
+			// Commit the attempt bump: rolling it back would make the attempt limit unreachable.
+			// A failed commit must surface as our error; answering "wrong code" would give the
+			// guesser a free attempt.
 			if err := tx.Commit(ctx); err != nil {
 				return fmt.Errorf("commit the failed attempt: %w", err)
 			}
@@ -299,9 +266,8 @@ func (s *Service) ConfirmVerification(ctx context.Context, userID int64, code st
 	return tx.Commit(ctx)
 }
 
-// sendVerificationOnRegister mails the new account's first code, best-effort: a mail
-// failure must not undo a registration that already succeeded, so it is logged and the
-// user is left to ask for a resend.
+// sendVerificationOnRegister mails the first code, best-effort: a mail failure is logged
+// and must not undo the registration.
 func (s *Service) sendVerificationOnRegister(ctx context.Context, userID int64, email string) {
 	if !s.codesEnabled() {
 		return

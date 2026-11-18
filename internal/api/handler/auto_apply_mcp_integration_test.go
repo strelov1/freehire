@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -21,7 +22,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
@@ -36,15 +36,7 @@ type mcpToolCaller struct {
 
 func newMCPToolCaller(t *testing.T, h *assistantHandlers, userID int64) *mcpToolCaller {
 	t.Helper()
-	server := mcpapp.NewAccountServer(mcpAccountTools(h, testMCPOrigin), userID, testMCPOrigin)
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	go func() { _ = server.Run(context.Background(), serverTransport) }()
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).
-		Connect(context.Background(), clientTransport, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { _ = session.Close() })
+	session := connectMCPTools(t, mcpAccountTools(h, testMCPOrigin), strconv.FormatInt(userID, 10))
 	return &mcpToolCaller{t: t, session: session}
 }
 
@@ -85,7 +77,7 @@ func newAutoApplyMCPFixture(t *testing.T) (*pgxpool.Pool, *assistantHandlers, *d
 	pool := startPostgres(t)
 	truncateAutoApplyEnqueueTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	_, h, _ := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "", nil)
+	_, h, _ := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "")
 	queries := db.New(pool)
 	h.answerBank = answerbank.NewStore(answerbank.NewQueriesRepository(queries))
 	h.screeningAnswers = screeninganswers.New(screeninganswers.NewQueriesRepository(queries, pool))
@@ -215,12 +207,13 @@ func TestAgentPermissions_OnlyTheBrowserMayTurnItOn(t *testing.T) {
 	pool := startPostgres(t)
 	truncateAutoApplyEnqueueTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	_, _, mw := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "", nil)
+	_, _, mw := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "")
 	queries := db.New(pool)
 	userID, cookie := autoApplyTailorUser(t, pool, iss, "perm@example.test")
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	(&agentPermissionHandlers{queries: queries}).register(app.Group("/api/v1"), mw)
+	perms := &agentPermissionHandlers{queries: queries}
+	perms.register(app.Group("/api/v1"), mw, newContract(contractHandlers{agentPermissionHandlers: perms}))
 
 	put := func(withCookie bool, bearer string) int {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/me/agent-permissions",
@@ -255,7 +248,7 @@ func TestJobAutoApplyRetryAndCancelRoutes(t *testing.T) {
 	pool := startPostgres(t)
 	truncateAutoApplyEnqueueTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	_, h, mw := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "", nil)
+	_, h, mw := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "")
 	queries := db.New(pool)
 	userID, cookie := autoApplyTailorUser(t, pool, iss, "routes@example.test")
 	jobID := insertAutoApplyJob(t, pool, "routes-job")
@@ -263,8 +256,8 @@ func TestJobAutoApplyRetryAndCancelRoutes(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	api.Post("/jobs/:slug/auto-apply/retry", mw.cookie, h.PostJobAutoApplyRetry)
-	api.Delete("/jobs/:slug/auto-apply", mw.cookie, h.DeleteJobAutoApply)
+	api.Post("/jobs/:slug/auto-apply/retry", mw.cookie, newContract(contractHandlers{assistantHandlers: h}))
+	api.Delete("/jobs/:slug/auto-apply", mw.cookie, newContract(contractHandlers{assistantHandlers: h}))
 	do := func(method, path string) int {
 		req := httptest.NewRequestWithContext(context.Background(), method, path, nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})

@@ -4,13 +4,7 @@
      Rendered on the server, and under reduced motion, as its finished state. -->
 <script lang="ts">
   import { MediaQuery } from 'svelte/reactivity';
-  import {
-    DEMO_ASKED,
-    DEMO_BULLETS,
-    DEMO_REQUIREMENTS,
-    DEMO_ROLE,
-    DEMO_SCORES,
-  } from '#lib/tailorDemo.js';
+  import { DEMO_ASKED, DEMO_BULLETS, DEMO_REQUIREMENTS, DEMO_ROLE, DEMO_SCORES } from '#lib/tailorDemo.js';
 
   const STEP_MS = 1800;
   const HOLD_TICKS = 2;
@@ -75,13 +69,13 @@
     <span>example</span>
   </figcaption>
   <p class="sr-only">
-    An example: the agent rewrites {LAST} CV bullets toward a backend payments role, the job match
-    rises from {DEMO_SCORES[0]} to {DEMO_SCORES[LAST]}, and it asks about {ASKED_LABEL}
+    An example: the agent rewrites {LAST} CV bullets toward a backend payments role, the job match rises from {DEMO_SCORES[0]}
+    to {DEMO_SCORES[LAST]}, and it asks about {ASKED_LABEL}
     instead of writing them in.
   </p>
   <div aria-hidden="true" class="grid gap-px bg-border sm:grid-cols-5">
     <div class="bg-background p-4 sm:col-span-2">
-      <p class="text-xs uppercase tracking-wide text-muted-foreground">Vacancy</p>
+      <p class="text-xs text-muted-foreground">Vacancy</p>
       <p class="mt-1 text-sm font-semibold">{DEMO_ROLE}</p>
       <ul class="mt-3 flex flex-wrap gap-1.5">
         {#each DEMO_REQUIREMENTS as r (r.id)}
@@ -103,7 +97,7 @@
         <p class="text-3xl font-semibold tabular-nums">{score}</p>
         <p class="text-xs text-muted-foreground">job match</p>
       </div>
-      <p class="text-xs uppercase tracking-wide text-muted-foreground">Your CV</p>
+      <p class="text-xs text-muted-foreground">Your CV</p>
       <ul class="mt-3 space-y-2 pr-20 text-xs leading-snug">
         {#each DEMO_BULLETS as b, i (b.req)}
           <li class="grid">
@@ -115,7 +109,8 @@
               {b.before}
             </span>
             <span
-              class="col-start-1 row-start-1 -mx-1 self-start rounded bg-brand/10 px-1 py-1 text-foreground transition-opacity duration-500 {i < step
+              class="col-start-1 row-start-1 -mx-1 self-start rounded bg-brand/10 px-1 py-1 text-foreground transition-opacity duration-500 {i <
+              step
                 ? 'opacity-100'
                 : 'opacity-0'}"
             >

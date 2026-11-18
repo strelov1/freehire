@@ -132,18 +132,6 @@ func TestTurijobsReadsOnlyItsOwnHost(t *testing.T) {
 	}
 }
 
-func TestTurijobsGateSkipsRejectedTitles(t *testing.T) {
-	f := &turijobsFake{}
-	gate := DetailGate{Rejected: func(j Job) bool { return true }}
-	jobs, err := newTestTurijobs(f).FetchNewGated(context.Background(), CompanyEntry{}, func(string) bool { return false }, gate)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(jobs) != 3 || len(f.pages) != 0 {
-		t.Errorf("jobs = %d, pages = %d; want three body-less postings and no request", len(jobs), len(f.pages))
-	}
-}
-
 func TestTurijobsNoPageAnsweringFailsTheCrawl(t *testing.T) {
 	f := &turijobsFake{pageErr: errors.New("held open")}
 	if _, err := newTestTurijobs(f).Fetch(context.Background(), CompanyEntry{}); err == nil {

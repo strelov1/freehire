@@ -12,10 +12,7 @@ import (
 // morpheme: a Kranken|pfleger, an Alten|pfleger and a Kinderkranken|pfleger are all
 // nurses, a Stapler|fahrer and a Berufskraft|fahrer both drive. Listing every
 // compound as a whole-word alias — the shape the main tables use — cannot keep up:
-// measured 2026-10-25 over the 123,605 open postings of the German ATS crawl
-// (coveto, rexx, xing, dvinci, concludis, onlyfy, kenjo), 85% resolved no category
-// and 98% no grade, and the unresolved titles were a long tail of compounds whose
-// heads are a few dozen words.
+// the compounds are a long tail, but their heads are a few dozen words.
 //
 // So the German tables match a word's TAIL. An alias written "-pfleger" is a head:
 // it matches any word that ends in it ("krankenpfleger", "pfleger"). An alias
@@ -38,8 +35,8 @@ import (
 // matches. A word whose head is only spelled in the feminine (Ärztin) lists it.
 //
 // These tables are a FALLBACK: they run only when the main table resolved nothing,
-// so a title that already resolves keeps its answer. That placement is deliberate —
-// a German head never outvotes an alias the main table was ordered around.
+// so a title that already resolves keeps its answer: a German head never outvotes an
+// alias the main table was ordered around.
 
 // germanCategoryTable lists the German category aliases, heads ("-…") and whole-word
 // phrases, in precedence order.

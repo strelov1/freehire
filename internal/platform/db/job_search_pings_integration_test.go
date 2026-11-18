@@ -29,7 +29,7 @@ func TestListJobsToPingTiersPartitionTheIndexedCatalogue(t *testing.T) {
 		{"nurse", "is_tech = false, category = 'healthcare'"},
 		{"unknown-tech-signal", "is_tech = NULL, category = 'retail'"},
 		{"enrichment-only", `is_tech = false, category = '', enrichment = '{"category":"logistics"}'`},
-		// Excluded from both tiers: what search.CategoryUnresolved keeps out of the index.
+		// Uncategorized: indexed under "other" (#4412), so eligible in the non-technical tier.
 		{"unresolved", "is_tech = false, category = ''"},
 		{"enrichment-other", `is_tech = NULL, category = '', enrichment = '{"category":"other"}'`},
 		// Excluded from both tiers: what search.DescriptionMissing keeps out of the index.
@@ -70,7 +70,7 @@ func TestListJobsToPingTiersPartitionTheIndexedCatalogue(t *testing.T) {
 	if got, want := tier(true), []string{"tech", "tech-uncategorised"}; !slices.Equal(got, want) {
 		t.Errorf("technical tier = %v, want %v", got, want)
 	}
-	if got, want := tier(false), []string{"enrichment-only", "nurse", "unknown-tech-signal"}; !slices.Equal(got, want) {
+	if got, want := tier(false), []string{"enrichment-only", "enrichment-other", "nurse", "unknown-tech-signal", "unresolved"}; !slices.Equal(got, want) {
 		t.Errorf("non-technical tier = %v, want %v", got, want)
 	}
 
@@ -79,7 +79,7 @@ func TestListJobsToPingTiersPartitionTheIndexedCatalogue(t *testing.T) {
 	if err := q.RecordJobSearchPing(ctx, RecordJobSearchPingParams{JobID: ids["nurse"], Engine: "google", Kind: "created"}); err != nil {
 		t.Fatalf("record: %v", err)
 	}
-	if got, want := tier(false), []string{"enrichment-only", "unknown-tech-signal"}; !slices.Equal(got, want) {
+	if got, want := tier(false), []string{"enrichment-only", "enrichment-other", "unknown-tech-signal", "unresolved"}; !slices.Equal(got, want) {
 		t.Errorf("non-technical tier after recording nurse = %v, want %v", got, want)
 	}
 }

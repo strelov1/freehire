@@ -1,11 +1,12 @@
 <script lang="ts">
   import { Bell, Check, Mail, Moon, Smartphone } from '@lucide/svelte';
+  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { api, ApiError } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import PushNoDeviceNote from '#lib/components/PushNoDeviceNote.svelte';
   import ToggleSwitch from '#lib/components/ToggleSwitch.svelte';
-  import { cn } from '#lib/ui/index.js';
-  import { ProviderIcon } from '#lib/ui/index.js';
+  import { Badge, cn, ProviderIcon } from '#lib/ui/index.js';
 
   // The single account-level notification rule: turn notifications on and pick
   // the delivery channels. It gates four things at once — the saved-job apply
@@ -18,10 +19,10 @@
   // notifications are on (an enabled rule requires at least one channel).
   //
   // Two more controls ride the same settings row but govern different things:
-  // digest frequency (instant/daily) affects ONLY saved-search alerts
+  // digest frequency (interval/instant/daily) affects ONLY saved-search alerts
   // (internal/notify), not the reminder/nudge kinds above; quiet hours defers
-  // ALL of them (plus instant-frequency search alerts) except a `daily` digest,
-  // which fires at its own chosen time regardless.
+  // ALL of them (plus interval and instant search alerts) except a `daily`
+  // digest, which fires at its own chosen time regardless.
 
   let enabled = $state(false);
   let channels = $state<string[]>([]);
@@ -30,8 +31,20 @@
   // once there is one — or while push is already chosen, so it can be removed.
   let pushAvailable = $state(false);
 
-  let digestFrequency = $state('instant');
+  // The server's default is a daily digest at 09:00 (migration 0246).
+  let digestFrequency = $state('daily');
+  // Faster than daily is a Pro/Ultra benefit. A Free account may still carry an older instant or
+  // batched preference: it is kept (and sent back unchanged, so an unrelated edit never rewrites it),
+  // but what takes effect is daily.
+  let fasterAlerts = $state(false);
+  const effectiveFrequency = $derived(fasterAlerts ? digestFrequency : 'daily');
   let digestTime = $state('09:00');
+  let inboxDigestEnabled = $state(false);
+  let applicationDigestEnabled = $state(false);
+  let digestPaid = $state(false);
+  let digestIntervalHours = $state(1);
+  // 1-23: a full day is the Daily option, which also picks the hour.
+  const intervalHourOptions = Array.from({ length: 23 }, (_, i) => i + 1);
   let quietHoursOn = $state(false);
   let quietHoursStart = $state('22:00');
   let quietHoursEnd = $state('08:00');
@@ -52,20 +65,41 @@
     if (isAuthenticated()) void load();
   });
 
+  // The no-device note sends the user to the phone; when they come back to this tab,
+  // re-read so the note goes away without a reload.
+  $effect(() => {
+    if (!channels.includes('push') || pushAvailable) return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      api.hasPushDevice().then(
+        (v) => (pushAvailable = v),
+        () => {},
+      );
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  });
+
   async function load() {
     status = 'loading';
     try {
-      const [settings, tg, pushDevice] = await Promise.all([
+      const [settings, tg, pushDevice, plan] = await Promise.all([
         api.getNotificationSettings(),
         api.telegramStatus(),
         api.hasPushDevice(),
+        api.myPlan().catch(() => null),
       ]);
       enabled = settings.enabled;
       channels = settings.channels;
       telegramAvailable = tg.enabled;
       pushAvailable = pushDevice;
-      digestFrequency = settings.digest_frequency || 'instant';
+      digestPaid = plan?.plan === 'pro' || plan?.plan === 'ultra';
+      digestFrequency = settings.digest_frequency || 'daily';
+      fasterAlerts = settings.faster_alerts_available ?? false;
       digestTime = settings.digest_time ?? '09:00';
+      inboxDigestEnabled = settings.inbox_digest_enabled ?? false;
+      applicationDigestEnabled = settings.application_digest_enabled ?? false;
+      digestIntervalHours = settings.digest_interval_hours || 1;
       quietHoursOn = Boolean(settings.quiet_hours_start && settings.quiet_hours_end);
       quietHoursStart = settings.quiet_hours_start ?? '22:00';
       quietHoursEnd = settings.quiet_hours_end ?? '08:00';
@@ -84,13 +118,24 @@
     saveTimer = setTimeout(doSave, 350);
   }
 
-  async function doSave() {
+  // Saves run one at a time, so the last request sent is the last one stored.
+  let saveQueue = Promise.resolve();
+  function doSave() {
+    saveQueue = saveQueue.then(sendSettings);
+    return saveQueue;
+  }
+
+  async function sendSettings() {
     try {
       await api.updateNotificationSettings({
         enabled,
         channels,
         digest_frequency: digestFrequency,
-        digest_time: digestFrequency === 'daily' ? digestTime : null,
+        digest_time:
+          effectiveFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled ? digestTime : null,
+        inbox_digest_enabled: inboxDigestEnabled,
+        application_digest_enabled: applicationDigestEnabled,
+        digest_interval_hours: digestIntervalHours,
         quiet_hours_start: quietHoursOn ? quietHoursStart : null,
         quiet_hours_end: quietHoursOn ? quietHoursEnd : null,
       });
@@ -122,6 +167,11 @@
   }
 
   function setDigestFrequency(freq: string) {
+    // Free accounts see every option; a faster one leads to the plans instead of a refused save.
+    if (freq !== 'daily' && !fasterAlerts) {
+      void goto(resolve('/pricing'));
+      return;
+    }
     digestFrequency = freq;
     persist();
   }
@@ -142,7 +192,7 @@
   // Shared by every section label below, so the arbitrary 11px size is written once
   // rather than repeated per section (design-system/scripts/check-token-coverage.mjs
   // counts occurrences, not unique values).
-  const sectionLabel = 'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
+  const sectionLabel = 'text-xs font-semibold text-muted-foreground';
 </script>
 
 <section class="rounded-xl border border-border bg-card p-4">
@@ -153,7 +203,8 @@
     <div class="min-w-0 flex-1">
       <h2 class="text-sm font-semibold leading-tight">Notifications</h2>
       <p class="text-xs text-muted-foreground">
-        Come back to a saved job before it goes stale, follow up when an application goes quiet, prepare before an interview, and hear about it if a listing you're tracking closes.
+        Come back to a saved job before it goes stale, follow up when an application goes quiet, prepare before an
+        interview, and hear about it if a listing you're tracking closes.
       </p>
     </div>
 
@@ -161,17 +212,14 @@
     {#if saveState === 'saving'}
       <span class="text-xs text-muted-foreground">Saving…</span>
     {:else if saveState === 'saved'}
-      <span class="flex items-center gap-1 text-xs text-brand-strong"><Check class="size-3.5" aria-hidden="true" /> Saved</span>
+      <span class="flex items-center gap-1 text-xs text-brand-strong"
+        ><Check class="size-3.5" aria-hidden="true" /> Saved</span
+      >
     {:else if saveState === 'error'}
       <span class="text-xs text-destructive">{saveError}</span>
     {/if}
 
-    <ToggleSwitch
-      on={enabled}
-      label="Enable notifications"
-      disabled={status !== 'ready'}
-      onToggle={toggleEnabled}
-    />
+    <ToggleSwitch on={enabled} label="Enable notifications" disabled={status !== 'ready'} onToggle={toggleEnabled} />
   </div>
 
   {#if status === 'error'}
@@ -182,7 +230,12 @@
         <span class={sectionLabel}>Deliver over</span>
         <div class="flex flex-wrap items-center gap-2">
           {#if telegramAvailable}
-            <button type="button" onclick={() => toggleChannel('telegram')} aria-pressed={channels.includes('telegram')} class={pill(channels.includes('telegram'))}>
+            <button
+              type="button"
+              onclick={() => toggleChannel('telegram')}
+              aria-pressed={channels.includes('telegram')}
+              class={pill(channels.includes('telegram'))}
+            >
               {#if channels.includes('telegram')}
                 <Check class="size-3.5" aria-hidden="true" />
               {:else}
@@ -191,7 +244,12 @@
               Telegram
             </button>
           {/if}
-          <button type="button" onclick={() => toggleChannel('email')} aria-pressed={channels.includes('email')} class={pill(channels.includes('email'))}>
+          <button
+            type="button"
+            onclick={() => toggleChannel('email')}
+            aria-pressed={channels.includes('email')}
+            class={pill(channels.includes('email'))}
+          >
             {#if channels.includes('email')}
               <Check class="size-3.5" aria-hidden="true" />
             {:else}
@@ -200,7 +258,12 @@
             Email
           </button>
           {#if pushAvailable || channels.includes('push')}
-            <button type="button" onclick={() => toggleChannel('push')} aria-pressed={channels.includes('push')} class={pill(channels.includes('push'))}>
+            <button
+              type="button"
+              onclick={() => toggleChannel('push')}
+              aria-pressed={channels.includes('push')}
+              class={pill(channels.includes('push'))}
+            >
               {#if channels.includes('push')}
                 <Check class="size-3.5" aria-hidden="true" />
               {:else}
@@ -210,29 +273,42 @@
             </button>
           {/if}
         </div>
+        {#if channels.includes('push') && !pushAvailable}
+          <PushNoDeviceNote />
+        {/if}
         {#if channels.includes('telegram')}
-          <p class="text-xs text-muted-foreground">Telegram notifications need the bot connected on the <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/integrations')}>Integrations</a> tab.</p>
+          <p class="text-xs text-muted-foreground">
+            Telegram notifications need the bot connected on the <a
+              class="font-medium text-foreground underline underline-offset-2 hover:opacity-80"
+              href={resolve('/my/integrations')}>Integrations</a
+            > tab.
+          </p>
         {/if}
       </div>
 
       <div class="flex flex-col gap-2 border-t border-border pt-4">
         <span class={sectionLabel}>Timing</span>
-        <dl class="flex flex-col gap-1.5 text-xs text-muted-foreground">
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Apply reminder —</dt>
+        <dl class="flex flex-col gap-3 text-xs text-muted-foreground">
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Apply reminder</dt>
             <dd>3 days after you save a job you haven't applied to yet.</dd>
           </div>
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Follow-up —</dt>
-            <dd>once an application goes quiet: 21 days after applying, 18 in screening, 15 after a reply, 12 once interviewing, 5 with an offer out.</dd>
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Follow-up</dt>
+            <dd>
+              Once an application goes quiet: 21 days after applying, 18 in screening, 15 after a reply, 12 once
+              interviewing, 5 with an offer out.
+            </dd>
           </div>
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Interview prep —</dt>
-            <dd>right when you move a card to Interview.</dd>
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Interview prep</dt>
+            <dd>Right when you move a card to Interview.</dd>
           </div>
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Listing closed —</dt>
-            <dd>right when a job you're still actively tracking closes — the card also moves to Expired on your board.</dd>
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Listing closed</dt>
+            <dd>
+              Right when a job you're still actively tracking closes — the card also moves to Expired on your board.
+            </dd>
           </div>
         </dl>
       </div>
@@ -240,7 +316,7 @@
   {/if}
 </section>
 
-<!-- Delivery timing: digest frequency governs only saved-search alerts
+<!-- Delivery timing: digest frequency (interval/instant/daily) governs only saved-search alerts
      (internal/notify), independent of the Notifications toggle above — a
      search-alert subscriber with reminders/nudges off still picks a frequency.
      Quiet hours defers everything except a `daily` digest, which is exempt by
@@ -248,28 +324,140 @@
      regardless of the toggle above, and use the same debounced-autosave PUT. -->
 {#if status === 'ready'}
   <section class="mt-4 rounded-xl border border-border bg-card p-4">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <h2 class="flex items-center gap-2 text-sm font-semibold">
+          Daily inbox summary
+          <a href={resolve('/pricing')} aria-label="Pro feature, view plans"><Badge variant="brand">Pro</Badge></a>
+        </h2>
+        <p class="mt-1 text-xs text-muted-foreground">
+          New recruiter messages, requests and application updates in one email, grouped by conversation. Empty days
+          send nothing.
+        </p>
+      </div>
+      <ToggleSwitch
+        on={inboxDigestEnabled}
+        label="Daily inbox summary"
+        disabled={!inboxDigestEnabled && digestPaid && (!enabled || !channels.includes('email'))}
+        onToggle={() => {
+          // Free accounts see the switch, and turning it on sends them to the plans.
+          if (!inboxDigestEnabled && !digestPaid) {
+            void goto(resolve('/pricing'));
+            return;
+          }
+          inboxDigestEnabled = !inboxDigestEnabled;
+          persist();
+        }}
+      />
+    </div>
+    {#if !digestPaid}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Available with Pro and Ultra. Delivery pauses when your subscription ends. <a
+          href={resolve('/pricing')}
+          class="font-medium text-brand-strong hover:underline">View plans</a
+        >
+      </p>
+    {/if}
+    <p class="mt-2 text-xs text-muted-foreground">
+      Uses the daily digest time below and your account timezone. Starts with messages received after you turn it on.
+    </p>
+    {#if !enabled || !channels.includes('email')}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Enable notifications and select Email above to receive the inbox summary.
+      </p>
+    {/if}
+  </section>
+  <section class="mt-4 rounded-xl border border-border bg-card p-4">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <h2 class="flex items-center gap-2 text-sm font-semibold">
+          Weekly application summary
+          <a href={resolve('/pricing')} aria-label="Weekly application summary Pro feature, view plans"
+            ><Badge variant="brand">Pro</Badge></a
+          >
+        </h2>
+        <p class="mt-1 text-xs text-muted-foreground">
+          Your applications grouped by status, with overdue follow-ups to help you decide what to do next.
+        </p>
+      </div>
+      <ToggleSwitch
+        on={applicationDigestEnabled}
+        label="Weekly application summary"
+        disabled={!applicationDigestEnabled && digestPaid && (!enabled || !channels.includes('email'))}
+        onToggle={() => {
+          if (!applicationDigestEnabled && !digestPaid) {
+            void goto(resolve('/pricing'));
+            return;
+          }
+          applicationDigestEnabled = !applicationDigestEnabled;
+          persist();
+        }}
+      />
+    </div>
+    {#if !digestPaid}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Available with Pro and Ultra. Delivery pauses when your subscription ends. <a
+          href={resolve('/pricing')}
+          class="font-medium text-brand-strong hover:underline">View plans</a
+        >
+      </p>
+    {/if}
+    <p class="mt-2 text-xs text-muted-foreground">
+      Every Monday at the digest time below in your account timezone. This weekly email is separate from the daily inbox
+      summary.
+    </p>
+    {#if !enabled || !channels.includes('email')}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Enable notifications and select Email above to receive the application summary.
+      </p>
+    {/if}
+  </section>
+  <section class="mt-4 rounded-xl border border-border bg-card p-4">
     <div class="flex flex-col gap-2">
       <span class={sectionLabel}>Search alert frequency</span>
       <div class="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onclick={() => setDigestFrequency('instant')}
-          aria-pressed={digestFrequency === 'instant'}
-          class={pill(digestFrequency === 'instant')}
+          aria-pressed={effectiveFrequency === 'instant'}
+          class={pill(effectiveFrequency === 'instant')}
         >
-          {#if digestFrequency === 'instant'}<Check class="size-3.5" aria-hidden="true" />{/if}
+          {#if effectiveFrequency === 'instant'}<Check class="size-3.5" aria-hidden="true" />{/if}
           Instant
+          {#if !fasterAlerts}<Badge variant="brand">Pro</Badge>{/if}
         </button>
         <button
           type="button"
-          onclick={() => setDigestFrequency('daily')}
-          aria-pressed={digestFrequency === 'daily'}
-          class={pill(digestFrequency === 'daily')}
+          onclick={() => setDigestFrequency('interval')}
+          aria-pressed={effectiveFrequency === 'interval'}
+          class={pill(effectiveFrequency === 'interval')}
         >
-          {#if digestFrequency === 'daily'}<Check class="size-3.5" aria-hidden="true" />{/if}
+          {#if effectiveFrequency === 'interval'}<Check class="size-3.5" aria-hidden="true" />{/if}
+          Batched
+          {#if !fasterAlerts}<Badge variant="brand">Pro</Badge>{/if}
+        </button>
+        {#if effectiveFrequency === 'interval'}
+          <select
+            bind:value={digestIntervalHours}
+            onchange={persist}
+            aria-label="How often to send batched alerts"
+            class="rounded-md border border-border bg-background px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {#each intervalHourOptions as hours (hours)}
+              <option value={hours}>{hours === 1 ? 'every hour' : `every ${hours} hours`}</option>
+            {/each}
+          </select>
+        {/if}
+        <button
+          type="button"
+          onclick={() => setDigestFrequency('daily')}
+          aria-pressed={effectiveFrequency === 'daily'}
+          class={pill(effectiveFrequency === 'daily')}
+        >
+          {#if effectiveFrequency === 'daily'}<Check class="size-3.5" aria-hidden="true" />{/if}
           Daily digest
         </button>
-        {#if digestFrequency === 'daily'}
+        {#if effectiveFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled}
           <input
             type="time"
             bind:value={digestTime}
@@ -279,13 +467,35 @@
           />
         {/if}
       </div>
-      <p class="text-xs text-muted-foreground">
-        Applies only to saved-search alerts — reminders and application nudges above always deliver as they happen.
-      </p>
-      {#if digestFrequency === 'daily' && !hasTimezone}
+      {#if fasterAlerts}
         <p class="text-xs text-muted-foreground">
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
-          Set your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}>timezone</a> so the digest time means your own local time — until then it's read as UTC.
+          Instant sends new matches when the next check finds them (checks run every few minutes, outside quiet hours);
+          Batched collects them into one message at most that often. Frequency applies only to saved-search alerts. The
+          inbox and weekly application summaries share the chosen time; reminders and application nudges above deliver
+          as they happen.
+        </p>
+      {:else}
+        <p class="text-xs text-muted-foreground">
+          Free accounts get new matches in one daily digest at the time you choose. Search stays free; Instant and
+          Batched alerts come with Pro and Ultra. <a
+            href={resolve('/pricing')}
+            class="font-medium text-brand-strong hover:underline">View plans</a
+          >
+          {#if digestFrequency !== 'daily'}
+            Your saved {digestFrequency === 'instant' ? 'Instant' : 'Batched'} choice returns if you subscribe again.
+          {/if}
+          The inbox and weekly application summaries share this time; reminders and application nudges above deliver as they
+          happen.
+        </p>
+      {/if}
+      {#if (effectiveFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled) && !hasTimezone}
+        <p class="text-xs text-muted-foreground">
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
+          Set your
+          <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}
+            >timezone</a
+          ><!-- eslint-enable svelte/no-navigation-without-resolve --> so the digest time means your own local time — until
+          then it's read as UTC.
         </p>
       {/if}
     </div>
@@ -298,14 +508,11 @@
         <div class="min-w-0 flex-1">
           <span class={sectionLabel}>Quiet hours</span>
           <p class="text-xs text-muted-foreground">
-            Delay reminders, nudges, and instant search alerts until this window ends. A daily digest still arrives at its own time.
+            Delay reminders, nudges, and instant search alerts until this window ends. A daily digest still arrives at
+            its own time.
           </p>
         </div>
-        <ToggleSwitch
-          on={quietHoursOn}
-          label="Enable quiet hours"
-          onToggle={toggleQuietHours}
-        />
+        <ToggleSwitch on={quietHoursOn} label="Enable quiet hours" onToggle={toggleQuietHours} />
       </div>
       {#if quietHoursOn}
         <div class="flex items-center gap-2 pl-12">
@@ -327,12 +534,15 @@
         </div>
         {#if !hasTimezone}
           <p class="pl-12 text-xs text-muted-foreground">
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
-            Set your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}>timezone</a> so this means your own local time — until then it's read as UTC.
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
+            Set your
+            <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}
+              >timezone</a
+            ><!-- eslint-enable svelte/no-navigation-without-resolve --> so this means your own local time — until then it's
+            read as UTC.
           </p>
         {/if}
       {/if}
     </div>
   </section>
 {/if}
-

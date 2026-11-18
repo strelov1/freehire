@@ -50,6 +50,8 @@ func (f *fakePhotoBlobs) Get(_ context.Context, key string) (io.ReadCloser, erro
 	return io.NopCloser(bytes.NewReader(b)), nil
 }
 
+func (f *fakePhotoBlobs) List(context.Context, string) ([]string, error) { return nil, nil }
+
 func (f *fakePhotoBlobs) Delete(_ context.Context, key string) error {
 	delete(f.objs, key)
 	return nil

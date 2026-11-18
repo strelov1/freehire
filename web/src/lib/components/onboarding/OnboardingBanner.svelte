@@ -23,12 +23,12 @@
   </div>
   <div class="min-w-0 flex-1">
     <p class="text-sm font-semibold tracking-tight">Make this your feed</p>
-    <p class="truncate text-xs text-muted-foreground">Answer 2 quick questions — see only jobs that fit you.</p>
+    <p class="truncate text-xs text-muted-foreground">Drop your CV — see only jobs that fit you.</p>
   </div>
   <button
     type="button"
     onclick={onOpen}
-    class="inline-flex h-9 shrink-0 items-center rounded-lg bg-brand px-4 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+    class="inline-flex h-9 shrink-0 items-center rounded-lg border border-border bg-background px-4 text-sm font-semibold transition-colors hover:bg-accent"
   >
     Set up
   </button>

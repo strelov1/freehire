@@ -144,3 +144,43 @@ func TestBlockingCancelsThePairsFutureMocks(t *testing.T) {
 		t.Fatalf("cancel notices = %+v", n.cancelled)
 	}
 }
+
+func TestLeavingFreesTheOtherParticipantsHour(t *testing.T) {
+	pool, svc, mocks, _ := mockSetup(t)
+	host, handle := joined(t, pool, svc, "host@example.test")
+	leaver, _ := joined(t, pool, svc, "leaver@example.test")
+	guest, _ := joined(t, pool, svc, "guest@example.test")
+	openAllWeek(t, mocks, host, "UTC")
+	at := firstSlot(t, mocks, leaver, handle)
+	if _, err := book(mocks, leaver, handle, at, buddy.TopicCoding); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Leave(context.Background(), leaver); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := book(mocks, guest, handle, at, buddy.TopicCoding); err != nil {
+		t.Fatalf("booking the hour the leaver freed: %v", err)
+	}
+}
+
+func TestCancellationNoticesSkipMocksThatHaveAlreadyStarted(t *testing.T) {
+	pool, svc, mocks, n := mockSetup(t)
+	ctx := context.Background()
+	host, _ := joined(t, pool, svc, "host@example.test")
+	guest, _ := joined(t, pool, svc, "guest@example.test")
+	id := seedMock(t, pool, host, guest, time.Now().Add(-10*time.Minute))
+	if _, err := pool.Exec(ctx, `UPDATE buddy_mocks SET status = 'cancelled', cancelled_at = now(), cancel_reason = 'participant', cancelled_by = $2 WHERE id = $1::uuid`, id.String(), host); err != nil {
+		t.Fatal(err)
+	}
+	mocks.AnnounceCancellations(ctx, host)
+	if len(n.cancelled) != 0 {
+		t.Fatalf("notices = %+v, want none for a started mock", n.cancelled)
+	}
+	var announced bool
+	if err := pool.QueryRow(ctx, `SELECT cancel_announced_at IS NOT NULL FROM buddy_mocks WHERE id = $1::uuid`, id.String()).Scan(&announced); err != nil {
+		t.Fatal(err)
+	}
+	if announced {
+		t.Fatal("started mock cancellation was claimed")
+	}
+}

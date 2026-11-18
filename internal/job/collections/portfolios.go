@@ -11,18 +11,16 @@ import (
 	"strings"
 )
 
-// Venture portfolios, read from each firm's own site. Every parser here drops the
-// companies the firm records as acquired or shut down: an acquired company now hires
-// under its acquirer's name, so the tag would either match nothing or — worse — match
-// an unrelated company that kept the name. A company that went public stays: it is
-// still the firm's portfolio company and still hires under its own name.
+// Venture portfolios, read from each firm's own site. Every parser here drops companies the
+// firm records as acquired or shut down: they now hire under the acquirer's name, so the tag
+// would match nothing or an unrelated company that kept the name. A company that went public
+// stays.
 //
 // Every record carries the member's website where the firm publishes one, which is
 // what lets Members refuse a same-named company running a different site.
 
-// Sanity is the CMS behind the Greylock, Union Square Ventures and Accel sites. Its
-// read API is public — no token — and answers a GROQ query with {"result": [...]},
-// so each firm is one pinned URL. These are the same reads the firms' own pages make.
+// Sanity is the CMS behind the Greylock, Union Square Ventures and Accel sites. Its read API
+// is public and answers a GROQ query with {"result": [...]}, so each firm is one pinned URL.
 const (
 	greylockDatasetURL = `https://uz672vkd.apicdn.sanity.io/v2021-10-21/data/query/production?query=*%5B_type%3D%3D%22portfolioCompany%22%5D%7Bname%2Cwebsite%2Cstatus%7D`
 	usvDatasetURL      = `https://2r1amp8c.apicdn.sanity.io/v2021-10-21/data/query/production?query=*%5B_type%3D%3D%22company%22%5D%7Bname%2Cwebsite%2Curl%2CcurrentStage%2C%22profileWebsite%22%3AsiteProfile.website%7D`
@@ -90,9 +88,8 @@ func ParseUSV(data []byte) ([]Record, error) {
 	return out, nil
 }
 
-// ParseAccel reads Accel's portfolio. Accel marks no exit status the page explains —
-// its currentStatus flag splits current from past investments, and a past investment
-// may well be a public company still hiring — so only the entries Accel itself
+// ParseAccel reads Accel's portfolio. Its currentStatus flag splits current from past
+// investments, and a past one may be a public company still hiring, so only entries Accel
 // archived are dropped.
 func ParseAccel(data []byte) ([]Record, error) {
 	rows, err := parseSanity[struct {
@@ -117,10 +114,9 @@ func ParseAccel(data []byte) ([]Record, error) {
 // "CLEAR (NYSE: YOU)", "Weights & Biases (CoreWeave acquired)".
 var bondNote = regexp.MustCompile(`\s*\(([^)]*)\)\s*$`)
 
-// ParseBond reads BOND's investments file. It also lists the legacy Kleiner Perkins
-// Digital Growth fund under a separate key, which is not BOND's portfolio and is not
-// read. An exit is only recorded in the name's parenthetical, so that is where an
-// acquisition is detected and stripped.
+// ParseBond reads BOND's investments file, ignoring the legacy Kleiner Perkins Digital Growth
+// fund listed under a separate key. An exit is only recorded in the name's parenthetical, so
+// an acquisition is detected and stripped there.
 func ParseBond(data []byte) ([]Record, error) {
 	var payload struct {
 		Data struct {
@@ -214,11 +210,10 @@ func acquired(stages []string) bool {
 	return false
 }
 
-// sequoiaIndex is the search index the Sequoia site (built on Framer) publishes. Its
-// file name carries a content hash that changes on every publish, so it is found on
-// the companies page rather than pinned. Only the site id and the hash are read from
-// the page; the address is rebuilt on Framer's own host, so nothing the page says can
-// point the fetch anywhere else.
+// sequoiaIndex is the Sequoia site's (Framer) search index. Its file name carries a content
+// hash that changes on every publish, so it is found on the companies page. Only the site id
+// and hash are read; the address is rebuilt on Framer's own host, so the page cannot point the
+// fetch elsewhere.
 var sequoiaIndex = regexp.MustCompile(`sites/([A-Za-z0-9]+)/searchIndex-([A-Za-z0-9]+)\.json`)
 
 const sequoiaIndexURL = "https://framerusercontent.com/sites/%s/searchIndex-%s.json"

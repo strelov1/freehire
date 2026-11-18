@@ -2,12 +2,12 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { ChevronDown, Globe, House, Blend, Building } from '@lucide/svelte';
-  import { WORK_MODE_OPTIONS, REGION_OPTIONS, type FacetStore, type FacetOption } from '#lib/facets.js';
+  import { WORK_MODE_OPTIONS, REGION_OPTIONS } from '#lib/locationOptions.js';
+  import type { FacetStore, FacetOption } from '#lib/facets.js';
   import type { FacetCounts } from '#lib/types.js';
   import { summarizeScope, JOBS_SCOPE, COMPANIES_SCOPE } from '#lib/headerScope.js';
   import { pillClass, pillPressed, pillTitle } from './facets/pill';
   import PillMeta from './facets/PillMeta.svelte';
-  import LocationPane from './filters/LocationPane.svelte';
   import { must } from '#lib/utils.js';
 
   // The header's cross-cutting location filter — a scope-prefix trigger inside the
@@ -54,9 +54,7 @@
   const ICONS = { globe: Globe, remote: House, hybrid: Blend, onsite: Building } as const;
   // The head geography and its roll-up as one string; either half can be empty (a
   // format with no geography draws its icon alone, worldwide draws the globe alone).
-  const trailing = $derived(
-    [summary.text, summary.extra > 0 ? `+${summary.extra}` : ''].filter(Boolean).join(' '),
-  );
+  const trailing = $derived([summary.text, summary.extra > 0 ? `+${summary.extra}` : ''].filter(Boolean).join(' '));
 
   // The accessible name carries the whole story, because the visual marking is a
   // dashed underline and an underline reads to nobody. It also names the way out —
@@ -232,7 +230,19 @@
           {@render storePills('work_mode', WORK_MODE_OPTIONS)}
         </div>
         <div class="border-t border-border pt-4">
-          <LocationPane store={must(store, 'store')} {counts} />
+          {#await import('./filters/LocationPane.svelte') then { default: LocationPane }}
+            <LocationPane store={must(store, 'store')} {counts} />
+          {:catch}
+            <p role="alert" class="text-sm text-destructive">Location filters could not load.</p>
+            <button
+              type="button"
+              class="mt-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              onclick={() => {
+                open = false;
+                trigger?.focus();
+              }}>Close</button
+            >
+          {/await}
         </div>
       {:else if variant === 'companies'}
         <div class="mb-4">

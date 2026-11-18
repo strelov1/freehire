@@ -21,11 +21,8 @@ type DBStore struct {
 func NewDBStore(q *db.Queries) *DBStore { return &DBStore{q: q} }
 
 // MailboxByAddress resolves an inbound recipient to its owning user: strip the
-// domain, look up the local-part as an account username, then confirm that
-// account is actually enrolled in the hosted mailbox (a known username with no
-// mailbox row is not a recipient — same as an unknown one). See the
-// add-username-claim change for why this is no longer a single address lookup:
-// the address is derived from users.username rather than stored on mailboxes.
+// domain, look up the local-part as a username, then confirm the account is
+// enrolled in the hosted mailbox (a username with no mailbox row is not a recipient).
 func (s *DBStore) MailboxByAddress(ctx context.Context, address string) (int64, bool, error) {
 	local := address
 	if at := strings.IndexByte(local, '@'); at >= 0 {

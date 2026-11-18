@@ -27,8 +27,8 @@
 <div class="flex flex-col gap-2 border-t pt-3">
   <p class="text-sm font-medium">How did it go?</p>
   <p class="text-muted-foreground text-xs">
-    They see your rating only once they have rated you too, or a week after the mock — so
-    neither of you can answer the other's.
+    They see your rating only once they have rated you too, or a week after the mock — so neither of you can answer the
+    other's.
   </p>
   <div class="flex gap-1" role="radiogroup" aria-label="Rating">
     {#each [1, 2, 3, 4, 5] as value (value)}
@@ -47,8 +47,7 @@
     maxlength="1000"
     aria-label="Comment"
     class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-    placeholder="What went well, and what to practise next (optional)"
-  ></textarea>
+    placeholder="What went well, and what to practise next (optional)"></textarea>
   <div>
     <Button size="sm" disabled={sending || rating === 0} onclick={send}>
       {sending ? 'Sending…' : 'Send review'}

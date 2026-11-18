@@ -73,7 +73,7 @@ func TestListViewedSlugsEndpoint(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking/viewed", auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), h.ListViewedSlugs)
+	app.Get("/api/v1/me/tracking/viewed", auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), newContract(contractHandlers{trackingHandlers: h}))
 
 	getSlugs := func(t *testing.T, userID int64) []string {
 		t.Helper()

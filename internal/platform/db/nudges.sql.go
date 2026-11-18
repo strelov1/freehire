@@ -87,57 +87,70 @@ const getNudgeForDelivery = `-- name: GetNudgeForDelivery :one
 SELECT n.id, n.user_id, n.job_id, n.kind,
        j.title, j.company, j.public_slug, j.url,
        (j.closed_at IS NULL)::bool AS job_open,
+       COALESCE(n.episode_key = j.closed_at, false)::bool AS job_closed_episode_current,
        COALESCE(ns.enabled, false)::bool AS notifications_enabled,
        COALESCE(ns.channels, '{}'::text[]) AS channels,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end,
        a.stage,
        (a.user_id IS NOT NULL)::bool AS application_exists,
-       GREATEST(a.applied_at, mail.newest_mail_at)::timestamptz AS last_activity_at,
+       -- The same last-activity rule ListFollowUpCandidates matched on, employer moves
+       -- included, so the re-check before send reaches the verdict MATCH did. The employer
+       -- term counts only while the application is applied: a candidate who cleared their
+       -- progress must not have an old employer move keep the follow-up alive.
+       GREATEST(a.applied_at, mail.newest_mail_at,
+                CASE WHEN a.applied_at IS NOT NULL THEN
+                (SELECT max(ev.occurred_at)
+                   FROM application_events ev
+                  WHERE ev.application_id = a.id
+                    AND ev.kind = 'stage_set'
+                    AND ev.source = 'employer'
+                    AND ev.retracted_at IS NULL) END)::timestamptz AS last_activity_at,
        COALESCE(mail.suggestion_pending, false)::boolean AS has_pending_suggestion,
-       u.email AS account_email,
+       mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS account_email,
        u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
-       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = n.user_id) AS has_push_device
+       (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = n.user_id))::boolean AS has_push_device
 FROM application_nudges n
 JOIN jobs j ON j.id = n.job_id
 JOIN users u ON u.id = n.user_id
 LEFT JOIN notification_settings ns ON ns.user_id = n.user_id
 LEFT JOIN applications a ON a.user_id = n.user_id AND a.job_id = n.job_id
-LEFT JOIN telegram_links tl ON tl.user_id = n.user_id
+LEFT JOIN telegram_links tl ON tl.user_id = n.user_id AND u.banned_at IS NULL
 LEFT JOIN LATERAL (
     SELECT max(e.received_at) FILTER (WHERE e.job_id = n.job_id)               AS newest_mail_at,
            bool_or(e.suggested_job_id = n.job_id AND e.application_id IS NULL) AS suggestion_pending
       FROM emails e
      WHERE e.user_id = n.user_id
        AND (e.job_id = n.job_id OR e.suggested_job_id = n.job_id)
-       AND e.deleted_at IS NULL
+       AND e.deleted_at IS NULL AND e.direction = 'incoming'
 ) mail ON true
 WHERE n.id = $1
 `
 
 type GetNudgeForDeliveryRow struct {
-	ID                   int64              `json:"id"`
-	UserID               int64              `json:"user_id"`
-	JobID                int64              `json:"job_id"`
-	Kind                 string             `json:"kind"`
-	Title                string             `json:"title"`
-	Company              string             `json:"company"`
-	PublicSlug           string             `json:"public_slug"`
-	URL                  string             `json:"url"`
-	JobOpen              bool               `json:"job_open"`
-	NotificationsEnabled bool               `json:"notifications_enabled"`
-	Channels             []string           `json:"channels"`
-	QuietHoursStart      pgtype.Time        `json:"quiet_hours_start"`
-	QuietHoursEnd        pgtype.Time        `json:"quiet_hours_end"`
-	Stage                pgtype.Text        `json:"stage"`
-	ApplicationExists    bool               `json:"application_exists"`
-	LastActivityAt       pgtype.Timestamptz `json:"last_activity_at"`
-	HasPendingSuggestion bool               `json:"has_pending_suggestion"`
-	AccountEmail         string             `json:"account_email"`
-	Timezone             pgtype.Text        `json:"timezone"`
-	TelegramChatID       pgtype.Int8        `json:"telegram_chat_id"`
-	HasPushDevice        bool               `json:"has_push_device"`
+	ID                      int64              `json:"id"`
+	UserID                  int64              `json:"user_id"`
+	JobID                   int64              `json:"job_id"`
+	Kind                    string             `json:"kind"`
+	Title                   string             `json:"title"`
+	Company                 string             `json:"company"`
+	PublicSlug              string             `json:"public_slug"`
+	URL                     string             `json:"url"`
+	JobOpen                 bool               `json:"job_open"`
+	JobClosedEpisodeCurrent bool               `json:"job_closed_episode_current"`
+	NotificationsEnabled    bool               `json:"notifications_enabled"`
+	Channels                []string           `json:"channels"`
+	QuietHoursStart         pgtype.Time        `json:"quiet_hours_start"`
+	QuietHoursEnd           pgtype.Time        `json:"quiet_hours_end"`
+	Stage                   pgtype.Text        `json:"stage"`
+	ApplicationExists       bool               `json:"application_exists"`
+	LastActivityAt          pgtype.Timestamptz `json:"last_activity_at"`
+	HasPendingSuggestion    bool               `json:"has_pending_suggestion"`
+	AccountEmail            string             `json:"account_email"`
+	Timezone                pgtype.Text        `json:"timezone"`
+	TelegramChatID          pgtype.Int8        `json:"telegram_chat_id"`
+	HasPushDevice           bool               `json:"has_push_device"`
 }
 
 // The re-check-before-send context for one nudge: the job display fields, the
@@ -166,6 +179,7 @@ func (q *Queries) GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeFo
 		&i.PublicSlug,
 		&i.URL,
 		&i.JobOpen,
+		&i.JobClosedEpisodeCurrent,
 		&i.NotificationsEnabled,
 		&i.Channels,
 		&i.QuietHoursStart,
@@ -315,7 +329,7 @@ func (q *Queries) ListAutoApplySubmittedCandidates(ctx context.Context, windowDa
 
 const listFollowUpCandidates = `-- name: ListFollowUpCandidates :many
 SELECT a.user_id, a.job_id, a.stage,
-       GREATEST(a.applied_at, mail.newest_mail_at)::timestamptz AS last_activity_at,
+       GREATEST(a.applied_at, mail.newest_mail_at, emp.newest_move_at)::timestamptz AS last_activity_at,
        COALESCE(mail.suggestion_pending, false)::boolean AS has_pending_suggestion
 FROM applications a
 JOIN notification_settings ns ON ns.user_id = a.user_id AND ns.enabled
@@ -326,10 +340,18 @@ LEFT JOIN LATERAL (
       FROM emails e
      WHERE e.user_id = a.user_id
        AND (e.job_id = a.job_id OR e.suggested_job_id = a.job_id)
-       AND e.deleted_at IS NULL
+       AND e.deleted_at IS NULL AND e.direction = 'incoming'
 ) mail ON true
+LEFT JOIN LATERAL (
+    SELECT max(ev.occurred_at) AS newest_move_at
+      FROM application_events ev
+     WHERE ev.application_id = a.id
+       AND ev.kind = 'stage_set'
+       AND ev.source = 'employer'
+       AND ev.retracted_at IS NULL
+) emp ON true
 WHERE a.applied_at IS NOT NULL
-  AND GREATEST(a.applied_at, mail.newest_mail_at)
+  AND GREATEST(a.applied_at, mail.newest_mail_at, emp.newest_move_at)
       > now() - make_interval(days => $1::int)
 `
 
@@ -347,6 +369,8 @@ type ListFollowUpCandidatesRow struct {
 // backlog as nudges). Returns the raw ingredients for silence.StateFor —
 // the silence verdict itself is a Go-side decision, not a SQL one, same as every
 // other silence-state reader in this codebase.
+// The employer's newest move in their freehire pipeline counts as activity, as in
+// ListUserJobs; a stage the candidate typed does not.
 func (q *Queries) ListFollowUpCandidates(ctx context.Context, windowDays int32) ([]ListFollowUpCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, listFollowUpCandidates, windowDays)
 	if err != nil {
@@ -404,53 +428,6 @@ func (q *Queries) ListInterviewPrepCandidates(ctx context.Context, windowDays in
 	for rows.Next() {
 		var i ListInterviewPrepCandidatesRow
 		if err := rows.Scan(&i.UserID, &i.JobID, &i.OccurredAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listJobClosedCandidates = `-- name: ListJobClosedCandidates :many
-SELECT a.user_id, a.job_id, a.stage, j.closed_at
-FROM applications a
-JOIN notification_settings ns ON ns.user_id = a.user_id AND ns.enabled
-JOIN jobs j ON j.id = a.job_id
-WHERE a.applied_at IS NOT NULL
-  AND j.closed_at IS NOT NULL
-  AND j.closed_at > now() - make_interval(days => $1::int)
-`
-
-type ListJobClosedCandidatesRow struct {
-	UserID   int64              `json:"user_id"`
-	JobID    pgtype.Int8        `json:"job_id"`
-	Stage    pgtype.Text        `json:"stage"`
-	ClosedAt pgtype.Timestamptz `json:"closed_at"`
-}
-
-// Jobs that closed recently while the tracking user still has an application in a
-// non-terminal stage on them (any stage silence.ThresholdDays accrues
-// silence for — the same active/terminal split every other silence reader uses).
-// Bounded to a recency window on closed_at for the same first-deploy reason as
-// the other two candidate scans.
-func (q *Queries) ListJobClosedCandidates(ctx context.Context, windowDays int32) ([]ListJobClosedCandidatesRow, error) {
-	rows, err := q.db.Query(ctx, listJobClosedCandidates, windowDays)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListJobClosedCandidatesRow{}
-	for rows.Next() {
-		var i ListJobClosedCandidatesRow
-		if err := rows.Scan(
-			&i.UserID,
-			&i.JobID,
-			&i.Stage,
-			&i.ClosedAt,
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -545,4 +522,55 @@ WHERE id = $1
 func (q *Queries) ReleaseNudgeClaim(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, releaseNudgeClaim, id)
 	return err
+}
+
+const settleClosedApplications = `-- name: SettleClosedApplications :one
+WITH locked AS (
+    SELECT j.id, j.closed_at
+    FROM jobs j
+    WHERE j.closed_at IS NOT NULL
+      AND j.closed_reason <> 'native_source_pending'
+      AND EXISTS (
+          SELECT 1 FROM applications a
+          WHERE a.job_id = j.id
+            AND (a.stage IN ('preparing', 'applied', 'screening', 'responded', 'interview', 'offer')
+                 OR (a.stage IS NULL AND a.applied_at IS NOT NULL)))
+    ORDER BY j.id
+    FOR UPDATE OF j
+), expired AS (
+    UPDATE applications a
+    SET stage = 'expired'
+    FROM locked j
+    WHERE j.id = a.job_id
+      AND (a.stage IN ('preparing', 'applied', 'screening', 'responded', 'interview', 'offer')
+           OR (a.stage IS NULL AND a.applied_at IS NOT NULL))
+    RETURNING a.id, a.user_id, a.job_id, a.company_slug, j.closed_at
+), events AS (
+    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+    SELECT user_id, id, job_id, company_slug, 'stage_set', 'expired', now(), 'system'
+    FROM expired
+), nudges AS (
+    INSERT INTO application_nudges (user_id, job_id, kind, episode_key)
+    SELECT e.user_id, e.job_id, 'job_closed', e.closed_at
+    FROM expired e
+    JOIN notification_settings ns ON ns.user_id = e.user_id AND ns.enabled
+    WHERE e.closed_at > now() - make_interval(days => $1::int)
+    ON CONFLICT (user_id, job_id, kind, episode_key) DO NOTHING
+    RETURNING user_id, job_id, episode_key
+)
+SELECT count(*) FROM nudges
+`
+
+// Settle every active tracked application whose listing closed, regardless of
+// notification settings, application date, or closure age. The update guard is
+// rechecked under the row lock, preserving outcomes set concurrently by a user.
+// Lock matching jobs first so a concurrent reopen cannot leave a stale closure.
+// Source-verification withdrawal does not expire applications or announce closure.
+// Events and notification records commit with the transition. Only notifications
+// have a recency window, so repairing old tracker entries does not flood inboxes.
+func (q *Queries) SettleClosedApplications(ctx context.Context, windowDays int32) (int64, error) {
+	row := q.db.QueryRow(ctx, settleClosedApplications, windowDays)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }

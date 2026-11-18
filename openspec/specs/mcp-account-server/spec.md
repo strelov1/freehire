@@ -4,11 +4,11 @@
 TBD - created by archiving change mcp-oauth-signin. Update Purpose after archive.
 ## Requirements
 ### Requirement: Bearer-Gated Signed-In MCP Endpoint
-The system SHALL serve an MCP server at `/api/v1/mcp/account` that requires a valid `Authorization: Bearer <token>` header resolving to a live OAuth grant (per the `mcp-oauth-authorization` capability), responding `401 Unauthorized` with no MCP framing attempted when the header is missing, malformed, or does not resolve to a live grant.
+The system SHALL serve its MCP server at `/api/v1/mcp`, and only there, requiring a valid `Authorization: Bearer <token>` header resolving to a live OAuth grant (per the `mcp-oauth-authorization` capability) or a full-scope API key, responding `401 Unauthorized` with a `WWW-Authenticate` challenge and no MCP framing attempted when the header is missing, malformed, or does not resolve to a live credential. No request is served anonymously, whatever its User-Agent.
 
 #### Scenario: A request with no Authorization header is rejected
-- **WHEN** a request reaches `/api/v1/mcp/account` with no `Authorization` header
-- **THEN** the response is `401 Unauthorized`
+- **WHEN** a request reaches `/api/v1/mcp` with no `Authorization` header, including the `initialize` a host sends while a connector is added
+- **THEN** the response is `401 Unauthorized` carrying `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/api/v1/mcp"`
 
 #### Scenario: A request with an expired or revoked token is rejected
 - **WHEN** a request presents `Authorization: Bearer <token>` for a grant that has expired or whose session-generation no longer matches
@@ -35,3 +35,20 @@ Every tool call on the signed-in MCP server SHALL execute as the user id resolve
 #### Scenario: A tool call only reads or changes the caller's own data
 - **WHEN** a tool call is made with a valid bearer token belonging to user A
 - **THEN** the call's effects (reads and writes alike) are scoped to user A's own records, regardless of any id-like value present in the tool's arguments
+
+### Requirement: A Session Reached Through the freehire CLI Is Told the CLI Is On Its Shell
+When the canonical MCP endpoint is reached by the freehire CLI, identified by a
+User-Agent beginning with `freehire-cli/`, the server instructions SHALL end with one
+sentence stating that the freehire CLI is available on the agent's shell, naming
+`freehire search <query> --json` written to a file for whole results with full
+descriptions and `freehire cv render <id> --out <file>` for the CV PDF. The sentence SHALL
+NOT exceed 256 characters. It SHALL appear for no other User-Agent. No tool description SHALL change as a result.
+
+#### Scenario: The CLI connects
+- **WHEN** an MCP client initializes the canonical endpoint with User-Agent `freehire-cli/1.4.0`
+- **THEN** the returned instructions end with the sentence naming `freehire search` and `freehire cv render`
+
+#### Scenario: Another host connects
+- **WHEN** an MCP client initializes the canonical endpoint with User-Agent `Claude-User` or `openai-mcp`
+- **THEN** the returned instructions are identical to those served without this change and do not mention the CLI
+

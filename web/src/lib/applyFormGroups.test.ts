@@ -61,9 +61,7 @@ describe('apply form groups', () => {
   it('reads a question of unknown kind as answerable in a line', () => {
     const model = applyFormModel([ask('Notice period', 'signature')]);
 
-    expect(model.groups.map((g) => [g.key, g.questions.map((q) => q.text)])).toEqual([
-      ['short', ['Notice period']],
-    ]);
+    expect(model.groups.map((g) => [g.key, g.questions.map((q) => q.text)])).toEqual([['short', ['Notice period']]]);
   });
 
   it('has no groups when the form asks nothing', () => {

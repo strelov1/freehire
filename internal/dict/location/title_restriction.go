@@ -14,9 +14,9 @@ var bracketSuffixPattern = regexp.MustCompile(`\[([^\[\]]*)\]|\(([^()]*)\)`)
 
 // titleRestrictionAnchor matches the ATS convention that states a geography
 // restriction inside a title's bracket/parenthetical suffix, as opposed to an
-// unrelated bracket ("(React)", "(Contract)", a seniority band). Deliberately
-// narrow — see design.md's precision-over-recall rationale, the same stance
-// eligibility.go's phrase lists take.
+// titleRestrictionAnchor matches the ATS convention that states a geography restriction inside
+// a title's bracket/parenthetical suffix, as opposed to an unrelated bracket ("(React)",
+// "(Contract)", a seniority band). Deliberately narrow: precision over recall.
 var titleRestrictionAnchor = regexp.MustCompile(`\b(remote|location)\b`)
 
 // RestrictionFromTitle reports the geography a job title's bracketed or
@@ -47,16 +47,7 @@ func RestrictionFromTitle(title string) (countries, regions []string) {
 		}
 		s := separatorReplacer.Replace(rest)
 		for _, tok := range strings.Split(s, ",") {
-			tok = strings.TrimSpace(tok)
-			if tok == "" {
-				continue
-			}
-			// prevTok is always "" here — a colliding subdivision code (e.g. "LA")
-			// cannot be disambiguated by a neighboring token the way Parse's own
-			// comma-token loop does. Deliberate, not an oversight: it costs a small,
-			// safe recall gap (never guesses) in exchange for not threading
-			// cross-token state through a bracket suffix this narrow.
-			resolveGeoToken(tok, "", countrySet, regionSet)
+			resolveRestrictionToken(tok, countrySet, regionSet)
 		}
 	}
 	if len(countrySet) == 0 && len(regionSet) == 0 {

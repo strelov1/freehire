@@ -88,9 +88,7 @@ describe('columnOf', () => {
   });
 
   it('keeps an explicit stage ahead of the saved mark', () => {
-    expect(columnOf(job({ saved_at: '2026-07-12T00:00:00Z', stage: 'interview' }))).toBe(
-      'interview',
-    );
+    expect(columnOf(job({ saved_at: '2026-07-12T00:00:00Z', stage: 'interview' }))).toBe('interview');
   });
 
   it('returns null for a row that is neither saved nor tracked', () => {
@@ -200,13 +198,24 @@ describe('CLOSED_OUTCOMES', () => {
   });
 });
 
-
 describe('sortBoardItems', () => {
   it('orders actual deadlines first and keeps missing dates last', () => {
     const rows = [
       job({ id: 'missing', job: null }),
-      job({ id: 'later', job: { public_slug: 'later', title: '', company: '', closed_at: undefined, application_deadline: '2026-11-10' } }),
-      job({ id: 'earlier', job: { public_slug: 'earlier', title: '', company: '', closed_at: undefined, application_deadline: '2026-11-01' } }),
+      job({
+        id: 'later',
+        job: { public_slug: 'later', title: '', company: '', closed_at: undefined, application_deadline: '2026-11-10' },
+      }),
+      job({
+        id: 'earlier',
+        job: {
+          public_slug: 'earlier',
+          title: '',
+          company: '',
+          closed_at: undefined,
+          application_deadline: '2026-11-01',
+        },
+      }),
     ];
     expect(sortBoardItems(rows, 'deadline').map((i) => i.id)).toEqual(['earlier', 'later', 'missing']);
     expect(rows[0]?.id).toBe('missing');

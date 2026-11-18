@@ -9,282 +9,13 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/experience"
-	"github.com/strelov1/freehire/internal/platform/db"
 )
-
-// cvRepo is a one-document stand-in for cv.Repository: it serves a single owned
-// CV and records what an update wrote.
-type cvRepo struct {
-	id      uuid.UUID
-	userID  int64
-	jobID   int64
-	data    []byte
-	written []byte
-	// report is what an autopilot run leaves behind: its account of each requirement.
-	report []byte
-	// autopilotErr, when set, is what SetAutopilotReport returns instead of succeeding —
-	// simulating a report write that fails after the document edit has already landed.
-	autopilotErr error
-}
-
-func (r *cvRepo) Get(_ context.Context, id uuid.UUID, userID int64) (db.GetCVByIDRow, error) {
-	if id != r.id || userID != r.userID {
-		return db.GetCVByIDRow{}, cv.ErrNotFound
-	}
-	return db.GetCVByIDRow{ID: r.id, Title: "CV", TemplateID: "classic-ats", Data: r.data,
-		JobID:           pgtype.Int8{Int64: r.jobID, Valid: r.jobID != 0},
-		AutopilotReport: r.report}, nil
-}
-
-func (r *cvRepo) Update(_ context.Context, id uuid.UUID, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {
-	if id != r.id || userID != r.userID {
-		return db.UpdateCVRow{}, cv.ErrNotFound
-	}
-	r.written = data
-	r.data = data
-	return db.UpdateCVRow{ID: id, Title: title, TemplateID: templateID}, nil
-}
-
-func (r *cvRepo) Create(context.Context, int64, string, string, []byte) (db.CreateCVRow, error) {
-	return db.CreateCVRow{}, nil
-}
-func (r *cvRepo) List(context.Context, int64) ([]db.ListCVsByUserRow, error) { return nil, nil }
-func (r *cvRepo) Delete(context.Context, uuid.UUID, int64) (int64, error)    { return 0, nil }
-func (r *cvRepo) GetBase(context.Context, int64) (db.GetBaseCVByUserRow, error) {
-	return db.GetBaseCVByUserRow{}, cv.ErrNotFound
-}
-func (r *cvRepo) CreateTailored(context.Context, int64, int64, string, string, []byte) (db.CreateTailoredCVRow, error) {
-	return db.CreateTailoredCVRow{}, nil
-}
-func (r *cvRepo) SetSession(context.Context, uuid.UUID, int64, string) (int64, error)  { return 1, nil }
-func (r *cvRepo) SetTemplate(context.Context, uuid.UUID, int64, string) (int64, error) { return 1, nil }
-func (r *cvRepo) SetTracerLinks(context.Context, uuid.UUID, int64, bool) (int64, error) {
-	return 1, nil
-}
-func (r *cvRepo) ListTailored(context.Context, int64) ([]db.ListTailoredCVsByUserRow, error) {
-	return nil, nil
-}
-
-func (r *cvRepo) GetTailoredForJob(_ context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error) {
-	if userID != r.userID || jobID != r.jobID {
-		return db.GetTailoredCVForJobRow{}, pgx.ErrNoRows
-	}
-	return db.GetTailoredCVForJobRow{ID: r.id, Title: "CV", TemplateID: "classic-ats", Data: r.data}, nil
-}
-
-func (r *cvRepo) SetAutopilotReport(_ context.Context, id uuid.UUID, userID int64, report []byte) (int64, error) {
-	if r.autopilotErr != nil {
-		return 0, r.autopilotErr
-	}
-	if id != r.id || userID != r.userID {
-		return 0, nil
-	}
-	r.report = report
-	return 1, nil
-}
-
-func (r *cvRepo) MergeAutopilotEntry(_ context.Context, id uuid.UUID, userID int64, entry []byte) (int64, error) {
-	if r.autopilotErr != nil {
-		return 0, r.autopilotErr
-	}
-	if id != r.id || userID != r.userID {
-		return 0, nil
-	}
-	var incoming cv.AutopilotEntry
-	if err := json.Unmarshal(entry, &incoming); err != nil {
-		return 0, err
-	}
-	var entries []cv.AutopilotEntry
-	if len(r.report) > 0 {
-		if err := json.Unmarshal(r.report, &entries); err != nil {
-			return 0, err
-		}
-	}
-	target := strings.ToLower(strings.TrimSpace(incoming.Requirement))
-	replaced := false
-	for i, e := range entries {
-		if strings.ToLower(strings.TrimSpace(e.Requirement)) == target {
-			entries[i] = incoming
-			replaced = true
-			break
-		}
-	}
-	if !replaced {
-		entries = append(entries, incoming)
-	}
-	blob, err := json.Marshal(entries)
-	if err != nil {
-		return 0, err
-	}
-	r.report = blob
-	return 1, nil
-}
-
-// GetAppearanceDefaults/UpsertAppearanceDefaults are unused by anything in this file — no
-// case here saves or reads appearance defaults — so GetAppearanceDefaults always reports
-// "nothing saved" and Upsert is never expected to be called.
-func (r *cvRepo) GetAppearanceDefaults(context.Context, int64) (db.CvAppearanceDefault, error) {
-	return db.CvAppearanceDefault{}, pgx.ErrNoRows
-}
-
-func (r *cvRepo) UpsertAppearanceDefaults(_ context.Context, userID int64, templateID string, style, margins []byte) (db.CvAppearanceDefault, error) {
-	return db.CvAppearanceDefault{UserID: userID, TemplateID: templateID, Style: style, Margins: margins}, nil
-}
-
-// testCVID is the CV every case in this file addresses. Fixed so a failure names a
-// stable value rather than a fresh random one.
-var testCVID = uuid.MustParse("55555555-5555-4555-8555-555555555555")
-
-// cvToolsAPI wires an API whose CV store serves one document owned by user 3.
-func cvToolsAPI(t *testing.T, doc string) (*assistantHandlers, *cvRepo) {
-	t.Helper()
-	// An EMPTY bank, not a nil gate. Production always constructs the editor with one
-	// (Register passes bankGate{bank}), so a nil gate is a configuration that does not ship
-	// — a fixture using it asserts behaviour nobody can reach. An empty bank is the honest
-	// stand-in: the gate is present and refuses every citation, which is what a user with
-	// nothing banked actually experiences.
-	repo := &cvRepo{id: testCVID, userID: 3, jobID: 9, data: []byte(doc)}
-	bank := newStubBank()
-	editor := cvedit.NewEditor(&memRevisions{cv: repo}, bankGate{bank: bank})
-	return &assistantHandlers{experience: bank, cv: &cvHandlers{cvStore: cv.NewStore(repo), editor: editor}}, repo
-}
-
-// cvToolsAPIWithBank is cvToolsAPI for the cases that exercise the evidence gate. The
-// editor is CONSTRUCTED with the gate, the way the production assembly builds it — the
-// gate is not something a caller can attach to an editor after the fact.
-func cvToolsAPIWithBank(t *testing.T, doc string, bank experienceBankTools) (*assistantHandlers, *cvRepo) {
-	t.Helper()
-	repo := &cvRepo{id: testCVID, userID: 3, jobID: 9, data: []byte(doc)}
-	editor := cvedit.NewEditor(&memRevisions{cv: repo}, bankGate{bank: bank})
-	return &assistantHandlers{
-		experience: bank,
-		cv:         &cvHandlers{cvStore: cv.NewStore(repo), editor: editor},
-	}, repo
-}
-
-// memRevisions is an in-memory cvedit.Repository over the same cvRepo the CV store uses, so
-// a tool test exercises the real editor — policy, evidence gate, apply, coalescing — without
-// a database. Writes land in cvRepo.written, which is what the cases assert on.
-type memRevisions struct {
-	cv        *cvRepo
-	revisions []cvedit.Revision
-}
-
-func (m *memRevisions) Edit(ctx context.Context, _ uuid.UUID, _ int64, fn func(context.Context, cvedit.Tx) error) error {
-	return fn(ctx, m)
-}
-
-func (m *memRevisions) List(_ context.Context, _ uuid.UUID, _ int64, limit int32) ([]cvedit.Revision, error) {
-	out := make([]cvedit.Revision, 0, len(m.revisions))
-	for i := len(m.revisions) - 1; i >= 0 && len(out) < int(limit); i-- {
-		out = append(out, m.revisions[i])
-	}
-	return out, nil
-}
-
-func (m *memRevisions) Get(_ context.Context, id uuid.UUID, _ int64) (cvedit.Revision, error) {
-	for _, r := range m.revisions {
-		if r.ID == id {
-			return r, nil
-		}
-	}
-	return cvedit.Revision{}, cvedit.ErrNothingToUndo
-}
-
-func (m *memRevisions) State(context.Context) (cvedit.State, time.Time, error) {
-	var doc cv.Document
-	blob := m.cv.written
-	if blob == nil {
-		blob = m.cv.data
-	}
-	if err := json.Unmarshal(blob, &doc); err != nil {
-		return cvedit.State{}, time.Time{}, err
-	}
-	return cvedit.State{Title: "CV", TemplateID: "classic-ats", Document: doc}, time.Time{}, nil
-}
-
-func (m *memRevisions) Save(_ context.Context, s cvedit.State) (cv.Meta, error) {
-	blob, err := json.Marshal(s.Document)
-	if err != nil {
-		return cv.Meta{}, err
-	}
-	m.cv.written = blob
-	return cv.Meta{ID: m.cv.id, Title: s.Title, TemplateID: s.TemplateID}, nil
-}
-
-func (m *memRevisions) Newest(context.Context) (cvedit.Revision, bool, error) {
-	if len(m.revisions) == 0 {
-		return cvedit.Revision{}, false, nil
-	}
-	return m.revisions[len(m.revisions)-1], true, nil
-}
-
-func (m *memRevisions) Revision(_ context.Context, id uuid.UUID) (cvedit.Revision, bool, error) {
-	for _, r := range m.revisions {
-		if r.ID == id {
-			return r, true, nil
-		}
-	}
-	return cvedit.Revision{}, false, nil
-}
-
-func (m *memRevisions) Insert(_ context.Context, rev cvedit.Revision) (cvedit.Revision, error) {
-	rev.ID = uuid.New()
-	m.revisions = append(m.revisions, rev)
-	return rev, nil
-}
-
-func (m *memRevisions) Amend(_ context.Context, id uuid.UUID, ops []cvedit.Op, title, note string) (cvedit.Revision, error) {
-	for i, r := range m.revisions {
-		if r.ID == id {
-			m.revisions[i].Ops = ops
-			m.revisions[i].Title = title
-			m.revisions[i].Note = note
-			return m.revisions[i], nil
-		}
-	}
-	return cvedit.Revision{}, cvedit.ErrNothingToUndo
-}
-
-func (m *memRevisions) MarkReverted(_ context.Context, id uuid.UUID) (bool, error) {
-	for i, r := range m.revisions {
-		if r.ID == id && r.RevertedAt == nil {
-			now := time.Now()
-			m.revisions[i].RevertedAt = &now
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (m *memRevisions) InBatch(_ context.Context, batchID uuid.UUID) ([]cvedit.Revision, error) {
-	var out []cvedit.Revision
-	for i := len(m.revisions) - 1; i >= 0; i-- {
-		if m.revisions[i].BatchID == batchID && m.revisions[i].RevertedAt == nil {
-			out = append(out, m.revisions[i])
-		}
-	}
-	return out, nil
-}
-
-func (m *memRevisions) Feed(_ context.Context, limit int32) ([]cvedit.Revision, error) {
-	out := make([]cvedit.Revision, 0, len(m.revisions))
-	for i := len(m.revisions) - 1; i >= 0 && len(out) < int(limit); i-- {
-		out = append(out, m.revisions[i])
-	}
-	return out, nil
-}
-
-func (m *memRevisions) Trim(context.Context, int32) error { return nil }
 
 const oneExperienceCV = `{"header":{"full_name":"Ada Lovelace","email":"ada@example.com"},` +
 	`"summary":"Backend engineer","experience":[{"company":"Acme","title":"Engineer","bullets":["Shipped a thing"]}]}`
@@ -292,7 +23,7 @@ const oneExperienceCV = `{"header":{"full_name":"Ada Lovelace","email":"ada@exam
 func TestCVGetToolReadsTheBoundDocument(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_get")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_get")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_get: %v", err)
@@ -318,7 +49,7 @@ const contactfulCV = `{"header":{"full_name":"Ada Lovelace","email":"ada@example
 func TestCVGetToolOmitsTheContactBlock(t *testing.T) {
 	a, _ := cvToolsAPI(t, contactfulCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_get")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_get")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_get: %v", err)
@@ -343,7 +74,7 @@ func TestCVEditToolAppliesAPatch(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}]}`))
 	if err != nil {
@@ -362,7 +93,7 @@ func TestCVEditToolAcceptsOpsAsAJSONString(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	args, err := json.Marshal(map[string]any{
 		"ops": `[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"` + atom.ID.String() + `"}]`,
 	})
@@ -383,7 +114,7 @@ func TestCVEditToolAcceptsOpsAsAJSONString(t *testing.T) {
 func TestCVEditToolStillRefusesAnUnknownField(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":"[{\"kind\":\"set\",\"path\":\"summary\",\"value\":\"x\",\"skill\":0}]"}`))
 	if err == nil {
@@ -402,7 +133,7 @@ func TestCVEditToolRemovesTwoPositionsOfOneList(t *testing.T) {
 		`"experience":[{"company":"Acme","title":"Engineer","bullets":["A","B","C","D"]}]}`
 	a, repo := cvToolsAPI(t, fourBullets)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	// Non-adjacent, and named against the document the model read.
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"remove","path":"experience[0].bullets[1]"},{"kind":"remove","path":"experience[0].bullets[3]"}]}`))
@@ -427,7 +158,7 @@ func TestCVEditToolRemovesTwoPositionsOfOneList(t *testing.T) {
 func TestCVEditToolRefusesToRewriteContactDetails(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"header.email","value":"someone@else.test"}]}`))
 	if err == nil {
@@ -443,7 +174,7 @@ func TestCVEditToolRefusesToRewriteContactDetails(t *testing.T) {
 func TestCVEditToolRejectsAMisaddressedPatch(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"insert","path":"experience[42].bullets[0]","value":"Did a thing"}]}`))
 	if err == nil {
@@ -456,7 +187,7 @@ func TestCVEditToolRejectsAMisaddressedPatch(t *testing.T) {
 func cvEditOpSchema(t *testing.T) map[string]any {
 	t.Helper()
 	a, _ := cvToolsAPI(t, oneExperienceCV)
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	props, _ := tool.Schema["properties"].(map[string]any)
 	ops, _ := props["ops"].(map[string]any)
 	item, _ := ops["items"].(map[string]any)
@@ -525,7 +256,7 @@ func TestCVEditWithoutAnyEvidenceIdNamesWhereItGoes(t *testing.T) {
 	bank := newStubBank()
 	a, _ := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"insert","path":"experience[0].bullets[0]","value":"Led the migration."}]}`))
 	if err == nil {
@@ -544,7 +275,7 @@ func TestCVEditWritesACitedBullet(t *testing.T) {
 	})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"insert","path":"experience[0].bullets[0]","value":"Ran the payments Kafka cluster.",`+
 			`"evidence_id":"`+atom.ID.String()+`"}]}`))
@@ -578,7 +309,7 @@ func TestCVEditToolRefusesAnOverCapInsert(t *testing.T) {
 	a, repo := cvToolsAPIWithBank(t, string(doc), bank)
 	before := append([]byte(nil), repo.data...)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err = tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"insert","path":"experience[0].bullets[0]","value":"extra claim",`+
 			`"evidence_id":"`+atom.ID.String()+`"}]}`))
@@ -597,7 +328,7 @@ func TestCVEditToolRefusesAnOverCapInsert(t *testing.T) {
 }
 
 func TestCVEditToolDescriptionNamesTheBulletCeiling(t *testing.T) {
-	tool := toolByName(t, (&assistantHandlers{}).assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, (&assistantHandlers{}).assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	want := fmt.Sprintf("%d", cv.MaxBullets)
 	if !strings.Contains(tool.Description, want) {
 		t.Fatalf("cv_edit description missing live MaxBullets %s: %s", want, tool.Description)
@@ -608,7 +339,7 @@ func TestCVEditToolDescriptionNamesTheBulletCeiling(t *testing.T) {
 }
 
 func TestCVEditToolDescriptionRoutesProjectsAndTemplateHeading(t *testing.T) {
-	tool := toolByName(t, (&assistantHandlers{}).assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, (&assistantHandlers{}).assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	d := tool.Description
 	if !strings.Contains(d, "projects[i]") {
 		t.Fatalf("cv_edit description must mention projects[i] for portfolio work: %s", d)
@@ -622,182 +353,6 @@ func TestCVEditToolDescriptionRoutesProjectsAndTemplateHeading(t *testing.T) {
 	}
 }
 
-// cv_edit and tailor_report write two different columns through two different tool calls;
-// nothing ties them together unless cv_edit is told which requirement its batch just closed.
-// requirement/requirement_status is that link — it must land in the SAME call as the edit,
-// because that is the one moment the model still has the requirement in mind.
-func TestCVEditToolMergesTheClosedRequirementIntoTheReport(t *testing.T) {
-	bank := newStubBank()
-	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
-	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
-
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
-	_, err := tool.Run(context.Background(), 3, json.RawMessage(
-		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
-			`"requirement":"PostgreSQL experience","requirement_status":"closed_bank"}`))
-	if err != nil {
-		t.Fatalf("cv_edit: %v", err)
-	}
-
-	var report []cv.AutopilotEntry
-	if err := json.Unmarshal(repo.report, &report); err != nil {
-		t.Fatalf("report unreadable: %v (raw %s)", err, repo.report)
-	}
-	if len(report) != 1 || report[0].Requirement != "PostgreSQL experience" || report[0].Status != cv.AutopilotClosedBank {
-		t.Errorf("report = %+v, want one entry closing \"PostgreSQL experience\"", report)
-	}
-}
-
-// The merge's replace path (proven at the store level in internal/candidate/cv/autopilot_test.go) has
-// to be reachable through cv_edit itself, not just through Store.MergeAutopilotEntry directly
-// — this is what proves the handler wiring, not just the store logic, does the right thing
-// when a report entry already exists.
-func TestCVEditToolReplacesAnExistingOpenReportEntry(t *testing.T) {
-	bank := newStubBank()
-	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
-	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
-	seed, err := json.Marshal([]cv.AutopilotEntry{
-		{Requirement: "PostgreSQL experience", Status: cv.AutopilotOpen},
-		{Requirement: "Team leadership", Status: cv.AutopilotClosedBank},
-	})
-	if err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	repo.report = seed
-
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
-	_, err = tool.Run(context.Background(), 3, json.RawMessage(
-		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
-			`"requirement":"PostgreSQL experience","requirement_status":"closed_bank"}`))
-	if err != nil {
-		t.Fatalf("cv_edit: %v", err)
-	}
-
-	var report []cv.AutopilotEntry
-	if err := json.Unmarshal(repo.report, &report); err != nil {
-		t.Fatalf("report unreadable: %v (raw %s)", err, repo.report)
-	}
-	if len(report) != 2 {
-		t.Fatalf("report has %d entries, want 2 (the edit must replace, not duplicate)", len(report))
-	}
-	if report[0].Requirement != "PostgreSQL experience" || report[0].Status != cv.AutopilotClosedBank {
-		t.Errorf("report[0] = %+v, want PostgreSQL experience closed_bank", report[0])
-	}
-	if report[1].Requirement != "Team leadership" || report[1].Status != cv.AutopilotClosedBank {
-		t.Errorf("unrelated entry was disturbed: %+v", report[1])
-	}
-}
-
-// A report-merge failure arrives strictly AFTER cvedit.Commit has already durably landed the
-// document edit. Failing the whole tool call at that point would tell the model the edit never
-// happened; a well-behaved model retries, and Commit has no content-level dedup against a
-// retried insert — so the merge must be best-effort, the same way UndoCVRevisionBatch treats
-// the sibling SetAutopilotReport call after RevertBatch has already succeeded.
-func TestCVEditToolSucceedsWhenTheReportMergeFailsAfterTheEditLands(t *testing.T) {
-	bank := newStubBank()
-	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
-	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
-	repo.autopilotErr = errors.New("connection reset")
-
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
-	_, err := tool.Run(context.Background(), 3, json.RawMessage(
-		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
-			`"requirement":"PostgreSQL experience","requirement_status":"closed_bank"}`))
-	if err != nil {
-		t.Fatalf("cv_edit returned an error for a report-merge failure after a successful edit: %v", err)
-	}
-	if repo.written == nil {
-		t.Fatal("the edit did not land — Commit should have run before the failing merge")
-	}
-}
-
-// The schema's enum keeps a well-behaved model from offering open/not_reached, but the
-// handler must refuse the value too — a model can send whatever JSON it wants regardless of
-// what the schema advertises.
-func TestCVEditToolRejectsAnExplicitOpenRequirementStatus(t *testing.T) {
-	bank := newStubBank()
-	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
-	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
-
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
-	_, err := tool.Run(context.Background(), 3, json.RawMessage(
-		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
-			`"requirement":"PostgreSQL experience","requirement_status":"open"}`))
-	if err == nil {
-		t.Fatal("an explicit \"open\" status was accepted; cv_edit must not be able to reopen a requirement")
-	}
-	if repo.written != nil {
-		t.Errorf("document was written = %s, want the batch refused before the edit applied", repo.written)
-	}
-	if repo.report != nil {
-		t.Errorf("report = %s, want it untouched when the call is refused", repo.report)
-	}
-}
-
-// A batch that names no requirement is the common case (rewording, reordering, adding a
-// technology tag) and must leave the report exactly as it was — merging a blank requirement
-// would either error or, worse, silently create a nameless row the panel cannot render.
-func TestCVEditToolWithNoRequirementLeavesTheReportUntouched(t *testing.T) {
-	bank := newStubBank()
-	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
-	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
-
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
-	_, err := tool.Run(context.Background(), 3, json.RawMessage(
-		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}]}`))
-	if err != nil {
-		t.Fatalf("cv_edit: %v", err)
-	}
-	if repo.report != nil {
-		t.Errorf("report = %s, want it untouched when the call named no requirement", repo.report)
-	}
-}
-
-// requirement_status only makes sense as an outcome the edit just produced — open and
-// not_reached describe requirements NOT closed, so cv_edit (which only ever closes one) must
-// not advertise or accept them; a model that could send "open" here could silently reopen a
-// requirement tailor_report already closed, through a call that carries no report review.
-func TestCVEditToolRequirementStatusOffersOnlyClosingOutcomes(t *testing.T) {
-	a, _ := cvToolsAPI(t, oneExperienceCV)
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
-	props, _ := tool.Schema["properties"].(map[string]any)
-	status, _ := props["requirement_status"].(map[string]any)
-	got, _ := status["enum"].([]string)
-
-	want := []string{string(cv.AutopilotClosedBank), string(cv.AutopilotClosedCandidate)}
-	if len(got) != len(want) {
-		t.Fatalf("requirement_status enum = %v, want %v", got, want)
-	}
-	for _, w := range want {
-		found := false
-		for _, g := range got {
-			if g == w {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("requirement_status enum = %v, missing %q", got, w)
-		}
-	}
-}
-
-func TestCVEditToolRequirementWithoutStatusIsRefused(t *testing.T) {
-	bank := newStubBank()
-	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
-	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
-
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
-	_, err := tool.Run(context.Background(), 3, json.RawMessage(
-		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
-			`"requirement":"PostgreSQL experience"}`))
-	if err == nil {
-		t.Fatal("a requirement with no status was accepted; the report would hold an invalid entry")
-	}
-	if repo.report != nil {
-		t.Errorf("report = %s, want it untouched when the call is refused", repo.report)
-	}
-}
-
 // A batch is one entry in the candidate's history and one round of the turn's budget, which
 // is why closing a requirement no longer costs three calls.
 func TestCVEditAppliesAWholeBatchAtOnce(t *testing.T) {
@@ -808,7 +363,7 @@ func TestCVEditAppliesAWholeBatchAtOnce(t *testing.T) {
 	id := atom.ID.String()
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Platform engineer","evidence_id":"`+id+`"},`+
 			`{"kind":"insert","path":"experience[0].bullets[1]","value":"Ran the cluster","evidence_id":"`+id+`"},`+
@@ -830,7 +385,7 @@ func TestCVEditAppliesAWholeBatchAtOnce(t *testing.T) {
 func TestRequestConfirmationToolIsRegisteredForTailoring(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "request_confirmation")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"claim":"Built Reelmente.app with React and Next.js","question":"Is that right?"}`))
 	if err != nil {
@@ -848,7 +403,7 @@ func TestRequestConfirmationToolTouchesNoStore(t *testing.T) {
 	a, repo := cvToolsAPI(t, oneExperienceCV)
 	before := string(repo.written)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "request_confirmation")
 	if _, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"claim":"Anything","question":"Confirm?"}`)); err != nil {
 		t.Fatalf("request_confirmation: %v", err)
@@ -869,7 +424,7 @@ func TestRequestConfirmationToolTouchesNoStore(t *testing.T) {
 // "{}", so an empty call arrives whatever the provider did.
 func TestRequestConfirmationToolRefusesAnEmptyClaim(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "request_confirmation")
 
 	for _, args := range []string{
 		`{}`,                                 // what healToolArguments makes of a mangled call
@@ -888,7 +443,7 @@ func TestRequestConfirmationToolRefusesAnEmptyClaim(t *testing.T) {
 // card that renders perfectly well.
 func TestRequestConfirmationToolAllowsAnEmptyQuestion(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "request_confirmation")
 
 	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"claim":"Ran the cluster"}`)); err != nil {
 		t.Errorf("err = %v, want a claim with no question accepted", err)
@@ -911,7 +466,7 @@ func TestCVEditToolReadsACallLevelEvidenceIDOntoItsOnlyOp(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer"}],`+
 			`"note":"n","evidence_id":"`+atom.ID.String()+`"}`))
@@ -932,7 +487,7 @@ func TestCVEditToolRefusesACallLevelEvidenceIDAcrossSeveralOps(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, _ := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer"},`+
 			`{"kind":"set","path":"experience[0].role","value":"Staff Engineer"}],`+
@@ -953,7 +508,7 @@ func TestCVEditToolRefusesACallLevelEvidenceIDWhenTheOpAlreadyNamesOne(t *testin
 	other := bank.add(3, experience.Atom{Claim: "Ran the payments cluster", Provenance: experience.ProvenanceStatedInChat})
 	a, _ := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
 			`"evidence_id":"`+other.ID.String()+`"}`))

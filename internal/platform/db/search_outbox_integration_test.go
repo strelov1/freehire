@@ -209,8 +209,12 @@ func TestDeleteIneligibleSearchOutboxReapsWhatClaimCanNeverTake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upsert dead: %v", err)
 	}
+	private, err := ingestUpsert(ctx, q, ingestParams("acme:private", "Private"))
+	if err != nil {
+		t.Fatalf("upsert private: %v", err)
+	}
 
-	for _, id := range []int64{open.ID, canon.ID, closedJob.ID, repost.ID, deadLettered.ID} {
+	for _, id := range []int64{open.ID, canon.ID, closedJob.ID, repost.ID, deadLettered.ID, private.ID} {
 		if err := q.EnqueueSearchOutbox(ctx, id); err != nil {
 			t.Fatalf("enqueue job %d: %v", id, err)
 		}
@@ -220,6 +224,11 @@ func TestDeleteIneligibleSearchOutboxReapsWhatClaimCanNeverTake(t *testing.T) {
 	}
 	if _, err := pool.Exec(ctx, `UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2`, canon.ID, repost.ID); err != nil {
 		t.Fatalf("mark repost as duplicate: %v", err)
+	}
+	// An open, canonical, private job (a user's pasted JD): claim skips it, so only the
+	// reaper can ever remove its entry.
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET is_private = true WHERE id = $1`, private.ID); err != nil {
+		t.Fatalf("mark private: %v", err)
 	}
 	// A dead-lettered entry whose job ALSO closed: it is ineligible on both counts, and
 	// must still survive — failed_at is the record of repeated failure that
@@ -238,8 +247,8 @@ func TestDeleteIneligibleSearchOutboxReapsWhatClaimCanNeverTake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeleteIneligibleSearchOutbox: %v", err)
 	}
-	if reaped != 2 {
-		t.Errorf("reaped %d rows, want 2 (the closed job's and the repost's)", reaped)
+	if reaped != 3 {
+		t.Errorf("reaped %d rows, want 3 (the closed job's, the repost's and the private job's)", reaped)
 	}
 
 	var surviving []int64
@@ -261,7 +270,7 @@ func TestDeleteIneligibleSearchOutboxReapsWhatClaimCanNeverTake(t *testing.T) {
 			t.Errorf("job %d's entry was reaped; only entries claim can never take may go", id)
 		}
 	}
-	for _, id := range []int64{closedJob.ID, repost.ID} {
+	for _, id := range []int64{closedJob.ID, repost.ID, private.ID} {
 		if containsInt64(surviving, id) {
 			t.Errorf("job %d's entry survived; claim skips it forever, so nothing else would ever remove it", id)
 		}
@@ -443,4 +452,68 @@ func containsInt64(xs []int64, want int64) bool {
 		}
 	}
 	return false
+}
+
+func TestSyncJobsAIInterviewReportsQueuesOnlyWhatTheDrainCanTake(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	public, err := ingestUpsert(ctx, q, ingestParams("acme:public", "Public"))
+	if err != nil {
+		t.Fatalf("upsert public: %v", err)
+	}
+	private, err := ingestUpsert(ctx, q, ingestParams("acme:private", "Private"))
+	if err != nil {
+		t.Fatalf("upsert private: %v", err)
+	}
+	repost, err := ingestUpsert(ctx, q, ingestParams("acme:repost", "Repost"))
+	if err != nil {
+		t.Fatalf("upsert repost: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET is_private = true WHERE id = $1`, private.ID); err != nil {
+		t.Fatalf("mark private: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2`, public.ID, repost.ID); err != nil {
+		t.Fatalf("mark repost as duplicate: %v", err)
+	}
+
+	if err := q.SyncJobsAIInterviewReports(ctx, SyncJobsAIInterviewReportsParams{
+		CompanySlug: "acme", AiInterviewReports: 1,
+	}); err != nil {
+		t.Fatalf("SyncJobsAIInterviewReports: %v", err)
+	}
+
+	var queued []int64
+	rows, err := pool.Query(ctx, `SELECT job_id FROM search_outbox ORDER BY job_id`)
+	if err != nil {
+		t.Fatalf("list queued: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		queued = append(queued, id)
+	}
+	if !containsInt64(queued, public.ID) {
+		t.Errorf("the public posting was not queued; its badge would never reach the index")
+	}
+	for name, id := range map[string]int64{"private": private.ID, "duplicate": repost.ID} {
+		if containsInt64(queued, id) {
+			t.Errorf("the %s posting was queued; the drain never takes it", name)
+		}
+	}
+
+	// The column is still written on every row, queued or not.
+	var written int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM jobs WHERE company_slug = 'acme' AND ai_interview_reports = 1`).Scan(&written); err != nil {
+		t.Fatalf("count written: %v", err)
+	}
+	if written != 3 {
+		t.Errorf("counter written on %d postings, want all 3", written)
+	}
 }

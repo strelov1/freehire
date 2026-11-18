@@ -11,59 +11,43 @@ import (
 	"time"
 )
 
-// ChannelLinkedIn is the ledger's name for this publisher. Stored in
-// social_digest_posts.channel and in social_tokens.channel, so it must not be renamed — the
-// publish-once check reads it back, and a rename would republish every past day.
+// ChannelLinkedIn is the ledger's name for this publisher, stored in social_digest_posts.channel
+// and social_tokens.channel. Never rename it: the publish-once check reads it back.
 const ChannelLinkedIn = "linkedin"
 
-// linkedInAPIVersion is the API generation this publisher speaks, as LinkedIn's YYYYMM header.
-//
-// IT EXPIRES. LinkedIn sunsets a version roughly a year after it ships (202508 died on
-// 2026-08-17), and a request naming a retired one is refused — so this constant is a dated
-// commitment, not a detail. It lives in code rather than in configuration deliberately: moving
-// it forward means re-reading the migration notes for what changed in the Posts API between
-// the two, which is a reviewed commit, not an SSH edit.
-//
-// Next review: before 2027-08. See
-// https://learn.microsoft.com/en-us/linkedin/marketing/integrations/migrations
+// linkedInAPIVersion is the API version header (YYYYMM). It expires: LinkedIn retires a version
+// about a year after release and refuses requests naming it. It lives in code, not config, so
+// bumping it is a reviewed commit after reading the Posts API migration notes
+// (https://learn.microsoft.com/en-us/linkedin/marketing/integrations/migrations). Next review:
+// before 2027-08.
 const linkedInAPIVersion = "202608"
 
 const linkedInPostsURL = "https://api.linkedin.com/rest/posts"
 
 // linkedInCommentaryLimit is the cap on a post's text. Overflow is refused with
-// FIELD_LENGTH_TOO_LONG, which would cost the day's post entirely, so the digest is trimmed to
-// fit — by whole postings, never mid-text; see payload.
+// FIELD_LENGTH_TOO_LONG, so the digest is trimmed by whole postings; see payload.
 const linkedInCommentaryLimit = 3000
 
-// TokenSource hands out the access token this publisher posts with.
-//
-// Declared here, by the consumer, rather than imported from the package that mints tokens:
-// this file needs a string and an error, and nothing else about OAuth. It also keeps the two
-// packages independent — linkedinauth knows about grants and expiry, socialdigest knows about
-// lists and channels, and cmd/social-digest is where they meet.
+// TokenSource hands out the access token this publisher posts with. Declared by the consumer to
+// keep socialdigest independent of linkedinauth; cmd/social-digest is where they meet.
 type TokenSource interface {
-	// AccessToken returns a token that is usable NOW. An expired or missing credential is an
-	// error rather than an empty string, because the two failures need different words and
-	// both are somebody's job to fix.
+	// AccessToken returns a token usable now. An expired or missing credential is an error,
+	// never an empty string.
 	AccessToken(ctx context.Context) (string, error)
 }
 
-// LinkedInPublisher posts a digest to a LinkedIn company page.
-//
-// Unlike the Discord publisher beside it, its credential expires every 60 days — which is why
-// it takes a TokenSource rather than a string, and why cmd/linkedin-token-refresh exists.
+// LinkedInPublisher posts a digest to a LinkedIn company page. Its credential expires every 60
+// days, hence the TokenSource and cmd/linkedin-token-refresh.
 type LinkedInPublisher struct {
 	tokens TokenSource
-	// orgURN is the company page posted to, as urn:li:organization:{id}. Configuration and not
-	// discovery: the token's holder may administer several pages, and "the first one" is not a
-	// thing this feature should decide on its own at 06:45 UTC.
+	// orgURN is the company page posted to, as urn:li:organization:{id}. Configured, not
+	// discovered: the token's holder may administer several pages.
 	orgURN string
 	origin string
 	http   *http.Client
 
-	// postsURL is the API endpoint, a field rather than the constant used directly so the
-	// tests can point it at a stub and assert what actually goes over the wire — headers
-	// included, which is where two of this API's three unforgiving requirements live.
+	// postsURL is a field so tests can point it at a stub and assert the wire format, headers
+	// included.
 	postsURL string
 }
 
@@ -81,12 +65,9 @@ func NewLinkedInPublisher(tokens TokenSource, orgURN, origin string) *LinkedInPu
 
 func (p *LinkedInPublisher) Name() string { return ChannelLinkedIn }
 
-// linkedInPayload is the Posts API body for a plain text post by an organization.
-//
-// Every field here is required by the API — a missing one is a 400 MISSING_FIELD — including
-// the ones whose values are the defaults a reader would assume. distribution.targetEntities is
-// empty because the digest is for everyone who follows the page; a targeted post needs an
-// audience over 300 and a reason, and this has neither.
+// linkedInPayload is the Posts API body for a plain text post by an organization. Every field
+// is required (a missing one is a 400 MISSING_FIELD), even those holding the assumed default.
+// distribution.targetEntities is empty because the digest is for all followers.
 type linkedInPayload struct {
 	Author                    string               `json:"author"`
 	Commentary                string               `json:"commentary"`
@@ -98,15 +79,12 @@ type linkedInPayload struct {
 
 type linkedInDistribution struct {
 	FeedDistribution string `json:"feedDistribution"`
-	// Present and empty rather than omitted: the API rejects a distribution object without
-	// them, and `omitempty` on a nil slice would produce exactly that.
+	// Present and empty, not omitted: the API rejects a distribution object without them.
 	TargetEntities                 []string `json:"targetEntities"`
 	ThirdPartyDistributionChannels []string `json:"thirdPartyDistributionChannels"`
 }
 
-// Render builds the exact JSON body Publish sends, indented so a dry run is something a person
-// can read a judgement off — the failure a dry run catches is a list that reads badly, and
-// that is a property of the text.
+// Render builds the exact JSON body Publish sends, indented so a dry run is readable.
 func (p *LinkedInPublisher) Render(d Digest) (string, error) {
 	body, err := json.MarshalIndent(p.payload(d), "", "  ")
 	if err != nil {
@@ -115,22 +93,17 @@ func (p *LinkedInPublisher) Render(d Digest) (string, error) {
 	return string(body), nil
 }
 
-// payload assembles the post.
-//
-// The list is trimmed by WHOLE POSTINGS when it would exceed the limit, which is the one place
-// this differs from the Discord publisher's rune-count truncation. Discord's text carries its
-// links inside markdown, so a clipped tail loses formatting; here every posting's URL is bare
-// text on its own line, and cutting mid-string would publish a link that goes nowhere. A short
-// list is a smaller loss than a broken link.
+// payload assembles the post. Unlike the Discord publisher's rune truncation, the list is
+// trimmed by whole postings: each URL is bare text, and a mid-string cut would publish a
+// broken link.
 func (p *LinkedInPublisher) payload(d Digest) linkedInPayload {
-	header := "Most viewed on freehire — " + d.Day.Format("2 January 2006")
+	header := d.Title()
 
 	var b strings.Builder
 	b.WriteString(escapeLinkedInText(header))
 	for i, item := range d.Items {
 		entry := p.entry(i+1, item)
-		// +2 for the blank line that separates entries. Counted in runes, because the API's
-		// limit is a character count and this text is routinely not ASCII.
+		// +2 for the blank line between entries. Runes, because the limit is a character count.
 		if len([]rune(b.String()))+len([]rune(entry))+2 > linkedInCommentaryLimit {
 			break
 		}
@@ -152,33 +125,26 @@ func (p *LinkedInPublisher) payload(d Digest) linkedInPayload {
 	}
 }
 
-// entry is one posting, as two lines: what it is, and where it is.
+// entry is one posting as two lines: what it is, and where it is.
 //
-// The URL is NOT escaped, and everything around it is. LinkedIn's reserved characters do not
-// appear in a URL this site generates — the slug is lowercase alphanumerics and hyphens, and
-// the only query parameter is a literal — while a backslash inside a link would be published
-// verbatim and break it.
+// The URL is not escaped (a backslash would be published verbatim and break it); our URLs
+// contain no reserved characters, since slugs are lowercase alphanumerics and hyphens.
 func (p *LinkedInPublisher) entry(n int, item Posting) string {
 	line := fmt.Sprintf("%d. %s — %s", n, escapeLinkedInText(item.Title), escapeLinkedInText(item.Company))
 	if where := placeOf(item); where != "" {
 		line += " · " + escapeLinkedInText(where)
 	}
-	// Unescaped, like Discord's: a number and a word this file wrote, containing none of
-	// the reserved characters.
+	// Unescaped: text this file wrote, with no reserved characters.
 	line += " · " + viewsLabel(item)
 	return line + "\n" + jobURL(p.origin, item.Slug, ChannelLinkedIn)
 }
 
-// escapeLinkedInText neutralises the characters LinkedIn's "little" text format reserves.
+// escapeLinkedInText neutralises the characters LinkedIn's "little" text format reserves. All
+// must be escaped even in plain text: a bare "(" in "Senior C++ (Remote)" is a syntax error and
+// the API answers the whole post with a 400.
 //
-// All of them must be escaped even when they are plain text and not part of any element — a
-// bare "(" in a title like "Senior C++ (Remote)" is a syntax error, not a parenthesis, and the
-// API answers the whole post with a 400. This catalogue's titles contain every one of these
-// characters routinely.
-//
-// The backslash goes first, and the ordering is why this is a Replacer rather than a loop over
-// a list: escaping "\" after "(" would turn the "\(" just written into "\\(", which publishes
-// a literal backslash followed by a syntax error.
+// A Replacer, not a loop over a list, so the backslash is escaped in the same pass and the
+// "\(" just written is not turned into "\\(".
 func escapeLinkedInText(s string) string { return linkedInEscaper.Replace(s) }
 
 var linkedInEscaper = strings.NewReplacer(
@@ -216,8 +182,7 @@ func (p *LinkedInPublisher) Publish(ctx context.Context, d Digest) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	// Both of these are required on every Posts API call, and omitting either is a 400 that
-	// names neither header.
+	// Both are required on every Posts API call; omitting either is a 400 that names neither.
 	req.Header.Set("LinkedIn-Version", linkedInAPIVersion)
 	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
 
@@ -228,10 +193,9 @@ func (p *LinkedInPublisher) Publish(ctx context.Context, d Digest) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// LinkedIn names the offending field in the body, which is the only thing that tells a
-		// 400 for an over-long commentary apart from one for a malformed URN — and a 401 for
-		// an expired token apart from a 403 for a page role that was taken away. Bounded,
-		// because this ends up in a log line.
+		// The body names the offending field, the only way to tell failures sharing a status
+		// apart (over-long commentary vs malformed URN, expired token vs revoked page role).
+		// Bounded because it lands in a log line.
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return fmt.Errorf("linkedin posts api: status %d: %s", resp.StatusCode, strings.TrimSpace(string(detail)))
 	}

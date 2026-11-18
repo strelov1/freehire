@@ -33,6 +33,7 @@ afterEach(() => {
 
 const row = (n: number): BoardItem => ({
   id: `app-${n}`,
+  added_to_board_at: null,
   company_slug: 'acme',
   role_title: `Role ${n}`,
   job: null,
@@ -53,7 +54,9 @@ const drawn = () => screen.queryAllByText(/^Role \d+$/).length;
 
 describe('BoardList', () => {
   it('draws the first page, then the next when the end scrolls into view', () => {
-    render(BoardList, { props: { items: Array.from({ length: 120 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() } });
+    render(BoardList, {
+      props: { items: Array.from({ length: 120 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() },
+    });
     expect(drawn()).toBe(50);
 
     reveal?.();
@@ -73,13 +76,17 @@ describe('BoardList', () => {
     // The sentinel never leaves the viewport, so no observer sees it ENTER; only one
     // started after each page reports it.
     inView = true;
-    render(BoardList, { props: { items: Array.from({ length: 120 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() } });
+    render(BoardList, {
+      props: { items: Array.from({ length: 120 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() },
+    });
 
     await vi.waitFor(() => expect(drawn()).toBe(120));
   });
 
   it('offers a load-more control for keyboard and screen-reader users', async () => {
-    render(BoardList, { props: { items: Array.from({ length: 60 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() } });
+    render(BoardList, {
+      props: { items: Array.from({ length: 60 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() },
+    });
 
     const more = screen.getByRole('button', { name: 'Load more' });
     more.focus();
@@ -93,7 +100,9 @@ describe('BoardList', () => {
   });
 
   it('keeps focus in the list when the sentinel draws the last page while the button holds it', async () => {
-    render(BoardList, { props: { items: Array.from({ length: 60 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() } });
+    render(BoardList, {
+      props: { items: Array.from({ length: 60 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() },
+    });
 
     screen.getByRole('button', { name: 'Load more' }).focus();
     reveal?.();
@@ -102,7 +111,9 @@ describe('BoardList', () => {
   });
 
   it('leaves focus on the button when the sentinel draws a page that is not the last', async () => {
-    render(BoardList, { props: { items: Array.from({ length: 120 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() } });
+    render(BoardList, {
+      props: { items: Array.from({ length: 120 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() },
+    });
     const more = screen.getByRole('button', { name: 'Load more' });
 
     more.focus();

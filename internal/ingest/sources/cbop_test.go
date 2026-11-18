@@ -83,7 +83,7 @@ func (f *cbopFake) PostJSON(_ context.Context, raw string, _, v any) error {
 	return json.Unmarshal(b, v)
 }
 
-func newTestCBOP(f *cbopFake) cbop { return cbop{http: f, limiter: noWait{}} }
+func newTestCBOP(f *cbopFake) cbop { return cbop{http: f} }
 
 func TestCBOPMapsOffers(t *testing.T) {
 	f := newCBOPFake(t, 5)

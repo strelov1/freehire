@@ -28,9 +28,7 @@
 
   const { name, height = 620, scheme = 'light' }: Props = $props();
 
-  const suffix = $derived(
-    scheme === 'auto' ? '.html' : scheme === 'dark' ? '.dark.html' : '.light.html',
-  );
+  const suffix = $derived(scheme === 'auto' ? '.html' : scheme === 'dark' ? '.dark.html' : '.light.html');
 </script>
 
 <!--

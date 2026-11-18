@@ -1,11 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import { collectionForCategory } from '#lib/collections.js';
-import {
-  categoryFromSlug,
-  categorySlug,
-  landingCategories,
-  publishedCountries,
-} from '#lib/roleLandings.js';
+import { categoryFromSlug, categorySlug, landingCategories, publishedCountries } from '#lib/roleLandings.js';
 import { categoryLabel } from '#lib/labels.js';
 import { serverApi } from '#lib/server/api.js';
 import type { PageServerLoad } from './$types';

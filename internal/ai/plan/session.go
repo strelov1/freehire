@@ -8,22 +8,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// A tailoring session is metered by TWO bounds, and they stop different things. The daily
-// allowance bounds how many vacancies a candidate works on; the turn ceiling bounds how
-// far one of them goes.
+// A tailoring session is metered by two bounds: the daily allowance caps how many vacancies a
+// candidate works on, the turn ceiling caps how far one goes. A session count alone leaves a
+// single session unbounded.
 //
-// Either alone leaves a hole. Measured on production over three August weeks, the median
-// session ran 2.7 turns and one ran 54 — and the account that ran it opened two sessions,
-// well inside any daily count, while consuming $25 of model calls. A session count would
-// not have noticed it. That is the shape of what this replaces: the old ledger charged
-// three points when a session was created and nothing for anything said inside it.
-//
-// The ceiling in force is not stored anywhere of its own. It is derived from the charges
-// the session holds: '<session>#1' is the first, '#2' buys another ceiling's worth. This
-// falls out of the idempotency key rather than fighting it — a bare session id could only
-// ever be charged once, which is right for starting a session and wrong for extending one,
-// while '#n' makes an extension a distinct event that is still idempotent. A
-// double-clicked "continue" therefore consumes one allowance, not two.
+// The ceiling in force is derived from the session's charges: '<session>#1' is the first, '#2'
+// buys another ceiling's worth. A bare session id could only be charged once, while '#n' makes
+// an extension a distinct, still idempotent event, so a double-clicked "continue" consumes one
+// allowance.
 
 // TurnDecision is the answer to "may this session run one more turn".
 type TurnDecision struct {
@@ -36,22 +28,12 @@ type TurnDecision struct {
 	Shadowed bool
 }
 
-// ceilingsHeld is how many ceilings a session holds, given the highest slot its ledger
-// charges reach. It is the ONE place the implicit ceiling is granted, so the turn rule and
-// the extension price cannot disagree about how many the session already has.
+// ceilingsHeld is how many ceilings a session holds, given the highest slot its ledger charges
+// reach. It is the one place the implicit ceiling is granted.
 //
-// A session holding no charge predates this metering: every session open on the day it
-// deploys was created before anything wrote a ledger row for one. Treating "no charge" as
-// "never paid for" would 402 the next turn of every live conversation until its owner
-// bought an extension for work they had already started.
-//
-// So an uncharged session is given slot 1 implicitly. It is still bounded — a caller who
-// skips the bootstrap gets one ceiling's worth of turns and no more — and the charge is
-// taken where sessions are created, which is the place that can refuse before anything
-// exists. Granting it as a SLOT rather than as a bare ceiling is what makes the first
-// extension buy slot 2: granted as a ceiling, the extension would buy slot 1, land the
-// session back on exactly the ceiling it already had, and cost one of the day's sessions
-// for no extra turns at all.
+// A session with no charge predates this metering and gets slot 1 implicitly, so live
+// conversations are not refused. It is granted as a slot, not a bare ceiling, so the first
+// extension buys slot 2 instead of landing back on the ceiling it already had.
 func ceilingsHeld(highestSlot int) int {
 	if highestSlot < 1 {
 		return 1
@@ -63,8 +45,7 @@ func ceilingsHeld(highestSlot int) int {
 // session's charges reach, and how many turns it has already run.
 func (c Config) decideTurn(tier Tier, highestSlot, turnsSoFar int) TurnDecision {
 	d := TurnDecision{Turns: turnsSoFar}
-	// Every PAID tier, not pro specifically. A session on the more expensive plan running
-	// out of turns where the cheaper one did not is the one bug this rule can have.
+	// Every paid tier, not pro specifically, so a pricier plan never runs out of turns first.
 	if tier.Paid() {
 		d.Allowed, d.Unlimited = true, true
 		return d
@@ -81,9 +62,8 @@ func (c Config) decideTurn(tier Tier, highestSlot, turnsSoFar int) TurnDecision 
 	return d
 }
 
-// sessionRef is the ledger reference for the nth ceiling of a session. The terminator
-// matters: without it, the scan for session "sess-1" would sweep up the charges of
-// "sess-12" as well, because one id is a prefix of the other.
+// sessionRef is the ledger reference for the nth ceiling of a session. The '#' terminator keeps
+// the scan for "sess-1" from matching "sess-12".
 func sessionRef(sessionID string, n int) string {
 	return sessionPrefix(sessionID) + strconv.Itoa(n)
 }
@@ -91,10 +71,8 @@ func sessionRef(sessionID string, n int) string {
 // sessionPrefix is what the ceiling scan matches on, terminated for the same reason.
 func sessionPrefix(sessionID string) string { return sessionID + "#" }
 
-// refSlot reads back the ceiling number sessionRef wrote. A reference this package did not
-// write — nothing produces one today, but the ledger is append-only and outlives any one
-// format — reports 0 and is simply not counted, rather than failing a turn over a row
-// somebody will have to look at anyway.
+// refSlot reads back the ceiling number sessionRef wrote. A reference in any other format
+// reports 0 and is not counted, rather than failing a turn.
 func refSlot(ref string) int {
 	_, suffix, found := strings.Cut(ref, "#")
 	if !found {
@@ -107,12 +85,9 @@ func refSlot(ref string) int {
 	return n
 }
 
-// StartSession consumes one tailoring-session allowance for a session being created.
-//
-// It is charged when the session is minted, not when the workspace is opened: the
-// workspace is addressed by vacancy, so a reload re-runs the bootstrap, and charging that
-// would bill a candidate for pressing refresh. Returning to a session that already exists
-// consumes nothing — the caller simply does not call this.
+// StartSession consumes one tailoring-session allowance for a session being created. It is
+// charged at creation, not when the workspace opens, so a reload is not billed; returning to an
+// existing session does not call it.
 func (s *Store) StartSession(ctx context.Context, userID int64, sessionID string) (Decision, error) {
 	return s.Consume(ctx, userID, FeatureTailor, sessionRef(sessionID, 1))
 }
@@ -120,16 +95,9 @@ func (s *Store) StartSession(ctx context.Context, userID int64, sessionID string
 // ExtendSession buys one further ceiling's worth of turns for a session that reached its
 // current one.
 //
-// The slot it buys is the one AFTER however many ceilings the session already holds, which
-// for a session that predates the metering is slot 2 — slot 1 being the one it was granted
-// implicitly. Pricing the extension off a raw row count instead would sell that session
-// slot 1, leave its ceiling exactly where it was, and take one of the day's tailoring
-// sessions for nothing.
-//
-// Two simultaneous "continue" clicks both read the same ceiling count and both attempt the
-// same next reference; they serialise on today's counter row, so the second sees the first's
-// charge, is reported as already charged and consumes nothing. The race costs a candidate
-// one allowance rather than two, without a lock of its own.
+// The slot bought is the one after the ceilings already held (slot 2 for a pre-metering
+// session), not a raw row count. Two simultaneous "continue" clicks serialise on today's counter
+// row; the second sees the first's charge and consumes nothing.
 func (s *Store) ExtendSession(ctx context.Context, userID int64, sessionID string) (Decision, error) {
 	held, err := s.ceilingsHeld(ctx, userID, sessionID)
 	if err != nil {
@@ -144,11 +112,8 @@ func (s *Store) ReleaseSession(ctx context.Context, userID int64, sessionID stri
 	return s.Release(ctx, userID, FeatureTailor, sessionRef(sessionID, 1))
 }
 
-// AllowTurn reports whether a tailoring session may run one more turn.
-//
-// The caller passes how many turns the session has already run, because that is the
-// caller's own data — this package would otherwise have to read the assistant's transcript
-// tables to find out, and knowing how a conversation is stored is not its business.
+// AllowTurn reports whether a tailoring session may run one more turn. The caller passes
+// turnsSoFar because this package should not read the assistant's transcript tables.
 func (s *Store) AllowTurn(ctx context.Context, userID int64, sessionID string, turnsSoFar int) (TurnDecision, error) {
 	tier, err := s.Tier(ctx, userID)
 	if err != nil {
@@ -162,9 +127,8 @@ func (s *Store) AllowTurn(ctx context.Context, userID int64, sessionID string, t
 }
 
 // highestSlot is the largest ceiling number the session's live charges reach, or 0 when it
-// holds none. It is the slot rather than the row count because a release voids a row without
-// un-selling the slot, and because a session granted its first ceiling implicitly holds no
-// row at all — see ceilingsHeld.
+// holds none. It is a slot, not a row count: a release voids a row without un-selling the slot,
+// and an implicitly granted first ceiling has no row.
 func (s *Store) highestSlot(ctx context.Context, userID int64, sessionID string) (int, error) {
 	refs, err := s.q.ListConsumptionRefsByPrefix(ctx, db.ListConsumptionRefsByPrefixParams{
 		UserID: userID, Feature: string(FeatureTailor), RefPrefix: sessionPrefix(sessionID),

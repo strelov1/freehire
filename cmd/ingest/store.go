@@ -6,28 +6,26 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"slices"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/adzunadesc"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
+	sweeppolicy "github.com/strelov1/freehire/internal/ingest/sweep"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobdedup"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/externalid"
+	"github.com/strelov1/freehire/internal/platform/pgerr"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// dbStore adapts the generated queries + connection pool to pipeline.Store. Save runs
-// the job upsert, the gated enrichment enqueue, and the gated search-index enqueue in
-// one transaction, so a newly ingested job is queued for both atomically with its
-// write. The search_outbox queue is drained by cmd/search-drain, which builds and
-// pushes documents into the live index wave by wave — cmd/ingest itself never talks
-// to the search engine.
+// dbStore adapts the generated queries and pool to pipeline.Store. Save writes the job and its gated enrichment and search-index enqueues in one transaction. cmd/search-drain drains search_outbox; cmd/ingest never talks to the search engine.
 type dbStore struct {
 	pool          *pgxpool.Pool
 	q             *db.Queries
@@ -36,32 +34,23 @@ type dbStore struct {
 	tally         *writeTally
 	// seen decides what the seen-set withholds, and so what a hydrating adapter re-fetches.
 	seen seenPolicy
+	// websites holds the company slugs whose website this run has already offered, so one
+	// employer's many postings cost one statement rather than one each.
+	websites sync.Map
 }
 
-// seenPolicy gathers the three independent reasons a stored posting is offered to a hydrating
-// adapter for another detail fetch. They are one type because they are one decision made in one
-// place (ExistingExternalIDs), and because a constructor taking them apart would take seven
-// positional arguments, three of which are policy.
+// seenPolicy gathers the three independent reasons a stored posting is offered to a hydrating adapter for another detail fetch; they are one decision, made in ExistingExternalIDs.
 type seenPolicy struct {
-	// hydrationWindow is how long a stored row with NO description keeps being withheld, so a
-	// detail fetch that failed on the first pass is retried. See cmd/ingest's
-	// hydrationRetryWindowFor.
+	// hydrationWindow is how long a row with NO description stays withheld, so a failed first detail fetch is retried. See hydrationRetryWindowFor.
 	hydrationWindow time.Duration
-	// refetchAll withholds EVERY row for the run, so a hydrating adapter treats every listed
-	// posting as new and the pipeline re-WRITES it instead of only refreshing its liveness. The
-	// repair path for an adapter fix that changes what the listing yields.
+	// refetchAll withholds EVERY row, so a hydrating adapter treats every listed posting as new and the pipeline re-writes it. The repair path for an adapter fix that changes what the listing yields.
 	refetchAll bool
 	// bodies withholds a row whose stored BODY has gone stale, so an employer's later edit is
-	// re-read. Disabled unless BODY_REFRESH_DAYS is set — see bodyRefreshFor.
-	bodies bodyRefresh
+	// re-read. Disabled unless BODY_REFRESH_DAYS is set — see sweeppolicy.BodyRefreshFor.
+	bodies sweeppolicy.BodyRefresh
 }
 
-// dbStore is the only non-test implementation of pipeline.Store, and it is expected to carry
-// every optional capability below — the pipeline discovers them by type assertion and
-// silently degrades on a miss, which is right for a test fake and wrong for this one. A
-// dropped Touch stops refreshing a re-listed posting's last_seen_at, and the 48h unseen sweep
-// then closes live jobs. These state that expectation to the compiler, the way board_health.go
-// already does for the one port that was exported.
+// dbStore is the only non-test implementation of pipeline.Store and must carry every optional capability below: the pipeline finds them by type assertion and silently degrades on a miss. A dropped Touch stops refreshing last_seen_at, and the 48h unseen sweep then closes live jobs.
 var (
 	_ pipeline.Store                    = (*dbStore)(nil)
 	_ pipeline.FormSaver                = (*dbStore)(nil)
@@ -69,6 +58,7 @@ var (
 	_ pipeline.Toucher                  = (*dbStore)(nil)
 	_ pipeline.SeenLookup               = (*dbStore)(nil)
 	_ pipeline.CompanyDescriptionFiller = (*dbStore)(nil)
+	_ pipeline.CompanyWebsiteRecorder   = (*dbStore)(nil)
 )
 
 func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tally *writeTally, seen seenPolicy) *dbStore {
@@ -82,15 +72,9 @@ func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tall
 	}
 }
 
-// written is what save needs back from whichever of the two writes ran, so the rest of the
-// function does not care which did.
+// written is what save needs back from either write. Both return narrow columns on purpose: an embedded row would detoast the description and ship the semantic vector for every re-seen posting, and the complete job is the jobs_read view, which sqlc.embed(jobs) would bypass.
 //
-// row is the persisted job, and it is present ONLY when the full upsert ran. The cheap write
-// returns four narrow columns on purpose — embedding the row would detoast the description and
-// ship the semantic vector back for every re-seen posting, which is read amplification on the
-// path built to remove write amplification. Nothing on the cheap branch needs more: the fuller
-// row is read only to BUILD a search document, and needsIndex gates that to the full branch. A
-// pointer rather than a zeroed struct so a mistaken read panics instead of quietly serving "".
+// full is which write ran; leftClosed is the full write's report that it left the row closed (the cheap write never changes closed_at).
 type written struct {
 	id          int64
 	source      string
@@ -98,33 +82,48 @@ type written struct {
 	duplicateOf pgtype.Int8
 	inserted    bool
 	changed     bool
-	row         *db.Job
+	full        bool
+	leftClosed  bool
 }
 
 func fullWrite(r db.UpsertJobRow) written {
 	return written{
-		id:          r.Job.ID,
-		source:      r.Job.Source,
-		companySlug: r.Job.CompanySlug,
-		duplicateOf: r.Job.DuplicateOf,
+		id:          r.ID,
+		source:      r.Source,
+		companySlug: r.CompanySlug,
+		duplicateOf: r.DuplicateOf,
 		inserted:    r.Inserted.Bool,
 		changed:     r.Changed,
-		row:         &r.Job,
+		full:        true,
+		leftClosed:  r.ClosedAt.Valid,
 	}
 }
 
-// cheapWrite leaves inserted and changed false, which is what they mean: the row was neither
-// created nor edited. Every consumer downstream is already gated on those two.
+// cheapWrite leaves inserted and changed false: the row was neither created nor edited.
 func cheapWrite(r db.RefreshUnchangedJobRow) written {
 	return written{id: r.ID, source: r.Source, companySlug: r.CompanySlug, duplicateOf: r.DuplicateOf}
 }
 
-// persist writes the posting the cheapest way that is correct. A re-crawl that matches the
-// stored row on RefreshUnchangedJob's key refreshes only last_seen_at, touching no index and
-// leaving updated_at alone; everything else — edited content, a closed row reappearing, a
-// posting the catalogue does not hold yet — takes the full upsert. Matching no row cannot
-// distinguish "changed" from "absent", and does not need to: both want the same statement.
-func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (written, error) {
+// withheldIfSeenBefore is the last_seen_at before which search had withheld a posting as
+// unseen (search.UnseenWindow); a liveness write that moves it past this requeues the posting.
+func withheldIfSeenBefore() pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: time.Now().Add(-search.UnseenWindow), Valid: true}
+}
+
+// errCheapFenced reports that the cheap write matched the stored row but was refused because the row's state changed while it waited (a close, a content or metadata edit). Taking the jobs row now would reverse the lock order (jobs, then activity) and deadlock against a closer, so persist returns, saveOnce rolls back, and save retries in a fresh transaction.
+var errCheapFenced = errors.New("cheap write fenced by a concurrent state change")
+
+// maxFencedAttempts bounds how often one posting's cheap write may lose to a concurrent change before save reports an error; the next crawl retries it.
+const maxFencedAttempts = 3
+
+// persist refreshes activity when the stored posting matches, leaving the jobs tuple alone.
+// Edited, closed and absent postings take the full write. A fenced match must be retried in a
+// fresh transaction before either path can run again.
+func persist(ctx context.Context, tx pgx.Tx, qtx *db.Queries, p db.UpsertJobParams) (written, error) {
+	p, err := job.ResolveUpsertIdentity(ctx, tx, p)
+	if err != nil {
+		return written{}, err
+	}
 	cheap, err := qtx.RefreshUnchangedJob(ctx, db.RefreshUnchangedJobParams{
 		Source:               p.Source,
 		ExternalID:           p.ExternalID,
@@ -136,27 +135,31 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 		SalaryPeriodSource:   p.SalaryPeriodSource,
 		EnglishLevel:         p.EnglishLevel,
 		IsTech:               p.IsTech,
+		Engagement:           p.Engagement,
 		ApplicationDeadline:  p.ApplicationDeadline,
+		Team:                 p.Team,
+		BodyFromCatalogue:    p.BodyFromCatalogue,
+		WithheldIfSeenBefore: withheldIfSeenBefore(),
 	})
 	if err == nil {
+		if cheap.Fenced {
+			return written{}, errCheapFenced
+		}
 		return cheapWrite(cheap), nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return written{}, fmt.Errorf("refresh unchanged job: %w", err)
 	}
 
-	full, err := qtx.UpsertJob(ctx, p)
+	// No row matched, so no activity lock is held and the full write takes the jobs row first.
+	full, err := job.Upsert(ctx, tx, p)
 	if err != nil {
 		return written{}, fmt.Errorf("upsert job: %w", err)
 	}
 	return fullWrite(full), nil
 }
 
-// needsIndex reports whether a persisted write changed what search would show: a
-// new row, or one whose indexed content (content_hash) changed. A re-ingest that
-// only refreshed bookkeeping (last_seen_at) reports neither and is skipped.
-// Changed is already true on insert (a NULL prior hash is DISTINCT FROM any value);
-// Inserted is OR-ed in to keep the "new or changed" intent explicit.
+// needsIndex reports whether a write changed what search would show: a new row or a changed content_hash. A bookkeeping-only re-ingest (last_seen_at) is skipped.
 func needsIndex(w written) bool {
 	if w.closed() {
 		return false
@@ -164,42 +167,21 @@ func needsIndex(w written) bool {
 	return w.changed || w.inserted
 }
 
-// closed reports whether the write left the row closed — only the full write carries the row,
-// and the cheap write never changes closed_at.
-func (w written) closed() bool { return w.row != nil && w.row.ClosedAt.Valid }
+// closed reports whether the write left the row closed.
+func (w written) closed() bool { return w.leftClosed }
 
-// tookCheapWrite reports which of the two writes produced this. The narrow write is the only
-// one that carries no row, so this is exact rather than a heuristic.
-func (w written) tookCheapWrite() bool { return w.row == nil }
+// tookCheapWrite reports which of the two writes produced this, exactly rather than by
+// inference from a missing field.
+func (w written) tookCheapWrite() bool { return !w.full }
 
-// clustersByRole reports whether a persisted write is worth asking the role-cluster
-// question about — the gate in front of jobdedup.CanonicalForRole.
+// clustersByRole reports whether a write is worth the role-cluster lookup (jobdedup.CanonicalForRole). A cost gate, not correctness: a full crawl replays millions of rows against an I/O-bound database.
 //
-// It is a cost gate, not a correctness one: the lookup is a range scan on
-// jobs_open_role_cluster_idx, but a full crawl replays millions of rows per pass against
-// a database that is already the fleet's I/O bottleneck, so which writes pay for it is a
-// real choice. The batch recompute remains the reconciler for whatever this skips.
-//
-// Only a genuinely new posting is asked about. A per-city fan-out arrives as inserts, so
-// this catches it at the moment it happens, and a full pass then pays one lookup per new
-// vacancy — thousands — instead of one per row re-seen, which is nearly the whole
-// catalogue. What it deliberately leaves to the batch recompute is the posting that turns
-// into a duplicate later, when an edit makes its title and description match a sibling's:
-// rarer than the fan-out, and no worse off than before this existed.
-//
-// A row that already carries a marker knows its own answer and is not re-asked.
+// Only a new posting is asked, since a per-city fan-out arrives as inserts. A posting that becomes a duplicate later through an edit is left to the batch recompute. A row already carrying a marker is not re-asked.
 func clustersByRole(w written) bool {
 	return w.inserted && !w.duplicateOf.Valid
 }
 
-// needsRecentFeed reports whether a persisted write should be surfaced on the homepage's
-// live "recently added" feed (openspec/changes/add-homepage-recent-jobs-feed): the same
-// eligibility needsIndex/the search-outbox enqueue already apply — new or changed content,
-// not deduped into a role repost, not already marked a duplicate — plus tech evidence,
-// since the feed is IT-only by design and jobderive.deriveIsTech already ran before this
-// write. isTech.Valid is required, not just isTech.Bool: an unresolved verdict (NULL) is
-// not the same as a confirmed non-tech role, but this feed treats both as "not eligible yet"
-// rather than guessing.
+// needsRecentFeed reports whether a write belongs on the homepage "recently added" feed: the needsIndex eligibility (new or changed, not a role repost, not a duplicate) plus tech evidence, since the feed is IT-only. isTech.Valid is required: an unresolved (NULL) verdict is not eligible yet.
 func needsRecentFeed(w written, deduped bool, isTech pgtype.Bool) bool {
 	return needsIndex(w) && !deduped && !w.duplicateOf.Valid && isTech.Valid && isTech.Bool
 }
@@ -210,16 +192,72 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 	return s.save(ctx, j, nil)
 }
 
-// SaveWithApplyForm persists a posting together with the application form its adapter
-// yielded, in ONE transaction. Separated from Save only at the seam: a form written after
-// a committed job could be lost to a crash, and nothing would ever queue it — the capture
-// queue is for the providers whose form costs a request, and Recruitee is not one of them,
-// so this write is the only chance its form gets.
+// SaveWithApplyForm persists a posting with its application form in ONE transaction: a form written after a committed job could be lost to a crash, and nothing would queue it, since the capture queue covers only providers whose form costs a request.
 func (s *dbStore) SaveWithApplyForm(ctx context.Context, j job.Job, form applyform.Form) error {
 	return s.save(ctx, j, &form)
 }
 
+// save persists the posting, retrying a fenced cheap write in a fresh transaction. The retry is a fresh CHEAP attempt, never a forced full write, which would rewrite from parameters that predate the refusing change; a key that no longer matches falls to the full write by itself.
 func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) error {
+	f := j.Fields()
+	err := retryFenced(
+		func() error { return s.saveOrRetrySlug(ctx, j, form) },
+		func() { s.tally.recordFenced(f.Source) },
+	)
+	if errors.Is(err, errCheapFenced) {
+		return fmt.Errorf("save %s/%s: %w", f.Source, f.ExternalID, err)
+	}
+	return err
+}
+
+// retryFenced runs attempt until it stops reporting errCheapFenced, at most maxFencedAttempts
+// times, calling onFenced after each refused attempt. A budget spent is an error, not a skip.
+func retryFenced(attempt func() error, onFenced func()) error {
+	for n := 1; ; n++ {
+		err := attempt()
+		if !errors.Is(err, errCheapFenced) {
+			return err
+		}
+		onFenced()
+		if n == maxFencedAttempts {
+			return fmt.Errorf("cheap write fenced %d times: %w", n, err)
+		}
+	}
+}
+
+func (s *dbStore) saveOrRetrySlug(ctx context.Context, j job.Job, form *applyform.Form) error {
+	err := s.saveOnce(ctx, j, form, false)
+	if constraint, ok := pgerr.UniqueViolationConstraint(err); !ok || constraint != "jobs_public_slug_key" {
+		return err
+	}
+	// A failed statement aborts the transaction. saveOnce has rolled it back before
+	// this retry, so the posting and all of its outboxes still commit together.
+	log.Print("ingest: public slug collision; retrying with the full identity hash")
+	return s.saveOnce(ctx, j, form, true)
+}
+
+// fuzzyCanonicalFn is a seam so a test can force a real SQL failure inside the lookup.
+var fuzzyCanonicalFn = func(ctx context.Context, q *db.Queries, p db.UpsertJobParams, id int64) (int64, bool, error) {
+	return jobdedup.CanonicalForFuzzy(ctx, q, p, id)
+}
+
+// fuzzyCanonical runs the fuzzy lookup inside a savepoint. A failed SELECT (a statement timeout,
+// say) aborts the transaction; rolling back to the savepoint revives it, so the row is still
+// written, unmarked, and the batch pass decides. Only a savepoint failure is returned.
+func (s *dbStore) fuzzyCanonical(ctx context.Context, tx pgx.Tx, params db.UpsertJobParams, id int64) (int64, bool, error) {
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	canon, ok, lerr := fuzzyCanonicalFn(ctx, s.q.WithTx(sp), params, id)
+	if lerr != nil {
+		log.Printf("ingest: fuzzy dedup lookup failed, writing unmarked: %v", lerr)
+		return 0, false, sp.Rollback(ctx)
+	}
+	return canon, ok, sp.Commit(ctx)
+}
+
+func (s *dbStore) saveOnce(ctx context.Context, j job.Job, form *applyform.Form, fullSlugHash bool) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -227,24 +265,21 @@ func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) err
 	// Rollback after Commit is a no-op; suppress its error (matches the other stores).
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// The aggregate's read projection carries every persistable field; the write path
-	// never touches enrichment (SetJobEnrichment owns those columns), so it is not mapped.
-	// The mapping also stamps content_hash — which the upsert reports back as
-	// inserted/changed, driving the incremental index push below — and role_fingerprint.
+	// The read projection carries every persistable field; enrichment is owned by SetJobEnrichment, so it is not mapped. The mapping also stamps content_hash and role_fingerprint.
 	params := j.Fields().UpsertParams()
+	if fullSlugHash {
+		params.PublicSlug = normalize.JobSlugWithFullHash(params.Title, params.Company, params.Source, params.ExternalID)
+		// Keep the incoming content hash, just as UpsertJob does when it preserves
+		// an existing URL after a title edit. An unchanged recrawl must stay cheap.
+	}
 
 	qtx := s.q.WithTx(tx)
-	saved, err := persist(ctx, qtx, params)
+	saved, err := persist(ctx, tx, qtx, params)
 	if err != nil {
 		return err
 	}
 
-	// A company that posts one role once per city sends it as many board identities, all
-	// sharing a role_fingerprint. Ask — after the upsert, because the answer depends on
-	// the written row's id — whether an older canonical copy already exists, and point
-	// this row at it. Without this the copies stay separate searchable jobs until the
-	// next batch recompute hours later, and every one of them reaches search, the
-	// subscription digests, and the company's job count as a vacancy of its own.
+	// A company posting one role per city arrives as many board identities sharing a role_fingerprint. After the upsert (the answer needs the row id), point this row at an older canonical copy if one exists; otherwise the copies stay separate searchable jobs until the next batch recompute.
 	deduped := false
 	if clustersByRole(saved) {
 		if canon, ok := jobdedup.CanonicalForRole(ctx, qtx, params, saved.id); ok {
@@ -257,12 +292,27 @@ func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) err
 			deduped = true
 		}
 	}
+	// The fuzzy tier, the same question for a near-identical repost the exact role cluster
+	// missed (descriptions differing by a localized block). CanonicalForFuzzy runs the batch
+	// pass's own rule, so the next reindex keeps this verdict. Only a row the role tier left
+	// alone is asked: a marked row is already invisible.
+	if !deduped && clustersByRole(saved) {
+		canon, ok, err := s.fuzzyCanonical(ctx, tx, params, saved.id)
+		if err != nil {
+			return err
+		}
+		if ok {
+			if _, err := qtx.MarkJobDuplicateOfFuzzy(ctx, db.MarkJobDuplicateOfFuzzyParams{
+				ID:               saved.id,
+				DuplicateOfFuzzy: pgtype.Int8{Int64: canon, Valid: true},
+			}); err != nil {
+				return fmt.Errorf("mark job %d fuzzy duplicate of %d: %w", saved.id, canon, err)
+			}
+			deduped = true
+		}
+	}
 
-	// The form belongs to the posting whether or not the posting is a searchable canon: a
-	// repost is still a job somebody can apply to, and its form is what applying costs.
-	// This is the opposite call from the enrichment enqueue below, and deliberately so —
-	// that one spends an LLM budget on an invisible row, this one writes bytes we already
-	// hold.
+	// The form belongs to the posting even if it is not a searchable canon (a repost is still applicable). Unlike the enrichment enqueue below, this writes bytes we already hold rather than spending LLM budget.
 	if form != nil {
 		payload, err := json.Marshal(form)
 		if err != nil {
@@ -288,24 +338,14 @@ func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) err
 		}
 	}
 
-	// Queue this write for the live search index, atomically with the row it indexes,
-	// only when the write inserted or changed indexed content and the row is a
-	// searchable canon (mirrors the enrichment gate above). cmd/search-drain builds
-	// and pushes the document later, in a batch with whatever else queued around the
-	// same time — cmd/ingest never talks to the search engine directly. Unconditional
-	// on whether search is configured anywhere: the row is cheap, and an unconfigured
-	// deployment simply never drains it.
+	// Queue the write for the live search index atomically with the row, when it inserted or changed indexed content and the row is a searchable canon (mirrors the enrichment gate). Unconditional on search being configured: an unconfigured deployment never drains it.
 	if needsIndex(saved) && !deduped && !saved.duplicateOf.Valid {
 		if err := qtx.EnqueueSearchOutbox(ctx, saved.id); err != nil {
 			return fmt.Errorf("enqueue search outbox: %w", err)
 		}
 	}
 
-	// Queue this write for the homepage's live "recently added" feed, atomically with
-	// the row it announces — see needsRecentFeed for the eligibility this mirrors from
-	// the search-index gate above, plus the IT-only restriction. cmd/tg-extract is
-	// deliberately not wired into this outbox either, matching its exclusion from
-	// search_outbox (see openspec/changes/add-homepage-recent-jobs-feed/design.md).
+	// Queue the write for the homepage "recently added" feed atomically with the row; eligibility is needsRecentFeed. cmd/tg-extract is deliberately not wired in, like search_outbox.
 	if needsRecentFeed(saved, deduped, params.IsTech) {
 		if err := qtx.EnqueueRecentFeedOutbox(ctx, saved.id); err != nil {
 			return fmt.Errorf("enqueue recent feed outbox: %w", err)
@@ -316,51 +356,32 @@ func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) err
 		return err
 	}
 
-	// Queue a form capture for a provider whose form costs its own request — AFTER the
-	// commit, and never fatal.
-	//
-	// After, because a failed statement aborts the surrounding transaction: inside it, a
-	// hiccup on this queue would discard the posting itself, and failing a crawl over a
-	// field nothing yet reads is the wrong trade. The gap that opens — a crash between the
-	// commit and this line — closes by itself, because the enqueue is gated on the job
-	// having no stored form rather than on it being new: the next crawl of the board
-	// queues it again.
+	// Queue a form capture for a provider whose form costs its own request, AFTER the commit and never fatal: a failed statement would abort the transaction and discard the posting. The crash gap closes itself because the enqueue is gated on no stored form, not on the row being new.
 	if applyform.NeedsRequestCapture(saved.source) && !saved.closed() {
 		if _, err := s.q.EnqueueApplyFormCapture(ctx, saved.id); err != nil {
 			log.Printf("ingest: queue apply-form capture for job %d: %v", saved.id, err)
 		}
 	}
 
-	// Queue a full-description fetch for an Adzuna posting whose stored URL is Adzuna's
-	// own hosted job page — the API gives only a ~500-character snippet. Same after-
-	// commit, never-fatal, gated-on-not-done-yet shape as the apply-form capture above;
-	// see adzunadesc.Eligible for why only a subset of Adzuna's own URLs qualify.
+	// Queue a full-description fetch for an Adzuna posting on Adzuna's own hosted page (the API gives only a ~500-char snippet). Same after-commit, never-fatal shape as the form capture; see adzunadesc.Eligible.
 	if adzunadesc.Eligible(saved.source, params.URL) {
 		if _, err := s.q.EnqueueAdzunaDescriptionCapture(ctx, saved.id); err != nil {
 			log.Printf("ingest: queue adzuna description capture for job %d: %v", saved.id, err)
 		}
 	}
 
-	// Record this (provider, company) as crawled so the post-run stale sweep only
-	// closes jobs of companies this run actually wrote — never a provider's whole
-	// catalogue when a run crawled only some of its boards. Uses the persisted row so
-	// aggregator sources (one board, per-job companies) scope by their real companies.
+	// Record this (provider, company) as crawled so the stale sweep closes only jobs of companies this run wrote, not a provider's whole catalogue. Uses the persisted row so aggregator sources scope by their real companies.
 	if s.crawled != nil {
 		s.crawled.record(saved.source, saved.companySlug)
 	}
 
-	// Which write this posting took, counted after the commit so a rolled-back attempt is not
-	// reported as a saving. The run-end share is the only thing that would show a provider whose
-	// rows never match the cheap key — see writeTally.
+	// Count which write this posting took after the commit, so a rolled-back attempt is not reported. See writeTally.
 	s.tally.record(saved.source, saved.tookCheapWrite())
 
 	return nil
 }
 
-// Close soft-closes a posting by its (source, external_id) identity — the stream-driven
-// close path a self-closing source (jobtech) uses for ads its incremental feed reports
-// removed. Idempotent (the query no-ops on an already-closed or absent row), so a re-sent
-// removal in the trailing window costs nothing.
+// Close soft-closes a posting by (source, external_id), the close path for a self-closing source (jobtech). Idempotent: an already-closed or absent row is a no-op.
 func (s *dbStore) Close(ctx context.Context, source, externalID string) error {
 	if _, err := s.q.CloseJobBySourceExternalID(ctx, db.CloseJobBySourceExternalIDParams{
 		Source:     source,
@@ -371,210 +392,4 @@ func (s *dbStore) Close(ctx context.Context, source, externalID string) error {
 	return nil
 }
 
-// ExistingExternalIDs returns the set of external_ids already stored for the board about to be
-// crawled — the pipeline's seen-set for a hydrating source, so per-posting detail is fetched only
-// for postings the catalogue lacks. Implements pipeline.seenLookup.
-//
-// The lookup runs once per board, so a board-bearing provider reads only its own namespace: on
-// workday the provider-wide query returns 1.27M ids in ~168s against ~1.8s for a board's 25k. A
-// boardless adapter has no namespace to scope by and reads the provider's whole set, which is what
-// its single "board" means anyway.
-//
-// Each id maps to its row's tech evidence (is_tech IS TRUE), which the refresh path judges the
-// catalogue filter on — a re-listed posting carries no description to derive it from.
-//
-// A row still without a description is withheld from the set until it is pipeline.
-// HydrationRetryWindow old, so the crawl re-attempts the detail fetch its first pass lost rather
-// than treating the body-less row as finished.
-//
-// A row whose stored application deadline passed within pipeline.DeadlineRecheckWindow is
-// withheld too, so an extension the employer made after we first read the posting is picked up
-// instead of the touch closing it on the old date.
-//
-// A row whose stored BODY has gone stale is withheld too, so an employer's later edit reaches
-// the catalogue at all: without it, being stored is what stops a posting from ever being fetched
-// again, and a posting that gains a "this position is 100% on-site" paragraph keeps whatever we
-// read the day we first saw it (freehire#2555). Disabled unless BODY_REFRESH_DAYS is set, and
-// bounded by a slice even then — see bodyRefreshFor for both, and note that the disabled form
-// travels through these same parameters rather than a second query.
-//
-// refetchAll withholds EVERY row, which is the repair path for an adapter fix that changes what
-// the LISTING yields (a mis-read remote flag, a location built from the wrong place). Such a fix
-// reaches new postings on the next crawl and reaches stored ones never: a re-listed posting takes
-// the refresh path, which by design rewrites no content. Emptying the set puts the provider's
-// whole catalogue back through the ordinary write, so nothing about the repair is a second code
-// path that could disagree with the crawl.
-func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error) {
-	set := map[string]bool{}
-	if s.seen.refetchAll {
-		return set, nil
-	}
-	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-s.seen.hydrationWindow), Valid: true}
-	bodyCutoff := pgtype.Timestamptz{Time: s.seen.bodies.cutoff, Valid: true}
-	deadlineFrom := pgtype.Date{Time: time.Now().UTC().Add(-pipeline.DeadlineRecheckWindow), Valid: true}
-	if board == "" {
-		rows, err := s.q.ExistingExternalIDs(ctx, db.ExistingExternalIDsParams{
-			Source:              source,
-			HydrationCutoff:     cutoff,
-			BodyRefreshCutoff:   bodyCutoff,
-			BodyRefreshSlices:   s.seen.bodies.slices,
-			BodyRefreshSlot:     s.seen.bodies.slot,
-			DeadlineRecheckFrom: deadlineFrom,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range rows {
-			set[r.ExternalID] = r.IsTech.Valid && r.IsTech.Bool
-		}
-		return set, nil
-	}
-	// The pattern is escaped by externalid.BoardPattern: a board name may contain LIKE syntax,
-	// and a third of the workday board names carry an underscore.
-	rows, err := s.q.ExistingExternalIDsByBoard(ctx, db.ExistingExternalIDsByBoardParams{
-		Source:              source,
-		Pattern:             externalid.BoardPattern(board),
-		HydrationCutoff:     cutoff,
-		BodyRefreshCutoff:   bodyCutoff,
-		BodyRefreshSlices:   s.seen.bodies.slices,
-		BodyRefreshSlot:     s.seen.bodies.slot,
-		DeadlineRecheckFrom: deadlineFrom,
-	})
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range rows {
-		set[r.ExternalID] = r.IsTech.Valid && r.IsTech.Bool
-	}
-	return set, nil
-}
-
-// Touch refreshes an already-ingested posting's liveness (last_seen_at, reopen if closed) by
-// its (source, external_id) identity, without rewriting content — the path a HydratingSource
-// (justjoin) uses for an offer it re-listed but did not re-fetch, so its hydrated description
-// and facets are preserved. Implements pipeline.toucher.
-func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
-	companySlug, err := s.q.TouchJob(ctx, db.TouchJobParams{
-		Source:     source,
-		ExternalID: externalID,
-	})
-	if err != nil {
-		return fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
-	}
-	// Record the company as crawled, exactly as Save does, so the post-run stale sweep keeps
-	// this company in scope. Otherwise a company whose offers were all touched (none newly
-	// saved) would fall out of the crawled-set and its removed offers would never close.
-	if s.crawled != nil {
-		s.crawled.record(source, companySlug)
-	}
-	// A touch IS the cheap write for a hydrating source: TouchJob refreshes liveness and writes
-	// no content, the same bargain RefreshUnchangedJob makes on the board path. Counting it keeps
-	// the per-provider share meaning one thing for both source shapes. Leaving it out would be
-	// worse than a gap — a hydrating provider re-lists through here and only NEW offers reach
-	// save(), so the run would report 0% and read as the very churn the line exists to expose.
-	s.tally.record(source, true)
-	return nil
-}
-
-// refreshCoveredChunk bounds one RefreshCoveredJobs statement. A board's covered postings are
-// refreshed in one pass after its crawl — 4dayweek's ~22k at once — and a chunk keeps any one
-// statement's row locks and runtime small beside the crawl's own writes.
-const refreshCoveredChunk = 5000
-
-// RefreshCovered refreshes the liveness of the open stored rows among a board's covered
-// postings, and records each refreshed row's company as crawled, as Touch does, so the sweep's
-// company scope reaches the rows the aggregator no longer lists. Implements
-// pipeline.CoveredRefresher. Not counted in the write tally: the gate declined these postings,
-// so they are not writes of the run.
-//
-// The companies are recorded only once every chunk has succeeded: a company whose postings span
-// two chunks, one refreshed and one not, must not enter the sweep's scope, or the sweep would
-// close its listed-but-unrefreshed rows.
-func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs []string) (int, error) {
-	var refreshed []string
-	for chunk := range slices.Chunk(externalIDs, refreshCoveredChunk) {
-		slugs, err := s.q.RefreshCoveredJobs(ctx, db.RefreshCoveredJobsParams{
-			Source:      source,
-			ExternalIds: chunk,
-		})
-		if err != nil {
-			return 0, fmt.Errorf("refresh covered jobs %s: %w", source, err)
-		}
-		refreshed = append(refreshed, slugs...)
-	}
-	if s.crawled != nil {
-		for _, slug := range refreshed {
-			s.crawled.record(source, slug)
-		}
-	}
-	return len(refreshed), nil
-}
-
-// CompanyDescriptionDue implements pipeline.CompanyDescriptionFiller: whether the company
-// still lacks a description and has had no answered fetch since checkedSince.
-func (s *dbStore) CompanyDescriptionDue(ctx context.Context, slug string, checkedSince time.Time) (bool, error) {
-	due, err := s.q.CompanyDescriptionDue(ctx, db.CompanyDescriptionDueParams{
-		Slug:         slug,
-		CheckedSince: pgtype.Timestamptz{Time: checkedSince, Valid: true},
-	})
-	if err != nil {
-		return false, fmt.Errorf("company description due %s: %w", slug, err)
-	}
-	return due, nil
-}
-
-// RecordCompanyDescription implements pipeline.CompanyDescriptionFiller: record an
-// answered company-description fetch (see sources.CompanyDescriber). A blank answer only
-// stamps the attempt; a non-empty one also fills the company's company_info gap. Stored
-// under company_info.summary rather than the short tagline field — this text is raw
-// employer-authored prose, not the terse, curated-style values tagline is reserved for
-// (the YC directory's one_liner, the Wikipedia backfill's Wikidata description).
-func (s *dbStore) RecordCompanyDescription(ctx context.Context, slug, name, description string) error {
-	if description == "" {
-		if err := s.q.MarkCompanyDescriptionChecked(ctx, db.MarkCompanyDescriptionCheckedParams{Slug: slug, Name: name}); err != nil {
-			return fmt.Errorf("mark company description checked %s: %w", slug, err)
-		}
-		return nil
-	}
-	info, err := json.Marshal(map[string]string{"summary": description})
-	if err != nil {
-		return fmt.Errorf("fill company description %s: encode company_info: %w", slug, err)
-	}
-	if err := s.q.FillCompanyDescriptionFromIngest(ctx, db.FillCompanyDescriptionFromIngestParams{
-		Slug:        slug,
-		Name:        name,
-		Tagline:     pgtype.Text{},
-		CompanyInfo: info,
-	}); err != nil {
-		return fmt.Errorf("fill company description %s: %w", slug, err)
-	}
-	return nil
-}
-
-// CanonicalCompanySlugs implements pipeline.AliasLookup: for a batch of folded company slugs,
-// the canonical slug a merge elected for each employer that has one.
-//
-// Read rather than written here, like ExistingExternalIDs — the store already owns the pool,
-// and the pipeline asks for this once per board run, not once per posting.
-func (s *dbStore) CanonicalCompanySlugs(ctx context.Context, foldedKeys []string) (map[string]string, error) {
-	rows, err := s.q.ResolveCompanySlugAliases(ctx, foldedKeys)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string]string, len(rows))
-	for _, r := range rows {
-		// One canonical slug per folded key is the writer's invariant, not the schema's (see
-		// the query). Rows arrive ordered, so the first wins deterministically; a second,
-		// different one means two waves elected different winners for one employer, which
-		// would otherwise show up only as a company that keeps changing url.
-		if prev, ok := out[r.FoldedKey]; ok {
-			if prev != r.CanonicalSlug {
-				log.Printf("ingest: company alias conflict: folded key %q maps to both %q and %q; using %q",
-					r.FoldedKey, prev, r.CanonicalSlug, prev)
-			}
-			continue
-		}
-		out[r.FoldedKey] = r.CanonicalSlug
-	}
-	return out, nil
-}
+var _ pipeline.StoredBodyLookup = (*dbStore)(nil)

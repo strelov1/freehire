@@ -57,6 +57,17 @@ func TestParse_SlovenianHeadsAndFields(t *testing.T) {
 		{"Saldakontist dobaviteljev (m/ž)", "finance"},
 		{"Strokovnjak za finance - saldakonti (m/ž/d)", "finance"},
 		{"Svetovalec za SAP EWM (m/ž/d)", "solutions_engineering"},
+		// The ess/mojedelo/optius tail, measured 2026-11-10 (#4412).
+		{"VARUH II", "healthcare"},
+		{"Varuh v varstveno delovnem centru (m/ž)", "healthcare"},
+		{"KOZMETIK", "personal_services"},
+		{"Operater na varilnem robotu m/ž", "manufacturing"},
+		{"IZDELOVALEC GUMENIH IZDELKOV", "manufacturing"},
+		{"DELAVEC PRI STROJU", "manufacturing"},
+		{"Operater v farmacevtskem podjetju m/ž/d", "manufacturing"},
+		{"Operater tiskarskega stroja za flekso tisk (m/ž)", "manufacturing"},
+		{"SMD OPERATER", "manufacturing"},
+		{"GRADBENI TEHNIK", "skilled_trades"},
 	}
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.want {
@@ -82,6 +93,11 @@ func TestParse_SlovenianUnresolved(t *testing.T) {
 		"Aftersales (poprodajni referent)",
 		// "CSD" is also a hospital's central sterile department in English.
 		"CSD Technician",
+		// The Ombudsman is an employer, not the carer; "pilanje" is filing, not the sawmill.
+		"Svetovalec pri Varuhu človekovih pravic",
+		"Pilanje kovin",
+		"Varnostni tehnik (m/ž)",
+		"Delovodja (m/ž)",
 	} {
 		if got := Parse(title).Category; got != "" {
 			t.Errorf("Parse(%q).Category = %q, want unresolved", title, got)

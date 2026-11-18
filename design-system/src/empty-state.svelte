@@ -44,10 +44,7 @@
   const role = $derived(variant === 'destructive' ? 'alert' : 'status');
 </script>
 
-<div
-  class={cn('flex flex-col items-center justify-center gap-3 py-12 text-center', className)}
-  {role}
->
+<div class={cn('flex flex-col items-center justify-center gap-3 py-12 text-center', className)} {role}>
   {#if icon}
     <div class="text-muted-foreground">
       {@render icon()}

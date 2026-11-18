@@ -183,3 +183,15 @@ func TestWorkerJobIgnoresInvocationArguments(t *testing.T) {
 		t.Errorf("workerJob() = %q, want %q", got, "ingest")
 	}
 }
+
+func TestPausedHoldsOnAnExtraKey(t *testing.T) {
+	mr, url := newPauseRedis(t)
+	hold(t, mr, "freehire:pause:mail:lifecycle")
+
+	if !Paused(context.Background(), url, "onboarding", "freehire:pause:mail:lifecycle") {
+		t.Error("Paused = false while a caller-supplied key is set, want true")
+	}
+	if Paused(context.Background(), url, "ingest") {
+		t.Error("a worker not given the key must not be held by it")
+	}
+}

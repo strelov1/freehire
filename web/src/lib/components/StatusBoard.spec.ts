@@ -11,6 +11,7 @@ function status(over: Partial<IngestStatus> = {}): IngestStatus {
   return {
     overall: 'down',
     generated_at: '2026-10-31T12:00:00Z',
+    last_job_added_at: null,
     site: {
       status: 'operational',
       database: 'up',

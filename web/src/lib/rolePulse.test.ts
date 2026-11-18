@@ -29,11 +29,7 @@ function byKey(p: InsightRolePulse): Record<Figure['key'], Figure> {
 
 describe('rolePulseFigures', () => {
   it('keeps a fixed order', () => {
-    expect(rolePulseFigures(pulse()).map((f) => f.key)).toEqual([
-      'competition',
-      'time_to_close',
-      'inflow',
-    ]);
+    expect(rolePulseFigures(pulse()).map((f) => f.key)).toEqual(['competition', 'time_to_close', 'inflow']);
   });
 
   it('scales views to a month per open posting', () => {
@@ -54,7 +50,13 @@ describe('rolePulseFigures', () => {
     expect(thin.direction).toBeNull();
     const short = byKey(
       pulse({
-        competition: { views: 4500, views_prev: 3000, exposure_days: 200, exposure_days_prev: 30000, views_through: null },
+        competition: {
+          views: 4500,
+          views_prev: 3000,
+          exposure_days: 200,
+          exposure_days_prev: 30000,
+          views_through: null,
+        },
       }),
     ).competition;
     expect(short.value).toBeNull();

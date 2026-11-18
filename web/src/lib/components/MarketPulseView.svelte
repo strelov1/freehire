@@ -30,9 +30,7 @@
   const trimmedQuery = $derived(query.trim());
   const matchesQuery = (s: SkillPulse) => {
     const needle = trimmedQuery.toLowerCase();
-    return (
-      s.skill.toLowerCase().includes(needle) || skillLabel(s.skill).toLowerCase().includes(needle)
-    );
+    return s.skill.toLowerCase().includes(needle) || skillLabel(s.skill).toLowerCase().includes(needle);
   };
   const filtered = $derived(trimmedQuery ? data.filter(matchesQuery) : data);
   const s = $derived(t(messages, locale()));

@@ -10,18 +10,16 @@ import (
 
 // werecruit adapts careers.werecruit.io career sites. A board is "<locale>/<tenant>", both
 // segments required, exactly as the platform's own public URLs carry them
-// (careers.werecruit.io/<locale>/<tenant>/…). The locale is load-bearing, not cosmetic: a
-// tenant configured for only one locale answers every OTHER locale with an empty listing rather
-// than an error — verified live (see internal/ingest/sources/AGENTS.md's "werecruit traps"
-// section) — so it is kept as part of the board id rather than folded off the way Dayforce's
-// optional culture segment is.
+// (careers.werecruit.io/<locale>/<tenant>/…). The locale is load-bearing: a tenant configured
+// for only one locale answers every OTHER locale with an empty listing rather than an error (see
+// internal/ingest/sources/providers/werecruit.md), so it stays in the board id rather than being
+// folded off the way Dayforce's optional culture segment is.
 //
 // The tenant's listing page embeds its WHOLE open-postings list server-side as
-// `window.allOffers = [...]` — no pagination exists. The listing carries no description, so each
-// posting's body comes from its own page (already linked by the listing's own Url field), fanned
-// out under the shared bounded-concurrency fetchDetails helper — the Factorial shape (fetch
-// every detail every crawl; boards found are small enough that this is cheap), not a
-// HydratingSource.
+// `window.allOffers = [...]`, so there is no pagination. The listing carries no description, so
+// each posting's body comes from its own page (the listing's Url field), fanned out under the
+// shared bounded-concurrency fetchDetails helper (the Factorial shape: every detail every crawl,
+// boards are small), not a HydratingSource.
 type werecruitHTTP interface {
 	TextGetter
 	HTMLGetter
@@ -44,7 +42,7 @@ const werecruitBaseURL = "https://careers.werecruit.io"
 var werecruitOffersMarker = regexp.MustCompile(`window\.allOffers\s*=\s*`)
 
 // werecruitOffer is one listed posting. Address_State is a two-letter ISO COUNTRY code despite
-// the name (confirmed live: "FR", "CH" — never a US state on a non-US address).
+// the name ("FR", "CH"), never a US state.
 type werecruitOffer struct {
 	ID                   string `json:"Id"`
 	TitleTranslated      string `json:"TitleTranslated"`

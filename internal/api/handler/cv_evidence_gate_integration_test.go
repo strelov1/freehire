@@ -63,7 +63,7 @@ func newCVAPIWithoutAssistant(t *testing.T) (*cvHandlers, *auth.Issuer, *fiber.A
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrScopedKey(iss, testVersions, apiKeys{h.queries}, auth.ScopeCV)
-	app.Patch("/api/v1/me/cvs/:id", keyAuth, h.PatchCV)
+	app.Patch("/api/v1/me/cvs/:id", keyAuth, cvContract(h))
 
 	owner := seedAccount(t, pool, "owner@example.test", true)
 	return h, iss, app, owner

@@ -71,3 +71,8 @@ func TestToUserResponse_IncludesOnboardingCompletedAt(t *testing.T) {
 		t.Errorf("onboarding_completed_at = %v, want %v", got.OnboardingCompletedAt, done)
 	}
 }
+
+// submissionsContract is the generated server a test mounts its submission routes on.
+func submissionsContract(h *submissionHandlers) fiber.Handler {
+	return newContract(contractHandlers{submissionHandlers: h})
+}

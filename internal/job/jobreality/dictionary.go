@@ -2,11 +2,9 @@ package jobreality
 
 import "strings"
 
-// evergreenPhrases are curated phrases that signal a posting is a perpetual
-// talent-pool / pipeline listing rather than a specific opening. They are kept
-// specific (multi-word) on purpose so a generic word like "pipeline" in "data
-// pipeline" never trips the signal — the dictionary never guesses. EN + RU surface
-// forms, matched case-insensitively as substrings.
+// evergreenPhrases are curated multi-word phrases that mark a perpetual talent-pool
+// listing. They stay specific so a generic "pipeline" in "data pipeline" never trips
+// the signal. EN + RU forms, matched case-insensitively as substrings.
 var evergreenPhrases = []string{
 	"always hiring",
 	"always looking for",

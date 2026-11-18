@@ -2,9 +2,7 @@ package classify
 
 // Indian titles state a grade in shapes the main table does not read: a numbered rung
 // ("SDE-2", "Software Engineer II"), an "Associate" before the role, the graded
-// Member-of-Technical-Staff acronyms, and the campus-hire words ("Fresher"). Measured
-// 2026-10-25 over 63,305 Indian postings, 31.6% of titles resolved a grade; most of the
-// rest state none at all, as everywhere.
+// Member-of-Technical-Staff acronyms, and the campus-hire words ("Fresher").
 //
 // indianSeniorityTable is a FALLBACK, consulted only when the main table resolved no
 // grade — so "Senior Software Engineer II" stays senior — and before the German one.

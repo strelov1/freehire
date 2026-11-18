@@ -11,28 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countRecentUserJobAnalyses = `-- name: CountRecentUserJobAnalyses :one
-SELECT count(*)
-FROM user_job_analysis
-WHERE user_id = $1 AND created_at >= $2
-`
-
-type CountRecentUserJobAnalysesParams struct {
-	UserID    int64              `json:"user_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-// How many distinct jobs the caller first analyzed within the window (created_at is the
-// first-analysis time — see UpsertUserJobAnalysis). This is the fit-analysis quota
-// meter: the PK guarantees one row per (user, job), so the row count is the distinct-job
-// count. A recompute does not add a row, so it never consumes quota.
-func (q *Queries) CountRecentUserJobAnalyses(ctx context.Context, arg CountRecentUserJobAnalysesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countRecentUserJobAnalyses, arg.UserID, arg.CreatedAt)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const getUserJobAnalysis = `-- name: GetUserJobAnalysis :one
 SELECT analysis, model, cv_uploaded_at, job_content_hash, language, created_at
 FROM user_job_analysis
@@ -101,8 +79,7 @@ type ListUserJobAnalysesRow struct {
 // stored staleness stamps (model, cv_uploaded_at, job_content_hash, language) ride
 // along so the handler can flag rows whose CV, job, model, or profile language has
 // since changed, and the analysis blob carries the overall score + verdict the list
-// shows. Capped at 500 — the quota window (see CountRecentUserJobAnalyses) keeps real
-// usage far below that, and each row drags a full analysis JSONB over the wire.
+// shows. Capped at 500 because each row carries a full analysis JSONB over the wire.
 func (q *Queries) ListUserJobAnalyses(ctx context.Context, userID int64) ([]ListUserJobAnalysesRow, error) {
 	rows, err := q.db.Query(ctx, listUserJobAnalyses, userID)
 	if err != nil {
@@ -159,9 +136,8 @@ type UpsertUserJobAnalysisParams struct {
 // Create-or-replace the cached analysis for a (user, job). The composite PRIMARY KEY
 // makes it idempotent: a recompute overwrites the analysis and all four staleness stamps
 // (model, cv_uploaded_at, job_content_hash, language). created_at is deliberately NOT
-// re-bumped on conflict, so it records the FIRST-analysis time — the fit-analysis quota
-// counts distinct jobs a user first analyzed within a rolling window, and a recompute
-// must not re-age its row into it.
+// re-bumped on conflict, so the tracking list keeps the first-analysis time even
+// when the caller recomputes the same job.
 // analysis is the sanitized matchanalysis.Analysis JSON.
 func (q *Queries) UpsertUserJobAnalysis(ctx context.Context, arg UpsertUserJobAnalysisParams) error {
 	_, err := q.db.Exec(ctx, upsertUserJobAnalysis,

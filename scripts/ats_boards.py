@@ -28,10 +28,20 @@ UA = "freehire-harvest/1.0 (+https://freehire.me)"
 
 # (compiled regex, provider). Group 1 (first non-empty group) is the board slug.
 SLUG_PATTERNS = [
-    (re.compile(r"(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io/(?:embed/job_app\?for=)?([A-Za-z0-9_-]+)"), "greenhouse"),
+    (
+        re.compile(
+            r"(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io/(?:embed/job_app\?for=)?([A-Za-z0-9_-]+)"
+        ),
+        "greenhouse",
+    ),
     (re.compile(r"jobs\.(?:eu\.)?lever\.co/([A-Za-z0-9_.-]+)"), "lever"),
     (re.compile(r"jobs\.ashbyhq\.com/([A-Za-z0-9_.-]+)"), "ashby"),
-    (re.compile(r"(?:jobs|careers)\.smartrecruiters\.com/([A-Za-z0-9_-]+)|api\.smartrecruiters\.com/v1/companies/([A-Za-z0-9_-]+)"), "smartrecruiters"),
+    (
+        re.compile(
+            r"(?:jobs|careers)\.smartrecruiters\.com/([A-Za-z0-9_-]+)|api\.smartrecruiters\.com/v1/companies/([A-Za-z0-9_-]+)"
+        ),
+        "smartrecruiters",
+    ),
     (re.compile(r"apply\.workable\.com/([A-Za-z0-9_-]+)"), "workable"),
     (re.compile(r"([A-Za-z0-9_-]+)\.recruitee\.com"), "recruitee"),
     (re.compile(r"([A-Za-z0-9_-]+)\.bamboohr\.com"), "bamboohr"),
@@ -51,31 +61,57 @@ SLUG_PATTERNS = [
 ]
 
 SLUG_BLOCKLIST = {
-    "embed", "jobs", "job", "j", "o", "share", "en-us", "en-gb",
-    "api", "widget", "backend", "www", "app", "auth", "referrals", "v1",
+    "embed",
+    "jobs",
+    "job",
+    "j",
+    "o",
+    "share",
+    "en-us",
+    "en-gb",
+    "api",
+    "widget",
+    "backend",
+    "www",
+    "app",
+    "auth",
+    "referrals",
+    "v1",
 }
 
 # Validation endpoints — each identical to the one its internal/sources/<provider>.go
 # adapter calls. bamboohr returns JSON, personio XML, teamtailor HTML (see validate()).
 VALIDATORS = {
-    "greenhouse": lambda s: f"https://boards-api.greenhouse.io/v1/boards/{s}/jobs?content=true",
+    "greenhouse": lambda s: (
+        f"https://boards-api.greenhouse.io/v1/boards/{s}/jobs?content=true"
+    ),
     "lever": lambda s: f"https://api.lever.co/v0/postings/{s}?mode=json",
     "ashby": lambda s: f"https://api.ashbyhq.com/posting-api/job-board/{s}",
-    "smartrecruiters": lambda s: f"https://api.smartrecruiters.com/v1/companies/{s}/postings?limit=10",
-    "workable": lambda s: f"https://apply.workable.com/api/v1/widget/accounts/{s}?details=true",
+    "smartrecruiters": lambda s: (
+        f"https://api.smartrecruiters.com/v1/companies/{s}/postings?limit=10"
+    ),
+    "workable": lambda s: (
+        f"https://apply.workable.com/api/v1/widget/accounts/{s}?details=true"
+    ),
     "recruitee": lambda s: f"https://{s}.recruitee.com/api/offers/",
     "bamboohr": lambda s: f"https://{s}.bamboohr.com/careers/list",
-    "breezy": lambda s: f"https://{s}.breezy.hr/json",  # top-level JSON array of positions
+    "breezy": lambda s: (
+        f"https://{s}.breezy.hr/json"
+    ),  # top-level JSON array of positions
     "personio": lambda s: f"https://{s}.jobs.personio.com/xml",
     "jazzhr": lambda s: f"https://{s}.applytojob.com/apply",  # /apply listing HTML
     "jobvite": lambda s: f"https://jobs.jobvite.com/{s}",  # careersite listing HTML
     "teamtailor": lambda s: f"https://{s}/jobs",  # s is the board host, not a slug
-    "traffit": lambda s: f"https://{s}.traffit.com/public/an/list/?limit=10&offset=0",  # {count, items}
+    "traffit": lambda s: (
+        f"https://{s}.traffit.com/public/an/list/?limit=10&offset=0"
+    ),  # {count, items}
 }
 
 
 def fetch(url: str, timeout: int = 25) -> bytes | None:
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": UA, "Accept": "application/json"}
+    )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.read()
@@ -87,7 +123,7 @@ def yaml_name(name: str) -> str:
     """Quote a company name only when it carries YAML-significant characters."""
     name = name.strip()
     if not name or name[0] in "-?:,[]{}#&*!|>'\"%@`" or any(c in name for c in ':#,"'):
-        return '"' + name.replace('\\', '\\\\').replace('"', '\\"') + '"'
+        return '"' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
     return name
 
 
@@ -137,9 +173,18 @@ def _boards_table_dump(database_url: str) -> str:
     carries the test coverage.
     """
     return subprocess.run(
-        ["psql", database_url, "-t", "-A", "-c",
-         "select provider, lower(board) from boards where status in ('pending', 'active')"],
-        capture_output=True, text=True, timeout=60, check=True,
+        [
+            "psql",
+            database_url,
+            "-t",
+            "-A",
+            "-c",
+            "select provider, lower(board) from boards where status in ('pending', 'active')",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
     ).stdout
 
 
@@ -152,7 +197,9 @@ def existing_slugs() -> dict[str, set[str]]:
     """
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
-        sys.exit("existing_slugs: DATABASE_URL not set — cannot dedup against the live board catalog")
+        sys.exit(
+            "existing_slugs: DATABASE_URL not set — cannot dedup against the live board catalog"
+        )
     return parse_boards_dump(_boards_table_dump(database_url))
 
 
@@ -162,7 +209,8 @@ def seed_items(rows: list[tuple[str, str, int]]) -> list[dict[str, str]]:
 
 
 def merge_seed_items(
-    existing: list[dict[str, str]], new: list[dict[str, str]],
+    existing: list[dict[str, str]],
+    new: list[dict[str, str]],
 ) -> list[dict[str, str]]:
     """Merge a run's new seed entries into a provider's existing seed file, keyed by board.
 
@@ -220,10 +268,24 @@ def github_fragments(query: str, pages: int) -> list[str]:
     for page in range(1, pages + 1):
         try:
             raw = subprocess.run(
-                ["gh", "api", "-X", "GET", "search/code",
-                 "-H", "Accept: application/vnd.github.text-match+json",
-                 "-f", f"q={query} in:file", "-f", "per_page=100", "-f", f"page={page}"],
-                capture_output=True, text=True, timeout=60,
+                [
+                    "gh",
+                    "api",
+                    "-X",
+                    "GET",
+                    "search/code",
+                    "-H",
+                    "Accept: application/vnd.github.text-match+json",
+                    "-f",
+                    f"q={query} in:file",
+                    "-f",
+                    "per_page=100",
+                    "-f",
+                    f"page={page}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
             ).stdout
             items = json.loads(raw).get("items", [])
         except Exception as e:
@@ -246,15 +308,18 @@ def emit_survivors(cand: dict[tuple[str, str], str], write: bool) -> int:
     """
     have = existing_slugs()
     new = {(p, s): n for (p, s), n in cand.items() if s.lower() not in have[p]}
-    print(f"\n{len(cand)} unique candidates, {len(cand) - len(new)} already tracked, "
-          f"{len(new)} new to validate\n", file=sys.stderr)
+    print(
+        f"\n{len(cand)} unique candidates, {len(cand) - len(new)} already tracked, "
+        f"{len(new)} new to validate\n",
+        file=sys.stderr,
+    )
 
     items = list(new.items())
     with ThreadPoolExecutor(max_workers=16) as ex:
         counts = list(ex.map(lambda kv: validate(kv[0][0], kv[0][1]), items))
 
     best: dict[tuple[str, str], tuple[str, str, int]] = {}
-    for ((prov, slug), name), n in zip(items, counts):
+    for ((prov, slug), name), n in zip(items, counts, strict=True):
         if not n:
             continue
         key = (prov, slug.lower())
@@ -282,9 +347,12 @@ def emit_survivors(cand: dict[tuple[str, str], str], write: bool) -> int:
             existing = json.loads(f.read_text()) if f.exists() else []
             merged = merge_seed_items(existing, seed_items(rows))
             f.write_text(json.dumps(merged, indent=2) + "\n")
-            print(f"  -> {f.relative_to(REPO)} now holds {len(merged)} entries "
-                  f"({len(rows)} from this run) — apply with `go run ./cmd/harvest-boards "
-                  f"{prov} {f.relative_to(REPO)} --apply`", file=sys.stderr)
+            print(
+                f"  -> {f.relative_to(REPO)} now holds {len(merged)} entries "
+                f"({len(rows)} from this run) — apply with `go run ./cmd/harvest-boards "
+                f"{prov} {f.relative_to(REPO)} --apply`",
+                file=sys.stderr,
+            )
 
     print(f"\n{total} new validated boards total", file=sys.stderr)
     return total

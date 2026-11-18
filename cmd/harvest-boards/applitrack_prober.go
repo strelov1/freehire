@@ -9,29 +9,24 @@ import (
 )
 
 // applitrackProber validates an AppliTrack tenant ("<board>") by counting the postings on the
-// board's "All Vacancies" listing — the same listing the adapter crawls.
-//
-// It mirrors the adapter's URL shape, which is unexported (this tool lives outside that
-// package). It costs two requests per live candidate — the adapter fallback would instead run a
-// whole crawl, hydrating a posting page each.
+// board's "All Vacancies" listing, the same listing the adapter crawls. It mirrors the
+// adapter's unexported URL shape and costs two requests per live candidate, where the adapter
+// fallback would run a whole crawl.
 //
 // Everything is read off the RAW body rather than a DOM: the platform document.writes its markup
-// as escaped JavaScript, and the thing wanted here — a posting id in a link — is ASCII and
-// matchable where it sits, which needs neither the unescaping nor the parse the adapter does.
+// as escaped JavaScript, and a posting id in a link is ASCII and matchable where it sits.
 type applitrackProber struct{}
 
 const applitrackProbeBase = "https://www.applitrack.com"
 
 // applitrackProbeID matches a posting link's id in the raw listing body. The listing links a
 // posting through a javascript: call whose argument is percent-encoded, so the parameter
-// separator arrives as "%3D" there and as a plain "=" elsewhere on the page; both are accepted,
-// mirroring the adapter's own pattern.
+// separator is "%3D" there and "=" elsewhere; both are accepted, like the adapter's pattern.
 var applitrackProbeID = regexp.MustCompile(`(?i)AppliTrackJobId(?:=|%3D)(\d+)`)
 
-// applitrackProbeName captures the tenant name the career site renders in its heading. This is
-// AppliTrack's own tenant field rather than free text a district typed into a page — every site
-// sampled renders the same sentence — so it is worth reporting: it gates a candidate against what
-// the seed claimed and, where the seed claimed nothing, it is what names the board in the file.
+// applitrackProbeName captures the tenant name the career site renders in its heading. It is
+// AppliTrack's own tenant field, not free text, so it gates a candidate against the seed's claim
+// and names the board when the seed claimed nothing.
 var applitrackProbeName = regexp.MustCompile(`(?is)<h1[^>]*>\s*Open Positions for\s+(.*?)\s*</h1>`)
 
 func (applitrackProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
@@ -59,15 +54,13 @@ func applitrackProbeURL(board string) string {
 		applitrackProbeBase, url.PathEscape(board))
 }
 
-// dedupKey folds a tenant to lower case. The path segment is case-insensitive (Saskatoon,
-// SASKATOON and saskatoon all serve the same board, confirmed live), so a candidate spelled in
-// another case than one the board file already holds is the same board — without this it probes
-// live, passes the gate against its own district, and is appended a second time.
+// dedupKey folds a tenant to lower case: the path segment is case-insensitive (Saskatoon,
+// SASKATOON and saskatoon serve the same board), so a differently cased candidate would
+// otherwise be appended a second time.
 func (applitrackProber) dedupKey(board string) string { return strings.ToLower(board) }
 
 // applitrackName reads the district name off the career site's heading, or "" when the page
-// cannot be read or does not carry one — an absent name simply leaves the seed's own to label
-// the board.
+// cannot be read or carries none, leaving the seed's own name to label the board.
 func applitrackName(ctx context.Context, c httpClient, board string) string {
 	page, err := c.GetText(ctx, fmt.Sprintf("%s/%s/onlineapp/jobpostings/view.asp",
 		applitrackProbeBase, url.PathEscape(board)))

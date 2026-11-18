@@ -5,7 +5,7 @@ const returnKey = 'freehire.reauth.return';
 const draftKey = 'freehire.reauth.draft';
 const expiryKey = 'freehire.reauth.expires';
 
-export type ReauthReturnPath = '/my/integrations/api-keys' | '/my/account';
+export type ReauthReturnPath = '/my/integrations/api-keys' | '/my/api/keys' | '/my/account';
 
 // This module used to be reachable only from a click handler, so it could touch
 // `sessionStorage` bare. `recentAuthExpiry()` broke that: it is read at component INIT,
@@ -14,7 +14,7 @@ export type ReauthReturnPath = '/my/integrations/api-keys' | '/my/account';
 //
 // Reading is also not safe in a browser: Safari with site data blocked THROWS on access
 // rather than answering null, which is why `typeof` alone is not the guard. Same shape as
-// autoApplyPauseStorage.ts and cvRefreshOffer.ts.
+// cvRefreshOffer.ts.
 //
 // Every read degrades to "nothing carried, no proof held" — the correct reading on a
 // server and in a locked-down browser alike. Writes deliberately do NOT degrade: see
@@ -86,9 +86,7 @@ function isDraftFor<S extends ReauthDraft['surface']>(
   // real type guard rather than a cast wearing a boolean.
   switch (surface) {
     case 'create-api-key':
-      return (
-        typeof d.name === 'string' && typeof d.days === 'number' && typeof d.scope === 'string'
-      );
+      return typeof d.name === 'string' && typeof d.days === 'number' && typeof d.scope === 'string';
     case 'revoke-api-key':
       return typeof d.keyId === 'number';
     case 'revoke-oauth-grant':
@@ -199,6 +197,7 @@ export async function completeProviderReauthentication(code: string): Promise<Re
   const storedTarget = readSession(returnKey);
   forgetSession(returnKey);
   // '/my/api-keys' is what a tab opened before API keys moved under Integrations stored.
+  if (storedTarget === '/my/api/keys') return storedTarget;
   if (storedTarget === '/my/integrations/api-keys' || storedTarget === '/my/api-keys') {
     return '/my/integrations/api-keys';
   }

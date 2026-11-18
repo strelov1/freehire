@@ -50,26 +50,6 @@ UPDATE billing_events
 SET processed_at = now()
 WHERE id = sqlc.arg(id);
 
--- ListSubscribersNearProExpiry was removed by the add-store-purchases change, and its absence
--- is worth a line because deleting a query is unusual here.
---
--- It predicated on users.pro_until, which stopped being a provider's own answer the moment
--- that column became GREATEST of three sources: a subscriber whose OTHER source reaches
--- further would sit outside the window and never be re-checked, and the lost renewal the pass
--- exists to repair would stay lost. Each provider now has its own near-expiry read against its
--- own column — ListSubscribersNearProExpiryStripe in billing_customer.sql, and
--- ListSubscribersNearProExpiryRevenueCat below.
---
--- Left in place it would have been a generated, callable query that is wrong by construction,
--- sitting where the next provider would reach for it.
-
-
--- name: DeleteBillingEventsForUser :exec
--- Erase one user's billing events. Account deletion calls this; the foreign key cascades,
--- but deletion states what it erases explicitly rather than relying on a constraint to
--- mean it.
-DELETE FROM billing_events WHERE user_id = $1;
-
 -- name: HasRevenueCatFootprint :one
 -- Whether this account has ever been seen by RevenueCat: a recorded delivery of theirs, or a
 -- store entitlement we already hold.

@@ -6,14 +6,11 @@ import (
 	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
-// roundSalaryPart converts one structured salary bound from an ATS's own JSON
-// (occasionally fractional — Lever reports hourly wages like $35.22) into freehire's
-// integer salary_min/salary_max, rounding rather than truncating so a fractional
-// rate is never inflated by a stray decimal point (see the enrich package's identical
-// fix for the LLM path). A non-positive value — the shape some ATS APIs emit for "not
-// set" (an all-zero range) — reports absent (nil) rather than a fabricated zero, same
-// as enrich.Sanitize's positiveOrNil for the LLM path; min and max are independent, so
-// a one-sided "up to $X" range still comes through.
+// roundSalaryPart converts one structured salary bound from an ATS's own JSON (possibly
+// fractional, e.g. Lever's $35.22 hourly) into integer salary_min/salary_max, rounding rather
+// than truncating. A non-positive value (some ATS APIs emit zero for "not set") reports nil
+// rather than a fabricated zero, as enrich.Sanitize does; min and max are independent, so a
+// one-sided "up to $X" range still comes through.
 func roundSalaryPart(v float64) *int {
 	if v <= 0 {
 		return nil
@@ -22,10 +19,8 @@ func roundSalaryPart(v float64) *int {
 	return &r
 }
 
-// isSalaryPeriod reports whether period is one of freehire's own salary_period
-// values. For a source (like Recruitee) whose own period vocabulary already matches
-// ours exactly, this is validation rather than translation — an adapter with a
-// different vocabulary (Lever, Ashby) maps first and never needs this.
+// isSalaryPeriod reports whether period is one of freehire's own salary_period values. It
+// validates sources whose vocabulary already matches ours (Recruitee); others map first.
 func isSalaryPeriod(period string) bool {
 	for _, p := range vocab.SalaryPeriodValues {
 		if p == period {

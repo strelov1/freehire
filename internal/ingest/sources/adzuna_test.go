@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // adzunaHTTP is a paging-aware test JSONGetter, mirroring echojobsHTTP: it serves pages[i] for a
@@ -137,6 +138,34 @@ func TestAdzunaFetchRequestsCorrectURL(t *testing.T) {
 	}
 	if v := parsed.Query().Get("max_days_old"); v != strconv.Itoa(adzunaMaxDaysOld) {
 		t.Fatalf("max_days_old = %q, want %q", v, strconv.Itoa(adzunaMaxDaysOld))
+	}
+}
+
+// A recent run sends its own window as max_days_old; a full run still sends the constant.
+func TestAdzunaFetchRecentSendsTheRunWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		window time.Duration
+		want   string
+	}{
+		{"three days", 72 * time.Hour, "3"},
+		{"one day", 24 * time.Hour, "1"},
+		{"below a day rounds up to one", time.Hour, "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			http := &adzunaHTTP{pages: []string{adzunaPageJSON("")}}
+			adz := adzuna{http: http, appID: "id", appKey: "key"}
+			if _, err := adz.FetchRecent(context.Background(), CompanyEntry{Region: "gb", Board: "it-jobs"}, tc.window); err != nil {
+				t.Fatalf("FetchRecent: %v", err)
+			}
+			parsed, err := url.Parse(http.gotURLs[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v := parsed.Query().Get("max_days_old"); v != tc.want {
+				t.Fatalf("max_days_old = %q, want %q", v, tc.want)
+			}
+		})
 	}
 }
 

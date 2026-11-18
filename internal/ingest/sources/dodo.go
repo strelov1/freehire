@@ -17,7 +17,7 @@ type dodo struct {
 }
 
 const (
-	// The careers site moved to dodoteam.ru in 2026; its Nuxt runtime config names this
+	// The careers site is dodoteam.ru; its Nuxt runtime config names this
 	// backend (public.apiURL), which serves the same API the retired career-api.dodoteam.ru did.
 	dodoListURL   = "https://job-site-backend.dodo-ai-platform.io/api/v1/vacancies"
 	dodoDetailURL = "https://job-site-backend.dodo-ai-platform.io/api/v1/pages/vacancy/%d"

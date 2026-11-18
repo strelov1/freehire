@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -23,6 +24,40 @@ type fakeEntitlement struct {
 	tier  plan.Tier
 	err   error
 	asked atomic.Int32
+
+	// recordErr and recordPanic make the paywall-hit write fail or panic; hits collects what
+	// the gate asked to record.
+	recordErr   error
+	recordPanic bool
+	mu          sync.Mutex
+	hits        []recordedHit
+}
+
+type recordedHit struct {
+	userID  int64
+	feature string
+	job     plan.PaywallJob
+}
+
+func (f *fakeEntitlement) RecordPaywallHit(_ context.Context, userID int64, feature string, job plan.PaywallJob) error {
+	if f.recordPanic {
+		panic("record exploded")
+	}
+	if f.recordErr != nil {
+		return f.recordErr
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.hits = append(f.hits, recordedHit{userID, feature, job})
+	return nil
+}
+
+// recorded waits for every detached paywall-hit write to finish and returns what they stored.
+func (f *fakeEntitlement) recorded() []recordedHit {
+	paywallWrites.Wait()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]recordedHit(nil), f.hits...)
 }
 
 func (f *fakeEntitlement) RequirePaid(context.Context, int64) (plan.Tier, error) {
@@ -52,6 +87,7 @@ type gatedRoute struct {
 // calls a model means adding it here — and mounting mw.paidAI on it, or the first test
 // below fails.
 var gatedRoutes = []gatedRoute{
+	{fiber.MethodPost, "/api/v1/jobs/some-job/referral-message/stream", plan.FeatureCoverLetter},
 	{fiber.MethodPost, "/api/v1/jobs/some-job/fit", plan.FeatureFit},
 	{fiber.MethodGet, "/api/v1/jobs/some-job/fit/stream", plan.FeatureFit},
 	{fiber.MethodPost, "/api/v1/jobs/some-job/match-analysis", plan.FeatureFit},
@@ -69,12 +105,14 @@ var gatedRoutes = []gatedRoute{
 	{fiber.MethodPost, "/api/v1/speech/transcriptions", plan.FeatureDictation},
 	{fiber.MethodPost, "/api/v1/me/profile/ats-report", unmeteredAI},
 	{fiber.MethodPost, "/api/v1/me/tracking/some-job/mail-recall", unmeteredAI},
+	{fiber.MethodPost, "/api/v1/me/emails/4821/reply-draft", plan.FeatureMailReply},
 	{fiber.MethodPost, "/api/v1/me/autofill/run", unmeteredAI},
 }
 
 // openRoutes read a cached AI result, compute something deterministic, or make one of the
-// model calls every account gets (plan.WithFreeAI) — the CV parse and the search
-// interpretation. They must stay reachable to free, so the gate must never even be asked.
+// model calls every account gets (plan.WithFreeAI) — the CV parse, the onboarding CV read
+// (signed in or not) and the search interpretation. They must stay reachable to free, so
+// the gate must never even be asked.
 var openRoutes = []gatedRoute{
 	{method: fiber.MethodGet, path: "/api/v1/jobs/some-job/fit"},
 	{method: fiber.MethodGet, path: "/api/v1/jobs/some-job/match-analysis"},
@@ -87,6 +125,7 @@ var openRoutes = []gatedRoute{
 	{method: fiber.MethodGet, path: "/api/v1/me/cvs/00000000-0000-0000-0000-000000000001/cover-letter"},
 	{method: fiber.MethodGet, path: "/api/v1/me/cvs/00000000-0000-0000-0000-000000000001/tailor-context"},
 	{method: fiber.MethodPost, path: "/api/v1/cv/roast"},
+	{method: fiber.MethodPost, path: "/api/v1/onboarding/cv"},
 	{method: fiber.MethodPost, path: "/api/v1/search/interpret"},
 }
 
@@ -107,17 +146,21 @@ func gatedApp(t *testing.T, plans paidEntitlement) *fiber.App {
 		key: signedIn, cvKey: signedIn, cookie: signedIn, optional: signedIn,
 		autoApplyGate: signedIn,
 		paidAI:        paidAIGate(plans),
-		throttler:     newTestThrottler(t),
 	}
 	api := app.Group("/api/v1")
-	(&matchHandlers{}).register(api, mw)
-	(&assistantHandlers{}).register(api, mw)
-	(&cvHandlers{}).register(api, mw)
-	(&resumeHandlers{}).register(api, mw)
+	matchH, assistantH, intentH, autofillH, inboxH := &matchHandlers{}, &assistantHandlers{}, &intentHandlers{}, &autofillHandlers{}, &inboxHandlers{}
+	contract := newContract(contractHandlers{matchHandlers: matchH, assistantHandlers: assistantH, intentHandlers: intentH,
+		autofillHandlers: autofillH, inboxHandlers: inboxH})
+	matchH.register(api, mw, contract)
+	assistantH.register(api, mw, contract)
+	(&cvHandlers{}).register(api, mw, cvContract(&cvHandlers{}))
+	(&referralMessageHandlers{}).register(api, mw)
+	resumeH := &resumeHandlers{}
+	resumeH.register(api, mw, newContract(contractHandlers{resumeHandlers: resumeH}))
 	(&speechHandlers{}).register(api, mw)
-	(&intentHandlers{}).register(api, mw)
-	(&inboxHandlers{}).register(api, mw)
-	(&autofillHandlers{}).register(api, mw)
+	intentH.register(api, mw, contract)
+	inboxH.register(api, mw, contract)
+	autofillH.register(api, mw, contract)
 	return app
 }
 

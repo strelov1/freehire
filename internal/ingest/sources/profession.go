@@ -9,102 +9,61 @@ import (
 	"sync"
 
 	"golang.org/x/net/html"
-
-	"github.com/strelov1/freehire/internal/dict/location"
 )
 
 // profession adapts Profession.hu, Hungary's dominant job board. It is one central
-// catalogue with no per-employer tenancy, so it is a multi-company aggregator whose
-// employer is read from each posting.
+// catalogue with no per-tenant board, so it is a multi-company aggregator whose employer is read
+// from each posting.
 //
-// THE BOARD IS ONE OF THE PLATFORM'S OWN CATEGORY SITEMAPS, and taking the technical
-// ones rather than the whole board is the design. Profession.hu publishes 23 category
-// sitemaps holding ~12k postings between them; two of those categories are IT
-// (itdev, itops) and hold ~770. That is the AppliTrack/EDJOIN lesson applied before it
-// costs anything — freehire's non-technical gate was written against tech-company ATS
-// boards and leaks badly on a general-population board, so the platform's own facet
-// picks the slice. Measured over 128 live postings from the two IT sitemaps,
-// classify.ConfirmedNonTech rejected zero: the slice is already what the catalogue
-// wants.
-//
-// THE OTHER 21 CATEGORIES ARE REFUSED, and that was measured rather than assumed. They do
-// hold technical postings — a live audit on 2026-09-06 found roughly 30 — but nothing in a
-// TITLE separates them from their neighbours. That audit crawled all 21 behind a URL-slug
-// prefilter and a title check, both reading internal/dict/classify: 11,403 postings listed,
-// 227 passed the cheap gate, 159 were stored. Of those 159, 45 resolved through the bare
-// English "analyst" (VAT, credit control, valuation), 23 through project management, 13
-// through business analysis, 11 through product, 13 through design and creative, and 5
-// through solutions engineering ("Sales Engineer"). Only 17 satisfied classify.IsTech.
-// Three gas fitters and a pump tester were among the 159.
-//
-// The lesson is not that the filter was tuned badly. vocab.TechCategories names the job
-// FAMILIES OF A TECH COMPANY — product, project management, design, creative, business
-// analysis — which is the right reading on a software employer's board and the wrong one
-// here, where they are a construction site's project manager and a furniture showroom's
-// designer. Making the gate work needs three separate corrections that the next reader
-// would have to hold at once: a craft-only predicate instead of that list, an exclusion for
-// the bare "analyst"/"qa"/"architect", and the two Hungarian aliases the audit itself
-// disproved. Thirty postings do not buy that, and a mechanism nobody can keep correct
-// invites being pointed at one more category. See AGENTS.md for the full table.
+// Only the platform's own two IT category sitemaps (itdev, itops) are crawled, not the whole board.
+// freehire's non-technical gate was written against tech-company ATS boards and leaks badly on a
+// general-population board, so the platform's own facet picks the slice. The other 21 categories
+// are refused: they hold some technical postings, but nothing in a title separates them from their
+// neighbours, and what classify.IsTech lets through there is mostly non-tech roles (bare "analyst",
+// project management, product, design, "Sales Engineer"). vocab.TechCategories names the job
+// families of a tech company, the wrong reading on a general board. Making the gate work would need
+// a craft-only predicate, an exclusion for bare "analyst"/"qa"/"architect" and Hungarian aliases,
+// which the few technical postings there do not justify. See AGENTS.md for the table.
 
-// Traps, all verified live on 2026-09-03:
+// Traps:
 //
-//   - jobLocationType "TELECOMMUTE" means NOT STRICTLY ONSITE, not remote. It is set on
-//     48% of the slice, and the posting page shows those same postings as "Hibrid" —
-//     the badge above the address is the only thing that separates hybrid from remote.
-//     Worse, a posting carrying that flag has NO jobLocation at all in its ld+json, so
-//     reading only the structured block loses the city on half the crawl. Both facts are
-//     read off the page's address line, which agreed with the flag on 128 of 128.
-//   - The address line's postal code and street number are what stop the location
-//     dictionary: "Budapest" resolves, "1087 Budapest, Kerepesi út 21." resolves nothing.
-//     Dropping digit runs took the sample from 61 resolved cities to 92 of 128.
-//   - A taken-down posting answers 200, not 404 or 410: the URL redirects to the
-//     platform's category listing, whose page carries no JobPosting block. About 8% of
-//     the URLs the sitemap lists are already in that state, so a body-less read here is
-//     the ordinary case rather than a failure — the posting is skipped and never stored.
-//   - The ld+json description flattens the posting's bullet lists into one run-on
-//     paragraph. The page carries the same text in the sections the employer typed it
-//     into (#tasks, #requirements, …), list markup intact and under the employer's own
-//     headings, so the body is read from those. #c_info is the employer's standing blurb
-//     (the employerOverview call edjoin and gusto already make) and #contact_info is
-//     where an address or a recruiter's mail lands; neither is part of the posting.
-//   - The platform states no salary anywhere in this slice: data-item-variant read
-//     "salary confidential" on every one of 128 sampled postings and no ld+json field
-//     carries an amount. Nothing to map.
-//   - occupationalCategory is a good SELECTOR and a bad LABEL, so it is read to pick the
-//     board and not mapped onto a category. Its 20 IT leaves were read against the titles
-//     of every one of the 709 live postings: the largest, "AI és Automatizáció" (124),
-//     holds Senior Java Developer, AWS Cloud Engineer and a Vice President of Government
-//     Sales, and "IT tanácsadó, Elemző, Auditor" (73) holds a Backend Engineer, an Energy
-//     Economist and a Technical Writer. Even the honest leaves lose by being read: a
-//     structured Category from an adapter takes precedence over the title dictionary
-//     (jobderive's category precedence), and the dictionary already resolves 47% of this
-//     slice — so the best map anyone could write from this vocabulary added a category to
-//     132 postings while flattening 76 the dictionary had already placed more precisely
-//     (backend, fullstack, frontend, mobile → software_engineering). Left to the
-//     dictionary and the enrichment pass.
+//   - jobLocationType "TELECOMMUTE" means NOT STRICTLY ONSITE, not remote. The posting page shows
+//     those same postings as "Hibrid"; the badge above the address is the only thing that separates
+//     hybrid from remote. A posting carrying that flag also has NO jobLocation in its ld+json, so
+//     both facts are read off the page's address line.
+//   - The address line's postal code and street number stop the location dictionary: "Budapest"
+//     resolves, "1087 Budapest, Kerepesi út 21." resolves nothing. Digit runs are dropped.
+//   - A taken-down posting answers 200, not 404 or 410: the URL redirects to the platform's category
+//     listing, whose page carries no JobPosting block. A body-less read is therefore the ordinary
+//     case; the posting is skipped and never stored.
+//   - The ld+json description flattens the bullet lists into one run-on paragraph. The page carries
+//     the same text in the sections the employer typed it into (#tasks, #requirements, ...), list
+//     markup intact, so the body is read from those. #c_info is the employer's standing blurb and
+//     #contact_info is where an address or a recruiter's mail lands; neither is part of the posting.
+//   - The platform states no salary in this slice (data-item-variant reads "salary confidential"
+//     and no ld+json field carries an amount). Nothing to map.
+//   - occupationalCategory is a good SELECTOR and a bad LABEL: it picks the board and is not mapped
+//     onto a category. Its IT leaves do not match the titles under them, and a structured Category
+//     from an adapter takes precedence over the title dictionary (jobderive's category precedence),
+//     so mapping it would flatten categories the dictionary already places more precisely. Left to
+//     the dictionary and the enrichment pass.
 type profession struct {
 	http professionHTTP
-	// index memoizes the sitemap index for the life of the adapter, which is the life of
-	// one crawl: the pipeline builds the registry once and shares an adapter across every
-	// board it visits. See professionIndex for why that matters here and nowhere else.
+	// index memoizes the sitemap index for the life of the adapter, which is one crawl: the
+	// pipeline shares an adapter across every board it visits. See professionIndex.
 	index *professionIndex
 }
 
-// professionIndex holds the platform's sitemap index once it has been read, so a crawl
-// resolves it once however many categories it visits.
+// professionIndex holds the platform's sitemap index once it has been read, so a crawl resolves
+// it once however many categories it visits.
 //
-// resolveSubSitemap re-reads the index on every call, which is the right shape for a
-// provider with one board and was invisible while this crawl was the two IT categories.
-// With all 23 it is 23 requests for one document, and the platform does not tolerate that:
-// measured live on 2026-09-06 it answered the first and then closed the connection on the
-// rest, which reads downstream as every category being unreachable rather than as the
-// crawl asking too often.
+// resolveSubSitemap re-reads the index on every call; with all 23 categories that is 23 requests
+// for one document, and the platform answers the first and closes the connection on the rest,
+// which reads downstream as every category being unreachable.
 //
-// Only a successful read is cached. Caching the error would spend one transient failure on
-// every remaining board in the run, and a crawl that can be retried per board should be.
-// The lock is held across the fetch on purpose: concurrent boards then wait for the one
-// request instead of racing to make their own, which is the whole point.
+// Only a successful read is cached, so one transient failure is not spent on every remaining board.
+// The lock is held across the fetch on purpose: concurrent boards wait for the one request instead
+// of racing to make their own.
 type professionIndex struct {
 	mu       sync.Mutex
 	sitemaps map[string]string
@@ -152,8 +111,8 @@ const (
 )
 
 // professionIDPattern captures the posting id the platform ends every /allas/ URL with.
-// It is the id the ld+json states as well (@id ".../JobPosting/2990578"), and it is
-// stable across the slug, which carries the title and is therefore not an identity.
+// It is the id the ld+json states as well (@id ".../JobPosting/2990578"), and it is stable
+// across the slug, which carries the title and is therefore not an identity.
 var professionIDPattern = regexp.MustCompile(`/allas/[^/]+-(\d+)(?:/|$)`)
 
 // professionExternalID returns the platform's posting id for a listing URL, or "" for a
@@ -188,10 +147,9 @@ type professionLDPosting struct {
 	} `json:"applicantLocationRequirements"`
 }
 
-// Fetch hydrates every listed posting. It is what a caller that cannot supply a seen set
-// gets; the live pipeline always prefers FetchNew (see internal/ingest/pipeline.fetchBoard).
-// There is no cheaper list-only tier to fall back on — a sitemap states nothing but a URL —
-// so this is FetchNew with nothing seen rather than a second walk.
+// Fetch hydrates every listed posting, for a caller that cannot supply a seen set; the live
+// pipeline prefers FetchNew. A sitemap states nothing but a URL, so there is no cheaper list-only
+// tier: this is FetchNew with nothing seen.
 func (s profession) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return s.FetchNew(ctx, e, func(string) bool { return false })
 }
@@ -246,19 +204,12 @@ func (s profession) list(ctx context.Context, e CompanyEntry) ([]string, error) 
 // and must not become boards.
 var professionCategoryPattern = regexp.MustCompile(`/sitemap-listings-([a-z0-9-]+)-hu\.xml$`)
 
-// ProfessionCategorySitemaps reads the platform's sitemap index — ONE request — and returns
-// every category it publishes against the URL of that category's sitemap. It is exported
-// for cmd/harvest-boards, which enumerates this provider's boards rather than being handed
-// a seed list for them: the index IS the catalogue of categories, so a board list kept
-// anywhere else would be a copy that drifts.
-//
-// It returns the URLs and not just the names so a caller that goes on to read those
-// sitemaps does not have to resolve the index again per category. That is the shape the
-// platform's rate limiting requires, not a convenience — see professionIndex.
-//
-// The index is also where the crawl resolves a board, so the URL shape lives in this file
-// only. A caller that rebuilt it would be a second answer to "where is a category's
-// sitemap", and the two would disagree silently the first time the platform moved one.
+// ProfessionCategorySitemaps reads the platform's sitemap index (ONE request) and returns every
+// category it publishes against the URL of that category's sitemap. It is exported for
+// cmd/harvest-boards: the index IS the catalogue of categories, so a list kept elsewhere would
+// drift. It returns the URLs so a caller reading those sitemaps does not re-resolve the index per
+// category, which the platform's rate limiting requires (see professionIndex). The URL shape lives
+// in this file only.
 func ProfessionCategorySitemaps(ctx context.Context, c XMLGetter) (map[string]string, error) {
 	doc, err := getSitemap(ctx, c, professionSitemapIndex)
 	if err != nil {
@@ -274,10 +225,8 @@ func ProfessionCategorySitemaps(ctx context.Context, c XMLGetter) (map[string]st
 	return out, nil
 }
 
-// ProfessionSitemapPostings returns how many postings a category sitemap lists. It is the
-// cheap liveness measure a board harvest needs — one XML request against the whole crawl an
-// adapter probe would otherwise cost for each of 23 categories — and it takes the sitemap
-// URL rather than the category so that the index is not re-read to find it.
+// ProfessionSitemapPostings returns how many postings a category sitemap lists: the cheap
+// liveness measure a board harvest needs. It takes the sitemap URL so the index is not re-read.
 func ProfessionSitemapPostings(ctx context.Context, c XMLGetter, sitemapURL string) (int, error) {
 	locs, err := sitemapJobLocs(ctx, c, sitemapURL, professionExternalID)
 	if err != nil {
@@ -287,25 +236,20 @@ func ProfessionSitemapPostings(ctx context.Context, c XMLGetter, sitemapURL stri
 }
 
 // professionITBoards are the platform's two dedicated IT category sitemaps, and the only
-// categories the catalogue crawls. A posting filed in one of them is stored on the
-// platform's own filing and is never asked to satisfy freehire's title dictionary: measured over 128 live postings from these
-// two, classify.ConfirmedNonTech rejected none, and the dictionary resolves a category for
-// only about half — so filtering here would drop technical postings to no purpose. Every
-// other category is a general-population board and is filtered.
+// categories the catalogue crawls. A posting filed in one of them is stored on the platform's own
+// filing and is never asked to satisfy freehire's title dictionary, which resolves a category for
+// only about half of them. Every other category is a general-population board and is filtered.
 var professionITBoards = map[string]bool{"itdev": true, "itops": true}
 
-// ProfessionCrawlsCategory reports whether the catalogue crawls a category at all. It is
-// exported for cmd/harvest-boards, so the harvest cannot offer a curator a board the crawl
-// would refuse — one answer to that question, in the file that decided it.
+// ProfessionCrawlsCategory reports whether the catalogue crawls a category at all. Exported for
+// cmd/harvest-boards, so the harvest cannot offer a board the crawl would refuse.
 func ProfessionCrawlsCategory(board string) bool {
 	return professionITBoards[strings.ToLower(strings.TrimSpace(board))]
 }
 
-// ProfessionITBoardNames returns the platform's dedicated IT board names, sorted, for
-// a caller that must enumerate them rather than test one — cmd/backfill-profession-it-tech
-// scopes its SQL predicate to exactly these boards, and reading the list from here
-// rather than repeating it as a literal is what makes a third IT board (should the
-// platform ever add one) reach that predicate with no second edit.
+// ProfessionITBoardNames returns the platform's dedicated IT board names, sorted, for a caller
+// that must enumerate them: cmd/backfill-profession-it-tech scopes its SQL predicate to exactly
+// these boards, so a third IT board reaches it with no second edit.
 func ProfessionITBoardNames() []string {
 	names := make([]string, 0, len(professionITBoards))
 	for board := range professionITBoards {
@@ -315,16 +259,12 @@ func ProfessionITBoardNames() []string {
 	return names
 }
 
-// ProfessionConfirmsTech reports whether a STORED (source, external_id) pair belongs to
-// one of Profession's dedicated IT boards — the same "confirmed technical" fact detail()
-// asserts fresh off the crawl (see IsTechHint below), recomputed here for a caller that
-// only has the persisted row and cannot re-crawl to learn the board. cmd/backfill-derive
-// is exactly that caller: it re-derives is_tech from jobderive.Derive on a bare title and
-// category, and without this it would silently rewrite these rows' is_tech back to
-// unknown on every routine pass, undoing issue #2601's fix for the rows it exists to
-// reach. The board is recovered from the external_id's own namespace prefix
-// (internal/platform/externalid.Namespace put it there at ingest); the source check
-// guards against another provider's external_id coincidentally sharing a board name.
+// ProfessionConfirmsTech reports whether a STORED (source, external_id) pair belongs to one of
+// Profession's dedicated IT boards: the "confirmed technical" fact detail() asserts fresh off the
+// crawl, recomputed for a caller that only has the persisted row. cmd/backfill-derive is that
+// caller; without this it would rewrite these rows' is_tech back to unknown on every pass. The
+// board is recovered from the external_id's namespace prefix (internal/platform/externalid.Namespace);
+// the source check guards against another provider's external_id sharing a board name.
 func ProfessionConfirmsTech(source, externalID string) bool {
 	if source != "profession" {
 		return false
@@ -333,12 +273,10 @@ func ProfessionConfirmsTech(source, externalID string) bool {
 	return ok && ProfessionCrawlsCategory(board)
 }
 
-// detail fetches one posting page and maps it. It reports ok=false — so the caller skips
-// just this posting — when the page carries no JobPosting block, which is what a
-// taken-down posting looks like (its URL redirects to a category listing and answers
-// 200), and when the page yields no body. Deferring a posting by one crawl is
-// recoverable; storing it body-less is not, because a stored row is `seen` and so is
-// never hydrated again once it ages past the pipeline's hydration-retry window.
+// detail fetches one posting page and maps it. It reports ok=false, so the caller skips just
+// this posting, when the page carries no JobPosting block (a taken-down posting) or yields no body.
+// Deferring a posting by one crawl is recoverable; storing it body-less is not, because a stored
+// row is `seen` and is never hydrated again once past the pipeline's hydration-retry window.
 func (s profession) detail(ctx context.Context, loc, externalID string) (Job, bool) {
 	root, err := s.http.GetHTML(ctx, loc)
 	if err != nil {
@@ -371,132 +309,17 @@ func (s profession) detail(ctx context.Context, loc, externalID string) (Job, bo
 		EducationLevel:     education,
 		EnglishLevel:       english,
 		PostedAt:           parseDate(ld.DatePosted),
-		// detail is reachable only after list() has already refused every board but
-		// itdev/itops (see ProfessionCrawlsCategory above), so every posting reaching
-		// this point is filed under the platform's own dedicated IT sections — the
-		// same evidence professionITBoards documents for the ingest-time non-tech
-		// filter, now also asserted for is_tech so these postings enter the
-		// enrichment queue instead of stalling when the title dictionary alone
-		// cannot resolve a category (see issue #2601).
+		// detail is reachable only after list() refused every board but itdev/itops, so every posting
+		// here is filed under the platform's IT sections. That evidence (see professionITBoards) is
+		// asserted for is_tech too, so these postings enter the enrichment queue instead of stalling when
+		// the title dictionary cannot resolve a category.
 		IsTechHint: true,
 	}, true
 }
 
-// professionBodySections are the page's body sections, in the order the platform renders
-// them. They are selected by element id rather than by heading, because the heading is
-// the employer's own words — the same #tasks section is headed "Feladatok", "A pozíció
-// leírása", "Responsibilities" and "MI LESZ A FELADATOD?" across the live sample — so it
-// identifies nothing and is instead carried through as part of what the employer wrote.
-//
-// #c_info and #contact_info are absent on purpose. The first is the employer's standing
-// blurb, repeated verbatim across its postings (the employerOverview call edjoin and
-// gusto make); the second is where a postal address or a recruiter's mail lands.
-var professionBodySections = []string{"tasks", "requirements", "other", "offer", "workplace_extras"}
-
-// professionBody assembles the posting's body from the page's own sections, each under
-// the heading its box states. The ld+json's description holds the same text with its list
-// markup flattened into one paragraph, which is why it is not read.
-func professionBody(root *html.Node) string {
-	var b strings.Builder
-	for _, id := range professionBodySections {
-		section := firstByID(root, id)
-		if section == nil {
-			continue
-		}
-		body := strings.TrimSpace(innerHTML(section))
-		if body == "" {
-			continue
-		}
-		if heading := professionSectionHeading(section); heading != "" {
-			fmt.Fprintf(&b, "<h3>%s</h3>", html.EscapeString(heading))
-		}
-		b.WriteString(body)
-	}
-	return b.String()
-}
-
-// professionSectionHeading returns the heading the section's box container states, or ""
-// when the page renders none. The heading is a sibling of the section rather than a
-// child, so it is reached by walking up to the box and back down to its <h2>.
-func professionSectionHeading(section *html.Node) string {
-	for n := section.Parent; n != nil; n = n.Parent {
-		if n.Type != html.ElementNode || !HasClass(n, "box-container") {
-			continue
-		}
-		if h2 := firstByTag(n, "h2"); h2 != nil {
-			return strings.Join(strings.Fields(textContent(h2)), " ")
-		}
-		return ""
-	}
-	return ""
-}
-
-// professionWorkModeBadges maps the badge the page prints ahead of the address onto the
-// work arrangement. It is the platform's own three-valued control and the only thing that
-// separates a hybrid posting from a remote one — the ld+json spends a single TELECOMMUTE
-// flag on both. "Országos lefedettség" ("nationwide coverage") is not a work mode: it
-// says the work is spread over the whole country, which names no arrangement and no
-// place, so it resolves to neither.
-var professionWorkModeBadges = map[string]string{
-	"Hibrid":               "hybrid",
-	"Távmunka / Remote":    "remote",
-	"Országos lefedettség": "",
-}
-
-// professionDigits matches a run of digits: a postal code or a street number.
-var professionDigits = regexp.MustCompile(`\d+`)
-
-// professionPlace splits the page's address line into the work mode its badge states and
-// the place the location dictionary can read. A line with no badge is an ordinary sited
-// posting, which the platform says by printing the address alone.
-//
-// The digits go because they are what stops the dictionary: it resolves "Budapest" and
-// nothing at all in "1087 Budapest, Kerepesi út 21.", since the postal code is glued to
-// the city inside one comma-token. Dropping them took a 128-posting sample from 61
-// resolved cities to 92. The street name is left in place — it resolves to nothing, and
-// removing it would mean guessing which token is the city.
-func professionPlace(addressLine string) (workMode, place string) {
-	line := strings.Join(strings.Fields(addressLine), " ")
-	badge, rest, separated := strings.Cut(line, "•")
-	badge, rest = strings.TrimSpace(badge), strings.TrimSpace(rest)
-	mode, isBadge := professionWorkModeBadges[badge]
-	switch {
-	case isBadge && separated:
-		return mode, professionStripDigits(rest)
-	case isBadge:
-		return mode, ""
-	}
-	return "onsite", professionStripDigits(line)
-}
-
-// professionStripDigits removes digit runs and tidies the whitespace they leave behind.
-func professionStripDigits(place string) string {
-	return strings.TrimSpace(strings.Join(strings.Fields(professionDigits.ReplaceAllString(place, " ")), " "))
-}
-
-// professionCountries reads the country the platform states, which it does in one of two
-// mutually exclusive places: a sited posting carries jobLocation.address.addressCountry
-// ("HU"), a not-strictly-onsite one carries applicantLocationRequirements instead, naming
-// the country in Hungarian or in English ("Magyarország", "Hungary"). Both go through the
-// shared dictionary, so a name it does not know yields nothing rather than a guess — which
-// is what a posting sited abroad ("Külföld") gets.
-func professionCountries(ld professionLDPosting) []string {
-	if code := location.NormalizeCountry(ld.JobLocation.Address.Country); code != "" {
-		return []string{code}
-	}
-	var out []string
-	for _, req := range ld.ApplicantLocationRequirements {
-		if code := location.NormalizeCountry(req.Name); code != "" && !slices.Contains(out, code) {
-			out = append(out, code)
-		}
-	}
-	return out
-}
-
-// professionExperienceLevels maps the platform's experience picklist onto the low end of
-// the band it names. It is a closed list — six values across the whole IT slice — and the
-// two that name no band are the two that mean none: "Nem kell tapasztalat" ("no
-// experience needed") and "Pályakezdő/friss diplomás" ("entry level / new graduate").
+// professionExperienceLevels maps the platform's closed experience picklist onto the low end of
+// the band it names. The two values that name no band mean none: "Nem kell tapasztalat" and
+// "Pályakezdő/friss diplomás".
 var professionExperienceLevels = map[string]int{
 	"Nem kell tapasztalat":      0,
 	"Pályakezdő/friss diplomás": 0,
@@ -515,12 +338,10 @@ func professionExperienceYears(level string) *int {
 	return &years
 }
 
-// professionEmploymentType maps the platform's employment picklist onto freehire's
-// vocabulary. The field is multi-valued and mixes two different things: a SCHEDULE
-// ("Teljes munkaidő" / "Részmunkaidő") and a CONTRACT FORM ("Alkalmazotti jogviszony",
-// employee status, which 81% of the slice states and which names no schedule at all —
-// the ukgready employee_type trap in a second language). Only the schedule is mapped, and
-// a posting ticking both schedules names neither.
+// professionEmploymentType maps the platform's employment picklist onto freehire's vocabulary.
+// The field is multi-valued and mixes a SCHEDULE ("Teljes munkaidő" / "Részmunkaidő") with a
+// CONTRACT FORM ("Alkalmazotti jogviszony", employee status, which names no schedule). Only the
+// schedule is mapped, and a posting ticking both schedules names neither.
 func professionEmploymentType(field string) string {
 	var full, part, internship bool
 	for _, ticked := range strings.Split(field, ",") {
@@ -546,10 +367,9 @@ func professionEmploymentType(field string) string {
 	return ""
 }
 
-// professionAddressLine returns the text of the page's address line: the work-mode badge,
-// the separator the platform prints between them, and the place. It is one line rather
-// than two fields on the page, and the badge sits OUTSIDE the schema.org jobLocation span
-// beside it — which is the whole reason the line is read rather than the microdata.
+// professionAddressLine returns the text of the page's address line: the work-mode badge, the
+// separator and the place. It is read as one line because the badge sits OUTSIDE the schema.org
+// jobLocation span beside it.
 func professionAddressLine(root *html.Node) string {
 	n := firstByClass(root, "address-data")
 	if n == nil {
@@ -559,16 +379,13 @@ func professionAddressLine(root *html.Node) string {
 }
 
 // professionSchoolLevels maps the platform's school picklist onto freehire's education
-// vocabulary. The Hungarian pair is the load-bearing part: főiskola (a three-to-four year
-// college programme) is the bachelor's-equivalent and egyetem (the five-year university
-// programme) the master's-equivalent — the distinction the picklist preserves from before
-// Bologna. Everything below them is the platform stating that no degree is required.
+// vocabulary. főiskola (three-to-four year college) is the bachelor's-equivalent and egyetem
+// (five-year university) the master's-equivalent, a distinction kept from before Bologna.
+// Everything below them states that no degree is required.
 //
-// "Felsőoktatási szakképzés" is deliberately absent. It is a two-year tertiary programme,
-// above secondary school and below a bachelor's, and freehire's four-value vocabulary has
-// no member for it — so it yields nothing rather than rounding to a neighbour, on the
-// jobfacts doctrine that a wrong value in a faceted field is worse than a missing one. It
-// is 28 of the 709 live postings.
+// "Felsőoktatási szakképzés" is deliberately absent: a two-year tertiary programme with no member
+// in freehire's four-value vocabulary yields nothing rather than rounding to a neighbour (a wrong
+// value in a faceted field is worse than a missing one).
 var professionSchoolLevels = map[string]string{
 	"Általános iskola":              "none",
 	"Szakiskola / szakmunkás képző": "none",
@@ -580,10 +397,8 @@ var professionSchoolLevels = map[string]string{
 // professionEnglishLevels maps the platform's language picklist onto CEFR, for English.
 //
 // THE LEVELS ARE NOT "basic/medium/advanced". alapfok/középfok/felsőfok are Hungary's
-// state-recognised language-exam levels and are defined as B1/B2/C1 (Government Decree
-// 137/2008; the same equivalence every accredited exam centre publishes). Reading them by
-// their everyday sense puts each posting a level off — and the trio has no name for C2 at
-// all, which is why "felsőfok" is so often rendered as one.
+// state-recognised language-exam levels, defined as B1/B2/C1 (Government Decree 137/2008). Reading
+// them by their everyday sense puts each posting a level off, and the trio has no name for C2.
 var professionEnglishLevels = map[string]string{
 	"Angol alapfok":          "b1",
 	"Angol középfok":         "b2",
@@ -591,16 +406,14 @@ var professionEnglishLevels = map[string]string{
 	"Angol anyanyelvi szint": "native",
 }
 
-// professionNoLanguageRequired is the platform's own way of stating that the posting asks
-// for no language at all — which is a statement about English, unlike naming some other
-// language and staying silent about it.
+// professionNoLanguageRequired is the platform's own way of stating that the posting asks for
+// no language at all, which is a statement about English.
 const professionNoLanguageRequired = "Nem kell nyelvtudás"
 
-// professionEducationAndLanguage reads the educationRequirements picklist, which
-// comma-joins two different things: zero or more LANGUAGE levels and one SCHOOL level
-// ("Angol középfok, Német középfok, Egyetem"). Each half is resolved independently and a
-// token outside the closed vocabulary — read off all 709 live postings — yields nothing,
-// so a change on the platform's side reads as silence rather than as a wrong facet.
+// professionEducationAndLanguage reads the educationRequirements picklist, which comma-joins
+// zero or more LANGUAGE levels and one SCHOOL level ("Angol középfok, Német középfok, Egyetem").
+// Each half is resolved independently and a token outside the closed vocabulary yields nothing,
+// so a platform-side change reads as silence rather than a wrong facet.
 //
 // Only English answers the English facet. A posting requiring German and saying nothing
 // about English states no English level; a posting requiring no language at all states

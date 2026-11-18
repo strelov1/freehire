@@ -1,8 +1,6 @@
 // Package recentfeed drains recent_feed_outbox and turns it into the homepage's
 // live "recently added jobs" feed: grouping bursts of same-role or same-company
-// postings into one aggregated entry, and broadcasting the result to connected
-// SSE clients. See openspec/changes/add-homepage-recent-jobs-feed for the
-// product and design context.
+// postings into one aggregated entry, and broadcasting the result to SSE clients.
 package recentfeed
 
 import "time"
@@ -20,8 +18,7 @@ const (
 	// companies, collapsed into one entry once their count reaches
 	// AggregationThreshold. It names a representative posting's title and
 	// company but must never be presented as if all counted postings came from
-	// that one company — see design.md, "Aggregated entries do not attribute a
-	// single company".
+	// that one company.
 	KindAggregate Kind = "aggregate"
 	// KindCompanyAggregate is the other direction of burst: one company posting
 	// many DIFFERENT roles at once (a mass hiring push), collapsed into one

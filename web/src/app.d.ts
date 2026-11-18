@@ -1,12 +1,17 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 declare global {
   namespace App {
-    // interface Error {}
+    interface Error {
+      message: string;
+      // Short code the client error page shows and telemetry records as `error.id`
+      // (hooks.client.ts); absent on server-rendered errors.
+      id?: string;
+    }
     interface Locals {
       // The resolved account-section locale for this request (see
       // hooks.server.ts) — 'en' outside /my/** regardless of the user's
       // preference.
-      locale: import('#lib/locale.js').Locale;
+      locale: import('#lib/i18n/locale.js').Locale;
     }
     interface PageData {
       // The current signed-in user, resolved in the root layout's server load
@@ -14,7 +19,7 @@ declare global {
       user: import('#lib/types.js').User | null;
       // The resolved account-section locale, synced from `user.language` and
       // path-gated to /my/** in hooks.server.ts — 'en' everywhere else.
-      locale: import('#lib/locale.js').Locale;
+      locale: import('#lib/i18n/locale.js').Locale;
     }
     interface PageState {
       // The application whose drawer the tracking board opened with pushState, so Back
@@ -25,4 +30,5 @@ declare global {
   }
 }
 
+// oxlint-disable-next-line unicorn/require-module-specifiers -- an empty export is what makes this file a module, which `declare global` needs
 export {};

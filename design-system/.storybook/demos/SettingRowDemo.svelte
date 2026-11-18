@@ -4,11 +4,7 @@
   import SettingRow from '../../src/setting-row.svelte';
   import Input from '../../src/input.svelte';
 
-  let {
-    label = 'Font',
-    hint,
-    grow = false,
-  }: { label?: string; hint?: string; grow?: boolean } = $props();
+  let { label = 'Font', hint, grow = false }: { label?: string; hint?: string; grow?: boolean } = $props();
 </script>
 
 <div class="max-w-sm">

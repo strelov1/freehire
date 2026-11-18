@@ -70,13 +70,11 @@ func NumericPlaceholder(name string) bool {
 	return true
 }
 
-// ExtractTitleName pulls a company name out of a Pinpoint careers-page <title>: the shapes
-// validated against real Pinpoint boards (PR #825) — a "<lead-in> at {Name}" prefix
-// (Jobs/Careers/Employment Opportunities at …) and a trailing "{Name} Careers" — then cleans
-// a stray "| …" section and collapsed whitespace off the result. Returns "" when neither shape
-// matches. Other ATSes title their careers pages differently (see ExtractSuffixName,
-// ExtractBareTitle) — this is Pinpoint-specific despite the generic name, kept for the
-// callers/tests already using it.
+// ExtractTitleName pulls a company name out of careers-page <title> shapes
+// (Pinpoint): a "<lead-in> at {Name}" prefix (Jobs/Careers/Employment Opportunities at …) or a trailing "{Name} Careers". SuccessFactors' placeholder resolver
+// reuses the observed "Jobs at {Name}" case. The function then cleans a stray "| …" section and
+// collapsed whitespace off the result. Returns "" when neither shape matches. Other ATSes title
+// their careers pages differently (see ExtractSuffixName, ExtractBareTitle).
 func ExtractTitleName(title string) string {
 	title = strings.TrimSpace(html.UnescapeString(title))
 	switch {
@@ -181,6 +179,13 @@ func acronym(s string) string {
 func cutSuffixFold(s, suffix string) (string, bool) {
 	if len(s) >= len(suffix) && strings.EqualFold(s[len(s)-len(suffix):], suffix) {
 		return s[:len(s)-len(suffix)], true
+	}
+	return s, false
+}
+
+func cutPrefixFold(s, prefix string) (string, bool) {
+	if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+		return s[len(prefix):], true
 	}
 	return s, false
 }

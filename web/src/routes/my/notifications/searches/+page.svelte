@@ -6,8 +6,8 @@
   <title>Search alerts — freehire</title>
 </svelte:head>
 
-<!-- The account shell (my/+layout) owns the container, auth gate, and noindex;
-     an inner max-width keeps the list readable within the content column. -->
-<div class="max-w-3xl">
+<!-- The account shell (my/+layout) owns the container, auth gate, and noindex. Full
+     column width, like every other section, so card edges do not move between pages. -->
+<div>
   <SavedSearchesView />
 </div>

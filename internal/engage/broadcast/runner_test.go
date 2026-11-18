@@ -9,10 +9,12 @@ import (
 	"github.com/strelov1/freehire/internal/engage/broadcast"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/maildaily"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 type fakeStore struct {
+	maildaily.Memory
 	ids       []int64
 	recorded  []db.RecordBroadcastEmailParams
 	listErr   error
@@ -30,7 +32,7 @@ func (s *fakeStore) ListBroadcastCandidates(_ context.Context, arg db.ListBroadc
 	return out, s.listErr
 }
 
-func (s *fakeStore) CountBroadcastCandidates(_ context.Context, _ string) (int64, error) {
+func (s *fakeStore) CountBroadcastCandidates(_ context.Context, _ db.CountBroadcastCandidatesParams) (int64, error) {
 	return s.remaining, s.countErr
 }
 
@@ -44,10 +46,10 @@ type fakeSender struct {
 	err  error
 }
 
-type sentMail struct{ from, replyTo, to, subject, html, text string }
+type sentMail struct{ from, replyTo, to, subject, html, text, campaign, variant string }
 
 func (f *fakeSender) Send(_ context.Context, m emailnotify.Message) error {
-	f.sent = append(f.sent, sentMail{m.From, m.ReplyTo, m.To, m.Subject, m.HTML, m.Text})
+	f.sent = append(f.sent, sentMail{m.From, m.ReplyTo, m.To, m.Subject, m.HTML, m.Text, m.Campaign, m.Variant})
 	return f.err
 }
 
@@ -187,4 +189,96 @@ func TestSend_InterviewBuddiesLinksTheLanding(t *testing.T) {
 // mintable.
 func testLinks(base string) *emailprefs.Links {
 	return emailprefs.NewLinks("broadcast-test-secret-padded-to-32", base)
+}
+
+func TestRun_TagsMailWithCampaignAndLimitsToHalf(t *testing.T) {
+	store := &fakeStore{ids: []int64{1}}
+	sender := &fakeSender{}
+	c := campaign(t, "discord-invite")
+	c.Half = "b"
+
+	if _, err := newRunner(store, sender, 10).Run(context.Background(), c); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if store.lastQuery.Half != "b" {
+		t.Errorf("candidates queried for half %q, want b", store.lastQuery.Half)
+	}
+	if got := sender.sent[0]; got.campaign != c.Name || got.variant != "b" {
+		t.Errorf("mail tagged %q/%q, want %q/b", got.campaign, got.variant, c.Name)
+	}
+}
+
+func TestValidHalf(t *testing.T) {
+	for half, want := range map[string]bool{"": true, "a": true, "b": true, "c": false, "A": false} {
+		if got := broadcast.ValidHalf(half); got != want {
+			t.Errorf("ValidHalf(%q) = %v, want %v", half, got, want)
+		}
+	}
+}
+
+// Another sender already took the person's mail today: they stay a candidate, with no send
+// and no ledger row, and the campaign's remainder still counts them.
+func TestRun_LostDailyClaimLeavesThePersonACandidate(t *testing.T) {
+	store := &fakeStore{ids: []int64{1, 2}}
+	store.Hold(1, maildaily.SourceOnboarding)
+	sender := &fakeSender{}
+
+	stats, err := newRunner(store, sender, 0).Run(context.Background(), campaign(t, "discord-invite"))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(sender.sent) != 1 {
+		t.Fatalf("sent %d, want only the unclaimed person", len(sender.sent))
+	}
+	if len(store.recorded) != 1 || store.recorded[0].UserID != 2 {
+		t.Errorf("recorded = %+v, want a row for user 2 only", store.recorded)
+	}
+	if stats.Deferred != 1 || stats.Failed != 0 || stats.Sent != 1 {
+		t.Errorf("stats = %+v, want 1 sent and 1 deferred", stats)
+	}
+}
+
+func TestRun_FailedSendReleasesTheDailyClaim(t *testing.T) {
+	store := &fakeStore{ids: []int64{1}}
+	if _, err := newRunner(store, &fakeSender{err: errors.New("bounce")}, 0).Run(context.Background(), campaign(t, "discord-invite")); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := store.Holder(1); got != "" {
+		t.Errorf("holder = %q, want the claim released", got)
+	}
+
+	kept := &fakeStore{ids: []int64{1}}
+	if _, err := newRunner(kept, &fakeSender{}, 0).Run(context.Background(), campaign(t, "discord-invite")); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := kept.Holder(1); got != maildaily.SourceBroadcast {
+		t.Errorf("holder = %q, want the claim kept for a sent letter", got)
+	}
+}
+
+func TestRun_ClaimErrorSendsNothing(t *testing.T) {
+	store := &fakeStore{ids: []int64{1}}
+	store.ClaimErr = errors.New("connection reset")
+	sender := &fakeSender{}
+
+	stats, err := newRunner(store, sender, 0).Run(context.Background(), campaign(t, "discord-invite"))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(sender.sent) != 0 || len(store.recorded) != 0 || stats.Failed != 1 {
+		t.Errorf("sent %d, recorded %d, stats %+v; want nothing without a claim", len(sender.sent), len(store.recorded), stats)
+	}
+}
+
+func TestRun_ReleaseErrorDoesNotStopTheBatch(t *testing.T) {
+	store := &fakeStore{ids: []int64{1, 2}}
+	store.ReleaseErr = errors.New("connection reset")
+	sender := &fakeSender{err: errors.New("bounce")}
+
+	if _, err := newRunner(store, sender, 0).Run(context.Background(), campaign(t, "discord-invite")); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(sender.sent) != 2 {
+		t.Errorf("attempted %d sends, want both tried", len(sender.sent))
+	}
 }

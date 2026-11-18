@@ -1,7 +1,7 @@
 // Non-essential trackers — a thin, guarded wrapper (PostHog + Google Analytics) so
 // call sites never touch the SDKs directly and every entry point is a safe no-op
-// when nothing is initialized (no key in dev, or SSR). Mirrors the Sentry env-gating
-// posture: without PUBLIC_POSTHOG_KEY PostHog stays inert. Both trackers start only
+// when nothing is initialized (no key in dev, or SSR). Env-gated:
+// without PUBLIC_POSTHOG_KEY PostHog stays inert. Both trackers start only
 // through initTrackers, which the caller gates on cookie consent.
 //
 // Only the pure/guarded surface (isPrivateRoute, track no-op, isFeatureEnabled
@@ -13,6 +13,7 @@
 // chunk for visitors where analytics is inert (no key, or SSR). Same lazy posture
 // as easymde elsewhere.
 import type { PostHog } from 'posthog-js';
+import { reportSignupAttribution } from './attribution';
 import { isBuddiesSpace } from './shellLayout.js';
 
 export interface AnalyticsConfig {
@@ -143,11 +144,7 @@ const gtag: (...args: unknown[]) => void = function () {
 // every OAuth sign-in reads as a new session from accounts.google.com and the
 // visit's real source (ChatGPT, LinkedIn, …) is lost. This is GA's "unwanted
 // referrals" list, kept in code because the Admin API cannot set it.
-const HANDOFF_REFERRER_HOSTS = new Set([
-  'accounts.google.com',
-  'appleid.apple.com',
-  'checkout.stripe.com',
-]);
+const HANDOFF_REFERRER_HOSTS = new Set(['accounts.google.com', 'appleid.apple.com', 'checkout.stripe.com']);
 
 /** Whether `referrer` is a handoff host GA should not report as a source. An empty
  *  or unparseable referrer is not one. */
@@ -172,11 +169,7 @@ function initGoogleAnalytics(): void {
   document.head.appendChild(script);
   window.gtag = gtag;
   gtag('js', new Date());
-  gtag(
-    'config',
-    GA_MEASUREMENT_ID,
-    isHandoffReferrer(document.referrer) ? { ignore_referrer: true } : {},
-  );
+  gtag('config', GA_MEASUREMENT_ID, isHandoffReferrer(document.referrer) ? { ignore_referrer: true } : {});
 }
 
 /** Routes whose DOM must never be recorded (résumé, tracking, inbox all live
@@ -254,15 +247,18 @@ export function claimSignupOnce(userId: number, store: SignupStore): boolean {
  *  This is the ONLY sign-up detector, and it deliberately covers both routes into
  *  an account. Tracking at the password-registration call site as well would count
  *  that account twice: it arrives here fresh too, just with `has_password` set. */
-export function trackSignupIfNew(user: {
-  id: number;
-  created_at: string | null;
-  has_password: boolean;
-}): void {
+export function trackSignupIfNew(user: { id: number; created_at: string | null; has_password: boolean }): void {
   if (!isFreshAccount(user.created_at, Date.now(), SIGNUP_WINDOW_MS)) return;
   if (typeof localStorage === 'undefined') return;
   if (!claimSignupOnce(user.id, localStorage)) return;
-  track('signup', { method: user.has_password ? 'password' : 'oauth' });
+  const method = user.has_password ? 'password' : 'oauth';
+  // PostHog hears of it now. GA4 is told by the server, which also records where the
+  // account came from; only if the server could not (no secret configured, the call
+  // failed) does the browser send it, so GA never counts one sign-up twice.
+  withPostHog((sdk) => sdk.capture('signup', { method }));
+  void reportSignupAttribution(method, GA_MEASUREMENT_ID).then((serverSent) => {
+    if (!serverSent && gaLoaded) gtag('event', 'sign_up', { method });
+  });
 }
 
 // The funnel steps GA4 has built-in reports for go out under GA4's recommended names

@@ -15,9 +15,7 @@ describe('site navigation', () => {
   // told the same thing.
   it('leads only to destinations the sitemap also offers', () => {
     for (const { href, label } of Object.values(NAV)) {
-      expect(STATIC_PATHS, `${label} (${href}) is in the site nav but not the sitemap`).toContain(
-        href,
-      );
+      expect(STATIC_PATHS, `${label} (${href}) is in the site nav but not the sitemap`).toContain(href);
     }
   });
 

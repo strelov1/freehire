@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  ownsMobileStickyCta,
-  readDismissed,
-  suppressesToast,
-  writeDismissed,
-} from './supportToast';
+import { ownsMobileStickyCta, readDismissed, suppressesToast, writeDismissed } from './supportToast';
 
 describe('route rules', () => {
   it('suppresses the toast on the open-source page', () => {
@@ -80,5 +75,4 @@ describe('dismissal', () => {
 
     expect(() => writeDismissed()).not.toThrow();
   });
-
 });

@@ -124,3 +124,30 @@ func TestDaysSilent(t *testing.T) {
 		})
 	}
 }
+
+func TestEmployerMay(t *testing.T) {
+	cases := []struct {
+		name       string
+		current    string
+		byEmployer bool
+		target     string
+		want       bool
+	}{
+		{"advances an applied candidate to interview", "applied", false, "interview", true},
+		{"seeds a record with no stage", "", false, "screening", true},
+		{"rejects an active application", "interview", false, "rejected", true},
+		{"announces a hire", "offer", false, "accepted", true},
+		{"never moves the candidate's own stage backward", "interview", false, "screening", false},
+		{"never reopens a withdrawal", "withdrawn", false, "interview", false},
+		{"never overrides an outcome the candidate recorded", "rejected", false, "offer", false},
+		{"corrects its own rejection", "rejected", true, "interview", true},
+		{"moves its own stage backward", "interview", true, "screening", true},
+		{"no-op on the same stage", "interview", true, "interview", false},
+		{"refuses a stage outside the vocabulary", "applied", false, "hired", false},
+	}
+	for _, c := range cases {
+		if got := EmployerMay(c.current, c.byEmployer, c.target); got != c.want {
+			t.Errorf("%s: EmployerMay(%q, %v, %q) = %v, want %v", c.name, c.current, c.byEmployer, c.target, got, c.want)
+		}
+	}
+}

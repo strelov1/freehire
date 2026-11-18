@@ -1,55 +1,24 @@
 import { describe, expect, test } from 'vitest';
+import { mentor, slot } from './mentorshipTestUtils';
 import {
-  addMonths,
-  daysInMonth,
-  daysWithSlots,
-  dayStatuses,
   emptyMentorFilters,
-  groupCalendarByLocalDay,
-  monthGrid,
-  monthOf,
   profileInputFromProfile,
   seedFormFromSuggestions,
-  slotWindowForMonth,
   openingSlotWindow,
   firstOpenMonth,
-  todayIn,
   withSearchParams,
-  groupSlotsByLocalDay,
   mentorFilterOptions,
   mentorFiltersFromParams,
   mentorFiltersToParams,
   mentorFiltersToQuery,
   seniorityLabel,
-  slotLocalDay,
-  slotLocalTime,
   canReview,
   companyLabel,
   formatInstantIn,
   isCancellable,
-  splitAvailability,
-  weekDraft,
-  weekRows,
-  nextWeekRange,
-  exceptionDayLabel,
-  weekdayLabel,
-  weekdayOrder,
-  weekdayShortLabel,
 } from './mentorship';
-import type {
-  Mentor,
-  MentorAvailabilityRule,
-  MentorCalendarInterval,
-  MentorProfileInput,
-  MentorProfileSuggestions,
-  MentorSession,
-  MentorSlot,
-  OwnMentorProfile,
-} from './types';
 
-function rule(over: Partial<MentorAvailabilityRule> = {}): MentorAvailabilityRule {
-  return { id: 1, weekday: 1, date: null, start: '18:00', end: '21:00', closure: false, ...over };
-}
+import type { MentorProfileInput, MentorProfileSuggestions, MentorSession, OwnMentorProfile } from './types';
 
 function session(over: Partial<MentorSession> = {}): MentorSession {
   return {
@@ -66,44 +35,13 @@ function session(over: Partial<MentorSession> = {}): MentorSession {
   };
 }
 
-function slot(localStart: string, utcOffset = '+00:00'): MentorSlot {
-  return {
-    starts_at: '2026-10-15T09:00:00Z',
-    ends_at: '2026-10-15T10:00:00Z',
-    local_start: localStart,
-    local_end: localStart,
-    utc_offset: utcOffset,
-  };
-}
-
-function mentor(over: Partial<Mentor> = {}): Mentor {
-  return {
-    slug: 'anna-k',
-    name: 'Anna K.',
-    company_slug: 'acme',
-    company_name: 'Acme',
-    headline: 'Staff Engineer',
-    bio: '',
-    topics: ['career'],
-    languages: ['en'],
-    timezone: 'Europe/Berlin',
-    session_minutes: 60,
-    rating_count: 0,
-    rating_avg: 0,
-    show_photo: false,
-    ...over,
-  };
-}
-
 describe('mentor directory filters', () => {
   test('empty filters serialize to an empty query', () => {
     expect(mentorFiltersToParams(emptyMentorFilters()).toString()).toBe('');
   });
 
   test('the six filters the directory reads survive a round trip', () => {
-    const params = new URLSearchParams(
-      'company=acme&topic=career&language=en&seniority=senior&q=jane&no_reviews=1',
-    );
+    const params = new URLSearchParams('company=acme&topic=career&language=en&seniority=senior&q=jane&no_reviews=1');
     const forwarded = mentorFiltersToParams(mentorFiltersFromParams(params));
     expect(forwarded.get('company')).toBe('acme');
     expect(forwarded.get('topic')).toBe('career');
@@ -118,9 +56,7 @@ describe('mentor directory filters', () => {
   test('no_reviews is a flag: absent means unfiltered, never sent as false', () => {
     expect(mentorFiltersFromParams(new URLSearchParams('')).noReviews).toBe(false);
     expect(mentorFiltersToParams(emptyMentorFilters()).has('no_reviews')).toBe(false);
-    expect(
-      mentorFiltersToParams({ ...emptyMentorFilters(), noReviews: true }).get('no_reviews'),
-    ).toBe('1');
+    expect(mentorFiltersToParams({ ...emptyMentorFilters(), noReviews: true }).get('no_reviews')).toBe('1');
   });
 
   // The directory's vocabulary is company/topic/language and nothing else — the same
@@ -140,9 +76,7 @@ describe('mentor directory filters', () => {
   // silently keep the first.
   test('a repeated key collapses to one value', () => {
     const params = new URLSearchParams('topic=career&topic=system-design');
-    expect(mentorFiltersToParams(mentorFiltersFromParams(params)).getAll('topic')).toEqual([
-      'career',
-    ]);
+    expect(mentorFiltersToParams(mentorFiltersFromParams(params)).getAll('topic')).toEqual(['career']);
   });
 
   // An empty value is not a filter. `?company=` narrows nothing, and forwarding it makes
@@ -156,9 +90,7 @@ describe('mentor directory filters', () => {
 
   test('the query string form clears to empty, so a cleared filter has no trailing ?', () => {
     expect(mentorFiltersToQuery(emptyMentorFilters())).toBe('');
-    expect(mentorFiltersToQuery({ ...emptyMentorFilters(), company: 'acme' })).toBe(
-      'company=acme',
-    );
+    expect(mentorFiltersToQuery({ ...emptyMentorFilters(), company: 'acme' })).toBe('company=acme');
   });
 
   // Surrounding space comes from hand-edited and shared links; it is not part of a slug.
@@ -256,185 +188,6 @@ describe('mentor filter options', () => {
   });
 });
 
-describe('reading a slot in the viewer zone', () => {
-  // THE trap this whole module exists to avoid. `local_start` is already in the viewer's
-  // zone, so its own date IS the day it belongs to. Route it through a Date and the value
-  // is re-interpreted against whatever zone the browser is in: for Tokyo's 16th at 01:00
-  // the instant is still the 15th in UTC, and a naive
-  // `new Date(local_start).toISOString().slice(0, 10)` files the slot under the wrong day.
-  test('the local day is read from the label, not recomputed from the instant', () => {
-    expect(slotLocalDay(slot('2026-10-16T01:00:00+09:00'))).toBe('2026-10-16');
-    // Proof the naive route really does disagree, so this test is guarding something.
-    expect(new Date('2026-10-16T01:00:00+09:00').toISOString().slice(0, 10)).toBe('2026-10-15');
-  });
-
-  test('the wall clock is read from the label too', () => {
-    expect(slotLocalTime(slot('2026-10-16T01:30:00+09:00'))).toBe('01:30');
-  });
-
-  test('a zoneless label is still read as written', () => {
-    expect(slotLocalDay(slot('2026-03-29T02:00:00Z'))).toBe('2026-03-29');
-    expect(slotLocalTime(slot('2026-03-29T02:00:00Z'))).toBe('02:00');
-  });
-});
-
-describe('grouping slots into calendar days', () => {
-  test('slots are grouped under their own local day, in order', () => {
-    const grouped = groupSlotsByLocalDay([
-      slot('2026-10-15T11:00:00+03:00'),
-      slot('2026-10-16T09:00:00+03:00'),
-      slot('2026-10-15T17:00:00+03:00'),
-    ]);
-    expect([...grouped.keys()]).toEqual(['2026-10-15', '2026-10-16']);
-    expect(grouped.get('2026-10-15')?.length).toBe(2);
-  });
-
-  // The autumn transition repeats an hour, so two DIFFERENT instants carry the same
-  // wall-clock label and differ only by their offset. Both are real hours the mentor
-  // stated; collapsing them would silently withhold one, and the spec says neither is.
-  test('the repeated autumn hour keeps both slots', () => {
-    const grouped = groupSlotsByLocalDay([
-      slot('2026-10-25T02:00:00+03:00', '+03:00'),
-      slot('2026-10-25T02:00:00+02:00', '+02:00'),
-    ]);
-    expect(grouped.get('2026-10-25')?.length).toBe(2);
-  });
-
-  test('an empty slot list groups into nothing', () => {
-    expect(groupSlotsByLocalDay([]).size).toBe(0);
-  });
-
-  // What the month grid greys out. Derived from the same grouping rather than measured
-  // separately, so a day can never be enabled in the grid and empty when opened.
-  test('the days with slots are exactly the grouped keys', () => {
-    const slots = [slot('2026-10-15T11:00:00+03:00'), slot('2026-10-20T11:00:00+03:00')];
-    expect(daysWithSlots(slots)).toEqual(new Set(['2026-10-15', '2026-10-20']));
-  });
-});
-
-describe('the month a day belongs to', () => {
-  test('a day names its own month', () => {
-    expect(monthOf('2026-10-15')).toBe('2026-10');
-  });
-
-  test('stepping forward rolls the year over', () => {
-    expect(addMonths('2026-11', 1)).toBe('2026-12');
-    expect(addMonths('2026-12', 1)).toBe('2027-01');
-  });
-
-  test('stepping back rolls the year under', () => {
-    expect(addMonths('2026-01', -1)).toBe('2025-12');
-  });
-
-  test('the month is always two digits', () => {
-    expect(addMonths('2026-08', 1)).toBe('2026-09');
-  });
-});
-
-describe('days in a month', () => {
-  test('the ordinary lengths', () => {
-    expect(daysInMonth('2026-01')).toBe(31);
-    expect(daysInMonth('2026-04')).toBe(30);
-    expect(daysInMonth('2026-02')).toBe(28);
-  });
-
-  // The three leap rules, each with a case that only it decides. 2100 is the one a bare
-  // "divisible by four" gets wrong, and it is inside the horizon of nothing — but the rule
-  // costs one character and being wrong about it is the kind of thing nobody re-derives.
-  test('the leap-year rules', () => {
-    expect(daysInMonth('2028-02')).toBe(29);
-    expect(daysInMonth('2000-02')).toBe(29);
-    expect(daysInMonth('2100-02')).toBe(28);
-  });
-});
-
-describe('the month grid', () => {
-  // Monday-first, which is what the approved layout shows and what most of this
-  // catalogue's audience reads.
-  test('a month starting mid-week is padded to Monday', () => {
-    // 2026-10-01 is a Thursday, so the first row carries three blanks.
-    const weeks = monthGrid('2026-10');
-    expect(weeks[0]?.slice(0, 4)).toEqual(['', '', '', '2026-10-01']);
-  });
-
-  test('a month starting on a Monday needs no padding', () => {
-    // 2026-06-01 is a Monday.
-    expect(monthGrid('2026-06')[0]?.[0]).toBe('2026-06-01');
-  });
-
-  test('every row is a full week and every day appears once', () => {
-    const weeks = monthGrid('2026-10');
-    for (const week of weeks) expect(week.length).toBe(7);
-    const days = weeks.flat().filter(Boolean);
-    expect(days.length).toBe(31);
-    expect(new Set(days).size).toBe(31);
-    expect(days[0]).toBe('2026-10-01');
-    expect(days[30]).toBe('2026-10-31');
-  });
-
-  // The worst case for a Monday-first grid: 2026-02-01 is a Sunday, so it lands in the
-  // LAST column and the first row is six blanks. A Sunday-first grid would have needed
-  // none, which is exactly why the convention has to be decided once and tested.
-  test('a month starting on a Sunday is padded by six', () => {
-    const weeks = monthGrid('2026-02');
-    expect(weeks[0]).toEqual(['', '', '', '', '', '', '2026-02-01']);
-    expect(weeks.flat().filter(Boolean).length).toBe(28);
-    expect(weeks.at(-1)?.some((d) => d !== '')).toBe(true);
-  });
-});
-
-describe('today, in the zone that was actually used', () => {
-  // "Today" is a question about a zone, not about a machine. At 16:00 UTC it is already
-  // tomorrow in Tokyo, so a calendar that opens on the server's day opens on the wrong
-  // month for a seeker there for eight hours out of every twenty-four.
-  test('the same instant is a different day in two zones', () => {
-    const instant = new Date('2026-10-15T16:00:00Z');
-    expect(todayIn('Asia/Tokyo', instant)).toBe('2026-10-16');
-    expect(todayIn('UTC', instant)).toBe('2026-10-15');
-    expect(todayIn('America/Los_Angeles', instant)).toBe('2026-10-15');
-  });
-
-  // Just past midnight UTC is still the previous day west of it — the mirror case, so a
-  // wrong sign in the conversion cannot pass both.
-  test('the day before midnight UTC still reads as yesterday in the west', () => {
-    const instant = new Date('2026-10-15T00:30:00Z');
-    expect(todayIn('America/Los_Angeles', instant)).toBe('2026-10-14');
-    expect(todayIn('UTC', instant)).toBe('2026-10-15');
-  });
-});
-
-describe('the slot window a month needs', () => {
-  // The endpoint takes INSTANTS and answers in the viewer's zone, so a window cut exactly
-  // on UTC month boundaries loses the month's first local morning east of UTC and its last
-  // local evening west of it. A day of padding on each side costs nothing and closes both.
-  test('the window covers the month with a day of padding on each side', () => {
-    expect(slotWindowForMonth('2026-10')).toEqual({
-      from: '2026-09-30T00:00:00Z',
-      to: '2026-11-01T00:00:00Z',
-    });
-  });
-
-  test('padding rolls across a year boundary', () => {
-    expect(slotWindowForMonth('2026-01')).toEqual({
-      from: '2025-12-31T00:00:00Z',
-      to: '2026-02-01T00:00:00Z',
-    });
-  });
-
-  test('padding lands on the right day after a leap February', () => {
-    expect(slotWindowForMonth('2028-03').from).toBe('2028-02-29T00:00:00Z');
-  });
-
-  // The endpoint refuses a span wider than 62 days; a padded month is at most 33.
-  test('the window never exceeds what the endpoint will compute', () => {
-    for (const month of ['2026-01', '2026-02', '2028-02', '2026-04']) {
-      const { from, to } = slotWindowForMonth(month);
-      const days = (Date.parse(to) - Date.parse(from)) / 86_400_000;
-      expect(days).toBeLessThanOrEqual(62);
-    }
-  });
-});
-
 describe('showing a booked session in the viewer zone', () => {
   // A booking carries only the absolute instant — no `local_start`, unlike a slot. So here
   // the zone conversion has to happen in the browser, and that is NOT a contradiction of
@@ -501,9 +254,7 @@ describe('who may leave a review', () => {
   });
 
   test('the mentor of the same session may not', () => {
-    expect(canReview(session({ completed: true, seeker_email: 'seeker@example.test' }))).toBe(
-      false,
-    );
+    expect(canReview(session({ completed: true, seeker_email: 'seeker@example.test' }))).toBe(false);
   });
 
   // `completed` is already "confirmed AND ended", so a cancelled session is never
@@ -517,98 +268,17 @@ describe('who may leave a review', () => {
   });
 });
 
-describe('weekdays, stored and displayed', () => {
-  // The one place the two conventions meet. Storage is Go's time.Weekday, where 0 is
-  // SUNDAY; the calendar draws Monday first. Getting this backwards shifts a mentor's
-  // whole week by a day and looks like they typed it wrong.
-  test('storage numbers name the right days', () => {
-    expect(weekdayLabel(0)).toBe('Sunday');
-    expect(weekdayLabel(1)).toBe('Monday');
-    expect(weekdayLabel(6)).toBe('Saturday');
-  });
-
-  test('the display order runs Monday to Sunday, in storage numbers', () => {
-    expect(weekdayOrder()).toEqual([1, 2, 3, 4, 5, 6, 0]);
-  });
-
-  // The calendar's column headings come from here rather than from a second list in the
-  // component. This asserts the headings a Monday-first grid actually draws, so the two
-  // cannot drift into disagreeing about which column is which.
-  test('the short labels spell the calendar header', () => {
-    expect(weekdayOrder().map(weekdayShortLabel)).toEqual([
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ]);
-  });
-
-  // The two together: reading the display order through the labels must spell the week,
-  // which is the assertion that fails if either side is fixed without the other.
-  test('the order and the labels agree', () => {
-    expect(weekdayOrder().map(weekdayLabel)).toEqual([
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ]);
-  });
-});
-
-describe('splitting availability into a week and its exceptions', () => {
-  test('a rule is weekly or dated, and lands in exactly one half', () => {
-    const split = splitAvailability([
-      rule({ id: 1, weekday: 1 }),
-      rule({ id: 2, weekday: null, date: '2026-10-16' }),
-    ]);
-    expect(split.weekly.map((r) => r.id)).toEqual([1]);
-    expect(split.dated.map((r) => r.id)).toEqual([2]);
-  });
-
-  // Weekly rules come back in the DISPLAY order, so a mentor reads their week as a week.
-  test('weekly rules are ordered Monday first, then by start time', () => {
-    const split = splitAvailability([
-      rule({ id: 1, weekday: 0, start: '09:00' }),
-      rule({ id: 2, weekday: 1, start: '18:00' }),
-      rule({ id: 3, weekday: 1, start: '09:00' }),
-    ]);
-    expect(split.weekly.map((r) => r.id)).toEqual([3, 2, 1]);
-  });
-
-  test('dated rules are ordered by date', () => {
-    const split = splitAvailability([
-      rule({ id: 1, weekday: null, date: '2026-11-02' }),
-      rule({ id: 2, weekday: null, date: '2026-10-16' }),
-    ]);
-    expect(split.dated.map((r) => r.id)).toEqual([2, 1]);
-  });
-
-  test('an empty schedule splits into two empty halves', () => {
-    expect(splitAvailability([])).toEqual({ weekly: [], dated: [] });
-  });
-});
-
 describe('writing the booker state back to the query', () => {
   test('a set value is written and the rest is left alone', () => {
     const current = new URLSearchParams('month=2026-10&ref=newsletter');
-    expect(withSearchParams(current, { date: '2026-10-15' })).toBe(
-      'month=2026-10&ref=newsletter&date=2026-10-15',
-    );
+    expect(withSearchParams(current, { date: '2026-10-15' })).toBe('month=2026-10&ref=newsletter&date=2026-10-15');
   });
 
   // Picking a new day has to DROP the slot chosen under the old one, or the page shows one
   // date while the button is armed with an hour from another.
   test('a null value removes its key', () => {
     const current = new URLSearchParams('month=2026-10&date=2026-10-15&slot=x');
-    expect(withSearchParams(current, { date: '2026-10-16', slot: null })).toBe(
-      'month=2026-10&date=2026-10-16',
-    );
+    expect(withSearchParams(current, { date: '2026-10-16', slot: null })).toBe('month=2026-10&date=2026-10-16');
   });
 
   test('an empty string removes its key too, so a cleared control does not linger', () => {
@@ -708,6 +378,7 @@ describe('profileInputFromProfile', () => {
       show_photo: true,
       status: 'approved',
       paused: false,
+      created_at: '2026-09-01T00:00:00Z',
       meeting_url: 'https://meet.example.test/jane',
       buffer_before_minutes: 5,
       buffer_after_minutes: 10,
@@ -741,140 +412,11 @@ describe('profileInputFromProfile', () => {
   });
 
   test('a stated seniority carries over unchanged', () => {
-    expect(profileInputFromProfile(ownProfile({ seniority: 'senior' })).seniority).toBe(
-      'senior',
-    );
+    expect(profileInputFromProfile(ownProfile({ seniority: 'senior' })).seniority).toBe('senior');
   });
 
   test('an unset seniority becomes the empty string, never undefined', () => {
     expect(profileInputFromProfile(ownProfile({ seniority: undefined })).seniority).toBe('');
-  });
-
-  // The owner's read carries the session parameters precisely so a re-submit (from
-  // either the profile form or the schedule page's session settings) never silently
-  // resets a buffer/notice/horizon the mentor already has, even though nothing in
-  // either screen lets them edit these three directly yet.
-  test('an absent optional session parameter falls back to its stored default', () => {
-    const input = profileInputFromProfile(
-      ownProfile({
-        buffer_before_minutes: undefined,
-        buffer_after_minutes: undefined,
-        notice_minutes: undefined,
-        horizon_days: undefined,
-      }),
-    );
-
-    expect(input.buffer_before_minutes).toBe(0);
-    expect(input.buffer_after_minutes).toBe(0);
-    expect(input.notice_minutes).toBe(120);
-    expect(input.horizon_days).toBe(30);
-  });
-});
-
-function interval(
-  startsAt: string,
-  endsAt: string,
-  status: MentorCalendarInterval['status'],
-): MentorCalendarInterval {
-  return { starts_at: startsAt, ends_at: endsAt, status };
-}
-
-describe('grouping a mentor own-calendar into local days', () => {
-  test('an interval wholly inside one day is grouped under it alone', () => {
-    const grouped = groupCalendarByLocalDay(
-      [interval('2026-09-08T16:00:00Z', '2026-09-08T17:00:00Z', 'free')],
-      'UTC',
-    );
-    expect([...grouped.keys()]).toEqual(['2026-09-08']);
-  });
-
-  // The whole reason this differs from groupSlotsByLocalDay: a mentor with no
-  // availability rules yet gets back ONE closed interval spanning the entire requested
-  // window, not one per day. Bucketing only by start day would leave every day after the
-  // first showing no data at all, when the source data says they are closed too.
-  test('an interval spanning several days appears under every day it touches', () => {
-    const grouped = groupCalendarByLocalDay(
-      [interval('2026-09-01T00:00:00Z', '2026-09-04T00:00:00Z', 'closed')],
-      'UTC',
-    );
-    expect([...grouped.keys()]).toEqual(['2026-09-01', '2026-09-02', '2026-09-03']);
-  });
-
-  // ends_at is exclusive, matching the domain's half-open intervals: an interval ending
-  // exactly at a day's start does not touch that day.
-  test('an interval ending exactly at midnight does not touch that day', () => {
-    const grouped = groupCalendarByLocalDay(
-      [interval('2026-09-08T22:00:00Z', '2026-09-09T00:00:00Z', 'busy')],
-      'UTC',
-    );
-    expect([...grouped.keys()]).toEqual(['2026-09-08']);
-  });
-
-  test('grouping is in the given timezone, not UTC', () => {
-    // 22:00 UTC is already the 9th in Europe/Berlin (UTC+2 in September).
-    const grouped = groupCalendarByLocalDay(
-      [interval('2026-09-08T22:00:00Z', '2026-09-08T23:00:00Z', 'free')],
-      'Europe/Berlin',
-    );
-    expect([...grouped.keys()]).toEqual(['2026-09-09']);
-  });
-
-  test('an empty interval list groups into nothing', () => {
-    expect(groupCalendarByLocalDay([], 'UTC').size).toBe(0);
-  });
-});
-
-describe('which statuses a day shows, in priority order', () => {
-  test('booked outranks busy, free and closed', () => {
-    const day = [
-      interval('2026-09-08T09:00:00Z', '2026-09-08T10:00:00Z', 'closed'),
-      interval('2026-09-08T18:00:00Z', '2026-09-08T19:00:00Z', 'free'),
-      interval('2026-09-08T20:00:00Z', '2026-09-08T21:00:00Z', 'booked'),
-    ];
-    expect(dayStatuses(day)).toEqual(['booked', 'free', 'closed']);
-  });
-
-  test('a day with only closed time reports just closed', () => {
-    expect(dayStatuses([interval('2026-09-08T00:00:00Z', '2026-09-09T00:00:00Z', 'closed')])).toEqual([
-      'closed',
-    ]);
-  });
-
-  test('a day with no intervals reports nothing', () => {
-    expect(dayStatuses([])).toEqual([]);
-  });
-});
-
-describe('the weekly schedule editor', () => {
-  const rule = (id: number, weekday: number, start: string, end: string): MentorAvailabilityRule => ({
-    id, weekday, start, end, closure: false,
-  });
-
-  test('draws all seven days Monday first, each with its own ranges in order', () => {
-    const draft = weekDraft([rule(1, 0, '10:00', '12:00'), rule(2, 2, '19:00', '21:00'), rule(3, 2, '08:00', '09:00')]);
-    expect(draft.map((d) => d.weekday)).toEqual([1, 2, 3, 4, 5, 6, 0]);
-    expect(draft[1]?.ranges).toEqual([{ start: '08:00', end: '09:00' }, { start: '19:00', end: '21:00' }]);
-    expect(draft[6]?.ranges).toEqual([{ start: '10:00', end: '12:00' }]);
-    expect(draft[0]?.ranges).toEqual([]);
-  });
-
-  test('flattens back into the rows the replace-week endpoint takes', () => {
-    const rows = weekRows(weekDraft([rule(1, 0, '10:00', '12:00'), rule(2, 1, '18:00', '20:00')]));
-    expect(rows).toEqual([
-      { weekday: 1, start: '18:00', end: '20:00' },
-      { weekday: 0, start: '10:00', end: '12:00' },
-    ]);
-  });
-
-  test('a new range follows the last one, and never wraps past midnight', () => {
-    expect(nextWeekRange([])).toEqual({ start: '18:00', end: '20:00' });
-    expect(nextWeekRange([{ start: '09:00', end: '11:30' }])).toEqual({ start: '11:30', end: '13:30' });
-    expect(nextWeekRange([{ start: '20:00', end: '23:00' }])).toEqual({ start: '18:00', end: '20:00' });
-  });
-
-  test('an exception names its day without reading the date in a zone', () => {
-    expect(exceptionDayLabel('2026-11-04')).toBe('Wed 4 Nov 2026');
-    expect(exceptionDayLabel('nonsense')).toBe('nonsense');
   });
 });
 
@@ -887,19 +429,25 @@ describe('the month a booking calendar opens on', () => {
 
   test('the opening read searches forward within the endpoint limit across short months and year boundaries', () => {
     expect(openingSlotWindow(new Date('2027-01-31T12:00:00Z'))).toEqual({
-      from: '2027-01-31T00:00:00.000Z', to: '2027-04-03T00:00:00.000Z',
+      from: '2027-01-31T00:00:00.000Z',
+      to: '2027-04-03T00:00:00.000Z',
     });
     expect(openingSlotWindow(new Date('2026-12-31T12:00:00Z'))).toEqual({
-      from: '2026-12-31T00:00:00.000Z', to: '2027-03-03T00:00:00.000Z',
+      from: '2026-12-31T00:00:00.000Z',
+      to: '2027-03-03T00:00:00.000Z',
     });
   });
 
   test('stays on the shown month while it has an open hour', () => {
-    expect(firstOpenMonth([slot('2026-11-02T19:00:00+01:00'), slot('2026-10-31T19:00:00+01:00')], '2026-10')).toBe('2026-10');
+    expect(firstOpenMonth([slot('2026-11-02T19:00:00+01:00'), slot('2026-10-31T19:00:00+01:00')], '2026-10')).toBe(
+      '2026-10',
+    );
   });
 
   test('moves to the month of the earliest open hour when the shown month has none', () => {
-    expect(firstOpenMonth([slot('2026-12-01T09:00:00+01:00'), slot('2026-11-02T19:00:00+01:00')], '2026-10')).toBe('2026-11');
+    expect(firstOpenMonth([slot('2026-12-01T09:00:00+01:00'), slot('2026-11-02T19:00:00+01:00')], '2026-10')).toBe(
+      '2026-11',
+    );
   });
 
   test('ignores the padding day before the shown month and stays put with nothing open', () => {

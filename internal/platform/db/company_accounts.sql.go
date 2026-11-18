@@ -80,35 +80,10 @@ func (q *Queries) DeleteCompanyAccount(ctx context.Context, userID int64) (int64
 	return result.RowsAffected(), nil
 }
 
-const getCompanyAccountByUserID = `-- name: GetCompanyAccountByUserID :one
-SELECT user_id, company_slug, company_name, work_email, status, verified_at, created_at, updated_at, email_confirmed_at
-FROM company_accounts
-WHERE user_id = $1
-`
-
-// The one account a user may hold, in whatever status it is in. Every employer-facing
-// capability check reads this and then inspects status itself, rather than a second query
-// per status, since a pending/revoked account needs to be distinguishable in the refusal.
-func (q *Queries) GetCompanyAccountByUserID(ctx context.Context, userID int64) (CompanyAccount, error) {
-	row := q.db.QueryRow(ctx, getCompanyAccountByUserID, userID)
-	var i CompanyAccount
-	err := row.Scan(
-		&i.UserID,
-		&i.CompanySlug,
-		&i.CompanyName,
-		&i.WorkEmail,
-		&i.Status,
-		&i.VerifiedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.EmailConfirmedAt,
-	)
-	return i, err
-}
-
 const insertPendingCompanyAccount = `-- name: InsertPendingCompanyAccount :one
 INSERT INTO company_accounts (user_id, company_slug, company_name, work_email)
-VALUES ($1, $2, $3, $4)
+SELECT $1, $2, $3, $4
+WHERE NOT EXISTS (SELECT 1 FROM company_account_members m WHERE m.user_id = $1)
 RETURNING user_id, company_slug, company_name, work_email, status, verified_at, created_at, updated_at, email_confirmed_at
 `
 
@@ -123,7 +98,9 @@ type InsertPendingCompanyAccountParams struct {
 // the whole race guard: two concurrent claims on the same slug both attempt this insert, one
 // succeeds, and the loser's caller maps the unique violation to a clean conflict — see
 // pgerr.IsUniqueViolation. user_id is the table's primary key, so a user who already holds
-// an account (in any status) also fails here, on the primary-key conflict.
+// an account (in any status) also fails here, on the primary-key conflict. A user who is a
+// member of another company's team (migration 0271) is refused too, by writing no row: a user
+// acts for at most one company.
 func (q *Queries) InsertPendingCompanyAccount(ctx context.Context, arg InsertPendingCompanyAccountParams) (CompanyAccount, error) {
 	row := q.db.QueryRow(ctx, insertPendingCompanyAccount,
 		arg.UserID,
@@ -147,35 +124,42 @@ func (q *Queries) InsertPendingCompanyAccount(ctx context.Context, arg InsertPen
 }
 
 const listPendingCompanyAccounts = `-- name: ListPendingCompanyAccounts :many
-SELECT user_id, company_slug, company_name, work_email, status, verified_at, created_at, updated_at, email_confirmed_at
-FROM company_accounts
-WHERE status = 'pending' AND email_confirmed_at IS NOT NULL
-ORDER BY created_at
+SELECT ca.user_id, ca.company_slug, ca.company_name, ca.work_email, ca.status, ca.verified_at, ca.created_at, ca.updated_at, ca.email_confirmed_at, COALESCE(c.company_info->>'website', '')::text AS website
+FROM company_accounts ca
+LEFT JOIN companies c ON c.slug = ca.company_slug
+WHERE ca.status = 'pending' AND ca.email_confirmed_at IS NOT NULL
+ORDER BY ca.created_at
 `
+
+type ListPendingCompanyAccountsRow struct {
+	CompanyAccount CompanyAccount `json:"company_account"`
+	Website        string         `json:"website"`
+}
 
 // The moderator review queue: every claim that could not auto-activate (unknown or
 // mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 // whose code was never entered is not reviewable — nobody has shown they can read that
 // address — so it stays out of the queue (migration 0181).
-func (q *Queries) ListPendingCompanyAccounts(ctx context.Context) ([]CompanyAccount, error) {
+func (q *Queries) ListPendingCompanyAccounts(ctx context.Context) ([]ListPendingCompanyAccountsRow, error) {
 	rows, err := q.db.Query(ctx, listPendingCompanyAccounts)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []CompanyAccount{}
+	items := []ListPendingCompanyAccountsRow{}
 	for rows.Next() {
-		var i CompanyAccount
+		var i ListPendingCompanyAccountsRow
 		if err := rows.Scan(
-			&i.UserID,
-			&i.CompanySlug,
-			&i.CompanyName,
-			&i.WorkEmail,
-			&i.Status,
-			&i.VerifiedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.EmailConfirmedAt,
+			&i.CompanyAccount.UserID,
+			&i.CompanyAccount.CompanySlug,
+			&i.CompanyAccount.CompanyName,
+			&i.CompanyAccount.WorkEmail,
+			&i.CompanyAccount.Status,
+			&i.CompanyAccount.VerifiedAt,
+			&i.CompanyAccount.CreatedAt,
+			&i.CompanyAccount.UpdatedAt,
+			&i.CompanyAccount.EmailConfirmedAt,
+			&i.Website,
 		); err != nil {
 			return nil, err
 		}

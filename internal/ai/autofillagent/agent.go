@@ -1,11 +1,9 @@
 // Package autofillagent fills a job-application form in the user's browser: it
-// reads the form through the browser-tool wire, maps the user's stored profile
-// onto it, and writes back the fields it can justify.
+// reads the form through the browser-tool wire, maps the stored profile onto it,
+// and writes back the fields it can justify.
 //
-// It is deliberately not the old deterministic filler (a fixed label dictionary):
-// the agent sees the actual form and decides. What it may *not* do is invent —
-// every value it writes has to be grounded in the profile, which is enforced here
-// rather than trusted to the model.
+// The model decides the mapping but may not invent: every written value must be
+// grounded in the profile, enforced here rather than trusted to the model.
 package autofillagent
 
 import (
@@ -29,36 +27,26 @@ type Field struct {
 	Combo    bool     `json:"combo"`
 	Options  []string `json:"options,omitempty"`
 	Frame    int      `json:"frame"`
-	// Form is which <form> inside Frame the control belongs to. The extension has
-	// reported it on every field for as long as it has reported Frame; this side
-	// did not parse it, so a fill could be narrowed to a document but never to one
-	// of the forms in it — and a careers page carrying its application form beside
-	// a job-alert signup carries both in the same document.
+	// Form is which <form> inside Frame the control belongs to; a careers page can
+	// carry an application and a job-alert signup in the same document.
 	Form int `json:"form"`
 }
 
 // Upload is a CV upload the page offers, as `read_form` reported it. Never a fill
-// target — it travels because it is what marks one form on the page as the
-// APPLICATION. Measured across Greenhouse, Lever and Ashby: every open application
-// offered one, and no page that was not showing an application did, which is what
-// lets a job-alert signup be told from a short application form when counting fields
-// cannot.
+// target: it marks which form on the page is the application, which field counts
+// cannot tell from a job-alert signup.
 type Upload struct {
 	Frame int `json:"frame"`
 	Form  int `json:"form"`
 }
 
 // Fill is one entry of the plan: the value to write into the control carrying
-// this label. Frame and Form name where the target field was read from (see
-// Field.Frame, Field.Form) — set by splitByKind from the field it resolved the
-// fill against, not by the planner, so a same-labeled control elsewhere on the
-// page is not addressed by a Fill meant for another.
+// this label. Frame and Form are set by splitByKind from the field the fill
+// resolved to, not by the planner, so a same-labeled control elsewhere is not hit.
 //
-// Both are needed, and neither alone is enough: Frame separates an application
-// served in an ATS iframe from the careers page around it, Form separates the
-// application from a job-alert signup sitting in the SAME document. A fill naming
-// neither is matched by label alone, which is how a write lands in whichever form
-// the extension happens to walk first.
+// Both are needed: Frame separates an ATS iframe from the page around it, Form
+// separates the application from a signup in the same document. A fill naming
+// neither is matched by label alone and lands in whichever form is walked first.
 type Fill struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
@@ -66,34 +54,28 @@ type Fill struct {
 	Form  int    `json:"form"`
 }
 
-// Profile is the user's canonical autofill fields, keyed as
-// /me/autofill-profile returns them (full_name, email, …) — that is,
-// candidateprofile.Profile.Fields(), which is exactly the fixed set the
-// endpoint serialises.
+// Profile is the user's canonical autofill fields, keyed as /me/autofill-profile
+// returns them (full_name, email, ...): candidateprofile.Profile.Fields().
 //
-// A fixed set, and it has to stay one. groundedValue below admits any planned
-// value sharing a word-run with ANY value in here, so every entry added widens
-// what a model is allowed to write; and Plan marshals the whole map into the
-// prompt, so every entry added is also sent to the provider. The candidate's
-// banked screening answers are free text they typed for employers — on
-// Greenhouse that includes the demographic and veteran/disability questions —
-// and are kept out of Fields() for both reasons.
+// It must stay a fixed set. groundedValue admits any value sharing a word-run with
+// ANY entry here, and Plan sends the whole map to the provider, so each entry widens
+// what the model may write and what leaves the system. Banked screening answers
+// (free text, including demographic and disability questions) are kept out for both
+// reasons.
 type Profile map[string]string
 
 // Banked is the candidate's answer bank, topic → answer, keyed by internal/dict/answertopic
-// exactly as internal/candidate/answerbank stores it: what they answered on earlier forms.
+// as internal/candidate/answerbank stores it.
 //
-// It never meets the model and never meets groundedValue — Profile's doc says why neither
-// may hold it. It is recalled deterministically instead: a question the plan left
-// unanswered whose topic the bank holds is filled with the candidate's own words for it.
+// It never meets the model or groundedValue (see Profile). A question the plan left
+// unanswered whose topic the bank holds is filled from it deterministically.
 type Banked map[string]string
 
 // Report is what the run tells the user.
 type Report struct {
 	// Filled are the labels that now carry a profile value.
 	Filled []string `json:"filled"`
-	// Deferred are the custom-widget comboboxes this slice cannot fill yet —
-	// reported rather than written into with a wrong value.
+	// Deferred are the custom-widget comboboxes this slice cannot fill yet.
 	Deferred []string `json:"deferred"`
 	// Unmapped are the fields the agent found no basis for in the profile.
 	Unmapped []string `json:"unmapped"`
@@ -110,18 +92,14 @@ type Planner interface {
 	// Choose picks one of a widget's options for the question it answers, or ""
 	// when the profile does not answer it.
 	//
-	// Separate from Plan because a custom widget renders no options until it is
-	// opened — measured on two live Greenhouse forms, not one of their 40
-	// comboboxes carries an option list while closed. So Plan cannot name a value
-	// it has never seen; it names which widgets are worth opening, and the choice
-	// is made here against the list actually read from the page.
+	// Separate from Plan because a custom widget renders no options until opened:
+	// Plan names which widgets are worth opening, Choose picks from the list read
+	// off the page.
 	Choose(ctx context.Context, question Field, options []string, profile Profile) (string, error)
 }
 
-// The two states a run can end in that are not faults. They are sentinels because the
-// caller has to tell them from a gateway failure, our own deadline or a model answer that
-// is not JSON: those are ours to fix and belong in the error inbox, while these two are
-// the user's page and the deployment's configuration, and read as advice.
+// Run outcomes that are not faults. Sentinels so the caller can tell them from gateway
+// or model failures, which belong in the error inbox; these two read as advice.
 var (
 	// ErrNoFillableFields is a page with no form on it — nothing to do, nothing wrong.
 	ErrNoFillableFields = errors.New("no fillable fields on this page")
@@ -152,10 +130,7 @@ func Run(ctx context.Context, tools Tools, planner Planner, profile Profile, ban
 	if err != nil {
 		return Report{}, err
 	}
-	// driveWidgets records whatever it drove before a failure, not just on success:
-	// fillSimple's writes above already landed in the browser, and dropping them
-	// from the report on a later widget's failure would tell the user nothing
-	// succeeded when part of the form is, in fact, already filled.
+	// Report on failure too: fillSimple's writes already landed in the browser.
 	driven := map[string]string{}
 	if err := driveWidgets(ctx, tools, planChooser(planner, profile), widgets, driven); err != nil {
 		return report(fields, outcomes, driven), err
@@ -167,17 +142,13 @@ func Run(ctx context.Context, tools Tools, planner Planner, profile Profile, ban
 }
 
 // recall answers, from the bank, the questions the plan left alone. It runs AFTER the
-// plan, never before: the profile's fields are typed facts and the bank's copy is free
-// text, so a question both could answer resolves to the profile every time — the order
-// internal/api/atsapply's resolver keeps for the same reason. A planned value the
-// grounding gate refused counts as left alone, so the candidate's own answer replaces a
-// fabricated one.
+// plan so the profile wins over the bank's free text (as in internal/api/atsapply's
+// resolver). A planned value the grounding gate refused counts as left alone.
 //
 // A work-authorization question is never recalled (answertopic.Recallable): its answer
-// depends on this posting's country, which a topic does not carry.
+// depends on the posting's country.
 //
-// Recalled widgets come back with their banked answers keyed by widgetKey, which is how
-// bankChooser finds the answer for the widget it is driving.
+// Recalled widgets' answers are keyed by widgetKey for bankChooser.
 func recall(fields []Field, banked Banked, typed []Fill, widgets []Field) ([]Fill, []Field, map[string]string) {
 	if len(banked) == 0 {
 		return nil, nil, nil
@@ -217,18 +188,12 @@ func recall(fields []Field, banked Banked, typed []Fill, widgets []Field) ([]Fil
 }
 
 // splitByKind separates the plan into values that can simply be written and the
-// widgets that have to be driven. Only widgets the plan named are driven: a form
-// with 27 of them would otherwise cost 27 needless round trips and 27 needless
-// model calls to discover the profile answers none of them.
+// widgets that have to be driven. Only widgets the plan named are driven, to avoid
+// a round trip and a model call per unanswerable combobox.
 //
-// Fields sharing a label are grouped, not deduped to one: a form can carry two
-// controls under the same label — a repeated question in a multi-entry section,
-// or the same label in two different frames, which Field.Frame exists to
-// disambiguate. The plan addresses a fill by label alone (the model has no way to
-// name a frame), so a fill naming that label is routed to EVERY field carrying it,
-// each tagged with its own Frame — never collapsed onto whichever field happened
-// to be last in the page, which is what silently misrouted a plain field's value
-// to a combobox target (or vice versa) whenever the two shared a label.
+// Fields sharing a label (repeated questions, or the same label in two frames) are
+// grouped, not deduped. The plan addresses a fill by label alone, so a fill is routed
+// to EVERY field carrying that label, each tagged with its own Frame and Form.
 func splitByKind(fields []Field, planned []Fill) (typed []Fill, widgets []Field) {
 	byLabel := make(map[string][]Field, len(fields))
 	for _, field := range fields {
@@ -267,24 +232,15 @@ func readForm(ctx context.Context, tools Tools) ([]Field, []Upload, error) {
 }
 
 // scopeToApplication narrows an observation to the one form the application is
-// asking, identified by the CV upload sitting in it.
+// asking, identified by the CV upload sitting in it. Without it a page with an
+// application and a job-alert signup gets both filled (each has an "Email").
 //
-// Without it a page carrying both an application and a job-alert signup has both
-// written: each has its own "Email", splitByKind emits one Fill per field carrying a
-// planned label, and every one of those fills now names its own form precisely — so
-// the signup's lands rather than collapsing onto the application's, which is what
-// happened while the scopes were being discarded on arrival.
+// Mirrors the extension's function of the same name; Go cannot call into it, so a
+// change to either belongs in both.
 //
-// This mirrors the extension's own function of the same name, deliberately rather
-// than by accident: the panel's deterministic filler has narrowed this way since the
-// signup case was found, and the agent path read the same `read_form` reply and threw
-// the uploads away. Two copies because the layering forbids one — Go cannot call into
-// the extension — so a change to either belongs in both.
-//
-// Both indices identify the group: an ATS iframe numbers its own forms from zero, so
-// the frame alone would merge two unrelated first forms. When the upload names a group
-// holding no questions — a page rendering them outside its form element — every field
-// is kept, because filling nothing at all is the worse answer.
+// Frame and Form together identify the group: an ATS iframe numbers its own forms
+// from zero. When the upload's group holds no questions (a page rendering them
+// outside its form element) every field is kept, since filling nothing is worse.
 func scopeToApplication(fields []Field, uploads []Upload) []Field {
 	if len(uploads) == 0 {
 		return fields
@@ -324,8 +280,8 @@ func fillSimple(ctx context.Context, tools Tools, fills []Fill) ([]outcome, erro
 	return result.Outcomes, nil
 }
 
-// Widget outcomes this package decides itself, alongside the statuses the
-// extension's primitives report (opened, no_option, verified, mismatch, …).
+// Widget outcomes this package decides itself, besides the statuses the extension's
+// primitives report (opened, no_option, verified, mismatch, ...).
 const (
 	// The profile answers nothing the widget offers.
 	widgetUnanswered = "not_answered"
@@ -341,9 +297,8 @@ const (
 // "" with the widget status that says why there is none (widgetUnanswered, …).
 type chooser func(ctx context.Context, question Field, options []string) (choice, refusal string, err error)
 
-// planChooser asks the planner, then holds its pick to the two rules a model's answer
-// must meet: it is one of the options the widget actually offers, and the profile
-// supports it.
+// planChooser asks the planner, then requires the pick to be one of the widget's
+// options and supported by the profile.
 func planChooser(planner Planner, profile Profile) chooser {
 	return func(ctx context.Context, question Field, options []string) (string, string, error) {
 		choice, err := planner.Choose(ctx, question, options, profile)
@@ -353,9 +308,7 @@ func planChooser(planner Planner, profile Profile) chooser {
 		if choice == "" {
 			return "", widgetUnanswered, nil
 		}
-		// The widget's own list is the authority: a pick that is merely close is not
-		// approximated, because committing the nearest option is how a question
-		// wanting "No" ends up holding "Norfolk Island".
+		// No approximating to the nearest option: that is how "No" becomes "Norfolk Island".
 		if !offers(options, choice) {
 			return "", widgetNotOffered, nil
 		}
@@ -366,9 +319,8 @@ func planChooser(planner Planner, profile Profile) chooser {
 	}
 }
 
-// bankChooser picks the option the candidate's banked answer names — in the widget's own
-// spelling, since that is what select and verify compare against — and nothing near it,
-// by the same rule planChooser follows.
+// bankChooser picks the option the banked answer names, in the widget's own spelling
+// (what select and verify compare against), and nothing merely near it.
 func bankChooser(answers map[string]string) chooser {
 	return func(_ context.Context, question Field, options []string) (string, string, error) {
 		answer := answers[widgetKey(question.Label, question.Frame)]
@@ -381,14 +333,11 @@ func bankChooser(answers map[string]string) chooser {
 	}
 }
 
-// driveWidgets works each widget the way a person does — open it, read what it offers,
-// choose, commit, confirm — and records what became of each in driven. A step that does
-// not do what it should stops that widget rather than pressing on: nothing is written
-// into a widget whose state is not understood.
+// driveWidgets works each widget the way a person does (open, read options, choose,
+// commit, confirm) and records each outcome in driven. A step that misbehaves stops
+// that widget: nothing is written into a widget whose state is not understood.
 //
-// On a widget's failure it returns the error with driven already holding what it drove
-// so far: the earlier widgets committed their choices in the browser, and the caller
-// (Run) reports that real progress instead of losing it behind the error.
+// On failure it returns the error with driven holding the widgets driven so far.
 func driveWidgets(ctx context.Context, tools Tools, choose chooser, questions []Field, driven map[string]string) error {
 	for _, question := range questions {
 		status, err := driveWidget(ctx, tools, choose, question)
@@ -400,9 +349,8 @@ func driveWidgets(ctx context.Context, tools Tools, choose chooser, questions []
 	return nil
 }
 
-// widgetKey composite-keys a driven widget's outcome by label and frame, so two
-// widgets sharing a label in different frames (see splitByKind) are tracked as the
-// distinct controls they are instead of one overwriting the other's status.
+// widgetKey keys a widget's outcome by label and frame, so same-labeled widgets in
+// different frames do not overwrite each other.
 func widgetKey(label string, frame int) string {
 	return fmt.Sprintf("%s\x00%d", label, frame)
 }
@@ -440,8 +388,7 @@ func driveWidget(ctx context.Context, tools Tools, choose chooser, question Fiel
 		return selected.Status, nil
 	}
 
-	// The commit is only real once the widget says so; `verified` is the single
-	// status the report is allowed to count as filled.
+	// `verified` is the only status the report counts as filled.
 	verified, err := comboStep(ctx, tools, "combobox.verify", question.Label, choice, question.Frame)
 	if err != nil {
 		return "", err
@@ -456,9 +403,7 @@ type comboReply struct {
 }
 
 // comboStep runs one combobox primitive against the widget carrying label in the
-// given frame — frame is what lets the browser tell apart two same-labeled
-// widgets in different frames/forms (see Field.Frame), the same way it already
-// does for read_form.
+// given frame, which tells apart same-labeled widgets (see Field.Frame).
 func comboStep(ctx context.Context, tools Tools, tool, label, value string, frame int) (comboReply, error) {
 	raw, err := tools.Call(ctx, tool, map[string]any{"label": label, "value": value, "frame": frame})
 	if err != nil {
@@ -480,12 +425,10 @@ func offers(options []string, choice string) bool {
 	return false
 }
 
-// groundedIn drops any planned value that cannot be traced back to the profile.
-// A model asked to fill a form will happily supply a plausible answer to a
-// question the profile never answered; this is what keeps "no fabricated values"
-// a property of the system rather than a hope about the prompt. A value counts as
-// grounded when it appears within one of the profile's own values (so "Berlin"
-// from "Berlin, Germany" survives) or contains one.
+// groundedIn drops any planned value that cannot be traced back to the profile, so
+// "no fabricated values" does not rest on the prompt. A value is grounded when it
+// appears within one of the profile's values ("Berlin" from "Berlin, Germany") or
+// contains one.
 func groundedIn(profile Profile, fills []Fill) []Fill {
 	kept := make([]Fill, 0, len(fills))
 	for _, fill := range fills {
@@ -498,11 +441,9 @@ func groundedIn(profile Profile, fills []Fill) []Fill {
 
 // groundedValue reports whether the profile actually supports this answer.
 //
-// Matching is on whole words, in either direction, so "Germany" is supported by
-// "Berlin, Germany" and "Berlin" is supported by it too. Comparing raw substrings
-// instead would be far too generous once the answer is short: "no" sits inside
-// "norway", so a candidate living in Oslo would have the answer "No" grounded for
-// any question at all — and a widget's options are routinely this short.
+// Matching is on whole words, in either direction. Raw substrings would be too
+// generous for short answers: "no" sits inside "norway", so "No" would be grounded
+// for a candidate living in Oslo.
 func groundedValue(profile Profile, value string) bool {
 	want := words(value)
 	if len(want) == 0 {
@@ -541,23 +482,19 @@ func normalize(s string) string {
 }
 
 func report(fields []Field, outcomes []outcome, driven map[string]string) Report {
-	// outcomes (fill_simple's reply) carries no frame — the wire's own contract, not
-	// something this function can widen — so a simple (non-combo) field is still
-	// looked up by label alone here. driven (this package's own widget-loop
-	// bookkeeping) has no such limit and is keyed label+frame; see widgetKey.
+	// fill_simple's outcomes carry no frame, so simple fields are looked up by label
+	// alone; driven is keyed label+frame (see widgetKey).
 	byLabel := make(map[string]string, len(outcomes))
 	for _, o := range outcomes {
 		byLabel[o.Label] = o.Status
 	}
 
 	rep := Report{Filled: []string{}, Deferred: []string{}, Unmapped: []string{}}
-	// The unfilled fields are split so the required ones lead: a real ATS form
-	// contributes dozens of optional controls (Greenhouse adds a checkbox per
-	// country), and the reader sees the head of the list, not all of it.
+	// Required unfilled fields lead: ATS forms add dozens of optional controls and
+	// the reader sees only the head of the list.
 	var optional []string
 	for _, field := range fields {
-		// Everything here is addressed by label, so a control without one is not
-		// something the report can meaningfully name to the user.
+		// The report names fields by label; a control without one cannot be named.
 		if strings.TrimSpace(field.Label) == "" {
 			continue
 		}
@@ -578,8 +515,7 @@ func report(fields []Field, outcomes []outcome, driven map[string]string) Report
 	return rep
 }
 
-// placement is the three-way distinction the report makes: what the agent filled,
-// what it cannot fill yet, and what is left for the user to answer.
+// placement is the report's three-way split: filled, not fillable yet, left for the user.
 type placement int
 
 const (
@@ -591,8 +527,7 @@ const (
 // place decides where one field belongs. `written` is what fill_simple reported
 // for it, `driven` what the widget loop reported.
 //
-// Only a verified commit counts as filled — an unverified write is a failure and
-// never a fill, or the user is told a field is done while it is still empty.
+// Only a verified commit counts as filled; an unverified write never does.
 func place(field Field, written, driven string) placement {
 	if written == "filled" {
 		return wasFilled
@@ -602,10 +537,8 @@ func place(field Field, written, driven string) placement {
 		case "verified":
 			return wasFilled
 		case "", widgetUnanswered, widgetUngrounded, widgetNotOffered:
-			// The answer is what is missing, not the ability to drive the widget. ""
-			// is a widget the plan never targeted, which is the planner saying the
-			// profile answers nothing it could offer (splitByKind drives only what the
-			// plan names).
+			// The answer is missing, not the ability to drive the widget. "" is a widget
+			// the plan never targeted: the profile answers nothing it offers.
 			return leftForUser
 		default:
 			// Would not open, committed something else, or offers its options only
@@ -613,12 +546,10 @@ func place(field Field, written, driven string) placement {
 			return notFillableYet
 		}
 	}
-	// A control the form did not present as a widget but the browser found to be
-	// one — the page re-rendered between reading it and writing to it.
+	// The page re-rendered between read and write, and the control turned out a widget.
 	if written == "deferred_combobox" {
 		return notFillableYet
 	}
-	// Never planned, or planned and the browser could not write it (no matching
-	// option, the control vanished) — either way the user still has to fill it.
+	// Never planned, or the browser could not write it (no matching option, control gone).
 	return leftForUser
 }

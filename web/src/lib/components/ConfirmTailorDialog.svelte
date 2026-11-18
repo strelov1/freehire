@@ -9,12 +9,19 @@
   import { Check, TriangleAlert } from '@lucide/svelte';
   import { notInPlan, refuses, remaining, resetsAtLabel } from '#lib/allowance.js';
   import {
+    chooseConfirmTailorBase,
     confirmTailorDialog,
     refreshConfirmTailorAllowance,
     settleConfirmTailorDialog,
   } from '#lib/confirmTailorDialog.svelte.js';
+  import { resolve } from '$app/paths';
+  import { track } from '#lib/analytics.js';
+  import { currentUser } from '#lib/auth.svelte.js';
+  import { priceLabel } from '#lib/proPrice.js';
+  import { startTailorCheckout } from '#lib/tailorCheckout.js';
   import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '#lib/jobMatch.js';
-  import { ConfirmDialog } from '#lib/ui/index.js';
+  import { Button, ConfirmDialog } from '#lib/ui/index.js';
+  import BasePicker from './cv/BasePicker.svelte';
   import SkillIcon from './SkillIcon.svelte';
   import PlanLimitLink from './PlanLimitLink.svelte';
   import { skillLabel } from '#lib/facets.js';
@@ -47,6 +54,55 @@
   const refused = $derived(refuses(allowance));
   const left = $derived(remaining(allowance));
 
+  // Pro, offered right where the refusal is: the candidate chose a vacancy and a base, and
+  // the purchase carries both through the provider and back (tailorCheckout.ts). Always the
+  // monthly price, said as a monthly subscription, with the yearly choices one link away.
+  const offer = $derived(refused && notInPlan(allowance) ? confirmTailorDialog.proOffer : null);
+  let buying = $state(false);
+  let buyError = $state(false);
+  // Bumped when the dialog closes, so a checkout answer that lands later is ignored.
+  let checkoutAttempt = 0;
+
+  // Once per ask, however many times the plan is re-read when the tab regains focus.
+  let viewedFor = '';
+  $effect(() => {
+    if (!offer || !confirmTailorDialog.open) return;
+    const ask = confirmTailorDialog.slug;
+    if (viewedFor === ask) return;
+    viewedFor = ask;
+    track('contextual_pro_offer_view', { surface: 'confirm_tailor' });
+  });
+  $effect(() => {
+    if (!confirmTailorDialog.open) {
+      checkoutAttempt++;
+      viewedFor = '';
+      buying = false;
+      buyError = false;
+    }
+  });
+
+  async function buy() {
+    if (!offer || buying) return;
+    buying = true;
+    buyError = false;
+    const attempt = ++checkoutAttempt;
+    try {
+      // The base is sent along even when it is the only one: resuming must land on exactly it.
+      const baseCvId = confirmTailorDialog.baseCvId || undefined;
+      const url = await startTailorCheckout(
+        currentUser()?.id,
+        { slug: confirmTailorDialog.slug, baseCvId },
+        offer,
+        'confirm_tailor',
+      );
+      if (attempt === checkoutAttempt) window.location.href = url;
+    } catch {
+      if (attempt !== checkoutAttempt) return;
+      buyError = true;
+      buying = false;
+    }
+  }
+
   // The upgrade link opens /my/plan in a new tab; coming back after paying should find
   // the confirm already available, not a refusal the candidate just paid to lift.
   function onVisibilityChange() {
@@ -77,16 +133,13 @@
   {:else if match}
     <div class="flex flex-col gap-4">
       <div class="flex flex-col gap-1.5">
-        <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skills coverage</p>
+        <p class="text-xs font-semibold text-muted-foreground">Skills coverage</p>
         <div class="flex items-baseline justify-between gap-2">
           <span class="text-xs text-muted-foreground">{matchedCount} of {total} required skills</span>
           <span class="text-sm font-bold tabular-nums">{pct}%</span>
         </div>
         <div class="h-1.5 overflow-hidden rounded bg-secondary">
-          <div
-            class="h-full rounded {missing.length > 0 ? 'bg-warning' : 'bg-brand'}"
-            style="width: {pct}%"
-          ></div>
+          <div class="h-full rounded {missing.length > 0 ? 'bg-warning' : 'bg-brand'}" style="width: {pct}%"></div>
         </div>
         <div class="flex flex-wrap gap-1.5">
           {#each matched as skill (skill)}
@@ -106,7 +159,7 @@
 
       {#if blockers.unmet.length || blockers.met.length}
         <div class="flex flex-col gap-1.5">
-          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Requirements</p>
+          <p class="text-xs font-semibold text-muted-foreground">Requirements</p>
           <ul class="flex flex-col gap-1">
             {#each blockers.unmet as b (b.category + b.reason)}
               <li class="flex items-start gap-1.5 text-xs {toneText(b.severity)}">
@@ -130,15 +183,47 @@
     </p>
   {/if}
 
+  <!-- Only with two or more bases: with one there is nothing to choose and the picker renders
+       nothing. Preselected to the default, so confirming without touching it is the old flow. -->
+  <div class="mt-4">
+    <BasePicker
+      bases={confirmTailorDialog.bases}
+      bind:value={() => confirmTailorDialog.baseCvId, (v) => chooseConfirmTailorBase(v)}
+      name="confirm-tailor-base"
+      copyHint
+    />
+  </div>
+
   {#if refused && notInPlan(allowance)}
     <!-- A plan that includes no editing sessions is not one the candidate spent: nothing was
          started today and the reset leaves it at zero, so the reset time is the one fact
          here that cannot help them. -->
     <p class="mt-4 text-sm font-medium">Your plan doesn't include CV editing sessions.</p>
-    <p class="text-xs text-muted-foreground">
-      Upgrade to rewrite your CV against this role, line by line.
-    </p>
-    <div class="mt-1"><PlanLimitLink /></div>
+    <p class="text-xs text-muted-foreground">Upgrade to rewrite your CV against this role, line by line.</p>
+    {#if offer}
+      <div class="mt-2 flex flex-col items-start gap-1.5">
+        <Button variant="cta" size="sm" disabled={buying} onclick={buy}>
+          Upgrade to Pro — {priceLabel(offer)}/month
+        </Button>
+        <p class="text-xs text-muted-foreground">
+          Monthly subscription, renews until you cancel. You come back here to continue — nothing starts on its own.
+          <a class="underline underline-offset-2" href={resolve('/pricing')} target="_blank" rel="noopener noreferrer"
+            >Yearly plans</a
+          >
+          ·
+          <a class="underline underline-offset-2" href={resolve('/terms')} target="_blank" rel="noopener noreferrer"
+            >Terms</a
+          >
+        </p>
+        {#if buyError}
+          <p class="text-xs text-destructive" role="alert">
+            Checkout is not available right now. Please try again in a moment.
+          </p>
+        {/if}
+      </div>
+    {:else}
+      <div class="mt-1"><PlanLimitLink /></div>
+    {/if}
   {:else if refused}
     <p class="mt-4 text-sm font-medium">You've used today's CV editing sessions.</p>
     <p class="text-xs text-muted-foreground">

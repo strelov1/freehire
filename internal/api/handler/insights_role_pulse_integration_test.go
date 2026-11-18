@@ -48,13 +48,13 @@ func TestInsightsRolePulseEndpoint(t *testing.T) {
 	if err := q.DeleteAllInsightsRoleCountryStats(ctx); err != nil {
 		t.Fatalf("delete role-country: %v", err)
 	}
-	if _, err := q.RebuildInsightsRoleCountryStatsGlobal(ctx, prev); err != nil {
+	if _, err := materializeInsightsRoleCountryStatsGlobal(q)(ctx, prev); err != nil {
 		t.Fatalf("rebuild role-country: %v", err)
 	}
 	if err := q.DeleteAllInsightsRolePulse(ctx); err != nil {
 		t.Fatalf("delete pulse: %v", err)
 	}
-	if _, err := q.RebuildInsightsRolePulse(ctx, db.RebuildInsightsRolePulseParams{
+	if _, err := materializeInsightsRolePulse(q)(ctx, db.ComputeInsightsRolePulseParams{
 		WindowStart: prev,
 		PriorStart:  pgtype.Timestamptz{Time: now.AddDate(0, 0, -60), Valid: true},
 	}); err != nil {
@@ -63,7 +63,7 @@ func TestInsightsRolePulseEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/role-pulse", h.InsightsRolePulse)
+	app.Get("/api/v1/insights/role-pulse", statsContract(h))
 
 	t.Run("known category", func(t *testing.T) {
 		out, raw, code := getInsights(t, ctx, app, "/api/v1/insights/role-pulse?category=backend")

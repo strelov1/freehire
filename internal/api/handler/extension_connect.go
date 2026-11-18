@@ -9,11 +9,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// extensionRedirectSuffixes are the host suffixes a browser's identity redirect
-// URL carries: launchWebAuthFlow only resolves a redirect to its own browser's
-// domain — https://<extension-id>.chromiumapp.org in Chrome,
-// https://<sha1-of-addon-id>.extensions.allizom.org in Firefox. Both domains belong
-// to the browser vendor, so a label under either names one installed extension.
+// extensionRedirectSuffixes are the host suffixes of a browser's identity redirect URL
+// (launchWebAuthFlow): https://<extension-id>.chromiumapp.org in Chrome,
+// https://<sha1-of-addon-id>.extensions.allizom.org in Firefox. Both belong to the browser
+// vendor, so a label under either names one installed extension.
 var extensionRedirectSuffixes = []string{".chromiumapp.org", ".extensions.allizom.org"}
 
 // validateExtensionRedirect reports whether redirectURI is a safe target for the
@@ -74,13 +73,11 @@ func (h *authHandlers) signInURL(redirectURI, state string) string {
 
 // ExtensionConnect renders the consent screen for the browser-extension sign-in.
 // Cookie-only: a leaked API key must not drive it. It validates the redirect target
-// before showing anything, so an invalid redirect never reaches a consent step — nor
-// gets carried through a sign-in round trip.
+// first, so an invalid redirect never reaches consent or a sign-in round trip.
 //
-// A signed-out visitor is sent to sign in rather than refused. The extension opens
-// this in Chrome's auth window, whose cookie jar is not the browsing profile's, so
-// arriving without a session is the NORMAL first run — and a 401 body there is what
-// Chrome reports as "Authorization page could not be loaded", with no way forward.
+// A signed-out visitor is sent to sign in, not refused: Chrome's auth window has its own
+// cookie jar, so no session is the NORMAL first run, and a 401 body there shows as
+// "Authorization page could not be loaded".
 func (h *authHandlers) ExtensionConnect(c *fiber.Ctx) error {
 	redirectURI := c.Query("redirect_uri")
 	state := c.Query("state")
@@ -89,9 +86,8 @@ func (h *authHandlers) ExtensionConnect(c *fiber.Ctx) error {
 	}
 	userID, err := requireUserID(c)
 	if err != nil {
-		// `via=web` marks a request the web app sent back after signing the visitor in.
-		// It is the loop stop: without it, a session the browsing profile has but this
-		// window cannot see would bounce between the two forever.
+		// `via=web` marks a request the web app sent back after sign-in. It is the loop
+		// stop: without it a session this window cannot see would bounce forever.
 		if c.Query("via") == "web" {
 			page, err := noSessionPage(h.frontendOrigin)
 			if err != nil {
@@ -125,11 +121,13 @@ func (h *authHandlers) ExtensionConnectSubmit(c *fiber.Ctx) error {
 	if err := validateExtensionRedirect(redirectURI, h.extensionRedirectAllowlist); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid redirect_uri")
 	}
+	if c.FormValue("decision") == decisionSwitch {
+		return h.switchAccount(c, h.signInURL(redirectURI, state))
+	}
 	userID, err := requireUserID(c)
 	if err != nil {
-		// The session can lapse between the consent screen and the decision. Restart the
-		// flow rather than render JSON into the auth window — the sign-in page brings the
-		// visitor straight back to this same consent.
+		// The session can lapse between consent and decision. Restart the flow rather than
+		// render JSON into the auth window; sign-in returns to this same consent.
 		return c.Redirect(h.signInURL(redirectURI, state), fiber.StatusFound)
 	}
 	redirect := func(vals url.Values) error {
@@ -144,17 +142,12 @@ func (h *authHandlers) ExtensionConnectSubmit(c *fiber.Ctx) error {
 		return redirect(url.Values{"error": {"access_denied"}, "state": {state}})
 	}
 
-	// Unify on the session JWT: hire and the agent (Roy) both verify it with the
-	// shared HS256 secret, so one token authenticates everywhere (hire via
-	// Authorization: Bearer, Roy via cookie/WS-subprotocol). The token carries the
-	// account's session generation, so "sign out everywhere" evicts the extension too —
-	// re-running connect mints a fresh one.
+	// Use the session JWT: hire and the agent (Roy) verify it with the shared HS256 secret
+	// (Bearer for hire, cookie/WS-subprotocol for Roy). It carries the session generation,
+	// so "sign out everywhere" evicts the extension too.
 	//
-	// Both failures are returned rather than phrased as fiber.NewError(500, …): what
-	// has to read them is the error inbox, and a *fiber.Error carries no cause for it
-	// to show. The caller meets the generic 500 body instead — see classify. The read
-	// additionally gains the house mapping for a vanished account (pgx.ErrNoRows →
-	// 404), which is the honest answer when the session outlives its user row.
+	// Failures are returned, not phrased as fiber.NewError(500, …), so the error inbox
+	// keeps the cause (see classify). A vanished account maps pgx.ErrNoRows to 404.
 	version, err := h.queries.GetUserTokenVersion(c.Context(), userID)
 	if err != nil {
 		return fmt.Errorf("read token version for the extension connect of user %d: %w", userID, err)

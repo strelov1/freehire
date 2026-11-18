@@ -67,9 +67,7 @@ describe('stageImplication', () => {
       const label = statusLabel(signal);
       expect(label, signal).not.toBe('');
       const implication = stageImplication(signal);
-      const selfExplaining = SIGNAL_STAGE[signal].stage
-        ? label === humanizeStage(SIGNAL_STAGE[signal].stage)
-        : false;
+      const selfExplaining = SIGNAL_STAGE[signal].stage ? label === humanizeStage(SIGNAL_STAGE[signal].stage) : false;
       expect(implication !== '' || selfExplaining, signal).toBe(true);
     }
   });

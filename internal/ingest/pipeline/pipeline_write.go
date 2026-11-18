@@ -1,0 +1,269 @@
+package pipeline
+
+import (
+	"context"
+	"log"
+	"slices"
+	"strings"
+	"sync"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/job/logodomain"
+)
+
+// boardTally is one writer's share of a board's outcome; writeBoard merges them.
+type boardTally struct {
+	// bodies is a successful batch lookup; nil retains the per-posting fallback.
+	bodies   map[string]string
+	st       Stats
+	firstErr error
+	// refreshIDs holds listed identities needing an open-only liveness refresh.
+	refreshIDs []string
+}
+
+// writeBoard writes raw through saveConcurrency workers, each tallying into its own
+// boardTally, and merges them. Everything a write touches is safe to share: the Store already
+// serves boards concurrently, and canon is a read-only lookup built up front.
+func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, canon companyCanonical) boardTally {
+	var merged boardTally
+	// Repeated identities must see any body written by an earlier entry, not a cached miss.
+	counts := make(map[string]int, len(raw))
+	for _, j := range raw {
+		counts[j.ExternalID]++
+	}
+	// Bound both query parameters and retained body memory; filtering still uses stored bodies.
+	for batch := range slices.Chunk(raw, 500) {
+		var bodies map[string]string
+		if lookup, ok := r.Store.(StoredBodyBatchLookup); ok {
+			var ids []string
+			for _, j := range batch {
+				needsBody := j.Description == "" && !j.SeenRefresh && !j.Unreadable
+				if needsBody && counts[j.ExternalID] == 1 {
+					_, id := jobIdentity(e, j)
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) > 0 {
+				var err error
+				bodies, err = lookup.StoredDescriptions(ctx, e.Provider, ids)
+				if err != nil {
+					bodies = nil
+				} else {
+					cached := make(map[string]string, len(ids))
+					for _, id := range ids {
+						cached[id] = bodies[id]
+					}
+					bodies = cached
+				}
+			}
+		}
+		tallies := make([]boardTally, min(saveConcurrency, max(len(batch), 1)))
+		jobs := make(chan sources.Job)
+		var wg sync.WaitGroup
+		for i := range tallies {
+			tallies[i].bodies = bodies
+			wg.Add(1)
+			go func(t *boardTally) {
+				defer wg.Done()
+				for j := range jobs {
+					r.ingestOne(ctx, e, j, canon, t)
+				}
+			}(&tallies[i])
+		}
+		for _, j := range batch {
+			jobs <- j
+		}
+		close(jobs)
+		wg.Wait()
+
+		for _, t := range tallies {
+			merged.st.Ingested += t.st.Ingested
+			merged.st.Skipped += t.st.Skipped
+			merged.st.Discovered += t.st.Discovered
+			merged.st.Unreadable += t.st.Unreadable
+			if merged.firstErr == nil {
+				merged.firstErr = t.firstErr
+			}
+			merged.refreshIDs = append(merged.refreshIDs, t.refreshIDs...)
+		}
+	}
+	return merged
+}
+
+// ingestOne applies one fetched posting: counts an unreadable one, refreshes a re-listed one,
+// and saves the rest, tallying the outcome into t.
+func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, canon companyCanonical, t *boardTally) {
+	// A posting the listing named but whose detail could not be read. There is nothing to
+	// write, but a stored row must retain the listing's liveness evidence. Count it
+	// as unreadable even after refreshing: the sweep still has incomplete evidence.
+	if j.Unreadable {
+		t.st.Unreadable++
+		_, externalID := jobIdentity(e, j)
+		t.refreshIDs = append(t.refreshIDs, externalID)
+		return
+	}
+	// A SeenRefresh carries identity only and never proves an application method, so it is
+	// not a non-native discovery: it falls through to the touch below, never to ATS resolution.
+	if e.Provider == "linkedin" && !j.SeenRefresh && j.ApplyMethod != sources.ApplyOnSite {
+		if _, err := normalizeJob(e, j, canon, false); err != nil {
+			t.st.Skipped++
+			if t.firstErr == nil {
+				t.firstErr = err
+			}
+			return
+		}
+		if r.Outbound != nil {
+			if err := r.Outbound.Resolve(ctx, e, j); err != nil {
+				t.st.Skipped++
+				if t.firstErr == nil {
+					t.firstErr = err
+				}
+				return
+			}
+		}
+		t.st.Discovered++
+		r.recordNonNativeRead(ctx, e, j)
+		return
+	}
+	// A HydratingSource marks an already-ingested posting it re-listed but did not
+	// re-fetch: refresh its liveness by identity instead of re-upserting content-less
+	// (which would wipe the description/facets hydrated when it was new).
+	if j.SeenRefresh {
+		slug, err := r.touch(ctx, e, j)
+		if err != nil {
+			t.st.Skipped++
+			if t.firstErr == nil {
+				t.firstErr = err
+			}
+			return
+		}
+		t.st.Ingested++
+		// A re-listed posting still states its employer's website, and the employers whose
+		// postings were all stored before the field existed are only ever reached here. The
+		// stored row's slug, since a slug rule may have moved since it was written.
+		r.recordCompanyWebsite(ctx, e, slug, j.CompanyWebsite)
+		return
+	}
+	r.saveOne(ctx, e, j, canon, t)
+}
+
+// recordNonNativeRead remembers a LinkedIn posting whose detail was read and is not on-site, so
+// the seen-set stops the next crawls re-reading it until the body-refresh window passes. It runs
+// only AFTER native resolution succeeded: a failed resolution leaves the posting unrecorded and
+// therefore retried by the next crawl. The record is best-effort: a failure costs one repeated
+// read, never the posting, so it is logged rather than counted as a skip.
+func (r Runner) recordNonNativeRead(ctx context.Context, e sources.CompanyEntry, j sources.Job) {
+	rec, ok := r.Store.(PostingReadRecorder)
+	if !ok {
+		return
+	}
+	_, id := jobIdentity(e, j)
+	if id == "" {
+		return
+	}
+	method := string(j.ApplyMethod)
+	if method == "" {
+		method = "unknown"
+	}
+	if err := rec.RecordLinkedInRead(ctx, id, method); err != nil {
+		log.Printf("ingest: linkedin %s: recording non-native read: %v", id, err)
+	}
+}
+
+// saveOne normalizes one posting and saves it, tallying the outcome into t and keeping the first error for the board's
+// skip-summary log line. Both the buffered (ingestBoard) and the streaming (ingestStream)
+// save loops share it so the normalize→filter→save→count step behaves identically; the
+// SeenRefresh and Removed branches stay on the caller, which is why neither reaches the
+// filter's candidate denominator.
+func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, canon companyCanonical, t *boardTally) {
+	fromCatalogue := false
+	if j.Description == "" {
+		if l, ok := r.Store.(StoredBodyLookup); ok {
+			source, externalID := jobIdentity(e, j)
+			body, cached := t.bodies[externalID]
+			var err error
+			if !cached {
+				body, err = l.StoredDescription(ctx, source, externalID)
+			}
+			if err != nil {
+				// Saving anyway would derive from no body over a stored one; the next crawl
+				// retries. The posting was listed, so its liveness is refreshed through the
+				// covered-refresh path — otherwise the post-run sweep could close a live row.
+				t.st.Skipped++
+				if t.firstErr == nil {
+					t.firstErr = err
+				}
+				t.refreshIDs = append(t.refreshIDs, externalID)
+				return
+			}
+			j.Description = body
+			// A cached absence is also an observation: fence a body inserted since prefetch.
+			fromCatalogue = cached || body != ""
+		}
+	}
+	dj, err := normalizeJob(e, j, canon, fromCatalogue)
+	if err != nil {
+		t.st.Skipped++
+		if t.firstErr == nil {
+			t.firstErr = err
+		}
+		return
+	}
+	if err := r.save(ctx, dj, j.ApplyForm); err != nil {
+		t.st.Skipped++
+		if t.firstErr == nil {
+			t.firstErr = err
+		}
+		return
+	}
+	t.st.Ingested++
+	r.recordCompanyWebsite(ctx, e, dj.Fields().CompanySlug, j.CompanyWebsite)
+}
+
+// recordCompanyWebsite writes a posting's stated employer website onto the company it was
+// filed under, which after alias resolution is the canonical slug. It is best-effort: the
+// posting is already saved, and a missed website costs a merge signal, not a posting.
+func (r Runner) recordCompanyWebsite(ctx context.Context, e sources.CompanyEntry, companySlug, raw string) {
+	website := companyWebsite(raw)
+	if website == "" || companySlug == "" {
+		return
+	}
+	rec, ok := r.Store.(CompanyWebsiteRecorder)
+	if !ok {
+		return
+	}
+	if err := rec.RecordCompanyWebsite(ctx, companySlug, website); err != nil {
+		log.Printf("ingest: %s board %q: record website of %q: %v", e.Provider, e.Board, companySlug, err)
+	}
+}
+
+// companyWebsite keeps a stated website only when logodomain.Domain reads a domain from it,
+// the same reader the logo map and the duplicate report apply to the stored value. A feed's
+// free-text field holds "n/a" or a relative path often enough that storing it as given
+// would put junk where those read a domain. An e-mail address is refused as well: its
+// domain is often a mail provider's.
+func companyWebsite(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if strings.Contains(raw, "@") || logodomain.Domain(raw) == "" {
+		return ""
+	}
+	return raw
+}
+
+// refreshCovered refreshes the liveness of whichever listed, unwritten postings the
+// catalogue already holds (see CoveredRefresher). It only logs a failure: a row the refresh
+// misses is left exactly as stale as it was, and is never closed because of it. It returns how
+// many rows were refreshed.
+func (r Runner) refreshCovered(ctx context.Context, e sources.CompanyEntry, externalIDs []string) (refreshed, failed int, companies []string) {
+	cr, ok := r.Store.(CoveredRefresher)
+	if !ok || len(externalIDs) == 0 {
+		return 0, 0, nil
+	}
+	companies, err := cr.RefreshCovered(ctx, e.Provider, externalIDs)
+	if err != nil {
+		log.Printf("ingest: %s board %q (%s): refresh %d listed postings: %v",
+			e.Provider, e.Board, e.Company, len(externalIDs), err)
+		return 0, len(externalIDs), nil
+	}
+	return len(companies), 0, companies
+}

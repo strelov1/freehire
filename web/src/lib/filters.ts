@@ -1,30 +1,29 @@
-// The reactive job-filter store, mirrored into the URL. The pure model (types,
-// URL (de)serialization, and per-value sign transitions) lives in ./facetModel and
-// is re-exported here so existing `#lib/filters.js` imports keep working; this file
-// owns only the SvelteKit-bound FilterStore.
+// The reactive job-filter store, mirrored into the URL. The pure model (types and URL
+// (de)serialization) lives in ./facetModel, the per-value sign transitions in ./facetSign,
+// the sort order in ./jobSort, and seeding filters from a profile in ./profileFilters; all
+// are re-exported here so existing `#lib/filters.js` imports keep working; this file owns
+// only the SvelteKit-bound FilterStore.
 
 import { UrlSyncedState } from './urlSynced.svelte';
 import { saveJobFilters } from './filterStorage';
 import {
   type FacetState,
   type JobFilters,
-  type JobSort,
-  type Sign,
   emptyFacet,
   emptyFilters,
   filtersFromParams,
   filtersToParams,
   activeFilterCount,
-  facetSetSign,
-  facetCycle,
-  facetPick,
-  facetToggleSign,
-  facetAdd,
-  facetRemove,
   filtersWithParts,
 } from './facetModel';
+import { type JobSort } from './jobSort';
+import { type Sign, facetSetSign, facetCycle, facetPick, facetToggleSign, facetAdd, facetRemove } from './facetSign';
 
 export * from './facetModel';
+export * from './facetSign';
+export * from './jobSort';
+export * from './savedSearchQuery';
+export * from './profileFilters';
 
 /** Reactive job filters mirrored into the URL. A thin wrapper over the shared
  *  `UrlSyncedState` primitive: it owns the job-specific shape (facets/visa/salary)
@@ -132,6 +131,22 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, autoApplyAvailable: on });
   }
 
+  setFormerEmployers(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, formerEmployers: on });
+  }
+
+  setWatchlist(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, watchlist: on });
+  }
+
+  setApplyQuestionsMax(n: number | null) {
+    this.#url.setNow({ ...this.#url.value, applyQuestionsMax: n });
+  }
+
+  setMinSkillMatch(n: number | null) {
+    this.#url.setNow({ ...this.#url.value, minSkillMatch: n });
+  }
+
   setExperienceIncludeUnspecified(on: boolean) {
     this.#url.setNow({ ...this.#url.value, experienceIncludeUnspecified: on });
   }
@@ -142,6 +157,17 @@ export class FilterStore {
 
   setSeniorityIncludeUnspecified(on: boolean) {
     this.#url.setNow({ ...this.#url.value, seniorityIncludeUnspecified: on });
+  }
+
+  /** The remote-anywhere modifier. setNow: a discrete toggle that re-filters the
+   *  whole feed, like its sibling modifiers above. */
+  setWorkModeRemoteAnywhere(on: boolean) {
+    // The reach is part of the modifier: turning it off clears it too.
+    this.#url.setNow({
+      ...this.#url.value,
+      workModeRemoteAnywhere: on,
+      ...(on ? {} : { workModeRemoteRegions: [], workModeRemoteCountries: [] }),
+    });
   }
 
   /** The summary chip's remove: one chip stands for the whole salary range, so it
@@ -155,6 +181,12 @@ export class FilterStore {
    *  would leave the old order on screen with no indication anything is coming. */
   setSort(sort: JobSort) {
     this.#url.setNow({ ...this.#url.value, sort });
+  }
+
+  /** Hide or show the postings already opened. setNow: a discrete toggle that
+   *  re-filters the whole feed, for the same reason as setSort. */
+  setHideSeen(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, hideSeen: on });
   }
 
   /** Toggle a facet between match-all (AND) and match-any (OR) of its included values. */

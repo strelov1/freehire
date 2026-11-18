@@ -38,10 +38,7 @@
     let cancelled = false;
     void (async () => {
       try {
-        const [list, photo] = await Promise.all([
-          api.listCvTemplates(),
-          api.getPhoto().catch(() => null),
-        ]);
+        const [list, photo] = await Promise.all([api.listCvTemplates(), api.getPhoto().catch(() => null)]);
         if (cancelled) return;
         templates = list;
         hasPhoto = photo === null ? null : photo.enabled && photo.present;
@@ -107,9 +104,7 @@
           aria-pressed={t.id === current}
           class={[
             'group flex flex-col overflow-hidden rounded-lg border text-left transition-colors disabled:opacity-60',
-            t.id === current
-              ? 'border-primary ring-2 ring-primary/40'
-              : 'border-border hover:border-foreground/40',
+            t.id === current ? 'border-primary ring-2 ring-primary/40' : 'border-border hover:border-foreground/40',
           ]}
         >
           <img

@@ -39,7 +39,7 @@ func (f *jobleadsFake) PostJSON(_ context.Context, _ string, body, v any) error 
 	return json.Unmarshal([]byte(f.pages[req.Page-1]), v)
 }
 
-func (f *jobleadsFake) GetJSON(_ context.Context, url string, v any) error {
+func (f *jobleadsFake) FetchJSON(_ context.Context, url string, v any) error {
 	f.detailCalls++
 	for id, body := range f.details {
 		if strings.Contains(url, id) {
@@ -152,7 +152,7 @@ func TestJobleadsFetchRequestShape(t *testing.T) {
 	if len(req.Keywords) != 1 || req.Keywords[0] != "Frontend Developer" {
 		t.Errorf("Keywords = %v, want the board as the keyword", req.Keywords)
 	}
-	if req.Limit != 100 || req.Page != 1 || req.EngineOptions.EngineType != "vdbSearch" {
+	if req.Limit != jobleadsPageSize || req.Page != 1 || req.EngineOptions.EngineType != "vdbSearch" {
 		t.Errorf("Limit/Page/Engine = %d/%d/%q", req.Limit, req.Page, req.EngineOptions.EngineType)
 	}
 	if len(req.Filters) != 1 {
@@ -340,5 +340,44 @@ func TestJobleadsFetchNewDefersNewPostingsPastTheBudget(t *testing.T) {
 	}
 	if len(jobs) != 1 || jobs[0].ExternalID != jobleadsP1ID || fake.detailCalls != 1 {
 		t.Fatalf("jobs = %+v, detail calls %d; want only the first new posting, hydrated", jobs, fake.detailCalls)
+	}
+}
+
+// TestJobleadsFetchNewFetchesADetailOncePerRun pins the cross-board detail cache: keyword
+// windows overlap and the pipeline stores a row per board, so every board listing a new posting
+// yields it with the body, while only the first pays the detail request.
+func TestJobleadsFetchNewFetchesADetailOncePerRun(t *testing.T) {
+	fake := &jobleadsFake{
+		pages:   []string{jobleadsSearchPage(jobleadsP2)},
+		details: map[string]string{"e6a7e4e033a20bc1da22e2a6bc665ee03": `{"payload":{"content":{"jobSummary":"<p>x</p>"}}}`},
+	}
+	s := NewJobleads(fake).(HydratingSource)
+	for _, board := range []string{"React Developer", "Frontend Developer"} {
+		jobs, err := s.FetchNew(context.Background(), CompanyEntry{Board: board, Region: "IT"},
+			func(string) bool { return false })
+		if err != nil {
+			t.Fatalf("FetchNew %s: %v", board, err)
+		}
+		if len(jobs) != 1 || jobs[0].Description != "<p>x</p>" {
+			t.Errorf("%s: got %+v, want the posting with its body", board, jobs)
+		}
+	}
+	if fake.detailCalls != 1 {
+		t.Errorf("detail calls = %d, want 1", fake.detailCalls)
+	}
+}
+
+// TestFpFetchHeadersAreAFetchCall pins the detail request's shape: jobleads' edge answers a
+// navigation-shaped GET with a Cloudflare challenge about half the time and serves the fetch shape.
+func TestFpFetchHeadersAreAFetchCall(t *testing.T) {
+	h := fpFetchHeaders()
+	if _, ok := h["content-type"]; ok {
+		t.Error("a body-less GET must not carry content-type")
+	}
+	if got := h["sec-fetch-mode"]; len(got) != 1 || got[0] != "cors" {
+		t.Errorf("sec-fetch-mode = %v, want cors", got)
+	}
+	if got := h["accept"]; len(got) != 1 || !strings.HasPrefix(got[0], "application/json") {
+		t.Errorf("accept = %v, want JSON first", got)
 	}
 }

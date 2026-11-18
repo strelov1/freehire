@@ -8,6 +8,9 @@ import type { ChatPreset } from './presets';
 
 const BASE = '/api/v1/assistant';
 
+/** The support agent's own routes: create, messages, cancel and rating, and nothing else. */
+export const SUPPORT_BASE = '/api/v1/support';
+
 /** One conversation plus its stored transcript. */
 export interface SessionTranscript {
   session: SessionSummary;
@@ -25,15 +28,20 @@ export class SessionNotFound extends Error {
   }
 }
 
-async function request<T = void>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+async function request<T = void>(path: string, init?: RequestInit, base: string = BASE): Promise<T> {
+  const res = await fetch(`${base}${path}`, {
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
     ...init,
   });
   if (res.status === 404) throw new SessionNotFound();
   if (!res.ok) {
-    throw new Error(`assistant request failed (${res.status})`);
+    const body: unknown = await res.json().catch(() => null);
+    const detail =
+      typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
+        ? body.error
+        : undefined;
+    throw new Error(detail || `assistant request failed (${res.status})`);
   }
   if (res.status === 204) return undefined as T;
   const body = (await res.json()) as { data: T };
@@ -44,36 +52,29 @@ async function request<T = void>(path: string, init?: RequestInit): Promise<T> {
  *  Tailoring conversations are created by the tailoring bootstrap instead, which knows
  *  the CV and vacancy to bind them to — a preset that binds cannot be minted here. */
 export function createSession(preset: ChatPreset = 'chat'): Promise<SessionSummary> {
+  if (preset === 'support') {
+    return request<SessionSummary>('/sessions', { method: 'POST', body: '{}' }, SUPPORT_BASE);
+  }
   const query = preset === 'chat' ? '' : `?preset=${preset}`;
   return request<SessionSummary>(`/sessions${query}`, { method: 'POST', body: '{}' });
 }
 
-/** Start a conversation held against one application: a rehearsal before the interview,
- *  a debrief after it. The vacancy is named by the client because the binding is one the
- *  caller already holds — the backend resolves it through their own application and
- *  answers a vacancy they never applied to as not found. */
-function createApplicationSession(preset: string, slug: string): Promise<SessionSummary> {
-  return request<SessionSummary>(
-    `/sessions?preset=${preset}&job=${encodeURIComponent(slug)}`,
-    { method: 'POST', body: '{}' },
+/** Record whether a support conversation helped; a later vote replaces an earlier one. */
+export function rateSupportSession(id: string, helpful: boolean): Promise<void> {
+  return request(
+    `/sessions/${encodeURIComponent(id)}/rating`,
+    { method: 'POST', body: JSON.stringify({ helpful }) },
+    SUPPORT_BASE,
   );
 }
 
-/** Rehearse the interview that is coming. */
-export function createRehearsal(slug: string): Promise<SessionSummary> {
-  return createApplicationSession('interview', slug);
-}
-
-/** Open the conversation held against one automatic application. The server returns the
- *  one an application already has rather than starting a second, so the numbered questions
- *  and the answers given to them stay in one transcript. */
+/** Open the conversation held against one automatic application. The server reuses its
+ *  session, so the numbered questions and answers remain in one transcript. */
 export function openApplyChat(slug: string): Promise<SessionSummary> {
-  return createApplicationSession('apply', slug);
-}
-
-/** Review the interview that already happened. */
-export function createDebrief(slug: string): Promise<SessionSummary> {
-  return createApplicationSession('debrief', slug);
+  return request<SessionSummary>(`/sessions?preset=apply&job=${encodeURIComponent(slug)}`, {
+    method: 'POST',
+    body: '{}',
+  });
 }
 
 /** The caller's conversations, most recently active first. */
@@ -131,11 +132,7 @@ export async function mintVoiceToken(sessionId: string): Promise<VoiceToken> {
 
 /** Append one completed voice-mode turn to a session's transcript, so it reads the
  *  same afterward whether the exchange was typed or spoken. */
-export function appendVoiceTurn(
-  sessionId: string,
-  role: 'user' | 'assistant',
-  content: string,
-): Promise<void> {
+export function appendVoiceTurn(sessionId: string, role: 'user' | 'assistant', content: string): Promise<void> {
   return request(`/sessions/${encodeURIComponent(sessionId)}/voice-turns`, {
     method: 'POST',
     body: JSON.stringify({ role, content }),

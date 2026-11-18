@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,9 +21,8 @@ import (
 )
 
 // infostud adapts Poslovi Infostud (poslovi.infostud.com), Serbia's largest general job board:
-// every trade, ~3% technical, thousands of employers each named per posting. It is boardless and
-// an aggregator. See the "Infostud traps" section of AGENTS.md for the measurements behind each
-// rule.
+// every trade, thousands of employers each named per posting. It is boardless and an aggregator.
+// See the "Infostud traps" section of AGENTS.md.
 //
 // The listing is the site's own server-rendered search, 30 postings a page, whose __NEXT_DATA__
 // carries every structured fact but the body. The body and the structured salary come from the
@@ -31,7 +31,6 @@ import (
 // host's robots.txt, so it is not used.
 type infostud struct {
 	http           TextGetter
-	limiter        waiter
 	maxNewPerRun   int
 	maxPages       int
 	deadlineMargin time.Duration
@@ -49,12 +48,10 @@ const (
 	// infostudRequestInterval paces every request of a run at one a second — a courtesy
 	// ceiling, not a measured limit.
 	infostudRequestInterval = time.Second
-	// infostudMaxPages is a safety ceiling: the search held 3,171 postings (106 pages) on
-	// 2026-10-28. Reaching it fails the crawl rather than ending it.
+	// infostudMaxPages is a safety ceiling; reaching it fails the crawl rather than ending it.
 	infostudMaxPages = 500
-	// infostudMaxNewPerRun bounds the posting pages of one run: ~106 listing pages and 1,000
-	// posting pages at one a second, plus the writes, sit inside the scheduler's default 2,400 s
-	// crawl budget. A cold catalogue is taken in slices over a few runs.
+	// infostudMaxNewPerRun bounds the posting pages of one run so listing, detail and writes fit
+	// the scheduler's default 2,400 s crawl budget. A cold catalogue is taken over a few runs.
 	infostudMaxNewPerRun   = 1000
 	infostudDeadlineMargin = 5 * time.Minute
 )
@@ -62,8 +59,7 @@ const (
 // NewInfostud builds the adapter over the given client.
 func NewInfostud(c TextGetter) Source {
 	return infostud{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(infostudRequestInterval), 1),
+		http:           rateLimitedTextGetter{inner: c, limiter: rate.NewLimiter(rate.Every(infostudRequestInterval), 1)},
 		maxNewPerRun:   infostudMaxNewPerRun,
 		maxPages:       infostudMaxPages,
 		deadlineMargin: infostudDeadlineMargin,
@@ -78,6 +74,9 @@ func (infostud) boardless() {}
 // Thousands of employers post here, each named per posting.
 func (infostud) aggregator() {}
 
+// One country's market (see nationalMarket).
+func (infostud) marketCountries(CompanyEntry) []string { return []string{"rs"} }
+
 // infostudCard is one search result: what the gate and the job need before the body is bought.
 type infostudCard struct {
 	ID              int64  `json:"id"`
@@ -85,6 +84,7 @@ type infostudCard struct {
 	Company         string `json:"companyName"`
 	Location        string `json:"location"`
 	OnlineViewDate  string `json:"onlineViewDate"`
+	ExpirationDate  string `json:"expirationDate"`
 	WorkFromHome    bool   `json:"workFromHome"`
 	HybridWork      bool   `json:"hybridWork"`
 	URL             string `json:"url"`
@@ -117,8 +117,11 @@ type infostudPosting struct {
 	Status     string `json:"status"`
 	TextAd     string `json:"textAd"`
 	DatePosted string `json:"datePosted"`
-	Location   string `json:"location"`
-	Salary     *struct {
+	// ExpirationDate is the last application day, "15.11.2026." — with the trailing dot here
+	// (the posting page) and without it on the search card.
+	ExpirationDate string `json:"expirationDate"`
+	Location       string `json:"location"`
+	Salary         *struct {
 		From     *string `json:"from"`
 		To       *string `json:"to"`
 		Period   string  `json:"additional"`
@@ -164,7 +167,7 @@ func (s infostud) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(cards))
 		for _, c := range cards {
-			companies = append(companies, infostudClean(c.Company))
+			companies = append(companies, collapseSpace(c.Company))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -177,7 +180,7 @@ func (s infostud) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -239,9 +242,6 @@ func (s infostud) list(ctx context.Context) ([]infostudCard, error) {
 		if page > s.maxPages {
 			return nil, fmt.Errorf("infostud: listing still not exhausted after %d pages", s.maxPages)
 		}
-		if err := s.limiter.Wait(ctx); err != nil {
-			return nil, err
-		}
 		body, err := s.http.GetText(ctx, fmt.Sprintf(infostudListURL, page))
 		if err != nil {
 			return nil, fmt.Errorf("infostud: listing page %d: %w", page, err)
@@ -266,7 +266,7 @@ func (s infostud) list(ctx context.Context) ([]infostudCard, error) {
 			break
 		}
 		for _, c := range r.Jobs.Primary {
-			if c.ID <= 0 || seen[c.ID] || infostudClean(c.Title) == "" || infostudClean(c.Company) == "" {
+			if c.ID <= 0 || seen[c.ID] || collapseSpace(c.Title) == "" || collapseSpace(c.Company) == "" {
 				continue
 			}
 			seen[c.ID] = true
@@ -288,8 +288,6 @@ func infostudNextData(page string, v any) error {
 	return nil
 }
 
-func infostudClean(s string) string { return strings.Join(strings.Fields(s), " ") }
-
 // infostudPostingURL is the posting's page. Only the trailing id is read — any two slugs answer
 // the same page — so the stored URL is the one the search names when it names one.
 func infostudPostingURL(c infostudCard) string {
@@ -306,8 +304,8 @@ func infostudBaseJob(c infostudCard) Job {
 	return Job{
 		ExternalID:        strconv.FormatInt(c.ID, 10),
 		URL:               infostudPostingURL(c),
-		Title:             infostudClean(c.Title),
-		Company:           infostudClean(c.Company),
+		Title:             collapseSpace(c.Title),
+		Company:           collapseSpace(c.Company),
 		Location:          infostudPlace(c.Location),
 		WorkMode:          mode,
 		Remote:            mode == "remote",
@@ -334,7 +332,7 @@ func infostudWorkMode(fromHome, hybrid bool) string {
 func infostudPlace(s string) string {
 	var parts []string
 	for _, p := range strings.Split(s, "|") {
-		p = infostudClean(p)
+		p = collapseSpace(p)
 		switch strings.ToLower(p) {
 		case "", "hibrid", "terenski rad", "rad od kuće", "rad od kuce":
 			continue
@@ -369,9 +367,6 @@ func sortInfostudFreshestFirst(cards []infostudCard) {
 // is gone (404, or a status other than "live") or carries no body; an error is the absence of an
 // answer.
 func (s infostud) detail(ctx context.Context, c infostudCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	body, err := s.http.GetText(ctx, infostudPostingURL(c))
 	if err != nil {
 		var se *StatusError
@@ -403,14 +398,39 @@ var infostudBelgrade = func() *time.Location {
 	return time.FixedZone("CET", 60*60)
 }()
 
+// infostudDMY matches the site's "15.11.2026" / "15.11.2026." application date.
+var infostudDMY = regexp.MustCompile(`^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?$`)
+
+// infostudDeadline reads the posting's expiration date at midnight in Belgrade. ok is false
+// for a value that is not one. Unlike a posted_at the date may legitimately sit today or
+// tomorrow, so it is not run through NotFuture; a stale one past today closes the posting on
+// the write.
+func infostudDeadline(s string) (time.Time, bool) {
+	m := infostudDMY.FindStringSubmatch(strings.TrimSpace(s))
+	if m == nil {
+		return time.Time{}, false
+	}
+	day, _ := strconv.Atoi(m[1])
+	month, _ := strconv.Atoi(m[2])
+	year, _ := strconv.Atoi(m[3])
+	if month < 1 || month > 12 || day < 1 || day > 31 {
+		return time.Time{}, false
+	}
+	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, infostudBelgrade)
+	if t.Day() != day { // time.Date rolls 31.02 over to March rather than rejecting it
+		return time.Time{}, false
+	}
+	return t, true
+}
+
 // infostudJob maps a posting page and its search result to a Job. ok is false for one with no
 // title, employer or body — an ad published only as an image carries no text.
 func infostudJob(p infostudPosting, c infostudCard) (Job, bool) {
 	j := infostudBaseJob(c)
-	if t := infostudClean(p.Title); t != "" {
+	if t := collapseSpace(p.Title); t != "" {
 		j.Title = t
 	}
-	if co := infostudClean(p.Company); co != "" {
+	if co := collapseSpace(p.Company); co != "" {
 		j.Company = co
 	}
 	body := strings.TrimSpace(infostudDropHidden(p.TextAd))
@@ -422,7 +442,7 @@ func infostudJob(p infostudPosting, c infostudCard) (Job, bool) {
 		// The figure is net or gross as the poster chose, and the Job has no field for it; the
 		// site's own label ("neto 900 - 1.400 EUR (mesečno)") keeps it in view.
 		if p.SalaryLabel != nil {
-			if label := infostudClean(*p.SalaryLabel); label != "" {
+			if label := collapseSpace(*p.SalaryLabel); label != "" {
 				body = "<p>Plata: " + label + "</p>" + body
 			}
 		}
@@ -443,8 +463,14 @@ func infostudJob(p infostudPosting, c infostudCard) (Job, bool) {
 	if p.PrimaryCategory != nil {
 		j.IsTechHint = infostudTechCategory(p.PrimaryCategory.ID)
 	}
-	if p.WorkingHours != nil && strings.EqualFold(infostudClean(p.WorkingHours.Name), "nepuno radno vreme") {
+	if p.WorkingHours != nil && strings.EqualFold(collapseSpace(p.WorkingHours.Name), "nepuno radno vreme") {
 		j.EmploymentType = "part_time"
+	}
+	// The posting page's own date wins; the card's is the same day when both are present.
+	if t, ok := infostudDeadline(p.ExpirationDate); ok {
+		j.ApplicationDeadline = &t
+	} else if t, ok := infostudDeadline(c.ExpirationDate); ok {
+		j.ApplicationDeadline = &t
 	}
 	return j, true
 }

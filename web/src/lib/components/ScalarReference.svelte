@@ -1,8 +1,8 @@
 <script lang="ts">
   // The Scalar mount + theme bridge shared by /docs/api and /docs/api/internal — the
   // only thing that differs between the two pages is which spec `config` points at.
-  // `scalarHtml` is the SSR fragment from the page's own +page.server.ts (same config,
-  // rendered via renderApiReferenceToString); this hydrates it client-side.
+  // `scalarHtml` is the build-time fragment from the page's own +page.server.ts (same
+  // config, rendered via renderApiReferenceToString); this hydrates it client-side.
   import { themeStore } from '#lib/theme.svelte.js';
   import type { ApiReferenceInstance, AnyApiReferenceConfiguration } from '@scalar/types/api-reference';
   import '@scalar/api-reference/style.css';

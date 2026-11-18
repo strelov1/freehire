@@ -14,15 +14,10 @@ import (
 // as every other matcher here: a phrasing outside this list is not guessed at, and its
 // clause is read as a requirement.
 //
-// The languages are the ones the matchers above already claim — English, Russian and
-// Polish for EnglishLevel — plus Hungarian, whose boards are where this was reported.
+// The languages are the ones the matchers above claim (English, Russian, Polish) plus Hungarian.
 //
-// Literal phrases, matched with strings.Index over an already-lowercased description,
-// rather than one alternating regexp. The regexp is the obvious shape and is what this
-// replaced: Go's regexp runs an alternation of this size at about 3 MB/s, which put
-// 650µs on EVERY job in the catalogue for a scan that now costs single-digit
-// microseconds. It also reads like the heading vocabulary in internal/job/reqextract,
-// which is the same kind of list doing the same kind of job.
+// Literal phrases matched with strings.Index over a lowercased description, not one
+// alternating regexp: Go's regexp is far too slow for an alternation this size on every job.
 //
 // Two shapes are deliberately absent. A bare "bonus" is not here: it is the ordinary
 // word for a payment ("annual bonus", "signing bonus"), so only the phrases that
@@ -71,9 +66,8 @@ var optionalMarkers = []string{
 // ordinary as "English, B2 required". Replacing letters and digits with spaces leaves
 // every boundary where the posting put it.
 //
-// Lowercasing here rather than in each matcher is what lets the vocabulary above be
-// literals: it is done once, before the offsets the clause walk works in are taken, and
-// every caller lowercased its input as its first act anyway.
+// Lowercasing here, once, is what lets the vocabulary above be literals; it happens before
+// the clause walk takes its offsets.
 func hardRequirementText(description string) string {
 	return maskOptionalClauses(strings.ToLower(reqextract.MaskPreferred(description)))
 }
@@ -144,11 +138,9 @@ func clauseBreak(r rune) bool {
 // whitespace. The trailing whitespace is what keeps "3.5 years" and "min. B2" — the
 // standard Polish phrasing — from being read as two clauses.
 //
-// The follower is DECODED rather than read as a byte. A description pasted out of a
-// word processor separates its sentences with a non-breaking space as readily as with
-// an ordinary one, and U+00A0 is two bytes: converting the first of them to a rune
-// yields 'Â', which is not whitespace, so the sentence would not have broken and a
-// preferred clause would have blanked the required one after it.
+// The follower is DECODED, not read as a byte: U+00A0 (non-breaking space) is two bytes and
+// its first byte as a rune is 'Â', not whitespace, so a preferred clause would blank the
+// required one after it.
 func sentenceBreak(s string, i int, r rune) bool {
 	if r != '.' && r != '!' && r != '?' {
 		return false

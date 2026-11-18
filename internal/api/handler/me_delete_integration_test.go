@@ -44,6 +44,16 @@ func newMemBlobs(keys ...string) *memBlobs {
 func (m *memBlobs) Put(context.Context, string, string, io.Reader, int64) error { return nil }
 func (m *memBlobs) Get(context.Context, string) (io.ReadCloser, error)          { return nil, nil }
 
+func (m *memBlobs) List(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for k := range m.objects {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
 func (m *memBlobs) Delete(_ context.Context, key string) error {
 	if m.failOn != "" && key == m.failOn {
 		return io.ErrUnexpectedEOF
@@ -150,6 +160,7 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 		{"gmail email", `INSERT INTO emails (user_id, source, external_id, received_at) VALUES ($1, 'gmail', 'g-msg-1', now())`, []any{leaver}},
 		{"referral offer", `INSERT INTO referral_offers (user_id, company_slug, proof_object_key) VALUES ($1, 'acme', 'referral-proof/leaver/acme.pdf')`, []any{leaver}},
 		{"company vote", `INSERT INTO company_votes (user_id, company_slug, vote) VALUES ($1, 'acme', 1)`, []any{leaver}},
+		{"watched company", `INSERT INTO company_watchlist (user_id, company_slug) VALUES ($1, 'acme')`, []any{leaver}},
 		{"notification settings", `INSERT INTO notification_settings (user_id, enabled) VALUES ($1, true)`, []any{leaver}},
 		{"persona", `INSERT INTO community_personas (user_id, handle) VALUES ($1, 'quiet-otter')`, []any{leaver}},
 		{"stayer persona", `INSERT INTO community_personas (user_id, handle) VALUES ($1, 'brisk-heron')`, []any{stayer}},
@@ -218,6 +229,7 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 			{"emails", "user_id"},
 			{"referral_offers", "user_id"},
 			{"company_votes", "user_id"},
+			{"company_watchlist", "user_id"},
 			{"notification_settings", "user_id"},
 			{"community_personas", "user_id"},
 		} {

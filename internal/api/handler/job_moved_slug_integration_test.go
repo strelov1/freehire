@@ -6,11 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -31,6 +33,9 @@ func TestGetJob_ResolvesMovedSlugByCode(t *testing.T) {
 			Title: "Forward Deployed Engineer", Company: "Toloka", CompanySlug: "toloka",
 			PublicSlug: slug, Location: "Remote", Description: "x",
 		}
+		if extID == "collision-224028" || extID == "collision-1908612" {
+			p.Source = "lever"
+		}
 		p.RoleFingerprint = pgtype.Text{String: "fp-" + extID, Valid: true}
 		if _, err := q.UpsertJob(ctx, p); err != nil {
 			t.Fatalf("seed %s: %v", extID, err)
@@ -43,7 +48,7 @@ func TestGetJob_ResolvesMovedSlugByCode(t *testing.T) {
 
 	h := &jobsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/:slug", h.GetJob)
+	mountJobsContract(app, h, middleware{})
 
 	get := func(slug string) (int, string) {
 		t.Helper()
@@ -67,6 +72,22 @@ func TestGetJob_ResolvesMovedSlugByCode(t *testing.T) {
 	}
 	if status, _ := get("old-title-acme-aaaaaaaa"); status != fiber.StatusNotFound {
 		t.Errorf("ambiguous code: status=%d, want 404", status)
+	}
+	// These identities really share their shortcode, so the second posting uses the
+	// full identity suffix. Neither current title matches the old links below.
+	seed("collision-224028", "current-original-75jwd7n2")
+	fallback := normalize.JobSlugWithFullHash("Current fallback", "Acme", "lever", "collision-1908612")
+	seed("collision-1908612", fallback)
+	for _, request := range []struct{ old, current string }{
+		{"old-original-75jwd7n2", "current-original-75jwd7n2"},
+		{normalize.JobSlugWithFullHash("Old fallback", "Acme", "lever", "collision-1908612"), fallback},
+	} {
+		if status, slug := get(request.old); status != fiber.StatusOK || slug != request.current {
+			t.Errorf("collision redirect %q: status=%d slug=%q; want %q", request.old, status, slug, request.current)
+		}
+	}
+	if status, slug := get("old-title-" + strings.Repeat("a", 44) + "-75jwd7n2"); status != fiber.StatusOK || slug != "current-original-75jwd7n2" {
+		t.Errorf("hash-shaped legacy company: status=%d slug=%q, want original posting", status, slug)
 	}
 	if status, _ := get("no-such-job-zzzzzzzz"); status != fiber.StatusNotFound {
 		t.Errorf("unknown code: status=%d, want 404", status)

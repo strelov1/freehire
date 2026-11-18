@@ -48,9 +48,7 @@ describe('paged listing routes', () => {
   // from the number alone, which is what lets a route refuse ?page=900 without
   // searching for it at all.
   it('refuses a page past the feed window before searching for it', () => {
-    const unguarded = paged
-      .filter(({ source }) => !source.includes('pageWithinWindow('))
-      .map(({ file }) => file);
+    const unguarded = paged.filter(({ source }) => !source.includes('pageWithinWindow(')).map(({ file }) => file);
     expect(unguarded, 'routes reading ?page=N without bounding it to the window').toEqual([]);
   });
 

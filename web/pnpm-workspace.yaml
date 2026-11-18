@@ -1,5 +1,4 @@
 allowBuilds:
-  '@sentry/cli': false
   core-js: false
   # Pulled in transitively by @scalar/api-reference (Vue-based). Its postinstall only
   # writes a Vue-2-vs-3 compatibility shim; Scalar's own build already targets Vue 3
@@ -7,9 +6,8 @@ allowBuilds:
   # (verified in a real browser, light and dark).
   vue-demi: false
 # pnpm 11 structural config — not a workspace definition (no packages: list).
-# strictDepBuilds: false lets install proceed when @sentry/cli and core-js
-# build scripts are skipped. @sentry/cli is only needed for source-map upload
-# (gated on SENTRY_AUTH_TOKEN); core-js postinstall is non-critical.
+# strictDepBuilds: false lets install proceed when core-js and vue-demi build
+# scripts are skipped; neither postinstall is needed.
 strictDepBuilds: false
 # @sveltejs/kit pins cookie@^0.6.0 on every 2.x release (GHSA-pxg6-pf52-xh8x /
 # CVE-2024-47764, low: out-of-bounds characters in cookie name/path/domain).
@@ -17,6 +15,10 @@ strictDepBuilds: false
 # jumped to 1.x/2.x, and @sveltejs/kit has never declared support past 0.6/0.7 —
 # an unbounded override would silently ride a major bump its own tests never ran.
 overrides:
+  # GHSA-g3hv-75wg-m249: glob preprocessing can amplify attacker-controlled
+  # patterns. ESLint and typescript-eslint still request minimatch 10.x;
+  # the first fixed release is 11.0.1, so this is a deliberate major override.
+  'minimatch@>=7.0.0 <11.0.1': 11.0.1
   cookie@<0.7.0: 0.7.2
   # GHSA-6g55-p6wh-862q: postcss reads an attacker-controlled sourceMappingURL
   # path when `from` is unset, letting a crafted stylesheet exfiltrate
@@ -52,7 +54,12 @@ overrides:
   # Agent again dropping function-valued TLS options, cross-origin redirect
   # cache poisoning, and an oversized Content-Encoding chain crashing the
   # process (SNYK-JS-UNDICI-21181005 .. -21185768).
-  undici@<8.12.2: 8.12.2
+  # Raised to 8.12.4 for six more published 2026-11-05, two high: a redirect
+  # chain cached under the original key (cache poisoning, cross-user
+  # disclosure) and a cache-replay handler exception killing the process
+  # (GHSA-mqg3-3v4r-cm32, GHSA-3g9m-rv3r-w5w2; Snyk SNYK-JS-UNDICI-22290988 ..
+  # -22291127). 8.12.3 fixes none of them.
+  undici@<8.12.4: 8.12.4
   # GHSA-px8p-9vwx-vf98 / CVE-2026-45820: fflate's unzipSync can loop forever
   # parsing a malformed ZIP64 central-directory entry (missing extra-field tag
   # 0x0001 after a 0xFFFFFFFF size sentinel). Reached transitively via

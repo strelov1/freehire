@@ -5,5 +5,7 @@ web/build
 design-system/node_modules
 design-system/dist
 .git
+# Agent worktrees carry their own node_modules (13 GB here) and are never part of a build.
+.claude
 openspec
 design-system/storybook-static/

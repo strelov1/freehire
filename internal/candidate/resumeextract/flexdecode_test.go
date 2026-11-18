@@ -76,3 +76,13 @@ func experienceEnd(s Structured) *perioddate.PeriodDate {
 	}
 	return s.Experience[0].End
 }
+
+func TestUnmarshal_NumericTotalYearsTruncates(t *testing.T) {
+	var s Structured
+	if err := json.Unmarshal([]byte(`{"total_years":5.9}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.TotalYears != 5 {
+		t.Fatalf("years = %d, want 5", s.TotalYears)
+	}
+}

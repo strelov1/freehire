@@ -78,9 +78,8 @@ func (y yandex) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // yandexMaxListPages bounds the cursor pagination. Yandex's API tarpits datacenter IPs and
-// under throttling can return a "next" cursor that never empties; without a cap the loop
-// runs forever (it hung a prod custom.yml ingest for ~4h, holding its flock). The bound sits
-// far above the real page count (~1250 jobs total) so it never truncates a legitimate crawl.
+// under throttling can return a "next" cursor that never empties; without a cap the loop runs
+// forever, holding the ingest lock. The bound sits far above the real page count.
 const yandexMaxListPages = 500
 
 // list walks the cursor-paginated publication list. The first request hits the bare

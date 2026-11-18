@@ -4,8 +4,7 @@
 // create/edit/delete and the recomputed company summary each returns, the two
 // Mine bugs an earlier review caught (a bad slug silently reading as "no
 // feedback yet", and the caller's own live review reporting itself as
-// "[deleted]"), the per-user new-review rate limit (an edit never counts
-// against it), the body-length cap, and the report/hide moderation lever (a
+// "[deleted]"), the body-length cap, and the report/hide moderation lever (a
 // hidden review drops out of List/Count/the company average immediately).
 // Run with: go test -tags=integration ./internal/api/handler/
 package handler
@@ -30,17 +29,17 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-func newCompanyFeedbackApp(queries *db.Queries, pool *pgxpool.Pool, iss *auth.Issuer, cfg companyfeedback.Config) *fiber.App {
+func newCompanyFeedbackApp(queries *db.Queries, pool *pgxpool.Pool, iss *auth.Issuer) *fiber.App {
 	communityRepo := community.NewQueriesRepository(queries)
 	communitySvc := community.New(communityRepo, communityRepo, community.Config{})
-	svc := companyfeedback.New(queries, pool, communityPersonas{svc: communitySvc}, cfg)
+	svc := companyfeedback.New(queries, pool, communityPersonas{svc: communitySvc})
 	h := newCompanyFeedbackHandlers(svc)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	mw := middleware{
 		cookie:    auth.RequireAuth(iss, testVersions),
 		moderator: auth.RequireRole(queries, "moderator"),
 	}
-	h.register(app.Group("/api/v1"), mw)
+	h.register(app.Group("/api/v1"), mw, newContract(contractHandlers{companyFeedbackHandlers: h}))
 	return app
 }
 
@@ -120,7 +119,7 @@ func TestCompanyFeedbackEndpoints(t *testing.T) {
 		t.Fatalf("issue token: %v", err)
 	}
 
-	app := newCompanyFeedbackApp(queries, pool, iss, companyfeedback.Config{})
+	app := newCompanyFeedbackApp(queries, pool, iss)
 
 	// Unauthenticated write is rejected.
 	if resp := doFeedbackRequest(t, app, fiber.MethodPost, "/api/v1/companies/acme/feedback", "",
@@ -210,6 +209,10 @@ func TestCompanyFeedbackEndpoints(t *testing.T) {
 		t.Fatalf("delete remaining category: want 200, got %d", delResp2.StatusCode)
 	}
 	raw2, _ := io.ReadAll(delResp2.Body)
+	// The average is null, not absent: a client reads the key.
+	if !strings.Contains(string(raw2), `"feedback_rating_avg":null`) {
+		t.Fatalf("empty summary must carry feedback_rating_avg:null, got %s", raw2)
+	}
 	var delEnv2 struct {
 		Data struct {
 			Count     int32    `json:"feedback_count"`
@@ -221,50 +224,6 @@ func TestCompanyFeedbackEndpoints(t *testing.T) {
 	}
 	if delEnv2.Data.Count != 0 || delEnv2.Data.RatingAvg != nil {
 		t.Fatalf("delete: want empty summary, got %+v", delEnv2.Data)
-	}
-}
-
-// TestCompanyFeedbackRateLimit mirrors community's over-the-cap test: a tiny
-// Config.Cap trips after that many NEW companies, but editing an
-// already-reviewed one never counts against it.
-func TestCompanyFeedbackRateLimit(t *testing.T) {
-	pool := startPostgres(t)
-	ctx := context.Background()
-	queries := db.New(pool)
-
-	var userID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('ratelimited@example.test') RETURNING id`).Scan(&userID); err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	for _, slug := range []string{"acme", "globex", "initech"} {
-		if _, err := pool.Exec(ctx, `INSERT INTO companies (slug, name) VALUES ($1, $1)`, slug); err != nil {
-			t.Fatalf("seed company %q: %v", slug, err)
-		}
-	}
-
-	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, err := iss.Issue(userID, testTokenVersion)
-	if err != nil {
-		t.Fatalf("issue token: %v", err)
-	}
-	app := newCompanyFeedbackApp(queries, pool, iss, companyfeedback.Config{Cap: 2})
-
-	post := func(slug string) *http.Response {
-		return doFeedbackRequest(t, app, fiber.MethodPost, "/api/v1/companies/"+slug+"/feedback", cookie,
-			`{"rating":4,"feedback_type":"other","body":"fine"}`)
-	}
-	if resp := post("acme"); resp.StatusCode != fiber.StatusCreated {
-		t.Fatalf("1st new review: want 201, got %d", resp.StatusCode)
-	}
-	if resp := post("globex"); resp.StatusCode != fiber.StatusCreated {
-		t.Fatalf("2nd new review: want 201, got %d", resp.StatusCode)
-	}
-	if resp := post("initech"); resp.StatusCode != fiber.StatusTooManyRequests {
-		t.Fatalf("3rd new review (over cap): want 429, got %d", resp.StatusCode)
-	}
-	// Editing one of the first two never counts against the cap.
-	if resp := post("acme"); resp.StatusCode != fiber.StatusCreated {
-		t.Fatalf("edit of an existing review after hitting cap: want 201, got %d", resp.StatusCode)
 	}
 }
 
@@ -295,7 +254,7 @@ func TestCompanyFeedbackReportAndHide(t *testing.T) {
 	reporterCookie, _ := iss.Issue(reporterID, testTokenVersion)
 	modCookie, _ := iss.Issue(modID, testTokenVersion)
 
-	app := newCompanyFeedbackApp(queries, pool, iss, companyfeedback.Config{})
+	app := newCompanyFeedbackApp(queries, pool, iss)
 
 	created := decodeFeedback(t, doFeedbackRequest(t, app, fiber.MethodPost, "/api/v1/companies/acme/feedback", authorCookie,
 		`{"rating":1,"feedback_type":"other","body":"unfounded claim"}`))

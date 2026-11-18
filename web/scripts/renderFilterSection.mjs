@@ -1,10 +1,5 @@
-// The "Filtering jobs" section, built once from filters.ts data and shared by
-// both docs generators — gen-api-docs.mjs's docs/API.md and gen-openapi.mjs's
-// OpenAPI info.description. Before this module existed, each generator hand-built
-// its own copy of the same heading/modifiers/tables/recipes sequence; a future
-// edit to one and not the other would make the two representations of the same
-// filter vocabulary silently disagree — the exact drift this migration exists
-// to eliminate for the rest of the API surface.
+// The "Filtering jobs" section of the API reference, built from filters.ts data by
+// gen-api-docs.mjs into each document's info.description (and so into docs/API*.md).
 //
 // Returns an array of Markdown lines (not a joined string) so a caller can
 // `out.push(...renderFilterSectionLines(filters))` alongside its own lines.

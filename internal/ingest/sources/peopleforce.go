@@ -34,19 +34,16 @@ func (peopleforce) Provider() string { return "peopleforce" }
 func (peopleforce) fullBoardListing() {}
 
 // peopleforceMaxPages caps the ?page=N walk so a listing whose nav never stops naming a next
-// page cannot loop forever (the largest boards seen are a few pages; this is ample headroom).
-//
-// It is a backstop, not the end signal, and the difference is what freehire#3046 was about:
-// while the walk waited for an EMPTY page — which this source does not serve, clamping an
-// out-of-range ?page=N to the last real one instead — this cap was reached on every crawl of
-// 85 of the provider's 93 boards, and reaching it discards the whole board.
+// page cannot loop forever. It is a backstop, not the end signal: this source clamps an
+// out-of-range ?page=N to the last real page instead of serving an empty one, so waiting for
+// an empty page would reach the cap on every crawl, and reaching it discards the whole board.
 const peopleforceMaxPages = 100
 
 // peopleforceDetailWorkers throttles the per-board detail fan-out below the shared
 // defaultDetailWorkers (8): peopleforce.io rate-limits by request volume (429), and a wide
-// burst across 61 boards poisons the egress IP — starving later boards whose listing then
-// 429s. A narrow pool keeps each board's burst small; the crawl also egresses through the
-// proxy (see proxiedProviders) so the volume never lands on the prod IP.
+// burst poisons the egress IP, starving later boards whose listing then 429s. A narrow pool
+// keeps each board's burst small; the crawl also egresses through the proxy (see
+// proxiedProviders) so the volume never lands on the prod IP.
 const peopleforceDetailWorkers = 3
 
 // peopleforceListing is one job card read from a listing page: its canonical detail URL and
@@ -85,19 +82,12 @@ func (s peopleforce) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 		// The source's own pagination nav says whether there is another page, and it is the only
 		// thing that can: an out-of-range ?page=N is CLAMPED to the last real page rather than
-		// answered empty, so waiting for an empty page waits forever. Measured 2026-09-21 against
-		// akvelon.peopleforce.io — 30 postings on 3 pages, and pages 4, 5, 20 and 5000 each return
-		// page 3 byte for byte. A board that fits on one page renders no nav at all, which is the
-		// same answer.
+		// answered empty, so waiting for an empty page waits forever. A board that fits on one page
+		// renders no nav at all, which is the same answer.
 		//
-		// The old rule was "stop on a page with no cards", chosen over "stop on a page that adds
-		// nothing new" because a duplicate-only page is not proof of the end. That reasoning is
-		// still correct, and is why the fix is not to relax it: the nav is a direct statement from
-		// the source, so a duplicate-only page mid-listing is still walked through.
-		//
-		// Kept alongside it: a genuinely empty page also ends the walk. The live site does not
-		// serve one, but a board whose every posting closed between two crawls plausibly would,
-		// and there is nothing left to page through either way.
+		// A duplicate-only page is not proof of the end, so one mid-listing is still walked through.
+		// A genuinely empty page also ends the walk: the live site does not serve one, but a board
+		// whose every posting closed between two crawls plausibly would.
 		if len(pageCards) == 0 || !peopleforceHasPageAfter(root, page) {
 			done = true
 			break
@@ -242,7 +232,7 @@ var peopleforceMetaIcons = map[string]string{
 }
 
 // peopleforceVacancyMeta reads the detail page's vacancy_meta row — the layout every tenant
-// serves since the <dl> sidebar went away (all 40 boards sampled 2026-10-30) — into the same
+// serves now that the <dl> sidebar is gone — into the same
 // label→value map peopleforceDefList builds. Each item is an icon followed by its value as bare
 // text; an item the posting leaves blank is simply not rendered, so a posting naming no place
 // has no Location key. Returns an empty map for a page without the row.

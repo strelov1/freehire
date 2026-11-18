@@ -79,9 +79,7 @@ export function parseFrontmatter(raw: Record<string, unknown>, filePath: string)
   let type: PostType = 'changelog';
   if (raw.type !== undefined) {
     if (!isPostType(raw.type)) {
-      throw new Error(
-        `blog post ${filePath}: invalid type "${String(raw.type)}" (expected ${POST_TYPES.join(' | ')})`,
-      );
+      throw new Error(`blog post ${filePath}: invalid type "${String(raw.type)}" (expected ${POST_TYPES.join(' | ')})`);
     }
     type = raw.type;
   }
@@ -103,7 +101,5 @@ export function parseFrontmatter(raw: Record<string, unknown>, filePath: string)
 
 /** Filter drafts (unless `includeDrafts`) and order newest-first. Non-mutating. */
 export function selectPosts(posts: PostMeta[], { includeDrafts }: { includeDrafts: boolean }): PostMeta[] {
-  return posts
-    .filter((post) => includeDrafts || !post.draft)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  return posts.filter((post) => includeDrafts || !post.draft).sort((a, b) => b.date.localeCompare(a.date));
 }

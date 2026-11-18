@@ -27,7 +27,7 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/stats/engagement", h.EngagementStats)
+	app.Get("/api/v1/stats/engagement", statsContract(h))
 
 	type counts struct {
 		Saved            int    `json:"saved"`

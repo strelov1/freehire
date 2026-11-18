@@ -8,7 +8,14 @@ import type { BuddyFeedItem } from './types.js';
  *  companies. Interviews and offers always stand alone: each is news in itself. */
 export type BuddyPost =
   | { kind: 'event'; key: string; item: BuddyFeedItem }
-  | { kind: 'applied'; key: string; handle: string; card_summary: BuddyFeedItem['card_summary']; day: string; items: BuddyFeedItem[] };
+  | {
+      kind: 'applied';
+      key: string;
+      handle: string;
+      card_summary: BuddyFeedItem['card_summary'];
+      day: string;
+      items: BuddyFeedItem[];
+    };
 
 /** The feed's items (newest first) as posts, in the same order. A member's applications on
  *  one day collect into the post placed where the first of them appeared; one application
@@ -36,7 +43,14 @@ export function buddyFeedPosts(items: readonly BuddyFeedItem[]): BuddyPost[] {
     // Keyed by the first event's id (this one: the group is met at its first item), not by
     // handle and day — a later page can bring more of the same day, and the id keeps the
     // key unique and stable as the list grows.
-    posts.push({ kind: 'applied', key: `a${it.id}`, handle: it.handle, card_summary: it.card_summary, day: it.day, items: group });
+    posts.push({
+      kind: 'applied',
+      key: `a${it.id}`,
+      handle: it.handle,
+      card_summary: it.card_summary,
+      day: it.day,
+      items: group,
+    });
   }
   return posts;
 }
@@ -56,7 +70,10 @@ export function buddyFeedDays(posts: readonly BuddyPost[]): { day: string; posts
 /** A posting's two lines: the job title, and under it the company and, when known, where
  *  the posting is ("Revolut · London, UK"). A posting since removed has no title, so the
  *  company becomes the title and is not repeated beneath it. */
-export function buddyJobLines(item: Pick<BuddyFeedItem, 'company' | 'job_title' | 'job_location'>): { title: string; where: string } {
+export function buddyJobLines(item: Pick<BuddyFeedItem, 'company' | 'job_title' | 'job_location'>): {
+  title: string;
+  where: string;
+} {
   if (!item.job_title) return { title: item.company.name, where: item.job_location ?? '' };
   return { title: item.job_title, where: [item.company.name, item.job_location].filter(Boolean).join(' · ') };
 }

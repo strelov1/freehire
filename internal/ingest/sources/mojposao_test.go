@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // mojposaoFake serves real fixtures fetched 2026-10-28: a two-page search trimmed to five
@@ -137,6 +138,11 @@ func TestMojPosaoHydratesNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	if it.PostedAt == nil || it.PostedAt.UTC().Format("2006-01-02 15:04") != "2026-10-27 11:20" {
 		t.Errorf("posted at = %v", it.PostedAt)
 	}
+	// endsAt is the last day's end (22:59:59Z), so its UTC date is that last day.
+	wantBy := time.Date(2026, 11, 6, 22, 59, 59, 0, time.UTC)
+	if it.ApplicationDeadline == nil || !it.ApplicationDeadline.Equal(wantBy) {
+		t.Errorf("apply by = %v, want endsAt %v", it.ApplicationDeadline, wantBy)
+	}
 	if it.URL != "https://mojposao.hr/posao/"+mojposaoITID+"/senior-inzenjer-za-vmware-nsx-i-avi-load-balancer-m-z" {
 		t.Errorf("url = %q", it.URL)
 	}
@@ -198,17 +204,6 @@ func TestMojPosaoRejectsAnUnknownBoard(t *testing.T) {
 	}
 	if len(f.lists) != 0 {
 		t.Errorf("requests went out for an unknown market: %v", f.lists)
-	}
-}
-
-func TestMojPosaoDoesNotJudgeTheCatalogueFilterOnTheCard(t *testing.T) {
-	f := &mojposaoFake{}
-	gate := DetailGate{Rejected: func(Job) bool { return true }}
-	if _, err := newTestMojPosao(f).FetchNewGated(context.Background(), mojposaoHR, func(string) bool { return false }, gate); err != nil {
-		t.Fatal(err)
-	}
-	if len(f.details) != 4 {
-		t.Errorf("posting requests = %v, want all four named postings bought: the card lacks the IT position", f.details)
 	}
 }
 

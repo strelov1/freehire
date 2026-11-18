@@ -2,7 +2,8 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import Seo from '#lib/components/Seo.svelte';
-  import { blogJsonLd, breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { blogJsonLd } from '#lib/seoAppJsonLd.js';
   import type { PostType } from '#lib/blog.js';
   import type { PageData } from './$types';
 
@@ -34,9 +35,7 @@
     { value: 'article', label: 'Articles' },
   ];
   let active = $state<Filter>('all');
-  const posts = $derived(
-    active === 'all' ? data.posts : data.posts.filter((post) => post.type === active),
-  );
+  const posts = $derived(active === 'all' ? data.posts : data.posts.filter((post) => post.type === active));
 
   // UTC so a date-only frontmatter value renders as itself, not shifted a day by
   // the viewer's timezone (mirrors the OG card).
@@ -55,9 +54,7 @@
   <header class="mb-6">
     <div class="flex flex-wrap items-baseline justify-between gap-3">
       <h1 class="text-2xl font-semibold tracking-tight">Blog</h1>
-      <a href={resolve('/blog/rss.xml')} class="text-sm text-muted-foreground hover:text-foreground">
-        RSS
-      </a>
+      <a href={resolve('/blog/rss.xml')} class="text-sm text-muted-foreground hover:text-foreground"> RSS </a>
     </div>
     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
       Product updates and the occasional deeper dive.
@@ -86,9 +83,7 @@
       {#each posts as post (post.slug)}
         <li class="py-5">
           <div class="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-            <span
-              class="rounded-full border border-border px-2 py-0.5 font-medium uppercase tracking-wide"
-            >
+            <span class="rounded-full border border-border px-2 py-0.5 font-medium">
               {post.type}
             </span>
             <time datetime={post.date}>{formatDate(post.date)}</time>

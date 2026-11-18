@@ -22,7 +22,7 @@ func dictionaryApp(t *testing.T, write gapWrite) *fiber.App {
 	h := &dictionaryHandlers{write: write}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	h.register(api, middleware{cookie: auth.RequireAuth(iss, testVersions)})
+	h.register(api, middleware{cookie: auth.RequireAuth(iss, testVersions)}, newContract(contractHandlers{dictionaryHandlers: h}))
 	return app
 }
 
@@ -89,6 +89,13 @@ func TestDictionaryRecord(t *testing.T) {
 		`{"kind":"specialization","term":"Backend"}`,
 		`{"kind":"specialization","term":"Senior Backend Engineer"}`,
 		`{"kind":"skill","term":"k8s"}`,
+		`{"kind":"skill","term":"TPM"}`,
+		`{"kind":"skill","term":"rcm"}`,
+		`{"kind":"skill","term":"APM"}`,
+		`{"kind":"skill","term":"ППР"}`,
+		`{"kind":"skill","term":"oee"}`,
+		`{"kind":"industry","term":"software development"}`,
+		`{"kind":"industry","term":"finance"}`,
 	} {
 		code, _ = doDictionary(t, app, http.MethodPost, "/api/v1/dictionary/gaps", known, cookie)
 		if code != http.StatusConflict || calls != 0 {
@@ -110,11 +117,4 @@ func TestDictionaryRecord(t *testing.T) {
 		t.Fatalf("recorded = %#v", data)
 	}
 
-	capped := dictionaryApp(t, func(context.Context, int64, string, string, string) (int32, string, error) {
-		return 0, "", errGapCap
-	})
-	code, _ = doDictionary(t, capped, http.MethodPost, "/api/v1/dictionary/gaps", `{"kind":"specialization","term":"underwater basket weaving"}`, cookie)
-	if code != http.StatusTooManyRequests {
-		t.Fatalf("cap = %d", code)
-	}
 }

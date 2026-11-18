@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyJob } from '#lib/types.js';
 import JobDrawer from './JobDrawer.svelte';
@@ -7,6 +7,9 @@ import JobDrawer from './JobDrawer.svelte';
 vi.mock('$app/state', () => ({
   page: { data: { locale: 'ru' }, url: new URL('http://localhost/my/tracking'), state: {} },
 }));
+vi.mock('./MatchAnalysisFull.svelte', () => {
+  throw new Error('chunk unavailable');
+});
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), pushState: vi.fn(), replaceState: vi.fn() }));
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true, currentUser: () => ({ id: 'u1' }) }));
@@ -20,7 +23,14 @@ vi.mock('easymde', () => ({
   },
 }));
 
-const { getTrackedApplication } = vi.hoisted(() => ({ getTrackedApplication: vi.fn() }));
+const { getTrackedApplication, openApplyChat } = vi.hoisted(() => ({
+  getTrackedApplication: vi.fn(),
+  openApplyChat: vi.fn(),
+}));
+vi.mock('#lib/assistant/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('#lib/assistant/api.js')>()),
+  openApplyChat,
+}));
 vi.mock('#lib/api.js', () => ({ api: { getTrackedApplication }, isPlanRefusal: () => false }));
 
 const job = {
@@ -32,6 +42,7 @@ const job = {
 
 const item: MyJob = {
   id: 'app-1',
+  added_to_board_at: null,
   company_slug: 'acme',
   role_title: 'Staff Cloud Native Software Engineer',
   job,
@@ -58,12 +69,11 @@ const props = (over: Partial<MyJob> = {}) => ({
   onautoapplyreview: noop,
   onremove: async () => {},
   onclose: noop,
-  onrehearse: noop,
-  ondebrief: noop,
   onfollowup: noop,
 });
 
 beforeEach(() => {
+  openApplyChat.mockReset().mockRejectedValue(new Error('chat unavailable'));
   getTrackedApplication.mockReset().mockResolvedValue({
     job,
     emails: [],
@@ -100,40 +110,40 @@ describe('JobDrawer — phone layout in Russian', () => {
 
     // The badge beside the facet pills.
     expect(screen.getAllByText('Подготовка').some((el) => el.tagName === 'SPAN')).toBe(true);
-    // The history row interpolates the label, not the raw `preparing` key.
-    await waitFor(() => expect(screen.getByText('Переход на этап «Подготовка»')).toBeTruthy());
-    expect(screen.queryByText(/preparing/)).toBeNull();
-
     const select = screen.getByRole('combobox') as HTMLSelectElement;
-    const options = within(select).getAllByRole('option').map((o) => o.textContent);
+    const options = within(select)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
     expect(options).toContain('Собеседование');
     expect(options).toContain('Отказ');
     expect(options).not.toContain('Interview');
     const groups = Array.from(select.querySelectorAll('optgroup')).map((g) => g.label);
     expect(groups).toContain('Закрыто');
     expect(select.value).toBe('preparing');
+    const historyTab = screen.getAllByRole('tab').find((tab) => tab.id === 'jobdrawer-tab-history');
+    if (!historyTab) throw new Error('Missing History tab');
+    await fireEvent.click(historyTab);
+    // The history row interpolates the label, not the raw `preparing` key.
+    await waitFor(() => expect(screen.getByText('Переход на этап «Подготовка»')).toBeTruthy());
+    expect(screen.queryByText(/preparing/)).toBeNull();
   });
 
-  it('gathers every action into one grid, View job included, with Tailor CV leading', () => {
+  it('keeps View job in the employer row and Tailor CV in the action row', () => {
     render(JobDrawer, props());
 
     const viewJob = screen.getByRole('link', { name: 'Открыть вакансию' });
-    const grid = viewJob.parentElement as HTMLElement;
-    expect(grid.className).toContain('grid-cols-2');
-    const names = Array.from(grid.children).map((el) => el.textContent?.trim());
-    expect(names).toEqual(['Открыть вакансию', 'Адаптировать CV', 'Репетировать', 'Анализ']);
+    expect(viewJob.parentElement?.textContent).toContain('Acme');
+    expect(viewJob.getAttribute('target')).toBe('_blank');
     // The one framed call to action, while the application is still being prepared.
     const tailor = screen.getByRole('button', { name: 'Адаптировать CV' });
-    expect(tailor.className).toContain('ring-brand/30');
-    for (const name of ['Репетировать', 'Анализ']) {
-      expect(screen.getByRole('button', { name }).className).not.toContain('ring-brand/30');
-    }
+    expect(tailor.className).toContain('bg-brand');
+    expect(tailor.parentElement).not.toBe(viewJob.parentElement);
   });
 
   it('weighs every action the same once the application has been sent', () => {
     render(JobDrawer, props({ applied_at: '2026-10-02T00:00:00Z', stage: 'applied' }));
 
-    expect(screen.getByRole('button', { name: 'Адаптировать CV' }).className).not.toContain('ring-brand/30');
+    expect(screen.getByRole('button', { name: 'Адаптировать CV' }).className).not.toContain('bg-brand');
     expect(screen.getAllByText('Отклик отправлен').length).toBeGreaterThan(0);
   });
 
@@ -146,4 +156,128 @@ describe('JobDrawer — phone layout in Russian', () => {
     expect(tabs.map((t) => t.textContent?.trim())).toContain('Описание');
     expect(tabs.filter((t) => t.tabIndex === 0)).toHaveLength(1);
   });
+});
+
+it('shows unavailable history when the original posting cannot be read', async () => {
+  render(JobDrawer, props({ job: null }));
+  await fireEvent.click(screen.getByRole('tab', { name: 'История' }));
+  expect(screen.getByText('История этой заявки недоступна.')).toBeTruthy();
+  expect(screen.queryByText('Для этой заявки пока нет записей.')).toBeNull();
+  expect(getTrackedApplication).not.toHaveBeenCalled();
+});
+
+it('keeps a history load failure stable until the user retries', async () => {
+  getTrackedApplication.mockRejectedValueOnce(new Error('offline'));
+  render(JobDrawer, props());
+  await fireEvent.click(screen.getByRole('tab', { name: 'История' }));
+  expect(await screen.findByText('offline')).toBeTruthy();
+  expect(getTrackedApplication).toHaveBeenCalledOnce();
+
+  getTrackedApplication.mockResolvedValueOnce({ job, emails: [], events: [] });
+  await fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  expect(await screen.findByText('Для этой заявки пока нет записей.')).toBeTruthy();
+  expect(getTrackedApplication).toHaveBeenCalledTimes(2);
+});
+
+it('retries a failed auto-apply deep link instead of leaving a blank panel', async () => {
+  getTrackedApplication.mockRejectedValueOnce(new Error('offline'));
+  render(JobDrawer, { ...props(), initialTab: 'auto_apply' });
+  expect(await screen.findByText('offline')).toBeTruthy();
+  getTrackedApplication.mockResolvedValueOnce({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'tailoring', queue_id: 1 },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Прогресс' }).getAttribute('aria-selected')).toBe('true'));
+  expect(screen.queryByText('offline')).toBeNull();
+});
+
+it('leaves the progress tab when an auto-apply deep link no longer has an attempt', async () => {
+  getTrackedApplication.mockResolvedValueOnce({ job, emails: [], events: [] });
+  render(JobDrawer, { ...props(), initialTab: 'auto_apply' });
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Заявка' }).getAttribute('aria-selected')).toBe('true'));
+  expect(screen.queryByRole('tab', { name: 'Прогресс' })).toBeNull();
+});
+
+it('opens Application for a removed posting even when the deep link requests Progress', () => {
+  render(JobDrawer, { ...props({ job: null }), initialTab: 'auto_apply' });
+  expect(screen.getByRole('tab', { name: 'Заявка' }).getAttribute('aria-selected')).toBe('true');
+  expect(screen.queryByRole('tab', { name: 'Прогресс' })).toBeNull();
+  expect(getTrackedApplication).not.toHaveBeenCalled();
+});
+
+it('opens the application chat directly in Progress and retries a failed opening without a form', async () => {
+  getTrackedApplication.mockResolvedValue({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'pending_review', queue_id: 1 },
+  });
+  render(JobDrawer, { ...props(), initialTab: 'auto_apply' });
+  expect(await screen.findByText('chat unavailable')).toBeTruthy();
+  expect(openApplyChat).toHaveBeenCalledWith(job.public_slug);
+  expect(screen.queryByRole('textbox')).toBeNull();
+  await fireEvent.click(screen.getByRole('button', { name: 'Попробовать снова' }));
+  await waitFor(() => expect(openApplyChat).toHaveBeenCalledTimes(2));
+});
+
+it('keeps the application conversation mounted across drawer tabs', async () => {
+  getTrackedApplication.mockResolvedValue({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'pending_review', queue_id: 1 },
+  });
+  render(JobDrawer, { ...props(), initialTab: 'auto_apply' });
+  const chatError = await screen.findByText('chat unavailable');
+  await fireEvent.click(screen.getByRole('tab', { name: 'Описание' }));
+  expect(chatError.isConnected).toBe(true);
+  await fireEvent.click(screen.getByRole('tab', { name: 'Прогресс' }));
+  expect(await screen.findByText('chat unavailable')).toBe(chatError);
+  expect(openApplyChat).toHaveBeenCalledTimes(1);
+});
+
+it('reconciles the board after retrying an unsuccessful application reload', async () => {
+  getTrackedApplication.mockRejectedValueOnce(new Error('offline'));
+  const onautoapplyreview = vi.fn();
+  render(JobDrawer, { ...props(), onautoapplyreview, initialTab: 'auto_apply' });
+  expect(await screen.findByText('offline')).toBeTruthy();
+  expect(onautoapplyreview).not.toHaveBeenCalled();
+  getTrackedApplication.mockResolvedValue({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'approved', queue_id: 1 },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  await waitFor(() => expect(onautoapplyreview).toHaveBeenCalledWith('approved'));
+});
+
+it('ignores a late application response after the drawer is closed', async () => {
+  let finish = () => {};
+  getTrackedApplication.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve({ job, emails: [], events: [], auto_apply: { status: 'approved', queue_id: 1 } });
+      }),
+  );
+  const onautoapplyreview = vi.fn();
+  const drawer = render(JobDrawer, { ...props(), onautoapplyreview, initialTab: 'auto_apply' });
+  await waitFor(() => expect(getTrackedApplication).toHaveBeenCalledTimes(1));
+  drawer.unmount();
+  finish();
+  await Promise.resolve();
+  expect(onautoapplyreview).not.toHaveBeenCalled();
+});
+
+it('keeps the drawer usable when the analysis chunk fails', async () => {
+  render(JobDrawer, props());
+  const fitTab = screen.getAllByRole('tab').find((el) => el.id === 'jobdrawer-tab-fit');
+  if (!fitTab) throw new Error('Missing fit tab');
+  await fireEvent.click(fitTab);
+  expect((await screen.findByRole('alert')).textContent).toContain('Не удалось загрузить анализ.');
+  await fireEvent.click(screen.getByRole('button', { name: 'Вернуться к описанию вакансии' }));
+  expect(document.getElementById('jobdrawer-tab-description')?.getAttribute('aria-selected')).toBe('true');
 });

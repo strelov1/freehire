@@ -12,20 +12,21 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// applyChunkRows is how many (day, job) rows one transaction applies. Every row also
-// bumps jobs.view_count, and that UPDATE holds the jobs row's lock until commit — while
-// ingest's TouchJob / RefreshUnchangedJob / UpsertJob wait on it. The whole file in one
-// transaction held ~1M rows for 45 minutes on 2026-10-31 (~3.6 ms a row, contended) and
-// stalled the crawl fleet; uncontended a row costs ~0.07 ms (measured against a real
-// Postgres). So a chunk holds its rows for ~70 ms, and ~4 s at prod's contended worst.
-// A var only so the tests can shrink it.
+// applyChunkRows is how many (day, job) rows one transaction applies. Each row bumps
+// jobs.view_count, and that UPDATE holds the jobs row lock until commit, blocking ingest's
+// TouchJob / RefreshUnchangedJob / UpsertJob; one transaction for a whole file stalled the
+// crawl fleet. A var only so tests can shrink it.
 var applyChunkRows = 1000
 
-// errAlreadyApplied reports a file another run has applied, or is applying, already.
+// viewDeltas is how much this run's committed chunks moved each job's view_count, for the
+// index write at the end of the run (pushViewCounts). Package state is fine for a run-once worker.
+var viewDeltas = map[int64]int64{}
+
+// errAlreadyApplied reports a file another run has applied, or is applying.
 var errAlreadyApplied = errors.New("view log file already applied")
 
-// viewKey is the order a file's rows are applied in, and the cursor that remembers how
-// far a file has got: ascending job id, then day (see buildParams for why job id first).
+// viewKey is the order a file's rows are applied in and the cursor remembering how far a
+// file has got: ascending job id, then day (see buildParams for why job id first).
 type viewKey struct {
 	jobID int64
 	day   pgtype.Date
@@ -38,15 +39,14 @@ func (k viewKey) after(o viewKey) bool {
 	return k.day.Time.After(o.day.Time)
 }
 
-// applyChunked applies one file's rows — already sorted by key — in transactions of
+// applyChunked applies one file's rows, already sorted by key, in transactions of
 // applyChunkRows, then marks the file processed. It returns the views THIS run applied.
 //
-// The counts are additive, so committing part of a file is only safe because each chunk
-// moves the file's cursor (view_log_cursors) in its own transaction: a failed run leaves
-// the cursor on the last committed row and a re-run resumes after it, never adding a row
-// twice. The cursor move is a compare-and-swap against the key this run read, so a second
-// run over the same file loses its first chunk and stops with errAlreadyApplied. Each
-// chunk is retried on a deadlock by itself; the chunks before it stay committed.
+// The counts are additive, so partial commits are safe only because each chunk moves the
+// file's cursor (view_log_cursors) in its own transaction: a failed run's re-run resumes
+// after the last committed row. The move is a compare-and-swap against the key this run
+// read, so a concurrent run loses its first chunk and stops with errAlreadyApplied. Each
+// chunk retries on deadlock by itself.
 func applyChunked[P any](
 	ctx context.Context, pool *pgxpool.Pool, q *db.Queries, sig int64, name string,
 	params []P, key func(P) viewKey, views func(P) int,
@@ -87,6 +87,7 @@ func applyChunked[P any](
 		}
 		for _, p := range chunk {
 			applied += views(p)
+			viewDeltas[key(p).jobID] += int64(views(p))
 		}
 		prev = &last
 		params = params[len(chunk):]

@@ -1,6 +1,20 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { AlertTriangle, Archive, Bell, CalendarClock, CheckCircle2, Clock, FileText, Heart, MessageCircle, MessagesSquare, Search, Target, XCircle } from '@lucide/svelte';
+  import {
+    AlertTriangle,
+    Archive,
+    Bell,
+    CalendarClock,
+    CheckCircle2,
+    Clock,
+    FileText,
+    Heart,
+    MessageCircle,
+    MessagesSquare,
+    Search,
+    Target,
+    XCircle,
+  } from '@lucide/svelte';
   import { notificationCenter } from '#lib/notificationCenter.svelte.js';
   import { notificationTarget } from '#lib/notificationTarget.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -28,6 +42,7 @@
     nudge_auto_apply_failed: XCircle,
     auto_apply_tailor_ready: FileText,
     auto_apply_ready_for_review: FileText,
+    auto_apply_tailoring_failed: AlertTriangle,
     buddy_mock_booked: CalendarClock,
     buddy_mock_cancelled: CalendarClock,
     buddy_mock_reminder: CalendarClock,

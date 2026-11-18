@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import type { Snippet } from 'svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { Bell, Settings, SearchCheck } from '@lucide/svelte';
@@ -27,21 +28,18 @@
   const PANEL_ID = 'notification-center-panel';
 
   const active = $derived(activeRouteTab(page.url.pathname, NOTIFICATION_TABS, 'history'));
-  const tabs = $derived(
-    NOTIFICATION_TABS.map((tab) => ({ ...tab, icon: ICONS[tab.id], href: resolve(tab.href) })),
-  );
+  const tabs = $derived(NOTIFICATION_TABS.map((tab) => ({ ...tab, icon: ICONS[tab.id], href: resolve(tab.href) })));
 </script>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-4 lg:gap-6">
   <!-- The section's title belongs to the layout, above the strip, the way /my/activity
        and /my/tracking title theirs — in the History pane it was the only one of the
        three routes that had a heading at all. -->
-  <div class="flex flex-col gap-1 max-lg:sr-only">
-    <h1 class="text-2xl font-semibold tracking-tight">Notifications</h1>
-    <p class="text-sm text-muted-foreground">
-      Every new-job match, reminder and application nudge you've been sent — and what you
-      get next.
+  <div class="flex flex-col gap-1">
+    <AccountPageHeading>Notifications</AccountPageHeading>
+    <p class="text-sm text-muted-foreground max-lg:sr-only">
+      Every new-job match, reminder and application nudge you've been sent — and what you get next.
     </p>
   </div>
 

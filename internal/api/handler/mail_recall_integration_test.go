@@ -138,7 +138,7 @@ func recallApp(t *testing.T, pool *pgxpool.Pool, model llms.Model) (*fiber.App, 
 		// No mailbox factory: these tests cover the STORED path, which is the fallback and
 		// the one a caller with no Gmail grant still gets. The search path has its own.
 		h = h.withRecall(mailrecall.New(mailrecall.NewDBStore(queries), client),
-			llmBinding{client: client}, nil)
+			llmBinding{client: client}, nil, nil)
 	}
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
@@ -147,7 +147,7 @@ func recallApp(t *testing.T, pool *pgxpool.Pool, model llms.Model) (*fiber.App, 
 	// API key can press the button, and testing the cookie-only gate would leave the path
 	// that makes rate limiting matter unexercised.
 	app.Post("/api/v1/me/tracking/:slug/mail-recall",
-		auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), mailRecallLimiter(newTestThrottler(t)), markPaidAI(unmeteredAI), h.RecallApplicationMail)
+		auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), markPaidAI(unmeteredAI), newContract(contractHandlers{inboxHandlers: h}))
 
 	return app, iss
 }
@@ -392,13 +392,13 @@ func recallSearchApp(t *testing.T, pool *pgxpool.Pool, model llms.Model, box *fa
 	client := llm.NewWithModel(model)
 	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test").
 		withRecall(mailrecall.New(mailrecall.NewDBStore(queries), client),
-			llmBinding{client: client}, &fakeMailboxes{box: box})
+			llmBinding{client: client}, &fakeMailboxes{box: box}, nil)
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	ra := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
-	app.Post("/api/v1/me/tracking/:slug/mail-recall", ra, markPaidAI(unmeteredAI), h.RecallApplicationMail)
-	app.Post("/api/v1/me/tracking/:slug/mail-recall/link", ra, h.LinkRecalledMail)
+	app.Post("/api/v1/me/tracking/:slug/mail-recall", ra, markPaidAI(unmeteredAI), newContract(contractHandlers{inboxHandlers: h}))
+	app.Post("/api/v1/me/tracking/:slug/mail-recall/link", ra, newContract(contractHandlers{inboxHandlers: h}))
 
 	return app, iss
 }

@@ -147,7 +147,7 @@ SELECT a.id AS application_id,
            '{}'
        )::text[] AS ical_uids
   FROM applications a
-  LEFT JOIN emails em ON em.application_id = a.id AND em.user_id = a.user_id
+  LEFT JOIN emails em ON em.application_id = a.id AND em.user_id = a.user_id AND em.direction = 'incoming'
  WHERE a.user_id = $1
  GROUP BY a.id, a.company_slug, a.role_title
  ORDER BY a.id
@@ -188,28 +188,6 @@ func (q *Queries) ListCalendarMatchCandidates(ctx context.Context, userID int64)
 		return nil, err
 	}
 	return items, nil
-}
-
-const recordGrantScopes = `-- name: RecordGrantScopes :exec
-UPDATE gmail_connections
-SET scopes = CASE
-                 WHEN cardinality($1::text[]) > 0 THEN $1::text[]
-                 ELSE scopes
-             END
-WHERE user_id = $2
-`
-
-type RecordGrantScopesParams struct {
-	Scopes []string `json:"scopes"`
-	UserID int64    `json:"user_id"`
-}
-
-// Record what a grant covers, as the provider reported it. Replacing rather than unioning,
-// for the reason above: a list that only grows cannot express a scope the candidate took
-// away. An empty list means the exchange did not say, and keeps what we held.
-func (q *Queries) RecordGrantScopes(ctx context.Context, arg RecordGrantScopesParams) error {
-	_, err := q.db.Exec(ctx, recordGrantScopes, arg.Scopes, arg.UserID)
-	return err
 }
 
 const retractMovedInterviewEvent = `-- name: RetractMovedInterviewEvent :execrows

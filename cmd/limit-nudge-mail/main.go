@@ -1,11 +1,6 @@
-// Command limit-nudge-mail nudges every free-tier account that ran into a daily plan
-// ceiling with a one-time, personal email pointing at Pro — see
-// internal/engage/limitnudge for why this touchpoint exists. One run does a single
-// pass and exits; run it hourly, independent of cmd/billing-sync's own cadence — this
-// is not a billing reconciliation.
+// Command limit-nudge-mail nudges every free-tier account that hit a daily plan ceiling with a one-time, personal email pointing at Pro (see internal/engage/limitnudge). One run does a single pass and exits; run it hourly, independent of cmd/billing-sync.
 //
-// It exits non-zero when any send failed, so the timer's failure handling surfaces a
-// broken sender rather than the pass quietly nudging nobody.
+// It exits non-zero when any send failed, so a broken sender surfaces instead of the pass quietly nudging nobody.
 //
 // Needs:
 //
@@ -36,13 +31,11 @@ import (
 )
 
 func main() {
-	worker.Main(run)
+	worker.Main(run, emailnotify.HoldKeys("limit-nudge-mail")...)
 }
 
 func run() int {
-	// Gate before Bootstrap, not after — the same reason cmd/pro-welcome-mail does:
-	// with no mail transport there is nothing to send, and an unconfigured deployment
-	// must run without touching the database at all.
+	// Gate before Bootstrap, like cmd/pro-welcome-mail: with no mail transport an unconfigured deployment must run without touching the database.
 	cfg := config.Load()
 	if cfg.AWSRegion == "" || cfg.NotifyEmailFrom == "" {
 		log.Print("limit-nudge-mail: email transport not configured (AWS_REGION / NOTIFY_EMAIL_FROM) — nothing to do")
@@ -76,6 +69,7 @@ func run() int {
 		log.Printf("limit-nudge-mail: ses: %v", err)
 		return 1
 	}
+	ses = ses.WithSendingBreaker()
 
 	mailer := limitnudge.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin,
 		emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))

@@ -23,9 +23,7 @@
   const where = $derived(data.countryLabel);
   const heading = $derived(`${what} Jobs in ${where}`);
   const pageTitle = $derived(
-    data.pageNumber > 1
-      ? `${heading} — page ${data.pageNumber} · freehire`
-      : `${heading} · freehire`,
+    data.pageNumber > 1 ? `${heading} — page ${data.pageNumber} · freehire` : `${heading} · freehire`,
   );
 
   /** Facet distribution → the rows a strip renders, biggest first. */

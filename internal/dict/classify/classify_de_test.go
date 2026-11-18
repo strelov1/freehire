@@ -125,7 +125,7 @@ func TestGermanHeadsNeverOverrideTheMainTable(t *testing.T) {
 	for title, want := range map[string]string{
 		"Sicherheitsmitarbeiter (m/w/d) Objektschutz": "public_safety",
 		"Softwareentwickler (m/w/d)":                  "software_engineering",
-		"Systemadministrator (m/w/d)":                 "devops",
+		"Systemadministrator (m/w/d)":                 "system_administration",
 		"Filialleiter (m/w/d)":                        "retail",
 	} {
 		if got := Parse(title).Category; got != want {

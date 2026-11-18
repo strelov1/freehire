@@ -23,10 +23,7 @@ export const GET: RequestHandler = async ({ params }) => {
   const contributor = findContributor(snapshot as ContributorsSnapshot, params.login);
   if (!contributor) error(404, 'Contributor not found');
 
-  const [fonts, avatar] = await Promise.all([
-    loadOgFonts(),
-    resolveAvatar(contributor.avatarUrl),
-  ]);
+  const [fonts, avatar] = await Promise.all([loadOgFonts(), resolveAvatar(contributor.avatarUrl)]);
 
   const png = await renderMarkupPng(buildContributorCard(contributor, { avatar }), fonts);
 

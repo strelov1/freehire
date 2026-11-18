@@ -11,8 +11,8 @@ import (
 
 // jazzhr adapts JazzHR career sites. The board is the JazzHR slug (e.g. "proautomated"),
 // forming the host "{board}.applytojob.com". The /apply listing HTML enumerates the
-// postings; each job page is server-rendered HTML carrying a schema.org JobPosting ld+json
-// block, so the description comes from a per-job detail fetch (bounded-concurrency), like
+// postings; job pages carry schema.org JobPosting JSON-LD or the platform's own
+// server-rendered DOM, so bodies come from per-job detail fetches (bounded-concurrency), like
 // the other HTML detail adapters (teamtailor, radancy).
 type jazzhr struct {
 	http HTMLGetter
@@ -63,11 +63,17 @@ func (s jazzhr) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job,
 		return Job{}, false
 	}
 	var p jazzhrPosting
-	if !ldJobPosting(root, &p) {
-		return unreadableDetail(id, jobURL, e.Company), true
+	var location string
+	if ldJobPosting(root, &p) {
+		location = p.JobLocation.Address.Location()
+		p.Description = sanitizeHTML(html.UnescapeString(p.Description))
+	} else {
+		title, place, description, ok := jazzhrDOMPosting(root, id)
+		if !ok {
+			return unreadableDetail(id, jobURL, e.Company), true
+		}
+		p.Title, p.Description, location = title, description, place
 	}
-
-	location := p.JobLocation.Address.Location()
 
 	return Job{
 		ExternalID:  id,
@@ -75,7 +81,7 @@ func (s jazzhr) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job,
 		Title:       p.Title,
 		Company:     firstNonEmpty(p.HiringOrganization.Name, e.Company),
 		Location:    location,
-		Description: sanitizeHTML(html.UnescapeString(p.Description)),
+		Description: p.Description,
 		// JazzHR exposes no structured remote flag, so isRemote(location) is the only
 		// signal (never the title, which false-positives on "Remote …" role names).
 		Remote:   isRemote(location),

@@ -3,11 +3,9 @@ package gmailsync
 import (
 	"context"
 	"errors"
-	"net/url"
+	"net/http"
 	"testing"
 	"time"
-
-	"golang.org/x/oauth2"
 
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 )
@@ -23,14 +21,21 @@ func testCipher(t *testing.T) *tokencrypt.Cipher {
 }
 
 type fakeStore struct {
-	conns          []Connection
-	encToken       string
-	upserted       []StoredEmail
-	upsertErrIDs   map[string]bool // message ids on which UpsertEmail fails
-	syncedCursor   int64
-	syncedCalled   bool
-	reconsentUsers []int64
-	reconsentErr   error
+	cooldown          time.Time
+	cooldownReadErr   error
+	cooldownWriteErr  error
+	conns             []Connection
+	encToken          string
+	upserted          []StoredEmail
+	upsertErrIDs      map[string]bool // message ids on which UpsertEmail fails
+	syncedSent        int64
+	knownThreads      []string
+	knownThreadsErr   error
+	knownThreadsCalls int
+	syncedCursor      int64
+	syncedCalled      bool
+	reconsentUsers    []int64
+	reconsentErr      error
 }
 
 func (f *fakeStore) ListConnected(context.Context) ([]Connection, error) { return f.conns, nil }
@@ -42,9 +47,10 @@ func (f *fakeStore) UpsertEmail(_ context.Context, e StoredEmail) error {
 	f.upserted = append(f.upserted, e)
 	return nil
 }
-func (f *fakeStore) SetSynced(_ context.Context, _, cursor int64) error {
+func (f *fakeStore) SetSynced(_ context.Context, _, cursor, sentCursor int64) error {
 	f.syncedCalled = true
 	f.syncedCursor = cursor
+	f.syncedSent = sentCursor
 	return nil
 }
 func (f *fakeStore) SetNeedsReconsent(_ context.Context, userID int64) error {
@@ -55,13 +61,41 @@ func (f *fakeStore) SetNeedsReconsent(_ context.Context, userID int64) error {
 	return nil
 }
 
+func (f *fakeStore) ListThreadIDs(context.Context, int64) ([]string, error) {
+	f.knownThreadsCalls++
+	return f.knownThreads, f.knownThreadsErr
+}
+
+// StoredMessages answers from what this fake has upserted, leaving out rows with no recipients
+// (legacy rows a fetch repairs), as the real store does.
+func (f *fakeStore) StoredMessages(_ context.Context, _ int64, ids []string) (map[string]StoredRef, error) {
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		want[id] = true
+	}
+	out := make(map[string]StoredRef)
+	for _, e := range f.upserted {
+		if want[e.Message.ID] && e.Message.ToAddrs != "" {
+			out[e.Message.ID] = StoredRef{ThreadID: e.Message.ThreadID, ReceivedAt: e.Message.ReceivedAt, Incoming: e.Message.Direction != DirectionOutgoing}
+		}
+	}
+	return out, nil
+}
+
 type fakeReader struct {
+	sent         []MessageRef
+	sentErr      error
 	ids          []string
 	byID         map[string]Message
 	threads      map[string][]string // threadID -> message ids
 	listErr      error
 	getErrIDs    map[string]error // message ids on which GetMessage fails
+	gets         []string         // message ids GetMessage was asked for, in order
 	threadErrIDs map[string]error // thread ids on which ListThreadMessageIDs fails
+}
+
+func (f *fakeReader) ListSentMessages(context.Context, int64) ([]MessageRef, error) {
+	return f.sent, f.sentErr
 }
 
 func (f *fakeReader) ListATSMessageIDs(context.Context, string, int64) ([]string, error) {
@@ -74,6 +108,7 @@ func (f *fakeReader) ListThreadMessageIDs(_ context.Context, threadID string) ([
 	return f.threads[threadID], nil
 }
 func (f *fakeReader) GetMessage(_ context.Context, id string) (Message, error) {
+	f.gets = append(f.gets, id)
 	if err := f.getErrIDs[id]; err != nil {
 		return Message{}, err
 	}
@@ -116,7 +151,7 @@ func TestRunOnceSyncsUser(t *testing.T) {
 // TestRunOnceExpandsThread locks in thread-expansion: a matched ATS message
 // pulls in every sibling of its thread, so a recruiter's reply from a personal
 // domain (which no allowlist/phrase would match) is ingested too. The user's own
-// in-thread reply is skipped — inbound mail only.
+// in-thread reply is retained as conversation history.
 func TestRunOnceExpandsThread(t *testing.T) {
 	c := testCipher(t)
 	enc, _ := c.Encrypt("refresh-token")
@@ -145,11 +180,11 @@ func TestRunOnceExpandsThread(t *testing.T) {
 	if !got["m1"] || !got["m3"] {
 		t.Errorf("want anchor m1 and sibling m3 upserted, got %v", got)
 	}
-	if got["m9"] {
-		t.Error("user's own in-thread reply m9 should not be ingested")
+	if !got["m9"] {
+		t.Error("user reply m9 must be retained")
 	}
-	if len(store.upserted) != 2 {
-		t.Errorf("upserted = %d, want 2 (m1, m3; no dupes)", len(store.upserted))
+	if len(store.upserted) != 3 {
+		t.Errorf("upserted = %d, want 3 (no dupes)", len(store.upserted))
 	}
 }
 
@@ -266,252 +301,135 @@ func TestRunOnceRewindsWatermarkOnAFailedThreadSibling(t *testing.T) {
 	}
 }
 
-// A 401 from the Gmail API is the grant saying no, and the only kind of failure that may
-// cost the candidate their connection.
-func TestRunOnceRevokedTokenMarksReconsent(t *testing.T) {
-	store, stats := runWithListError(t, &APIError{
-		Op: "gmail: list", StatusCode: 401, Status: "401 Unauthorized",
-	})
-
-	if len(store.reconsentUsers) != 1 || store.reconsentUsers[0] != 9 {
-		t.Errorf("reconsent = %v, want [9]", store.reconsentUsers)
-	}
-	if store.syncedCalled {
-		t.Error("should not advance cursor when listing failed")
-	}
-	if stats.Reconsent != 1 || stats.Synced != 0 {
-		t.Errorf("stats = %+v, want one connection flagged for re-consent", stats)
-	}
-}
-
-// The revocation that actually happens in production never reaches the Gmail API at all:
-// the reader's client is built from a stored refresh token, so Google refuses it at the
-// TOKEN endpoint and oauth2 hands back a *url.Error wrapping *oauth2.RetrieveError.
-func TestRunOnceMarksReconsentWhenTheTokenEndpointRefusesTheRefreshToken(t *testing.T) {
-	store, stats := runWithListError(t, &url.Error{
-		Op:  "Get",
-		URL: "https://gmail.googleapis.com/gmail/v1/users/me/messages",
-		Err: &oauth2.RetrieveError{ErrorCode: "invalid_grant", ErrorDescription: "Token has been expired or revoked."},
-	})
-
-	if len(store.reconsentUsers) != 1 || store.reconsentUsers[0] != 9 {
-		t.Errorf("reconsent = %v, want [9] — invalid_grant at the token endpoint IS the revocation", store.reconsentUsers)
-	}
-	if stats.Reconsent != 1 {
-		t.Errorf("stats = %+v, want one connection flagged for re-consent", stats)
-	}
-}
-
-// Counting a re-consent the store refused to record would report a transition that did not
-// happen. The mailbox is still `connected`, so the next run meets the same revoked grant and
-// tries again — and nothing else notices in the meantime: the candidate is supposed to be
-// told to reconnect by a status that was never written. That belongs in the failed count,
-// which is what the exit code reads.
-func TestRunOnceCountsAnUnwritableReconsentAsAFailure(t *testing.T) {
+// A first sync too big for one run's rate limit must still finish: the run that hits the
+// limit keeps its cursor, so the next run lists the same messages and must skip the ones
+// already stored rather than re-fetch them and stop at the same limit again.
+func TestRunOnceResumesAThrottledSyncWithoutRefetchingStoredMessages(t *testing.T) {
 	c := testCipher(t)
 	enc, _ := c.Encrypt("refresh-token")
-	store := &fakeStore{
-		conns:        []Connection{{UserID: 9, Cursor: 0}},
-		encToken:     enc,
-		reconsentErr: errors.New("connection reset by peer"),
+	store := &fakeStore{conns: []Connection{{UserID: 7, Email: "u@gmail.com"}}, encToken: enc}
+	t1, t2, t3 := time.Unix(1_700_000_100, 0), time.Unix(1_700_000_200, 0), time.Unix(1_700_000_300, 0)
+	throttle := &APIError{StatusCode: http.StatusForbidden, Reason: "rateLimitExceeded"}
+	reader := &fakeReader{
+		ids: []string{"m3", "m2", "m1"},
+		byID: map[string]Message{
+			"m1": {ID: "m1", ThreadID: "t1", ToAddrs: "u@gmail.com", Subject: "Thanks for applying", ReceivedAt: t1},
+			"m2": {ID: "m2", ThreadID: "t2", ToAddrs: "u@gmail.com", Subject: "Thanks for applying", ReceivedAt: t2},
+			"m3": {ID: "m3", ThreadID: "t3", ToAddrs: "u@gmail.com", Subject: "Thanks for applying", ReceivedAt: t3},
+		},
+		getErrIDs: map[string]error{"m2": throttle},
 	}
-	reader := &fakeReader{listErr: &APIError{
-		Op: "gmail: list", StatusCode: 401, Status: "401 Unauthorized",
-	}}
 	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
 
+	if stats, _ := w.RunOnce(context.Background()); stats.Throttled != 1 {
+		t.Fatalf("first run stats = %+v, want the connection counted as throttled", stats)
+	}
+	if store.syncedCursor != 0 {
+		t.Fatalf("cursor after the throttled run = %d, want 0", store.syncedCursor)
+	}
+
+	reader.gets = nil
+	if stats, _ := w.RunOnce(context.Background()); stats.Throttled != 1 || len(reader.gets) != 0 {
+		t.Fatalf("cooldown made API calls: %+v %v", stats, reader.gets)
+	}
+	store.cooldown = time.Time{}
+	delete(reader.getErrIDs, "m2")
+	reader.gets = nil
 	stats, err := w.RunOnce(context.Background())
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if stats.Reconsent != 0 || stats.Failed != 1 {
-		t.Errorf("stats = %+v, want the connection counted as failed — the status never moved", stats)
+	if stats.Synced != 1 {
+		t.Fatalf("second run stats = %+v, want synced", stats)
+	}
+	for _, id := range reader.gets {
+		if id == "m3" {
+			t.Errorf("second run fetched m3 again (gets = %v); it was stored by the first run", reader.gets)
+		}
+	}
+	if store.syncedCursor != t3.Unix() {
+		t.Errorf("cursor = %d, want %d: a skipped stored message still counts toward the watermark", store.syncedCursor, t3.Unix())
 	}
 }
 
-// Everything else is Google having a bad day, or this process being stopped. The status
-// flag is SHARED with the calendar and only a browser consent clears it, so one incident
-// read as a revocation disconnects every mailbox we hold at once — and the on-demand sync
-// behind the inbox's Sync button runs this same path, so a click at a bad moment did it
-// to one candidate on its own.
-func TestRunOnceDoesNotDisconnectOverATransientFailure(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		err  error
-	}{
-		{"rate limit", &APIError{Op: "gmail: list", StatusCode: 429, Status: "429 Too Many Requests"}},
-		{"provider fault", &APIError{Op: "gmail: list", StatusCode: 503, Status: "503 Service Unavailable"}},
-		{"connection reset", errors.New("read tcp: connection reset by peer")},
-		{"run cancelled", context.Canceled},
-		{"our own client credential is wrong", &url.Error{
-			Op:  "Post",
-			URL: "https://oauth2.googleapis.com/token",
-			Err: &oauth2.RetrieveError{ErrorCode: "invalid_client"},
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			store, stats := runWithListError(t, tc.err)
+// A row stored before recipients were recorded may be a sent reply saved as incoming; the
+// fetch is what repairs it, so a legacy row is fetched again rather than skipped.
+func TestRunOnceRefetchesALegacyStoredMessage(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	legacy := Message{ID: "m1", ThreadID: "t1", FromAddr: "u@gmail.com", ReceivedAt: time.Unix(1_700_000_100, 0)}
+	store := &fakeStore{
+		conns:    []Connection{{UserID: 7, Email: "u@gmail.com"}},
+		encToken: enc,
+		upserted: []StoredEmail{{UserID: 7, Message: legacy}},
+	}
+	repaired := legacy
+	repaired.ToAddrs, repaired.Direction = "hr@acme.test", DirectionOutgoing
+	reader := &fakeReader{ids: []string{"m1"}, byID: map[string]Message{"m1": repaired}}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
 
-			if len(store.reconsentUsers) != 0 {
-				t.Errorf("marked %v for re-consent over %v", store.reconsentUsers, tc.err)
+	if _, err := w.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(reader.gets) != 1 || reader.gets[0] != "m1" {
+		t.Fatalf("gets = %v, want the legacy m1 fetched again", reader.gets)
+	}
+	if last := store.upserted[len(store.upserted)-1].Message; last.Direction != DirectionOutgoing {
+		t.Errorf("re-stored m1 direction = %q, want outgoing", last.Direction)
+	}
+}
+
+func (f *fakeStore) CooldownUntil(context.Context, int64) (time.Time, error) {
+	return f.cooldown, f.cooldownReadErr
+}
+func (f *fakeStore) SetCooldown(context.Context, int64) error {
+	if f.cooldownWriteErr != nil {
+		return f.cooldownWriteErr
+	}
+	f.cooldown = time.Now().Add(time.Hour)
+	return nil
+}
+
+func TestThrottlePersistsCooldownBeforeThreadDiscovery(t *testing.T) {
+	c := testCipher(t)
+	enc, err := c.Encrypt("refresh-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &fakeStore{conns: []Connection{{UserID: 7}}, encToken: enc, knownThreadsErr: errors.New("thread storage unavailable")}
+	reader := &fakeReader{ids: []string{"limited"}, getErrIDs: map[string]error{"limited": &APIError{StatusCode: http.StatusForbidden, Reason: "rateLimitExceeded"}}}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Throttled != 1 || store.cooldown.IsZero() || store.knownThreadsCalls != 0 || store.syncedCalled {
+		t.Fatalf("stats=%+v cooldown=%v threadCalls=%d synced=%v", stats, store.cooldown, store.knownThreadsCalls, store.syncedCalled)
+	}
+}
+
+func TestCooldownFailuresRemainVisible(t *testing.T) {
+	for _, stage := range []string{"read", "write"} {
+		t.Run(stage, func(t *testing.T) {
+			c := testCipher(t)
+			enc, _ := c.Encrypt("refresh")
+			store := &fakeStore{conns: []Connection{{UserID: 7}}, encToken: enc}
+			failure := errors.New("cooldown storage unavailable")
+			if stage == "read" {
+				store.cooldownReadErr = failure
+			} else {
+				store.cooldownWriteErr = failure
 			}
-			if store.syncedCalled {
-				t.Error("should not advance cursor when listing failed")
+			reader := &fakeReader{listErr: &APIError{StatusCode: 429}}
+			calls := 0
+			w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { calls++; return reader })
+			stats, err := w.RunOnce(context.Background())
+			if err != nil || stats.Failed != 1 || stats.Throttled != 0 || store.syncedCalled {
+				t.Fatalf("stats=%+v err=%v", stats, err)
 			}
-			if stats.Failed != 1 || stats.Reconsent != 0 {
-				t.Errorf("stats = %+v, want the connection counted as failed and retried next run", stats)
+			if stage == "read" && calls != 0 {
+				t.Fatal("queried Gmail despite unreadable cooldown")
 			}
 		})
 	}
-}
-
-// A 403 on an individual message fetch is the grant saying no exactly as much as a 403 on
-// the list call is — RevokedGrant reads the status code, not which endpoint sent it. Before
-// this test the fetch loop treated every GetMessage error alike (logged, counted as
-// sawFailure, retried next run), so a mailbox whose grant lost message-read access relisted
-// and re-403'd the SAME messages every run forever: never flagged for re-consent, because
-// nothing on this path asked RevokedGrant. Production measured this at ~450k failed message
-// fetches in 24h for one connection.
-func TestRunOnceRevokedTokenOnMessageFetchMarksReconsent(t *testing.T) {
-	c := testCipher(t)
-	enc, _ := c.Encrypt("refresh-token")
-	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 1_700_000_000}}, encToken: enc}
-	reader := &fakeReader{
-		ids: []string{"m1", "m2"},
-		byID: map[string]Message{
-			"m2": {ID: "m2", Subject: "Thank you for applying to Acme", ReceivedAt: time.Unix(1_700_000_500, 0)},
-		},
-		getErrIDs: map[string]error{
-			"m1": &APIError{Op: "gmail: get message m1", StatusCode: 403, Status: "403 Forbidden"},
-		},
-	}
-	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
-
-	stats, err := w.RunOnce(context.Background())
-	if err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(store.reconsentUsers) != 1 || store.reconsentUsers[0] != 9 {
-		t.Errorf("reconsent = %v, want [9]", store.reconsentUsers)
-	}
-	if store.syncedCalled {
-		t.Error("should not advance the cursor when a message fetch revealed a revoked grant")
-	}
-	if stats.Reconsent != 1 || stats.Synced != 0 || stats.Failed != 0 {
-		t.Errorf("stats = %+v, want one connection flagged for re-consent", stats)
-	}
-}
-
-// A 500, a reset connection, or a message that would not store on a live grant says nothing
-// about the grant — the existing per-message failure path, unchanged by the fix above.
-func TestRunOnceDoesNotDisconnectOverATransientMessageFetchFailure(t *testing.T) {
-	c := testCipher(t)
-	enc, _ := c.Encrypt("refresh-token")
-	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 0}}, encToken: enc}
-	reader := &fakeReader{
-		ids:       []string{"m1"},
-		byID:      map[string]Message{},
-		getErrIDs: map[string]error{"m1": &APIError{Op: "gmail: get message m1", StatusCode: 503, Status: "503 Service Unavailable"}},
-	}
-	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
-
-	stats, err := w.RunOnce(context.Background())
-	if err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(store.reconsentUsers) != 0 {
-		t.Errorf("marked %v for re-consent over a transient fetch failure", store.reconsentUsers)
-	}
-	if stats.Failed != 1 || stats.Reconsent != 0 {
-		t.Errorf("stats = %+v, want the connection counted as failed and retried next run", stats)
-	}
-}
-
-// A third Gmail API call — thread expansion's ListThreadMessageIDs — can reveal a revoked
-// grant exactly as the list call and a message fetch can, and was the one call site this
-// PR's own review found still unchecked: its error path only logged and continued,
-// leaving a connection that lost thread-read access mid-run un-flagged and retried by cron
-// forever, the same bug class this whole PR exists to close.
-func TestRunOnceRevokedTokenOnThreadListingMarksReconsent(t *testing.T) {
-	c := testCipher(t)
-	enc, _ := c.Encrypt("refresh-token")
-	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 1_700_000_000}}, encToken: enc}
-	reader := &fakeReader{
-		ids: []string{"m1"},
-		byID: map[string]Message{
-			"m1": {ID: "m1", ThreadID: "t1", FromAddr: "no-reply@ashbyhq.com", Subject: "Thanks for applying", ReceivedAt: time.Unix(1_700_000_100, 0)},
-		},
-		threadErrIDs: map[string]error{
-			"t1": &APIError{Op: "gmail: thread t1", StatusCode: 403, Status: "403 Forbidden"},
-		},
-	}
-	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
-
-	stats, err := w.RunOnce(context.Background())
-	if err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(store.reconsentUsers) != 1 || store.reconsentUsers[0] != 9 {
-		t.Errorf("reconsent = %v, want [9]", store.reconsentUsers)
-	}
-	if store.syncedCalled {
-		t.Error("should not advance the cursor when a thread listing revealed a revoked grant")
-	}
-	if stats.Reconsent != 1 || stats.Synced != 0 || stats.Failed != 0 {
-		t.Errorf("stats = %+v, want one connection flagged for re-consent", stats)
-	}
-}
-
-// A thread listing that fails for any other reason still only skips that one thread's
-// siblings — the anchor message it was expanding already stored fine, so the run is not
-// failed over a single thread's own hiccup. Unchanged by the fix above.
-func TestRunOnceDoesNotDisconnectOverATransientThreadListingFailure(t *testing.T) {
-	c := testCipher(t)
-	enc, _ := c.Encrypt("refresh-token")
-	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 0}}, encToken: enc}
-	reader := &fakeReader{
-		ids: []string{"m1"},
-		byID: map[string]Message{
-			"m1": {ID: "m1", ThreadID: "t1", FromAddr: "no-reply@ashbyhq.com", Subject: "Thanks for applying", ReceivedAt: time.Unix(1_700_000_100, 0)},
-		},
-		threadErrIDs: map[string]error{
-			"t1": &APIError{Op: "gmail: thread t1", StatusCode: 503, Status: "503 Service Unavailable"},
-		},
-	}
-	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
-
-	stats, err := w.RunOnce(context.Background())
-	if err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(store.reconsentUsers) != 0 {
-		t.Errorf("marked %v for re-consent over a transient thread listing failure", store.reconsentUsers)
-	}
-	if len(store.upserted) != 1 || store.upserted[0].Message.ID != "m1" {
-		t.Fatalf("upserted = %v, want only the anchor m1 (thread expansion failed, not the anchor)", store.upserted)
-	}
-	if stats.Failed != 0 || stats.Synced != 1 || stats.Reconsent != 0 {
-		t.Errorf("stats = %+v, want the connection cleanly synced — a thread's own transient "+
-			"failure does not fail the whole run", stats)
-	}
-}
-
-// runWithListError syncs one connection whose listing fails with err, returning what the
-// store saw and what the run reported.
-func runWithListError(t *testing.T, listErr error) (*fakeStore, Stats) {
-	t.Helper()
-	c := testCipher(t)
-	enc, _ := c.Encrypt("refresh-token")
-	store := &fakeStore{conns: []Connection{{UserID: 9, Cursor: 0}}, encToken: enc}
-	reader := &fakeReader{listErr: listErr}
-	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
-
-	stats, err := w.RunOnce(context.Background())
-	if err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if stats.Connections != 1 {
-		t.Fatalf("connections = %d, want 1", stats.Connections)
-	}
-	return store, stats
 }

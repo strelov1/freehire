@@ -1,12 +1,10 @@
 // Package prowelcome sends the one-time, personal welcome email a first-ever transition
-// into a paying tier earns — see openspec/changes/welcome-pro-subscribers.
+// into a paying tier earns.
 //
-// It sits beside internal/engage/onboarding rather than internal/engage/emailnotify on
-// purpose: this is a person introducing himself and inviting a reply (Reply-To a human
-// inbox, first-person prose), not a machine reporting a fact. cmd/pro-welcome-mail is the
-// only caller — see that binary's own doc for why this cannot be a pass inside
-// cmd/billing-sync (internal/identity/billing is layer identity, this package is layer
-// engage, and identity must not import engage).
+// It sits beside internal/engage/onboarding, not emailnotify: this is a person introducing
+// himself (Reply-To a human inbox, first-person prose), not a machine reporting a fact.
+// cmd/pro-welcome-mail is the only caller; it cannot be a pass inside cmd/billing-sync
+// because identity must not import engage.
 package prowelcome
 
 import (
@@ -24,27 +22,15 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// Sender delivers one rendered message. *emailnotify.Client satisfies it in production;
-// tests inject a fake. Same seam onboarding.Sender uses, for the same reason: the
-// Reply-To this letter needs is a field on emailnotify.Message, not a second transport
-// method.
-type Sender interface {
-	Send(ctx context.Context, m emailnotify.Message) error
-}
-
-// ErrNotPaying is returned by render/Send when asked to welcome a free tier. There is
-// nothing to welcome an account to on the plan everyone starts on, and a caller reaching
-// this with TierFree has already made the mistake the candidate query is built to avoid.
+// ErrNotPaying is returned by render/Send when asked to welcome a free tier.
 var ErrNotPaying = errors.New("prowelcome: refusing to welcome a free-tier account")
 
-// senderName is what the recipient's message list shows — see
-// onboarding.senderName's own comment: "freehire" would set up a reply to a company no
-// one intends to answer.
+// senderName is what the recipient's message list shows; see onboarding.senderName.
 const senderName = "Ilya from freehire"
 
 // Mailer renders and sends the welcome letter.
 type Mailer struct {
-	sender  Sender
+	sender  emailnotify.Sender
 	from    string
 	replyTo string
 	baseURL string
@@ -52,11 +38,9 @@ type Mailer struct {
 	links   *emailprefs.Links
 }
 
-// NewMailer builds a Mailer. `from` is the verified sending address; `replyTo` is the
-// human inbox that answers — see onboarding.NewMailer's own comment on why a blank value
-// is a configuration error the caller must catch rather than something this type papers
-// over.
-func NewMailer(sender Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
+// NewMailer builds a Mailer. from is the verified sending address; replyTo is the human
+// inbox that answers (blank is a configuration error, see onboarding.NewMailer).
+func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	return &Mailer{
 		sender:  sender,
 		from:    emailnotify.From(senderName, from),
@@ -100,14 +84,12 @@ type content struct {
 	LinkedInIcon string
 	PortraitURL  string
 	// IntegrationsURL is where the reader connects their Discord account to claim the
-	// paid-tier channel — see internal/engage/discordlink's own "every paying tier gets
-	// the same role" for why this letter never needs to distinguish Pro from Ultra here.
+	// paid-tier channel; every paying tier gets the same role.
 	IntegrationsURL string
 }
 
-// tierLabel is the ONLY place a plan.Tier becomes the word this letter uses for it — see
-// discordlink's "every paying tier gets the same role" for the sibling reasoning: Pro and
-// Ultra get the same letter, differing only in which word appears where.
+// tierLabel is the only place a plan.Tier becomes the word this letter uses; Pro and
+// Ultra get the same letter otherwise.
 func tierLabel(t plan.Tier) (string, error) {
 	switch t {
 	case plan.TierPro:

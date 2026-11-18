@@ -268,7 +268,11 @@ func TestGreenhouseOfficeCountry(t *testing.T) {
 		{"no offices", "Remote", `[]`, nil},
 		{"a scoped location is not bare", "Americas Remote", `[{"name":"USA Remote","location":"Oregon, United States"}]`, nil},
 		{"an open-anywhere location is not bare", "Remote - Worldwide", `[{"name":"London","location":"London, United Kingdom"}]`, nil},
-		{"a non-remote location is not read", "Hybrid", `[{"name":"Dubai","location":"Dubai, United Arab Emirates"}]`, nil},
+		{"a bare Hybrid works from its office", "Hybrid", `[{"name":"Dubai","location":"Dubai, United Arab Emirates"}]`, []string{"ae"}},
+		// cloudflare/6998777.
+		{"a bare Hybrid over offices in one country", "Hybrid", `[{"name":"Austin, TX","location":"Austin, TX, United States"},{"name":"New York, NY","location":"New York, New York, United States"},{"name":"San Francisco, CA","location":"San Francisco, CA, United States"}]`, []string{"us"}},
+		{"a scoped hybrid is not bare", "Hybrid - Europe", `[{"name":"Berlin","location":"Berlin, Germany"}]`, nil},
+		{"an onsite location is not read", "Onsite", `[{"name":"Dubai","location":"Dubai, United Arab Emirates"}]`, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

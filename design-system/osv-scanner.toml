@@ -1,0 +1,12 @@
+# Build configuration only; reviewed caller paths and checked-in token inputs.
+# Remove or re-evaluate before expiry: https://github.com/strelov1/freehire/issues/4714
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+reason = "No patched deepmerge release. Svelte merges local build options; Style Dictionary merges repository token configuration and hooks. No request input. Tracked in freehire#4714."
+effectiveUntil = 2026-11-29
+
+# Build and dev tooling only (Vite, Vitest, tinyglobby/fdir, unplugin, WXT, knip); globs come from repository config.
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+reason = "No patched picomatch release (affects <=4.0.7). Only build, test and lint tools match globs, and every pattern comes from checked-in config, never from request input, so the extglob ReDoS is unreachable in production."
+effectiveUntil = 2026-12-18

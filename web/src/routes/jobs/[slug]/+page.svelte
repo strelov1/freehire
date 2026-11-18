@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { api } from '#lib/api.js';
   import { page } from '$app/state';
   import JobRelated from '#lib/components/JobRelated.svelte';
   import JobSeeAlso from '#lib/components/JobSeeAlso.svelte';
@@ -8,17 +9,31 @@
   import { filterHref } from '#lib/enrichment.js';
   import { categoryLabel } from '#lib/labels.js';
   import { categoryLandingLink } from '#lib/roleLandings.js';
-  import {
-    breadcrumbJsonLd,
-    jobPageTitle,
-    jobPostingJsonLd,
-    jsonLdScript,
-    metaDescription,
-  } from '#lib/seo.js';
+  import { breadcrumbJsonLd, jobPageTitle, jsonLdScript, metaDescription } from '#lib/seo.js';
+  import { jobPostingJsonLd } from '#lib/seoJobPosting.js';
+  import type { Job } from '#lib/types.js';
   import { Breadcrumbs } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
+
+  // Loaded in the browser, not in +page.server.ts: see the note there. A failure (search
+  // disabled, no neighbours yet) leaves the list empty rather than breaking the page.
+  let similar = $state<Job[]>([]);
+  $effect(() => {
+    const slug = data.job.public_slug;
+    let current = true;
+    api
+      .getSimilarJobs(slug)
+      .then((jobs) => {
+        if (current) similar = jobs;
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+      similar = [];
+    };
+  });
 
   const marketLink = $derived(categoryLandingLink(data.job.enrichment.category));
   const origin = $derived(page.url.origin);
@@ -31,7 +46,7 @@
     metaDescription(data.job.description) ||
       (data.job.company
         ? `${data.job.title} at ${data.job.company} — apply on freehire.`
-        : `${data.job.title} — apply on freehire.`)
+        : `${data.job.title} — apply on freehire.`),
   );
   // The one breadcrumb trail behind both the visible nav (via visibleBreadcrumbItems below)
   // and the structured data — a single array so the two can never disagree about what the
@@ -74,7 +89,7 @@
           url: item.href ? `${origin}${item.href}` : canonical,
         })),
       ),
-    ])
+    ]),
   );
 </script>
 
@@ -90,18 +105,13 @@
      raw text with no card wrapper, so 16px reads tight against the edge; sm+ falls
      back to the shared px-4 rhythm. -->
 <div class="mx-auto w-full max-w-6xl px-5 py-6 sm:px-4">
-  <JobView job={data.job} applyForm={data.applyForm} hasSimilar={data.similar.length > 0} />
+  <JobView job={data.job} applyForm={data.applyForm} hasSimilar={similar.length > 0} />
 
   <!-- `#similar-jobs` is where a closed posting's notice points its reader. JobRelated opens
        on the Similar tab whenever there are similar postings, which is the only case in
-       which JobView offers the link. -->
+       which JobView offers the link. Full page width: the rail above has ended by here. -->
   <div id="similar-jobs">
-    <JobRelated
-      similar={data.similar}
-      copies={data.copies}
-      copiesTotal={data.copiesTotal}
-      slug={data.job.public_slug}
-    />
+    <JobRelated {similar} copies={data.copies} copiesTotal={data.copiesTotal} slug={data.job.public_slug} />
   </div>
 
   <!-- Below the related postings and right above "See also" on every width: at the top
@@ -120,7 +130,7 @@
     <p class="mt-8 text-sm">
       <a
         href={resolve('/roles/[category]', { category: marketLink.slug })}
-        class="text-brand-strong hover:underline"
+        class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
       >
         {marketLink.label} jobs by country — openings, pay and top skills →
       </a>

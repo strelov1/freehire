@@ -13,9 +13,7 @@ import (
 // Compile-time proof that QueriesRepository satisfies Repository.
 var _ Repository = (*QueriesRepository)(nil)
 
-// QueriesRepository adapts *db.Queries to the Repository. It maps the no-row condition on
-// Get to ErrNotFound; Upsert needs no mapping (the PRIMARY KEY (user_id) makes it
-// conflict-free).
+// QueriesRepository adapts *db.Queries to the Repository, mapping no row on Get to ErrNotFound.
 type QueriesRepository struct {
 	q *db.Queries
 }
@@ -66,9 +64,7 @@ func answersFromRow(row db.CandidateSurvey) Responses {
 	}
 }
 
-// derefString returns the empty string for a nil pointer, its content otherwise —
-// pgconv.Text already treats "" as NULL, so this is the one-line bridge from Responses'
-// *string fields to that convention.
+// derefString returns "" for nil; pgconv.Text treats "" as NULL.
 func derefString(s *string) string {
 	if s == nil {
 		return ""

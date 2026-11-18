@@ -228,7 +228,7 @@ func TestTwoSimultaneousContinuesCostOneAllowance(t *testing.T) {
 	}
 }
 
-func TestOneSessionCannotBorrowAnothersCeilings(t *testing.T) {
+func TestOneSessionCannotBorrowAnotherCeilings(t *testing.T) {
 	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)
 	s, pool := newStore(t, enforcing(), now)
 	ctx := context.Background()

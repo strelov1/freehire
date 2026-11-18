@@ -4,6 +4,7 @@
   import AccountTimezone from '#lib/components/AccountTimezone.svelte';
   import CandidateContactsEditor from '#lib/components/CandidateContactsEditor.svelte';
   import CvSummaryCard from '#lib/components/profile/CvSummaryCard.svelte';
+  import JobLanguagesCard from '#lib/components/profile/JobLanguagesCard.svelte';
   import LocationCard from '#lib/components/profile/LocationCard.svelte';
   import ProfileForm from '#lib/components/ProfileForm.svelte';
   import RoleCard from '#lib/components/profile/RoleCard.svelte';
@@ -25,16 +26,13 @@
 </script>
 
 {#if profile}
-  {#key profile.updated_at}
-    <ProfileForm
-      {profile}
-      hasCv={resumeStore.present}
-      uploadedAt={resumeMeta?.uploaded_at}
-      onSaved={handleSaved}
-      onCvUploaded={handleCvUploaded}
-      onCvDeleted={handleCvDeleted}
-    />
-  {/key}
+  <ProfileForm
+    hasCv={resumeStore.present}
+    uploadedAt={resumeMeta?.uploaded_at}
+    onSaved={handleSaved}
+    onCvUploaded={handleCvUploaded}
+    onCvDeleted={handleCvDeleted}
+  />
 
   <div class="mt-4">
     <CvSummaryCard structured={resumeMeta?.structured ?? null} />
@@ -43,6 +41,8 @@
   <div class="mt-4">
     <RoleCard {profile} onProfileChanged={handleSaved} />
   </div>
+
+  <JobLanguagesCard onProfileChanged={handleSaved} />
 
   <div id="account-contacts" class="mt-8 scroll-mt-20 border-t border-border pt-6">
     <CandidateContactsEditor contacts={resumeMeta?.contacts ?? null} />

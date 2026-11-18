@@ -84,22 +84,21 @@ export class ToolChannel {
     const ws = new WebSocket(toolsWsUrl(), [WS_SUBPROTOCOL_MARKER, token]);
     this.ws = ws;
 
-    ws.onopen = () => {
+    ws.addEventListener('open', () => {
       this.attempt = 0;
       this.notifiedUnreachable = false;
       this.onStatus('open');
-    };
-    ws.onmessage = async (ev) => {
+    });
+    ws.addEventListener('message', async (ev) => {
       const reply = await respondTo(ev.data, this.page);
       if (reply && ws.readyState === WebSocket.OPEN) ws.send(reply);
-    };
-    ws.onclose = () => {
+    });
+    // A socket that errors also closes, so the retry is scheduled here alone and a
+    // failure is not scheduled twice.
+    ws.addEventListener('close', () => {
       this.onStatus('closed');
       this.retry(token);
-    };
-    // A socket that errors also closes; leave the retry to onclose so a failure
-    // is not scheduled twice.
-    ws.onerror = () => {};
+    });
   }
 
   private retry(token: string): void {

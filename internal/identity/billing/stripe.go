@@ -15,11 +15,6 @@ const stripeName = "stripe"
 const stripeSignatureHeader = "Stripe-Signature"
 
 // stripeProvider is Stripe behind the provider seam.
-//
-// Everything here was already in this package and is unchanged in behaviour; what moved is
-// only which type owns it. The existing Stripe tests are the proof — three of their lines
-// changed and none was an assertion: a helper that moved types, a header constant written out
-// locally, and a constructor call that stopped reaching into a field.
 type stripeProvider struct {
 	cfg    Config
 	q      *db.Queries
@@ -39,12 +34,8 @@ func (p *stripeProvider) accept(raw []byte, signature string, now time.Time) (Ev
 	return parseEvent(raw)
 }
 
-// account finds which account an event is about.
-//
-// Two routes, and the order matters. The customer binding is authoritative for everything
-// after the first purchase. The account reference the provider echoes back is what covers
-// the first purchase itself, where no binding exists yet — a checkout completion carries it
-// precisely because nothing else could.
+// account finds which account an event is about. The customer binding is authoritative; the
+// echoed account reference covers the first purchase, where no binding exists yet.
 func (p *stripeProvider) account(ctx context.Context, ev Event) (int64, bool) {
 	if ev.CustomerID != "" {
 		if id, err := p.q.GetUserIDByStripeCustomer(ctx, ev.CustomerID); err == nil {
@@ -57,11 +48,8 @@ func (p *stripeProvider) account(ctx context.Context, ev Event) (int64, bool) {
 	return 0, false
 }
 
-// bind records which provider customer an account is. Idempotent: the query is guarded by
-// IS DISTINCT FROM, so writing the value already there does nothing.
-//
-// An event carrying no customer binds nothing and is not an error — the engine calls this
-// for every delivery, and only some of them name a customer.
+// bind records which provider customer an account is. Idempotent (guarded by IS DISTINCT
+// FROM). An event with no customer binds nothing; the engine calls this for every delivery.
 func (p *stripeProvider) bind(ctx context.Context, userID int64, ev Event) error {
 	if ev.CustomerID == "" {
 		return nil
@@ -71,9 +59,7 @@ func (p *stripeProvider) bind(ctx context.Context, userID int64, ev Event) error
 	})
 }
 
-// knows reports whether this account has a Stripe customer to ask about. Asking about a
-// stranger costs nothing here — there is simply nobody to name — but the answer is the same
-// one reach would give, one round trip earlier.
+// knows reports whether this account has a Stripe customer to ask about.
 func (p *stripeProvider) knows(ctx context.Context, userID int64) (bool, error) {
 	customer, err := p.q.GetStripeCustomerID(ctx, userID)
 	if err != nil {
@@ -83,11 +69,8 @@ func (p *stripeProvider) knows(ctx context.Context, userID int64) (bool, error) 
 }
 
 // reach reads Stripe's current subscriptions for one account and reduces them to the furthest
-// point a conferring one still stands, per tier.
-//
-// ONE listing answers for both tiers. Asking twice would be two reads of a thing that can
-// change between them, and the tier a subscription confers is only which configured price
-// list its price is in — a filter over the same answer, not a second question.
+// point a conferring one still stands, per tier. One listing serves every tier, since the
+// tier is only which configured price list the price is in.
 func (p *stripeProvider) reach(ctx context.Context, userID int64) (entitlement, error) {
 	customer, err := p.customerOf(ctx, userID)
 	if err != nil {
@@ -100,8 +83,7 @@ func (p *stripeProvider) reach(ctx context.Context, userID int64) (entitlement, 
 	return entitlementFrom(sub, p.cfg), nil
 }
 
-// store writes both of Stripe's source columns in one statement — see the query's own note
-// on why not two.
+// store writes all of Stripe's source columns in one statement (see the query's note).
 func (p *stripeProvider) store(ctx context.Context, userID int64, ent entitlement) error {
 	return p.q.SetStripeEntitlement(ctx, db.SetStripeEntitlementParams{
 		ProUntil:     nullable(ent.Pro),
@@ -112,8 +94,7 @@ func (p *stripeProvider) store(ctx context.Context, userID int64, ent entitlemen
 	})
 }
 
-// dueSoon reaches accounts through the customer binding, so the candidate set is the accounts
-// that have actually transacted rather than every account on the site.
+// dueSoon goes through the customer binding, so only accounts that have transacted are candidates.
 func (p *stripeProvider) dueSoon(ctx context.Context, from, to time.Time, max int32) ([]int64, error) {
 	rows, err := p.q.ListSubscribersNearProExpiryStripe(ctx, db.ListSubscribersNearProExpiryStripeParams{
 		FromTime: stamp(from),

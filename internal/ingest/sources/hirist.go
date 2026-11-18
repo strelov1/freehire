@@ -70,8 +70,8 @@ var (
 const (
 	// hiristPageSize is the listing's page size; the API serves size=100 in full.
 	hiristPageSize = 100
-	// hiristMaxPages is a safety ceiling, not the platform's: the largest category held 6,346
-	// postings (64 pages) on 2026-10-25. A walk that reaches it is logged.
+	// hiristMaxPages is a safety ceiling, not the platform's: far above the largest category. A
+	// walk that reaches it is logged.
 	hiristMaxPages = 200
 	// hiristRequestInterval paces every request of a run, listing and posting alike, to one a
 	// second. Both sites' robots.txt ask crawlers for a 10 s delay on the web host; the API host
@@ -79,9 +79,9 @@ const (
 	hiristRequestInterval = time.Second
 	hiristRequestBurst    = 1
 	hiristDetailWorkers   = 2
-	// hiristDetailBudget bounds one run's detail requests (~20 minutes at the pace above, plus
-	// the ~300 listing pages of a full hirist walk). A cold start is ~30k postings on hirist and
-	// ~25k on iimjobs, so the backlog drains over the first ~25 runs, newest first.
+	// hiristDetailBudget bounds one run's detail requests (~20 minutes at the pace above, plus the
+	// listing pages of a full walk). A cold start is tens of thousands of postings per site, so
+	// the backlog drains over many runs, newest first.
 	hiristDetailBudget = 1200
 	// hiristBoardDetailShare caps one board's claim on the run's budget, so the largest
 	// categories' cold backlogs cannot take a whole run while the rest wait.
@@ -249,7 +249,7 @@ func (s hirist) hydrate(ctx context.Context, rows []hiristListing, tech bool, se
 			continue
 		}
 		// A posting the pipeline will discard is yielded body-less, for it to count.
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}

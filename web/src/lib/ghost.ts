@@ -1,6 +1,6 @@
 import { GHOST_CRITERION_VALUES } from './generated/contracts';
 import type { Ghost, GhostCriterion } from './generated/contracts';
-import type { Locale } from './locale';
+import type { Locale } from './i18n/locale';
 import { timeAgo } from './utils';
 
 /** A rendered ghost badge: a tone, a hedged chip label, the `fired/total` scale, and
@@ -76,10 +76,7 @@ export type GhostCriterionCode = GhostCriterion;
  *  way, both are type errors.
  *
  *  `short` names the criterion for a list, where `label` states it as a sentence. */
-const WORDING: Record<
-  GhostCriterionCode,
-  { label: string; short: string; tier: 'structural' | 'outcome' }
-> = {
+const WORDING: Record<GhostCriterionCode, { label: string; short: string; tier: 'structural' | 'outcome' }> = {
   evergreen_posting: {
     label: 'Posting behaves as evergreen',
     short: 'how the posting behaves',
@@ -122,9 +119,7 @@ export const WITNESS_GATE = 2;
 /** The levels the classifier reports. `none` is most of the catalogue. */
 export type GhostLevel = 'none' | 'possible' | 'likely';
 
-const OUTCOME_CODES: ReadonlySet<string> = new Set(
-  CRITERIA.filter((c) => c.tier === 'outcome').map((c) => c.code),
-);
+const OUTCOME_CODES: ReadonlySet<string> = new Set(CRITERIA.filter((c) => c.tier === 'outcome').map((c) => c.code));
 
 /** ghostLevel derives the level from the criteria that fired and the number of distinct
  *  people behind the outcome evidence. Mirrors internal/ghost, which remains the

@@ -28,9 +28,8 @@ const (
 // Target is one traceable link: the position it occupies in the CV document, and the absolute
 // destination a visitor following it must end up at.
 //
-// The position is kept as its parts rather than a formatted string because it becomes half of
-// the uniqueness key that makes minting idempotent — and a key that only exists pre-formatted
-// has to be parsed back apart by whoever needs it next.
+// The position is kept as parts, not a formatted string, because it is half of the
+// uniqueness key that makes minting idempotent.
 type Target struct {
 	Section Section
 	Index   int
@@ -77,10 +76,8 @@ func Targets(ownHosts, headerLinks, projectLinks []string) []Target {
 // destination normalises a stored link into the absolute URL a redirect can send a visitor to,
 // reporting whether it is traceable at all.
 //
-// CVs store links the way a candidate writes them on paper — "github.com/ada", no scheme — so a
-// missing scheme is the common case and means https, not "not a link". A scheme that is present
-// and is not http(s) means the opposite: mailto: and tel: are working links that tracing would
-// break, and there is nothing to count on either.
+// CVs store links without a scheme ("github.com/ada"), which means https. A present scheme
+// other than http(s) is not traceable: mailto: and tel: would break.
 func destination(ownHosts []string, raw string) (string, bool) {
 	s := strings.TrimSpace(raw)
 	if s == "" {
@@ -112,9 +109,9 @@ func destination(ownHosts []string, raw string) (string, bool) {
 // hasScheme reports whether the link already names a scheme — "https://…", but also the
 // slash-less "mailto:…" and "tel:…".
 //
-// Two things a bare "is there a colon" test gets wrong: a colon after the first slash belongs to
-// a path ("example.com/a:b"), and a colon followed by digits is a port on a scheme-less host
-// ("myserver.dev:8080/cv"), which is a perfectly traceable link rather than an exotic protocol.
+// A bare colon test gets two cases wrong: a colon after the first slash belongs to a path
+// ("example.com/a:b"), and a colon followed by digits is a port on a scheme-less host
+// ("myserver.dev:8080/cv").
 func hasScheme(s string) bool {
 	colon := strings.IndexByte(s, ':')
 	if colon < 0 {
@@ -136,9 +133,8 @@ func hasScheme(s string) bool {
 }
 
 // isOurs reports whether a host is one this deployment serves. The comparison is over the
-// normalised host: case folded, the "www." label dropped, and the trailing dot of a
-// fully-qualified name removed — that dot names the same host to DNS and is the cheapest way
-// past a string comparison.
+// normalised host: case folded, "www." dropped, and the trailing dot of a fully-qualified
+// name removed (it names the same host to DNS).
 func isOurs(ownHosts []string, host string) bool {
 	h := normaliseHost(host)
 	for _, own := range ownHosts {
@@ -155,30 +151,24 @@ func normaliseHost(host string) string {
 	return strings.TrimPrefix(h, "www.")
 }
 
-// tokenAlphabet is what Token's random part is drawn from — lowercase, because the token is read
-// off a hover tooltip and an address bar, where case is easy to mistake and impossible to check.
-// It mirrors the alphabet of crypto/rand.Text, lowercased.
+// tokenAlphabet is what Token's random part is drawn from: lowercase, because the token is read
+// off a hover tooltip and an address bar. It mirrors crypto/rand.Text's alphabet, lowercased.
 const tokenAlphabet = "abcdefghijklmnopqrstuvwxyz234567"
 
-// tokenRandomLen is 5 rather than the 2 of the tool this borrows from. Two characters is a few
-// hundred tokens per prefix, which is ample for one self-hosted user and wrong here: hundreds of
-// candidates apply to the same company and share its prefix, so by the birthday bound collisions
-// begin around the thirtieth token.
+// tokenRandomLen is 5: many candidates share one company prefix, and with 2 characters the
+// birthday bound makes collisions begin around the thirtieth token.
 const tokenRandomLen = 5
 
 // noCompanyPrefix stands in when the CV is tied to no job, so every token has the same shape.
 const noCompanyPrefix = "cv"
 
 // Token mints a token for a CV's link. The prefix is the company the CV was tailored for: the
-// recruiter sees it on hover and in the address bar during the redirect, and their own company's
-// name reads less alarmingly there than an opaque string.
+// recruiter sees it on hover and in the address bar during the redirect.
 //
-// Uniqueness is the database's to enforce, through the token's unique index. Nothing retries: a
-// collision leaves that one link untraced for this download and mints cleanly on the next one. So
-// this only has to make a collision rare, not impossible.
+// Uniqueness is enforced by the token's unique index. Nothing retries: a collision leaves that
+// link untraced for this download, so a collision only has to be rare, not impossible.
 func Token(prefix string) string {
-	// crypto/rand.Text draws from the base32 alphabet and cannot fail, so there is no error path
-	// here to leave a caller holding an empty token.
+	// crypto/rand.Text cannot fail, so no error path leaves a caller with an empty token.
 	random := strings.ToLower(rand.Text())[:tokenRandomLen]
 	return sanitizePrefix(prefix) + "-" + random
 }
@@ -196,13 +186,11 @@ func sanitizePrefix(prefix string) string {
 	return noCompanyPrefix
 }
 
-// botMarkers are matched as plain substrings of the lowercased user agent. Whole-word matching —
-// the obvious spelling, and the one the tool this borrows from uses — misses "HeadlessChrome",
-// because the character after "headless" is a word character.
+// botMarkers are matched as plain substrings of the lowercased user agent (whole-word matching
+// misses "HeadlessChrome").
 //
-// Every entry here is a name no browser carries. The generic "bot" is deliberately absent: it
-// appears inside "CUBOT", a phone brand, and inside "Safari Technology Preview" lives the word
-// "preview" that a scanner list would otherwise claim. Generic bots are caught by botSuffixes.
+// Every entry is a name no browser carries. The generic "bot" is deliberately absent: it appears
+// inside "CUBOT", a phone brand. Generic bots are caught by botSuffixes.
 var botMarkers = []string{
 	"crawler", "spider", "scanner", "headless", "curl/", "wget",
 	"python-requests", "go-http-client", "java/", "okhttp",
@@ -210,13 +198,12 @@ var botMarkers = []string{
 }
 
 // botSuffixes catch the general shape of a bot's name — "…bot" followed by a version separator,
-// as in "Googlebot/2.1" or "bingbot;" — without claiming every product whose name happens to end
-// in those three letters.
+// as in "Googlebot/2.1" or "bingbot;" — without claiming every name that merely ends in "bot".
 var botSuffixes = []string{"bot/", "bot;", "bot)", "bot ", "bot-"}
 
 // Classify reads what a click's request says about its maker. It is called once, when the click
-// is recorded, and its verdict is stored: recomputing it on read would let a later edit to these
-// markers silently rewrite history.
+// is recorded, and its verdict is stored: recomputing on read would let a later edit to these
+// markers rewrite history.
 func Classify(method, userAgent string) Client {
 	ua := strings.ToLower(strings.TrimSpace(userAgent))
 	os := osFamily(ua)
@@ -228,9 +215,8 @@ func Classify(method, userAgent string) Client {
 	}
 }
 
-// isAutomated errs towards flagging. A human reading a CV in a browser issues GET and sends a
-// user agent; anything else is a fetcher of some kind, and a link checker issuing HEAD is one no
-// user-agent list would catch.
+// isAutomated errs towards flagging: a human in a browser issues GET and sends a user agent;
+// anything else (e.g. a HEAD link checker) is a fetcher.
 //
 // It cannot catch the case that matters most: corporate mail-security scanners fetch links with
 // ordinary browser user agents. Counts are therefore evidence a link was opened, never proof a
@@ -255,8 +241,7 @@ func isAutomated(method, lowerUA string) bool {
 	return strings.HasSuffix(lowerUA, "bot")
 }
 
-// The three families below are dictionaries in the sense this codebase uses the word: they
-// recognise or they report unknown, and never guess a plausible-looking answer.
+// The three families below recognise or report unknown; they never guess.
 
 func osFamily(lowerUA string) string {
 	switch {
@@ -277,10 +262,8 @@ func osFamily(lowerUA string) string {
 	}
 }
 
-// uaFamily reads the browser off the user agent. Order is the whole logic: every entry below
-// borrows the name of one further down — Edge, Opera and Samsung Internet all claim Chrome, and
-// Chrome claims Safari — so the most specific claim has to be tested first. Reporting a borrower
-// as Chrome would be the guessing the unknown fallback exists to refuse.
+// uaFamily reads the browser off the user agent. Order matters: Edge, Opera and Samsung
+// Internet all claim Chrome, and Chrome claims Safari, so the most specific is tested first.
 func uaFamily(lowerUA string) string {
 	switch {
 	case strings.Contains(lowerUA, "edg/"), strings.Contains(lowerUA, "edga/"), strings.Contains(lowerUA, "edgios/"):
@@ -321,13 +304,11 @@ func deviceType(lowerUA, os string) string {
 }
 
 // VisitorHash is how one visitor is told from another without keeping who they are. It returns
-// empty when no salt is configured, and that is not a fallback to an unsalted digest: IPv4 has
-// 4.3 billion addresses, so a bare hash of an address is reversible by exhaustive search and
-// would be anonymisation in appearance only. Counting distinct visitors is worth having, but not
-// at the price of storing something that only looks anonymous.
+// empty when no salt is configured, and never falls back to an unsalted digest: a bare hash of
+// an IPv4 address is reversible by exhaustive search.
 //
-// An empty return therefore means "not identifiable", and a read surface must report no
-// distinct-visitor count at all rather than counting every such click as one visitor.
+// An empty return means "not identifiable", and a read surface must report no distinct-visitor
+// count at all rather than counting every such click as one visitor.
 func VisitorHash(salt, ip, userAgent string) string {
 	if salt == "" {
 		return ""

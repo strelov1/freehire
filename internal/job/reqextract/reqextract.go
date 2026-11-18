@@ -1,21 +1,18 @@
 // Package reqextract derives a posting's own stated requirements from its
 // description markup, with no model call. It is the second producer of the
-// enrichment contract's `requirements` field: the LLM reads the postings that state
-// their requirements as prose, this reads the ones that state them as a list under a
-// heading, and the two union rather than compete (measured on prod 2026-09-04: the
-// model had reached 2.9% of open postings, a heading-and-list is present in 23%).
+// enrichment contract's `requirements` field: the LLM reads requirements stated as
+// prose, this reads those stated as a list under a heading, and the two union.
 //
-// The extraction is dictionary-gated in the same sense the facet dictionaries are:
-// a heading outside the vocabulary yields nothing, and there is deliberately no
-// fallback that infers which list in a posting is the requirements list. The most
-// common list in a job posting after the requirements is the benefits list, and
-// reading perks as requirements is worse than reading nothing.
+// Extraction is dictionary-gated: a heading outside the vocabulary yields nothing, and
+// there is deliberately no fallback that guesses which list is the requirements list
+// (the next most common list is benefits, and perks read as requirements are worse
+// than nothing).
 //
-// The bound is enrich.BoundRequirements — its own, not a second copy of the
-// numbers — so the two producers of the field cannot drift apart.
+// The bound is enrich.BoundRequirements, shared so the two producers cannot drift.
 package reqextract
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/mozillazg/go-unidecode"
@@ -25,24 +22,18 @@ import (
 	"github.com/strelov1/freehire/internal/ai/enrich"
 )
 
-// maxHeadingRunes bounds how long a candidate heading may be. Only the inline
-// elements (`p`, `strong`, `b`, `div`) need it: a posting that opens with "The
-// requirements for this role are flexible…" is a sentence, not a section title, and
-// length is what separates the two without a second vocabulary of non-headings.
-// h1–h6 are structurally headings and are not length-checked.
+// maxHeadingRunes bounds how long a candidate heading may be. Only inline elements
+// (`p`, `strong`, `b`, `div`) need it, to tell "The requirements for this role are
+// flexible…" (a sentence) from a title. h1–h6 are not length-checked.
 const maxHeadingRunes = 60
 
 // preferredHeadings and requiredHeadings are the controlled vocabulary the
 // derivation is gated on, normalized the way normalizeHeading normalizes a node's
-// text. A heading matches when its normalized text EQUALS a phrase or BEGINS with
-// one, so "Requirements:" and "Requirements for this role" both match while "What we
-// offer" matches nothing.
+// text. A heading matches when its normalized text EQUALS or BEGINS with a phrase.
 //
-// preferredHeadings is consulted first and must stay first: "preferred
-// qualifications" also begins with nothing in requiredHeadings, but "qualifications
-// (preferred)" would be decided by whichever list is read first, and the optional
-// reading is the safe one — overstating a nice-to-have as a hard requirement is the
-// error a reader cannot detect.
+// preferredHeadings is consulted first and must stay first: "qualifications
+// (preferred)" matches both lists, and the optional reading is the safe one, since
+// overstating a nice-to-have as required is undetectable.
 var preferredHeadings = []string{
 	"nice to have",
 	"nice to haves",
@@ -67,17 +58,11 @@ var preferredHeadings = []string{
 }
 
 // closingHeadings are the section titles that END a requirements section without
-// starting one. They exist because structure alone cannot tell a heading from a
-// lead-in: a posting written in a rich-text editor heads its sections with a bolded
-// paragraph, which is the same shape `<p>You will need:</p>` takes. An h1–h6 outside
-// the vocabulary closes a section on its tag alone; an inline element needs to be
-// RECOGNIZED, or the spacers and lead-ins between a heading and its bullets would
-// close it too.
-//
-// Everything here names the section a posting most often puts right after its
-// requirements — which is the benefits list, the one thing that must never be read as
-// a requirement. An unrecognized inline line still leaves the section open: this is a
-// dictionary, so what it does not know, it does not act on.
+// starting one. Structure alone cannot tell an inline heading (a bolded paragraph)
+// from a lead-in like `<p>You will need:</p>`, so an inline element must be
+// RECOGNIZED to close a section; an h1–h6 outside the vocabulary closes on its tag.
+// These mostly name the benefits section, which must never be read as requirements.
+// An unrecognized inline line leaves the section open.
 var closingHeadings = []string{
 	"about us",
 	"about the company",
@@ -101,14 +86,10 @@ var closingHeadings = []string{
 	"why join us",
 	"amit ajanlunk", // Hungarian: "Amit ajánlunk" — "what we offer"
 	"amit kinalunk", // Hungarian: "Amit kínálunk" — "what we provide"
-	// Russian: "Мы предлагаем" — "we offer" — measured against 500 real tbank.ru
-	// postings: 683 real headings across 369 non-templated postings (some carry more
-	// than one), transliterated by unidecode.Unidecode the way normalizeHeading spells
-	// it. See this vocabulary's own doc comment on why measuring, not guessing, matters
-	// here — and reqextract/AGENTS.md's Limitations on what this addition does NOT fix.
+	// Russian: "Мы предлагаем" — "we offer", transliterated the way normalizeHeading
+	// spells it. See reqextract/AGENTS.md's Limitations.
 	"my predlagaem",
-	// Russian: "Условия" — "terms"/"conditions", the closing section a posting most
-	// often puts after benefits. 158 real headings in the same sample.
+	// Russian: "Условия" — "terms"/"conditions", the closing section after benefits.
 	"usloviia",
 }
 
@@ -139,14 +120,11 @@ var requiredHeadings = []string{
 	"skills and experience",
 	"experience required",
 	"we are looking for",
-	// Russian: "Требования" — "requirements" — measured against the same 500-posting
-	// tbank.ru sample closingHeadings' "my predlagaem" cites: 683 real headings.
+	// Russian: "Требования" — "requirements".
 	"trebovaniia",
-	// Russian: "Мы ждем от вас" — "what we expect from you", the same shape as "what we
-	// expect" above. 631 real headings in the same sample. Two spellings, because
-	// go-unidecode transliterates the accented "ё" (U+0451) to "io", not "e": "Мы ждём от
-	// вас" normalizes to "my zhdiom ot vas", while the common informal spelling without
-	// the dots, "Мы ждем от вас", normalizes to "my zhdem ot vas". Real postings use both.
+	// Russian: "Мы ждем от вас" — "what we expect from you". Two spellings: go-unidecode
+	// turns "ё" into "io", so "Мы ждём от вас" is "my zhdiom ot vas" and "Мы ждем" is
+	// "my zhdem ot vas".
 	"my zhdem ot vas",
 	"my zhdiom ot vas",
 }
@@ -161,33 +139,22 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 	}
 	doc, err := xhtml.Parse(strings.NewReader(descriptionHTML))
 	if err != nil {
-		// x/net/html does not reject malformed markup, so this is unreachable in
-		// practice; an unparseable description simply yields nothing rather than
-		// failing a crawl.
+		// x/net/html does not reject malformed markup, so this is effectively
+		// unreachable; yield nothing rather than fail a crawl.
 		return nil
 	}
 
 	var found []enrich.Requirement
-	// priority is the section currently open: the priority of the last recognized
-	// heading, or "" when none is. Three things close a section, and between them they
-	// are what stops a benefits list two elements down from being read as requirements:
-	// taking its list, an unrecognized structural heading, and a table.
+	// priority is the open section's priority ("" when none). A section closes on taking
+	// its list, an unrecognized structural heading, or a table.
 	priority := ""
-	// pending buffers candidate item texts collected since the section opened, while
-	// no list has been found yet: a text block too long to be a heading candidate
-	// (real prose, by isHeadingCandidate's own length test) and a short inline text
-	// block the heading vocabulary does not recognize (a lead-in, a spacer, or — if
-	// enough of these accumulate — one of the section's own short items). Their fate
-	// is decided later, never at the paragraph itself: reaching a list either
-	// discards them (prose was heading somewhere else) or is simply cleared in front
-	// of it (a lead-in was never content); reaching the section's natural end with
-	// two or more of them commits them as the section's items — a posting that
-	// states each requirement as its own paragraph rather than under a <ul>, which is
-	// not hypothetical: every "Требования" heading sampled from a large real source
-	// (tbank.ru, 2026-09, 25/25 postings) is followed by exactly this shape, 3 to 10
-	// paragraphs long, never a list. pendingHasProse marks whether any buffered entry
-	// was the too-long kind, which is what a list found afterward is read by — see
-	// that case below.
+	// pending buffers candidate item texts collected since the section opened while no
+	// list has been found: too-long text blocks (prose) and short inline blocks the
+	// vocabulary does not recognize (lead-ins, spacers, or short items). A list found
+	// next discards prose or just clears lead-ins; reaching the section's natural end
+	// with two or more commits them as items, for postings that state each requirement
+	// as its own paragraph instead of a <ul>. pendingHasProse marks whether any
+	// buffered entry was the too-long kind, which a list found afterward is read by.
 	var pending []string
 	var pendingHasProse bool
 
@@ -196,11 +163,9 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 		pendingHasProse = false
 	}
 
-	// flushPending commits the buffered paragraphs to found under the given priority
-	// when there are two or more of them — a real p-per-item section, not the single
-	// ambiguous sentence "a matching heading with prose after it yields nothing"
-	// tests for. Called whenever a section's fate is decided outside the list case:
-	// a real heading transition, a table, or the end of the document.
+	// flushPending commits the buffered paragraphs under the given priority when there
+	// are two or more (a p-per-item section; one is an ambiguous sentence). Called when
+	// a section ends outside the list case: a heading transition, a table, or the end.
 	flushPending := func(forPriority string) {
 		if len(pending) >= 2 {
 			for _, text := range pending {
@@ -214,10 +179,8 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 	walk = func(n *xhtml.Node) {
 		if n.Type == xhtml.ElementNode {
 			switch {
-			// A container that holds the list is a wrapper, not a heading, however
-			// short its text reads. Classifying it as one skipped its whole subtree,
-			// which made whether a posting yielded anything depend on how long its
-			// bullets happened to be.
+			// A container holding the list is a wrapper, not a heading, however short
+			// its text; treating it as one would skip the whole subtree.
 			case wrapsAList(n):
 
 			case isHeadingCandidate(n):
@@ -227,8 +190,7 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 					priority = next
 					return // the heading's own text is never an item
 				}
-				// Not recognized: buffered, not discarded outright — see pending's
-				// own comment for why a run of these may still become items.
+				// Not recognized: buffered, since a run of these may become items.
 				if priority != "" {
 					if text := textOf(n); text != "" {
 						pending = append(pending, text)
@@ -238,10 +200,8 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 
 			case priority != "" && (n.DataAtom == atom.Ul || n.DataAtom == atom.Ol):
 				if pendingHasProse {
-					// Real prose, not a lead-in, preceded this list: the list
-					// belongs to whatever comes after it, not to this section —
-					// "prose after the heading closes the section even when a
-					// list follows" is the tested case this guards.
+					// Prose preceded this list, so the list belongs to whatever
+					// follows, not to this section.
 					resetPending()
 					priority = ""
 					return
@@ -257,13 +217,9 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 				flushPending(priority)
 				priority = ""
 
-			// Reached only when isHeadingCandidate already failed it on length — too
-			// long to be a title, so a genuine paragraph. Buffered rather than
-			// closing the section immediately: it may be this section's own first
-			// item (the tbank.ru shape above) rather than prose explaining the
-			// section away, and the two cannot be told apart from one paragraph
-			// alone — only from what follows it (more paragraphs, a list, or the
-			// section's end).
+			// Too long to be a title, so a paragraph. Buffered rather than closing the
+			// section: it may be the section's first item, which only what follows
+			// (more paragraphs, a list, the section's end) can tell.
 			case isTextBlock(n):
 				if priority != "" {
 					if text := textOf(n); text != "" {
@@ -271,10 +227,8 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 						pendingHasProse = true
 					}
 				}
-				// textOf already read every descendant of n, so a nested
-				// <strong>/<b>/<div> inside this block must not be visited
-				// again by the walk below — that would buffer its (shorter)
-				// text a second time as its own entry.
+				// textOf already read every descendant; do not walk them again, or a
+				// nested <strong>/<b>/<div> would be buffered twice.
 				return
 			}
 		}
@@ -288,9 +242,8 @@ func Derive(descriptionHTML string) []enrich.Requirement {
 	return enrich.BoundRequirements(found)
 }
 
-// isTextBlock reports whether an element is one of the four a posting uses for both
-// its section titles and its paragraphs. Which of the two a given one IS depends on its
-// length, not its tag — see isHeadingCandidate.
+// isTextBlock reports whether an element is one of the four used for both section
+// titles and paragraphs; which one it is depends on length (see isHeadingCandidate).
 func isTextBlock(n *xhtml.Node) bool {
 	switch n.DataAtom {
 	case atom.P, atom.Strong, atom.B, atom.Div:
@@ -301,9 +254,7 @@ func isTextBlock(n *xhtml.Node) bool {
 }
 
 // wrapsAList reports whether a text block that could otherwise pass for a heading is
-// really a container holding the list. `<div><h3>Requirements</h3><ul>…</ul></div>` is
-// one element whose whole text is short, and reading it as a heading discards the list
-// inside it.
+// really a container holding the list, as in `<div><h3>Requirements</h3><ul>…</ul></div>`.
 func wrapsAList(n *xhtml.Node) bool {
 	return isTextBlock(n) && containsList(n)
 }
@@ -325,13 +276,8 @@ func containsList(n *xhtml.Node) bool {
 }
 
 // isHeadingCandidate reports whether a node is in a position to carry a section title:
-// an h1–h6, which is structurally one, or a text block short enough to be a line rather
-// than a paragraph. What such a node then DOES to the open section is headingDecision's
-// answer, not this one's.
-//
-// The length test appears only here. Its other half — "a text block too long to be a
-// title is prose" — is not a second test but the walk reaching its later case, where a
-// text block has already failed this one.
+// an h1–h6, or a text block short enough to be a line rather than a paragraph. What it
+// does to the open section is headingDecision's call.
 func isHeadingCandidate(n *xhtml.Node) bool {
 	switch n.DataAtom {
 	case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
@@ -344,28 +290,19 @@ func isHeadingCandidate(n *xhtml.Node) bool {
 // headingDecision returns the section priority in force after this node, given the one
 // in force before it, and whether the node was RECOGNIZED as a section title at all.
 //
-// Derive ignores the second value: a heading candidate's own text is never a list item,
-// recognized or not. [MaskPreferred] needs it — an unrecognized short line inside a
-// preferred section is that section's CONTENT, and treating it as a title would leave
-// the words it carries unmasked.
+// Derive ignores the second value. [MaskPreferred] needs it: an unrecognized short line
+// inside a preferred section is that section's CONTENT, and treating it as a title would
+// leave its words unmasked.
 //
-// Three outcomes, and the difference between them is what decides
-// whether a list two elements down is read as requirements:
+//   - In the requirements vocabulary: OPENS a section at that priority.
+//   - In closingHeadings, or a structural heading (h1–h6) outside every vocabulary:
+//     CLOSES the open section.
+//   - Any other inline text LEAVES the section as it was (spacers like `<p></p>` and
+//     lead-ins like `<p>You will need:</p>`; closing on those loses real lists).
 //
-//   - The text is in the requirements vocabulary: it OPENS a section at that priority.
-//   - The text is in closingHeadings, or it is a structural heading (h1–h6) outside
-//     every vocabulary: it CLOSES the open section — "Benefits" ends "Requirements".
-//   - Anything else inline LEAVES the section as it was. This is the spacer `<p></p>`
-//     and the lead-in `<p>You will need:</p>` that a rich-text editor puts between a
-//     heading and its bullets; closing on those cost real postings their lists.
-//
-// The asymmetry between the last two is the whole reason closingHeadings exists. An
-// h1–h6 announces itself as a heading by its tag, so an unrecognized one can safely
-// close. An inline element does not: `<p>Benefits:</p>` and `<p>You will need:</p>`
-// are the same shape, and only a vocabulary tells them apart.
-//
-// Prose never reaches here: a text block longer than maxHeadingRunes is not a
-// candidate, and the walk closes the section on it in a later case instead.
+// An h1–h6 announces itself by tag so an unrecognized one can close; an inline
+// `<p>Benefits:</p>` has the same shape as a lead-in, so only a vocabulary tells them apart.
+// Prose never reaches here: text longer than maxHeadingRunes is not a candidate.
 func headingDecision(n *xhtml.Node, open string) (string, bool) {
 	heading := normalizeHeading(textOf(n))
 	if matches(heading, preferredHeadings) {
@@ -386,14 +323,10 @@ func headingDecision(n *xhtml.Node, open string) (string, bool) {
 }
 
 // headingTail is the closed set of words that may follow a vocabulary phrase without
-// changing what the heading is: connectives, and the nouns a posting uses to name the
-// same section twice ("Requirements & Qualifications", "Preferred competencies and
-// qualifications"). A word outside this set means the line names something else.
-//
-// This set is what separates a section title from a sentence that opens with the same
-// words. Both of these are real prod headings: "Required Qualifications & Skills"
-// heads a requirements list, and "MUST HAVE MORNING/DAYTIME AVAILABILITY" heads a
-// list of employee benefits. Only the tail tells them apart.
+// changing what the heading is: connectives, and nouns that name the same section twice
+// ("Requirements & Qualifications"). A word outside the set means the line names
+// something else, which separates "Required Qualifications & Skills" (a title) from
+// "MUST HAVE MORNING/DAYTIME AVAILABILITY" (a benefits sentence).
 var headingTail = map[string]bool{
 	"a": true, "and": true, "for": true, "of": true, "or": true, "the": true,
 	"this": true, "we": true, "you": true, "your": true,
@@ -409,10 +342,8 @@ var headingTail = map[string]bool{
 // matches reports whether a normalized heading is one of the vocabulary's phrases,
 // either exactly or followed only by headingTail words.
 //
-// Prefix matching alone is not enough. It admits "Requirements for this role" — which
-// is wanted — but also "Must have morning availability", which is a sentence, and the
-// list beneath such a line is as likely to be benefits as requirements. Requiring the
-// remainder to be vocabulary is what keeps a statement from opening a section.
+// A bare prefix match would also admit "Must have morning availability", a sentence;
+// requiring the remainder to be tail vocabulary keeps statements from opening a section.
 func matches(heading string, vocabulary []string) bool {
 	for _, phrase := range vocabulary {
 		if heading == phrase {
@@ -443,11 +374,8 @@ func allTail(words []string) bool {
 // single spaces, so "Requirements:", "REQUIREMENTS", "Nice-to-have" and "What you'll
 // need" all reach the vocabulary in the one spelling it is written in.
 //
-// The transliteration is what lets an accented heading be spelled once. Without it
-// every non-ASCII letter falls through to the separator case, so "Előnyt jelent"
-// would arrive as "el nyt jelent" and the vocabulary would have to carry that
-// spelling — a form no one reading the list could check against a real posting. It is
-// the same fold [normalize.Slug] applies for the same reason.
+// Transliteration lets an accented heading be spelled once: without it "Előnyt jelent"
+// would arrive as "el nyt jelent". Same fold as [normalize.Slug].
 func normalizeHeading(s string) string {
 	var b strings.Builder
 	space := false
@@ -460,9 +388,8 @@ func normalizeHeading(s string) string {
 			space = false
 			b.WriteRune(r)
 		case r == '\'' || r == '’':
-			// An apostrophe joins rather than separates: "what you'll need" becomes
-			// "what youll need", one token, rather than "what you ll need". Both
-			// spellings of the character, since a posting's HTML carries either.
+			// An apostrophe joins rather than separates ("what youll need"); both
+			// spellings occur in HTML.
 		default:
 			space = true
 		}
@@ -489,10 +416,8 @@ func listItems(list *xhtml.Node) []string {
 // textOf returns a node's plain text: descendant markup stripped, entities already
 // decoded by the parser, and whitespace collapsed to single spaces.
 //
-// A block boundary contributes a space of its own. Markup is where the separation
-// lives — "Go<ul><li>generics</li></ul>" carries no whitespace between the two words
-// — so without this a qualified requirement reads "Gogenerics". The extra spaces are
-// harmless: Fields collapses them.
+// A block boundary contributes a space of its own, else "Go<ul><li>generics</li></ul>"
+// reads "Gogenerics". Fields collapses the extras.
 func textOf(n *xhtml.Node) string {
 	var b strings.Builder
 	var walk func(*xhtml.Node)
@@ -524,4 +449,18 @@ func breaksLine(a atom.Atom) bool {
 	default:
 		return false
 	}
+}
+
+// DeriveJSON is Derive encoded for the jsonb requirements_derived column. An empty list
+// encodes as `[]` rather than nil, so the NOT NULL column never receives a null.
+func DeriveJSON(descriptionHTML string) []byte {
+	reqs := Derive(descriptionHTML)
+	if len(reqs) == 0 {
+		return []byte("[]")
+	}
+	encoded, err := json.Marshal(reqs)
+	if err != nil {
+		return []byte("[]")
+	}
+	return encoded
 }

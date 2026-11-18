@@ -2,11 +2,9 @@
 // candidate has actually done. An Employment is a place where something happened (a
 // job or a project); an Atom is one piece of evidence at the grain of a CV bullet.
 //
-// The bank exists because every other store of experience is a cache. The structured
-// résumé is derived from the uploaded file and replaced whenever that file changes; a
-// tailored CV is derived from a vacancy and thrown away with it. Knowledge a candidate
-// confirms — to the tailoring agent, in a chat, on their profile page — had nowhere to
-// live. Here it accumulates, and only its owner removes it.
+// Every other store of experience is a cache: the structured résumé is replaced when the
+// uploaded file changes, a tailored CV is thrown away with its vacancy. The bank is where
+// what a candidate confirms accumulates, and only its owner removes it.
 package experience
 
 import (
@@ -20,11 +18,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// This file holds ONLY the wire shape and its sanitizer, so what a client receives can be
-// read without the server-only Store and Importer beside it (mirrors cv.go vs store.go,
-// structured.go vs resumeextract.go). cmd/gen-contracts does NOT read this package — it
-// once was written as though it did, and that belief is what kept a private copy of
-// llm.TrimTruncateRunes here to avoid an import nothing was actually avoiding.
+// This file holds ONLY the wire shape and its sanitizer, apart from the server-only Store
+// and Importer. cmd/gen-contracts does NOT read this package.
 
 // Field bounds for untrusted bank content. Atoms are written by the user AND by the
 // model, and are fed back into LLM prompts on retrieval, so Sanitize is both the
@@ -147,11 +142,11 @@ type Atom struct {
 // vacancy side has never heard of — an out-of-vocabulary tag would be evidence nothing
 // could ever match.
 func (a *Atom) Sanitize() {
-	a.Claim = clip(a.Claim, maxClaimRunes)
-	a.Context = clip(a.Context, maxContextRunes)
-	a.SourceRef = clip(a.SourceRef, maxShortRunes)
-	a.Metrics = orEmpty(limit(nonEmpty(mapStrings(a.Metrics, maxShortRunes)), maxMetrics))
-	a.Skills = orEmpty(limit(skilltag.Canonicalize(a.Skills, skilltag.WithResumeAcronyms()), maxSkills))
+	a.Claim = llm.TrimTruncateRunes(a.Claim, maxClaimRunes)
+	a.Context = llm.TrimTruncateRunes(a.Context, maxContextRunes)
+	a.SourceRef = llm.TrimTruncateRunes(a.SourceRef, maxShortRunes)
+	a.Metrics = orEmpty(llm.Limit(llm.NonEmpty(mapStrings(a.Metrics, maxShortRunes)), maxMetrics))
+	a.Skills = orEmpty(llm.Limit(skilltag.Canonicalize(a.Skills, skilltag.WithResumeAcronyms()), maxSkills))
 }
 
 // Validate reports the first reason this atom cannot be persisted. It runs after
@@ -168,14 +163,14 @@ func (a Atom) Validate() error {
 
 // Sanitize bounds every string on the employment.
 func (e *Employment) Sanitize() {
-	e.Company = clip(e.Company, maxShortRunes)
-	e.Role = clip(e.Role, maxShortRunes)
-	e.Location = clip(e.Location, maxShortRunes)
+	e.Company = llm.TrimTruncateRunes(e.Company, maxShortRunes)
+	e.Role = llm.TrimTruncateRunes(e.Role, maxShortRunes)
+	e.Location = llm.TrimTruncateRunes(e.Location, maxShortRunes)
 	e.Start = perioddate.Sanitize(e.Start)
 	e.End = perioddate.Sanitize(e.End)
-	e.Summary = clip(e.Summary, maxSummaryRunes)
-	e.Link = clip(e.Link, maxShortRunes)
-	e.Stack = orEmpty(limit(skilltag.Canonicalize(e.Stack, skilltag.WithResumeAcronyms()), maxSkills))
+	e.Summary = llm.TrimTruncateRunes(e.Summary, maxSummaryRunes)
+	e.Link = llm.TrimTruncateRunes(e.Link, maxShortRunes)
+	e.Stack = orEmpty(llm.Limit(skilltag.Canonicalize(e.Stack, skilltag.WithResumeAcronyms()), maxSkills))
 }
 
 // Validate reports the first reason this employment cannot be persisted.
@@ -213,25 +208,11 @@ func ClaimKey(claim string) string {
 
 // --- small helpers (mirror internal/candidate/cv) ---
 
-// clip trims s and truncates to at most max runes on a rune boundary, trimming again so
-// a mid-word cut never leaves a trailing space.
-func clip(s string, max int) string {
-	return llm.TrimTruncateRunes(s, max)
-}
-
-// limit returns at most n elements of s (nil-safe, preserves order).
-func limit[T any](s []T, n int) []T {
-	if len(s) > n {
-		return s[:n]
-	}
-	return s
-}
-
 // mapStrings clips each string to max runes.
 func mapStrings(in []string, max int) []string {
 	out := make([]string, len(in))
 	for i, v := range in {
-		out[i] = clip(v, max)
+		out[i] = llm.TrimTruncateRunes(v, max)
 	}
 	return out
 }
@@ -246,15 +227,4 @@ func orEmpty(s []string) []string {
 		return []string{}
 	}
 	return s
-}
-
-// nonEmpty drops blank strings, preserving order; returns nil when nothing remains.
-func nonEmpty(in []string) []string {
-	var out []string
-	for _, v := range in {
-		if v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
 }

@@ -21,21 +21,19 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// netempregos adapts Net-Empregos (www.net-empregos.com), Portugal's largest general job board:
-// ~62k live postings across every trade, ~330 new ids an hour at the afternoon peak, about half of
-// them posted by staffing agencies, ~2% filed under the Informática categories. It is boardless and an aggregator — the
-// employer is read per posting. See the "Net-Empregos traps" section of AGENTS.md for the
-// measurements behind each rule.
+// netempregos adapts Net-Empregos (www.net-empregos.com), Portugal's largest general job board,
+// covering every trade; about half of its postings come from staffing agencies. It is boardless
+// and an aggregator: the employer is read per posting. See the "Net-Empregos traps" section of
+// AGENTS.md.
 //
-// No listing reaches the whole catalogue cheaply (the search pages hold 18 cards each, 3,446
-// pages), so the crawl reads the two feeds the site publishes for crawlers: Sitemap.asp, the
+// No listing reaches the whole catalogue cheaply (search pages hold 18 cards each), so the
+// crawl reads the two feeds the site publishes for crawlers: Sitemap.asp, the
 // newest 5,000 posting URLs (under a day), and rss.asp, the newest 1,000 (~3 hours) with each
 // posting's employer, category and zone. Every new posting's body is bought from its page's
 // schema.org JobPosting, newest id first, within a per-run budget; the rest are refreshed by
 // identity while they stay in the window.
 type netempregos struct {
 	http         TextGetter
-	limiter      waiter
 	maxNewPerRun int
 	// deadlineMargin is how much of the run's deadline hydration leaves to the pipeline: a
 	// hydrating crawl writes nothing until FetchNew returns, so one that runs into its deadline
@@ -51,13 +49,11 @@ const (
 	// netempregosRequestInterval paces every request of a run, feed and posting page alike, at
 	// one a second — a courtesy ceiling toward a national site, not a measured limit.
 	netempregosRequestInterval = time.Second
-	// netempregosDetailWorkers keeps enough pages in flight that the limiter, not latency (~0.4 s
-	// a page from the crawl host), sets the pace.
+	// netempregosDetailWorkers keeps enough pages in flight that the limiter, not latency, sets
+	// the pace.
 	netempregosDetailWorkers = 2
-	// netempregosMaxNewPerRun bounds how many unseen postings one run reads: 1,500 pages at one a
-	// second is 25 minutes, and the writes after the fetch (~7 new rows a second from the crawl
-	// host) take ~4 more, inside the scheduler's default 2,400 s crawl budget. ~330 new ids an
-	// hour reach the feeds at the afternoon peak, so a run every few hours keeps up; a posting
+	// netempregosMaxNewPerRun bounds how many unseen postings one run reads, so the fetch at one
+	// page a second plus the writes after it fit the scheduler's default crawl budget. A posting
 	// past the bound is read by a later run while it stays in the 5,000-posting window.
 	netempregosMaxNewPerRun   = 1500
 	netempregosDeadlineMargin = 5 * time.Minute
@@ -69,7 +65,7 @@ const (
 )
 
 // netempregosHidden is the employer name the site shows when the poster chose to stay anonymous
-// (~0.6% of the RSS sample). It is a placeholder, not a company, so such a posting is dropped
+// (a small share of the feed). It is a placeholder, not a company, so such a posting is dropped
 // rather than filed under one bogus employer (catho's rule) — and, when the feed already says so,
 // dropped before its page is bought.
 const netempregosHidden = "anónimo"
@@ -82,8 +78,7 @@ const netempregosTechIndustry = "informática"
 // NewNetEmpregos builds the adapter over the given client.
 func NewNetEmpregos(c TextGetter) Source {
 	return netempregos{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(netempregosRequestInterval), 1),
+		http:           rateLimitedTextGetter{inner: c, limiter: rate.NewLimiter(rate.Every(netempregosRequestInterval), 1)},
 		maxNewPerRun:   netempregosMaxNewPerRun,
 		deadlineMargin: netempregosDeadlineMargin,
 	}
@@ -128,7 +123,7 @@ func (s netempregos) FetchNew(ctx context.Context, e CompanyEntry, seen func(ext
 
 // FetchNewGated lists every posting the feeds name, refreshes the ones already stored, and reads
 // up to maxNewPerRun of the rest, newest id first. A posting the pipeline will discard anyway —
-// its employer already covered by a non-aggregator source, or its title rejected — is judged on
+// its employer already covered by a non-aggregator source — is judged on
 // what the RSS says and yielded body-less without a request; one the RSS shows with a hidden
 // employer is not yielded at all. A posting whose page cannot be read is not yielded; a later run
 // tries again.
@@ -160,7 +155,7 @@ func (s netempregos) FetchNewGated(ctx context.Context, _ CompanyEntry, seen fun
 		if strings.EqualFold(p.company, netempregosHidden) {
 			continue
 		}
-		if covered[p.company] || (p.title != "" && gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[p.company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -261,9 +256,6 @@ func (s netempregos) list(ctx context.Context) ([]netempregosPosting, error) {
 // accented letter into U+FFFD. Windows-1252 is the superset that also maps the curly quotes and
 // dashes such sites emit in the 0x80-0x9F range.
 func (s netempregos) get(ctx context.Context, u string) (string, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return "", err
-	}
 	raw, err := s.http.GetText(ctx, u)
 	if err != nil {
 		return "", err
@@ -357,8 +349,8 @@ func (s netempregos) detail(ctx context.Context, p netempregosPosting) (Job, boo
 }
 
 // netempregosWallAttempts is how many times a posting is asked for while the answer is the login
-// wall. The crawl rides the rotating gateway, so each attempt leaves from a fresh exit, and ~18%
-// of exits were already walled (7 of 40 sequential requests, 2026-10-28).
+// wall. The crawl rides the rotating gateway, so each attempt leaves from a fresh exit, and some
+// exits are already walled.
 const netempregosWallAttempts = 3
 
 // errNetempregosWall is the candidate login page served in place of a posting to an exit that
@@ -382,8 +374,7 @@ func (s netempregos) detailOnce(ctx context.Context, p netempregosPosting) (Job,
 	if !ldJobPosting(root, &ld) {
 		// Only the site's own notice says the posting is gone. Any other page without a
 		// JobPosting is not an answer: a walled exit is served the candidate LOGIN page (HTTP
-		// 200) for every posting, and reading that as "gone" made a whole run read 1,500 pages
-		// and store nothing without a single error.
+		// 200) for every posting, and reading that as "gone" would store nothing without any error.
 		if strings.Contains(page, netempregosInactive) {
 			return Job{}, false, nil
 		}

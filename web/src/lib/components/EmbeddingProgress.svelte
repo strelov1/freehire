@@ -2,14 +2,7 @@
   import { onMount } from 'svelte';
   import { Button, Card, SectionLabel } from '#lib/ui/index.js';
   import type { EmbedProgress } from '#lib/types.js';
-  import {
-    MEASURING,
-    coveredPercent,
-    formatClock,
-    formatCount,
-    formatEta,
-    formatRate,
-  } from '#lib/embedProgress.js';
+  import { MEASURING, coveredPercent, formatClock, formatCount, formatEta, formatRate } from '#lib/embedProgress.js';
 
   const REPO_URL = 'https://github.com/strelov1/freehire-volunteer-embed';
   const GUIDE_URL = `${REPO_URL}/blob/main/HOW_TO_RUN_THE_CLIENT.md`;
@@ -51,7 +44,7 @@
     aria-valuemax={100}
     aria-valuenow={percent ?? undefined}
   >
-    <div class="h-full rounded-full bg-brand transition-all duration-700" style:width="{percent ?? 0}%"></div>
+    <div class="h-full rounded-full bg-brand" style:width="{percent ?? 0}%"></div>
   </div>
 
   <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
@@ -82,22 +75,19 @@
   </dl>
 
   <p class="mt-8 text-sm leading-relaxed text-muted-foreground">
-    “Embedded” is the last full count plus what the queue has drained since, current to the
-    queue’s last sample. The queue also holds closed postings waiting to be cleared, so it can
-    run longer than the eligible count. The full
-    count — {formatCount(progress.snapshot_covered)} embedded — was last taken at
-    {formatClock(progress.snapshot_at)}; it runs every few hours because it reads every open
-    posting.
+    “Embedded” is the last full count plus what the queue has drained since, current to the queue’s last sample. The
+    queue also holds closed postings waiting to be cleared, so it can run longer than the eligible count. The full count
+    — {formatCount(progress.snapshot_covered)} embedded — was last taken at
+    {formatClock(progress.snapshot_at)}; it runs every few hours because it reads every open posting.
   </p>
 </Card>
 
 <section class="mt-10">
-  <SectionLabel text="help speed it up" />
+  <SectionLabel text="Help speed it up" />
   <h2 class="mt-3 text-2xl font-semibold tracking-tight">Lend your machine for a while.</h2>
   <p class="mt-3 max-w-2xl leading-relaxed text-muted-foreground">
-    The volunteer client runs the embedding model on your own computer and sends back vectors for
-    postings in the queue. Pick how much of your machine it may use — easy, medium or hard — and
-    watch the queue above move faster.
+    The volunteer client runs the embedding model on your own computer and sends back vectors for postings in the queue.
+    Pick how much of your machine it may use — easy, medium or hard — and watch the queue above move faster.
   </p>
   <div class="mt-5 flex flex-wrap gap-3">
     <Button href={GUIDE_URL} variant="primary">How to run the client</Button>

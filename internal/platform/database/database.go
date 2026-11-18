@@ -10,27 +10,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// defaultMaxConns caps each process's pool when the DSN does not set
-// pool_max_conns. pgxpool otherwise defaults to max(4, NumCPU) connections per
-// pool; with the API server and a dozen cron workers each opening a pool on a
-// many-core host, that sum can exhaust Postgres's non-superuser connection slots
-// (FATAL ... reserved for roles with the SUPERUSER attribute, SQLSTATE 53300). A
-// modest per-process cap keeps the fleet's total bounded, and ops can still raise
-// an individual process by adding pool_max_conns to its DATABASE_URL.
+// defaultMaxConns caps each process's pool when the DSN does not set pool_max_conns. pgxpool's
+// default (max(4, NumCPU)) across the API server and many cron workers can exhaust Postgres's
+// connection slots (SQLSTATE 53300). Ops can raise one process via pool_max_conns in its DSN.
 const defaultMaxConns = 10
 
 // reachableWindow bounds how long Connect keeps retrying a database that is not answering yet.
-//
-// It exists because "not answering yet" is the normal case at two moments, and a single ping
-// loses to both. A Postgres container running its init scripts serves a TEMPORARY server on a
-// unix socket only, so every TCP connect is refused until init finishes and the real server
-// starts — the window grows with each migration added, and CI's smoke run began losing that race
-// (freehire#1461: the app died one second before "database system is ready"). The same shape
-// happens in production whenever the database restarts under a worker.
-//
-// Thirty seconds is chosen against the failure it must not cause: a cron worker whose DSN is
-// simply wrong should still fail its slot promptly rather than hold it. The caller's context
-// wins if it is shorter, so a SIGTERM during startup cancels immediately.
+// A Postgres container running init scripts serves only a temporary unix-socket server, so TCP
+// is refused until init ends, and a database restart under a worker looks the same. Kept short so
+// a worker with a wrong DSN still fails its slot promptly. A shorter caller context wins.
 const reachableWindow = 30 * time.Second
 
 // Option adjusts a pool before it is opened.
@@ -38,24 +26,15 @@ type Option func(*pgxpool.Config)
 
 // WithStatementTimeout makes Postgres cancel any query on this pool that runs longer than d.
 //
-// It is the backstop for the endpoint whose cost nobody anticipated, and it is opt-in because
-// the right answer differs by caller rather than by deployment. On 2026-09-14 a deep-offset
-// crawl pinned all ten of the API server's connections in one query for minutes each; every
-// other request queued behind them and nginx answered 504 for 54 minutes. Nothing cut those
-// queries: the schema sets statement_timeout to 0, pgx sets none, and Fiber's WriteTimeout
-// closes the client socket while the handler goroutine and its in-flight query keep the
-// connection.
+// Opt-in, because the right value differs by caller: only cmd/server asks for it. Cron workers
+// share this package and some run for hours (backfill-derive), so a package default would fail
+// correct batch passes. Nothing else cuts a runaway query: the schema sets statement_timeout to 0
+// and Fiber's WriteTimeout closes the socket while the query keeps its connection.
 //
-// Only cmd/server asks for it. The cron workers share this package and some legitimately run
-// for hours — backfill-derive walks the whole catalogue — so a package-wide default would
-// turn a correct batch pass into a nightly failure.
-//
-// It bounds the QUERY, not the wait for a connection. A caller that also needs the ACQUIRE
-// bounded must carry a context deadline; the two failures are different and this covers the
-// one that holds a connection hostage.
+// It bounds the query, not the wait for a connection; bound the acquire with a context deadline.
 func WithStatementTimeout(d time.Duration) Option {
 	return func(c *pgxpool.Config) {
-		// Milliseconds, as a bare integer, is what Postgres takes for a unitless value.
+		// Unitless values are milliseconds.
 		c.ConnConfig.RuntimeParams["statement_timeout"] = strconv.FormatInt(d.Milliseconds(), 10)
 	}
 }
@@ -83,9 +62,7 @@ func Connect(ctx context.Context, dsn string, opts ...Option) (*pgxpool.Pool, er
 }
 
 // waitReachable pings until the database answers, the window closes, or the caller's context
-// ends — whichever comes first. The backoff doubles to a two-second ceiling: the common case is
-// a database that becomes ready within a second or two, and a tight loop against a container
-// still unpacking its data directory is just noise in the log.
+// ends. Backoff doubles to a two-second ceiling.
 func waitReachable(ctx context.Context, pool *pgxpool.Pool) error {
 	deadline := time.Now().Add(reachableWindow)
 	backoff := 100 * time.Millisecond
@@ -97,8 +74,7 @@ func waitReachable(ctx context.Context, pool *pgxpool.Pool) error {
 		if err == nil {
 			return nil
 		}
-		// The caller's context ending is not a database fault, and must not be retried:
-		// a worker cancelled by SIGTERM mid-startup stops now, not in thirty seconds.
+		// The caller's context ending is not a database fault; do not retry (SIGTERM stops now).
 		if ctx.Err() != nil {
 			return fmt.Errorf("ping: %w", ctx.Err())
 		}
@@ -117,8 +93,7 @@ func waitReachable(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 }
 
-// poolConfig parses the DSN and applies defaultMaxConns unless the DSN sets its
-// own pool_max_conns, so an explicit override always wins.
+// poolConfig parses the DSN and applies defaultMaxConns unless the DSN sets pool_max_conns.
 func poolConfig(dsn string) (*pgxpool.Config, error) {
 	// pgxpool.ParseConfig CONSUMES pool_max_conns, so detect the override on a
 	// pgx-level parse first (unknown settings land in RuntimeParams). A substring

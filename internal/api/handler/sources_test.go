@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -18,8 +19,8 @@ func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Val
 
 func i8(n int64) pgtype.Int8 { return pgtype.Int8{Int64: n, Valid: true} }
 
-func entriesBySource(entries []sourceEntry) map[string]sourceEntry {
-	out := make(map[string]sourceEntry, len(entries))
+func entriesBySource(entries []apigen.SourceEntry) map[string]apigen.SourceEntry {
+	out := make(map[string]apigen.SourceEntry, len(entries))
 	for _, e := range entries {
 		out[e.Source] = e
 	}
@@ -34,10 +35,10 @@ func TestBuildSourceEntriesClassifiesByTheAdapterRegistry(t *testing.T) {
 
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
 
-	if got["greenhouse"].Kind != sources.KindATS {
+	if string(got["greenhouse"].Kind) != sources.KindATS {
 		t.Errorf("greenhouse kind = %q, want %q", got["greenhouse"].Kind, sources.KindATS)
 	}
-	if got["adzuna"].Kind != sources.KindAggregator {
+	if string(got["adzuna"].Kind) != sources.KindAggregator {
 		t.Errorf("adzuna kind = %q, want %q", got["adzuna"].Kind, sources.KindAggregator)
 	}
 }
@@ -50,22 +51,22 @@ func TestBuildSourceEntriesCarriesOverlapForAggregatorsOnly(t *testing.T) {
 
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
 
-	adzuna := got["adzuna"].Jobs
-	if adzuna == nil || adzuna.ATSMatched == nil || *adzuna.ATSMatched != 70 {
+	adzuna := got["adzuna"].Jobs.Value
+	if m, ok := adzuna.AtsMatched.Get(); !ok || m != 70 {
 		t.Fatalf("adzuna overlap = %+v, want a matched count of 70", adzuna)
 	}
-	if adzuna.ATSUnmatched == nil || *adzuna.ATSUnmatched != 30 {
-		t.Errorf("adzuna unmatched = %+v, want 30 (raw minus matched)", adzuna.ATSUnmatched)
+	if u, ok := adzuna.AtsUnmatched.Get(); !ok || u != 30 {
+		t.Errorf("adzuna unmatched = %+v, want 30 (raw minus matched)", adzuna.AtsUnmatched)
 	}
 
 	// A first-party ATS source is never marked by the aggregator-suppression pass, so its
 	// 0 is arithmetic rather than a finding. Publishing it would read as "fully exclusive".
 	gh := got["greenhouse"].Jobs
-	if gh == nil {
+	if gh.Null {
 		t.Fatal("greenhouse has no jobs block")
 	}
-	if gh.ATSMatched != nil || gh.ATSUnmatched != nil {
-		t.Errorf("greenhouse carries overlap figures %+v/%+v, want neither", gh.ATSMatched, gh.ATSUnmatched)
+	if gh.Value.AtsMatched.Set || gh.Value.AtsUnmatched.Set {
+		t.Errorf("greenhouse carries overlap figures %+v/%+v, want neither", gh.Value.AtsMatched, gh.Value.AtsUnmatched)
 	}
 }
 
@@ -77,10 +78,10 @@ func TestBuildSourceEntriesKeepsAnUnmeasuredCountAbsent(t *testing.T) {
 
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
 
-	if b := got["greenhouse"].Jobs.Browsable; b != nil {
-		t.Errorf("greenhouse browsable = %d, want absent — Meilisearch was not measured", *b)
+	if b := got["greenhouse"].Jobs.Value.Browsable; !b.Null {
+		t.Errorf("greenhouse browsable = %d, want null — Meilisearch was not measured", b.Value)
 	}
-	if b := got["lever"].Jobs.Browsable; b == nil || *b != 0 {
+	if b := got["lever"].Jobs.Value.Browsable; b.Null || b.Value != 0 {
 		t.Errorf("lever browsable = %v, want a measured 0", b)
 	}
 }
@@ -88,7 +89,7 @@ func TestBuildSourceEntriesKeepsAnUnmeasuredCountAbsent(t *testing.T) {
 func TestBuildSourceEntriesHasNoJobsBlockWithoutASnapshot(t *testing.T) {
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, nil, sourcesNow))
 
-	if got["greenhouse"].Jobs != nil {
+	if !got["greenhouse"].Jobs.Null {
 		t.Errorf("greenhouse carries a jobs block with no snapshot: %+v", got["greenhouse"].Jobs)
 	}
 	if len(got) == 0 {
@@ -107,7 +108,7 @@ func TestBuildSourceEntriesHasNoHealthBlockWithoutAHealthRecord(t *testing.T) {
 	if !ok {
 		t.Fatal("a source with postings but no adapter was dropped")
 	}
-	if tg.Kind != sources.KindSocial {
+	if string(tg.Kind) != sources.KindSocial {
 		t.Errorf("telegram kind = %q, want %q", tg.Kind, sources.KindSocial)
 	}
 	if tg.Adapter {
@@ -116,7 +117,7 @@ func TestBuildSourceEntriesHasNoHealthBlockWithoutAHealthRecord(t *testing.T) {
 	if !got["greenhouse"].Adapter {
 		t.Error("greenhouse is not reported as a crawl adapter")
 	}
-	if tg.Health != nil {
+	if !tg.Health.Null {
 		t.Errorf("telegram carries a health verdict %+v, want none", tg.Health)
 	}
 }
@@ -124,20 +125,20 @@ func TestBuildSourceEntriesHasNoHealthBlockWithoutAHealthRecord(t *testing.T) {
 func TestBuildSourceEntriesCarriesHealthWhenThereIsARecord(t *testing.T) {
 	health := []db.ProviderHealthRollupRow{{
 		Provider: "greenhouse", TotalBoards: 900, HealthyBoards: 890, CooledBoards: 10,
-		LastRunAt: ts(sourcesNow.Add(-time.Hour)), LastSuccessAt: ts(sourcesNow.Add(-time.Hour)),
+		LastRunAt: ts(sourcesNow.Add(-time.Hour)), LastSuccessAt: ts(sourcesNow.Add(-time.Hour)), FreshnessAt: ts(sourcesNow.Add(-time.Hour)),
 		IngestedTotal: 4321,
 	}}
 
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), health, nil, sourcesNow))["greenhouse"]
 
-	if got.Health == nil {
+	if got.Health.Null {
 		t.Fatal("greenhouse has no health block")
 	}
-	if got.Health.IngestedTotal != 4321 || got.Health.TotalBoards != 900 {
+	if got.Health.Value.IngestedTotal != 4321 || got.Health.Value.TotalBoards != 900 {
 		t.Errorf("health = %+v, want the rollup's figures", got.Health)
 	}
-	if got.Health.Status != statusOperational {
-		t.Errorf("status = %q, want operational", got.Health.Status)
+	if string(got.Health.Value.Status) != string(statusOperational) {
+		t.Errorf("status = %q, want operational", got.Health.Value.Status)
 	}
 }
 
@@ -195,5 +196,88 @@ func TestSourceEntryNeverNamesAFieldExclusive(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(string(blob)), "exclusive") {
 		t.Errorf("the wire shape says \"exclusive\":\n%s", blob)
+	}
+}
+
+func TestBuildSourceEntriesFoldsASourceFamilyIntoOneEntry(t *testing.T) {
+	older := sourcesNow.Add(-time.Hour)
+	snap := []db.ListSourceStatsRow{
+		{Source: "whatjobs", OpenJobs: 100, AtsMatchedJobs: 10, BrowsableJobs: i8(90), MeasuredAt: ts(sourcesNow)},
+		{Source: "whatjobs-uk", OpenJobs: 50, AtsMatchedJobs: 5, BrowsableJobs: i8(40), MeasuredAt: ts(older)},
+	}
+	health := []db.ProviderHealthRollupRow{
+		{Provider: "whatjobs-uk", TotalBoards: 2, HealthyBoards: 2, IngestedTotal: 7, LastRunAt: ts(sourcesNow)},
+		{Provider: "whatjobs", TotalBoards: 3, HealthyBoards: 1, CooledBoards: 2, IngestedTotal: 3, LastRunAt: ts(older)},
+	}
+
+	entries := buildSourceEntries(sources.Taxonomy(), health, snap, sourcesNow)
+	got := entriesBySource(entries)
+
+	for _, e := range entries {
+		if strings.HasPrefix(e.Source, "whatjobs-") {
+			t.Fatalf("market %q is listed on its own, want it folded into whatjobs", e.Source)
+		}
+	}
+	jobs := got["whatjobs"].Jobs.Value
+	if jobs.Open != 150 || jobs.Browsable.Value != 130 || jobs.AtsMatched.Value != 15 {
+		t.Errorf("folded jobs = %+v, want open 150, browsable 130, matched 15", jobs)
+	}
+	if jobs.MeasuredAt != older.Format(time.RFC3339) {
+		t.Errorf("measured_at = %s, want the oldest member's %s", jobs.MeasuredAt, older.Format(time.RFC3339))
+	}
+	h := got["whatjobs"].Health.Value
+	if h.TotalBoards != 5 || h.HealthyBoards != 3 || h.CooledBoards != 2 || h.IngestedTotal != 10 {
+		t.Errorf("folded health = %+v, want 5 boards, 3 healthy, 2 cooled, 10 ingested", h)
+	}
+	if h.LastRun.Value != sourcesNow.Format(time.RFC3339) {
+		t.Errorf("last_run = %s, want the latest member's", h.LastRun.Value)
+	}
+}
+
+func TestBuildSourceEntriesLeavesAFamilyUnmeasuredWhenAMemberIs(t *testing.T) {
+	snap := []db.ListSourceStatsRow{
+		{Source: "whatjobs", OpenJobs: 100, BrowsableJobs: i8(90), MeasuredAt: ts(sourcesNow)},
+		{Source: "whatjobs-uk", OpenJobs: 50, MeasuredAt: ts(sourcesNow)}, // BrowsableJobs invalid
+	}
+
+	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
+
+	if b := got["whatjobs"].Jobs.Value.Browsable; !b.Null {
+		t.Errorf("browsable = %+v, want null: a partial sum would read as a measurement", b)
+	}
+}
+
+func TestHealthBlockUsesQuietPolicyButReportsActualSuccess(t *testing.T) {
+	actual := sourcesNow.Add(-60 * time.Hour)
+	row := db.ProviderHealthRollupRow{
+		Provider: "ukg", TotalBoards: 1, HealthyBoards: 1,
+		LastSuccessAt: ts(actual), FreshnessAt: ts(sourcesNow),
+	}
+	got := healthBlock(row, sourcesNow)
+	if got.Status != "operational" || got.LastSuccess.Null || got.LastSuccess.Value != actual.Format(time.RFC3339) {
+		t.Fatalf("health = %+v", got)
+	}
+	row.FreshnessAt = row.LastSuccessAt
+	if got := healthBlock(row, sourcesNow); got.Status != "down" {
+		t.Fatalf("expired quiet policy = %+v", got)
+	}
+}
+
+func TestFoldHealthFamiliesKeepsPolicySeparateFromSuccess(t *testing.T) {
+	actual := ts(sourcesNow.Add(-60 * time.Hour))
+	rows := foldHealthFamilies([]db.ProviderHealthRollupRow{
+		{Provider: "whatjobs-br", LastSuccessAt: actual, FreshnessAt: actual},
+		{Provider: "whatjobs-ca", LastSuccessAt: actual, FreshnessAt: ts(sourcesNow)},
+	})
+	if len(rows) != 1 {
+		t.Fatalf("family rows = %+v", rows)
+	}
+	for _, row := range rows {
+		if !row.LastSuccessAt.Time.Equal(actual.Time) {
+			t.Fatalf("fabricated success: %+v", row)
+		}
+	}
+	if !rows[0].FreshnessAt.Time.Equal(sourcesNow) {
+		t.Fatalf("lost policy freshness: %+v", rows)
 	}
 }

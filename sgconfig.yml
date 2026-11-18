@@ -1,0 +1,25 @@
+# ast-grep: the repository's own syntax rules (`ast-grep scan`), each with tests
+# (`ast-grep test`). A rule that needs types belongs in golangci-lint or a Go test instead.
+# How to add one: AGENTS.md, "Syntax rules: ast-grep".
+ruleDirs:
+  - ast-grep/rules
+testConfigs:
+  - testDir: ast-grep/tests
+# A .svelte file is parsed as HTML; ast-grep reads its <script> as TypeScript, so the
+# TypeScript rules reach the components too.
+languageGlobs:
+  html: ["*.svelte"]
+# A Svelte <script> with no lang="ts" is plain JavaScript, which ast-grep would read as
+# JavaScript and the TypeScript rules would skip (33 such blocks today). TypeScript parses
+# JavaScript as well, so those are read as TypeScript too (a lang="ts" one already is).
+languageInjections:
+  - hostLanguage: html
+    rule:
+      pattern: <script $$$A>$CONTENT</script>
+      not:
+        has:
+          kind: start_tag
+          has:
+            kind: attribute
+            regex: ^lang=["']ts["']$
+    injected: typescript

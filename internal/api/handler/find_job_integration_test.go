@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -21,6 +22,33 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
+
+func TestFindJobPreservesVerifiedDestinationIdentity(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `INSERT INTO jobs (source, external_id, url, title, public_slug, application_url) VALUES
+	 ('linkedin', 'board:7', 'https://www.linkedin.com/jobs/view/7/', 'Engineer', 'query-seven', 'https://careers.example.org/application?id=7'),
+	 ('linkedin', 'board:8', 'https://www.linkedin.com/jobs/view/8/', 'Engineer', 'query-eight', 'https://careers.example.org/application?id=8'),
+	 ('linkedin', 'board:9', 'https://www.linkedin.com/jobs/view/9/', 'Engineer', 'lever-form', 'https://jobs.lever.co/acme/6ce0e52b-e7bc-462f-ac9e-1d31c8c0e037/apply')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &jobsHandlers{queries: db.New(pool), postings: sources.NewPostingURLResolver(nil)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	mountJobsContract(app, h, middleware{})
+	for _, tc := range []struct{ address, slug string }{
+		{"https://careers.example.org/application?id=7&utm_source=freehire.me", "query-seven"},
+		{"https://careers.example.org/application?id=8", "query-eight"},
+		{"https://careers.example.org/application?id=9", ""},
+		{"https://jobs.lever.co/acme/6ce0e52b-e7bc-462f-ac9e-1d31c8c0e037/apply?utm_source=freehire.me", "lever-form"},
+	} {
+		t.Run(tc.slug+tc.address, func(t *testing.T) {
+			if got := findSlug(t, app, url.QueryEscape(tc.address)); got != tc.slug {
+				t.Fatalf("find = %q, want %q", got, tc.slug)
+			}
+		})
+	}
+}
 
 // stubPostingAPI serves one canned JSON body per URL, standing in for the ATS the
 // posting-URL resolver asks. An unlisted URL is an error, so a test that expects no call
@@ -107,7 +135,7 @@ func TestFindJobResolvesByIdentityAndByURL(t *testing.T) {
 		}),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/find", h.FindJob)
+	mountJobsContract(app, h, middleware{})
 
 	t.Run("greenhouse URL resolves by identity", func(t *testing.T) {
 		if slug := findSlug(t, app, "https%3A%2F%2Fjob-boards.greenhouse.io%2Fvgw-eu%2Fjobs%2F8617539002"); slug != "engineer-vgw-eu" {

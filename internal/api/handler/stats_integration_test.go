@@ -35,7 +35,7 @@ func rebuildRollup(t *testing.T, pool *pgxpool.Pool) {
 	if err := q.DeleteAllJobDailyStats(ctx); err != nil {
 		t.Fatalf("delete rollup: %v", err)
 	}
-	if _, err := q.RebuildJobDailyStats(ctx); err != nil {
+	if _, err := materializeJobDailyStats(q)(ctx); err != nil {
 		t.Fatalf("rebuild rollup: %v", err)
 	}
 }
@@ -88,7 +88,7 @@ func TestJobActivityRollupAndEndpoint(t *testing.T) {
 	// --- Endpoint: dense daily series -----------------------------------------
 	h := &statsHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/stats/jobs-activity", h.JobsActivity)
+	app.Get("/api/v1/stats/jobs-activity", statsContract(h))
 
 	type point struct {
 		Period  string `json:"period"`

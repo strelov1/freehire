@@ -94,8 +94,7 @@ func talentNetworkApp(t *testing.T, store *fakeTalentNetworkStore) (*fiber.App, 
 	h := newTalentNetworkHandlers(store)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss, testVersions)
-	app.Get("/me/talent-network", g, h.GetVisibility)
-	app.Put("/me/talent-network", g, h.PutVisibility)
+	h.register(app.Group("/api/v1"), middleware{key: g, cookie: g}, newContract(contractHandlers{talentNetworkHandlers: h}))
 	return app, token
 }
 
@@ -103,9 +102,9 @@ func doTalentNetwork(t *testing.T, app *fiber.App, method, body, token string) *
 	t.Helper()
 	var r *http.Request
 	if body == "" {
-		r = httptest.NewRequestWithContext(context.Background(), method, "/me/talent-network", nil)
+		r = httptest.NewRequestWithContext(context.Background(), method, "/api/v1/me/talent-network", nil)
 	} else {
-		r = httptest.NewRequestWithContext(context.Background(), method, "/me/talent-network", strings.NewReader(body))
+		r = httptest.NewRequestWithContext(context.Background(), method, "/api/v1/me/talent-network", strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	}
 	if token != "" {
@@ -354,6 +353,13 @@ func TestPutTalentNetwork_LeavingDoesNotMint(t *testing.T) {
 	if got.Handle != "" || store.claimCalls != 0 {
 		t.Errorf("handle = %q after %d claims, want none of either", got.Handle, store.claimCalls)
 	}
+}
+
+// talentNetworkResponse is the wire shape the tests decode.
+type talentNetworkResponse struct {
+	Visibility string `json:"talent_network_visibility"`
+	Handle     string `json:"talent_handle"`
+	Listed     bool   `json:"listed"`
 }
 
 // putTalentNetworkOK PUTs the given visibility and decodes a 200 response.

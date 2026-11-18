@@ -8,11 +8,7 @@ import (
 // remoteokSource adapts remoteok.com, a remote-jobs aggregator. Boardless (one public
 // API, no per-tenant board) and multi-company, so it stays in the source facet and takes
 // each posting's company from the feed. The /api feed carries every posting's body inline
-// (no detail call) but is capped at roughly the latest ~100 postings, so coverage is the
-// recent window, not the full backlog.
-//
-// (The provider key is "remoteok"; the type is remoteokSource to avoid colliding with that
-// string literal style elsewhere.)
+// but is capped at the latest ~100 postings, so coverage is the recent window only.
 type remoteokSource struct {
 	http JSONGetter
 }

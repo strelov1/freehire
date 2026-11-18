@@ -114,6 +114,11 @@ func TestRequiresClearanceLabelledField(t *testing.T) {
 		{"clearance level label", "Clearance Level: Public Trust (Secret eligibility)", true},
 		{"clearance type label", "CLEARANCE TYPE: Polygraph\nTRAVEL: 10%", true},
 		{"clearance required yes", "CLEARANCE REQUIRED FOR START: Yes", true},
+		{"security clearance required", "<p>Security Clearance: Required</p>", true},
+		{"medical clearance field", "<p><b>Medical Clearance:</b> Required</p>", false},
+		{"drug screen clearance field", "<p>Background check and drug screen clearance: required</p>", false},
+		{"customs clearance field", "<p>Customs Clearance: 3+ years experience required</p>", false},
+		{"health clearance field", "<p>Health Clearance: Required</p>", false},
 		{"ability to obtain", "Clearance Required: Ability to Obtain Public Trust", true},
 
 		// A label that denies the requirement must not mark the posting.
@@ -164,6 +169,11 @@ func TestRequiresClearanceLabelledField(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := RequiresClearanceFromDescription(tt.desc); got != tt.want {
 				t.Errorf("RequiresClearanceFromDescription(%q) = %v, want %v", tt.desc, got, tt.want)
+			}
+			if !tt.want {
+				if levels := ClearanceLevelsFromDescription(tt.desc); levels != nil {
+					t.Errorf("ClearanceLevelsFromDescription(%q) = %v, want nil", tt.desc, levels)
+				}
 			}
 		})
 	}

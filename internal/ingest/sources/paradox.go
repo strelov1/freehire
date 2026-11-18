@@ -43,9 +43,8 @@ import (
 // crawl, and the distinct postings read must equal the board's own total_jobs.
 //
 // The API is metered by a per-IP request budget that answers 403 once spent: an unpaced
-// hydration of one 1,528-posting site at defaultDetailWorkers read ~840 details in under two
-// minutes and was refused the remaining 688 (measured 2026-10-20 on olivia.eu1.paradox.ai);
-// the refusal lifted by itself within a few minutes. Every request therefore goes through one
+// hydration of a large site at defaultDetailWorkers was refused part-way through, and the
+// refusal lifted by itself within a few minutes. Every request therefore goes through one
 // limiter (pacedParadoxGetter), and the first refusal defers the rest of that board's
 // hydration rather than spending more requests against a spent budget.
 type paradox struct {
@@ -56,12 +55,15 @@ type paradox struct {
 func NewParadox(c HeaderJSONGetter) Source { return paradox{http: c} }
 
 // paradoxRequestInterval paces every request of a run — listing pages and details alike — to
-// ~1.4 req/s, about half the ~850 requests in a few minutes the budget was seen to admit: the
-// headroom is for the true window, which a short burst cannot measure, and for the client's
-// own retries beneath the limiter.
+// ~1.4 req/s, about half the rate the budget was seen to admit: the headroom is for the true
+// window, which a short burst cannot measure, and for the client's own retries beneath the
+// limiter.
 const (
 	paradoxRequestInterval = 700 * time.Millisecond
 	paradoxRequestBurst    = 1
+	// Hydrated postings are buffered until FetchNew returns. Leave the pipeline
+	// time to persist them before the crawl context expires.
+	paradoxPersistenceReserve = 5 * time.Minute
 )
 
 // pacedParadoxGetter holds every request of a run to one limiter, wired once per registry
@@ -79,13 +81,12 @@ func (paradox) Provider() string { return "paradox" }
 func (paradox) fullBoardListing() {}
 
 const (
-	// paradoxPageSize is the listing page size. The server spends roughly 50 ms per row — a
-	// 100-row page took 4-11 s, a 500-row page 14-21 s and a 2,500-row page timed out on the
-	// server's own side — so pages stay small and the client is the long-timeout one.
+	// paradoxPageSize is the listing page size. The server spends roughly 50 ms per row, so a
+	// large page is slow and a very large one times out on the server's own side; pages stay
+	// small and the client is the long-timeout one.
 	paradoxPageSize = 100
 	// paradoxMaxPages is a safety ceiling, not a stopping rule: a board still serving full
-	// pages at this depth fails the crawl rather than reporting a truncated listing. The
-	// largest site measured (InspireBrands2) was 2,064 postings, 21 pages.
+	// pages at this depth fails the crawl rather than reporting a truncated listing.
 	paradoxMaxPages = 300
 )
 
@@ -189,22 +190,45 @@ func (s paradox) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 	if err != nil {
 		return nil, err
 	}
+	detailCtx := ctx
+	if deadline, ok := ctx.Deadline(); ok {
+		var cancel context.CancelFunc
+		detailCtx, cancel = context.WithDeadline(ctx, deadline.Add(-paradoxPersistenceReserve))
+		defer cancel()
+	}
 	// refused is set by the first 403/429: the budget is the IP's, so every further detail
 	// request would only be refused too and keep it spent. The rest wait for the next crawl.
 	var refused atomic.Bool
-	return fetchDetails(postings, defaultDetailWorkers, func(p paradoxPosting) (Job, bool) {
+	var outOfTime atomic.Bool
+	var deferred atomic.Int64
+	jobs := fetchDetails(postings, defaultDetailWorkers, func(p paradoxPosting) (Job, bool) {
 		if seen(p.id) {
 			return Job{ExternalID: p.id, URL: p.url, Title: p.row.Title, Company: e.Company, SeenRefresh: true}, true
+		}
+		if outOfTime.Load() || detailCtx.Err() != nil {
+			deferred.Add(1)
+			return unreadableDetail(p.id, p.url, e.Company), true
 		}
 		if refused.Load() {
 			return Job{}, false
 		}
-		job, ok, err := s.detail(ctx, b, e, p)
+		job, ok, err := s.detail(detailCtx, b, e, p)
+		// rate.Wait refuses before cancellation if the next token is past the
+		// deadline. It exposes no sentinel; the pipeline recognizes the same text.
+		if err != nil && (detailCtx.Err() != nil || strings.Contains(err.Error(), "would exceed context deadline")) {
+			outOfTime.Store(true)
+			deferred.Add(1)
+			return unreadableDetail(p.id, p.url, e.Company), true
+		}
 		if isRateLimited(err) && !refused.Swap(true) {
 			log.Printf("paradox: %s: detail refused (%v); deferring the rest of this board's hydration", b, err)
 		}
 		return job, ok
-	}), nil
+	})
+	if n := deferred.Load(); n > 0 {
+		log.Printf("paradox: %s: %d postings deferred to leave time for persistence", b, n)
+	}
+	return jobs, nil
 }
 
 // list walks the site's job list to its natural end — a page shorter than asked for — and
@@ -321,8 +345,8 @@ func paradoxJobPosting(script string) (paradoxLD, bool) {
 }
 
 // paradoxDate parses the JobPosting's datePosted, which the platform writes with a two-digit
-// year ("26-09-23" for 2026-09-23 — every date sampled led with the current year). A
-// four-digit ISO date is accepted too, in case a site emits the schema.org form.
+// year ("26-09-23" for 2026-09-23). A four-digit ISO date is accepted too, in case a site
+// emits the schema.org form.
 func paradoxDate(s string) *time.Time {
 	if t := parseDate(s); t != nil {
 		return t
@@ -331,8 +355,8 @@ func paradoxDate(s string) *time.Time {
 }
 
 // paradoxEmploymentType maps the listing's employment-type labels onto the vocabulary, only
-// when the row states exactly one: "Full Time" was the one label seen across 1,430 rows of 26
-// sites, and a row naming several says nothing a single value could carry.
+// when the row states exactly one: a row naming several says nothing a single value could
+// carry.
 func paradoxEmploymentType(v any) string {
 	labels, ok := v.([]any)
 	if !ok || len(labels) != 1 {

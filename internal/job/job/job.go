@@ -1,14 +1,12 @@
-// Package job defines the Job domain aggregate: the core posting entity with a
-// single guarded construction door. A Job can only be built through New (a fresh
-// posting) or loaded through a Repository (a stored one); its state is unexported
-// so no caller can assemble one bypassing the deterministic facet derivation.
-// This makes "a Job always carries facets consistent with its source fields" a
-// type-enforced invariant rather than a convention every write path must remember.
+// Package job defines the Job domain aggregate with a single guarded construction door. A
+// Job is built only through New (fresh) or a Repository load (stored); its state is
+// unexported, so no caller can bypass the deterministic facet derivation and a Job always
+// carries facets consistent with its source fields.
 package job
 
 import (
-	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -27,9 +25,8 @@ import (
 var ErrInvalidDraft = errors.New("job: draft missing source, external id, or title")
 
 // Salary is a stated compensation range in a currency's units over a period. A nil
-// Min/Max means that bound was not stated. It carries the authoritative manual salary a
-// submitter or moderator entered by hand — distinct from the LLM-enriched salary in the
-// enrichment payload, which it takes precedence over in the effective projection.
+// Min/Max means that bound was not stated. It carries the manual salary a submitter or
+// moderator entered by hand, which takes precedence over the LLM-enriched salary.
 type Salary struct {
 	Min      *int
 	Max      *int
@@ -37,13 +34,10 @@ type Salary struct {
 	Period   string
 }
 
-// Draft is the source-agnostic input to New: the raw posting fields a write path
-// supplies before derivation. The embedded jobderive.Input carries every field the
-// deterministic derivation reads (identity, content, and the optional structured
-// signals — see its docs); Draft adds only what derivation never touches: the URL,
-// the remote flag, the source posted time, and the authoritative manual salary
-// (nil when none stated). The caller resolves Source/ExternalID (the dedup
-// identity) so the job package stays free of the source registry.
+// Draft is the source-agnostic input to New: the raw posting fields before derivation. The
+// embedded jobderive.Input carries what derivation reads; Draft adds what it never touches
+// (URL, remote flag, posted time, manual salary). The caller resolves Source/ExternalID
+// (the dedup identity) so this package stays free of the source registry.
 type Draft struct {
 	jobderive.Input
 
@@ -51,27 +45,32 @@ type Draft struct {
 	Remote              bool
 	PostedAt            *time.Time
 	ApplicationDeadline *time.Time
+	// Team is the department or team the source files the posting under, verbatim; trimmed by New.
+	Team string
 
 	ManualSalary *Salary
 
 	// CanonicalCompanySlug overrides the derived company slug with the one a merge elected
-	// for this employer (company_slug_aliases). Empty for almost every posting, and empty
-	// is the honest default: only the ingest pipeline can fill it, because only it has the
-	// registry, and jobderive must stay a pure function of its input.
-	//
-	// It rides on the Draft rather than being applied to a built Job so the aggregate is
-	// still constructed once and never mutated — a setter would let any caller re-key a
-	// company, which is a decision the merge worker owns.
+	// (company_slug_aliases). Only the ingest pipeline fills it, because only it has the
+	// registry and jobderive must stay pure. It rides on the Draft, not a setter, so no
+	// caller can re-key a company; that decision belongs to the merge worker.
 	CanonicalCompanySlug string
+
+	// BodyFromCatalogue marks a Description the pipeline took from the stored row because the
+	// crawl brought none (a failed detail fetch). It was not READ, so the write must not
+	// stamp hydrated_at, which would drop a stale body from BODY_REFRESH_DAYS' re-read set.
+	BodyFromCatalogue bool
 }
 
-// Fields is the readable projection of a Job: a plain DTO exposing every field for
-// the wire projection and search indexing. A Fields can be freely constructed, but
-// it is not a Job and cannot be persisted, so the construction invariant holds.
+// Fields is the readable projection of a Job, a plain DTO for the wire projection and
+// search indexing. It can be constructed freely but is not a Job and cannot be persisted.
 type Fields struct {
-	Source              string
-	ExternalID          string
-	URL                 string
+	Source     string
+	ExternalID string
+	URL        string
+	// ApplicationURL is an independently verified destination. URL remains the source
+	// posting for identity and liveness; ingestion never overwrites this destination.
+	ApplicationURL      string
 	Title               string
 	Company             string
 	CompanySlug         string
@@ -81,6 +80,10 @@ type Fields struct {
 	Description         string
 	PostedAt            *time.Time
 	ApplicationDeadline *time.Time
+	// Team: see Draft.Team. Empty when the source states none.
+	Team string
+	// BodyFromCatalogue: see Draft.BodyFromCatalogue.
+	BodyFromCatalogue bool
 
 	// deterministic dictionary facets
 	Countries []string
@@ -91,27 +94,26 @@ type Fields struct {
 	Skills    []string
 	Seniority string
 	Category  string
-	// IsTech is the tri-state technical/non-technical signal (nil = unknown), derived
-	// from title + category; served as a filterable facet. See jobderive.Derived.IsTech.
+	// IsTech is the tri-state technical signal (nil = unknown), derived from title and
+	// category. See jobderive.Derived.IsTech.
 	IsTech *bool
 	// RequiresClearance marks a posting that states a government security-clearance
-	// requirement (nil = not stated); served as a filterable facet. Only ever true or
-	// nil — see jobderive.Derived.RequiresClearance for why there is no false.
+	// requirement (nil = not stated). Only true or nil; see jobderive.Derived.RequiresClearance.
 	RequiresClearance *bool
 	// ViaRecruiter marks a posting that states it is published by an intermediary on a
-	// client's behalf (nil = not stated); served as a filterable facet.
+	// client's behalf (nil = not stated).
 	ViaRecruiter *bool
-	// Equity is what the posting states about equity compensation: a vocab.EquityValues
-	// member, or "" for not stated; served as a filterable facet.
+	// Equity is a vocab.EquityValues member, or "" for not stated.
 	Equity string
-	// ClearanceLevels names the clearance levels the posting states (vocab.
-	// ClearanceLevelValues); non-empty exactly when RequiresClearance is set. See
-	// jobderive.Derived.ClearanceLevels.
+	// ClearanceLevels names the clearance levels stated (vocab.ClearanceLevelValues);
+	// non-empty exactly when RequiresClearance is set.
 	ClearanceLevels []string
-	// Perks are the benefits the description states it offers (vocab.PerkValues),
-	// served as the multi-value `perks` facet. Empty means none mentioned — see
-	// internal/dict/perks.
+	// Perks are the benefits the description states (vocab.PerkValues); empty means none
+	// mentioned.
 	Perks []string
+	// Engagement names the legal terms the posting engages on (vocab.EngagementValues:
+	// IR35, W-2, B2B...); empty means not stated.
+	Engagement []string
 
 	// synthetic enrichment facets (deterministic stand-ins)
 	PostingLanguage    string
@@ -120,71 +122,55 @@ type Fields struct {
 	EnglishLevel       string
 	ExperienceYearsMin *int
 
-	// ManualSalary is the authoritative manual salary (nil when none). It is a base
-	// field, never derived, and takes precedence over the enriched salary.
+	// ManualSalary is the manual salary (nil when none). Never derived; it takes
+	// precedence over the enriched salary.
 	ManualSalary *Salary
-	// SourceSalary is the ATS's own structured salary (nil when the source stated
-	// none), derived from jobderive's passthrough — see its Input docs. Wins over the
-	// enrichment pass's LLM-derived guess but never over ManualSalary.
+	// SourceSalary is the ATS's own structured salary (nil when none stated). It wins over
+	// the LLM-derived guess but never over ManualSalary.
 	SourceSalary *Salary
 
 	// lifecycle + enrichment provenance (0 = unenriched)
 	ClosedAt          *time.Time
 	EnrichmentVersion int32
 
-	// Read-only projection fields, populated by a repository load and zero on a
-	// fresh New. ID is the persistence id (the domain identity is Source+ExternalID);
-	// ManuallyAdded is the moderator-authored provenance (created_by set). Enrichment
-	// is the RAW decoded LLM payload before any dict fold — the projection folds the
-	// dictionary columns over it. These never participate in the write surface.
+	// Read-only projection fields, populated by a repository load and zero on a fresh New.
+	// ID is the persistence id (the domain identity is Source+ExternalID); ManuallyAdded is
+	// moderator-authored provenance (created_by set); Enrichment is the RAW LLM payload
+	// before any dict fold. None of these are part of the write surface.
 	ID            int64
 	ManuallyAdded bool
-	// Private marks the jd-tailor-intake posting a single user pasted in, visible only
-	// to them (jobs.is_private, written by InsertPrivateJob — see internal/job/privatejob).
-	//
-	// It is here because it was NOT, and four separate reads leaked or rewrote a private
-	// posting for want of it: nothing above a db.Job row could even ask the question, so
-	// every check had to be a predicate remembered in one more SQL statement. A caller
-	// holding a loaded Job can now ask directly. It stays off the write surface — private
-	// is decided by which query wrote the row, not by a field a caller may set — and off
-	// the wire shape (jobview), which is served to whoever asks.
+	// Private marks a posting a single user pasted in, visible only to them (jobs.is_private,
+	// written by InsertPrivateJob; see internal/job/privatejob). It stays off the write
+	// surface (the query that wrote the row decides it) and off the wire shape (jobview).
 	Private    bool
 	Enrichment enrich.Enrichment
-	// RequirementsDerived is the posting's own requirements read out of its
-	// description markup (internal/job/reqextract), nil when it states none. It is the
-	// second producer of the served enrichment.requirements: the projection folds it in
-	// when the model stated none, the same dict-wins-over-LLM fold the other facets get.
-	//
-	// It is a read-only projection field like Enrichment, NOT part of the write
-	// surface: the write path derives its own copy in UpsertParams, from the same
-	// description, so a caller cannot persist a list that disagrees with the text.
+	// RequirementsDerived is the posting's own requirements read from its description markup
+	// (internal/job/reqextract), nil when none. The projection folds it into
+	// enrichment.requirements when the model stated none. Read-only: UpsertParams derives its
+	// own copy from the description, so a caller cannot persist a list that disagrees.
 	RequirementsDerived []enrich.Requirement
 	EnrichedAt          *time.Time
 	CreatedAt           *time.Time
 	UpdatedAt           *time.Time
-	// LastSeenAt is when a re-crawl last confirmed this posting still live (see
-	// docs/agents/job-lifecycle.md) — the freshest "still open" evidence available
-	// for an open job, used to estimate a rolling JobPosting.validThrough.
+	// LastSeenAt is when a re-crawl last confirmed this posting live, the freshest "still
+	// open" evidence, used to estimate a rolling JobPosting.validThrough.
 	LastSeenAt *time.Time
 }
 
-// Job is the domain aggregate. Its state is unexported: the only ways to obtain a
-// Job are New (fresh) and a Repository load (stored), so construction always runs
-// through derivation. Read access for projection is via Fields.
+// Job is the domain aggregate. Its state is unexported; obtain one via New or a Repository
+// load, and read it via Fields.
 type Job struct {
 	f Fields
 }
 
-// New constructs a fresh Job from a draft, running the deterministic derivation
-// (slugs + dictionary facets) internally. It is the single construction door for
-// a not-yet-persisted posting. A fresh Job is open and unenriched.
+// New constructs a fresh, open, unenriched Job from a draft, running the deterministic
+// derivation (slugs and facets). It is the single construction door for a new posting.
 func New(d Draft) (Job, error) {
 	if d.Source == "" || d.ExternalID == "" || d.Title == "" {
 		return Job{}, ErrInvalidDraft
 	}
-	// Strip any coordinate tail a source jammed into the free-text location before
-	// it reaches both the facet derivation and the stored/displayed field — the
-	// same order pipeline.normalizeJob uses.
+	// Strip a coordinate tail from the location before derivation and storage, as
+	// pipeline.normalizeJob does.
 	in := d.Input
 	in.Location = normalize.CleanLocation(in.Location)
 	der := jobderive.Derive(in)
@@ -202,8 +188,10 @@ func New(d Draft) (Job, error) {
 		Location:            in.Location,
 		Remote:              d.Remote,
 		Description:         d.Description,
+		BodyFromCatalogue:   d.BodyFromCatalogue,
 		PostedAt:            d.PostedAt,
 		ApplicationDeadline: d.ApplicationDeadline,
+		Team:                strings.TrimSpace(d.Team),
 
 		Countries: der.Countries,
 		Regions:   der.Regions,
@@ -220,6 +208,7 @@ func New(d Draft) (Job, error) {
 		Equity:            der.Equity,
 		ClearanceLevels:   der.ClearanceLevels,
 		Perks:             der.Perks,
+		Engagement:        der.Engagement,
 
 		PostingLanguage:    der.PostingLanguage,
 		EmploymentType:     der.EmploymentType,
@@ -227,14 +216,13 @@ func New(d Draft) (Job, error) {
 		EnglishLevel:       der.EnglishLevel,
 		ExperienceYearsMin: der.ExperienceYearsMin,
 
-		// Authoritative manual salary is carried verbatim — never derived.
+		// Manual salary is carried verbatim, never derived.
 		ManualSalary: d.ManualSalary,
 		SourceSalary: salaryFromParts(der.SalaryMin, der.SalaryMax, der.SalaryCurrency, der.SalaryPeriod),
 	}}, nil
 }
 
-// salaryFromParts packages a structured salary's parts into a *Salary, or nil when
-// neither bound is present — the shape SourceSalary and manualSalaryFromRow share.
+// salaryFromParts packages salary parts into a *Salary, or nil when neither bound is present.
 func salaryFromParts(min, max *int, currency, period string) *Salary {
 	if min == nil && max == nil {
 		return nil
@@ -246,15 +234,11 @@ func salaryFromParts(min, max *int, currency, period string) *Salary {
 // fields alias the aggregate's; callers treat the result as read-only.
 func (j Job) Fields() Fields { return j.f }
 
-// UpsertParams maps a job to the generated UpsertJob params, so every write path
-// (ingest, telegram extraction, link import) shares one mapping instead of re-listing
-// the columns. It owns the DERIVED columns too — content_hash and role_fingerprint are
-// computed here rather than bolted on by each caller afterwards, so a write path cannot
-// persist a posting missing either one by forgetting a step. A posted time supplied
-// outside the deterministic derivation therefore belongs on the Draft, before this
-// mapping runs: content_hash fingerprints posted_at, so setting it on the returned
-// struct would fingerprint a value other than the one written.
-// Enrichment columns are deliberately excluded — SetJobEnrichment owns those.
+// UpsertParams maps a job to the generated UpsertJob params, the one column mapping every
+// write path shares. It computes the derived columns (content_hash, role_fingerprint) so no
+// path can forget them. A posted time from outside derivation belongs on the Draft:
+// content_hash fingerprints posted_at, so setting it on the returned struct would hash a
+// value other than the one written. Enrichment columns are excluded; SetJobEnrichment owns them.
 func (f Fields) UpsertParams() db.UpsertJobParams {
 	p := db.UpsertJobParams{
 		Source:              f.Source,
@@ -267,8 +251,10 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		Location:            f.Location,
 		Remote:              f.Remote,
 		Description:         f.Description,
+		BodyFromCatalogue:   f.BodyFromCatalogue,
 		PostedAt:            pgconv.Timestamptz(f.PostedAt),
 		ApplicationDeadline: pgconv.Date(f.ApplicationDeadline),
+		Team:                f.Team,
 		Countries:           f.Countries,
 		Regions:             f.Regions,
 		Cities:              f.Cities,
@@ -284,6 +270,7 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		Equity:            pgconv.Text(f.Equity),
 		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
+		Engagement:        f.Engagement,
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -300,51 +287,24 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 	return withDerived(p)
 }
 
-// withDerived stamps the two fingerprints a persisted posting carries onto a mapped
-// params struct, plus the requirements read out of its own description markup.
-// content_hash covers the indexed content (posted_at included), so the upsert can
-// report whether a re-ingest changed anything searchable; role_fingerprint is the
-// repost IDENTITY and deliberately excludes posted_at/url/slug, so a reposted role
-// clusters with its original for the reality signal.
-//
-// requirements_derived belongs here for the same reason the fingerprints do: it is a
-// pure function of the raw fields, and stamping it in the one shared mapping is what
-// keeps a write path from persisting a posting without it by forgetting a step. It is
-// NOT enrichment — nothing here calls a model — even though SetJobEnrichment later
-// overlays it into the served `enrichment.requirements` when the model states none.
+// withDerived stamps content_hash, role_fingerprint and requirements_derived onto a mapped
+// params struct. content_hash covers the indexed content (posted_at included), so the upsert
+// can report whether a re-ingest changed anything searchable; role_fingerprint is the repost
+// identity and excludes posted_at/url/slug, so a reposted role clusters with its original.
+// requirements_derived is a pure function of the raw fields, not enrichment (no model call).
 func withDerived(p db.UpsertJobParams) db.UpsertJobParams {
 	p.ContentHash = pgtype.Text{String: jobhash.Of(p), Valid: true}
 	p.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(p), Valid: true}
-	p.RequirementsDerived = marshalRequirements(reqextract.Derive(p.Description))
+	p.RequirementsDerived = reqextract.DeriveJSON(p.Description)
 	return p
 }
 
-// marshalRequirements encodes a derived requirements list for the jsonb column. A
-// marshal error is impossible for this shape (two strings), and an empty list encodes
-// as `[]` rather than nil so the NOT NULL column takes the same value whether the
-// posting yielded nothing or the encoding fell over — "no requirements found" either
-// way, and never a null the column would reject.
-func marshalRequirements(reqs []enrich.Requirement) []byte {
-	if len(reqs) == 0 {
-		return []byte("[]")
-	}
-	encoded, err := json.Marshal(reqs)
-	if err != nil {
-		return []byte("[]")
-	}
-	return encoded
-}
-
-// UpsertManualParams is the moderator-write analogue of UpsertParams: it maps the
-// same Fields columns to the generated UpsertManualJob params, so the manual write
-// path shares the one column mapping instead of re-listing them. It additionally
-// seeds the salary_*_manual columns from the authoritative ManualSalary (nil when
-// none) and stamps the moderator's id as created_by/updated_by.
+// UpsertManualParams is the moderator-write analogue of UpsertParams, mapping to
+// UpsertManualJob params. It also seeds the salary_*_manual columns from ManualSalary and
+// stamps the moderator's id as created_by/updated_by.
 //
-// The derived columns are taken from UpsertParams rather than recomputed, so a
-// hand-curated posting and a crawled one carry identical fingerprints for identical
-// content — which is what lets the two cluster as one role instead of the manual copy
-// sitting outside clustering.
+// Derived columns come from UpsertParams, so a hand-curated and a crawled posting with
+// identical content share fingerprints and cluster as one role.
 func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 	var salMin, salMax *int
 	var salCurrency, salPeriod string
@@ -380,6 +340,7 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 		Equity:            pgconv.Text(f.Equity),
 		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
+		Engagement:        f.Engagement,
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -401,28 +362,15 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 	}
 }
 
-// UpdateManualParams is the moderator-EDIT analogue of UpsertManualParams: it maps the
-// same Fields columns to the generated UpdateManualJob params, addressing the row by its
-// public slug and stamping the acting moderator. It deliberately carries no salary or
-// created_by — the edit query touches neither the manual salary nor the authorship of
-// the original create.
-//
-// Like the other two mappings it owns the derived columns, and the edit is the write
-// that most needs them: re-deriving facets from edited content is exactly when the
-// fingerprints move.
+// UpdateManualParams is the moderator-EDIT analogue of UpsertManualParams, mapping to
+// UpdateManualJob params addressed by public slug. It carries no salary or created_by; the
+// edit query touches neither. Re-deriving from edited content is when fingerprints move.
 func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJobParams {
 	derived := f.UpsertParams()
-	// jobhash.Of hashes p.PublicSlug, and UpsertParams() built derived from f.PublicSlug —
-	// a slug job.New/jobderive.Derive just recomputed from the edited title/company. But
-	// UpdateManualJob's own SQL comment is explicit that "the source identity (url/
-	// external_id/public_slug) is deliberately NOT updatable here": the row's real
-	// public_slug stays `slug`, the value already addressing it below. Hashing f.PublicSlug
-	// would stamp content_hash with a slug value that never lands in the row, so
-	// jobhash.OfRow (what a backfill/reconciliation pass calls, reading the row's ACTUAL
-	// public_slug) could never reproduce it — the row would spuriously report "changed" on
-	// every such pass even though nothing indexed actually moved. Re-derive against the
-	// slug that is actually persisted; RoleFingerprint is unaffected (it deliberately
-	// excludes public_slug, per its own doc comment), so this only changes ContentHash.
+	// UpdateManualJob does not update public_slug, so the row keeps `slug`. Hashing the
+	// recomputed f.PublicSlug would stamp a content_hash that jobhash.OfRow (which reads the
+	// row's actual slug) could never reproduce, so backfills would flag the row changed
+	// forever. Re-derive against the persisted slug; only ContentHash changes.
 	derived.PublicSlug = slug
 	derived = withDerived(derived)
 	return db.UpdateManualJobParams{
@@ -448,6 +396,7 @@ func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJo
 		Equity:            pgconv.Text(f.Equity),
 		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
+		Engagement:        f.Engagement,
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -464,12 +413,9 @@ func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJo
 	}
 }
 
-// UpdateEmployerParams is the employer-self-service analogue of UpdateManualParams: same
-// mapping, same content-hash/public-slug reasoning (see UpdateManualParams's own comment),
-// but targeting UpdateEmployerJob's narrower actor-scoped statement (WHERE created_by =
-// actor_id AND source = 'employer', not merely created_by IS NOT NULL) — see
-// openspec/changes/add-employer-company-accounts/design.md for why moderation's own
-// UpdateManualJob is not safe to reuse for this caller.
+// UpdateEmployerParams is the employer-self-service analogue of UpdateManualParams, with
+// the same slug reasoning, targeting UpdateEmployerJob's narrower statement (WHERE
+// created_by = actor_id AND source = 'employer'). UpdateManualJob is not safe to reuse here.
 func (f Fields) UpdateEmployerParams(slug string, actorID int64) db.UpdateEmployerJobParams {
 	derived := f.UpsertParams()
 	derived.PublicSlug = slug
@@ -497,6 +443,7 @@ func (f Fields) UpdateEmployerParams(slug string, actorID int64) db.UpdateEmploy
 		Equity:            pgconv.Text(f.Equity),
 		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
+		Engagement:        f.Engagement,
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -514,11 +461,9 @@ func (f Fields) UpdateEmployerParams(slug string, actorID int64) db.UpdateEmploy
 	}
 }
 
-// InsertPrivateParams is the private-JD analogue of UpsertParams/UpsertManualParams: it
-// maps the same Fields columns to the generated InsertPrivateJob params, stamping
-// created_by. Unlike the other two mappings there is no updated_by or salary — a private
-// job is never edited or given a manual salary, only created once per submission (see
-// internal/job/privatejob).
+// InsertPrivateParams is the private-JD analogue of UpsertParams, mapping to InsertPrivateJob
+// params and stamping created_by. There is no updated_by or salary: a private job is only
+// created once per submission (see internal/job/privatejob).
 func (f Fields) InsertPrivateParams(createdBy int64) db.InsertPrivateJobParams {
 	derived := f.UpsertParams()
 	return db.InsertPrivateJobParams{
@@ -547,6 +492,7 @@ func (f Fields) InsertPrivateParams(createdBy int64) db.InsertPrivateJobParams {
 		Equity:            pgconv.Text(f.Equity),
 		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
+		Engagement:        f.Engagement,
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,

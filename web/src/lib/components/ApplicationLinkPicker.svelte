@@ -68,15 +68,15 @@
       onclick={() => (open = false)}
     ></button>
 
-    <div
-      class="absolute left-0 z-20 mt-1 w-64 overflow-hidden rounded-md border border-border bg-background shadow-md"
-    >
+    <div class="absolute left-0 z-20 mt-1 w-64 overflow-hidden rounded-md border border-border bg-background shadow-md">
       {#if loading}
         <p class="p-3 text-xs text-muted-foreground">{s.loadingApps}</p>
       {:else if applications.length === 0}
         <p class="p-3 text-xs text-muted-foreground">{s.empty}</p>
       {:else}
-        <div class="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-ring">
+        <div
+          class="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-ring"
+        >
           <Search class="size-3.5 shrink-0 text-muted-foreground" />
           <input
             bind:value={q}

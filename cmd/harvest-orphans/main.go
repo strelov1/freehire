@@ -1,12 +1,11 @@
-// Command harvest-orphans builds a candidate-board seed from the companies the catalogue
-// holds only through aggregators — an open posting from an aggregator and none from any
-// first-party ATS. Each company proposes board ids derived from its name alone (no website
-// resolution, no search), paired with the employer the board is expected to belong to.
+// Command harvest-orphans builds a candidate-board seed from the companies the catalogue holds only
+// through aggregators (an open aggregator posting, none from a first-party ATS). Each company proposes
+// board ids derived from its name alone, paired with the employer the board should belong to.
 //
-// The seed carries no provider: cmd/harvest-boards de-duplicates against each provider's own
-// board file and probes what remains, so one seed is run against every provider whose board
-// id is a name. Providers keyed by a tenant token or a numeric id (workday, icims,
-// oracle, taleo, cornerstone, pageup, neogov) cannot be seeded this way.
+// The seed carries no provider: cmd/harvest-boards de-duplicates against each provider's own board
+// file and probes the rest, so one seed runs against every provider whose board id is a name.
+// Providers keyed by a tenant token or numeric id (workday, icims, oracle, taleo, cornerstone, pageup,
+// neogov) cannot be seeded this way.
 //
 //	harvest-orphans [-aggregators a,b] [-out orphans.seed.json]   # needs DATABASE_URL
 //	go run ./cmd/harvest-boards <provider> orphans.seed.json      # then, per provider
@@ -27,16 +26,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// remoteAggregators is the default requested set: the remote-jobs aggregators, whose
-// companies are overwhelmingly product employers rather than the local staffing agencies
-// that dominate the country-specific boards and rarely run an ATS of their own.
+// remoteAggregators is the default requested set: remote-jobs aggregators, whose companies are
+// mostly product employers, unlike the country boards dominated by staffing agencies.
 var remoteAggregators = []string{
 	"himalayas", "remoteok", "weworkremotely", "jobspresso",
 	"workingnomads", "4dayweek", "jobicy", "remotive",
 }
 
-// queryTimeout bounds the worklist scan. It is a backstop against a planner flip, not a
-// budget: the query runs in seconds on the production catalogue.
+// queryTimeout bounds the worklist scan, a backstop against a planner flip (it runs in seconds).
 const queryTimeout = "10min"
 
 func main() { worker.Main(run) }
@@ -59,19 +56,17 @@ func run() int {
 		log.Printf("harvest-orphans: no aggregators requested")
 		return 2
 	}
-	// The exclusion test always considers EVERY aggregator, whatever this run asked for:
-	// narrowing the request must not make another aggregator's posting look like the
-	// first-party ATS coverage that disqualifies a company.
+	// The exclusion test always considers EVERY aggregator: narrowing the request must not make another
+	// aggregator's posting look like the first-party coverage that disqualifies a company.
 	all := allAggregatorProviders()
 	if unknown := notIn(from, all); len(unknown) > 0 {
 		log.Printf("harvest-orphans: not aggregator sources: %s", strings.Join(unknown, ", "))
 		return 2
 	}
 
-	// One pinned connection with a bounded statement time. The worklist scan is a single
-	// long read over the whole jobs table, and an unbounded one held open against prod is the
-	// snapshot hazard that has taken the site down before; measured at ~6s on the production
-	// catalogue, so a cap this generous only ever fires on a plan that has gone wrong.
+	// One pinned connection with a bounded statement time: the scan is a long read over the whole jobs
+	// table, and an unbounded one held open against prod is a snapshot hazard. The cap only fires on a
+	// plan gone wrong.
 	conn, err := pool.Acquire(ctx)
 	if err != nil {
 		log.Printf("harvest-orphans: acquire: %v", err)
@@ -116,11 +111,10 @@ func run() int {
 	return 0
 }
 
-// allAggregatorProviders is every provider the pipeline treats as an aggregator — the set the
-// exclusion test is evaluated against, and the set a requested source must belong to. It reads
-// the taxonomy, not the crawl registry: this tool needs only DATABASE_URL, so a
-// credential-gated aggregator (reed, usajobs, whatjobs) would otherwise be absent and its
-// postings would read as the first-party ATS coverage that disqualifies a company.
+// allAggregatorProviders is every provider treated as an aggregator: the set the exclusion test uses
+// and a requested source must belong to. It reads the taxonomy, not the crawl registry, since this
+// tool needs only DATABASE_URL and a credential-gated aggregator (reed, usajobs, whatjobs) would be
+// absent and its postings would read as first-party coverage.
 func allAggregatorProviders() []string {
 	return sources.AggregatorProviders(sources.Taxonomy())
 }
@@ -136,8 +130,8 @@ func splitList(s string) []string {
 	return out
 }
 
-// notIn returns the members of want absent from have. A source misspelt on the command line
-// would otherwise select nothing and report an empty worklist as a real result.
+// notIn returns the members of want absent from have; a misspelt source would otherwise select
+// nothing and report an empty worklist as a real result.
 func notIn(want, have []string) []string {
 	known := make(map[string]bool, len(have))
 	for _, h := range have {

@@ -10,21 +10,15 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
-// propagateBatchSize bounds how many job rows one statement locks. The single
-// statement this replaced locked every diverging job at once and deadlocked
-// against the live ingest writers (2026-10-21); a few thousand rows hold their
-// locks for well under a second.
+// propagateBatchSize bounds how many job rows one statement locks, so locks are held
+// briefly and the run does not deadlock against live ingest writers.
 const propagateBatchSize = 5000
 
-// maxDeadlockRetries is how many times one batch is re-run after PostgreSQL broke a
-// lock cycle by aborting it. A deadlock says nothing is wrong with the batch, only
-// that a concurrent writer wanted the same rows in another order, so the batch is
-// simply run again; a batch that keeps losing is a real contention problem and
-// fails the run rather than spinning.
+// maxDeadlockRetries is how many times one batch is re-run after a deadlock abort. A batch
+// that keeps losing is real contention and fails the run rather than spinning.
 const maxDeadlockRetries = 5
 
-// deadlockBackoff is the base pause before a retry, multiplied by the attempt, so
-// the writer that won has time to commit and move on.
+// deadlockBackoff is the base pause before a retry, multiplied by the attempt.
 var deadlockBackoff = time.Second
 
 type collectionsPropagator interface {

@@ -26,9 +26,7 @@
   const visibleItems = $derived(notificationCenter.items.slice(0, DROPDOWN_LIMIT));
   // The badge is visual only; the button's name carries the count instead.
   const buttonLabel = $derived(
-    notificationCenter.unreadCount > 0
-      ? `Notifications, ${notificationCenter.unreadCount} unread`
-      : 'Notifications',
+    notificationCenter.unreadCount > 0 ? `Notifications, ${notificationCenter.unreadCount} unread` : 'Notifications',
   );
   // Below `sm` the panel takes the whole screen, so it is a modal dialog there
   // (scroll locked, focus trapped); on wider screens it stays a non-modal popover.
@@ -101,10 +99,7 @@
   }
 </script>
 
-<svelte:window
-  onclick={onWindowClick}
-  onkeydown={(e) => e.key === 'Escape' && (open = false)}
-/>
+<svelte:window onclick={onWindowClick} onkeydown={(e) => e.key === 'Escape' && (open = false)} />
 
 {#if isAuthenticated()}
   <div class="relative" bind:this={root}>

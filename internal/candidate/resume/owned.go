@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // Parse status values persisted on users.resume_extract_status.
@@ -19,62 +19,6 @@ const (
 	ExtractStatusOK      = "ok"
 	ExtractStatusFailed  = "failed"
 )
-
-// Owned is everything about a candidate's résumé that the CANDIDATE edited directly,
-// rather than whatever resume_structured most recently re-derived from an upload. It is
-// the one owned-overlay mechanism for the whole "profile" — the fields a fresh CV upload
-// would otherwise silently overwrite — not identity alone: a re-upload regenerates
-// headline/summary/languages/certifications/education exactly as wholesale as it
-// regenerates email/phone, so a candidate correcting any of them needs the same
-// protection.
-//
-// Deliberately NOT here: Skills (owned already, as userprofile.Profile.Skills — a
-// separate, CV-independent resource with its own edit surface), and Experience/Projects
-// (owned already, as the experience bank — provenance-tracked, richer than flat
-// overwrite; Education has no equivalent claim-level provenance need, so it stays a flat
-// overlay like Languages/Certifications rather than growing a bank of its own).
-//
-// Persisted as one JSON blob on users.candidate_contacts — the column keeps its original
-// name (a rename would need a migration for no reader-facing benefit); only the Go
-// concept broadened.
-type Owned struct {
-	FullName       string                    `json:"full_name,omitempty"`
-	Email          string                    `json:"email,omitempty"`
-	Phone          string                    `json:"phone,omitempty"`
-	Location       string                    `json:"location,omitempty"`
-	Links          []string                  `json:"links,omitempty"`
-	Headline       string                    `json:"headline,omitempty"`
-	Summary        string                    `json:"summary,omitempty"`
-	Languages      []string                  `json:"languages,omitempty"`
-	Certifications []string                  `json:"certifications,omitempty"`
-	Education      []resumeextract.Education `json:"education,omitempty"`
-	// TotalYears is the candidate's own years of experience. It belongs here for exactly
-	// the reason the rest of this struct does: the CV extract computes a figure, a
-	// re-upload recomputes it wholesale, and a candidate who corrected it needs that
-	// correction to survive. The onboarding wizard offers the extracted figure and saves
-	// whatever the candidate leaves in the field.
-	TotalYears int `json:"total_years,omitempty"`
-
-	// The five body fields above are owned per field (see ApplyBody), and a non-empty
-	// value has always implied ownership — Sanitize keeps deriving that. But a candidate
-	// clearing a field they'd previously set has no non-empty value left to signal it, so
-	// an explicit save of that one field carries its own *Set flag: true even while the
-	// value is "". Sanitize only ever turns these on (from a non-empty value); it never
-	// turns one off, so an explicit clear survives every Sanitize call between the PUT
-	// and the read that overlays it. Identity fields need no equivalent — they are
-	// overlaid as one IdentityEmpty()-gated block, never field by field, so clearing one
-	// while another stays set was never representable to lose in the first place.
-	HeadlineSet       bool `json:"headline_set,omitempty"`
-	SummarySet        bool `json:"summary_set,omitempty"`
-	LanguagesSet      bool `json:"languages_set,omitempty"`
-	CertificationsSet bool `json:"certifications_set,omitempty"`
-	EducationSet      bool `json:"education_set,omitempty"`
-	// TotalYearsSet carries the same explicit-clear signal for a numeric field, where the
-	// stakes are higher than for the strings above: zero is a legitimate answer ("less
-	// than a year"), not an absence, and without this flag a junior who deliberately said
-	// zero would silently get the CV's own figure handed back to them.
-	TotalYearsSet bool `json:"total_years_set,omitempty"`
-}
 
 const (
 	maxContactName      = 200
@@ -89,36 +33,31 @@ const (
 	maxOwnedLanguages   = 20
 	maxOwnedCertifCount = 40
 	maxOwnedEducation   = 20
-	// maxOwnedTotalYears is longer than any career and shorter than any typo. A figure
-	// past it is clamped rather than rejected: this field rides the contacts endpoint
-	// alongside four others, and failing the whole write over a stray digit would lose
-	// the rest of what the candidate just typed.
+	// maxOwnedTotalYears is longer than any career and shorter than any typo. A larger figure is
+	// clamped, not rejected, so a stray digit does not lose the rest of the write.
 	maxOwnedTotalYears = 70
 )
 
-// Sanitize bounds every field the same way CV headers and the structured extract are
-// bounded (mirrors resumeextract.Structured's own caps for the fields they share).
+// Sanitize bounds every field like CV headers and the structured extract (mirrors
+// resumeextract.Structured's caps for shared fields).
 func (o *Owned) Sanitize() {
 	if o == nil {
 		return
 	}
-	o.FullName = clipRunes(strings.TrimSpace(o.FullName), maxContactName)
-	o.Email = clipRunes(strings.TrimSpace(o.Email), maxContactEmail)
-	o.Phone = clipRunes(strings.TrimSpace(o.Phone), maxContactPhone)
-	o.Location = clipRunes(strings.TrimSpace(o.Location), maxContactLocation)
+	o.FullName = llm.TruncateRunes(strings.TrimSpace(o.FullName), maxContactName)
+	o.Email = llm.TruncateRunes(strings.TrimSpace(o.Email), maxContactEmail)
+	o.Phone = llm.TruncateRunes(strings.TrimSpace(o.Phone), maxContactPhone)
+	o.Location = llm.TruncateRunes(strings.TrimSpace(o.Location), maxContactLocation)
 	o.Links = clipList(o.Links, maxContactLink, maxContactLinks, false)
-	o.Headline = clipRunes(strings.TrimSpace(o.Headline), maxOwnedHeadline)
-	o.Summary = clipRunes(strings.TrimSpace(o.Summary), maxOwnedSummary)
+	o.Headline = llm.TruncateRunes(strings.TrimSpace(o.Headline), maxOwnedHeadline)
+	o.Summary = llm.TruncateRunes(strings.TrimSpace(o.Summary), maxOwnedSummary)
 	o.Languages = clipList(o.Languages, maxOwnedShort, maxOwnedLanguages, true)
 	o.Certifications = clipList(o.Certifications, maxOwnedShort, maxOwnedCertifCount, true)
 	o.Education = clipEducation(o.Education, maxOwnedEducation)
 	o.TotalYears = min(max(o.TotalYears, 0), maxOwnedTotalYears)
 
-	// Additive only: a non-empty value has always meant "owned" (every caller before the
-	// *Set fields existed relied on exactly that), so a value surviving Sanitize
-	// non-empty still forces its flag on. Never turned off here — that would erase an
-	// explicit clear (value "" with Set already true) the moment it round-trips through
-	// Sanitize, which every read and write path does.
+	// Additive only: a non-empty value forces its flag on. Never turned off here, which would
+	// erase an explicit clear (value "" with Set true) on every Sanitize round-trip.
 	if o.Headline != "" {
 		o.HeadlineSet = true
 	}
@@ -139,14 +78,13 @@ func (o *Owned) Sanitize() {
 	}
 }
 
-// clipEducation trims each entry's fields, drops entries left with no content, and caps
-// the list — the same shape of cleanup resumeextract.Structured.Sanitize applies to its
-// own Education, kept independent since Owned has no access to that unexported helper.
+// clipEducation trims each entry's fields, drops entries left with no content, and caps the
+// list, like resumeextract.Structured.Sanitize (whose helper is unexported).
 func clipEducation(items []resumeextract.Education, maxCount int) []resumeextract.Education {
 	out := make([]resumeextract.Education, 0, len(items))
 	for _, e := range items {
-		e.Degree = clipRunes(strings.TrimSpace(e.Degree), maxOwnedShort)
-		e.Institution = clipRunes(strings.TrimSpace(e.Institution), maxOwnedShort)
+		e.Degree = llm.TruncateRunes(strings.TrimSpace(e.Degree), maxOwnedShort)
+		e.Institution = llm.TruncateRunes(strings.TrimSpace(e.Institution), maxOwnedShort)
 		e.Year = perioddate.Sanitize(e.Year)
 		if e.Degree == "" && e.Institution == "" && e.Year == nil {
 			continue
@@ -159,9 +97,8 @@ func clipEducation(items []resumeextract.Education, maxCount int) []resumeextrac
 	return out
 }
 
-// clipList trims, bounds, and — when dedupe is set — case-insensitively dedupes a list of
-// short strings. Shared by Links, Languages, and Certifications: same shape of field,
-// same cleanup.
+// clipList trims, bounds, and (when dedupe is set) case-insensitively dedupes a list of short
+// strings. Shared by Links, Languages, and Certifications.
 func clipList(items []string, maxRunes, maxCount int, dedupe bool) []string {
 	var seen map[string]bool
 	if dedupe {
@@ -169,7 +106,7 @@ func clipList(items []string, maxRunes, maxCount int, dedupe bool) []string {
 	}
 	out := make([]string, 0, len(items))
 	for _, it := range items {
-		it = clipRunes(strings.TrimSpace(it), maxRunes)
+		it = llm.TruncateRunes(strings.TrimSpace(it), maxRunes)
 		if it == "" {
 			continue
 		}
@@ -188,21 +125,17 @@ func clipList(items []string, maxRunes, maxCount int, dedupe bool) []string {
 	return out
 }
 
-// Empty reports whether every owned field is blank — "nothing to override yet". A body
-// field explicitly cleared to "" still counts as owned here (its *Set flag is true), same
-// as the case ApplyBody overlays: an owned empty summary is not "nothing to override," it
-// is an override to nothing.
+// Empty reports whether every owned field is blank: "nothing to override yet". A body field
+// explicitly cleared to "" still counts as owned (its *Set flag is true), as in ApplyBody.
 func (o Owned) Empty() bool {
 	return o.IdentityEmpty() && !o.headlineOwned() && !o.summaryOwned() &&
 		!o.languagesOwned() && !o.certificationsOwned() && !o.educationOwned() &&
 		!o.totalYearsOwned()
 }
 
-// headlineOwned and its four siblings report whether a body field is this candidate's own
-// — either explicitly, via its *Set flag, or implicitly, because it carries a non-empty
-// value (every caller before the *Set flags existed relied on exactly that, and a value
-// built as a plain struct literal rather than through Sanitize still needs to read as
-// owned). Shared by Empty and ApplyBody so the two can never disagree about what counts.
+// headlineOwned and its four siblings report whether a body field is the candidate's own:
+// explicitly via its *Set flag, or implicitly via a non-empty value (a struct literal that
+// skipped Sanitize still reads as owned). Shared by Empty and ApplyBody so they agree.
 func (o Owned) headlineOwned() bool       { return o.HeadlineSet || o.Headline != "" }
 func (o Owned) summaryOwned() bool        { return o.SummarySet || o.Summary != "" }
 func (o Owned) languagesOwned() bool      { return o.LanguagesSet || len(o.Languages) > 0 }
@@ -210,23 +143,18 @@ func (o Owned) certificationsOwned() bool { return o.CertificationsSet || len(o.
 func (o Owned) educationOwned() bool      { return o.EducationSet || len(o.Education) > 0 }
 func (o Owned) totalYearsOwned() bool     { return o.TotalYearsSet || o.TotalYears > 0 }
 
-// IdentityEmpty reports whether every identity field (name/email/phone/location/links)
-// is blank — distinct from Empty(), which also considers the body fields. A caller that
-// is about to overwrite a CV header/contact block with Owned's identity subset must gate
-// on THIS, not Empty(): a candidate who has only ever edited their summary has an Owned
-// that is non-Empty (Summary is set) but whose identity fields are still blank, and
-// gating the identity copy on Empty() would blank out a real name/email pulled from the
-// current extract instead of leaving it alone.
+// IdentityEmpty reports whether every identity field (name/email/phone/location/links) is
+// blank, unlike Empty(), which also considers body fields. Gate an identity overwrite on THIS,
+// not Empty(): a candidate who only edited their summary is non-Empty with blank identity, and
+// gating on Empty() would blank a real name/email from the current extract.
 func (o Owned) IdentityEmpty() bool {
 	return o.FullName == "" && o.Email == "" && o.Phone == "" && o.Location == "" && len(o.Links) == 0
 }
 
 // ApplyBody overlays the non-identity flat fields — headline, summary, languages,
-// certifications, education — onto st, field by field, wherever Owned actually has a
-// value. This is the one precedence rule GetResume, structuredCV, and StructureForSeed
-// each compose with; identity fields are each caller's own concern (StructureForSeed
-// sets them unconditionally once Owned is non-empty, structuredCV's contact-free view
-// never touches them at all).
+// certifications, education — onto st, field by field, wherever Owned has a value. The one
+// precedence rule GetResume, structuredCV, and StructureForSeed compose with; identity fields
+// are each caller's own concern.
 func (o Owned) ApplyBody(st *resumeextract.Structured) {
 	if o.headlineOwned() {
 		st.Headline = o.Headline
@@ -243,15 +171,24 @@ func (o Owned) ApplyBody(st *resumeextract.Structured) {
 	if o.educationOwned() {
 		st.Education = append([]resumeextract.Education(nil), o.Education...)
 	}
+	o.ApplyTotalYears(st, time.Now())
+}
+
+// ApplyTotalYears settles the years of experience: the candidate's own figure when they
+// gave one — an explicit choice, never second-guessed, even when lower than their dates
+// add up to — and otherwise the extract's figure caught up with its dated roles, since
+// the model's number is frozen at parse time and may be wrong.
+func (o Owned) ApplyTotalYears(st *resumeextract.Structured, now time.Time) {
 	if o.totalYearsOwned() {
 		st.TotalYears = o.TotalYears
+		return
 	}
+	st.TotalYears = st.EffectiveYears(now)
 }
 
 // AsStructured projects the identity subset onto the structured contact fields for
-// seed/heal — CV HEADER fields only (name/email/phone/location/links). Headline, summary,
-// languages, and certifications are body content, not header identity, so callers that
-// need those read the full StructureForSeed composition instead.
+// seed/heal: CV HEADER fields only (name/email/phone/location/links). Body content comes from
+// the full StructureForSeed composition.
 func (o Owned) AsStructured() resumeextract.Structured {
 	return resumeextract.Structured{
 		FullName: o.FullName,
@@ -302,9 +239,8 @@ func FillEmpty(dst *Owned, src Owned) {
 	if len(dst.Links) == 0 && len(src.Links) > 0 {
 		dst.Links = append([]string(nil), src.Links...)
 	}
-	// Gated on ownership, not emptiness: a candidate who explicitly cleared a body field
-	// (its *Set flag true, value "") has made a choice a fresh extract must not overrule,
-	// the same protection an explicitly non-empty field already had.
+	// Gated on ownership, not emptiness: an explicitly cleared body field (*Set true, value "")
+	// must not be overruled by a fresh extract.
 	if !dst.headlineOwned() {
 		dst.Headline = src.Headline
 	}
@@ -326,15 +262,8 @@ func FillEmpty(dst *Owned, src Owned) {
 	dst.Sanitize()
 }
 
-func clipRunes(s string, max int) string {
-	if max <= 0 || utf8.RuneCountInString(s) <= max {
-		return s
-	}
-	r := []rune(s)
-	return string(r[:max])
-}
-
-func decodeOwned(blob []byte) Owned {
+// DecodeOwned reads the stored candidate_contacts blob; unreadable or empty is "owns nothing".
+func DecodeOwned(blob []byte) Owned {
 	if len(blob) == 0 {
 		return Owned{}
 	}
@@ -390,7 +319,7 @@ func (s *Store) CandidateOwned(ctx context.Context, userID int64) (Owned, error)
 	if err != nil {
 		return Owned{}, err
 	}
-	return decodeOwned(blob), nil
+	return DecodeOwned(blob), nil
 }
 
 // SetCandidateOwned replaces the candidate's owned overrides after Sanitize.
@@ -480,15 +409,13 @@ func (s *Store) ReplaceOwnedFromStructured(ctx context.Context, userID int64, st
 
 // MarkExtractFailed records a failed extract for the given upload stamp.
 func (s *Store) MarkExtractFailed(ctx context.Context, userID int64, detail string, uploadedAt time.Time) error {
-	detail = clipRunes(strings.TrimSpace(detail), 200)
+	detail = llm.TruncateRunes(strings.TrimSpace(detail), 200)
 	return s.repo.SetExtractFailed(ctx, userID, detail, uploadedAt)
 }
 
 // MarkExtractPending clears a stale status (typically 'failed') for the given upload stamp
-// before a retry's background derivation starts — the same transition a fresh upload makes
-// in Put, done here without re-stamping the upload or touching the object key. Without this,
-// a poll reading GET /me/resume right after a retry starts would see the PREVIOUS attempt's
-// terminal status and mistake it for the retry's own outcome.
+// before a retry's background derivation starts, without re-stamping the upload. Otherwise a
+// poll of GET /me/resume would mistake the previous attempt's terminal status for the retry's.
 func (s *Store) MarkExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error {
 	return s.repo.SetExtractPending(ctx, userID, uploadedAt)
 }
@@ -502,8 +429,7 @@ func (s *Store) StructuredRow(ctx context.Context, userID int64) (db.GetUserResu
 // come from the current extract when stamped. A superseded blob contributes contacts
 // only — semantic sections wait for a matching stamp (same rule as ProvisionalContacts).
 // Owned overrides win as a block, field by field, over both — a candidate's own edit to
-// their headline or summary belongs in a freshly seeded CV exactly as their own edited
-// email does. ok is true when there is any identity or body worth seeding (caller still
+// their headline or summary belongs in a freshly seeded CV, like their edited email. ok is true when there is any identity or body worth seeding (caller still
 // applies seedable). See AGENTS.md for the identity table.
 func (s *Store) StructureForSeed(ctx context.Context, userID int64) (resumeextract.Structured, bool, error) {
 	row, err := s.repo.GetStructured(ctx, userID)

@@ -1,13 +1,7 @@
 package config
 
 import (
-	"encoding/base64"
-	"errors"
-	"fmt"
-	"net/url"
 	"os"
-	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -16,9 +10,8 @@ import (
 type Settings struct {
 	Env  string
 	Port string
-	// MetricsPort, if set, serves /metrics on its own listener instead of the
-	// main API port — so an internal-only firewall rule for this port never
-	// exposes the rest of the API surface too. Empty disables /metrics.
+	// MetricsPort, if set, serves /metrics on its own listener so a firewall rule for it
+	// does not expose the rest of the API. Empty disables /metrics.
 	MetricsPort string
 	// AgentViewLogDir is where the server writes internal/application/agentview's day files.
 	// Unset, nothing is written.
@@ -26,42 +19,25 @@ type Settings struct {
 	DatabaseURL     string
 	FrontendOrigin  string
 
-	// PublicAnonLimits selects the anonymous public-read budgets: "" keeps each route's
-	// previous per-minute budget, "strict" applies the shared 120/min + 2,000/day per IP
-	// (openspec/changes/commercial-api-paid-keys). Any other value fails Validate — a typo
-	// here would otherwise look exactly like a deliberate "keep the old limits".
-	PublicAnonLimits string
-	// VerifiedBotSecret is the value a Cloudflare Transform Rule puts in X-FH-Verified-Bot for
-	// a request Cloudflare verified as a known bot; such a request skips the anonymous
-	// public-read budgets. Empty disables the exemption.
-	VerifiedBotSecret string
+	AuthIntrospectionSecret string
 
-	// JWT settings for the auth surface. JWTSecret has no default: it is read
-	// as-is and the server fails fast when it is empty (see cmd/server). Only
-	// the server calls Load — the enrich worker reads its own LoadEnrich — so
-	// the requirement lives at the server entry point, not here.
+	// JWTSecret has no default: the server fails fast when it is empty (see cmd/server).
+	// Only the server calls Load, so the check lives there.
 	JWTSecret string
 	JWTTTL    time.Duration
 
-	// CookieSecure marks the auth cookie Secure (HTTPS-only). Default false so
-	// the cookie works over http://localhost in dev; set COOKIE_SECURE=true in
-	// any HTTPS deployment.
+	// CookieSecure marks the auth cookie HTTPS-only. Default false for http://localhost dev;
+	// set COOKIE_SECURE=true in any HTTPS deployment.
 	CookieSecure bool
 
-	// CookieDomains are the registrable domains the session cookie is scoped to,
-	// one per served domain (e.g. "freehire.dev", "freehire.me"). Read from
-	// COOKIE_DOMAIN as a comma-separated list; a leading dot is accepted and
-	// stripped ("​.freehire.dev,.freehire.me"). Empty in dev (host-only cookie).
-	// Per request the cookie is scoped to whichever entry the request host falls
-	// under, so one deployment can serve — and keep SSO on — more than one domain
-	// during a migration. This same set gates the OAuth redirect origin (see
-	// handler.requestOrigin), since it is exactly the set of domains we serve.
+	// CookieDomains are the registrable domains the session cookie is scoped to, from the
+	// comma-separated COOKIE_DOMAIN (a leading dot is stripped). Empty in dev (host-only cookie).
+	// Each request's cookie is scoped to the entry its host falls under. The same set gates
+	// the OAuth redirect origin (see handler.requestOrigin).
 	CookieDomains []string
 
-	// OAuth holds per-provider client credentials keyed by provider name
-	// (google, github, linkedin). OAuth sign-in is optional: a provider with
-	// incomplete credentials is simply disabled (enforced where the provider
-	// registry is built, not here), and the server starts either way.
+	// OAuth holds per-provider client credentials (google, github, linkedin). A provider with
+	// incomplete credentials is disabled where the provider registry is built, not here.
 	OAuth map[string]OAuthCredentials
 
 	// AuthV2 enables verifier-bound native OAuth endpoints. Browser-provider v2
@@ -78,295 +54,215 @@ type Settings struct {
 	AppleGrantKeys        map[string][]byte
 	RecentAuthTTL         time.Duration
 
-	// GmailTokenKey is the 32-byte AES key (from GMAIL_TOKEN_KEY, base64) that
-	// encrypts stored Gmail refresh tokens. Empty/invalid = the Connect-Gmail
-	// inbox feature is disabled (like an unset optional integration).
+	// GmailTokenKey is the 32-byte AES key (GMAIL_TOKEN_KEY, base64) that encrypts stored
+	// Gmail refresh tokens. Empty or invalid disables the Connect-Gmail feature.
 	GmailTokenKey []byte
 
-	// MailboxDomain is the receiving domain hosted mailboxes live on
-	// (<handle>@MailboxDomain, e.g. inbox.freehire.me). Empty = the hosted-mailbox
-	// option is off (claim route unregistered, status reports unavailable). It is
-	// deliberately NOT named MAIL_DOMAIN — that name reads like the SES *sending*
-	// identity (notifications, NOTIFY_EMAIL_FROM), a different, non-receiving domain.
+	// MailboxDomain is the receiving domain hosted mailboxes live on (<handle>@MailboxDomain).
+	// Empty turns the hosted-mailbox option off. Not named MAIL_DOMAIN: that reads like the SES
+	// sending identity, a different domain.
 	MailboxDomain string
 
-	// TypesafeAPIKey backs the Jev provider for every discrete-choice LLM call that opts
-	// in: the autofill agent's Choose call (internal/ai/autofillagent.JevPlanner),
-	// select-kind auto-apply drafting (internal/api/atsapply.JevSelectDrafter), the
-	// Telegram vacancy judge (internal/ingest/telegram.JevJudge, in cmd/tg-ingest and
-	// cmd/backfill-telegram-prefilter), and inbox mail classification
-	// (internal/application/mailclassify). Empty disables it outright for all four: each
-	// falls back to exactly what it did before this setting existed. Unrelated to LLM_* —
-	// it is read fresh here.
+	// TypesafeAPIKey backs the Jev provider for discrete-choice LLM calls: the autofill agent's
+	// Choose, select-kind auto-apply drafting, the Telegram vacancy judge and inbox mail
+	// classification. Empty disables all four, each falling back to its non-Jev path. Unrelated to LLM_*.
 	TypesafeAPIKey string
 
-	// Meilisearch backs the job search endpoint and the reindex command. Shared
-	// via Load (both cmd/server and cmd/reindex read it). Search is optional:
-	// MeiliKey empty ⇒ search is disabled and the server still starts (see
-	// cmd/server), so the requirement is enforced at the call site, not here.
+	// Meilisearch backs job search and the reindex command. MeiliKey empty disables search;
+	// the server still starts (enforced at the call site, not here).
 	MeiliURL string
 	MeiliKey string
 
-	// RedisURL backs the shared rate limiter (internal/api/ratelimit). Unlike Meili,
-	// Redis is a required dependency — there is no optional/disabled mode — so
-	// this only has a localhost default, the same posture as DatabaseURL.
+	// RedisURL backs shared application caches. Required (no disabled mode), so it only has a
+	// localhost default, like DatabaseURL.
 	RedisURL string
 
-	// LLM backs the optional CV ATS qualitative review and the in-app assistant. Optional
-	// and provider-agnostic: any empty field disables the AI layer — the server builds no
-	// LLM client and the ATS score stays deterministic (enforced at the cmd/server call
-	// site, not here, which is why Require is deliberately NOT called on it). The workers
-	// share the same six values and the same loader; what differs is that policy.
+	// LLM backs the CV ATS review and the in-app assistant. Any empty field disables the AI
+	// layer: the server builds no LLM client (enforced at the cmd/server call site, so Require is
+	// deliberately not called here). Workers share the same loader but apply their own policy.
 	LLM
 
-	// LLMAdminURL, LLMAdminUsername and LLMAdminPassword reach the gateway's
-	// administrative API, which mints the per-user credential each account's calls are
-	// spent under. They are named apart from LLMBaseURL/LLMAPIKey for two reasons: the
-	// endpoints genuinely differ (inference is served under /v1, administration under
-	// /api), and separating them is what lets LLMAPIKey stop being an administrative
-	// credential without a code change. It authenticates with a username and password
-	// rather than a bearer token because the management surface admits exactly one
-	// identity, and it is HTTP Basic.
+	// LLMAdminURL, LLMAdminUsername and LLMAdminPassword reach the gateway's administrative API,
+	// which mints the per-user credential each account's calls are spent under. Separate from
+	// LLMBaseURL/LLMAPIKey because inference is served under /v1 and administration under /api,
+	// and so LLMAPIKey need not be an admin credential. HTTP Basic: the management surface admits
+	// one identity.
 	//
-	// LLMAdminTemplateKey names the virtual key whose provider policy every minted
-	// credential copies. It is required rather than optional: the gateway denies every
-	// provider to a key that carries no policy, so minting without it produces
-	// credentials that fail on their first call.
+	// LLMAdminTemplateKey names the virtual key whose provider policy every minted credential
+	// copies. Required: the gateway denies every provider to a key with no policy.
 	//
-	// Any of them empty disables attribution entirely — every call then goes out on
-	// LLMAPIKey exactly as it did before.
+	// Any of them empty disables attribution; every call then goes out on LLMAPIKey.
 	LLMAdminURL         string
 	LLMAdminUsername    string
 	LLMAdminPassword    string
 	LLMAdminTemplateKey string
 
-	// LLMUserMaxBudget and LLMUserRPMLimit bound one account at the gateway. Both are
-	// unset by default and omitted from a minted credential when zero: a ceiling
-	// chosen before the spend distribution is known is a guess, and a guess that
-	// refuses people is expensive to be wrong about. LLMUserBudgetWindow is the period
-	// a budget resets over ("30d"); it only matters once a budget exists.
+	// LLMUserMaxBudget and LLMUserRPMLimit bound one account at the gateway. Both are unset by
+	// default and omitted from a minted credential when zero: a ceiling chosen before the spend
+	// distribution is known is a guess. LLMUserBudgetWindow is the budget reset period ("30d").
 	LLMUserMaxBudget    float64
 	LLMUserRPMLimit     int
 	LLMUserBudgetWindow string
 
-	// AssistantModel is the model the in-app agent runs on. It is separate from
-	// LLMModel because the two jobs differ: LLMModel is chosen for cheap, one-shot
-	// JSON extraction, while the assistant needs reliable tool calling and a large
-	// context. Empty falls back to LLMModel. AssistantMaxSteps bounds how many
-	// tool-calling rounds one turn may take before the agent is forced to answer;
-	// zero uses the package default.
+	// AssistantModel is the model the in-app agent runs on, separate from LLMModel because it
+	// needs reliable tool calling and a large context. Empty falls back to LLMModel.
+	// AssistantMaxSteps bounds tool-calling rounds per turn; zero uses the package default.
 	AssistantModel    string
 	AssistantMaxSteps int
-	// SearchIntentModel is the model the AI filter runs on, and it is separate for the
-	// opposite reason to AssistantModel: the job is trivial — sort one sentence into
-	// named fields — but somebody is watching a spinner while it runs, so latency IS
-	// the quality bar. Measured on the real prompt and schema, a small fast model
-	// answers in ~2.3s against ~4s-and-spiking for the shared one, at the same
-	// accuracy. Empty falls back to LLMModel.
+	// SearchIntentModel is the model the AI filter runs on. The job is trivial but a user waits
+	// on a spinner, so latency is the bar: use a small fast model. Empty falls back to LLMModel.
 	SearchIntentModel string
-	// ResumeExtractModel is the model a stored CV is parsed on. It is separate because
-	// the parse is the one model call every account gets, paid or not, so it runs on a
-	// cheap model rather than on whatever the paid features chose. Empty falls back to
-	// LLMModel.
+	// ResumeExtractModel is the model a stored CV is parsed on. Every account gets this call,
+	// paid or not, so it runs on a cheap model. Empty falls back to LLMModel.
 	ResumeExtractModel string
-	// AssistantMaxPrompt is the max rune length of one user message to the
-	// assistant. Default 8000; override with ASSISTANT_MAX_PROMPT. Values below 1
-	// fall back to the default so a typo cannot erase the ceiling.
+	// SupportModel is the model the support agent runs on. Open to every account, so it gets a
+	// cheap model of its own. Empty falls back to LLMModel.
+	SupportModel string
+	// AssistantMaxPrompt is the max rune length of one user message to the assistant
+	// (ASSISTANT_MAX_PROMPT, default 8000). Values below 1 fall back to the default.
 	AssistantMaxPrompt int
 
-	// STTModel transcribes dictated audio, through the same gateway and key the LLM
-	// settings above name — an OpenAI-compatible endpoint serves /chat/completions and
-	// /audio/transcriptions alike. Named explicitly like every other model here, with
-	// no default: transcription is billed per minute of audio against an assistant that
-	// is not metered, so a deployment that never said which model to use should not
-	// find itself paying for one. Empty leaves the endpoint answering 501 and the
-	// composer rendering no microphone.
+	// STTModel transcribes dictated audio through the same gateway and key as the LLM settings.
+	// No default: transcription is billed per minute and the assistant is not metered. Empty makes
+	// the endpoint answer 501 and hides the microphone.
 	STTModel string
 
-	// RealtimeModel is the OpenAI Realtime API model voice mode mints call credentials
-	// against, through the same gateway and key as STTModel above. Same posture as
-	// STTModel: no default, because Realtime audio is billed per minute and a
-	// deployment that never named a model should get no voice mode rather than a bill
-	// for one nobody chose. Empty leaves the mint endpoint answering 501 and the
-	// interview session view offering no voice mode.
+	// RealtimeModel is the OpenAI Realtime model voice mode mints call credentials against, via
+	// the same gateway and key as STTModel. No default, because Realtime audio is billed per
+	// minute. Empty makes the mint endpoint answer 501 and hides voice mode.
 	RealtimeModel string
 
-	// PIIFilterURL is the co-located openai/privacy-filter span-detection endpoint used to
-	// mask PII out of CV text before it reaches the LLM (internal/candidate/pii). Optional here, but
-	// the fit-analysis and structured-résumé paths are fail-closed: an empty value disables
-	// them entirely (no CV is sent to the LLM) rather than leaking PII — enforced at the
-	// call site, not here.
-	PIIFilterURL string
-
-	// S3 backs résumé storage (internal/platform/blobstore). Optional and provider-agnostic:
-	// any S3-compatible endpoint works, and no bucket/host/provider is baked into code —
-	// freehire-ops owns those. All four must be set to enable storage; any empty field
-	// disables it (résumé upload then only extracts skills in-request, no regression).
-	// Enforced at the cmd/server call site, not here.
+	// S3 backs CV storage (internal/platform/blobstore); any S3-compatible endpoint works. All four
+	// must be set to enable it; any empty field disables it (upload then only extracts skills
+	// in-request). Enforced at the cmd/server call site.
 	S3Endpoint  string
 	S3Bucket    string
 	S3AccessKey string
 	S3SecretKey string
 
-	// TypstBin is the resolved path to the typst binary used to render CV PDFs
-	// (internal/candidate/cv). Optional: an empty value disables PDF rendering (the /me/cvs/:id/pdf
-	// endpoint returns 501, the rest of the CV builder still works). Resolved via
-	// exec.LookPath(TYPST_BIN|"typst") so "disabled" means the binary is genuinely
-	// absent, not merely misconfigured — enforced at the cmd/server call site, not here.
+	// Catalogue export (internal/search/catalogexport): a separate bucket from S3_* because
+	// that one holds résumés. Optional and inert when any of the first four is empty — the
+	// worker refuses to run and the download endpoint answers 501. ExportS3Region is the
+	// provider's region name (Hetzner: hel1, fsn1, nbg1). ExportKeep is how many complete
+	// snapshots the worker leaves in the bucket.
+	ExportS3Endpoint  string
+	ExportS3Bucket    string
+	ExportS3AccessKey string
+	ExportS3SecretKey string
+	ExportS3Region    string
+	ExportKeep        int
+
+	// TypstBin is the resolved path to the typst binary used to render CV PDFs. Empty disables
+	// PDF rendering (the pdf endpoint returns 501). Resolved via exec.LookPath, so empty means
+	// the binary is absent, not misconfigured.
 	TypstBin string
 
-	// CVEditAllowBulletTruncation restores the old Sanitize behaviour that keeps the
-	// first MaxBullets and silently drops the rest. Default false — Commit refuses
-	// that class of loss. Set CV_EDIT_ALLOW_BULLET_TRUNCATION=true as an ops kill
-	// switch (restart required). Named as the escape hatch so an unset Go bool keeps
-	// the safety on.
+	// CVEditAllowBulletTruncation restores the old Sanitize behaviour of keeping the first
+	// MaxBullets and silently dropping the rest. Default false: Commit refuses that loss.
+	// CV_EDIT_ALLOW_BULLET_TRUNCATION=true is an ops kill switch (restart required).
 	CVEditAllowBulletTruncation bool
 
-	// CVMaxBullets is the per-experience / per-project bullet ceiling (cv.MaxBullets).
-	// Default 20. Override with CV_MAX_BULLETS; values below 1 fall back to the
-	// package default so a typo cannot erase the ceiling.
+	// CVMaxBullets is the per-experience / per-project bullet ceiling (cv.MaxBullets), default 20.
+	// Values below 1 fall back to the default.
 	CVMaxBullets int
 
-	// MatchAnalysis holds sanitize caps for the fit-analysis LLM output
-	// (internal/candidate/matchanalysis). Override any field via MATCH_ANALYSIS_*; values
-	// below 1 fall back to that field's package default at SetBounds time.
+	// MatchAnalysis holds sanitize caps for the fit-analysis LLM output; override via
+	// MATCH_ANALYSIS_*. Values below 1 fall back to the package default at SetBounds time.
 	MatchAnalysis MatchAnalysisSettings
 
 	// TracerLinkSalt keys the visitor hash of a click on a traced CV link. Empty disables the
-	// feature's consent toggle outright: without a salt there is no way to tell one visitor from
-	// another that is not reversible by walking the address space, and a hash that only looks
-	// anonymous is worse than no count at all.
+	// consent toggle: without a salt the hash is reversible by walking the address space.
 	TracerLinkSalt string
 
-	// Sentry backs optional error reporting for the server and every cron worker
-	// (internal/platform/observability). Optional: an empty SentryDSN disables the integration
-	// entirely (no init, no delivery) — enforced at the observability call site, not
-	// here. SentryEnvironment tags every event (defaults to "development" for local runs).
-	SentryDSN         string
-	SentryEnvironment string
-
-	// Telegram bot for outbound notifications (filter subscriptions). Optional:
-	// an empty TelegramBotToken disables the feature — the linking endpoints and
-	// webhook are inert and the notify worker has nothing to deliver through.
-	// TelegramBotUsername builds the t.me deep link the SPA shows; its presence
-	// is what the public config reports as "enabled". TelegramWebhookSecret is the
-	// shared secret verified on the inbound webhook (the bot's secret_token); without
-	// it the whole feature stays off, because an empty expected secret would make the
-	// webhook admit any caller.
+	// Telegram bot for outbound notifications. An empty TelegramBotToken disables the feature.
+	// TelegramBotUsername builds the t.me deep link and marks the feature enabled in the public
+	// config. TelegramWebhookSecret is the inbound webhook's secret_token; empty keeps the feature
+	// off, since an empty expected secret would admit any caller.
 	TelegramBotToken      string
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
 
-	// Email notifications for filter subscriptions, sent via AWS SES by the notify
-	// worker. Optional: the email channel is registered only when both AWSRegion and
-	// NotifyEmailFrom are set — either empty and the worker still delivers Telegram
-	// (enforced at the cmd/notify call site, not here). AWS credentials come from the
-	// default AWS chain (env/role), never config. NotifyEmailFrom is the verified SES
-	// sender address (e.g. notifications@freehire.me).
+	// Email notifications via AWS SES. The email channel is registered only when both AWSRegion
+	// and NotifyEmailFrom are set (enforced at the cmd/notify call site); otherwise only Telegram
+	// delivers. AWS credentials come from the default AWS chain. NotifyEmailFrom is the verified
+	// SES sender.
 	AWSRegion       string
 	NotifyEmailFrom string
+	// SESEngagementConfigurationSet is the SES configuration set publishing clicks and
+	// delivery outcomes for campaigns and digests. Empty tracks nothing.
+	SESEngagementConfigurationSet string
 
-	// DiscordDigestWebhookURL is the incoming-webhook URL cmd/social-digest posts the
-	// daily "most viewed" list to. Optional and silently disabling, like the rest of
-	// this worker fleet: an unset value means the channel is not configured, not that
-	// the run failed. A webhook URL is itself the credential and does not expire,
-	// which is why this channel needs nothing else here.
+	// DiscordDigestWebhookURL is the incoming-webhook URL cmd/social-digest posts the daily
+	// "most viewed" list to. Unset means not configured, not a failed run. The URL is itself the
+	// credential and does not expire.
 	//
-	// Unrelated to the five values below despite the shared name. This one posts INTO a
-	// public channel and holds no bot; those authenticate a bot that manages a role.
-	// Neither may switch the other on.
+	// Unrelated to the five Discord values below: this posts into a public channel, those
+	// authenticate a role-managing bot. Neither may switch the other on.
 	DiscordDigestWebhookURL string
 
-	// The daily digest's LinkedIn channel: the application that posts to our own company
-	// page, and the page it posts to.
+	// The daily digest's LinkedIn channel: the application that posts to our company page, and
+	// the page. Optional as a set: a deployment holding only some values has not configured it
+	// (see LinkedInDigestConfigured). The access token is not here: it expires every 60 days and a
+	// worker renews it, so it lives in social_tokens.
 	//
-	// Optional as a SET, like the Discord bot below: the credentials mint a token, the
-	// organization names where it goes, and a deployment holding some of them has not
-	// configured the channel — see LinkedInDigestConfigured. What is NOT here is the access
-	// token itself, and that absence is the design: it expires every 60 days and is renewed
-	// by a worker, so it lives in social_tokens where a process can write it, not in a file
-	// only a person can edit.
-	//
-	// LinkedInRedirectURI must be one of the redirect URLs registered on the LinkedIn
-	// application and must be absolute HTTPS — LinkedIn refuses http, including on
-	// localhost, which is why the sign-in flow hands a code to a command rather than
-	// catching it on a loopback listener.
+	// LinkedInRedirectURI must be registered on the LinkedIn app and absolute HTTPS (LinkedIn
+	// refuses http, even on localhost), so the sign-in flow hands a code to a command rather than
+	// a loopback listener.
 	LinkedInClientID       string
 	LinkedInClientSecret   string
 	LinkedInRedirectURI    string
 	LinkedInOrganizationID string
 
-	// Discord paid channels (internal/engage/discordlink): the bot that keeps the paid
-	// role on the community server in step with the subscription, and the OAuth app a
-	// user links their Discord account through.
+	// Discord paid channels (internal/engage/discordlink): the bot that keeps the paid role in step
+	// with the subscription, and the OAuth app users link Discord through.
 	//
-	// Optional as a SET: every one of the five is load-bearing, so any missing value means
-	// the feature is off — the link routes 404, the SPA omits the card, and cmd/discord-sync
-	// is a no-op that never opens the pool (see DiscordPaidAccessConfigured). A deployment
-	// holding four of five would otherwise start an OAuth flow it cannot finish, and fail
-	// somewhere the user can see rather than never offering it.
+	// Optional as a set: any missing value turns the feature off (link routes 404, SPA omits the
+	// card, cmd/discord-sync is a no-op; see DiscordPaidAccessConfigured), so users never start an
+	// OAuth flow that cannot finish.
 	//
-	// The guild and role ids are configuration rather than discovery: the bot could list
-	// the guilds it is in and the roles it can manage, but "the one called Paid" is a name
-	// an admin can rename, and a feature that silently followed a rename would grant access
-	// to whatever the name landed on.
+	// The guild and role ids are configured, not discovered: a role found by name would follow a
+	// rename and grant access to whatever the name lands on.
 	DiscordClientID     string
 	DiscordClientSecret string
 	DiscordBotToken     string
 	DiscordGuildID      string
 	DiscordPaidRoleID   string
 
-	// OnboardingReplyTo is the human inbox that answers the founder signup sequence
-	// (internal/engage/onboarding). Those mails ask a question, so an unset value disables
-	// the sequence rather than sending letters whose replies reach nobody — the send
-	// address is a no-reply feeding the application-mail parser.
+	// OnboardingReplyTo is the human inbox answering the founder signup sequence. Unset disables
+	// the sequence: the send address is a no-reply, so replies would reach nobody.
 	OnboardingReplyTo string
 
-	// ServedHosts are the exact hostnames this deployment answers on (e.g.
-	// "freehire.me,apply.freehire.me"). Only these are honoured as an OAuth redirect
-	// origin; anything else falls back to FrontendOrigin. Empty defaults to the
-	// frontend origin's own host, so a deployment that never sets it keeps working.
+	// ServedHosts are the exact hostnames this deployment answers on. Only these are honoured as
+	// an OAuth redirect origin; anything else falls back to FrontendOrigin. Empty defaults to the
+	// frontend origin's host.
 	ServedHosts []string
 
-	// ExtensionRedirectAllowlist bounds where the browser-extension connect flow
-	// may hand back a minted token: only https://<id>.chromiumapp.org (Chrome) or
-	// https://<id>.extensions.allizom.org (Firefox) redirects whose <id> is listed
-	// here are accepted. Empty disables the connect flow.
+	// ExtensionRedirectAllowlist bounds where the extension connect flow may hand back a minted
+	// token: only https://<id>.chromiumapp.org (Chrome) or https://<id>.extensions.allizom.org
+	// (Firefox) redirects with a listed <id>. Empty disables the flow.
 	ExtensionRedirectAllowlist []string
 
-	// AutoApplyOrchestratorSecret is the shared, static credential
-	// cmd/auto-apply-orchestrate presents on POST /me/auto-apply/:queueId/{tailor,review}
-	// to authenticate itself (not any particular candidate) — see
-	// openspec/changes/auto-apply-inngest-orchestration/design.md. Empty disables that
-	// fallback path entirely; the two routes then accept only a session cookie or a live
-	// api_keys row, exactly as before this existed.
+	// AutoApplyOrchestratorSecret is the static credential cmd/auto-apply-orchestrate presents on
+	// POST /me/auto-apply/:queueId/{tailor,review} to authenticate itself, not a candidate. Empty
+	// disables that path; the routes then accept only a session cookie or a live api_keys row.
 	AutoApplyOrchestratorSecret string
 
 	// InngestEventAPIURL, InngestEventKey and InngestSigningKey point PostAutoApplyReview's
-	// best-effort event publish (auto-apply/review.decided) at the self-hosted Inngest
-	// server. InngestSigningKey is unused by the publish itself (that call carries only
-	// InngestEventKey) but lives beside the other two because every Inngest setting this
-	// deployment carries is one self-hosted instance's own config — cmd/auto-apply-orchestrate
-	// is the actual signing-key consumer. Any of the three empty degrades the publish to
-	// "log and continue" (see PostAutoApplyReview) rather than failing the request; the
-	// orchestrator worker itself has no such degraded mode and fails its own startup loudly
-	// on a missing value instead (see cmd/auto-apply-orchestrate).
+	// best-effort event publish at the self-hosted Inngest server. The publish itself uses only
+	// InngestEventKey; InngestSigningKey is consumed by cmd/auto-apply-orchestrate. Any of the
+	// three empty makes the publish log and continue, while the orchestrator fails startup.
 	InngestEventAPIURL string
 	InngestEventKey    string
 	InngestSigningKey  string
 
-	// AutoApplyOrchestratePort is the port cmd/auto-apply-orchestrate listens on to serve
-	// the Inngest SDK callback protocol (internal-only — never exposed publicly, reached
-	// solely by the self-hosted Inngest server at InngestEventAPIURL, which this deployment
-	// runs on the SAME host per design.md).
+	// AutoApplyOrchestratePort is the port cmd/auto-apply-orchestrate serves the Inngest SDK
+	// callback on. Internal-only, reached by the self-hosted Inngest server on the same host.
 	AutoApplyOrchestratePort string
 }
 
-// OAuthCredentials is one OAuth provider's credentials. Google/GitHub/LinkedIn
-// use only ClientID/ClientSecret; Apple authenticates with a self-signed JWT
-// instead of a static secret, so it uses ClientID (its Services ID) plus
-// TeamID/KeyID/PrivateKey and leaves ClientSecret empty. PrivateKey is the
-// decoded PEM (the OAUTH_APPLE_PRIVATE_KEY env var carries it base64-encoded).
+// OAuthCredentials is one OAuth provider's credentials. Apple authenticates with a self-signed
+// JWT, so it uses ClientID (Services ID) plus TeamID/KeyID/PrivateKey and leaves ClientSecret
+// empty. PrivateKey is the decoded PEM (the env var is base64).
 type OAuthCredentials struct {
 	ClientID     string
 	ClientSecret string
@@ -375,15 +271,11 @@ type OAuthCredentials struct {
 	PrivateKey   string
 }
 
-// MatchAnalysisSettings carries the MATCH_ANALYSIS_* overrides for the sanitize
-// ceilings on fit-analysis model output; cmd/server applies them via
-// matchanalysis.SetBounds at boot. Restart required after any change.
+// MatchAnalysisSettings carries the MATCH_ANALYSIS_* overrides for fit-analysis sanitize
+// ceilings; cmd/server applies them via matchanalysis.SetBounds at boot (restart required).
 //
-// A field left at zero means "not overridden": SetBounds substitutes that field's
-// own Default* from internal/candidate/matchanalysis, which is where every default
-// number lives. This layer deliberately holds none of them — it is not supposed to
-// know what a fit analysis is, and a second copy here would be the one the server
-// actually reads, silently retiring the domain's own defaults.
+// Zero means not overridden: SetBounds substitutes the field's Default* from
+// internal/candidate/matchanalysis. No defaults live here, so a copy cannot shadow the domain's.
 type MatchAnalysisSettings struct {
 	// MaxCommentRunes caps each dimension's Comment.
 	MaxCommentRunes int
@@ -409,45 +301,41 @@ type MatchAnalysisSettings struct {
 	MaxSignalInsightRunes int
 }
 
-// oauthProviders are the providers whose credentials Load reads from the
-// environment (OAUTH_<PROVIDER>_CLIENT_ID / OAUTH_<PROVIDER>_CLIENT_SECRET,
-// plus OAUTH_APPLE_TEAM_ID / OAUTH_APPLE_KEY_ID / OAUTH_APPLE_PRIVATE_KEY for apple).
+// oauthProviders are the providers whose credentials Load reads (OAUTH_<PROVIDER>_*).
 var oauthProviders = []string{"google", "github", "linkedin", "apple"}
 
-// defaultAssistantMaxPrompt is the rune ceiling on one user message when
-// ASSISTANT_MAX_PROMPT is unset or invalid.
+// defaultAssistantMaxPrompt is the rune ceiling when ASSISTANT_MAX_PROMPT is unset or invalid.
 const defaultAssistantMaxPrompt = 8000
 
 // Load reads configuration from the environment, falling back to sensible defaults.
 func Load() Settings {
 	s := Settings{
-		Env:                   env("ENV", "development"),
-		LLM:                   LoadLLM(),
-		Port:                  env("PORT", "8080"),
-		MetricsPort:           os.Getenv("METRICS_PORT"),
-		AgentViewLogDir:       os.Getenv("AGENT_VIEW_LOG_DIR"),
-		DatabaseURL:           env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
-		FrontendOrigin:        env("FRONTEND_ORIGIN", "http://localhost:5173"),
-		PublicAnonLimits:      strings.TrimSpace(os.Getenv("PUBLIC_ANON_LIMITS")),
-		VerifiedBotSecret:     strings.TrimSpace(os.Getenv("VERIFIED_BOT_SECRET")),
-		JWTSecret:             os.Getenv("JWT_SECRET"),
-		JWTTTL:                envDuration("JWT_TTL", 30*24*time.Hour),
-		CookieSecure:          envBool("COOKIE_SECURE", false),
-		CookieDomains:         splitDomains(os.Getenv("COOKIE_DOMAIN")),
-		OAuth:                 loadOAuth(),
-		AuthV2Enabled:         envBool("AUTH_V2_ENABLED", false),
-		MobileAuthCallbacks:   parseNamedValues(os.Getenv("MOBILE_AUTH_CALLBACKS")),
-		AppleNativeClientID:   strings.TrimSpace(os.Getenv("APPLE_NATIVE_CLIENT_ID")),
-		OJCPSigningKeyFile:    strings.TrimSpace(os.Getenv("OJCP_SIGNING_KEY_FILE")),
-		AppleGrantActiveKeyID: strings.TrimSpace(os.Getenv("APPLE_GRANT_ACTIVE_KEY_ID")),
-		AppleGrantKeys:        parseKeyRing(os.Getenv("APPLE_GRANT_KEYS")),
-		RecentAuthTTL:         envDuration("RECENT_AUTH_TTL", 10*time.Minute),
-		GmailTokenKey:         decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
-		MailboxDomain:         os.Getenv("MAILBOX_DOMAIN"),
-		TypesafeAPIKey:        os.Getenv("TYPESAFE_API_KEY"),
-		MeiliURL:              env("MEILI_URL", "http://localhost:7700"),
-		MeiliKey:              os.Getenv("MEILI_MASTER_KEY"),
-		RedisURL:              env("REDIS_URL", "redis://localhost:6379/0"),
+		Env:                     env("ENV", "development"),
+		LLM:                     LoadLLM(),
+		Port:                    env("PORT", "8080"),
+		MetricsPort:             os.Getenv("METRICS_PORT"),
+		AgentViewLogDir:         os.Getenv("AGENT_VIEW_LOG_DIR"),
+		DatabaseURL:             env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
+		FrontendOrigin:          env("FRONTEND_ORIGIN", "http://localhost:5173"),
+		AuthIntrospectionSecret: strings.TrimSpace(os.Getenv("AUTH_INTROSPECTION_SECRET")),
+		JWTSecret:               os.Getenv("JWT_SECRET"),
+		JWTTTL:                  envDuration("JWT_TTL", 30*24*time.Hour),
+		CookieSecure:            envBool("COOKIE_SECURE", false),
+		CookieDomains:           splitDomains(os.Getenv("COOKIE_DOMAIN")),
+		OAuth:                   loadOAuth(),
+		AuthV2Enabled:           envBool("AUTH_V2_ENABLED", false),
+		MobileAuthCallbacks:     parseNamedValues(os.Getenv("MOBILE_AUTH_CALLBACKS")),
+		AppleNativeClientID:     strings.TrimSpace(os.Getenv("APPLE_NATIVE_CLIENT_ID")),
+		OJCPSigningKeyFile:      strings.TrimSpace(os.Getenv("OJCP_SIGNING_KEY_FILE")),
+		AppleGrantActiveKeyID:   strings.TrimSpace(os.Getenv("APPLE_GRANT_ACTIVE_KEY_ID")),
+		AppleGrantKeys:          parseKeyRing(os.Getenv("APPLE_GRANT_KEYS")),
+		RecentAuthTTL:           envDuration("RECENT_AUTH_TTL", 10*time.Minute),
+		GmailTokenKey:           decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
+		MailboxDomain:           os.Getenv("MAILBOX_DOMAIN"),
+		TypesafeAPIKey:          os.Getenv("TYPESAFE_API_KEY"),
+		MeiliURL:                env("MEILI_URL", "http://localhost:7700"),
+		MeiliKey:                os.Getenv("MEILI_MASTER_KEY"),
+		RedisURL:                env("REDIS_URL", "redis://localhost:6379/0"),
 
 		AutoApplyOrchestratorSecret: os.Getenv("AUTO_APPLY_ORCHESTRATOR_SECRET"),
 		InngestEventAPIURL:          os.Getenv("INNGEST_EVENT_API_URL"),
@@ -466,6 +354,7 @@ func Load() Settings {
 		AssistantModel:     os.Getenv("ASSISTANT_MODEL"),
 		SearchIntentModel:  os.Getenv("SEARCH_INTENT_MODEL"),
 		ResumeExtractModel: os.Getenv("RESUME_EXTRACT_MODEL"),
+		SupportModel:       os.Getenv("SUPPORT_MODEL"),
 		AssistantMaxSteps:  envInt("ASSISTANT_MAX_STEPS", 0),
 		AssistantMaxPrompt: envInt("ASSISTANT_MAX_PROMPT", defaultAssistantMaxPrompt),
 
@@ -473,12 +362,17 @@ func Load() Settings {
 
 		RealtimeModel: os.Getenv("REALTIME_MODEL"),
 
-		PIIFilterURL: os.Getenv("PII_FILTER_URL"),
-
 		S3Endpoint:  os.Getenv("S3_ENDPOINT"),
 		S3Bucket:    os.Getenv("S3_BUCKET"),
 		S3AccessKey: os.Getenv("S3_ACCESS_KEY"),
 		S3SecretKey: os.Getenv("S3_SECRET_KEY"),
+
+		ExportS3Endpoint:  os.Getenv("CATALOGUE_EXPORT_S3_ENDPOINT"),
+		ExportS3Bucket:    os.Getenv("CATALOGUE_EXPORT_S3_BUCKET"),
+		ExportS3AccessKey: os.Getenv("CATALOGUE_EXPORT_S3_ACCESS_KEY"),
+		ExportS3SecretKey: os.Getenv("CATALOGUE_EXPORT_S3_SECRET_KEY"),
+		ExportS3Region:    os.Getenv("CATALOGUE_EXPORT_S3_REGION"),
+		ExportKeep:        envInt("CATALOGUE_EXPORT_KEEP", 4),
 
 		TypstBin:                    resolveTypstBin(env("TYPST_BIN", "typst")),
 		CVEditAllowBulletTruncation: envBool("CV_EDIT_ALLOW_BULLET_TRUNCATION", false),
@@ -499,15 +393,14 @@ func Load() Settings {
 			MaxSignalInsightRunes: envInt("MATCH_ANALYSIS_MAX_SIGNAL_INSIGHT_RUNES", 0),
 		},
 
-		SentryDSN:         os.Getenv("SENTRY_DSN"),
-		SentryEnvironment: env("SENTRY_ENVIRONMENT", "development"),
-
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),
 		TelegramWebhookSecret: os.Getenv("TELEGRAM_WEBHOOK_SECRET"),
 
 		AWSRegion:       os.Getenv("AWS_REGION"),
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
+
+		SESEngagementConfigurationSet: os.Getenv("SES_ENGAGEMENT_CONFIGURATION_SET"),
 
 		DiscordDigestWebhookURL: os.Getenv("DISCORD_DIGEST_WEBHOOK_URL"),
 
@@ -534,158 +427,6 @@ func Load() Settings {
 	return s
 }
 
-// StrictAnonLimits reports PUBLIC_ANON_LIMITS=strict, the one value besides empty it accepts.
-func (s Settings) StrictAnonLimits() bool { return s.PublicAnonLimits == "strict" }
-
-// Validate checks that the configuration values are safe to boot the auth surface with.
-// The JWT secret check runs in every environment, not just production: HS256 security
-// rests entirely on secret entropy, so a short secret is brute-forceable offline against
-// any captured token regardless of what ENV happens to be set to.
-func (s Settings) Validate() error {
-	if s.Env == "production" && !s.CookieSecure {
-		return errors.New("COOKIE_SECURE must be true in production")
-	}
-	if strings.HasPrefix(s.FrontendOrigin, "https://") && !s.CookieSecure {
-		return errors.New("COOKIE_SECURE must be true when using HTTPS origin")
-	}
-	if s.PublicAnonLimits != "" && !s.StrictAnonLimits() {
-		return fmt.Errorf("PUBLIC_ANON_LIMITS must be empty or \"strict\", got %q", s.PublicAnonLimits)
-	}
-	if len(s.JWTSecret) < 32 {
-		return errors.New("JWT_SECRET is required and must be at least 32 bytes")
-	}
-	if s.RecentAuthTTL != 0 && (s.RecentAuthTTL < time.Minute || s.RecentAuthTTL > time.Hour) {
-		return errors.New("RECENT_AUTH_TTL must be between 1m and 1h")
-	}
-	appleWeb := s.OAuth["apple"]
-	appleFields := []bool{s.AppleNativeClientID != "", s.AppleGrantActiveKeyID != "", len(s.AppleGrantKeys) != 0}
-	partialApple := (appleFields[0] || appleFields[1] || appleFields[2]) && (!appleFields[0] || !appleFields[1] || !appleFields[2])
-	if partialApple {
-		return errors.New("native Apple requires APPLE_NATIVE_CLIENT_ID, APPLE_GRANT_ACTIVE_KEY_ID, and APPLE_GRANT_KEYS")
-	}
-	if appleFields[0] {
-		if appleWeb.TeamID == "" || appleWeb.KeyID == "" || appleWeb.PrivateKey == "" {
-			return errors.New("native Apple requires OAUTH_APPLE_TEAM_ID, OAUTH_APPLE_KEY_ID, and OAUTH_APPLE_PRIVATE_KEY")
-		}
-		if len(s.AppleGrantKeys[s.AppleGrantActiveKeyID]) != 32 {
-			return errors.New("APPLE_GRANT_ACTIVE_KEY_ID must identify a 32-byte key in APPLE_GRANT_KEYS")
-		}
-	}
-	if s.AuthV2Enabled && len(s.MobileAuthCallbacks) == 0 {
-		return errors.New("MOBILE_AUTH_CALLBACKS is required when AUTH_V2_ENABLED=true")
-	}
-	if s.AuthV2Enabled && s.MobileAuthCallbacks["web"] == "" {
-		return errors.New("MOBILE_AUTH_CALLBACKS must include web when AUTH_V2_ENABLED=true")
-	}
-	for name, raw := range s.MobileAuthCallbacks {
-		u, err := url.Parse(raw)
-		validName := name == "ios" || name == "android" || name == "web"
-		if err != nil || !validName || !u.IsAbs() || u.Host == "" || u.User != nil || u.Fragment != "" {
-			return errors.New("MOBILE_AUTH_CALLBACKS must contain valid ios, android, or web URLs")
-		}
-		if s.Env == "production" && u.Scheme != "https" {
-			return errors.New("MOBILE_AUTH_CALLBACKS must use HTTPS in production")
-		}
-	}
-	if raw := s.MobileAuthCallbacks["web"]; raw != "" {
-		callback, callbackErr := url.Parse(raw)
-		frontend, frontendErr := url.Parse(s.FrontendOrigin)
-		if callbackErr != nil || frontendErr != nil || callback.Scheme != frontend.Scheme || callback.Host != frontend.Host || callback.Path != "/my/reauth" {
-			return errors.New("MOBILE_AUTH_CALLBACKS web must be FRONTEND_ORIGIN/my/reauth")
-		}
-	}
-	return nil
-}
-
-func parseNamedValues(raw string) map[string]string {
-	out := map[string]string{}
-	for _, part := range strings.Split(raw, ",") {
-		name, value, ok := strings.Cut(strings.TrimSpace(part), "=")
-		if ok && strings.TrimSpace(name) != "" && strings.TrimSpace(value) != "" {
-			out[strings.TrimSpace(name)] = strings.TrimSpace(value)
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func parseKeyRing(raw string) map[string][]byte {
-	out := map[string][]byte{}
-	for _, part := range strings.Split(raw, ",") {
-		id, encoded, ok := strings.Cut(strings.TrimSpace(part), ":")
-		if !ok || strings.TrimSpace(id) == "" {
-			continue
-		}
-		key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
-		if err != nil {
-			key = nil
-		}
-		// Preserve malformed named entries so NewKeyRing fails startup instead of
-		// silently dropping an old decrypt-only key still referenced by grants.
-		out[strings.TrimSpace(id)] = key
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-// splitCSV parses a comma-separated env value into trimmed, non-empty entries.
-// An empty or all-blank value yields nil.
-func splitCSV(s string) []string {
-	var out []string
-	for _, p := range strings.Split(s, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-// decodeKey base64-decodes an AES key, returning nil unless it is exactly 32
-// bytes so a missing or malformed key simply disables the feature.
-func decodeKey(s string) []byte {
-	if s == "" {
-		return nil
-	}
-	b, err := base64.StdEncoding.DecodeString(s)
-	if err != nil || len(b) != 32 {
-		return nil
-	}
-	return b
-}
-
-// decodeBase64 decodes a base64-encoded env value, returning "" for an unset
-// or malformed one. Used for OAUTH_APPLE_PRIVATE_KEY: a multi-line PEM does
-// not survive a systemd EnvironmentFile reliably, so it is stored
-// base64-encoded, the same convention as GMAIL_TOKEN_KEY.
-func decodeBase64(s string) string {
-	if s == "" {
-		return ""
-	}
-	b, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}
-
-// splitDomains parses a comma-separated COOKIE_DOMAIN into bare registrable
-// domains, trimming spaces and any leading dot (".freehire.me" -> "freehire.me").
-// Empty entries are dropped, so "" yields nil (host-only cookie, no extra origins).
-func splitDomains(s string) []string {
-	var out []string
-	for _, p := range strings.Split(s, ",") {
-		p = strings.TrimPrefix(strings.TrimSpace(p), ".")
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
 func loadOAuth() map[string]OAuthCredentials {
 	creds := make(map[string]OAuthCredentials, len(oauthProviders))
 	for _, p := range oauthProviders {
@@ -699,51 +440,4 @@ func loadOAuth() map[string]OAuthCredentials {
 		}
 	}
 	return creds
-}
-
-func env(key, fallback string) string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
-		return v
-	}
-	return fallback
-}
-
-// resolveTypstBin returns the absolute path to the typst binary named by name, or "" when
-// no such binary is on PATH — so a missing binary cleanly disables PDF rendering (501)
-// instead of failing every render at exec time (500).
-func resolveTypstBin(name string) string {
-	if name == "" {
-		return ""
-	}
-	path, err := exec.LookPath(name)
-	if err != nil {
-		return ""
-	}
-	return path
-}
-
-func envDuration(key string, fallback time.Duration) time.Duration {
-	// Reuse env()'s "unset or empty -> fallback" rule; an unparseable value
-	// also falls back.
-	if d, err := time.ParseDuration(env(key, "")); err == nil {
-		return d
-	}
-	return fallback
-}
-
-func envFloat(key string, fallback float64) float64 {
-	// Same "unset or empty -> fallback" rule as envInt; an unparseable value also
-	// falls back, which for a spend ceiling means "no ceiling" rather than "no spend".
-	if f, err := strconv.ParseFloat(env(key, ""), 64); err == nil {
-		return f
-	}
-	return fallback
-}
-
-func envBool(key string, fallback bool) bool {
-	// Same "unset or empty -> fallback" rule; only an explicit "true" enables.
-	if b, err := strconv.ParseBool(env(key, "")); err == nil {
-		return b
-	}
-	return fallback
 }

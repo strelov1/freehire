@@ -145,15 +145,14 @@
        screen. Right: the real pill mechanics, shrunk down and clickable. -->
   <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-[1.05fr_0.95fr]">
     <div>
-      <SectionLabel text="advanced search" />
+      <SectionLabel text="Advanced search" />
       <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
         Cut the list down to the jobs you'd actually take.
       </h1>
       <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-        Role, seniority, stack, region, company type, salary currency, even whether a posting looks
-        real — twenty filters, and almost every one can also mean <span class="text-foreground"
-          >"not this."</span
-        > Build the search once, save it to your profile, and let freehire keep running it for you.
+        Role, seniority, stack, region, company type, salary currency, even whether a posting looks real — twenty
+        filters, and almost every one can also mean <span class="text-foreground">"not this."</span> Build the search once,
+        save it to your profile, and let freehire keep running it for you.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
         <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
@@ -172,7 +171,7 @@
       <div class="flex flex-col gap-4 p-4 sm:p-5">
         {#each demoRows as row (row.label)}
           <div>
-            <p class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{row.label}</p>
+            <p class="mb-2 text-xs font-medium text-muted-foreground">{row.label}</p>
             <div class="flex flex-wrap gap-2">
               {#each row.options as opt (opt.value)}
                 {@const state = demoState[opt.value] ?? 'off'}
@@ -204,10 +203,10 @@
 
   <!-- The 20 facets, grouped. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="what you can filter by" />
+    <SectionLabel text="What you can filter by" />
     <p class="mt-6 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Every group below is a real cluster of filter panel sections — the mono line under each
-      title is the exact parameter name the filter panel, the API and the CLI all use.
+      Every group below is a real cluster of filter panel sections — the mono line under each title is the exact
+      parameter name the filter panel, the API and the CLI all use.
     </p>
     <div
       class="mt-8 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3"
@@ -231,14 +230,13 @@
 
   <!-- Include / exclude, explained via the same pill states. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="include, exclude, or leave alone" />
+    <SectionLabel text="Include, exclude, or leave alone" />
     <div class="mt-6 grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
       <p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
-        Nineteen of the twenty filters cycle through three states on a single click: off, then
-        include, then exclude, then back to off. Exclude isn't a separate control to go find — it's
-        the same pill, one more click. Rule out a source you don't trust, a stack you're done with,
-        or a company you already applied to, without leaving the field empty — which would only mean
-        "don't care."
+        Nineteen of the twenty filters cycle through three states on a single click: off, then include, then exclude,
+        then back to off. Exclude isn't a separate control to go find — it's the same pill, one more click. Rule out a
+        source you don't trust, a stack you're done with, or a company you already applied to, without leaving the field
+        empty — which would only mean "don't care."
       </p>
       <div class="flex flex-col items-center gap-5 rounded-xl border border-border bg-card p-6 sm:p-8">
         <button
@@ -271,17 +269,16 @@
   <!-- Apply my profile: the reverse direction — profile feeds filters, not the
        other way around — and a real, concrete exclude example (avoided skills). -->
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="start from your profile" />
+    <SectionLabel text="Start from your profile" />
     <div class="mt-6 grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
           Or skip the setup — apply my profile.
         </h2>
         <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted-foreground">
-          Everything you filled in becomes a starting set of filters, one click, right in the
-          panel: your specialization and skills go in as includes, the skills you're avoiding go
-          in as excludes, and your work-location preferences — remote regions, on-site countries
-          and cities, whether you'd relocate — come along too. Nothing to re-type.
+          Everything you filled in becomes a starting set of filters, one click, right in the panel: your specialization
+          and skills go in as includes, the skills you're avoiding go in as excludes, and your work-location preferences
+          — remote regions, on-site countries and cities, whether you'd relocate — come along too. Nothing to re-type.
         </p>
       </div>
       <div class="rounded-xl border border-border bg-card p-6 sm:p-8">
@@ -305,16 +302,14 @@
             <dd class="font-mono text-xs text-muted-foreground">→ region, country, city</dd>
           </div>
         </dl>
-        <Button href={resolve('/my/profile')} variant="outline" size="sm" class="mt-6">
-          Fill in your profile
-        </Button>
+        <Button href={resolve('/my/profile')} variant="outline" size="sm" class="mt-6">Fill in your profile</Button>
       </div>
     </div>
   </section>
 
   <!-- Save to profile, as the genuine 3-step sequence it is. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="save it once" />
+    <SectionLabel text="Save it once" />
     <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
       Set the filters up once. They'll keep working after you close the tab.
     </h2>
@@ -330,40 +325,36 @@
   <!-- CLI — modest: names the shared vocabulary, links out to the full /cli page
        rather than duplicating its command reference. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="from the terminal" />
+    <SectionLabel text="From the terminal" />
     <div class="mt-6 grid gap-10 lg:grid-cols-[1fr_1fr]">
       <p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
         Every parameter name on this page — <code class="font-mono text-foreground">role</code>,
         <code class="font-mono text-foreground">regions</code>,
         <code class="font-mono text-foreground">skills</code>,
-        <code class="font-mono text-foreground">company_type</code> — is the same one the public API
-        and the freehire CLI use. Start from the live vocabulary, then filter from a script instead
-        of a browser tab.
+        <code class="font-mono text-foreground">company_type</code> — is the same one the public API and the freehire CLI
+        use. Start from the live vocabulary, then filter from a script instead of a browser tab.
       </p>
       <div class="rounded-lg border border-border bg-secondary/40 p-4">
         <dl class="space-y-3">
           {#each cliCommands as row (row.cmd)}
             <div>
               <dt class="font-mono text-sm">
-                <span class="text-muted-foreground">freehire</span> {row.cmd}
+                <span class="text-muted-foreground">freehire</span>
+                {row.cmd}
               </dt>
               <dd class="text-sm leading-relaxed text-muted-foreground">{row.desc}</dd>
             </div>
           {/each}
         </dl>
-        <Button href={resolve('/cli')} variant="outline" size="sm" class="mt-4">
-          Read the CLI docs →
-        </Button>
+        <Button href={resolve('/cli')} variant="outline" size="sm" class="mt-4">Read the CLI docs →</Button>
       </div>
     </div>
   </section>
 
   <!-- FAQ. The visible answers and the FAQPage JSON-LD share ADVANCED_SEARCH_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="faq" />
-    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-      Frequently asked questions.
-    </h2>
+    <SectionLabel text="FAQ" />
+    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Frequently asked questions.</h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each ADVANCED_SEARCH_FAQ as item (item.question)}
         <div class="bg-background p-6 sm:p-7">

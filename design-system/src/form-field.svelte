@@ -20,9 +20,7 @@
      * announce itself is handed to it:
      * `{@render children({ id, describedBy, required, invalid })}`.
      */
-    children: Snippet<
-      [{ id: string; describedBy: string | undefined; required: boolean; invalid: boolean }]
-    >;
+    children: Snippet<[{ id: string; describedBy: string | undefined; required: boolean; invalid: boolean }]>;
   } = $props();
 
   // $props.id() is stable across SSR and hydration — crypto.randomUUID() is not.

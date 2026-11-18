@@ -14,13 +14,13 @@
         { name: 'freehire', url: `${origin}/` },
         { name: 'Agents', url: canonical },
       ]),
-    ])
+    ]),
   );
 </script>
 
 <Seo
-  title="freehire for AI agents — CLI, MCP and ChatGPT"
-  description="Point your AI agent at the freehire job catalogue. A local harness driving the CLI reaches the whole surface; an MCP host or ChatGPT covers most of it. Search needs no API key."
+  title="freehire for AI agents — MCP, CLI and Jobs API"
+  description="Every tech job, straight from company ATS boards, for your agent: connect Claude, ChatGPT, Cursor or Codex over MCP, script it from the CLI, or build on the Jobs API. Free search, open source."
   {canonical}
 />
 

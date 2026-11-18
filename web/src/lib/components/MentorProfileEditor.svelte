@@ -212,17 +212,16 @@
 
   {#if profile}
     <p class="text-muted-foreground text-sm">
-      Your timezone and session length live on the <a class="underline" href={resolve('/my/mentorship/schedule')}>schedule page</a> now, alongside when you're free.
+      Your timezone and session length live on the <a class="underline" href={resolve('/my/mentorship/schedule')}
+        >schedule page</a
+      > now, alongside when you're free.
     </p>
   {/if}
 
   <div class="grid gap-3 sm:grid-cols-2">
     <label class="text-sm">
       <span class="text-muted-foreground">Your name, as seekers will see it</span>
-      <Input
-        bind:value={form.name}
-        class="mt-1 w-full"
-      />
+      <Input bind:value={form.name} class="mt-1 w-full" />
     </label>
 
     {#if profile}
@@ -263,13 +262,10 @@
           class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
         />
         {#if form.slug && !slugPattern.test(form.slug)}
-          <p class="text-destructive mt-1 text-xs">
-            Lowercase letters, digits and single hyphens only.
-          </p>
+          <p class="text-destructive mt-1 text-xs">Lowercase letters, digits and single hyphens only.</p>
         {:else}
           <p class="text-muted-foreground mt-1 text-xs">
-            Lowercase letters, digits and hyphens. Leave it blank to generate one from
-            your name.
+            Lowercase letters, digits and hyphens. Leave it blank to generate one from your name.
           </p>
         {/if}
       </label>
@@ -277,10 +273,7 @@
 
     <label class="text-sm">
       <span class="text-muted-foreground">Headline</span>
-      <Input
-        bind:value={form.headline}
-        class="mt-1 w-full"
-      />
+      <Input bind:value={form.headline} class="mt-1 w-full" />
     </label>
 
     <label class="text-sm">
@@ -310,19 +303,16 @@
     <label class="text-sm sm:col-span-2">
       <span class="text-muted-foreground">
         {#if hasMentorCalendar}
-          Meeting link — optional. Your connected calendar mints a real Google Meet link
-          for every booking, so you only need this as a fallback.
+          Meeting link — optional. Your connected calendar mints a real Google Meet link for every booking, so you only
+          need this as a fallback.
         {:else}
-          Meeting link — a room you own. Only booked seekers ever see it. Don't want to
-          paste one? Connect <a class="underline" href={resolve('/my/integrations')}
-            >Calendar</a
+          Meeting link — a room you own. Only booked seekers ever see it. Don't want to paste one? Connect <a
+            class="underline"
+            href={resolve('/my/integrations')}>Calendar</a
           > instead and we'll create a fresh Meet link for every booking.
         {/if}
       </span>
-      <Input
-        bind:value={form.meeting_url}
-        class="mt-1 w-full"
-      />
+      <Input bind:value={form.meeting_url} class="mt-1 w-full" />
     </label>
 
     <label class="text-sm">
@@ -341,8 +331,8 @@
     <label class="flex items-center gap-2 text-sm sm:col-span-2">
       <input type="checkbox" bind:checked={form.show_photo} class="h-4 w-4" />
       <span class="text-muted-foreground">
-        Show my account's CV photo on my public mentor card and profile. Off by default —
-        you decide whether that photo belongs here too.
+        Show my account's CV photo on my public mentor card and profile. Off by default — you decide whether that photo
+        belongs here too.
       </span>
     </label>
 
@@ -351,8 +341,7 @@
       <textarea
         bind:value={form.bio}
         rows="4"
-        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-      ></textarea>
+        class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"></textarea>
     </label>
   </div>
 
@@ -366,8 +355,8 @@
     <div class="border-t pt-4">
       {#if profile.status === 'withdrawn'}
         <p class="text-muted-foreground mb-2 text-sm">
-          You withdrew this profile. Resubmitting sends it back for review — like a first
-          submission, with no special treatment for having been a mentor before.
+          You withdrew this profile. Resubmitting sends it back for review — like a first submission, with no special
+          treatment for having been a mentor before.
         </p>
         <Button variant="ghost" size="sm" disabled={reactivating} onclick={reactivate}>
           {reactivating ? 'Submitting…' : 'Submit for review again'}
@@ -375,25 +364,17 @@
       {:else if confirmingWithdrawal}
         <p class="text-sm font-medium">Withdraw your profile?</p>
         <p class="text-muted-foreground mt-1 text-sm">
-          Every confirmed session still ahead is cancelled and each person told. Sessions
-          that already happened stay in your history.
+          Every confirmed session still ahead is cancelled and each person told. Sessions that already happened stay in
+          your history.
         </p>
         <div class="mt-3 flex gap-2">
           <Button variant="destructive" disabled={withdrawing} onclick={withdraw}>
             {withdrawing ? 'Withdrawing…' : 'Withdraw'}
           </Button>
-          <Button
-            variant="ghost"
-            disabled={withdrawing}
-            onclick={() => (confirmingWithdrawal = false)}
-          >
-            Keep it
-          </Button>
+          <Button variant="ghost" disabled={withdrawing} onclick={() => (confirmingWithdrawal = false)}>Keep it</Button>
         </div>
       {:else}
-        <Button variant="ghost" size="sm" onclick={() => (confirmingWithdrawal = true)}>
-          Withdraw profile
-        </Button>
+        <Button variant="ghost" size="sm" onclick={() => (confirmingWithdrawal = true)}>Withdraw profile</Button>
       {/if}
     </div>
   {/if}

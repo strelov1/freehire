@@ -9,7 +9,7 @@ import type { RequestHandler } from './$types';
 // no long-lived cache header (unlike hashed /_app/immutable/ assets), so every visit
 // re-fetched the ~370KB spec regardless of whether anything in it had changed.
 //
-// The content is generated at build time (scripts/gen-openapi.mjs) and the same for
+// The content is generated at build time (scripts/gen-api-docs.mjs) and the same for
 // every visitor until the next deploy restarts this process — same reasoning as
 // +page.server.ts's own memoized SSR render — so a moderate max-age costs nothing.
 // Not `immutable`: unlike a hashed asset, this URL's content DOES change across a

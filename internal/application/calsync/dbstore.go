@@ -59,16 +59,12 @@ func (s *DBStore) Candidates(ctx context.Context, userID int64) ([]calmatch.Cand
 }
 
 func (s *DBStore) UpsertInterview(ctx context.Context, in StoredInterview) error {
-	// Retract first, upsert second — the two-statement shape the mail reconcile uses, and
-	// for the same reason it documents: data-modifying CTEs read one pre-statement
-	// snapshot, so folding these together would leave the insert conflicting with the row
-	// being retracted and silently recording nothing.
-	//
-	// A meeting CAN move between applications: its identifier reaches the application
-	// through emails.application_id, and a link correction rewrites that column. Without
-	// this the old employer kept the "Interview scheduled" entry forever and the right one
-	// never got it, because the upsert's DO NOTHING fired against the correct application
-	// too. A meeting that has not moved matches nothing here, so a re-sync is untouched.
+	// Retract first, upsert second, like the mail reconcile: data-modifying CTEs read one
+	// pre-statement snapshot, so folding them together would make the insert conflict with the
+	// row being retracted and record nothing. A meeting CAN move between applications (a link
+	// correction rewrites emails.application_id); without the retract the old employer kept the
+	// entry and the right one never got it, because the upsert's DO NOTHING fired. A meeting
+	// that has not moved matches nothing here.
 	if _, err := s.q.RetractMovedInterviewEvent(ctx, db.RetractMovedInterviewEventParams{
 		UserID:  in.UserID,
 		IcalUid: in.UID,

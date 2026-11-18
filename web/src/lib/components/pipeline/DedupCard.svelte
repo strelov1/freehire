@@ -8,12 +8,8 @@
 
 <div class="flex h-28 flex-col items-center justify-center gap-2" aria-hidden="true">
   <div class="relative h-14 w-28 shrink-0">
-    <div
-      class="absolute inset-0 translate-x-2 translate-y-2 rounded-md border border-border bg-muted/50"
-    ></div>
-    <div
-      class="absolute inset-0 translate-x-1 translate-y-1 rounded-md border border-border bg-muted/70"
-    ></div>
+    <div class="absolute inset-0 translate-x-2 translate-y-2 rounded-md border border-border bg-muted/50"></div>
+    <div class="absolute inset-0 translate-x-1 translate-y-1 rounded-md border border-border bg-muted/70"></div>
     <div class="absolute inset-0 rounded-md border border-brand/40 bg-card px-2 py-1.5">
       <p class="truncate text-[10px] font-medium">Senior Software Engineer</p>
       <p class="truncate text-[9px] text-muted-foreground">Berlin, DE</p>

@@ -20,14 +20,7 @@
   const needle = $derived(query.trim().toLowerCase());
   const matches = (row: { title: string; slug: string }) =>
     needle === '' || row.title.toLowerCase().includes(needle) || row.slug.includes(needle);
-  // A stack is wider than a single mark, so a section holding any stack gives every
-  // row's leading slot the stack's width — otherwise the titles beside a mark and
-  // beside a stack start at different places in one card.
-  const hasStack = (rows: PageData['sections'][number]['rows']) =>
-    rows.some((row) => row.companies.length > 0 || row.flags.length > 1);
-  const visibleSections = $derived(
-    data.sections.filter((section) => section.rows.some(matches)),
-  );
+  const visibleSections = $derived(data.sections.filter((section) => section.rows.some(matches)));
 </script>
 
 <Seo
@@ -48,7 +41,7 @@
     <Search class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
     <input
       type="search"
-      placeholder="Search collections — Python, Remote Europe, Y Combinator…"
+      placeholder="Search collections"
       bind:value={query}
       aria-label="Search collections"
       class="w-full rounded-lg border border-border bg-background py-2 pr-3 pl-9 text-sm transition outline-none focus:border-brand focus:ring-2 focus:ring-ring"
@@ -59,10 +52,9 @@
     <p class="py-8 text-center text-sm text-muted-foreground">No collection matches “{query.trim()}”.</p>
   {/if}
 
-  <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+  <div class="grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
     {#each visibleSections as section (section.key)}
-      {@const wide = hasStack(section.rows)}
-      <section class="flex flex-col rounded-xl border border-border bg-background p-6">
+      <section class="flex flex-col rounded-xl border border-border bg-background p-4 sm:p-6">
         <h2 class="text-lg font-semibold tracking-tight">
           <a href={resolve('/collections/group/[group]', { group: section.slug })} class="hover:underline">
             {section.title}
@@ -75,16 +67,19 @@
                 href={resolve('/collections/[slug]', { slug: row.slug })}
                 class="-mx-2 flex h-12 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-secondary/60"
               >
-                <span class={['flex shrink-0', wide && 'w-20']}>
-                  <CollectionRowMark {row} />
-                </span>
+                <!-- Titles lead and the mark trails: a stack of four flags is wider than one,
+                     so a leading mark either left a gap after a single flag or started the
+                     titles at different places in one card. -->
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-sm font-medium text-foreground">{row.title}</span>
                   {#if row.count !== null}
-                    <span class="block font-mono text-xs text-muted-foreground">
+                    <span class="block text-xs tabular-nums text-muted-foreground">
                       {row.count.toLocaleString()} jobs
                     </span>
                   {/if}
+                </span>
+                <span class="flex shrink-0">
+                  <CollectionRowMark {row} />
                 </span>
               </a>
             </li>
@@ -93,7 +88,7 @@
         {#if needle === ''}
           <a
             href={resolve('/collections/group/[group]', { group: section.slug })}
-            class="mt-auto inline-flex items-center gap-1.5 self-start text-xs font-semibold tracking-wide text-foreground uppercase hover:text-muted-foreground"
+            class="mt-auto inline-flex items-center gap-1.5 self-start text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             View all {section.rows.length}
             <ArrowRight class="size-3.5" />

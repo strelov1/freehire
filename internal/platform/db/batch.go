@@ -44,6 +44,7 @@ type ApplyDailyAgentViewParams struct {
 // and add the same delta to jobs.view_count. `uniques` is written as 0 on insert (it is
 // NOT NULL with no default) and never touched on conflict, so the nginx figures and
 // GET /api/v1/stats/catalog keep their meaning.
+// Not queued for the drain, for the same reason as ApplyDailyView.
 func (q *Queries) ApplyDailyAgentView(ctx context.Context, arg []ApplyDailyAgentViewParams) *ApplyDailyAgentViewBatchResults {
 	batch := &pgx.Batch{}
 	for _, a := range arg {
@@ -117,6 +118,10 @@ type ApplyDailyViewParams struct {
 // bot-filtered signal of the two.
 // A visitor who did both is one visitor in each, so the two do not sum with an API
 // count; the only relation between them is page_delta <= total_delta.
+// view_count is a sortable attribute of the search document, but it is NOT queued for
+// the drain: cmd/rollup-views writes the new figures to the index itself at the end of
+// the run (search.SetViewCounts). Queuing them re-built ~1.7M whole documents a day and
+// kept search_outbox from ever emptying (2026-11-14).
 func (q *Queries) ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults {
 	batch := &pgx.Batch{}
 	for _, a := range arg {

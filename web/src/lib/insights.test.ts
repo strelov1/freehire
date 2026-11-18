@@ -4,6 +4,10 @@ import {
   coveredCategories,
   isCovered,
   sortBandsBySeniority,
+  salaryScopeFromParams,
+  scopeBands,
+  salaryView,
+  salaryScopeKey,
   formatSalary,
   salaryIntro,
   skillsIntro,
@@ -55,11 +59,7 @@ describe('coveredCategories', () => {
   });
 
   it('sorts by demand descending', () => {
-    const roles = [
-      role('frontend', 'senior', 100),
-      role('backend', 'senior', 300),
-      role('design', 'senior', 200),
-    ];
+    const roles = [role('frontend', 'senior', 100), role('backend', 'senior', 300), role('design', 'senior', 200)];
     expect(coveredCategories(roles).map((c) => c.category)).toEqual(['backend', 'design', 'frontend']);
   });
 
@@ -80,6 +80,7 @@ describe('sortBandsBySeniority', () => {
       p25: 1,
       p50: 2,
       p75: 3,
+      quantiles: [],
     });
     const sorted = sortBandsBySeniority([band('senior'), band(''), band('junior')]).map((b) => b.seniority);
     expect(sorted).toEqual(['junior', 'senior', '']);
@@ -101,7 +102,16 @@ describe('formatSalary', () => {
 describe('auto-intros', () => {
   it('salaryIntro states the median from the richest yearly band', () => {
     const bands: InsightSalaryBand[] = [
-      { seniority: '', currency: 'USD', period: 'year', sample_size: 200, p25: 130000, p50: 155000, p75: 180000 },
+      {
+        seniority: '',
+        currency: 'USD',
+        period: 'year',
+        sample_size: 200,
+        p25: 130000,
+        p50: 155000,
+        p75: 180000,
+        quantiles: [],
+      },
     ];
     const intro = salaryIntro('backend', bands);
     expect(intro).toContain('Backend');
@@ -154,9 +164,7 @@ describe('roleQualifies / rankedQualifyingRoles', () => {
       role('qa', 'lead', MIN_CATEGORY_OPEN - 1),
     ];
 
-    expect(rankedQualifyingRoles(roles).map((r) => [r.category, r.seniority])).toEqual([
-      ['backend', 'senior'],
-    ]);
+    expect(rankedQualifyingRoles(roles).map((r) => [r.category, r.seniority])).toEqual([['backend', 'senior']]);
 
     // But the thin one is still a real ADDRESS, so the route serves it (noindex) rather
     // than refusing it — the job page links there without knowing the role's size.
@@ -184,7 +192,7 @@ describe('roleQualifies / rankedQualifyingRoles', () => {
     expect(rankedQualifyingRoles(ranking).map((r) => r.seniority)).toEqual(['senior']);
   });
 
-  it('answers whether an address exists without needing the role\'s size', () => {
+  it("answers whether an address exists without needing the role's size", () => {
     // Takes no ranking on purpose — the job page links here knowing only a posting's two
     // facets. It must also be answerable BEFORE the API is asked: the endpoint answers an
     // invented level with a 400 and a load turns that into a 500, so a mistyped URL would
@@ -234,5 +242,83 @@ describe('roleSkillsIntro', () => {
     const intro = roleSkillsIntro({ ...role('backend', 'senior', 40), sample_size: 0, skills: [] });
 
     expect(intro).toContain('Not enough');
+  });
+});
+
+describe('salaryScopeFromParams', () => {
+  const read = (q: string) => salaryScopeFromParams(new URLSearchParams(q));
+
+  it('reads one value per part, lowercasing the country', () => {
+    expect(read('category=backend&seniority=senior&countries=DE')).toEqual({
+      scope: { category: 'backend', seniority: 'senior', country: 'de' },
+      partial: false,
+    });
+  });
+
+  it('treats no filters as the whole catalogue', () => {
+    expect(read('')).toEqual({ scope: { category: '', seniority: '', country: '' }, partial: false });
+  });
+
+  it('has no scope for two values in a part or an exclusion', () => {
+    expect(read('category=backend,frontend')).toBeNull();
+    expect(read('countries_exclude=us')).toBeNull();
+  });
+
+  it('flags other filters as not reflected, but not the sort', () => {
+    expect(read('category=backend&sort=salary')?.partial).toBe(false);
+    expect(read('category=backend&skills=go')?.partial).toBe(true);
+  });
+});
+
+describe('scopeBands', () => {
+  const band = (seniority: string, currency: string, sample_size: number): InsightSalaryBand => ({
+    seniority,
+    currency,
+    period: 'year',
+    sample_size,
+    p25: 1,
+    p50: 2,
+    p75: 3,
+    quantiles: [],
+  });
+
+  it("keeps only the scope's own seniority, richest first, capped", () => {
+    const bands = [
+      band('senior', 'USD', 900),
+      band('', 'EUR', 50),
+      band('', 'USD', 400),
+      band('', 'GBP', 70),
+      band('', 'INR', 10),
+    ];
+    const got = scopeBands(bands, { category: 'backend', seniority: '', country: '' });
+    expect(got.map((b) => b.currency)).toEqual(['USD', 'GBP', 'EUR']);
+  });
+});
+
+describe('salaryView', () => {
+  const de = { category: 'backend', seniority: 'senior', country: 'de' };
+  const fr = { ...de, country: 'fr' };
+  const deBand: InsightSalaryBand = {
+    seniority: 'senior',
+    currency: 'EUR',
+    period: 'year',
+    sample_size: 18,
+    p25: 1,
+    p50: 2,
+    p75: 3,
+    quantiles: [],
+  };
+
+  it("never shows another scope's figures while its own answer is pending", () => {
+    // A country change keeps the seniority, so a seniority-only check would pass DE's band.
+    expect(salaryView({ key: salaryScopeKey(de), bands: [deBand] }, fr)).toBe('pending');
+  });
+
+  it('reports a failed read for this scope as unavailable', () => {
+    expect(salaryView({ key: salaryScopeKey(fr), bands: null }, fr)).toBeNull();
+  });
+
+  it("shows the scope's own bands once they land", () => {
+    expect(salaryView({ key: salaryScopeKey(de), bands: [deBand] }, de)).toEqual([deBand]);
   });
 });

@@ -8,10 +8,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/htmltext"
 )
 
-// sanitizeHTML is the package-local name for the description sanitizer, which lives in
-// internal/platform/htmltext: it is HTML processing that knows nothing about boards or adapters,
-// and packages outside ingest sanitize descriptions too. Kept as a local name because
-// roughly 190 adapters in this package call it on every posting they yield.
+// sanitizeHTML is the package-local name for the description sanitizer in
+// internal/platform/htmltext, which knows nothing about boards and is shared outside ingest.
 func sanitizeHTML(s string) string { return htmltext.Sanitize(s) }
 
 // encodedTagOpener and liveTagOpener count tag openers in their entity-encoded ("&lt;div",
@@ -28,12 +26,12 @@ var (
 // "&lt;p&gt;" as a text node and re-encodes it on output, so the tags reach the catalogue as
 // literals the reader sees instead of the structure they describe.
 //
-// The decision is by weight, not by presence: encoding is undone only when encoded tag
-// openers outnumber live ones. Decoding unconditionally would corrupt the healthy majority of
-// such a feed — a posting that deliberately shows markup as an example would have that example
-// turned into real tags and then stripped, silently losing the content — whereas a wholly
-// encoded body stays dominated by encoded openers even when the feed wraps it in live HTML of
-// its own (arbeitnow appends a promo footer).
+// The decision is by weight, not presence: encoding is undone only when encoded tag openers
+// outnumber live ones. Decoding unconditionally would turn a posting's deliberate markup
+// example into real tags that are then stripped, losing content, whereas a wholly encoded body
+// stays dominated by encoded openers even when the feed wraps it in live HTML (arbeitnow
+// appends a promo footer).
+//
 // UnescapeEncodedHTML is the exported form of the entity-encoding repair, for the
 // description backfill worker that re-runs the adapter pipeline over stored rows.
 func UnescapeEncodedHTML(s string) string { return unescapeEncodedHTML(s) }

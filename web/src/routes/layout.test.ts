@@ -41,10 +41,38 @@ describe('root layout footer state', () => {
 // that navigation and lost, so the tour opened for an instant — long enough to record
 // itself as shown — and the visitor never saw it (2026-10-27, 18 accounts). The sign-in
 // page lands the visitor first; the gate runs on the page it lands on.
+//
+// The flow on /onboarding is open to everyone (cv-first-onboarding): an account that has
+// not seen it is routed there once, and nothing routes anybody AWAY from it — neither a
+// signed-out visitor (who can run it to the results) nor an account that completed it.
 describe('root layout onboarding gate', () => {
-  it('leaves /signin to finish its own navigation', () => {
-    const gateAt = SOURCE.indexOf('const needsOnboarding');
-    const gate = SOURCE.slice(gateAt, SOURCE.indexOf('});', gateAt));
-    expect(gate).toContain("path !== '/signin'");
+  const gateAt = SOURCE.indexOf('const needsOnboarding');
+  const gate = SOURCE.slice(gateAt, SOURCE.indexOf('});', gateAt));
+
+  // The rules themselves (the /signin and /onboarding guards, once per visit, a guest's skip)
+  // are behaviour of routeAccount, exercised in onboardingGate.spec.ts; the layout only has to
+  // hand it a signed-in account's path and need.
+  it('hands only a signed-in account, with its need, to the onboarding gate', () => {
+    expect(SOURCE).toContain('const needsOnboarding = $derived(currentUser()?.onboarding_completed_at == null)');
+    expect(gate).toContain('if (isAuthenticated()) {');
+    expect(gate).toContain('routeAccount(page.url.pathname, page.url.search, needsOnboarding');
+    expect(gate).not.toContain("path !== '/signin'"); // not re-listed beside the rule that owns it
+  });
+
+  it('never bounces anybody away from /onboarding', () => {
+    // The reverse bounce read the completion marker while ON the page; any read of the
+    // pathname as `=== '/onboarding'` outside the footer rule would be one again.
+    const outsideFooter = SOURCE.replace("page.url.pathname === '/onboarding' ||", '');
+    expect(outsideFooter).not.toContain("=== '/onboarding'");
+    expect(SOURCE).not.toContain('onboarding_completed_at != null');
+  });
+});
+
+describe('root layout sign-out reset', () => {
+  it('clears the guest skip mark only on a signed-in to signed-out transition', () => {
+    const at = SOURCE.indexOf('let wasAuthenticated');
+    const block = SOURCE.slice(at, SOURCE.indexOf('});', at));
+    expect(block).toContain('if (wasAuthenticated) onboardingGate.reset();');
+    expect(block).not.toMatch(/if \(!authenticated\) \{\s*resetUserStores\(\);\s*onboardingGate\.reset\(\)/);
   });
 });

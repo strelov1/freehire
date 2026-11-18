@@ -1,0 +1,21 @@
+id: exit-only-from-main
+valid:
+  - |
+    package search
+    func run() error { return fmt.Errorf("boom") }
+  - |
+    package main
+    func main() { log.Fatal(run()) }
+  - |
+    package search
+    func f() { exec.Exit(1) }
+invalid:
+  - |
+    package search
+    func f() { os.Exit(1) }
+  - |
+    package search
+    func f(err error) { log.Fatalf("x: %v", err) }
+  - |
+    package search
+    func f() { log.Panicln("x") }

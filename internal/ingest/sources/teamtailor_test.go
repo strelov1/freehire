@@ -206,18 +206,7 @@ func TestTeamtailorPaginatesUntilEmpty(t *testing.T) {
 	}
 }
 
-// A page that repeats an earlier page's link is NOT a genuinely empty page, and must not
-// terminate the walk: the raw per-page link count, not the count of newly-added links, is
-// what proves the board's end (see the fullBoardListing interface, source.go). A board that
-// truly repeats its last link forever for any ?page=N has no other structural end to find and
-// must exhaust ttMaxPages and fail loudly, exactly like a board that never stops yielding
-// genuinely new links — the two are indistinguishable from the walk's point of view, and
-// that indistinguishability is the point: silently trusting "no new links" as proof was the
-// gap the mechanical batch fix (openspec/changes/fullboardlisting-hand-rolled-batch) found and
-// closed for its five adapters, and this is the same fix for teamtailor. Live-verified
-// 2026-09-08 against both currently-crawled boards (migen, tantor): neither actually repeats a
-// page — both answer a genuinely empty page past their real end — so this reflects real
-// platform behavior, not a hypothetical regression.
+// Repeated non-empty listing pages fail early; they never prove completeness.
 func TestTeamtailorFetchFailsWhenAPageRepeatsAnEarlierLink(t *testing.T) {
 	d := ttDetailHTML("Role", "&lt;p&gt;x&lt;/p&gt;", "2026-06-08T00:00:00+02:00", "Oslo", "NO", "")
 	fake := (&routedHTTP{}).
@@ -227,6 +216,9 @@ func TestTeamtailorFetchFailsWhenAPageRepeatsAnEarlierLink(t *testing.T) {
 	_, err := NewTeamtailor(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
 	if err == nil {
 		t.Fatal("Fetch succeeded despite every page repeating the same link — a repeated non-empty page must not be treated as the board's natural end")
+	}
+	if fake.calls != 3 {
+		t.Fatalf("listing requests = %d, want 3", fake.calls)
 	}
 }
 
@@ -249,6 +241,28 @@ func TestTeamtailorFetchReachesAPostingPastADuplicateOnlyPage(t *testing.T) {
 	}
 	if len(jobs) != 2 {
 		t.Fatalf("got %d jobs, want 2 (the walk must not stop at the duplicate-only page 2)", len(jobs))
+	}
+}
+
+// A board whose page chrome links a posting on EVERY page (an FAQ answer pointing at the
+// open-application role) must still end where its job list does. Measured 2026-11-01: on
+// weroad, platsa and d-tec the past-the-end page carries no jobs_list_container, only that
+// chrome link, so the walk read every page as non-empty and failed at the ceiling on every
+// crawl — 74 boards on prod.
+func TestTeamtailorFetchEndsWhereTheJobListDoes(t *testing.T) {
+	d := ttDetailHTML("Role", "&lt;p&gt;x&lt;/p&gt;", "2026-06-08T00:00:00+02:00", "Milan", "IT", "")
+	chrome := `<div class="prose"><a href="https://b/jobs/9-open-application">Apply anyway</a></div>`
+	fake := (&routedHTTP{}).
+		route("page=1", `<html><body><ul id="jobs_list_container"><li><a href="https://b/jobs/1-a">A</a></li></ul>`+chrome+`</body></html>`).
+		route("/jobs?page", `<html><body>`+chrome+`</body></html>`).
+		route("/jobs/1", d).route("/jobs/9", d)
+
+	jobs, err := NewTeamtailor(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "1" {
+		t.Fatalf("got %+v, want only posting 1 from the job list", jobs)
 	}
 }
 
@@ -404,6 +418,49 @@ func TestTeamtailorFallsBackToRootListingWhenJobsPath404s(t *testing.T) {
 	}
 	if len(jobs) != 1 || jobs[0].ExternalID != "8024669" {
 		t.Fatalf("got %v, want the one root-listed posting", jobs)
+	}
+}
+
+type ttGoneListingHTTP struct {
+	jobsCode int
+	rootCode int
+}
+
+func (h ttGoneListingHTTP) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	code := h.rootCode
+	if strings.Contains(u, "/jobs?page=") {
+		code = h.jobsCode
+	}
+	return nil, &StatusError{Method: "GET", Code: code, URL: u}
+}
+
+func (ttGoneListingHTTP) GetXML(context.Context, string, any) error { return nil }
+
+func TestTeamtailorOnlyReportsBoardGoneWhenBothListingPaths404(t *testing.T) {
+	_, err := NewTeamtailor(ttGoneListingHTTP{jobsCode: 404, rootCode: 404}).(teamtailor).
+		jobURLs(context.Background(), CompanyEntry{Board: "jobs.example.com"})
+	if !errors.Is(err, ErrBoardGone) {
+		t.Fatalf("jobURLs error = %v, want ErrBoardGone", err)
+	}
+}
+
+func TestTeamtailorFallbackFailuresRemainOrdinaryErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		jobsCode int
+		rootCode int
+	}{
+		{name: "jobs forbidden", jobsCode: 403, rootCode: 404},
+		{name: "root rate limited", jobsCode: 404, rootCode: 429},
+		{name: "root server failure", jobsCode: 404, rootCode: 503},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewTeamtailor(ttGoneListingHTTP{jobsCode: tc.jobsCode, rootCode: tc.rootCode}).(teamtailor).
+				jobURLs(context.Background(), CompanyEntry{Board: "jobs.example.com"})
+			if err == nil || errors.Is(err, ErrBoardGone) {
+				t.Fatalf("jobURLs error = %v, want ordinary failure", err)
+			}
+		})
 	}
 }
 

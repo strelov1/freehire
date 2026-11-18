@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -19,10 +20,8 @@ const (
 	pauseAllKey    = pauseKeyPrefix + "all"
 )
 
-// pauseTimeout bounds the switch lookup. An unhealthy-but-reachable Redis must
-// delay a worker's start by a known amount rather than by go-redis's dial
-// default — the switch is a convenience, and a convenience may not decide how
-// long the catalogue waits.
+// pauseTimeout bounds the switch lookup, so an unhealthy Redis delays a worker's start
+// by a known amount.
 const pauseTimeout = 250 * time.Millisecond
 
 // IgnorePauseEnv names the environment variable that bypasses the pause switch.
@@ -35,27 +34,39 @@ const pauseTimeout = 250 * time.Millisecond
 // reading that as one would run the very fleet they just held.
 const IgnorePauseEnv = "FREEHIRE_IGNORE_PAUSE"
 
+// PauseKey is the pause key named by suffix. A caller that owns a family of
+// keys of its own (the mail classes) builds them here so the prefix has one author.
+func PauseKey(suffix string) string { return pauseKeyPrefix + suffix }
+
 // Paused reports whether an external switch is holding this worker back, where
 // job is the worker binary's name. It answers only "may this run start"; a run
-// already in flight is never interrupted.
-func Paused(ctx context.Context, redisURL, job string) bool {
+// already in flight is never interrupted. extraKeys are further keys that hold
+// this worker, for a caller that classifies workers in a way this package does
+// not know (see Main).
+func Paused(ctx context.Context, redisURL, job string, extraKeys ...string) bool {
+	return AnyHeld(ctx, redisURL, append([]string{pauseAllKey, PauseKey(job)}, extraKeys...)...)
+}
+
+// AnyHeld reports whether any of keys exists, with the bypass and the fail-open
+// behaviour of Paused: FREEHIRE_IGNORE_PAUSE lifts every hold, and an unreadable
+// Redis holds nothing.
+func AnyHeld(ctx context.Context, redisURL string, keys ...string) bool {
 	if ignore, err := strconv.ParseBool(os.Getenv(IgnorePauseEnv)); err == nil && ignore {
 		return false
 	}
 
-	held, err := switchHeld(ctx, redisURL, job)
+	held, err := keysHeld(ctx, redisURL, keys...)
 	if err != nil {
-		// Fail open, and say so. A facility for shedding load must never become
-		// the reason the catalogue stops updating, but a silent degrade would be
-		// indistinguishable from a switch that was genuinely clear.
+		// Fail open, and say so: the pause switch must never stop the catalogue updating,
+		// but a silent degrade would look like a clear switch.
 		log.Printf("worker: pause switch unreadable, running anyway: %v", err)
 		return false
 	}
 	return held
 }
 
-// switchHeld reports whether either pause key exists, or why it could not tell.
-func switchHeld(ctx context.Context, redisURL, job string) (bool, error) {
+// keysHeld reports whether any of keys exists, or why it could not tell.
+func keysHeld(ctx context.Context, redisURL string, keys ...string) (bool, error) {
 	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return false, err
@@ -75,8 +86,60 @@ func switchHeld(ctx context.Context, redisURL, job string) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, pauseTimeout)
 	defer cancel()
 
-	held, err := client.Exists(ctx, pauseAllKey, pauseKeyPrefix+job).Result()
+	held, err := client.Exists(ctx, keys...).Result()
 	return held > 0, err
+}
+
+// SearchDrainJob is the pause key's suffix for cmd/search-drain, named here because the
+// rebuild that holds it is a different binary.
+const SearchDrainJob = "search-drain"
+
+// HoldPause holds another worker back for as long as the caller needs, through the same
+// switch an operator uses, until the returned release is called. The key carries a TTL
+// that is refreshed while the caller runs, so a holder that dies cannot leave the worker
+// off. It only stops new work; a worker in flight has to look for itself (see Paused).
+func HoldPause(ctx context.Context, redisURL, job string, ttl time.Duration) (release func(), err error) {
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, err
+	}
+	client := redis.NewClient(opts)
+	key := pauseKeyPrefix + job
+	if err := client.Set(ctx, key, "held by "+workerJob(), ttl).Err(); err != nil {
+		_ = client.Close()
+		return nil, err
+	}
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(ttl / 3)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if err := client.Expire(ctx, key, ttl).Err(); err != nil {
+					log.Printf("worker: refreshing the %s pause: %v", job, err)
+				}
+			}
+		}
+	}()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			close(done)
+			<-stopped
+			// A cancelled run still lifts the hold; it must not wait out the TTL.
+			cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			if err := client.Del(cctx, key).Err(); err != nil {
+				log.Printf("worker: lifting the %s pause, it expires on its own: %v", job, err)
+			}
+			_ = client.Close()
+		})
+	}, nil
 }
 
 // workerJob names the running binary, which is both the per-worker pause key's

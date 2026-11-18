@@ -48,16 +48,15 @@ func TestAnAPIPriceConfersTheAPIProductAndNoPlan(t *testing.T) {
 		t.Fatalf("pro_until valid=%v ultra_until valid=%v — the API product must confer no plan", pro.Valid, ultra.Valid)
 	}
 
-	// The key resolution the public-read gate uses sees the same entitlement.
+	// Credential introspection sees the same entitlement.
 	row, err := db.New(pool).GetUserAPIEntitlement(ctx, userID)
 	if err != nil || !row.ApiUntilStripe.Time.UTC().Equal(until) {
 		t.Fatalf("GetUserAPIEntitlement = %+v, %v", row, err)
 	}
 }
 
-// TestResolveAPIKeyTierReadsTheOwnersEntitlement covers the one query the public-read gate
-// makes: a live key resolves to its owner's API columns, an expired one to nothing.
-func TestResolveAPIKeyTierReadsTheOwnersEntitlement(t *testing.T) {
+// TestResolveAPIKeyIdentityReadsTheOwnersEntitlement covers credential introspection: a live key resolves to its owner's API columns, an expired one to nothing.
+func TestResolveAPIKeyIdentityReadsTheOwnersEntitlement(t *testing.T) {
 	_, pool := newService(t, subscriptionsFor(apiPrice, time.Now()))
 	ctx := context.Background()
 	q := db.New(pool)
@@ -75,11 +74,11 @@ func TestResolveAPIKeyTierReadsTheOwnersEntitlement(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	row, err := q.ResolveAPIKeyTier(ctx, "hash-live")
+	row, err := q.ResolveAPIKeyIdentity(ctx, "hash-live")
 	if err != nil || row.UserID != userID || row.Scope != "full" || !row.ApiUntilStripe.Time.UTC().Equal(until) {
 		t.Fatalf("live key = %+v, %v", row, err)
 	}
-	if _, err := q.ResolveAPIKeyTier(ctx, "hash-gone"); err == nil {
+	if _, err := q.ResolveAPIKeyIdentity(ctx, "hash-gone"); err == nil {
 		t.Fatal("an expired key resolved")
 	}
 }

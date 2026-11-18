@@ -35,7 +35,7 @@
   <title>Matched jobs — freehire</title>
 </svelte:head>
 
-<div class="max-w-2xl">
+<div>
   <a
     href={resolve('/my/notifications')}
     class="mb-4 inline-block text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"

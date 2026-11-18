@@ -27,10 +27,7 @@
 
 {intakeOutcomeMessage(resolved, locale())}
 {#if resolved.public_slug}
-  <a
-    href={resolve('/jobs/[slug]', { slug: resolved.public_slug })}
-    class="font-medium underline underline-offset-4"
-  >
+  <a href={resolve('/jobs/[slug]', { slug: resolved.public_slug })} class="font-medium underline underline-offset-4">
     {s.viewTheJob}
   </a>
 {/if}

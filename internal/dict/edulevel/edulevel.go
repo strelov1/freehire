@@ -12,13 +12,11 @@ import (
 	"strings"
 )
 
-// Requirement-text matchers, moved here from internal/job/jobfacts unchanged. See
-// that package's own comment for why bare single-letter abbreviations are excluded
-// here: "ms"/"m.s" collide with "MS Office"/"MS SQL" and "bs"/"b.s" with everyday
+// Requirement-text matchers. Bare single-letter abbreviations are excluded:
+// "ms"/"m.s" collide with "MS Office"/"MS SQL" and "bs"/"b.s" with everyday
 // text in free-running requirement prose, and bare "master" is excluded because
-// "scrum master" is not a degree. The possessive admits both apostrophes for the
-// same reason documented there: a rich-text editor's typographic one is common in
-// production postings.
+// "scrum master" is not a degree. The possessive admits both apostrophes because a
+// rich-text editor's typographic one is common in postings.
 var (
 	reReqPhD      = regexp.MustCompile(`\b(ph\.?\s?d|phd|doctorate|doctoral)\b`)
 	reReqMaster   = regexp.MustCompile(`\b(master['’]?s|master degree|m\.?sc|mba|graduate degree)\b`)

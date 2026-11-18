@@ -33,9 +33,7 @@
   <!-- The terms hyperlink the word "Jobs" specifically, so "by" stays plain text between the
        two links rather than riding along inside the first one. -->
   <span class="text-xs leading-none text-muted-foreground">
-    <a href={domain} target="_blank" rel="noopener" class="underline-offset-2 hover:underline"
-      >Jobs</a
-    > by
+    <a href={domain} target="_blank" rel="noopener" class="underline-offset-2 hover:underline">Jobs</a> by
   </span>
   <a href={domain} target="_blank" rel="noopener" class="inline-flex items-center">
     <!-- The mark stands in for the word "Adzuna", so the alt text IS that word. -->

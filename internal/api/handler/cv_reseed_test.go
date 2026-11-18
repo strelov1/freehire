@@ -22,7 +22,7 @@ func TestCVRegister_ReseedIsCookieOnly(t *testing.T) {
 		key:    namedGate("key"),
 		cvKey:  namedGate("cvKey"),
 		cookie: namedGate("cookie"),
-	})
+	}, cvContract(&cvHandlers{}))
 	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/me/cvs/"+uuid.New().String()+"/reseed", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)

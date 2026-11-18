@@ -3,71 +3,74 @@ package handler
 import (
 	"context"
 
-	"github.com/gofiber/fiber/v2"
-
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/agentview"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// jobDescriptions loads full job descriptions by internal id, to rehydrate the
-// truncated preview the search index serves. *db.Queries satisfies it; tests
-// inject a fake.
+// jobDescriptions loads full job descriptions by internal id, to rehydrate the truncated
+// preview the search index serves.
 type jobDescriptions interface {
 	GetJobDescriptionsByIDs(ctx context.Context, ids []int64) ([]db.GetJobDescriptionsByIDsRow, error)
 }
 
-// AgentSearchJobs is the programmatic-consumer variant of SearchJobs: it runs the
-// exact same query (via the shared runJobSearch core) and always rehydrates each
-// result with the full description from Postgres, in a selectable format. The
-// truncated preview stays exclusive to /jobs/search — a caller that wants the
-// lightweight variant uses that endpoint instead. Public and unauthenticated like
-// the other job reads; full descriptions are already public via the detail
-// endpoint.
+// AgentSearchJobs is the programmatic-consumer variant of SearchJobs: the same query (shared
+// runJobSearch core), but every result is rehydrated with the full description from Postgres,
+// in a selectable format. The truncated preview stays exclusive to /jobs/search. Public and
+// unauthenticated like the other job reads.
 //
-// `semantic=true` opts into the same hybrid search OJCP offers (see semanticSearch);
-// meta.semantic then says whether the description vectors answered ("applied") or the
-// request fell back to keywords ("unavailable"). Omitted when not asked. An applied one
-// also carries meta.total_is_lower_bound: its total is "at least", not a count.
-func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
-	out, err := h.runJobSearch(c, c.QueryBool("semantic"), nil, "")
+// `semantic=true` is accepted but never honoured (see semanticOutcome): meta.semantic is then
+// "unavailable", omitted when not asked.
+func (h *searchHandlers) AgentSearchJobs(ctx context.Context, _ apigen.AgentSearchJobsParams) (*apigen.AgentJobSearchPageHeaders, error) {
+	vals := contractQuery(ctx)
+	userID, _ := auth.UserIDFromContext(ctx)
+	out, err := h.runJobSearch(ctx, vals, userID, wantsParam(vals, "semantic"), nil, "", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	res := out.res
 	if len(res.Hits) > 0 {
-		if err := h.hydrateDescriptions(c.Context(), res.Hits); err != nil {
-			return err
+		if err := h.hydrateDescriptions(ctx, res.Hits); err != nil {
+			return nil, err
 		}
 	}
-	// Recorded only once the answer is certain to be served: a failed hydration serves no
-	// postings, so it must not count them as seen.
-	agentview.Record(c.Context(), agentview.KindSearch, hitIDs(res.Hits))
+	// Recorded only once the answer is certain to be served: a failed hydration serves nothing.
+	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 
-	format := c.Query("description_format")
+	format := vals.Get("description_format")
 	views := make([]jobview.Job, len(res.Hits))
 	for i, hit := range res.Hits {
 		hit.Description = formatDescription(hit.Description, format)
 		views[i] = hit.Job
 	}
 
-	ignored := mergedJobSearchIgnored(c, out.own(agentSearchParams), out.dropped)
-	meta := listMeta(res.Total, out.limit, out.offset, ignored, ignoredJobValues(c))
-	if out.semantic != "" {
-		meta["semantic"] = out.semantic
+	data, err := marshalRaws(views)
+	if err != nil {
+		return nil, err
+	}
+
+	ignored := mergedJobSearchIgnored(vals, out.own(agentSearchParams), out.dropped)
+	meta := apigen.AgentJobSearchMeta{
+		Total: res.Total, Limit: int64(out.limit), Offset: int64(out.offset),
+		IgnoredParams: contractIgnoredParams(ignored),
+		IgnoredValues: contractIgnoredValues(ignoredJobValues(vals)),
+		Semantic:      optString(out.semantic),
 	}
 	if res.TotalIsLowerBound {
-		meta["total_is_lower_bound"] = true
+		meta.TotalIsLowerBound = apigen.NewOptBool(true)
 	}
-	return c.JSON(fiber.Map{"data": views, "meta": meta})
+	return &apigen.AgentJobSearchPageHeaders{
+		CacheControl: optString(privateCacheControl(out.private)),
+		Response:     apigen.AgentJobSearchPage{Data: data, Meta: meta},
+	}, nil
 }
 
-// hydrateDescriptions replaces each hit's truncated preview description with the
-// job's full description read from Postgres, keyed by internal id. Best-effort: a
-// hit whose id has no row (index lag vs a just-removed job) keeps its preview
-// rather than being dropped.
+// hydrateDescriptions replaces each hit's truncated preview with the full description from
+// Postgres, keyed by internal id. Best-effort: a hit with no row (index lag) keeps its preview.
 func (h *searchHandlers) hydrateDescriptions(ctx context.Context, hits []search.JobDocument) error {
 	ids := make([]int64, len(hits))
 	for i := range hits {
@@ -89,10 +92,8 @@ func (h *searchHandlers) hydrateDescriptions(ctx context.Context, hits []search.
 	return nil
 }
 
-// formatDescription renders a job description in the requested format. Any value
-// other than "text" or "markdown" — including the empty default and unrecognized
-// values — yields the stored verbatim HTML, so the endpoint never fails on a bad
-// format param.
+// formatDescription renders a job description in the requested format. Anything other than
+// "text" or "markdown" yields the stored HTML, so a bad format param never fails the endpoint.
 func formatDescription(html, format string) string {
 	switch format {
 	case "text":

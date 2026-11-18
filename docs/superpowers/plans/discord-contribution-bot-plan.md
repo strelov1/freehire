@@ -54,6 +54,7 @@ queries for it, and add the new Discord config fields.
 
 **Migration** (new file `migrations/00NN_discord_links.sql`, NN = next sequential number per
 Global Constraints):
+
 ```sql
 CREATE TABLE public.discord_links (
     user_id    bigint NOT NULL,
@@ -74,6 +75,7 @@ ALTER TABLE public.link_contributions
     ADD CONSTRAINT link_contributions_surface_check
     CHECK ((surface = ANY (ARRAY['web'::text, 'telegram'::text, 'extension'::text, 'cli'::text, 'discord'::text, 'unknown'::text])));
 ```
+
 Read `migrations/0001_init.sql` (search `telegram_links`) to confirm the exact DDL style/ordering
 convention (table, then PK constraint, then FK constraint as separate `ALTER TABLE` statements)
 before writing this file, and follow it.
@@ -88,12 +90,14 @@ before writing this file, and follow it.
 Run `make sqlc` after adding the query file (regenerates `internal/platform/db`).
 
 **Config** — in `internal/platform/config/config.go`, add to the `Settings` struct and `Load()`:
+
 ```go
 DiscordBotToken       string
 DiscordApplicationID  string
 DiscordPublicKey      string
 DiscordGuildID        string
 ```
+
 read from `DISCORD_BOT_TOKEN`, `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`,
 `DISCORD_GUILD_ID` via plain `os.Getenv` — no defaults, matching the `TelegramBotToken` field
 group (read that block in `config.go` first for placement/comment style).
@@ -292,10 +296,12 @@ Cover, per `openspec/changes/discord-contribution-bot/specs/**/*.md`'s scenarios
   `/api/v1/discord/interactions` responds 404.
 
 **Verification for this task** (run both, from the module root):
+
 ```
 go vet -tags=integration ./...
 go test -tags=integration ./internal/api/handler/...
 ```
+
 Docker is available in this environment — actually run the tagged suite, don't just vet-check
 it. Paste the pass/fail summary into the task report.
 

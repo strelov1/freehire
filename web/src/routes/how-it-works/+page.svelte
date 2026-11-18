@@ -17,7 +17,7 @@
         { name: 'freehire', url: `${origin}/` },
         { name: 'How it works', url: canonical },
       ]),
-    ])
+    ]),
   );
 </script>
 

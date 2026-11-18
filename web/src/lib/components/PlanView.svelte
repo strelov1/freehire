@@ -4,14 +4,17 @@
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { track } from '#lib/analytics.js';
+  import { claimCheckoutPurchase } from '#lib/purchaseTracking.js';
   import { api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, plural, t, tokenLabel } from '#lib/i18n/t.js';
   import { formatMinorUnits } from '#lib/money.js';
-  import type { AiUsage, BillingOverview, PlanState, UsageHistoryEntry } from '#lib/types.js';
+  import type { AiUsage, ApiPlan, BillingOverview, PlanState, UsageHistoryEntry } from '#lib/types.js';
   import { messages } from './PlanView.messages';
   import States from './States.svelte';
+  import PaymentHistory from './PaymentHistory.svelte';
+  import TailorCheckoutResume from './TailorCheckoutResume.svelte';
 
   const s = $derived(t(messages, locale()));
 
@@ -23,6 +26,8 @@
   // balance said "you own 12 of something", this says "1 of today's 3 analyses". Nothing
   // here accumulates and nothing is a currency.
   let plan = $state<PlanState | null>(null);
+  const userId = $derived(currentUser()?.id);
+  let planReadVersion = 0;
 
   // The plan's own name, from the strings rather than from a ternary that can only know two
   // of them. A tier the strings have no label for falls back to what the API called it,
@@ -39,6 +44,9 @@
     const words = feature.split(/[-_]+/).filter(Boolean).join(' ');
     return words.charAt(0).toUpperCase() + words.slice(1);
   };
+  const unlimitedFeatures = $derived(
+    (plan?.allowances ?? []).filter((a) => a.unlimited).map((a) => featureLabel(a.feature)),
+  );
   let history = $state<UsageHistoryEntry[]>([]);
   let status = $state<'loading' | 'error' | 'ready'>('loading');
 
@@ -59,37 +67,61 @@
       .catch(() => (usage = null));
   });
 
-  // A finished purchase lands here carrying ?checkout=success (billing.Config.SuccessURL),
-  // because the provider is given the same page for success and cancel. This is the only
-  // place a payment meets the channel that produced it: the money is known to Postgres and
-  // the acquisition source only to the product analytics, and nothing else joins them.
-  //
-  // The TIER comes from the loaded plan rather than from what was clicked — the server's
-  // answer, so a purchase recorded here is one the account actually holds. Recorded once:
-  // the marker is stripped from the address afterwards, or a reload would count a second
-  // sale that never happened.
-  // Plain `let`, deliberately not $state: nothing renders from it, and a reactive flag
-  // read at the top of the effect that sets it would make the effect re-run itself once
-  // for nothing.
-  let purchaseRecorded = false;
+  // A return marker is intent to verify, never proof that money moved.
   $effect(() => {
-    if (purchaseRecorded || page.url.searchParams.get('checkout') !== 'success') return;
-    const tier = plan?.plan;
-    if (tier !== 'pro' && tier !== 'ultra') return;
-
-    purchaseRecorded = true;
-    track('subscribe', { plan: tier });
-
-    // SvelteKit's replaceState, not the browser's: every other view here uses it, and a
-    // raw history call leaves the framework's own `page.url` and history index pointing
-    // at an address that no longer exists.
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
-    replaceState(page.url.pathname, page.state);
+    if (!userId || page.url.searchParams.get('checkout') !== 'success') return;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    async function confirm(accountId: number, remaining: number) {
+      try {
+        const attempts = await api.billingAttempts();
+        if (!live) return;
+        const purchase = claimCheckoutPurchase(accountId, attempts, sessionStorage);
+        if (purchase) {
+          track('subscribe', purchase);
+          const url = new URL(page.url.href);
+          url.searchParams.delete('checkout');
+          // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow cleanup preserves other query parameters
+          replaceState(url.pathname + url.search + url.hash, page.state);
+          return;
+        }
+      } catch {
+        // The provider may not have exposed the completed charge yet.
+      }
+      if (live && remaining > 0) timer = setTimeout(() => void confirm(accountId, remaining - 1), 2000);
+    }
+    void confirm(userId, 4);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
   });
 
   // Where a subscriber changes their card or cancels — the provider's own page. Null when
   // there is no subscription to manage, which is the ordinary state for a free account.
   let manageUrl = $state<string | null>(null);
+
+  // The API product is billed apart from Pro, and a checkout for it lands on this page too.
+  // Without its own strip an API subscriber read "Free" and an upgrade button here and paid
+  // for Pro as well, thinking the API needed it.
+  let apiPlan = $state<ApiPlan | null>(null);
+  // A failed read is said, not shown as "no API plan": that is the state that misled them.
+  let apiPlanFailed = $state(false);
+  // Cleared first, like the billing effect below, so one account's plan never shows to the next.
+  $effect(() => {
+    apiPlan = null;
+    apiPlanFailed = false;
+    if (!isAuthenticated()) return;
+    let live = true;
+    api
+      .getApiPlan()
+      .then((p) => live && (apiPlan = p))
+      .catch(() => live && (apiPlanFailed = true));
+    return () => {
+      live = false;
+    };
+  });
+  const hasApiPlan = $derived(!!apiPlan?.tier);
 
   // What is being paid and what has been taken. Null for a free account, and for a provider
   // we could not reach — in both cases the section is simply absent, because a billing
@@ -112,13 +144,16 @@
     const paid = plan?.plan === 'pro' || plan?.plan === 'ultra';
     billing = null;
     manageUrl = null;
-    if (!paid) return;
+    if (!paid && !hasApiPlan) return;
 
     let live = true;
-    api
-      .billingSubscription()
-      .then((b) => live && (billing = b))
-      .catch(() => {});
+    // The overview describes the Pro/Ultra subscription only; an API-only customer has the
+    // provider's portal for receipts.
+    if (paid)
+      api
+        .billingSubscription()
+        .then((b) => live && (billing = b))
+        .catch(() => {});
     api
       .billingManageUrl()
       .then(({ url }) => live && (manageUrl = url))
@@ -152,29 +187,43 @@
   const money = formatMinorUnits;
 
   function load() {
+    const owner = userId;
+    const version = ++planReadVersion;
+    plan = null;
+    history = [];
     status = 'loading';
     Promise.all([api.myPlan(), api.myPlanHistory()])
       .then(([p, h]) => {
-        plan = p;
+        if (userId !== owner) return;
+        if (version === planReadVersion) plan = p;
         history = h;
         status = 'ready';
       })
       .catch(() => {
-        status = 'error';
+        if (userId === owner) status = 'error';
       });
   }
 
   $effect(() => {
-    if (!isAuthenticated()) return;
+    if (userId === undefined) {
+      plan = null;
+      history = [];
+      return;
+    }
     load();
   });
+
+  function acceptFreshPlan(fresh: PlanState) {
+    // The checkout poll may finish before an older plan read waiting on usage history.
+    ++planReadVersion;
+    plan = fresh;
+  }
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   // When today's allowance starts over, in the reader's own clock rather than in UTC — the
   // day is keyed in UTC, but "resets at 3am" is what actually happens to them.
-  const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 </script>
 
 {#if !isAuthenticated()}
@@ -186,14 +235,22 @@
       <p class="text-sm text-muted-foreground">{s.description}</p>
     </div>
 
+    <!-- A tailoring task left for the purchase. Its own fresh reads decide whether it may
+         continue; the return marker only tells it to look harder. -->
+    <TailorCheckoutResume
+      {plan}
+      returned={page.url.searchParams.get('checkout') === 'success'}
+      onPlan={acceptFreshPlan}
+    />
+
     {#if plan}
       <!-- The plan strip. On Pro it states when the subscription runs to; on Free it offers
            the upgrade — but only once we know there is somewhere to send them. -->
       <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
+        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand/30 bg-brand/[0.03] px-4 py-3"
       >
         <div class="flex flex-col gap-0.5">
-          <span class="text-sm font-semibold">
+          <span class="text-base font-semibold">
             {planLabel(plan.plan)}
           </span>
           {#if plan.plan !== 'free' && plan.pro_until}
@@ -202,7 +259,9 @@
               {fmtDate(plan.pro_until)}
             </span>
           {:else if plan.plan === 'free'}
-            <span class="text-xs text-muted-foreground">{s.planStrip.freeSubtitle}</span>
+            <span class="text-xs text-muted-foreground"
+              >{hasApiPlan ? s.planStrip.freeWithApi : s.planStrip.freeSubtitle}</span
+            >
           {/if}
         </div>
         <!-- Both, not one or the other. A subscriber below the top tier has two things to do
@@ -216,9 +275,7 @@
             <!-- To /pricing rather than straight to checkout: the choice between monthly and
                  annual belongs on a page that can explain it, and sending someone to a payment
                  form without it silently sells them the monthly one. -->
-            <a
-              class={buttonVariants({ variant: 'cta', size: 'sm' })}
-              href={resolve('/pricing')}
+            <a class={buttonVariants({ variant: 'cta', size: 'sm' })} href={resolve('/pricing')}
               >{plan.plan === 'free' ? s.planStrip.upgrade : s.planStrip.upgradeUltra}</a
             >
           {/if}
@@ -235,13 +292,33 @@
         </div>
       </div>
 
+      {#if apiPlanFailed}
+        <p class="text-xs text-muted-foreground">{s.apiStrip.loadError}</p>
+      {:else if apiPlan?.tier}
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
+          <div class="flex flex-col gap-0.5">
+            <span class="text-base font-semibold">{s.apiStrip.tiers[apiPlan.tier]}</span>
+            <span class="text-xs text-muted-foreground">
+              {#if apiPlan.until}{s.planStrip.runsUntilPrefix} {fmtDate(apiPlan.until)} ·
+              {/if}{s.apiStrip.separate}
+            </span>
+          </div>
+          <a class="rounded-md border border-border px-3 py-1.5 text-sm font-medium" href={resolve('/my/api')}
+            >{s.apiStrip.keys}</a
+          >
+        </div>
+      {/if}
+
       {#if billing}
         <div class="flex flex-col gap-3">
-          <h2 class="text-sm font-medium text-muted-foreground">{s.subscription.heading}</h2>
+          <h2 class="text-sm font-semibold">{s.subscription.heading}</h2>
           <div class="flex flex-col gap-3 rounded-lg border border-border px-4 py-3">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <span class="text-sm font-medium">
-                {money(billing.amount_cents, billing.currency)} / {tokenLabel(s.subscription.interval, billing.interval)}
+                {money(billing.amount_cents, billing.currency)} / {tokenLabel(
+                  s.subscription.interval,
+                  billing.interval,
+                )}
               </span>
               <span class="text-xs text-muted-foreground">
                 {tokenLabel(s.subscription.status, billing.status)}
@@ -271,19 +348,14 @@
                   <li class="flex items-center justify-between gap-3 py-2 text-sm">
                     <span class="text-muted-foreground">{fmtDate(inv.date)}</span>
                     <span class="flex items-center gap-3">
-                      <span class="tabular-nums"
-                        >{money(inv.amount_cents, inv.currency)}</span
-                      >
+                      <span class="tabular-nums">{money(inv.amount_cents, inv.currency)}</span>
                       {#if inv.status !== 'paid'}
                         <span class="text-xs text-destructive">{inv.status}</span>
                       {/if}
                       {#if inv.receipt_url}
                         <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's hosted invoice, not a SvelteKit route -->
-                        <a
-                          class="text-xs underline"
-                          href={inv.receipt_url}
-                          target="_blank"
-                          rel="noopener noreferrer">{s.subscription.receipt}</a
+                        <a class="text-xs underline" href={inv.receipt_url} target="_blank" rel="noopener noreferrer"
+                          >{s.subscription.receipt}</a
                         ><!-- eslint-enable svelte/no-navigation-without-resolve -->
                       {/if}
                     </span>
@@ -294,45 +366,51 @@
           </div>
         </div>
       {/if}
+    {/if}
 
+    <PaymentHistory />
+
+    {#if plan}
       <div class="flex flex-col gap-3">
         <div class="flex items-baseline justify-between gap-3">
-          <h2 class="text-sm font-medium text-muted-foreground">{s.today.heading}</h2>
+          <h2 class="text-sm font-semibold">{s.today.heading}</h2>
           <span class="text-xs text-muted-foreground">
             {s.today.resetsAtPrefix}
             {fmtTime(plan.resets_at)}
           </span>
         </div>
+        <!-- The metered rows are the ones a reader checks, so they get a row each; every
+             unlimited feature shares one closing row instead of repeating "Unlimited". -->
         <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
-          {#each plan.allowances as a (a.feature)}
+          {#each plan.allowances.filter((a) => !a.unlimited) as a (a.feature)}
             <li class="flex items-center justify-between gap-3 px-4 py-3">
               <span class="truncate text-sm font-medium">{featureLabel(a.feature)}</span>
-              {#if a.unlimited}
-                <span class="shrink-0 text-sm text-muted-foreground">{s.today.unlimited}</span>
-              {:else if !a.limit}
+              {#if !a.limit}
                 <!-- The API omits a zero limit. Printing it left a dangling "0 /"; a zero
                      allowance is a feature this plan does not include, so it says that. -->
                 <span class="shrink-0 text-sm text-muted-foreground">
                   {format(s.today.notOnPlan, { plan: planLabel(plan.plan) })}
                 </span>
               {:else}
-                <span
-                  class="shrink-0 text-sm font-semibold tabular-nums {a.used >= a.limit
-                    ? 'text-muted-foreground'
-                    : ''}"
-                >
+                <span class="shrink-0 text-sm tabular-nums {a.used >= a.limit ? 'text-muted-foreground' : ''}">
                   {a.used} / {a.limit}
                 </span>
               {/if}
             </li>
           {/each}
+          {#if unlimitedFeatures.length}
+            <li class="flex items-start justify-between gap-3 px-4 py-3">
+              <span class="text-sm text-muted-foreground">{unlimitedFeatures.join(' · ')}</span>
+              <span class="shrink-0 text-sm text-muted-foreground">{s.today.unlimited}</span>
+            </li>
+          {/if}
         </ul>
       </div>
     {/if}
 
     {#if showUsage && usage}
       <div class="flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-muted-foreground">{s.usage.heading}</h2>
+        <h2 class="text-sm font-semibold">{s.usage.heading}</h2>
         <div class="rounded-lg border border-border px-5 py-4">
           <div class="flex items-baseline gap-2">
             <span class="text-2xl font-semibold tabular-nums">{usage.requests}</span>
@@ -353,7 +431,7 @@
     {/if}
 
     <div class="flex flex-col gap-3">
-      <h2 class="text-sm font-medium text-muted-foreground">{s.history.heading}</h2>
+      <h2 class="text-sm font-semibold">{s.history.heading}</h2>
       {#if status === 'loading'}
         <States state="loading" />
       {:else if status === 'error'}
@@ -363,13 +441,13 @@
       {:else}
         <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
           {#each history as entry, i (i)}
-            <li class="flex items-center justify-between gap-3 px-4 py-3">
-              <div class="flex min-w-0 flex-col gap-0.5">
-                <span class="truncate text-sm font-medium">{entry.label}</span>
-                <span class="truncate text-xs text-muted-foreground">
-                  {#if entry.subtitle}{entry.subtitle} · {/if}{fmtDate(entry.created_at)}
-                </span>
-              </div>
+            <!-- One line per entry, the date right-aligned: a log, not a list of cards. -->
+            <li class="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+              <span class="min-w-0 truncate">
+                <span>{entry.label}</span>
+                {#if entry.subtitle}<span class="text-muted-foreground"> · {entry.subtitle}</span>{/if}
+              </span>
+              <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{fmtDate(entry.created_at)}</span>
             </li>
           {/each}
         </ul>

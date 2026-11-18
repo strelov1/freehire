@@ -1,8 +1,7 @@
-// Package agentview records the job postings served to agents — over the hosted MCP
-// servers, OJCP and the agent search endpoint — as a JSON Lines log, and aggregates
-// that log into per-day unique views. It is the agent-side twin of viewlog: nginx's
-// access log cannot see these, because every MCP call is a POST to one URL and a search
-// answer is a list. See AGENTS.md.
+// Package agentview records the job postings served to agents (hosted MCP servers, OJCP,
+// the agent search endpoint) as a JSON Lines log and aggregates it into per-day unique
+// views. It is the agent-side twin of viewlog: nginx's access log cannot see these calls.
+// See AGENTS.md.
 package agentview
 
 import (
@@ -22,10 +21,9 @@ const (
 
 // The surfaces an event can come from.
 const (
-	SurfaceMCP        = "mcp"
-	SurfaceMCPAccount = "mcp_account"
-	SurfaceOJCP       = "ojcp"
-	SurfaceAgentAPI   = "agent_api"
+	SurfaceMCP      = "mcp"
+	SurfaceOJCP     = "ojcp"
+	SurfaceAgentAPI = "agent_api"
 )
 
 // Event is one served response: the postings one agent call returned.

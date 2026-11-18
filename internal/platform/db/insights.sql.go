@@ -11,65 +11,573 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteAllInsightsCompanyGrowth = `-- name: DeleteAllInsightsCompanyGrowth :exec
-
-DELETE FROM insights_company_growth
+const computeInsightsRoleCountryStatsByCountry = `-- name: ComputeInsightsRoleCountryStatsByCountry :many
+SELECT
+    (category)::text AS category,
+    (country)::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
+FROM (
+    SELECT
+        category,
+        country,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+    FROM jobs, unnest(countries) AS country
+    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
+    GROUP BY category, country
+) t
+WHERE open_count > 0 OR open_count_prev > 0
 `
 
-// ---------------------------------------------------------------------------
-// Per-company open/growth scalar (backs the /insights/companies leaderboard)
-// ---------------------------------------------------------------------------
-func (q *Queries) DeleteAllInsightsCompanyGrowth(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyGrowth)
-	return err
+type ComputeInsightsRoleCountryStatsByCountryRow struct {
+	Category      string `json:"category"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
 }
 
-const deleteAllInsightsCompanyLifetime = `-- name: DeleteAllInsightsCompanyLifetime :exec
-
-DELETE FROM insights_company_lifetime
-`
-
-// ---------------------------------------------------------------------------
-// Per-company posting lifetime (backs the company page's Hiring tab)
-// ---------------------------------------------------------------------------
-func (q *Queries) DeleteAllInsightsCompanyLifetime(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyLifetime)
-	return err
+// Compute on the read connection; publish the result separately on the writer.
+// One column per country: a posting contributes once to each country it lists, and a
+// posting with none reaches the ” bucket only.
+func (q *Queries) ComputeInsightsRoleCountryStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsRoleCountryStatsByCountryRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsRoleCountryStatsByCountry, prevTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsRoleCountryStatsByCountryRow{}
+	for rows.Next() {
+		var i ComputeInsightsRoleCountryStatsByCountryRow
+		if err := rows.Scan(
+			&i.Category,
+			&i.Country,
+			&i.OpenCount,
+			&i.OpenCountPrev,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const deleteAllInsightsCompanyResponse = `-- name: DeleteAllInsightsCompanyResponse :exec
-DELETE FROM insights_company_response
+const computeInsightsRoleCountryStatsGlobal = `-- name: ComputeInsightsRoleCountryStatsGlobal :many
+SELECT
+    (category)::text AS category,
+    ('')::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
+FROM (
+    SELECT
+        category,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+    FROM jobs
+    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
+    GROUP BY category
+) t
+WHERE open_count > 0 OR open_count_prev > 0
 `
 
-func (q *Queries) DeleteAllInsightsCompanyResponse(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyResponse)
-	return err
+type ComputeInsightsRoleCountryStatsGlobalRow struct {
+	Category      string `json:"category"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
 }
 
-const deleteAllInsightsCompanyStats = `-- name: DeleteAllInsightsCompanyStats :exec
-
-DELETE FROM insights_company_stats
-`
-
-// ---------------------------------------------------------------------------
-// Per-company hiring signal
-// ---------------------------------------------------------------------------
-func (q *Queries) DeleteAllInsightsCompanyStats(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyStats)
-	return err
+// Compute on the read connection; publish the result separately on the writer.
+// The all-countries column (” bucket): one count per posting, however many countries
+// it lists — grouping by category alone is what keeps a two-country posting from
+// counting twice here. Unlike insights_role_stats it needs no seniority and counts
+// only canonical, public postings (see migration 0214 for both).
+func (q *Queries) ComputeInsightsRoleCountryStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsRoleCountryStatsGlobalRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsRoleCountryStatsGlobal, prevTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsRoleCountryStatsGlobalRow{}
+	for rows.Next() {
+		var i ComputeInsightsRoleCountryStatsGlobalRow
+		if err := rows.Scan(
+			&i.Category,
+			&i.Country,
+			&i.OpenCount,
+			&i.OpenCountPrev,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const deleteAllInsightsCompanyViews = `-- name: DeleteAllInsightsCompanyViews :exec
-
-DELETE FROM insights_company_views
+const computeInsightsRoleSkillSample = `-- name: ComputeInsightsRoleSkillSample :many
+SELECT
+    (category)::text AS category,
+    (seniority)::text AS seniority,
+    (count(*)::int)::integer AS sample_size
+FROM jobs
+WHERE closed_at IS NULL
+  AND NOT is_private
+  AND category <> '' AND seniority <> ''
+  AND cardinality(skills) > 0
+GROUP BY category, seniority
 `
 
-// ---------------------------------------------------------------------------
-// Per-company posting views (backs the company page's Hiring tab)
-// ---------------------------------------------------------------------------
-func (q *Queries) DeleteAllInsightsCompanyViews(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyViews)
-	return err
+type ComputeInsightsRoleSkillSampleRow struct {
+	Category   string `json:"category"`
+	Seniority  string `json:"seniority"`
+	SampleSize int32  `json:"sample_size"`
+}
+
+// Compute on the read connection; publish the result separately on the writer.
+// The denominator every share in insights_role_skill_stats divides by: the role's
+// open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of
+// the eligible postings carry none, so dividing by the role's open count would fold
+// our own tagging gap into every published share — and because that gap differs per
+// role, two roles' shares would stop being comparable.
+// Takes NO @min_sample, deliberately. The floor selects which SKILLS are published;
+// applied here it would delete the denominator of a share that did clear the floor,
+// leaving a numerator with nothing to divide by.
+// The NOT is_private clause must stay in step with the distribution's: a numerator
+// and a denominator counting different populations is a share that is quietly wrong
+// rather than visibly broken.
+func (q *Queries) ComputeInsightsRoleSkillSample(ctx context.Context) ([]ComputeInsightsRoleSkillSampleRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsRoleSkillSample)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsRoleSkillSampleRow{}
+	for rows.Next() {
+		var i ComputeInsightsRoleSkillSampleRow
+		if err := rows.Scan(&i.Category, &i.Seniority, &i.SampleSize); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const computeInsightsRoleSkillStats = `-- name: ComputeInsightsRoleSkillStats :many
+SELECT
+    (category)::text AS category,
+    (seniority)::text AS seniority,
+    (skill)::text AS skill,
+    (count(*)::int)::integer AS open_count
+FROM jobs, unnest(skills) AS skill
+WHERE closed_at IS NULL
+  AND NOT is_private
+  AND category <> '' AND seniority <> ''
+GROUP BY category, seniority, skill
+HAVING count(*) >= $1::int
+`
+
+type ComputeInsightsRoleSkillStatsRow struct {
+	Category  string `json:"category"`
+	Seniority string `json:"seniority"`
+	Skill     string `json:"skill"`
+	OpenCount int32  `json:"open_count"`
+}
+
+// Compute on the read connection; publish the result separately on the writer.
+// The skill distribution WITHIN one role. Same shape as
+// ComputeInsightsRoleStatsByCountry's `FROM jobs, unnest(countries)` above — a job
+// contributes once per skill it carries — so its cost is one already measured in
+// production, and `skills` is a small text[] rather than the TOASTed description.
+// Open postings only: a closed posting's skills describe a vacancy nobody can apply
+// to. No growth column, unlike the sibling rollups: "docker is up 4% within senior
+// backend" is a second question, and answering it would need a prior-window pass
+// over the same unnest.
+func (q *Queries) ComputeInsightsRoleSkillStats(ctx context.Context, minSample int32) ([]ComputeInsightsRoleSkillStatsRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsRoleSkillStats, minSample)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsRoleSkillStatsRow{}
+	for rows.Next() {
+		var i ComputeInsightsRoleSkillStatsRow
+		if err := rows.Scan(
+			&i.Category,
+			&i.Seniority,
+			&i.Skill,
+			&i.OpenCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const computeInsightsRoleStatsByCountry = `-- name: ComputeInsightsRoleStatsByCountry :many
+SELECT
+    (category)::text AS category,
+    (seniority)::text AS seniority,
+    (country)::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
+FROM (
+    SELECT
+        category,
+        seniority,
+        country,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+    FROM jobs, unnest(countries) AS country
+    WHERE category <> '' AND seniority <> ''
+    GROUP BY category, seniority, country
+) t
+WHERE open_count > 0 OR open_count_prev > 0
+`
+
+type ComputeInsightsRoleStatsByCountryRow struct {
+	Category      string `json:"category"`
+	Seniority     string `json:"seniority"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+}
+
+// Compute on the read connection; publish the result separately on the writer.
+// Per-country role demand: a job contributes once to each of its countries.
+func (q *Queries) ComputeInsightsRoleStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsRoleStatsByCountryRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsRoleStatsByCountry, prevTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsRoleStatsByCountryRow{}
+	for rows.Next() {
+		var i ComputeInsightsRoleStatsByCountryRow
+		if err := rows.Scan(
+			&i.Category,
+			&i.Seniority,
+			&i.Country,
+			&i.OpenCount,
+			&i.OpenCountPrev,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const computeInsightsRoleStatsGlobal = `-- name: ComputeInsightsRoleStatsGlobal :many
+SELECT
+    (category)::text AS category,
+    (seniority)::text AS seniority,
+    ('')::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
+FROM (
+    SELECT
+        category,
+        seniority,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+    FROM jobs
+    WHERE category <> '' AND seniority <> ''
+    GROUP BY category, seniority
+) t
+WHERE open_count > 0 OR open_count_prev > 0
+`
+
+type ComputeInsightsRoleStatsGlobalRow struct {
+	Category      string `json:"category"`
+	Seniority     string `json:"seniority"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+}
+
+// Compute on the read connection; publish the result separately on the writer.
+// Country-agnostic (” bucket) role demand. open_count = jobs open now
+// (closed_at IS NULL); open_count_prev = jobs open as of @prev_ts. The inner
+// aggregate is wrapped so the "non-zero in either window" filter names the counts
+// once instead of repeating the FILTER expressions in a HAVING.
+func (q *Queries) ComputeInsightsRoleStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsRoleStatsGlobalRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsRoleStatsGlobal, prevTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsRoleStatsGlobalRow{}
+	for rows.Next() {
+		var i ComputeInsightsRoleStatsGlobalRow
+		if err := rows.Scan(
+			&i.Category,
+			&i.Seniority,
+			&i.Country,
+			&i.OpenCount,
+			&i.OpenCountPrev,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const computeInsightsSkillStatsByCategory = `-- name: ComputeInsightsSkillStatsByCategory :many
+SELECT
+    (skill)::text AS skill,
+    (category)::text AS category,
+    ('')::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
+FROM (
+    SELECT
+        skill,
+        category,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+    FROM jobs, unnest(skills) AS skill
+    WHERE category <> ''
+    GROUP BY skill, category
+) t
+WHERE open_count > 0 OR open_count_prev > 0
+`
+
+type ComputeInsightsSkillStatsByCategoryRow struct {
+	Skill         string `json:"skill"`
+	Category      string `json:"category"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+}
+
+// Compute on the read connection; publish the result separately on the writer.
+// Per-category skill demand (country ” bucket).
+func (q *Queries) ComputeInsightsSkillStatsByCategory(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsSkillStatsByCategoryRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsSkillStatsByCategory, prevTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsSkillStatsByCategoryRow{}
+	for rows.Next() {
+		var i ComputeInsightsSkillStatsByCategoryRow
+		if err := rows.Scan(
+			&i.Skill,
+			&i.Category,
+			&i.Country,
+			&i.OpenCount,
+			&i.OpenCountPrev,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const computeInsightsSkillStatsByCountry = `-- name: ComputeInsightsSkillStatsByCountry :many
+SELECT
+    (skill)::text AS skill,
+    ('')::text AS category,
+    (country)::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
+FROM (
+    SELECT
+        skill,
+        country,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+    FROM jobs, unnest(skills) AS skill, unnest(countries) AS country
+    GROUP BY skill, country
+) t
+WHERE open_count > 0 OR open_count_prev > 0
+`
+
+type ComputeInsightsSkillStatsByCountryRow struct {
+	Skill         string `json:"skill"`
+	Category      string `json:"category"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+}
+
+// Compute on the read connection; publish the result separately on the writer.
+// Per-country skill demand (category ” bucket).
+func (q *Queries) ComputeInsightsSkillStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsSkillStatsByCountryRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsSkillStatsByCountry, prevTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsSkillStatsByCountryRow{}
+	for rows.Next() {
+		var i ComputeInsightsSkillStatsByCountryRow
+		if err := rows.Scan(
+			&i.Skill,
+			&i.Category,
+			&i.Country,
+			&i.OpenCount,
+			&i.OpenCountPrev,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const computeInsightsSkillStatsGlobal = `-- name: ComputeInsightsSkillStatsGlobal :many
+SELECT
+    (skill)::text AS skill,
+    ('')::text AS category,
+    ('')::text AS country,
+    (open_count)::integer AS open_count,
+    (open_count_prev)::integer AS open_count_prev
+FROM (
+    SELECT
+        skill,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+    FROM jobs, unnest(skills) AS skill
+    GROUP BY skill
+) t
+WHERE open_count > 0 OR open_count_prev > 0
+`
+
+type ComputeInsightsSkillStatsGlobalRow struct {
+	Skill         string `json:"skill"`
+	Category      string `json:"category"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+}
+
+// Compute on the read connection; publish the result separately on the writer.
+// Country- and category-agnostic skill demand (both ” buckets).
+func (q *Queries) ComputeInsightsSkillStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsSkillStatsGlobalRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsSkillStatsGlobal, prevTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsSkillStatsGlobalRow{}
+	for rows.Next() {
+		var i ComputeInsightsSkillStatsGlobalRow
+		if err := rows.Scan(
+			&i.Skill,
+			&i.Category,
+			&i.Country,
+			&i.OpenCount,
+			&i.OpenCountPrev,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const computeInsightsVelocityDaily = `-- name: ComputeInsightsVelocityDaily :many
+SELECT
+    (day)::date AS day,
+    (facet_kind)::text AS facet_kind,
+    (facet_value)::text AS facet_value,
+    (sum(added)::int)::integer AS added,
+    (sum(removed)::int)::integer AS removed
+FROM jobs j
+CROSS JOIN LATERAL (
+
+    SELECT (j.created_at AT TIME ZONE 'UTC')::date AS day, f.fk AS facet_kind, f.fv AS facet_value, 1 AS added, 0 AS removed
+    FROM (SELECT 'all'::text AS fk, ''::text AS fv UNION ALL SELECT 'category', j.category UNION ALL SELECT 'seniority', j.seniority) AS f
+    WHERE f.fk = 'all' OR f.fv <> ''
+    UNION ALL
+
+    SELECT (j.created_at AT TIME ZONE 'UTC')::date, 'country', c, 1, 0
+    FROM unnest(j.countries) AS c
+    UNION ALL
+
+    SELECT (j.closed_at AT TIME ZONE 'UTC')::date, f.fk, f.fv, 0, 1
+    FROM (SELECT 'all'::text AS fk, ''::text AS fv UNION ALL SELECT 'category', j.category UNION ALL SELECT 'seniority', j.seniority) AS f
+    WHERE j.closed_at IS NOT NULL AND (f.fk = 'all' OR f.fv <> '')
+    UNION ALL
+
+    SELECT (j.closed_at AT TIME ZONE 'UTC')::date, 'country', c, 0, 1
+    FROM unnest(j.countries) AS c
+    WHERE j.closed_at IS NOT NULL
+) e
+GROUP BY day, facet_kind, facet_value
+`
+
+type ComputeInsightsVelocityDailyRow struct {
+	Day        pgtype.Date `json:"day"`
+	FacetKind  string      `json:"facet_kind"`
+	FacetValue string      `json:"facet_value"`
+	Added      int32       `json:"added"`
+	Removed    int32       `json:"removed"`
+}
+
+// Compute on the read connection; publish the result separately on the writer.
+// Faceted added/removed-per-day rollup from a SINGLE scan of jobs: a CROSS JOIN
+// LATERAL expands each job into its events instead of the previous 8 separate
+// full-table scans (one per facet axis × added/removed), which at catalogue scale
+// dominated the recompute. Per job the lateral emits: added events on the
+// created_at day and (if closed) removed events on the closed_at day, across the
+// 'all', category, seniority, and country (unnest) axes. Days are UTC calendar
+// dates; the outer GROUP BY aggregates per (day, facet_kind, facet_value).
+func (q *Queries) ComputeInsightsVelocityDaily(ctx context.Context) ([]ComputeInsightsVelocityDailyRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsVelocityDaily)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsVelocityDailyRow{}
+	for rows.Next() {
+		var i ComputeInsightsVelocityDailyRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.FacetKind,
+			&i.FacetValue,
+			&i.Added,
+			&i.Removed,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const deleteAllInsightsRoleCountryStats = `-- name: DeleteAllInsightsRoleCountryStats :exec
@@ -82,19 +590,6 @@ DELETE FROM insights_role_country_stats
 // ---------------------------------------------------------------------------
 func (q *Queries) DeleteAllInsightsRoleCountryStats(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteAllInsightsRoleCountryStats)
-	return err
-}
-
-const deleteAllInsightsRolePulse = `-- name: DeleteAllInsightsRolePulse :exec
-
-DELETE FROM insights_role_pulse
-`
-
-// ---------------------------------------------------------------------------
-// Role pulse (competition, time to close, inflow per category)
-// ---------------------------------------------------------------------------
-func (q *Queries) DeleteAllInsightsRolePulse(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteAllInsightsRolePulse)
 	return err
 }
 
@@ -148,28 +643,6 @@ func (q *Queries) DeleteAllInsightsRoleStats(ctx context.Context) error {
 	return err
 }
 
-const deleteAllInsightsSalaryMonthly = `-- name: DeleteAllInsightsSalaryMonthly :exec
-DELETE FROM insights_salary_monthly
-`
-
-func (q *Queries) DeleteAllInsightsSalaryMonthly(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteAllInsightsSalaryMonthly)
-	return err
-}
-
-const deleteAllInsightsSalaryStats = `-- name: DeleteAllInsightsSalaryStats :exec
-
-DELETE FROM insights_salary_stats
-`
-
-// ---------------------------------------------------------------------------
-// Salary bands
-// ---------------------------------------------------------------------------
-func (q *Queries) DeleteAllInsightsSalaryStats(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteAllInsightsSalaryStats)
-	return err
-}
-
 const deleteAllInsightsSkillStats = `-- name: DeleteAllInsightsSkillStats :exec
 
 DELETE FROM insights_skill_stats
@@ -189,113 +662,11 @@ DELETE FROM insights_velocity_daily
 `
 
 // ---------------------------------------------------------------------------
-// Hiring velocity (faceted)
+// Salary bands
 // ---------------------------------------------------------------------------
 func (q *Queries) DeleteAllInsightsVelocityDaily(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteAllInsightsVelocityDaily)
 	return err
-}
-
-const getCompanyGrowth = `-- name: GetCompanyGrowth :one
-SELECT open_count, open_count_prev FROM insights_company_growth WHERE company_slug = $1
-`
-
-type GetCompanyGrowthRow struct {
-	OpenCount     int32 `json:"open_count"`
-	OpenCountPrev int32 `json:"open_count_prev"`
-}
-
-// One company's open count now and as of the growth window ago. No row means nothing
-// open at either point; the caller serves zeros.
-func (q *Queries) GetCompanyGrowth(ctx context.Context, companySlug string) (GetCompanyGrowthRow, error) {
-	row := q.db.QueryRow(ctx, getCompanyGrowth, companySlug)
-	var i GetCompanyGrowthRow
-	err := row.Scan(&i.OpenCount, &i.OpenCountPrev)
-	return i, err
-}
-
-const getCompanyLifetime = `-- name: GetCompanyLifetime :one
-SELECT closed, median_days FROM insights_company_lifetime WHERE company_slug = $1
-`
-
-type GetCompanyLifetimeRow struct {
-	Closed     int32   `json:"closed"`
-	MedianDays float32 `json:"median_days"`
-}
-
-// One company's posting lifetime. No row means no qualifying closure; the caller
-// applies its own sample gate on `closed`.
-func (q *Queries) GetCompanyLifetime(ctx context.Context, companySlug string) (GetCompanyLifetimeRow, error) {
-	row := q.db.QueryRow(ctx, getCompanyLifetime, companySlug)
-	var i GetCompanyLifetimeRow
-	err := row.Scan(&i.Closed, &i.MedianDays)
-	return i, err
-}
-
-const getCompanyResponse = `-- name: GetCompanyResponse :one
-SELECT applications, answered, median_reply_days FROM insights_company_response WHERE company_slug = $1
-`
-
-type GetCompanyResponseRow struct {
-	Applications    int32         `json:"applications"`
-	Answered        int32         `json:"answered"`
-	MedianReplyDays pgtype.Float4 `json:"median_reply_days"`
-}
-
-// The observable application counts for one company. A company with no row has no
-// observable applications at all, which the caller must treat as "not enough data"
-// rather than as a zero response rate.
-func (q *Queries) GetCompanyResponse(ctx context.Context, companySlug string) (GetCompanyResponseRow, error) {
-	row := q.db.QueryRow(ctx, getCompanyResponse, companySlug)
-	var i GetCompanyResponseRow
-	err := row.Scan(&i.Applications, &i.Answered, &i.MedianReplyDays)
-	return i, err
-}
-
-const getCompanyViews = `-- name: GetCompanyViews :one
-SELECT views, views_prev FROM insights_company_views WHERE company_slug = $1
-`
-
-type GetCompanyViewsRow struct {
-	Views     int64 `json:"views"`
-	ViewsPrev int64 `json:"views_prev"`
-}
-
-// One company's posting views. No row means none in either window; the caller serves zeros.
-func (q *Queries) GetCompanyViews(ctx context.Context, companySlug string) (GetCompanyViewsRow, error) {
-	row := q.db.QueryRow(ctx, getCompanyViews, companySlug)
-	var i GetCompanyViewsRow
-	err := row.Scan(&i.Views, &i.ViewsPrev)
-	return i, err
-}
-
-const getGlobalCompanyResponse = `-- name: GetGlobalCompanyResponse :one
-
-SELECT
-    coalesce(sum(applications), 0)::int AS applications,
-    coalesce(sum(answered), 0)::int     AS answered
-  FROM insights_company_response
-`
-
-type GetGlobalCompanyResponseRow struct {
-	Applications int32 `json:"applications"`
-	Answered     int32 `json:"answered"`
-}
-
-// ---------------------------------------------------------------------------
-// Global and per-user application response rate (the reply-rate benchmark)
-// ---------------------------------------------------------------------------
-// The all-companies response rate, summed from the same per-company observable and
-// answered counts RebuildInsightsCompanyResponse already computed. Every company's row
-// contributes regardless of whether it individually clears its own ten-application
-// sample gate (see company-hiring-signal) — that gate protects what is safe to publish
-// about one NAMED employer, not what may contribute to an aggregate across all of them.
-// The caller applies its own sample gate to this sum.
-func (q *Queries) GetGlobalCompanyResponse(ctx context.Context) (GetGlobalCompanyResponseRow, error) {
-	row := q.db.QueryRow(ctx, getGlobalCompanyResponse)
-	var i GetGlobalCompanyResponseRow
-	err := row.Scan(&i.Applications, &i.Answered)
-	return i, err
 }
 
 const getInsightsRoleOpenCount = `-- name: GetInsightsRoleOpenCount :one
@@ -312,46 +683,6 @@ func (q *Queries) GetInsightsRoleOpenCount(ctx context.Context, category string)
 	var open_count int32
 	err := row.Scan(&open_count)
 	return open_count, err
-}
-
-const getInsightsRolePulse = `-- name: GetInsightsRolePulse :one
-SELECT views_through, views, views_prev, exposure_days, exposure_days_prev,
-       closed, closed_prev, median_close_days, median_close_days_prev, inflow
-FROM insights_role_pulse
-WHERE category = $1::text
-`
-
-type GetInsightsRolePulseRow struct {
-	ViewsThrough        pgtype.Date   `json:"views_through"`
-	Views               int64         `json:"views"`
-	ViewsPrev           int64         `json:"views_prev"`
-	ExposureDays        float64       `json:"exposure_days"`
-	ExposureDaysPrev    float64       `json:"exposure_days_prev"`
-	Closed              int64         `json:"closed"`
-	ClosedPrev          int64         `json:"closed_prev"`
-	MedianCloseDays     pgtype.Float4 `json:"median_close_days"`
-	MedianCloseDaysPrev pgtype.Float4 `json:"median_close_days_prev"`
-	Inflow              int64         `json:"inflow"`
-}
-
-// One category's pulse. No row means the category had nothing open or closed in either
-// window; the caller serves zeros.
-func (q *Queries) GetInsightsRolePulse(ctx context.Context, category string) (GetInsightsRolePulseRow, error) {
-	row := q.db.QueryRow(ctx, getInsightsRolePulse, category)
-	var i GetInsightsRolePulseRow
-	err := row.Scan(
-		&i.ViewsThrough,
-		&i.Views,
-		&i.ViewsPrev,
-		&i.ExposureDays,
-		&i.ExposureDaysPrev,
-		&i.Closed,
-		&i.ClosedPrev,
-		&i.MedianCloseDays,
-		&i.MedianCloseDaysPrev,
-		&i.Inflow,
-	)
-	return i, err
 }
 
 const getInsightsRoleSkillSample = `-- name: GetInsightsRoleSkillSample :one
@@ -374,173 +705,6 @@ func (q *Queries) GetInsightsRoleSkillSample(ctx context.Context, arg GetInsight
 	var sample_size int32
 	err := row.Scan(&sample_size)
 	return sample_size, err
-}
-
-const getUserResponseRate = `-- name: GetUserResponseRate :one
-WITH observable AS (
-    SELECT ae.application_id
-      FROM application_events ae
-     WHERE ae.kind = 'applied'
-       AND ae.retracted_at IS NULL
-       AND ae.user_id = $1
-       AND ae.company_slug <> ''
-       AND ae.application_id IS NOT NULL
-       AND (EXISTS (SELECT 1 FROM gmail_connections gc
-                     WHERE gc.user_id = ae.user_id AND gc.status = 'connected' AND gc.email <> '')
-         OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = ae.user_id))
-)
-SELECT
-    count(*)::int AS applications,
-    count(*) FILTER (
-        WHERE EXISTS (SELECT 1 FROM application_events r
-                       WHERE r.application_id = o.application_id
-                         AND r.kind          = 'employer_reply'
-                         AND r.retracted_at IS NULL)
-    )::int AS answered
-  FROM observable o
-`
-
-type GetUserResponseRateRow struct {
-	Applications int32 `json:"applications"`
-	Answered     int32 `json:"answered"`
-}
-
-// One caller's own observable/answered counts, computed live from application_events —
-// unlike the per-company/global figures, this is not read from a periodic rollup, since
-// it is scoped to one user and cheap to compute on every request (served by
-// application_events_user_occurred_idx). Same observable/answered definitions as
-// RebuildInsightsCompanyResponse: observable requires a connected mailbox, answered
-// requires a non-retracted employer_reply event. A caller with no connected mailbox has
-// zero observable applications — not a separate case, just the same predicate producing
-// zero — which is what lets the serving layer's sample gate double as the "no mailbox"
-// check.
-// No applied_at here, unlike the per-company CTE this mirrors: that one needs it for the
-// median days-to-reply, and the personal side serves no time-based metric (see design.md
-// - Non-Goals).
-func (q *Queries) GetUserResponseRate(ctx context.Context, userID int64) (GetUserResponseRateRow, error) {
-	row := q.db.QueryRow(ctx, getUserResponseRate, userID)
-	var i GetUserResponseRateRow
-	err := row.Scan(&i.Applications, &i.Answered)
-	return i, err
-}
-
-const listCompanyActivity = `-- name: ListCompanyActivity :many
-SELECT
-    date_trunc($1::text, d)::date AS period,
-    COALESCE(sum(s.added), 0)::int   AS added,
-    COALESCE(sum(s.removed), 0)::int AS removed
-FROM generate_series($2::timestamp, $3::timestamp, interval '1 day') AS d
-LEFT JOIN insights_company_stats s
-       ON s.company_slug = $4::text AND s.day = d::date
-GROUP BY date_trunc($1::text, d)
-ORDER BY date_trunc($1::text, d)
-`
-
-type ListCompanyActivityParams struct {
-	Unit        string           `json:"unit"`
-	FromTs      pgtype.Timestamp `json:"from_ts"`
-	ToTs        pgtype.Timestamp `json:"to_ts"`
-	CompanySlug string           `json:"company_slug"`
-}
-
-type ListCompanyActivityRow struct {
-	Period  pgtype.Date `json:"period"`
-	Added   int32       `json:"added"`
-	Removed int32       `json:"removed"`
-}
-
-// One company's dense added/removed series over [from, to] at the given granularity —
-// the company-scoped twin of ListJobActivity. insights_company_stats holds rows only on
-// a company's activity days, so a daily generate_series builds the gap-free calendar,
-// the LEFT JOIN on the (company_slug, day) primary key fills it (missing days → 0), and
-// date_trunc rolls days up to the bucket. `unit` is caller-validated (day/week/month).
-func (q *Queries) ListCompanyActivity(ctx context.Context, arg ListCompanyActivityParams) ([]ListCompanyActivityRow, error) {
-	rows, err := q.db.Query(ctx, listCompanyActivity,
-		arg.Unit,
-		arg.FromTs,
-		arg.ToTs,
-		arg.CompanySlug,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListCompanyActivityRow{}
-	for rows.Next() {
-		var i ListCompanyActivityRow
-		if err := rows.Scan(&i.Period, &i.Added, &i.Removed); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listInsightsCompanies = `-- name: ListInsightsCompanies :many
-SELECT
-    g.company_slug,
-    coalesce(c.name, g.company_slug) AS company_name,
-    g.open_count,
-    g.open_count_prev,
-    (g.open_count - g.open_count_prev)::int AS growth
-FROM insights_company_growth g
-LEFT JOIN companies c ON c.slug = g.company_slug
-WHERE g.open_count >= $1::int
-ORDER BY
-    (CASE
-        WHEN $2::text = 'open'     THEN g.open_count
-        WHEN $2::text = '-growth'  THEN -(g.open_count - g.open_count_prev)
-        ELSE (g.open_count - g.open_count_prev)
-    END) DESC,
-    g.open_count DESC
-LIMIT $3::int
-`
-
-type ListInsightsCompaniesParams struct {
-	MinOpen int32  `json:"min_open"`
-	Sort    string `json:"sort"`
-	Lim     int32  `json:"lim"`
-}
-
-type ListInsightsCompaniesRow struct {
-	CompanySlug   string `json:"company_slug"`
-	CompanyName   string `json:"company_name"`
-	OpenCount     int32  `json:"open_count"`
-	OpenCountPrev int32  `json:"open_count_prev"`
-	Growth        int32  `json:"growth"`
-}
-
-// The leaderboard read: companies ranked by growth (open_count - open_count_prev),
-// '-growth' (freezing) reverses it, 'open' ranks by raw size; open_count is the
-// tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).
-// company_name falls back to the slug when no companies row exists.
-func (q *Queries) ListInsightsCompanies(ctx context.Context, arg ListInsightsCompaniesParams) ([]ListInsightsCompaniesRow, error) {
-	rows, err := q.db.Query(ctx, listInsightsCompanies, arg.MinOpen, arg.Sort, arg.Lim)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListInsightsCompaniesRow{}
-	for rows.Next() {
-		var i ListInsightsCompaniesRow
-		if err := rows.Scan(
-			&i.CompanySlug,
-			&i.CompanyName,
-			&i.OpenCount,
-			&i.OpenCountPrev,
-			&i.Growth,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listInsightsRoleCountryCells = `-- name: ListInsightsRoleCountryCells :many
@@ -715,156 +879,6 @@ func (q *Queries) ListInsightsRoles(ctx context.Context, arg ListInsightsRolesPa
 	return items, nil
 }
 
-const listInsightsSalary = `-- name: ListInsightsSalary :many
-SELECT currency, period, sample_size, p25, p50, p75
-FROM insights_salary_stats
-WHERE category = $1
-  AND seniority = $2
-  AND country = $3
-ORDER BY sample_size DESC
-`
-
-type ListInsightsSalaryParams struct {
-	Category  string `json:"category"`
-	Seniority string `json:"seniority"`
-	Country   string `json:"country"`
-}
-
-type ListInsightsSalaryRow struct {
-	Currency   string `json:"currency"`
-	Period     string `json:"period"`
-	SampleSize int32  `json:"sample_size"`
-	P25        int32  `json:"p25"`
-	P50        int32  `json:"p50"`
-	P75        int32  `json:"p75"`
-}
-
-// Salary bands for one role × country scope, one row per (currency, period),
-// richest samples first. Currencies are never combined.
-func (q *Queries) ListInsightsSalary(ctx context.Context, arg ListInsightsSalaryParams) ([]ListInsightsSalaryRow, error) {
-	rows, err := q.db.Query(ctx, listInsightsSalary, arg.Category, arg.Seniority, arg.Country)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListInsightsSalaryRow{}
-	for rows.Next() {
-		var i ListInsightsSalaryRow
-		if err := rows.Scan(
-			&i.Currency,
-			&i.Period,
-			&i.SampleSize,
-			&i.P25,
-			&i.P50,
-			&i.P75,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listInsightsSalaryByCategory = `-- name: ListInsightsSalaryByCategory :many
-SELECT seniority, currency, period, sample_size, p25, p50, p75
-FROM insights_salary_stats
-WHERE category = $1
-  AND country = ''
-ORDER BY seniority, sample_size DESC
-`
-
-type ListInsightsSalaryByCategoryRow struct {
-	Seniority  string `json:"seniority"`
-	Currency   string `json:"currency"`
-	Period     string `json:"period"`
-	SampleSize int32  `json:"sample_size"`
-	P25        int32  `json:"p25"`
-	P50        int32  `json:"p50"`
-	P75        int32  `json:"p75"`
-}
-
-// All-seniority salary bands for one category (country-agnostic ” bucket), so a
-// per-category salary page is one call: one row per (seniority, currency, period),
-// richest samples first. seniority ” is the category-wide band; the named
-// seniorities are the per-grade bands. Bands below the sample floor are already
-// absent from the rollup.
-func (q *Queries) ListInsightsSalaryByCategory(ctx context.Context, category string) ([]ListInsightsSalaryByCategoryRow, error) {
-	rows, err := q.db.Query(ctx, listInsightsSalaryByCategory, category)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListInsightsSalaryByCategoryRow{}
-	for rows.Next() {
-		var i ListInsightsSalaryByCategoryRow
-		if err := rows.Scan(
-			&i.Seniority,
-			&i.Currency,
-			&i.Period,
-			&i.SampleSize,
-			&i.P25,
-			&i.P50,
-			&i.P75,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listInsightsSalaryHistory = `-- name: ListInsightsSalaryHistory :many
-SELECT currency, period, month, sample_size, p25, p50, p75
-FROM insights_salary_monthly
-WHERE category = $1::text
-ORDER BY currency, period, month
-`
-
-type ListInsightsSalaryHistoryRow struct {
-	Currency   string      `json:"currency"`
-	Period     string      `json:"period"`
-	Month      pgtype.Date `json:"month"`
-	SampleSize int32       `json:"sample_size"`
-	P25        int32       `json:"p25"`
-	P50        int32       `json:"p50"`
-	P75        int32       `json:"p75"`
-}
-
-// One category's stored months, every (currency, period) it has.
-func (q *Queries) ListInsightsSalaryHistory(ctx context.Context, category string) ([]ListInsightsSalaryHistoryRow, error) {
-	rows, err := q.db.Query(ctx, listInsightsSalaryHistory, category)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListInsightsSalaryHistoryRow{}
-	for rows.Next() {
-		var i ListInsightsSalaryHistoryRow
-		if err := rows.Scan(
-			&i.Currency,
-			&i.Period,
-			&i.Month,
-			&i.SampleSize,
-			&i.P25,
-			&i.P50,
-			&i.P75,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listInsightsSkillHistory = `-- name: ListInsightsSkillHistory :many
 SELECT skill, week_start, open_count
 FROM insights_skill_history
@@ -1011,728 +1025,6 @@ WHERE week_start < $1::date
 // the table bounded.
 func (q *Queries) PruneInsightsSkillHistory(ctx context.Context, cutoff pgtype.Date) (int64, error) {
 	result, err := q.db.Exec(ctx, pruneInsightsSkillHistory, cutoff)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsCompanyGrowth = `-- name: RebuildInsightsCompanyGrowth :execrows
-INSERT INTO insights_company_growth (company_slug, open_count, open_count_prev)
-SELECT
-    company_slug,
-    count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-    count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
-FROM jobs
-WHERE company_slug <> '' AND duplicate_of IS NULL
-GROUP BY company_slug
-HAVING count(*) FILTER (WHERE closed_at IS NULL) > 0
-    OR count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1)) > 0
-`
-
-// One row per company with its current open-count and the open-count as of @prev_ts,
-// from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
-// insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
-// uses open-as-of @prev_ts. Companies open at neither point are dropped (HAVING) to
-// keep the table lean.
-func (q *Queries) RebuildInsightsCompanyGrowth(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsCompanyGrowth, prevTs)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsCompanyLifetime = `-- name: RebuildInsightsCompanyLifetime :execrows
-INSERT INTO insights_company_lifetime (company_slug, closed, median_days)
-SELECT
-    company_slug,
-    count(*)::int,
-    percentile_cont(0.5) WITHIN GROUP (
-        ORDER BY EXTRACT(EPOCH FROM (closed_at - created_at)) / 86400.0
-    )::real
-FROM jobs
-WHERE company_slug <> ''
-  AND duplicate_of IS NULL
-  -- A member's private URL import carries the employer's slug and can be closed by the
-  -- orphan liveness probe (probe_expired); it is the member's, not evidence about the
-  -- company, and the company page's own reads exclude it the same way.
-  AND NOT is_private
-  AND closed_at IS NOT NULL
-  AND closed_at >= now() - interval '180 days'
-  AND closed_reason IN ('unseen', 'feed_removed', 'probe_expired', 'employer_closed')
-  -- A closure dated before its posting (a reopened row, clock skew) would add a
-  -- negative duration; the response rollup keeps the same pair out of its median.
-  AND closed_at >= created_at
-GROUP BY company_slug
-`
-
-// Median days from created_at to closed_at over each company's canonical postings
-// closed in the last 180 days. Only closures that say the POSTING is over count: it
-// dropped off a board we crawl (unseen), the source reported it taken down
-// (feed_removed), the liveness probe read its source page as expired twice
-// (probe_expired), or the employer closed it here (employer_closed). Not expired —
-// that is the age rule for sources with no close signal, which closes at 45 days
-// whatever the employer did, so it would publish our cutoff as the company's speed.
-// board_unreachable and feed_empty measure our crawler, board_retired,
-// source_misattributed and moderated our own decisions, ” is unknown. 180 days so the
-// figure describes how the company hires now, not over its whole history.
-//
-// Every rollup that measures a real close reads this same list;
-// insights_close_rule_test.go fails if one of them drifts from it.
-func (q *Queries) RebuildInsightsCompanyLifetime(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsCompanyLifetime)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsCompanyResponse = `-- name: RebuildInsightsCompanyResponse :execrows
-WITH observable AS (
-    SELECT ae.application_id, ae.company_slug, ae.occurred_at AS applied_at
-      FROM application_events ae
-     WHERE ae.kind = 'applied'
-       AND ae.retracted_at IS NULL
-       AND ae.company_slug <> ''
-       AND ae.application_id IS NOT NULL
-       -- Observable means "we would have seen a reply": the candidate has somewhere we
-       -- read mail. A Google grant with no mailbox address is a calendar-only consent —
-       -- it can never produce an employer_reply, so counting it would put applications in
-       -- the denominator that are structurally barred from the numerator and make named
-       -- employers read as more silent than they are. That is the exact distortion this
-       -- rollup exists to remove.
-       AND (EXISTS (SELECT 1 FROM gmail_connections gc
-                     WHERE gc.user_id = ae.user_id AND gc.status = 'connected' AND gc.email <> '')
-         OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = ae.user_id))
-), answered AS (
-    SELECT o.company_slug, o.applied_at,
-           (SELECT min(r.occurred_at)
-              FROM application_events r
-             WHERE r.application_id = o.application_id
-               AND r.kind          = 'employer_reply'
-               AND r.retracted_at IS NULL) AS replied_at
-      FROM observable o
-)
-INSERT INTO insights_company_response (company_slug, applications, answered, median_reply_days)
-SELECT company_slug,
-       count(*)::int,
-       count(*) FILTER (WHERE replied_at IS NOT NULL)::int,
-       percentile_cont(0.5) WITHIN GROUP (
-           ORDER BY EXTRACT(EPOCH FROM (replied_at - applied_at)) / 86400.0
-       ) FILTER (WHERE replied_at IS NOT NULL AND replied_at >= applied_at)::real
-  FROM answered
- GROUP BY company_slug
-`
-
-// One row per company with an OBSERVABLE application: the applicant has a connected
-// mailbox, so a reply would have been seen. Applications from people we cannot observe
-// are excluded from BOTH sides of the ratio — counting them in the denominator would
-// report our own blind spot as the employer's silence, which is the same mistake the
-// job-level signal's mailbox gate exists to prevent.
-//
-// Both sides come from application_events, not from live mail. Reading the emails table
-// made the served rate a function of the candidate's inbox hygiene: it counted messages
-// WHERE deleted_at IS NULL, so someone clearing old mail made an employer that had
-// answered them look silent, on a public page, about a named company. The ledger records
-// that the reply arrived; what later became of the message is not the employer's doing.
-//
-// "Answered" is any live employer_reply event. Not a stage advance: a stage is what the
-// candidate recorded, and a company that replied to somebody who never updated their
-// board still replied. A retracted event does not count — it belongs to another employer.
-//
-// The reply is paired to its application through application_id, never through job_id.
-// job_id is ON DELETE SET NULL, so once a posting is deleted both sides read NULL, the pair reduces
-// to NULL = NULL — never true — and an employer that answered is served as silent: the
-// distortion this rollup was moved onto the ledger to remove, arriving by a different
-// route. Pairing on (user_id, company_slug) instead would survive the deletion by
-// crediting one reply to every application that user made to that employer, which is
-// worse than losing it.
-//
-// An event with no application_id is left out of BOTH sides rather than counted and never
-// answerable. Only rows written before the carry-over can be in that state, and
-// cmd/backfill-applications is what empties it.
-//
-// The median covers answered applications only and is therefore right-censored; the
-// serving layer reports the unanswered count beside it so the number is never read as
-// "employers reply in six days" when most of the sample was never replied to. Replies
-// dated before their application (an application reconstructed from a later message, or
-// clock skew) still count as answered but are kept out of the median, where they would
-// contribute a negative duration.
-func (q *Queries) RebuildInsightsCompanyResponse(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsCompanyResponse)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsCompanyStats = `-- name: RebuildInsightsCompanyStats :execrows
-INSERT INTO insights_company_stats (company_slug, day, added, removed, open)
-SELECT
-    company_slug,
-    day,
-    added,
-    removed,
-    sum(added - removed) OVER (PARTITION BY company_slug ORDER BY day)::int AS open
-FROM (
-    SELECT j.company_slug, day, sum(added)::int AS added, sum(removed)::int AS removed
-    FROM jobs j
-    CROSS JOIN LATERAL (
-        -- Added event on the created_at day; removed event on the closed_at day.
-        SELECT (j.created_at AT TIME ZONE 'UTC')::date AS day, 1 AS added, 0 AS removed
-        UNION ALL
-        SELECT (j.closed_at AT TIME ZONE 'UTC')::date, 0, 1
-        WHERE j.closed_at IS NOT NULL
-    ) e
-    WHERE j.company_slug <> '' AND j.duplicate_of IS NULL
-    GROUP BY j.company_slug, day
-) daily
-`
-
-// Per-(company, day) hiring velocity with a running open count, from the retained
-// jobs lifecycle. Each canonical, attributable job (company_slug <> ” AND
-// duplicate_of IS NULL) emits an added event on its created_at (UTC) day and, if
-// closed, a removed event on its closed_at (UTC) day; the inner aggregate collapses
-// those to one row per (company_slug, day), and the window SUM over (added - removed)
-// ordered by day yields open = cumulative(added) - cumulative(removed) as of that day
-// (a job is created no later than it closes, so this equals the point-in-time open
-// count). Only a company's activity days get a row.
-func (q *Queries) RebuildInsightsCompanyStats(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsCompanyStats)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsCompanyViews = `-- name: RebuildInsightsCompanyViews :execrows
-INSERT INTO insights_company_views (company_slug, views, views_prev)
-SELECT
-    j.company_slug,
-    COALESCE(sum(v.page_uniques) FILTER (WHERE v.day > current_date - 30), 0)::bigint,
-    COALESCE(sum(v.page_uniques) FILTER (WHERE v.day <= current_date - 30), 0)::bigint
-FROM job_daily_views v
-JOIN jobs j ON j.id = v.job_id
-WHERE v.day > current_date - 60
-  AND j.company_slug <> ''
-GROUP BY j.company_slug
-HAVING sum(v.page_uniques) > 0
-`
-
-// page_uniques summed over each company's postings for the last 30 days and the 30
-// before. page_uniques, never uniques: uniques fuses unfiltered API reads — mostly
-// crawlers — with page opens. Duplicates are NOT filtered out: a view of a repost is
-// still attention paid to the company. One visitor counts once per posting per day, so
-// the sum is posting-views, not distinct people; the page says so.
-func (q *Queries) RebuildInsightsCompanyViews(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsCompanyViews)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsRoleCountryStatsByCountry = `-- name: RebuildInsightsRoleCountryStatsByCountry :execrows
-INSERT INTO insights_role_country_stats (category, country, open_count, open_count_prev)
-SELECT category, country, open_count, open_count_prev
-FROM (
-    SELECT
-        category,
-        country,
-        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
-    FROM jobs, unnest(countries) AS country
-    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
-    GROUP BY category, country
-) t
-WHERE open_count > 0 OR open_count_prev > 0
-`
-
-// One column per country: a posting contributes once to each country it lists, and a
-// posting with none reaches the ” bucket only.
-func (q *Queries) RebuildInsightsRoleCountryStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsRoleCountryStatsByCountry, prevTs)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsRoleCountryStatsGlobal = `-- name: RebuildInsightsRoleCountryStatsGlobal :execrows
-INSERT INTO insights_role_country_stats (category, country, open_count, open_count_prev)
-SELECT category, '', open_count, open_count_prev
-FROM (
-    SELECT
-        category,
-        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
-    FROM jobs
-    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
-    GROUP BY category
-) t
-WHERE open_count > 0 OR open_count_prev > 0
-`
-
-// The all-countries column (” bucket): one count per posting, however many countries
-// it lists — grouping by category alone is what keeps a two-country posting from
-// counting twice here. Unlike insights_role_stats it needs no seniority and counts
-// only canonical, public postings (see migration 0214 for both).
-func (q *Queries) RebuildInsightsRoleCountryStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsRoleCountryStatsGlobal, prevTs)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsRolePulse = `-- name: RebuildInsightsRolePulse :execrows
-WITH anchor AS (
-    -- The freshest COMPLETE day: today's row, when cmd/rollup-views has landed one, holds
-    -- part of a day's views and would be set against a full day of exposure.
-    SELECT coalesce(max(day), (now() AT TIME ZONE 'UTC')::date - 1) AS d
-    FROM job_daily_views
-    WHERE day < (now() AT TIME ZONE 'UTC')::date
-), w AS (
-    SELECT
-        d,
-        (d - 29)::timestamp AT TIME ZONE 'UTC' AS cur_start,
-        (d + 1)::timestamp  AT TIME ZONE 'UTC' AS cur_end,
-        (d - 59)::timestamp AT TIME ZONE 'UTC' AS prev_start
-    FROM anchor
-), p AS (
-    SELECT
-        j.id,
-        j.category,
-        j.created_at,
-        j.closed_at,
-        LEAST(j.posted_at, j.created_at) AS existed_at,
-        (j.closed_reason IN ('unseen', 'feed_removed', 'probe_expired', 'employer_closed')
-            AND j.closed_at >= LEAST(j.posted_at, j.created_at)) AS counted_close
-    FROM jobs j, w
-    WHERE j.category <> '' AND j.duplicate_of IS NULL AND NOT j.is_private
-      AND (j.closed_at IS NULL OR j.closed_at > LEAST($1::timestamptz, w.prev_start))
-), postings AS (
-    SELECT
-        p.category,
-        sum(GREATEST(0, EXTRACT(EPOCH FROM (LEAST(coalesce(p.closed_at, now()), w.cur_end) - GREATEST(p.created_at, w.cur_start))) / 86400.0))::float8 AS exposure_days,
-        sum(GREATEST(0, EXTRACT(EPOCH FROM (LEAST(coalesce(p.closed_at, now()), w.cur_start) - GREATEST(p.created_at, w.prev_start))) / 86400.0))::float8 AS exposure_days_prev,
-        count(*) FILTER (WHERE p.counted_close AND p.closed_at > $2::timestamptz) AS closed,
-        count(*) FILTER (WHERE p.counted_close AND p.closed_at > $1::timestamptz AND p.closed_at <= $2::timestamptz) AS closed_prev,
-        (percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (p.closed_at - p.existed_at)) / 86400.0)
-            FILTER (WHERE p.counted_close AND p.closed_at > $2::timestamptz))::real AS median_close_days,
-        (percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (p.closed_at - p.existed_at)) / 86400.0)
-            FILTER (WHERE p.counted_close AND p.closed_at > $1::timestamptz AND p.closed_at <= $2::timestamptz))::real AS median_close_days_prev,
-        count(*) FILTER (WHERE p.existed_at > $2::timestamptz) AS inflow
-    FROM p, w
-    GROUP BY p.category
-), views AS (
-    SELECT
-        p.category,
-        sum(v.page_uniques) FILTER (WHERE v.day > w.d - 30) AS views,
-        sum(v.page_uniques) FILTER (WHERE v.day <= w.d - 30) AS views_prev
-    FROM job_daily_views v
-    JOIN p ON p.id = v.job_id
-    CROSS JOIN w
-    WHERE v.day > w.d - 60 AND v.day <= w.d
-      AND (p.closed_at IS NULL OR v.day <= (p.closed_at AT TIME ZONE 'UTC')::date)
-    GROUP BY p.category
-)
-INSERT INTO insights_role_pulse (
-    category, views_through, views, views_prev, exposure_days, exposure_days_prev,
-    closed, closed_prev, median_close_days, median_close_days_prev, inflow
-)
-SELECT
-    s.category,
-    w.d,
-    coalesce(v.views, 0),
-    coalesce(v.views_prev, 0),
-    s.exposure_days,
-    s.exposure_days_prev,
-    s.closed,
-    s.closed_prev,
-    s.median_close_days,
-    s.median_close_days_prev,
-    s.inflow
-FROM postings s
-CROSS JOIN w
-LEFT JOIN views v ON v.category = s.category
-`
-
-type RebuildInsightsRolePulseParams struct {
-	PriorStart  pgtype.Timestamptz `json:"prior_start"`
-	WindowStart pgtype.Timestamptz `json:"window_start"`
-}
-
-// Three figures per category over canonical, public postings, each for the last 30 days
-// and the 30 before (openspec/changes/insights-role-pulse/design.md has the prod
-// measurements behind every choice below).
-//
-// COMPETITION is page views over exposure. Views are job_daily_views.page_uniques, never
-// uniques (AGENTS.md "View counts"). Exposure is the posting-days a posting was OPEN ON
-// FREEHIRE inside the window: from created_at, not from LEAST(posted_at, created_at) —
-// the one figure in this file where first-seen is the right date, because nobody can view
-// a posting here before we found it, and the existence rule would charge a backlog posting
-// for weeks it was not on the site. A view on a day the posting was already closed is not
-// counted, so numerator and denominator are the same population. Both windows end on the
-// freshest COMPLETE views day (before today, UTC) rather than on now(): cmd/rollup-views
-// usually lands a day after it ends, and a now()-anchored window would set 29 days of
-// views against 30 of exposure.
-//
-// TIME TO CLOSE is the median days from existence to close over closes that describe the
-// POSTING: unseen, feed_removed, probe_expired, employer_closed. Not expired (a 45-day age
-// rule — its median is 45 by construction), feed_empty or board_unreachable (our crawler's
-// health), board_retired, moderated or source_misattributed (our own decisions), or ”
-// (closed before reasons were recorded). A close dated before existence is left out, as
-// RebuildInsightsCompanyLifetime does.
-//
-// INFLOW counts postings whose existence date falls in the last 30 days — the header's
-// rule, applied to "new" instead of "open at the start" — and deliberately has NO earlier
-// window. Measured 2026-10-30, the comparison was dominated by our own coverage growth:
-// a board first crawled this month shows its earlier postings only if they were still
-// open when we found it, so healthcare read +155% while stable-coverage categories
-// (devops, data_engineering) moved -1% and -20%; neither a stable-employer panel nor a
-// discovered-within-N-days rule removed it (the latter made healthcare +392%).
-func (q *Queries) RebuildInsightsRolePulse(ctx context.Context, arg RebuildInsightsRolePulseParams) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsRolePulse, arg.PriorStart, arg.WindowStart)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsRoleSkillSample = `-- name: RebuildInsightsRoleSkillSample :execrows
-INSERT INTO insights_role_skill_sample (category, seniority, sample_size)
-SELECT category, seniority, count(*)::int
-FROM jobs
-WHERE closed_at IS NULL
-  AND NOT is_private
-  AND category <> '' AND seniority <> ''
-  AND cardinality(skills) > 0
-GROUP BY category, seniority
-`
-
-// The denominator every share in insights_role_skill_stats divides by: the role's
-// open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of
-// the eligible postings carry none, so dividing by the role's open count would fold
-// our own tagging gap into every published share — and because that gap differs per
-// role, two roles' shares would stop being comparable.
-//
-// Takes NO @min_sample, deliberately. The floor selects which SKILLS are published;
-// applied here it would delete the denominator of a share that did clear the floor,
-// leaving a numerator with nothing to divide by.
-// The NOT is_private clause must stay in step with the distribution's: a numerator
-// and a denominator counting different populations is a share that is quietly wrong
-// rather than visibly broken.
-func (q *Queries) RebuildInsightsRoleSkillSample(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsRoleSkillSample)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsRoleSkillStats = `-- name: RebuildInsightsRoleSkillStats :execrows
-INSERT INTO insights_role_skill_stats (category, seniority, skill, open_count)
-SELECT category, seniority, skill, count(*)::int
-FROM jobs, unnest(skills) AS skill
-WHERE closed_at IS NULL
-  AND NOT is_private
-  AND category <> '' AND seniority <> ''
-GROUP BY category, seniority, skill
-HAVING count(*) >= $1::int
-`
-
-// The skill distribution WITHIN one role. Same shape as
-// RebuildInsightsRoleStatsByCountry's `FROM jobs, unnest(countries)` above — a job
-// contributes once per skill it carries — so its cost is one already measured in
-// production, and `skills` is a small text[] rather than the TOASTed description.
-//
-// Open postings only: a closed posting's skills describe a vacancy nobody can apply
-// to. No growth column, unlike the sibling rollups: "docker is up 4% within senior
-// backend" is a second question, and answering it would need a prior-window pass
-// over the same unnest.
-func (q *Queries) RebuildInsightsRoleSkillStats(ctx context.Context, minSample int32) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsRoleSkillStats, minSample)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsRoleStatsByCountry = `-- name: RebuildInsightsRoleStatsByCountry :execrows
-INSERT INTO insights_role_stats (category, seniority, country, open_count, open_count_prev)
-SELECT category, seniority, country, open_count, open_count_prev
-FROM (
-    SELECT
-        category,
-        seniority,
-        country,
-        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
-    FROM jobs, unnest(countries) AS country
-    WHERE category <> '' AND seniority <> ''
-    GROUP BY category, seniority, country
-) t
-WHERE open_count > 0 OR open_count_prev > 0
-`
-
-// Per-country role demand: a job contributes once to each of its countries.
-func (q *Queries) RebuildInsightsRoleStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsRoleStatsByCountry, prevTs)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsRoleStatsGlobal = `-- name: RebuildInsightsRoleStatsGlobal :execrows
-INSERT INTO insights_role_stats (category, seniority, country, open_count, open_count_prev)
-SELECT category, seniority, '', open_count, open_count_prev
-FROM (
-    SELECT
-        category,
-        seniority,
-        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
-    FROM jobs
-    WHERE category <> '' AND seniority <> ''
-    GROUP BY category, seniority
-) t
-WHERE open_count > 0 OR open_count_prev > 0
-`
-
-// Country-agnostic (” bucket) role demand. open_count = jobs open now
-// (closed_at IS NULL); open_count_prev = jobs open as of @prev_ts. The inner
-// aggregate is wrapped so the "non-zero in either window" filter names the counts
-// once instead of repeating the FILTER expressions in a HAVING.
-func (q *Queries) RebuildInsightsRoleStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsRoleStatsGlobal, prevTs)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsSalaryMonthly = `-- name: RebuildInsightsSalaryMonthly :execrows
-INSERT INTO insights_salary_monthly (category, currency, period, month, sample_size, p25, p50, p75)
-SELECT
-    category,
-    currency,
-    period,
-    month,
-    count(*)::int,
-    percentile_cont(0.25) WITHIN GROUP (ORDER BY amount)::int,
-    percentile_cont(0.50) WITHIN GROUP (ORDER BY amount)::int,
-    percentile_cont(0.75) WITHIN GROUP (ORDER BY amount)::int
-FROM (
-    -- Months are UTC calendar months, so a posting near midnight on the 1st lands in
-    -- the month the page's own UTC clock calls current, whatever the session TimeZone.
-    -- A publication date in the future (bad source data) is no month at all yet.
-    SELECT category, currency, period, amount,
-           date_trunc('month', LEAST(posted_at, created_at) AT TIME ZONE 'UTC')::date AS month
-    FROM jobs_effective_salary
-    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
-      AND LEAST(posted_at, created_at) AT TIME ZONE 'UTC' >= date_trunc('month', now() AT TIME ZONE 'UTC') - interval '11 months'
-      AND LEAST(posted_at, created_at) <= now()
-) s
-GROUP BY category, currency, period, month
-HAVING count(*) >= $1::int
-`
-
-// The salary history: effective-salary percentiles per (category, currency, period,
-// month a posting was PUBLISHED), the current month and the eleven before it. Open and
-// closed postings alike — a posting closed since still records what was offered that
-// month — and canonical, public ones only. A month a posting belongs to is its
-// existence date (see the file header), so one found in June but published in March
-// counts in March. Months under @min_sample are not stored: a line through a handful
-// of postings a month is noise drawn as a trend.
-func (q *Queries) RebuildInsightsSalaryMonthly(ctx context.Context, minSample int32) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsSalaryMonthly, minSample)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsSalaryStatsByCountry = `-- name: RebuildInsightsSalaryStatsByCountry :execrows
-INSERT INTO insights_salary_stats (category, seniority, country, currency, period, sample_size, p25, p50, p75)
-SELECT
-    coalesce(category, ''),
-    coalesce(seniority, ''),
-    country,
-    currency,
-    period,
-    count(*)::int,
-    percentile_cont(0.25) WITHIN GROUP (ORDER BY sal)::int,
-    percentile_cont(0.50) WITHIN GROUP (ORDER BY sal)::int,
-    percentile_cont(0.75) WITHIN GROUP (ORDER BY sal)::int
-FROM (
-    SELECT category, seniority, country, currency, period, amount AS sal
-    FROM jobs_effective_salary, unnest(countries) AS country
-    WHERE closed_at IS NULL AND NOT is_private
-      AND category <> '' AND seniority <> ''
-) s
-WHERE sal IS NOT NULL
-GROUP BY country, currency, period, CUBE(category, seniority)
-HAVING count(*) >= $1::int
-`
-
-// Per-country salary bands (same CUBE of role scope, country from unnest).
-func (q *Queries) RebuildInsightsSalaryStatsByCountry(ctx context.Context, minSample int32) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsSalaryStatsByCountry, minSample)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsSalaryStatsGlobal = `-- name: RebuildInsightsSalaryStatsGlobal :execrows
-INSERT INTO insights_salary_stats (category, seniority, country, currency, period, sample_size, p25, p50, p75)
-SELECT
-    coalesce(category, ''),
-    coalesce(seniority, ''),
-    '',
-    currency,
-    period,
-    count(*)::int,
-    percentile_cont(0.25) WITHIN GROUP (ORDER BY sal)::int,
-    percentile_cont(0.50) WITHIN GROUP (ORDER BY sal)::int,
-    percentile_cont(0.75) WITHIN GROUP (ORDER BY sal)::int
-FROM (
-    SELECT category, seniority, currency, period, amount AS sal
-    FROM jobs_effective_salary
-    WHERE closed_at IS NULL AND NOT is_private
-      AND category <> '' AND seniority <> ''
-) s
-WHERE sal IS NOT NULL
-GROUP BY currency, period, CUBE(category, seniority)
-HAVING count(*) >= $1::int
-`
-
-// Country-agnostic salary bands. CUBE(category, seniority) emits every scope the
-// endpoint can ask for — the exact (category, seniority) band, the category-only
-// band (seniority ”), the seniority-only band (category ”), and the overall band
-// (both ”) — all per (currency, period), which is never aggregated across. The
-// figure per job is its EFFECTIVE salary (jobs_effective_salary, migration 0216:
-// manual, else source, else enrichment — the min/max midpoint or whichever bound is
-// present). Only bands at/above @min_sample are stored.
-func (q *Queries) RebuildInsightsSalaryStatsGlobal(ctx context.Context, minSample int32) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsSalaryStatsGlobal, minSample)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsSkillStatsByCategory = `-- name: RebuildInsightsSkillStatsByCategory :execrows
-INSERT INTO insights_skill_stats (skill, category, country, open_count, open_count_prev)
-SELECT skill, category, '', open_count, open_count_prev
-FROM (
-    SELECT
-        skill,
-        category,
-        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
-    FROM jobs, unnest(skills) AS skill
-    WHERE category <> ''
-    GROUP BY skill, category
-) t
-WHERE open_count > 0 OR open_count_prev > 0
-`
-
-// Per-category skill demand (country ” bucket).
-func (q *Queries) RebuildInsightsSkillStatsByCategory(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsSkillStatsByCategory, prevTs)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsSkillStatsByCountry = `-- name: RebuildInsightsSkillStatsByCountry :execrows
-INSERT INTO insights_skill_stats (skill, category, country, open_count, open_count_prev)
-SELECT skill, '', country, open_count, open_count_prev
-FROM (
-    SELECT
-        skill,
-        country,
-        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
-    FROM jobs, unnest(skills) AS skill, unnest(countries) AS country
-    GROUP BY skill, country
-) t
-WHERE open_count > 0 OR open_count_prev > 0
-`
-
-// Per-country skill demand (category ” bucket).
-func (q *Queries) RebuildInsightsSkillStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsSkillStatsByCountry, prevTs)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsSkillStatsGlobal = `-- name: RebuildInsightsSkillStatsGlobal :execrows
-INSERT INTO insights_skill_stats (skill, category, country, open_count, open_count_prev)
-SELECT skill, '', '', open_count, open_count_prev
-FROM (
-    SELECT
-        skill,
-        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
-    FROM jobs, unnest(skills) AS skill
-    GROUP BY skill
-) t
-WHERE open_count > 0 OR open_count_prev > 0
-`
-
-// Country- and category-agnostic skill demand (both ” buckets).
-func (q *Queries) RebuildInsightsSkillStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsSkillStatsGlobal, prevTs)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rebuildInsightsVelocityDaily = `-- name: RebuildInsightsVelocityDaily :execrows
-INSERT INTO insights_velocity_daily (day, facet_kind, facet_value, added, removed)
-SELECT day, facet_kind, facet_value, sum(added)::int, sum(removed)::int
-FROM jobs j
-CROSS JOIN LATERAL (
-    -- Added events (created_at day), scalar facet axes.
-    SELECT (j.created_at AT TIME ZONE 'UTC')::date AS day, f.fk AS facet_kind, f.fv AS facet_value, 1 AS added, 0 AS removed
-    FROM (VALUES ('all', ''), ('category', j.category), ('seniority', j.seniority)) AS f(fk, fv)
-    WHERE f.fk = 'all' OR f.fv <> ''
-    UNION ALL
-    -- Added events, per country.
-    SELECT (j.created_at AT TIME ZONE 'UTC')::date, 'country', c, 1, 0
-    FROM unnest(j.countries) AS c
-    UNION ALL
-    -- Removed events (closed_at day), scalar facet axes — only for closed jobs.
-    SELECT (j.closed_at AT TIME ZONE 'UTC')::date, f.fk, f.fv, 0, 1
-    FROM (VALUES ('all', ''), ('category', j.category), ('seniority', j.seniority)) AS f(fk, fv)
-    WHERE j.closed_at IS NOT NULL AND (f.fk = 'all' OR f.fv <> '')
-    UNION ALL
-    -- Removed events, per country.
-    SELECT (j.closed_at AT TIME ZONE 'UTC')::date, 'country', c, 0, 1
-    FROM unnest(j.countries) AS c
-    WHERE j.closed_at IS NOT NULL
-) e
-GROUP BY day, facet_kind, facet_value
-`
-
-// Faceted added/removed-per-day rollup from a SINGLE scan of jobs: a CROSS JOIN
-// LATERAL expands each job into its events instead of the previous 8 separate
-// full-table scans (one per facet axis × added/removed), which at catalogue scale
-// dominated the recompute. Per job the lateral emits: added events on the
-// created_at day and (if closed) removed events on the closed_at day, across the
-// 'all', category, seniority, and country (unnest) axes. Days are UTC calendar
-// dates; the outer GROUP BY aggregates per (day, facet_kind, facet_value).
-func (q *Queries) RebuildInsightsVelocityDaily(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildInsightsVelocityDaily)
 	if err != nil {
 		return 0, err
 	}

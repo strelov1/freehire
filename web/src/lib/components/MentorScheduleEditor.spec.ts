@@ -4,7 +4,14 @@ import MentorScheduleEditor from './MentorScheduleEditor.svelte';
 import type { AvailabilityApi, MentorAvailabilityRule } from '#lib/types.js';
 
 const tuesday: MentorAvailabilityRule = { id: 1, weekday: 2, date: null, start: '18:00', end: '20:00', closure: false };
-const away: MentorAvailabilityRule = { id: 7, weekday: null, date: '2026-12-01', start: '00:00', end: '00:00', closure: true };
+const away: MentorAvailabilityRule = {
+  id: 7,
+  weekday: null,
+  date: '2026-12-01',
+  start: '00:00',
+  end: '00:00',
+  closure: true,
+};
 
 function fakeSchedule() {
   return {

@@ -18,11 +18,10 @@ import (
 )
 
 // jobsch adapts JobCloud's two national job boards, jobs.ch (German- and English-speaking
-// Switzerland) and jobup.ch (Romandie). Both sites serve one posting pool under one UUID space —
-// ~17k of jobup's ~31k postings are also on jobs.ch — so they are one provider: ~52k distinct
-// postings from every trade, a few percent IT. It is boardless and an aggregator — the employer
-// is read per posting. See the "jobs.ch traps" section of AGENTS.md for the measurements behind
-// each rule.
+// Switzerland) and jobup.ch (Romandie). Both sites serve one posting pool under one UUID space,
+// so they are one provider covering every trade, a few percent IT. It is boardless and an
+// aggregator — the employer is read per posting. See the "jobs.ch traps" section of AGENTS.md
+// for the measurements behind each rule.
 //
 // robots.txt disallows the web app's API, so the posting set comes from each site's job
 // sitemap, which names nothing but each posting's URL. The newest postings also come from the
@@ -79,29 +78,28 @@ var jobschSites = []jobschSite{
 }
 
 const (
-	// jobschMaxSitemapBytes caps one sitemap file as read off the wire (~1 MB compressed for
-	// jobs.ch's 38k postings); decodeSitemapBody caps it again once inflated.
+	// jobschMaxSitemapBytes caps one sitemap file as read off the wire; decodeSitemapBody caps it
+	// again once inflated.
 	jobschMaxSitemapBytes = 16 << 20
 	// jobschRequestInterval paces every request of a run, sitemap, search and posting page alike,
-	// through one limiter: one a second, a courtesy ceiling rather than a measured limit (~400
-	// pages at that pace drew no refusal, from a residential IP and from the crawl host).
+	// through one limiter: one a second, a courtesy ceiling rather than a measured limit.
 	jobschRequestInterval = time.Second
 	// jobschDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the pace.
 	jobschDetailWorkers = 2
-	// jobschSearchPages is how deep each site's date-sorted search is read: 25 pages of 20 are
-	// the ~500 newest publications, about half a day of jobs.ch's (a page past 100 redirects to
-	// page 1, so the whole catalogue can never come from here).
+	// jobschSearchPages is how deep each site's date-sorted search is read: 25 pages of 20, the
+	// newest publications (a page past 100 redirects to page 1, so the whole catalogue can never
+	// come from here).
 	jobschSearchPages = 25
 	// jobschDeadlineMargin is the time left to the pipeline's writes: a hydrating crawl writes
 	// nothing until FetchNewGated returns.
 	jobschDeadlineMargin = 5 * time.Minute
 )
 
-// jobschFreshPerRun and jobschBacklogPerRun split one run's 1,800 posting pages (~30 minutes at
-// one a second, inside the 2,400 s crawl budget) into two lanes.
+// jobschFreshPerRun and jobschBacklogPerRun split one run's posting pages, sized to the crawl
+// budget at one request a second, into two lanes.
 //
 // The fresh lane takes the postings the search pages named and the gate let through, newest
-// first: ~1,200 distinct postings are first published a day across both sites.
+// first.
 //
 // The backlog lane takes a window of the remaining unseen sitemap postings that moves every
 // hour (hydrationLanes). Those name no employer before their page is bought, so the gate can
@@ -191,7 +189,7 @@ func (s jobsch) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 			continue // an anonymous posting is dropped (jobschDetail), so its page is not bought
 		}
 		base := p.card.job(p)
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -337,7 +335,7 @@ type jobschCard struct {
 	InitialPublication string           `json:"initialPublicationDate"`
 }
 
-func (c jobschCard) company() string { return jobschClean(c.Company.Name) }
+func (c jobschCard) company() string { return collapseSpace(c.Company.Name) }
 
 // job is the body-less Job a card supports: enough for the gate, and for a posting the gate turns
 // away.
@@ -345,7 +343,7 @@ func (c jobschCard) job(p jobschPosting) Job {
 	return Job{
 		ExternalID:        p.id,
 		URL:               p.url(),
-		Title:             jobschClean(c.Title),
+		Title:             collapseSpace(c.Title),
 		Company:           c.company(),
 		Location:          jobschLocationLabel(c.Locations, c.Place),
 		PostedAt:          NotFuture(parseRFC3339(c.InitialPublication)),
@@ -480,11 +478,11 @@ type jobschSalary struct {
 
 // jobschDetail maps a posting's state to a Job. ok is false for an inactive posting, and for one
 // without a title, employer or body: storing it body-less would make it seen, and a seen posting
-// is never read again. An anonymous posting (a recruiter's "for a client", ~1%) names no
+// is never read again. An anonymous posting (a recruiter's "for a client") names no
 // employer, and filing it would build one bogus company out of many.
 func jobschDetail(v jobschVacancy, p jobschPosting) (Job, bool) {
-	title := jobschClean(v.Title)
-	company := jobschClean(v.Company.Name)
+	title := collapseSpace(v.Title)
+	company := collapseSpace(v.Company.Name)
 	body := sanitizeHTML(v.Text)
 	if !v.Active || title == "" || company == "" || strings.TrimSpace(body) == "" {
 		return Job{}, false
@@ -583,10 +581,10 @@ func jobschEmploymentType(ids []string, grades []int) string {
 // "AG" read as countries to the location dictionary, and the structured country already says
 // where the posting is.
 func jobschLocationLabel(locs []jobschLocation, place string) string {
-	if l := distinctJoin(locs, "; ", func(l jobschLocation) string { return jobschClean(l.City) }); l != "" {
+	if l := distinctJoin(locs, "; ", func(l jobschLocation) string { return collapseSpace(l.City) }); l != "" {
 		return l
 	}
-	return jobschClean(place)
+	return collapseSpace(place)
 }
 
 func jobschCountries(locs []jobschLocation) []string {
@@ -596,8 +594,6 @@ func jobschCountries(locs []jobschLocation) []string {
 	}
 	return countriesFromCodes(codes)
 }
-
-func jobschClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // jobschState decodes one of the page's state assignments ("      __INIT__ = {...};") into v. The
 // value is a JavaScript object literal: JSON except that a missing field is written as a bare

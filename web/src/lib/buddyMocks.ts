@@ -37,7 +37,12 @@ export function mockDateParts(
   const start = new Date(mock.starts_at);
   const part = (opts: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: zone }).format(start);
-  const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zone });
+  const time = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: zone,
+  });
   return {
     weekday: part({ weekday: 'short' }),
     day: part({ day: 'numeric' }),

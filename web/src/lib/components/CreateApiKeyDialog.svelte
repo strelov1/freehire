@@ -2,7 +2,7 @@
   import { ApiError, api } from '#lib/api.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
-  import { consumeReauthDraft } from '#lib/recentAuth.js';
+  import { consumeReauthDraft, type ReauthReturnPath } from '#lib/recentAuth.js';
   import type { CreatedApiKey } from '#lib/types.js';
   import { Button, Dialog, Input } from '#lib/ui/index.js';
   import ConfirmIdentity from './ConfirmIdentity.svelte';
@@ -16,8 +16,11 @@
   let {
     open = $bindable(false),
     onCreated,
+    returnTo = '/my/integrations/api-keys',
   }: {
     open?: boolean;
+    /** The page a provider re-authentication lands back on. */
+    returnTo?: ReauthReturnPath;
     /** Handed the created key so the page can list it and reveal the token once. */
     onCreated: (key: CreatedApiKey) => void;
   } = $props();
@@ -100,15 +103,14 @@
       // Holds a proof or buys one with the typed password — the component decides which,
       // and says so itself when the member has supplied neither.
       if (!(await identity?.prove())) return;
-      const expiresAt =
-        days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : undefined;
+      const expiresAt = days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : undefined;
       onCreated(await api.createApiKey(trimmed, expiresAt, scope || undefined));
       reset();
       open = false;
-    } catch (e) {
+    } catch (err) {
       // Identity refusals are worded once, by the component that asked for the proof;
       // anything else is this dialog's own to explain.
-      fail(identity?.handleRefusal(e) ?? messageFor(e));
+      fail(identity?.handleRefusal(err) ?? messageFor(err));
     } finally {
       creating = false;
     }
@@ -173,7 +175,7 @@
       <ConfirmIdentity
         bind:this={identity}
         bind:password
-        returnTo="/my/integrations/api-keys"
+        {returnTo}
         draft={() => ({ surface: 'create-api-key', name, days, scope })}
         prompt={s.confirmPrompt}
         active={open}

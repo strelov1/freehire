@@ -10,7 +10,7 @@ import (
 )
 
 func TestFromJobCarriesTheSkillVector(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "erlang"}}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "erlang"}}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestFromJobCarriesTheSkillVector(t *testing.T) {
 // supply an explicit null for an empty userProvided vector: omitting the embedder key
 // rejects the whole document instead of clearing its old vector.
 func TestFromJobWithNoRecognisedSkillsClearsTheVector(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"definitely-not-a-skill"}}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"definitely-not-a-skill"}}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -35,13 +35,13 @@ func TestFromJobWithNoRecognisedSkillsClearsTheVector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if !bytes.Contains(b, []byte(`"_vectors":{"skills":null,`)) {
+	if !bytes.Contains(b, []byte(`"_vectors":{"skills":null}`)) {
 		t.Errorf("serialised as %s, want an explicit null clear", b)
 	}
 }
 
 func TestFromJobWithNoSkillsClearsTheVector(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestFromJobWithNoSkillsClearsTheVector(t *testing.T) {
 // TestFromJobVectorSerialisesUnderTheReservedKey pins the wire contract: Meilisearch
 // reads document vectors from the reserved `_vectors` object, keyed by embedder name.
 func TestFromJobVectorSerialisesUnderTheReservedKey(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go"}}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go"}}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestFromJobVectorSerialisesUnderTheReservedKey(t *testing.T) {
 // defect the ballast exists to fix, reintroduced silently. Assert the stored vector
 // carries it.
 func TestFromJobUsesTheJobSideConstructor(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "docker"}}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "docker"}}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -114,42 +114,9 @@ func TestDocumentVectorsKeysMatchEmbedders(t *testing.T) {
 			t.Errorf("declared embedder %q has no key in DocumentVectors (%s)", name, b)
 		}
 	}
-	for _, name := range []string{SkillEmbedder, DescEmbedder} {
+	for _, name := range []string{SkillEmbedder} {
 		if _, ok := keys[name]; !ok {
 			t.Errorf("embedder constant %q is not a DocumentVectors key (%s)", name, b)
 		}
-	}
-}
-
-// Description vectors serialise as Meilisearch's multi-vector form — an array of
-// vectors under the embedder — in chunk order.
-func TestFromJobCarriesTheDescriptionVectors(t *testing.T) {
-	desc := [][]float32{{1, 0}, {0, 1}}
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, desc, "")
-	if err != nil {
-		t.Fatalf("FromJob: %v", err)
-	}
-	b, err := json.Marshal(doc)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	if !bytes.Contains(b, []byte(`"desc":[[1,0],[0,1]]`)) {
-		t.Errorf("serialised as %s, want the chunk vectors as an array of arrays", b)
-	}
-}
-
-// A job nobody has embedded sends an explicit null: omitting the key would reject the
-// document, and a stale set left behind would keep matching a description that changed.
-func TestFromJobWithNoChunksClearsTheDescriptionVectors(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, nil, "")
-	if err != nil {
-		t.Fatalf("FromJob: %v", err)
-	}
-	b, err := json.Marshal(doc)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	if !bytes.Contains(b, []byte(`"desc":null`)) {
-		t.Errorf("serialised as %s, want an explicit desc null", b)
 	}
 }

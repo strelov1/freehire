@@ -18,11 +18,7 @@ import { countryOfTimezone } from '#lib/timezoneCountry.js';
  *  one entry (`c_level`), and everything else is meant to fall through to titleCase, the
  *  same fallback insights.ts and facets.ts use. Reading them as complete — `?? value` —
  *  is why headings first rendered as "senior backend". */
-export function talentHeading(
-  seniority: string | undefined,
-  category: string | undefined,
-  fallback: string,
-): string {
+export function talentHeading(seniority: string | undefined, category: string | undefined, fallback: string): string {
   const grade = seniority ? (SENIORITY_LABELS[seniority] ?? titleCase(seniority)) : '';
   const discipline = category ? (CATEGORY_LABELS[category] ?? titleCase(category)) : '';
   return [grade, discipline].filter(Boolean).join(' ') || fallback;

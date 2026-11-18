@@ -223,22 +223,6 @@ func TestLoad_RealtimeModelFromEnv(t *testing.T) {
 	}
 }
 
-func TestLoad_PIIFilterURLFromEnv(t *testing.T) {
-	t.Setenv("PII_FILTER_URL", "http://127.0.0.1:8099/detect")
-
-	if s := Load(); s.PIIFilterURL != "http://127.0.0.1:8099/detect" {
-		t.Errorf("PIIFilterURL = %q, want the env value", s.PIIFilterURL)
-	}
-}
-
-func TestLoad_PIIFilterURLEmptyWhenUnset(t *testing.T) {
-	t.Setenv("PII_FILTER_URL", "")
-
-	if s := Load(); s.PIIFilterURL != "" {
-		t.Errorf("PIIFilterURL should be empty when unset, got %q", s.PIIFilterURL)
-	}
-}
-
 func TestLoad_LLMEmptyWhenUnset(t *testing.T) {
 	t.Setenv("LLM_BASE_URL", "")
 	t.Setenv("LLM_API_KEY", "")
@@ -274,29 +258,6 @@ func TestLoad_S3EmptyWhenUnset(t *testing.T) {
 	if s.S3Endpoint != "" || s.S3Bucket != "" || s.S3AccessKey != "" || s.S3SecretKey != "" {
 		t.Errorf("S3 settings should be empty when unset, got %q/%q/%q/%q",
 			s.S3Endpoint, s.S3Bucket, s.S3AccessKey, s.S3SecretKey)
-	}
-}
-
-func TestLoad_SentryFromEnv(t *testing.T) {
-	t.Setenv("SENTRY_DSN", "https://pub@o1.ingest.sentry.io/42")
-	t.Setenv("SENTRY_ENVIRONMENT", "production")
-
-	s := Load()
-	if s.SentryDSN != "https://pub@o1.ingest.sentry.io/42" || s.SentryEnvironment != "production" {
-		t.Errorf("Sentry settings = %q/%q, want the env values", s.SentryDSN, s.SentryEnvironment)
-	}
-}
-
-func TestLoad_SentryDefaultsWhenUnset(t *testing.T) {
-	t.Setenv("SENTRY_DSN", "")
-	t.Setenv("SENTRY_ENVIRONMENT", "")
-
-	s := Load()
-	if s.SentryDSN != "" {
-		t.Errorf("SentryDSN should be empty when unset, got %q", s.SentryDSN)
-	}
-	if s.SentryEnvironment != "development" {
-		t.Errorf("SentryEnvironment should default to development when unset, got %q", s.SentryEnvironment)
 	}
 }
 
@@ -618,11 +579,11 @@ func TestSettings_Validate(t *testing.T) {
 	}
 }
 
-func TestSettingsValidatePublicAnonLimits(t *testing.T) {
-	for value, wantErr := range map[string]bool{"": false, "strict": false, "Strict": true, "on": true} {
-		s := Settings{JWTSecret: strings.Repeat("x", 32), PublicAnonLimits: value}
-		if err := s.Validate(); (err != nil) != wantErr {
-			t.Errorf("PUBLIC_ANON_LIMITS=%q: Validate()=%v, want error %v", value, err, wantErr)
+func TestAuthIntrospectionSecretValidation(t *testing.T) {
+	for _, secret := range []string{"", "short", strings.Repeat("x", 32)} {
+		settings := Settings{JWTSecret: strings.Repeat("j", 32), AuthIntrospectionSecret: secret}
+		if err := settings.Validate(); (err != nil) != (secret == "short") {
+			t.Fatalf("secret length%d: %v", len(secret), err)
 		}
 	}
 }

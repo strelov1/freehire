@@ -23,7 +23,7 @@ type nofluffjobs struct {
 	http nofluffjobsHTTP
 }
 
-// nofluffjobsHTTP is the two-stage transport: a streamed listing (the ~60 MB document exceeds the
+// nofluffjobsHTTP is the two-stage transport: a streamed listing (the document exceeds the
 // size-capped GetJSON) and a per-posting JSON detail.
 type nofluffjobsHTTP interface {
 	GetStream(ctx context.Context, url, accept string, fn func(io.Reader) error) error
@@ -54,8 +54,8 @@ type nofluffjobsListing struct {
 // skill string; seniority is an array whose first entry is the grade.
 //
 // A posting also carries a top-level "fullyRemote" beside Location. It is NOT read: the feed
-// serves it false on every one of its ~19k postings while location.fullyRemote is true on ~16.8k
-// of them, so the top-level copy is a dead field whose only effect is to lose remoteness.
+// serves it false on every posting while location.fullyRemote is true on most of them, so the
+// top-level copy is a dead field whose only effect is to lose remoteness.
 type nofluffjobsPosting struct {
 	ID         string                   `json:"id"`
 	URL        string                   `json:"url"`
@@ -236,9 +236,8 @@ func nofluffjobsLocation(loc nofluffjobsLocationBlock) string {
 }
 
 // nofluffjobsCountries is the posting's whole set of stated countries. A posting names its
-// offices AND the provinces it hires across, and a Polish board still lists cross-border roles
-// (715 of ~19k postings name more than one country), so keeping only the first would hide a job
-// from a filter on any of the others.
+// offices AND the provinces it hires across, and a Polish board still lists cross-border roles,
+// so keeping only the first would hide a job from a filter on any of the others.
 func nofluffjobsCountries(places []nofluffjobsPlace) []string {
 	codes := make([]string, 0, len(places))
 	for _, place := range places {

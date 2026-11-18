@@ -21,8 +21,7 @@ import (
 // robots.txt); the site is a Next.js App Router app whose listing page server-renders its data
 // into the RSC flight, so the structured fields come from there rather than from markup. The
 // listing carries no description, which only the posting page holds, so the adapter hydrates
-// (HydratingSource). Measured 2026-10-14: 85 postings, 13 a page over pages 0-6, worldwide —
-// Moscow plus sales offices abroad.
+// (HydratingSource). Postings are worldwide, Moscow plus sales offices abroad.
 type kaspersky struct {
 	http kasperskyHTTP
 }

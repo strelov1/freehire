@@ -3,7 +3,7 @@
 // package whose TYPES cross the boundary between them.
 //
 // `design-system/` is consumed as a symlink, not a copy — pnpm's `link:../design-system`
-// from `web/`, npm's `file:../design-system` from `extension/`. Each package therefore
+// from `web/`, pnpm's `file:../design-system` from `extension/`. Each package therefore
 // installs its own `node_modules`, and a package depended on by both ends up on disk twice.
 // For a value that costs a few kilobytes. For a TYPE it costs correctness: TypeScript
 // identifies a type by where it was declared, so `LucideIcon` from the design system's copy

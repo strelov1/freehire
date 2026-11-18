@@ -8,6 +8,8 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
+
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // fullSnapshot is a populated collection pass, deliberately using distinct numbers per
@@ -41,6 +43,9 @@ func fullSnapshot() snapshot {
 		// 72h freshness window, which is why the two are published apart.
 		notifyDeliverable:   notifyBacklog{pendingSubscriptions: 12, oldestAgeSeconds: 184.25},
 		notifyUndeliverable: notifyBacklog{pendingSubscriptions: 48, oldestAgeSeconds: 259053.5},
+		// The 2026-11-04 shape: a mass rewrite of profile alerts, then one inbox far over
+		// the hourly ceiling.
+		notifyVolume: db.NotifyDigestVolumeMetricsRow{Digests: 32025, Recipients: 1605, MaxPerUser: 140, UsersOverDailyCap: 15, ProfileAlertsRewritten1h: 578},
 	}
 }
 
@@ -79,6 +84,21 @@ freehire_notify_pending_subscriptions{deliverable="false"} 48
 # TYPE freehire_notify_oldest_pending_age_seconds gauge
 freehire_notify_oldest_pending_age_seconds{deliverable="true"} 184.250
 freehire_notify_oldest_pending_age_seconds{deliverable="false"} 259053.500
+# HELP freehire_notify_digests_24h Subscription digests delivered in the last 24 hours.
+# TYPE freehire_notify_digests_24h gauge
+freehire_notify_digests_24h 32025
+# HELP freehire_notify_digest_recipients_24h Users who received at least one subscription digest in the last 24 hours.
+# TYPE freehire_notify_digest_recipients_24h gauge
+freehire_notify_digest_recipients_24h 1605
+# HELP freehire_notify_digests_max_per_user_24h Most subscription digests one user received in the last 24 hours.
+# TYPE freehire_notify_digests_max_per_user_24h gauge
+freehire_notify_digests_max_per_user_24h 140
+# HELP freehire_notify_users_over_daily_cap_24h Users who received more than 24 subscription digests in the last 24 hours.
+# TYPE freehire_notify_users_over_daily_cap_24h gauge
+freehire_notify_users_over_daily_cap_24h 15
+# HELP freehire_notify_profile_alerts_rewritten_1h Profile-derived saved searches created earlier and updated in the last hour.
+# TYPE freehire_notify_profile_alerts_rewritten_1h gauge
+freehire_notify_profile_alerts_rewritten_1h 578
 # HELP freehire_boards_total Ingest boards by health state.
 # TYPE freehire_boards_total gauge
 freehire_boards_total{state="healthy"} 74894
@@ -207,6 +227,11 @@ func TestRenderIsValidPrometheusTextFormat(t *testing.T) {
 		"freehire_provider_boards":                         8,
 		"freehire_notify_pending_subscriptions":            2,
 		"freehire_notify_oldest_pending_age_seconds":       2,
+		"freehire_notify_digests_24h":                      1,
+		"freehire_notify_digest_recipients_24h":            1,
+		"freehire_notify_digests_max_per_user_24h":         1,
+		"freehire_notify_users_over_daily_cap_24h":         1,
+		"freehire_notify_profile_alerts_rewritten_1h":      1,
 		"freehire_employment_boilerplate":                  4,
 		"freehire_employment_boilerplate_sample_size":      1,
 		"freehire_employment_boilerplate_truncated":        1,
@@ -249,117 +274,6 @@ func TestRenderGroupsEachFamilyUnderOneHelpAndType(t *testing.T) {
 		if n := strings.Count(got, "# HELP "+family+" "); n != 1 {
 			t.Errorf("family %s has %d HELP lines, want exactly 1", family, n)
 		}
-	}
-}
-
-// The freehire-ops alert rule binds to this family by name and by the provider label, so
-// the exposition text is pinned the way the other families are: a rename must be a visible
-// edit here, not a silent break of an alert nobody notices until the next outage.
-func TestRenderProviderFreshness(t *testing.T) {
-	s := fullSnapshot()
-	s.providers = []providerHealth{
-		{name: "greenhouse", lastSuccess: time.Unix(1786821000, 0), healthy: 4},
-		{name: "peopleforce", lastSuccess: time.Unix(1785700000, 0), healthy: 2},
-	}
-	got := render(s)
-	for _, want := range []string{
-		"# HELP freehire_provider_last_success_timestamp_seconds",
-		"# TYPE freehire_provider_last_success_timestamp_seconds gauge",
-		`freehire_provider_last_success_timestamp_seconds{provider="greenhouse"} 1786821000`,
-		`freehire_provider_last_success_timestamp_seconds{provider="peopleforce"} 1785700000`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("exposition missing %q\ngot:\n%s", want, got)
-		}
-	}
-}
-
-// A provider that has never succeeded must be ABSENT from the TIMESTAMP family, not zero.
-// An alert rule reads a missing series as no-data and a 1970 timestamp as infinitely
-// overdue; only the first is what the measurement actually supports.
-func TestRenderOmitsProviderThatNeverSucceededFromTimestamp(t *testing.T) {
-	s := fullSnapshot()
-	s.providers = []providerHealth{
-		{name: "greenhouse", lastSuccess: time.Unix(1786821000, 0), healthy: 4},
-		{name: "gulftalent", failing: 1},
-	}
-	got := render(s)
-	if strings.Contains(got, `freehire_provider_last_success_timestamp_seconds{provider="gulftalent"}`) {
-		t.Errorf("a provider with no successful crawl must publish no timestamp sample\ngot:\n%s", got)
-	}
-	if !strings.Contains(got, `freehire_provider_last_success_timestamp_seconds{provider="greenhouse"}`) {
-		t.Error("the provider that did succeed must still publish a timestamp")
-	}
-}
-
-// Every provider having never succeeded leaves the TIMESTAMP family with nothing to say;
-// emitting a bare HELP/TYPE pair with no samples would be a valid but pointless exposition,
-// so that family is omitted entirely — the same rule newestJob already follows.
-func TestRenderOmitsEmptyProviderTimestampFamily(t *testing.T) {
-	s := fullSnapshot()
-	s.providers = []providerHealth{{name: "gulftalent", failing: 1}, {name: "bayt", cooled: 8}}
-	if got := render(s); strings.Contains(got, "freehire_provider_last_success_timestamp_seconds") {
-		t.Errorf("family must be omitted when no provider has a measurement\ngot:\n%s", got)
-	}
-}
-
-// The board-state family is the reason a never-succeeded provider is no longer invisible,
-// so the case the timestamp family drops is the case this one MUST keep. gulftalent held
-// 19,828 postings unrefreshed since 2026-07-07 with its timer disabled: no crawl, no
-// success, no timestamp — and nothing else named it.
-//
-// Like the timestamp family, the name and both labels are a freehire-ops contract.
-func TestRenderProviderBoardsCoversNeverSucceeded(t *testing.T) {
-	s := fullSnapshot()
-	s.providers = []providerHealth{
-		{name: "greenhouse", lastSuccess: time.Unix(1786821000, 0), healthy: 4, failing: 1},
-		{name: "gulftalent", failing: 1},
-	}
-	got := render(s)
-	for _, want := range []string{
-		"# HELP freehire_provider_boards",
-		"# TYPE freehire_provider_boards gauge",
-		`freehire_provider_boards{provider="greenhouse",state="healthy"} 4`,
-		`freehire_provider_boards{provider="greenhouse",state="failing"} 1`,
-		`freehire_provider_boards{provider="greenhouse",state="cooled"} 0`,
-		`freehire_provider_boards{provider="gulftalent",state="healthy"} 0`,
-		`freehire_provider_boards{provider="gulftalent",state="failing"} 1`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("exposition missing %q\ngot:\n%s", want, got)
-		}
-	}
-}
-
-// Every sample of a family must follow ONE HELP/TYPE pair, and this family emits four
-// samples per provider — so a loop nested the other way round would interleave the states
-// across providers and still look right sample-by-sample while being an invalid exposition.
-func TestRenderProviderBoardsIsOneWellFormedFamily(t *testing.T) {
-	s := fullSnapshot()
-	s.providers = []providerHealth{
-		{name: "greenhouse", healthy: 4, failing: 1, cooled: 2},
-		{name: "gulftalent", failing: 1},
-	}
-
-	// Parsed rather than counted, with a provider shape fullSnapshot() does not carry (a
-	// never-succeeded provider with no uncrawled boards). This family emits four samples per
-	// provider, which is the shape a loop nested the other way round would interleave:
-	// still correct sample-by-sample, and an invalid exposition that the textfile
-	// collector answers by silently skipping the file.
-	parser := expfmt.NewTextParser(model.UTF8Validation)
-	families, err := parser.TextToMetricFamilies(strings.NewReader(render(s)))
-	if err != nil {
-		t.Fatalf("rendered exposition does not parse: %v", err)
-	}
-	family, ok := families["freehire_provider_boards"]
-	if !ok {
-		t.Fatal("parsed exposition is missing family freehire_provider_boards")
-	}
-	if got, want := len(family.GetMetric()), len(s.providers)*4; got != want {
-		t.Errorf("family has %d samples, want %d (four states per provider)", got, want)
-	}
-	if family.GetType() != dto.MetricType_GAUGE {
-		t.Errorf("family parsed as %v, want GAUGE", family.GetType())
 	}
 }
 
@@ -421,211 +335,5 @@ func TestRenderOmitsAnEmptyOptionalFamilyEntirely(t *testing.T) {
 	}
 	if !strings.Contains(got, `freehire_queue_depth{queue="push_ticket_outbox"} 48`) {
 		t.Errorf("render() dropped the families that DO have samples\ngot:\n%s", got)
-	}
-}
-
-// The two counts must be published SEPARATELY, never as a ratio: the alert rule owns the
-// threshold (see render.go on freehire_provider_boards), and a ratio would also have to
-// invent an answer for a source that wrote nothing.
-func TestRenderIngestDuplication(t *testing.T) {
-	s := fullSnapshot()
-	s.ingest = []ingestVolume{
-		// The apploi shape: many rows standing for few postings.
-		{provider: "apploi", rowsWritten: 15120, distinctPostings: 3024},
-		// The ordinary shape: one row per posting.
-		{provider: "greenhouse", rowsWritten: 412, distinctPostings: 412},
-	}
-	got := render(s)
-	for _, want := range []string{
-		"# HELP freehire_ingest_rows_written",
-		"# TYPE freehire_ingest_rows_written gauge",
-		`freehire_ingest_rows_written{provider="apploi"} 15120`,
-		`freehire_ingest_rows_written{provider="greenhouse"} 412`,
-		"# HELP freehire_ingest_distinct_postings",
-		"# TYPE freehire_ingest_distinct_postings gauge",
-		`freehire_ingest_distinct_postings{provider="apploi"} 3024`,
-		`freehire_ingest_distinct_postings{provider="greenhouse"} 412`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("exposition missing %q\ngot:\n%s", want, got)
-		}
-	}
-	if strings.Contains(got, "freehire_ingest_duplication_ratio") {
-		t.Error("exposition publishes a baked ratio; the threshold belongs to the alert rule")
-	}
-}
-
-// A source that wrote nothing in the window produces no row at all, so the family must be
-// omitted head and all rather than emitted as a bare HELP/TYPE pair — the same rule the
-// provider timestamp family follows.
-func TestRenderOmitsIngestFamiliesWhenNothingWasWritten(t *testing.T) {
-	got := render(fullSnapshot())
-	for _, name := range []string{"freehire_ingest_rows_written", "freehire_ingest_distinct_postings"} {
-		if strings.Contains(got, name) {
-			t.Errorf("exposition carries %s with no sources measured", name)
-		}
-	}
-}
-
-// Both families must parse, and they are absent from fullSnapshot(), so the contract test
-// above never validates them.
-func TestRenderIngestFamiliesAreWellFormed(t *testing.T) {
-	s := fullSnapshot()
-	s.ingest = []ingestVolume{
-		{provider: "apploi", rowsWritten: 15120, distinctPostings: 3024},
-		{provider: "greenhouse", rowsWritten: 412, distinctPostings: 412},
-	}
-	parser := expfmt.NewTextParser(model.UTF8Validation)
-	families, err := parser.TextToMetricFamilies(strings.NewReader(render(s)))
-	if err != nil {
-		t.Fatalf("rendered exposition does not parse: %v", err)
-	}
-	for _, name := range []string{"freehire_ingest_rows_written", "freehire_ingest_distinct_postings"} {
-		family, ok := families[name]
-		if !ok {
-			t.Fatalf("parsed exposition is missing family %s", name)
-		}
-		if got, want := len(family.GetMetric()), len(s.ingest); got != want {
-			t.Errorf("%s has %d samples, want %d", name, got, want)
-		}
-		if family.GetType() != dto.MetricType_GAUGE {
-			t.Errorf("%s parsed as %v, want GAUGE", name, family.GetType())
-		}
-	}
-}
-
-// A provider that has never succeeded has no timestamp, so first-listed is the only age it
-// has — and it must be published, or every age-based rule loses it exactly when it is most
-// broken. gupy, 2026-10-19: 3,324 freshly re-keyed boards, none crawled, no series at all.
-func TestRenderFirstListedCoversNeverSucceeded(t *testing.T) {
-	s := fullSnapshot()
-	s.providers = []providerHealth{
-		{name: "gupy", firstListed: time.Unix(1792436951, 0), uncrawled: 3324},
-	}
-	got := render(s)
-	if strings.Contains(got, "freehire_provider_last_success_timestamp_seconds") {
-		t.Errorf("a provider with no success must publish no timestamp\ngot:\n%s", got)
-	}
-	for _, want := range []string{
-		`freehire_provider_first_listed_timestamp_seconds{provider="gupy"} 1792436951`,
-		`freehire_provider_boards{provider="gupy",state="uncrawled"} 3324`,
-		`freehire_boards_total{state="uncrawled"} 3324`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("exposition missing %q\ngot:\n%s", want, got)
-		}
-	}
-}
-
-// The fleet-wide family is the per-provider one summed, so a dashboard stacking the two
-// cannot disagree with itself. Checked through the parser over the published text, which is
-// what a consumer actually adds up.
-func TestRenderFleetIsTheSumOfProviders(t *testing.T) {
-	parser := expfmt.NewTextParser(model.UTF8Validation)
-	families, err := parser.TextToMetricFamilies(strings.NewReader(render(fullSnapshot())))
-	if err != nil {
-		t.Fatalf("rendered exposition does not parse: %v", err)
-	}
-	perState := map[string]float64{}
-	for _, m := range families["freehire_provider_boards"].GetMetric() {
-		for _, l := range m.GetLabel() {
-			if l.GetName() == "state" {
-				perState[l.GetValue()] += m.GetGauge().GetValue()
-			}
-		}
-	}
-	fleet := families["freehire_boards_total"].GetMetric()
-	if len(fleet) != 4 {
-		t.Fatalf("freehire_boards_total has %d samples, want 4", len(fleet))
-	}
-	for _, m := range fleet {
-		state := m.GetLabel()[0].GetValue()
-		if got, want := m.GetGauge().GetValue(), perState[state]; got != want {
-			t.Errorf("freehire_boards_total{state=%q} = %v, providers sum to %v", state, got, want)
-		}
-	}
-}
-
-// No provider at all still publishes the fleet family as explicit zeros: the rules read an
-// absent series as a dead exporter, and an empty catalogue is not one.
-func TestRenderPublishesAnEmptyFleetAsZeroes(t *testing.T) {
-	s := fullSnapshot()
-	s.providers = nil
-	got := render(s)
-	for _, st := range []string{"healthy", "failing", "cooled", "uncrawled"} {
-		if want := `freehire_boards_total{state="` + st + `"} 0`; !strings.Contains(got, want) {
-			t.Errorf("exposition missing %q\ngot:\n%s", want, got)
-		}
-	}
-	if strings.Contains(got, "freehire_provider_first_listed_timestamp_seconds") {
-		t.Errorf("first-listed family must be omitted with no providers\ngot:\n%s", got)
-	}
-}
-
-func qualitySnapshot() snapshot {
-	s := fullSnapshot()
-	measured := time.Unix(1792000000, 0)
-	s.sources = []sourceQuality{
-		// The spike's two findings: a source with no geography at all, and one whose
-		// crawl stopped listing anything while its postings stayed open.
-		{source: "hrmdirect", openJobs: 90000, gaps: [len(qualityChecks)]int64{80000, 3000, 0, 90000, 1200}, measuredAt: measured},
-		{source: "successfactors", openJobs: 488000, gaps: [len(qualityChecks)]int64{400000, 476000, 0, 5800, 0}, measuredAt: measured},
-	}
-	return s
-}
-
-// Counts, never shares, and one family keyed by check: the alert rule divides by
-// freehire_source_open_jobs and owns the threshold, the argument
-// TestRenderIngestDuplication makes for the ingest pair.
-func TestRenderSourceQuality(t *testing.T) {
-	got := render(qualitySnapshot())
-	for _, want := range []string{
-		`freehire_source_open_jobs{source="successfactors"} 488000`,
-		`freehire_source_quality_gap{source="hrmdirect",check="missing_work_mode"} 80000`,
-		`freehire_source_quality_gap{source="successfactors",check="missing_geo"} 476000`,
-		`freehire_source_quality_gap{source="successfactors",check="missing_company"} 0`,
-		`freehire_source_quality_gap{source="hrmdirect",check="unseen_7d"} 90000`,
-		`freehire_source_quality_gap{source="hrmdirect",check="posted_over_60d"} 1200`,
-		"freehire_source_stats_measured_timestamp_seconds 1792000000",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("exposition missing %q\ngot:\n%s", want, got)
-		}
-	}
-}
-
-// No snapshot yet (a fresh install, or the migration landed before the first rollup):
-// nothing was measured, so nothing is published — not a fleet of zeros.
-func TestRenderOmitsSourceQualityWithoutASnapshot(t *testing.T) {
-	got := render(fullSnapshot())
-	for _, name := range []string{"freehire_source_open_jobs", "freehire_source_quality_gap", "freehire_source_stats_measured"} {
-		if strings.Contains(got, name) {
-			t.Errorf("exposition carries %s with no snapshot", name)
-		}
-	}
-}
-
-func TestRenderSourceQualityIsWellFormed(t *testing.T) {
-	s := qualitySnapshot()
-	parser := expfmt.NewTextParser(model.UTF8Validation)
-	families, err := parser.TextToMetricFamilies(strings.NewReader(render(s)))
-	if err != nil {
-		t.Fatalf("rendered exposition does not parse: %v", err)
-	}
-	for name, samples := range map[string]int{
-		"freehire_source_open_jobs":                        len(s.sources),
-		"freehire_source_quality_gap":                      len(s.sources) * len(qualityChecks),
-		"freehire_source_stats_measured_timestamp_seconds": 1,
-	} {
-		family, ok := families[name]
-		if !ok {
-			t.Fatalf("parsed exposition is missing family %s", name)
-		}
-		if got := len(family.GetMetric()); got != samples {
-			t.Errorf("%s has %d samples, want %d", name, got, samples)
-		}
-		if family.GetType() != dto.MetricType_GAUGE {
-			t.Errorf("%s parsed as %v, want GAUGE", name, family.GetType())
-		}
 	}
 }

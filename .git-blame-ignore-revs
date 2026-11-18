@@ -1,0 +1,6 @@
+# Revisions `git blame` should look through. Enable locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub reads this file by itself.
+
+# Reformat TypeScript, JavaScript and Svelte with oxfmt
+2cda05de8117b88c3086ae2ffdc811d62fb34b53

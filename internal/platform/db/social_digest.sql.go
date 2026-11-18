@@ -49,17 +49,16 @@ WHERE day < (now() AT TIME ZONE 'utc')::date
 // over a slice and can be tested without a database. Those are the rules most likely
 // to be argued about and changed; keeping them out of SQL keeps that argument cheap.
 // The freshest COMPLETED day the view rollup has produced. The digest asks for this
-// rather than computing "yesterday" from the clock: cmd/rollup-views fires at 02:30 UTC
+// rather than computing "yesterday" from the clock: cmd/rollup-views runs once a day
 // and reads the rotated access log, so whether the freshest complete day is yesterday
 // or the day before depends on when logrotate runs on the host. A digest that assumed
 // the answer would fail by publishing a stale list silently, which is the worst way to
 // fail.
 //
 // The day in progress is EXCLUDED, and that predicate is the point of this query
-// rather than a refinement of it. A plain max(day) reads TODAY: that same run reaches
-// past midnight into the log it is rotating and lands a few dozen rows on the current
-// day, so by 13:00 UTC — when the digest runs — the freshest day is a stub whose best
-// posting has one view. Nothing clears MinPageUniques, the run reports a quiet day and
+// rather than a refinement of it. A plain max(day) reads TODAY: the rotated file
+// that run reads spans midnight and lands a few dozen rows on the current day, so when
+// the digest runs the freshest day is a stub whose best posting has one view. Nothing clears MinPageUniques, the run reports a quiet day and
 // exits 0, and the completed day beside it is never published, because tomorrow's
 // max(day) is fresher still. Measured on 2026-09-06: day 09-05 held 207020 rows and 38
 // postings above the floor, day 09-06 held 34 rows and a maximum of one view; three
@@ -131,6 +130,8 @@ SELECT
     j.company_slug,
     j.location,
     j.remote,
+    j.seniority,
+    j.category,
     v.page_uniques
 FROM job_daily_views v
 JOIN jobs j ON j.id = v.job_id
@@ -158,6 +159,8 @@ type TopPageViewedJobsForDayRow struct {
 	CompanySlug string `json:"company_slug"`
 	Location    string `json:"location"`
 	Remote      bool   `json:"remote"`
+	Seniority   string `json:"seniority"`
+	Category    string `json:"category"`
 	PageUniques int32  `json:"page_uniques"`
 }
 
@@ -180,8 +183,8 @@ type TopPageViewedJobsForDayRow struct {
 // a tech job" is not a good enough reason to put it in front of people. The same
 // predicate gates enrichment spend (internal/platform/db/queries/enrichment.sql).
 //
-// OVER-FETCHES on purpose. The caller drops rows for the company cap and the
-// quarantine, so a LIMIT of exactly ten would return fewer than ten publishable
+// OVER-FETCHES on purpose. The caller drops rows for the day's theme, the company cap and
+// the quarantine, so a LIMIT of exactly ten would return fewer than ten publishable
 // postings on any day where one company had a good morning.
 func (q *Queries) TopPageViewedJobsForDay(ctx context.Context, arg TopPageViewedJobsForDayParams) ([]TopPageViewedJobsForDayRow, error) {
 	rows, err := q.db.Query(ctx, topPageViewedJobsForDay, arg.Day, arg.Lim)
@@ -200,6 +203,8 @@ func (q *Queries) TopPageViewedJobsForDay(ctx context.Context, arg TopPageViewed
 			&i.CompanySlug,
 			&i.Location,
 			&i.Remote,
+			&i.Seniority,
+			&i.Category,
 			&i.PageUniques,
 		); err != nil {
 			return nil, err

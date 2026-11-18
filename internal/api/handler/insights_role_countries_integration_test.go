@@ -42,16 +42,16 @@ func TestInsightsRoleCountriesEndpoint(t *testing.T) {
 		t.Fatalf("delete: %v", err)
 	}
 	prev := pgtype.Timestamptz{Time: time.Now().UTC().AddDate(0, 0, -30), Valid: true}
-	if _, err := q.RebuildInsightsRoleCountryStatsGlobal(ctx, prev); err != nil {
+	if _, err := materializeInsightsRoleCountryStatsGlobal(q)(ctx, prev); err != nil {
 		t.Fatalf("rebuild global: %v", err)
 	}
-	if _, err := q.RebuildInsightsRoleCountryStatsByCountry(ctx, prev); err != nil {
+	if _, err := materializeInsightsRoleCountryStatsByCountry(q)(ctx, prev); err != nil {
 		t.Fatalf("rebuild by country: %v", err)
 	}
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/role-countries", h.InsightsRoleCountries)
+	app.Get("/api/v1/insights/role-countries", statsContract(h))
 
 	t.Run("default grid", func(t *testing.T) {
 		out, raw, code := getInsights(t, ctx, app, "/api/v1/insights/role-countries")

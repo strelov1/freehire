@@ -1,13 +1,9 @@
 // Package embed drives incremental semantic embedding: enqueue open jobs whose
-// vector/chunks are missing/stale (and closed jobs whose embed state must be
-// cleared), then drain the semantic_outbox queue wave by wave. Each wave is embedded
-// as ONE TEI batch (not one call per job) and persisted to Postgres as one
-// transaction, so a bulk backfill isn't bottlenecked into many small round trips; on
-// a batch failure it falls back to per-item processing so a single poison/corrupted
-// row can't sink the whole batch. It mirrors internal/ai/enrich: the batch/fallback
-// logic is unit-tested with fakes of the Store + Indexer ports and cmd/embed wires
-// the real adapters. The ports trade in db.Job rows (not a domain type), so the
-// runner is independent of the pool/queries, not of the generated row shape.
+// chunks are missing or stale (and closed jobs whose embed state must be cleared),
+// then drain the semantic_outbox queue wave by wave. Each wave is one TEI batch and
+// one Postgres transaction; a batch failure falls back to per-item processing so one
+// poison row cannot sink the wave. Mirrors internal/ai/enrich; cmd/embed wires the
+// real Store and Indexer adapters.
 package embed
 
 import (
@@ -21,9 +17,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
-// Claimed is one outbox entry leased to this run. Closed marks whether the job is now
-// unindexable — closed OR a non-canonical repost (duplicate_of set): open canonical jobs
-// are embedded, unindexable ones have their embed state cleared.
+// Claimed is one outbox entry leased to this run. Closed means the job is unindexable
+// (closed, or a non-canonical repost with duplicate_of set): its embed state is cleared
+// instead of embedded.
 type Claimed struct {
 	OutboxID int64
 	JobID    int64
@@ -31,76 +27,51 @@ type Claimed struct {
 }
 
 // ChunkEmbedding is one embedding vector for one 0-indexed chunk of a job's
-// description — the pgvector-backed job_semantic_chunks counterpart (see
-// openspec/changes/drop-hybrid-search-pgvector-similar/design.md Decisions 1/1a).
-// ChunkIndex matches job_semantic_chunks.chunk_index. Defined here (not reusing
-// internal/search's own JobChunkEmbedding) so this package's ports stay independent
-// of internal/search's types — only cmd/embed's concrete adapters know about both.
+// description. ChunkIndex matches job_semantic_chunks.chunk_index. Defined here, not
+// reusing internal/search's type, so the ports stay independent of it.
 type ChunkEmbedding struct {
 	ChunkIndex int16
 	Vector     []float32
 }
 
-// Store is the persistence the runner needs. The real implementation wraps the
-// generated queries and a pool (running CompleteOpen/CompleteClosed in a transaction);
-// tests use a fake. Jobs and CompleteOpen trade in db.Job rows — the port hides the
-// pool and the transaction boundaries, not the generated row type.
+// Store is the persistence the runner needs; the real one wraps the generated queries
+// and a pool, and runs each Complete* in a transaction.
 type Store interface {
 	// Enqueue adds outbox entries for jobs needing (re-)embedding or removal at model.
 	Enqueue(ctx context.Context, targetModel string) (int64, error)
 	// Claim leases up to batch live, unleased entries (closed jobs included).
 	Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error)
-	// Jobs returns the persisted rows the documents are built from. A corrupted row
-	// aborts the whole load, so the runner retries such a batch per item to isolate it.
+	// Jobs returns the persisted rows. A corrupted row aborts the whole load, so the
+	// runner retries that batch per item to isolate it.
 	Jobs(ctx context.Context, ids []int64) ([]db.Job, error)
-	// CompleteOpen stamps each entry's job embed provenance (model + its current
-	// content_hash), replaces each job's pgvector-backed chunk rows
-	// (job_semantic_chunks), clears its similar_computed_at staleness stamp, and
-	// deletes the outbox entries — all atomically. chunks maps job id to its ordered
-	// chunk vectors (see ChunkEmbedding); a job absent from chunks (an empty/very
-	// short description) has its existing chunk rows removed and gets none back —
-	// "replace", not "append". This no longer touches jobs.semantic_embedding (the
-	// legacy real[] column) — nothing reads it, so cmd/embed stopped computing and
-	// writing it; the column itself stays, per design.md's deferred-drop decision.
-	// inputHashes maps job id to Indexer.InputHash of the row that was embedded, stamped
-	// as jobs.semantic_embedded_input_hash so the next run can tell whether the text moved.
+	// CompleteOpen atomically stamps each job's embed provenance (model and current
+	// content_hash), replaces its job_semantic_chunks rows and deletes the outbox
+	// entries. A job absent from chunks (empty or very short description) has its
+	// chunk rows removed and gets none back: replace, not append.
+	// inputHashes (Indexer.InputHash per job id) is stamped as
+	// jobs.semantic_embedded_input_hash so the next run can tell whether the text moved.
 	CompleteOpen(ctx context.Context, entries []Claimed, model string, chunks map[int64][]ChunkEmbedding, inputHashes map[int64]string) error
-	// CompleteUnchanged settles entries whose embedded text has not changed (see
-	// Indexer.InputHash): it re-stamps the provenance (model, current content_hash,
-	// inputHashes) so the enqueue predicate stops firing, and deletes the outbox entries,
-	// atomically. It leaves the chunk rows and similar_computed_at alone — the vectors
-	// are still the vectors of this text.
+	// CompleteUnchanged atomically settles entries whose embedded text has not changed
+	// (see Indexer.InputHash): re-stamps the provenance so the enqueue predicate stops
+	// firing and deletes the outbox entries. Chunk rows are left alone.
 	CompleteUnchanged(ctx context.Context, entries []Claimed, model string, inputHashes map[int64]string) error
-	// CompleteClosed clears each entry's job embed provenance (stamp + the legacy
-	// jobs.semantic_embedding column, still nulled here even though nothing writes it
-	// on the open path anymore — see ClearSemanticEmbeddedBatch) and deletes each
-	// job's pgvector-backed chunk rows (job_semantic_chunks), and deletes the outbox
-	// entries, atomically — the whole closed-job side effect (there is no search
-	// index left to remove a document from).
+	// CompleteClosed atomically clears each job's embed provenance, deletes its
+	// job_semantic_chunks rows and the outbox entries. That is the whole closed-job
+	// side effect.
 	CompleteClosed(ctx context.Context, entries []Claimed) error
 	// Fail records a failed attempt for one entry; it reports whether it dead-lettered.
 	Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
 }
 
 // Indexer is the embedding side: compute each open job's chunked embeddings. There is
-// no corresponding "remove closed" method — a closed job has nothing left to compute
-// or embed, so Store.CompleteClosed alone is the whole closed-job side effect. This
-// port used to also own upserting/removing documents in the jobs_semantic Meili index,
-// and (later, briefly) a legacy single vector per job; both are gone
-// (openspec/changes/drop-hybrid-search-pgvector-similar — the Meili index had no
-// reader left once /similar and /me/recommendations stopped needing a live index, and
-// the legacy vector had no reader once job_semantic_chunks existed), so what remains
-// is purely the pgvector chunk computation.
+// no "remove closed" method; Store.CompleteClosed is the whole closed-job side effect.
 type Indexer interface {
-	// IndexOpen computes each job's chunked embeddings for the pgvector-backed
-	// job_semantic_chunks table (design.md Decisions 1/1a): a job with no
-	// chunk-worthy description text simply has no entry in the returned map, not an
-	// error.
+	// IndexOpen computes each job's chunked embeddings. A job with no chunk-worthy
+	// description has no entry in the returned map; that is not an error.
 	IndexOpen(ctx context.Context, jobs []db.Job) (chunks map[int64][]ChunkEmbedding, err error)
 	// InputHash fingerprints exactly the fields IndexOpen embeds. The runner compares it
-	// with the job's stored semantic_embedded_input_hash before paying for an embed:
-	// content_hash, which enqueues the job, also moves on derived facets the embedder
-	// never reads, so it says "maybe changed", and this says whether it did.
+	// with the stored semantic_embedded_input_hash before embedding: content_hash also
+	// moves on derived facets the embedder never reads, so it only says "maybe changed".
 	InputHash(job db.Job) string
 }
 
@@ -109,20 +80,17 @@ type RunOptions struct {
 	// TargetModel is the embedder identity: the enqueue staleness key and the value
 	// stamped on a successful embed (search.CurrentEmbedderModel()).
 	TargetModel string
-	// BatchSize is the claim wave size and the embed/persist batch size — the lever that
-	// collapses per-job TEI calls and Postgres round trips into one batch. The embed
-	// backend chunks the batch internally (EMBED_CONCURRENCY), so this can be large
-	// (hundreds).
+	// BatchSize is the claim wave size and the embed/persist batch size. The embed
+	// backend chunks internally (EMBED_CONCURRENCY), so it can be large (hundreds).
 	BatchSize    int
 	LeaseSeconds int
 	MaxAttempts  int
 	// CallTimeout bounds a single batch's (or fallback item's) embed operation; 0 means
 	// no per-call timeout (the embed backend has its own per-attempt timeout).
 	CallTimeout time.Duration
-	// MaxRun bounds the whole run, measured from its start (the enqueue included): no
-	// wave is claimed once elapsed time plus CallTimeout — the most one wave's batch call
-	// may take — would pass it, so the run exits on its own instead of being killed by a
-	// unit timeout mid-wave with the wave's embed work lost. 0 means unbounded.
+	// MaxRun bounds the whole run from its start (enqueue included): no wave is claimed
+	// once elapsed time plus CallTimeout would pass it, so the run exits itself instead
+	// of being killed mid-wave. 0 means unbounded.
 	MaxRun time.Duration
 }
 
@@ -165,22 +133,20 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 		BatchSize:    opt.BatchSize,
 		LeaseSeconds: opt.LeaseSeconds,
 		OnWave: func(outbox.Stats) {
-			// A heartbeat per wave so a long drain shows running totals instead of
-			// going silent for hours. Reads rn.stats directly (not the generic
-			// outbox.Stats parameter) because it distinguishes Indexed from Removed,
-			// which outbox's four generic buckets don't carry.
+			// Per-wave heartbeat. Reads rn.stats, not the generic outbox.Stats, which
+			// cannot tell Indexed from Removed.
 			log.Printf("embed: progress indexed=%d unchanged=%d removed=%d failed=%d dead=%d",
 				rn.stats.Indexed, rn.stats.Unchanged, rn.stats.Removed, rn.stats.Failed, rn.stats.DeadLettered)
 		},
-	}, rn.processWave, rn.unreachableFallback)
+	}, rn.processWave, nil)
 	if err != nil {
 		return rn.stats, fmt.Errorf("claim: %w", err)
 	}
 	return rn.stats, nil
 }
 
-// run accumulates one Run's options and tallies. Waves are processed sequentially (the
-// embed concurrency lives inside the Indexer), so the tallies need no lock.
+// run accumulates one Run's options and tallies. Waves run sequentially (concurrency
+// is inside the Indexer), so the tallies need no lock.
 type run struct {
 	store   Store
 	indexer Indexer
@@ -190,9 +156,8 @@ type run struct {
 	start   time.Time
 }
 
-// Claim is the claimer the drain loop sees: the Store's claim behind the MaxRun budget.
-// Returning no entries is outbox.RunBatch's ordinary stop, so a run out of budget ends
-// exactly like a drained one — exit 0, nothing claimed and nothing abandoned.
+// Claim is the Store's claim behind the MaxRun budget. Returning no entries is
+// outbox.RunBatch's ordinary stop, so an out-of-budget run ends like a drained one.
 func (rn *run) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
 	if rn.opt.MaxRun > 0 {
 		if elapsed := rn.now().Sub(rn.start); elapsed+rn.opt.CallTimeout > rn.opt.MaxRun {
@@ -205,23 +170,17 @@ func (rn *run) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, e
 	return rn.store.Claim(ctx, batch, leaseSeconds)
 }
 
-// unchanged reports whether job's chunks are already the embedding of its current text
-// under the target model, given hash, its current Indexer.InputHash. A job stamped before
-// the input hash existed (NULL) is never unchanged: there is no record of what it was
-// embedded from.
+// unchanged reports whether job's chunks already embed its current text (hash, its
+// Indexer.InputHash) under the target model. A NULL stored hash is never unchanged.
 func (rn *run) unchanged(job db.Job, hash string) bool {
 	return job.SemanticEmbeddedModel.Valid && job.SemanticEmbeddedModel.String == rn.opt.TargetModel &&
 		job.SemanticEmbeddedInputHash.Valid && job.SemanticEmbeddedInputHash.String == hash
 }
 
-// processWave is embed's outbox.BatchProcessor: split the wave into its open and
-// closed groups and hand each to its own batch-attempt-then-per-item-fallback cycle
-// (unchanged below). Always returns a nil error — embed fully handles every item
-// itself, including its own fallback, so outbox.RunBatch's outer per-item Processor
-// (unreachableFallback) is never invoked. The returned outbox.Stats is this wave's
-// delta, computed from rn.stats before/after, for outbox's own bookkeeping (MaxPerRun,
-// OnWave); Run's own public Stats return value comes from rn.stats directly, which
-// keeps the Indexed/Removed split outbox.Stats has no room for.
+// processWave is embed's outbox.BatchProcessor: it splits the wave into open and
+// closed groups, each with its own batch-then-per-item-fallback cycle. It always
+// returns a nil error, so outbox.RunBatch's per-item Processor is never invoked. The
+// returned outbox.Stats is this wave's delta; Run's public Stats come from rn.stats.
 func (rn *run) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, error) {
 	var open, closed []Claimed
 	for _, e := range batch {
@@ -242,17 +201,9 @@ func (rn *run) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, 
 	}, nil
 }
 
-// unreachableFallback satisfies outbox.RunBatch's Processor parameter. processWave
-// never returns an error, so outbox.RunBatch never calls this — panicking documents
-// that invariant rather than silently returning a fabricated outcome.
-func (rn *run) unreachableFallback(context.Context, Claimed) outbox.Outcome {
-	panic("embed: outer per-item fallback invoked, but processWave never returns an error")
-}
-
-// processOpenBatch embeds+upserts a whole wave of open jobs in one batch and completes
-// them in one transaction. Any batch-level failure (a corrupted-row load, a batch embed
-// error, a partial load) falls back to per-item processing so one bad entry can't sink
-// the wave.
+// processOpenBatch embeds a whole wave of open jobs in one batch and completes them in
+// one transaction. Any batch-level failure (corrupted-row load, embed error, partial
+// load) falls back to per-item processing.
 func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 	if len(entries) == 0 {
 		return
@@ -274,8 +225,7 @@ func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 		return
 	}
 
-	// Split the wave: a job whose text is what its chunks were embedded from only needs
-	// its stamp brought up to date; the rest are embedded.
+	// Jobs whose text is unchanged only need their stamp refreshed; the rest are embedded.
 	entryOf := make(map[int64]Claimed, len(entries))
 	for _, e := range entries {
 		entryOf[e.JobID] = e
@@ -326,25 +276,15 @@ func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 	log.Printf("embed: indexed batch of %d (+%d unchanged, re-stamped) in %s", len(changed), len(same), since(start))
 }
 
-// skipOnContextEnd reports whether callCtx ended before the stage finished — either a
-// normal-but-slow operation outran CallTimeout, or the run itself is being cancelled —
-// and, if so, logs and leaves the wave claimed for its lease to expire, so a later run
-// retries the WHOLE batch fresh.
+// skipOnContextEnd reports whether callCtx ended before the stage finished (CallTimeout
+// outrun, or the run cancelled) and, if so, logs and leaves the wave claimed so a later
+// run retries the WHOLE batch after the lease expires. It checks the context, not the
+// error, so it does not depend on how the backend or driver wrapped it.
 //
-// It classifies on the CONTEXT rather than on the error, which covers both endings
-// without depending on what the embed backend or the driver chose to wrap.
-//
-// Falling back to per-item on a mere timeout would still waste real work: a per-item TEI
-// call pays its per-request overhead len(entries) times over instead of once, and a
-// per-item CompleteOpen replaces one batched Postgres transaction (stamp + chunk rows +
-// outbox delete for the whole wave) with len(entries) of them — real multiplication even
-// though it is no longer Meili's old fixed whole-index re-merge cost (the mechanism
-// internal/search/searchdrain's identically-named guard still targets for its own index).
-// Falling back on a CANCELLATION is worse: the per-item path's Fail writes on a background
-// context, so a redeploy's SIGTERM would charge the whole wave an attempt on its way out,
-// and three of those dead-letter the entry — after which ClaimSemanticBatch skips it,
-// EnqueuePendingSemanticJobs' ON CONFLICT DO NOTHING never re-adds it, no sweeper exists,
-// and /similar is silently empty for that posting.
+// Per-item fallback on a timeout would multiply TEI calls and Postgres transactions by
+// len(entries). On a cancellation it is worse: Fail writes on a background context, so a
+// redeploy's SIGTERM would charge the wave an attempt, and three dead-letter the entry
+// permanently (nothing re-enqueues it) and /similar stays empty for that posting.
 func (rn *run) skipOnContextEnd(callCtx context.Context, entries []Claimed, stage string) bool {
 	cause := callCtx.Err()
 	if cause == nil {
@@ -367,8 +307,7 @@ func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
 
 	jobs, err := rn.store.Jobs(callCtx, []int64{entry.JobID})
 	if err != nil {
-		// A corrupted row (XX001) can never load — dead-letter it immediately rather
-		// than burning the attempt budget across cron runs (mirrors enrich).
+		// A corrupted row (XX001) can never load: dead-letter it now (mirrors enrich).
 		if pgerr.IsDataCorrupted(err) {
 			rn.failN(entry, fmt.Errorf("load job: %w", err), 1)
 			return
@@ -377,9 +316,7 @@ func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
 		return
 	}
 	if len(jobs) == 0 {
-		// A missing row is just as deterministic as a corrupted one — the job was
-		// hard-deleted after enqueue, so no future run can load it either. Dead-letter
-		// immediately rather than burning the attempt budget across cron runs.
+		// Hard-deleted after enqueue: as unloadable as a corrupted row, dead-letter now.
 		rn.failN(entry, fmt.Errorf("job %d not found", entry.JobID), 1)
 		return
 	}
@@ -404,11 +341,8 @@ func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
 	rn.stats.Indexed++
 }
 
-// processClosedBatch clears a whole wave of closed jobs' embed state (provenance
-// stamp, persisted vector, job_semantic_chunks rows — all of it Store-owned) in one
-// batch, with the same per-item fallback on failure. There is no index-side call to
-// make first: since jobs_semantic was removed, a closed job has nothing left to
-// unindex.
+// processClosedBatch clears a whole wave of closed jobs' embed state in one batch,
+// with the same per-item fallback on failure.
 func (rn *run) processClosedBatch(ctx context.Context, entries []Claimed) {
 	if len(entries) == 0 {
 		return
@@ -443,7 +377,7 @@ func (rn *run) processClosedOne(ctx context.Context, entry Claimed) {
 	rn.stats.Removed++
 }
 
-// callContext derives the per-batch timeout context (no-op when CallTimeout is 0).
+// callContext derives the per-batch timeout context (no timeout when CallTimeout is 0).
 func (rn *run) callContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if rn.opt.CallTimeout <= 0 {
 		return context.WithCancel(ctx)
@@ -451,11 +385,9 @@ func (rn *run) callContext(ctx context.Context) (context.Context, context.Cancel
 	return context.WithTimeout(ctx, rn.opt.CallTimeout)
 }
 
-// fail records a failed attempt against one entry — unless the call context ended first,
-// in which case nothing was learned about the entry at all. A wave abandoned mid-flight
-// (CallTimeout, or a redeploy's SIGTERM) must not be charged an attempt: failN writes on a
-// background context, so the attempt reaches Postgres even during shutdown, and three of
-// them dead-letter an entry nothing will ever re-queue.
+// fail records a failed attempt against one entry, unless the call context ended first.
+// A wave abandoned mid-flight (CallTimeout, SIGTERM) must not be charged an attempt:
+// failN writes on a background context, and three attempts dead-letter the entry for good.
 func (rn *run) fail(callCtx context.Context, entry Claimed, cause error) {
 	if ctxErr := callCtx.Err(); ctxErr != nil {
 		log.Printf("embed: outbox=%d abandoned (%v), leaving claimed for lease-expiry retry: %v",
@@ -465,11 +397,9 @@ func (rn *run) fail(callCtx context.Context, entry Claimed, cause error) {
 	rn.failN(entry, cause, rn.opt.MaxAttempts)
 }
 
-// failN records a failure with an explicit attempt ceiling. fail uses the run's
-// MaxAttempts; the corrupted-row path passes 1 to force an immediate dead-letter.
+// failN records a failure with an explicit attempt ceiling; 1 dead-letters immediately.
 func (rn *run) failN(entry Claimed, cause error, maxAttempts int) {
-	// Fail bookkeeping runs on the run's background context, not the per-call one:
-	// a timed-out/cancelled call must still record its own failure.
+	// Background context: a timed-out or cancelled call must still record its failure.
 	dead, err := rn.store.Fail(context.Background(), entry.OutboxID, cause.Error(), maxAttempts)
 	if err != nil {
 		log.Printf("embed: outbox=%d fail-bookkeeping error: %v", entry.OutboxID, err)

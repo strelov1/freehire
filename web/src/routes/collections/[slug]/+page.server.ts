@@ -46,7 +46,7 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
   // reverse of the link /roles/[category] carries: this page answers "show me the
   // jobs", that one answers "where are they, and what do they pay".
   const marketLink = categoryLandingLink(
-    Object.keys(collection.params).length === 1 ? (collection.params.category ?? null) : null
+    Object.keys(collection.params).length === 1 ? (collection.params.category ?? null) : null,
   );
   // The definition of this feed's subject, where the feed IS one skill. Same shape as
   // marketLink above and the third side of the same division: that link answers "where

@@ -297,3 +297,47 @@ queries:
     location: Iceland
     pages: 2
     jobage: 14
+
+# Compact blocks: every keyword in `keywords` is searched in every place in `locations`, after the
+# explicit queries above (an explicit entry keeps its own budget). Budgets come from the
+# registration flags (--pages, --jobage).
+matrix:
+  # --- 2026-11-17 expansion, measured before it was written ---
+  # The first day of the 80-search harvest (pages 10, a 30-day window) published 1040 new
+  # LinkedIn Easy Apply postings and onboarded 152 employer ATS boards. Yield was flat across
+  # markets (roughly 40-60 published postings per search on its first crawl), so the list widens
+  # on both axes: more roles in the largest markets, and every remaining market LinkedIn's guest
+  # search resolves (Worldwide does; "European Union" returns nothing).
+  - keywords: [data analyst, machine learning engineer, frontend developer, devops engineer, qa engineer, product designer, android developer, ios developer, cybersecurity, full stack developer]
+    locations: [United States, United Kingdom, Germany, France, India, Canada, Australia, Netherlands, Spain, Italy, Brazil, Poland]
+  - keywords: [software engineer]
+    locations: [Pakistan, Bangladesh, Sri Lanka, Thailand, Qatar, Kuwait, Bahrain, Oman, Jordan, Lebanon, Morocco, Tunisia, Ghana, Rwanda, Ethiopia, Uganda, Tanzania, Mauritius, Georgia, Armenia, Kazakhstan, Uzbekistan, Azerbaijan, Moldova, Bosnia and Herzegovina, North Macedonia, Albania, Montenegro, Nepal, Cambodia, China, Norway, Switzerland, Finland, Czechia, Portugal, Romania, Singapore, Mexico, Argentina, Colombia, Chile]
+  - keywords: [desarrollador]
+    locations: [Peru, Uruguay, Costa Rica, Ecuador, Panama, Guatemala, Dominican Republic, Bolivia, Paraguay, Puerto Rico]
+  - keywords: [software engineer, frontend developer, backend developer, devops engineer, data engineer]
+    locations: [Worldwide]
+  # --- 2026-11-17 dense IT coverage ---
+  # After the widened roster lifted the harvest to ~260 published postings an hour, the owner
+  # asked for dense IT coverage. One keyword's 100 newest postings are a small slice of a large
+  # market and different roles surface different employers, so the twenty largest markets get
+  # thirty IT roles each, plus local-language titles where English keywords miss postings.
+  # Affordable because a known posting is re-read only every few days (the seen-set), so a
+  # revisit costs its listing pages, not a detail request per card.
+  - keywords: [software engineer, backend developer, frontend developer, full stack developer, mobile developer, android developer, ios developer, devops engineer, site reliability engineer, cloud engineer, data engineer, data scientist, data analyst, machine learning engineer, ai engineer, qa engineer, test automation engineer, security engineer, network engineer, systems administrator, it support, product manager, product designer, solutions architect, embedded software engineer, java developer, python developer, .net developer, golang developer, engineering manager]
+    locations: [United States, United Kingdom, India, Germany, France, Canada, Australia, Netherlands, Spain, Italy, Brazil, Poland, Mexico, Singapore, United Arab Emirates, Ireland, Sweden, Switzerland, Portugal, Israel]
+  - keywords: [softwareentwickler, entwickler]
+    locations: [Germany]
+  - keywords: [ingénieur logiciel]
+    locations: [France]
+  - keywords: [programador]
+    locations: [Spain, Mexico, Portugal]
+  - keywords: [programmatore]
+    locations: [Italy]
+  - keywords: [programador, engenheiro de software]
+    locations: [Brazil]
+  - keywords: [programista]
+    locations: [Poland]
+  - keywords: [ontwikkelaar]
+    locations: [Netherlands]
+  - keywords: [softwareentwickler]
+    locations: [Switzerland]

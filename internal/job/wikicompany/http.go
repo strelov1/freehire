@@ -27,7 +27,13 @@ func doWithRetry(doer *http.Client, req *http.Request, maxAttempts int, backoff 
 		lastErr = fmt.Errorf("%s returned status %d after %d attempt(s)", req.URL, resp.StatusCode, attempt)
 		resp.Body.Close()
 		if attempt < maxAttempts && backoff > 0 {
-			time.Sleep(backoff)
+			timer := time.NewTimer(backoff)
+			select {
+			case <-req.Context().Done():
+				timer.Stop()
+				return nil, req.Context().Err()
+			case <-timer.C:
+			}
 		}
 	}
 	return nil, lastErr

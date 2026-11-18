@@ -75,9 +75,8 @@ func (r *PostgresRepository) RecordPing(ctx context.Context, c Candidate, engine
 	})
 }
 
-// PingsSince sums BOTH ledgers. The budget belongs to the engine and a company page
-// costs it exactly what a posting does, so counting only one would let the day's
-// allowance be spent close to twice over the moment an engine takes both.
+// PingsSince sums BOTH ledgers: the budget belongs to the engine, and a company page
+// costs what a posting does.
 func (r *PostgresRepository) PingsSince(ctx context.Context, engine string, since time.Time) (int64, error) {
 	at := pgtype.Timestamptz{Time: since, Valid: true}
 

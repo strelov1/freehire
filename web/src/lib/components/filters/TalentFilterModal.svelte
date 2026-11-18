@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from '#lib/api.js';
-  import { TALENT_FACETS } from '#lib/facets.js';
+  import { TALENT_FACETS } from '#lib/directoryFacets.js';
   import { railFacetSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
   import type { TalentFilterStore } from '#lib/talentFilters.js';
   import { YEAR_THRESHOLDS } from '#lib/talentFacetModel.js';
@@ -21,11 +21,7 @@
   // `dynamic` in TALENT_FACETS, so the shell's live counts drive them: they arrive
   // searchable, with the number of members behind each value, which is the whole reason
   // this modal exists rather than another row of pills.
-  let {
-    store,
-    open = false,
-    onClose,
-  }: { store: TalentFilterStore; open?: boolean; onClose: () => void } = $props();
+  let { store, open = false, onClose }: { store: TalentFilterStore; open?: boolean; onClose: () => void } = $props();
 
   const staged = new StagedTalentFilters();
 

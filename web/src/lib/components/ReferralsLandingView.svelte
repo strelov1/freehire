@@ -74,7 +74,6 @@
     'Receive matching requests, stay anonymous',
     'Reach out to the ones worth it',
   ];
-
 </script>
 
 <div class="landing">
@@ -82,9 +81,7 @@
   <section class="dot-grid -mx-4 px-4 pb-4 pt-14 sm:pt-20">
     <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
       <div>
-        <p class="reveal font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground" style="--d:0ms">
-          // referrals · a warm way in
-        </p>
+        <p class="reveal font-mono text-xs text-muted-foreground" style="--d:0ms">// referrals · a warm way in</p>
 
         <h1
           class="reveal mt-6 max-w-2xl text-balance text-5xl font-semibold leading-[0.95] tracking-tighter sm:text-7xl"
@@ -95,13 +92,16 @@
         </h1>
 
         <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
-          Everyone knows a referral is the fastest way in. The hard part is finding someone inside
-          who'll make it. freehire surfaces the companies that already have a willing insider — and
-          connects you to them, so you can stop cold-DMing strangers.
+          Everyone knows a referral is the fastest way in. The hard part is finding someone inside who'll make it.
+          freehire surfaces the companies that already have a willing insider — and connects you to them, so you can
+          stop cold-DMing strangers.
         </p>
 
         <!-- signature glyph: the path in one line, drawn in the muted mono register -->
-        <p class="reveal mt-7 flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground" style="--d:220ms">
+        <p
+          class="reveal mt-7 flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground"
+          style="--d:220ms"
+        >
           <span class="rounded-md border border-border bg-background px-2 py-1 text-foreground">you</span>
           <span aria-hidden="true">→</span>
           <span class="rounded-md border border-border bg-background px-2 py-1 text-foreground">insider</span>
@@ -148,8 +148,12 @@
                     CV attached
                   </span>
                   <span class="flex-1"></span>
-                  <span class="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background">Refer</span>
-                  <span class="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground">Pass</span>
+                  <span class="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background">Refer</span
+                  >
+                  <span
+                    class="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+                    >Pass</span
+                  >
                 </div>
               </article>
             {/each}
@@ -161,7 +165,7 @@
 
   <!-- ── The warm path ────────────────────────────────────────────────────── -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// how it happens</p>
+    <p class="font-mono text-xs text-muted-foreground">// how it happens</p>
     <dl class="mt-10 divide-y divide-border border-y border-border">
       {#each steps as step (step.n)}
         <div class="grid gap-2 py-6 sm:grid-cols-[auto_1fr] sm:gap-8">
@@ -177,25 +181,25 @@
 
   <!-- ── The one line that matters ────────────────────────────────────────── -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// the pitch</p>
+    <p class="font-mono text-xs text-muted-foreground">// the pitch</p>
     <p class="mt-6 max-w-3xl text-2xl font-medium leading-snug tracking-tight sm:text-3xl">
-      One warm intro beats a hundred cold applications. Referrals are how most roles are actually
-      filled — this is your side door in.
+      One warm intro beats a hundred cold applications. Referrals are how most roles are actually filled — this is your
+      side door in.
     </p>
   </section>
 
   <!-- ── Two sides ────────────────────────────────────────────────────────── -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// pick your side</p>
+    <p class="font-mono text-xs text-muted-foreground">// pick your side</p>
     <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-2">
       <!-- Seeker -->
       <div class="flex flex-col bg-background p-7 sm:p-8">
-        <p class="font-mono text-xs uppercase tracking-wide text-muted-foreground">for seekers</p>
+        <p class="font-mono text-xs text-muted-foreground">for seekers</p>
         <h3 class="mt-4 text-xl font-semibold tracking-tight">No one on the inside? Solved.</h3>
         <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
-          The hardest part of a referral is finding someone willing to give it. freehire shows you
-          which companies already have a referrer — attach your CV and ask, and if they see a fit they
-          reach out directly. No cold DMs, no application black hole.
+          The hardest part of a referral is finding someone willing to give it. freehire shows you which companies
+          already have a referrer — attach your CV and ask, and if they see a fit they reach out directly. No cold DMs,
+          no application black hole.
         </p>
         <ul class="mt-5 flex flex-col divide-y divide-border border-y border-border">
           {#each seekerPoints as point (point)}
@@ -209,12 +213,12 @@
 
       <!-- Referrer -->
       <div class="flex flex-col bg-background p-7 sm:p-8">
-        <p class="font-mono text-xs uppercase tracking-wide text-muted-foreground">for insiders</p>
+        <p class="font-mono text-xs text-muted-foreground">for insiders</p>
         <h3 class="mt-4 text-xl font-semibold tracking-tight">Refer without the awkward "no"</h3>
         <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Referring usually means putting your name on the line — and squirming when you have to turn
-          someone down. Here you stay invisible until you decide someone's worth it. Pass on anyone,
-          no explanation, and it's never tied back to you.
+          Referring usually means putting your name on the line — and squirming when you have to turn someone down. Here
+          you stay invisible until you decide someone's worth it. Pass on anyone, no explanation, and it's never tied
+          back to you.
         </p>
         <ul class="mt-5 flex flex-col divide-y divide-border border-y border-border">
           {#each referrerPoints as point (point)}
@@ -230,7 +234,7 @@
 
   <!-- ── Trust ────────────────────────────────────────────────────────────── -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// kept clean</p>
+    <p class="font-mono text-xs text-muted-foreground">// kept clean</p>
     <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
       {#each trust as t (t.n)}
         <div class="group bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">
@@ -246,7 +250,7 @@
 
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share REFERRALS_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// faq</p>
+    <p class="font-mono text-xs text-muted-foreground">// faq</p>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each REFERRALS_FAQ as item (item.question)}
         <div class="bg-background p-6 sm:p-7">
@@ -259,13 +263,12 @@
 
   <!-- ── Closing CTA ──────────────────────────────────────────────────────── -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// skip the pile</p>
+    <p class="font-mono text-xs text-muted-foreground">// skip the pile</p>
     <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
       Ask an insider to put your name forward.
     </h2>
     <p class="mt-5 max-w-xl leading-relaxed text-muted-foreground">
-      Get referred, or open the door for someone else. Either way it takes a couple of minutes and
-      stays anonymous.
+      Get referred, or open the door for someone else. Either way it takes a couple of minutes and stays anonymous.
     </p>
     <div class="mt-8 flex flex-wrap gap-3">
       <Button href={askCta} variant="primary" size="lg">Ask for a referral</Button>

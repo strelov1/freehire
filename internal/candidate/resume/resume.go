@@ -1,6 +1,7 @@
 // Package resume is the per-user stored-résumé use case: a signed-in user keeps at
-// most one résumé, the original file living in S3 (internal/platform/blobstore) under a per-user
-// key, with a pointer (object key + upload time) recorded on the users row. It stores,
+// most one résumé, the original file living in S3 (internal/platform/blobstore) under a
+// per-upload key, with a pointer (object key + upload time) recorded on the users row — the
+// one source of which object is current. It stores,
 // reports, deletes, and derives the plain text of that résumé, so the one upload feeds
 // both skill extraction and the verdict's coherence check without a second upload. When
 // object storage is unconfigured the service is disabled (Enabled reports false) and
@@ -14,34 +15,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"log"
 	"strings"
 	"time"
-	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
-
-// pdftotextBin is the poppler binary used to extract résumé PDF text, overridable via
-// PDFTOTEXT_BIN (default "pdftotext"; the production image installs poppler-utils). It is a
-// package var so tests can point it at a stub. Unlike the CV renderer's TypstBin there is
-// no "disabled" story to gate — PDF extraction is core to résumé upload — so it is resolved
-// here rather than threaded through config.
-var pdftotextBin = envOr("PDFTOTEXT_BIN", "pdftotext")
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
 
 var (
 	// ErrStorageDisabled is returned when object storage is unconfigured, so no résumé
@@ -51,6 +37,8 @@ var (
 	// ErrNotStored is returned when the user has no stored résumé (the handler maps it to
 	// a conflict — the SPA prompts a single upload).
 	ErrNotStored = errors.New("resume: no résumé stored")
+	// ErrAlreadyStored is PutIfAbsent's refusal: the user already has a stored résumé.
+	ErrAlreadyStored = errors.New("resume: a résumé is already stored")
 )
 
 // Meta reports whether a résumé is stored and, if so, when it was uploaded.
@@ -65,13 +53,11 @@ type Repository interface {
 	Get(ctx context.Context, userID int64) (db.GetUserResumeRow, error)
 	Set(ctx context.Context, userID int64, key string) error
 	Clear(ctx context.Context, userID int64) error
-	// SetStructured persists the derived structured résumé and the geography derived from
-	// it, as one write, guarded by the monotonic `resume_uploaded_at = w.UploadedAt` stamp
-	// check. applied reports whether the guard matched: false means a slow/late write for a
-	// since-superseded CV was correctly dropped, and the caller must not treat it as if it
-	// had landed (see Store.SetStructured). GetStructured reads the blob, its stamps, and
-	// the current résumé upload time so the Store can tell whether the structure still
-	// describes the stored CV.
+	// SetStructured persists the derived structured résumé and its geography as one write,
+	// guarded by the monotonic `resume_uploaded_at = w.UploadedAt` stamp check. applied false
+	// means a late write for a superseded CV was dropped and must not be treated as landed.
+	// GetStructured reads the blob, its stamps, and the current upload time so the Store can
+	// tell whether the structure still describes the stored CV.
 	SetStructured(ctx context.Context, w StructuredWrite) (applied bool, err error)
 	GetStructured(ctx context.Context, userID int64) (db.GetUserResumeStructuredRow, error)
 	// GetGeography reads the derived candidate geography plus the two stamps needed to
@@ -81,13 +67,16 @@ type Repository interface {
 	SetCandidateContacts(ctx context.Context, userID int64, blob []byte) error
 	SetExtractFailed(ctx context.Context, userID int64, detail string, uploadedAt time.Time) error
 	SetExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error
+	// WithUploadLock runs fn holding the user's CV-upload lock, passing the repository fn's
+	// reads and writes must go through so they share it. Every pointer write (upload, delete)
+	// takes it, which makes PutIfAbsent's presence check and pointer write one step. Keep it short:
+	// it holds a pooled connection, so never put an object-store call inside fn.
+	WithUploadLock(ctx context.Context, userID int64, fn func(Repository) error) error
 }
 
-// Geography is where the candidate is, as derived from their CV and stored. Countries is
-// empty both when the CV named no place and when it named one the dictionary could not
-// resolve; the two are distinguished in the database (NULL vs '{}') for the coverage
-// metric, and deliberately NOT here — a consumer asking "where is this candidate" gets
-// the same answer either way, which is "nowhere I can tell you".
+// Geography is where the candidate is, as derived from their CV and stored. Countries is empty
+// both when the CV named no place and when the dictionary could not resolve it; the database
+// distinguishes the two (NULL vs '{}') for the coverage metric, consumers do not.
 type Geography struct {
 	Countries []string
 	Regions   []string
@@ -100,15 +89,13 @@ type Geography struct {
 // a slow extraction for a since-replaced CV writes neither, and a stored geography can
 // never describe a different CV than the structure beside it.
 //
-// Countries/Regions/Cities carry a three-way answer, and the nil/empty distinction is the
-// point rather than an accident:
+// Countries/Regions/Cities carry a three-way answer; the nil/empty distinction is deliberate:
 //
 //	nil          — not known: the CV states no location at all
 //	empty slice  — the CV stated a place the curated dictionary could not resolve
 //	non-empty    — what it resolved to
 //
-// Collapsing nil and empty would confuse "we don't know where this candidate is" with
-// "this candidate is nowhere", and would throw away the dictionary's live coverage metric.
+// Collapsing nil and empty would confuse "unknown" with "nowhere" and lose the coverage metric.
 type StructuredWrite struct {
 	UserID     int64
 	Blob       []byte
@@ -121,7 +108,7 @@ type StructuredWrite struct {
 
 // Store owns the résumé's object storage plus its pointer. blobs is nil when storage is
 // unconfigured; the service then reports Enabled()==false and every operation returns
-// ErrStorageDisabled (matching the searcher/facetCounter nil-guard pattern).
+// ErrStorageDisabled.
 type Store struct {
 	blobs blobstore.Store
 	repo  Repository
@@ -137,27 +124,97 @@ func (s *Store) Enabled() bool {
 	return s != nil && s.blobs != nil
 }
 
-// Put stores (or replaces) the user's résumé: the original bytes go to S3 under the
-// user's key and the pointer is stamped with the upload time. contentType is recorded on
-// the object for a correct future download. Returns the resulting metadata.
+// Put stores (or replaces) the user's résumé: the original bytes go to S3 under a key of this
+// upload's own, and the pointer is moved to it and stamped with the upload time. contentType is
+// recorded on the object. Returns the resulting metadata.
 func (s *Store) Put(ctx context.Context, userID int64, contentType string, data []byte) (Meta, error) {
+	return s.put(ctx, userID, contentType, data, false)
+}
+
+// PutIfAbsent stores the user's résumé only when none is stored, and returns
+// ErrAlreadyStored otherwise. The check and the pointer write hold the same per-user lock
+// every pointer write takes, so two first uploads cannot both see no résumé.
+func (s *Store) PutIfAbsent(ctx context.Context, userID int64, contentType string, data []byte) (Meta, error) {
+	return s.put(ctx, userID, contentType, data, true)
+}
+
+// put writes the bytes to an object of their own OUTSIDE any transaction — an object-store
+// round trip must never hold a pooled connection — and then, briefly under the per-user upload
+// lock, checks presence (firstOnly) and moves the pointer to it. The object the pointer left is
+// deleted after commit, and the new one when the pointer did not move to it. Both are
+// best-effort cleanup; account deletion removes every object under the user's prefix, which
+// is the backstop for a cleanup that failed or a process that died between the steps.
+func (s *Store) put(ctx context.Context, userID int64, contentType string, data []byte, firstOnly bool) (Meta, error) {
 	if !s.Enabled() {
 		return Meta{}, ErrStorageDisabled
 	}
-	key := blobstore.ResumeKey(userID)
+	if firstOnly {
+		// A cheap early answer that spares the upload; the check that decides is under the lock.
+		if meta, err := s.Status(ctx, userID); err != nil {
+			return Meta{}, err
+		} else if meta.Present {
+			return Meta{}, ErrAlreadyStored
+		}
+	}
+	key := blobstore.ResumeUploadKey(userID, time.Now())
 	if err := s.blobs.Put(ctx, key, contentType, bytes.NewReader(data), int64(len(data))); err != nil {
+		observability.RecordCVUpload(false)
 		return Meta{}, err
 	}
-	if err := s.repo.Set(ctx, userID, key); err != nil {
+	var superseded string
+	var written Meta
+	err := s.repo.WithUploadLock(ctx, userID, func(repo Repository) error {
+		ptr, err := repo.Get(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if firstOnly && metaFromPointer(ptr).Present {
+			return ErrAlreadyStored
+		}
+		superseded = ptr.ResumeObjectKey.String
+		if err := repo.Set(ctx, userID, key); err != nil {
+			return err
+		}
+		// Read the stamp under the lock: after commit another upload may already have
+		// replaced it, and pairing this upload's text with that stamp would let its
+		// extraction pass the stamp guard as the other upload's.
+		ptr, err = repo.Get(ctx, userID)
+		written = metaFromPointer(ptr)
+		return err
+	})
+	if errors.Is(err, ErrAlreadyStored) {
+		s.discard(ctx, key)
 		return Meta{}, err
 	}
-	return s.Status(ctx, userID)
+	if err != nil {
+		// A failed COMMIT can still have committed on the server. Discard the object only once
+		// a fresh read shows the pointer does not name it; an otherwise unreadable pointer keeps
+		// it, and account deletion is the backstop for that.
+		// No account row means account deletion won the race: nothing can name the object.
+		ptr, readErr := s.repo.Get(context.WithoutCancel(ctx), userID)
+		if errors.Is(readErr, pgx.ErrNoRows) || (readErr == nil && ptr.ResumeObjectKey.String != key) {
+			s.discard(ctx, key)
+		}
+		observability.RecordCVUpload(false)
+		return Meta{}, err
+	}
+	if superseded != "" && superseded != key {
+		s.discard(ctx, superseded)
+	}
+	observability.RecordCVUpload(true)
+	return written, nil
 }
 
-// SetStructured persists the user's derived structured résumé, stamped with the
-// producing model and the résumé upload time it was derived from (so the read can tell
-// whether it still describes the stored CV). Independent of object storage — it only
-// touches the pointer row.
+// discard deletes an object no pointer refers to. Best-effort: the write it follows has
+// already succeeded or failed on its own terms, so a failure here is logged, not returned.
+func (s *Store) discard(ctx context.Context, key string) {
+	if err := s.blobs.Delete(context.WithoutCancel(ctx), key); err != nil {
+		log.Printf("resume: deleting unreferenced object %s: %v", key, err)
+	}
+}
+
+// SetStructured persists the user's derived structured résumé, stamped with the producing model
+// and the upload time it was derived from. Independent of object storage.
 func (s *Store) SetStructured(ctx context.Context, userID int64, st resumeextract.Structured, model string, uploadedAt time.Time) error {
 	blob, err := json.Marshal(st)
 	if err != nil {
@@ -177,10 +234,9 @@ func (s *Store) SetStructured(ctx context.Context, userID int64, st resumeextrac
 		return err
 	}
 	if !applied {
-		// The monotonic stamp guard dropped this write: a since-superseded upload's
-		// extraction landed after a newer one replaced it. Filling contacts from st here
-		// would let a stale/late extraction leak into candidate-owned contacts and get
-		// stuck there forever (FillEmpty never overwrites a non-empty owned field again).
+		// The stamp guard dropped this write (a superseded upload's late extraction). Filling
+		// contacts from st would leak it into owned contacts permanently, since FillEmpty never
+		// overwrites a non-empty owned field.
 		return nil
 	}
 	// Fill-empty into owned overrides (identity, headline, summary, languages,
@@ -194,20 +250,15 @@ func (s *Store) SetStructured(ctx context.Context, userID int64, st resumeextrac
 // DeriveGeography derives the candidate's geography from the location line their
 // structured résumé carries, and projects it onto the three stored columns.
 //
-// It is exported because it has TWO callers that must never disagree: the upload path
-// (Store.SetStructured, above) and the reconciler (cmd/backfill-resume-geo). If the two
-// derived differently, re-running the reconciler would rewrite rows the upload path had
-// just written, and "a second run changes nothing" would quietly stop being true.
+// Exported because two callers must never disagree: the upload path (Store.SetStructured) and
+// the reconciler (cmd/backfill-resume-geo); otherwise a re-run would rewrite fresh rows.
 //
-// The derivation itself is location.ParseResidence — the candidate entry point, never
-// location.Parse: a job may be open anywhere and a person never is, so the global region
-// and the work-mode hint are not part of where someone lives. It is deterministic and
-// does no I/O, which is why it runs on the write path rather than as scheduled work.
+// The derivation is location.ParseResidence, never location.Parse: a person is never open
+// anywhere, so the global region and work-mode hint do not apply. It is deterministic and does
+// no I/O, so it runs on the write path.
 //
-// The nil-versus-empty decision lives here rather than in the parser, because it is a
-// question about the INPUT, not about the resolution: ParseResidence returns nothing both
-// for a CV that stated no location and for one whose location it could not resolve, and
-// only this layer still knows which of the two happened.
+// The nil-versus-empty decision lives here, not in the parser: ParseResidence returns nothing
+// both for a CV with no location and for an unresolvable one, and only this layer knows which.
 func DeriveGeography(stated string) (countries, regions, cities []string) {
 	if strings.TrimSpace(stated) == "" {
 		return nil, nil, nil
@@ -227,20 +278,14 @@ func orEmpty(s []string) []string {
 
 // Structured returns the user's derived structured résumé, but ONLY when it still
 // describes the currently-stored CV — i.e. its stamp equals the résumé's upload time.
-// ok is false (with no error) when none is stored or the stamp is stale (a newer CV
-// whose extraction has not landed yet, or a persistent extraction outage), so the read
-// surface never serves a structure derived from a superseded résumé.
+// ok is false (with no error) when none is stored or the stamp is stale, so the read surface
+// never serves a structure derived from a superseded résumé.
 //
-// Staleness is keyed on the upload time ALONE, not the model stamp (unlike the CV
-// embedding, which is re-checked against the current embedder). The structured résumé has
-// no reconciler that re-derives it — only a re-upload does — so gating reads on the model
-// would hide the parsed profile forever after an LLM_MODEL upgrade rather than refreshing
-// it. Serving a best-effort, display-only structure from an older model is the better
-// degradation; resume_structured_model is kept as provenance for a future backfill.
+// Staleness is keyed on the upload time ALONE, not the model stamp: nothing re-derives the
+// structured résumé but a re-upload, so gating on the model would hide the profile forever after
+// an LLM_MODEL upgrade. resume_structured_model is kept as provenance.
 //
-// This is ProfileReadForUser's Current branch under another name — one read of the row, one
-// stamp comparison, one rule about a corrupt blob. Deriving it there rather than repeating
-// it here is what keeps the two answers from parting ways.
+// This is ProfileReadForUser's Current branch, derived there so the two answers cannot diverge.
 func (s *Store) Structured(ctx context.Context, userID int64) (resumeextract.Structured, bool, error) {
 	read, err := s.ProfileReadForUser(ctx, userID)
 	if err != nil || !read.Current {
@@ -295,10 +340,6 @@ func (s *Store) ProfileReadForUser(ctx context.Context, userID int64) (ProfileRe
 // stamp is not current with the upload. ok is false when the stamp is current (callers
 // use Structured), when no blob exists, or when the blob carries no contact fields.
 // Semantic sections are never included — the same slice ProfileRead serves while pending.
-//
-// The other side of ProfileReadForUser's answer: not-Current already means the Structure it
-// carries is the provisional slice, so the only thing left to decide here is whether that
-// slice says anything at all.
 func (s *Store) ProvisionalContacts(ctx context.Context, userID int64) (resumeextract.Structured, bool, error) {
 	read, err := s.ProfileReadForUser(ctx, userID)
 	if err != nil || read.Current || !hasContactFields(read.Structure) {
@@ -323,8 +364,8 @@ func hasContactFields(st resumeextract.Structured) bool {
 	return st.FullName != "" || st.Email != "" || st.Phone != "" || st.Location != "" || len(st.Links) > 0
 }
 
-// stampsEqual reports whether two timestamps are both present and equal — the freshness
-// rule for the structured résumé (mirrors the matchanalysis cache stamp comparison).
+// stampsEqual reports whether two timestamps are both present and equal: the freshness rule for
+// the structured résumé.
 func stampsEqual(a, b pgtype.Timestamptz) bool {
 	return a.Valid && b.Valid && a.Time.Equal(b.Time)
 }
@@ -364,10 +405,8 @@ func (s *Store) Text(ctx context.Context, userID int64) (string, error) {
 }
 
 // TextAndUploadedAt behaves like Text, but also returns the upload timestamp from the SAME
-// pointer read. A caller that needs both (a retry re-deriving text AND the stamp to write a
-// structured result under) must not call Text and Status as two separate reads: a résumé
-// replaced between them would derive text from the OLD upload under the NEW upload's stamp,
-// silently mismatching the two.
+// pointer read. Do not use Text and Status as two reads: a résumé replaced between them would
+// pair the old upload's text with the new upload's stamp.
 func (s *Store) TextAndUploadedAt(ctx context.Context, userID int64) (string, time.Time, error) {
 	data, uploadedAt, err := s.read(ctx, userID)
 	if err != nil {
@@ -419,15 +458,32 @@ func (s *Store) read(ctx context.Context, userID int64) ([]byte, time.Time, erro
 	return data, ptr.ResumeUploadedAt.Time, nil
 }
 
-// Delete removes the stored object and clears the pointer.
+// Delete clears the pointer under the per-user upload lock, so it cannot interleave with an
+// upload, and then removes the object the pointer named. The object goes after the commit, like
+// a superseded upload's: a pointer must never name an object that is already gone. Its removal
+// is best-effort cleanup — the CV is deleted once the pointer is, and a retry would find nothing
+// to name the object by — so a failure is logged; account deletion removes every object under
+// the user's prefix.
 func (s *Store) Delete(ctx context.Context, userID int64) error {
 	if !s.Enabled() {
 		return ErrStorageDisabled
 	}
-	if err := s.blobs.Delete(ctx, blobstore.ResumeKey(userID)); err != nil {
+	var key string
+	err := s.repo.WithUploadLock(ctx, userID, func(repo Repository) error {
+		ptr, err := repo.Get(ctx, userID)
+		if err != nil {
+			return err
+		}
+		key = ptr.ResumeObjectKey.String
+		return repo.Clear(ctx, userID)
+	})
+	if err != nil {
 		return err
 	}
-	return s.repo.Clear(ctx, userID)
+	if key != "" {
+		s.discard(ctx, key)
+	}
+	return nil
 }
 
 func metaFromPointer(ptr db.GetUserResumeRow) Meta {
@@ -442,150 +498,9 @@ func metaFromPointer(ptr db.GetUserResumeRow) Meta {
 	return m
 }
 
-// extractText derives plain text from a stored résumé: a PDF (magic number "%PDF") is
-// parsed, anything else is read as UTF-8 text (the pasted-text path). Sniffing the bytes
-// keeps the blobstore interface a pure key→bytes abstraction, free of content-type
-// plumbing.
-func extractText(data []byte) (string, error) {
-	if bytes.HasPrefix(data, []byte("%PDF")) {
-		return ExtractPDFText(data)
-	}
-	return string(data), nil
-}
-
-// pdfExtractTimeout bounds a single pdftotext run so a pathological PDF can never hang a
-// request; extracting a normal résumé is well under a second.
-const pdfExtractTimeout = 15 * time.Second
-
-// maxPDFTextBytes bounds the text one extraction retains. A PDF's text layer is not bounded
-// by the file: a 472KB upload has been observed yielding 12.6MB of text, and the whole string
-// then travels onward to the PII filter and the embedder, so the upload limit is not the
-// ceiling it looks like. Two megabytes is an order of magnitude past the densest real résumé
-// (a hundred pages of prose is a few hundred KB), so only a pathological document is ever
-// truncated — and for one of those, truncating beats propagating.
-const maxPDFTextBytes = 2 << 20
-
-// ExtractPDFText extracts plain text from PDF bytes, shared by the résumé store and the
-// upload handler (which wraps a returned error into a 400). It shells out to poppler's
-// pdftotext, which — unlike a pure-Go parser — decodes CID/Identity-H fonts through their
-// ToUnicode CMap (as produced by Canva and similar builders), where the previous library
-// silently returned empty text. The bytes go to a temp file (never onto argv) and the text
-// is read from stdout, retaining at most maxPDFTextBytes. A non-zero exit (corrupt/undecodable
-// PDF) is an error; a clean run yielding no text (an image-only PDF with no text layer)
-// returns ("", nil), which the handler renders as the "scan or image" rejection.
-func ExtractPDFText(data []byte) (string, error) {
-	dir, err := os.MkdirTemp("", "resume-pdf-*")
-	if err != nil {
-		return "", err
-	}
-	defer os.RemoveAll(dir)
-
-	inPath := filepath.Join(dir, "in.pdf")
-	if err := os.WriteFile(inPath, data, 0o600); err != nil {
-		return "", err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), pdfExtractTimeout)
-	defer cancel()
-
-	// Only fixed flags and a temp path reach argv: -q silences warnings on slightly
-	// malformed but readable PDFs; "-" writes the extracted text to stdout.
-	cmd := exec.CommandContext(ctx, pdftotextBin, "-q", "-nopgbrk", inPath, "-")
-	out := cappedBuffer{max: maxPDFTextBytes}
-	// stderr only ever becomes part of an error message, so a few kilobytes is plenty; it is
-	// bounded for the same reason stdout is.
-	errBuf := cappedBuffer{max: 8 << 10}
-	cmd.Stdout = &out
-	cmd.Stderr = &errBuf
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("resume: invalid PDF: %w: %s", err, strings.TrimSpace(errBuf.String()))
-	}
-	return trimPartialRune(out.String()), nil
-}
-
-// cappedBuffer accumulates at most max bytes and discards the rest, so a subprocess writing
-// an unbounded amount of output cannot grow this process's heap with it.
-//
-// It reports the discarded bytes as written on purpose. Returning an error (or short count)
-// would break the child's stdout pipe mid-run and surface as a failed command, turning a
-// merely enormous document into an extraction error; the existing timeout is what bounds how
-// long the child may keep producing output nobody keeps.
-type cappedBuffer struct {
-	buf bytes.Buffer
-	max int
-}
-
-func (c *cappedBuffer) Write(p []byte) (int, error) {
-	if room := c.max - c.buf.Len(); room > 0 {
-		c.buf.Write(p[:min(room, len(p))])
-	}
-	return len(p), nil
-}
-
-func (c *cappedBuffer) String() string { return c.buf.String() }
-
-// trimPartialRune drops a trailing incomplete UTF-8 sequence, which truncating at a byte cap
-// leaves behind whenever the cap falls inside a multi-byte rune. The text goes on into a JSON
-// request body, an LLM prompt and an embedder, so it must not end mid-rune. A genuine U+FFFD
-// in the document decodes with size 3 and is left alone.
-func trimPartialRune(s string) string {
-	for s != "" {
-		if r, size := utf8.DecodeLastRuneInString(s); r == utf8.RuneError && size <= 1 {
-			s = s[:len(s)-1]
-			continue
-		}
-		break
-	}
-	return s
-}
-
-// QueriesRepository adapts *db.Queries to Repository, mapping the pointer to the nullable
-// users columns.
-type QueriesRepository struct{ q *db.Queries }
-
-// NewQueriesRepository wraps *db.Queries as a Repository.
-func NewQueriesRepository(q *db.Queries) *QueriesRepository { return &QueriesRepository{q: q} }
-
-func (r *QueriesRepository) Get(ctx context.Context, userID int64) (db.GetUserResumeRow, error) {
-	return r.q.GetUserResume(ctx, userID)
-}
-
-func (r *QueriesRepository) Set(ctx context.Context, userID int64, key string) error {
-	return r.q.SetUserResume(ctx, db.SetUserResumeParams{
-		ID:              userID,
-		ResumeObjectKey: pgtype.Text{String: key, Valid: true},
-	})
-}
-
-func (r *QueriesRepository) Clear(ctx context.Context, userID int64) error {
-	return r.q.ClearUserResume(ctx, userID)
-}
-
-func (r *QueriesRepository) SetStructured(ctx context.Context, w StructuredWrite) (bool, error) {
-	rows, err := r.q.SetUserResumeStructured(ctx, db.SetUserResumeStructuredParams{
-		ID:                         w.UserID,
-		ResumeStructured:           w.Blob,
-		ResumeStructuredModel:      pgtype.Text{String: w.Model, Valid: w.Model != ""},
-		ResumeStructuredUploadedAt: pgtype.Timestamptz{Time: w.UploadedAt, Valid: true},
-		ResumeCountries:            w.Countries,
-		ResumeRegions:              w.Regions,
-		ResumeCities:               w.Cities,
-	})
-	if err != nil {
-		return false, err
-	}
-	return rows > 0, nil
-}
-
-func (r *QueriesRepository) GetStructured(ctx context.Context, userID int64) (db.GetUserResumeStructuredRow, error) {
-	return r.q.GetUserResumeStructured(ctx, userID)
-}
-
 // Geography returns the candidate geography derived from the user's CV, under the SAME
-// freshness rule as Structured: it is served only while its stamp still equals the
-// résumé's upload time. ok is false (with no error) when none is stored or the stamp is
-// stale, so a geography derived from a superseded CV is treated as absent rather than
-// answering "where is this candidate" from a document that has been replaced.
+// freshness rule as Structured: served only while its stamp equals the upload time. ok is false
+// (with no error) when none is stored or the stamp is stale.
 func (s *Store) Geography(ctx context.Context, userID int64) (Geography, bool, error) {
 	row, err := s.repo.GetGeography(ctx, userID)
 	if err != nil {
@@ -599,34 +514,4 @@ func (s *Store) Geography(ctx context.Context, userID int64) (Geography, bool, e
 		Regions:   row.ResumeRegions,
 		Cities:    row.ResumeCities,
 	}, true, nil
-}
-
-func (r *QueriesRepository) GetGeography(ctx context.Context, userID int64) (db.GetUserResumeGeographyRow, error) {
-	return r.q.GetUserResumeGeography(ctx, userID)
-}
-
-func (r *QueriesRepository) GetCandidateContacts(ctx context.Context, userID int64) ([]byte, error) {
-	return r.q.GetUserCandidateContacts(ctx, userID)
-}
-
-func (r *QueriesRepository) SetCandidateContacts(ctx context.Context, userID int64, blob []byte) error {
-	return r.q.SetUserCandidateContacts(ctx, db.SetUserCandidateContactsParams{
-		ID:                userID,
-		CandidateContacts: blob,
-	})
-}
-
-func (r *QueriesRepository) SetExtractFailed(ctx context.Context, userID int64, detail string, uploadedAt time.Time) error {
-	return r.q.SetUserResumeExtractFailed(ctx, db.SetUserResumeExtractFailedParams{
-		ID:                  userID,
-		ResumeExtractDetail: pgtype.Text{String: detail, Valid: detail != ""},
-		ResumeExtractFor:    pgtype.Timestamptz{Time: uploadedAt, Valid: true},
-	})
-}
-
-func (r *QueriesRepository) SetExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error {
-	return r.q.SetUserResumeExtractPending(ctx, db.SetUserResumeExtractPendingParams{
-		ID:               userID,
-		ResumeExtractFor: pgtype.Timestamptz{Time: uploadedAt, Valid: true},
-	})
 }

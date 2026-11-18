@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { Badge, Card, EmptyState } from '#lib/ui/index.js';
+  import { Badge, Card, EmptyState, onImageError } from '#lib/ui/index.js';
   import {
     companyLabel,
     emptyMentorFilters,
@@ -12,11 +12,8 @@
   } from '#lib/mentorship.js';
   import type { Mentor } from '#lib/types.js';
 
-  let {
-    mentors,
-    options,
-    filters,
-  }: { mentors: Mentor[]; options: MentorFilterOptions; filters: MentorFilters } = $props();
+  let { mentors, options, filters }: { mentors: Mentor[]; options: MentorFilterOptions; filters: MentorFilters } =
+    $props();
 
   // The URL is the state. Each control writes the whole filter set back to the address bar
   // and lets the route's `load` fetch again — the directory is small and hand-onboarded, so
@@ -34,12 +31,7 @@
 
   const active = $derived(
     Boolean(
-      filters.company ||
-        filters.topic ||
-        filters.language ||
-        filters.seniority ||
-        filters.q ||
-        filters.noReviews,
+      filters.company || filters.topic || filters.language || filters.seniority || filters.q || filters.noReviews,
     ),
   );
 
@@ -195,9 +187,7 @@
                       alt=""
                       loading="lazy"
                       class="border-border size-10 shrink-0 rounded-full border object-cover"
-                      onerror={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display = 'none';
-                      }}
+                      {@attach onImageError((img) => (img.style.display = 'none'))}
                     />
                   {/if}
                   <div>

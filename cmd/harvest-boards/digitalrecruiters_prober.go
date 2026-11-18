@@ -14,13 +14,11 @@ import (
 
 // digitalrecruitersProber validates a DigitalRecruiters career site (the board is its host) the
 // way internal/ingest/sources/digitalrecruiters.go reads it, which is unexported: the site's
-// configuration on api.digitalrecruiters.com (404 when the platform does not know the host),
-// then its listing, counting only the postings the site OWNS — an aggregating site lists other
-// sites' postings, each naming its owner in career_domain, and the adapter leaves those to the
-// owner's board. The employer is the brand of the site's first own posting.
-//
-// An offline site and an internal-mobility site (is_internal, for the employer's own staff) are
-// declined: the adapter fails both.
+// configuration on api.digitalrecruiters.com (404 when the host is unknown), then its listing,
+// counting only postings the site OWNS. An aggregating site lists other sites' postings, each
+// naming its owner in career_domain, and the adapter leaves those to the owner's board. The
+// employer is the brand of the first own posting. An offline site and an internal-mobility site
+// (is_internal) are declined, as the adapter fails both.
 type digitalrecruitersProber struct{}
 
 const drProbeAPI = "https://api.digitalrecruiters.com"

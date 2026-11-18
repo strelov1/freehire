@@ -5,7 +5,6 @@ import (
 	"errors"
 	"sort"
 	"testing"
-	"time"
 )
 
 // subjectRow is what the feed query's two LEFT JOINs would have resolved for one
@@ -15,14 +14,12 @@ type subjectRow struct{ title, company string }
 
 // fakeRepo is an in-memory Repository for exercising the service without a DB.
 type fakeRepo struct {
-	personas    map[int64]Persona
-	handles     map[string]int64 // handle -> owner, to simulate UNIQUE(handle)
-	threads     map[int64]Thread
-	replies     map[int64][]Reply
-	nextThread  int64
-	nextReply   int64
-	threadTimes []time.Time // creation times, for rate counting
-	replyTimes  []time.Time
+	personas   map[int64]Persona
+	handles    map[string]int64 // handle -> owner, to simulate UNIQUE(handle)
+	threads    map[int64]Thread
+	replies    map[int64][]Reply
+	nextThread int64
+	nextReply  int64
 	// subjectNames stands in for the jobs/companies joins in the feed query, keyed
 	// "<subject_type>:<subject_ref>". A missing key is a subject that no longer exists.
 	// Title and company are held APART because the query resolves them from different
@@ -73,7 +70,6 @@ func (f *fakeRepo) InsertThread(_ context.Context, st, ref, title, body string, 
 	f.nextThread++
 	t := Thread{ID: f.nextThread, SubjectType: st, SubjectRef: ref, Title: title, Body: body, Status: StatusOpen}
 	f.threads[t.ID] = t
-	f.threadTimes = append(f.threadTimes, time.Now())
 	return t, nil
 }
 
@@ -155,7 +151,6 @@ func (f *fakeRepo) InsertReply(_ context.Context, threadID, parentReplyID, autho
 	f.nextReply++
 	r := Reply{ID: f.nextReply, ThreadID: threadID, ParentID: parentReplyID, Body: body}
 	f.replies[threadID] = append(f.replies[threadID], r)
-	f.replyTimes = append(f.replyTimes, time.Now())
 	return r, nil
 }
 
@@ -171,26 +166,6 @@ func (f *fakeRepo) IncrementReplyCount(_ context.Context, threadID int64) error 
 
 func (f *fakeRepo) ListReplies(_ context.Context, threadID int64, _ Cursor, _ int32) ([]Reply, error) {
 	return f.replies[threadID], nil
-}
-
-func (f *fakeRepo) CountRecentThreads(_ context.Context, _ int64, since time.Time) (int64, error) {
-	var n int64
-	for _, ts := range f.threadTimes {
-		if ts.After(since) {
-			n++
-		}
-	}
-	return n, nil
-}
-
-func (f *fakeRepo) CountRecentReplies(_ context.Context, _ int64, since time.Time) (int64, error) {
-	var n int64
-	for _, ts := range f.replyTimes {
-		if ts.After(since) {
-			n++
-		}
-	}
-	return n, nil
 }
 
 // fakeSubjects answers existence from a fixed set of "type/slug" keys.
@@ -278,20 +253,6 @@ func TestPersonaRetriesOnHandleCollision(t *testing.T) {
 	}
 	if th.AuthorHandle == "" {
 		t.Fatal("expected a handle after collision retry")
-	}
-}
-
-func TestThreadRateLimit(t *testing.T) {
-	repo := newFakeRepo()
-	svc := New(repo, fakeSubjects{known: map[string]bool{"company/acme": true}}, Config{ThreadCap: 2})
-	in := CreateThreadInput{UserID: 1, SubjectType: SubjectCompany, SubjectSlug: "acme", Title: "t", Body: "b"}
-	for i := 0; i < 2; i++ {
-		if _, err := svc.CreateThread(context.Background(), in); err != nil {
-			t.Fatalf("post %d: %v", i, err)
-		}
-	}
-	if _, err := svc.CreateThread(context.Background(), in); !errors.Is(err, ErrRateLimited) {
-		t.Fatalf("want ErrRateLimited, got %v", err)
 	}
 }
 

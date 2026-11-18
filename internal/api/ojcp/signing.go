@@ -16,9 +16,8 @@ import (
 	"github.com/gowebpki/jcs"
 )
 
-// signatureLifetime is how long a manifest signature stays valid — the 24 hours the spec
-// recommends. The manifest is re-signed on every request, so a signature outliving a key
-// rotation is bounded by this, not by how long a copy sits in a cache.
+// signatureLifetime is how long a manifest signature stays valid (the spec's recommended
+// 24 hours); it bounds how long a signature can outlive a key rotation.
 const signatureLifetime = 24 * time.Hour
 
 // Signature is the manifest's `signature` member (spec § Manifest Signing).
@@ -28,10 +27,8 @@ type Signature struct {
 	Iss       string `json:"iss"`
 	SignedAt  string `json:"signed_at"`
 	ExpiresAt string `json:"expires_at"`
-	// Value is the JWS signature: the raw R||S pair of an ES256 signature, base64url
-	// without padding, as RFC 7518 §3.4 fixes it. The spec's own example shows a DER
-	// encoding ("MEUCIQ..."), which no JWS library produces or accepts; the prose says JWS,
-	// and a verifier built on any JOSE library expects R||S.
+	// Value is the JWS signature: raw R||S of an ES256 signature, base64url without padding
+	// (RFC 7518 §3.4). The spec's example shows DER, which JOSE libraries do not accept.
 	Value string `json:"value"`
 }
 

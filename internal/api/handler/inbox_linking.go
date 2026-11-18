@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/application/inbox"
@@ -15,79 +18,46 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// applicationEmail is one linked email on the application detail page.
-type applicationEmail struct {
-	ID           int64     `json:"id"`
-	Source       string    `json:"source"`
-	FromAddr     string    `json:"from_addr"`
-	FromName     string    `json:"from_name"`
-	Subject      string    `json:"subject"`
-	StatusSignal string    `json:"status_signal,omitempty"`
-	LinkSource   string    `json:"link_source,omitempty"`
-	ReceivedAt   time.Time `json:"received_at"`
-	Read         bool      `json:"read"`
-}
-
-// applicationDetail is the wire shape for GET /me/tracking/:slug — the job in the
-// shared jobview shape, the caller's interaction, and the emails linked to it.
-type applicationDetail struct {
-	Job       jobview.Job `json:"job"`
-	ViewedAt  *time.Time  `json:"viewed_at"`
-	SavedAt   *time.Time  `json:"saved_at"`
-	AppliedAt *time.Time  `json:"applied_at"`
-	Stage     string      `json:"stage,omitempty"`
-	Notes     string      `json:"notes,omitempty"`
-	// FollowedUpAt is when the caller last recorded chasing this application, or null
-	// for never. It says nothing about whether anybody replied.
-	FollowedUpAt *time.Time         `json:"followed_up_at"`
-	Emails       []applicationEmail `json:"emails"`
-	// Events is the application's history from the ledger, newest first — what happened to
-	// it, as against the marks on the posting the row carries. Empty on an application
-	// nothing has happened to yet, and the panel renders no history section for it.
-	Events []timelineEvent `json:"events"`
-	// StageSuggestion is the stage the newest classified message implies when it differs
-	// from the current one, and null when there is nothing to offer. It changes nothing by
-	// itself: mail never settles an application, and this is how that rule is said out loud
-	// rather than left for the reader to infer from a stage that did not move.
-	StageSuggestion *jobtracking.StageSuggestion `json:"stage_suggestion,omitempty"`
-	// AutoApply is the caller's live auto-apply attempt for this job, and null when none
-	// exists (openspec/changes/auto-apply-review-tracking). The drawer's own approve/
-	// decline banner reads this; it never carries the attempt's internal error text.
-	AutoApply *autoapply.AutoApplyReviewInfo `json:"auto_apply,omitempty"`
-}
-
 // GetTrackedApplication returns the caller's application for a job slug together
 // with the emails linked to it. A slug the caller does not track is a 404.
-func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *inboxHandlers) GetTrackedApplication(ctx context.Context, params apigen.GetTrackedApplicationParams) (*apigen.GetTrackedApplicationOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+	job, err := h.queries.GetJobBySlug(ctx, params.Slug)
 	if err != nil {
-		return err // ErrNoRows → 404
+		return nil, err
 	}
-	app, err := h.queries.GetUserApplication(c.Context(), db.GetUserApplicationParams{UserID: userID, JobID: job.ID})
+	if err := jobVisibleToCaller(job, userID, true); err != nil {
+		return nil, err
+	}
+	app, err := h.queries.GetUserApplication(ctx, db.GetUserApplicationParams{UserID: userID, JobID: job.ID})
 	if err != nil {
-		return err // ErrNoRows → 404 (caller does not track this job)
+		return nil, err // ErrNoRows → 404 (caller does not track this job)
 	}
-	rows, err := h.queries.ListJobEmails(c.Context(), db.ListJobEmailsParams{
+	rows, err := h.queries.ListJobEmails(ctx, db.ListJobEmailsParams{
 		UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	jv, err := jobview.FromRow(job)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	jobJSON, err := json.Marshal(jv)
+	if err != nil {
+		return nil, err
 	}
 
-	emails := make([]applicationEmail, 0, len(rows))
+	emails := make([]apigen.InboxApplicationEmail, 0, len(rows))
 	forSuggestion := make([]jobtracking.SuggestionEmail, 0, len(rows))
 	for _, r := range rows {
-		emails = append(emails, applicationEmail{
-			ID: r.ID, Source: r.Source, FromAddr: r.FromAddr, FromName: r.FromName,
-			Subject: r.Subject, StatusSignal: pgStr(r.StatusSignal), LinkSource: pgStr(r.LinkSource),
+		emails = append(emails, apigen.InboxApplicationEmail{
+			ID: r.ID, Source: r.Source, Direction: optString(r.Direction),
+			ToAddrs: optString(r.ToAddrs), CcAddrs: optString(r.CcAddrs), FromAddr: r.FromAddr, FromName: r.FromName,
+			Subject: r.Subject, StatusSignal: optString(pgStr(r.StatusSignal)), LinkSource: optString(pgStr(r.LinkSource)),
 			ReceivedAt: r.ReceivedAt.Time, Read: r.Read,
 		})
 		forSuggestion = append(forSuggestion, jobtracking.SuggestionEmail{
@@ -95,14 +65,11 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 		})
 	}
 
-	// The candidate's own last word on the stage, which silences an offer they have already
-	// answered. Mail-sourced stage_set rows are excluded because the mail path records its
-	// own auto-advances there, and one of those silencing a suggestion computed from the
-	// same messages would answer the question on the candidate's behalf. A failure here
-	// must not cost them the application: the ledger read is an input to an optional
-	// prompt, not to the record itself, so it degrades to "never set" — the direction that
-	// shows the offer rather than hiding it.
-	lastStageSet, err := h.queries.LastStageSetAt(c.Context(), db.LastStageSetAtParams{
+	// The candidate's own last word on the stage silences an offer they already answered.
+	// Mail-sourced stage_set rows are excluded: the mail path records its own auto-advances
+	// there and would answer on the candidate's behalf. A failure degrades to "never set",
+	// which shows the offer rather than hiding it.
+	lastStageSet, err := h.queries.LastStageSetAt(ctx, db.LastStageSetAtParams{
 		UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
 		ExcludeSources: appevent.MailSources,
 	})
@@ -110,120 +77,160 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 		lastStageSet = pgtype.Timestamptz{}
 	}
 
-	// The history. A failure here must not cost the caller their application: it is one
-	// section of a panel whose other four tabs do not depend on it, so it degrades to an
-	// empty history rather than a 500 on a page that was otherwise ready to render.
-	events, err := h.timeline.ForApplication(c.Context(), userID, job.ID)
+	// A history failure degrades to an empty history, not a 500 on the whole panel.
+	events, err := h.timeline.ForApplication(ctx, userID, job.ID)
 	if err != nil {
 		events = nil
 	}
 
-	// A failure here must not cost the caller the rest of the panel either — the same
-	// degrade-to-absent convention the history (events) and the stage-set read
-	// (lastStageSet) above already follow.
-	autoApply, err := autoApplyReviewInfoForJob(c.Context(), h.queries, userID, job.ID)
+	// Degrades to absent on failure, like events and lastStageSet above.
+	autoApply, err := autoApplyReviewInfoForJob(ctx, h.queries, userID, job.ID)
 	if err != nil {
 		log.Printf("auto-apply: reading review info for user %d job %d: %v", userID, job.ID, err)
 		autoApply = nil
 	}
 
-	return c.JSON(fiber.Map{"data": applicationDetail{
-		Job:             jv,
-		ViewedAt:        tsPtr(app.ViewedAt),
-		SavedAt:         tsPtr(app.SavedAt),
-		AppliedAt:       tsPtr(app.AppliedAt),
-		Stage:           pgStr(app.Stage),
-		Notes:           pgStr(app.Notes),
-		FollowedUpAt:    tsPtr(app.FollowedUpAt),
-		Emails:          emails,
-		Events:          timelineEvents(events),
-		StageSuggestion: jobtracking.SuggestStage(pgStr(app.Stage), forSuggestion, lastStageSet.Time),
-		AutoApply:       autoApply,
-	}})
+	detail := apigen.InboxApplicationDetail{
+		Job:          jobJSON,
+		ViewedAt:     nilDateTime(tsPtr(app.ViewedAt)),
+		SavedAt:      nilDateTime(tsPtr(app.SavedAt)),
+		AppliedAt:    nilDateTime(tsPtr(app.AppliedAt)),
+		Stage:        optString(pgStr(app.Stage)),
+		Notes:        optString(pgStr(app.Notes)),
+		FollowedUpAt: nilDateTime(tsPtr(app.FollowedUpAt)),
+		Emails:       emails,
+		Events:       timelineWire(events),
+	}
+	if s := jobtracking.SuggestStage(pgStr(app.Stage), forSuggestion, lastStageSet.Time); s != nil {
+		detail.StageSuggestion = apigen.NewOptStageSuggestion(apigen.StageSuggestion{Stage: s.Stage, Signal: s.Signal, EmailID: s.EmailID})
+	}
+	if autoApply != nil {
+		detail.AutoApply = apigen.NewOptAutoApplyReviewInfo(autoApplyReviewInfoOut(autoApply))
+	}
+	return &apigen.GetTrackedApplicationOK{Data: detail}, nil
+}
+
+// autoApplyReviewInfoOut maps the application layer's view of an attempt onto the contract's.
+func autoApplyReviewInfoOut(info *autoapply.AutoApplyReviewInfo) apigen.AutoApplyReviewInfo {
+	out := apigen.AutoApplyReviewInfo{
+		Status:  apigen.AutoApplyReviewStatus(info.Status),
+		QueueID: info.QueueID,
+	}
+	if info.MayHaveReachedEmployer {
+		out.MayHaveReachedEmployer = apigen.NewOptBool(true)
+	}
+	if p := info.ResolvedPreview; p != nil {
+		preview := apigen.AutoApplyResolvedPreview{Fields: make([]apigen.AutoApplyPreviewField, len(p.Fields))}
+		for i, f := range p.Fields {
+			preview.Fields[i] = apigen.AutoApplyPreviewField{Label: f.Label, Value: f.Value}
+		}
+		for _, q := range p.Pending {
+			preview.Pending = append(preview.Pending, apigen.AutoApplyPreviewPending{Label: q.Label, WillDraftAtSubmission: q.WillDraftAtSubmission})
+		}
+		out.ResolvedPreview = apigen.NewOptAutoApplyResolvedPreview(preview)
+	}
+	for _, u := range info.Unmapped {
+		out.Unmapped = append(out.Unmapped, apigen.AutoApplyUnmappedField{ID: u.ID, Label: u.Label, Required: u.Required, Reason: u.Reason})
+	}
+	return out
 }
 
 // ConfirmEmailLink promotes an email's pending suggestion to a confirmed manual
 // link. A 404 when the email is not the caller's or carries no suggestion.
-func (h *inboxHandlers) ConfirmEmailLink(c *fiber.Ctx) error {
-	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
-		return h.inbox.ResolveSuggestion(c.Context(), userID, id, true)
+func (h *inboxHandlers) ConfirmEmailLink(ctx context.Context, params apigen.ConfirmEmailLinkParams) (*apigen.ConfirmEmailLinkOK, error) {
+	msg, err := h.renderMutation(ctx, params.ID, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.ResolveSuggestion(ctx, userID, id, true)
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.ConfirmEmailLinkOK{Data: msg}, nil
 }
 
 // RejectEmailLink dismisses an email's pending suggestion without linking.
-func (h *inboxHandlers) RejectEmailLink(c *fiber.Ctx) error {
-	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
-		return h.inbox.ResolveSuggestion(c.Context(), userID, id, false)
+func (h *inboxHandlers) RejectEmailLink(ctx context.Context, params apigen.RejectEmailLinkParams) (*apigen.RejectEmailLinkOK, error) {
+	msg, err := h.renderMutation(ctx, params.ID, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.ResolveSuggestion(ctx, userID, id, false)
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.RejectEmailLinkOK{Data: msg}, nil
 }
 
 // UnlinkEmail clears an email's application link.
-func (h *inboxHandlers) UnlinkEmail(c *fiber.Ctx) error {
-	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
-		return h.inbox.Unlink(c.Context(), userID, id)
+func (h *inboxHandlers) UnlinkEmail(ctx context.Context, params apigen.UnlinkEmailParams) (*apigen.UnlinkEmailOK, error) {
+	msg, err := h.renderMutation(ctx, params.ID, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.Unlink(ctx, userID, id)
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.UnlinkEmailOK{Data: msg}, nil
 }
 
 // LinkEmail manually links an email to the application named by {"slug": …}.
-func (h *inboxHandlers) LinkEmail(c *fiber.Ctx) error {
-	slug, err := slugFromBody(c)
+func (h *inboxHandlers) LinkEmail(ctx context.Context, req apigen.OptInboxLinkTarget, params apigen.LinkEmailParams) (*apigen.LinkEmailOK, error) {
+	slug, err := slugFromBody(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
-		return h.inbox.Link(c.Context(), userID, id, slug)
+	msg, err := h.renderMutation(ctx, params.ID, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.Link(ctx, userID, id, slug)
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.LinkEmailOK{Data: msg}, nil
 }
 
 // CreateApplicationFromEmail records a tracked application from one of the
 // caller's emails and links the email to it in a single call, given {"slug": …}
 // naming a catalog job. It is the path for mail about an application the caller
-// never recorded: the employer is known and the job is in the catalog, but there
-// is no application to attach the mail to, so plain linking has nothing to point
-// at.
+// never recorded, where plain linking has nothing to point at.
 //
 // The application is dated by the email, not by now(). Mail still carrying a
 // pending suggestion is refused (409) — see inbox.Service.RecordApplication.
-func (h *inboxHandlers) CreateApplicationFromEmail(c *fiber.Ctx) error {
-	slug, err := slugFromBody(c)
+func (h *inboxHandlers) CreateApplicationFromEmail(ctx context.Context, req apigen.OptInboxLinkTarget, params apigen.CreateApplicationFromEmailParams) (*apigen.CreateApplicationFromEmailOK, error) {
+	slug, err := slugFromBody(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
-		return h.inbox.RecordApplication(c.Context(), userID, id, slug)
+	msg, err := h.renderMutation(ctx, params.ID, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.RecordApplication(ctx, userID, id, slug)
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.CreateApplicationFromEmailOK{Data: msg}, nil
 }
 
 // slugFromBody reads the {"slug": …} body shared by the linking endpoints.
-func slugFromBody(c *fiber.Ctx) (string, error) {
-	var body struct {
-		Slug string `json:"slug"`
-	}
-	if err := c.BodyParser(&body); err != nil || body.Slug == "" {
+func slugFromBody(req apigen.OptInboxLinkTarget) (string, error) {
+	slug, _ := req.Value.Slug.Get()
+	if slug == "" {
 		return "", fiber.NewError(fiber.StatusBadRequest, "slug required")
 	}
-	return body.Slug, nil
+	return slug, nil
 }
 
-// renderMutation runs one email mutation for the caller and renders the message it
+// renderMutation runs one email mutation for the caller and returns the message it
 // changed. It is the shared tail of link, unlink, confirm, reject, triage and
-// application-from-mail, so none of them can drift from another or from GetEmail —
-// and unlike GetEmail it does not mark the message read: the caller is acting on
-// the message, not opening it.
-func (h *inboxHandlers) renderMutation(c *fiber.Ctx, do func(userID, id int64) (inbox.Message, error)) error {
-	userID, err := requireUserID(c)
+// application-from-mail. Unlike GetEmail it does not mark the message read.
+func (h *inboxHandlers) renderMutation(ctx context.Context, rawID string, do func(userID, id int64) (inbox.Message, error)) (apigen.InboxEmail, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return apigen.InboxEmail{}, err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := emailPathID(rawID)
 	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
+		return apigen.InboxEmail{}, err
 	}
-	msg, err := do(userID, int64(id))
+	msg, err := do(userID, id)
 	if err != nil {
-		return err
+		return apigen.InboxEmail{}, err
 	}
-	return c.JSON(fiber.Map{"data": bodyOf(msg)})
+	return bodyOf(msg), nil
 }
 
 // tsPtr unwraps a nullable timestamp to *time.Time (nil when NULL).

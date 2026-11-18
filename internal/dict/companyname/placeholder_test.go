@@ -20,6 +20,16 @@ func (f fakeHTTP) GetJSON(_ context.Context, url string, v any) error {
 	return json.Unmarshal([]byte(body), v)
 }
 
+type recordingFakeHTTP struct {
+	fakeHTTP
+	requests []string
+}
+
+func (f *recordingFakeHTTP) GetText(ctx context.Context, url string) (string, error) {
+	f.requests = append(f.requests, url)
+	return f.fakeHTTP.GetText(ctx, url)
+}
+
 // Live-verified 2026-10-23: 15 of 15 sampled placeholder boards titled their listing page
 // "{Name} - Job Opportunities".
 func TestPlaceholderPaylocityUsesTheListingTitle(t *testing.T) {
@@ -46,97 +56,6 @@ func TestPlaceholderUKGReadyUsesFormatSettings(t *testing.T) {
 	}
 	if got, err := reg["ukgready"].Name(context.Background(), "no-tenant"); err != nil || got != "" {
 		t.Errorf("Name(no-tenant) = %q, %v; want empty, nil", got, err)
-	}
-}
-
-func TestPlaceholderOracleUsesTheSiteName(t *testing.T) {
-	getter := fakeHTTP{
-		// og:site_name, not <title>: Maggiano's page JS-escapes the apostrophe in its title.
-		"https://fa-etjg-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/Maggianos/requisitions": `<head><meta property="og:site_name" content="Maggiano&#39;s"><title>Maggiano\'s</title></head>`,
-	}
-	reg := NewPlaceholderRegistry(getter)
-	got, err := reg["oracle"].Name(context.Background(), "fa-etjg-saasfaprod1.fa.ocs.oraclecloud.com/Maggianos")
-	if err != nil || got != "Maggiano's" {
-		t.Errorf("Name = %q, %v; want Maggiano's", got, err)
-	}
-}
-
-// The site names below are the live 2026-10-23 sample: an Oracle site is named by whoever
-// configured it, so most carry the employer and a careers tail, and some carry only what the
-// site is for.
-func TestExtractOracleSiteName(t *testing.T) {
-	cases := map[string]string{
-		"Mouser":                        "Mouser",
-		"Akamai Career Site":            "Akamai",
-		"DNV careers":                   "DNV",
-		"Good Samaritan Careers":        "Good Samaritan",
-		"Harmonic Inc.":                 "Harmonic Inc.",
-		"University of Tulsa":           "University of Tulsa",
-		"Student Casual":                "",
-		"Career Site  - New Applicants": "",
-		"Dallah Recruitment System":     "",
-		"Lazard Student":                "",
-		"POLK_BoCC_Career Site":         "",
-		"Candidate Experience site":     "",
-		"":                              "",
-		// The noise in the 613 names the first prod dry-run resolved (2026-10-24).
-		"Working at Signature Aviation":           "Signature Aviation",
-		"Job Listings at Liquidity Services Inc.": "Liquidity Services Inc.",
-		"EXL Talent Acquisition Team":             "EXL",
-		"Mycronic Job Openings":                   "Mycronic",
-		"Crawford Job Listings - Global":          "Crawford",
-		"UT Health San Antonio Staff Positions":   "UT Health San Antonio",
-		"IRENA Employment":                        "IRENA",
-		"Yanfeng Human Resources":                 "Yanfeng",
-		"BDO USA Campus":                          "BDO USA",
-		"Schroders Referral":                      "Schroders",
-		"NemoursCareerSite":                       "Nemours",
-		"OMNES Education - Carrière":              "OMNES Education",
-		"City of Greeley -":                       "City of Greeley",
-		"UConn Health - Community Network":        "UConn Health - Community Network",
-		"WorkSafeNB":                              "WorkSafeNB",
-		"Vylla Home":                              "Vylla Home",
-		"Work with us":                            "",
-		"Job Search":                              "",
-		"Talent Acquisition Team":                 "",
-		"Graduate and Apprenticeship":             "",
-		"Sitio de carrera Laureate":               "",
-		"Home Page":                               "",
-		"Global":                                  "",
-		"Schools":                                 "",
-		"Generic":                                 "",
-		// A "Career" inside the name is part of it: refused by the purpose word, never cut to
-		// a different employer ("Summit").
-		"Summit Career College": "",
-		// The second prod pass (2026-10-24): 245 sites the first rule refused or never met.
-		"Dollar General External Career Site": "Dollar General",
-		"Mayo Career Site US":                 "Mayo",
-		"FMOL Health Career Portal":           "FMOL Health",
-		"JPMC Candidate Experience page":      "JPMC",
-		"St. Croix County Career Section":     "St. Croix County",
-		"Calderys Career Opportunities":       "Calderys",
-		"Jobs @ Carmeuse":                     "Carmeuse",
-		"Chubb External":                      "Chubb",
-		"Mountaire Jobs":                      "Mountaire",
-		"Careers | BXP":                       "BXP",
-		"Verisk Careers | Verisk":             "Verisk",
-		// Two parts naming different things are refused, never chosen between by shape.
-		"Local Truck Driving Jobs | Centerline Drivers": "",
-		"Careers at Acme | North America":               "",
-		"Chubb External Jobs":                           "Chubb",
-		"Corporate Careers | Trueblue":                  "Trueblue",
-		"Work with us | Copa Airlines - NEW":            "Copa Airlines",
-		"the Myriad Genetics Candidate site":            "Myriad Genetics",
-		"The Kroger Co.":                                "The Kroger Co.",
-		"Search Jobs - INL Interns":                     "INL",
-		"Testing Site - JPMC":                           "",
-		"All Jobs":                                      "",
-		"Candidate Experience site - Asia":              "",
-	}
-	for in, want := range cases {
-		if got := ExtractOracleSiteName(in); got != want {
-			t.Errorf("ExtractOracleSiteName(%q) = %q, want %q", in, got, want)
-		}
 	}
 }
 
@@ -348,6 +267,158 @@ func TestPlaceholderZohoRecruitUsesTheSiteName(t *testing.T) {
 		got, err := reg["zohorecruit"].Name(context.Background(), board)
 		if err != nil || got != want {
 			t.Errorf("Name(%s) = %q, %v; want %q", board, got, err, want)
+		}
+	}
+}
+
+func TestHostOnlyBoardRequiresBareHost(t *testing.T) {
+	for board, want := range map[string]bool{
+		"jobs.bookbeat.com":         true,
+		"":                          false,
+		"jobs.example.com/path":     false,
+		"jobs.example.com:8443":     false,
+		"user@jobs.example.com":     false,
+		"jobs.example.com?region=1": false,
+		"jobs.example.com#fragment": false,
+		"jobs..example.com":         false,
+		"jobs_.example.com":         false,
+		"-jobs.example.com":         false,
+		"jobs.example-.com":         false,
+		"jobs.example.com.":         false,
+		"jobs":                      false,
+		"127.0.0.1":                 false,
+		"xn--bcher-kva.example":     true} {
+		if got := hostOnlyBoard(board); got != want {
+			t.Errorf("hostOnlyBoard(%q) = %v; want %v", board, got, want)
+		}
+	}
+}
+
+func TestPlaceholderResolversDoNotFetchNonHostBoards(t *testing.T) {
+	for _, provider := range []string{"successfactors", "teamtailor"} {
+		t.Run(provider, func(t *testing.T) {
+			for _, board := range []string{"jobs.invalid/path", "bad_host.example", "127.0.0.1", "jobs..example.com"} {
+				getter := &recordingFakeHTTP{}
+				resolver := NewPlaceholderRegistry(getter)[provider]
+				got, err := resolver.Name(context.Background(), board)
+				if err != nil || got != "" {
+					t.Errorf("Name(%q) = %q, %v; want empty, nil", board, got, err)
+				}
+				if len(getter.requests) != 0 {
+					t.Errorf("non-host board %q triggered HTTP requests: %v", board, getter.requests)
+				}
+			}
+		})
+	}
+}
+
+// Live-verified 2026-11-02: the SuccessFactors host's title is "Jobs at Volvo Group".
+func TestPlaceholderSuccessFactorsUsesCareerPageTitle(t *testing.T) {
+	getter := fakeHTTP{
+		"https://jobs.volvogroup.com/":  `<html><head><title>Jobs at Volvo Group</title></head></html>`,
+		"https://jobs.generic.com/":     `<html><head><title>Job Search</title></head></html>`,
+		"https://jobs.careers.example/": `<html><head><title>Jobs at Careers</title></head></html>`,
+		"https://jobs.invalid/path/":    `<html><head><title>Jobs at Should Not Accept</title></head></html>`,
+	}
+	reg := NewPlaceholderRegistry(getter)
+	resolver, ok := reg["successfactors"]
+	if !ok {
+		t.Fatal("placeholder registry has no SuccessFactors resolver")
+	}
+	for board, want := range map[string]string{
+		"jobs.volvogroup.com":  "Volvo Group",
+		"jobs.generic.com":     "",
+		"jobs.careers.example": "",
+		"jobs.invalid/path":    "",
+	} {
+		got, err := resolver.Name(context.Background(), board)
+		if err != nil || got != want {
+			t.Errorf("Name(%s) = %q, %v; want %q", board, got, err, want)
+		}
+	}
+}
+
+// Live-verified 2026-11-02: the Teamtailor jobs page's og:site_name is "BookBeat".
+func TestPlaceholderTeamtailorUsesSiteName(t *testing.T) {
+	getter := fakeHTTP{
+		"https://jobs.bookbeat.com/jobs":     `<head><meta property="og:site_name" content="BookBeat" /></head>`,
+		"https://jobs.no-meta.com/jobs":      `<head><title>Jobs at No Meta</title></head>`,
+		"https://jobs.careers.example/jobs":  `<head><meta property="og:site_name" content="Careers" /></head>`,
+		"https://jobs.platform.example/jobs": `<head><meta property="og:site_name" content="Teamtailor" /></head>`,
+		"https://jobs.empty.example/jobs":    `<head><meta property="og:site_name" content="" /></head>`,
+		"https://jobs.entity.example/jobs":   `<head><meta property="og:site_name" content="BookBeat &amp; Co" /></head>`,
+		"https://jobs.spaces.example/jobs":   `<head><meta property="og:site_name" content=" Careers " /></head>`,
+		"https://jobs.invalid/path/jobs":     `<head><meta property="og:site_name" content="Should Not Accept" /></head>`,
+	}
+	reg := NewPlaceholderRegistry(getter)
+	resolver, ok := reg["teamtailor"]
+	if !ok {
+		t.Fatal("placeholder registry has no Teamtailor resolver")
+	}
+	for board, want := range map[string]string{
+		"jobs.bookbeat.com":     "BookBeat",
+		"jobs.no-meta.com":      "",
+		"jobs.careers.example":  "",
+		"jobs.platform.example": "",
+		"jobs.empty.example":    "",
+		"jobs.entity.example":   "BookBeat & Co",
+		"jobs.spaces.example":   "",
+		"jobs.invalid/path":     "",
+	} {
+		got, err := resolver.Name(context.Background(), board)
+		if err != nil || got != want {
+			t.Errorf("Name(%s) = %q, %v; want %q", board, got, err, want)
+		}
+	}
+}
+
+// Live-sampled 2026-11-13: 22 of 60 hex-labelled Paycor boards use the branded CareerHome
+// template, whose <title> names the employer; the plain template has no title at all.
+func TestPlaceholderPaycorUsesTheCareerHomeTitle(t *testing.T) {
+	const board = "8a7883d074274b7d01744b8825240e7f"
+	getter := fakeHTTP{
+		"https://recruitingbypaycor.com/career/CareerHome.action?clientId=" + board: `<html><head><title>Careers | Salvagnini America, Inc.</title></head></html>`,
+	}
+	got, err := NewPlaceholderRegistry(getter)["paycor"].Name(context.Background(), board)
+	if err != nil || got != "Salvagnini America, Inc." {
+		t.Errorf("Name = %q, %v; want Salvagnini America, Inc.", got, err)
+	}
+}
+
+func TestExtractPaycorTitle(t *testing.T) {
+	for title, want := range map[string]string{
+		"Careers | Paloma Resort Properties":               "Paloma Resort Properties",
+		"CAREERS | HORAN Wealth, LLC":                      "HORAN Wealth, LLC",
+		"Smith Dairy Queens, Ltd. | Careers":               "Smith Dairy Queens, Ltd.",
+		"Current Opportunities | Craig Technologies":       "Craig Technologies",
+		"The Dirty Buffalo Careers":                        "The Dirty Buffalo",
+		"Girl Scouts of Greater Iowa":                      "Girl Scouts of Greater Iowa",
+		"The Magic House, St. Louis Children&#39;s Museum": "The Magic House, St. Louis Children's Museum",
+		"":                                    "",
+		"Careers":                             "",
+		"Join Our Team | Careers":             "",
+		"Acme | Join the Best Team":           "", // two candidate parts: refuse rather than guess
+		"Careers - Jelly Belly Candy Company": "Jelly Belly Candy Company",
+		"Careers — RNDC-IL":                   "RNDC-IL",
+		"Careers at Urban Chestnut Brewing Company":                        "Urban Chestnut Brewing Company",
+		"Meeder Investment Management -":                                   "Meeder Investment Management",
+		"Aero Propulsion Support, Inc. - Employment":                       "Aero Propulsion Support, Inc.",
+		"Lutheran Care Center at Concord Village : Who We Are :":           "Lutheran Care Center at Concord Village",
+		"Athelas Institute, Inc. : About Us : Employment Opportunities":    "Athelas Institute, Inc.",
+		"Ohio Valley Residential Services – Balancing Mission, Management": "",
+		"Mysite":                                "",
+		"Add Company Name":                      "",
+		"Jobs at Company Name":                  "",
+		"Careers at Add Company Name":           "",
+		"Careers at Company Name Careers":       "",
+		"Company Name":                          "",
+		"neighorhood":                           "",
+		"GR Metrology Employment Opportunities": "GR Metrology",
+		"The Little Gym Jobs":                   "The Little Gym",
+		"Join Our Team at Ice Industries":       "Ice Industries",
+	} {
+		if got := ExtractPaycorTitle(title); got != want {
+			t.Errorf("ExtractPaycorTitle(%q) = %q, want %q", title, got, want)
 		}
 	}
 }

@@ -26,7 +26,7 @@ import (
 // Two shapes of site:
 //   - flat: the home page lists the vacancies.
 //   - sectioned: the home page lists only SECTIONS (?section=<guid>), each its own page of
-//     vacancies. 40 of 52 customers that looked empty on their home page were this (2026-10-27).
+//     vacancies.
 //
 // Both are read the same way: the vacancies of the home page plus those of every section it
 // links, de-duplicated by id. Any page failing fails the board, so the read is complete.
@@ -150,7 +150,7 @@ func cvwarehouseSections(root *html.Node, board string) []string {
 
 // cvwarehouseJobs maps the vacancies a page lists. A vacancy is LISTED when a list item links it:
 // the page also carries hidden detail blocks for vacancies the customer does not list on its site
-// (KCS IT: 9 listed, 94 blocks), and those are left alone. seen de-duplicates across sections.
+// (KCS IT), and those are left alone. seen de-duplicates across sections.
 func cvwarehouseJobs(root *html.Node, board, company string, seen map[string]bool) []Job {
 	details := map[string]*html.Node{}
 	var items []*html.Node

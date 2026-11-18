@@ -7,28 +7,7 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
-
-const countRecentCompanyProcessReports = `-- name: CountRecentCompanyProcessReports :one
-SELECT count(*) FROM company_process_reports WHERE user_id = $1 AND created_at >= $2
-`
-
-type CountRecentCompanyProcessReportsParams struct {
-	UserID    int64              `json:"user_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-// How many reports this user has filed since `since` — the rate-limit check, mirroring
-// CountRecentCompanyFeedback. A revival takes the ON CONFLICT branch and leaves
-// created_at untouched, so this only grows on genuinely new rows.
-func (q *Queries) CountRecentCompanyProcessReports(ctx context.Context, arg CountRecentCompanyProcessReportsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countRecentCompanyProcessReports, arg.UserID, arg.CreatedAt)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
 
 const fileCompanyProcessReport = `-- name: FileCompanyProcessReport :one
 
@@ -158,10 +137,13 @@ WITH updated AS (
        SET ai_interview_reports = $2, updated_at = now()
      WHERE company_slug = $1
        AND ai_interview_reports IS DISTINCT FROM $2
-    RETURNING id, closed_at, COALESCE(posted_at, created_at) AS eff_posted_at
+    RETURNING id, closed_at, duplicate_of, is_private, COALESCE(posted_at, created_at) AS eff_posted_at
 )
+    -- Same eligibility as ClaimSearchOutboxBatch and every other search_outbox writer: a
+    -- duplicate or private posting is never indexed, and a private one's entry would
+    -- never be drained either.
 INSERT INTO search_outbox (job_id, job_posted_at)
-SELECT id, eff_posted_at FROM updated WHERE closed_at IS NULL
+SELECT id, eff_posted_at FROM updated WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ON CONFLICT (job_id) DO NOTHING
 `
 

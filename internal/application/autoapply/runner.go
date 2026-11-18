@@ -1,13 +1,9 @@
 // Package autoapply drains the queued submission attempts in auto_apply_queue: claim a
-// wave, assemble each candidate's known answers, ask the browser-automation sidecar to
-// submit the application, and record what happened. It is deliberately incurious about ATS
-// specifics — the sidecar owns DOM structure, react-select verification, upload
-// confirmation and submission text markers, exactly as internal/applyform's fetchers own
-// each platform's own crawl quirks and this package owns none of them either.
-//
-// What populates the queue is out of scope here (see
-// openspec/changes/auto-apply-worker/design.md) — Run only ever claims what is already
-// there.
+// wave, assemble each candidate's known answers, ask the browser-automation sidecar to submit
+// the application, and record what happened. It is deliberately incurious about ATS
+// specifics: the sidecar owns DOM structure, react-select verification, upload confirmation
+// and submission text markers. What populates the queue is out of scope; Run only claims what
+// is already there.
 package autoapply
 
 import (
@@ -26,21 +22,18 @@ type Claimed struct {
 	QueueID int64
 	UserID  int64
 	JobID   int64
-	// Provider is the ATS this posting came from (jobs.source), the sidecar's routing key
-	// — the same vocabulary internal/applyform's Provider field already uses.
+	// Provider is the ATS this posting came from (jobs.source), the sidecar's routing key; same
+	// vocabulary as internal/applyform's Provider.
 	Provider string
-	// ExternalID is the board-namespaced posting id (sources.NamespaceExternalID:
-	// "board:id") — what internal/applyform's own schema fetchers need to reuse their
-	// existing per-provider API calls.
+	// ExternalID is the board-namespaced posting id (sources.NamespaceExternalID: "board:id"),
+	// which internal/applyform's schema fetchers reuse.
 	ExternalID string
 	// JobURL is the posting's own address, the page the sidecar opens to scan and fill the
 	// application form.
 	JobURL string
-	// TailoredCVID is the candidate's approved tailored CV for this vacancy (openspec/
-	// changes/auto-apply-tailored-resume). Store.Claim only ever returns entries that carry
-	// one — an approved review is part of the claim predicate — so this is never the zero
-	// value for a Claimed the sidecar sees; it is what internal/api/atsapply renders to a
-	// PDF and attaches to the form's résumé upload field.
+	// TailoredCVID is the candidate's approved tailored CV for this vacancy. Store.Claim only
+	// returns entries that carry one (an approved review is part of the claim predicate), so it
+	// is never zero here; internal/api/atsapply renders it to the PDF for the résumé upload.
 	TailoredCVID uuid.UUID
 }
 
@@ -63,40 +56,22 @@ const (
 	// touched nothing on the employer's form.
 	StatusParked SubmitStatus = "parked"
 	// StatusUnconfirmed means the sidecar could not tell whether the employer accepted the
-	// application — neither a confirmation nor an explicit refusal appeared. Most often
-	// that follows the sidecar's own deliberate submit click, but it can also follow a
-	// field's own interaction (e.g. an accidental Enter-triggered submit) that may have
-	// already sent the form before the sidecar's own click ever fired — see
-	// internal/api/atsapply/fill.go's formStillPresent guard. Either way this is NOT a
-	// plain transient failure: a submission may well have gone through, so retrying it
-	// through the ordinary attempts budget risks a second real submission —
-	// exactly the "never twice" requirement the forced dead-letter in recordApplied
-	// exists to protect on the DB-write side. See runner.go's process/fail handling: an
-	// unconfirmed result is dead-lettered immediately, the same way a lost post-submit
-	// record is, rather than spending a retry.
+	// application: neither a confirmation nor an explicit refusal appeared. A submission may
+	// have gone through (e.g. an Enter-triggered submit, see internal/api/atsapply/fill.go's
+	// formStillPresent guard), so it is NOT retried: process dead-letters it immediately, like a
+	// lost post-submit record, to keep "never twice".
 	StatusUnconfirmed SubmitStatus = "unconfirmed"
-	// StatusCaptchaRefused means the board answered the submit click by saying, in its own
-	// words, that it could not verify the submission — so no application was created. It is
-	// the ONE post-submit outcome that is safe to retry: every other uncertainty here could
-	// mean the employer already has the application, and StatusUnconfirmed exists precisely
-	// because that possibility must never be retried into a duplicate.
+	// StatusCaptchaRefused means the board said it could not verify the submission, so no
+	// application was created. It is the ONE post-submit outcome safe to retry: every other
+	// uncertainty may mean the employer already has the application.
 	StatusCaptchaRefused SubmitStatus = "captcha_refused"
 )
 
-// captchaMaxAttempts is the retry budget for StatusCaptchaRefused, deliberately far more
-// generous than the run's ordinary MaxAttempts.
-//
-// An invisible captcha is not a condition that can be configured away. Eight probe runs
-// against a live Lever posting — headless and windowed under Xvfb, from a datacentre IP and
-// a residential one, with and without mouse/scroll/dwell warm-up, with and without a
-// User-Agent that says "HeadlessChrome" — passed exactly once. Nothing about the browser
-// moved the odds; the pass looked like a coin landing well. What decides whether the
-// application ever goes through is therefore how many times we are willing to ask, and each
-// ask is free of consequence: the board itself said no application was created.
-//
-// 20, against a timer that fires every 5 minutes and takes one attempt per entry, is roughly
-// an hour and a half of asking. Bounded because a posting closes and a person deserves to be
-// told we gave up, rather than a queue that retries silently forever.
+// captchaMaxAttempts is the retry budget for StatusCaptchaRefused, far more generous than
+// the run's ordinary MaxAttempts. An invisible captcha cannot be configured away: nothing
+// about the browser setup moved the odds, so success depends on how many times we ask, and
+// each ask is free because no application was created. 20 asks against a 5-minute timer is
+// about an hour and a half; bounded so a closed posting is eventually reported as given up.
 const captchaMaxAttempts = 20
 
 // SidecarResult is what the sidecar returned for one attempt.
@@ -108,60 +83,46 @@ type SidecarResult struct {
 	// detail in Unmapped (e.g. "captcha required").
 	Reason string
 	// RetryBudget is how many times THIS sidecar thinks its outcome is worth repeating,
-	// overriding the runner's own default. Zero means "no opinion", which is what the
-	// free browser path says: its captcha asks cost nothing, so they keep the measured
-	// captchaMaxAttempts. The cloud path names a smaller number because each of its asks
-	// is billed, and only the executor knows that.
+	// overriding the runner's default. Zero means no opinion (the free browser path keeps
+	// captchaMaxAttempts); the cloud path names a smaller number because each ask is billed.
 	RetryBudget int
 }
 
-// SidecarClient submits one application attempt through the browser-automation sidecar.
-// The real implementation is internal/atsapply, driving a headless browser in-process
-// (see design.md's "chromedp, not a Python/Patchright sidecar" decision — this interface
-// predates and is unaffected by that choice); tests use a fake. Every ATS-specific decision
-// — what the DOM actually requires, whether an answer resolves a field, whether the
-// submission was confirmed — is made on the other side of this call; this package only
-// interprets the verdict.
+// SidecarClient submits one application attempt through the browser-automation sidecar. The
+// real implementation is internal/atsapply, driving a headless browser in-process; tests use
+// a fake. Every ATS-specific decision is made on the other side of this call; this package
+// only interprets the verdict.
 //
-// Submit takes the whole Claimed rather than its individual fields, mirroring
-// internal/applyform.Fetcher.Fetch: what a submission needs is not the same for every
-// provider (Greenhouse and Ashby's schema fetch is keyed by ExternalID's board:posting-id,
-// not by JobURL alone), so the seam should not have to grow a parameter every time a new
-// provider needs one more piece of the claim.
+// Submit takes the whole Claimed, like internal/applyform.Fetcher.Fetch, because what a
+// submission needs differs by provider (Greenhouse and Ashby key on ExternalID, not JobURL).
 type SidecarClient interface {
 	Submit(ctx context.Context, c Claimed, answers map[string]string) (SidecarResult, error)
 }
 
-// AnswerSource supplies the candidate's known answers for one attempt — identity and
-// work-authorization facts today (see design.md: no Tier C/LLM-drafted answers in this
-// package yet). A question the returned map has no entry for always parks rather than being
-// guessed.
+// AnswerSource supplies the candidate's known answers for one attempt: identity and
+// work-authorization facts. A question with no entry always parks rather than being guessed.
 type AnswerSource interface {
 	Answers(ctx context.Context, userID int64) (map[string]string, error)
 }
 
-// Store is the persistence the runner needs. The real implementation wraps the generated
-// queries and a pool; tests use a fake. The port hides the pool and the transaction
-// boundaries, not the queue's semantics.
+// Store is the persistence the runner needs; the real one wraps the generated queries and a
+// pool, tests use a fake. The port hides the pool and transactions, not the queue's semantics.
 type Store interface {
 	// Claim leases up to batch live, unleased attempts.
 	Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error)
-	// Submit records a successful application and retires the queue entry, atomically —
-	// so an attempt cannot be both recorded and left queued, nor retired without being
-	// recorded. Composes jobtracking's application write with the queue delete under one
-	// transaction/lock (design.md), so a double-claim of the same row cannot double-write.
+	// Submit records a successful application and retires the queue entry atomically, composing
+	// jobtracking's application write with the queue delete under one transaction/lock so a
+	// double-claim cannot double-write.
 	Submit(ctx context.Context, c Claimed) error
 	// Park records an attempt no known answer could complete, without retrying it — it
 	// needs new data, not another try.
 	Park(ctx context.Context, queueID int64, unmapped []UnmappedField, reason string) error
 	// Fail records a transient failure for one entry; it reports whether it dead-lettered.
 	Fail(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
-	// FailCaptcha counts a captcha refusal on its own counter (migration 0157) rather
-	// than the ordinary attempts budget. Deliberately NOT Fail with a different
-	// maxAttempts: the two share a column that way, and the captcha's far more generous
-	// budget then spends down the one a genuinely transient error depends on — a live
-	// entry with 12 captcha refusals was dead-lettered by the first field fill that
-	// timed out. Same separation RecordAutoApplyPreviewFailure already makes.
+	// FailCaptcha counts a captcha refusal on its own counter, not the ordinary attempts
+	// budget. Not Fail with a different maxAttempts: the two would share a column, and the
+	// generous captcha budget would spend down the one a transient error depends on. Same
+	// separation as RecordAutoApplyPreviewFailure.
 	FailCaptcha(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
 	// DeadLetterUncertain dead-letters an attempt whose submission may already have
 	// reached the employer, and marks it so (auto_apply_queue.submit_uncertain_at). The
@@ -190,12 +151,9 @@ type RunStats struct {
 	DeadLettered int
 }
 
-// Degraded reports whether a run deserves an alert. A parked attempt is not a fault — it is
-// the system correctly declining to guess — so it never counts here, the same reasoning
-// internal/applyform's RunStats.Degraded applies to a posting that is simply gone. What does
-// deserve attention is a dead letter (work abandoned, or — per the forced dead-letter path
-// below — a submission whose local record was lost) and a run that failed everything it
-// touched.
+// Degraded reports whether a run deserves an alert. A parked attempt is the system
+// correctly declining to guess, so it never counts. A dead letter (including a submission
+// whose local record was lost) or a run that failed everything it touched does.
 func (s RunStats) Degraded() bool {
 	return s.DeadLettered > 0 || (s.Applied == 0 && s.Blocked == 0 && s.Failed > 0)
 }
@@ -223,9 +181,9 @@ func Run(ctx context.Context, s Store, answers AnswerSource, sidecar SidecarClie
 	return stats, nil
 }
 
-// cancelAwareClaimer mirrors internal/applyform's: guards every Claim call after the first
-// against a cancelled ctx, so a cancelled run stops at the next wave boundary instead of
-// burning the remaining backlog's retry attempts on a shutdown.
+// cancelAwareClaimer mirrors internal/applyform's: it checks for a cancelled ctx before
+// every Claim after the first, so a cancelled run stops at the next wave boundary instead of
+// burning the backlog's retries.
 type cancelAwareClaimer struct {
 	store Store
 	calls int
@@ -246,10 +204,9 @@ type run struct {
 	opts    RunOptions
 }
 
-// process resolves one attempt end to end and reports what happened; outbox.RunPool tallies
-// the result. Blocked reuses outbox.Discarded — the same "left the active claim rotation
-// without being retried" meaning internal/applyform gives it for a gone posting, even
-// though what it means for THIS queue is "needs new data", not "the platform lost it".
+// process resolves one attempt end to end; outbox.RunPool tallies the result. Blocked
+// reuses outbox.Discarded ("left the rotation without a retry"); here it means "needs new
+// data".
 func (rn *run) process(ctx context.Context, c Claimed) outbox.Outcome {
 	answers, err := rn.answers.Answers(ctx, c.UserID)
 	if err != nil {
@@ -285,14 +242,10 @@ func (rn *run) process(ctx context.Context, c Claimed) outbox.Outcome {
 	}
 }
 
-// recordApplied handles the one outcome that must never take the ordinary retry path: the
-// sidecar has already submitted the application for real, so a failure to record that
-// locally cannot be treated like any other transient error. The normal Fail() path bumps a
-// retry counter and eventually re-arms the row for reclaim — which here would mean calling
-// the sidecar again for a job it already applied to, submitting a second time. Forcing an
-// immediate dead-letter (maxAttempts=1) instead means the row never becomes reclaimable
-// again; it surfaces as work a human must look at, not as a queue that quietly retries its
-// way into a duplicate application.
+// recordApplied handles the outcome that must never take the ordinary retry path: the
+// sidecar already submitted for real, so a failed local record is not a transient error.
+// Fail() would re-arm the row and the sidecar would submit a second time; forcing an
+// immediate dead-letter (maxAttempts=1) surfaces it for a human instead.
 func (rn *run) recordApplied(ctx context.Context, c Claimed) outbox.Outcome {
 	err := rn.store.Submit(ctx, c)
 	if err == nil {
@@ -302,30 +255,24 @@ func (rn *run) recordApplied(ctx context.Context, c Claimed) outbox.Outcome {
 	return rn.deadLetterImmediately(ctx, c, fmt.Sprintf("submitted but failed to record: %v", err))
 }
 
-// deadLetterImmediately forces a dead-letter rather than spending the run's
-// configured retry budget — the shared ending for every outcome where retrying normally
-// risks a second real submission to the employer: a lost post-submit record
-// (recordApplied) and an unconfirmed submission (process's StatusUnconfirmed case) both
-// land here. The row never becomes reclaimable again; it surfaces as work a human must look
-// at, not as a queue that quietly retries its way into a duplicate application.
+// deadLetterImmediately forces a dead-letter rather than spending the retry budget: the
+// shared ending where retrying risks a second real submission (a lost post-submit record, an
+// unconfirmed submission). The row never becomes reclaimable; a human must look at it.
 func (rn *run) deadLetterImmediately(ctx context.Context, c Claimed, reason string) outbox.Outcome {
 	if failErr := rn.store.DeadLetterUncertain(ctx, c.QueueID, reason); failErr != nil {
-		// The write that was supposed to make this row terminal did not happen: it
-		// stays claimed, its lease still runs out on its own, and a later run can
-		// reclaim it as an ordinary pending attempt — reopening exactly the "might
-		// submit twice" risk this whole path exists to close. CRITICAL because this
-		// is not a case retrying resolves; only a person can decide whether to block
-		// the row by hand before the lease expires.
+		// The write that should have made this row terminal failed: it stays claimed, its lease
+		// runs out, and a later run could reclaim it as an ordinary attempt, reopening the
+		// double-submit risk. CRITICAL because retrying cannot fix it; only a person can block the
+		// row before the lease expires.
 		log.Printf("auto-apply: CRITICAL could not dead-letter queue entry %d; it stays reclaimable and may submit twice: %v", c.QueueID, failErr)
 		return outbox.Failed
 	}
 	return outbox.DeadLettered
 }
 
-// failCaptcha records a captcha refusal against its own generous budget rather than the
-// run's ordinary one. It is otherwise an ordinary failure — the entry stays claimable, the
-// attempt counts, and running out still dead-letters, which is what tells the candidate we
-// stopped asking rather than leaving them to wonder.
+// failCaptcha records a captcha refusal against its own budget. Otherwise an ordinary
+// failure: the entry stays claimable and running out dead-letters it, which tells the
+// candidate we stopped asking.
 func (rn *run) failCaptcha(ctx context.Context, c Claimed, boardSaid string, budget int) outbox.Outcome {
 	reason := "captcha refused the submission, so no application was created"
 	if boardSaid != "" {

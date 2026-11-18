@@ -8,12 +8,10 @@ import (
 	"time"
 )
 
-// techtree adapts jobs.techtree.dev, a small AI-recruiting-agency job board. It is boardless
-// (one site, no per-tenant board) and multi-company, so it stays in the source facet and
-// takes each posting's company from the page. The flat sitemap.xml enumerates every open
-// posting's URL; each job page server-renders a schema.org JobPosting ld+json block plus,
-// separately, the full rich-text body in a "prose"-class DOM container — the ld+json block's
-// own description field is only the page's short summary, not the full body.
+// techtree adapts jobs.techtree.dev, a boardless, multi-company job board (it stays in the source
+// facet; each posting's company comes from the page). The flat sitemap.xml enumerates every open
+// posting's URL. Each job page server-renders a schema.org JobPosting ld+json block plus the full
+// rich-text body in a "prose"-class DOM container; the ld+json description is only a short summary.
 
 // techtreeHTTP is the transport techtree needs: an XML sitemap plus HTML detail pages.
 type techtreeHTTP interface {
@@ -56,19 +54,17 @@ func (s techtree) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		return s.detail(ctx, loc)
 	})
 
-	// A run that listed postings and read none of them is a board failure, not an empty
-	// crawl — see internal/ingest/sources/AGENTS.md's "a crawl that reads nothing of what it
-	// listed must fail" (the echojobs#2588 lesson).
+	// A run that listed postings and read none of them is a board failure, not an empty crawl (see
+	// sources/AGENTS.md).
 	if len(locs) > 0 && len(jobs) == 0 {
 		return nil, fmt.Errorf("techtree: listed %d postings and read none of them", len(locs))
 	}
 	return jobs, nil
 }
 
-// detail fetches one job page and maps its ld+json JobPosting plus its DOM rich-text body to
-// a Job, returning ok=false when the page fetch fails, carries no JobPosting, has no
-// resolvable employer, or has no locatable full-text body — so the caller drops just that
-// posting.
+// detail fetches one job page and maps its ld+json JobPosting plus its DOM body to a Job. It
+// returns ok=false when the fetch fails, there is no JobPosting, no resolvable employer or no
+// full-text body, so the caller drops just that posting.
 func (s techtree) detail(ctx context.Context, loc string) (Job, bool) {
 	root, err := s.http.GetHTML(ctx, loc)
 	if err != nil {
@@ -104,12 +100,9 @@ func (s techtree) detail(ctx context.Context, loc string) (Job, bool) {
 	}, true
 }
 
-// techtreePostedAt parses TechTree's own datePosted shape ("2026-09-11T07:46:06.765320" —
-// a zone-less ISO-8601 timestamp, confirmed live to carry no offset or "Z"), which
-// parseRFC3339 does not accept since both its layouts require one. A zone-less layout has
-// Go default to UTC, the reasonable read for a backend timestamp with no stated zone.
-// parseRFC3339 is tried first so a future switch to a proper RFC3339 value keeps working
-// unchanged.
+// techtreePostedAt parses TechTree's datePosted, a zone-less ISO-8601 timestamp
+// ("2026-09-11T07:46:06.765320") that parseRFC3339 rejects. The zone-less layout reads it as UTC;
+// parseRFC3339 goes first so a proper RFC3339 value keeps working.
 func techtreePostedAt(s string) *time.Time {
 	if t := parseRFC3339(s); t != nil {
 		return t
@@ -118,11 +111,9 @@ func techtreePostedAt(s string) *time.Time {
 }
 
 // techtreePosting is the schema.org JobPosting decoded from a TechTree job page.
-// JobLocation.Address is a plain string on this platform ("Latin America (remote)"), not a
-// structured PostalAddress object, so it cannot reuse the shared schemaAddress/schemaPlace
-// types. Description is deliberately NOT read here — TechTree's own ld+json description
-// field is only the page's short summary, never the full body (see detail, which reads the
-// full body from the DOM instead).
+// JobLocation.Address is a plain string here, not a PostalAddress, so the shared schemaAddress
+// types do not fit. Description is deliberately not read: it is only the short summary (detail
+// reads the full body from the DOM).
 type techtreePosting struct {
 	Title              string `json:"title"`
 	DatePosted         string `json:"datePosted"`

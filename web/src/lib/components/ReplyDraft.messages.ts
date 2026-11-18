@@ -1,0 +1,45 @@
+import { defineMessages } from '#lib/i18n/t.js';
+
+// The draft itself is model-written in the email's own language; only the chrome is here.
+export const messages = defineMessages(
+  {
+    draftReply: 'Draft reply',
+    heading: 'Reply draft',
+    building: 'Writing your reply…',
+    failed: "Couldn't draft a reply. Please try again.",
+    viewPlans: 'View plans',
+    to: 'To',
+    subject: 'Subject',
+    bodyLabel: 'Reply',
+    note: 'Fill in the [brackets], then send it from your own mail. freehire never sends anything for you.',
+    openIn: 'Open in',
+    mailApp: 'Mail app',
+    redraft: 'Redraft',
+    close: 'Close',
+    closeAria: 'Close dialog',
+    copy: 'Copy reply',
+    copied: 'Copied',
+    copyFailed: "Couldn't copy to the clipboard.",
+  },
+  {
+    ru: {
+      draftReply: 'Черновик ответа',
+      heading: 'Черновик ответа',
+      building: 'Пишем ответ…',
+      failed: 'Не удалось написать черновик. Попробуйте ещё раз.',
+      viewPlans: 'Посмотреть тарифы',
+      to: 'Кому',
+      subject: 'Тема',
+      bodyLabel: 'Ответ',
+      note: 'Заполните [скобки] и отправьте со своей почты. freehire ничего не отправляет за вас.',
+      openIn: 'Открыть в',
+      mailApp: 'почтовом приложении',
+      redraft: 'Написать заново',
+      close: 'Закрыть',
+      closeAria: 'Закрыть диалог',
+      copy: 'Скопировать ответ',
+      copied: 'Скопировано',
+      copyFailed: 'Не удалось скопировать в буфер обмена.',
+    },
+  },
+);

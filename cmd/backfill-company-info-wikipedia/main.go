@@ -1,14 +1,12 @@
-// Command backfill-company-info-wikipedia fills companies.tagline/company_info for
-// companies no curated company-info source has ever matched — the population that
-// keeps growing as ATS crawling discovers new companies (see
-// openspec/changes/company-info-wikipedia-backfill). Each eligible company (blank
-// tagline, never checked by this backfill) is looked up against Wikidata; a match is
-// accepted only when the resolved entity is confidently typed as a business/
-// organization (internal/job/wikicompany), never by keyword-scanning its description.
+// Command backfill-company-info-wikipedia fills companies.tagline/company_info for companies
+// no curated company-info source has matched. Each eligible company (blank tagline, never
+// checked by this backfill) is looked up against Wikidata; a match is accepted only when the
+// entity is confidently typed as a business/organization (internal/job/wikicompany), never by
+// keyword-scanning its description.
 //
-// Reports by default; --apply writes. WIKIPEDIA_BACKFILL_MAX_PER_RUN (default 500)
-// bounds one run. A company is marked checked whether or not a confident match was
-// found, so a later run never re-queries Wikidata for it — see migration 0154.
+// Reports by default; --apply writes. WIKIPEDIA_BACKFILL_MAX_PER_RUN (default 500) bounds one
+// run. A company is marked checked whether or not a match was found, so a later run never re-
+// queries it (migration 0154).
 //
 // Needs DATABASE_URL. Outbound HTTPS only, to www.wikidata.org, query.wikidata.org,
 // and en.wikipedia.org — no API key, no billing.
@@ -63,10 +61,8 @@ func run() int {
 		return 1
 	}
 
-	// A per-company failure (already logged via onFail) is counted and stepped
-	// over, never fatal to the run — the same convention backfill-talent-handle
-	// and discord-sync use, so one company whose Wikidata lookup deterministically
-	// fails does not turn every future scheduled run red.
+	// A per-company failure (already logged via onFail) is counted and stepped over, never fatal,
+	// so one company whose lookup always fails does not turn every scheduled run red.
 	if !*apply {
 		log.Printf("backfill-company-info-wikipedia: dry run — would match %d, reject %d, %d failed (of up to %d). Re-run with --apply to write.",
 			res.Matched, res.Rejected, res.Failed, maxPerRun)

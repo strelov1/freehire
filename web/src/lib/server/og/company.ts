@@ -32,14 +32,9 @@ function chips(company: Company): Chip[] {
 
 /** Builds the card HTML for `company`. `logo` is a data-URI or null (monogram);
  *  `openJobs` is the company's current open-vacancy count. */
-export function buildCompanyCard(
-  company: Company,
-  opts: { logo: string | null; openJobs: number },
-): string {
+export function buildCompanyCard(company: Company, opts: { logo: string | null; openJobs: number }): string {
   const tagline = company.tagline?.trim();
-  const chipRow = chips(company)
-    .map(chipMarkup)
-    .join('');
+  const chipRow = chips(company).map(chipMarkup).join('');
 
   return `
 <div style="display:flex;flex-direction:column;justify-content:space-between;width:${OG_WIDTH}px;height:${OG_HEIGHT}px;padding:64px 72px;background:#ffffff;color:#0a0a0a;font-family:Inter">

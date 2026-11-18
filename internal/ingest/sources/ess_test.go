@@ -151,6 +151,10 @@ func TestESSHydratesUnseenVacancies(t *testing.T) {
 	if nurse.PostedAt == nil || !nurse.PostedAt.Equal(want) {
 		t.Errorf("posted = %v, want %v", nurse.PostedAt, want)
 	}
+	wantDeadline := time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
+	if nurse.ApplicationDeadline == nil || !nurse.ApplicationDeadline.Equal(wantDeadline) {
+		t.Errorf("apply by = %v, want the detail's prijavaDo %v", nurse.ApplicationDeadline, wantDeadline)
+	}
 	if !strings.Contains(nurse.Description, "<li>izvajanje zdravstvene nege in oskrbe stanovalcev") {
 		t.Errorf("an inline dash list must render as a list: %q", nurse.Description)
 	}
@@ -178,12 +182,10 @@ func TestESSHydratesUnseenVacancies(t *testing.T) {
 	}
 }
 
-func TestESSRefreshesSeenAndSparesGatedVacancies(t *testing.T) {
+func TestESSRefreshesSeenVacancies(t *testing.T) {
 	s, fake := newTestESS(t)
 	seen := func(id string) bool { return id == "3475977" }
-	gate := DetailGate{
-		Rejected: func(j Job) bool { return j.ExternalID == "3499064" },
-	}
+	gate := DetailGate{}
 	jobs, err := s.FetchNewGated(context.Background(), CompanyEntry{Provider: "ess"}, seen, gate)
 	if err != nil {
 		t.Fatalf("FetchNewGated: %v", err)
@@ -192,11 +194,8 @@ func TestESSRefreshesSeenAndSparesGatedVacancies(t *testing.T) {
 	if !got["3475977"].SeenRefresh || got["3475977"].Description != "" {
 		t.Errorf("a stored vacancy must be refreshed by identity: %+v", got["3475977"])
 	}
-	if got["3499064"].Description != "" {
-		t.Errorf("a rejected vacancy must be yielded body-less")
-	}
 	for _, id := range fake.detCalls {
-		if id == "3475977" || id == "3499064" {
+		if id == "3475977" {
 			t.Errorf("detail bought for %s, which needed none", id)
 		}
 	}

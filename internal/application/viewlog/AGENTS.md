@@ -64,3 +64,17 @@ parses as nothing silently counts nothing.
   chunk is only safe beside `view_log_cursors`: each chunk moves the file's resume key
   (ascending `(job_id, day)`) in its own transaction, compare-and-swap, and
   `processed_view_logs` still marks the file finished.
+- **Every reader of "how much a posting was LOOKED AT" uses `job_daily_views.page_uniques`,
+  never `uniques`.** `uniques` fuses bot-filtered page opens with UNFILTERED API reads, and
+  crawlers are most of this host's traffic, so a figure built on it reports what robots
+  fetched. The rule once lived only in `social-digest`, which is why
+  `/api/v1/stats/engagement` and the `/open` grid published 11,027,722 against the real
+  5,401,347 for months (freehire#2945). Seed the two columns to DIFFERENT totals in any test
+  that asserts on a view figure: `page_uniques` has `DEFAULT 0`, so a test seeding only
+  `uniques` passes whichever column the query reads. `page_uniques` is every VISITOR, signed
+  in or not, so it never sits beside signed-in counters without its label saying so.
+  `job_daily_views.agent_uniques` counts postings served to agents (MCP, OJCP,
+  `/agent/jobs/search`, via `internal/application/agentview`); `jobs.view_count` =
+  `uniques` + `agent_uniques`, a total-reach figure mixing people, API reads and agents (the
+  most-viewed sort and the job page show it as such). The only human-only figure is
+  `page_uniques`.

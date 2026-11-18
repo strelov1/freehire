@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/api/ojcpmcp"
 	"github.com/strelov1/freehire/internal/application/agentview"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -35,13 +36,14 @@ func TestAnMCPSearchThroughTheMountedRouteIsRecorded(t *testing.T) {
 	fake := &fakeSearcher{res: search.SearchResult{Hits: []search.JobDocument{{ID: 7}, {ID: 9}}}}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.All("/mcp", agentViews(sink, agentview.SurfaceMCP),
-		adaptor.HTTPHandler(mcpapp.Handler(mcpappUnder(fake, nil, fakeOJCPStore{}), "")))
+		adaptor.HTTPHandler(mcpapp.Handler(nil, "", mcpappUnder(fake, nil, fakeOJCPStore{}))))
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_jobs","arguments":{"query":"go"}}}`
 	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("User-Agent", "Claude-User")
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +69,7 @@ func mcpCall(t *testing.T, app *fiber.App, ua, body string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("User-Agent", ua)
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +80,7 @@ func mcpCall(t *testing.T, app *fiber.App, ua, body string) {
 func mountedMCP(sink agentview.Sink, store fakeOJCPStore) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.All("/mcp", agentViews(sink, agentview.SurfaceMCP),
-		adaptor.HTTPHandler(mcpapp.Handler(mcpappUnder(&fakeSearcher{}, nil, store), "")))
+		adaptor.HTTPHandler(mcpapp.Handler(nil, "", mcpappUnder(&fakeSearcher{}, nil, store))))
 	return app
 }
 
@@ -166,9 +169,9 @@ func TestAnAgentSearchIsRecorded(t *testing.T) {
 	fake := &fakeSearcher{res: search.SearchResult{Hits: []search.JobDocument{{ID: 3}}}}
 	h := &searchHandlers{search: fake, descriptions: &fakeDescriptions{}}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/agent/jobs/search", agentViews(sink, agentview.SurfaceAgentAPI), h.AgentSearchJobs)
+	app.Get("/api/v1/agent/jobs/search", agentViews(sink, agentview.SurfaceAgentAPI), newContract(contractHandlers{searchHandlers: h}))
 
-	if status, body := doGet(t, app, "/agent/jobs/search?q=go"); status != fiber.StatusOK {
+	if status, body := doGet(t, app, "/api/v1/agent/jobs/search?q=go"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, body = %v", status, body)
 	}
 
@@ -181,12 +184,17 @@ func TestAnAgentSearchIsRecorded(t *testing.T) {
 func TestAnAccountRequestIsKeyedByTheVerifiedAccount(t *testing.T) {
 	sink := &recordingSink{}
 	app := fiber.New()
-	app.Get("/x", agentViews(sink, agentview.SurfaceMCPAccount), func(c *fiber.Ctx) error {
+	app.Get("/x", func(c *fiber.Ctx) error {
+		// What mcpAuthenticate leaves behind for a verified credential.
+		c.Locals(localsMCPUserID, int64(42))
+		return c.Next()
+	}, agentViews(sink, agentview.SurfaceMCP), func(c *fiber.Ctx) error {
 		agentview.Record(c.Context(), agentview.KindDetail, []int64{1})
 		return c.SendStatus(fiber.StatusNoContent)
 	})
 	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/x", nil)
-	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
+	// A caller-sent identity header is not what decides the viewer.
+	req.Header.Set(mcpapp.AccountUserIDHeader, "7")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
@@ -221,6 +229,7 @@ func ojcpMCPCall(t *testing.T, app *fiber.App, body string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("User-Agent", "Claude-User")
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
@@ -258,28 +267,57 @@ func TestAnOJCPMCPCallThroughTheMountedRouteIsRecorded(t *testing.T) {
 	}
 }
 
-func TestAnAgentViewBehindAVerifiedKeyIsCountedAsItsAccount(t *testing.T) {
-	// The public gate verifies a presented key for its rate budget; the view scope must
-	// reuse that identity, or every account behind one address and client counts as one.
+func TestAnAgentViewBehindTrustedAuthenticationIsCountedAsItsAccount(t *testing.T) {
 	sink := &recordingSink{}
-	g := newTestGate(&checkRecorder{}, paidKeys(), false, "")
 	app := fiber.New(fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor})
-	app.Get("/agent", g.limiter(agentSearchBudget), agentViews(sink, agentview.SurfaceAgentAPI),
-		func(c *fiber.Ctx) error {
-			agentview.Record(c.Context(), agentview.KindSearch, []int64{1})
-			return c.SendStatus(fiber.StatusOK)
-		})
-
-	gateGet(t, app, "/agent", bearer(unpaidToken))
-	gateGet(t, app, "/agent", bearer(unknownToken))
-
+	app.Use(externalCaller("trusted-auth-service"))
+	app.Get("/agent", agentViews(sink, agentview.SurfaceAgentAPI), func(c *fiber.Ctx) error {
+		if _, authenticated := auth.UserID(c); authenticated {
+			t.Error("attribution must not authenticate a request")
+		}
+		agentview.Record(c.Context(), agentview.KindSearch, []int64{1})
+		return c.SendStatus(fiber.StatusOK)
+	})
+	for _, secret := range []string{"trusted-auth-service", "forged"} {
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/agent", nil)
+		req.Header.Set(fiber.HeaderXForwardedFor, "203.0.113.42")
+		req.Header.Set(authIntrospectionSecretHeader, secret)
+		req.Header.Set("X-FH-Auth-User", "9")
+		response, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+	}
 	if len(sink.got) != 2 {
-		t.Fatalf("events = %d, want 2", len(sink.got))
+		t.Fatalf("events=%d want2", len(sink.got))
 	}
 	if got := sink.got[0].Viewer; got != "user:9" {
-		t.Errorf("verified key viewer = %q, want user:9", got)
+		t.Errorf("verified viewer=%q want user:9", got)
 	}
-	if got := sink.got[1].Viewer; !strings.HasPrefix(got, "ip:"+gateIP) {
-		t.Errorf("unknown key viewer = %q, want the address", got)
+	if got := sink.got[1].Viewer; !strings.HasPrefix(got, "ip:203.0.113.42") {
+		t.Errorf("forged proof viewer=%q want address", got)
+	}
+}
+
+func TestVerifiedMCPAccountIdentityIsRecorded(t *testing.T) {
+	sink := &recordingSink{}
+	app := fiber.New()
+	app.Get("/x", func(c *fiber.Ctx) error {
+		c.Locals(localsMCPUserID, int64(42))
+		return c.Next()
+	}, agentViews(sink, agentview.SurfaceMCP), func(c *fiber.Ctx) error {
+		agentview.Record(c.Context(), agentview.KindDetail, []int64{7})
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/x", nil)
+	req.Header.Set(mcpapp.AccountUserIDHeader, "99")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if len(sink.got) != 1 || sink.got[0].Viewer != "user:42" {
+		t.Fatalf("events=%+v, want verified account instead of caller header or IP", sink.got)
 	}
 }

@@ -72,8 +72,7 @@
   <div>
     <a
       href={asMentor ? resolve('/my/mentorship/bookings') : resolve('/my/mentorship')}
-      class="text-muted-foreground hover:text-foreground text-sm"
-      >← {asMentor ? 'Booked with you' : 'All sessions'}</a
+      class="text-muted-foreground hover:text-foreground text-sm">← {asMentor ? 'Booked with you' : 'All sessions'}</a
     >
     <h1 class="mt-2 text-xl font-semibold">{starts.day} at {starts.time}–{ends.time}</h1>
     <p class="text-muted-foreground mt-1 text-sm">
@@ -92,9 +91,7 @@
       <p class="text-sm">
         <span class="text-muted-foreground">Meeting link</span><br />
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the mentor's own meeting room, an external URL, not an internal route -->
-        <a class="underline" href={session.meeting_url} rel="noreferrer" target="_blank"
-          >{session.meeting_url}</a
-        >
+        <a class="underline" href={session.meeting_url} rel="noreferrer" target="_blank">{session.meeting_url}</a>
       </p>
     {/if}
 
@@ -121,10 +118,7 @@
       {/if}
       <label class="text-sm">
         <span class="text-muted-foreground">Rating</span>
-        <select
-          bind:value={rating}
-          class="border-input bg-background mt-1 block h-9 rounded-md border px-2 text-sm"
-        >
+        <select bind:value={rating} class="border-input bg-background mt-1 block h-9 rounded-md border px-2 text-sm">
           {#each [5, 4, 3, 2, 1] as value (value)}
             <option {value}>{value}</option>
           {/each}
@@ -136,8 +130,7 @@
           bind:value={comment}
           rows="3"
           maxlength="1000"
-          class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-        ></textarea>
+          class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"></textarea>
       </label>
       <div>
         <Button variant="primary" disabled={reviewing} onclick={submitReview}>
@@ -154,24 +147,16 @@
     {#if confirming}
       <Card class="flex flex-col gap-3 p-4">
         <p class="text-sm font-medium">Cancel this session?</p>
-        <p class="text-muted-foreground text-sm">
-          The other side is told, and the hour goes back on the calendar.
-        </p>
+        <p class="text-muted-foreground text-sm">The other side is told, and the hour goes back on the calendar.</p>
         <label class="block text-sm">
           <span class="text-muted-foreground">Reason (optional)</span>
-          <Input
-            bind:value={reason}
-            maxlength={500}
-            class="mt-1 w-full"
-          />
+          <Input bind:value={reason} maxlength={500} class="mt-1 w-full" />
         </label>
         <div class="flex gap-2">
           <Button variant="destructive" disabled={cancelling} onclick={cancel}>
             {cancelling ? 'Cancelling…' : 'Cancel the session'}
           </Button>
-          <Button variant="ghost" disabled={cancelling} onclick={() => (confirming = false)}>
-            Keep it
-          </Button>
+          <Button variant="ghost" disabled={cancelling} onclick={() => (confirming = false)}>Keep it</Button>
         </div>
         {#if cancelError}
           <p class="text-destructive text-sm">{cancelError}</p>

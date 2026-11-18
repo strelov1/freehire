@@ -1,6 +1,10 @@
 <script lang="ts">
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
+  import { messages } from './SearchSelect.messages';
   import type { Snippet } from 'svelte';
-  import { optionMatches, uniqueByValue, type FacetOption } from '#lib/facets.js';
+  import { type FacetOption } from '#lib/facets.js';
+  import { optionMatches, uniqueByValue } from '#lib/facetOptions.js';
   import { CountryFlag, EntityLogo, Input } from '#lib/ui/index.js';
   import SkillIcon from '../SkillIcon.svelte';
   import { pillClass, pillPressed, pillTitle } from './pill';
@@ -67,6 +71,8 @@
     label?: string;
   } = $props();
 
+  const s = $derived(t(messages, locale()));
+
   function toggle(value: string) {
     onToggle(value);
     if (clearOnSelect) filter = '';
@@ -87,15 +93,17 @@
   // While unfiltered, cap the list to the top `cap` (already busiest-first) plus
   // any selected options, so nothing selected is hidden. Typing lifts the cap.
   const capped = $derived(cap && !filter.trim() && matched.length > cap);
-  const shown = $derived(
-    capped ? matched.filter((o, i) => i < must(cap) || isSelected(o.value)) : matched,
-  );
+  const shown = $derived(capped ? matched.filter((o, i) => i < must(cap) || isSelected(o.value)) : matched);
   const hiddenCount = $derived(capped ? matched.length - shown.length : 0);
-
 </script>
 
 <div class="flex flex-col gap-2">
-  <Input bind:value={filter} {placeholder} aria-label={label ?? placeholder ?? 'Search options'} class="w-full" />
+  <Input
+    bind:value={filter}
+    placeholder={placeholder ?? s.search}
+    aria-label={label ?? placeholder ?? s.search}
+    class="w-full"
+  />
   <div class={expand ? 'flex flex-wrap gap-1.5' : 'flex max-h-44 flex-wrap gap-1.5 overflow-y-auto'}>
     {#each shown as opt (opt.value)}
       {@const excluded = exclude.includes(opt.value)}
@@ -105,30 +113,54 @@
         onclick={() => toggle(opt.value)}
         aria-pressed={pillPressed(included, excluded)}
         title={pillTitle(included, excluded, excludable)}
-        class={pillClass(included || excluded, excluded, 'inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 text-sm')}
+        class={pillClass(
+          included || excluded,
+          excluded,
+          'inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 text-sm',
+        )}
       >
         <!-- The leading mark is hidden from assistive tech: a flag's label, a brand mark's
              title and a logo's initials fallback each name the same thing the visible
              label beside them does, so it would be announced twice. `contents` keeps the
              wrapper out of the pill's flex layout. -->
         <span aria-hidden="true" class="contents"
-          >{#if opt.flag}<CountryFlag code={opt.flag} label={opt.label} class="text-base" />{:else if techIcons}<SkillIcon slug={opt.value} class="size-3.5 shrink-0" />{:else if entityLogos}<EntityLogo name={opt.label} src={opt.icon} shape="square" size="xs" class="shrink-0" />{/if}</span
+          >{#if opt.flag}<CountryFlag
+              code={opt.flag}
+              label={opt.label}
+              class="text-base"
+            />{:else if techIcons}<SkillIcon
+              slug={opt.value}
+              class="size-3.5 shrink-0"
+            />{:else if entityLogos}<EntityLogo
+              name={opt.label}
+              src={opt.icon}
+              shape="square"
+              size="xs"
+              class="shrink-0"
+            />{/if}</span
         >
         <!-- A very long value (roles like "Senior Business Development Representative")
              truncates to one line with an ellipsis instead of wrapping the pill onto
              two rows; the full label surfaces on hover via title. -->
-        <span class="min-w-0 truncate" title={opt.label}>{opt.label}</span><PillMeta {included} {excluded} count={opt.count?.toLocaleString()} class="shrink-0" />
+        <span class="min-w-0 truncate" title={opt.label}>{opt.label}</span><PillMeta
+          {included}
+          {excluded}
+          count={opt.count?.toLocaleString()}
+          class="shrink-0"
+        />
       </button>
     {/each}
     {#if shown.length === 0}
       {#if empty && filter.trim()}
         {@render empty(filter.trim())}
       {:else}
-        <span class="px-1 py-1 text-xs text-muted-foreground">Nothing found</span>
+        <span class="px-1 py-1 text-xs text-muted-foreground">{s.empty}</span>
       {/if}
     {/if}
   </div>
   {#if hiddenCount > 0}
-    <span class="px-1 text-xs text-muted-foreground">+{hiddenCount.toLocaleString()} more — type to search</span>
+    <span class="px-1 text-xs text-muted-foreground"
+      >{format(s.more, { count: hiddenCount.toLocaleString(locale()) })}</span
+    >
   {/if}
 </div>

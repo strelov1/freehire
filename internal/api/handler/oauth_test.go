@@ -62,7 +62,7 @@ func oauthApp(providers map[string]oauth.Provider) *fiber.App {
 		oauthCodes:     oauth.NewCodeStore(time.Minute),
 		frontendOrigin: "http://app.example",
 	}
-	app.Get("/api/v1/auth/oauth/providers", h.ListOAuthProviders)
+	app.Get("/api/v1/auth/oauth/providers", newContract(contractHandlers{authHandlers: h}))
 	app.Get("/api/v1/auth/oauth/:provider/start", h.OAuthStart)
 	app.Get("/api/v1/auth/oauth/:provider/callback", h.OAuthCallback)
 	app.Post("/api/v1/auth/oauth/:provider/callback", h.OAuthCallback)

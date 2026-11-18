@@ -36,9 +36,7 @@ const REGIONS: { code: string; short: string }[] = [
   { code: 'cis', short: 'CIS' },
 ];
 
-export const REGION_LABELS: Record<string, string> = Object.fromEntries(
-  REGIONS.map((r) => [r.code, r.short]),
-);
+export const REGION_LABELS: Record<string, string> = Object.fromEntries(REGIONS.map((r) => [r.code, r.short]));
 
 export const SENIORITY_LABELS: Record<string, string> = { c_level: 'C-level' };
 
@@ -61,6 +59,13 @@ export const CLEARANCE_LEVEL_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
+// Equity compensation (vocab.EquityValues). There is deliberately no "No equity": a
+// posting that states neither is NOT STATED, which is not a claim about the offer.
+export const EQUITY_LABELS: Record<string, string> = {
+  salary_and_equity: 'Salary + equity',
+  equity_only: 'Equity only',
+};
+
 // Source kinds (vocab.SourceTypeValues), as sources.ProviderKind assigns them.
 export const SOURCE_TYPE_LABELS: Record<string, string> = {
   ats: 'ATS',
@@ -72,7 +77,14 @@ export const SOURCE_TYPE_LABELS: Record<string, string> = {
 // English proficiency levels (vocab.EnglishLevelValues); `none` is the
 // no-requirement sentinel — detail pages filter it out before rendering.
 export const ENGLISH_LEVEL_LABELS: Record<string, string> = {
-  a1: 'A1', a2: 'A2', b1: 'B1', b2: 'B2', c1: 'C1', c2: 'C2', native: 'Native', none: 'None',
+  a1: 'A1',
+  a2: 'A2',
+  b1: 'B1',
+  b2: 'B2',
+  c1: 'C1',
+  c2: 'C2',
+  native: 'Native',
+  none: 'None',
 };
 
 export const EMPLOYMENT_LABELS: Record<string, string> = {
@@ -116,6 +128,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
   devops: 'DevOps',
   sre: 'SRE',
   network_engineering: 'Network Engineering',
+  system_administration: 'System Administration',
+  telecommunications_engineering: 'Telecommunications Engineering',
   it_support: 'IT Support / Help Desk',
   data_engineering: 'Data Engineering',
   data_science: 'Data Science',
@@ -165,6 +179,11 @@ export const CATEGORY_LABELS: Record<string, string> = {
   customer_success: 'Customer Success',
   other: 'Other',
 } satisfies Record<Category, string>;
+
+/** CATEGORY_LABELS as a job reads it: search files every posting no category resolved
+ *  under `other` (#4412), so on a job that bucket is "Unclassified". Candidate
+ *  specializations keep "Other". */
+export const JOB_CATEGORY_LABELS: Record<string, string> = { ...CATEGORY_LABELS, other: 'Unclassified' };
 
 /** Display label for a category code (e.g. ml_ai → "ML / AI"), shared by the filter
  *  panel, the profile view and the /insights pages. The map above is exhaustive over

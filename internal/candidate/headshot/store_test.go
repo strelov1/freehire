@@ -6,6 +6,7 @@ import (
 	"errors"
 	"image"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,6 +54,16 @@ func (f *fakeBlobs) Get(_ context.Context, key string) (io.ReadCloser, error) {
 		return nil, minio.ErrorResponse{Code: minio.NoSuchKey}
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
+}
+
+func (f *fakeBlobs) List(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for k := range f.objects {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeBlobs) Delete(_ context.Context, key string) error {

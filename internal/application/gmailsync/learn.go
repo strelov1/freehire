@@ -9,11 +9,9 @@ import "context"
 // MaxOtherShare of its mail is classified `other`. BuildQueryFor then unions the promoted
 // domains into the sync query, so coverage grows from real classifications.
 //
-// Wiring (two seams): the write side — mailclassify/maillink calls RecordJobMail
-// with the sender when it confidently labels an email as an application, and
-// RecordNonJobMail when it labels one `other` — and the
-// read side — the sync Worker loads Promoted() and passes it to BuildQueryFor. The
-// DB adapter over the learned_ats_domains table (migrations 0036, 0185) implements
+// Wiring: mailclassify/maillink calls RecordJobMail when it confidently labels an email as an
+// application and RecordNonJobMail when it labels one `other`; the sync Worker loads Promoted()
+// and passes it to BuildQueryFor. The DB adapter over learned_ats_domains implements
 // LearnedDomainStore.
 
 // PromoteThreshold is how many confident job-mail sightings a domain needs before
@@ -23,9 +21,8 @@ const PromoteThreshold = 3
 
 // MaxOtherShare bounds how much of a domain's mail may be classified `other` for it to stay
 // promoted. A promoted domain's whole mailstream joins every user's query, so the hit count
-// alone learned senders that mail a few hiring messages among many others — on prod,
-// google.com (98% `other`) and linkedin.com (87%). Real recruiter and ATS domains measured
-// under 20%; a third leaves headroom without keeping a mostly-noise sender.
+// alone would learn senders that mail a few hiring messages among many others (google.com,
+// linkedin.com). Real recruiter and ATS domains sit under 20%; a third leaves headroom.
 const MaxOtherShare = 1.0 / 3
 
 // DomainSource is the read side the sync Worker depends on: the promoted domains

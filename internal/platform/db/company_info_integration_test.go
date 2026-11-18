@@ -1,8 +1,7 @@
 //go:build integration
 
-// Integration test for DeleteOrphanCompanies: it preserves reference rows (companies
-// with no jobs of their own, such as those UpsertYCCompany inserts) while still
-// sweeping jobless non-reference companies. This is SQL behavior, verified against a
+// Integration test for CompanyExists: it sees reference rows (companies with no jobs of
+// their own, such as those UpsertYCCompany inserts). This is SQL behavior, verified against a
 // real Postgres. Run with: go test -tags=integration ./internal/platform/db/
 package db
 
@@ -11,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestCompanyExistsAndOrphanCleanupPreservesReference(t *testing.T) {
+func TestCompanyExistsSeesReferenceRows(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -39,21 +38,6 @@ func TestCompanyExistsAndOrphanCleanupPreservesReference(t *testing.T) {
 			}
 			if got != want {
 				t.Errorf("CompanyExists(%q) = %v, want %v", slug, got, want)
-			}
-		}
-	})
-
-	t.Run("orphan cleanup deletes jobless non-reference only", func(t *testing.T) {
-		if _, err := q.DeleteOrphanCompanies(ctx); err != nil {
-			t.Fatalf("delete orphans: %v", err)
-		}
-		for slug, wantExists := range map[string]bool{"withjob": true, "refco": true, "orphan": false} {
-			got, err := q.CompanyExists(ctx, slug)
-			if err != nil {
-				t.Fatalf("exists %s: %v", slug, err)
-			}
-			if got != wantExists {
-				t.Errorf("after cleanup CompanyExists(%q) = %v, want %v", slug, got, wantExists)
 			}
 		}
 	})

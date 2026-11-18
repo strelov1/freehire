@@ -1,19 +1,12 @@
 package userjob
 
-// activeRank is the forward position of each ACTIVE stage — how far along the pipeline an
-// application has got. It is deliberately NOT the index in Stages: accepted, rejected and
-// withdrawn sit after offer in the vocabulary but are outcomes, not positions. An application
-// does not pass THROUGH them, so they have no rank.
+// activeRank is the forward position of each ACTIVE stage. It is NOT the index in
+// Stages: accepted, rejected and withdrawn follow offer there but are outcomes an
+// application does not pass THROUGH, so they have no rank.
 //
-// This lives here rather than in the package that reads mail because "how an application may
-// move through its stages" is a tracking rule. It was in internal/application/mailclassify, which welded
-// the mail vocabulary to the application state machine and let a real drift through: a stage
-// inserted into Stages got rank 0, ranking BELOW applied and absent from the terminal set, so
-// any forward signal advanced the application backward out of it. TestEveryStageIsRankedOrTerminal
-// is what now fails instead.
-//
-// The keys are the same six that silenceThresholds keys on — a test binds them — though
-// `preparing`'s threshold is unreachable in practice; see silenceThresholds' own comment.
+// A stage added to Stages without a rank would rank below applied and let a forward
+// signal move an application backward; TestEveryStageIsRankedOrTerminal fails then.
+// The keys match internal/job/silence's thresholds (a test binds them).
 var activeRank = map[string]int{
 	"preparing": 0,
 	"applied":   1,
@@ -23,13 +16,12 @@ var activeRank = map[string]int{
 	"offer":     5,
 }
 
-// terminalStages are the settled outcomes. An automatic advance must never move an application
-// out of one — that would resurrect a dead application — and never into one either: deciding an
-// application is rejected, accepted or withdrawn is the candidate's call or an explicit action,
-// never an inference from a piece of mail.
-// `expired` is settled without anyone deciding: the employer never answered, or the posting
-// went away. It is the candidate's own conclusion, never an inference — nothing computes it
-// from a threshold, so the silence state stays the only automatic reading of a quiet employer.
+// terminalStages are the settled outcomes. An automatic advance must never move an
+// application out of one (it would resurrect it) nor into one: accepted, rejected and
+// withdrawn are the candidate's call, never inferred from mail.
+// `expired` is settled too, but is likewise the candidate's own conclusion; nothing
+// computes it from a threshold, so silence stays the only automatic reading of a
+// quiet employer.
 var terminalStages = map[string]bool{
 	"accepted":  true,
 	"rejected":  true,
@@ -54,4 +46,30 @@ func Forward(current, target string) bool {
 		return false
 	}
 	return next > activeRank[current]
+}
+
+// EmployerMay reports whether an employer's own pipeline move may set the candidate's stage
+// from `current` to `target`. `currentByEmployer` is whether the employer set `current`
+// themselves (the newest stage event's source).
+//
+// Unlike Forward, an employer's move is an explicit statement about the application, not an
+// inference from mail, so it may settle it: a rejection or a hire is theirs to announce. It
+// still never overrides the candidate. A stage the candidate set is moved only forward, and
+// one they settled (withdrawn, or an outcome they recorded) is never reopened. A stage the
+// employer set is theirs to correct in any direction — a rejection clicked by mistake has to
+// be undoable, or the candidate keeps reading a decision nobody made.
+func EmployerMay(current string, currentByEmployer bool, target string) bool {
+	if current == target || !ValidStage(target) {
+		return false
+	}
+	if currentByEmployer {
+		return true
+	}
+	if IsTerminal(current) {
+		return false
+	}
+	if IsTerminal(target) {
+		return true
+	}
+	return Forward(current, target)
 }

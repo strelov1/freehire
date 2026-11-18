@@ -24,7 +24,7 @@
     feedBusy = true;
     feedError = null;
     try {
-      const page = await api.listBuddyFeed(requestedMode, next ? cursor ?? undefined : undefined);
+      const page = await api.listBuddyFeed(requestedMode, next ? (cursor ?? undefined) : undefined);
       if (requestedMode !== mode) return;
       feed = next ? [...feed, ...page.data] : page.data;
       cursor = page.meta.next_cursor;
@@ -36,11 +36,17 @@
           if (requestedMode !== mode) return;
           feed = firstPage.data;
           cursor = firstPage.meta.next_cursor;
-        } catch { if (requestedMode === mode) feedError = 'more'; }
+        } catch {
+          if (requestedMode === mode) feedError = 'more';
+        }
       } else if (requestedMode === mode) feedError = next ? 'more' : 'first';
     } finally {
       feedBusy = false;
-      if (requestedMode !== mode) { feed = []; cursor = null; void loadFeed(false, mode); }
+      if (requestedMode !== mode) {
+        feed = [];
+        cursor = null;
+        void loadFeed(false, mode);
+      }
     }
   }
 
@@ -52,17 +58,36 @@
     return label.charAt(0).toUpperCase() + label.slice(1);
   };
 
-  $effect(() => { const currentMode = mode; untrack(() => { feed = []; cursor = null; void loadFeed(false, currentMode); }); });
+  $effect(() => {
+    const currentMode = mode;
+    untrack(() => {
+      feed = [];
+      cursor = null;
+      void loadFeed(false, currentMode);
+    });
+  });
 </script>
 
-<Tabs bind:value={() => mode, (next) => (mode = next as 'similar' | 'all')} tabs={[{ value: 'similar', label: 'Similar to you' }, { value: 'all', label: 'Everyone' }]}>
-  {#if feed.length === 0 && feedError === 'first'}<States state="error" message="Could not load the feed." onRetry={() => void loadFeed()} />
+<Tabs
+  bind:value={() => mode, (next) => (mode = next as 'similar' | 'all')}
+  tabs={[
+    { value: 'similar', label: 'Similar to you' },
+    { value: 'all', label: 'Everyone' },
+  ]}
+>
+  {#if feed.length === 0 && feedError === 'first'}<States
+      state="error"
+      message="Could not load the feed."
+      onRetry={() => void loadFeed()}
+    />
   {:else if feed.length === 0 && feedBusy}<States state="loading" />
   {:else if feed.length === 0}<States state="empty" message="No application updates yet." />
   {:else}
     <div class="flex flex-col gap-3">
       {#each days as group (group.day)}
-        <h2 class="flex items-center gap-3 pt-1 text-xs font-medium text-muted-foreground after:h-px after:flex-1 after:bg-border">
+        <h2
+          class="flex items-center gap-3 pt-1 text-xs font-medium text-muted-foreground after:h-px after:flex-1 after:bg-border"
+        >
           <time datetime={group.day}>{dayLabel(group.day)}</time>
         </h2>
         {#each group.posts as post (post.key)}<BuddyPost {post} />{/each}

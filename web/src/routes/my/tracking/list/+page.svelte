@@ -15,4 +15,4 @@
 </svelte:head>
 
 <!-- Same rows and the same application panel as the board, read as a list. -->
-<JobBoard view="list" initial={data.board} />
+<JobBoard view="list" initial={data.board} initialId={data.initialId} />

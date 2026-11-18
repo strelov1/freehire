@@ -127,7 +127,9 @@ Then change the `ats` CTE filter (currently at line 586):
 ```sql
     WHERE jobs.company_slug = sqlc.arg(company)
 ```
+
 to
+
 ```sql
     WHERE replace(jobs.company_slug, '-', '') = replace(sqlc.arg(company)::text, '-', '')
 ```
@@ -137,7 +139,9 @@ And the `agg` CTE filter (currently at line 602):
 ```sql
     WHERE a.company_slug = sqlc.arg(company)
 ```
+
 to
+
 ```sql
     WHERE replace(a.company_slug, '-', '') = replace(sqlc.arg(company)::text, '-', '')
 ```

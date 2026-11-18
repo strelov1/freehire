@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -27,42 +28,42 @@ func TestDeriveStatus(t *testing.T) {
 	}{
 		{
 			name: "all healthy and fresh is operational",
-			roll: providerRollup{total: 100, healthy: 100, lastSuccess: freshSuccess},
+			roll: providerRollup{total: 100, healthy: 100, freshnessAt: freshSuccess},
 			want: statusOperational,
 		},
 		{
 			name: "exactly 90 percent healthy and fresh is operational",
-			roll: providerRollup{total: 100, healthy: 90, lastSuccess: freshSuccess},
+			roll: providerRollup{total: 100, healthy: 90, freshnessAt: freshSuccess},
 			want: statusOperational,
 		},
 		{
 			name: "a minority failing is degraded",
-			roll: providerRollup{total: 100, healthy: 80, lastSuccess: freshSuccess},
+			roll: providerRollup{total: 100, healthy: 80, freshnessAt: freshSuccess},
 			want: statusDegraded,
 		},
 		{
 			name: "almost all failing is down",
-			roll: providerRollup{total: 100, healthy: 5, lastSuccess: freshSuccess},
+			roll: providerRollup{total: 100, healthy: 5, freshnessAt: freshSuccess},
 			want: statusDown,
 		},
 		{
 			name: "exactly 10 percent healthy is down",
-			roll: providerRollup{total: 100, healthy: 10, lastSuccess: freshSuccess},
+			roll: providerRollup{total: 100, healthy: 10, freshnessAt: freshSuccess},
 			want: statusDown,
 		},
 		{
 			name: "healthy counts but stale success is down",
-			roll: providerRollup{total: 100, healthy: 100, lastSuccess: staleSuccess},
+			roll: providerRollup{total: 100, healthy: 100, freshnessAt: staleSuccess},
 			want: statusDown,
 		},
 		{
 			name: "never succeeded is down",
-			roll: providerRollup{total: 100, healthy: 100}, // zero lastSuccess = never
+			roll: providerRollup{total: 100, healthy: 100}, // zero freshnessAt = never
 			want: statusDown,
 		},
 		{
 			name: "no boards is down (defensive, avoids div-by-zero)",
-			roll: providerRollup{total: 0, healthy: 0, lastSuccess: freshSuccess},
+			roll: providerRollup{total: 0, healthy: 0, freshnessAt: freshSuccess},
 			want: statusDown,
 		},
 	}
@@ -85,7 +86,7 @@ func TestFleetStatus(t *testing.T) {
 		{"empty fleet is operational", nil, statusOperational},
 		{
 			name:  "all served and fresh is operational",
-			rolls: []providerRollup{{total: 100, healthy: 100, lastSuccess: freshSuccess}, {total: 50, healthy: 50, lastSuccess: freshSuccess}},
+			rolls: []providerRollup{{total: 100, healthy: 100, freshnessAt: freshSuccess}, {total: 50, healthy: 50, freshnessAt: freshSuccess}},
 			want:  statusOperational,
 		},
 		{
@@ -94,7 +95,7 @@ func TestFleetStatus(t *testing.T) {
 			// logic returned down here; the fleet aggregate stays operational.
 			name: "a tiny fully-down provider does not red a broadly healthy fleet",
 			rolls: []providerRollup{
-				{total: 1000, healthy: 1000, lastSuccess: freshSuccess},
+				{total: 1000, healthy: 1000, freshnessAt: freshSuccess},
 				{total: 1, healthy: 0}, // never succeeded, fully cooled
 			},
 			want: statusOperational,
@@ -102,16 +103,16 @@ func TestFleetStatus(t *testing.T) {
 		{
 			name: "a broad outage (most boards cooled) is down",
 			rolls: []providerRollup{
-				{total: 100, healthy: 5, lastSuccess: freshSuccess},
-				{total: 100, healthy: 3, lastSuccess: freshSuccess},
+				{total: 100, healthy: 5, freshnessAt: freshSuccess},
+				{total: 100, healthy: 3, freshnessAt: freshSuccess},
 			},
 			want: statusDown,
 		},
 		{
 			name: "a large minority cooled is degraded",
 			rolls: []providerRollup{
-				{total: 100, healthy: 60, lastSuccess: freshSuccess},
-				{total: 100, healthy: 90, lastSuccess: freshSuccess},
+				{total: 100, healthy: 60, freshnessAt: freshSuccess},
+				{total: 100, healthy: 90, freshnessAt: freshSuccess},
 			},
 			want: statusDegraded,
 		},
@@ -119,7 +120,7 @@ func TestFleetStatus(t *testing.T) {
 			// Every provider stale (a fleet-wide stall) surfaces as down even at full
 			// served fraction — freshness guards a silently stopped crawl.
 			name:  "a fleet-wide stall is down despite full served fraction",
-			rolls: []providerRollup{{total: 100, healthy: 100, lastSuccess: staleSuccess}},
+			rolls: []providerRollup{{total: 100, healthy: 100, freshnessAt: staleSuccess}},
 			want:  statusDown,
 		},
 	}
@@ -248,10 +249,10 @@ func TestSiteHistoryFromRows(t *testing.T) {
 			{Day: day(2026, time.September, 3), WorstSeverity: 1},
 		}
 		got := siteHistoryFromRows(rows)
-		want := []siteHistoryEntry{
-			{Day: "2026-09-01", Status: statusOperational},
-			{Day: "2026-09-02", Status: statusDown},
-			{Day: "2026-09-03", Status: statusDegraded},
+		want := []apigen.SiteHistoryEntry{
+			{Day: "2026-09-01", Status: apigen.HealthStatus(statusOperational)},
+			{Day: "2026-09-02", Status: apigen.HealthStatus(statusDown)},
+			{Day: "2026-09-03", Status: apigen.HealthStatus(statusDegraded)},
 		}
 		if len(got) != len(want) {
 			t.Fatalf("len = %d, want %d", len(got), len(want))

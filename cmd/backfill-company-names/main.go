@@ -1,28 +1,21 @@
-// Command backfill-company-names replaces slug-like company names with the
-// company's real display name, resolved from that ATS's own careers-page title
-// or API. Many ATS adapters set jobs.company straight from the board file, so a
-// board whose file entry is a squished slug (e.g. "lbresearch", "gs1ca", "afcb")
-// carries that slug as its display name — which leaks into the UI, the public
-// /companies/<slug> URL, and breaks logo.dev name resolution.
+// Command backfill-company-names replaces slug-like company names with the company's real
+// display name, resolved from that ATS's own careers-page title or API. Many ATS adapters set
+// jobs.company straight from the board file, so a squished slug (e.g. "lbresearch", "gs1ca")
+// leaks into the UI and the /companies/<slug> URL and breaks logo.dev name resolution.
 //
-//	backfill-company-names [--dry-run]   # needs DATABASE_URL
+//	backfill-company-names [--dry-run] [--provider=paycor]   # needs DATABASE_URL
 //
-// It touches only companies whose name is still slug-like AND that have open
-// jobs, resolves a candidate name per board (bounded-concurrent HTTP), and
-// applies it only when it passes the confidence gate (never guessing from the
-// slug). Each name is written to the board it came from before its jobs (see
-// writeRename) — otherwise the board's next crawl puts the slug back. Renames re-key
-// company_slug via normalize.Slug; the derived companies catalogue reconciles for exactly the
-// slugs the run touched (reconcileRenamedSlugs). Idempotent — a second run finds
-// nothing slug-like left to fix. Follow with `make reindex` so corrected names reach
-// search.
+// It touches only slug-like companies that have open jobs, resolves a candidate name per board
+// (bounded-concurrent HTTP), and applies it only when it passes the confidence gate, never
+// guessing from the slug. Each name is written to its board before its jobs (see writeRename),
+// or the next crawl puts the slug back. Renames re-key company_slug via normalize.Slug; the
+// companies catalogue reconciles for exactly the touched slugs (reconcileRenamedSlugs).
+// Idempotent. Follow with `make reindex` so corrected names reach search.
 //
-// A second pass fixes the boards whose company is not a slug but the board id itself — a
-// "<host>/<site>" path or a GUID a harvest wrote into boards.company verbatim (measured
-// 2026-10-23: ~2,200 companies carrying ~156k open postings under a host path, ~7,400 carrying
-// ~44k under a GUID). It is driven by the board rather than by the jobs, asks the ATS for
-// exactly that board's name (companyname.NewPlaceholderRegistry), and renames the board and its
-// stored jobs in one transaction — see writePlaceholderRename.
+// A second pass fixes boards whose company is the board id itself (a bare host, a
+// "<host>/<site>" path or a GUID a harvest wrote into boards.company). It is driven by the
+// board, asks the ATS for exactly that board's name (companyname.NewPlaceholderRegistry), and
+// renames the board and its jobs in one transaction (writePlaceholderRename).
 package main
 
 import (
@@ -48,11 +41,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// perSourceConcurrency bounds simultaneous fetches against ONE source. Every source this
-// worker reads serves its boards from one host or a handful (join.com, jobs.lever.co,
-// recruiting.paylocity.com), so a bound across the whole run lands on one host: at 24, the
-// first prod run of the placeholder pass drew 429s from Paylocity within minutes and 1,382
-// from join.com, and crawled at their retry backoff.
+// perSourceConcurrency bounds simultaneous fetches against ONE source. A source serves its
+// boards from one host or a handful (join.com, jobs.lever.co, recruiting.paylocity.com), so a
+// run-wide bound lands on one host and draws 429s.
 const perSourceConcurrency = 4
 
 // eachPerSource calls fn for every item — the sources in parallel, each held to
@@ -80,6 +71,7 @@ func main() { worker.Main(run) }
 
 func run() int {
 	dryRun := flag.Bool("dry-run", false, "print proposed renames without writing")
+	provider := flag.String("provider", "", "run only the placeholder pass, for this one provider (e.g. paycor)")
 	flag.Parse()
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
@@ -93,25 +85,29 @@ func run() int {
 	client := sources.NewClient()
 	registry := companyname.NewRegistry(client)
 
-	rows, err := queries.ListSlugLikeCompaniesForBackfill(ctx)
-	if err != nil {
-		log.Printf("list companies: %v", err)
-		return 1
+	var rows []db.ListSlugLikeCompaniesForBackfillRow
+	if *provider == "" {
+		if rows, err = queries.ListSlugLikeCompaniesForBackfill(ctx); err != nil {
+			log.Printf("list companies: %v", err)
+			return 1
+		}
 	}
 
 	renames, stats := resolveNames(ctx, rows, registry)
 	sort.Slice(renames, func(i, j int) bool { return renames[i].oldSlug < renames[j].oldSlug })
 
 	placeholders := companyname.NewPlaceholderRegistry(client)
-	// adp states the employer nowhere but in the posting text, so it is resolved by a model
-	// reading that text (postingTextResolver) — only when LLM_* is configured, and at most
-	// COMPANY_NAMES_LLM_MAX boards a run (unset = all), since each board costs one call.
+	// adp states the employer only in the posting text, so a model reads that text
+	// (postingTextResolver): only when LLM_* is configured, and at most COMPANY_NAMES_LLM_MAX
+	// boards a run (unset = all), since each board costs one call.
 	llmMax, err := worker.EnvInt64("COMPANY_NAMES_LLM_MAX", 0)
 	if err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
-	if lcfg := config.LoadLLM(); lcfg.Require() == nil {
+	if *provider != "" && *provider != "adp" {
+		// No model for a run that cannot use it.
+	} else if lcfg := config.LoadLLM(); lcfg.Require() == nil {
 		model, flush, err := llm.NewClient(lcfg.Settings(lcfg.Model), "company-names")
 		if err != nil {
 			log.Printf("llm: %v", err)
@@ -119,11 +115,19 @@ func run() int {
 		}
 		defer flush()
 		// Service credential, filed under its own feature so this pass's spend reads apart from
-		// enrichment's in the gateway's log.
+		// enrichment's.
 		model = model.As("", nil, llm.Feature("company-names"))
 		placeholders["adp"] = postingTextResolver{q: queries, model: model, source: "adp"}
 	} else {
 		log.Printf("LLM_* not configured: adp placeholder boards are left for a run that has it")
+	}
+	if *provider != "" {
+		r, ok := placeholders[*provider]
+		if !ok {
+			log.Printf("--provider=%s: no placeholder resolver for it", *provider)
+			return 1
+		}
+		placeholders = companyname.Registry{*provider: r}
 	}
 	boards, err := queries.ListPlaceholderCompanyBoards(ctx, slices.Sorted(maps.Keys(placeholders)))
 	if err != nil {
@@ -204,14 +208,12 @@ type companyReconciler interface {
 }
 
 // reconcileRenamedSlugs gives each slug a rename moved jobs ONTO a companies row carrying the
-// new name, then drops the rows of the slugs it moved jobs AWAY from that no job carries any
-// more. Syncs go first, so a slug that is both keeps its row.
+// new name, then drops the rows of slugs it moved jobs AWAY from that no job carries any more.
+// Syncs go first, so a slug that is both keeps its row.
 //
 // Scoped to those slugs and chunked, NOT the whole-table SyncCompaniesFromJobs +
-// DeleteOrphanCompanies pair this used to run: that sync is one transaction of about an hour
-// on prod, and it ran even when the run renamed nothing — on 2026-10-29 every model call came
-// back 429 and the sync still held jobs for an hour, keeping a migration out. A run that
-// renamed nothing now writes nothing.
+// DeleteOrphanCompanies pair: that sync is one transaction of about an hour and held jobs even
+// when nothing was renamed. A run that renamed nothing writes nothing.
 func reconcileRenamedSlugs(ctx context.Context, r companyReconciler, movedTo, movedFrom []string, chunk int) (orphaned int64, err error) {
 	for part := range slices.Chunk(movedTo, chunk) {
 		if _, err := r.SyncCompaniesForSlugs(ctx, part); err != nil {
@@ -245,16 +247,14 @@ type renamer interface {
 	RenameSlugCompany(context.Context, db.RenameSlugCompanyParams) (int64, error)
 }
 
-// writeRename applies one resolved name to the board and then to its jobs, reporting
-// whether any job changed.
+// writeRename applies one resolved name to the board and then to its jobs, reporting whether
+// any job changed.
 //
-// The board is what makes the rename stick: the adapter copies boards.company onto
-// every posting and the job upsert overwrites jobs.company, so a rename written to jobs
-// alone was undone by the board's next crawl. And the board goes FIRST. Renamed jobs no
-// longer look slug-like, so no later run lists the company again; were the board write
-// to fail after them, the next crawl would restore the slug with nothing left to notice.
-// In this order a failed jobs write heals itself — the crawl carries the name from the
-// board — and a failed board write leaves the company listed for the next run.
+// The board goes FIRST: the adapter copies boards.company onto every posting, so a rename
+// written to jobs alone is undone by the next crawl. Renamed jobs no longer look slug-like, so
+// if the board write failed after them nothing would notice. In this order a failed jobs write
+// heals itself (the crawl carries the board's name) and a failed board write leaves the
+// company listed for the next run.
 func writeRename(ctx context.Context, q renamer, r rename) (bool, error) {
 	if _, err := q.RenameSlugBoardCompany(ctx, db.RenameSlugBoardCompanyParams{
 		Name:     r.name,
@@ -272,11 +272,9 @@ func writeRename(ctx context.Context, q renamer, r rename) (bool, error) {
 	return n > 0, err
 }
 
-// applyRenames writes each rename via write, counting how many actually
-// changed a row (applied) and how many errored (failed). A single company's
-// write failure (e.g. a unique-constraint collision on the derived slug) must
-// not abort the batch, so the loop always continues; the caller uses failed
-// to decide the process exit code instead.
+// applyRenames writes each rename via write, counting rows changed (applied) and errors
+// (failed). One company's failure (e.g. a unique-constraint collision on the derived slug)
+// must not abort the batch; the caller uses failed for the exit code.
 func applyRenames[T any](ctx context.Context, renames []T, write func(context.Context, T) (bool, error)) (applied, failed int) {
 	for _, r := range renames {
 		ok, err := write(ctx, r)

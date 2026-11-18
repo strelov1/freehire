@@ -1,19 +1,13 @@
-// Package autoapplyorchestrate holds the one Inngest function
-// cmd/auto-apply-orchestrate serves: a durable, event-triggered sequence that calls
-// freehire's own auto-apply tailoring trigger, then pauses for however long the
-// candidate's review decision takes (surviving a process restart). It does NOT call the
-// review endpoint itself: EventReviewDecided is published by PostAutoApplyReview only
-// AFTER it has already durably recorded the decision (internal/api/handler's own
-// publishReviewDecided runs after the write), so by the time this function's own
-// WaitForEvent resumes, there is nothing left to record — a second call would always 409
-// (already reviewed). The run simply completes with the decision the event carried.
+// Package autoapplyorchestrate holds the one Inngest function cmd/auto-apply-orchestrate
+// serves: a durable, event-triggered sequence that calls freehire's auto-apply tailoring
+// trigger, then pauses (surviving a restart) for the candidate's review decision. It does
+// NOT call the review endpoint: PostAutoApplyReview publishes EventReviewDecided only after
+// durably recording the decision, so a second call would always 409. The run completes with
+// the decision the event carried.
 //
-// See openspec/changes/auto-apply-inngest-orchestration/design.md — in particular why this
-// package calls the existing HTTP endpoints rather than importing internal/candidate/cv or
-// internal/ai/assistant directly, and why it uses a plain http.Client rather than
-// internal/platform/safehttp (that package's guard BLOCKS the internal address this client
-// must reach; it exists for outbound fetches of attacker-influenced URLs, which this is
-// not).
+// It calls the existing HTTP endpoints rather than importing internal/candidate/cv or
+// internal/ai/assistant, and uses a plain http.Client because internal/platform/safehttp
+// would BLOCK the internal address this client must reach.
 package autoapplyorchestrate
 
 import (
@@ -31,9 +25,7 @@ import (
 	"github.com/inngest/inngestgo/step"
 )
 
-// EventSubmit starts one durable run per auto-apply queue entry submission. Not yet
-// published anywhere in production — see auto-apply-tailored-resume's own tasks.md item
-// 2.1, the still-deferred trigger.
+// EventSubmit starts one durable run per auto-apply queue entry submission.
 const EventSubmit = "auto-apply/submit"
 
 // EventReviewDecided resumes a run paused awaiting the candidate's decision.
@@ -43,35 +35,23 @@ const EventReviewDecided = "auto-apply/review.decided"
 // FunctionID names the one Inngest function this package registers.
 const FunctionID = "auto-apply-tailor-and-review"
 
-// ReviewWaitTimeout bounds how long a run may sit paused awaiting the candidate's
-// decision before ending without one (spec: "without a wall-clock upper bound shorter
-// than several days"). A candidate under no particular pressure still has real time to
-// decide.
+// ReviewWaitTimeout bounds how long a run may sit paused awaiting the candidate's decision
+// before ending without one; several days, so a candidate under no pressure can decide.
 const ReviewWaitTimeout = 7 * 24 * time.Hour
 
 // hireRequestTimeout bounds ONE call into hire's own API. It must sit ABOVE the tailoring
-// endpoint's own run budget (internal/api/handler's autoApplyTailorBudget, 10 minutes), so
-// that a run always ends on ITS terms rather than being cut off by the caller.
-//
-// "Generous past the whole run" was the previous reading of five minutes, and it was
-// wrong. A tailoring pass makes up to autopilotMaxSteps (30) model calls of up to
-// assistantLLMTimeout (180s) each, so five minutes was not past the run, it was inside it.
-// In production this hung up mid-pass every time: the run kept working, its CV edits were
-// already written, and the entry was never told — three queue entries sat with no tailored
-// CV, reading as "tailoring" indefinitely, while the retry this failure triggered arrived
-// to find the session still busy with the very run it had abandoned (freehire, 2026-09-08).
-//
-// The layering guard forbids importing the handler package here to state the relationship
-// in code, so it is stated here: raise the budget and this must follow.
+// endpoint's run budget (internal/api/handler's autoApplyTailorBudget, 10 minutes) so a run
+// always ends on its own terms: a tailoring pass can make up to autopilotMaxSteps (30) model
+// calls of up to assistantLLMTimeout (180s) each, and a shorter timeout abandons a run that
+// keeps working, leaving the entry never told. The layering guard forbids importing the
+// handler package to state this in code: raise the budget and this must follow.
 const hireRequestTimeout = 12 * time.Minute
 
-// SubmitEvent is EventSubmit's own data: which queue entry to run.
+// SubmitEvent is EventSubmit's data: which queue entry to run.
 //
-// QueueID is a STRING even though auto_apply_queue.id is bigint: it is compared inside a
-// WaitForEvent CEL "if" expression as a quoted literal (see the wait step below), and this
-// avoids the whole question of how that evaluator widens a JSON number — a question this
-// session's own verified spike sidestepped the same way, deliberately kept rather than
-// "fixed" to int64 without re-verifying that path.
+// QueueID is a STRING though auto_apply_queue.id is bigint: it is compared in a WaitForEvent
+// CEL "if" expression as a quoted literal, which avoids how that evaluator widens a JSON
+// number. Do not change it to int64 without re-verifying that path.
 type SubmitEvent struct {
 	QueueID string `json:"queueId"`
 }
@@ -147,22 +127,18 @@ func callHire(ctx context.Context, cfg Config, path string, body any) error {
 	return nil
 }
 
-// busyRetryDelay is how long a step waits after hire says the session is busy. Long enough
-// to outlast the run it collided with — a live tailoring run took 7m44s on 2026-09-16 — and
-// short enough that a candidate is not left waiting on a queue that has stalled.
+// busyRetryDelay is how long a step waits after hire says the session is busy: long enough
+// to outlast the run it collided with (a tailoring run can take several minutes), short
+// enough that a candidate is not left on a stalled queue.
 const busyRetryDelay = 8 * time.Minute
 
-// responseError turns a non-2xx into the error the step returns, and decides whether Inngest
-// should treat it as a failure or as "come back later".
+// responseError turns a non-2xx into the error the step returns, and decides whether
+// Inngest treats it as a failure or as "come back later".
 //
-// 409 from the tailoring route is hire's own guard against two tailoring runs on one session
-// — the earlier run is still going and will finish. Spending a retry on it is pure waste:
-// measured 2026-09-16, a 7m44s tailoring run was still going when the retry arrived, which
-// got its 409 in 31 milliseconds and did it again, until the attempts ran out against a door
-// that was always going to be shut for another few minutes.
-//
-// Every other status keeps its ordinary meaning. A 500 IS a failed run and must spend a
-// retry; a 404 is a wrong route that retrying cannot fix.
+// 409 from the tailoring route is hire's guard against two tailoring runs on one session:
+// the earlier run is still going, so a retry only fails again at once and burns the
+// attempts. Every other status keeps its ordinary meaning: a 500 is a failed run and spends
+// a retry; a 404 is a wrong route retrying cannot fix.
 func responseError(status int, path, body string) error {
 	err := fmt.Errorf("POST %s: status %d: %s", path, status, body)
 	if status == http.StatusConflict {
@@ -207,31 +183,24 @@ func Register(client inngestgo.Client, cfg Config) (inngestgo.ServableFunction, 
 				ctx, "wait-for-review-decision", step.WaitForEventOpts{
 					Event:   EventReviewDecided,
 					Timeout: cfg.reviewWaitTimeout(),
-					// "async" (not "event") is the CEL variable Inngest's own executor
-					// binds the candidate event to when evaluating a WaitForEvent "if" —
-					// confirmed against a real dev server: "event.data..." (this
-					// session's own earlier spike, and this package's own first draft)
-					// silently matched EVERY event of the right name rather than failing
-					// to parse, which this package's own negative-case integration test
-					// (orchestrate_integration_test.go) caught.
+					// async (not event) is the CEL variable Inngest's executor binds the candidate event to in
+					// a WaitForEvent "if"; "event.data..." silently matches EVERY event of the right name
+					// instead of failing to parse (orchestrate_integration_test.go covers it).
 					If: inngestgo.StrPtr(fmt.Sprintf("async.data.queueId == %q", queueID)),
 				},
 			)
 			if err != nil {
 				if errors.Is(err, step.ErrEventNotReceived) {
-					// The pause exceeded its own bound: end the run without a review call
-					// and without retrying tailor (spec's own "failed or timed-out step"
-					// requirement) — a clean completion, not a failure, since nobody
-					// responding in time is an expected outcome, not a bug.
+					// The pause exceeded its bound: end the run without a review call or a tailor retry, as a
+					// clean completion, since nobody responding in time is an expected outcome.
 					return map[string]any{"status": "review_wait_timed_out", "queueId": queueID}, nil
 				}
 				return nil, fmt.Errorf("wait for review decision on queue entry %s: %w", queueID, err)
 			}
 
-			// No further HTTP call: PostAutoApplyReview only ever publishes
-			// EventReviewDecided after its own write already recorded the decision (see
-			// this package's own doc comment), so this run's only remaining job is to
-			// note the outcome it was told.
+			// No further HTTP call: PostAutoApplyReview publishes EventReviewDecided only after
+			// recording the decision (see the package doc), so this run only notes the outcome it was
+			// told.
 			return map[string]any{"status": "reviewed", "queueId": queueID, "decision": decided.Data.Decision}, nil
 		},
 	)

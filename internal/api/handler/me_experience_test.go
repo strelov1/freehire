@@ -29,7 +29,7 @@ func experienceApp(t *testing.T) (*fiber.App, string, *stubBank) {
 	h := newExperienceHandlers(bank)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	guard := auth.RequireAuth(iss, testVersions)
-	h.register(app.Group(""), middleware{cookie: guard, key: guard})
+	h.register(app.Group("/api/v1"), middleware{cookie: guard, key: guard}, newContract(contractHandlers{experienceHandlers: h}))
 	return app, token, bank
 }
 
@@ -65,7 +65,7 @@ func TestListExperienceGroupsAchievementsUnderTheirPlace(t *testing.T) {
 	})
 	bank.reindex()
 
-	resp := experienceReq(t, app, http.MethodGet, "/me/experience", "", token)
+	resp := experienceReq(t, app, http.MethodGet, "/api/v1/me/experience", "", token)
 	var body struct {
 		Data struct {
 			Employments []struct {
@@ -111,7 +111,7 @@ func TestUpdateAtomMakesItTheOwnersOwnStatement(t *testing.T) {
 		Claim: "Probably led the Kubernetes migration", Provenance: experience.ProvenanceAgentInferred,
 	})
 
-	resp := experienceReq(t, app, http.MethodPut, "/me/experience/atoms/"+inferred.ID.String(),
+	resp := experienceReq(t, app, http.MethodPut, "/api/v1/me/experience/atoms/"+inferred.ID.String(),
 		`{"claim":"Led the Kubernetes migration for 21 services"}`, token)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
@@ -139,7 +139,7 @@ func TestDeleteExperienceIsOwnerScoped(t *testing.T) {
 	mine := bank.add(1, experience.Atom{Claim: "Mine", Provenance: experience.ProvenanceManual})
 	theirs := bank.add(2, experience.Atom{Claim: "Theirs", Provenance: experience.ProvenanceManual})
 
-	resp := experienceReq(t, app, http.MethodDelete, "/me/experience/atoms/"+theirs.ID.String(), "", token)
+	resp := experienceReq(t, app, http.MethodDelete, "/api/v1/me/experience/atoms/"+theirs.ID.String(), "", token)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("deleting another owner's achievement = %d, want 404 (never 403)", resp.StatusCode)
@@ -148,7 +148,7 @@ func TestDeleteExperienceIsOwnerScoped(t *testing.T) {
 		t.Errorf("another owner's achievement was removed: %v", err)
 	}
 
-	resp2 := experienceReq(t, app, http.MethodDelete, "/me/experience/atoms/"+mine.ID.String(), "", token)
+	resp2 := experienceReq(t, app, http.MethodDelete, "/api/v1/me/experience/atoms/"+mine.ID.String(), "", token)
 	defer resp2.Body.Close()
 	if resp2.StatusCode != http.StatusNoContent {
 		t.Errorf("deleting my own achievement = %d, want 204", resp2.StatusCode)
@@ -164,7 +164,7 @@ func TestDeleteExperienceIsOwnerScoped(t *testing.T) {
 func TestAddAtomCreatesUnderTheCaller(t *testing.T) {
 	app, token, bank := experienceApp(t)
 
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms",
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/atoms",
 		`{"claim":"Cut latency 20s to 1s"}`, token)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", resp.StatusCode)
@@ -198,7 +198,7 @@ func TestAddAtomCreatesUnderTheCaller(t *testing.T) {
 func TestAddAtomForcesManualProvenance(t *testing.T) {
 	app, token, bank := experienceApp(t)
 
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms",
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/atoms",
 		`{"claim":"Led the migration","provenance":"stated_in_chat"}`, token)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", resp.StatusCode)
@@ -225,7 +225,7 @@ func TestAddAtomForcesManualProvenance(t *testing.T) {
 func TestAddAtomRefusesAnEmptyClaim(t *testing.T) {
 	app, token, bank := experienceApp(t)
 
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms", `{"claim":""}`, token)
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/atoms", `{"claim":""}`, token)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
@@ -242,7 +242,7 @@ func TestAddAtomOnAnAlreadyBankedClaimIsAConflict(t *testing.T) {
 	app, token, bank := experienceApp(t)
 	bank.addErr = experience.ErrAlreadyBanked
 
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms", `{"claim":"Cut latency 20s to 1s"}`, token)
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/atoms", `{"claim":"Cut latency 20s to 1s"}`, token)
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("status = %d, want 409", resp.StatusCode)
 	}
@@ -252,7 +252,7 @@ func TestAddAtomOnAnAlreadyBankedClaimIsAConflict(t *testing.T) {
 func TestAddEmploymentCreatesUnderTheCaller(t *testing.T) {
 	app, token, bank := experienceApp(t)
 
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments",
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/employments",
 		`{"kind":"job","company":"RingCentral","role":"SWE"}`, token)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", resp.StatusCode)
@@ -285,7 +285,7 @@ func TestAddEmploymentCreatesUnderTheCaller(t *testing.T) {
 func TestAddProjectEmploymentReturnsName(t *testing.T) {
 	app, token, bank := experienceApp(t)
 
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments",
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/employments",
 		`{"kind":"project","name":"telagon.io","link":"https://telagon.io"}`, token)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", resp.StatusCode)
@@ -314,7 +314,7 @@ func TestAddProjectEmploymentReturnsName(t *testing.T) {
 func TestAddProjectEmploymentAcceptsLegacyCompany(t *testing.T) {
 	app, token, _ := experienceApp(t)
 
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments",
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/employments",
 		`{"kind":"project","company":"opensched"}`, token)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", resp.StatusCode)
@@ -337,7 +337,7 @@ func TestListProjectEmploymentEmitsName(t *testing.T) {
 		Kind: experience.KindProject, Company: "telagon.io", Link: "https://telagon.io",
 	})
 
-	resp := experienceReq(t, app, http.MethodGet, "/me/experience", "", token)
+	resp := experienceReq(t, app, http.MethodGet, "/api/v1/me/experience", "", token)
 	var body struct {
 		Data struct {
 			Employments []map[string]any `json:"employments"`
@@ -365,7 +365,7 @@ func TestListProjectEmploymentEmitsName(t *testing.T) {
 func TestAddEmploymentRefusesOneWithNeitherCompanyNorRole(t *testing.T) {
 	app, token, bank := experienceApp(t)
 
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments", `{"kind":"job"}`, token)
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/employments", `{"kind":"job"}`, token)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
@@ -378,7 +378,7 @@ func TestAddEmploymentRefusesOneWithNeitherCompanyNorRole(t *testing.T) {
 func TestAddEmploymentRefusesAKindOutsideTheVocabulary(t *testing.T) {
 	app, token, bank := experienceApp(t)
 
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments",
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/employments",
 		`{"kind":"hobby","company":"RingCentral"}`, token)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
@@ -393,8 +393,8 @@ func TestExperienceRoutesRefuseAMalformedID(t *testing.T) {
 	app, token, _ := experienceApp(t)
 
 	for _, path := range []string{
-		"/me/experience/atoms/not-a-uuid",
-		"/me/experience/employments/not-a-uuid",
+		"/api/v1/me/experience/atoms/not-a-uuid",
+		"/api/v1/me/experience/employments/not-a-uuid",
 	} {
 		resp := experienceReq(t, app, http.MethodDelete, path, "", token)
 		defer resp.Body.Close()
@@ -407,22 +407,22 @@ func TestExperienceRoutesRefuseAMalformedID(t *testing.T) {
 func TestExperienceRoutesRequireAuth(t *testing.T) {
 	app, _, _ := experienceApp(t)
 
-	resp1 := experienceReq(t, app, http.MethodGet, "/me/experience", "", "")
+	resp1 := experienceReq(t, app, http.MethodGet, "/api/v1/me/experience", "", "")
 	defer resp1.Body.Close()
 	if resp1.StatusCode != http.StatusUnauthorized {
 		t.Errorf("unauthenticated read = %d, want 401", resp1.StatusCode)
 	}
-	resp2 := experienceReq(t, app, http.MethodDelete, "/me/experience/atoms/"+uuid.New().String(), "", "")
+	resp2 := experienceReq(t, app, http.MethodDelete, "/api/v1/me/experience/atoms/"+uuid.New().String(), "", "")
 	defer resp2.Body.Close()
 	if resp2.StatusCode != http.StatusUnauthorized {
 		t.Errorf("unauthenticated delete = %d, want 401", resp2.StatusCode)
 	}
-	resp3 := experienceReq(t, app, http.MethodPost, "/me/experience/atoms", `{"claim":"x"}`, "")
+	resp3 := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/atoms", `{"claim":"x"}`, "")
 	defer resp3.Body.Close()
 	if resp3.StatusCode != http.StatusUnauthorized {
 		t.Errorf("unauthenticated atom create = %d, want 401", resp3.StatusCode)
 	}
-	resp4 := experienceReq(t, app, http.MethodPost, "/me/experience/employments", `{"kind":"job","company":"x"}`, "")
+	resp4 := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/employments", `{"kind":"job","company":"x"}`, "")
 	defer resp4.Body.Close()
 	if resp4.StatusCode != http.StatusUnauthorized {
 		t.Errorf("unauthenticated employment create = %d, want 401", resp4.StatusCode)
@@ -444,7 +444,7 @@ func TestMergeAtomsUnionsAndRemovesLoser(t *testing.T) {
 	bank.reindex()
 
 	body := `{"ids":["` + a.ID.String() + `","` + b.ID.String() + `"]}`
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms/merge", body, token)
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/atoms/merge", body, token)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("merge status = %d, want 200", resp.StatusCode)
 	}
@@ -462,7 +462,7 @@ func TestMergeAtomsUnionsAndRemovesLoser(t *testing.T) {
 		t.Error("kept atom has no context from the richer sibling")
 	}
 
-	list := experienceReq(t, app, http.MethodGet, "/me/experience", "", token)
+	list := experienceReq(t, app, http.MethodGet, "/api/v1/me/experience", "", token)
 	var listed struct {
 		Data struct {
 			Unplaced []struct {
@@ -492,14 +492,14 @@ func TestMergeAtomsIsCookieOnly(t *testing.T) {
 		return fiber.NewError(fiber.StatusUnauthorized, "cookie only")
 	}
 	keyAccept := auth.RequireAuth(iss, testVersions)
-	h.register(app.Group(""), middleware{cookie: cookieReject, key: keyAccept})
+	h.register(app.Group("/api/v1"), middleware{cookie: cookieReject, key: keyAccept}, newContract(contractHandlers{experienceHandlers: h}))
 
 	a := bank.add(1, experience.Atom{Claim: "One", Provenance: experience.ProvenanceManual})
 	b := bank.add(1, experience.Atom{Claim: "Two", Provenance: experience.ProvenanceManual})
 	bank.reindex()
 
 	body := `{"ids":["` + a.ID.String() + `","` + b.ID.String() + `"]}`
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms/merge", body, token)
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/atoms/merge", body, token)
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("merge through key-only path = %d, want 401", resp.StatusCode)
 	}
@@ -519,7 +519,7 @@ func TestListExperienceFlagsSoftDuplicatesAndThinAtoms(t *testing.T) {
 	})
 	bank.reindex()
 
-	resp := experienceReq(t, app, http.MethodGet, "/me/experience", "", token)
+	resp := experienceReq(t, app, http.MethodGet, "/api/v1/me/experience", "", token)
 	var body struct {
 		Data struct {
 			Unplaced []struct {
@@ -561,9 +561,9 @@ func TestAddAtomRespectsContextGate(t *testing.T) {
 	h := newExperienceHandlers(bank).withRequireContext(stubRequireContext{on: true})
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	guard := auth.RequireAuth(iss, testVersions)
-	h.register(app.Group(""), middleware{cookie: guard, key: guard})
+	h.register(app.Group("/api/v1"), middleware{cookie: guard, key: guard}, newContract(contractHandlers{experienceHandlers: h}))
 
-	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms",
+	resp := experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/atoms",
 		`{"claim":"Cut latency"}`, token)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("gated empty context = %d, want 400", resp.StatusCode)
@@ -573,7 +573,7 @@ func TestAddAtomRespectsContextGate(t *testing.T) {
 		t.Error("gated create persisted anyway")
 	}
 
-	resp = experienceReq(t, app, http.MethodPost, "/me/experience/atoms",
+	resp = experienceReq(t, app, http.MethodPost, "/api/v1/me/experience/atoms",
 		`{"claim":"Cut latency","context":"payments checkout"}`, token)
 	if resp.StatusCode != http.StatusCreated {
 		t.Errorf("gated with context = %d, want 201", resp.StatusCode)
@@ -593,7 +593,7 @@ func TestListExperienceShowsAnAchievementWithAnUnknownPlace(t *testing.T) {
 	})
 	bank.reindex()
 
-	resp := experienceReq(t, app, http.MethodGet, "/me/experience", "", token)
+	resp := experienceReq(t, app, http.MethodGet, "/api/v1/me/experience", "", token)
 	var body struct {
 		Data struct {
 			Unplaced []struct {

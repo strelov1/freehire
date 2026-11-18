@@ -3,7 +3,15 @@
   import { ApiError, api } from '#lib/api.js';
   import { messageActionFor } from '#lib/buddies.js';
   import { buddyRelativeDay, localDay } from '#lib/buddyPresent.js';
-  import { counterpartName, followsNewMessages, isSendShortcut, kindCopy, mergeMessages, messageDays, messageJobSlugs } from '#lib/messaging.js';
+  import {
+    counterpartName,
+    followsNewMessages,
+    isSendShortcut,
+    kindCopy,
+    mergeMessages,
+    messageDays,
+    messageJobSlugs,
+  } from '#lib/messaging.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
   import type { Conversation, ConversationMessage, ConversationReport } from '#lib/types.js';
   import { Button, ConfirmDialog } from '#lib/ui/index.js';
@@ -105,7 +113,9 @@
       }
       if (history !== 'ready') {
         history = 'ready';
-        void tick().then(() => { announce = true; });
+        void tick().then(() => {
+          announce = true;
+        });
       }
       const lastMessage = messages.at(-1);
       if (fetched && lastMessage) {
@@ -115,7 +125,9 @@
     } catch {
       // A failed first read is shown with a retry; a later one is recovered by the next poll.
       if (history !== 'ready') history = 'error';
-    } finally { pollInFlight = false; }
+    } finally {
+      pollInFlight = false;
+    }
   }
 
   function retryHistory() {
@@ -130,14 +142,18 @@
     return () => clearInterval(timer);
   });
 
-  $effect(() => { messagingDock.setDraft(id, body); });
+  $effect(() => {
+    messagingDock.setDraft(id, body);
+  });
 
   // Keep the newest message in view as messages arrive, unless the reader has scrolled up
   // into the history (sending brings them back down; see send).
   $effect(() => {
     void messages.length;
     if (!following) return;
-    void tick().then(() => { if (list) list.scrollTop = list.scrollHeight; });
+    void tick().then(() => {
+      if (list) list.scrollTop = list.scrollHeight;
+    });
   });
 
   function onVisibility() {
@@ -163,11 +179,15 @@
     try {
       await api.answerConversation(id, action);
       onchange?.(action === 'accept' ? 'accepted' : 'declined');
-      await messagingDock.refresh().catch(() => { /* the next poll catches up */ });
+      await messagingDock.refresh().catch(() => {
+        /* the next poll catches up */
+      });
       if (action === 'accept') void refreshMessages();
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Could not update the invitation.';
+    } finally {
+      actionBusy = false;
     }
-    catch (err) { error = err instanceof Error ? err.message : 'Could not update the invitation.'; }
-    finally { actionBusy = false; }
   }
   async function send() {
     const text = body.trim();
@@ -179,26 +199,42 @@
       body = '';
       following = true;
       messages = mergeMessages(messages, [sent]);
-      void messagingDock.refresh().catch(() => { /* the next poll catches up */ });
+      void messagingDock.refresh().catch(() => {
+        /* the next poll catches up */
+      });
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Could not send message.';
+    } finally {
+      actionBusy = false;
     }
-    catch (err) { error = err instanceof Error ? err.message : 'Could not send message.'; }
-    finally { actionBusy = false; }
   }
   async function block() {
     error = '';
     try {
       await api.blockConversation(id);
       onchange?.('blocked');
-      await messagingDock.refresh().catch(() => { /* the next poll catches up */ });
+      await messagingDock.refresh().catch(() => {
+        /* the next poll catches up */
+      });
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Could not block this member.';
     }
-    catch (err) { error = err instanceof Error ? err.message : 'Could not block this member.'; }
   }
   async function report() {
     if (reportNote.length > 1000) return;
-    error = ''; reportSuccess = false; actionBusy = true;
-    try { await api.reportConversation(id, reportReason, reportNote.trim()); reportSuccess = true; reportOpen = false; reportNote = ''; }
-    catch (err) { error = err instanceof ApiError ? err.message : 'Could not send report.'; }
-    finally { actionBusy = false; }
+    error = '';
+    reportSuccess = false;
+    actionBusy = true;
+    try {
+      await api.reportConversation(id, reportReason, reportNote.trim());
+      reportSuccess = true;
+      reportOpen = false;
+      reportNote = '';
+    } catch (err) {
+      error = err instanceof ApiError ? err.message : 'Could not send report.';
+    } finally {
+      actionBusy = false;
+    }
   }
 
   onMount(() => {
@@ -215,13 +251,23 @@
 
 <div class="flex min-h-0 flex-1 flex-col">
   {#if !compact || (live && (status === 'open' || status === 'incoming'))}
-    <header class="flex items-center gap-2 border-b border-border {compact ? 'justify-end px-3 py-2' : 'justify-between pb-3'}">
+    <header
+      class="flex items-center gap-2 border-b border-border {compact
+        ? 'justify-end px-3 py-2'
+        : 'justify-between pb-3'}"
+    >
       {#if !compact}
         <ConversationCounterpart counterpart={conversation.counterpart} link nameClass="font-bold" />
       {/if}
       {#if live && (status === 'open' || status === 'incoming')}
         <div class="flex gap-2">
-          <Button variant="ghost" size="sm" aria-expanded={reportOpen} aria-controls="{uid}-report" onclick={toggleReport}>Report</Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-expanded={reportOpen}
+            aria-controls="{uid}-report"
+            onclick={toggleReport}>Report</Button
+          >
           <Button variant="ghost" size="sm" onclick={() => (confirmBlockOpen = true)}>Block</Button>
         </div>
       {/if}
@@ -230,15 +276,50 @@
   <div class="flex min-h-0 flex-1 flex-col {compact ? 'px-3' : ''}">
     {#if error}<p role="alert" class="py-2 text-sm text-destructive">{error}</p>{/if}
     {#if reportSuccess}<p role="status" class="py-2 text-sm text-muted-foreground">Report sent.</p>{/if}
-    {#if reportOpen && live}<form id="{uid}-report" aria-label="Report {name}" class="mt-2 flex flex-col gap-2 rounded-md border border-border p-3" onsubmit={(e) => { e.preventDefault(); void report(); }}>
-      <label class="text-sm">Reason<select bind:this={reasonSelect} bind:value={reportReason} class="mt-1 block w-full rounded-md border border-border bg-background p-2"><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="scam">Scam</option><option value="other">Other</option></select></label>
-      <label class="text-sm">Optional note<textarea bind:value={reportNote} maxlength="1000" rows="3" class="mt-1 block w-full rounded-md border border-border bg-background p-2"></textarea></label>
-      <span class="text-right text-xs text-muted-foreground">{reportNote.length}/1000</span>
-      <div class="flex justify-end gap-2"><Button variant="outline" type="button" onclick={() => (reportOpen = false)}>Cancel</Button><Button variant="primary" type="submit" disabled={actionBusy || reportNote.length > 1000}>Send report</Button></div>
-    </form>{/if}
+    {#if reportOpen && live}<form
+        id="{uid}-report"
+        aria-label="Report {name}"
+        class="mt-2 flex flex-col gap-2 rounded-md border border-border p-3"
+        onsubmit={(e) => {
+          e.preventDefault();
+          void report();
+        }}
+      >
+        <label class="text-sm"
+          >Reason<select
+            bind:this={reasonSelect}
+            bind:value={reportReason}
+            class="mt-1 block w-full rounded-md border border-border bg-background p-2"
+            ><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="scam"
+              >Scam</option
+            ><option value="other">Other</option></select
+          ></label
+        >
+        <label class="text-sm"
+          >Optional note<textarea
+            bind:value={reportNote}
+            maxlength="1000"
+            rows="3"
+            class="mt-1 block w-full rounded-md border border-border bg-background p-2"></textarea></label
+        >
+        <span class="text-right text-xs text-muted-foreground">{reportNote.length}/1000</span>
+        <div class="flex justify-end gap-2">
+          <Button variant="outline" type="button" onclick={() => (reportOpen = false)}>Cancel</Button><Button
+            variant="primary"
+            type="submit"
+            disabled={actionBusy || reportNote.length > 1000}>Send report</Button
+          >
+        </div>
+      </form>{/if}
     <!-- Above the scroller, not in it: following new messages would scroll it away. -->
     {#if intro}<div class="flex justify-center pt-3">{@render intro()}</div>{/if}
-    <div bind:this={list} onscroll={() => { if (list) following = followsNewMessages(list); }} class="min-h-0 flex-1 overflow-y-auto py-4 pr-2">
+    <div
+      bind:this={list}
+      onscroll={() => {
+        if (list) following = followsNewMessages(list);
+      }}
+      class="min-h-0 flex-1 overflow-y-auto py-4 pr-2"
+    >
       {#if history === 'loading' && messages.length === 0}
         <p class="text-sm text-muted-foreground">Loading messages…</p>
       {:else if history === 'error'}
@@ -252,29 +333,77 @@
       <div role="log" aria-live={announce ? 'polite' : 'off'}>
         <ol aria-label="Messages with {name}" class="flex flex-col gap-1">
           {#each messageDays(messages) as group (group.day)}
-            <li class="py-2 text-center text-xs font-medium text-muted-foreground" aria-hidden="true">{dayLabel(group.day)}</li>
+            <li class="py-2 text-center text-xs font-medium text-muted-foreground" aria-hidden="true">
+              {dayLabel(group.day)}
+            </li>
             {#each group.messages as message (message.id)}
               <!-- Bubbles: the viewer's own on the right in the brand fill, the other side's on
                    the left; the corner nearest the sender is tucked in. -->
               <li class="flex flex-col {message.mine ? 'items-end' : 'items-start'}">
-                <div class="w-fit max-w-4/5 whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm {message.mine ? 'rounded-br-md bg-brand text-brand-foreground' : 'rounded-bl-md bg-muted'}">
+                <div
+                  class="w-fit max-w-4/5 whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm {message.mine
+                    ? 'rounded-br-md bg-brand text-brand-foreground'
+                    : 'rounded-bl-md bg-muted'}"
+                >
                   <span class="sr-only">{message.mine ? 'You' : name}: </span>{message.body}
                   {#each messageJobSlugs(message.body) as slug (slug)}<ChatJobPreview {slug} />{/each}
                 </div>
-                <time datetime={message.created_at} title={new Date(message.created_at).toLocaleString()} class="mx-2 mt-0.5 text-xs text-muted-foreground">{clock(message.created_at)}</time>
+                <time
+                  datetime={message.created_at}
+                  title={new Date(message.created_at).toLocaleString()}
+                  class="mx-2 mt-0.5 text-xs text-muted-foreground">{clock(message.created_at)}</time
+                >
               </li>
             {/each}
           {/each}
         </ol>
       </div>
     </div>
-    {#if status === 'incoming' && live}<div class="flex gap-2 border-t border-border py-3"><Button variant="primary" disabled={actionBusy} onclick={() => void invitation('accept')}>Accept</Button><Button variant="outline" disabled={actionBusy} onclick={() => void invitation('decline')}>Decline</Button></div>
-    {:else if status === 'outgoing' && live}<p role="status" class="border-t border-border py-3 text-sm text-muted-foreground">Sent. You can keep chatting once they accept.</p>
-    {:else if status === 'open' && live}<form class="flex flex-col gap-2 border-t border-border py-3" onsubmit={(e) => { e.preventDefault(); void send(); }}><textarea bind:value={body} maxlength="4000" rows={compact ? 2 : 3} class="w-full resize-none rounded-xl bg-muted p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-ring" aria-label="Message to {name}" aria-describedby="{uid}-composer-hint" placeholder="Write a message" onkeydown={onComposerKeydown}></textarea><div class="flex items-center justify-between gap-2"><span id="{uid}-composer-hint" class="text-xs text-muted-foreground">{body.length}/4000 · {sendKey}+Enter sends</span><Button variant="primary" size={compact ? 'sm' : 'md'} type="submit" disabled={actionBusy || !body.trim()}>Send</Button></div></form>
+    {#if status === 'incoming' && live}<div class="flex gap-2 border-t border-border py-3">
+        <Button variant="primary" disabled={actionBusy} onclick={() => void invitation('accept')}>Accept</Button><Button
+          variant="outline"
+          disabled={actionBusy}
+          onclick={() => void invitation('decline')}>Decline</Button
+        >
+      </div>
+    {:else if status === 'outgoing' && live}<p
+        role="status"
+        class="border-t border-border py-3 text-sm text-muted-foreground"
+      >
+        Sent. You can keep chatting once they accept.
+      </p>
+    {:else if status === 'open' && live}<form
+        class="flex flex-col gap-2 border-t border-border py-3"
+        onsubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+      >
+        <textarea
+          bind:value={body}
+          maxlength="4000"
+          rows={compact ? 2 : 3}
+          class="w-full resize-none rounded-xl bg-muted p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-ring"
+          aria-label="Message to {name}"
+          aria-describedby="{uid}-composer-hint"
+          placeholder="Write a message"
+          onkeydown={onComposerKeydown}></textarea>
+        <div class="flex items-center justify-between gap-2">
+          <span id="{uid}-composer-hint" class="text-xs text-muted-foreground"
+            >{body.length}/4000 · {sendKey}+Enter sends</span
+          ><Button variant="primary" size={compact ? 'sm' : 'md'} type="submit" disabled={actionBusy || !body.trim()}
+            >Send</Button
+          >
+        </div>
+      </form>
     {:else}
       <div class="flex flex-col items-start gap-2 border-t border-border py-3 text-sm text-muted-foreground">
         <p>{live ? copy.closed : copy.gone}</p>
-        {#if reinviteHandle}{@const handle = reinviteHandle}<Button variant="primary" size={compact ? 'sm' : 'md'} onclick={() => oninvite?.(handle)}>Message {name} again</Button>{/if}
+        {#if reinviteHandle}{@const handle = reinviteHandle}<Button
+            variant="primary"
+            size={compact ? 'sm' : 'md'}
+            onclick={() => oninvite?.(handle)}>Message {name} again</Button
+          >{/if}
       </div>
     {/if}
   </div>

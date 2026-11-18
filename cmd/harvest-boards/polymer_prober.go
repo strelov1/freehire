@@ -13,9 +13,9 @@ import (
 )
 
 // polymerProber validates a Polymer board (the <board> of jobs.polymer.co/<board>) with one
-// request: the first page of the public listing API states the board's posting count and the
-// organisation's own name, where the adapter fallback would read every posting's body to count
-// a board. It mirrors the URL of internal/ingest/sources/polymer.go, which is unexported.
+// request: the first page of the public listing API states the posting count and the
+// organisation's name, where the adapter fallback would read every posting's body. It mirrors
+// the URL of internal/ingest/sources/polymer.go, which is unexported.
 type polymerProber struct{}
 
 // polymerBoardPattern is the slug shape the adapter accepts; anything else would build an API

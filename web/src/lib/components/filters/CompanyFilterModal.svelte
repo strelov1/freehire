@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { COMPANY_FACETS } from '#lib/facets.js';
+  import { COMPANY_FACETS } from '#lib/directoryFacets.js';
   import { railFacetSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
   import type { CompanyFilterStore } from '#lib/companyFilters.js';
   import { StagedCompanyFilters } from '#lib/stagedCompanyFilters.svelte.js';

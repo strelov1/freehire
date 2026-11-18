@@ -12,7 +12,5 @@ const SESSION_COOKIE = 'hire_token';
  *  the same characters (`not_hire_token=…`) doesn't read as a session. */
 export function hasSessionCookie(header: string | null | undefined): boolean {
   if (!header) return false;
-  return header
-    .split(';')
-    .some((pair) => pair.trimStart().startsWith(`${SESSION_COOKIE}=`));
+  return header.split(';').some((pair) => pair.trimStart().startsWith(`${SESSION_COOKIE}=`));
 }

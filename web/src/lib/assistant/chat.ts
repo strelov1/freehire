@@ -3,7 +3,7 @@
 // accumulation is unit-testable (vitest) without a DOM — mirroring how
 // `matchAnalysis.ts` isolates `reduceMatchEvent`.
 
-import type { TurnEvent } from './wire';
+import { eventsFromTranscript, type StoredMessage, type TurnEvent } from './wire';
 import type { ToolCall } from './tool-formatters';
 
 /** One rendered message. Assistant messages accumulate `text` (the reply),
@@ -11,7 +11,7 @@ import type { ToolCall } from './tool-formatters';
  *  call with its arguments and, once it comes back, its result) while
  *  `streaming`; `errored` is set when the turn ends with an error. User messages
  *  carry only `text`. */
-interface ChatMessage {
+export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   attachments: string[];
@@ -28,8 +28,26 @@ export interface ChatState {
   queued: boolean;
 }
 
+/** Whether a frame shows the turn actually ran, rather than waiting behind another one. */
+export function turnBegins(event: TurnEvent): boolean {
+  return (
+    event.type === 'user_prompt' ||
+    event.type === 'assistant_text' ||
+    event.type === 'assistant_thought' ||
+    event.type === 'tool_use'
+  );
+}
+
 export function initChat(): ChatState {
   return { messages: [], queued: false };
+}
+
+/** A stored transcript replayed through the same reducer live events go through, so
+ *  history and a running turn render identically. */
+export function chatFromTranscript(messages: StoredMessage[]): ChatState {
+  let next = initChat();
+  for (const event of eventsFromTranscript(messages)) next = reduceTurnEvent(next, event);
+  return next;
 }
 
 /** Fold one `TurnEvent` into the chat state, returning a new state (never
@@ -66,7 +84,15 @@ export function reduceTurnEvent(prev: ChatState, event: TurnEvent): ChatState {
             ...next,
             messages: [
               ...next.messages,
-              { role: 'assistant', text: '', attachments: [], thinking: '', tools: [], streaming: false, errored: true },
+              {
+                role: 'assistant',
+                text: '',
+                attachments: [],
+                thinking: '',
+                tools: [],
+                streaming: false,
+                errored: true,
+              },
             ],
           };
         }
@@ -86,10 +112,7 @@ export function reduceTurnEvent(prev: ChatState, event: TurnEvent): ChatState {
  *  Keying by name rather than by call id keeps the reducer free of id
  *  bookkeeping; a result for a call we never saw is dropped rather than
  *  fabricating a card. */
-function attachResult(
-  tools: ToolCall[],
-  event: { name: string; result?: string; is_error?: boolean },
-): ToolCall[] {
+function attachResult(tools: ToolCall[], event: { name: string; result?: string; is_error?: boolean }): ToolCall[] {
   for (let i = 0; i < tools.length; i++) {
     const tool = tools[i];
     if (!tool || tool.name !== event.name || tool.result !== undefined) continue;

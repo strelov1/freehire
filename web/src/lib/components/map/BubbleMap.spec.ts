@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MapPlace } from '#lib/worldMap.js';
 import BubbleMap from './BubbleMap.svelte';
 
-const { page } = vi.hoisted(() => ({ page: { data: {} as { locale?: string }, url: new URL('http://localhost/jobs') } }));
+const { page } = vi.hoisted(() => ({
+  page: { data: {} as { locale?: string }, url: new URL('http://localhost/jobs') },
+}));
 vi.mock('$app/state', () => ({ page }));
 
 const PLACES: MapPlace[] = [

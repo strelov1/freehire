@@ -3,13 +3,13 @@ import {
   EMPLOYER_CREDENTIALS,
   FACETS,
   JOB_COLLECTION,
-  SOURCE_LABELS,
   type FacetDef,
   type FacetOption,
 } from './facets';
 import { CATEGORY_GROUPS, RAIL, type RailGroup } from './filterSections';
 import { EXPERIENCE_PRESETS, FRESHNESS_PRESETS } from './filterControls';
 import { fuzzyMatch } from './fuzzy';
+import { SOURCE_LABELS } from './sourceLabels';
 import { SKILL_LABELS } from './generated/contracts';
 
 export const FILTER_SEARCH_MIN_QUERY = 2;
@@ -120,26 +120,42 @@ function buildJobCatalog(): FilterSearchHit[] {
   hits.push(jumpHit('location', 'City', 'City'));
   pushFacet(hits, 'work', 'work_mode');
   pushFacet(hits, 'work', 'employment_type');
+  pushFacet(hits, 'work', 'engagement');
   for (const [value, label] of Object.entries(SKILL_LABELS)) {
     hits.push(optionHit('skills', 'skills', 'Skills', { value, label }));
   }
   pushFacet(hits, 'industry', 'domains');
   pushFacet(hits, 'industry', 'company_type');
   pushFacet(hits, 'industry', 'collections', JOB_COLLECTION, 'Collection');
+  hits.push({
+    ...actionHit('company_slug', 'Company', 'Hiring again', 'former-employers'),
+    param: 'company_slug',
+    aliases: ['former employers', 'past employers', 'previous employers'],
+  });
+  hits.push({
+    ...actionHit('company_slug', 'Company', 'Your watchlist', 'watchlist'),
+    param: 'company_slug',
+    aliases: ['watched companies', 'followed companies', 'companies I follow'],
+  });
+  hits.push({
+    ...actionHit('posted', 'Posted', 'Hide viewed', 'hide-seen'),
+    aliases: ['viewed', 'seen', 'opened', 'already viewed'],
+  });
   pushFacet(hits, 'source', 'source_type');
   for (const [value, label] of Object.entries(SOURCE_LABELS)) {
     hits.push(optionHit('source', 'source', 'Source', { value, label }));
   }
   pushFacet(hits, 'salary', 'salary_currency');
+  pushFacet(hits, 'perks', 'perks');
+  pushFacet(hits, 'salary', 'equity');
   pushFacet(hits, 'language', 'english_level');
   hits.push(jumpHit('language', 'Job language', 'Job language'));
   pushFacet(hits, 'relocation', 'relocation');
   pushFacet(hits, 'relocation', 'collections', EMPLOYER_CREDENTIALS, 'Employer credentials');
   hits.push(actionHit('relocation', 'Visa', 'Offers visa sponsorship', 'visa'));
-  hits.push(
-    actionHit('relocation', 'AI interviews', 'Hide employers reported to interview with AI', 'hide-ai'),
-  );
+  hits.push(actionHit('relocation', 'AI interviews', 'Hide employers reported to interview with AI', 'hide-ai'));
   hits.push(actionHit('relocation', 'Auto-apply', 'Auto-apply available', 'auto-apply'));
+  hits.push(actionHit('relocation', 'Application', 'Short application', 'short-apply'));
   pushFacet(hits, 'relocation', 'clearance_levels', undefined, 'Security clearance');
   return hits;
 }
@@ -148,6 +164,9 @@ export function jobFilterSearchItems(opts?: {
   exclude?: readonly string[];
   railKeys?: readonly string[];
   openWithin?: boolean;
+  formerEmployers?: boolean;
+  watchlist?: boolean;
+  hideSeen?: boolean;
 }): FilterSearchHit[] {
   jobCatalog ??= buildJobCatalog();
   const exclude = new Set(opts?.exclude ?? []);
@@ -156,6 +175,9 @@ export function jobFilterSearchItems(opts?: {
     if (rails && !rails.has(hit.railKey)) return false;
     if (hit.param && exclude.has(hit.param)) return false;
     if (!opts?.openWithin && hit.action?.startsWith('open:')) return false;
+    if (!opts?.formerEmployers && hit.action === 'former-employers') return false;
+    if (!opts?.watchlist && hit.action === 'watchlist') return false;
+    if (!opts?.hideSeen && hit.action === 'hide-seen') return false;
     return true;
   });
 }

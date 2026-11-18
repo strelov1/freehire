@@ -2,28 +2,15 @@ package handler
 
 import (
 	"cmp"
-	"context"
-	"log"
-	"math"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/browsertools"
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/ai/speech"
-	"github.com/strelov1/freehire/internal/api/atsapply"
-	"github.com/strelov1/freehire/internal/api/ojcp"
-	"github.com/strelov1/freehire/internal/api/ratelimit"
-	"github.com/strelov1/freehire/internal/api/realtime"
-	"github.com/strelov1/freehire/internal/application/agentview"
-	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/application/mailrecall"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
@@ -31,512 +18,40 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
-	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/candidate/survey"
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
-	"github.com/strelov1/freehire/internal/engage/buddy"
+	"github.com/strelov1/freehire/internal/engage/changehook"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
-	"github.com/strelov1/freehire/internal/engage/emailnotify"
-	"github.com/strelov1/freehire/internal/engage/emailprefs"
-	"github.com/strelov1/freehire/internal/engage/mentorship"
-	"github.com/strelov1/freehire/internal/engage/messaging"
+	"github.com/strelov1/freehire/internal/engage/problemreport"
 	"github.com/strelov1/freehire/internal/engage/processreport"
-	"github.com/strelov1/freehire/internal/engage/referral"
 	"github.com/strelov1/freehire/internal/engage/reminder"
-	"github.com/strelov1/freehire/internal/engage/report"
 	"github.com/strelov1/freehire/internal/engage/webhooknotify"
 	"github.com/strelov1/freehire/internal/identity/accountdelete"
-	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/identity/auth"
-	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
-	"github.com/strelov1/freehire/internal/identity/auth/mobileauth"
-	"github.com/strelov1/freehire/internal/identity/auth/oauth"
-	"github.com/strelov1/freehire/internal/identity/auth/recentauth"
 	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/ingest/boardresolve"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
-	"github.com/strelov1/freehire/internal/ingest/directapply"
-	"github.com/strelov1/freehire/internal/ingest/employer"
 	"github.com/strelov1/freehire/internal/ingest/jdresolve"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/moderation"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/job/companyrelation"
 	"github.com/strelov1/freehire/internal/job/privatejob"
-	"github.com/strelov1/freehire/internal/job/recentfeed"
-	"github.com/strelov1/freehire/internal/platform/blobstore"
-	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/llm"
-	"github.com/strelov1/freehire/internal/platform/tokencrypt"
-	"github.com/strelov1/freehire/internal/search/embedprogress"
-	"github.com/strelov1/freehire/internal/search/search"
-	"github.com/strelov1/freehire/internal/search/suggest"
 )
 
-const (
-	defaultLimit = 20
-	maxLimit     = 100
-	// trackingMaxLimit is the higher ceiling for the caller's own tracked-jobs
-	// listing: the Kanban board is unpaginated (it fetches everything at once), so
-	// the shared 100 cap would silently hide a heavy user's older applications.
-	trackingMaxLimit = 500
-	// maxPageWindow bounds how deep pagination may reach (offset+limit) on every list
-	// endpoint, whichever store answers it. ~500 pages at the default limit, 100 at the
-	// maximum — past any real browsing, and the cost of one refused request is that the
-	// caller must narrow its filter or page by cursor instead.
-	//
-	// One number for both stores on purpose. It arrived first for the Meili-backed search,
-	// where the index's own deep-paging cost argued for it; the Postgres-backed lists were
-	// left unbounded because their OFFSET walk was slow rather than refused — which is the
-	// gap the 2026-09-14 outage went through. Why a request past it is REFUSED rather than
-	// clamped is argued at pageParamsWindowed.
-	maxPageWindow = 10000
-	// telegramLinkTTL bounds how long a deep-link token is valid — long enough to
-	// open Telegram and tap Start, short enough to limit a leaked link's window.
-	telegramLinkTTL = 10 * time.Minute
-	// matchAnalysisLLMTimeout is the per-stage LLM timeout for the fit analysis: its reasoning
-	// model spends tens of seconds thinking before answering, so a stage needs more than
-	// the shared client's default.
-	//
-	// It is a budget for ONE attempt of the stages a reader is blocked on. What each stage
-	// does with it is matchanalysis's own business — timeoutForStage doubles it for the
-	// adversarial audit, whose subject is already served, and attemptsForStage decides how
-	// many attempts each stage gets.
-	//
-	// 90s was chosen against a spread of 3–25s, which is no longer what production shows:
-	// measured 2026-09-08, healthy stages answer in 45–83s, because a call landing on the
-	// gateway's deliberating provider is slow rather than hung. That is why the retry no
-	// longer helps the stage it was written for and why the audit needed a budget of its
-	// own; the figure itself still sits past the spread for stages 1 and 2.
-	matchAnalysisLLMTimeout = 90 * time.Second
-	// resumeExtractLLMTimeout bounds the single structured-résumé extraction call. It runs
-	// off the upload response path (background) so it can be generous, but still bounded so
-	// a stalled gateway cannot leak a goroutine indefinitely.
-	resumeExtractLLMTimeout = 120 * time.Second
-	// assistantLLMTimeout bounds ONE model call in an assistant turn. The shared default of
-	// 90s was measured, on 2026-08-21, to sit inside the working range rather than past it:
-	// over three days of tailoring turns the gateway's own spend log put p95 at 58s and the
-	// slowest SUCCESSFUL call at 83.1s, with the reasoning model taking up to 51.8s before
-	// its first token on a single call. A ceiling that close to the spread cuts work that
-	// was going to finish.
-	//
-	// And a cut call does not cost a step, it costs the run: Runner.Run surfaces a model
-	// error as a failed turn, so one slow round ends an unattended pass that had thirty. On
-	// 2026-08-21 that happened to three runs, each on its SECOND call — the first round of
-	// real work, where the model writes several thousand tokens off the fit analysis.
-	//
-	// 180s is twice the slowest observed success, and still well under the gateway's own
-	// limits (its nginx reads for 300s), so a genuinely hung call is still bounded here.
-	assistantLLMTimeout = 180 * time.Second
-)
-
-// API holds the cross-cutting dependencies every route shares: the DB pool, the
-// sqlc queries, and the token issuer the auth middleware is built from. Feature
-// handlers carry their own dependencies (see the *Handlers structs) and register
-// their own routes; Register wires them onto the app.
-type API struct {
-	pool    *pgxpool.Pool
-	queries *db.Queries
-	issuer  *auth.Issuer
-	// browserTools relays browser-tool frames between a user's harness and that
-	// user's browser extension (the /tools/ws wire). In-memory and per-instance:
-	// both ends of a channel are live connections to this process.
-	browserTools *browsertools.Hub
-}
-
-// middleware bundles the auth gates the feature handlers mount their routes
-// behind. optional attaches the caller when signed in (cookie or key) but never
-// rejects, so public detail reads can overlay the caller's own state (my_vote)
-// while staying open to anonymous visitors. key accepts the session cookie or an
-// API key (RequireAuthOrKey), so a script holding a key can drive the same flow as
-// the browser. cookie is the cookie-only gate (RequireAuth) for the
-// browser-convenience surfaces where a leaked API key must not act. moderator
-// gates on the moderator role and is stacked after key or cookie.
-type middleware struct {
-	optional fiber.Handler
-	key      fiber.Handler
-	// cvKey is keyAuth widened to admit the narrow `cv` key. Only the caller's own
-	// identity read (/auth/me) mounts it; every other key-accepting route stays
-	// on key, which is full-scope-only — so a new endpoint is out of a leaked agent
-	// credential's reach unless it opts in.
-	cvKey fiber.Handler
-	// autoApplyGate is keyAuth (cookie or full-scope API key) widened with a fallback
-	// to the shared auto-apply orchestrator secret (see
-	// openspec/changes/auto-apply-inngest-orchestration/design.md) — only the two
-	// auto-apply tailor/review routes mount it; every other route stays on key.
-	autoApplyGate fiber.Handler
-	cookie        fiber.Handler
-	// optionalCookie attaches a cookie session when there is one but never rejects.
-	// It exists for provider callbacks, which are browser navigations: a 401 there
-	// renders JSON into the address bar instead of sending the user back to the app.
-	optionalCookie fiber.Handler
-	moderator      fiber.Handler
-	// paidAI is the paid-entitlement gate (paid_ai.go) every route that makes a model call
-	// for its caller mounts AFTER its authentication gate. Called with the metered feature the
-	// route draws on, so a refusal names it, or with the zero Feature for an AI action that
-	// has no allowance of its own. Free gets no AI at all: an unpaid caller is a 402 before
-	// the handler runs, and a plan that cannot be read is a 503.
-	//
-	// The binding (user_llm.go) refuses to hand out a model client without the mark this
-	// leaves, so forgetting it on a new route is a 500 in that route's first test rather
-	// than model spend nobody paid for.
-	paidAI func(plan.Feature) fiber.Handler
-	// outboundFetch throttles every endpoint that makes the server fetch a
-	// caller-supplied URL, so one user's budget is spent across them rather than
-	// granted once per route.
-	outboundFetch fiber.Handler
-	// throttler backs every other per-route rate limiter built inside a feature
-	// handler's own register method (mail recall, photo upload, JD resolve, match
-	// analysis) — the same shared instance outboundFetch and the auth routes use.
-	throttler ratelimit.Throttler
-	// public is the rate limiter of every public read route (public_gate.go), mounted through
-	// publicReadLimiter / agentSearchLimiter.
-	public *publicGate
-}
-
-// pageParamsBounded reads and clamps the shared limit/offset pagination query params, with
-// caller-supplied bounds for endpoints whose page is sized differently from the shared list
-// cap (the tracking board, which is unpaginated and needs the whole set; the role-cluster
-// copies list, which pages a handful of city openings).
-//
-// The unbounded-depth reader. Every PUBLIC list calls pageParamsWindowed below instead; what
-// is left here are the caller's own resources — the tracking board, the inbox, the
-// notification list — where the set is one user's and the depth is theirs to walk.
-//
-// It is the ONLY place the offset query param is read, and a test enforces that. The clamp to
-// MaxInt32 is the reason: every paginated column binds as a Postgres int4, Fiber's QueryInt is
-// a plain strconv.Atoi that happily accepts a 64-bit value, and the int32 conversion then wraps
-// it NEGATIVE — which Postgres rejects, turning ?offset=3000000000 into a 500 rather than an
-// empty page. Naming that in a comment did not stop a second call site re-implementing the
-// parse without it.
-func pageParamsBounded(c *fiber.Ctx, fallback, ceiling int) (limit, offset int) {
-	limit = min(max(c.QueryInt("limit", fallback), 1), ceiling)
-	offset = min(max(c.QueryInt("offset", 0), 0), math.MaxInt32)
-	return limit, offset
-}
-
-// pageParamsWindowed is pageParamsBounded plus the deep-pagination refusal: it answers 400
-// rather than serving a page whose offset reaches past maxPageWindow.
-//
-// The clamp pageParamsBounded already applies bounds the VALUE, so Postgres accepts it; it
-// does not bound the WORK. `LIMIT n OFFSET k` reads and discards k rows before returning
-// any, so an offset the caller chooses sets how much of a table one request walks — and on
-// `jobs` (millions of open rows, `SELECT *`, so every skipped tuple is a heap fetch) that is
-// minutes of disk per request rather than milliseconds.
-//
-// That is not a hypothetical. On 2026-09-14 a crawler walked /api/v1/jobs?offset= in steps of
-// 100 up to ~180,000, eight requests at a time. Each one pinned a pooled connection for over
-// two minutes; ten of them exhausted the pool (defaultMaxConns = 10), every other endpoint
-// queued behind them — /api/v1/threads was served in 15m41s — and nginx answered 504 to
-// 14,007 requests over 54 minutes. The per-IP rate limiter did not help and could not: it
-// bounds requests per minute, and this endpoint's COST PER REQUEST is what the caller
-// controls (see public_read_limit.go, whose budgets are split "by cost, not by path" — a
-// split that assumes a path HAS a fixed cost).
-//
-// Refusing rather than clamping to the ceiling is the deliberate half. A clamped page answers
-// 200 with rows the caller did not ask for, which reads as success: a walker would loop over
-// the same page forever and a person paging would silently see the wrong slice. That
-// reasoning first landed on the Meili-backed lists, under a constant of their own; this
-// is that constant, moved here so one number decides for both stores.
-func pageParamsWindowed(c *fiber.Ctx, fallback, ceiling int) (limit, offset int, err error) {
-	return pageParamsWithin(c, fallback, ceiling, maxPageWindow)
-}
-
-// pageParamsWithin is pageParamsWindowed with the window named by the caller, for an
-// endpoint whose rows cost more per skipped offset than the shared window allows for.
-func pageParamsWithin(c *fiber.Ctx, fallback, ceiling, window int) (limit, offset int, err error) {
-	limit, offset = pageParamsBounded(c, fallback, ceiling)
-	if offset+limit > window {
-		return 0, 0, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
-	}
-	return limit, offset, nil
-}
-
-// pageParams is pageParamsWindowed at the shared list caps — the form six of its seven call
-// sites want, and the same convenience the package carried before the window existed.
-//
-// It returns an error where the old pageParams returned two values, which is deliberate: any
-// call site left behind by the change fails to compile rather than silently skipping the
-// window.
-func pageParams(c *fiber.Ctx) (limit, offset int, err error) {
-	return pageParamsWindowed(c, defaultLimit, maxLimit)
-}
-
-// listResponse writes the shared paginated-list envelope: the data slice plus a
-// meta block carrying the filtered total and the limit/offset echoed back. It is
-// the single source of the list wire shape, so the jobs/companies/search list
-// endpoints cannot drift from one another.
-func listResponse(c *fiber.Ctx, data any, total int64, limit, offset int) error {
-	return c.JSON(fiber.Map{
-		"data": data,
-		"meta": fiber.Map{
-			"total":  total,
-			"limit":  limit,
-			"offset": offset,
-		},
-	})
-}
-
-// listResponseWithHidden is listResponse plus the count a default filter suppressed.
-//
-// Separate from listResponse rather than a widened one: every other listing hides nothing,
-// and a `hidden: 0` on all of them would be a field readers have to learn to ignore.
-func listResponseWithHidden(c *fiber.Ctx, data any, total, hidden int64, limit, offset int) error {
-	return c.JSON(fiber.Map{
-		"data": data,
-		"meta": fiber.Map{
-			"total":  total,
-			"limit":  limit,
-			"offset": offset,
-			"hidden": hidden,
-		},
-	})
-}
-
-// listResponseWithIgnored is listResponse plus the query params the filter did
-// not read and the facet values outside their closed vocabulary (values: see
-// search.IgnoredValues; nil for an endpoint that builds no job filter), each
-// omitted entirely when there are none.
-//
-// Omitted rather than sent empty: a caller only needs the key when something
-// actually went wrong, and an always-present empty array is a field every reader
-// learns to skip — at which point the one response that does carry a warning
-// gets skipped too.
-func listResponseWithIgnored(c *fiber.Ctx, data any, total int64, limit, offset int, ignored []search.UnknownParam, values map[string][]string) error {
-	return c.JSON(fiber.Map{"data": data, "meta": listMeta(total, limit, offset, ignored, values)})
-}
-
-// listMeta is listResponseWithIgnored's meta block, for a list endpoint that has one
-// more thing of its own to say beside it.
-func listMeta(total int64, limit, offset int, ignored []search.UnknownParam, values map[string][]string) fiber.Map {
-	meta := fiber.Map{
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
-	}
-	addIgnored(meta, ignored, values)
-	return meta
-}
-
-// dataResponseWithIgnored is listResponseWithIgnored for the single-item
-// endpoints: they answer a bare {"data": ...} with no meta at all, so a clean
-// request keeps exactly that shape and the block appears only to carry a
-// warning.
-func dataResponseWithIgnored(c *fiber.Ctx, data any, ignored []search.UnknownParam, values map[string][]string) error {
-	meta := fiber.Map{}
-	addIgnored(meta, ignored, values)
-	if len(meta) == 0 {
-		return c.JSON(fiber.Map{"data": data})
-	}
-	return c.JSON(fiber.Map{"data": data, "meta": meta})
-}
-
-// addIgnored writes the two reports into a response meta, each only when it has
-// something to say.
-func addIgnored(meta fiber.Map, ignored []search.UnknownParam, values map[string][]string) {
-	if len(ignored) > 0 {
-		meta["ignored_params"] = ignored
-	}
-	if len(values) > 0 {
-		meta["ignored_values"] = values
-	}
-}
-
-// ignoredJobValues is search.IgnoredValues over this request's query, for the
-// endpoints that build a job filter from it.
-func ignoredJobValues(c *fiber.Ctx) map[string][]string {
-	return search.IgnoredValues(queryValues(c))
-}
-
-// Config is the dependency bundle Register wires onto the app: the DB pool, the
-// required rate-limit Throttler, the single browser origin allowed cross-origin
-// (FrontendOrigin), the token-issuer settings (JWTSecret/JWTTTL), the HTTPS-only
-// cookie flag (CookieSecure), the enabled OAuth providers, and the optional
-// search client (nil disables search).
-type Config struct {
-	Pool *pgxpool.Pool
-	// AgentViews receives the postings served to agents (internal/application/agentview).
-	// Optional: nil records nothing.
-	AgentViews agentview.Sink
-	// Throttler backs every rate-limited route in the API (internal/api/ratelimit).
-	// Required — there is no degraded/nil mode, unlike the optional dependencies
-	// below.
-	Throttler ratelimit.Throttler
-	// Cache holds values that are expensive to compute and identical for every
-	// caller — today the catalogue-scale snapshot (internal/ingest/catalogstats). Optional:
-	// nil degrades the figures it backs to their approximations, exactly as an
-	// unreachable backend does.
-	Cache          cache.Cache
-	FrontendOrigin string
-	// PublicAnonStrict and VerifiedBotSecret configure the public-read gate (public_gate.go):
-	// the strict anonymous budgets, and the Cloudflare verified-bot exemption.
-	PublicAnonStrict  bool
-	VerifiedBotSecret string
-	// RateTiers is every public-read rate tier's budget (RateTiersFromEnv); nil is the
-	// shipped ladder.
-	RateTiers           RateTiers
-	JWTSecret           string
-	JWTTTL              time.Duration
-	CookieSecure        bool
-	CookieDomains       []string
-	OAuthRegistry       *oauth.Registry
-	AuthV2Enabled       bool
-	MobileAuthCallbacks map[string]string
-	RecentAuthTTL       time.Duration
-	AppleNative         *appleauth.Client
-	AppleGrantKeys      *appleauth.KeyRing
-	Search              *search.Client
-	// Suggest answers the search box's completions from the dictionary index
-	// (cmd/build-suggestions writes it). Nil disables /suggest with a 503, the same
-	// shape as an unconfigured search — the rest of the site is unaffected, and the
-	// box falls back to offering nothing rather than to erroring.
-	Suggest *suggest.Service
-	// Blob backs résumé storage (internal/platform/blobstore). Nil disables storage: résumé
-	// upload only extracts skills in-request (no regression).
-	Blob blobstore.Store
-	// DirectApplyDailyLimit caps how many on-site applications one candidate sends per UTC
-	// day (config.LoadDirectApplyDailyLimit, read and validated in cmd/server).
-	DirectApplyDailyLimit int64
-	// TypstBin is the resolved path to the typst binary for CV PDF rendering. Empty
-	// disables rendering: the /me/cvs/:id/pdf endpoint returns 501, the rest works.
-	TypstBin string
-
-	// CVEditAllowBulletTruncation restores silent Sanitize truncation past the
-	// per-role bullet ceiling. Default false (refuse on). Ops kill switch.
-	CVEditAllowBulletTruncation bool
-
-	// TracerLinkSalt keys the visitor hash of a traced click; empty means the CV tracing
-	// toggle cannot be enabled at all.
-	TracerLinkSalt string
-	// LLM backs the optional CV ATS qualitative review. Nil disables the AI layer:
-	// the ATS score stays deterministic (the report just omits content-quality).
-	LLM *llm.Client
-	// AssistantLLM backs the in-app agent. It is a separate client because the agent
-	// runs on its own model (ASSISTANT_MODEL) — chosen for tool calling and context
-	// size rather than for cheap JSON extraction. Nil disables new turns.
-	AssistantLLM *llm.Client
-	// SearchIntentLLM backs the AI filter. Separate for latency, not capability — see
-	// config.SearchIntentModel.
-	SearchIntentLLM *llm.Client
-	// ResumeExtractLLM backs the structured parse of a stored CV — free for every
-	// account, so on its own cheap model (config.ResumeExtractModel). Nil falls back to
-	// LLM.
-	ResumeExtractLLM *llm.Client
-	// TypesafeAPIKey backs the Jev provider for the autofill agent's Choose call
-	// (autofillagent.JevPlanner). Empty disables it: Choose answers through LLM alone.
-	TypesafeAPIKey string
-	// AssistantMaxSteps bounds the tool-calling rounds of one turn; zero uses the
-	// assistant package's default.
-	AssistantMaxSteps int
-	// AssistantMaxPrompt bounds the rune length of one user message. Zero falls
-	// back to the handler default (8000).
-	AssistantMaxPrompt int
-	// LLMKeys mints the per-user gateway credential each account's model calls are
-	// spent under. Nil is the deployment that does not attribute spend: every call goes
-	// out on the service credential exactly as it did before, and no behaviour changes.
-	LLMKeys *llmkey.Client
-	// Speech transcribes dictated audio for the composer. Nil is the deployment with
-	// no speech gateway: the endpoint answers 501 and the SPA offers no microphone.
-	Speech *speech.Client
-	// Realtime mints voice mode's short-lived OpenAI Realtime API credentials. Nil is
-	// the deployment with no Realtime gateway configured: the mint endpoint answers
-	// 501 and the interview session view offers no voice mode.
-	Realtime *realtime.Client
-	// PIIDetector de-identifies CV text before it reaches the LLM (fit analysis and
-	// structured extraction). Nil disables those CV→LLM paths (fail-closed): they degrade
-	// to no analysis rather than send PII to the model.
-	PIIDetector pii.Detector
-	// Telegram bot for notification linking/delivery confirmations. Optional: an
-	// empty TelegramBotToken disables the feature (linking endpoints report off,
-	// webhook inert). TelegramBotUsername builds the deep link; TelegramWebhookSecret
-	// guards the inbound webhook.
-	TelegramBotToken      string
-	TelegramBotUsername   string
-	TelegramWebhookSecret string
-	// DiscordLinker enables the paid Discord channels: linking an account, and the role
-	// that follows the subscription. Nil = the feature is off and its routes are not
-	// registered at all, so they 404 rather than reporting a feature that half exists.
-	// DiscordClientID builds the consent URL; it is only read when the linker is present.
-	DiscordLinker   DiscordLinker
-	DiscordClientID string
-	// GmailConnector + GmailCipher enable the Connect-Gmail inbox. Both nil = the
-	// feature is off (connect routes unregistered, inbox empty).
-	GmailConnector *gmailsync.Connector
-	GmailCipher    *tokencrypt.Cipher
-	// OJCPSigner signs the OJCP manifest. Nil = the manifest is unsigned and no key set is
-	// published.
-	OJCPSigner *ojcp.Signer
-	// QueryEmbedder embeds an agent's query for its opt-in semantic search. Nil = no
-	// embedding backend: such requests are answered keyword-only and say so.
-	QueryEmbedder *search.QueryEmbedder
-	// SemanticScoreThreshold is the ranking-score floor of an agent's hybrid query.
-	SemanticScoreThreshold float64
-	// MailboxDomain enables the hosted-mailbox option: the receiving domain user
-	// addresses live on (<handle>@MailboxDomain). Empty = the feature is off.
-	MailboxDomain string
-	// Plan carries what each plan allows per day, per feature, and whether a refusal is
-	// enforced yet. Every metered AI surface draws on it.
-	Plan plan.Config
-	// Billing connects the Pro subscription at the payment provider to users.pro_until,
-	// which is what Plan then reads. Optional and off by default: with no provider
-	// credentials the billing routes are not mounted at all, so a deployment that never
-	// configures it cannot tell they exist.
-	Billing billing.Config
-	// AWSRegion + NotifyEmailFrom enable the SES email channel for referral pings, reusing
-	// the notify worker's config. Both must be set; either empty leaves referral pings
-	// Telegram-only (email disabled). NotifyEmailFrom is the verified SES sender address.
-	AWSRegion       string
-	NotifyEmailFrom string
-	// ExtensionRedirectAllowlist bounds the browser-extension connect flow: only
-	// https://<id>.chromiumapp.org or <id>.extensions.allizom.org redirects whose <id> is listed may receive a
-	// minted token. Empty leaves the connect endpoint refusing every redirect.
-	ExtensionRedirectAllowlist []string
-	// ServedHosts are the exact hostnames honoured as an OAuth redirect origin.
-	// Empty defaults to the frontend origin's own host.
-	ServedHosts []string
-	// AutoApplyOrchestratorSecret is the shared, static credential
-	// cmd/auto-apply-orchestrate presents to authenticate itself (not any particular
-	// candidate) on POST /me/auto-apply/:queueId/{tailor,review} — see
-	// openspec/changes/auto-apply-inngest-orchestration/design.md. Empty disables the
-	// path entirely: the two routes then behave exactly as they did under plain
-	// cookie/API-key auth, with no fallback.
-	AutoApplyOrchestratorSecret string
-	// InngestEventAPIURL and InngestEventKey point PostAutoApplyReview's best-effort
-	// event publish (auto-apply/review.decided) at the self-hosted Inngest server. Either
-	// empty disables the publish entirely — the review decision itself is still recorded,
-	// exactly as it is today.
-	InngestEventAPIURL string
-	InngestEventKey    string
-	// RecentJobsFeed backs the homepage's live "recently added jobs" SSE feed
-	// (internal/job/recentfeed). cmd/server owns the Poller that publishes into it;
-	// this handler only subscribes. Nil disables the route with a 503 rather than
-	// serving a feed that will never receive anything.
-	RecentJobsFeed *recentfeed.Broadcaster
-	// EmbedProgress backs the public /embeddings page's figures and stream
-	// (internal/search/embedprogress). cmd/server owns the Sampler's tick; this handler
-	// only reads it. Nil serves 503 on both routes.
-	EmbedProgress *embedprogress.Sampler
-}
-
-// Register wires all routes onto the application from cfg. Auth is same-origin
-// only: the SPA reaches the API under one origin (a dev Vite proxy mirrors the
-// production reverse proxy), so the cookie rides along with no CORS. The CORS
-// allowlist is not credentialed — it only permits non-credentialed cross-origin
-// reads of the public endpoints.
+// Register wires all routes onto the application from cfg. Auth is same-origin only, so
+// the cookie rides along with no CORS; the CORS allowlist is not credentialed and permits
+// only cross-origin reads of the public endpoints.
 func Register(app *fiber.App, cfg Config) {
-	if cfg.RateTiers == nil {
-		cfg.RateTiers = DefaultRateTiers()
-	}
-	// One ladder for the gate, /plans and the API-keys page alike, so none of them can state a
-	// cap the others do not apply.
-	cfg.RateTiers = cfg.RateTiers.inForce(cfg.PublicAnonStrict)
 	queries := db.New(cfg.Pool)
 	a := &API{
 		pool:         cfg.Pool,
@@ -544,274 +59,192 @@ func Register(app *fiber.App, cfg Config) {
 		issuer:       auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
 		browserTools: browsertools.New(),
 	}
-	authH := newAuthHandlers(queries, cfg.Pool, cfg.Throttler, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
-		servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
-	authH.authV2Enabled = cfg.AuthV2Enabled
-	authH.rateTiers = cfg.RateTiers
-	authH.mobileCallbacks = cfg.MobileAuthCallbacks
-	authH.mobileAuth = mobileauth.NewStore(cfg.Pool)
-	authH.recentAuth = recentauth.NewStore(cfg.Pool, cfg.RecentAuthTTL)
-	authH.appleNative = cfg.AppleNative
-	authH.appleGrantKeys = cfg.AppleGrantKeys
-	if needsExplicitServedHosts(cfg.ServedHosts, cfg.CookieDomains) {
-		log.Printf("oauth: COOKIE_DOMAIN is set (%v) but SERVED_HOSTS is not — "+
-			"the redirect origin falls back to %s for every other host, which breaks "+
-			"sign-in on them (state mismatch). List every served host in SERVED_HOSTS.",
-			cfg.CookieDomains, cfg.FrontendOrigin)
+	app.Use(externalCaller(cfg.AuthIntrospectionSecret))
+	if cfg.APIUsage != nil {
+		app.Use(countAPIUsage(cfg.APIUsage))
 	}
-	// Moderation is shared by the jobs surface and the submission queue, so it is built
-	// here rather than inside whichever of the two is constructed first.
+	app.Get("/internal/auth/introspect", newAuthIntrospection(queries, a.issuer, cfg.AuthIntrospectionSecret))
+
+	authH := newConfiguredAuthHandlers(cfg, queries, a.issuer)
+	// Shared by the jobs surface and the submission queue, so built here.
 	moderationSvc := moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version))
-	// One SSRF-guarded client for everything that fetches a user-supplied page: the imports
-	// below dial through it, it backs the ingest registry board coverage reads a vacancy
-	// through (so an import and a crawl of the same board share transport and rate limits),
-	// and the posting-URL resolver asks an ATS which posting an apply link is through it too.
+	// One SSRF-guarded client for everything that fetches a user-supplied page: imports,
+	// the ingest registry's board coverage reads (so an import and a crawl of one board share
+	// transport and rate limits) and the posting-URL resolver.
 	ingestClient := sources.NewClient()
-	// Turning a link into the posting it is: offline for nearly every ATS, one platform call
-	// for the shapes that hide the posting behind a second id (see sources.PostingURLResolver).
-	// Shared by /jobs/find and the link intake, which must agree on what a page is.
+	// Turns a link into the posting it is: offline for nearly every ATS, one platform call
+	// for shapes that hide the posting behind a second id. Shared by /jobs/find and the link
+	// intake, which must agree on what a page is.
 	postingURLs := sources.NewPostingURLResolver(ingestClient)
 	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs, cfg.Cache)
 	statsH := newStatsHandlers(queries, cfg.Cache, cfg.Pool)
-	recentFeedH := newRecentFeedHandlers(cfg.RecentJobsFeed, cfg.Throttler)
+	recentFeedH := newRecentFeedHandlers(cfg.RecentJobsFeed)
 	// A nil *Sampler in an interface is not a nil interface, so the 503 path needs the
 	// conversion skipped, not done.
 	var embedProgressSrc embedProgressSource
 	if cfg.EmbedProgress != nil {
 		embedProgressSrc = cfg.EmbedProgress
 	}
-	embedProgressH := newEmbedProgressHandlers(embedProgressSrc, cfg.Throttler)
+	embedProgressH := newEmbedProgressHandlers(embedProgressSrc)
 	ogH := newOGHandlers(queries, cfg.Cache)
 	votesH := newVoteHandlers(queries, cfg.Pool)
+	companyWatchH := newCompanyWatchHandlers(queries)
 	communityH := newCommunityHandlers(queries)
-	// Feedback reuses communityH's persona minting (via the communityPersonas
-	// adapter) so a user's pseudonym stays the same one discussion threads show,
-	// which is why it is constructed after communityH rather than alongside it.
-	companyProcessReportH := newCompanyProcessReportHandlers(processreport.New(queries, cfg.Pool, processreport.Config{}))
-	companyFeedbackH := newCompanyFeedbackHandlers(companyfeedback.New(queries, cfg.Pool, communityPersonas{svc: communityH.community}, companyfeedback.Config{}))
-	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
-	// network fallback (boardresolve) that fetches a company careers page and detects an
-	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
+	// Feedback reuses communityH's persona minting (via communityPersonas) so a pseudonym
+	// matches the one discussion threads show; hence constructed after communityH.
+	companyProcessReportH := newCompanyProcessReportHandlers(processreport.New(queries, cfg.Pool))
+	companyFeedbackH := newCompanyFeedbackHandlers(companyfeedback.New(queries, cfg.Pool, communityPersonas{svc: communityH.community}))
+	// Contributions detect the ATS board from the URL alone (network-free), with a network
+	// fallback (boardresolve) that finds an ATS embedded in a company careers page.
 	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
 	reportsH := newReportHandlers(queries)
 	ghostReportsH := newGhostReportHandlers(queries)
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
 	webhookH := newWebhookHandlers(queries, webhooknotify.NewNotifier())
+	changeWebhookH := newChangeWebhookHandlers(queries, changehook.NewSender())
 	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
-	// The candidate's own screening answers (visa, salary, notice period, relocation, …) —
-	// a distinct singleton from profileSvc above (search/targeting preferences, a
-	// different lifecycle; see internal/ingest/screeninganswers/AGENTS.md).
+	// The candidate's own screening answers (visa, salary, notice period, relocation, ...),
+	// distinct from profileSvc's search preferences (see internal/ingest/screeninganswers/AGENTS.md).
 	screeningAnswersSvc := screeninganswers.New(screeninganswers.NewQueriesRepository(queries, cfg.Pool))
 	screeningAnswersH := newScreeningAnswersHandlers(screeningAnswersSvc)
-	// The candidate's accumulating bank of screening-question answers (internal/candidate/
-	// answerbank) — a third, distinct store from screeningAnswersSvc's six typed facts: this
-	// one takes the open-ended remainder, keyed by the question's own topic rather than a
-	// fixed field. Fed into the autofill assembler below so a banked answer can fill a form
-	// field the deterministic rules never anticipated.
+	// The accumulating bank of open-ended screening-question answers, keyed by the question's
+	// topic: a third store, distinct from screeningAnswersSvc's typed facts. Feeds the autofill
+	// assembler below.
 	answerBank := answerbank.NewStore(answerbank.NewQueriesRepository(queries))
-	// The bank's own list/save/delete routes over the same store, so what autofill reads
-	// and what the review screen edits are never two copies.
+	// The bank's own routes over the same store, so autofill and the review screen never see two copies.
 	answerBankH := &answerBankHandlers{bank: answerBank}
-	// The onboarding survey: the candidate's own segmentation answers, and the marker
-	// saying they have been through the wizard. A third singleton beside the two above,
-	// and deliberately so — these answers describe the candidate to us alone, where
-	// profileSvc is the search filter and screeningAnswersSvc is what an employer sees.
+	// The onboarding survey: segmentation answers plus the wizard-done marker. Distinct from
+	// profileSvc (search filter) and screeningAnswersSvc (what an employer sees): these
+	// describe the candidate to us alone.
 	surveyH := newSurveyHandlers(survey.New(survey.NewQueriesRepository(queries)), queries)
-	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
-	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
-	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
-	// The headshot rides the same bucket and the same nil-degradation: no Blob means the
-	// photo endpoints 501 while the photo-bearing CV templates still render a placeholder.
+	// CV storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service, so
+	// upload/verdict paths degrade to in-request parsing. The pool serialises one user's
+	// uploads, so add_cv's first-CV check holds.
+	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries).WithUploadLocks(cfg.Pool))
+	// The headshot rides the same bucket and nil-degradation: no Blob means the photo
+	// endpoints 501 while photo CV templates render a placeholder.
 	photoStore := headshot.New(cfg.Blob, headshot.NewQueriesRepository(queries))
-	// The profile read serves the structured résumé beside the profile, so it needs the
-	// résumé store — hence constructed after it.
+	// The profile read serves the structured CV beside the profile, so it follows resumeStore.
 	profileH := newProfileHandlers(profileSvc, resumeStore, newCandidateProfiler(queries))
-	// Personal skill-demand trend: the caller's own profile skills joined against the
-	// weekly insights_skill_history snapshots cmd/rollup-stats writes (see
-	// me_market_pulse.go). Reuses profileSvc rather than a second userprofile.Service.
+	// Personal skill-demand trend: the caller's profile skills against the weekly
+	// insights_skill_history snapshots (see me_market_pulse.go).
 	marketPulseH := newMarketPulseHandlers(profileSvc, queries)
-	// The Talent Network visibility toggle is a distinct singleton on `users`, not part
-	// of the user_profiles-backed profileHandlers above (see me_talent_network.go).
+	// The Talent Network visibility toggle is a singleton on `users`, not part of profileHandlers.
 	talentNetworkH := newTalentNetworkHandlers(queries)
-	// The public catalogue. One Catalogue per process, holding the snapshot every
-	// request is served from — constructing one per request would read the whole
-	// membership per request, which is the outage the snapshot exists to avoid.
-	//
-	// A one-minute TTL: long enough that a burst of visitors costs one read, short
-	// enough that somebody who just joined sees themselves listed while still looking at
-	// the page that said they would be. Leaving takes effect immediately regardless —
-	// the card route re-reads the database rather than the snapshot.
+	// The public catalogue. One Catalogue per process: it holds the snapshot every request is
+	// served from, and one per request would read the whole membership each time. The
+	// one-minute TTL lets someone who just joined see themselves listed; leaving takes effect
+	// immediately because the card route re-reads the database.
 	talentCatalogH := newTalentCatalogHandlers(talentnetwork.NewCatalogue(queries, time.Minute, time.Now), photoStore)
-	// One bank for the whole surface. It is stateless over the shared queries, but the
-	// single value is what keeps the evidence gate from being anyone's to attach later:
-	// the CV editor is constructed with it below, not handed it by the assistant.
-	// SetProfileSkills folds every atom this bank ever writes into the owner's search
-	// profile, so a skill proven in the bank reaches job filters without a manual step.
+	// One bank for the whole surface. The single value keeps the evidence gate from being
+	// attachable later: the CV editor takes it below, the assistant does not hand it over.
+	// SetProfileSkills folds every written atom into the owner's search profile.
 	bank := experience.NewStore(experience.NewQueriesRepository(queries)).SetProfileSkills(profileSvc)
 	experienceH := newExperienceHandlers(bank).withRequireContext(queries)
-	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
-	// or not the LLM is configured.
+	// Nil-safe: NewAnalyzer(nil) is a no-op, so the ATS report works without an LLM.
 	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)
-	// The fit analysis shares the same LLM client but with a longer per-call timeout:
-	// its reasoning model is slow (tens of seconds per stage), so the default would time
-	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
+	// The fit analysis uses the same LLM client with a longer per-call timeout: its reasoning
+	// model takes tens of seconds per stage. A nil client stays nil (Analyze is a no-op).
 	matchAnalyzer := matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
-	structuredExtractor := resumeextract.NewExtractor(cmp.Or(cfg.ResumeExtractLLM, cfg.LLM).WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
+	structuredExtractor := resumeextract.NewExtractor(cmp.Or(cfg.ResumeExtractLLM, cfg.LLM).WithTimeout(resumeExtractLLMTimeout))
 	plans := plan.NewStore(queries, cfg.Pool, cfg.Plan)
-	// Imports fetch a user-supplied page, so they dial through ingestClient (built above,
-	// where the comment on it is). cfg.Search may be nil (no engine configured), which only
-	// skips the index push.
+	// Imports fetch a user-supplied page, so they dial through ingestClient. A nil cfg.Search
+	// only skips the index push.
 	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, sources.All(ingestClient), boardresolve.New())
 	contributionsH := newContributionHandlers(contributionSvc, queries, importer, postingURLs)
-	// Prefill reuses the SAME importer (its Resolve half, which never writes) rather than
-	// a second parsing registry — see submissionHandlers.PrefillSubmission.
+	// Prefill reuses the SAME importer (its non-writing Resolve half); see submissionHandlers.PrefillSubmission.
 	submissionsH := newSubmissionHandlers(queries, cfg.Pool, moderationSvc, importer, postingURLs)
-	// jd-tailor-intake reuses the SAME importer as the contribution flow (shared SSRF-guarded
-	// transport and rate limits — see the comment on ingestClient above) for its recognized-ATS
-	// branch, and internal/job/privatejob for its generic-scrape/pasted-text branch.
+	// jd-tailor-intake reuses the contribution importer (shared SSRF-guarded transport) for its
+	// recognized-ATS branch, and internal/job/privatejob for the generic-scrape/pasted-text branch.
 	jdResolveH := newJDResolveHandlers(jdresolve.New(queries, importer, privatejob.NewWriter(queries)))
 	planH := newPlanHandlers(plans, queries)
+	catalogueH := newCatalogueHandlers(queries, cfg.Export)
 	billingSvc := billing.New(cfg.Billing, queries)
-	// The store provider reads its own environment rather than taking configuration from
-	// cfg: it is enabled, disabled and credentialed independently of Stripe, and threading it
-	// through the handler config would tie the two together for no reason but symmetry.
+	// The store provider reads its own environment: it is enabled and credentialed
+	// independently of Stripe.
 	storeSvc := billing.NewRevenueCat(billing.RevenueCatConfigFromEnv(), queries)
-	// Discounts read their own environment for the same reason the store provider does: an
-	// invite link works whether or not anything is for sale, and the reward ceiling is an
-	// operational bound rather than a piece of handler configuration.
+	// Discounts read their own environment too: an invite link works whether or not anything
+	// is for sale, and the reward ceiling is operational.
 	promoSvc := promo.New(promo.NewQueriesRepository(queries), promo.ConfigFromEnv())
 	billingH := newBillingHandlers(billingSvc, storeSvc, promoSvc)
 	promoH := newPromoHandlers(promoSvc)
-	// Both registration paths attribute a new account to whoever's link brought it. Set
-	// here rather than passed to a constructor that already takes ten arguments.
+	// Both registration paths attribute a new account to the inviting link; set here because
+	// the constructor already takes ten arguments.
 	authH.withInvites(promoSvc)
-	// Public: a pricing page that needs an account cannot do a pricing page's job.
-	plansH := newPlansHandlers(cfg.Plan, billingSvc, cfg.PublicAnonStrict, cfg.RateTiers)
-	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, plans)
-	// The CV store is shared: the CV surface owns the write path, referrals render from it
-	// and autofill reads the base CV's contact header out of it. AGENTS.md puts shared
-	// services here rather than inside whichever feature happened to need one first.
+	// Public: a pricing page that needs an account cannot do its job.
+	plansH := newPlansHandlers(cfg.Plan, billingSvc)
+	fitSvc := fitanalysis.New(queries, meterOrNil(plans), matchAnalyzer)
+	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, fitSvc, plans)
+	// The CV store is shared: the CV surface owns the write path, referrals render from it and
+	// autofill reads the base CV's contact header from it.
 	cvStore := cv.NewStore(cv.NewQueriesRepository(queries))
-	// The conversation store is shared the same way: the assistant runs turns in it and the
-	// tailoring bootstrap mints a session in it. Built here, both are handed the same one —
-	// which is what lets the CV handlers take it as an argument instead of being patched
-	// with it after the assistant exists.
+	// The conversation store is shared: the assistant runs turns in it and the tailoring
+	// bootstrap mints a session in it. Both get the same one.
 	assistantStore := assistant.NewStore(queries)
-	// The renderer is shared with referrals, and is enabled only when a typst binary was
-	// resolved. Assign only a NON-NIL renderer: a typed-nil satisfies cv.Renderer and would
-	// defeat the 501 gate that answers when rendering is off.
+	// The renderer is shared with referrals and enabled only when a typst binary was resolved.
+	// Assign only a NON-NIL renderer: a typed nil would defeat the 501 gate.
 	var cvRenderer cv.Renderer
 	if r := cv.NewTypstRenderer(cfg.TypstBin); r != nil {
 		cvRenderer = r
 	}
-	// Who each model call is spent as. One resolver serves every per-user surface, so the
-	// account a call is attributed to is decided in one place rather than per feature. A nil
-	// gateway client leaves it inert and every call on the service credential.
+	// Who each model call is spent as: one resolver for every per-user surface. A nil gateway
+	// client leaves it inert and every call on the service credential.
 	llmKeys := llmkey.NewResolver(queries, cfg.LLMKeys)
-	// Same repository the tracking surface uses: tailor bootstrap places the vacancy on
-	// the Kanban so a pursued role is not invisible under Activity → Saved alone.
+	// Same repository as the tracking surface: tailor bootstrap places the vacancy on the Kanban.
 	trackingJobs := trackingBoarder{repo: jobtracking.NewQueriesRepository(queries, cfg.Pool)}
-	// One store, one chain, one bank, shared by the endpoint and by cover_letter_draft - which
-	// is what stops the button path and the chat path from writing two different letters for
-	// one pair. Built here, before either handler, so both take it through their constructor.
+	// One store, chain and bank shared by the endpoint and cover_letter_draft, so the button
+	// and chat paths cannot write two different letters for one pair.
 	letterDeps := coverLetterDeps{
 		letters: coverletter.NewStore(coverletter.NewQueriesRepository(queries)),
 		chain:   coverletter.NewAnalyzer(cfg.LLM),
 		bank:    bank,
 	}
-	// How a CV is rendered when its owner sends it somewhere — the CV page's download and an
-	// on-site application share it.
+	// How a CV is rendered when its owner sends it somewhere (CV download, on-site application).
 	cvPDF := newOwnedCVPDF(queries, cvStore, cvRenderer, photoStore, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
 	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cvPDF, cfg.TracerLinkSalt, cfg.FrontendOrigin, resumeStore, photoStore, plans, matchH, bankGate{bank: bank}, trackingJobs, letterDeps, !cfg.CVEditAllowBulletTruncation)
 
 	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
+	referralMessageH := newReferralMessageHandlers(queries, bank, resumeStore, fitSvc, letterDeps.chain, llmBinding{client: cfg.LLM, keys: llmKeys}, plans)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	discordH := newDiscordHandlers(cfg.DiscordLinker, cfg.DiscordClientID, cfg.FrontendOrigin, cfg.CookieSecure)
-	// The pull direction is wired only where there is a model to ask. Left nil, its endpoint
-	// reports the feature off — the same way an unconfigured deployment reports every other
-	// model-backed surface off, rather than failing at the first press.
+	// The pull direction is wired only where there is a model to ask; left nil, its endpoint
+	// reports the feature off.
 	if cfg.LLM != nil {
-		// The mailbox factory is present only where a Gmail client and a token cipher both
-		// are — the same condition cmd/gmail-sync checks. Absent, every caller falls back to
-		// stored mail, which is the path that shipped first.
+		// The mailbox factory exists only where a Gmail client and token cipher both do (the
+		// cmd/gmail-sync condition); otherwise callers fall back to stored mail.
 		inboxH = inboxH.withRecall(
 			mailrecall.New(mailrecall.NewDBStore(queries), cfg.LLM),
 			llmBinding{client: cfg.LLM, keys: llmKeys},
-			newGmailMailboxes(queries, cfg.GmailCipher, cfg.GmailConnector))
+			newGmailMailboxes(queries, cfg.GmailCipher, cfg.GmailConnector), plans)
 	}
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
-	// unconfigured and the revoker is nil when Gmail is — either way there is nothing
-	// to erase there, which must not stop a member from leaving.
-	// The gateway credential is the third external system erasure spans, after object
-	// storage and Google. It is attached below, once the resolver exists.
+	// unconfigured and the revoker is nil when Gmail is, and neither may stop a member from
+	// leaving. The gateway credential is the third external system; attached below.
 	accountDeletion := accountdelete.New(accountdelete.NewQueriesRepository(queries), cfg.Blob, inboxH.revokeGmailGrant).
 		WithAppleGrants(authH.mobileAuth.ReleaseAppleGrantsForDeletion)
 	authH.withAccountDeletion(accountDeletion, queries)
-	// Assign only when configured: a nil *search.Client wrapped in the searcher
-	// interface would be a non-nil interface and defeat the nil check.
-	var jobSearch searcher
-	var facets facetCounter
-	var companySearch companySearcher
-	// Both sitemaps page an index, so they are wired here rather than beside the
-	// Postgres-backed handlers above.
-	var sitemapJobs, sitemapCompanies sitemapLister
-	var sitemapFreshJobs freshSitemapLister
-	if cfg.Search != nil {
-		jobSearch = cfg.Search
-		facets = cfg.Search
-		companySearch = cfg.Search
-		sitemapJobs = cfg.Search
-		sitemapCompanies = companySitemapIndex{c: cfg.Search}
-		sitemapFreshJobs = cfg.Search
-	}
-	sitemapH := newSitemapHandlers(sitemapJobs, sitemapCompanies, sitemapFreshJobs)
-	// One opt-in semantic search for both agent surfaces, so OJCP and /agent/jobs/search
-	// cannot disagree about when a query was answered by meaning. The embedder is assigned
-	// only when set: a nil *search.QueryEmbedder in the interface field would be a non-nil
-	// interface, and the "no backend" check would never fire.
-	semantic := semanticSearch{threshold: cfg.SemanticScoreThreshold}
-	if cfg.QueryEmbedder != nil {
-		semantic.embedder = cfg.QueryEmbedder
-	}
+	sb := newSearchBackends(cfg)
+	jobSearch, facets, companySearch := sb.jobs, sb.facets, sb.companies
+	sitemapH := newSitemapHandlers(sb.sitemapJobs, sb.sitemapCompanies, sb.sitemapFreshJobs)
 	searchH := newSearchHandlers(jobSearch, facets, queries, cfg.Cache, profileSvc)
-	searchH.semantic = semantic
 	searchH.agentViews = cfg.AgentViews
-	// The OJCP read surface. It shares the search backend and the store with the handlers
-	// above rather than holding its own: an agent's question and a browser's must reach the
-	// same catalogue, or the two answers drift.
-	ojcpH := newOJCPHandlers(jobSearch, queries, cfg.FrontendOrigin, atsapply.SubmittableProviders())
-	ojcpH.signer = cfg.OJCPSigner
-	ojcpH.anonStrict = cfg.PublicAnonStrict
-	ojcpH.semantic = semantic
-	ojcpH.agentViews = cfg.AgentViews
-	// The ChatGPT app's MCP surface. A SECOND MCP server beside the OJCP one, over the same
-	// search backend and the same store: that one renders a foreign schema for agents which
-	// branch on error codes, this one renders ours for a language model reading prose. They
-	// share everything below the projection, so they cannot disagree about the catalogue.
-	mcpappH := newMCPAppHandlers(jobSearch, companySearch, queries, cfg.FrontendOrigin)
-	mcpappH.facets = facets
-	mcpappH.cache = cfg.Cache
-	mcpappH.semantic = semantic
-	mcpappH.agentViews = cfg.AgentViews
-	// The completion dictionary. Left nil when search is unconfigured — same reason as
-	// jobSearch above: a nil *suggest.Service wrapped in the interface would be a
-	// non-nil interface, and the handler's "not configured" check would pass straight
-	// into a nil dereference.
+	ojcpH, mcpappH := newAgentSurfaces(cfg, queries, sb)
+	// The completion dictionary. Left nil when search is unconfigured: a nil *suggest.Service
+	// in the interface would pass the handler's "not configured" check and then dereference nil.
 	suggestH := &suggestHandlers{}
 	if cfg.Suggest != nil {
 		suggestH.suggest = cfg.Suggest
 	}
-	// The AI filter reads the same saved profile the assistant does, so a profile-seeded
-	// search and a profile-aware conversation cannot disagree about what it says.
+	// Reads the same saved profile as the assistant, so a profile-seeded search and a
+	// profile-aware conversation agree.
 	intentH := newIntentHandlers(llmBinding{client: cmp.Or(cfg.SearchIntentLLM, cfg.LLM), keys: llmKeys})
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	geoH := newGeoHandlers()
 	// One reminder service, handed to tracking as its Reminders port and kept by the tracking
 	// handlers for the notification-settings endpoints. Save/unsave/apply schedule and cancel
-	// inside the tracking service, so every caller of it — the tracking routes, the in-app
-	// assistant, the mail reconstruction, an on-site application — gets the same side effect.
+	// inside tracking, so every caller gets the same side effect.
 	reminders := reminder.New(reminder.NewQueriesRepository(queries))
 	tracking := jobtracking.New(jobtracking.NewQueriesRepository(queries, cfg.Pool), jobtracking.WithReminders(reminders))
 	trackingH := newTrackingHandlers(queries, tracking, reminders, jobSearch)
@@ -819,404 +252,155 @@ func Register(app *fiber.App, cfg Config) {
 	searchH.appliedCompanies = tracking
 	// hide_seen on /jobs/search reads the same record the swipe deck excludes by.
 	searchH.seen = tracking
+	// A closed posting stays in the index until the drain removes it; the page hides it meanwhile.
+	searchH.removals = queries
 	timelineH := newTimelineHandlers(queries)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)
-	// Same reason as jobSearch above: a nil *speech.Client wrapped in the transcriber
-	// interface would be a non-nil interface, and the handler's "no gateway here"
-	// check would pass straight into a nil dereference.
+	// Same nil-interface trap as jobSearch: assign only when non-nil, or the handler's "no
+	// gateway here" check passes into a nil dereference.
 	var stt transcriber
 	if cfg.Speech != nil {
 		stt = cfg.Speech
 	}
 	speechH := newSpeechHandlers(stt, plans)
-	// The in-app agent is a facade over the feature handlers above: its tools call
-	// the same services their endpoints do, so a tool result and the API can never
-	// disagree. The tailoring bootstrap mints its conversations through the same
-	// store, which is why the CV handlers get it back. It also takes the browser-tool
-	// hub, which a browsing session reads the caller's open page through.
-	assistantH := newAssistantHandlers(queries,
+	// The in-app agent is a facade over the feature handlers above: its tools call the same
+	// services as their endpoints, so a tool result and the API cannot disagree. The tailoring
+	// bootstrap mints conversations through the same store. It also takes the browser-tool hub.
+	dictionaryH := &dictionaryHandlers{queries: queries}
+	assistantH := newAssistantHandlers(
+		queries,
 		assistantModels{
-			// Its own per-call timeout for the same reason the fit analysis has one, and
-			// nil-safe the same way: a turn's rounds are slower than a one-shot extraction,
-			// and here a call cut short takes the whole run with it.
+			// Its own per-call timeout: a turn's rounds are slower than a one-shot extraction, and
+			// a call cut short takes the whole run with it. Nil-safe like the fit analysis.
 			Agent: cfg.AssistantLLM.WithTimeout(assistantLLMTimeout), Keys: llmKeys,
 			MaxSteps: cfg.AssistantMaxSteps, MaxPrompt: cfg.AssistantMaxPrompt,
 		},
-		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank, screeningAnswersSvc, plans, letterDeps)
-	// Same nil-interface trap as stt above: only assign when cfg.Realtime is
-	// genuinely non-nil, or "no voice mode here" becomes a panic on the first mint.
-	if cfg.Realtime != nil {
-		assistantH.realtime = cfg.Realtime
-	}
-	if p := newInngestEventPublisher(cfg.InngestEventAPIURL, cfg.InngestEventKey); p != nil {
-		assistantH.events = p
-	}
-	assistantH.answerBank = answerBank
+		assistantStore,
+		searchH,
+		resumeH,
+		trackingH,
+		cvH,
+		profileH,
+		dictionaryH,
+		problemreport.New(queries),
+		a.browserTools,
+		inboxH,
+		bank,
+		screeningAnswersSvc,
+		plans,
+		letterDeps,
+		billingSvc.PublicPrices,
+	)
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
-	// The autofill planner is one cheap structured call per run, so it travels on the
-	// shared client's default timeout. The contact block it plans over comes from the base
-	// CV, then the structured résumé — see autofillHandlers.autofillProfile.
+	// The autofill planner is one cheap structured call per run, so it keeps the shared
+	// client's default timeout. Its contact block comes from the base CV, then the structured
+	// CV (see autofillHandlers.autofillProfile).
 	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys}, cfg.TypesafeAPIKey)
 	autofillH.profiles.WithProfileLocation(profileSvc)
 	usageH := newUsageHandlers(cfg.LLMKeys, llmKeys)
 	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 
-	// Referral notifications reuse the SES email transport (email is always present) and
-	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
-	// concrete pointer never hides behind a non-nil interface (see the search note above);
-	// a referrer with no reachable channel still sees the request in-cabinet.
-	var referralEmail referral.EmailSender
-	// mailLinks signs the unsubscribe URL every non-essential mail carries. One
-	// instance for every sender the API composes, so the token in a footer is the
-	// same shape wherever it was minted.
-	mailLinks := emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin)
-	// mailPrefs both serves the preference routes and answers "has this account
-	// turned that group off" for the two senders with no selection query to gate —
-	// the report notice and the referral ping, which go out on a request path. One
-	// instance, so the switch the footer offers and the switch the sender consults
-	// are the same switch.
-	mailPrefs := emailprefs.NewService(queries, cfg.JWTSecret)
-	// The same client, held as its CONCRETE type as well, because mentorship is
-	// composed separately below. A typed nil must not hide behind a non-nil interface
-	// here either, which is why this is its own pointer rather than a type assertion
-	// on referralEmail.
-	var mailClient *emailnotify.Client
-	// employerH is constructed unconditionally below (its routes register either way, like
-	// authH's), but the employer.Service inside it needs a claim mailer that is only
-	// buildable once an SES client exists — hence this forward declaration.
-	var employerClaimMailer *emailnotify.AuthMailer
-	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
-		if ec, err := emailnotify.NewClient(context.Background(), cfg.AWSRegion); err != nil {
-			log.Printf("referral: email pinger disabled: %v", err)
-		} else {
-			referralEmail = ec
-			mailClient = ec
-			// The same AuthMailer instance carries the account mails (verification and
-			// password reset) AND the employer-claim work-email code — one SES client,
-			// one mailer, three mail purposes. Without it the accounts service keeps
-			// registering and authenticating (only the code-backed flows report 503), and
-			// employer.Service.Claim reports employer.ErrMailUnavailable up front, before
-			// reserving a company slug it could never mail a code for.
-			employerClaimMailer = emailnotify.NewAuthMailer(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
-			authH.accounts.WithCodes(accounts.NewQueriesCodeStore(queries, cfg.Pool), employerClaimMailer)
-			// And it tells a reporter what a moderator decided about their report.
-			// Without it the queue still decides reports — each decision simply
-			// reports that nobody was notified.
-			reportsH.report.WithNotifier(report.NewMailNotifier(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin, mailLinks, mailPrefs))
-		}
-	} else {
-		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
-	}
-	// employer.Service reuses authH.accounts as its codeIssuer (the same *accounts.Service
-	// pointer WithCodes configures above, whichever branch ran). employer.ClaimMailer is a
-	// properly NIL INTERFACE when employerClaimMailer is nil, not a non-nil interface
-	// wrapping a nil pointer — assigning the *emailnotify.AuthMailer var directly here
-	// would be the typed-nil footgun ClaimMailer's own doc comment warns about, since
-	// Service.Claim's "is a mailer configured" check tests the interface, not the pointer.
-	var employerMailer employer.ClaimMailer
-	if employerClaimMailer != nil {
-		employerMailer = employerClaimMailer
-	}
-	employerRepo := employer.NewQueriesRepository(queries, cfg.Pool)
-	employerSvc := employer.New(employerRepo, authH.accounts, employerMailer, employerRepo, moderationSvc)
-	employerH := newEmployerHandlers(queries, employerSvc)
-	// Applying on freehire needs both a CV renderer and a mail transport; without either an
-	// application could be recorded but never delivered, so the routes answer 501 instead.
-	directApplyH := &directApplyHandlers{}
-	if cvRenderer != nil && mailClient != nil {
-		directApplyH.svc = directapply.New(
-			directapply.NewQueriesRepository(queries),
-			employerSvc,
-			directApplyCVs{pdf: cvPDF, resumes: resumeStore},
-			directApplyMailer{mailer: emailnotify.NewApplicationMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin), origin: cfg.FrontendOrigin},
-			directApplyTracker{tracking: tracking},
-			answerBank,
-			cfg.DirectApplyDailyLimit,
-		)
-	} else {
-		log.Print("directapply: no CV renderer or no mail transport — applications on freehire are unavailable")
-	}
-	var referralTelegram referral.TelegramSender
-	if telegramH.telegramBot != nil {
-		referralTelegram = telegramH.telegramBot
-	}
-	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram, cfg.FrontendOrigin, mailLinks, mailPrefs)
-	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals/incoming"
-	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
-		referral.Config{CabinetURL: referralCabinetURL})
-	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore, queries)
-	// Conversations are the messaging core's; each persona a participant may speak as is
-	// registered here.
-	buddyRepo := buddy.NewQueriesRepository(queries, cfg.Pool)
-	messagingSvc := messaging.New(messaging.NewQueriesRepository(queries), buddy.NewPersona(buddyRepo))
-	buddySvc := buddy.New(buddyRepo, messagingSvc)
-	// Buddy mock interviews. Without a mail transport the notices still reach the
-	// notification center. A properly nil interface, never a typed-nil *Client.
-	var mockMail emailnotify.Sender
-	if mailClient != nil && cfg.NotifyEmailFrom != "" {
-		mockMail = mailClient
-	}
-	buddyMocks := buddy.NewMockService(buddySvc, buddyRepo,
-		buddy.NewMockMailNotifier(queries, mockMail, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
-	conversationH := newConversationHandlers(messagingSvc, buddyMocks)
-	buddyH := newBuddyHandlers(buddySvc, buddyMocks)
+	mail := newAPIMail(cfg, queries, authH.accounts, reportsH)
+	mailClient := mail.client
+	assistantH.wireOptional(cfg, assistantStore, answerBank, reportsH, mailClient)
+	employerSvc, employerH := newEmployerSurfaces(cfg, queries, authH.accounts, mail.claimMailer, mailClient, moderationSvc)
+	directApplyH := newDirectApplySurface(cfg, queries, mailClient, cvRenderer, cvPDF, resumeStore, employerSvc, employerH, tracking, answerBank)
+	referralsH := newReferralSurface(cfg, queries, mail, telegramH, cvRenderer, cvStore, photoStore, resumeStore)
+	conversationH, buddyH := newBuddySurfaces(cfg, queries, mailClient)
+	assistantH.buddies = buddyH
 
-	// The mentorship marketplace: referral's opposite number, where the insider is named
-	// and chosen rather than anonymous. A nil notifier is a deployment with no mail
-	// transport — the feature works and nobody is told, which is how it ships before SES
-	// is wired for it and what rolling it back looks like.
-	var mentorshipNotifier mentorship.Notifier
-	if mailClient != nil && cfg.NotifyEmailFrom != "" {
-		mentorshipNotifier = mentorship.NewMailNotifier(mailClient, cfg.NotifyEmailFrom,
-			strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/sessions")
-	}
-	// A connected mentor's calendar.events grant, mirroring the read-side gate above: the
-	// candidate calendar sync's own GmailConnector/GmailCipher pair, reused rather than a
-	// second copy of either. Nil when either is unset, so a deployment with no Google
-	// client configured just gets every booking's static-link fallback — this feature's
-	// entire rollback path.
-	mentorshipRepo := mentorship.NewQueriesRepository(queries, cfg.Pool)
-	var mentorshipCalendar mentorship.CalendarLinker
-	if cfg.GmailConnector != nil && cfg.GmailCipher != nil {
-		mentorshipCalendar = mentorship.NewGoogleCalendarLinker(mentorshipRepo, cfg.GmailConnector, cfg.GmailCipher)
-	}
-	mentorshipH := newMentorshipHandlers(mentorship.New(
-		mentorshipRepo,
-		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache, CalendarLinker: mentorshipCalendar},
-	), photoStore)
-	// The mentor-profile create form's prefill. Composed from four unrelated blocks'
-	// own services (résumé, user profile, account, experience bank) plus the company
-	// catalog — never from mentorship itself, see the mentor-profile-prefill spec.
-	//
-	// The account read is the bare repository, not a second accounts.Service: the
-	// only thing this handler needs is UserByID, which accounts.Repository already
-	// exposes, and newAuthHandlers already builds the one Service this process
-	// needs. A constructor that builds a shared service is the bug this package's
-	// AGENTS.md calls out by name — hoist, don't duplicate.
-	mentorSuggestionsH := newMentorSuggestionsHandlers(
-		resumeStore, profileSvc, accounts.NewQueriesRepository(queries, cfg.Pool), bank, queries,
-	)
+	mentorshipH, mentorSuggestionsH := newMentorshipSurfaces(cfg, queries, mailClient, photoStore, resumeStore, profileSvc, bank)
 
-	// Allow the canonical frontend origin plus every served domain's https apex,
-	// so a cross-origin (non-credentialed) read works from either domain during a
-	// migration. Same-origin app traffic never triggers CORS; this only covers the
-	// dev Vite origin and genuine cross-origin callers.
-	allowOrigins := cfg.FrontendOrigin
-	for _, d := range cfg.CookieDomains {
-		allowOrigins += ",https://" + d
-	}
-	app.Use(cors.New(cors.Config{AllowOrigins: allowOrigins}))
-
-	app.Get("/health", a.Health)
-
-	// The public side of CV link tracing. It sits beside /health rather than under /api/v1
-	// because it lives inside a PDF a recruiter opens by hand: "freehire.me/cv/acme-x7abc" is a
-	// URL a person may read off a hover tooltip, and "/api/v1/..." would not be.
-	//
-	// Optional cookie auth, never a key: it is what lets a candidate's own click be recognised
-	// and excluded, and a leaked API key must not be able to attribute or hide one.
-	//
-	// Rate-limited because it is the only unauthenticated WRITE in the app: one visit is one
-	// click row plus a stamp on the CV. Two things it bounds. Anyone holding a PDF can loop its
-	// link and fabricate the one number the feature exists to report — a count nobody can forge
-	// is the whole point. And the token is a public company slug plus five random characters, so
-	// the space is small enough that an unthrottled guesser would find live links and be handed a
-	// candidate's personal URL, one 302 at a time.
-	tracerH := newTracerHandlers(queries, cfg.TracerLinkSalt)
-	tracerLimiter := ratelimit.Middleware(cfg.Throttler, ratelimit.KeyByIP("tracer"), 60, time.Minute)
-	app.Get("/cv/:token", tracerLimiter, auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
+	a.mountAppRoutes(app, cfg, queries)
 
 	api := app.Group("/api/v1")
 
-	// optionalAuth attaches the caller when signed in (cookie or key) but never
-	// rejects, so these public detail reads can overlay the caller's own vote
-	// (my_vote) while staying open to anonymous visitors.
-	optionalAuth := auth.OptionalAuth(a.issuer, a.queries, apiKeys{a.queries})
-	// keyAuth (RequireAuthOrKey) accepts the session cookie or an API key, so a
-	// script holding a key can drive the same flow as the browser. The public job
-	// reads stay unauthenticated. Jobs are addressed by their public slug; the
-	// handlers resolve it to the internal id before writing user_jobs.
-	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries, apiKeys{a.queries})
-	cvKeyAuth := auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV)
-	autoApplyGate := autoApplyOrchestratorGate(cfg.AutoApplyOrchestratorSecret, keyAuth, cfg.Throttler)
-	// cookieAuth is the single cookie-only gate (RequireAuth) for the
-	// browser-convenience surfaces below — key management, saved searches, the CV
-	// builder, the inbox, subscriptions — where a leaked API key must not act.
-	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
+	mw := a.newMiddleware(cfg, plans)
 
 	// Before any /api/v1 route: it hands them the rewritten request (signed_in_door.go).
-	mountSignedInDoor(app, keyAuth)
+	mountSignedInDoor(app, mw.key)
 
-	requireModerator := auth.RequireRole(a.queries, "moderator")
-	mw := middleware{
-		optional:       optionalAuth,
-		key:            keyAuth,
-		cvKey:          cvKeyAuth,
-		autoApplyGate:  autoApplyGate,
-		cookie:         cookieAuth,
-		optionalCookie: auth.OptionalCookieAuth(a.issuer, a.queries),
-		moderator:      requireModerator,
-		paidAI:         paidAIGate(entitlementOf(plans)),
-		outboundFetch:  contributionLimiter(cfg.Throttler),
-		throttler:      cfg.Throttler,
-		public: newPublicGate(cfg.Throttler, queries, publicGateConfig{
-			Strict:    cfg.PublicAnonStrict,
-			Tiers:     cfg.RateTiers,
-			BotSecret: cfg.VerifiedBotSecret,
-			Origin:    strings.TrimRight(cfg.FrontendOrigin, "/"),
-		}),
-	}
+	// The email preference centre. Its three public routes are unauthenticated on purpose: a
+	// person holding one of our mails must be able to turn it off without an account, so the
+	// signed token stands in for a session. The two /me routes are the same switches for a
+	// cookie-authenticated caller.
+	emailPrefsH := newEmailPrefsHandlers(mail.prefs)
+	agentPermissionsH := &agentPermissionHandlers{queries: queries}
+	userModerationH := newUserModerationHandlers(queries)
+	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
+	handlers := contractHandlers{conversationHandlers: conversationH,
+		authHandlers:                 authH,
+		resumeHandlers:               resumeH,
+		matchHandlers:                matchH,
+		autofillHandlers:             autofillH,
+		intentHandlers:               intentH,
+		embedProgressHandlers:        embedProgressH,
+		assistantHandlers:            assistantH,
+		communityHandlers:            communityH,
+		companyFeedbackHandlers:      companyFeedbackH,
+		companyRelationHandlers:      companyRelationH,
+		reportHandlers:               reportsH,
+		emailPrefsHandlers:           emailPrefsH,
+		talentCatalogHandlers:        talentCatalogH,
+		buddyHandlers:                buddyH,
+		companyWatchHandlers:         companyWatchH,
+		geoHandlers:                  geoH,
+		suggestHandlers:              suggestH,
+		agentPermissionHandlers:      agentPermissionsH,
+		usageHandlers:                usageH,
+		plansHandlers:                plansH,
+		dictionaryHandlers:           dictionaryH,
+		jdResolveHandlers:            jdResolveH,
+		screeningAnswersHandlers:     screeningAnswersH,
+		surveyHandlers:               surveyH,
+		voteHandlers:                 votesH,
+		ghostReportHandlers:          ghostReportsH,
+		talentNetworkHandlers:        talentNetworkH,
+		answerBankHandlers:           answerBankH,
+		changeWebhookHandlers:        changeWebhookH,
+		userModerationHandlers:       userModerationH,
+		companyProcessReportHandlers: companyProcessReportH,
+		contributionHandlers:         contributionsH,
+		marketPulseHandlers:          marketPulseH,
+		promoHandlers:                promoH,
+		mentorSuggestionsHandlers:    mentorSuggestionsH,
+		mentorshipHandlers:           mentorshipH,
+		savedSearchHandlers:          savedSearchH,
+		subscriptionHandlers:         subscriptionH,
+		timelineHandlers:             timelineH,
+		profileHandlers:              profileH,
+		statsHandlers:                statsH,
+		submissionHandlers:           submissionsH,
+		trackingHandlers:             trackingH,
+		experienceHandlers:           experienceH,
+		employerHandlers:             employerH,
+		referralHandlers:             referralsH,
+		billingHandlers:              billingH,
+		planHandlers:                 planH,
+		catalogueHandlers:            catalogueH,
+		directApplyHandlers:          directApplyH,
+		jobsHandlers:                 jobsH,
+		searchHandlers:               searchH,
+		companiesHandlers:            companiesH,
+		cvHandlers:                   cvH,
+		inboxHandlers:                inboxH}
+	contract := newContract(handlers)
+	emailPrefsH.register(api, mw, contract)
 
-	// The email preference centre. Its three public routes are unauthenticated on
-	// purpose — a person holding one of our mails must be able to turn it off
-	// without an account — so the signed token in the link stands in for a session.
-	// The two /me routes beside them are the same switches for a caller the cookie
-	// already identified.
-	newEmailPrefsHandlers(mailPrefs).register(api, mw)
-
-	// Job search surfaces first: their literal /jobs/* routes must precede the
-	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
-	searchH.register(api, mw)
-	suggestH.register(api, mw)
-	(&dictionaryHandlers{pool: cfg.Pool, queries: queries}).register(api, mw)
-	// Beside the search it builds a filter for, though it shares none of its
-	// dependencies: interpretation needs a model and the caller's profile, not the
-	// index.
-	intentH.register(api, mw)
-	sitemapH.register(api, mw)
-	// Before jobsH for the same reason searchH is: /ojcp/v1/jobs/:slug is a literal path,
-	// not a slug.
-	ojcpH.register(api, mw)
-	mcpappH.register(api, mw)
-	// The signed-in MCP server (freehire#3114): bearer-gated by an MCP OAuth
-	// grant, reusing assistantH's own tool set so this surface and the in-app
-	// assistant can never disagree about what a tool does.
-	mountMCPAccount(api, mw, assistantH, cfg.FrontendOrigin, cfg.AgentViews)
-	jobsH.register(api, mw)
-	companiesH.register(api, mw)
-	geoH.register(api, mw)
-
-	// Saved searches + the public shared-board read (see savedSearchHandlers).
-	savedSearchH.register(api, mw)
-
-	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
-	// ingest-status reads (see statsHandlers).
-	statsH.register(api, optionalAuth)
-	// The homepage's live "recently added jobs" SSE feed (see recentFeedHandlers).
-	recentFeedH.register(api)
-	// The public /embeddings page's coverage figures and their live stream.
-	embedProgressH.register(api)
-	// The /open and /about pages' OG preview cards (see ogHandlers) — reads the
-	// same snapshot statsH.CatalogScale serves.
-	ogH.register(api)
-
-	// Per-user job interactions, tracking reads, and reminder controls
-	// (see trackingHandlers). The interaction writes precede the vote routes,
-	// mirroring the previous registration order.
-	trackingH.register(api, mw)
-	// The ledger's dated read, behind the tracking calendar. Its own namespace, not a
-	// segment under /me/tracking — see the comment on its register.
-	timelineH.register(api, mw)
-	votesH.register(api, mw)
-	companyFeedbackH.register(api, mw)
-	companyProcessReportH.register(api, mw)
-	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
-	matchH.register(api, mw)
-	// The contact block the extension writes into forms, plain and agent-driven (see
-	// autofillHandlers).
-	autofillH.register(api, mw)
-	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
-	answerBankH.register(api, mw)
-	(&agentPermissionHandlers{queries: queries}).register(api, mw)
-	// The browser-tool wire: a harness on one end, the caller's browser extension
-	// on the other, exchanging raw tool frames. Both ends authenticate with the
-	// session JWT (Bearer for a server-side harness, the subprotocol for the
-	// extension, which can set no headers); the relay routes strictly within one
-	// user's channel. See internal/ai/browsertools.
-	api.Get("/tools/ws", auth.RequireAuthWS(a.issuer, a.queries, apiKeys{a.queries}), a.BrowserToolsWS())
-
-	// Public job submissions + review queue (see submissionHandlers).
-	submissionsH.register(api, mw)
-
-	// Verified-employer accounts: claim, curated profile, own vacancies, and the
-	// moderator/admin review surface (see employerHandlers).
-	employerH.register(api, mw)
-	directApplyH.register(api, mw)
-
-	// Link contributions (see contributionHandlers).
-	contributionsH.register(api, mw)
-	jdResolveH.register(api, mw)
-
-	// Employee referrals (see referralHandlers).
-	referralsH.register(api, mw)
-
-	// Interview buddies (see buddyHandlers).
-	buddyH.register(api, mw)
-
-	// Conversations of every kind (see conversationHandlers).
-	conversationH.register(api, mw)
-
-	// The mentorship marketplace (see mentorshipHandlers).
-	mentorshipH.register(api, mw)
-	mentorSuggestionsH.register(api, mw)
-
-	// Job reports + review queue (see reportHandlers).
-	reportsH.register(api, mw)
-	ghostReportsH.register(api, mw)
-
-	// Community discussion threads (see communityHandlers).
-	communityH.register(api, mw)
-
-	planH.register(api, mw)
-	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
-	billingH.register(api, mw)
-	// Mounted whatever billing is doing: sharing an invite link and counting who came is
-	// not a purchase, and a deployment that sells nothing can still have a referral page.
-	promoH.register(api, mw)
-	plansH.register(api)
-	usageH.register(api, mw)
-
-	// API-key management and the auth surface (see authHandlers).
-	authH.register(api, mw)
-	authH.registerV2(app.Group("/api/v2"), mw)
-
-	// The per-user profile singleton (see profileHandlers).
-	profileH.register(api, mw)
-	// The candidate's own screening answers (see screeningAnswersHandlers).
-	screeningAnswersH.register(api, mw)
-	surveyH.register(api, mw)
-	marketPulseH.register(api, mw)
-	experienceH.register(api, mw)
-	talentNetworkH.register(api, mw)
-	talentCatalogH.register(api, mw)
-
-	// CV builder + AI tailoring (see cvHandlers).
-	cvH.register(api, mw)
-
-	// Mail inbox (Gmail connect + hosted mailbox) and email ↔ application linking
-	// (see inboxHandlers). Registered after the static /me/tracking/* routes so
-	// /me/tracking/:slug does not shadow them.
-	inboxH.register(api, mw)
-	// Résumé/CV surfaces: verdict, ATS report, extraction, storage (see
-	// resumeHandlers).
-	resumeH.register(api, mw)
-	// The headshot the photo-bearing CV templates print (see photoHandlers).
-	photoH.register(api, mw)
-	// Dictation for the assistant composer.
-	speechH.register(api, mw)
-	assistantH.register(api, mw)
-
-	// Filter subscriptions (see subscriptionHandlers).
-	subscriptionH.register(api, mw)
-	webhookH.register(api, mw)
-
-	// Telegram linking + the inbound bot webhook (see telegramHandlers).
-	telegramH.register(api, mw)
-
-	// Discord linking for the paid channels. Registers nothing when the feature is
-	// unconfigured (see discordHandlers).
-	discordH.register(api, mw)
-
+	a.mountRoutes(app, api, mw, contract, routeHandlers{
+		contractHandlers: handlers,
+		sitemap:          sitemapH,
+		ojcp:             ojcpH,
+		mcpapp:           mcpappH,
+		recentFeed:       recentFeedH,
+		og:               ogH,
+		referralMessage:  referralMessageH,
+		photo:            photoH,
+		speech:           speechH,
+		webhook:          webhookH,
+		telegram:         telegramH,
+		discord:          discordH,
+	})
 }

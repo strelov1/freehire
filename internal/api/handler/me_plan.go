@@ -1,22 +1,20 @@
 package handler
 
 import (
+	"context"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // planHandlers serves the caller's own plan: what they are on, what each metered feature
-// allows today, and what they have used of it.
-//
-// It replaces the credits surface. The difference is not the numbers but the noun: a
-// balance said "you own 12 of something", and this says "you have used 1 of today's 3
-// analyses". Nothing here is a currency, nothing accumulates, and the word "credits"
-// appears in no field.
+// allows today, and what they have used of it. Nothing here is a currency and no field
+// says "credits".
 type planHandlers struct {
 	plans   *plan.Store
 	queries *db.Queries
@@ -26,9 +24,9 @@ func newPlanHandlers(plans *plan.Store, queries *db.Queries) *planHandlers {
 	return &planHandlers{plans: plans, queries: queries}
 }
 
-func (h *planHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/me/plan", mw.key, h.GetMyPlan)
-	api.Get("/me/plan/history", mw.key, h.GetMyPlanHistory)
+func (h *planHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/me/plan", mw.key, contract)
+	api.Get("/me/plan/history", mw.key, contract)
 }
 
 // planResponse is the whole plan surface: which plan, every metered feature's standing
@@ -36,36 +34,24 @@ func (h *planHandlers) register(api fiber.Router, mw middleware) {
 type planResponse struct {
 	Plan     string    `json:"plan"`
 	ResetsAt time.Time `json:"resets_at"`
-	// ProUntil is when the caller's PAID plan lapses, absent on the free plan. It is read
-	// from the stored column, never from the billing provider — this endpoint must keep
-	// answering when the provider does not.
-	//
-	// It carries whichever tier the caller is actually on: an ultra subscriber gets their
-	// ultra entitlement here, not a NULL taken from the pro columns they do not hold. The
-	// field keeps its `pro_` spelling because clients read it and a rename buys nothing —
-	// what it has always meant is "when does the plan you are paying for run out".
+	// ProUntil is when the caller's PAID plan lapses, absent on the free plan. Read from the
+	// stored column, never the billing provider, so the endpoint answers when the provider
+	// does not. It carries the tier the caller is actually on (an ultra subscriber gets the
+	// ultra entitlement); the `pro_` spelling stays because clients read it.
 	ProUntil *time.Time `json:"pro_until,omitempty"`
 	// ProSource is where the plan was bought: "stripe", "revenuecat" or "granted". Absent on
-	// the free plan, alongside ProUntil.
-	//
-	// It is behavioural rather than informational, which is why it is here at all. Apple
-	// forbids directing an in-app subscriber to a web page to cancel, so a client has to know
-	// which surface to send them to; and offering an in-app purchase to somebody already
-	// paying through Stripe sells them the same plan twice, which RevenueCat would happily
-	// take the money for.
+	// the free plan, alongside ProUntil. Clients branch on it: Apple forbids sending an in-app
+	// subscriber to a web page to cancel, and offering an in-app purchase to a Stripe payer
+	// sells the same plan twice.
 	ProSource  string          `json:"pro_source,omitempty"`
 	Allowances []allowanceView `json:"allowances"`
 }
 
-// proSourceOf names which origin conferred the plan: the source column equal to the derived
-// pro_until.
-//
-// The order is the tie-break and it is stated rather than left to whichever column is read
-// first, so the answer is stable across deployments. A tie means two origins reach the same
-// instant, which is rare and harmless; naming Stripe first points a client's cancellation
-// advice at the surface the subscriber most likely bought through.
-// It takes the derived instant and this tier's three sources rather than the whole row, so
-// that adding a tier cannot leave it silently answering about the wrong one.
+// planSourceOf names which origin conferred the plan: the source column equal to the derived
+// pro_until. The check order is the tie-break, stated so the answer is stable; Stripe goes
+// first because it is the likeliest purchase surface. It takes the derived instant and this
+// tier's three sources rather than the whole row, so adding a tier cannot silently answer
+// about the wrong one.
 func planSourceOf(derived, stripe, revenuecat, granted pgtype.Timestamptz) string {
 	if !derived.Valid {
 		return ""
@@ -89,41 +75,55 @@ func planSourceOf(derived, stripe, revenuecat, granted pgtype.Timestamptz) strin
 
 // GetMyPlan returns the caller's plan and today's usage across every metered feature,
 // without consuming anything. Cookie or API key; never calls the LLM.
-//
-// Every feature is listed, including ones the caller has not touched — the surface shows
-// what the plan IS, and a feature missing from the list because no row exists yet would
-// read as a feature they do not have.
-func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *planHandlers) GetMyPlan(ctx context.Context) (*apigen.GetMyPlanOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	tier, usage, resets, err := h.plans.Usage(c.Context(), userID)
+	out, err := loadPlan(ctx, h.plans, h.queries, userID)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	data := apigen.PlanStanding{
+		Plan: apigen.PlanTier(out.Plan), ResetsAt: out.ResetsAt,
+		Allowances: make([]apigen.PlanAllowance, len(out.Allowances)),
+	}
+	if out.ProUntil != nil {
+		data.ProUntil = apigen.NewOptDateTime(*out.ProUntil)
+	}
+	if out.ProSource != "" {
+		data.ProSource = apigen.NewOptPlanSource(apigen.PlanSource(out.ProSource))
+	}
+	for i, a := range out.Allowances {
+		data.Allowances[i] = apigen.PlanAllowance{Feature: a.Feature, Used: int64(a.Used),
+			Unlimited: a.Unlimited, Enforced: a.Enforced, ResetsAt: a.ResetsAt}
+		// Omitted when zero, as the Go type's omitempty did.
+		if a.Limit != 0 {
+			data.Allowances[i].Limit = apigen.NewOptInt64(int64(a.Limit))
+		}
+	}
+	return &apigen.GetMyPlanOK{Data: data}, nil
+}
+
+// loadPlan reads the plan surface for one user, shared by GetMyPlan and the support agent's
+// `my_account` tool so the two cannot disagree. Every feature is listed, including untouched
+// ones, so a missing row does not read as a feature the caller lacks.
+func loadPlan(ctx context.Context, plans *plan.Store, queries *db.Queries, userID int64) (planResponse, error) {
+	tier, usage, resets, err := plans.Usage(ctx, userID)
+	if err != nil {
+		return planResponse{}, err
 	}
 	out := planResponse{Plan: string(tier), ResetsAt: resets, Allowances: make([]allowanceView, 0, len(usage))}
-	// One extra row read, not a call to the provider. A lapsed or absent value simply leaves
-	// both fields out, which is what a free-plan caller should see.
+	// One extra row read, not a provider call. A lapsed or absent value leaves both fields out.
 	//
-	// A FAILED read FAILS THE RESPONSE. Logging it and answering 200 anyway was the first
-	// draft, and it is the wrong direction: the tier above came from the same column through
-	// plans.Usage, so the answer would say "pro" while carrying no pro_source — and a client
-	// that decides whether to offer an in-app purchase from pro_source would then sell Pro to
-	// somebody already paying for it. That is the exact double-charge the field exists to
-	// prevent, produced by the endpoint meant to prevent it.
-	//
-	// A partial answer nobody can tell is partial is worse than no answer: a 500 is retried,
-	// a wrong 200 is believed.
-	sources, err := h.queries.GetProUntilSources(c.Context(), userID)
+	// A FAILED read FAILS THE RESPONSE: a 200 without pro_source would let a client offer an
+	// in-app purchase to someone already paying. A 500 is retried, a wrong 200 is believed.
+	sources, err := queries.GetProUntilSources(ctx, userID)
 	if err != nil {
-		return err
+		return planResponse{}, err
 	}
-	// The columns of the tier the caller is ACTUALLY on. Reading the pro ones unconditionally
-	// answered "ultra" with no until and no source — and pro_source is behavioural, so a
-	// client deciding whether to offer an in-app purchase from an empty one would sell Ultra
-	// to somebody already paying for it. That is the exact double-charge this field exists to
-	// prevent, produced by the endpoint meant to prevent it.
+	// Read the columns of the tier the caller is ACTUALLY on: reading the pro ones for an
+	// ultra subscriber answered "ultra" with no until and no source, risking a double sale.
 	derived, stripe, revenuecat, granted := sources.ProUntil, sources.ProUntilStripe,
 		sources.ProUntilRevenuecat, sources.ProUntilGranted
 	if tier == plan.TierUltra {
@@ -138,5 +138,5 @@ func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
 	for _, u := range usage {
 		out.Allowances = append(out.Allowances, view(u.Feature, u.Used, u.Limit, u.Unlimited, u.Enforced, resets))
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return out, nil
 }

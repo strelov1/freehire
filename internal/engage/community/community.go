@@ -1,12 +1,9 @@
-// Package community is the anonymous discussion-thread use case: a signed-in user
-// starts a topic attached to a subject (a company or a vacancy) and any signed-in
-// user replies. Authors are shown only through a stable pseudonymous persona — the
-// real user_id is the private key the handle hides behind, used for moderation and
-// rate limiting but never sent to a client.
+// Package community is the anonymous discussion-thread use case: a signed-in user starts a topic on
+// a subject (a company or a vacancy) and any signed-in user replies. Authors show only as a stable
+// pseudonymous persona; the real user_id is used for moderation and never sent to a client.
 //
-// The subject is polymorphic: (SubjectType, subject_ref) where subject_ref is the
-// subject's public slug. The primitive is deliberately decoupled from what it
-// attaches to, so a future subject type plugs in without reshaping this package.
+// The subject is polymorphic: (SubjectType, subject_ref) with subject_ref the public slug, so a new
+// subject type plugs in without reshaping this package.
 // Persistence is a Repository; subject existence is a SubjectChecker.
 package community
 
@@ -30,15 +27,6 @@ const (
 	StatusClosed = "closed"
 )
 
-// Per-user rate-limit defaults over a rolling window. Threads and replies are free
-// but spam-resistant; tune as usage shows.
-const (
-	DefaultThreadWindow = 24 * time.Hour
-	DefaultThreadCap    = 10
-	DefaultReplyWindow  = time.Hour
-	DefaultReplyCap     = 30
-)
-
 // Sentinel errors, mapped to HTTP statuses by the handler.
 var (
 	// ErrUnsupportedSubject is a subject_type other than company or job (400).
@@ -56,8 +44,6 @@ var (
 	ErrEmptyBody = errors.New("community: body is required")
 	// ErrEmptyTitle is a thread submitted with no title (422).
 	ErrEmptyTitle = errors.New("community: title is required")
-	// ErrRateLimited is a user over their thread or reply window cap (429).
-	ErrRateLimited = errors.New("community: rate limit exceeded")
 	// ErrPersonaNotFound is returned by Repository.GetPersona when a user has no
 	// persona yet — the service mints one and retries.
 	ErrPersonaNotFound = errors.New("community: persona not found")
@@ -88,19 +74,15 @@ type Thread struct {
 	CreatedAt    time.Time
 }
 
-// ThreadWithSubject is a Thread carrying its subject's display name — the read model
-// of the cross-subject feed, where a row must name the subject it hangs off. A thread
-// stores only the subject's slug and no FK to it, so the names are resolved on read.
+// ThreadWithSubject is a Thread carrying its subject's display name, for the cross-subject feed.
+// A thread stores only the subject's slug, so names are resolved on read.
 //
-// Deliberately NOT fields on Thread: that type is a faithful image of a threads row,
-// and a subject-scoped listing (where the subject is already known from the request)
-// would return it with these always empty. One type meaning two things is how "the
-// field is blank but shouldn't be" gets shipped.
+// Deliberately not fields on Thread: that type mirrors a threads row, and a subject-scoped listing
+// would return them always empty.
 //
-// SubjectTitle is the vacancy's title or the company's name; SubjectCompany is the
-// employer in both cases, which is also the key the logo proxy resolves by. Both are
-// empty when the subject no longer exists — the load-bearing signal for "unresolved",
-// which a client renders as the stored slug rather than dropping the row.
+// SubjectTitle is the vacancy's title or the company's name; SubjectCompany is the employer in both
+// cases (also the logo proxy's key). Both are empty when the subject no longer exists, which a client
+// renders as the stored slug rather than dropping the row.
 type ThreadWithSubject struct {
 	Thread
 	SubjectTitle   string
@@ -164,9 +146,6 @@ type Repository interface {
 	InsertReply(ctx context.Context, threadID, parentReplyID, authorUserID int64, body string) (Reply, error)
 	IncrementReplyCount(ctx context.Context, threadID int64) error
 	ListReplies(ctx context.Context, threadID int64, cur Cursor, limit int32) ([]Reply, error)
-
-	CountRecentThreads(ctx context.Context, userID int64, since time.Time) (int64, error)
-	CountRecentReplies(ctx context.Context, userID int64, since time.Time) (int64, error)
 }
 
 // SubjectChecker reports whether a subject slug names an existing company or job.

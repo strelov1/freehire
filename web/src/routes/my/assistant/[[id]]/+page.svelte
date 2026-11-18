@@ -46,13 +46,7 @@
 
 <div use:fillViewport class="flex" style:height="calc(100dvh - 3.5rem)">
   <AccountNavRail collapsible bind:open={navOpen} />
-  <AssistantChat
-    {session}
-    preset={entry.preset}
-    kickoff={entry.kickoff}
-    {onSessionChange}
-    showSessionRail
-  >
+  <AssistantChat {session} preset={entry.preset} kickoff={entry.kickoff} {onSessionChange} showSessionRail>
     {#snippet navTrigger()}
       <button
         type="button"

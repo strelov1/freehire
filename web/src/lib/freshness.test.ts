@@ -30,10 +30,7 @@ describe('daysSince', () => {
 
 describe('freshnessBadges', () => {
   it('marks a today-posted job new and invites an early applicant', () => {
-    expect(freshnessBadges(daysAgo(0), reality(), 0).map((b) => b.label)).toEqual([
-      'New',
-      'Be an early applicant',
-    ]);
+    expect(freshnessBadges(daysAgo(0), reality(), 0).map((b) => b.label)).toEqual(['New', 'Be an early applicant']);
   });
 
   it('keeps New past the early window but drops the invitation', () => {
@@ -60,10 +57,7 @@ describe('freshnessBadges', () => {
 
   // A projection without counts carries no reality at all; the date then stands alone.
   it('trusts the date when no reality signal was computed', () => {
-    expect(freshnessBadges(daysAgo(1), null, 0).map((b) => b.label)).toEqual([
-      'New',
-      'Be an early applicant',
-    ]);
+    expect(freshnessBadges(daysAgo(1), null, 0).map((b) => b.label)).toEqual(['New', 'Be an early applicant']);
   });
 
   it('says nothing without a posting date', () => {

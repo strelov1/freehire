@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { ArrowLeft } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
@@ -115,11 +116,13 @@
   <p class="py-12 text-center text-sm text-muted-foreground">{s.signedOut}</p>
 {:else}
   <div class="flex flex-col gap-4">
+    <AccountPageHeading>{label}</AccountPageHeading>
     <a
       href={resolve('/my/market-pulse')}
       class="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
     >
-      <ArrowLeft class="size-4" /> {s.backLink}
+      <ArrowLeft class="size-4" />
+      {s.backLink}
     </a>
 
     {#if status === 'loading'}
@@ -137,7 +140,6 @@
     {:else}
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 class="text-2xl font-semibold tracking-tight">{label}</h1>
           <div class="mt-1 flex items-baseline gap-2">
             <span class="text-3xl font-semibold tabular-nums">{skill.open_count}</span>
             <span class="text-sm text-muted-foreground">{plural(locale(), skill.open_count, s.openRoles)}</span>
@@ -196,13 +198,7 @@
           {#each ticks as i (i)}
             {@const p = model.points[i]}
             {#if p}
-              <text
-                x={p.x}
-                y={model.baselineY + 16}
-                text-anchor="middle"
-                class="fill-muted-foreground"
-                font-size="11"
-              >
+              <text x={p.x} y={model.baselineY + 16} text-anchor="middle" class="fill-muted-foreground" font-size="11">
                 {shortDate(p.weekStart)}
               </text>
             {/if}
@@ -231,7 +227,8 @@
               onfocus={() => showPoint(i)}
               onkeydown={onValueKey}
             >
-              {fullDate(p.weekStart)}: {p.openCount.toLocaleString()} {plural(locale(), p.openCount, s.openRoles)}
+              {fullDate(p.weekStart)}: {p.openCount.toLocaleString()}
+              {plural(locale(), p.openCount, s.openRoles)}
             </button>
           </li>
         {/each}

@@ -6,10 +6,9 @@ import (
 	"golang.org/x/net/html"
 )
 
-// pageTitle returns the document's <title> text, or "". Six probers read it: opencats for
-// the portal's own name, talentsoft for the lead of its result title, and jazzhr, trakstar,
-// darwinbox and pyjamahr because their platforms publish the employer nowhere else the prober
-// looks.
+// pageTitle returns the document's <title> text, or "". Probers read it where the platform
+// publishes the employer nowhere else (opencats, talentsoft, jazzhr, trakstar, darwinbox,
+// pyjamahr).
 func pageTitle(root *html.Node) string {
 	var title string
 	var walk func(*html.Node)

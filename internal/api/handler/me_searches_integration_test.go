@@ -46,10 +46,7 @@ func TestSavedSearchesEndToEnd(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	guard := auth.RequireAuth(iss, testVersions)
-	app.Post("/api/v1/me/searches", guard, h.CreateSavedSearch)
-	app.Get("/api/v1/me/searches", guard, h.ListSavedSearches)
-	app.Patch("/api/v1/me/searches/:id", guard, h.UpdateSavedSearch)
-	app.Delete("/api/v1/me/searches/:id", guard, h.DeleteSavedSearch)
+	h.register(app.Group("/api/v1"), middleware{cookie: guard}, newContract(contractHandlers{savedSearchHandlers: h}))
 
 	const path = "/api/v1/me/searches"
 
@@ -133,6 +130,20 @@ func TestSavedSearchesEndToEnd(t *testing.T) {
 		t.Errorf("updated query = %v, want q=rust", env["data"].(map[string]any)["query"])
 	}
 
+	// A null field reads as absent: the stored name survives, and the query is overwritten.
+	wantName := env["data"].(map[string]any)["name"]
+	res, env = do(req(http.MethodPatch, fmt.Sprintf("%s/%d", path, id), ownerCookie, `{"name":null,"query":"q=go"}`))
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK || env["data"].(map[string]any)["name"] != wantName || env["data"].(map[string]any)["query"] != "q=go" {
+		t.Errorf("null-name patch = %d %v, want 200 keeping name %v", res.StatusCode, env, wantName)
+	}
+	// A non-numeric id keeps its 400 "invalid id".
+	res, env = do(req(http.MethodPatch, path+"/abc", ownerCookie, `{"query":"x=1"}`))
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest || env["error"] != "invalid id" {
+		t.Errorf("non-numeric id = %d %v, want 400 invalid id", res.StatusCode, env)
+	}
+
 	// A different user cannot update the owner's set → 404.
 	if res, _ := do(req(http.MethodPatch, fmt.Sprintf("%s/%d", path, id), otherCookie, `{"query":"x=1"}`)); res.StatusCode != http.StatusNotFound {
 		t.Errorf("cross-user update status = %d, want 404", res.StatusCode)
@@ -166,7 +177,7 @@ func TestSavedSearchesProfileDerived(t *testing.T) {
 	h := &savedSearchHandlers{savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/searches", auth.RequireAuth(iss, testVersions), h.CreateSavedSearch)
+	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)}, newContract(contractHandlers{savedSearchHandlers: h}))
 
 	do := func(body string) (*http.Response, map[string]any) {
 		rq := httptest.NewRequest(http.MethodPost, "/api/v1/me/searches", bytes.NewBufferString(body))
@@ -231,7 +242,7 @@ func TestSavedSearchesCapEnforced(t *testing.T) {
 	h := &savedSearchHandlers{savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/searches", auth.RequireAuth(iss, testVersions), h.CreateSavedSearch)
+	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)}, newContract(contractHandlers{savedSearchHandlers: h}))
 
 	rq := httptest.NewRequest(http.MethodPost, "/api/v1/me/searches", bytes.NewBufferString(`{"name":"one too many","query":""}`))
 	rq.Header.Set("Content-Type", "application/json")

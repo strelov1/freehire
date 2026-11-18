@@ -67,7 +67,7 @@ func usageApp(t *testing.T, gatewayURL string, userID int64) (*fiber.App, string
 	h := &usageHandlers{gateway: gateway, keys: llmkey.NewResolver(store, gateway)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), h.GetMyUsage)
+	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{usageHandlers: h}))
 	return app, token
 }
 
@@ -207,7 +207,7 @@ func TestUsageWithNoGatewayConfiguredIsStillZeroes(t *testing.T) {
 	h := &usageHandlers{}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), h.GetMyUsage)
+	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{usageHandlers: h}))
 
 	status, data := readUsage(t, app, token)
 	if status != fiber.StatusOK {
@@ -258,7 +258,7 @@ func TestUsageOfAnUncredentialledAccountMintsNothing(t *testing.T) {
 	h := &usageHandlers{gateway: gateway, keys: llmkey.NewResolver(store, gateway)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), h.GetMyUsage)
+	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{usageHandlers: h}))
 
 	status, data := readUsage(t, app, token)
 	if status != fiber.StatusOK {
@@ -297,7 +297,7 @@ func TestUsageOfAnIdlessCredentialAsksNothing(t *testing.T) {
 	h := &usageHandlers{gateway: gateway, keys: llmkey.NewResolver(store, gateway)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), h.GetMyUsage)
+	app.Get("/api/v1/me/usage", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{usageHandlers: h}))
 
 	status, data := readUsage(t, app, token)
 	if status != fiber.StatusOK {

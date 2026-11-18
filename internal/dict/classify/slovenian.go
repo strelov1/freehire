@@ -11,12 +11,11 @@ import "regexp"
 // table resolved nothing — no BCS answer changes.
 //
 // The main table's Central and Eastern European block already reads most Slovenian role
-// nouns (#3518): measured 2026-10-29 over 2,900 open MojeDelo postings and 3,621 ESS
-// vacancies, 88% of the titles resolved a category, and the rest were mostly generic heads
+// nouns; what stays unresolved is mostly generic heads
 // with no field ("Svetovalec", "Strokovni sodelavec", "Vodja oddelka", "Referent"), which
 // stay unresolved as their English twins do. What this table adds is the machine floor by
 // its heads and processes, the engineers by discipline, a few desks and trades, and the
-// grades: 1.4% of MojeDelo's and 4.2% of ESS's titles stated one before.
+// grades.
 //
 // A Slovenian noun with a fleeting "e" ("posluževalec", genitive "posluževalca") is listed
 // in both stems, because an ending is only ever appended to a stem (bcsEndings).
@@ -65,8 +64,8 @@ var slovenianCategoryTable = []aliasEntry{
 	{"asfalter*", "skilled_trades"},
 	{"asfaltersk*", "skilled_trades"},
 	// The store manager: the Slovenian "poslovodja" heads a shop, as "Store Manager" does.
-	// Matched as written: the BCS "poslovođa" is also a site foreman, and #3778 left it
-	// unresolved.
+	// Matched as written: the BCS "poslovođa" is also a site foreman, and it is left
+	// unresolved there.
 	{"=poslovodj*", "retail"},
 	{"saldakontist*", "finance"},
 	{"saldakont*", "finance"},
@@ -103,6 +102,24 @@ var slovenianCategoryTable = []aliasEntry{
 	{"slascicarsk*", "hospitality"},
 	{"pralnic*", "hospitality"},
 	{"klicn* centr*", "support"},
+	// The carer ("varuh", the masculine of "varuhinja") is healthcare; the Ombudsman
+	// ("Varuh človekovih pravic") names an employer, not the role.
+	{"varuh* clovekov*", categoryNone},
+	{"varuh", "healthcare"},
+	{"kozmetik", "personal_services"},
+	// The machine floor by its machine or plant: the welding robot, the rubber goods,
+	// the woodworking machines, the food and pharmaceutical plants, the SMD/THT
+	// assembly lines, as "Machine Operator" is.
+	{"variln* robot*", "manufacturing"},
+	{"gumen* izdelk*", "manufacturing"},
+	{"pri stroj*", "manufacturing"},
+	{"lesnoobdelovaln*", "manufacturing"},
+	{"zivilsk* obrat*", "manufacturing"},
+	{"operater* v farmacevtsk*", "manufacturing"},
+	{"operater* tehnolosk*", "manufacturing"},
+	{"smd operater*", "manufacturing"},
+	{"tht operater*", "manufacturing"},
+	{"gradben* tehnik*", "skilled_trades"},
 }
 
 // slovenianSeniorityTable lists the Slovenian grades. Višji is senior only in the forms that

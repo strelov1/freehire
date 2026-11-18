@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "jobs": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "company": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remote": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "company",
+          "description",
+          "location",
+          "remote",
+          "title"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "jobs"
+  ],
+  "type": "object"
+}

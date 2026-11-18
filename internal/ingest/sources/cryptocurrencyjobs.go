@@ -15,19 +15,17 @@ import (
 // (one public RSS feed, no per-tenant board) and multi-company, so it stays in the source
 // facet and takes each posting's company from the feed.
 //
-// The feed's <description> is only the opening blurb (confirmed live: ~750 chars vs. the
-// ~7000-char full posting), not the body — so each item gets a per-posting detail fetch for
+// The feed's <description> is only the opening blurb, not the body — so each item gets a per-posting detail fetch for
 // its page's schema.org JobPosting ld+json, same as breezy/teamtailor. A failed or
 // description-less detail fetch falls back to the feed's short blurb rather than dropping the
 // posting, since unlike breezy's listing (which carries nothing) the feed already gives a
 // non-empty description.
 //
-// The board is mostly but not entirely remote: a posting the board restricts to one office
-// (confirmed live, e.g. "Product Designer (New York only)" at Loopscale, whose page reads
-// "This role requires working full-time from our New York City office") gets that city
-// appended to its title in parens as "(<City> only)", with no "remote" wording anywhere in
-// the feed's blurb — unlike a geo-eligibility-restricted remote posting, which this board
-// phrases as e.g. "100% remote ... anywhere in Europe" rather than a title suffix.
+// The board is mostly but not entirely remote: a posting the board restricts to one office (e.g.
+// "Product Designer (New York only)", whose page reads "This role requires working full-time from our
+// New York City office") gets that city appended to its title as "(<City> only)", with no "remote"
+// wording in the feed's blurb — unlike a geo-restricted remote posting, which this board phrases as
+// e.g. "100% remote ... anywhere in Europe".
 // cryptocurrencyjobsOnsiteTitle strips that suffix and treats it as an onsite location instead
 // of defaulting every posting to remote.
 //

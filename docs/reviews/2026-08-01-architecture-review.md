@@ -18,31 +18,7 @@ doubles as the burn-down. Legend: ⬜ not started · 🔄 in progress · ✅ mer
 | Status | Findings |
 |---|---|
 | ✅ **closed** | The shortlist (S1–S20) and every actionable catalogue finding are done. **Nine remain, and all nine are deliberate `leave as is`** — their verifier notes reject the remedy as a premature generic or point at a documented decision (#3, #5, #6, #10, #23, #35 and neighbours). Do not re-open one by its number: read its `Verifier` block first. #20 was found already closed by the S20 work and needed no PR. |
-| ✅ merged | S1 (#1393) · S2 (#1395) · S3 (#1394) — released and archived in #1398
-            S4 (#1385) · S5 (#1389) · S6 (#1390) — archived in #1391
-            S7 (#1403) — archived in #1404
-            S8 (#1405) — archived in #1406
-            S9 (#1409) — archived in #1412
-            S10 (#1414) — archived in #1415
-            S11 (#1416) — archived in #1417
-            S12 (#1420) — archived in #1422
-            S13 (#1426) — archived in #1428
-            S14 (#1430) — archived in #1431
-            S15 (#1433) — archived in #1434
-            S16 (#1435) — archived in #1436
-            S17 (#1438) — archived in #1439
-            S18 (#1444) — archived in #1447
-            S19 (#1448) — archived in #1450
-            S20 (#1452) — archived in #1453 — **the ranked shortlist is complete**
-            catalogue #19+#34+#45 (#1456) — archived in #1459
-            catalogue #27+#28+#29 (#1462) — archived in #1463
-            catalogue #36+#38 (#1465) · #16+#32 (#1470)
-            I1 (#1474) — archived in #1475
-            catalogue #20 — **found already closed**, no PR
-            catalogue #2 (#1478) — archived in #1481
-            catalogue #24 + #15 + #9 (#1487) · #4 (#1492) — refactors, no spec delta
-            catalogue #39 + #40 (#1494) — the residues only; both verifiers' rejections upheld
-            catalogue #11 (#1497) — prose, not an extraction; verifier's rejection upheld |
+| ✅ merged | S1 (#1393) · S2 (#1395) · S3 (#1394) — released and archived in #1398<br>S4 (#1385) · S5 (#1389) · S6 (#1390) — archived in #1391<br>S7 (#1403) — archived in #1404<br>S8 (#1405) — archived in #1406<br>S9 (#1409) — archived in #1412<br>S10 (#1414) — archived in #1415<br>S11 (#1416) — archived in #1417<br>S12 (#1420) — archived in #1422<br>S13 (#1426) — archived in #1428<br>S14 (#1430) — archived in #1431<br>S15 (#1433) — archived in #1434<br>S16 (#1435) — archived in #1436<br>S17 (#1438) — archived in #1439<br>S18 (#1444) — archived in #1447<br>S19 (#1448) — archived in #1450<br>S20 (#1452) — archived in #1453 — **the ranked shortlist is complete**<br>catalogue #19+#34+#45 (#1456) — archived in #1459<br>catalogue #27+#28+#29 (#1462) — archived in #1463<br>catalogue #36+#38 (#1465) · #16+#32 (#1470)<br>I1 (#1474) — archived in #1475<br>catalogue #20 — **found already closed**, no PR<br>catalogue #2 (#1478) — archived in #1481<br>catalogue #24 + #15 + #9 (#1487) · #4 (#1492) — refactors, no spec delta<br>catalogue #39 + #40 (#1494) — the residues only; both verifiers' rejections upheld<br>catalogue #11 (#1497) — prose, not an extraction; verifier's rejection upheld |
 
 **S1 · S2 · S3** — merged, released to freehire.me (blue/green, zero migrations) and verified
 live before archiving in #1398.
@@ -159,7 +135,7 @@ So "compare before you consolidate" has now produced all three answers: the find
 not demonstrated (#27/#29). The third is the one that most needs saying out loud, because a PR
 that repeats an unverified live claim teaches the next reader to trust the next one.
 
-#28's remedy was deliberately modest and stayed that way: `notify.ValidChannel` exported, two
+Finding #28's remedy was deliberately modest and stayed that way: `notify.ValidChannel` exported, two
 hand-built allowlists deleted, and `notifications.md` corrected — it claimed adding a channel
 "means adding a package, not touching `notify` or `reminder`", which is false. Collapsing the
 duplicated `Router`/`Notifier` pair is deferred until a third channel lands, and that deferral is
@@ -1062,7 +1038,7 @@ note before acting.
 
 **Evidence.**
 
-- internal/ingest/boardresolve/boardresolve.go:48 — `var absURLRe = regexp.MustCompile(`https?://[^\s"'<>)\\]+`)`, byte-for-byte identical to internal/ingest/atsdetect/atsdetect.go:31
+- internal/ingest/boardresolve/boardresolve.go:48 — ``var absURLRe = regexp.MustCompile(`https?://[^\s"'<>)\\]+`)``, byte-for-byte identical to internal/ingest/atsdetect/atsdetect.go:31
 - internal/ingest/atsdetect/atsdetect.go:44-49 — Detect already runs that scan itself: "falls back to scanning every absolute URL through FromURL — so any board shape FromURL understands is detected on a careers page without duplicating its host parsing here"
 - internal/ingest/boardresolve/boardresolve.go:66 — `if provider, slug, ok := atsdetect.Detect(html); ok && trusted[provider] && slug != ""`, where trusted (boardresolve.go:25-30) is only greenhouse/lever/ashby/workable
 - internal/ingest/boardresolve/boardresolve.go:72-76 — a second `absURLRe.FindAllString(html, -1)` loop over the same body, this time through `atsboard.Recognize`

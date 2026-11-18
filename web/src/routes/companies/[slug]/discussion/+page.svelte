@@ -32,7 +32,11 @@
 {#if company}
   <div class="mx-auto w-full max-w-6xl px-4 py-6">
     <Breadcrumbs
-      items={[{ name: 'Companies', href: '/companies' }, { name: company.name, href: `/companies/${company.slug}` }, { name: 'Discussion' }]}
+      items={[
+        { name: 'Companies', href: '/companies' },
+        { name: company.name, href: `/companies/${company.slug}` },
+        { name: 'Discussion' },
+      ]}
       class="mb-4"
     />
     {#key data.slug}

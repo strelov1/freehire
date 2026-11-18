@@ -1,7 +1,7 @@
 # Skill-Match Sort Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
+>
 > **Historical.** This plan was written before implementation and is kept as the
 > record of what was intended. Three things went differently and the CODE is the
 > authority, not this file: task 1 needed no work (`skilltag.Canonicals()` already

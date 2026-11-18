@@ -7,9 +7,8 @@ import (
 )
 
 // Silence is how long an application has been waiting and what that means at the
-// stage it is in. It is derived on read against the caller's clock, never
-// stored: the value changes as time passes with nothing about the application
-// changing, so it must never be cached apart from the instant it was taken.
+// stage it is in. It is derived on read against the caller's clock, never stored
+// or cached, since it changes as time passes.
 type Silence struct {
 	// LastActivityAt is the application's apply date, or the newest message
 	// linked to it when that is later.
@@ -21,14 +20,12 @@ type Silence struct {
 }
 
 // Silence derives the waiting state of a tracked row as of now, or nil when the
-// row has nothing to report: a job merely viewed or saved is not waiting on
-// anyone, and neither is an application in a settled stage. Returning nil rather
-// than a zero-day `active` keeps "nothing owed" distinguishable from "owed and
-// fine" — a distinction the board's marker depends on.
+// row has nothing to report: a job merely viewed or saved, or an application in a
+// settled stage. Nil rather than a zero-day `active` keeps "nothing owed"
+// distinct from "owed and fine", which the board's marker depends on.
 //
-// An application whose LastActivityAt is missing falls back to its apply date.
-// The query already guarantees that fallback; repeating it here keeps the domain
-// from reintroducing a hole the SQL closed.
+// A missing LastActivityAt falls back to the apply date; the query already does
+// this, and it is repeated here so the domain keeps the guarantee.
 func (j TrackedJob) Silence(now time.Time) *Silence {
 	if j.AppliedAt == nil {
 		return nil

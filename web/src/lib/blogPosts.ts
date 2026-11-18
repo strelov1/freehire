@@ -23,10 +23,9 @@ const INCLUDE_DRAFTS = import.meta.env.DEV;
 // dev dep-scanner, which parses `.svx` without mdsvex and can't find the export;
 // reading `metadata` off the namespace is opaque to the scanner. The post count
 // is tiny, so eagerly pulling the bodies for a listing is negligible.
-const postModules = import.meta.glob<{ default: Component; metadata: Record<string, unknown> }>(
-  '/src/posts/*.svx',
-  { eager: true },
-);
+const postModules = import.meta.glob<{ default: Component; metadata: Record<string, unknown> }>('/src/posts/*.svx', {
+  eager: true,
+});
 
 function allPosts(): PostMeta[] {
   return Object.entries(postModules).map(([path, mod]) => parseFrontmatter(mod.metadata ?? {}, path));

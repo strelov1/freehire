@@ -1,15 +1,13 @@
 <script lang="ts">
   import { navigating, page, updated } from '$app/state';
   import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
-  import { gotoPath } from '#lib/gotoPath.js';
-  import { resolve } from '$app/paths';
-  import { onMount, untrack } from 'svelte';
+  import { onMount } from 'svelte';
+  import { api } from '#lib/api.js';
   import { initTheme } from '#lib/theme.svelte.js';
-  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import { adoptBrowserTimezone, currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { confirmTailorDialog, settleConfirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
-  import { onboardingGate, onboardingUrl } from '#lib/onboardingGate.svelte.js';
+  import { onboardingGate, routeAccount } from '#lib/onboardingGate.svelte.js';
   import { isAccountArea, isFullBleedRoute } from '#lib/shellLayout.js';
-  import { safeRedirect } from '#lib/safeRedirect.js';
   import { resetUserStores } from '#lib/userResource.svelte.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
   import { dockReserveClass } from '#lib/messagingDock.js';
@@ -20,7 +18,9 @@
     identifyUser,
     resetIdentity,
     trackSignupIfNew,
+    isHandoffReferrer,
   } from '#lib/analytics.js';
+  import { captureFirstTouch } from '#lib/attribution.js';
   import TopBar from '#lib/components/TopBar.svelte';
   import CliBanner from '#lib/components/CliBanner.svelte';
   import EmailVerificationBanner from '#lib/components/EmailVerificationBanner.svelte';
@@ -47,9 +47,7 @@
   // at module level, so the component mounting late reads `open` as already true and
   // settling goes through the same controller. A chunk that fails to load must still
   // answer the ask, or the caller would await forever; the next ask retries the import.
-  let confirmTailorModule = $state<Promise<typeof import('#lib/components/ConfirmTailorDialog.svelte')> | null>(
-    null,
-  );
+  let confirmTailorModule = $state<Promise<typeof import('#lib/components/ConfirmTailorDialog.svelte')> | null>(null);
   $effect(() => {
     if (!confirmTailorDialog.open || confirmTailorModule) return;
     const load = import('#lib/components/ConfirmTailorDialog.svelte');
@@ -70,34 +68,38 @@
     if (isAuthenticated()) void messagingDock.ensureLoaded();
   });
   $effect(() => {
-    if (messagingDock.active && !messagingDockModule) messagingDockModule = import('#lib/components/MessagingDock.svelte');
+    if (messagingDock.active && !messagingDockModule)
+      messagingDockModule = import('#lib/components/MessagingDock.svelte');
   });
   // Room under the page for the dock's bars, so they never sit over its last line. A
   // full-bleed route sizes itself to the viewport, where padding would only add a scroll.
   const dockReserve = $derived(
     isFullBleedRoute(page.url.pathname)
       ? ''
-      : dockReserveClass(messagingDock.shownOn(page.url.pathname), ownsMobileStickyCta(page.url.pathname), messagingDock.windows),
+      : dockReserveClass(
+          messagingDock.shownOn(page.url.pathname),
+          ownsMobileStickyCta(page.url.pathname),
+          messagingDock.windows,
+        ),
   );
 
   // The account area (/my/*) is an app-like surface with its own sidebar nav — the
-  // marketing footer's link columns don't belong there, but a compact one (just
-  // copyright/cookie settings/social/open-source note) still anchors the page.
+  // compact footer with essential site links and the shared bottom bar anchors
+  // the page in place of the marketing footer's link columns.
   // The full-bleed account routes (the assistant chat, CV tailoring — see
   // isFullBleedRoute) size themselves to the exact viewport height and get no
-  // footer at all, same as /onboarding and /signin, both their own full-screen
-  // pages (a fixed inset-0 overlay covers TopBar too).
+  // footer at all, and neither do /signin (a full-screen overlay that covers TopBar
+  // too) and /onboarding (a single-task flow whose next step is the only way on).
   const isAccountRoute = $derived(isAccountArea(page.url.pathname));
   const hideFooter = $derived(
-    isFullBleedRoute(page.url.pathname) ||
-      page.url.pathname === '/onboarding' ||
-      page.url.pathname === '/signin',
+    isFullBleedRoute(page.url.pathname) || page.url.pathname === '/onboarding' || page.url.pathname === '/signin',
   );
   const compactFooter = $derived(isAccountRoute && !hideFooter);
 
-  // The onboarding gate: auto-redirect a signed-in visitor who has not been shown the tour
-  // to /onboarding (which bounces an anonymous visitor straight on to /signin — see that
-  // page's own gate).
+  // The onboarding gate: auto-redirect a signed-in visitor who has not been shown the
+  // onboarding flow to /onboarding, once. The flow itself is open to everyone — an
+  // anonymous visitor can run it from the CV to the results — so nothing is gated the
+  // other way: an account that already completed it may come back to it any time.
   //
   // The condition is one explicit account fact, `onboarding_completed_at`. It used to be
   // "does this account have a CV", which was a fair proxy while the wizard was about the
@@ -107,37 +109,19 @@
   // new question permanently.
   //
   // It rides on the user read the layout already makes, so there is no separate fetch to
-  // wait for. The tour marks the account complete the moment it is shown, so this fires
+  // wait for. The flow marks the account complete the moment it is shown, so this fires
   // at most once; `onboardingGate.dismissed` covers the rest of that visit, before the
   // session read picks the marker up.
   const needsOnboarding = $derived(currentUser()?.onboarding_completed_at == null);
   $effect(() => {
-    // Not on /signin: it navigates to its own returnTo the moment the session flips, and a
-    // redirect fired in between races that navigation. The tour, opened for an instant,
-    // would record itself as shown and the visitor would never see it.
-    const path = page.url.pathname;
-    if (isAuthenticated() && needsOnboarding && !onboardingGate.dismissed && path !== '/onboarding' && path !== '/signin') {
-      // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
-      void goto(onboardingUrl(page.url.pathname + page.url.search));
+    // The path guards (/onboarding, /signin) and a guest's skip live in routeAccount.
+    if (isAuthenticated()) {
+      routeAccount(page.url.pathname, page.url.search, needsOnboarding, {
+        complete: () => api.completeOnboarding(),
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
+        go: (url) => void goto(url),
+      });
     }
-  });
-
-  // The other direction — bounce AWAY from /onboarding once there is truly nothing to do
-  // there (signed in AND already marked complete) — is checked only at ARRIVAL: a direct,
-  // bookmarked or stale visit. The page itself always navigates elsewhere on its own way
-  // out, and it is the page that writes the completion marker, so reacting to that write
-  // live would yank the candidate off the wizard the instant they finished their last step
-  // instead of letting it navigate them. Hence untrack().
-  //
-  // Honors the same `returnTo` the page itself would have used, so a stale link at least
-  // lands the visitor back where they started rather than home.
-  $effect(() => {
-    if (page.url.pathname !== '/onboarding') return;
-    untrack(() => {
-      if (isAuthenticated() && currentUser()?.onboarding_completed_at != null) {
-        void gotoPath(safeRedirect(page.url.searchParams.get('returnTo')) ?? resolve('/'));
-      }
-    });
   });
 
   // Re-apply the persisted theme once mounted (the singleton may have been
@@ -145,6 +129,14 @@
   // in app.html already set the class before paint.
   onMount(() => {
     initTheme();
+    // First-touch source of this tab, kept so a later sign-up can say where it came
+    // from. Independent of analytics consent: it records the visit, not the visitor.
+    captureFirstTouch(
+      { href: location.href, referrer: document.referrer },
+      sessionStorage,
+      location.hostname,
+      isHandoffReferrer,
+    );
   });
 
   // hooks.server.ts sets `<html lang>` on the initial SSR response, but a live
@@ -162,11 +154,16 @@
   // a new per-user store participates automatically (no list here to forget). Fired
   // from the always-mounted root layout so it covers every route; idempotent while
   // signed out.
+  // The guest's skip mark is cleared only on a real sign-out: a guest moving from /onboarding to
+  // /signin re-runs this effect while signed out, and must keep the mark for the new account.
+  let wasAuthenticated = false;
   $effect(() => {
-    if (!isAuthenticated()) {
+    const authenticated = isAuthenticated();
+    if (!authenticated) {
       resetUserStores();
-      onboardingGate.reset();
+      if (wasAuthenticated) onboardingGate.reset();
     }
+    wasAuthenticated = authenticated;
   });
 
   // A tab open across a deploy still holds the old build's route manifest, naming
@@ -222,6 +219,7 @@
       // from any other. A just-created account is the signal; the call itself is
       // idempotent per account.
       trackSignupIfNew(page.data.user);
+      void adoptBrowserTimezone(page.data.user);
     } else resetIdentity();
   });
 </script>

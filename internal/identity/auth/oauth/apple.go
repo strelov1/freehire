@@ -22,20 +22,16 @@ import (
 	"github.com/strelov1/freehire/internal/platform/safehttp"
 )
 
-// appleAuthURL, appleTokenURL, and appleJWKSURL are Apple's fixed endpoints.
-// appleProvider carries them as fields (rather than inlining the constants at
-// each call site) so tests can point them at a stub server.
+// Apple's fixed endpoints; appleProvider holds them as fields so tests can stub them.
 const (
 	appleAuthURL  = "https://appleid.apple.com/auth/authorize"
 	appleTokenURL = "https://appleid.apple.com/auth/token"
 	appleJWKSURL  = "https://appleid.apple.com/auth/keys"
 )
 
-// appleProvider implements Provider for Sign in with Apple. Unlike the OIDC
-// providers, it authenticates the token exchange with a self-signed JWT
-// (appleClientSecret) instead of a static secret, and it has no userinfo
-// endpoint — identity comes only from the token exchange's id_token, whose
-// signature must be verified against Apple's JWKS.
+// appleProvider implements Sign in with Apple. It authenticates the token exchange with a
+// self-signed JWT (appleClientSecret) and has no userinfo endpoint: identity comes only
+// from the id_token, verified against Apple's JWKS.
 type appleProvider struct {
 	clientID      string // Apple Services ID
 	teamID        string
@@ -47,9 +43,8 @@ type appleProvider struct {
 	jwksURL       string
 }
 
-// NewApple returns the Apple provider ("Sign in with Apple" via the
-// authorization-code flow). creds.ClientSecret is unused — Apple authenticates
-// with a JWT minted from TeamID/KeyID/PrivateKey instead (see appleClientSecret).
+// NewApple returns the Apple provider. creds.ClientSecret is unused; the secret is a JWT
+// minted from TeamID/KeyID/PrivateKey.
 func NewApple(creds config.OAuthCredentials, redirectURL string) Provider {
 	return &appleProvider{
 		clientID:      creds.ClientID,
@@ -65,9 +60,8 @@ func NewApple(creds config.OAuthCredentials, redirectURL string) Provider {
 
 func (p *appleProvider) Name() string { return "apple" }
 
-// AuthCodeURL builds Apple's consent URL. response_mode=form_post is mandatory
-// whenever a scope is requested — Apple sends the callback as a POST with a
-// form-encoded body instead of GET query parameters.
+// AuthCodeURL builds Apple's consent URL. response_mode=form_post is mandatory with a
+// scope: the callback arrives as a form-encoded POST.
 func (p *appleProvider) AuthCodeURL(state string) string {
 	v := url.Values{
 		"client_id":     {p.clientID},
@@ -80,10 +74,8 @@ func (p *appleProvider) AuthCodeURL(state string) string {
 	return p.authURL + "?" + v.Encode()
 }
 
-// FetchIdentity exchanges code for Apple's tokens, using a client secret
-// minted fresh for this one call, then verifies the returned id_token's
-// signature before trusting its claims. Apple has no userinfo endpoint —
-// the id_token is the only source of identity.
+// FetchIdentity exchanges code for tokens with a freshly minted client secret, then
+// verifies the id_token before trusting its claims.
 func (p *appleProvider) FetchIdentity(ctx context.Context, code string) (Identity, error) {
 	ctx = safehttp.GuardedOAuth2Context(ctx, userinfoTimeout)
 	client, _ := ctx.Value(oauth2.HTTPClient).(*http.Client)
@@ -123,15 +115,11 @@ func (p *appleProvider) FetchIdentity(ctx context.Context, code string) (Identit
 	}, nil
 }
 
-// appleClientSecretTTL is how long the self-signed client-secret JWT is valid
-// for. It is minted fresh for every token exchange, so this only needs to
-// outlive the single round trip to Apple's token endpoint — not the 6-month
-// maximum Apple allows.
+// appleClientSecretTTL only needs to outlive one round trip; the secret is minted per exchange.
 const appleClientSecretTTL = 5 * time.Minute
 
-// appleClientSecret signs the client-secret JWT Apple requires in place of a
-// static client secret: iss is the Team ID, sub is the Services ID (Apple's
-// client id), aud is Apple's own issuer, and kid names the signing key.
+// appleClientSecret signs the client-secret JWT: iss is the Team ID, sub the Services ID,
+// aud Apple's issuer, kid the signing key.
 func appleClientSecret(teamID, servicesID, keyID, privateKeyPEM string) (string, error) {
 	block, _ := pem.Decode([]byte(privateKeyPEM))
 	if block == nil {
@@ -159,10 +147,8 @@ func appleClientSecret(teamID, servicesID, keyID, privateKeyPEM string) (string,
 	return token.SignedString(key)
 }
 
-// appleIDTokenClaims is the subset of an Apple id_token's claims identity
-// resolution needs. EmailVerified is `any` because Apple has been observed to
-// send it as either a JSON boolean or the string "true"/"false" depending on
-// the flow; emailVerifiedBool normalizes both.
+// appleIDTokenClaims is the subset of id_token claims we need. EmailVerified is `any`
+// because Apple sends either a JSON boolean or "true"/"false"; emailVerifiedBool normalizes.
 type appleIDTokenClaims struct {
 	jwt.RegisteredClaims
 	Email         string `json:"email"`
@@ -206,8 +192,7 @@ func (k appleJWK) applePublicKey() (*rsa.PublicKey, error) {
 	return &rsa.PublicKey{N: new(big.Int).SetBytes(nb), E: e}, nil
 }
 
-// maxJWKSBytes caps Apple's JWKS response — it is a handful of small keys, not
-// a multi-MB payload.
+// maxJWKSBytes caps Apple's JWKS response.
 const maxJWKSBytes = 1 << 20 // 1 MiB
 
 // fetchAppleJWKS retrieves and decodes Apple's published signing keys.
@@ -236,13 +221,9 @@ func fetchAppleJWKS(ctx context.Context, client *http.Client, jwksURL string) ([
 // appleIssuer is the only issuer Apple ever signs an id_token as.
 const appleIssuer = "https://appleid.apple.com"
 
-// verifyAppleIDToken parses idToken and verifies its signature against a key
-// fetched from Apple's JWKS matching the token's kid header, and that it was
-// issued by Apple for this exact client, before returning its claims. This is
-// the one trust boundary in the Apple provider: every other provider proves
-// identity via a live, authenticated userinfo call, but Apple hands back only
-// this signed token — an unverified signature, audience, or issuer would let
-// a forged or misdirected token claim any email.
+// verifyAppleIDToken verifies idToken's signature against Apple's JWKS key for its kid,
+// and that Apple issued it for this client. This is the Apple provider's trust boundary:
+// a forged or misdirected token could otherwise claim any email.
 func verifyAppleIDToken(ctx context.Context, client *http.Client, jwksURL, clientID, idToken string) (appleIDTokenClaims, error) {
 	var claims appleIDTokenClaims
 	_, err := jwt.ParseWithClaims(idToken, &claims, func(tok *jwt.Token) (any, error) {

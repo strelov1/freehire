@@ -19,10 +19,9 @@ type Store interface {
 	DeactivateEmailSubscription(ctx context.Context, arg db.DeactivateEmailSubscriptionParams) (int64, error)
 }
 
-// Prefs is everything the public page may show. Deliberately small: the token that
-// opens it is a bearer credential somebody could have forwarded, so it unlocks the
-// address the mail already went to, three switches, and the names of the searches
-// whose digests those switches govern — and nothing else about the account.
+// Prefs is everything the public page may show. Deliberately small: the token is a
+// bearer credential that may have been forwarded, so it exposes only the mail
+// address, three switches and the names of the governed searches.
 type Prefs struct {
 	Email    string
 	Alerts   bool
@@ -41,16 +40,15 @@ type Search struct {
 // Update is what the page sends back. The group switches are required; the search
 // ids are the ones to turn OFF.
 //
-// There is no "turn this search on" field, and that is the design. A link that can
-// only ever subtract cannot be used to sign somebody up for anything, which is the
-// right shape for a credential that never expires and travels in an email.
+// There is deliberately no "turn this search on" field: a never-expiring emailed
+// credential must only ever subtract.
 type Update struct {
 	Alerts   bool
 	Activity bool
 	News     bool
 	// DeactivateSearches names email subscriptions to switch off. Ids that are not
-	// this account's, or are already off, are ignored rather than reported — telling
-	// an unauthenticated caller which ids exist is the one thing this must not do.
+	// this account's, or already off, are ignored, never reported, so an
+	// unauthenticated caller cannot learn which ids exist.
 	DeactivateSearches []int64
 }
 
@@ -60,16 +58,14 @@ type Service struct {
 	signer *Signer
 }
 
-// NewService builds the service. secret is the session-signing secret; the salt in
-// NewSigner is what keeps this key apart from it.
+// NewService builds the service. secret is the session-signing secret.
 func NewService(store Store, secret string) *Service {
 	return &Service{store: store, signer: NewSigner(secret)}
 }
 
-// resolve turns a token into the account it names, refusing one whose account no
-// longer exists. Parse proves only that we minted the token — there is no database
-// in the signer — so the lookup happens here, and it fails with the same sentinel as
-// a forgery, because an unauthenticated caller must not learn which ids are real.
+// resolve turns a token into the account it names. Parse proves only that we minted
+// the token, so the lookup happens here; a missing account fails with the same
+// sentinel as a forgery so a caller cannot learn which ids are real.
 func (s *Service) resolve(ctx context.Context, token string) (int64, Group, Prefs, error) {
 	userID, group, err := s.signer.Parse(token)
 	if err != nil {
@@ -99,12 +95,8 @@ func (s *Service) Load(ctx context.Context, token string) (Prefs, error) {
 	return s.withSearches(ctx, userID, prefs)
 }
 
-// LoadFor is Load for a caller the session already identified, so the signed-in
-// settings page shows exactly what the emailed link would.
-//
-// The two entry points differ only in how the user is established. Sharing the rest
-// is what stops the two views drifting into disagreeing about the same three
-// booleans — which, on a preference page, reads as the product losing a setting.
+// LoadFor is Load for a caller the session already identified. The two entry points
+// differ only in how the user is established, so the two views cannot disagree.
 func (s *Service) LoadFor(ctx context.Context, userID int64) (Prefs, error) {
 	row, err := s.store.GetEmailPrefs(ctx, userID)
 	if err != nil {
@@ -125,19 +117,13 @@ func (s *Service) SaveFor(ctx context.Context, userID int64, in Update) error {
 
 // Silenced reports whether this account has turned g off.
 //
-// It exists for the two mails that have no selection query to gate: a report
-// outcome and a referral ping are sent straight from a request path, so there is no
-// "who do we mail" list for the predicate to live in. Everything queue-driven is
-// gated in SQL instead, which is the better place — a delivery path added later
-// inherits it rather than having to remember.
+// For the two mails with no selection query to gate (a report outcome and a referral
+// ping, sent straight from a request path). Queue-driven mail is gated in SQL
+// instead, so a later delivery path inherits it.
 //
-// A read failure returns false, so a database hiccup delays nobody's mail. That is
-// the right direction to fail for a notice somebody is waiting on, and it is
-// bounded: the worst case is one mail somebody had asked us not to send, which the
-// link in its own footer then stops for good.
+// A read failure returns false: failing open is right for a notice somebody is
+// waiting on, and the worst case is one unwanted mail whose footer link stops the rest.
 func (s *Service) Silenced(ctx context.Context, userID int64, g Group) bool {
-	// The row only, not LoadFor: this answers one boolean and has no use for the
-	// account's saved searches.
 	row, err := s.store.GetEmailPrefs(ctx, userID)
 	if err != nil {
 		return false
@@ -167,10 +153,9 @@ func (s *Service) withSearches(ctx context.Context, userID int64, prefs Prefs) (
 
 // Save applies what somebody set on the page.
 //
-// The two writes are deliberately separate statements rather than one: the activity
-// switch and the other two are written by different callers with different scopes —
-// the authenticated settings page owns the whole rule, this page owns three
-// booleans — and a single full-replace writer would let each clobber the other.
+// The two writes are separate statements because the activity switch and the other
+// two have different owners (the authenticated settings page owns the whole rule),
+// and a single full-replace writer would let each clobber the other.
 func (s *Service) Save(ctx context.Context, token string, in Update) error {
 	userID, _, _, err := s.resolve(ctx, token)
 	if err != nil {
@@ -194,9 +179,8 @@ func (s *Service) apply(ctx context.Context, userID int64, in Update) error {
 		return fmt.Errorf("emailprefs: writing the activity switch: %w", err)
 	}
 	for _, id := range in.DeactivateSearches {
-		// Owner-scoped and deactivate-only in SQL, so an id belonging to somebody
-		// else simply affects no rows. The count is discarded on purpose: reporting
-		// "that one was not yours" would answer a question this caller may not ask.
+		// Owner-scoped and deactivate-only in SQL, so a foreign id affects no rows.
+		// The count is discarded on purpose: reporting it would reveal ownership.
 		if _, err := s.store.DeactivateEmailSubscription(ctx, db.DeactivateEmailSubscriptionParams{
 			ID: id, UserID: userID,
 		}); err != nil {
@@ -207,15 +191,11 @@ func (s *Service) apply(ctx context.Context, userID int64, in Update) error {
 }
 
 // OneClick is the RFC 8058 target: it turns off exactly the group the token names
-// and returns which one, so the response can say what it did.
+// and returns which one.
 //
-// Scoped to one group rather than everything, because a mail client's own
-// unsubscribe button acts with no confirmation screen — a tap on one campaign must
-// not silence the job alerts somebody actually wants. The confirmation page offers
-// the rest.
-//
-// Idempotent: turning off a group that is already off writes the same row again and
-// succeeds, so a client that retries reports success rather than an error.
+// Scoped to one group because a mail client's unsubscribe button acts with no
+// confirmation screen; the confirmation page offers the rest. Idempotent, so a
+// retrying client sees success.
 func (s *Service) OneClick(ctx context.Context, token string) (Group, error) {
 	userID, group, prefs, err := s.resolve(ctx, token)
 	if err != nil {
@@ -233,9 +213,8 @@ func (s *Service) OneClick(ctx context.Context, token string) (Group, error) {
 			UserID: userID, AlertsEmailEnabled: prefs.Alerts, NewsEmailEnabled: false,
 		})
 	default:
-		// Unreachable: Parse refuses any group that is not silenceable. Handled
-		// rather than ignored so a fourth group added later fails loudly here
-		// instead of silently turning nothing off.
+		// Unreachable (Parse refuses non-silenceable groups); fails loudly so a new
+		// group cannot silently turn nothing off.
 		return "", fmt.Errorf("%w: group %q has no switch", ErrInvalidToken, group)
 	}
 	if err != nil {

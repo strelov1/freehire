@@ -130,7 +130,7 @@ func newGmailCallbackApp(t *testing.T) (*fiber.App, string) {
 		cookie:         auth.RequireAuth(iss, testVersions),
 		optionalCookie: auth.OptionalCookieAuth(iss, testVersions),
 		key:            auth.RequireAuthOrKey(iss, testVersions, nil),
-	})
+	}, newContract(contractHandlers{inboxHandlers: h}))
 	return app, frontend
 }
 

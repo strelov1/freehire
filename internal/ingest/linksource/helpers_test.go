@@ -13,7 +13,13 @@ import (
 // route whose match substring is contained in the requested URL, and reports a configured
 // final URL (defaulting to the requested URL) so a shortener redirect can be simulated.
 type fakeClient struct {
-	routes []fakeRoute
+	routes    []fakeRoute
+	errRoutes []fakeErrRoute
+}
+
+type fakeErrRoute struct {
+	match string
+	err   error
 }
 
 type fakeRoute struct {
@@ -44,6 +50,13 @@ func (c *fakeClient) GetHTML(_ context.Context, url string) (*html.Node, error) 
 	return html.Parse(strings.NewReader(r.body))
 }
 
+// routeErr makes every GetJSON whose URL contains match fail with err, ahead of any body
+// route — the shape a test needs to drive what an adapter does with a PARTICULAR failure.
+func (c *fakeClient) routeErr(match string, err error) *fakeClient {
+	c.errRoutes = append(c.errRoutes, fakeErrRoute{match: match, err: err})
+	return c
+}
+
 func (c *fakeClient) GetHTMLResolved(_ context.Context, url string) (*html.Node, string, error) {
 	r, ok := c.find(url)
 	if !ok {
@@ -58,6 +71,11 @@ func (c *fakeClient) GetHTMLResolved(_ context.Context, url string) (*html.Node,
 }
 
 func (c *fakeClient) GetJSON(_ context.Context, url string, v any) error {
+	for _, r := range c.errRoutes {
+		if strings.Contains(url, r.match) {
+			return r.err
+		}
+	}
 	r, ok := c.find(url)
 	if !ok {
 		return fmt.Errorf("fakeClient: no route for %s", url)

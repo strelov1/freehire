@@ -60,7 +60,7 @@ func (f *empregosFake) PostJSON(_ context.Context, u string, body, v any) error 
 }
 
 func newEmpregosTest(f *empregosFake, leafMax, maxNew int) empregos {
-	return empregos{http: f, limiter: noWait{}, leafMax: leafMax, maxNewPerRun: maxNew}
+	return empregos{http: f, leafMax: leafMax, maxNewPerRun: maxNew}
 }
 
 func empregosPostings(ids ...int64) []empregosPosting {

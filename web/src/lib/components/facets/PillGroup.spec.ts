@@ -18,6 +18,8 @@ describe('PillGroup', () => {
     render(PillGroup, { props: { options, include: ['remote'], exclude: ['onsite'], onToggle: () => {} } });
     expect(screen.getByRole('button', { name: /^Remote,\s?1,234$/ }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: /^Hybrid,\s?56$/ }).getAttribute('aria-pressed')).toBe('false');
-    expect(screen.getByRole('button', { name: /^On-site,\s?excluded,\s?7$/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: /^On-site,\s?excluded,\s?7$/ }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
   });
 });

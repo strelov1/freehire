@@ -11,10 +11,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// MaxIngestBatch bounds one harness push. A harness syncing a mailbox pages through it; an
-// unbounded batch would be one transaction holding an arbitrary number of rows. An oversized
-// batch is REFUSED rather than truncated, so the reported counts are never a partial truth the
-// caller has to guess at.
+// MaxIngestBatch bounds one harness push (one transaction). An oversized batch is REFUSED rather
+// than truncated, so the reported counts are never a partial truth.
 const MaxIngestBatch = 100
 
 // IncomingMessage is one message a caller's own mail client fetched and handed over.
@@ -44,9 +42,8 @@ type BatchError struct{ Reason string }
 
 func (e *BatchError) Error() string { return e.Reason }
 
-// Ingester writes a batch under source 'external'. The WHOLE batch is one transaction — a
-// partially-applied batch would leave the caller unable to tell what to retry — and that
-// obligation belongs to the implementation, which is the only thing here that owns a pool.
+// Ingester writes a batch under source 'external'. The WHOLE batch is one transaction, so the
+// caller never has to tell what to retry; the implementation owns the pool and that obligation.
 type Ingester interface {
 	IngestBatch(ctx context.Context, userID int64, msgs []IncomingMessage) (IngestResult, error)
 }
@@ -55,10 +52,9 @@ type Ingester interface {
 // transport here: the caller owns the mail client, and this is where its output enters the
 // ordinary inbox.
 //
-// The rules — the batch ceiling, the required deduplication key, and refusing the whole push
-// rather than storing a prefix of it — live here rather than at the HTTP door, because this
-// store has two readers and only one of them speaks HTTP (see the package comment). Until
-// this moved, the in-app assistant could not ingest mail at all.
+// The rules (batch ceiling, required deduplication key, refusing the whole push rather than
+// storing a prefix) live here, not at the HTTP door, because the in-app assistant also ingests
+// through this (see the package comment).
 func (s *Service) Ingest(ctx context.Context, userID int64, msgs []IncomingMessage) (IngestResult, error) {
 	if s.ingest == nil {
 		return IngestResult{}, ErrUnavailable
@@ -143,11 +139,7 @@ func (m IncomingMessage) upsertParams(userID int64) db.UpsertExternalEmailParams
 		BodyText:   m.BodyText,
 		BodyHtml:   m.BodyHTML,
 		ReceivedAt: pgtype.Timestamptz{Time: receivedAt, Valid: true},
-		// No meeting identifier: this tier receives a JSON projection, not MIME, so
-		// there is no text/calendar part to read one out of. Pushed mail therefore
-		// yields no automatic calendar link, which is the same shape as the tier's
-		// existing bargain — it is never classified server-side either. Accepting a
-		// caller-supplied ical_uid would change the ingest contract and can wait for
-		// a harness that wants it.
+		// No meeting identifier: this tier receives a JSON projection, not MIME, so there is no
+		// text/calendar part and pushed mail yields no automatic calendar link.
 	}
 }

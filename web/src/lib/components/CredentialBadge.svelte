@@ -10,8 +10,16 @@
   // selling point. The disclaimer rides in the tooltip on every badge, because the
   // failure mode is a candidate reading "licensed sponsor" as "they will sponsor
   // me" and spending an application on it.
-  let { collections, class: className }: { collections?: string[] | null; class?: string } =
-    $props();
+  let {
+    collections,
+    plain = false,
+    class: className,
+  }: {
+    collections?: string[] | null;
+    /** Plain muted text instead of an outlined chip (a job card's meta line). */
+    plain?: boolean;
+    class?: string;
+  } = $props();
 
   const badges = $derived(credentialBadges(collections));
 </script>
@@ -20,7 +28,9 @@
   <span
     title={badge.tooltip}
     class={cn(
-      'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground',
+      plain
+        ? 'inline-flex items-center gap-1 text-xs font-medium text-muted-foreground'
+        : 'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground',
       className,
     )}
   >

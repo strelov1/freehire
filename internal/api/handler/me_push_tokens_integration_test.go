@@ -56,10 +56,10 @@ func TestPushTokensEndToEnd(t *testing.T) {
 	h := &authHandlers{queries: queries}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.RegisterPushToken)
-	app.Get("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.ListPushTokens)
-	app.Delete("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.UnregisterPushToken)
-	app.Post("/api/v1/me/push-tokens/test", auth.RequireAuth(iss, testVersions), h.TestPushToken)
+	app.Post("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Get("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Delete("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Post("/api/v1/me/push-tokens/test", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 
 	cookieReq := func(method, path, cookie string, body []byte) *http.Request {
 		var r *http.Request

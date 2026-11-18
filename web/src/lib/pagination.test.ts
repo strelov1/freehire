@@ -218,9 +218,7 @@ describe('pageHref', () => {
   // bar, so paging must not swap the visitor onto a percent-escaped twin of the
   // URL they are already on.
   it('keeps comma-joined facet values readable', () => {
-    expect(pageHref('/', new URLSearchParams({ skills: 'go,react' }), 3)).toBe(
-      '/?skills=go,react&page=3',
-    );
+    expect(pageHref('/', new URLSearchParams({ skills: 'go,react' }), 3)).toBe('/?skills=go,react&page=3');
   });
 
   it('leaves an unfiltered listing with a plain path', () => {

@@ -59,18 +59,12 @@ export interface GateCell {
   level: GhostLevel;
 }
 
-const byTier = (tier: string): string[] =>
-  CRITERIA.filter((c) => c.tier === tier).map((c) => c.code);
+const byTier = (tier: string): string[] => CRITERIA.filter((c) => c.tier === tier).map((c) => c.code);
 
 /** The gates a cell passes are declared, not recomputed — recomputing them here would be
  *  a second copy of `ghostLevel`'s predicates, free to disagree with it. The example
  *  beside them is what makes the declaration checkable. */
-const cell = (
-  converged: boolean,
-  witnessed: boolean,
-  criteria: string[],
-  contributors: number,
-): GateCell => ({
+const cell = (converged: boolean, witnessed: boolean, criteria: string[], contributors: number): GateCell => ({
   converged,
   witnessed,
   criteria,

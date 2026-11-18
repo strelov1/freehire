@@ -1,16 +1,14 @@
-// Command backfill-company-type-hint force-requeues the existing OPEN postings of the
-// companies in enrich.CompanyTypeHints back into enrichment_outbox, so the next
-// cmd/enrich runs rewrite their company_type using the "Known company type" prompt hint
-// instead of waiting for the next Version bump — which would re-enrich the whole
-// catalogue just to reach a handful of companies.
+// Command backfill-company-type-hint force-requeues the OPEN postings of the companies in
+// enrich.CompanyTypeHints into enrichment_outbox, so the next cmd/enrich runs rewrite their
+// company_type using the "Known company type" prompt hint instead of waiting for a Version
+// bump, which would re-enrich the whole catalogue.
 //
-// One-off: run it once after adding entries to enrich.CompanyTypeHints, then let the
-// normal cmd/enrich cron drain the requeued rows (EnqueueEnrichmentForCompanySlugs is
-// ON CONFLICT-guarded, so re-running this before that drain completes costs nothing).
+// One-off: run it after adding entries to enrich.CompanyTypeHints, then let the cmd/enrich
+// cron drain the rows (EnqueueEnrichmentForCompanySlugs is ON CONFLICT-guarded, so re-running
+// before the drain costs nothing).
 //
-// Enrichment writes are not pushed to search_outbox, so the corrected values only reach
-// Meilisearch on the next full rebuild — follow the drain with a full `make reindex`,
-// the same gap cmd/backfill-clearance documents.
+// Enrichment writes are not pushed to search_outbox, so follow the drain with a full `make
+// reindex`.
 //
 // Needs DATABASE_URL.
 package main

@@ -87,9 +87,11 @@ var prompts = []promptSpec{
 	},
 }
 
-// addPrompts registers every prompt on the server.
-func addPrompts(server *mcp.Server) {
-	for _, spec := range prompts {
+// addPrompts registers every catalogue prompt on the server.
+func addPrompts(server *mcp.Server) { addPromptSpecs(server, prompts) }
+
+func addPromptSpecs(server *mcp.Server, specs []promptSpec) {
+	for _, spec := range specs {
 		server.AddPrompt(spec.prompt, func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 			args := map[string]string{}
 			for _, arg := range spec.prompt.Arguments {
@@ -115,10 +117,9 @@ func addPrompts(server *mcp.Server) {
 const maxCompletions = 100
 
 // completePromptArgument answers completion/complete for a prompt argument: the values of
-// its vocabulary that start with what the person has typed, case folded, in the
-// vocabulary's own order. An argument with no vocabulary, an unknown prompt, or a resource
-// reference gets an empty answer — a suggestion we would have to guess is worse than none,
-// and an error would surface in the client as a failure while the person is typing.
+// its vocabulary that start with what the person has typed, case folded, in vocabulary
+// order. Anything else gets an empty answer, not an error, which would surface in the
+// client while the person is typing.
 func completePromptArgument(_ context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 	values := []string{}
 	if ref := req.Params.Ref; ref != nil && ref.Type == "ref/prompt" {

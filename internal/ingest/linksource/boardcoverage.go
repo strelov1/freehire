@@ -173,6 +173,10 @@ func fetchForResolve(ctx context.Context, adapter sources.Source, e sources.Comp
 // the id followed by a readable slug — SmartRecruiters' "<id>-<title-slug>", where the id is
 // never a segment of its own.
 func segmentNamesID(seg, id string) bool {
+	// Complete paths identify one posting exactly; a hyphen suffix may name a sibling.
+	if strings.HasPrefix(seg, "/") {
+		return sameRef(seg, id)
+	}
 	return id != "" && (sameRef(seg, id) || strings.HasPrefix(seg, id+"-"))
 }
 
@@ -267,14 +271,28 @@ func queryMatches(raw, posting string, linkMustCarry bool) bool {
 // trackingParams are the query parameters that say how a link travelled rather than what it
 // points at, besides the utm_ family trackingParam matches by prefix. A stored posting URL can
 // carry them too (micro1 stores its utm_ referral values), so they must never veto a match.
+//
+// The database repeats this vocabulary in normalize_job_url (migration 0284), which drops
+// these parameters from both sides of /jobs/find's URL comparison; an integration test in
+// internal/api/handler holds the two together, so a key added here fails it until the
+// function is migrated too. Keys are lower case: trackingParam lowercases before looking up.
 var trackingParams = map[string]bool{
 	"gclid": true, "fbclid": true, "msclkid": true, "trk": true, "gh_src": true,
 	"ref": true, "src": true, "source": true,
+	"lever-source": true, "lever-origin": true, "refid": true, "trackingid": true,
+	"mc_cid": true, "mc_eid": true, "_hsenc": true, "_hsmi": true,
+	"yclid": true, "ttclid": true, "li_fat_id": true,
 }
 
 func trackingParam(k string) bool {
 	k = strings.ToLower(k)
 	return strings.HasPrefix(k, "utm_") || trackingParams[k]
+}
+
+// TrackingParamNames returns the listed tracking parameter names, sorted. The utm_ family
+// is matched by prefix and is not among them.
+func TrackingParamNames() []string {
+	return slices.Sorted(maps.Keys(trackingParams))
 }
 
 // normalizeURL reduces a posting URL to what identifies it: scheme-less, lowercased host with
@@ -290,7 +308,7 @@ func normalizeURL(raw string) string {
 }
 
 // postingRefs returns what in a link may name the posting's id, in the order to try them: the
-// path segments last-first, then the query values. Most platforms put the id in the path; a few
+// path segments last-first, then path suffixes and query values. Most platforms put the id in the path; a few
 // name it only in the query (eRecruiter's oid), and a query value that names no posting on the
 // board matches nothing.
 func postingRefs(raw string) []string {
@@ -298,6 +316,12 @@ func postingRefs(raw string) []string {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return refs
+	}
+	// Workday's external id is a complete /job/<location>/<slug> path. Keep
+	// component boundaries so a different location or requisition cannot match it.
+	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
+	for i := len(segments) - 1; i >= 0; i-- {
+		refs = append(refs, "/"+strings.Join(segments[i:], "/"))
 	}
 	q := u.Query()
 	for _, k := range slices.Sorted(maps.Keys(q)) {

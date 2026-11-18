@@ -71,42 +71,7 @@ func TestSearchRequestWithQFieldsSetsAttributesToSearchOn(t *testing.T) {
 	}
 }
 
-// An agent's semantic search is a HYBRID of its text and its embedding, against the
-// description embedder — never the skill one, whose vectors live in another space.
-func TestBuildSearchRequestSemanticVectorIsAHybridOverDescriptions(t *testing.T) {
-	v := []float32{0.1, 0.2}
-	req := buildSearchRequest(SearchParams{Query: "payments backend", SemanticVector: v, Filter: `country = "DE"`, ScoreThreshold: 0.7, Limit: 10})
-
-	if req.Hybrid == nil {
-		t.Fatal("no hybrid block: the semantic vector would be ignored")
-	}
-	if req.Hybrid.Embedder != DescEmbedder {
-		t.Errorf("hybrid embedder = %q, want %q", req.Hybrid.Embedder, DescEmbedder)
-	}
-	if req.Hybrid.SemanticRatio <= 0 || req.Hybrid.SemanticRatio >= 1 {
-		t.Errorf("semantic ratio = %v, want a blend strictly between keyword-only and vector-only", req.Hybrid.SemanticRatio)
-	}
-	if len(req.Vector) != 2 {
-		t.Errorf("vector = %v, want the query embedding", req.Vector)
-	}
-	if req.Filter != `country = "DE"` {
-		t.Errorf("filter = %v, want the caller's filter unchanged", req.Filter)
-	}
-	if req.RankingScoreThreshold != 0.7 {
-		t.Errorf("ranking score threshold = %v, want 0.7", req.RankingScoreThreshold)
-	}
-}
-
-// The match sort keeps its own embedder and its pure-vector ratio even if a semantic
-// vector rode along.
-func TestBuildSearchRequestMatchSortWinsOverSemanticVector(t *testing.T) {
-	req := buildSearchRequest(SearchParams{Vector: []float32{1}, SemanticVector: []float32{2}})
-	if req.Hybrid == nil || req.Hybrid.Embedder != SkillEmbedder || req.Hybrid.SemanticRatio != 1 {
-		t.Errorf("hybrid = %+v, want the skills embedder at ratio 1", req.Hybrid)
-	}
-}
-
-// No vector of either kind means no hybrid and no threshold: today's keyword request.
+// No vector means no hybrid and no threshold: a plain keyword request.
 func TestBuildSearchRequestWithoutVectorsIsPlainKeyword(t *testing.T) {
 	req := buildSearchRequest(SearchParams{Query: "golang", Limit: 20})
 	if req.Hybrid != nil || req.Vector != nil || req.RankingScoreThreshold != 0 {

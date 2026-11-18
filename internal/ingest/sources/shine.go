@@ -17,10 +17,9 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// shine adapts Shine.com (www.shine.com), the HT Media group's Indian general job board: ~223k
-// public postings, a sixth or so of them technical, many posted by recruitment consultancies.
-// It is boardless and an aggregator — the employer is read per posting. See the "Shine traps"
-// section of AGENTS.md for the measurements behind each rule.
+// shine adapts Shine.com (www.shine.com), the HT Media group's Indian general job board, many
+// postings on it by recruitment consultancies. It is boardless and an aggregator: the employer is
+// read per posting. See the "Shine traps" section of AGENTS.md.
 //
 // The posting set comes from the job sitemaps (robots.txt disallows the site's API), which carry
 // nothing but each posting's URL, so every fact is bought with the posting page's schema.org
@@ -52,12 +51,10 @@ const (
 	// shineDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the pace.
 	shineDetailWorkers = 2
 	// shineMaxNewPerRun bounds how many unseen postings one run reads: 1,500 pages at one a second
-	// is 25 minutes. The rest of the scheduler's default 2,400 s crawl budget goes to the ~22
-	// sitemaps, the coverage probe over ~62k employers and the writes after the fetch — and a run
-	// that meets its deadline stores nothing, so the margin is the point. ~10k postings reach the
-	// sitemaps a day — under the ~18k twelve two-hourly runs read — and the first runs face the
-	// whole catalogue, so it is taken in slices, newest first; a posting past the bound is read by
-	// a later run.
+	// is 25 minutes. The rest of the scheduler's default 2,400 s crawl budget goes to the sitemaps,
+	// the coverage probe and the writes after the fetch, and a run that meets its deadline stores
+	// nothing, so the margin is the point. The first runs face the whole catalogue, so it is taken
+	// in slices, newest first; a posting past the bound is read by a later run.
 	shineMaxNewPerRun = 1500
 )
 
@@ -122,7 +119,7 @@ func (s shine) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 
 // FetchNewGated lists every posting the sitemaps name, refreshes the ones already stored, and
 // reads up to maxNewPerRun of the rest, newest id first. A posting the pipeline will discard
-// anyway — its employer already covered by a non-aggregator source, or its title rejected — is
+// anyway — its employer already covered by a non-aggregator source — is
 // judged on what its URL spells and yielded body-less without a request: a discarded posting is
 // never stored, so without the gate every run would buy it again. A posting whose page cannot be
 // read is not yielded; a later run tries again.
@@ -149,7 +146,7 @@ func (s shine) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(exte
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[p.company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[p.company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -310,9 +307,7 @@ func shineJob(ld shineLD, p shinePosting) (Job, bool) {
 		places = append(places, city)
 	}
 	j.Location = strings.Join(places, "; ")
-	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseRFC3339(strings.TrimSpace(ld.DatePosted))
 	switch strings.ToUpper(strings.TrimSpace(ld.EmploymentType)) {
 	case "FULL_TIME":
 		j.EmploymentType = "full_time"

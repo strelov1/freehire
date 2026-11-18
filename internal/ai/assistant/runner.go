@@ -1,9 +1,11 @@
 package assistant
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"strings"
 	"time"
@@ -14,15 +16,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// EventKind names one frame of a streamed turn. The set deliberately mirrors what
-// the chat UI already renders, so a replayed transcript and a live turn fold
-// through the same reducer.
+// EventKind names one frame of a streamed turn. The set mirrors what the chat UI
+// renders, so a replayed transcript and a live turn fold through the same reducer.
 type EventKind string
 
 const (
-	// EventQueued precedes a turn that had to wait for the session's previous one. It is not
-	// produced by the loop — the turn has not started yet — but it travels the same stream, so
-	// a client learns it is waiting instead of watching a silent connection and guessing.
+	// EventQueued precedes a turn that had to wait for the session's previous one. The loop
+	// does not produce it, but it travels the same stream so a client knows it is waiting.
 	EventQueued           EventKind = "queued"
 	EventUserPrompt       EventKind = "user_prompt"
 	EventAssistantText    EventKind = "assistant_text"
@@ -33,26 +33,23 @@ const (
 	EventResult           EventKind = "result"
 )
 
-// Why a turn ended. Every turn emits exactly one result event carrying one of
-// these, so a client is never left waiting on a stream that quietly stopped.
+// Why a turn ended. Every turn emits exactly one result event carrying one of these.
 const (
 	StopEndTurn   = "end_turn"
 	StopMaxSteps  = "max_steps"
+	StopToolLoop  = "tool_loop"
 	StopCancelled = "cancelled"
 	StopError     = "error"
 )
 
-// Event is one streamed frame. The JSON tags are the wire contract the SSE
-// endpoint and the web client share.
+// Event is one streamed frame. The JSON tags are the wire contract shared with the web client.
 type Event struct {
 	Kind EventKind `json:"type"`
 
-	// Text carries the prompt (user_prompt) or one streamed delta
-	// (assistant_text, assistant_thought).
+	// Text carries the prompt (user_prompt) or one streamed delta (assistant_text, assistant_thought).
 	Text string `json:"text,omitempty"`
-	// Attachments names the documents attached to the prompt (user_prompt). Names only:
-	// the extracted text is the model's to read, and echoing it down the stream would
-	// send the client back what it just uploaded.
+	// Attachments names the documents attached to the prompt (user_prompt). Names only: the
+	// extracted text is not echoed back down the stream.
 	Attachments []string `json:"attachments,omitempty"`
 
 	// Name and Input describe a tool invocation; Result and IsError its outcome.
@@ -61,38 +58,36 @@ type Event struct {
 	Result  string          `json:"result,omitempty"`
 	IsError bool            `json:"is_error,omitempty"`
 
-	// Token counts, when the provider reported them (usage).
-	InputTokens  int `json:"input_tokens,omitempty"`
-	OutputTokens int `json:"output_tokens,omitempty"`
+	// Token counts, when the provider reported them (usage). CachedInputTokens is the part of
+	// InputTokens the provider served from its prompt cache; zero is also what a provider that
+	// reports no cache sends (see llm.UsageFrom).
+	InputTokens       int `json:"input_tokens,omitempty"`
+	CachedInputTokens int `json:"cached_input_tokens,omitempty"`
+	OutputTokens      int `json:"output_tokens,omitempty"`
 
 	// StopReason is set on the terminal result event.
 	StopReason string `json:"stop_reason,omitempty"`
 }
 
-// Model is the slice of the LLM client a turn needs. *llm.Client satisfies it;
-// tests script it.
+// Model is the slice of the LLM client a turn needs. *llm.Client satisfies it.
 type Model interface {
 	Chat(ctx context.Context, msgs []llms.MessageContent, tools []llms.Tool, stream llm.ChatStream) (*llms.ContentChoice, error)
 }
 
 // RunnerConfig bounds a turn.
 type RunnerConfig struct {
-	// MaxSteps is how many tool-calling rounds a turn may take before the model is
-	// asked for a final answer with no tools offered.
+	// MaxSteps is how many tool-calling rounds a turn may take before the model is asked for
+	// a final answer with tool calls forbidden.
 	MaxSteps int
-	// HistoryLimit is how many of a session's most recent messages are replayed
-	// into the model. A long session otherwise grows past the context window.
+	// HistoryLimit is how many of a session's most recent messages are replayed into the model.
 	HistoryLimit int
 }
 
-// TurnConfig bounds ONE turn, overriding the runner's own bounds where it is set.
-// It exists because turns are not all the same size: a question takes two tool
-// rounds, an unattended run over a vacancy's requirements takes dozens. A zero
-// field means "use the runner's configured bound", so the default applies to every
-// turn that does not ask for something else.
+// TurnConfig bounds ONE turn, overriding the runner's bounds where set. A zero field means
+// "use the runner's configured bound".
 //
-// The value is always chosen server-side. A ceiling is a spend limit on a metered
-// gateway, and a limit a client can raise is not a limit.
+// Chosen server-side only: a ceiling is a spend limit on a metered gateway, and a limit a
+// client can raise is not a limit.
 type TurnConfig struct {
 	// MaxSteps overrides RunnerConfig.MaxSteps for this turn when positive.
 	MaxSteps int
@@ -106,9 +101,8 @@ type Runner struct {
 	cfg   RunnerConfig
 }
 
-// NewRunner wires a runner. Zero or negative bounds fall back to conservative
-// defaults rather than meaning "unbounded" — an unbounded agent loop on a metered
-// gateway is a runaway bill.
+// NewRunner wires a runner. Zero or negative bounds fall back to defaults, never
+// "unbounded": an unbounded loop on a metered gateway is a runaway bill.
 func NewRunner(m Model, s *Store, cfg RunnerConfig) *Runner {
 	if cfg.MaxSteps <= 0 {
 		cfg.MaxSteps = defaultMaxSteps
@@ -119,15 +113,10 @@ func NewRunner(m Model, s *Store, cfg RunnerConfig) *Runner {
 	return &Runner{model: m, store: s, cfg: cfg}
 }
 
-// With returns a runner that drives a different model, leaving its bounds, its store and
-// everything else alone.
+// With returns a runner that drives a different model, keeping its bounds and store. It
+// lets a turn run on the caller's per-user gateway credential.
 //
-// It exists so a turn can run on the caller's own gateway credential: that credential is
-// per-user and per-turn, while the runner is built once at boot. A Runner is three fields,
-// so cloning one per turn costs nothing beside the model call it is about to make.
-//
-// Nil-safe both ways: a nil runner stays nil (the assistant is unavailable), and a nil
-// model leaves the runner as it was rather than producing one that cannot answer.
+// Nil-safe: a nil runner stays nil, and a nil model leaves the runner unchanged.
 func (r *Runner) With(m Model) *Runner {
 	if r == nil || m == nil {
 		return r
@@ -141,73 +130,55 @@ func (r *Runner) With(m Model) *Runner {
 const (
 	defaultMaxSteps     = 8
 	defaultHistoryLimit = 60
-	// historyBlock caps how far the replayed window's OLDEST message moves at a time.
-	//
-	// A window of "the newest HistoryLimit messages" slides by one every turn, so the
-	// bytes the model is sent after the system prompt differ on every request. Prompt
-	// caching is a prefix match, so that costs the whole conversation at full price on
-	// every turn: measured on production the assistant read 30,848 input tokens a
-	// request and only 10,868 of them came from cache — the size of the static head
-	// (system prompt plus tool schemas), with the conversation itself never hit.
-	//
-	// Quantising the window's start to a multiple of the block keeps that prefix
-	// byte-identical for a block's worth of turns and breaks it once, rather than
-	// breaking it every turn. The cost is carrying up to one block of extra history —
-	// cached tokens, roughly a tenth the price of the uncached ones this avoids.
+	// historyBlock caps how far the replayed window's oldest message moves at a time.
+	// A window of "the newest HistoryLimit messages" slides every turn, which breaks the
+	// prompt-cache prefix match on every request. Quantising the window start to a multiple of
+	// the block keeps the prefix byte-identical for a block's worth of turns, at the cost of up
+	// to one block of extra (cached) history.
 	historyBlock = 20
-	// persistTimeout bounds one transcript write. The writes run on a context
-	// detached from the caller's, so they need a deadline of their own.
+	// persistTimeout bounds one transcript write, which runs on a context detached from the
+	// caller's.
 	persistTimeout = 5 * time.Second
 )
 
-// persisting derives the context transcript writes run on: detached from the
-// caller's cancellation, bounded by its own deadline. A turn's writes must
-// outlive the request, because cancellation is exactly when they matter — the
-// user watched the model answer and then closed the tab, and a transcript
-// missing that answer looks like the assistant lost work it visibly did.
+// persisting derives the context transcript writes run on: detached from the caller's
+// cancellation, bounded by its own deadline. Writes must outlive the request, because
+// cancellation (the user closing the tab) is exactly when they matter.
 func persisting(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(ctx), persistTimeout)
 }
 
-// ErrNothingToContinue is returned by Continue when the session has no user
-// message to resume from. The handler maps it to HTTP 409.
+// ErrNothingToContinue is returned by Continue when the session has no user message to
+// resume from. The handler maps it to HTTP 409.
 var ErrNothingToContinue = errors.New("assistant: nothing to continue")
 
-// Run executes one turn: it records the prompt, then alternates model calls and
-// tool calls until the model answers, the step cap is reached, or the caller goes
-// away. Every frame is emitted through emit and persisted as it is produced, so a
-// turn that dies halfway still leaves a resumable session.
+// Run executes one turn: it records the prompt, then alternates model calls and tool calls
+// until the model answers, the step cap is reached, or the caller goes away. Every frame is
+// emitted and persisted as produced, so a turn that dies halfway leaves a resumable session.
 //
-// A tool failure is not a turn failure — it goes back to the model as a result.
-// Only a model/transport failure returns an error, and even then the terminal
-// event has already been emitted.
+// A tool failure goes back to the model as a result. Only a model/transport failure returns
+// an error, and the terminal event has already been emitted by then.
 func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, prompt string, turn TurnConfig, emit func(Event)) error {
 	return r.RunWithAttachments(ctx, sess, reg, system, prompt, nil, turn, emit)
 }
 
-// RunWithAttachments is Run for a prompt that carries attached documents. They are stored
-// in the prompt's own transcript row, so every later turn replays them with it.
+// RunWithAttachments is Run for a prompt with attached documents, stored in the prompt's
+// own transcript row so every later turn replays them.
 func (r *Runner) RunWithAttachments(ctx context.Context, sess Session, reg *Registry, system, prompt string, docs []Attachment, turn TurnConfig, emit func(Event)) error {
 	if err := r.recordPrompt(ctx, sess, prompt, docs, emit); err != nil {
-		// Through fail, not raw: a turn that dies before the loop owes its client the
-		// same terminal result every other exit emits. Returning here bare closed a
-		// 200 stream that carried nothing but `:open` and heartbeats, and the web
-		// client — which only raises on a READ error — resolved it as a clean end,
-		// blamed a busy chat, and never called endTurn(), so the session stayed
-		// "turn in flight" and queued every later message behind a turn that was over.
+		// Through fail so the client still gets the terminal result; a bare return left the web
+		// client with a clean-looking end and a session stuck "turn in flight".
 		return r.fail(emit, err)
 	}
 	return r.runFromHistory(ctx, sess, reg, system, turn, emit)
 }
 
-// RunNote executes one turn whose input is a status note from freehire rather than a
-// message from the candidate. The note is stored as RoleNote and nothing else about the
-// conversation changes: it does not name the session (a note is the server's words, the
-// same for every conversation) and the client is not told the candidate said it.
+// RunNote executes one turn whose input is a status note from freehire, not a message from
+// the candidate. It is stored as RoleNote, does not name the session, and the client is not
+// told the candidate said it.
 //
-// A note identical to the transcript's last message is not stored again: that is the same
-// narration being retried after the model failed it, and storing it on every retry would
-// grow the conversation for as long as the model is down.
+// A note identical to the transcript's last message is not stored again, so retries while
+// the model is down do not grow the conversation.
 func (r *Runner) RunNote(ctx context.Context, sess Session, reg *Registry, system, note string, turn TurnConfig, emit func(Event)) error {
 	msg, err := EncodeNote(note)
 	if err != nil {
@@ -230,11 +201,9 @@ func (r *Runner) RunNote(ctx context.Context, sess Session, reg *Registry, syste
 	return r.runFromHistory(ctx, sess, reg, system, turn, emit)
 }
 
-// Continue resumes after a failed turn without appending another user message.
-// The transcript already holds the prompt (and any partial tool work); replaying
-// a second copy would duplicate the candidate's request in the model's context.
-// Dangling tool_use rows from the interrupted turn are healed when history is
-// rebuilt — same path every other turn uses — so Bedrock stays provider-legal.
+// Continue resumes after a failed turn without appending another user message, which
+// would duplicate the request in the model's context. Dangling tool_use rows from the
+// interrupted turn are healed when history is rebuilt.
 func (r *Runner) Continue(ctx context.Context, sess Session, reg *Registry, system string, turn TurnConfig, emit func(Event)) error {
 	stored, err := r.store.Transcript(ctx, sess.ID)
 	if err != nil {
@@ -243,7 +212,7 @@ func (r *Runner) Continue(ctx context.Context, sess Session, reg *Registry, syst
 	if !hasUserMessage(stored) {
 		return ErrNothingToContinue
 	}
-	// Activity only — no new prompt, no re-label.
+	// Activity only: no new prompt, no re-label.
 	writeCtx, cancel := persisting(ctx)
 	defer cancel()
 	if err := r.store.Touch(writeCtx, sess.ID, sess.UserID); err != nil {
@@ -252,8 +221,8 @@ func (r *Runner) Continue(ctx context.Context, sess Session, reg *Registry, syst
 	return r.runFromHistory(ctx, sess, reg, system, turn, emit)
 }
 
-// hasUserMessage reports whether a transcript holds a turn to continue: a prompt, or a status
-// note — an apply conversation's first turn is one, before the candidate has typed anything.
+// hasUserMessage reports whether a transcript holds a turn to continue: a prompt, or a
+// status note (an apply conversation's first turn is one).
 func hasUserMessage(msgs []Message) bool {
 	for _, m := range msgs {
 		if m.Role == RoleUser || m.Role == RoleNote {
@@ -263,8 +232,8 @@ func hasUserMessage(msgs []Message) bool {
 	return false
 }
 
-// runFromHistory is the shared tool-calling loop. Run records a prompt first;
-// Continue skips that so a retry does not rewrite the conversation.
+// runFromHistory is the shared tool-calling loop; Run records a prompt first, Continue
+// does not.
 func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry, system string, turn TurnConfig, emit func(Event)) error {
 	history, err := r.history(ctx, sess.ID, system)
 	if err != nil {
@@ -276,6 +245,8 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 		maxSteps = turn.MaxSteps
 	}
 
+	failures := make(map[string]Result)
+	stopReason := StopMaxSteps
 	for step := 0; step < maxSteps; step++ {
 		if ctx.Err() != nil {
 			return end(emit, StopCancelled)
@@ -283,8 +254,7 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 
 		choice, err := r.model.Chat(ctx, history, reg.Definitions(), stream(emit))
 		if err != nil {
-			// A cancelled context surfaces as a model error; report it as the
-			// cancellation it is rather than as a failure the user must act on.
+			// A cancelled context surfaces as a model error; report it as cancellation.
 			if ctx.Err() != nil {
 				return end(emit, StopCancelled)
 			}
@@ -294,13 +264,8 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 		history = r.appendAssistant(ctx, sess.ID, history, choice)
 
 		if len(choice.ToolCalls) == 0 {
-			// A provider can report success with a genuinely empty completion — no
-			// text, no tool calls — after a turn's context grew large (a batch of
-			// tool results feeding the next call is the case seen in production).
-			// Treating that as an ordinary end_turn leaves nothing in the transcript
-			// and nothing in the UI (the frontend never fabricates a message for a
-			// turn it never saw start), so the assistant appears to go silent with
-			// no way to tell the turn even ran.
+			// A provider can report success with a completely empty completion after a large context.
+			// Without a note the transcript and UI show no trace that the turn ran.
 			if strings.TrimSpace(choice.Content) == "" {
 				r.noteEmptyReply(ctx, sess.ID, emptyReplyNote, &history, emit)
 			}
@@ -308,21 +273,24 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 			return end(emit, StopEndTurn)
 		}
 
-		history = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, emit)
+		var repeated bool
+		history, repeated = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, failures, emit)
 
-		// Cancelled mid-round: the tools that already ran are committed and
-		// persisted; stop before spending another model call.
+		// Cancelled mid-round: finished tools are persisted; stop before another model call.
 		if ctx.Err() != nil {
 			return end(emit, StopCancelled)
 		}
+		if repeated {
+			stopReason = StopToolLoop
+			break
+		}
 	}
 
-	// The cap is reached. Ask once more with no tools offered so the model can
-	// only answer. Some providers (Haiku on Bedrock) still emit tool calls when
-	// the list is empty — persisting those without running them left a dangling
-	// tool_use the UI showed as a hung turn. Execute any that arrive, then stop
-	// without spending another model round past the ceiling.
-	choice, err := r.model.Chat(ctx, history, nil, stream(emit))
+	// Cap or repeated failure: ask once more for text only. The tools stay in the request so the provider's
+	// cached prefix (tools, system, history) still matches; llm.WithoutToolCalls forbids calling
+	// them. A provider may emit tool calls anyway (Haiku on Bedrock did with no tools at all);
+	// run them so no tool_use is left dangling, then stop.
+	choice, err := r.model.Chat(llm.WithoutToolCalls(ctx), history, reg.Definitions(), stream(emit))
 	if err != nil {
 		if ctx.Err() != nil {
 			return end(emit, StopCancelled)
@@ -331,19 +299,21 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 	}
 	history = r.appendAssistant(ctx, sess.ID, history, choice)
 	if len(choice.ToolCalls) > 0 {
-		log.Printf("assistant: max_steps wrap-up returned %d tool call(s); running them before stop", len(choice.ToolCalls))
-		history = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, emit)
+		log.Printf("assistant: %s wrap-up returned %d tool call(s); running them before stop", stopReason, len(choice.ToolCalls))
+		history, _ = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, failures, emit)
 	}
 	if strings.TrimSpace(choice.Content) == "" {
-		r.noteEmptyReply(ctx, sess.ID, stepLimitNote, &history, emit)
+		note := stepLimitNote
+		if stopReason == StopToolLoop {
+			note = "I stopped after the same tool call failed again. The rejected operation was not applied."
+		}
+		r.noteEmptyReply(ctx, sess.ID, note, &history, emit)
 	}
 	emitUsage(emit, choice)
-	return end(emit, StopMaxSteps)
+	return end(emit, stopReason)
 }
 
-// end closes a turn with its terminal event. Every exit from the loop goes
-// through here or through fail, so a turn can never finish without telling the
-// client why.
+// end closes a turn with its terminal event. Every loop exit goes through here or fail.
 func end(emit func(Event), reason string) error {
 	emit(Event{Kind: EventResult, StopReason: reason})
 	return nil
@@ -352,15 +322,12 @@ func end(emit func(Event), reason string) error {
 const (
 	// stepLimitNote explains a max_steps wrap-up that produced no answer text.
 	stepLimitNote = "I hit the step limit for this turn before finishing. Send another message and I will continue."
-	// emptyReplyNote covers the other route to the same symptom: the model itself
-	// answered with nothing, well short of the step cap.
+	// emptyReplyNote covers the model answering with nothing well short of the step cap.
 	emptyReplyNote = "I didn't have anything to add there. Could you rephrase, or ask me to continue?"
 )
 
-// noteEmptyReply records a short prose line in place of a model turn that produced
-// neither an answer nor a tool call. Without it the transcript (and the UI, which
-// never fabricates a message for a turn it never saw start) shows no trace that the
-// turn ran at all — indistinguishable from the assistant having gone silent.
+// noteEmptyReply records a short prose line in place of a model turn that produced neither
+// an answer nor a tool call.
 func (r *Runner) noteEmptyReply(ctx context.Context, sessionID uuid.UUID, note string, history *[]llms.MessageContent, emit func(Event)) {
 	emit(Event{Kind: EventAssistantText, Text: note})
 	msg, err := EncodeAssistant(note, nil)
@@ -380,8 +347,8 @@ func (r *Runner) noteEmptyReply(ctx context.Context, sessionID uuid.UUID, note s
 	*history = append(*history, decoded)
 }
 
-// recordPrompt persists the user's message, names the session after it when it is
-// the first, and emits it so a replay and a live turn look identical.
+// recordPrompt persists the user's message, labels the session after it when it is the
+// first, and emits it so a replay and a live turn look identical.
 func (r *Runner) recordPrompt(ctx context.Context, sess Session, prompt string, docs []Attachment, emit func(Event)) error {
 	msg, err := EncodeUser(prompt, docs...)
 	if err != nil {
@@ -392,8 +359,7 @@ func (r *Runner) recordPrompt(ctx context.Context, sess Session, prompt string, 
 	if _, err := r.store.Append(writeCtx, sess.ID, msg); err != nil {
 		return err
 	}
-	// Label and activity stamp are conveniences, not correctness: a failure here
-	// must not cost the user their turn.
+	// Label and activity stamp are conveniences: a failure must not cost the user their turn.
 	// A message that is only a document labels the session by the document's name.
 	label := prompt
 	if label == "" && len(docs) > 0 {
@@ -409,9 +375,10 @@ func (r *Runner) recordPrompt(ctx context.Context, sess Session, prompt string, 
 	return nil
 }
 
-// runToolCalls executes one round of tool calls, emitting and persisting each
-// invocation and its result, and returns the history with the results appended.
-func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, history []llms.MessageContent, calls []llms.ToolCall, emit func(Event)) []llms.MessageContent {
+// runToolCalls executes one round of tool calls, emitting and persisting each, and returns
+// the history with the results appended.
+func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, history []llms.MessageContent, calls []llms.ToolCall, failures map[string]Result, emit func(Event)) ([]llms.MessageContent, bool) {
+	repeated := false
 	for _, call := range calls {
 		if call.FunctionCall == nil {
 			continue
@@ -420,17 +387,30 @@ func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, 
 		raw := call.FunctionCall.Arguments
 		var args json.RawMessage
 		if looksConcatenated(raw) {
-			// Two complete JSON values with no separator: the model intended a second
-			// call. healToolArguments would keep only the first, silently dropping the
-			// second — pass the raw string through instead so DecodeArgs's own
-			// trailing-content check fails the call loudly (see looksConcatenated).
+			// Two JSON values with no separator: healToolArguments would keep only the first and
+			// silently drop the second, so pass the raw string through and let DecodeArgs fail loudly
+			// (see looksConcatenated).
 			args = json.RawMessage(raw)
 		} else {
 			args = json.RawMessage(healToolArguments(raw))
 		}
 		emit(Event{Kind: EventToolUse, Name: name, Input: validJSON(args)})
 
-		res := reg.Call(ctx, sess.UserID, name, args)
+		key := rejectedCallKey(name, args)
+		res, seen := failures[key]
+		if seen {
+			repeated = true
+			res = failed("This call already failed with the same arguments: " + res.Content +
+				". It was not executed again. Explain what remains unfinished; do not claim it succeeded.")
+		} else {
+			res = reg.Call(ctx, sess.UserID, name, args)
+			if res.Failed {
+				failures[key] = res
+			} else {
+				// A successful tool may have changed the state that caused the refusal.
+				clear(failures)
+			}
+		}
 		emit(Event{Kind: EventToolResult, Name: name, Result: res.Content, IsError: res.Failed})
 
 		msg, err := EncodeToolResult(call.ID, name, res.Content)
@@ -448,7 +428,25 @@ func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, 
 		}
 		history = append(history, decoded)
 	}
-	return history
+	return history, repeated
+}
+
+func rejectedCallKey(name string, args []byte) string {
+	// Decoding into any sorts nested object keys on re-marshal; UseNumber keeps numbers exact.
+	dec := json.NewDecoder(bytes.NewReader(args))
+	dec.UseNumber()
+	var fields map[string]any
+	if dec.Decode(&fields) != nil {
+		return name + "\x00" + string(args)
+	}
+	if _, err := dec.Token(); err != io.EOF { // trailing data: key by raw bytes
+		return name + "\x00" + string(args)
+	}
+	if name == "cv_edit" {
+		delete(fields, "note")
+	}
+	canonical, _ := json.Marshal(fields)
+	return name + "\x00" + string(canonical)
 }
 
 // appendAssistant persists one model turn and appends it to the working history.
@@ -469,8 +467,7 @@ func (r *Runner) appendAssistant(ctx context.Context, sessionID uuid.UUID, histo
 	return append(history, decoded)
 }
 
-// persist writes one message to the transcript, outliving the caller's
-// cancellation.
+// persist writes one message to the transcript, outliving the caller's cancellation.
 func (r *Runner) persist(ctx context.Context, sessionID uuid.UUID, msg Message) error {
 	writeCtx, cancel := persisting(ctx)
 	defer cancel()
@@ -478,20 +475,11 @@ func (r *Runner) persist(ctx context.Context, sessionID uuid.UUID, msg Message) 
 	return err
 }
 
-// history rebuilds the model's conversation: the session's system prompt followed
-// by its most recent messages.
+// history rebuilds the model's conversation: the system prompt plus the most recent messages.
 //
-// Fetches only the tail via RecentTranscript rather than the whole transcript via
-// Transcript — trim() below only ever keeps a bounded window anyway, so fetching
-// everything first paid a cost proportional to the session's total length (autopilot
-// runs and long-lived chats can accumulate hundreds of rows) on every single turn, for
-// a window whose size is bounded.
-//
-// It asks for HistoryLimit+historyBlock rows, not HistoryLimit: trim cuts at a block
-// boundary, and the widest window that boundary can leave is one block past the limit.
-// Fetching exactly HistoryLimit would silently cap the window at the limit again and
-// put the cut back on every turn — the fetch size is part of the cache fix, not an
-// optimisation beside it.
+// It fetches only the tail, HistoryLimit+historyBlock rows: trim cuts at a block boundary,
+// and the widest window that leaves is one block past the limit. Fetching exactly
+// HistoryLimit would put the cut back on every turn.
 func (r *Runner) history(ctx context.Context, sessionID uuid.UUID, system string) ([]llms.MessageContent, error) {
 	stored, err := r.store.RecentTranscript(ctx, sessionID, r.cfg.HistoryLimit+historyBlock)
 	if err != nil {
@@ -508,18 +496,12 @@ func (r *Runner) history(ctx context.Context, sessionID uuid.UUID, system string
 	return append(out, msgs...), nil
 }
 
-// trim keeps roughly the most recent limit messages, cutting at a block boundary
-// rather than at "newest limit" so the replayed prefix survives the provider's prompt
-// cache (see historyBlock). It then drops any leading tool results whose originating
-// call was cut away. Providers reject a tool result that answers no call in the
-// conversation, so an orphan at the head would fail the whole turn rather than merely
-// losing context. It finally closes any tool_use that still has no matching
-// tool_result — a turn that died after persisting the calls but before their results
-// leaves exactly that shape, and Bedrock rejects the whole next turn for it.
+// trim keeps roughly the most recent limit messages, cutting at a block boundary so the
+// replayed prefix survives the provider's prompt cache (see historyBlock). It drops leading
+// tool results whose call was cut away (providers reject orphans) and closes any tool_use
+// with no tool_result (Bedrock rejects the next turn otherwise).
 //
-// The caller must hand it limit+historyBlock messages, which is the widest window a
-// block boundary can produce; fewer and the cut is a no-op and the window is whatever
-// arrived.
+// The caller must pass limit+historyBlock messages, else the cut is a no-op.
 func trim(msgs []Message, limit int) []Message {
 	if limit > 0 && len(msgs) > 0 {
 		anchor := blockAnchor(int(msgs[len(msgs)-1].Seq), limit)
@@ -535,10 +517,9 @@ func trim(msgs []Message, limit int) []Message {
 	return closeDanglingToolCalls(msgs)
 }
 
-// blockAnchor is the oldest seq the replayed window keeps: the start of the newest
-// `limit` messages, rounded DOWN to a multiple of the block. Rounding down is what makes
-// it stand still while newest advances, which is the whole point — the same anchor for a
-// block's worth of turns means the same replayed prefix for that many turns.
+// blockAnchor is the oldest seq the replayed window keeps: the start of the newest `limit`
+// messages rounded DOWN to a multiple of the block, so it stands still while newest
+// advances.
 //
 // A session shorter than the window answers 0, which keeps everything.
 func blockAnchor(newestSeq, limit int) int {
@@ -550,12 +531,9 @@ func blockAnchor(newestSeq, limit int) int {
 	return anchor
 }
 
-// historyBlockFor is the block for a given window: a third of it, capped at
-// historyBlock. Proportional rather than fixed because the quantisation is paid for in
-// overshoot, and the overshoot has to stay a fraction of the window at ANY limit — a
-// flat block of 20 turns a 4-message window into a 20-message one, which is not a
-// caching tweak but a different bound. At the production limit of 60 this is the 20 the
-// constant names; at a limit of 3 or less it is 1, which is the old behaviour exactly.
+// historyBlockFor is the block for a window: a third of it, capped at historyBlock. It is
+// proportional so the overshoot stays a fraction of the window at any limit; at a limit of
+// 3 or less it is 1.
 func historyBlockFor(limit int) int {
 	block := limit / 3
 	if block > historyBlock {
@@ -567,10 +545,8 @@ func historyBlockFor(limit int) int {
 	return block
 }
 
-// closeDanglingToolCalls inserts synthetic error tool results for any assistant
-// tool_use that is not followed by its tool_result before the next non-tool
-// message (or the end of the transcript). Replay must stay provider-legal even
-// when a prior turn was interrupted mid-round.
+// closeDanglingToolCalls inserts synthetic error tool results for any assistant tool_use not
+// followed by its tool_result, keeping replay provider-legal after an interrupted turn.
 func closeDanglingToolCalls(msgs []Message) []Message {
 	if len(msgs) == 0 {
 		return msgs
@@ -578,6 +554,15 @@ func closeDanglingToolCalls(msgs []Message) []Message {
 	out := make([]Message, 0, len(msgs)+4)
 	for i := 0; i < len(msgs); i++ {
 		msg := msgs[i]
+		if msg.Role == RoleTool {
+			continue
+		}
+		if msg.Role == RoleAssistant {
+			var content assistantContent
+			if json.Unmarshal(msg.Content, &content) == nil && content.Text == "" && len(content.ToolCalls) == 0 {
+				continue
+			}
+		}
 		out = append(out, msg)
 		if msg.Role != RoleAssistant {
 			continue
@@ -589,8 +574,16 @@ func closeDanglingToolCalls(msgs []Message) []Message {
 		answered := make(map[string]struct{}, len(calls))
 		j := i + 1
 		for j < len(msgs) && msgs[j].Role == RoleTool {
-			answered[toolResultCallID(msgs[j])] = struct{}{}
-			out = append(out, msgs[j])
+			id := toolResultCallID(msgs[j])
+			for _, call := range calls {
+				if call.ID == id && id != "" {
+					if _, duplicate := answered[id]; !duplicate {
+						answered[id] = struct{}{}
+						out = append(out, msgs[j])
+					}
+					break
+				}
+			}
 			j++
 		}
 		for _, call := range calls {
@@ -632,16 +625,15 @@ func syntheticToolError(call toolCall) Message {
 	return msg
 }
 
-// fail emits the terminal error event and returns the cause. The event goes out
-// first so a streaming client stops waiting even though the request also errors.
+// fail emits the terminal error event and returns the cause. The event goes out first so a
+// streaming client stops waiting.
 func (r *Runner) fail(emit func(Event), err error) error {
 	emit(Event{Kind: EventResult, StopReason: StopError, IsError: true})
 	return err
 }
 
-// stream routes the model's two delta channels to their own event kinds: the
-// answer as it is written, and the reasoning behind it, which the chat shows in a
-// separate panel rather than inline.
+// stream routes the model's answer deltas and its reasoning deltas to their own event
+// kinds; the chat shows reasoning in a separate panel.
 func stream(emit func(Event)) llm.ChatStream {
 	return llm.ChatStream{
 		OnText:     func(delta string) { emit(Event{Kind: EventAssistantText, Text: delta}) },
@@ -649,20 +641,18 @@ func stream(emit func(Event)) llm.ChatStream {
 	}
 }
 
-// emitUsage reports token counts when the provider surfaced them. It reads them
-// through the LLM client's own extraction, so the stream and the tracer never
-// disagree about what a turn cost.
+// emitUsage reports token counts when the provider surfaced them, via the LLM client's own
+// extraction so the stream and tracer agree.
 func emitUsage(emit func(Event), choice *llms.ContentChoice) {
 	usage := llm.UsageFrom(choice)
 	if usage == nil {
 		return
 	}
-	emit(Event{Kind: EventUsage, InputTokens: usage.Input, OutputTokens: usage.Output})
+	emit(Event{Kind: EventUsage, InputTokens: usage.Input, CachedInputTokens: usage.CachedInput, OutputTokens: usage.Output})
 }
 
-// validJSON renders tool arguments for the UI, falling back to a JSON string when
-// the model emitted something unparseable — the frame is for display, so it must
-// never carry invalid JSON into the stream.
+// validJSON renders tool arguments for the UI, falling back to a JSON string when the model
+// emitted something unparseable; the stream must never carry invalid JSON.
 func validJSON(args json.RawMessage) json.RawMessage {
 	if len(args) > 0 && json.Valid(args) {
 		return args

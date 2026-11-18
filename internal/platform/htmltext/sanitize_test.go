@@ -239,3 +239,23 @@ func TestSanitizeHTMLRepairsLiteralNewlinesIsIdempotent(t *testing.T) {
 		t.Errorf("Sanitize is not idempotent:\nonce:  %q\ntwice: %q", once, twice)
 	}
 }
+
+func TestSanitizeHTMLRemovesNULBytes(t *testing.T) {
+	cases := map[string]struct{ in, want string }{
+		"prose":                  {"<p>Build\x00 reliable systems.</p>", "<p>Build reliable systems.</p>"},
+		"plain text":             {"Go\x00 engineer", "Go engineer"},
+		"tag name":               {"<scr\x00ipt>alert(1)</scr\x00ipt><p>Role</p>", "<p>Role</p>"},
+		"unicode and whitespace": {"<p>開発\x00\nGo\tengineer</p>", "<p>開発\nGo\tengineer</p>"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := Sanitize(tc.in)
+			if got != tc.want {
+				t.Fatalf("Sanitize() = %q, want %q", got, tc.want)
+			}
+			if again := Sanitize(got); again != got {
+				t.Errorf("Sanitize is not idempotent: %q became %q", got, again)
+			}
+		})
+	}
+}

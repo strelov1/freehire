@@ -1,11 +1,7 @@
 <script lang="ts">
   // A single conversion-rate donut. Presentational: the parent passes an already
   // computed fraction (0–1). Hand-built SVG, no charting dependency.
-  let {
-    percent,
-    label,
-    sublabel,
-  }: { percent: number; label: string; sublabel?: string } = $props();
+  let { percent, label, sublabel }: { percent: number; label: string; sublabel?: string } = $props();
 
   const R = 42;
   const CIRC = 2 * Math.PI * R;
@@ -13,9 +9,7 @@
   // Clamp so a malformed fraction can't draw a negative or overflowing arc.
   const fraction = $derived(Math.max(0, Math.min(1, percent)));
   const dash = $derived(`${CIRC * fraction} ${CIRC}`);
-  const display = $derived(
-    fraction === 0 ? '0%' : `${(fraction * 100).toFixed(fraction < 0.1 ? 1 : 0)}%`,
-  );
+  const display = $derived(fraction === 0 ? '0%' : `${(fraction * 100).toFixed(fraction < 0.1 ? 1 : 0)}%`);
 </script>
 
 <div class="flex flex-col items-center gap-1">

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -11,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // The whole server, driven through the SDK's in-memory transport — the same thing ChatGPT
@@ -21,7 +24,7 @@ func connect(t *testing.T, r Reader) *mcp.ClientSession {
 	ctx := context.Background()
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	server, err := newServer(r, "").Connect(ctx, serverTransport, nil)
+	server, err := newServer(nil, 42, "", r, false).Connect(ctx, serverTransport, nil)
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
@@ -172,10 +175,11 @@ func TestEveryToolDeclaresWhatItDoesAndWhatItDoesNotTouch(t *testing.T) {
 func TestTheServersInstructionsFitTheBudget(t *testing.T) {
 	// 512 characters is what the Apps SDK guidance asks for, and a limit nobody re-checks
 	// by eye is one that drifts on the next edit.
-	if got := utf8.RuneCountInString(serverInstructions); got > 512 {
+	instructions := connect(t, readerThatFinds(t)).InitializeResult().Instructions
+	if got := utf8.RuneCountInString(instructions); got > 512 {
 		t.Errorf("instructions are %d characters, want at most 512", got)
 	}
-	if strings.TrimSpace(serverInstructions) == "" {
+	if strings.TrimSpace(instructions) == "" {
 		t.Error("the server offers no instructions at all")
 	}
 }
@@ -339,5 +343,54 @@ func TestIdentityCarriesTheLogoWhenTheOriginIsKnown(t *testing.T) {
 	bare := Identity("freehire", Version, "")
 	if bare.WebsiteURL != "" || len(bare.Icons) != 0 {
 		t.Errorf("with no origin: WebsiteURL = %q, icons = %v; want neither", bare.WebsiteURL, bare.Icons)
+	}
+}
+
+// Models routinely send a one-item list filter as a bare string (work_mode: "remote"); on
+// 2026-11-04 every such search_jobs call was refused by schema validation. A bare value must
+// read as a one-item list, and a list must still work.
+func TestListFilterAcceptsASingleValue(t *testing.T) {
+	var got SearchInput
+	r := readerThatFinds(t)
+	r.searchJobs = func(_ context.Context, in SearchInput) (SearchJobsResult, error) {
+		got = in
+		return SearchJobsResult{}, nil
+	}
+	session := connect(t, r)
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: toolSearchJobs,
+		Arguments: map[string]any{"work_mode": "remote", "countries": []string{"DE", "PL"}, "cities": nil}})
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("a bare string was refused: %v", res.Content)
+	}
+	if !slices.Equal(got.WorkMode, []string{"remote"}) || !slices.Equal(got.Countries, []string{"DE", "PL"}) {
+		t.Errorf("work_mode = %v, countries = %v", got.WorkMode, got.Countries)
+	}
+	// null is no filter, not a one-item list holding "".
+	if got.Cities != nil {
+		t.Errorf("cities = %q, want nil for null", got.Cities)
+	}
+}
+
+// A query with more OR alternatives than the engine takes is the caller's to fix, so the agent
+// is told what to change; it used to read "freehire could not answer this request".
+func TestTooManyAlternativesTellsTheAgentWhatToChange(t *testing.T) {
+	r := readerThatFinds(t)
+	r.searchJobs = func(context.Context, SearchInput) (SearchJobsResult, error) {
+		return SearchJobsResult{}, fmt.Errorf("search: %w", search.ErrTooManyAlternatives)
+	}
+	res, err := connect(t, r).CallTool(context.Background(), &mcp.CallToolParams{Name: toolSearchJobs, Arguments: map[string]any{"query": "a OR b OR c OR d OR e OR f"}})
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	text := res.Content[0].(*mcp.TextContent).Text
+	if !res.IsError || !strings.Contains(text, "5 OR alternatives") || !strings.Contains(text, "combine the results") {
+		t.Errorf("result = %v %q", res.IsError, text)
+	}
+	if code := resultErrorCode(res); code != "invalid_request" {
+		t.Errorf("error_code = %q, want invalid_request", code)
 	}
 }

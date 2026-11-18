@@ -2,19 +2,16 @@ package location
 
 import "strings"
 
-// Argentina. Measured 2026-10-27 over ~12k open postings placed in Argentina
-// (pandapelatam, whatjobs-ar, manatal, hiringroom, teamtailor, workday, cornerstone,
-// workable, smartrecruiters, oracle, torre, epam), a third of the lines named no city, and
-// most of those were Buenos Aires written as something the city table does not know:
+// Argentina: most city-less lines are Buenos Aires written as something the city table
+// does not know:
 //
-//   - the autonomous city's own names — "CABA", "C.A.B.A.", "Capital Federal",
-//     "Ciudad de Buenos Aires", "Buenos Aires City" — which cityOverrides now gives the
-//     city;
-//   - one of its 48 barrios ("Palermo", "Recoleta", "San Nicolás", "Núñez"), which
-//     pandapelatam writes ALONE, with the country only in its structured data;
-//   - a town of Greater Buenos Aires ("Vicente López", "Munro", "Gral. Pacheco"), most of
-//     them below GeoNames' population floor or under a namesake abroad ("Martínez" was
-//     the Californian one, "Florida" the US state, "Ciudad Evita" a Santa Fe town).
+//   - the autonomous city's own names ("CABA", "Capital Federal"), which cityOverrides
+//     gives the city;
+//   - one of its barrios ("Palermo", "Recoleta"), which some boards write ALONE, with the
+//     country only in structured data;
+//   - a town of Greater Buenos Aires ("Vicente López", "Munro"), most below GeoNames'
+//     population floor or under a namesake abroad ("Martínez" the Californian one,
+//     "Florida" the US state).
 //
 // A barrio is the city of Buenos Aires; a town of the conurbation is itself, in the
 // capital's metro. Both are read only where the line places them in Buenos Aires (see

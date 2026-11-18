@@ -25,21 +25,9 @@ export const ROLE_PREFIX = 'Search jobs: ';
  *  Busiest-looking first: under prefers-reduced-motion nothing is animated, so the first
  *  entry is the only one anyone sees and carries the whole weight of answering "what can
  *  I type here". Six is about what a visitor will sit through before typing. */
-export const PLACEHOLDER_ROLES: Category[] = [
-  'backend',
-  'frontend',
-  'devops',
-  'qa',
-  'data_science',
-  'product',
-];
+export const PLACEHOLDER_ROLES: Category[] = ['backend', 'frontend', 'devops', 'qa', 'data_science', 'product'];
 
-/** The fixed prefix and the words that follow it, for the jobs search box.
- *
- *  A constant, not a factory. The labels are a pure lookup over a frozen list, so every
- *  call would return an equal object with a new identity — and a caller that recomputes
- *  it (the header re-derives its wording on every navigation) would hand the box a
- *  "changed" prop, restarting the animation's pending delay on each page change. */
+/** The fixed prefix and animated role examples for the homepage search box. */
 export const ROLE_PLACEHOLDER: { prefix: string; roles: string[] } = {
   prefix: ROLE_PREFIX,
   roles: PLACEHOLDER_ROLES.map(categoryLabel),
@@ -89,10 +77,7 @@ export function typedTail(state: TypewriterState, roles: string[]): string {
  *  The delay belongs to the step it precedes rather than the one that produced it, which
  *  is what lets the finished word hold: the step that removes its first character is the
  *  one that waits HOLD_MS, so the whole word stays on screen for that long. */
-export function typewriterStep(
-  state: TypewriterState,
-  roles: string[],
-): { next: TypewriterState; delayMs: number } {
+export function typewriterStep(state: TypewriterState, roles: string[]): { next: TypewriterState; delayMs: number } {
   const word = roles[state.role] ?? '';
   const nextRole = (state.role + 1) % Math.max(roles.length, 1);
 

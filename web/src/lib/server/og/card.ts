@@ -50,9 +50,7 @@ function chips(job: Job): Chip[] {
 /** Builds the card HTML for `job`, with `logo` as a data-URI or null (monogram). */
 export function buildCard(job: Job, opts: { logo: string | null }): string {
   const titleSize = titleFontSize(job.title);
-  const chipRow = chips(job)
-    .map(chipMarkup)
-    .join('');
+  const chipRow = chips(job).map(chipMarkup).join('');
 
   return `
 <div style="display:flex;flex-direction:column;justify-content:space-between;width:${OG_WIDTH}px;height:${OG_HEIGHT}px;padding:64px 72px;background:#ffffff;color:#0a0a0a;font-family:Inter">

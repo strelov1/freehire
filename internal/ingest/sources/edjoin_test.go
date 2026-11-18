@@ -228,7 +228,7 @@ func TestEdjoinFetchNewSkipsSeenPostings(t *testing.T) {
 	if jobs[0].Description != "" {
 		t.Error("a seen posting must not be re-hydrated")
 	}
-	// The title travels with the refresh so the pipeline can re-apply the catalogue filter.
+	// The title travels with the refresh.
 	if jobs[0].Title != "Network Technician" {
 		t.Errorf("Title = %q", jobs[0].Title)
 	}

@@ -72,10 +72,8 @@ func (s instaffo) detail(ctx context.Context, loc string) (Job, bool) {
 		return Job{}, false
 	}
 
-	// Instaffo never retires a posting from its sitemap — validThrough is stamped a year out
-	// on every fetch, so it carries no signal, and the 48h unseen sweep never fires because
-	// the posting never goes unseen. Age is the only staleness signal, so it gates on the way
-	// in: a posting older than the window would otherwise sit open in the catalogue forever.
+	// Instaffo never retires a posting from its sitemap (validThrough is stamped a year out on
+	// every fetch), so age is the only staleness signal and it gates on the way in.
 	posted := parseDate(p.DatePosted)
 	if posted == nil || time.Since(*posted) > instaffoMaxAge {
 		return Job{}, false
@@ -95,11 +93,9 @@ func (s instaffo) detail(ctx context.Context, loc string) (Job, bool) {
 	}, true
 }
 
-// instaffoMaxAge is how old a posting may be and still be ingested. Instaffo keeps postings
-// in its sitemap indefinitely (the catalogue holds ads from two years back), and nothing
-// downstream can close one, so this is the only thing standing between the catalogue and a
-// permanent tail of dead ads. A year is deliberately generous: German mid-market vacancies
-// do legitimately stay open for months.
+// instaffoMaxAge is how old a posting may be and still be ingested. Postings stay in the
+// sitemap indefinitely and nothing downstream can close one; a year is generous because German
+// mid-market vacancies do stay open for months.
 const instaffoMaxAge = 365 * 24 * time.Hour
 
 // instaffoPosting is the schema.org JobPosting decoded from an Instaffo job page. jobLocation

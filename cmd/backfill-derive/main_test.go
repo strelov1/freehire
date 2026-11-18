@@ -12,8 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ingest/rederive"
 	"github.com/strelov1/freehire/internal/job/jobderive"
 	"github.com/strelov1/freehire/internal/job/jobhash"
+	"github.com/strelov1/freehire/internal/job/reqextract"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
@@ -146,7 +148,7 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency, every
 }
 
 func expectedDerived(j db.Job) db.UpdateJobDerivedParams {
-	countries, regions := storedGeography(j)
+	countries, regions := rederive.StoredGeography(j)
 	d := jobderive.Derive(jobderive.Input{
 		Title: j.Title, Company: j.Company, Source: j.Source, ExternalID: j.ExternalID,
 		Location: j.Location, Description: j.Description, WorkMode: j.WorkMode,
@@ -159,14 +161,15 @@ func expectedDerived(j db.Job) db.UpdateJobDerivedParams {
 	return db.UpdateJobDerivedParams{
 		ID: j.ID, Countries: d.Countries, Regions: d.Regions, Cities: d.Cities, Metros: d.Metros, WorkMode: d.WorkMode,
 		Skills: d.Skills, Seniority: d.Seniority, Category: d.Category,
-		IsTech:             pgconv.Bool(d.IsTech),
-		PostingLanguage:    d.PostingLanguage,
-		EmploymentType:     d.EmploymentType,
-		EducationLevel:     d.EducationLevel,
-		EnglishLevel:       d.EnglishLevel,
-		ExperienceYearsMin: pgconv.Int4(d.ExperienceYearsMin),
-		RoleFingerprint:    pgtype.Text{String: fingerprint, Valid: true},
-		CompanySlug:        d.CompanySlug,
+		IsTech:              pgconv.Bool(d.IsTech),
+		PostingLanguage:     d.PostingLanguage,
+		EmploymentType:      d.EmploymentType,
+		EducationLevel:      d.EducationLevel,
+		EnglishLevel:        d.EnglishLevel,
+		ExperienceYearsMin:  pgconv.Int4(d.ExperienceYearsMin),
+		RoleFingerprint:     pgtype.Text{String: fingerprint, Valid: true},
+		CompanySlug:         d.CompanySlug,
+		RequirementsDerived: reqextract.DeriveJSON(j.Description),
 	}
 }
 
@@ -179,6 +182,7 @@ func seedDerived(j db.Job) db.Job {
 	j.PostingLanguage, j.EmploymentType = d.PostingLanguage, d.EmploymentType
 	j.EducationLevel, j.EnglishLevel, j.ExperienceYearsMin = d.EducationLevel, d.EnglishLevel, d.ExperienceYearsMin
 	j.RoleFingerprint, j.CompanySlug = d.RoleFingerprint, d.CompanySlug
+	j.RequirementsDerived = d.RequirementsDerived
 	return j
 }
 
@@ -234,12 +238,12 @@ func TestDeriveRow_EmploymentTypeSignal(t *testing.T) {
 		}
 	}
 	fullTime := base("full_time")
-	got, _, _ := deriveRow(fullTime, nil)
+	got, _, _ := rederive.Row(fullTime, nil)
 	if got.EmploymentType != "full_time" {
 		t.Errorf("ATS full_time = %q, want full_time", got.EmploymentType)
 	}
 	poisoned := base("part_time")
-	got, changed, _ := deriveRow(poisoned, nil)
+	got, changed, _ := rederive.Row(poisoned, nil)
 	if got.EmploymentType != "" {
 		t.Errorf("disclaimer-only part_time = %q, want empty", got.EmploymentType)
 	}
@@ -248,7 +252,7 @@ func TestDeriveRow_EmploymentTypeSignal(t *testing.T) {
 	}
 	atsOnly := base("part_time")
 	atsOnly.Description = "Build the risk platform."
-	got, _, _ = deriveRow(atsOnly, nil)
+	got, _, _ = rederive.Row(atsOnly, nil)
 	if got.EmploymentType != "part_time" {
 		t.Errorf("ATS part_time with no phrase = %q, want part_time", got.EmploymentType)
 	}

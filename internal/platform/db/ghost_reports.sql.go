@@ -11,27 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countGhostReportsSince = `-- name: CountGhostReportsSince :one
-SELECT count(*) FROM ghost_reports
-WHERE user_id = $1::bigint
-  AND created_at >= $2::timestamptz
-`
-
-type CountGhostReportsSinceParams struct {
-	UserID int64              `json:"user_id"`
-	Since  pgtype.Timestamptz `json:"since"`
-}
-
-// How many claims this account has filed since a cutoff, for the daily cap. Counts
-// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
-// exists to bound, so forgiving it would leave the cap trivially bypassable.
-func (q *Queries) CountGhostReportsSince(ctx context.Context, arg CountGhostReportsSinceParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countGhostReportsSince, arg.UserID, arg.Since)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createGhostReport = `-- name: CreateGhostReport :one
 INSERT INTO ghost_reports (user_id, job_id, applied_on)
 SELECT u.id, j.id, $1::date

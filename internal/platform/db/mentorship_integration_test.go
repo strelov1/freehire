@@ -882,7 +882,7 @@ func TestASilencedAccountStillHearsAboutItsOwnSession(t *testing.T) {
 			UserID:          user,
 			Enabled:         false,
 			Channels:        []string{},
-			DigestFrequency: "instant",
+			DigestFrequency: "instant", DigestIntervalHours: 1,
 		}); err != nil {
 			t.Fatalf("silence user %d: %v", user, err)
 		}

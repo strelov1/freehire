@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -12,17 +13,24 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// fakeQueries captures every InsertPrivateJob call it is handed and returns a canned
-// row, so the writer's derivation and param-mapping can be tested without a database.
+// fakeQueries captures every InsertPrivateJob call it is handed and keeps a canned row per
+// returned id, so the writer's derivation and param-mapping can be tested without a database.
+// InsertPrivateJob returns the id only; the complete row comes back through GetJob, as it does
+// from the jobs_read view.
 type fakeQueries struct {
 	calls []db.InsertPrivateJobParams
+	rows  map[int64]db.Job
+	reads []int64
 	next  int64
 }
 
-func (f *fakeQueries) InsertPrivateJob(_ context.Context, arg db.InsertPrivateJobParams) (db.Job, error) {
+func (f *fakeQueries) InsertPrivateJob(_ context.Context, arg db.InsertPrivateJobParams) (int64, error) {
 	f.calls = append(f.calls, arg)
 	f.next++
-	return db.Job{
+	if f.rows == nil {
+		f.rows = map[int64]db.Job{}
+	}
+	f.rows[f.next] = db.Job{
 		ID:          f.next,
 		Source:      arg.Source,
 		ExternalID:  arg.ExternalID,
@@ -38,7 +46,34 @@ func (f *fakeQueries) InsertPrivateJob(_ context.Context, arg db.InsertPrivateJo
 		Skills:      arg.Skills,
 		CreatedBy:   pgtype.Int8{Int64: arg.CreatedBy, Valid: true},
 		IsPrivate:   true,
-	}, nil
+		LastSeenAt:  pgtype.Timestamptz{Time: time.Unix(1700000000, 0), Valid: true},
+	}
+	return f.next, nil
+}
+
+func (f *fakeQueries) GetJob(_ context.Context, id int64) (db.Job, error) {
+	f.reads = append(f.reads, id)
+	return f.rows[id], nil
+}
+
+// The writer persists with the narrow INSERT and reads the complete row back through GetJob,
+// so the returned job carries the stamps the view adds (last_seen_at), not a stale copy.
+func TestCreate_RereadsTheCompleteRowThroughGetJob(t *testing.T) {
+	f := &fakeQueries{}
+	w := privatejob.NewWriter(f)
+
+	got, err := w.Create(context.Background(), 42, privatejob.SourcePasted, privatejob.Input{
+		Title: "Go Developer", Company: "Acme", Description: "We use Golang.",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if !reflect.DeepEqual(f.reads, []int64{1}) {
+		t.Fatalf("GetJob reads = %v, want exactly the inserted id [1]", f.reads)
+	}
+	if got.Fields().LastSeenAt == nil {
+		t.Error("returned job has no LastSeenAt: the row was not read back through the complete-row view")
+	}
 }
 
 func TestCreate_DerivesFacetsAndPersists(t *testing.T) {

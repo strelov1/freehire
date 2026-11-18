@@ -27,7 +27,7 @@ export const PIPELINE_STAGES: Stage[] = [
     title: 'Derive',
     blurb: 'Tagged by a fixed dictionary — never guessed.',
     detail:
-      'This step never invents a value: it looks a term up in a closed dictionary and tags the posting if it finds a match, and emits nothing for anything it doesn\'t recognize. That is deliberate — a facet built on a guess degrades quietly, and quietly is the one way a filter is allowed to fail here.',
+      "This step never invents a value: it looks a term up in a closed dictionary and tags the posting if it finds a match, and emits nothing for anything it doesn't recognize. That is deliberate — a facet built on a guess degrades quietly, and quietly is the one way a filter is allowed to fail here.",
   },
   {
     key: 'enrich',

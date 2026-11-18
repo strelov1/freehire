@@ -18,7 +18,7 @@ if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].numb
   gh pr create \
     --base main \
     --head "$BRANCH" \
-    --title 'Refresh the contributor snapshot' \
+    --title 'chore(web): refresh the contributor snapshot' \
     --body 'Opened by the contributors workflow. The snapshot behind /contributors changed: someone merged a pull request, opened an issue, or contributed for the first time.
 
 Nothing here is hand-written — the file is whatever web/scripts/build-contributors.mjs collected from the GitHub API. Reviewing it means checking the diff is people, not a shape change.'

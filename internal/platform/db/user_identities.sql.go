@@ -56,29 +56,3 @@ func (q *Queries) GetActiveUserByIdentity(ctx context.Context, arg GetActiveUser
 	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
 	return i, err
 }
-
-const getUserByIdentity = `-- name: GetUserByIdentity :one
-SELECT u.id, u.email, u.created_at
-FROM user_identities ui
-JOIN users u ON u.id = ui.user_id
-WHERE ui.provider = $1 AND ui.provider_user_id = $2
-`
-
-type GetUserByIdentityParams struct {
-	Provider       string `json:"provider"`
-	ProviderUserID string `json:"provider_user_id"`
-}
-
-type GetUserByIdentityRow struct {
-	ID        int64              `json:"id"`
-	Email     string             `json:"email"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-// OAuth sign-in fast path: resolve a provider identity straight to its user.
-func (q *Queries) GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error) {
-	row := q.db.QueryRow(ctx, getUserByIdentity, arg.Provider, arg.ProviderUserID)
-	var i GetUserByIdentityRow
-	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
-	return i, err
-}

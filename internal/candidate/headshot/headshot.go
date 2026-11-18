@@ -1,14 +1,14 @@
-// Package headshot is the per-user profile photo: one image per member, normalized on
-// upload (square, fixed size, JPEG), the bytes living in object storage under a key
-// derived from the user id and a pointer (object key + upload time) recorded on the
-// users row. The CV renderer composes it into the templates that print a portrait.
+// Package headshot is the per-user profile photo: one image per member, normalized on upload
+// (square, fixed size, JPEG), stored in object storage under a key derived from the user id,
+// with a pointer (object key + upload time) on the users row. The CV renderer composes it into
+// the templates that print a portrait.
 //
-// It deliberately does NOT live on the CV document. A document is client-writable and
-// travels into tailoring prompts; a headshot is neither. Keeping it a profile asset means
-// one upload serves every CV the member owns, and no image can enter a prompt.
+// It is NOT on the CV document: a document is client-writable and travels into tailoring
+// prompts, a headshot is neither. As a profile asset one upload serves every CV and no image
+// can enter a prompt.
 //
-// When object storage is unconfigured the service reports Enabled()==false and every
-// operation returns ErrStorageDisabled — the same nil-degradation as internal/candidate/resume.
+// When object storage is unconfigured the service reports Enabled()==false and every operation
+// returns ErrStorageDisabled.
 package headshot
 
 import (
@@ -26,8 +26,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// contentType is what every stored headshot is, because Normalize re-encodes whatever
-// was uploaded. Nothing derived from the request's declared type is trusted or kept.
+// contentType is what every stored headshot is, because Normalize re-encodes the upload;
+// nothing from the request's declared type is trusted.
 const contentType = "image/jpeg"
 
 var (
@@ -54,9 +54,8 @@ type Repository interface {
 	ClearPhoto(ctx context.Context, userID int64) error
 }
 
-// Store owns the headshot's object storage plus its pointer. blobs is nil when storage
-// is unconfigured; the service then reports Enabled()==false and every operation returns
-// ErrStorageDisabled.
+// Store owns the headshot's object storage plus its pointer. blobs is nil when storage is
+// unconfigured (see Enabled).
 type Store struct {
 	blobs blobstore.Store
 	repo  Repository
@@ -67,15 +66,15 @@ func New(blobs blobstore.Store, repo Repository) *Store {
 	return &Store{blobs: blobs, repo: repo}
 }
 
-// Enabled reports whether object storage is configured. The nil-receiver case is what a
-// server assembled without storage holds, so callers can ask unconditionally.
+// Enabled reports whether object storage is configured. Nil-receiver safe, so callers can ask
+// unconditionally.
 func (s *Store) Enabled() bool {
 	return s != nil && s.blobs != nil
 }
 
-// Put normalizes the upload and stores it as the user's headshot, replacing any previous
-// one and stamping the pointer. An upload that is not a supported image is rejected
-// before storage is touched, so a bad request can never displace a good headshot.
+// Put normalizes the upload and stores it as the user's headshot, replacing any previous one.
+// An unsupported image is rejected before storage is touched, so a bad request never displaces
+// a good headshot.
 func (s *Store) Put(ctx context.Context, userID int64, data []byte) (Meta, error) {
 	if !s.Enabled() {
 		return Meta{}, ErrStorageDisabled
@@ -89,9 +88,9 @@ func (s *Store) Put(ctx context.Context, userID int64, data []byte) (Meta, error
 		return Meta{}, err
 	}
 	if err := s.repo.SetPhoto(ctx, userID, key); err != nil {
-		// The object is now in the bucket with nothing pointing at it, and account deletion
-		// collects keys FROM the pointers — so an orphan here would outlive the member's
-		// erasure. Best-effort removal; the upload is a failure either way.
+		// The object is in the bucket with nothing pointing at it, and account deletion
+		// collects keys FROM the pointers, so an orphan would outlive the member's erasure.
+		// Best-effort removal; the upload fails either way.
 		if delErr := s.blobs.Delete(ctx, key); delErr != nil {
 			log.Printf("headshot: orphaned object %s after pointer write failed: %v", key, delErr)
 		}
@@ -100,9 +99,8 @@ func (s *Store) Put(ctx context.Context, userID int64, data []byte) (Meta, error
 	return s.Status(ctx, userID)
 }
 
-// Get returns the stored headshot's bytes, or ErrNotStored when the user has none. The
-// pointer is consulted first: it is the record of whether a headshot exists, and reading
-// it costs nothing next to a bucket round trip that would 404 anyway.
+// Get returns the stored headshot's bytes, or ErrNotStored when the user has none. The pointer
+// is consulted first: it records whether a headshot exists and is cheaper than a bucket 404.
 func (s *Store) Get(ctx context.Context, userID int64) ([]byte, error) {
 	if !s.Enabled() {
 		return nil, ErrStorageDisabled
@@ -124,8 +122,7 @@ func (s *Store) Get(ctx context.Context, userID int64) ([]byte, error) {
 	defer rc.Close()
 	data, err := io.ReadAll(rc)
 	if err != nil {
-		// The S3 client's Get is lazy: a missing object typically surfaces here, on the
-		// first read, rather than from Get itself.
+		// The S3 client's Get is lazy: a missing object typically surfaces on first read.
 		if blobstore.IsNotFound(err) {
 			return nil, ErrNotStored
 		}
@@ -146,9 +143,8 @@ func (s *Store) Status(ctx context.Context, userID int64) (Meta, error) {
 	return metaFromPointer(ptr), nil
 }
 
-// Delete removes the stored object and clears the pointer. The key comes from the pointer,
-// not from PhotoKey, so the two reads of "which object is this member's" cannot drift — and
-// a member with no headshot costs no delete call.
+// Delete removes the stored object and clears the pointer. The key comes from the pointer, not
+// PhotoKey, so the two cannot drift, and a member with no headshot costs no delete call.
 func (s *Store) Delete(ctx context.Context, userID int64) error {
 	if !s.Enabled() {
 		return ErrStorageDisabled

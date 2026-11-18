@@ -12,26 +12,43 @@ import (
 )
 
 const authenticateAPIKey = `-- name: AuthenticateAPIKey :one
-UPDATE api_keys
-SET last_used_at = now()
-WHERE token_hash = $1
-  AND (expires_at IS NULL OR expires_at > now())
-RETURNING user_id, scope
+WITH k AS (
+    UPDATE api_keys
+    SET last_used_at = now()
+    FROM users AS owner
+    WHERE api_keys.token_hash = $1
+      AND owner.id = api_keys.user_id AND owner.banned_at IS NULL
+      AND (api_keys.expires_at IS NULL OR api_keys.expires_at > now())
+    RETURNING api_keys.user_id, api_keys.scope, api_keys.id
+), seen AS (
+    UPDATE users SET last_active_at = now()
+    FROM k
+    WHERE users.id = k.user_id AND users.last_active_at < now() - interval '1 day'
+)
+SELECT k.user_id, k.scope, k.id FROM k
 `
 
 type AuthenticateAPIKeyRow struct {
 	UserID int64  `json:"user_id"`
 	Scope  string `json:"scope"`
+	ID     int64  `json:"id"`
 }
 
 // Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
 // scope, enforcing expiry and touching last_used_at in one atomic statement. No row
 // means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
 // and an insufficient scope as 403.
+//
+// A key in use is the account in use, so the same statement keeps users.last_active_at
+// current (at most once a day), as GetUserTokenVersion does for a session: optional
+// mail stops after 180 idle days (mail_recipient, migration 0247).
+//
+// A banned owner's keys do not authenticate (and are not touched). OAuth grants need no
+// such clause: they die with the ban's token_version bump (AuthenticateOAuthGrant).
 func (q *Queries) AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error) {
 	row := q.db.QueryRow(ctx, authenticateAPIKey, tokenHash)
 	var i AuthenticateAPIKeyRow
-	err := row.Scan(&i.UserID, &i.Scope)
+	err := row.Scan(&i.UserID, &i.Scope, &i.ID)
 	return i, err
 }
 
@@ -134,7 +151,7 @@ type GetUserAPIEntitlementRow struct {
 }
 
 // How far the account's paid plans reach, for its own key-management page: the API product
-// names the plan sold for reading, and all four decide the rate its keys get.
+// names the plan sold for reading; the other fields describe account entitlements.
 func (q *Queries) GetUserAPIEntitlement(ctx context.Context, id int64) (GetUserAPIEntitlementRow, error) {
 	row := q.db.QueryRow(ctx, getUserAPIEntitlement, id)
 	var i GetUserAPIEntitlementRow
@@ -194,33 +211,34 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAP
 	return items, nil
 }
 
-const resolveAPIKeyTier = `-- name: ResolveAPIKeyTier :one
-SELECT k.user_id, k.scope, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
+const resolveAPIKeyIdentity = `-- name: ResolveAPIKeyIdentity :one
+SELECT k.user_id, k.scope, k.expires_at, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
 FROM api_keys k
 JOIN users u ON u.id = k.user_id
 WHERE k.token_hash = $1
+  AND u.banned_at IS NULL
   AND (k.expires_at IS NULL OR k.expires_at > now())
 `
 
-type ResolveAPIKeyTierRow struct {
+type ResolveAPIKeyIdentityRow struct {
 	UserID             int64              `json:"user_id"`
 	Scope              string             `json:"scope"`
+	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
 	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
 	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
 	ProUntil           pgtype.Timestamptz `json:"pro_until"`
 	UltraUntil         pgtype.Timestamptz `json:"ultra_until"`
 }
 
-// Resolve a presented token to its owner, the key's scope and how far the owner's paid
-// plans reach, for the public-read rate limiter. Read-only on purpose: unlike
-// AuthenticateAPIKey it does NOT touch last_used_at, because it runs on the hottest reads on
-// the site and its answer is cached. No row means unknown, revoked or expired.
-func (q *Queries) ResolveAPIKeyTier(ctx context.Context, tokenHash string) (ResolveAPIKeyTierRow, error) {
-	row := q.db.QueryRow(ctx, resolveAPIKeyTier, tokenHash)
-	var i ResolveAPIKeyTierRow
+// Read-only credential identity and entitlements for trusted infrastructure.
+// No row means unknown, revoked or expired; introspection never changes last_used_at.
+func (q *Queries) ResolveAPIKeyIdentity(ctx context.Context, tokenHash string) (ResolveAPIKeyIdentityRow, error) {
+	row := q.db.QueryRow(ctx, resolveAPIKeyIdentity, tokenHash)
+	var i ResolveAPIKeyIdentityRow
 	err := row.Scan(
 		&i.UserID,
 		&i.Scope,
+		&i.ExpiresAt,
 		&i.ApiUntilStripe,
 		&i.ApiDataUntilStripe,
 		&i.ProUntil,

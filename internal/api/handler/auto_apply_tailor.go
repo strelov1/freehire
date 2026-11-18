@@ -15,29 +15,27 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// This file is freehire's own half of an external, out-of-repository automation pipeline
-// (openspec/changes/auto-apply-tailored-resume): the queue-scoped tailoring trigger and the
-// candidate's review decision. It deliberately does not touch the interactive tailoring
-// surface's own endpoints, middleware, or safety posture — see the change's design.md,
-// "why not widen /autopilot".
+// This file holds the queue-scoped tailoring trigger and the candidate's review decision
+// for the auto-apply pipeline. It deliberately leaves the interactive tailoring endpoints,
+// middleware and safety posture alone (no widening of /autopilot).
 
 // autoApplyQueueID parses the :queueId route param.
-func autoApplyQueueID(c *fiber.Ctx) (int64, error) {
-	id, err := strconv.ParseInt(c.Params("queueId"), 10, 64)
+func autoApplyQueueID(raw string) (int64, error) {
+	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
 		return 0, fiber.NewError(fiber.StatusBadRequest, "invalid queue entry id")
 	}
 	return id, nil
 }
 
-// autoApplyEntry is the subset of an auto_apply_queue row both PostAutoApplyTailor and
-// PostAutoApplyReview need, regardless of which of resolveAutoApplyEntry's two reads
-// produced it.
+// autoApplyEntry is the subset of an auto_apply_queue row PostAutoApplyTailor and
+// PostAutoApplyReview need, whichever of resolveAutoApplyEntry's reads produced it.
 type autoApplyEntry struct {
 	ID             int64
 	UserID         int64
@@ -48,29 +46,25 @@ type autoApplyEntry struct {
 
 // resolveAutoApplyEntry reads one auto-apply queue entry and settles who it belongs to.
 //
-// A human caller (cookie or a live api_keys row) must OWN the entry: the read itself
-// enforces that (GetAutoApplyQueueEntryForReview), so a foreign or missing id both come
-// back as pgx.ErrNoRows → 404, never revealing which to a probing caller — unchanged from
-// before this function existed.
+// A human caller (cookie or a live api_keys row) must OWN the entry: the read enforces it
+// (GetAutoApplyQueueEntryForReview), so a foreign or missing id both give pgx.ErrNoRows
+// → 404 without revealing which.
 //
-// The trusted auto-apply orchestrator (isAutoApplySystemCaller — see
-// auto_apply_orchestrator_auth.go) authenticated as the deployment's own shared secret,
-// not as any particular candidate, so it has no ownership claim of its own to check the
-// row against. It reads by id alone (GetAutoApplyQueueEntryByID) and acts as whichever
-// user the row itself names.
-func (h *assistantHandlers) resolveAutoApplyEntry(c *fiber.Ctx, queueID int64) (autoApplyEntry, error) {
-	if isAutoApplySystemCaller(c) {
-		row, err := h.queries.GetAutoApplyQueueEntryByID(c.Context(), queueID)
-		// The generated row is field-for-field identical to autoApplyEntry (same names,
-		// types, order) — a direct conversion, not a copy, so the two reads below can
-		// never drift apart from what this type actually carries.
+// The trusted orchestrator (isAutoApplySystemCaller, auto_apply_orchestrator_auth.go)
+// authenticates with the deployment's shared secret, not as a candidate, so it reads by id
+// alone (GetAutoApplyQueueEntryByID) and acts as whichever user the row names.
+func (h *assistantHandlers) resolveAutoApplyEntry(ctx context.Context, queueID int64) (autoApplyEntry, error) {
+	if isAutoApplySystemCaller(ctx) {
+		row, err := h.queries.GetAutoApplyQueueEntryByID(ctx, queueID)
+		// The generated row is field-for-field identical to autoApplyEntry, so a direct
+		// conversion keeps the two reads from drifting apart.
 		return autoApplyEntry(row), err
 	}
-	userID, err := requireUserID(c)
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return autoApplyEntry{}, err
 	}
-	row, err := h.queries.GetAutoApplyQueueEntryForReview(c.Context(), db.GetAutoApplyQueueEntryForReviewParams{
+	row, err := h.queries.GetAutoApplyQueueEntryForReview(ctx, db.GetAutoApplyQueueEntryForReviewParams{
 		ID: queueID, UserID: userID,
 	})
 	return autoApplyEntry(row), err
@@ -78,45 +72,31 @@ func (h *assistantHandlers) resolveAutoApplyEntry(c *fiber.Ctx, queueID int64) (
 
 // autoApplyTailorBudget bounds ONE unattended tailoring run, end to end.
 //
-// Nothing bounded it before, and the ceiling that appeared to — autopilotMaxSteps (30) at
-// assistantLLMTimeout (180s) a call — allows an hour and a half. What actually ended these
-// runs was the orchestrator hanging up at five minutes, which is the worst way for one to
-// end: the run kept going, the CV edits it had already made were kept, and the queue entry
-// was never told, so it sat unclaimable and read as "tailoring" indefinitely. Three
-// production entries did exactly that (freehire, 2026-09-08).
+// It must stay shorter than the caller's patience (autoapplyorchestrate.hireRequestTimeout,
+// 12 minutes): if the orchestrator hangs up first, the run keeps going and the queue entry
+// is never told. Ending here lets the tailored CV be recorded and the entry move to review;
+// the runner treats an ended context as a cancellation (assistant.Runner.Run's
+// StopCancelled), stopping between rounds with its work committed.
 //
-// Ten minutes is deliberately shorter than the caller's own patience
-// (autoapplyorchestrate.hireRequestTimeout, 12 minutes), so a run that overruns is ended
-// HERE, where the tailored CV can still be recorded and the entry can move on to review.
-// The runner already treats an ended context as a cancellation rather than a failure
-// (assistant.Runner.Run's StopCancelled), so the pass stops between rounds with its work
-// committed rather than unwinding it.
-//
-// A var so a test can shorten it — the path it guards is a run that spends the whole
-// budget, which a test cannot otherwise reach without spending it too.
+// A var so a test can shorten it.
 var autoApplyTailorBudget = 10 * time.Minute
 
-// autoApplyTailorResponse is what starting a tailoring run reports: the tailored CV id and
-// its per-requirement account of itself, the same report shape the interactive workspace
-// shows (cv.AutopilotEntry).
+// autoApplyTailorResponse reports the tailored CV id and its per-requirement account
+// (cv.AutopilotEntry, as in the interactive workspace).
 type autoApplyTailorResponse struct {
 	TailoredCVID    string              `json:"tailored_cv_id"`
 	AutopilotReport []cv.AutopilotEntry `json:"autopilot_report,omitempty"`
 }
 
 // PostAutoApplyTailor starts an unattended tailoring run for exactly ONE auto-apply queue
-// entry the caller owns, authenticated by API key or cookie (mw.key, matching TailorCV's own
-// posture). It bootstraps (or reuses) the tailored CV for the entry's own vacancy — never a
-// caller-supplied session id — runs the same unattended autopilot pass the interactive
-// workspace's autopilot uses, and responds once the run finishes. This is NOT a variant of
-// POST /assistant/sessions/:id/autopilot: that endpoint stays cookie-only, unchanged, and
-// this one never accepts a session id at all.
+// entry the caller owns (API key or cookie, mw.key like TailorCV). It bootstraps or reuses
+// the tailored CV for the entry's own vacancy, never a caller-supplied session id, runs the
+// interactive autopilot pass, and responds when it finishes. NOT a variant of
+// POST /assistant/sessions/:id/autopilot, which stays cookie-only.
 //
-// Refuses an entry that does not belong to the caller as 404 (never 403 — mirrors TailorCV's
-// own ownership check), and an entry whose review has already been recorded as 409, rather
-// than re-tailoring it.
+// A foreign entry is 404 (never 403, like TailorCV); one already reviewed is 409.
 func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
-	queueID, err := autoApplyQueueID(c)
+	queueID, err := autoApplyQueueID(c.Params("queueId"))
 	if err != nil {
 		return err
 	}
@@ -124,7 +104,7 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
 
-	entry, err := h.resolveAutoApplyEntry(c, queueID)
+	entry, err := h.resolveAutoApplyEntry(c.Context(), queueID)
 	if err != nil {
 		return err // foreign or missing → pgx.ErrNoRows → 404, per RenderError's own mapping
 	}
@@ -132,11 +112,10 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 	if entry.ReviewDecision.Valid {
 		return fiber.NewError(fiber.StatusConflict, "this entry has already been reviewed")
 	}
-	// The paid gate, here rather than as the route's middleware: the user this run spends
-	// for is the entry's OWNER, which the orchestrator's shared secret does not name — it is
-	// known only once the entry is read. A candidate whose subscription lapsed after they
-	// queued the entry gets no unattended tailoring for it.
-	if ok, err := authorizePaidAI(c, entitlementOf(h.plans), userID, plan.FeatureTailor); !ok {
+	// The paid gate lives here, not in route middleware: the user this run spends for is the
+	// entry's OWNER, known only once the entry is read. A lapsed subscriber gets no
+	// unattended tailoring. Deliberately NOT recorded as a paywall hit: nobody pressed a paid button.
+	if ok, err := authorizePaidAIUnrecorded(c, entitlementOf(h.plans), userID, plan.FeatureTailor); !ok {
 		return err
 	}
 
@@ -145,17 +124,16 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		return err
 	}
 
-	// The plan-limit gate, called directly rather than through h.meterTurn (design.md):
-	// this is exactly TailorCV's own cold-start pre-check, reused as-is — a caller with no
-	// tailor allowance left is refused before any CV, session, or model call is made.
+	// The plan-limit gate is TailorCV's cold-start pre-check, called directly rather than
+	// via h.meterTurn: no allowance means refusal before any CV, session or model call.
 	if refused, err := h.cv.refuseNewTailoring(c, userID, job.ID); refused {
 		return err
 	}
 
-	if err := h.cv.reseedBaseIfStaleVsUpload(c, userID); err != nil {
+	if err := h.cv.reseedBaseIfStaleVsUpload(c.Context(), userID, uuid.Nil); err != nil {
 		log.Printf("auto-apply: base refresh before tailor bootstrap user=%d: %v", userID, err)
 	}
-	_, tailored, _, err := h.cv.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), h.cv.seedSource(), skilltag.PreferredFromText(job.Description))
+	_, tailored, _, err := h.cv.cvStore.Tailor(c.Context(), userID, job.ID, uuid.Nil, tailoredCVTitle(job.Title), h.cv.seedSource(), skilltag.PreferredFromText(job.Description))
 	if errors.Is(err, cv.ErrNoResume) {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before tailoring")
 	}
@@ -174,9 +152,8 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 			return err
 		}
 	}
-	// Same charge TailorCV takes on its own cold start, and for the same reason: only a
-	// session THIS request created is charged, so resuming an existing one (an entry
-	// re-tailored after adding evidence, say) costs nothing further.
+	// Same charge as TailorCV's cold start: only a session THIS request created is charged,
+	// so resuming one costs nothing further.
 	if justStarted {
 		if _, err := h.plans.StartSession(c.Context(), userID, sessionID); err != nil {
 			log.Printf("plan: charging a tailoring session (auto-apply) user=%d session=%s: %v", userID, sessionID, err)
@@ -194,12 +171,9 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 
 	ctx, cancel := context.WithTimeout(c.Context(), autoApplyTailorBudget)
 	defer cancel()
-	// tryClaim, not claim: unlike streamSSE (a human watching a live stream, worth a queued
-	// wait), this is a synchronous API-key call — refusing immediately lets the caller retry
-	// later rather than holding the connection open for up to a minute against a run it
-	// cannot observe anyway. claim would hand back a place in LINE for that wait, which this
-	// handler has no way to give back; doing exactly that is what wedged the session in
-	// production (see tryClaim's own doc comment).
+	// tryClaim, not claim: this is a synchronous API-key call, so refuse immediately and
+	// let the caller retry. claim would queue a place in LINE this handler cannot give
+	// back, which wedges the session (see tryClaim's doc).
 	slot, ok := h.turns.tryClaim(sess.ID, cancel)
 	if !ok {
 		return fiber.NewError(fiber.StatusConflict, "this tailoring session is busy with another run")
@@ -221,12 +195,9 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 	if err := h.runAutopilotToCompletion(ctx, analysis, sess, job.Description, runner, reg, system, noop); err != nil {
 		log.Printf("auto-apply: tailoring run for queue entry %d (cv %s): %v", queueID, tailored.ID, err)
 		h.recordTailoringFailure(c, queueID, err)
-		// The CAUSE, not fiber.NewError(500, "the tailoring run failed"): the streamed
-		// autopilot reports this same error to Sentry (reportStreamFault in
-		// assistant.go), and phrasing it here took the synchronous route's copy out of
-		// the inbox. Returned unwrapped so classify still recognises what it is — an
-		// orchestrator that hung up mid-run arrives as context.Canceled and must stay a
-		// 499 nobody is paged for, not a fault.
+		// Return the CAUSE, not a phrased 500: the streamed autopilot reports the same error
+		// (reportStreamFault in assistant.go). Unwrapped so classify still sees
+		// context.Canceled (orchestrator hung up) as a 499, not a fault.
 		return err
 	}
 
@@ -238,10 +209,8 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "could not record the tailored cv")
 	}
 	if affected == 0 {
-		// The candidate reviewed an earlier tailored CV for this same entry while this
-		// (stale or retried) run was still in flight — the guard on the statement itself
-		// refused to attach this fresh, never-seen CV to an already-decided entry. No
-		// notification, no success response: this run's own output is simply discarded.
+		// The candidate reviewed an earlier CV while this stale or retried run was in flight;
+		// the statement's guard refused to attach this one. Output discarded, no notification.
 		return fiber.NewError(fiber.StatusConflict, "this entry has already been reviewed")
 	}
 
@@ -250,36 +219,27 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		log.Printf("auto-apply: re-reading tailored cv %s after run: %v", tailored.ID, err)
 	}
 
-	// No notification here (openspec/changes/auto-apply-review-tracking moved it): a
-	// tailored CV alone has nothing for the candidate to act on yet — cmd/auto-apply's own
-	// preview pass notifies once the answer preview it also needs is actually ready.
+	// No notification here: cmd/auto-apply's preview pass notifies once the answer preview is ready.
 
 	return c.JSON(fiber.Map{"data": autoApplyTailorResponse{
 		TailoredCVID: tailored.ID.String(), AutopilotReport: rec.AutopilotReport,
 	}})
 }
 
-// autoApplyTailorFailedNotification is the notification kind for a tailoring run that gave
-// up. Its own kind rather than reusing autoApplyReadyForReviewNotification's: the two say
-// opposite things, and the notification centre groups by this.
+// autoApplyTailorFailedNotification is the kind for a tailoring run that gave up. Separate
+// from autoApplyReadyForReviewNotification because the centre groups by kind.
 const autoApplyTailorFailedNotification = "auto_apply_tailoring_failed"
 
 // recordTailoringFailure marks an entry whose run produced no CV, and tells the candidate.
 //
-// Best-effort throughout, and deliberately so: the caller is already returning the run's
-// own failure, and nothing here is worth turning that into a different one. What it must
-// not do is fail silently in the ONE way that matters — leaving the entry looking like work
-// still in progress, which is exactly the state this exists to end.
+// Best-effort: the caller is already returning the run's failure. It must not fail silently
+// by leaving the entry looking in progress.
 //
-// It runs on a context detached from the request's. This is called precisely when a run has
-// ended badly, and the most common way for that to happen is the caller giving up first —
-// so the request's own context is usually already dead, and a write on it would be dropped
-// at the moment it is most needed. The same reason runAutopilotToCompletion's own analysis
-// refresh is detached.
+// Runs on a context detached from the request's: the caller giving up first is the usual
+// failure, so the request context is often dead (as with runAutopilotToCompletion's refresh).
 //
-// The error text is stored as the diagnostic it is, never shown to the candidate:
-// ResolvedAttempt has no field to carry it for exactly that reason. What they see is the
-// status and the notification below.
+// The error text is a stored diagnostic, never shown to the candidate (ResolvedAttempt has
+// no field for it); they see the status and the notification.
 func (h *assistantHandlers) recordTailoringFailure(c *fiber.Ctx, queueID int64, cause error) {
 	ctx := context.WithoutCancel(c.Context())
 
@@ -288,9 +248,8 @@ func (h *assistantHandlers) recordTailoringFailure(c *fiber.Ctx, queueID int64, 
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// A guard fired: the entry already has a tailored CV from an earlier run, or
-			// the candidate has already decided on it. Both mean there is nothing to
-			// report — see MarkAutoApplyTailorFailed's own comment.
+			// A guard fired: the entry already has a tailored CV or a decision; nothing to
+			// report (see MarkAutoApplyTailorFailed).
 			return
 		}
 		log.Printf("auto-apply: recording the tailoring failure for queue entry %d: %v", queueID, err)
@@ -310,44 +269,34 @@ func (h *assistantHandlers) recordTailoringFailure(c *fiber.Ctx, queueID int64, 
 	}
 }
 
-// autoApplyReviewRequest is the candidate's decision on one queue entry's tailored CV.
-type autoApplyReviewRequest struct {
-	Decision string `json:"decision"`
-}
-
 const (
 	autoApplyReviewApproved = "approved"
 	autoApplyReviewDeclined = "declined"
 )
 
-// autoApplyDeclineReason is DeclineAutoApplyReview's last_error — distinct from any
-// unresolved-form-field park reason, per design.md, so the two are legible apart in the
-// queue's own history purely by this text.
+// autoApplyDeclineReason is DeclineAutoApplyReview's last_error, distinct from any
+// form-field park reason so the two read apart in the queue history.
 const autoApplyDeclineReason = "candidate declined the tailored CV"
 
 // PostAutoApplyReview records the candidate's approve/decline decision for one owned,
-// tailored-but-not-yet-reviewed queue entry. Approving marks it eligible for the ATS-
-// submission step (internal/application/autoapply.Store.Claim's own predicate); declining
-// parks it — through the same fields MarkAutoApplyBlocked sets, with a distinct reason — so
-// it is never claimed and never confused with a form-field park. A decision may be recorded
-// only once; a second attempt is refused as 409, and the existing decision is unchanged.
-func (h *assistantHandlers) PostAutoApplyReview(c *fiber.Ctx) error {
-	queueID, err := autoApplyQueueID(c)
+// tailored-but-not-yet-reviewed entry. Approving makes it eligible for submission
+// (autoapply.Store.Claim's predicate); declining parks it via the MarkAutoApplyBlocked
+// fields with a distinct reason, so it is never claimed. A decision is recorded only once
+// (second attempt 409, decision unchanged).
+func (h *assistantHandlers) PostAutoApplyReview(ctx context.Context, in *apigen.AutoApplyReviewRequest, params apigen.PostAutoApplyReviewParams) (*apigen.PostAutoApplyReviewOK, error) {
+	queueID, err := autoApplyQueueID(params.QueueId)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in autoApplyReviewRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	entry, err := h.resolveAutoApplyEntry(c, queueID)
+	entry, err := h.resolveAutoApplyEntry(ctx, queueID)
 	if err != nil {
-		return err // foreign or missing → pgx.ErrNoRows → 404
+		return nil, err // foreign or missing → pgx.ErrNoRows → 404
 	}
-	if err := h.decideAutoApplyReview(c.Context(), entry, in.Decision); err != nil {
-		return err
+	decision := in.Decision.Value
+	if err := h.decideAutoApplyReview(ctx, entry, decision); err != nil {
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"decision": in.Decision}})
+	return &apigen.PostAutoApplyReviewOK{Data: apigen.AutoApplyDecision{Decision: decision}}, nil
 }
 
 // decideAutoApplyReview records decision ("approved" or "declined") for an entry the caller
@@ -378,9 +327,8 @@ func (h *assistantHandlers) decideAutoApplyReview(ctx context.Context, entry aut
 		return err
 	}
 	if affected == 0 {
-		// The caller's read already ruled out "not found" and "already reviewed" for the row
-		// it saw — zero rows here means a concurrent decision on this same entry won the
-		// race between that read and this write.
+		// The caller's read ruled out "not found" and "already reviewed", so zero rows means
+		// a concurrent decision won the race.
 		return fiber.NewError(fiber.StatusConflict, "this entry has already been reviewed")
 	}
 

@@ -22,11 +22,10 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// turijobs adapts Turijobs (www.turijobs.com), Spain's hospitality and tourism job board: ~2.5k
-// open postings from hotel chains, restaurants and travel agencies, most in Spain and the rest
-// in Portugal, France and the Caribbean. It is boardless and an aggregator — the employer is read
-// per posting. See the "Turijobs traps" section of AGENTS.md for the measurements behind each
-// rule.
+// turijobs adapts Turijobs (www.turijobs.com), Spain's hospitality and tourism job board: hotel
+// chains, restaurants and travel agencies, most in Spain and the rest in Portugal, France and the
+// Caribbean. It is boardless and an aggregator; the employer is read per posting. See the "Turijobs
+// traps" section of AGENTS.md for the reasoning behind each rule.
 //
 // The posting set is the active-offers sitemap, which carries only each posting's URL, so every
 // fact is bought with the posting page's schema.org JobPosting. The pages sit behind Akamai bot
@@ -53,9 +52,9 @@ const (
 	// not a measured limit.
 	turijobsRequestInterval = time.Second
 	turijobsDetailWorkers   = 2
-	// turijobsMaxNewPerRun bounds how many unseen postings one run reads: 600 pages at one a
-	// second is ten minutes. The first runs face the whole ~2.5k catalogue, so it is taken in
-	// slices, newest first.
+	// turijobsMaxNewPerRun bounds how many unseen postings one run reads: 600 pages at one a second
+	// is ten minutes. The first runs face the whole catalogue, so it is taken in slices, newest
+	// first.
 	turijobsMaxNewPerRun   = 600
 	turijobsDeadlineMargin = 5 * time.Minute
 )
@@ -120,9 +119,8 @@ func (s turijobs) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 }
 
 // FetchNewGated lists the sitemap, refreshes the postings already stored, and reads up to
-// maxNewPerRun of the rest, newest id first. A posting whose title the catalogue filter will
-// reject is yielded body-less without a request; the coverage half of the gate cannot be asked,
-// since nothing before the page names the employer. A posting whose page cannot be read is not
+// maxNewPerRun of the rest, newest id first. The coverage gate cannot be asked before the page,
+// since nothing there names the employer. A posting whose page cannot be read is not
 // yielded; a later run tries again.
 func (s turijobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	postings, err := s.list(ctx)
@@ -136,10 +134,6 @@ func (s turijobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 		base := Job{ExternalID: p.externalID(), URL: p.url, Title: p.title}
 		if seen(base.ExternalID) {
 			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if gate.Rejected != nil && gate.Rejected(base) {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -259,8 +253,7 @@ func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, err
 	}
 	var ld turijobsLD
 	if !ldJobPosting(root, &ld) {
-		// ~10% of pages (measured on the first crawl, 56 of 600) carry no JobPosting; the
-		// page's own Next.js state always holds the offer.
+		// Some pages carry no JobPosting; the page's own Next.js state always holds the offer.
 		next, found, blind := turijobsFromNextData(root)
 		if !found {
 			return Job{}, false, errTurijobsNoPosting
@@ -366,9 +359,7 @@ func turijobsJob(ld turijobsLD, p turijobsPosting) (Job, bool) {
 		}
 	}
 	j.Location = strings.Join(places, "; ")
-	if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
 	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
 		j.WorkMode, j.Remote = "remote", true
 	}

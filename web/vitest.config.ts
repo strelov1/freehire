@@ -25,13 +25,31 @@ const appStubAlias = {
   '$app/state': fileURLToPath(new URL('./vitest-stubs/app-state.ts', import.meta.url)),
   '$app/paths': fileURLToPath(new URL('./vitest-stubs/app-paths.ts', import.meta.url)),
   '$app/navigation': fileURLToPath(new URL('./vitest-stubs/app-navigation.ts', import.meta.url)),
+  '$app/env/public': fileURLToPath(new URL('./vitest-stubs/app-env.ts', import.meta.url)),
   '$app/env': fileURLToPath(new URL('./vitest-stubs/app-env.ts', import.meta.url)),
 };
 
 export default defineConfig({
   test: {
+    // `include` is what lets a new file no test imports show up at 0%: without it v8 reports
+    // only the files a test loaded, and diff-cover reads a changed line missing from the
+    // report as "not measured", so an untested file would pass the changed-line gate.
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'clover', 'json', 'lcov'],
+      include: ['src/**/*.{ts,js,svelte}'],
+      exclude: ['src/**/*.{test,spec}.ts', 'src/**/*.d.ts', 'src/**/generated/**', 'src/**/fixtures/**'],
+    },
     projects: [
       {
+        // Only the two auth.test.ts mocks. The full appStubAlias would also catch
+        // `$app/env/private` by its `$app/env` prefix and point it at a file that isn't there.
+        resolve: {
+          alias: {
+            '$app/state': appStubAlias['$app/state'],
+            '$app/navigation': appStubAlias['$app/navigation'],
+          },
+        },
         test: {
           name: 'unit',
           environment: 'node',

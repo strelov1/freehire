@@ -1,23 +1,16 @@
-// Package serveprobe checks, on a random sample of the catalogue, that what a posting
-// STORES reaches what it SERVES: a field the row carries must appear in the wire shape
-// a reader gets back. It reports gaps; it changes nothing.
+// Package serveprobe checks, on a random sample of the catalogue, that what a posting stores
+// reaches what it serves: a field the row carries must appear in the wire shape a reader gets
+// back. It reports gaps and changes nothing.
 //
-// It exists because the opposite failure is silent. An Ashby posting stating CA$180K-250K
-// served no salary at all, because the structured range sat in salary_*_source and only
-// the enrichment write copied it into the payload — 872,117 of 891,859 open postings
-// with a source salary served nothing, and it surfaced as a user's question, not as a
-// signal. requirements_derived had the same shape before it. Each such field looks
-// healthy from every side: the adapter reads it, the row stores it, the endpoint answers
-// 200, and the field is simply absent, since an empty value is omitted from the JSON.
+// The failure it targets is silent: a stored field the projection or index drops looks healthy
+// from every side (the row stores it, the endpoint answers 200) and is simply omitted from the JSON.
 //
-// Two layers are checked, because they fail for different reasons and are fixed by
-// different people:
+// Two layers are checked, because they fail for different reasons:
 //
-//   - LayerProjection runs jobview.FromRow over the row itself. A gap here is a code
-//     bug: the projection drops a column it was given.
-//   - LayerIndex reads the posting's Meilisearch document, which is what search and the
-//     agent endpoints serve. A gap here with none in the projection means the index is
-//     stale — a reindex is owed, as after any change to what a document carries.
+//   - LayerProjection runs jobview.FromRow over the row. A gap here is a code bug: the
+//     projection drops a column it was given.
+//   - LayerIndex reads the posting's Meilisearch document, which search and the agent endpoints
+//     serve. A gap here with none in the projection means the index is stale and a reindex is owed.
 package serveprobe
 
 import (
@@ -39,18 +32,17 @@ const (
 // Layers is every layer in report order.
 var Layers = []Layer{LayerProjection, LayerIndex}
 
-// rule is one stored-to-served invariant: when stored says the row carries the field,
-// served must find it in the wire shape. Presence, not equality — a value the
-// projection legitimately reshapes (a dictionary fold, a normalised set) still counts,
-// and an equality rule would fire on every such reshaping rather than on a loss.
+// rule is one stored-to-served invariant: when stored says the row carries the field, served must
+// find it in the wire shape. Presence, not equality: equality would fire on every legitimate
+// reshaping (dictionary fold, normalised set) rather than on a loss.
 type rule struct {
 	field  string
 	stored func(db.Job) bool
 	served func(jobview.Job) bool
 }
 
-// rules is the invariant table. A column joins it once it is served: a field stored for
-// internal use only (a fingerprint, a cursor) has no served counterpart to check.
+// rules is the invariant table. A column joins it once it is served; internal-only fields
+// (fingerprint, cursor) have no served counterpart.
 var rules = []rule{
 	{"salary",
 		func(r db.Job) bool {
@@ -84,6 +76,9 @@ var rules = []rule{
 	{"experience_years_min",
 		func(r db.Job) bool { return r.ExperienceYearsMin.Valid },
 		func(v jobview.Job) bool { return v.Enrichment.ExperienceYearsMin != nil }},
+	{"engagement",
+		func(r db.Job) bool { return len(r.Engagement) > 0 },
+		func(v jobview.Job) bool { return len(v.Engagement) > 0 }},
 	{"requirements",
 		func(r db.Job) bool { return hasDerivedRequirements(r.RequirementsDerived) },
 		func(v jobview.Job) bool { return len(v.Enrichment.Requirements) > 0 }},
@@ -109,13 +104,12 @@ const Missing = "missing"
 
 // UnindexedReasons lists every Unindexed key, for a stable report.
 var UnindexedReasons = []string{
-	string(search.WithheldNoCategory), string(search.WithheldNoDescription), string(search.WithheldUnseen), Missing,
+	string(search.WithheldNoDescription), string(search.WithheldUnseen), Missing,
 }
 
-// Report is one probe's result. Unindexed counts sampled rows with no Meilisearch
-// document, by why: a search.WithholdReason when search keeps the row out on purpose
-// (measured 2026-10-31 that was 797 of 798, mostly no category), Missing when nothing
-// does. Neither is a field gap — there is no document to compare.
+// Report is one probe's result. Unindexed counts sampled rows with no Meilisearch document, by
+// why: a search.WithholdReason when search keeps the row out on purpose, Missing when nothing
+// does. Neither is a field gap, since there is no document to compare.
 type Report struct {
 	Sampled   int
 	Unindexed map[string]int
