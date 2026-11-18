@@ -31,4 +31,4 @@ else:
         "!**/openspec/changes/archive/**",
     ):
         command += ["--glob", glob]
-raise SystemExit(subprocess.call(command + ["--", args.pattern, args.scope]))
+raise SystemExit(subprocess.call([*command, "--", args.pattern, args.scope]))

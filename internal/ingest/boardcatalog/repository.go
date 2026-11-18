@@ -171,7 +171,7 @@ func (r *QueriesRepository) InsertRow(ctx context.Context, in InsertInput, statu
 	}
 	activatedAt := pgtype.Timestamptz{}
 	if status == StatusActive {
-		activatedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+		activatedAt = pgconv.Instant(time.Now())
 	}
 	surface := in.Surface
 	if surface == "" {

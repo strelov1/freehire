@@ -6,8 +6,8 @@ import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import ats_boards  # noqa: E402
-import discover_boards as d  # noqa: E402
+import ats_boards
+import discover_boards as d
 
 
 def test_provider_hosts_subset_of_validators():

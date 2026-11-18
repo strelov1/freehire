@@ -7,7 +7,7 @@ import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import harvest_boards as h  # noqa: E402
+import harvest_boards as h
 
 
 def test_select_hiring_threads_filters_to_whoishiring_titles():

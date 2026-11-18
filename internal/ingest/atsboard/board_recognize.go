@@ -25,128 +25,174 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		return "", "", "", false
 	}
 
-	switch mode {
-	case modeSubdomain, modeSubdomainChain, modeHost:
-		// The vendor's own product host must not be read as a tenant, regardless of which of
-		// the three modes matched: all three derive the board from host's leftmost DNS label
-		// (bare, chained, or as the whole host), and a platform label like "app" or "help" sits
-		// in that exact position for a subdomain tenant just as much as for a bare-host one —
-		// e.g. app.recruitee.com and help.bamboohr.com are the vendor's own login/support hosts,
-		// not a company named "app" or "help".
-		if platformHost(host, apex) {
-			return "", "", "", false
-		}
-		switch mode {
-		case modeSubdomain:
-			board = subdomainLabel(host, apex)
-		case modeSubdomainChain:
-			board = subdomainChain(host, apex)
-		default:
-			board = host // the whole careers host is the tenant identity
-		}
-		if board == "" {
-			return "", "", "", false // bare apex, no tenant label
-		}
-		// The board IS the host, so the canonical URL is the bare host — collapsing a vacancy
-		// URL and the board listing to one board.
-		u.RawQuery, u.Fragment, u.Path = "", "", ""
-		return src, board, u.String(), true
-
-	case modeHostPath:
-		// Workday: board = "<host>/<site>" where site is the first path segment (case-preserved,
-		// as the ingest stores it). Workday's public URL may prefix the site with an xx-XX locale
-		// the CXS API omits (host/en-US/<site>), so skip a leading locale — a locale-prefixed URL
-		// and a bare one resolve to the same board. A URL carrying ONLY a locale (host/en-US, itself
-		// a 404 landing) has no derivable site and is left unrecognized rather than taken as a false
-		// "en-US" board. Canonical strips to scheme://host/site.
-		site := workdaySite(u)
-		// A Workday per-job URL can reach us with no site at all (host/job/... or
-		// host/details/...), and those segments are the POSTING, never a career site. Taking one
-		// as the site yields "<host>/job" — a board that does not exist but looks new, so the
-		// contribution flow records and pays for it.
-		if site == "" || site == "job" || site == "details" {
-			return "", "", "", false // bare host, locale-only, or a per-job path with no site
-		}
-		u.RawQuery, u.Fragment = "", ""
-		u.Path = "/" + site
-		return src, host + "/" + site, u.String(), true
-
-	case modeHostTenantBoard:
-		// UKG: <host>/<tenant>/JobBoard/<guid>/… → board "<host>/<tenant>/<guid>". The literal
-		// "JobBoard" segment between the two is what proves the URL names a board at all; without
-		// it the path is some other part of the tenant's site (a login, an OpportunityDetail
-		// shortlink) and there is no guid to take. Declining is the only safe reading — the
-		// tenant alone is a board id the adapter rejects, and a rejected board still costs a
-		// contribution row and a crawl slot.
-		tenant, guid, ok := ukgTenantBoard(u)
-		if !ok {
-			return "", "", "", false
-		}
-		// Lower-cased: UKG answers either spelling (verified live against a real tenant, upper and
-		// lower, both 200) and every board in the catalogue is stored lower-case, so keeping a
-		// link's own casing would file a board we already crawl as a new one. This is the opposite
-		// of Workday above, whose site segment is a human-chosen name the ingest stores verbatim.
-		board = strings.ToLower(host + "/" + tenant + "/" + guid)
-		u.RawQuery, u.Fragment = "", ""
-		u.Path = "/" + tenant + "/JobBoard/" + guid
-		return src, board, u.String(), true
-
-	case modeHostCareers:
-		// UKG Ready: <host>/ta/<tenant>.careers[?ShowJob=…] → board "<host>/<tenant>". Lower-cased
-		// because tenant ids are case-insensitive at the platform and ukgready.yml holds them
-		// lower-case, so keeping a link's own spelling would file a board we already crawl as new.
-		tenant, ok := ukgReadyTenant(u)
-		if !ok {
-			return "", "", "", false
-		}
-		u.RawQuery, u.Fragment = "", ""
-		u.Path = "/ta/" + tenant + ".careers"
-		return src, host + "/" + tenant, u.String(), true
-
-	case modeQuery:
-		// Paycor: the board is a query parameter, and the canonical is the board's own listing —
-		// so a posting and the career home collapse to one. Lower-cased by default for the same
-		// reason as UKG Ready: the platform serves either spelling of the hex client id and
-		// paycor.yml holds it lower-case.
-		q, configured := queryBoards[apex]
-		if !configured || q.boardPattern == nil {
-			return "", "", "", false
-		}
-		value := u.Query().Get(q.param)
-		if !q.keepCase {
-			value = strings.ToLower(value)
-		}
-		// The pattern rejects an absent or empty parameter along with a malformed one, so a link
-		// on the host that names no board is declined rather than turned into one.
-		if !q.boardPattern.MatchString(value) {
-			if q.altParam == "" || q.altPattern == nil {
-				return "", "", "", false
-			}
-			m := q.altPattern.FindStringSubmatch(strings.ToLower(u.Query().Get(q.altParam)))
-			if len(m) < 2 || !q.boardPattern.MatchString(m[1]) {
-				return "", "", "", false
-			}
-			value = m[1]
-		}
-		board = value
-		if q.tenantHost {
-			if platformHost(host, apex) || subdomainLabel(host, apex) == "" {
-				return "", "", "", false // vendor host, bare apex, or deeper than one tenant label
-			}
-			board = host + "/" + value
-		}
-		query := url.Values{q.param: {value}}
-		for k, v := range q.listingQuery {
-			query[k] = v
-		}
-		u.Fragment = ""
-		u.Path = q.listingPath
-		u.RawQuery = query.Encode()
-		return src, board, u.String(), true
-
-	default:
-		return recognizeRest(u, host, src, mode, apex)
+	if recognize := modeRecognizers[mode]; recognize != nil {
+		return recognize(u, host, src, mode, apex)
 	}
+	// A mode with no entry in modeRecognizers is a mode nobody has decided how to read, so
+	// there is nothing to read it as. modePath and modePathNumeric used to be served by an
+	// implicit tail after the old switch on mode, which silently made the first-path-segment rule
+	// the fallback for every mode ADDED LATER too: a new platform that keeps its board
+	// anywhere but the first path segment would have had whatever its URL leads with
+	// taken as the tenant — a board that does not exist, which the contribution flow
+	// records and pays for (see the package doc). Declining is the fail-safe reading:
+	// the link is simply not recognized, which is what an unsupported host already gets.
+	return "", "", "", false
+}
+
+// modeRecognizers reads a URL by the extraction mode its host's entry names.
+var modeRecognizers = map[string]func(u *url.URL, host, src, mode, apex string) (source, board, canonical string, ok bool){
+	modeSubdomain:           recognizeSubdomainHost,
+	modeSubdomainChain:      recognizeSubdomainHost,
+	modeHost:                recognizeSubdomainHost,
+	modeHostPath:            recognizeHostPath,
+	modeHostTenantBoard:     recognizeHostTenantBoard,
+	modeHostCareers:         recognizeHostCareers,
+	modeQuery:               recognizeQuery,
+	modePathPattern:         recognizePathPattern,
+	modeQueryPair:           recognizeQueryPair,
+	modePathLocalePair:      recognizePathLocalePair,
+	modePathPair:            recognizePathPair,
+	modePathPortal:          recognizePathPortal,
+	modeICIMS:               recognizeICIMS,
+	modePathLocale:          recognizePathLocale,
+	modeHostSite:            recognizeHostSite,
+	modeAllowedFirstSegment: recognizeAllowedFirstSegment,
+	modeTenantHost:          recognizeTenantHost,
+	modeKeyedSegment:        recognizeKeyedSegment,
+	modePathJob:             recognizePathJob,
+	modeNjoyn:               recognizeNjoyn,
+	modeEncodedCareers:      recognizeEncodedCareers,
+	modePath:                recognizePath,
+	modePathNumeric:         recognizePath,
+}
+
+// recognizeSubdomainHost reads a URL on a host whose entry uses modeSubdomain,
+// modeSubdomainChain or modeHost.
+func recognizeSubdomainHost(u *url.URL, host, src, mode, apex string) (source, board, canonical string, ok bool) {
+	// The vendor's own product host must not be read as a tenant, regardless of which of
+	// the three modes matched: all three derive the board from host's leftmost DNS label
+	// (bare, chained, or as the whole host), and a platform label like "app" or "help" sits
+	// in that exact position for a subdomain tenant just as much as for a bare-host one —
+	// e.g. app.recruitee.com and help.bamboohr.com are the vendor's own login/support hosts,
+	// not a company named "app" or "help".
+	if platformHost(host, apex) {
+		return "", "", "", false
+	}
+	switch mode {
+	case modeSubdomain:
+		board = subdomainLabel(host, apex)
+	case modeSubdomainChain:
+		board = subdomainChain(host, apex)
+	default:
+		board = host // the whole careers host is the tenant identity
+	}
+	if board == "" {
+		return "", "", "", false // bare apex, no tenant label
+	}
+	// The board IS the host, so the canonical URL is the bare host — collapsing a vacancy
+	// URL and the board listing to one board.
+	u.RawQuery, u.Fragment, u.Path = "", "", ""
+	return src, board, u.String(), true
+}
+
+// recognizeHostPath reads a URL on a host whose entry uses modeHostPath.
+func recognizeHostPath(u *url.URL, host, src, mode, apex string) (source, board, canonical string, ok bool) {
+	// Workday: board = "<host>/<site>" where site is the first path segment (case-preserved,
+	// as the ingest stores it). Workday's public URL may prefix the site with an xx-XX locale
+	// the CXS API omits (host/en-US/<site>), so skip a leading locale — a locale-prefixed URL
+	// and a bare one resolve to the same board. A URL carrying ONLY a locale (host/en-US, itself
+	// a 404 landing) has no derivable site and is left unrecognized rather than taken as a false
+	// "en-US" board. Canonical strips to scheme://host/site.
+	site := workdaySite(u)
+	// A Workday per-job URL can reach us with no site at all (host/job/... or
+	// host/details/...), and those segments are the POSTING, never a career site. Taking one
+	// as the site yields "<host>/job" — a board that does not exist but looks new, so the
+	// contribution flow records and pays for it.
+	if site == "" || site == "job" || site == "details" {
+		return "", "", "", false // bare host, locale-only, or a per-job path with no site
+	}
+	u.RawQuery, u.Fragment = "", ""
+	u.Path = "/" + site
+	return src, host + "/" + site, u.String(), true
+}
+
+// recognizeHostTenantBoard reads a URL on a host whose entry uses modeHostTenantBoard.
+func recognizeHostTenantBoard(u *url.URL, host, src, mode, apex string) (source, board, canonical string, ok bool) {
+	// UKG: <host>/<tenant>/JobBoard/<guid>/… → board "<host>/<tenant>/<guid>". The literal
+	// "JobBoard" segment between the two is what proves the URL names a board at all; without
+	// it the path is some other part of the tenant's site (a login, an OpportunityDetail
+	// shortlink) and there is no guid to take. Declining is the only safe reading — the
+	// tenant alone is a board id the adapter rejects, and a rejected board still costs a
+	// contribution row and a crawl slot.
+	tenant, guid, ok := ukgTenantBoard(u)
+	if !ok {
+		return "", "", "", false
+	}
+	// Lower-cased: UKG answers either spelling (verified live against a real tenant, upper and
+	// lower, both 200) and every board in the catalogue is stored lower-case, so keeping a
+	// link's own casing would file a board we already crawl as a new one. This is the opposite
+	// of Workday above, whose site segment is a human-chosen name the ingest stores verbatim.
+	board = strings.ToLower(host + "/" + tenant + "/" + guid)
+	u.RawQuery, u.Fragment = "", ""
+	u.Path = "/" + tenant + "/JobBoard/" + guid
+	return src, board, u.String(), true
+}
+
+// recognizeHostCareers reads a URL on a host whose entry uses modeHostCareers.
+func recognizeHostCareers(u *url.URL, host, src, mode, apex string) (source, board, canonical string, ok bool) {
+	// UKG Ready: <host>/ta/<tenant>.careers[?ShowJob=…] → board "<host>/<tenant>". Lower-cased
+	// because tenant ids are case-insensitive at the platform and ukgready.yml holds them
+	// lower-case, so keeping a link's own spelling would file a board we already crawl as new.
+	tenant, ok := ukgReadyTenant(u)
+	if !ok {
+		return "", "", "", false
+	}
+	u.RawQuery, u.Fragment = "", ""
+	u.Path = "/ta/" + tenant + ".careers"
+	return src, host + "/" + tenant, u.String(), true
+}
+
+// recognizeQuery reads a URL on a host whose entry uses modeQuery.
+func recognizeQuery(u *url.URL, host, src, mode, apex string) (source, board, canonical string, ok bool) {
+	// Paycor: the board is a query parameter, and the canonical is the board's own listing —
+	// so a posting and the career home collapse to one. Lower-cased by default for the same
+	// reason as UKG Ready: the platform serves either spelling of the hex client id and
+	// paycor.yml holds it lower-case.
+	q, configured := queryBoards[apex]
+	if !configured || q.boardPattern == nil {
+		return "", "", "", false
+	}
+	value := u.Query().Get(q.param)
+	if !q.keepCase {
+		value = strings.ToLower(value)
+	}
+	// The pattern rejects an absent or empty parameter along with a malformed one, so a link
+	// on the host that names no board is declined rather than turned into one.
+	if !q.boardPattern.MatchString(value) {
+		if q.altParam == "" || q.altPattern == nil {
+			return "", "", "", false
+		}
+		m := q.altPattern.FindStringSubmatch(strings.ToLower(u.Query().Get(q.altParam)))
+		if len(m) < 2 || !q.boardPattern.MatchString(m[1]) {
+			return "", "", "", false
+		}
+		value = m[1]
+	}
+	board = value
+	if q.tenantHost {
+		if platformHost(host, apex) || subdomainLabel(host, apex) == "" {
+			return "", "", "", false // vendor host, bare apex, or deeper than one tenant label
+		}
+		board = host + "/" + value
+	}
+	query := url.Values{q.param: {value}}
+	for k, v := range q.listingQuery {
+		query[k] = v
+	}
+	u.Fragment = ""
+	u.Path = q.listingPath
+	u.RawQuery = query.Encode()
+	return src, board, u.String(), true
 }
 
 // recognizeAPI resolves a URL on an ATS's own API host, where the board is the segment right

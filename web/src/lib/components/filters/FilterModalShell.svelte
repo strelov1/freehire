@@ -277,7 +277,11 @@
 {#if open}
   <div class="fixed inset-0 z-50 flex items-stretch justify-center sm:items-center sm:p-6">
     <!-- backdrop -->
-    <button class="absolute inset-0 animate-modal-fade bg-foreground/35" aria-label="Close filters" onclick={onClose}
+    <button
+      type="button"
+      class="absolute inset-0 animate-modal-fade bg-foreground/35"
+      aria-label="Close filters"
+      onclick={onClose}
     ></button>
 
     <div

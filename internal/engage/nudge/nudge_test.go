@@ -476,3 +476,25 @@ func TestJobClosedRejectsStaleEpisode(t *testing.T) {
 		})
 	}
 }
+
+type ctxCheckingStore struct {
+	*fakeStore
+	liveWithDeadline bool
+}
+
+func (s *ctxCheckingStore) ReleaseNudgeClaim(ctx context.Context, id int64) error {
+	_, ok := ctx.Deadline()
+	s.liveWithDeadline = ctx.Err() == nil && ok
+	return s.fakeStore.ReleaseNudgeClaim(ctx, id)
+}
+
+func TestRelease_SurvivesCancelledRunContext(t *testing.T) {
+	store := &ctxCheckingStore{fakeStore: &fakeStore{}}
+	r := New(store, &fakeNotifier{}, DefaultConfig())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r.release(ctx, 7)
+	if !store.liveWithDeadline || len(store.released) != 1 {
+		t.Fatalf("release ran on a dead or unbounded context (live+deadline=%v, released=%v)", store.liveWithDeadline, store.released)
+	}
+}

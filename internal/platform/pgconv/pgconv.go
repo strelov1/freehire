@@ -28,6 +28,11 @@ func Timestamptz(t *time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
 
+// Instant maps a time to a valid (non-NULL) timestamptz, for a column that always has a value.
+func Instant(t time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: t, Valid: true}
+}
+
 // Int4 maps an optional int to the pgtype the generated params expect: nil becomes
 // the zero (NULL) value, a non-nil pointer a valid int32.
 func Int4(n *int) pgtype.Int4 {
@@ -92,6 +97,21 @@ func Text(s string) pgtype.Text {
 		return pgtype.Text{}
 	}
 	return pgtype.Text{String: s, Valid: true}
+}
+
+// TextValid maps a string to a non-NULL text, the empty string included. Text is the one for a
+// nullable column whose zero value means "none".
+func TextValid(s string) pgtype.Text {
+	return pgtype.Text{String: s, Valid: true}
+}
+
+// TextFromPtr maps an optional string to the pgtype a COALESCE-guarded param expects: nil is
+// NULL ("leave the stored value alone"), any non-nil pointer a valid text, "" included.
+func TextFromPtr(s *string) pgtype.Text {
+	if s == nil {
+		return pgtype.Text{}
+	}
+	return TextValid(*s)
 }
 
 // TextPtr maps a nullable DB text to a *string, preserving NULL as nil. Use it where the

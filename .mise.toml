@@ -30,6 +30,8 @@ shellcheck = "0.11.0"
 # The server itself is docker-compose's pgvector image.
 postgres = "18"
 ast-grep = "0.51.1"
+# Machine-wide slots for heavy checks (scripts/heavy.sh); CI skips the queue.
+"github:mokevnin/heavy" = "0.1.2"
 # The web/ architecture check (web/easement.yml) and the indexer it runs; CI's web-work job
 # pins the same two. Built from a commit until mokevnin/easement#130 is released.
 "cargo:https://github.com/strelov1/easement" = "rev:191f55c0661aeaec7ecf1d17713b7d683333daa9"

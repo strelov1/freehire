@@ -17,6 +17,9 @@ email takeover defenses, and snapshot-only public figures. Read their full requi
 
 Before committing Go: gofmt, go vet ./..., go test ./.... Before every push:
 go vet -tags=integration ./.... Keep existing check commands in Commands below.
+Run tests, type checks, linters and builds through make (lint, build, cover), the hooks or
+check-local.py, and any other (go test, pnpm test) as `sh scripts/heavy.sh <command>`: one
+machine-wide queue keeps parallel agents from starving the machine.
 PR titles use Conventional Commits. Host configuration belongs in freehire-ops and needs host application too.
 
 For an explained local check plan, run `python3 scripts/check-local.py --base origin/main`;

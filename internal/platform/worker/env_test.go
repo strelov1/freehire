@@ -70,3 +70,26 @@ func TestEnvInt32RefusesAValueThatOverflowsInt32(t *testing.T) {
 		t.Fatal("EnvInt32 accepted a value beyond int32 range, want an error")
 	}
 }
+
+func TestEnvInt32OrDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw string
+		want      int32
+	}{
+		{"empty keeps the default", "", 500},
+		{"a positive number is honoured", "50", 50},
+		// A typo resolving to zero would make every run a silent no-op.
+		{"zero keeps the default", "0", 500},
+		{"negative keeps the default", "-5", 500},
+		{"nonsense keeps the default", "lots", 500},
+		// Parsed at the width it is used at: a platform int converted would wrap negative.
+		{"beyond int32 keeps the default", "3000000000", 500},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("X_MAX_PER_RUN", tc.raw)
+			if got := EnvInt32OrDefault("X_MAX_PER_RUN", 500); got != tc.want {
+				t.Errorf("got %d, want %d", got, tc.want)
+			}
+		})
+	}
+}

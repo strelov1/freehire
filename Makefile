@@ -27,7 +27,7 @@ reindex: ## Reindex jobs into Meilisearch (requires running Postgres + Meilisear
 	go run ./cmd/reindex
 
 build: ## Build the binary
-	go build -o bin/hire ./cmd/server
+	sh scripts/heavy.sh go build -o bin/hire ./cmd/server
 
 tidy: ## Tidy up dependencies
 	go mod tidy
@@ -61,13 +61,13 @@ api-contract: ## Compile typespec/ to openapi/api.openapi.json, then generate in
 		rsync -rc --delete $$tmp/ internal/api/apigen/; status=$$?; rm -rf $$tmp; rm -f $$in; exit $$status
 
 gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contracts
-	go run ./cmd/gen-contracts
+	cd tools && go run ./gen-contracts
 
 gen-cities: ## Regenerate internal/location/cities1000.tsv from the GeoNames dump
 	go run ./cmd/gen-cities
 
 gen-metros: ## Regenerate internal/dict/location/metros.tsv from GeoNames + GHS-FUA
-	go run ./cmd/gen-metros
+	cd tools && go run ./gen-metros
 
 # Prints to stdout on purpose — the shipped text is reviewed, so a human pipes this into
 # internal/dict/skilltag/descriptions.tsv and edits every line before committing. LIMIT
@@ -96,7 +96,7 @@ psql: ## Open psql at DATABASE_URL (use mise for this checkout's DB)
 
 cover: ## Unit tests with coverage profile → coverage/unit.out
 	@mkdir -p $(COVERAGE_DIR)
-	go test ./... -coverprofile=$(COVER_UNIT) -covermode=atomic
+	sh scripts/heavy.sh go test ./... -coverprofile=$(COVER_UNIT) -covermode=atomic
 	@go tool cover -func=$(COVER_UNIT) | tail -1
 
 cover-html: ## HTML report from coverage/unit.out → coverage/unit.html
@@ -106,7 +106,7 @@ cover-html: ## HTML report from coverage/unit.out → coverage/unit.html
 
 cover-integration: ## Integration-tagged tests with coverage (needs Docker for testcontainers)
 	@mkdir -p $(COVERAGE_DIR)
-	go test -tags=integration ./... -coverprofile=$(COVER_INTEGRATION) -covermode=atomic
+	sh scripts/heavy.sh go test -tags=integration ./... -coverprofile=$(COVER_INTEGRATION) -covermode=atomic
 	@go tool cover -func=$(COVER_INTEGRATION) | tail -1
 	@echo "profile: $(COVER_INTEGRATION)"
 
@@ -114,4 +114,4 @@ cover-integration: ## Integration-tagged tests with coverage (needs Docker for t
 LINT_VERSION ?= 2.15.0
 .PHONY: lint
 lint: ## Run the pinned linter against origin/main
-	GOTOOLCHAIN=$$(awk '/^toolchain / {print $$2}' go.mod) go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(LINT_VERSION) run --new-from-merge-base=origin/main --allow-parallel-runners ./...
+	GOTOOLCHAIN=$$(awk '/^toolchain / {print $$2}' go.mod) sh scripts/heavy.sh go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(LINT_VERSION) run --new-from-merge-base=origin/main --allow-parallel-runners ./...

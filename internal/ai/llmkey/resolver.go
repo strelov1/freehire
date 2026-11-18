@@ -7,9 +7,9 @@ import (
 	"log"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // Queries is the slice of the generated query surface the resolver needs. *db.Queries
@@ -93,8 +93,8 @@ func (r *Resolver) mint(ctx context.Context, userID int64) Credential {
 
 	claimed, err := r.q.ClaimUserLLMKey(ctx, db.ClaimUserLLMKeyParams{
 		ID:       userID,
-		LlmKey:   pgtype.Text{String: minted.Secret, Valid: true},
-		LlmKeyID: pgtype.Text{String: minted.ID, Valid: true},
+		LlmKey:   pgconv.TextValid(minted.Secret),
+		LlmKeyID: pgconv.TextValid(minted.ID),
 	})
 	switch {
 	case err == nil:
@@ -138,7 +138,7 @@ func (r *Resolver) Forget(ctx context.Context, userID int64, secret string) {
 
 	err := r.q.ClearUserLLMKey(ctx, db.ClearUserLLMKeyParams{
 		ID:     userID,
-		LlmKey: pgtype.Text{String: secret, Valid: true},
+		LlmKey: pgconv.TextValid(secret),
 	})
 	if err != nil {
 		log.Printf("llmkey: clear credential for user %d: %v", userID, err)

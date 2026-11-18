@@ -99,7 +99,7 @@ func (h *reportHandlers) CreateJobReport(ctx context.Context, req *apigen.JobRep
 		return nil, err
 	}
 
-	jobID, err := h.queries.GetJobIDBySlug(ctx, params.Slug)
+	jobID, err := h.queries.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: params.Slug, CallerID: userID})
 	if err != nil {
 		return nil, err // pgx.ErrNoRows → 404 in RenderError
 	}

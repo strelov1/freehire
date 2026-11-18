@@ -54,6 +54,18 @@ func LoadLLM() LLM {
 	}
 }
 
+// LLMFeatureModels returns the per-feature model aliases cmd/server builds its own clients for
+// (assistant, AI filter, CV parse, support), unset ones empty. Each falls back to LLM_MODEL there,
+// so a caller that wants every alias the deployment routes through starts from Model and adds these.
+func LLMFeatureModels() []string {
+	return []string{
+		os.Getenv("ASSISTANT_MODEL"),
+		os.Getenv("SEARCH_INTENT_MODEL"),
+		os.Getenv("RESUME_EXTRACT_MODEL"),
+		os.Getenv("SUPPORT_MODEL"),
+	}
+}
+
 // Require reports every missing connection setting at once, for callers whose job is to spend
 // LLM calls. Tracing is never required.
 func (l LLM) Require() error {

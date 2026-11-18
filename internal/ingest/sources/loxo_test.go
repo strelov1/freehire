@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -178,5 +179,42 @@ func TestLoxoNextDelay(t *testing.T) {
 	}
 	if d := loxoNextDelay(now.Add(-500*time.Millisecond), now, gap); d != 0 {
 		t.Errorf("elapsed-gap delay = %v, want 0", d)
+	}
+}
+
+func TestLoxoThrottle_CancelledWaitReturnsAndUnlocks(t *testing.T) {
+	th := newLoxoThrottle(nil, time.Hour)
+	th.last = time.Now()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan error, 1)
+	go func() { _, err := th.GetHTML(ctx, "https://"+loxoSharedHost+"/x"); done <- err }()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetHTML kept sleeping after the context was cancelled")
+	}
+	if len(th.sem) != 0 {
+		t.Fatal("throttle admission still held after cancelled wait")
+	}
+}
+
+func TestLoxoThrottle_QueuedCallerLeavesOnCancel(t *testing.T) {
+	th := newLoxoThrottle(nil, time.Hour)
+	th.sem <- struct{}{} // another call holds admission
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { _, err := th.GetHTML(ctx, "https://"+loxoSharedHost+"/x"); done <- err }()
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("queued GetHTML stayed blocked after its context was cancelled")
 	}
 }

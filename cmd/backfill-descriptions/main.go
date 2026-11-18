@@ -38,12 +38,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobhash"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
@@ -148,7 +147,7 @@ func backfillAll(ctx context.Context, store jobStore, source string, pause time.
 			if _, err := store.UpdateJobDescription(ctx, db.UpdateJobDescriptionParams{
 				ID:          j.ID,
 				Description: desc,
-				ContentHash: pgtype.Text{String: hash, Valid: true},
+				ContentHash: pgconv.TextValid(hash),
 			}); err != nil {
 				return scanned, updated, err
 			}

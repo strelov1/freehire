@@ -13,13 +13,13 @@ import (
 	"unicode"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 const (
@@ -255,7 +255,7 @@ func (h *assistantHandlers) escalate(ctx context.Context, userID int64, sessionI
 	// The claim is counted too, so the cap holds under concurrent sessions.
 	since := time.Now().Add(-24 * time.Hour)
 	n, err := h.queries.CountSupportEscalationsSince(ctx, db.CountSupportEscalationsSinceParams{
-		UserID: userID, EscalatedAt: pgtype.Timestamptz{Time: since, Valid: true},
+		UserID: userID, EscalatedAt: pgconv.Instant(since),
 	})
 	if err != nil {
 		release()

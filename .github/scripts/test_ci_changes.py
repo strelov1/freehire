@@ -54,6 +54,8 @@ class ClassificationTests(ScopeAssertions):
         for path in (
             "internal/job/jobview/view.go",
             "cmd/ingest/main.go",
+            "tools/gen-contracts/main.go",
+            "tools/go.mod",
             "migrations/0999_test.sql",
             "go.mod",
             "go.sum",
@@ -210,15 +212,17 @@ class GitChangesTests(ScopeAssertions):
                 )
 
     def test_diff_timeout_falls_back_to_full(self):
-        with patch(
-            "ci_changes.subprocess.run",
-            side_effect=subprocess.TimeoutExpired("git", 60),
+        with (
+            patch(
+                "ci_changes.subprocess.run",
+                side_effect=subprocess.TimeoutExpired("git", 60),
+            ),
+            contextlib.redirect_stderr(io.StringIO()),
         ):
-            with contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(
-                    classify(read_changes("a" * 40, "b" * 40, self.repo)),
-                    backend_and_web(True, True),
-                )
+            self.assertEqual(
+                classify(read_changes("a" * 40, "b" * 40, self.repo)),
+                backend_and_web(True, True),
+            )
 
     def test_cli_only_emits_static_github_output_fields(self):
         self.write("README.md", "before\n")

@@ -9,6 +9,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // employmentRow is what Repository returns for one employment, independent of sqlc's
@@ -220,8 +221,8 @@ func (r queriesRepository) MergeAtoms(ctx context.Context, userID int64, keepID,
 	row, err := r.q.MergeExperienceAtoms(ctx, db.MergeExperienceAtomsParams{
 		Context: a.Context, Metrics: a.Metrics, Skills: a.Skills,
 		Provenance: string(a.Provenance), KeepID: keepID, UserID: userID, LoserID: loserID,
-		KeepUpdatedAt:  pgtype.Timestamptz{Time: keepUpdatedAt, Valid: true},
-		LoserUpdatedAt: pgtype.Timestamptz{Time: loserUpdatedAt, Valid: true},
+		KeepUpdatedAt:  pgconv.Instant(keepUpdatedAt),
+		LoserUpdatedAt: pgconv.Instant(loserUpdatedAt),
 	})
 	if err != nil {
 		return db.ExperienceAtom{}, err

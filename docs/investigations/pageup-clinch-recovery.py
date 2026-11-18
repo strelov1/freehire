@@ -175,7 +175,7 @@ def main():
     for command in commands:
         print(shlex.join(command + (["--apply"] if args.apply else [])), flush=True)
         if args.apply:
-            subprocess.run(command + ["--apply"], check=True)
+            subprocess.run([*command, "--apply"], check=True)
     print(f"{len(commands)} missing destinations; PageUp boards and jobs untouched")
 
 

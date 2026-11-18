@@ -85,7 +85,7 @@ export default {
       // (mdsvex among them) — they used to live in svelte.config.js, which knip's Svelte
       // plugin read; outside the project, the import that replaced it is never followed.
       project: ['src/**', 'scripts/**', 'svelte.options.ts'],
-      // Emitted by cmd/gen-contracts. It exports the whole domain vocabulary whether or not
+      // Emitted by tools/gen-contracts. It exports the whole domain vocabulary whether or not
       // the SPA has a use for each name yet — that is what a generated contract is for, so
       // its exports are not evidence of anything.
       ignore: ['src/lib/generated/**'],

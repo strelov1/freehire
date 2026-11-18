@@ -11,6 +11,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/mailclassify"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // Verdict is one caller's judgement of one message: what it is, and optionally
@@ -43,7 +44,7 @@ func (s *Service) Triage(ctx context.Context, userID, id int64, v Verdict) (Mess
 	// Resolve the slug before writing: an unknown one changes nothing.
 	var jobID pgtype.Int8
 	if v.Slug != "" {
-		resolved, err := s.q.GetJobIDBySlug(ctx, v.Slug)
+		resolved, err := s.q.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: v.Slug, CallerID: userID})
 		if err != nil {
 			return Message{}, err
 		}
@@ -55,7 +56,7 @@ func (s *Service) Triage(ctx context.Context, userID, id int64, v Verdict) (Mess
 		confidence = pgtype.Float4{Float32: *v.Confidence, Valid: true}
 	}
 	rows, err := s.q.AgentTriageEmail(ctx, db.AgentTriageEmailParams{
-		ID: id, UserID: userID, StatusSignal: pgtype.Text{String: v.Signal, Valid: true},
+		ID: id, UserID: userID, StatusSignal: pgconv.TextValid(v.Signal),
 		JobID: jobID, Confidence: confidence,
 	})
 	if err != nil {
@@ -83,7 +84,7 @@ func (s *Service) Link(ctx context.Context, userID, id int64, slug string) (Mess
 	if slug == "" {
 		return Message{}, ErrSlugRequired
 	}
-	jobID, err := s.q.GetJobIDBySlug(ctx, slug)
+	jobID, err := s.q.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: slug, CallerID: userID})
 	if err != nil {
 		return Message{}, err
 	}
@@ -137,7 +138,7 @@ func (s *Service) RecordApplication(ctx context.Context, userID, id int64, slug 
 	if email.SuggestedJobID.Valid && !email.JobID.Valid {
 		return Message{}, ErrPendingSuggestion
 	}
-	jobID, err := s.q.GetJobIDBySlug(ctx, slug)
+	jobID, err := s.q.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: slug, CallerID: userID})
 	if err != nil {
 		return Message{}, err
 	}

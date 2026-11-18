@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // dbStore adapts the generated queries + pool to autoapply.Store. It is the only place the
@@ -205,7 +206,7 @@ func (s *dbStore) SetPreview(ctx context.Context, queueID int64, preview autoapp
 		Kind:       "auto_apply_ready_for_review",
 		Title:      "Your application is ready to review",
 		Body:       fmt.Sprintf("We tailored your CV for %s at %s — take a look before it goes out.", row.Title, row.Company),
-		PublicSlug: pgtype.Text{String: row.PublicSlug, Valid: true},
+		PublicSlug: pgconv.TextValid(row.PublicSlug),
 	}); err != nil {
 		// Best-effort: a failure here must never fail the preview write.
 		log.Printf("auto-apply: recording ready-for-review notification for queue entry %d: %v", queueID, err)

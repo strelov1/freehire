@@ -1,4 +1,5 @@
 import asyncio
+from typing import ClassVar
 
 from app import FetchRequest
 from engines import (
@@ -42,7 +43,7 @@ def test_result_drops_framing_headers_of_the_already_decoded_body():
         status = 200
         url = "https://ex.com/final"
         body = b"hello"
-        headers = {
+        headers: ClassVar[dict[str, str]] = {
             "Content-Encoding": "gzip",
             "Content-Length": "999",
             "Transfer-Encoding": "chunked",
@@ -347,7 +348,9 @@ def test_http_redirect_to_metadata_is_never_followed():
     class Redirect:
         status = 302
         url = "https://public.example/jobs"
-        headers = {"Location": "http://169.254.169.254/latest/meta-data/"}
+        headers: ClassVar[dict[str, str]] = {
+            "Location": "http://169.254.169.254/latest/meta-data/"
+        }
         body = b""
 
     calls = []

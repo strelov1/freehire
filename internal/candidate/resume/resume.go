@@ -191,7 +191,9 @@ func (s *Store) put(ctx context.Context, userID int64, contentType string, data 
 		// a fresh read shows the pointer does not name it; an otherwise unreadable pointer keeps
 		// it, and account deletion is the backstop for that.
 		// No account row means account deletion won the race: nothing can name the object.
-		ptr, readErr := s.repo.Get(context.WithoutCancel(ctx), userID)
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+		defer cancel()
+		ptr, readErr := s.repo.Get(rctx, userID)
 		if errors.Is(readErr, pgx.ErrNoRows) || (readErr == nil && ptr.ResumeObjectKey.String != key) {
 			s.discard(ctx, key)
 		}
@@ -205,10 +207,15 @@ func (s *Store) put(ctx context.Context, userID int64, contentType string, data 
 	return written, nil
 }
 
+// cleanupTimeout bounds the detached reads and deletes that run after a failed write.
+const cleanupTimeout = 10 * time.Second
+
 // discard deletes an object no pointer refers to. Best-effort: the write it follows has
 // already succeeded or failed on its own terms, so a failure here is logged, not returned.
 func (s *Store) discard(ctx context.Context, key string) {
-	if err := s.blobs.Delete(context.WithoutCancel(ctx), key); err != nil {
+	dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+	defer cancel()
+	if err := s.blobs.Delete(dctx, key); err != nil {
 		log.Printf("resume: deleting unreferenced object %s: %v", key, err)
 	}
 }
