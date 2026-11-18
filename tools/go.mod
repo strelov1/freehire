@@ -10,7 +10,7 @@ toolchain go1.27.4
 require (
 	github.com/gzuidhof/tygo v0.2.21
 	github.com/strelov1/freehire v0.0.0
-	modernc.org/sqlite v1.61.1
+	modernc.org/sqlite v1.62.0
 )
 
 require (
@@ -109,7 +109,7 @@ require (
 	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/ini.v1 v1.67.3 // indirect
-	modernc.org/libc v1.79.0 // indirect
+	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
