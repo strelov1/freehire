@@ -225,7 +225,12 @@ func (t *loxoThrottle) GetHTML(ctx context.Context, u string) (*html.Node, error
 		// Hold the lock across the sleep so shared-host requests run one at a time, gap apart.
 		t.mu.Lock()
 		if d := loxoNextDelay(t.last, time.Now(), t.gap); d > 0 {
-			time.Sleep(d)
+			select {
+			case <-time.After(d):
+			case <-ctx.Done():
+				t.mu.Unlock()
+				return nil, ctx.Err()
+			}
 		}
 		t.last = time.Now()
 		t.mu.Unlock()

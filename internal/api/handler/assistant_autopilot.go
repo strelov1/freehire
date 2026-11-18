@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -98,7 +99,9 @@ func (h *assistantHandlers) runAutopilotToCompletion(ctx context.Context, analys
 	err := runner.Run(ctx, sess, reg, system, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps}, emit)
 	// The refresh must run even when the caller cancelled the run (CancelAssistantTurn cancels this
 	// ctx), so it runs on a detached copy, like boundRunner's credential-forget.
-	analysis.refresh(context.WithoutCancel(ctx))
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer cancel()
+	analysis.refresh(rctx)
 	return err
 }
 

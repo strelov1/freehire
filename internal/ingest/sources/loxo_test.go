@@ -180,3 +180,23 @@ func TestLoxoNextDelay(t *testing.T) {
 		t.Errorf("elapsed-gap delay = %v, want 0", d)
 	}
 }
+
+func TestLoxoThrottle_CancelledWaitReturnsAndUnlocks(t *testing.T) {
+	th := newLoxoThrottle(nil, time.Hour)
+	th.last = time.Now()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan error, 1)
+	go func() { _, err := th.GetHTML(ctx, "https://"+loxoSharedHost+"/x"); done <- err }()
+	select {
+	case err := <-done:
+		if err != context.Canceled {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetHTML kept sleeping after the context was cancelled")
+	}
+	if !th.mu.TryLock() {
+		t.Fatal("throttle mutex still held after cancelled wait")
+	}
+}

@@ -101,7 +101,9 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 		if len(searched) == 0 {
 			return
 		}
-		if err := r.store.MarkSubscriptionsSearched(context.WithoutCancel(ctx), db.MarkSubscriptionsSearchedParams{
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		if err := r.store.MarkSubscriptionsSearched(sctx, db.MarkSubscriptionsSearchedParams{
 			SearchedAt: pgconv.Timestamptz(&now),
 			Ids:        searched,
 		}); err != nil {
