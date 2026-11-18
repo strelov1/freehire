@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // MaxIngestBatch bounds one harness push (one transaction). An oversized batch is REFUSED rather
@@ -138,7 +138,7 @@ func (m IncomingMessage) upsertParams(userID int64) db.UpsertExternalEmailParams
 		Subject:    m.Subject,
 		BodyText:   m.BodyText,
 		BodyHtml:   m.BodyHTML,
-		ReceivedAt: pgconv.Instant(receivedAt),
+		ReceivedAt: pgtype.Timestamptz{Time: receivedAt, Valid: true},
 		// No meeting identifier: this tier receives a JSON projection, not MIME, so there is no
 		// text/calendar part and pushed mail yields no automatic calendar link.
 	}

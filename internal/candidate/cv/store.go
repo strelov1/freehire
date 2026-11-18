@@ -13,7 +13,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -552,7 +551,7 @@ func (r queriesRepository) CreateTailored(ctx context.Context, userID, jobID int
 func (r queriesRepository) SetSession(ctx context.Context, id uuid.UUID, userID int64, sessionID string) (int64, error) {
 	return r.q.SetCVSession(ctx, db.SetCVSessionParams{
 		ID: id, UserID: userID,
-		AgentSessionID: pgconv.Text(sessionID),
+		AgentSessionID: pgtype.Text{String: sessionID, Valid: sessionID != ""},
 	})
 }
 

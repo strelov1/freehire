@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // QueriesCodeStore is the production CodeStore. The composite primary key
@@ -48,8 +48,8 @@ func (s *QueriesCodeStore) UpsertCode(ctx context.Context, userID int64, purpose
 		UserID:      userID,
 		Purpose:     purpose,
 		CodeHash:    codeHash,
-		ExpiresAt:   pgconv.Instant(expiresAt),
-		TargetEmail: pgconv.Text(target),
+		ExpiresAt:   pgtype.Timestamptz{Time: expiresAt, Valid: true},
+		TargetEmail: pgtype.Text{String: target, Valid: target != ""},
 	})
 }
 

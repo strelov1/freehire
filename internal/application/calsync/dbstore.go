@@ -9,7 +9,6 @@ import (
 	"github.com/strelov1/freehire/internal/application/calmatch"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // DBStore adapts *db.Queries to the sync worker's Store.
@@ -81,7 +80,7 @@ func (s *DBStore) UpsertInterview(ctx context.Context, in StoredInterview) error
 		ApplicationID:   in.ApplicationID,
 		IcalUid:         in.UID,
 		ProviderEventID: in.ProviderID,
-		StartsAt:        pgconv.Instant(in.StartsAt),
+		StartsAt:        pgtype.Timestamptz{Time: in.StartsAt, Valid: true},
 		// An all-day or open-ended entry has no end, and NULL says so rather than
 		// inventing a duration the organiser did not give.
 		EndsAt:  pgtype.Timestamptz{Time: in.EndsAt, Valid: !in.EndsAt.IsZero()},

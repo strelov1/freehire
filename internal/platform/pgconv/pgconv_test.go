@@ -68,3 +68,13 @@ func TestInstantAndTextValidAreNeverNull(t *testing.T) {
 		t.Errorf("TextValid(\"\") = %+v, want a valid empty string", got)
 	}
 }
+
+func TestTextFromPtr(t *testing.T) {
+	if got := TextFromPtr(nil); got.Valid {
+		t.Errorf("TextFromPtr(nil) = %+v, want NULL", got)
+	}
+	empty := ""
+	if got := TextFromPtr(&empty); !got.Valid || got.String != "" {
+		t.Errorf("TextFromPtr(\"\") = %+v, want a valid empty string", got)
+	}
+}

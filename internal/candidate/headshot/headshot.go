@@ -20,9 +20,10 @@ import (
 	"log"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/platform/blobstore"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // contentType is what every stored headshot is, because Normalize re-encodes the upload;
@@ -187,7 +188,7 @@ func (r *QueriesRepository) GetPhoto(ctx context.Context, userID int64) (db.GetU
 func (r *QueriesRepository) SetPhoto(ctx context.Context, userID int64, key string) error {
 	return r.q.SetUserPhoto(ctx, db.SetUserPhotoParams{
 		ID:             userID,
-		PhotoObjectKey: pgconv.TextValid(key),
+		PhotoObjectKey: pgtype.Text{String: key, Valid: true},
 	})
 }
 

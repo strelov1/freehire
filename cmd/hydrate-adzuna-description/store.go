@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/adzunadesc"
 	"github.com/strelov1/freehire/internal/job/jobhash"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // dbStore adapts the generated queries + pool to adzunadesc.Store.
@@ -61,7 +61,7 @@ func (s *dbStore) Save(ctx context.Context, outboxID, jobID int64, description s
 	if _, err := qtx.UpdateJobDescription(ctx, db.UpdateJobDescriptionParams{
 		ID:          jobID,
 		Description: description,
-		ContentHash: pgconv.TextValid(hash),
+		ContentHash: pgtype.Text{String: hash, Valid: true},
 	}); err != nil {
 		return fmt.Errorf("update description for job %d: %w", jobID, err)
 	}
