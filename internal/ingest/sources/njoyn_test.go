@@ -292,3 +292,27 @@ func TestNjoynPlacesJoinsEveryLocation(t *testing.T) {
 		t.Errorf("places = %q %v", loc, countries)
 	}
 }
+
+// clients.njoyn.com serves every client by clid, so a board there is the client's own board
+// under a second name: the two fold to one identity, and the generic one is refused on its own.
+func TestNjoynClientsHostIsTheClientsOwnBoard(t *testing.T) {
+	own, _ := BoardDedupeKey(CompanyEntry{Provider: "njoyn", Board: "cgi/corp/21001"})
+	generic, _ := BoardDedupeKey(CompanyEntry{Provider: "njoyn", Board: "clients/corp/21001"})
+	other, _ := BoardDedupeKey(CompanyEntry{Provider: "njoyn", Board: "cgi/corp/21002"})
+	if own != generic {
+		t.Errorf("cgi/corp/21001 and clients/corp/21001 fold to %q and %q, want one identity", own, generic)
+	}
+	if own == other {
+		t.Error("a different clid folded to the same identity")
+	}
+	registry := map[string]Source{"njoyn": NewNjoyn(nil)}
+	entry := func(board string) Config {
+		return Config{Provider: "njoyn", Sources: []CompanyEntry{{Provider: "njoyn", Board: board, Company: "CGI"}}}
+	}
+	if err := entry("clients/corp/21001").Validate(registry); err == nil || !strings.Contains(err.Error(), "serves every client") {
+		t.Errorf("a board on the generic host validated: %v", err)
+	}
+	if err := entry("cgi/corp/21001").Validate(registry); err != nil {
+		t.Errorf("the client's own board failed validation: %v", err)
+	}
+}

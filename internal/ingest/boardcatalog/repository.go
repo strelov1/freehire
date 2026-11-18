@@ -91,10 +91,10 @@ func (i *Inserter) Insert(ctx context.Context, in InsertInput, wantStatus Status
 	// below — a harvested UKG board once arrived with a trailing space and so did not
 	// collide with the same board already listed.
 	in.Board = strings.TrimSpace(in.Board)
-	if err := Validate(in, i.registry); err != nil {
-		return i.repo.InsertRow(ctx, in, StatusRejected, err.Error())
-	}
 
+	// The duplicate check runs BEFORE validation: a spelling that is only valid as another
+	// board's second name (Njoyn's generic clients host) is a duplicate when that board is
+	// live, and rejected only when it is not.
 	key, keyed := sources.BoardDedupeKey(sources.CompanyEntry{
 		Provider: in.Provider, Board: in.Board, Region: in.Region,
 	})
@@ -107,6 +107,9 @@ func (i *Inserter) Insert(ctx context.Context, in InsertInput, wantStatus Status
 		if live[key] {
 			return Board{}, ErrDuplicateBoard
 		}
+	}
+	if err := Validate(in, i.registry); err != nil {
+		return i.repo.InsertRow(ctx, in, StatusRejected, err.Error())
 	}
 
 	b, err := i.repo.InsertRow(ctx, in, wantStatus, "")
@@ -272,10 +275,15 @@ func (r *QueriesRepository) ListActiveForProvider(ctx context.Context, provider 
 // Entry returns the crawl entry for one board — what a link import hands the adapter so it
 // builds the posting a crawl of that board would. found=false when the catalogue has no
 // such board. It satisfies linksource.BoardCatalog.
+//
+// A board the catalogue holds under another spelling of the same identity (sources.BoardDedupeKey:
+// an iCIMS slug for its host, a Njoyn link on the generic clients host for the client's own)
+// answers as that live board, so a link import writes its posting under the board a crawl
+// stores it under rather than minting a second namespace for it.
 func (r *QueriesRepository) Entry(ctx context.Context, provider, board string) (sources.CompanyEntry, bool, error) {
 	row, err := r.q.GetBoardForResolve(ctx, db.GetBoardForResolveParams{Provider: provider, Board: board})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return sources.CompanyEntry{}, false, nil
+		return r.liveSpelling(ctx, provider, board)
 	}
 	if err != nil {
 		return sources.CompanyEntry{}, false, err
@@ -285,6 +293,25 @@ func (r *QueriesRepository) Entry(ctx context.Context, provider, board string) (
 		return sources.CompanyEntry{}, false, err
 	}
 	return b.CompanyEntry(), true, nil
+}
+
+// liveSpelling finds the live board whose identity is board's under a different spelling.
+func (r *QueriesRepository) liveSpelling(ctx context.Context, provider, board string) (sources.CompanyEntry, bool, error) {
+	want, ok := sources.BoardDedupeKey(sources.CompanyEntry{Provider: provider, Board: board})
+	if !ok {
+		return sources.CompanyEntry{}, false, nil
+	}
+	live, err := r.ListActiveForProvider(ctx, provider)
+	if err != nil {
+		return sources.CompanyEntry{}, false, err
+	}
+	for _, b := range live {
+		e := b.CompanyEntry()
+		if k, _ := sources.BoardDedupeKey(sources.CompanyEntry{Provider: provider, Board: e.Board}); k == want {
+			return e, true, nil
+		}
+	}
+	return sources.CompanyEntry{}, false, nil
 }
 
 func (r *QueriesRepository) ListBySubmitter(ctx context.Context, submittedBy int64) ([]Board, error) {
