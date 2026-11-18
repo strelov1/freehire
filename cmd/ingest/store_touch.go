@@ -30,6 +30,11 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string, deadline
 		// Closed, past its deadline, absent, or fenced: the full touch decides under its own
 		// transaction, now that the fast statement has ended and released its activity row.
 		touched, err := s.touchFull(ctx, params)
+		if source == "linkedin" && errors.Is(err, pgx.ErrNoRows) {
+			// A posting seen through the read cache has no row to refresh: it was read as
+			// non-native and is not stored. Nothing to touch, nothing to count.
+			return "", nil
+		}
 		if err != nil {
 			return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
 		}
