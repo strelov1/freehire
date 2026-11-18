@@ -113,7 +113,7 @@ class RecoveryTest(unittest.TestCase):
         for call, command in zip(
             run.call_args_list[1:], recovery.additions(self.rows), strict=True
         ):
-            self.assertEqual(call.args[0], command + ["--apply"])
+            self.assertEqual(call.args[0], [*command, "--apply"])
             self.assertTrue(call.kwargs["check"])
 
     def test_apply_conflict_prevents_every_write(self):
