@@ -54,6 +54,8 @@ class ClassificationTests(ScopeAssertions):
         for path in (
             "internal/job/jobview/view.go",
             "cmd/ingest/main.go",
+            "tools/gen-contracts/main.go",
+            "tools/go.mod",
             "migrations/0999_test.sql",
             "go.mod",
             "go.sum",

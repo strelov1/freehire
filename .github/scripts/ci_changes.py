@@ -61,7 +61,9 @@ def classify(paths):
             )
             if path.startswith("design-system/"):
                 flags.update(design_system=True, extension=True)
-        elif path.startswith(("internal/", "cmd/", "migrations/")) or path in (
+        elif path.startswith(
+            ("internal/", "cmd/", "tools/", "migrations/")
+        ) or path in (
             "go.mod",
             "go.sum",
             ".golangci.yml",

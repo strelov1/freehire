@@ -59,8 +59,8 @@ hire
 /enrich
 /facetd
 /gen-cities
-/gen-contracts
-/gen-metros
+/tools/gen-contracts/gen-contracts
+/tools/gen-metros/gen-metros
 /gen-skill-descriptions
 /ghost-crosscheck
 /gmail-sync

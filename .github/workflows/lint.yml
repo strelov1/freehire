@@ -404,7 +404,10 @@ jobs:
       # read, which is what the pull request is for.
       - name: Report unreachable Go functions
         run: |
-          report=$(deadcode -test -tags=integration,llmlive ./...)
+          # tools/ (the generators) is its own module; a workspace lets its calls into
+          # the main module count as callers (SeniorityAliases, Labels, ... are used only there).
+          go work init . ./tools
+          report=$(deadcode -test -tags=integration,llmlive ./... ./tools/...)
           if [ -n "$report" ]; then
             echo "$report"
             echo

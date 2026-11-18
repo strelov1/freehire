@@ -93,7 +93,7 @@ jobs:
   # glossary page, which reads as the feature being broken rather than the file being
   # old. One more generated file with a silent failure mode is what makes this a job.
   #
-  # `go run ./cmd/gen-contracts` needs no toolchain of its own — tygo is a library here,
+  # `go run ./gen-contracts` (module tools/) needs no toolchain of its own — tygo is a library here,
   # not a binary — so unlike sqlc there is no version to pin in two places.
   contracts:
     needs: changes
@@ -112,7 +112,8 @@ jobs:
           cache: true
 
       - name: Regenerate
-        run: go run ./cmd/gen-contracts
+        working-directory: tools
+        run: go run ./gen-contracts
 
       - name: Assert the generated contracts match the Go vocabularies
         run: |
