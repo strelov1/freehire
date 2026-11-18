@@ -212,6 +212,8 @@ linters:
         - confidencial
         - administr
         - hybrides
+        # Turkish title vocabulary (internal/dict/classify/turkish*.go).
+        - personel
         # French title vocabulary (internal/dict/classify/french.go).
         - affaires
         - ambulancier

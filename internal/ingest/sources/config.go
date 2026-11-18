@@ -37,6 +37,10 @@ var boardIdentity = map[string]func(board string) string{
 	"emply":  emplyHost,
 	// BrassRing addresses a site by host plus partnerid+siteid, in any key order and case.
 	"brassring": brassringBoardIdentity,
+	// Njoyn addresses a client by its clid alone: clients.njoyn.com serves every client's
+	// career site under the same path, so "<tenant>/corp/<clid>" and "clients/corp/<clid>"
+	// are one board (see njoyn.go).
+	"njoyn": njoynClientID,
 }
 
 // BoardDedupeKey is the identity two catalog rows are the same crawl target under:
@@ -85,6 +89,11 @@ func (c Config) Validate(registry map[string]Source) error {
 		// entries may omit board; every other provider still requires one.
 		if _, noBoard := src.(boardless); !noBoard && e.Board == "" {
 			return fmt.Errorf("sources: %s entry for company %q has empty board", provider, e.Company)
+		}
+		if v, ok := src.(boardValidator); ok && e.Board != "" {
+			if err := v.validateBoard(e.Board); err != nil {
+				return fmt.Errorf("sources: %s board %q: %w", provider, e.Board, err)
+			}
 		}
 	}
 	return nil
