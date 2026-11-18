@@ -23,8 +23,6 @@ package main
 import (
 	"context"
 	"log"
-	"os"
-	"strconv"
 
 	"github.com/strelov1/freehire/internal/engage/buddy"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
@@ -78,14 +76,14 @@ func run() int {
 		buddy.NewMockMailNotifier(q, sender, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
 
 	exit := 0
-	stats, err := svc.SendDueReminders(ctx, maxPerRun())
+	stats, err := svc.SendDueReminders(ctx, worker.EnvInt32OrDefault("MENTORSHIP_REMIND_MAX_PER_RUN", maxPerRunDefault))
 	if err != nil {
 		log.Printf("mentorship-remind: %v", err)
 		exit = 1
 	} else {
 		log.Printf("mentorship-remind: sent=%d failed=%d", stats.Sent, stats.Failed)
 	}
-	mockStats, err := mocks.SendDueMockReminders(ctx, maxPerRun())
+	mockStats, err := mocks.SendDueMockReminders(ctx, worker.EnvInt32OrDefault("MENTORSHIP_REMIND_MAX_PER_RUN", maxPerRunDefault))
 	if err != nil {
 		log.Printf("mentorship-remind: buddy mocks: %v", err)
 		exit = 1
@@ -93,23 +91,4 @@ func run() int {
 		log.Printf("mentorship-remind: buddy mocks sent=%d failed=%d", mockStats.Sent, mockStats.Failed)
 	}
 	return exit
-}
-
-// maxPerRun reads the per-run bound.
-//
-// A set-but-unreadable value falls back and says so rather than failing the run: this runs
-// unattended, and failing hard would stop all reminders over a batch-size typo. One-off
-// backfills fail hard instead because an operator watches them. cmd/discord-sync and
-// cmd/billing-sync choose as this does.
-func maxPerRun() int32 {
-	raw := os.Getenv("MENTORSHIP_REMIND_MAX_PER_RUN")
-	if raw == "" {
-		return maxPerRunDefault
-	}
-	n, err := strconv.ParseInt(raw, 10, 32)
-	if err != nil || n <= 0 {
-		log.Printf("mentorship-remind: MENTORSHIP_REMIND_MAX_PER_RUN=%q is not a positive number that fits a batch size — keeping %d", raw, maxPerRunDefault)
-		return maxPerRunDefault
-	}
-	return int32(n)
 }
