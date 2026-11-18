@@ -130,3 +130,19 @@ func (b BodyRefresh) WithDetailReread(provider string, now time.Time) BodyRefres
 func sliceOfDay(now time.Time, slices int64) int64 {
 	return int64(now.YearDay()) % slices
 }
+
+// LinkedInBodyRefreshDays is LinkedIn's built-in re-read window. Every other provider ships with
+// the refresh disabled, but a stored LinkedIn posting that stays listed is otherwise only ever
+// touched: the touch keeps last_seen_at fresh, so liveness never probes it and a posting closed
+// on LinkedIn would stay open for good. Re-reading it is what notices the closed notice.
+const LinkedInBodyRefreshDays = 3
+
+// WithProviderDefault gives a provider that cannot ship without a re-read window its default
+// when the operator configured none. An explicit BODY_REFRESH_DAYS (already resolved into b)
+// always wins, and slice 1 makes every stored row older than the window eligible.
+func (b BodyRefresh) WithProviderDefault(provider string, now time.Time) BodyRefresh {
+	if b.Enabled() || provider != "linkedin" {
+		return b
+	}
+	return BodyRefresh{Cutoff: now.AddDate(0, 0, -LinkedInBodyRefreshDays), Slices: 1, Slot: sliceOfDay(now, 1)}
+}

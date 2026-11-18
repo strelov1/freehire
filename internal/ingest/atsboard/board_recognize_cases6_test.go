@@ -13,6 +13,15 @@ var recognizeCases6 = []recognizeCase{
 	// host, because the same host serves the vendor's own pages. The first two are real apply
 	// links (their title suffix arrives empty); the slug is lower-cased, as the catalogue
 	// stores it and the platform matches it case-blind.
+	// Njoyn: <tenant>.njoyn.com/<site>/xweb/xweb.asp?clid=<digits>, the query keys in either
+	// case; the board is all three, lower-cased, and the canonical is the listing page.
+	{"njoyn listing", "https://cgi.njoyn.com/CORP/xweb/xweb.asp?CLID=21001&page=joblisting&lang=1", "njoyn", "cgi/corp/21001", "https://cgi.njoyn.com/corp/xweb/xweb.asp?NTKN=c&Page=joblisting&clid=21001&lang=1", true},
+	{"njoyn posting", "https://cgi.njoyn.com/corp/xweb/xweb.asp?NTKN=c&clid=21001&Page=JobDetails&Jobid=J1126-1603&BRID=1350470&lang=1", "njoyn", "cgi/corp/21001", "https://cgi.njoyn.com/corp/xweb/xweb.asp?NTKN=c&Page=joblisting&clid=21001&lang=1", true},
+	{"njoyn link without a client id", "https://cgi.njoyn.com/CORP/xweb/xweb.asp?page=joblisting", "", "", "", false},
+	{"njoyn non-numeric client id", "https://cgi.njoyn.com/CORP/xweb/xweb.asp?clid=abc", "", "", "", false},
+	{"njoyn page outside the script", "https://cgi.njoyn.com/CORP/careers?clid=21001", "", "", "", false},
+	{"njoyn vendor site is not a tenant", "https://www.njoyn.com/corp/xweb/xweb.asp?clid=21001", "", "", "", false},
+	{"njoyn bare apex", "https://njoyn.com/corp/xweb/xweb.asp?clid=21001", "", "", "", false},
 	{"harri apply link", "https://harri.com/panera-careers/job/2843465-", "harri", "panera-careers", "https://harri.com/panera-careers", true},
 	{"harri apply link, trailing-hyphen slug", "https://harri.com/tig-reaper-llc-/job/2822379-", "harri", "tig-reaper-llc-", "https://harri.com/tig-reaper-llc-", true},
 	{"harri share link keeps a store slug, lower-cased", "https://www.harri.com/Taco-Social/job/2793867-cashier?utm_source=x", "harri", "taco-social", "https://www.harri.com/taco-social", true},
