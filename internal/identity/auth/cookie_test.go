@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -110,6 +111,58 @@ func TestBrowserOriginsIncludesExactServedHosts(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("origin %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// checkAttrs parses a Set-Cookie header and fails unless it is the session cookie with
+// HttpOnly, SameSite=Lax, Path "/" exactly, and Secure equal to secure.
+func checkAttrs(t *testing.T, what, header string, secure bool) {
+	t.Helper()
+	c, err := http.ParseSetCookie(header)
+	if err != nil {
+		t.Errorf("%s %q: %v", what, header, err)
+		return
+	}
+	if c.Name != CookieName || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" || c.Secure != secure {
+		t.Errorf("%s %q: want %s HttpOnly SameSite=Lax Path=/ Secure=%v", what, header, CookieName, secure)
+	}
+}
+
+// The session JWT cookie's only XSS/CSRF defence is HttpOnly + SameSite=Lax (+ Secure
+// in prod); pin them on the set and on both logout clears, with and without secure.
+func TestSessionCookieAttributes(t *testing.T) {
+	checkAttrs(t, "session cookie", setCookieHeader(t, ".freehire.me"), true)
+	clears := clearCookieHeaders(t, ".freehire.me")
+	if len(clears) != 2 {
+		t.Fatalf("expected 2 clears, got %q", clears)
+	}
+	for _, sc := range clears {
+		checkAttrs(t, "clear cookie", sc, true)
+	}
+
+	// Dev http path: no Secure on the set or the clear.
+	app := fiber.New()
+	app.Get("/set", func(c *fiber.Ctx) error {
+		SetTokenCookie(c, "tok", time.Hour, false, "")
+		return nil
+	})
+	app.Get("/clear", func(c *fiber.Ctx) error {
+		ClearTokenCookie(c, false, ".freehire.me")
+		return nil
+	})
+	for path, n := range map[string]int{"/set": 1, "/clear": 2} {
+		resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", path, nil))
+		if err != nil {
+			t.Fatalf("test request failed: %v", err)
+		}
+		_ = resp.Body.Close()
+		scs := resp.Header.Values("Set-Cookie")
+		if len(scs) != n {
+			t.Fatalf("insecure %s: expected %d Set-Cookie headers, got %q", path, n, scs)
+		}
+		for _, sc := range scs {
+			checkAttrs(t, "insecure "+path, sc, false)
 		}
 	}
 }
