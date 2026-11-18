@@ -125,8 +125,9 @@ type ComputeInsightsRolePulseRow struct {
 // health), board_retired, moderated or source_misattributed (our own decisions), or ”
 // (closed before reasons were recorded). A close dated before existence is left out, as
 // ComputeInsightsCompanyLifetime does.
-// INFLOW counts postings whose existence date falls in the last 30 days — the header's
-// rule, applied to "new" instead of "open at the start" — and deliberately has NO earlier
+// INFLOW counts postings whose existence date, LEAST(posted_at, created_at) (insights.sql's
+// header), falls in the last 30 days — so a posting published before the window but found
+// during it is not "new" — and deliberately has NO earlier
 // window. Measured 2026-10-30, the comparison was dominated by our own coverage growth:
 // a board first crawled this month shows its earlier postings only if they were still
 // open when we found it, so healthcare read +155% while stable-coverage categories

@@ -1,3 +1,7 @@
+-- Ingest-health aggregates behind cmd/queue-metrics, split out of metrics.sql for size. Its
+-- header's bar holds here too: every query is read-only, takes no locks, and runs once a
+-- minute alongside ingest, so none may scan `jobs` (8M rows) or make another worker wait.
+
 -- name: ProviderIngestHealth :many
 -- Per-provider ingest health: when the provider's most recent board crawl succeeded, and
 -- how its boards split across four mutually exclusive states. It is also the ONLY source of
@@ -54,7 +58,7 @@
 -- parallel hash join of the two tables, against 37ms for the board_health-only form it
 -- replaces. It also replaces BoardHealthMetrics, the fleet-wide twin it now feeds, so the
 -- net cost is one query of this size a minute. Neither table is jobs, whose 8M-row scan is
--- what this file's header exists to forbid.
+-- what this file's header forbids.
 SELECT
     b.provider,
     -- A board in its quiet pause (migration 0198) skips crawls on purpose for up to 72h; it reads
@@ -103,8 +107,8 @@ ORDER BY b.provider;
 --
 -- The window is ten minutes, and that is a measured choice rather than a round number.
 -- Measured on prod 2026-09-16: 24h costs 20,818ms, 60m costs 837ms, 15m costs 328ms, and
--- 10m costs 22ms -- the same order as ProviderIngestHealth's 54ms, which is the bar this
--- file's header sets. Ten minutes is also sufficient: the duplication appears BETWEEN
+-- 10m costs 22ms -- the same order as ProviderIngestHealth's 54ms, which is the once-a-minute bar
+-- this file's header sets. Ten minutes is also sufficient: the duplication appears BETWEEN
 -- boards, never within one crawl (a board that fetches the global catalogue writes each of
 -- its postings once), so the gap opens as soon as two boards of the same source land in one
 -- window. apploi would have had roughly forty per window. A source whose boards crawl more
