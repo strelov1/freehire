@@ -112,14 +112,14 @@ WITH moved AS (
     FROM jobs j
     WHERE j.source = $1
       AND j.external_id LIKE $2
-      AND j.company = $3
+      AND j.company IN ($3, NULLIF($4::text, ''))
     FOR UPDATE
 ), updated AS (
     UPDATE jobs
-    SET company = $4,
-        company_slug = $5,
+    SET company = $5,
+        company_slug = $6,
         -- Kept in step with company_slug by hand; see RenameSlugCompany.
-        company_slug_folded = replace($5, '-', ''),
+        company_slug_folded = replace($6, '-', ''),
         updated_at = now()
     FROM moved
     WHERE jobs.id = moved.id
@@ -140,6 +140,7 @@ type RenamePlaceholderBoardJobsParams struct {
 	Source       string `json:"source"`
 	BoardPattern string `json:"board_pattern"`
 	OldName      string `json:"old_name"`
+	LabelName    string `json:"label_name"`
 	Name         string `json:"name"`
 	NewSlug      string `json:"new_slug"`
 }
@@ -153,6 +154,8 @@ type RenamePlaceholderBoardJobsParams struct {
 // company and slug change, so an open, canonical, public one is queued for search in the same
 // statement, as every other writer of indexed job content does.
 //
+// label_name is the neutral label the postings may show instead (sources.PlaceholderLabel), ” for none.
+//
 // Returns the company_slug each moved job carried BEFORE the write, one row per job: the rows
 // are matched by board and name, not by slug, and an alias the merge worker recorded may have
 // re-keyed them away from the slug the placeholder name folds to — the caller sweeps exactly
@@ -162,6 +165,7 @@ func (q *Queries) RenamePlaceholderBoardJobs(ctx context.Context, arg RenamePlac
 		arg.Source,
 		arg.BoardPattern,
 		arg.OldName,
+		arg.LabelName,
 		arg.Name,
 		arg.NewSlug,
 	)

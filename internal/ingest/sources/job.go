@@ -10,10 +10,14 @@ import (
 // into the catalogue. ExternalID carries the platform's native posting id; the
 // pipeline namespaces it by board before persisting.
 type Job struct {
-	ExternalID  string
-	URL         string
-	Title       string
-	Company     string
+	ExternalID string
+	URL        string
+	Title      string
+	Company    string
+	// CompanyKey, when set, is what the company slug derives from instead of Company: for a
+	// posting shown under a neutral label shared by many boards (PlaceholderLabel), so each
+	// board stays its own company. Empty for every other posting.
+	CompanyKey  string
 	Location    string
 	Description string
 	// ApplyMethod and ExternalApplyURL are discovery evidence from the provider's

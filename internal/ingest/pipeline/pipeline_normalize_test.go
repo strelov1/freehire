@@ -114,3 +114,20 @@ func TestNormalizeJobDerivesClassification(t *testing.T) {
 		t.Errorf("Category = %q, want backend", f.Category)
 	}
 }
+
+// A neutral display label shared by many boards must not become their company key.
+func TestNormalizeJobCompanyKeyKeepsSlugPerBoard(t *testing.T) {
+	e := sources.CompanyEntry{Provider: "paycor", Board: "b"}
+	a, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Employer via Paycor", CompanyKey: "boardaaa"}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Employer via Paycor", CompanyKey: "boardbbb"}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Fields().Company != "Employer via Paycor" || a.Fields().CompanySlug == b.Fields().CompanySlug ||
+		a.Fields().CompanySlug != "boardaaa" {
+		t.Errorf("company %q slugs %q / %q", a.Fields().Company, a.Fields().CompanySlug, b.Fields().CompanySlug)
+	}
+}
