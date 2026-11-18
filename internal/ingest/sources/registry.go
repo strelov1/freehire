@@ -131,6 +131,8 @@ func All(c HTTPClient) map[string]Source {
 			// Paced per board to robots.txt's Crawl-delay (each tenant is its own host); see
 			// applicantstack.go.
 			NewApplicantStack(c),
+			// Paced per board; see njoyn.go.
+			NewNjoyn(c),
 			NewPaycom(c),
 			NewPaycor(c),
 			NewLuxoft(c),

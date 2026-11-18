@@ -71,3 +71,25 @@ describe('/pricing — saved-search alert frequency', () => {
     expect(screen.queryByText('Alerts by email, Telegram and push')).toBeNull();
   });
 });
+
+describe('/pricing — the headline', () => {
+  it('states the offer with the Pro price the backend sells', async () => {
+    renderPricing();
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Free to find a job. $5 a month for the AI that applies with you.',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('names the plan instead of a price when no monthly Pro price is sold', async () => {
+    renderPricing({ ...plans, prices: [price('ultra', 'price_ultra')] });
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Free to find a job. Pro for the AI that applies with you.',
+      }),
+    ).toBeTruthy();
+  });
+});

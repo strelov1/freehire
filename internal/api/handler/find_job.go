@@ -9,8 +9,10 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/atsboard"
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/externalid"
 )
 
 // catalogSlugForURL resolves the URL of a job page to the catalog posting it is, in three
@@ -29,15 +31,9 @@ func catalogSlugForURL(ctx context.Context, queries *db.Queries, postings source
 	}
 
 	if ref, ok := sources.RefFromURL(pageURL); ok {
-		job, err := queries.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{
-			Source:     ref.Source,
-			ExternalID: ref.ExternalID,
-		})
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return "", err
-		}
-		if err == nil && job.PublicSlug != "" {
-			return job.PublicSlug, nil
+		slug, err := catalogSlugForRef(ctx, queries, ref)
+		if err != nil || slug != "" {
+			return slug, err
 		}
 	}
 
@@ -82,4 +78,36 @@ func (h *jobsHandlers) FindJob(ctx context.Context, params apigen.FindJobParams)
 		}, nil
 	}
 	return &apigen.JobFindResult{Data: apigen.NewNilJobFoundPosting(apigen.JobFoundPosting{PublicSlug: slug})}, nil
+}
+
+// catalogSlugForRef looks a recovered identity up under the board the catalogue resolves it to
+// first, then under its literal key. The two differ when the link spells a live board another
+// way — a Njoyn link on the generic clients host names the client's board by clid alone — and
+// the literal key may then still hold a closed duplicate from a retired second name, which
+// must not win over the live posting.
+func catalogSlugForRef(ctx context.Context, queries *db.Queries, ref sources.PostingRef) (string, error) {
+	if ref.Board != "" {
+		stored, found, err := boardcatalog.NewQueriesRepository(queries).Entry(ctx, ref.Source, ref.Board)
+		if err != nil {
+			return "", err
+		}
+		if found && !strings.EqualFold(stored.Board, ref.Board) {
+			slug, err := slugBySourceExternalID(ctx, queries, ref.Source, externalid.Namespace(stored.Board, ref.PostingID))
+			if err != nil || slug != "" {
+				return slug, err
+			}
+		}
+	}
+	return slugBySourceExternalID(ctx, queries, ref.Source, ref.ExternalID)
+}
+
+func slugBySourceExternalID(ctx context.Context, queries *db.Queries, source, externalID string) (string, error) {
+	job, err := queries.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{Source: source, ExternalID: externalID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return job.PublicSlug, nil
 }

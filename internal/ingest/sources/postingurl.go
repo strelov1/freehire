@@ -18,6 +18,12 @@ import (
 type PostingRef struct {
 	Source     string
 	ExternalID string
+	// Board and PostingID are the two halves ExternalID is namespaced from. A caller that misses
+	// on ExternalID may look the board up under another spelling of the same identity (a Njoyn
+	// link on the generic clients host names the client's board by clid alone) and rebuild the
+	// key from PostingID.
+	Board     string
+	PostingID string
 }
 
 // greenhouseJobPath matches the job-detail form, /<board>/jobs/<id>.
@@ -29,7 +35,7 @@ var greenhouseJobPath = regexp.MustCompile(`^/([^/]+)/jobs/(\d+)/?$`)
 // page, say). A false answer is the honest one: the caller should then leave the
 // posting unrecognised rather than guess.
 //
-// Only Greenhouse is understood today. Each ATS numbers and addresses its
+// Only Greenhouse and Njoyn are understood today. Each ATS numbers and addresses its
 // postings differently, and the board segment of the URL has to be the same
 // token the ingest board file uses, so support is added per provider against
 // real links rather than inferred from a pattern.
@@ -39,12 +45,42 @@ func RefFromURL(raw string) (PostingRef, bool) {
 		return PostingRef{}, false
 	}
 
-	switch strings.ToLower(u.Hostname()) {
-	case "job-boards.greenhouse.io", "boards.greenhouse.io":
+	host := strings.ToLower(u.Hostname())
+	switch {
+	case host == "job-boards.greenhouse.io" || host == "boards.greenhouse.io":
 		return greenhouseRef(u)
+	case strings.HasSuffix(host, ".njoyn.com"):
+		return njoynRef(u, strings.TrimSuffix(host, ".njoyn.com"))
 	default:
 		return PostingRef{}, false
 	}
+}
+
+// njoynRef reads a Njoyn posting page, <tenant>.njoyn.com/<site>/xweb/xweb.asp?clid=<clid>&
+// Page=JobDetails&Jobid=<id>&…, into the identity the njoyn adapter stores: board
+// "<tenant>/<site>/<clid>" lower-cased, and the Jobid as the site spells it. The other
+// parameters (BRID, lang, NTKN) do not name the posting and are ignored; query keys come in
+// either case, as on the site.
+func njoynRef(u *url.URL, tenant string) (PostingRef, bool) {
+	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(segs) != 3 || !strings.EqualFold(segs[1], "xweb") || !strings.EqualFold(segs[2], "xweb.asp") {
+		return PostingRef{}, false
+	}
+	var clid, jobID string
+	for k, v := range u.Query() {
+		switch strings.ToLower(k) {
+		case "clid":
+			clid = strings.TrimSpace(v[0])
+		case "jobid":
+			jobID = strings.TrimSpace(v[0])
+		}
+	}
+	b, err := parseNjoynBoard(tenant + "/" + segs[0] + "/" + clid)
+	if err != nil || jobID == "" {
+		return PostingRef{}, false
+	}
+	board := b.tenant + "/" + b.site + "/" + b.clid
+	return PostingRef{Source: "njoyn", ExternalID: externalid.Namespace(board, jobID), Board: board, PostingID: jobID}, true
 }
 
 // greenhouseRef reads a Greenhouse link in either of its two shapes: the
@@ -69,7 +105,7 @@ func greenhousePosting(board, jobID string) (PostingRef, bool) {
 	if board == "" || jobID == "" || !isDigits(jobID) {
 		return PostingRef{}, false
 	}
-	return PostingRef{Source: "greenhouse", ExternalID: externalid.Namespace(board, jobID)}, true
+	return PostingRef{Source: "greenhouse", ExternalID: externalid.Namespace(board, jobID), Board: board, PostingID: jobID}, true
 }
 
 func isDigits(s string) bool {
