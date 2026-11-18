@@ -6,13 +6,13 @@ package search
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/MoeForge/moego/json"
 	"github.com/meilisearch/meilisearch-go"
 
 	"github.com/strelov1/freehire/internal/dict/skillvec"
@@ -107,7 +107,8 @@ func NewClient(url, key string, opts ...Option) *Client {
 	// SDK retries are off: v0.36.3 re-sends a consumed POST body, turning a transient
 	// 502/503/504 into 400 missing_payload. idempotentRetryTransport retries body-less
 	// requests; a failed POST surfaces its real status for workers to retry or requeue.
-	m := meilisearch.New(url, meilisearch.WithAPIKey(key), meilisearch.WithCustomClient(newEngineHTTPClient()), meilisearch.DisableRetries())
+	m := meilisearch.New(url, meilisearch.WithAPIKey(key), meilisearch.WithCustomClient(newEngineHTTPClient()), meilisearch.DisableRetries(),
+		meilisearch.WithCustomJsonMarshaler(json.Marshal), meilisearch.WithCustomJsonUnmarshaler(json.Unmarshal))
 	c := &Client{
 		manager:          m,
 		facet:            m.Index(facetIndexUID),
