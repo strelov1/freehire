@@ -150,5 +150,5 @@ type Repository interface {
 
 // SubjectChecker reports whether a subject slug names an existing company or job.
 type SubjectChecker interface {
-	SubjectExists(ctx context.Context, subjectType, slug string) (bool, error)
+	SubjectExists(ctx context.Context, userID int64, subjectType, slug string) (bool, error)
 }

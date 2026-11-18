@@ -60,8 +60,10 @@ SELECT count(*)                                          AS "all",
                             OR a.stage      IS NOT NULL)   AS board,
        count(*) FILTER (WHERE uj.dismissed_at IS NOT NULL) AS dismissed
 FROM user_jobs uj
+JOIN jobs ON jobs.id = uj.job_id
 LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
 WHERE uj.user_id = $1
+  AND (NOT jobs.is_private OR jobs.created_by = uj.user_id)
 `
 
 type CountUserJobsRow struct {
@@ -180,6 +182,8 @@ LEFT JOIN LATERAL (
        AND e.deleted_at IS NULL AND e.direction = 'incoming'
 ) mail ON true
 WHERE uj.user_id = $1
+  -- Another user's private posting never lists, even if a row for it exists (#4763).
+  AND (NOT jobs.is_private OR jobs.created_by = uj.user_id)
   AND ($5::text = 'all'
        OR ($5::text = 'viewed' AND uj.saved_at IS NULL AND a.applied_at IS NULL)
        OR ($5::text = 'saved' AND uj.saved_at IS NOT NULL)

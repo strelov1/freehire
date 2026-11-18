@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/engage/report"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // reportJobToolName is the MCP tool that files a job report.
@@ -64,7 +65,7 @@ func (h *assistantHandlers) reportMCPTools() []assistant.Tool {
 			if h.reports == nil {
 				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "job reports are not available")
 			}
-			jobID, err := h.reports.queries.GetJobIDBySlug(ctx, in.Slug)
+			jobID, err := h.reports.queries.GetJobIDBySlug(ctx, db.GetJobIDBySlugParams{PublicSlug: in.Slug, CallerID: userID})
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil, jobNotFound(in.Slug)
 			}

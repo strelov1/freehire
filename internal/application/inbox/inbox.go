@@ -36,7 +36,7 @@ type Queries interface {
 	GetInterviewInvitation(ctx context.Context, arg db.GetInterviewInvitationParams) (db.GetInterviewInvitationRow, error)
 	// Slugs here resolve to an id only, so use the slim lookup: the wide row would TOAST a
 	// description and an enrichment blob on every call.
-	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	GetJobIDBySlug(ctx context.Context, arg db.GetJobIDBySlugParams) (int64, error)
 	AgentTriageEmail(ctx context.Context, arg db.AgentTriageEmailParams) (int64, error)
 	LinkEmailToJob(ctx context.Context, arg db.LinkEmailToJobParams) (int64, error)
 	UnlinkEmail(ctx context.Context, arg db.UnlinkEmailParams) (int64, error)
