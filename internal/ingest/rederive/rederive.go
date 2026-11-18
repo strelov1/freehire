@@ -10,8 +10,6 @@ import (
 	"encoding/json"
 	"slices"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobderive"
@@ -91,7 +89,7 @@ func Row(j db.Job, canon map[string]string) (params db.UpdateJobDerivedParams, c
 		EducationLevel:      d.EducationLevel,
 		EnglishLevel:        d.EnglishLevel,
 		ExperienceYearsMin:  experience,
-		RoleFingerprint:     pgtype.Text{String: fingerprint, Valid: true},
+		RoleFingerprint:     pgconv.TextValid(fingerprint),
 		CompanySlug:         d.CompanySlug,
 	}
 	return params, FacetsDiffer(params, j) || fingerprintMoved || slugMoved, slugMoved

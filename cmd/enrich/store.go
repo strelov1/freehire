@@ -7,11 +7,11 @@ import (
 	"math"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // dbStore adapts the generated queries + connection pool to enrich.Store. It is the
@@ -101,7 +101,7 @@ func (s *dbStore) Complete(ctx context.Context, entry enrich.Claimed, payload js
 	}
 	if err := qtx.SetJobEnrichment(ctx, db.SetJobEnrichmentParams{
 		Enrichment:        payload,
-		EnrichedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		EnrichedAt:        pgconv.Instant(time.Now()),
 		EnrichmentVersion: int32(entry.TargetVersion),
 		ID:                entry.JobID,
 	}); err != nil {

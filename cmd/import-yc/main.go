@@ -27,6 +27,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/job/ycdir"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
@@ -222,10 +223,7 @@ func nonNil(a []string) []string {
 }
 
 func text(s string) pgtype.Text {
-	if s = strings.TrimSpace(s); s == "" {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: s, Valid: true}
+	return pgconv.Text(strings.TrimSpace(s))
 }
 
 func int4(n int) pgtype.Int4 {

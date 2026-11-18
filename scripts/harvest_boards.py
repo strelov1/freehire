@@ -31,7 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ats_boards import (  # noqa: E402
+from ats_boards import (
     REPO,
     SOURCES_DIR,
     UA,
@@ -373,7 +373,7 @@ def hn_company_name(comment: str) -> str:
     """
     text = re.sub(r"<[^>]+>", " ", comment)  # drop HTML tags
     text = html.unescape(re.sub(r"\s+", " ", text)).strip()
-    head = re.split(r"[|\n\r–—:/]| - ", text, maxsplit=1)[0].strip(" .,-")
+    head = re.split(r"[|\n\r–—:/]| - ", text, maxsplit=1)[0].strip(" .,-")  # noqa: RUF001 - the en dash is a real title separator
     low = head.lower()
     if (
         not head

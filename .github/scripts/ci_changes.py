@@ -83,7 +83,7 @@ def classify(paths):
     return Scope(**flags)
 
 
-def read_changes(base, head, repo=Path(".")):
+def read_changes(base, head, repo=Path()):
     valid_shas = all(
         re.fullmatch(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", sha or "")
         for sha in (base, head)

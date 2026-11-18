@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // ErrDisabled is returned by every operation when billing is not configured. Callers render
@@ -214,7 +215,7 @@ func nullable(t time.Time) pgtype.Timestamptz {
 
 // stamp converts a time to the pgtype the queries take.
 func stamp(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
+	return pgconv.Instant(t)
 }
 
 // Service is Stripe: the shared engine plus the web-only surface (checkout, portal, prices,

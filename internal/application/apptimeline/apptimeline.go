@@ -20,6 +20,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // Queries is the slice of the store this package reaches.
@@ -138,8 +139,8 @@ func (s *Service) Range(ctx context.Context, userID int64, from, to time.Time) (
 
 	rows, err := s.q.ListApplicationEventsInRange(ctx, db.ListApplicationEventsInRangeParams{
 		UserID: userID,
-		FromAt: pgtype.Timestamptz{Time: from, Valid: true},
-		ToAt:   pgtype.Timestamptz{Time: to, Valid: true},
+		FromAt: pgconv.Instant(from),
+		ToAt:   pgconv.Instant(to),
 		// Which sources carry an emails.id in source_ref. Passed rather than written into the
 		// statement so the vocabulary stays beside the trust rule that reads it.
 		SrcGmail:    appevent.SourceMailGmail,
@@ -200,8 +201,8 @@ func (s *Service) Interviews(ctx context.Context, userID int64, from, to time.Ti
 	}
 	rows, err := s.q.ListApplicationInterviewsInRange(ctx, db.ListApplicationInterviewsInRangeParams{
 		UserID: userID,
-		FromAt: pgtype.Timestamptz{Time: from, Valid: true},
-		ToAt:   pgtype.Timestamptz{Time: to, Valid: true},
+		FromAt: pgconv.Instant(from),
+		ToAt:   pgconv.Instant(to),
 	})
 	if err != nil {
 		return nil, err

@@ -19,10 +19,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/job/wikicompany"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/safehttp"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -94,7 +93,7 @@ func (s dbStore) ListMissing(ctx context.Context, afterSlug string, limit int32)
 func (s dbStore) Fill(ctx context.Context, slug, tagline string, companyInfo json.RawMessage) error {
 	return s.q.FillCompanyInfoFromWikipedia(ctx, db.FillCompanyInfoFromWikipediaParams{
 		Slug:        slug,
-		Tagline:     pgtype.Text{String: tagline, Valid: tagline != ""},
+		Tagline:     pgconv.Text(tagline),
 		CompanyInfo: companyInfo,
 	})
 }

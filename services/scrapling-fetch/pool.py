@@ -13,6 +13,7 @@ The factory is injected, so the pool's tests need no browser.
 """
 
 import asyncio
+import contextlib
 import time
 from collections.abc import Awaitable, Callable, Hashable
 from dataclasses import dataclass
@@ -258,10 +259,8 @@ async def _close_quietly(session: Any) -> None:
     try:
         await asyncio.shield(task)
     except asyncio.CancelledError:
-        try:
+        with contextlib.suppress(Exception):
             await task
-        except Exception:
-            pass
         raise
     except Exception:
         pass  # a session that cannot close cleanly is gone either way

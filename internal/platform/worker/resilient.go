@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -75,12 +75,12 @@ func NewLiveScanReader(q LiveScanQueries, closedSince time.Time) PageReader {
 
 func (r liveScanReader) Batch(ctx context.Context, afterID int64, bs int32) ([]db.Job, error) {
 	return r.q.ListLiveJobsByIDAfter(ctx, db.ListLiveJobsByIDAfterParams{
-		AfterID: afterID, BatchSize: bs, ClosedSince: pgtype.Timestamptz{Time: r.closedSince, Valid: true},
+		AfterID: afterID, BatchSize: bs, ClosedSince: pgconv.Instant(r.closedSince),
 	})
 }
 func (r liveScanReader) IDs(ctx context.Context, afterID int64, bs int32) ([]int64, error) {
 	return r.q.ListLiveJobIDsAfter(ctx, db.ListLiveJobIDsAfterParams{
-		AfterID: afterID, BatchSize: bs, ClosedSince: pgtype.Timestamptz{Time: r.closedSince, Valid: true},
+		AfterID: afterID, BatchSize: bs, ClosedSince: pgconv.Instant(r.closedSince),
 	})
 }
 func (r liveScanReader) Row(ctx context.Context, id int64) (db.Job, error) {

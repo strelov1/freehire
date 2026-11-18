@@ -62,8 +62,40 @@ const (
 // apply link it names is mostly LinkedIn, which answers a bot with a login wall.
 //
 // This one list is both the probe exclusion and the age-close set, so a source can never
-// be dropped from the probe without something else taking over its closes.
+// be dropped from the probe without something else taking over its closes. The exception
+// is a posting whose stored URL is itself a LinkedIn or Workday posting (a channel that
+// relays the link): unsignalledPass routes it to that host's paced pass, and the age rule
+// stays its backstop.
 var unsignalledSources = []string{"telegram"}
+
+// unsignalledPass names the paced pass that can judge an unsignalledSource posting by its
+// stored URL, or "" when none can (a t.me post, an unknown host) and only age closes it.
+// The plain GET probe is deliberately not used: Workday, Ashby and other SPA hosts answer
+// it with a JS shell that Classify reads as expired.
+func unsignalledPass(rawURL string) string {
+	switch {
+	case sources.LinkedInPostingID(rawURL) != "":
+		return "linkedin"
+	case workdayJobAPI(rawURL) != "":
+		return "workday"
+	}
+	return ""
+}
+
+// routeUnsignalled returns the orphans the plain GET probe judges and adds every
+// unsignalledSource posting unsignalledPass can judge to that pass's queue in paced, so it
+// shares the host's pace and per-run budget. The rest are dropped: only age closes them.
+func routeUnsignalled(rows []db.SelectOrphanLivenessCandidatesRow, paced map[string][]candidate) (orphans []db.SelectOrphanLivenessCandidatesRow, routed int) {
+	for _, r := range rows {
+		if !slices.Contains(unsignalledSources, r.Source) {
+			orphans = append(orphans, r)
+		} else if pass := unsignalledPass(r.URL); pass != "" {
+			paced[pass] = append(paced[pass], orphanCandidate(r))
+			routed++
+		}
+	}
+	return orphans, routed
+}
 
 // expiryWindow is how old an unsignalledSource posting must be before it is presumed
 // filled. Generous on purpose: this is the only close that rests on a guess, so it takes
@@ -103,6 +135,7 @@ func pacedPasses(client *http.Client) []pacedPass {
 		arbeitnowPass(client),
 		jobtechPass(client, jobtechAdAPI),
 		linkedInPass(client),
+		workdayPass(client),
 	}, catalogStatusPasses(client)...)
 }
 
@@ -237,23 +270,22 @@ func run() int {
 	}
 	expireDespiteRegistered, registeredSweepGrace := registeredAgeFallback()
 
-	// Appended AFTER the guard above so the empty-ATS-registry safeguard still keys
-	// off atsProviders alone. See unsignalledSources for why these are excluded.
-	excluded := append(atsProviders, unsignalledSources...)
-
-	candidates, staleCandidates, err := selectProbeCandidates(ctx, queries,
-		probeScope{source: *sourceFilter, jobIDs: jobIDs}, excluded, probeDespiteRegistered, time.Now().Add(-staleCutoff))
+	// unsignalledSources come back as orphans and are split off below: only those
+	// unsignalledPass can judge are probed (see unsignalledSources).
+	selected, staleCandidates, err := selectProbeCandidates(ctx, queries,
+		probeScope{source: *sourceFilter, jobIDs: jobIDs}, atsProviders, probeDespiteRegistered, time.Now().Add(-staleCutoff))
 	if err != nil {
 		log.Printf("select candidates: %v", err)
 		return 1
 	}
-	orphanCount := len(candidates)
 	// Probes go out on safehttp: orphan-job URLs come from attacker-influenced sources
 	// (telegram posts), so the probe must refuse internal/metadata targets.
 	client := safehttp.NewClient(probeTimeout)
 	paced := pacedPasses(client)
 	var getProbeStale, himalayasStale, echojobsStale []candidate
 	pacedStale := make(map[string][]candidate)
+	candidates, unsignalledProbed := routeUnsignalled(selected, pacedStale)
+	orphanCount := len(candidates)
 	for _, c := range staleCandidates {
 		switch {
 		case slices.Contains(probeDespiteRegisteredGET, c.Source):
@@ -277,8 +309,8 @@ func run() int {
 	for _, p := range paced {
 		pacedCounts = append(pacedCounts, fmt.Sprintf("%d %s", len(pacedStale[p.source]), p.source))
 	}
-	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources) + %d stale candidates from %d registered sources (%d GET, %d himalayas, %d echojobs, %s)",
-		orphanCount, len(atsProviders), len(unsignalledSources), len(staleCandidates), len(probeDespiteRegistered),
+	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers) + %d unsignalled postings on a judgeable host + %d stale candidates from %d registered sources (%d GET, %d himalayas, %d echojobs, %s)",
+		orphanCount, len(atsProviders), unsignalledProbed, len(staleCandidates), len(probeDespiteRegistered),
 		len(getProbeStale), len(himalayasStale), len(echojobsStale), strings.Join(pacedCounts, ", "))
 	if *sourceFilter != "" {
 		log.Printf("liveness: restricted to source %q for this run", *sourceFilter)
@@ -366,11 +398,13 @@ type candidate struct {
 func orphanCandidates(rows []db.SelectOrphanLivenessCandidatesRow) []candidate {
 	out := make([]candidate, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, candidate{
-			id: r.ID, publicSlug: r.PublicSlug, source: r.Source, url: r.URL, strikes: r.LivenessStrikes,
-		})
+		out = append(out, orphanCandidate(r))
 	}
 	return out
+}
+
+func orphanCandidate(r db.SelectOrphanLivenessCandidatesRow) candidate {
+	return candidate{id: r.ID, publicSlug: r.PublicSlug, source: r.Source, url: r.URL, strikes: r.LivenessStrikes}
 }
 
 func staleCandidate(r db.SelectStaleRegisteredCandidatesRow) candidate {

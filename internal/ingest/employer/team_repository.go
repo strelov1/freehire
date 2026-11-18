@@ -5,9 +5,9 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -51,7 +51,7 @@ func (r *QueriesRepository) Invite(ctx context.Context, inv NewInvitation, maxLi
 			Email:       inv.Email,
 			TokenHash:   inv.TokenHash,
 			InvitedBy:   inv.InvitedBy,
-			ExpiresAt:   pgtype.Timestamptz{Time: inv.ExpiresAt, Valid: true},
+			ExpiresAt:   pgconv.Instant(inv.ExpiresAt),
 			MaxLive:     maxLive,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {

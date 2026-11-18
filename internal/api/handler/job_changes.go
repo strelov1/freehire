@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 const (
@@ -92,7 +92,7 @@ func (h *jobsHandlers) ListJobChanges(ctx context.Context, params apigen.ListJob
 	}
 
 	if !hasPos {
-		xid, err := h.queries.JobChangesStartXID(ctx, pgtype.Timestamptz{Time: since, Valid: true})
+		xid, err := h.queries.JobChangesStartXID(ctx, pgconv.Instant(since))
 		if err != nil {
 			return nil, err
 		}

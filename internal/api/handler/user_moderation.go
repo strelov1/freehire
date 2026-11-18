@@ -13,6 +13,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // maxBanReason bounds the note a moderator leaves; it is shown to no one but moderators.
@@ -101,7 +102,7 @@ func (h *userModerationHandlers) BanUser(ctx context.Context, req *apigen.BanReq
 	// BanUser repeats the admin and self rules in SQL, so a role change between the read
 	// above and this write still cannot get around them.
 	_, err = h.queries.BanUser(ctx, db.BanUserParams{
-		ID: id, Reason: pgtype.Text{String: reason, Valid: true}, ActorID: pgtype.Int8{Int64: actor, Valid: true},
+		ID: id, Reason: pgconv.TextValid(reason), ActorID: pgtype.Int8{Int64: actor, Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fiber.NewError(fiber.StatusConflict, "user is already banned")
