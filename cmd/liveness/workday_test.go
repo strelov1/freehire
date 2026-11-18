@@ -17,6 +17,7 @@ func TestWorkdayJobAPI(t *testing.T) {
 		"https://citi.wd5.myworkdayjobs.com/es/2/job/Heredia--Costa-Rica/Analyst_26999832":   "https://citi.wd5.myworkdayjobs.com/wday/cxs/citi/2/job/Heredia--Costa-Rica/Analyst_26999832",
 		"https://wv.wd1.myworkdayjobs.com/WVI/job/Ambassel-Ethiopia/Officer_JR53064?utm=x":   "https://wv.wd1.myworkdayjobs.com/wday/cxs/wv/WVI/job/Ambassel-Ethiopia/Officer_JR53064",
 		"https://wv.wd1.myworkdayjobs.com/en-US/WVI/job/Ambassel-Ethiopia/Officer_JR53064":   "https://wv.wd1.myworkdayjobs.com/wday/cxs/wv/WVI/job/Ambassel-Ethiopia/Officer_JR53064",
+		"https://acme.wd1.myworkdayjobs.com/en-US/job/Berlin/Engineer_R-1":                   "",
 		"https://ipas.wd5.myworkdayjobs.com/en-US/Ipas":                                      "",
 		"https://unhcr.wd3.myworkdayjobs.com/en-US/External/details/Finance-Associate_JR266": "",
 		"http://wv.wd1.myworkdayjobs.com/WVI/job/A/B_1":                                      "",

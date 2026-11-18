@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -63,6 +64,8 @@ func workdayPass(client *http.Client) pacedPass {
 	}
 }
 
+var workdayLocale = regexp.MustCompile(`^(?i)[a-z]{2}-[a-z]{2}$`)
+
 // workdayJobAPI maps a posting URL "https://<tenant>.wdN.myworkdayjobs.com[/<locale>]/<site>/job/..."
 // to its CXS endpoint "https://<host>/wday/cxs/<tenant>/<site>/job/...", or "" for any other URL.
 func workdayJobAPI(raw string) string {
@@ -73,6 +76,9 @@ func workdayJobAPI(raw string) string {
 	segs := strings.Split(strings.Trim(u.EscapedPath(), "/"), "/")
 	for i := 1; i <= 2 && i+1 < len(segs); i++ {
 		if segs[i] == "job" {
+			if workdayLocale.MatchString(segs[i-1]) { // "/en-US/job/..." names no site
+				return ""
+			}
 			tenant, _, _ := strings.Cut(u.Host, ".")
 			return "https://" + u.Host + "/wday/cxs/" + tenant + "/" + strings.Join(segs[i-1:], "/")
 		}
