@@ -99,7 +99,7 @@
 
   /** The draft as a mailto query: its leading "Subject:" line becomes the subject. */
   function mailQuery(text: string): string {
-    const match = /^\s*Subject:\s*(.+)\n+/i.exec(text);
+    const match = /^\s*Subject:[^\S\r\n]*(.+?)\r?\n(?:\r?\n)*/i.exec(text);
     const subject = match?.[1]?.trim() ?? '';
     const body = match ? text.slice(match[0].length) : text;
     return `subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;

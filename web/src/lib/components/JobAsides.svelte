@@ -29,7 +29,10 @@
 
 <!-- Writing to the people who recruit: offered only where the API says a lookup can run. -->
 {#if job.recruiter_contacts_available && job.closed_at == null}
-  <RecruiterContactsBlock jobSlug={job.public_slug} companyName={job.company} />
+  <!-- Keyed: the page is reused across jobs, and found contacts belong to one job. -->
+  {#key job.public_slug}
+    <RecruiterContactsBlock jobSlug={job.public_slug} companyName={job.company} />
+  {/key}
 {/if}
 
 <!-- Mentorship is a separate way to get help from someone at this company. -->
