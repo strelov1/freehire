@@ -20,10 +20,12 @@ const hubstaffCards = `<div class="search-result"><div class="main-details"><a c
 	`<div class="search-result"><div class="main-details"><a class="name" href="/jobs/support-cc33">Support Agent</a><span class="label label-full_time">full time</span><div class="pay-rate"></div><div class="job-company"><a class="job-agency" href="https://initech.example/"><i class="hi hi-agency"></i> Initech</a><span><i class="hi hi-remote"></i> Remote job</span></div></div></div>` +
 	`<div class="search-result"><div class="main-details"><a class="name" href="/jobs/no-client-dd44">No Client</a></div></div>`
 
-// hubstaffAnswer wraps markup the way the site does: a JS call whose argument is a string literal.
+// hubstaffAnswer wraps markup the way the site does: a JS call whose argument is a string literal
+// escaped by Rails' escape_javascript, which also escapes /, $, ' and ` (JSON rejects the last three).
 func hubstaffAnswer(markup string) string {
-	lit, _ := json.Marshal(strings.ReplaceAll(markup, "/", `\/`)) // JS answers escape slashes
-	return `$('#results').html(` + strings.ReplaceAll(string(lit), `\\/`, `\/`) + `);` + "\n"
+	lit, _ := json.Marshal(markup)
+	escaped := strings.NewReplacer(`/`, `\/`, `$`, `\$`, `'`, `\'`, "`", "\\`").Replace(string(lit))
+	return `$('#results').html(` + escaped + `);` + "\n"
 }
 
 type hubstaffFake struct {

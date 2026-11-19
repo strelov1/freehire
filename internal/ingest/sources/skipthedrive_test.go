@@ -105,3 +105,15 @@ func TestSkipTheDriveSitemapWithoutCategoriesFails(t *testing.T) {
 		t.Fatal("want an error for a sitemap with no category")
 	}
 }
+
+func TestPacedSkipTheDriveSharesOneLimiterAcrossTextAndHTML(t *testing.T) {
+	paced := pacedSkipTheDrive(skipthedriveFake()).(struct {
+		TextGetter
+		HTMLGetter
+	})
+	text := paced.TextGetter.(rateLimitedTextGetter)
+	page := paced.HTMLGetter.(rateLimitedHTMLGetter)
+	if text.limiter != page.limiter {
+		t.Fatal("listing and posting requests draw on different limiters")
+	}
+}
