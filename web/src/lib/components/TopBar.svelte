@@ -88,17 +88,18 @@
   // `top` rather than a transform: a transform would become the containing block for
   // the mobile menu's `position: fixed` drawer, the same trap as backdrop-blur below.
   let lastScrollY = 0;
-  let headerEl: HTMLElement;
-  const HIDE_AFTER = 56; // the header's own height: it never slides away over nothing
+  let headerEl: HTMLElement | undefined = $state();
   const SCROLL_SLOP = 6; // ignore trackpad jitter so the bar does not flicker
   function onWindowScroll() {
     const y = window.scrollY;
     const delta = y - lastScrollY;
-    if (y < HIDE_AFTER) siteHeader.hidden = false;
+    // The header's own height (taller under a larger root font): it never slides away over nothing.
+    const hideAfter = headerEl?.offsetHeight ?? 57;
+    if (y < hideAfter) siteHeader.hidden = false;
     // Never slide away a control that holds focus: PageDown from a focused link would hide it.
-    else if (delta > SCROLL_SLOP) siteHeader.hidden = !headerEl.contains(document.activeElement);
+    else if (delta > SCROLL_SLOP) siteHeader.hidden = !headerEl?.contains(document.activeElement);
     else if (delta < -SCROLL_SLOP) siteHeader.hidden = false;
-    if (Math.abs(delta) > SCROLL_SLOP || y < HIDE_AFTER) lastScrollY = y;
+    if (Math.abs(delta) > SCROLL_SLOP || y < hideAfter) lastScrollY = y;
   }
   $effect(() => {
     document.documentElement.toggleAttribute('data-header-hidden', siteHeader.hidden);
