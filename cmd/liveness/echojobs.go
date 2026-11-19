@@ -15,7 +15,7 @@ const echojobsJobURL = "https://echojobs.io/job/%s"
 
 // checkEchoJobsLive queries echojobs.io's own job page for one posting's slug (its ExternalID,
 // minus the boardless ":" prefix UpsertJob stores boardless external ids with — see
-// internal/ingest/sources/source.go) and reports whether it is still listed.
+// internal/ingest/sources/markers.go) and reports whether it is still listed.
 func checkEchoJobsLive(ctx context.Context, client *http.Client, externalID string) (liveness.Verdict, string) {
 	return checkEchoJobsLiveAt(ctx, client, echojobsJobURL, trimEchoJobsHandle(externalID))
 }

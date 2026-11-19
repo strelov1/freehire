@@ -131,7 +131,7 @@ func TestICIMSJobLocationAsSingleObject(t *testing.T) {
 // fails). The board's full posting list depends on both, so the whole Fetch must fail rather
 // than silently return only the first sub-sitemap's postings as a complete board — the same
 // partial-success shape that forced freehire#2337's revert (see the fullBoardListing marker's
-// bar, internal/ingest/sources/source.go).
+// bar, internal/ingest/sources/markers.go).
 func TestICIMSFetchFailsWhenASubSitemapFails(t *testing.T) {
 	loc := "https://careers.docusign.com/jobs/1?lang=en-us"
 	fake := (&routedHTTP{}).

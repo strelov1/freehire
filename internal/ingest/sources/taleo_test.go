@@ -375,7 +375,7 @@ func (f *taleoEndlessFake) GetText(context.Context, string) (string, error) {
 // A listing still yielding new requisitions past taleoMaxPages is a truncated walk, not a
 // genuinely exhausted one, and must fail rather than silently return the requisitions
 // gathered so far — the same partial-success shape that forced freehire#2337's revert (see
-// the fullBoardListing marker's bar, internal/ingest/sources/source.go).
+// the fullBoardListing marker's bar, internal/ingest/sources/markers.go).
 func TestTaleoListRequisitionsFailsWhenListingExceedsThePageCap(t *testing.T) {
 	fake := &taleoEndlessFake{}
 	_, err := taleo{http: fake}.listRequisitions(context.Background(), taleoBoard{host: "acme.taleo.net", section: "2"}, "12345")
