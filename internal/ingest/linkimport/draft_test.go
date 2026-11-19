@@ -84,3 +84,13 @@ func TestDraftFrom_CarriesIdentityAndContent(t *testing.T) {
 		t.Error("IsTechHint = false, want true — draftFrom must forward it like the crawl path does")
 	}
 }
+
+// A URL import of a posting under the shared neutral label keeps its board's own company slug.
+func TestDraftFrom_CompanyKeyKeepsBoardSlug(t *testing.T) {
+	d := draftFrom(linksource.Resolved{Source: "paycor", Job: sources.Job{
+		ExternalID: "1", Title: "Cook", Company: "Employer via Paycor", CompanyKey: "boardaaa",
+	}})
+	if d.CanonicalCompanySlug != "boardaaa" {
+		t.Errorf("CanonicalCompanySlug = %q, want boardaaa", d.CanonicalCompanySlug)
+	}
+}

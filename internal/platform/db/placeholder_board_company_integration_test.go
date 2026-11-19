@@ -243,3 +243,29 @@ func TestRenamePlaceholderBoardJobsSurvivesAnInFlightClaim(t *testing.T) {
 		t.Errorf("pending entries for the renamed job after the old claim completed = %d, want 1", n)
 	}
 }
+
+// A board shown under its neutral label (sources.PlaceholderLabel) is renamed too, and keeps
+// its place when the label is empty.
+func TestRenamePlaceholderBoardJobsMatchesLabel(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	q := New(pool)
+	truncate(t, pool)
+
+	const board = "8a7883c664f8df9e0165119e33353606"
+	p := ingestParams(board+":1", "Cook")
+	p.Source, p.Company, p.CompanySlug = "paycor", "Employer via Paycor", board
+	if _, err := ingestUpsert(ctx, q, p); err != nil {
+		t.Fatal(err)
+	}
+	args := RenamePlaceholderBoardJobsParams{
+		Name: "Acme", NewSlug: "acme", Source: "paycor", BoardPattern: board + ":%", OldName: board,
+	}
+	if got, err := q.RenamePlaceholderBoardJobs(ctx, args); err != nil || len(got) != 0 {
+		t.Fatalf("without the label: %v, %v; want no rows", got, err)
+	}
+	args.LabelName = "Employer via Paycor"
+	if got, err := q.RenamePlaceholderBoardJobs(ctx, args); err != nil || len(got) != 1 || got[0] != board {
+		t.Fatalf("with the label: %v, %v; want [%s]", got, err, board)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"regexp"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -75,11 +76,16 @@ func (s paycor) detail(ctx context.Context, e CompanyEntry, id string) (Job, boo
 		description = sanitizeHTML(innerHTML(body))
 	}
 
+	company, key := e.Company, ""
+	if label := PlaceholderLabel(e.Provider, e.Company); label != "" {
+		company, key = label, e.Company
+	}
 	return Job{
 		ExternalID:  id,
 		URL:         jobURL,
 		Title:       title,
-		Company:     e.Company,
+		Company:     company,
+		CompanyKey:  key,
 		Location:    location,
 		Description: description,
 		// Paycor exposes no structured remote flag, so isRemote(location) is the only signal
@@ -171,4 +177,21 @@ func paycorFieldValue(root *html.Node, id string) string {
 		b.WriteByte(' ')
 	}
 	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// paycorNeutralLabel is what a Paycor board named only by its clientId shows users: the vendor
+// publishes no employer name, and a 32-hex id reads as an untrustworthy posting (#4548).
+const paycorNeutralLabel = "Employer via Paycor"
+
+var paycorClientID = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
+
+// PlaceholderLabel is the neutral display name for a board whose company is still its raw
+// board id, or "" when the board has a real name (or the provider has no such label). The
+// company SLUG stays keyed on the id (Job.CompanyKey), so the boards do not merge into one
+// company page; the id remains the board's placeholder until the rename path finds a name.
+func PlaceholderLabel(provider, company string) string {
+	if provider == "paycor" && paycorClientID.MatchString(company) {
+		return paycorNeutralLabel
+	}
+	return ""
 }

@@ -5,6 +5,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobderive"
@@ -112,11 +113,18 @@ func jobIdentity(e sources.CompanyEntry, j sources.Job) (source, externalID stri
 // job.ErrInvalidDraft for a posting with no title/identity, which the caller skips.
 func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical, bodyFromCatalogue bool) (job.Job, error) {
 	source, externalID := jobIdentity(e, j)
+	slug := canonicalCompanySlug(canon, j.Company)
+	if j.CompanyKey != "" {
+		// The key, not the shared label, is the company; the registry may have re-keyed it.
+		if slug = canonicalCompanySlug(canon, j.CompanyKey); slug == "" {
+			slug = normalize.CompanySlug(j.CompanyKey)
+		}
+	}
 	return job.New(job.Draft{
 		// Empty unless the registry re-keys this employer, and empty is what Draft reads as
 		// "keep what jobderive derived". Resolving here, at construction, is what makes the
 		// slug saveOne gates on the same value it stores.
-		CanonicalCompanySlug: canonicalCompanySlug(canon, j.Company),
+		CanonicalCompanySlug: slug,
 		BodyFromCatalogue:    bodyFromCatalogue,
 		Input: jobderive.Input{
 			Source:             source,

@@ -63,6 +63,11 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
   Workday was tried and is absent on purpose; ADP is not in this registry either, because it
   states the employer nowhere but in the posting text — see below;
   the constructor's comment says why for each.
+- **Boards still unnamed** (Paycor hex clientId): postings show the neutral label
+  `sources.PlaceholderLabel` ("Employer via Paycor", #4548) while `jobs.company_slug` stays keyed on the id
+  (`Job.CompanyKey`), so boards never merge into one company. `RenamePlaceholderBoardJobs` matches
+  the placeholder OR the label, so a later real name still renames them. Migration 0286 relabelled the
+  rows already stored.
 - **`AcceptPlaceholder`** — no confidence match: the lookup is by the exact board id, so there
   is no slug to compare against and nothing an unrelated page could slip through (join's
   argument in `Accept`). It refuses only what is no improvement — empty, junk, the placeholder.

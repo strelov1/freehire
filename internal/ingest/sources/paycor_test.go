@@ -163,3 +163,23 @@ func TestPaycorListingFailureFailsTheBoard(t *testing.T) {
 		t.Fatal("Fetch: want an error when the listing cannot be read")
 	}
 }
+
+// A board named only by its clientId is shown under the neutral label but keyed on the id, so
+// the postings of different boards do not merge into one company.
+func TestPaycorHexBoardGetsNeutralLabelAndKey(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("JobIntroduction.action", paycorDetailHTML).
+		route("CareerHome.action", paycorListingHTML)
+	jobs, err := NewPaycor(fake).Fetch(context.Background(), CompanyEntry{
+		Company: paycorBoard, Provider: "paycor", Board: paycorBoard,
+	})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("Fetch: %v, %d jobs", err, len(jobs))
+	}
+	if jobs[0].Company != "Employer via Paycor" || jobs[0].CompanyKey != paycorBoard {
+		t.Errorf("Company = %q, CompanyKey = %q", jobs[0].Company, jobs[0].CompanyKey)
+	}
+	if PlaceholderLabel("paycor", "Afiniti") != "" || PlaceholderLabel("lever", paycorBoard) != "" {
+		t.Error("a named board or another provider must get no label")
+	}
+}

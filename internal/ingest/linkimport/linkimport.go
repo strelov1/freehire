@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
+	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/linksource"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -233,7 +234,13 @@ func (im *Importer) resolveVanityDomain(ctx context.Context, raw string) (linkso
 // adapter's posted date rides the draft rather than being written over the mapped
 // params, so the derived columns fingerprint the posted_at that is actually stored.
 func draftFrom(r linksource.Resolved) job.Draft {
+	// A posting under a shared neutral label keeps its board's own company slug (Job.CompanyKey).
+	var slug string
+	if r.Job.CompanyKey != "" {
+		slug = normalize.CompanySlug(r.Job.CompanyKey)
+	}
 	return job.Draft{
+		CanonicalCompanySlug: slug,
 		Input: jobderive.Input{
 			Source:             r.Source,
 			ExternalID:         r.Job.ExternalID,

@@ -9,6 +9,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/dict/companyname"
 	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 )
@@ -95,6 +96,7 @@ func writePlaceholderRename(ctx context.Context, q placeholderWriter, r placehol
 		Source:       r.provider,
 		BoardPattern: externalid.BoardPattern(r.board),
 		OldName:      r.oldName,
+		LabelName:    sources.PlaceholderLabel(r.provider, r.oldName),
 	})
 	if err != nil {
 		return "", nil, fmt.Errorf("jobs: %w", err)

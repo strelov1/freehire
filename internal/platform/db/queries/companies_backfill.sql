@@ -49,6 +49,8 @@ WHERE company_slug = @old_slug
 -- company and slug change, so an open, canonical, public one is queued for search in the same
 -- statement, as every other writer of indexed job content does.
 --
+-- label_name is the neutral label the postings may show instead (sources.PlaceholderLabel), '' for none.
+--
 -- Returns the company_slug each moved job carried BEFORE the write, one row per job: the rows
 -- are matched by board and name, not by slug, and an alias the merge worker recorded may have
 -- re-keyed them away from the slug the placeholder name folds to — the caller sweeps exactly
@@ -58,7 +60,7 @@ WITH moved AS (
     FROM jobs j
     WHERE j.source = sqlc.arg(source)
       AND j.external_id LIKE sqlc.arg(board_pattern)
-      AND j.company = sqlc.arg(old_name)
+      AND j.company IN (sqlc.arg(old_name), NULLIF(sqlc.arg(label_name)::text, ''))
     FOR UPDATE
 ), updated AS (
     UPDATE jobs
