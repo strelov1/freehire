@@ -121,7 +121,7 @@ func (naukri) SweepGrace() time.Duration { return naukriSweepGrace }
 // sliceBoardListing: a functional area is a 7-day, page-capped slice, so the 14-day sweepGrace
 // stands in for a full listing. Without it a posting closed only through the company scope, and
 // an employer whose last posting left the search never re-entered it, so the row stayed open.
-func (naukri) sliceBoardListing() {}
+func (naukri) SliceBoardListing() {}
 
 // naukriListing is one search row, reduced to what the adapter reads.
 type naukriListing struct {
