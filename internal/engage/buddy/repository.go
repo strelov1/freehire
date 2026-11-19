@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -32,13 +33,9 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository 
 	return &QueriesRepository{q: q, pool: pool}
 }
 
-func categoryText(k Keys) pgtype.Text {
-	return pgtype.Text{String: k.Category, Valid: k.Category != ""}
-}
-
 func (r *QueriesRepository) Join(ctx context.Context, userID int64, handle string, keys Keys) (Member, error) {
 	row, err := r.q.JoinBuddyMember(ctx, db.JoinBuddyMemberParams{
-		UserID: userID, Handle: handle, Category: categoryText(keys),
+		UserID: userID, Handle: handle, Category: pgconv.Text(keys.Category),
 		Countries: keys.Countries, Regions: keys.Regions,
 	})
 	if err != nil {
@@ -92,7 +89,7 @@ func (r *QueriesRepository) MemberByHandle(ctx context.Context, handle string) (
 
 func (r *QueriesRepository) SetKeys(ctx context.Context, userID int64, keys Keys) error {
 	return r.q.UpdateBuddyMemberRankingKeys(ctx, db.UpdateBuddyMemberRankingKeysParams{
-		UserID: userID, Category: categoryText(keys),
+		UserID: userID, Category: pgconv.Text(keys.Category),
 		Countries: keys.Countries, Regions: keys.Regions,
 	})
 }
@@ -320,7 +317,7 @@ func (r *QueriesRepository) NoticeReaction(ctx context.Context, eventID, reactor
 	}
 	_, err = r.q.RecordNotification(ctx, db.RecordNotificationParams{
 		UserID: author, Kind: NotificationReaction, Title: title, Body: body,
-		DedupKey: pgtype.Text{String: fmt.Sprintf("%s:%d:%d", NotificationReaction, eventID, reactorID), Valid: true},
+		DedupKey: pgconv.TextValid(fmt.Sprintf("%s:%d:%d", NotificationReaction, eventID, reactorID)),
 	})
 	// A notice this reactor already gave the author for this event is a conflict, not a failure.
 	if errors.Is(err, pgx.ErrNoRows) {

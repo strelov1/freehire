@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // Notification-center kinds of a mock notice. user_notifications.kind is free text, so they
@@ -148,7 +148,7 @@ func (n *MockMailNotifier) record(ctx context.Context, userID int64, nt mockNoti
 	}
 	if _, err := n.q.RecordNotification(ctx, db.RecordNotificationParams{
 		UserID: userID, Kind: nt.kind, Title: nt.subject, Body: nt.line + " " + when,
-		DedupKey: pgtype.Text{String: fmt.Sprintf("%s:%s:%s:%d", nt.kind, m.ID, nt.event, userID), Valid: true},
+		DedupKey: pgconv.TextValid(fmt.Sprintf("%s:%s:%s:%d", nt.kind, m.ID, nt.event, userID)),
 	}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("buddy: recording %s notice for user %d: %v", nt.kind, userID, err)
 	}

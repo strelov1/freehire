@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 type probeScope struct {
@@ -53,7 +53,7 @@ func selectProbeCandidates(ctx context.Context, q candidateQueries, scope probeS
 			orphans = slices.DeleteFunc(orphans, func(c db.SelectOrphanLivenessCandidatesRow) bool { return c.Source != scope.source })
 		}
 		stale, err := q.SelectStaleRegisteredCandidates(ctx, db.SelectStaleRegisteredCandidatesParams{
-			Sources: filterSources(probed, scope.source), Cutoff: pgtype.Timestamptz{Time: cutoff, Valid: true},
+			Sources: filterSources(probed, scope.source), Cutoff: pgconv.Instant(cutoff),
 		})
 		return orphans, stale, err
 	}

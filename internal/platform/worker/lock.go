@@ -26,6 +26,10 @@ const (
 	// SchedulerLockKey serializes cmd/ingest-scheduler ticks; it makes the fleet's concurrency
 	// cap atomic, which a check-then-act pair is not. "fhsc".
 	SchedulerLockKey int64 = 0x66687363
+	// LivenessLockKey serializes cmd/liveness runs: cron offers no guarantee against stacking,
+	// and two runs probing the same orphan seconds apart would collapse the "two consecutive
+	// expired reads" grace into one burst and close a job on a transient blip. "fhlv".
+	LivenessLockKey int64 = 0x66686c76
 	// RewardLockKey serializes cmd/billing-sync's referral pass across processes, so the
 	// per-referrer reward ceiling is a bound. "fhrw".
 	RewardLockKey int64 = 0x66687277

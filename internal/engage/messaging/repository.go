@@ -5,9 +5,9 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -31,11 +31,9 @@ func rowFrom(c db.Conversation) ConversationRow {
 	return out
 }
 
-func pairKey(k string) pgtype.Text { return pgtype.Text{String: k, Valid: k != ""} }
-
 func (r *QueriesRepository) Start(ctx context.Context, req StartRequest) (ConversationRow, error) {
 	row, err := r.q.StartConversation(ctx, db.StartConversationParams{
-		Kind: req.Kind, PairKey: pairKey(req.PairKey), StarterID: req.StarterID, StarterPersona: req.StarterPersona,
+		Kind: req.Kind, PairKey: pgconv.Text(req.PairKey), StarterID: req.StarterID, StarterPersona: req.StarterPersona,
 		RecipientID: req.RecipientID, RecipientPersona: req.RecipientPersona, Body: req.Body,
 	})
 	if err == nil {
@@ -77,7 +75,7 @@ func (r *QueriesRepository) reopen(ctx context.Context, req StartRequest) (Conve
 }
 
 func (r *QueriesRepository) ConversationByPairKey(ctx context.Context, kind, key string) (ConversationRow, bool, error) {
-	row, err := r.q.GetConversationByPairKey(ctx, db.GetConversationByPairKeyParams{Kind: kind, PairKey: pairKey(key)})
+	row, err := r.q.GetConversationByPairKey(ctx, db.GetConversationByPairKeyParams{Kind: kind, PairKey: pgconv.Text(key)})
 	return found(row, err)
 }
 
@@ -199,7 +197,7 @@ func (r *QueriesRepository) Block(ctx context.Context, blocker, conversationID i
 func (r *QueriesRepository) Report(ctx context.Context, reporter, conversationID int64, reason, note string) error {
 	_, err := r.q.InsertConversationReport(ctx, db.InsertConversationReportParams{
 		ConversationID: conversationID, ReporterID: reporter, Reason: reason,
-		Note: pgtype.Text{String: note, Valid: note != ""},
+		Note: pgconv.Text(note),
 	})
 	if err == nil {
 		return nil

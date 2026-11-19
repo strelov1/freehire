@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // DBStore adapts *db.Queries to the sync worker's Store.
@@ -55,15 +55,15 @@ func (s *DBStore) ReplaceBusyWindow(ctx context.Context, mentorID int64, windowE
 	q := s.q.WithTx(tx)
 	if err := q.DeleteMentorBusyIntervalsInWindow(ctx, db.DeleteMentorBusyIntervalsInWindowParams{
 		MentorID:  mentorID,
-		WindowEnd: pgtype.Timestamptz{Time: windowEnd, Valid: true},
+		WindowEnd: pgconv.Instant(windowEnd),
 	}); err != nil {
 		return err
 	}
 	for _, p := range periods {
 		if err := q.UpsertMentorBusyInterval(ctx, db.UpsertMentorBusyIntervalParams{
 			MentorID:   mentorID,
-			StartsAt:   pgtype.Timestamptz{Time: p.Start, Valid: true},
-			EndsAt:     pgtype.Timestamptz{Time: p.End, Valid: true},
+			StartsAt:   pgconv.Instant(p.Start),
+			EndsAt:     pgconv.Instant(p.End),
 			ExternalID: externalID(p.Start, p.End),
 		}); err != nil {
 			return err

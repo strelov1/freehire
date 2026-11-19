@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // DBStore adapts *db.Queries to the sync worker's Store.
@@ -48,7 +47,7 @@ func (s *DBStore) UpsertEmail(ctx context.Context, e StoredEmail) error {
 		Subject:    e.Message.Subject,
 		BodyText:   e.Message.BodyText,
 		BodyHtml:   e.Message.BodyHTML,
-		ReceivedAt: pgtype.Timestamptz{Time: e.Message.ReceivedAt, Valid: true},
+		ReceivedAt: pgconv.Instant(e.Message.ReceivedAt),
 		IcalUid:    e.Message.CalendarUID,
 	})
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -104,16 +105,16 @@ func (r *QueriesRepository) ListBusyByKind(ctx context.Context, mentorID int64, 
 func (r *QueriesRepository) listBusyByKind(ctx context.Context, mentorID int64, from, to time.Time) (booked, busy []slots.Interval, err error) {
 	bookings, err := r.q.ListMentorBusyBookings(ctx, db.ListMentorBusyBookingsParams{
 		MentorID:    mentorID,
-		WindowStart: pgtype.Timestamptz{Time: from, Valid: true},
-		WindowEnd:   pgtype.Timestamptz{Time: to, Valid: true},
+		WindowStart: pgconv.Instant(from),
+		WindowEnd:   pgconv.Instant(to),
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	calendar, err := r.q.ListMentorBusyIntervals(ctx, db.ListMentorBusyIntervalsParams{
 		MentorID:    mentorID,
-		WindowStart: pgtype.Timestamptz{Time: from, Valid: true},
-		WindowEnd:   pgtype.Timestamptz{Time: to, Valid: true},
+		WindowStart: pgconv.Instant(from),
+		WindowEnd:   pgconv.Instant(to),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -139,8 +140,8 @@ func (r *QueriesRepository) CreateBooking(ctx context.Context, row BookingRow) (
 	params := db.CreateMentorBookingParams{
 		MentorID:       row.MentorID,
 		SeekerUserID:   row.SeekerUserID,
-		StartsAt:       pgtype.Timestamptz{Time: row.StartsAt, Valid: true},
-		EndsAt:         pgtype.Timestamptz{Time: row.EndsAt, Valid: true},
+		StartsAt:       pgconv.Instant(row.StartsAt),
+		EndsAt:         pgconv.Instant(row.EndsAt),
 		JobID:          optionalInt8(row.JobID),
 		Note:           row.Note,
 		SeekerTimezone: row.SeekerTimezone,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -134,7 +135,7 @@ func clockFromPg(t pgtype.Time) (slots.TimeOfDay, bool) {
 
 func (r *QueriesRepository) MockBusy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error) {
 	rows, err := r.q.ListBuddyMockBusy(ctx, db.ListBuddyMockBusyParams{
-		UserID: userID, WindowStart: pgInstant(from), WindowEnd: pgInstant(to),
+		UserID: userID, WindowStart: pgconv.Instant(from), WindowEnd: pgconv.Instant(to),
 	})
 	if err != nil {
 		return nil, err
@@ -145,8 +146,6 @@ func (r *QueriesRepository) MockBusy(ctx context.Context, userID int64, from, to
 	}
 	return out, nil
 }
-
-func pgInstant(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
 
 // constraintMockNoOverlap is the EXCLUDE that keeps one person out of two overlapping mocks
 // in either role. Matched by name, so another exclusion could never be answered with this
@@ -170,7 +169,7 @@ const createMockAttempts = 3
 func (r *QueriesRepository) CreateMock(ctx context.Context, in NewMock) (Mock, error) {
 	p := db.CreateBuddyMockParams{
 		HostUserID: in.HostUserID, GuestUserID: in.GuestUserID,
-		StartsAt: pgInstant(in.StartsAt), EndsAt: pgInstant(in.EndsAt),
+		StartsAt: pgconv.Instant(in.StartsAt), EndsAt: pgconv.Instant(in.EndsAt),
 		Topic: in.Topic, GuestTimezone: in.GuestTimezone,
 	}
 	// Two bookings racing for one person's time each insert a participant row and wait on the other's
@@ -343,7 +342,7 @@ func (r *QueriesRepository) MockSummaries(ctx context.Context, subjectIDs []int6
 
 func (r *QueriesRepository) MockHostCandidates(ctx context.Context, viewerID int64, topic string, limit int32) ([]MockHostCandidate, error) {
 	rows, err := r.q.ListBuddyMockHostCandidates(ctx, db.ListBuddyMockHostCandidatesParams{
-		ViewerID: viewerID, Topic: pgtype.Text{String: topic, Valid: topic != ""}, RowLimit: limit,
+		ViewerID: viewerID, Topic: pgconv.Text(topic), RowLimit: limit,
 	})
 	if err != nil {
 		return nil, err
@@ -375,7 +374,7 @@ func (r *QueriesRepository) MockAvailabilityFor(ctx context.Context, userIDs []i
 
 func (r *QueriesRepository) MockBusyFor(ctx context.Context, userIDs []int64, from, to time.Time) (map[int64][]slots.Interval, error) {
 	rows, err := r.q.ListBuddyMockBusyForUsers(ctx, db.ListBuddyMockBusyForUsersParams{
-		UserIds: userIDs, WindowStart: pgInstant(from), WindowEnd: pgInstant(to),
+		UserIds: userIDs, WindowStart: pgconv.Instant(from), WindowEnd: pgconv.Instant(to),
 	})
 	if err != nil {
 		return nil, err
