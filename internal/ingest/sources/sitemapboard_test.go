@@ -87,3 +87,17 @@ func TestSitemapBoardPlacesReadsEachPlacesAddressShapeOnItsOwn(t *testing.T) {
 		t.Errorf("countries = %q", got)
 	}
 }
+
+func TestSitemapBoardPostingKeepsAPostingWhoseSalaryIsABareNumber(t *testing.T) {
+	root, err := html.Parse(strings.NewReader(`<script type="application/ld+json">{"@type":"JobPosting","title":"Data Engineer","hiringOrganization":{"name":"Acme"},"baseSalary":150000}</script>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p sitemapBoardPosting
+	if !ldJobPosting(root, &p) || p.Title != "Data Engineer" {
+		t.Fatalf("posting with a numeric baseSalary was dropped: %+v", p)
+	}
+	if p.BaseSalary.amount != nil {
+		t.Errorf("numeric baseSalary decoded as an amount: %+v", p.BaseSalary.amount)
+	}
+}
