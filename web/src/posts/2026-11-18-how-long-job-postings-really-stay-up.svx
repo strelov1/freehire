@@ -1,7 +1,7 @@
 ---
 title: "Ghost jobs: what 27 million postings say about listings nobody fills"
 date: 2026-11-18
-summary: Most real postings come down within two months. We measured how long seven million of them stayed up, how many sit open for months, and how often the same role is closed and posted again — and what none of that can prove.
+summary: Most postings that close come down within two months. We measured how long seven million of them stayed up, how many sit open for months, and how often the same role is closed and posted again — and what none of that can prove.
 type: article
 tags:
   - ghost-jobs
@@ -21,8 +21,9 @@ and how far from normal a posting has drifted.
 
 ## How long does a real job posting stay up?
 
-Half of all postings come down within **32 days**. A quarter are gone in about two weeks;
-three in four within about two months.
+Of the postings we saw close, half came down within **32 days**. A quarter were gone in
+about two weeks; three in four within about two months. A close means the posting came
+down, not that someone was hired.
 
 | time from posting to closing | share of postings |
 | --- | --- |
@@ -51,7 +52,7 @@ purpose. But it is the population where ghosts live.
 ## How many open postings are already old?
 
 Now look at what is open today. Of **6,454,659** open postings that carry an employer
-date, the median one is **43 days** old.
+date (again without Greenhouse and SuccessFactors), the median one is **43 days** old.
 
 | open postings older than | share |
 | --- | --- |
@@ -67,7 +68,8 @@ closes in a week is there for a week. So the old ones pile up.
 
 This is the part that matters when you are applying: **what you scroll through is not a
 sample of the jobs being filled.** It is weighted towards the postings that are not
-closing, and those are exactly the ones most likely to be ghosts.
+closing. Age alone does not make a posting a ghost, but it is the first thing worth
+checking.
 
 ## The same job, posted again
 
@@ -86,8 +88,8 @@ paragraph before posting again gets past it. And we have only been watching sinc
 a role reposted every six months has had one chance to show up.
 
 A repost is not a ghost by itself. A role that was filled, then reopened when the hire
-fell through, looks identical in the data. What a repost does tell you is that the posting
-date is not the age of the search.
+fell through, looks identical in the data. What a repost does tell you is that the role
+was posted before, so the posting date may not be when the employer started looking.
 
 ## Where postings stay up longest
 
@@ -130,7 +132,7 @@ down. Only the last one is an accident, and it is probably the most common.
 - **Look at the date the employer gave it, not the date the job board shows.** Many boards
   reset the date when a posting is refreshed.
 - **Search for the same title at the same company.** If it was closed and posted again two
-  or three times this year, the posting date is not the age of the search.
+  or three times this year, it may be a new search each time or one that never ended.
 - **Open the posting on the company's own careers page.** If it is gone there but still on a
   job board, it is a leftover.
 - **Count the copies.** Twenty identical postings in twenty cities is usually one role, or a
@@ -138,7 +140,8 @@ down. Only the last one is an accident, and it is probably the most common.
 - **Check for a salary range and a team.** Neither proves a posting is real, but a posting
   that has neither and has been up for six months has little going for it.
 
-freehire does the first four for you. Every posting carries the date the employer gave it,
+freehire does the first four for you. Postings show the date the employer gave them when
+there is one,
 duplicates are collapsed into one card, and [ghost-job warnings](/features/ghost-jobs) show
 the facts behind each flag — how long the posting has been up, how often it was reposted,
 what happened to people who applied — without claiming anything about the employer's
@@ -157,7 +160,7 @@ of companies, because the data cannot support one.
 advertised role be real or that its pay range be stated, but posting a job and not filling
 it is not, in itself, against the law.
 
-**How long should a job posting stay up?** Half of real postings come down within about a month,
+**How long should a job posting stay up?** Of the postings we saw close, half came down within about a month,
 and three in four within about two months. A posting older than three months has outlasted
 more than 80% of the postings that closed, though old postings make up a third of
 what is open at any moment.
