@@ -4,12 +4,14 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/api/handler/jobs"
 )
 
 func geoApp() *fiber.App {
-	h := newGeoHandlers()
+	h := jobs.NewGeoHandlers()
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(app.Group("/api/v1"), newContract(contractHandlers{geoHandlers: h}))
+	h.Register(app.Group("/api/v1"), newContract(contractHandlers{GeoHandlers: h}))
 	return app
 }
 

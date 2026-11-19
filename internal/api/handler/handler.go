@@ -6,6 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/handler/jobs"
+
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/browsertools"
 	"github.com/strelov1/freehire/internal/ai/enrich"
@@ -241,7 +243,7 @@ func Register(app *fiber.App, cfg Config) {
 	// profile-aware conversation agree.
 	intentH := newIntentHandlers(llmBinding{client: cmp.Or(cfg.SearchIntentLLM, cfg.LLM), keys: llmKeys})
 	companiesH := newCompaniesHandlers(queries, companySearch)
-	geoH := newGeoHandlers()
+	geoH := jobs.NewGeoHandlers()
 	// One reminder service, handed to tracking as its Reminders port and kept by the tracking
 	// handlers for the notification-settings endpoints. Save/unsave/apply schedule and cancel
 	// inside tracking, so every caller gets the same side effect.
@@ -346,7 +348,7 @@ func Register(app *fiber.App, cfg Config) {
 		talentCatalogHandlers:        talentCatalogH,
 		buddyHandlers:                buddyH,
 		companyWatchHandlers:         companyWatchH,
-		geoHandlers:                  geoH,
+		GeoHandlers:                  geoH,
 		suggestHandlers:              suggestH,
 		agentPermissionHandlers:      agentPermissionsH,
 		usageHandlers:                usageH,

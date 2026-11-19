@@ -18,6 +18,7 @@ import (
 	"github.com/ogen-go/ogen/ogenerrors"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/api/handler/jobs"
 	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -35,7 +36,7 @@ type contractHandlers struct {
 	*emailPrefsHandlers
 	*talentCatalogHandlers
 	*companyWatchHandlers
-	*geoHandlers
+	*jobs.GeoHandlers
 	*suggestHandlers
 	*agentPermissionHandlers
 	*usageHandlers

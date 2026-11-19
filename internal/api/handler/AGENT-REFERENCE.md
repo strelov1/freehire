@@ -19,6 +19,14 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   `match_analysis.go`, `match_analysis_stream.go`, `job_match.go`, …). Handlers are thin;
   auth primitives, user job operations, API key management and error rendering live in
   their own files.
+- **Surfaces are moving into subpackages (#4586)**, one per route group (`jobs`, `cv`,
+  `account`, `tracking`, `engage`, `admin`). A surface package imports nothing of `handler`
+  (that would be a cycle): its handlers struct and constructor are exported
+  (`jobs.NewGeoHandlers`), it takes the auth gates it mounts behind as plain `fiber.Handler`
+  arguments to an exported `Register`, and `contractHandlers` embeds it under a name unique
+  across surfaces (`*jobs.GeoHandlers`). Route tests that go through `newContract` or
+  `Register` stay in `handler`; the surface keeps its own unit tests. Moved so far:
+  `jobs/geo.go` (city autocomplete). `web/static/openapi.yaml` does not change on a move.
 - Two couplings worth knowing: `cvHandlers` holds a `*matchHandlers` (it reuses the
   blocker/plan helpers for tailoring), and `jobs_moderation.go` carries the
   moderator-authored writes behind the `moderator` gate.
