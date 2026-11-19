@@ -378,6 +378,15 @@ func TestNaukriLaterPageFailureFailsTheBoard(t *testing.T) {
 	}
 }
 
+func TestNaukriEmptyPageShortOfTheTotalFailsTheBoard(t *testing.T) {
+	f := &naukriFake{pages: naukriSyntheticPages(t, 1, naukriPageSize, 3*naukriPageSize), fail: map[string]error{}}
+	f.pages["2"] = fmt.Sprintf(`{"noOfJobs":%d,"jobDetails":[]}`, 3*naukriPageSize)
+	src := NewNaukri(f).(HydratingSource)
+	if _, err := src.FetchNew(context.Background(), CompanyEntry{Board: "5"}, func(string) bool { return true }); err == nil {
+		t.Fatal("an empty page two pages short of the declared total must fail the board")
+	}
+}
+
 func TestNaukriStopsAtThePlatformsDeepestPage(t *testing.T) {
 	total := (naukriMaxPages + 10) * naukriPageSize
 	f := &naukriFake{pages: naukriSyntheticPages(t, naukriMaxPages+1, 1, total), fail: map[string]error{}}
