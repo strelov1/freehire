@@ -266,6 +266,9 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// Berlin Startup Jobs: Berlin startup board. post-sitemap.xml names the whole catalogue;
 		// posting pages carry a schema.org JobPosting. Paced, see berlinstartupjobs.go.
 		NewBerlinStartupJobs(c),
+		// DSML Kazakhstan: the Kazakh data/ML community board. sitemap.xml names the whole
+		// catalogue; posting pages carry a schema.org JobPosting. Paced, see dsml.go.
+		NewDSML(c),
 		// ITviec: Vietnam's IT-only board. One server-rendered listing names the whole
 		// catalogue; posting pages carry a schema.org JobPosting. Paced, see itviecRequestInterval.
 		NewITviec(pacedHTMLGetter(c, itviecRequestInterval, itviecRequestBurst)),

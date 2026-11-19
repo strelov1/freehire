@@ -3,6 +3,7 @@ package sources
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -19,7 +20,13 @@ func LDJobPosting(root *html.Node, v any) bool { return ldJobPosting(root, v) }
 // (teamtailor, breezy) whose job pages server-render a schema.org JobPosting; each passes
 // a struct selecting just the fields it needs. The JobPosting may sit at the block's top
 // level, inside an array of nodes, or under a @graph wrapper (see jobPostingNode).
+//
+// Each block decodes into a copy of v's starting value, and only the accepted one is stored, so
+// fields a rejected block decoded before its error never reach the result.
 func ldJobPosting(root *html.Node, v any) bool {
+	dst := reflect.ValueOf(v).Elem()
+	start := reflect.New(dst.Type()).Elem()
+	start.Set(dst)
 	found := false
 	walk(root, func(n *html.Node) bool {
 		if found {
@@ -27,10 +34,14 @@ func ldJobPosting(root *html.Node, v any) bool {
 		}
 		if n.Type == html.ElementNode && n.Data == "script" &&
 			Attr(n, "type") == "application/ld+json" {
-			if msg, ok := jobPostingNode(flexjson.SanitizeControlChars([]byte(textContent(n)))); ok &&
-				json.Unmarshal(msg, v) == nil {
-				found = true
-				return false
+			if msg, ok := jobPostingNode(flexjson.SanitizeControlChars([]byte(textContent(n)))); ok {
+				try := reflect.New(dst.Type())
+				try.Elem().Set(start)
+				if json.Unmarshal(msg, try.Interface()) == nil {
+					dst.Set(try.Elem())
+					found = true
+					return false
+				}
 			}
 		}
 		return true

@@ -130,6 +130,12 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool) {
 		EmploymentType: schemaEmploymentRaw(p.EmploymentType),
 		PostedAt:       NotFuture(parseRFC3339OrDate(p.DatePosted)),
 	}
+	// The board states each posting's own currency (dsml.kz mixes KZT, USD and RUB).
+	if salary := p.BaseSalary.amount; salary != nil {
+		if currency := strings.ToUpper(strings.TrimSpace(salary.Currency)); currency != "" {
+			salary.apply(&job, currency)
+		}
+	}
 	if job.Countries == nil && b.country != "" {
 		job.FallbackCountries = []string{b.country}
 	}
@@ -145,6 +151,20 @@ type sitemapBoardPosting struct {
 	JobLocationType    string             `json:"jobLocationType"`
 	JobLocation        sitemapBoardPlaces `json:"jobLocation"`
 	HiringOrganization sitemapldjsonOrg   `json:"hiringOrganization"`
+	BaseSalary         sitemapBoardSalary `json:"baseSalary"`
+}
+
+// sitemapBoardSalary decodes baseSalary when it is a MonetaryAmount. schema.org also allows a bare
+// number or text; such a shape leaves the posting without a salary instead of failing its decode,
+// which would drop the whole posting.
+type sitemapBoardSalary struct{ amount *schemaMonetaryAmount }
+
+func (s *sitemapBoardSalary) UnmarshalJSON(b []byte) error {
+	var a schemaMonetaryAmount
+	if json.Unmarshal(b, &a) == nil {
+		s.amount = &a
+	}
+	return nil
 }
 
 // sitemapBoardPlaces decodes jobLocation, a Place or an array of them, whose address is in turn
