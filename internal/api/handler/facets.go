@@ -154,9 +154,7 @@ func canonicalFilter(f any) any {
 		slices.Sort(g)
 		out[i] = g
 	}
-	slices.SortFunc(out, func(a, b []string) int {
-		return slices.Compare(a, b)
-	})
+	slices.SortFunc(out, slices.Compare)
 	return out
 }
 

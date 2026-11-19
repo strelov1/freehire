@@ -49,8 +49,8 @@ func (l *LinkTokens) Issue(userID int64) string {
 	payload := make([]byte, linkPayloadLen)
 	binary.BigEndian.PutUint64(payload[0:8], uint64(userID))
 	binary.BigEndian.PutUint64(payload[8:16], uint64(time.Now().Add(l.ttl).Unix()))
-	token := append(payload, l.mac(payload)...)
-	return base64.RawURLEncoding.EncodeToString(token)
+	payload = append(payload, l.mac(payload)...)
+	return base64.RawURLEncoding.EncodeToString(payload)
 }
 
 // Parse verifies a token's signature and expiry and returns its user id. It returns

@@ -392,7 +392,7 @@ func TestEdjoinAmount(t *testing.T) {
 		"6,097.87":    6098,
 		"60000":       60000,
 		"$32":         32,
-		" $24.40 ":    24,
+		" $24.40 ":    24, //nolint:gocritic // the padding is the case under test
 	}
 	for in, want := range amount {
 		got := edjoinAmount(in)

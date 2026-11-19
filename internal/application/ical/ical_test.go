@@ -2,6 +2,7 @@ package ical
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -106,7 +107,7 @@ func TestUIDReportsAbsenceRatherThanGuessing(t *testing.T) {
 func TestUIDRefusesABodyTooLargeToBeAnInvitation(t *testing.T) {
 	head := crlf("BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:oversized@example.test")
 	pad := bytes.Repeat([]byte("X-PADDING:xxxxxxxxxxxxxxxxxxxx\r\n"), maxBody/32+1)
-	body := append(head, pad...)
+	body := slices.Concat(head, pad)
 	if len(body) <= maxBody {
 		t.Fatalf("test body is %d bytes, want more than the %d-byte cap", len(body), maxBody)
 	}
@@ -122,7 +123,7 @@ func TestUIDRefusesABodyTooLargeToBeAnInvitation(t *testing.T) {
 func TestUIDReadsABodyJustUnderTheCap(t *testing.T) {
 	head := crlf("BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:roomy@example.test")
 	pad := bytes.Repeat([]byte("X-PADDING:xxxxxxxxxxxxxxxxxxxx\r\n"), (maxBody-len(head))/32-1)
-	body := append(head, pad...)
+	body := slices.Concat(head, pad)
 	if len(body) > maxBody {
 		t.Fatalf("test body is %d bytes, want at most the %d-byte cap", len(body), maxBody)
 	}

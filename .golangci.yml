@@ -27,6 +27,7 @@ linters:
     - unconvert
     - misspell
     - depguard
+    - gocritic
   settings:
     depguard:
       rules:

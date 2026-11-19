@@ -53,16 +53,17 @@ func (d *nativeDiscovery) Resolve(ctx context.Context, entry sources.CompanyEntr
 		origin, err = d.q.FindLinkedInJobByURL(ctx, discovered.URL)
 	}
 	var previous *db.Job
-	if err == nil {
+	switch {
+	case err == nil:
 		if origin.IsPrivate {
 			return fmt.Errorf("native discovery refuses a private origin")
 		}
 		if (!origin.ClosedAt.Valid || origin.ClosedReason == linkimport.NativeSourcePendingReason) && !origin.DuplicateOf.Valid {
 			previous = &origin
 		}
-	} else if errors.Is(err, pgx.ErrNoRows) {
+	case errors.Is(err, pgx.ErrNoRows):
 		origin = db.Job{Source: "linkedin", Title: discovered.Title, Company: discovered.Company, URL: discovered.URL}
-	} else {
+	default:
 		return err
 	}
 	if previous != nil && discovered.ApplyMethod != sources.ApplyOnSite {

@@ -412,7 +412,7 @@ func TestSlugFromLink(t *testing.T) {
 		"https://freehire.me/jobs/a-job-abcdefgh":                "a-job-abcdefgh",
 		"https://freehire.me/jobs/a-job-abcdefgh/":               "a-job-abcdefgh",
 		"https://freehire.me/jobs/a-job-abcdefgh?ref=b-t35nijto": "a-job-abcdefgh",
-		" https://freehire.me/jobs/a-job-abcdefgh#apply ":        "a-job-abcdefgh",
+		" https://freehire.me/jobs/a-job-abcdefgh#apply ":        "a-job-abcdefgh", //nolint:gocritic // the padding is the case under test
 	} {
 		if got := slugFromLink(in); got != want {
 			t.Errorf("slugFromLink(%q) = %q, want %q", in, got, want)

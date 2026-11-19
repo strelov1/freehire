@@ -5,6 +5,7 @@ package ingestsched
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 )
@@ -44,7 +45,7 @@ func TestPreviewSeesExactlyWhatAClaimWouldTake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PreviewDue light: %v", err)
 	}
-	preview := append(previewHeavy, previewLight...)
+	preview := slices.Concat(previewHeavy, previewLight)
 	if len(preview) == 0 {
 		t.Fatal("preview saw nothing; the test premise is broken")
 	}
@@ -57,7 +58,7 @@ func TestPreviewSeesExactlyWhatAClaimWouldTake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim light: %v", err)
 	}
-	claimed := append(claimedHeavy, claimedLight...)
+	claimed := slices.Concat(claimedHeavy, claimedLight)
 
 	if len(preview) != len(claimed) {
 		t.Fatalf("preview saw %d runs, claim took %d", len(preview), len(claimed))

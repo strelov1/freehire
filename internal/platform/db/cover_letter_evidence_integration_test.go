@@ -32,11 +32,12 @@ func TestCoverLetterEvidenceOwnershipAndConcurrentRevisions(t *testing.T) {
 	success := 0
 	conflicts := 0
 	for err := range results {
-		if err == nil {
+		switch {
+		case err == nil:
 			success++
-		} else if errors.Is(err, pgx.ErrNoRows) {
+		case errors.Is(err, pgx.ErrNoRows):
 			conflicts++
-		} else {
+		default:
 			t.Fatal(err)
 		}
 	}
