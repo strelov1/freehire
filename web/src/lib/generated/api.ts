@@ -11430,6 +11430,13 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "starts_at": "2026-12-01T09:00:00Z",
+                 *       "name": "Jane Recruiter",
+                 *       "email": "jane@example.com"
+                 *     }
+                 */
                 "application/json": components["schemas"]["BookingLinkBookBody"];
             };
         };
@@ -16248,6 +16255,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "timezone": "Europe/Berlin"
+                 *     }
+                 */
                 "application/json": components["schemas"]["BookingLinkEnableBody"];
             };
         };

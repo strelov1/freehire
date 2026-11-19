@@ -386,7 +386,7 @@ Book one of a link's slots. A taken or no longer offered slot is 409 `slot_unava
 | `email` | string | yes | The booker's bare email address, shown to the candidate. |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/booking/<token>/bookings"
+curl -X POST "https://freehire.me/api/v1/booking/<token>/bookings" -H 'Content-Type: application/json' -d '{"starts_at":"2026-12-01T09:00:00Z","name":"Jane Recruiter","email":"jane@example.com"}'
 ```
 
 ### `GET /booking/{token}/slots`

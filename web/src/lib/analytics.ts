@@ -130,11 +130,15 @@ export function redactBookingToken(url: string): string {
   return url.replace(BOOKING_TOKEN, '/booking/:token');
 }
 
-/** PostHog before_send: keeps booking-link tokens out of the URL properties we send. */
-function redactBookingEvent<T extends { properties?: Record<string, unknown>; $set?: Record<string, unknown> } | null>(
+type PersonProps = { $set?: Record<string, unknown>; $set_once?: Record<string, unknown> };
+
+/** PostHog before_send: keeps booking-link tokens out of the URL properties we send, in the
+ *  event's properties and in the person updates ($set, $set_once) beside or inside them. */
+function redactBookingEvent<T extends (PersonProps & { properties?: Record<string, unknown> & PersonProps }) | null>(
   event: T,
 ): T {
-  for (const props of [event?.properties, event?.$set]) {
+  const p = event?.properties;
+  for (const props of [p, p?.$set, p?.$set_once, event?.$set, event?.$set_once]) {
     if (!props) continue;
     for (const key of URL_PROPERTIES) {
       if (typeof props[key] === 'string') props[key] = redactBookingToken(props[key]);

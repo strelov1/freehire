@@ -39,6 +39,7 @@ model BookingLinkBooking {
 
 /** Turn on the caller's booking link for one of their applications. Pro or Ultra only (402). */
 @summary("Turn on an application's booking link.")
+@opExample(#{ parameters: #{ id: 42, body: #{ timezone: "Europe/Berlin" } } })
 @tag("Booking links")
 @route("/me/applications/{id}/booking-link")
 @post
@@ -58,6 +59,12 @@ op getBookingLinkSlots(@path token: string, @query tz?: string): MentorshipSlots
 /** Book one of a link's slots. A taken or no longer offered slot is 409 `slot_unavailable`. */
 @useAuth(NoAuth)
 @summary("Book a slot through a booking link.")
+@opExample(#{
+  parameters: #{
+    token: "<token>",
+    body: #{ starts_at: "2026-12-01T09:00:00Z", name: "Jane Recruiter", email: "jane@example.com" },
+  },
+})
 @tag("Booking links")
 @route("/booking/{token}/bookings")
 @post

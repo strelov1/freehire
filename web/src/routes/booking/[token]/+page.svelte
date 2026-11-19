@@ -15,21 +15,25 @@
   let name = $state('');
   let email = $state('');
   let booking = $state(false);
-  let bookingError = $state('');
+  // Tied to the slot it was about, so picking another slot never shows it against that one.
+  let bookingError = $state<{ slot: string; message: string } | null>(null);
+  // A taken time leaves the list on refresh, and the form with it: this stays above the list.
+  let taken = $state('');
   let booked = $state<{ slot: MentorSlot; day: string } | null>(null);
 
   async function book(slot: MentorSlot, day: string, refused: () => void) {
     booking = true;
-    bookingError = '';
+    bookingError = null;
+    taken = '';
     try {
       await api.bookBookingSlot(data.token, { starts_at: slot.starts_at, name, email });
       booked = { slot, day };
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        bookingError = 'This time is no longer available. Please pick another.';
+        taken = `${day} at ${slotLocalTime(slot)}`;
         refused();
       } else {
-        bookingError = errorMessage(e, 'That time could not be booked.');
+        bookingError = { slot: slot.starts_at, message: errorMessage(e, 'That time could not be booked.') };
       }
     } finally {
       booking = false;
@@ -50,6 +54,9 @@
       Booked for {booked.day} at {slotLocalTime(booked.slot)}. The candidate can see it now.
     </p>
   {:else}
+    {#if taken}
+      <p role="alert" class="text-destructive text-sm">{taken} was just taken. Please pick another time.</p>
+    {/if}
     <MentorBookingView
       loadSlots={(_from, _to, timezone, signal) => api.getBookingSlots(data.token, timezone, signal)}
       sessionMinutes={30}
@@ -85,8 +92,8 @@
             />
           </label>
           <Button type="submit" disabled={booking}>{booking ? 'Booking…' : 'Book this time'}</Button>
-          {#if bookingError}
-            <p class="text-destructive text-sm">{bookingError}</p>
+          {#if bookingError?.slot === slot.starts_at}
+            <p class="text-destructive text-sm">{bookingError.message}</p>
           {/if}
         </form>
       {/snippet}

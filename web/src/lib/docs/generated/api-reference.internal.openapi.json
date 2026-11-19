@@ -3144,6 +3144,9 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/BookingLinkEnableBody"
+              },
+              "example": {
+                "timezone": "Europe/Berlin"
               }
             }
           }

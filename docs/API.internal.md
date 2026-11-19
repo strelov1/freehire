@@ -362,7 +362,7 @@ Turn on the caller's booking link for one of their applications. Pro or Ultra on
 | `timezone` | string | yes | The candidate's IANA zone, sent by the browser; the default hours are wall-clock times in it. |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/me/applications/<id>/booking-link" -b cookies.txt
+curl -X POST "https://freehire.me/api/v1/me/applications/<id>/booking-link" -b cookies.txt -H 'Content-Type: application/json' -d '{"timezone":"Europe/Berlin"}'
 ```
 
 ## Jobs

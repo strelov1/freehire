@@ -163,4 +163,16 @@ func TestBookingLinkContractFlow(t *testing.T) {
 	if body["code"] != "slot_unavailable" {
 		t.Fatalf("double book code = %v", body["code"])
 	}
+
+	// The booking is the application's meeting, once, at the booked time.
+	var n int
+	var start time.Time
+	var status string
+	if err := pool.QueryRow(ctx, `SELECT count(*) OVER (), starts_at, status FROM application_interviews
+		WHERE application_id = $1`, ownerApp).Scan(&n, &start, &status); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || !start.Equal(at) || status != "confirmed" {
+		t.Fatalf("application interviews = %d, first at %v (%s); want 1 at %v (confirmed)", n, start, status, at)
+	}
 }
