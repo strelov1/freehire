@@ -5,6 +5,16 @@ Before editing or reviewing this area, read the applicable sections of
 architecture, contracts, authorization, state transitions or cross-module behavior.
 The reference retains all requirements previously held here.
 
+## Package layout (moving, #4586)
+
+`sources/kit` is the adapter kernel: `Source`, `Job`, `CompanyEntry`, the HTTP client interfaces,
+`StatusError` and the shared parsing helpers. It imports nothing of `sources`. Adapters are
+moving out of `sources` into family subpackages that import only `kit`; `sources` keeps the one
+registry (`All`) and the classifiers that read the capability markers (`markers.go`). Until the
+last adapter leaves, `kit_aliases.go` re-exports the kernel under its old names; new adapter
+code in a family calls `kit.X` directly. A marker is a method with an exported name
+(`FullBoardListing()`), so a family adapter can declare it.
+
 ## Scope
 
 Read [Scope](AGENT-REFERENCE.md#scope) before work involving this topic.

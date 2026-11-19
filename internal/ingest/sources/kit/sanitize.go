@@ -1,4 +1,4 @@
-package sources
+package kit
 
 import (
 	"html"
@@ -8,21 +8,21 @@ import (
 	"github.com/strelov1/freehire/internal/platform/htmltext"
 )
 
-// sanitizeHTML is the package-local name for the description sanitizer in
+// SanitizeHTML is the package-local name for the description sanitizer in
 // internal/platform/htmltext, which knows nothing about boards and is shared outside ingest.
-func sanitizeHTML(s string) string { return htmltext.Sanitize(s) }
+func SanitizeHTML(s string) string { return htmltext.Sanitize(s) }
 
-// encodedTagOpener and liveTagOpener count tag openers in their entity-encoded ("&lt;div",
+// EncodedTagOpener and LiveTagOpener count tag openers in their entity-encoded ("&lt;div",
 // "&lt;/div") and live ("<div", "</div") forms. Both require a letter after the bracket, so a
 // lone "<" or "&lt;" standing in for a less-than sign in prose counts as neither.
 var (
-	encodedTagOpener = regexp.MustCompile(`&lt;/?[a-zA-Z]`)
-	liveTagOpener    = regexp.MustCompile(`</?[a-zA-Z]`)
+	EncodedTagOpener = regexp.MustCompile(`&lt;/?[a-zA-Z]`)
+	LiveTagOpener    = regexp.MustCompile(`</?[a-zA-Z]`)
 )
 
-// unescapeEncodedHTML undoes one layer of HTML entity-encoding when s carries its markup as
+// UnescapeEncodedHTML undoes one layer of HTML entity-encoding when s carries its markup as
 // text ("&lt;p&gt;Role&lt;/p&gt;") rather than as live HTML. Some feeds encode a posting's
-// body before serving it, and sanitizeHTML cannot recover that on its own: bluemonday reads
+// body before serving it, and SanitizeHTML cannot recover that on its own: bluemonday reads
 // "&lt;p&gt;" as a text node and re-encodes it on output, so the tags reach the catalogue as
 // literals the reader sees instead of the structure they describe.
 //
@@ -31,25 +31,16 @@ var (
 // example into real tags that are then stripped, losing content, whereas a wholly encoded body
 // stays dominated by encoded openers even when the feed wraps it in live HTML (arbeitnow
 // appends a promo footer).
-//
-// UnescapeEncodedHTML is the exported form of the entity-encoding repair, for the
-// description backfill worker that re-runs the adapter pipeline over stored rows.
-func UnescapeEncodedHTML(s string) string { return unescapeEncodedHTML(s) }
-
-func unescapeEncodedHTML(s string) string {
+func UnescapeEncodedHTML(s string) string {
 	// Fast path: no encoded markup to weigh.
 	if !strings.Contains(s, "&lt;") {
 		return s
 	}
-	if len(encodedTagOpener.FindAllStringIndex(s, -1)) <= len(liveTagOpener.FindAllStringIndex(s, -1)) {
+	if len(EncodedTagOpener.FindAllStringIndex(s, -1)) <= len(LiveTagOpener.FindAllStringIndex(s, -1)) {
 		return s
 	}
 	return html.UnescapeString(s)
 }
-
-// IsRemote is the exported form of the shared location-based remote heuristic, so sibling
-// packages flag remote jobs consistently with the ATS adapters.
-func IsRemote(location string) bool { return isRemote(location) }
 
 // LenientPercentUnescape percent-decodes every valid "%XX" (two hex digits) sequence and
 // passes any stray "%" through literally. It exists because Go's url.PathUnescape is strict:

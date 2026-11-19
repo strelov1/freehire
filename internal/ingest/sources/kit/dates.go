@@ -1,4 +1,4 @@
-package sources
+package kit
 
 import "time"
 
@@ -21,10 +21,10 @@ func NotFuture(t *time.Time) *time.Time {
 	return t
 }
 
-// parseLayout parses a platform timestamp with the given layout into a posted_at,
+// ParseLayout parses a platform timestamp with the given layout into a posted_at,
 // returning nil on an empty or unparseable value (posted_at is nullable — a missing or
 // malformed date is not an error).
-func parseLayout(layout, s string) *time.Time {
+func ParseLayout(layout, s string) *time.Time {
 	if s == "" {
 		return nil
 	}
@@ -35,57 +35,49 @@ func parseLayout(layout, s string) *time.Time {
 	return NotFuture(&t)
 }
 
-// parseRFC3339 parses an RFC3339 timestamp (the common ATS format). RFC3339Nano
+// ParseRFC3339 parses an RFC3339 timestamp (the common ATS format). RFC3339Nano
 // accepts both fractional and plain-second forms (Z and colon offsets), a strict
 // superset of RFC3339. As a fallback it accepts the RFC822-style numeric offset
 // WITHOUT a colon (e.g. iCIMS careers-home's "2026-06-30T15:42:00+0000"), which
 // RFC3339 rejects — the fallback layout only matches numeric offsets, so a Z or
 // colon-offset string that reached here (parse or NotFuture failure) still yields nil.
-func parseRFC3339(s string) *time.Time {
-	if t := parseLayout(time.RFC3339Nano, s); t != nil {
+func ParseRFC3339(s string) *time.Time {
+	if t := ParseLayout(time.RFC3339Nano, s); t != nil {
 		return t
 	}
-	return parseLayout("2006-01-02T15:04:05.999999999-0700", s)
+	return ParseLayout("2006-01-02T15:04:05.999999999-0700", s)
 }
 
-// parseRFC3339OrDate parses a JobPosting datePosted that a board may emit as either a full
+// ParseRFC3339OrDate parses a JobPosting datePosted that a board may emit as either a full
 // RFC3339 timestamp or a bare "2006-01-02" date, trying the timestamp first. Shared by the
 // ld+json adapters whose datePosted format varies by tenant (briefhq, northstone).
-func parseRFC3339OrDate(s string) *time.Time {
-	if t := parseRFC3339(s); t != nil {
+func ParseRFC3339OrDate(s string) *time.Time {
+	if t := ParseRFC3339(s); t != nil {
 		return t
 	}
-	return parseDate(s)
+	return ParseDate(s)
 }
 
-// parseDate parses a date-only timestamp ("2006-01-02", as Workable emits).
-func parseDate(s string) *time.Time { return parseLayout("2006-01-02", s) }
+// ParseDate parses a date-only timestamp ("2006-01-02", as Workable emits).
+func ParseDate(s string) *time.Time { return ParseLayout("2006-01-02", s) }
 
-// ParseDate, ParseEpochMillis, and ParseRFC3339 are the exported forms used by
-// sibling packages (internal/ingest/linksource) that resolve a single posting and need
-// the same posted_at funnel — date-only, epoch-millis, and RFC3339 inputs all
-// pass through NotFuture.
-func ParseDate(s string) *time.Time        { return parseDate(s) }
-func ParseEpochMillis(ms int64) *time.Time { return parseEpochMillis(ms) }
-func ParseRFC3339(s string) *time.Time     { return parseRFC3339(s) }
-
-// parseSpaceTime parses a space-separated, zone-named timestamp ("2006-01-02 15:04:05
+// ParseSpaceTime parses a space-separated, zone-named timestamp ("2006-01-02 15:04:05
 // MST", as Recruitee emits). Recruitee emits UTC; an unrecognized zone abbreviation
 // would be read as offset 0, acceptable for an approximate posted_at.
-func parseSpaceTime(s string) *time.Time { return parseLayout("2006-01-02 15:04:05 MST", s) }
+func ParseSpaceTime(s string) *time.Time { return ParseLayout("2006-01-02 15:04:05 MST", s) }
 
-// parsePubDate parses an RSS <pubDate>, an RFC1123 timestamp with or without a numeric zone
+// ParsePubDate parses an RSS <pubDate>, an RFC1123 timestamp with or without a numeric zone
 // offset. Shared by the RSS-feed adapters (trakstar, earcu, likeit).
-func parsePubDate(s string) *time.Time {
-	if t := parseLayout(time.RFC1123Z, s); t != nil {
+func ParsePubDate(s string) *time.Time {
+	if t := ParseLayout(time.RFC1123Z, s); t != nil {
 		return t
 	}
-	return parseLayout(time.RFC1123, s)
+	return ParseLayout(time.RFC1123, s)
 }
 
-// parseEpochMillis converts a Unix-millisecond timestamp into a posted_at, returning
+// ParseEpochMillis converts a Unix-millisecond timestamp into a posted_at, returning
 // nil for a zero value (treated as "no date").
-func parseEpochMillis(ms int64) *time.Time {
+func ParseEpochMillis(ms int64) *time.Time {
 	if ms == 0 {
 		return nil
 	}
@@ -93,9 +85,9 @@ func parseEpochMillis(ms int64) *time.Time {
 	return NotFuture(&t)
 }
 
-// parseEpochSeconds converts a Unix-second timestamp into a posted_at, returning nil for
+// ParseEpochSeconds converts a Unix-second timestamp into a posted_at, returning nil for
 // a zero value (treated as "no date"). Gem dates postings with firstPublishedTsSec.
-func parseEpochSeconds(s int64) *time.Time {
+func ParseEpochSeconds(s int64) *time.Time {
 	if s == 0 {
 		return nil
 	}

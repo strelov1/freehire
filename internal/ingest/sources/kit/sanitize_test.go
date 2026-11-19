@@ -1,4 +1,4 @@
-package sources
+package kit
 
 import (
 	"testing"
@@ -41,7 +41,7 @@ func TestUnescapeEncodedHTML(t *testing.T) {
 		},
 		// A posting that deliberately shows markup as an example: live openers outnumber
 		// encoded ones, so the example is left encoded instead of becoming real tags
-		// (which sanitizeHTML would then strip, silently losing the content).
+		// (which SanitizeHTML would then strip, silently losing the content).
 		"escaped code sample": {
 			"<p>Use <code>&lt;div&gt;&lt;/div&gt;</code> in JSX</p>",
 			"<p>Use <code>&lt;div&gt;&lt;/div&gt;</code> in JSX</p>",
@@ -51,8 +51,8 @@ func TestUnescapeEncodedHTML(t *testing.T) {
 		"less-than in prose": {"<p>salary &lt; 100k</p>", "<p>salary &lt; 100k</p>"},
 	}
 	for name, c := range cases {
-		if got := unescapeEncodedHTML(c.in); got != c.want {
-			t.Errorf("%s: unescapeEncodedHTML(%q) = %q, want %q", name, c.in, got, c.want)
+		if got := UnescapeEncodedHTML(c.in); got != c.want {
+			t.Errorf("%s: UnescapeEncodedHTML(%q) = %q, want %q", name, c.in, got, c.want)
 		}
 	}
 }

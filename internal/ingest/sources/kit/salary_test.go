@@ -1,4 +1,4 @@
-package sources
+package kit
 
 import "testing"
 
@@ -14,22 +14,22 @@ func TestRoundSalaryPart(t *testing.T) {
 		{-5, nil}, // nonsensical
 	}
 	for _, c := range cases {
-		got := roundSalaryPart(c.in)
+		got := RoundSalaryPart(c.in)
 		if (got == nil) != (c.want == nil) || (got != nil && *got != *c.want) {
-			t.Errorf("roundSalaryPart(%v) = %v, want %v", c.in, deref(got), deref(c.want))
+			t.Errorf("RoundSalaryPart(%v) = %v, want %v", c.in, deref(got), deref(c.want))
 		}
 	}
 }
 
 func TestIsSalaryPeriod(t *testing.T) {
 	for _, p := range []string{"year", "month", "day", "hour"} {
-		if !isSalaryPeriod(p) {
-			t.Errorf("isSalaryPeriod(%q) = false, want true", p)
+		if !IsSalaryPeriod(p) {
+			t.Errorf("IsSalaryPeriod(%q) = false, want true", p)
 		}
 	}
 	for _, p := range []string{"", "week", "annual", "YEAR"} {
-		if isSalaryPeriod(p) {
-			t.Errorf("isSalaryPeriod(%q) = true, want false", p)
+		if IsSalaryPeriod(p) {
+			t.Errorf("IsSalaryPeriod(%q) = true, want false", p)
 		}
 	}
 }
