@@ -55,9 +55,6 @@
         { label: 'Hiring signal', href: resolve('/insights/companies') },
         { label: 'Trends', href: resolve('/trends') },
         { label: 'For AI agents', href: resolve('/agents') },
-        // Beside For AI agents: the page is where an agent's author learns that search
-        // can rank by meaning, and how much of the catalogue that covers.
-        { label: 'Semantic search', href: resolve('/semantic-search') },
         { label: 'MCP', href: resolve('/mcp') },
         { label: 'CLI', href: resolve('/cli') },
         { label: 'ChatGPT', href: resolve('/chatgpt') },
