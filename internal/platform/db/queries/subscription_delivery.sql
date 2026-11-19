@@ -100,14 +100,25 @@ SET last_digest_sent_at = now()
 WHERE id = $1;
 
 -- name: GetJobsForDigest :many
--- The display fields for the jobs in a digest, freshest first. Salary fields are
--- projected out of the enrichment JSONB (absent keys → NULL) so a card can render
--- a compensation line only when one is known.
+-- The display fields for the jobs in a digest, freshest first. Salary is the range the
+-- job page serves (jobview.FromDomain): manual beats the ATS's own range beats the
+-- model's, a stated layer replacing the whole range. Reading only the enrichment JSONB
+-- left the ATS range out of every alert on a posting the model had not reached yet
+-- (#4587). Zero / empty means unknown, so a card renders compensation only when known.
+-- The description's pay line, the projection's last fallback, is Go-only and not read here.
 SELECT id, title, company, public_slug, url, posted_at,
-       COALESCE((enrichment->>'salary_min')::int, 0)::int AS salary_min,
-       COALESCE((enrichment->>'salary_max')::int, 0)::int AS salary_max,
-       COALESCE(enrichment->>'salary_currency', '')::text AS salary_currency,
-       COALESCE(enrichment->>'salary_period', '')::text   AS salary_period
+       COALESCE(CASE WHEN salary_min_manual IS NOT NULL OR salary_max_manual IS NOT NULL THEN salary_min_manual
+                     WHEN salary_min_source IS NOT NULL OR salary_max_source IS NOT NULL THEN salary_min_source
+                     ELSE (enrichment->>'salary_min')::int END, 0)::int AS salary_min,
+       COALESCE(CASE WHEN salary_min_manual IS NOT NULL OR salary_max_manual IS NOT NULL THEN salary_max_manual
+                     WHEN salary_min_source IS NOT NULL OR salary_max_source IS NOT NULL THEN salary_max_source
+                     ELSE (enrichment->>'salary_max')::int END, 0)::int AS salary_max,
+       COALESCE(CASE WHEN salary_min_manual IS NOT NULL OR salary_max_manual IS NOT NULL THEN salary_currency_manual
+                     WHEN salary_min_source IS NOT NULL OR salary_max_source IS NOT NULL THEN salary_currency_source
+                     ELSE enrichment->>'salary_currency' END, '')::text AS salary_currency,
+       COALESCE(CASE WHEN salary_min_manual IS NOT NULL OR salary_max_manual IS NOT NULL THEN salary_period_manual
+                     WHEN salary_min_source IS NOT NULL OR salary_max_source IS NOT NULL THEN salary_period_source
+                     ELSE enrichment->>'salary_period' END, '')::text AS salary_period
 FROM jobs
 WHERE id = ANY(sqlc.arg(job_ids)::bigint[])
 ORDER BY COALESCE(posted_at, created_at) DESC;
