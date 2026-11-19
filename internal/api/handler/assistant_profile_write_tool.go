@@ -100,8 +100,8 @@ type profileUpdateResult struct {
 	Next     string   `json:"next,omitempty"`
 }
 
-// profileMCPTools are the profile writes served to an OAuth grant. PUT /me/profile is
-// cookie-only, so a full-scope API key does not get them either.
+// profileMCPTools are the profile writes served over MCP to an OAuth grant and to a
+// full-scope API key (see mcpKeyTools), though PUT /me/profile itself stays cookie-only.
 func (h *assistantHandlers) profileMCPTools() []assistant.Tool {
 	return []assistant.Tool{h.updateProfileTool()}
 }

@@ -149,8 +149,16 @@ var sharedAcronyms = map[string]string{
 // Their uppercase form collides with a non-tech meaning in JOB text — "RAG status"
 // (red/amber/green project health) — so tagging them on jobs would corrupt facets;
 // in résumés that collision is near-absent. Each value is an existing canonical.
+//
+// The tier also holds terms a person asserts but job prose cannot be trusted with:
+// "Nx" (the JS monorepo tool; job text also means Siemens NX CAD) and "Design System(s)"
+// (job text means the verb phrase, "design systems that scale"). Job postings still tag
+// them through the qualified phrases in dictionaries_phrases_engineering2.go.
 var resumeAcronyms = map[string]string{
-	"RAG": "rag",
+	"RAG":            "rag",
+	"Nx":             "nx",
+	"Design System":  "design-systems",
+	"Design Systems": "design-systems",
 }
 
 // categoryScopedAcronym pairs a canonical with the job categories it may resolve for (see

@@ -52,10 +52,12 @@ key and no grant, manages job alerts through these same tools instead of a secon
 implementation. `mcpKeyTools` omits OAuth-only actions: auto-apply, dictionary
 suggestions, problem reports and the interview-buddy tools. Dictionary suggestions and the
 buddy tools (`internal/api/handler/buddy_mcp_tools.go`: membership, mock hosts, slots,
-booking, cancelling and the hosting schedule) preserve the cookie-only REST gate, and so does
-`update_profile` (`assistant_profile_write_tool.go`: a partial update of the saved job-search
-profile: preferences plus the headline and summary text, never a CV document), and so do
+booking, cancelling and the hosting schedule) preserve the cookie-only REST gate, and so do
 the guided-setup tools below; problem reports use the signed-in agent's reporting workflow.
+`update_profile` (`assistant_profile_write_tool.go`: a partial update of the saved job-search
+profile: preferences plus the headline and summary text, never a CV document) is the one
+exception: PUT /me/profile stays cookie-only, but a key gets the MCP tool so `freehire-mcp`
+can keep the profile's skills in step with the experience bank.
 A narrow (`cv`) key is a 403.
 
 ## Guided setup: `get_setup_status` and `add_cv`

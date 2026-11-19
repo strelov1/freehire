@@ -151,17 +151,14 @@ func TestUpdateProfile_InitialCreateFaultIsNotRetried(t *testing.T) {
 	}
 }
 
-func TestUpdateProfile_IsAccountOnlyAndDeclaresItsEffect(t *testing.T) {
+func TestUpdateProfile_IsServedToGrantAndKeyAndDeclaresItsEffect(t *testing.T) {
 	h := assistantWithProfile(savedProfile(), nil)
 	tool := toolByName(t, mcpAccountTools(h, "https://x"), "update_profile")
 	if tool.Title == "" || tool.Description == "" {
 		t.Errorf("title and description are required: %+v", tool)
 	}
-	for _, k := range mcpKeyTools(h, "https://x") {
-		if k.Name == "update_profile" {
-			t.Error("update_profile must not be offered to an API key")
-		}
-	}
+	// The local freehire-mcp package holds only a key and forwards update_profile here.
+	toolByName(t, mcpKeyTools(h, "https://x"), "update_profile")
 }
 
 func runUpdateProfileWith(t *testing.T, repo *fakeProfileRepo, cv structuredResumeReader, args string) (any, error) {

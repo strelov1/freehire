@@ -1167,4 +1167,6 @@ var registry = []string{
 	"spend-analysis",
 	"strategic-sourcing",
 	"supply-chain-management",
+	"design-systems",
+	"nx",
 }
