@@ -19,6 +19,8 @@ var nonCorroboratingPhrases = func() map[string]bool {
 		"pos-terminals":         true,
 		"cctv":                  true,
 		"structured-cabling":    true,
+		// A design discipline: "AI-powered digital product design" is no AI requirement.
+		"product-design": true,
 
 		// An electrician installs "sieci komputerowe" too.
 		"networking":                     true,

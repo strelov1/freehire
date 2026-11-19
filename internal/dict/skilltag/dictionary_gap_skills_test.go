@@ -28,7 +28,7 @@ func TestDictionaryGapSkills(t *testing.T) {
 
 	for _, c := range []struct{ text, want string }{
 		{"Backend on Node.js with TypeScript, PostgreSQL and Prisma ORM.", "prisma"},
-		{"You will build internal tools as Retool apps on top of our Postgres.", "retool"},
+		{"Admin panels built with Retool on top of our Postgres.", "retool"},
 		{"Lead digital product design for our mobile banking app in Figma.", "product-design"},
 		{"Разработка на 1С-Битрикс, знание PHP и MySQL.", "1c-bitrix"},
 		{"PHP developer: Bitrix D7, custom components, MySQL.", "1c-bitrix"},
@@ -41,6 +41,8 @@ func TestDictionaryGapSkills(t *testing.T) {
 	for _, c := range []struct{ text, not string }{
 		{"Secure our cloud with Prisma Cloud and Cortex XSOAR.", "prisma"},
 		{"We will retool the warehouse line for the new product.", "retool"},
+		{"Operations manager: retool workflows to reduce packing delays.", "retool"},
+		{"AI-powered digital product design for retail brands.", "ai"},
 		{"Industrial engineer: product design of injection-moulded parts in SolidWorks.", "product-design"},
 		{"Менеджер по продажам: ведение клиентов в Битрикс24.", "1c-bitrix"},
 	} {

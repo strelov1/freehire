@@ -841,7 +841,7 @@ export const SKILL_ALIASES = {
   'requirements-gathering': ['requirements gathering'],
   'rest': ['api rest', 'api restful', 'apis rest', 'apis restful', 'rest api', 'rest apis', 'restful', 'restful api', 'restful apis', 'services rest', 'servicios rest', 'servicos rest', 'serviços rest'],
   'rest-assured': ['rest assured', 'restassured'],
-  'retool': ['Retool', 'retool app', 'retool apps', 'retool dashboards', 'retool workflows'],
+  'retool': ['Retool', 'built in retool', 'built with retool', 'retool developer', 'retool platform'],
   'revenue-recognition': ['revenue recognition'],
   'reverse-engineering': ['reverse engineering'],
   'revit': ['revit'],

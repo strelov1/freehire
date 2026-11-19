@@ -27,10 +27,12 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"prisma client", "prisma"},
 	{"prisma schema", "prisma"},
 	{"prisma migrate", "prisma"},
-	{"retool apps", "retool"},
-	{"retool app", "retool"},
-	{"retool dashboards", "retool"},
-	{"retool workflows", "retool"},
+	// "retool <noun>" is just as often the verb ("retool workflows"), so only phrases that
+	// name the product qualify.
+	{"retool developer", "retool"},
+	{"retool platform", "retool"},
+	{"built with retool", "retool"},
+	{"built in retool", "retool"},
 	{"digital product design", "product-design"},
 	{"saas product design", "product-design"},
 	// 1C-Bitrix, the RU CMS and its D7 framework. Bare "Битрикс"/"Bitrix" is left out: it is
