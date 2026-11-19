@@ -148,13 +148,14 @@ func (w *Worker) retry(ctx context.Context, j job, cause error) (givenUp bool, e
 	status := "retry"
 	class := "provider_unavailable"
 	delay := time.Minute*time.Duration(1<<min(int(attempt), 8)) + time.Duration(rand.IntN(30))*time.Second
-	if errors.Is(cause, apple.ErrPermanent) {
+	switch {
+	case errors.Is(cause, apple.ErrPermanent):
 		status = "failed"
 		class = "provider_configuration"
-	} else if errors.Is(cause, apple.ErrGrantDecrypt) {
+	case errors.Is(cause, apple.ErrGrantDecrypt):
 		status = "failed"
 		class = "grant_decryption"
-	} else if attempt >= 10 {
+	case attempt >= 10:
 		status = "failed"
 		class = "retry_exhausted"
 	}

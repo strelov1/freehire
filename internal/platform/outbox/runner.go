@@ -125,13 +125,14 @@ func RunBatch[C any](ctx context.Context, claimer Claimer[C], opt RunOptions, pr
 			return stats, nil
 		}
 		waveStats, err := processBatch(ctx, batch)
-		if err != nil && processOne == nil {
+		switch {
+		case err != nil && processOne == nil:
 			stats.Failed += len(batch)
-		} else if err != nil {
+		case err != nil:
 			for _, item := range batch {
 				tally(&stats, processOne(ctx, item))
 			}
-		} else {
+		default:
 			stats.Succeeded += waveStats.Succeeded
 			stats.Failed += waveStats.Failed
 			stats.DeadLettered += waveStats.DeadLettered

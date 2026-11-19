@@ -123,7 +123,8 @@ func (ix *Index) apply(b Batch) (*Index, error) {
 	if n > ix.n {
 		next.all = ix.all.Clone()
 		next.all.AddRange(uint64(ix.n), uint64(n))
-		next.jobIDs = append(ix.jobIDs, newIDs...) // appends past every older generation's length
+		// Appends past every older generation's length; aliasing ix.jobIDs is deliberate.
+		next.jobIDs = append(ix.jobIDs, newIDs...) //nolint:gocritic // generations share one backing array
 		next.overlay = maps.Clone(ix.overlay)
 		if next.overlay == nil {
 			next.overlay = map[int64]uint32{}

@@ -87,8 +87,7 @@ func seedJob(t *testing.T, pool *pgxpool.Pool, slug string, extra string) {
 }
 
 func valuesFor(extra string) string {
-	switch extra {
-	case ", is_private":
+	if extra == ", is_private" {
 		return ", true"
 	}
 	return ""

@@ -8,6 +8,8 @@ extend-exclude = [
   # Facet dictionaries: city, place and title vocabularies in a dozen languages.
   "internal/dict/**",
   "*.tsv",
+  # The misspell ignore list in .golangci.yml is foreign-language vocabulary by design.
+  ".golangci.yml",
   # Captured provider responses, verbatim and in the provider's language.
   "internal/ingest/**/testdata/**",
   "cmd/reindex/testdata/whatjobs_summaries.json",

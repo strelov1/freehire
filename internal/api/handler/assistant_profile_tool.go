@@ -118,6 +118,7 @@ type profileToolResult struct {
 	// not a CV document, which is why it is named for what it is and not "cv".
 	Background *resumeextract.Professional `json:"background,omitempty"`
 	// CV is the same block under its original name, kept so older readers do not break.
+	//
 	// Deprecated: drop it once agents read `background`; it doubles this block in every transcript.
 	CV         *resumeextract.Professional `json:"cv,omitempty"`
 	Experience *experienceSummary          `json:"experience,omitempty"`

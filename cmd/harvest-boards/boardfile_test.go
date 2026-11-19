@@ -27,7 +27,7 @@ func TestNewBoards(t *testing.T) {
 // CamelCase board must dedup away (else the same board is crawled twice).
 func TestNewBoardsCaseInsensitiveKey(t *testing.T) {
 	existing := map[string]bool{"acme.wd1.myworkdayjobs.com/Careers": true}
-	key := func(s string) string { return strings.ToLower(s) }
+	key := strings.ToLower
 	got := newBoards([]string{"acme.wd1.myworkdayjobs.com/careers", "new.wd1.myworkdayjobs.com/x"}, existing, key)
 	if len(got) != 1 || got[0] != "new.wd1.myworkdayjobs.com/x" {
 		t.Fatalf("got %v, want [new.wd1.myworkdayjobs.com/x]", got)

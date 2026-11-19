@@ -418,11 +418,12 @@ func TestCodeConsume_ConcurrentRace(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			err := s.ConfirmVerification(context.Background(), 5, "123456")
-			if err == nil {
+			switch {
+			case err == nil:
 				atomic.AddInt32(&successes, 1)
-			} else if errors.Is(err, ErrInvalidCode) {
+			case errors.Is(err, ErrInvalidCode):
 				atomic.AddInt32(&failures, 1)
-			} else {
+			default:
 				t.Errorf("unexpected error: %v", err)
 			}
 		}()

@@ -251,11 +251,12 @@ func (f *neogovDuplicateThenNewFake) GetTextWithHeaders(_ context.Context, url s
 		return "", nil
 	}
 	page := 1
-	if strings.Contains(url, "page=2") {
+	switch {
+	case strings.Contains(url, "page=2"):
 		page = 2
-	} else if strings.Contains(url, "page=3") {
+	case strings.Contains(url, "page=3"):
 		page = 3
-	} else if strings.Contains(url, "page=4") {
+	case strings.Contains(url, "page=4"):
 		page = 4
 	}
 	if page > len(f.pages) {

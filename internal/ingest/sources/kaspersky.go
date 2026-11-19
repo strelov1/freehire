@@ -180,8 +180,10 @@ func (k kaspersky) page(ctx context.Context, page int) ([]kasperskyItem, int, er
 		return nil, 0, fmt.Errorf("decode listing: %w", err)
 	}
 	total := 0
-	if m := kasperskyTotalCount.FindStringSubmatch(flight[strings.Index(flight, kasperskyListKey):]); m != nil {
-		total, _ = strconv.Atoi(m[1])
+	if i := strings.Index(flight, kasperskyListKey); i >= 0 {
+		if m := kasperskyTotalCount.FindStringSubmatch(flight[i:]); m != nil {
+			total, _ = strconv.Atoi(m[1])
+		}
 	}
 	return items, total, nil
 }

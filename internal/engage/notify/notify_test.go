@@ -195,7 +195,18 @@ func TestMeetsSkillMatch(t *testing.T) {
 }
 
 func TestMinSkillMatch(t *testing.T) {
-	for raw, want := range map[string]int{"70": 70, " 70 ": 70, "100": 100, "1": 1, "0": 0, "101": 0, "-5": 0, "abc": 0, "": 0} {
+	for raw, want := range map[string]int{
+		"70":   70,
+		" 70 ": 70, //nolint:gocritic // the padding is the case under test
+		"100":  100,
+		"1":    1,
+		"0":    0,
+		"101":  0,
+		"-5":   0,
+		"abc":  0,
+		"":     0,
+	} {
+
 		if got := minSkillMatch(url.Values{"min_skill_match": {raw}}); got != want {
 			t.Errorf("minSkillMatch(%q) = %d, want %d", raw, got, want)
 		}
