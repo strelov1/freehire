@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { ExternalLink, SquarePen } from '@lucide/svelte';
+  import { SquarePen } from '@lucide/svelte';
   import { ProviderIcon } from '#lib/ui/index.js';
 
   // The tools beside the job page's tabs for reaching people at the employer: drafting a
@@ -38,10 +38,6 @@
     class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground lg:min-w-0"
   >
     <span class="hidden lg:inline">Find people</span>
-    <!-- Opens LinkedIn in a new tab: the arrow beside the logo says the reader leaves the site. -->
-    <span class="inline-flex shrink-0 items-center gap-0.5">
-      <ProviderIcon provider="linkedin" class="size-4 lg:size-3.5" />
-      <ExternalLink class="hidden size-2 -translate-y-1 self-start lg:inline" aria-hidden="true" />
-    </span>
+    <ProviderIcon provider="linkedin" class="size-4 shrink-0 lg:size-3.5" />
   </a>
 </div>
