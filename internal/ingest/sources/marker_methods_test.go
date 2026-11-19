@@ -42,3 +42,50 @@ func TestNoLegacyMarkerMethods(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestMarkersAnswer calls every marker on every registered adapter. The markers are empty
+// methods read only by type assertion, so nothing else runs them; this holds each one callable
+// and keeps the value-returning ones (SweepGrace, ValidateBoard) from panicking on a zero adapter.
+func TestMarkersAnswer(t *testing.T) {
+	for name, s := range All(nil) {
+		if m, ok := s.(boardless); ok {
+			m.Boardless()
+		}
+		if m, ok := s.(boardValidator); ok {
+			_ = m.ValidateBoard("x")
+		}
+		if m, ok := s.(aggregator); ok {
+			m.Aggregator()
+		}
+		if m, ok := s.(social); ok {
+			m.Social()
+		}
+		if m, ok := s.(unknownOrigin); ok {
+			m.UnknownOrigin()
+		}
+		if m, ok := s.(selfClosing); ok {
+			m.SelfClosing()
+		}
+		if m, ok := s.(probeClosing); ok {
+			m.ProbeClosing()
+		}
+		if m, ok := s.(fullCatalog); ok {
+			m.FullCatalog()
+		}
+		if m, ok := s.(sliceBoardListing); ok {
+			m.SliceBoardListing()
+		}
+		if m, ok := s.(sweepGrace); ok && m.SweepGrace() <= 0 {
+			t.Errorf("%s: SweepGrace() = %v, want a positive window", name, m.SweepGrace())
+		}
+		if m, ok := s.(livenessProbed); ok {
+			m.LivenessProbed()
+		}
+		if m, ok := s.(fullBoardListing); ok {
+			m.FullBoardListing()
+		}
+		if m, ok := s.(emptyBoardListing); ok {
+			m.EmptyBoardListing()
+		}
+	}
+}
