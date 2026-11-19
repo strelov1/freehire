@@ -4,7 +4,7 @@
 -- has_pending_suggestion mirror ListUserJobs deliberately: the follow-up gate
 -- must reach the same silence verdict as the badge on the board, and two derivations of one rule
 -- drift. See the column comment in 0059 for why followed_up_at is NOT part of the activity.
-SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_at,
+SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_at, a.id AS application_id,
        (CASE WHEN a.applied_at IS NOT NULL THEN
           GREATEST(a.applied_at,
                    (SELECT max(e.received_at)

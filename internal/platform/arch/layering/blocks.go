@@ -167,7 +167,7 @@ var blocks = map[string][]string{
 	// discordlink is outbound engagement (a community-server role) and reaches
 	// identity/billing only to ask an account's tier; in identity it would invert that.
 	"engage": {
-		"broadcast", "buddy", "changehook", "community", "companyfeedback", "companywatch", "discordlink", "emailevents", "emailnotify", "emailprefs",
+		"bookinglink", "broadcast", "buddy", "changehook", "community", "companyfeedback", "companywatch", "discordlink", "emailevents", "emailnotify", "emailprefs",
 		// limitnudge is outbound engagement like prowelcome. The trigger (a free-tier ceiling
 		// refusal) is written by ai/plan.Store into plan_limit_hits, so it never imports ai/plan.
 		"limitnudge",

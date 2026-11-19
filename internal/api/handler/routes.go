@@ -113,6 +113,8 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// The mentorship marketplace (see mentorshipHandlers).
 	h.mentorshipHandlers.register(api, mw, contract)
 	h.mentorSuggestionsHandlers.register(api, mw, contract)
+	// The candidate booking link and its anonymous public page (see bookingLinkHandlers).
+	h.bookingLinkHandlers.register(api, mw, contract)
 
 	// Job reports + review queue (see reportHandlers).
 	h.reportHandlers.register(api, mw, contract)

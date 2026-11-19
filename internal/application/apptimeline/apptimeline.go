@@ -32,6 +32,7 @@ type Queries interface {
 	ListApplicationEventsInRange(ctx context.Context, arg db.ListApplicationEventsInRangeParams) ([]db.ListApplicationEventsInRangeRow, error)
 	ListApplicationInterviewsInRange(ctx context.Context, arg db.ListApplicationInterviewsInRangeParams) ([]db.ListApplicationInterviewsInRangeRow, error)
 	ListApplicationEvents(ctx context.Context, arg db.ListApplicationEventsParams) ([]db.ListApplicationEventsRow, error)
+	ListApplicationInterviews(ctx context.Context, arg db.ListApplicationInterviewsParams) ([]db.ListApplicationInterviewsRow, error)
 }
 
 // MaxRangeDays caps one request at a year and a day: enough for any calendar span a reader
@@ -207,6 +208,26 @@ func (s *Service) Interviews(ctx context.Context, userID int64, from, to time.Ti
 	if err != nil {
 		return nil, err
 	}
+	return interviewsOf(rows), nil
+}
+
+// InterviewsForApplication returns one application's meetings, oldest first: the application
+// panel's list. The row mapping is shared with Interviews so the two views agree.
+func (s *Service) InterviewsForApplication(ctx context.Context, userID, applicationID int64) ([]Interview, error) {
+	rows, err := s.q.ListApplicationInterviews(ctx, db.ListApplicationInterviewsParams{
+		UserID: userID, ApplicationID: applicationID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	inRange := make([]db.ListApplicationInterviewsInRangeRow, len(rows))
+	for i, r := range rows {
+		inRange[i] = db.ListApplicationInterviewsInRangeRow(r)
+	}
+	return interviewsOf(inRange), nil
+}
+
+func interviewsOf(rows []db.ListApplicationInterviewsInRangeRow) []Interview {
 	out := make([]Interview, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, Interview{
@@ -222,5 +243,5 @@ func (s *Service) Interviews(ctx context.Context, userID int64, from, to time.Ti
 			JobSlug:       r.JobSlug.String,
 		})
 	}
-	return out, nil
+	return out
 }

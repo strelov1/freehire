@@ -25,6 +25,7 @@
     MyJob,
     ApplicationEmail,
     AutoApplyReviewInfo,
+    ScheduledInterview,
     StageSuggestion,
     TimelineEvent,
   } from '#lib/types.js';
@@ -139,6 +140,10 @@
   // Declared here (before TABS, which reads autoApplied) rather than nearer its own
   // rendering further down — the same ordering `emails`'s own comment already explains.
   let events = $state.raw<TimelineEvent[]>([]);
+  // What hangs off the application itself: its meetings and its booking link.
+  let interviews = $state.raw<ScheduledInterview[]>([]);
+  let applicationId = $state<number | null>(null);
+  let bookingUrl = $state<string | null>(null);
   let buddyMember = $state(false);
   let hiddenInBuddyFeed = $state(false);
   let buddyVisibilityBusy = $state(false);
@@ -243,6 +248,9 @@
       }
       posting = app.job;
       events = app.events ?? [];
+      interviews = app.interviews ?? [];
+      applicationId = app.application_id ?? null;
+      bookingUrl = app.booking_url ?? null;
       if (tab === 'auto_apply' && !autoApply && !autoApplied) tab = 'application';
     } catch (e) {
       emailsError = errorMessage(e, s.errors.loadEmails);
@@ -420,7 +428,7 @@
         {:else if emailsLoading || emailsError}
           <JobDrawerLoadState loading={emailsLoading} error={emailsError} onretry={() => loadEmails(true)} />
         {:else}
-          <JobDrawerHistory {events} />
+          <JobDrawerHistory {events} {interviews} {applicationId} bind:bookingUrl />
         {/if}
       {:else if tab === 'auto_apply' && (emails === null || emailsError)}
         <JobDrawerLoadState

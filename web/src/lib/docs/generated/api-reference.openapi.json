@@ -22,6 +22,9 @@
       "name": "Onboarding"
     },
     {
+      "name": "Booking links"
+    },
+    {
       "name": "Jobs",
       "description": "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint."
     },
@@ -1057,6 +1060,124 @@
             }
           }
         },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/booking/{token}/bookings": {
+      "post": {
+        "operationId": "bookBookingLinkSlot",
+        "summary": "Book a slot through a booking link.",
+        "description": "Book one of a link's slots. A taken or no longer offered slot is 409 `slot_unavailable`.",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BookingLinkBooking"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Booking links"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingLinkBookBody"
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/booking/{token}/slots": {
+      "get": {
+        "operationId": "getBookingLinkSlots",
+        "summary": "List a booking link's free slots.",
+        "description": "A link's free slots from now to its horizon, in the viewer's zone (UTC when unknown; `meta.timezone` says which).",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorshipSlotsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Booking links"
+        ],
         "security": [
           {}
         ]
@@ -10954,6 +11075,8 @@
                     "applied_at": "2026-07-24T09:00:00Z",
                     "stage": "interview",
                     "followed_up_at": null,
+                    "application_id": 5120,
+                    "interviews": [],
                     "emails": [
                       {
                         "id": 4821,
@@ -15415,6 +15538,47 @@
         },
         "description": "An answer to a free-text screening question, saved for the next form that asks it."
       },
+      "BookingLinkBookBody": {
+        "type": "object",
+        "required": [
+          "starts_at",
+          "name",
+          "email"
+        ],
+        "properties": {
+          "starts_at": {
+            "type": "string",
+            "description": "RFC 3339; must be one of the offered slots."
+          },
+          "name": {
+            "type": "string",
+            "description": "The booker's name, shown to the candidate; 1-200 characters, no control characters."
+          },
+          "email": {
+            "type": "string",
+            "description": "The booker's bare email address, shown to the candidate."
+          }
+        }
+      },
+      "BookingLinkBooking": {
+        "type": "object",
+        "required": [
+          "starts_at",
+          "ends_at"
+        ],
+        "properties": {
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        }
+      },
       "BuddyMockRule": {
         "type": "object",
         "properties": {
@@ -17655,7 +17819,8 @@
           "applied_at",
           "followed_up_at",
           "emails",
-          "events"
+          "events",
+          "interviews"
         ],
         "properties": {
           "job": {
@@ -17735,6 +17900,22 @@
           "auto_apply": {
             "$ref": "#/components/schemas/AutoApplyReviewInfo",
             "description": "The caller's live auto-apply attempt for this job; absent when none exists."
+          },
+          "application_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The application's own id, which the booking link is turned on by; absent for a job only saved."
+          },
+          "interviews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledInterview"
+            },
+            "description": "The meetings arranged for this application, oldest first; cancelled ones are served."
+          },
+          "booking_url": {
+            "type": "string",
+            "description": "The application's booking link page; absent until the candidate turns it on."
           }
         },
         "description": "The job, the caller's interaction with it, the linked mail and the history."

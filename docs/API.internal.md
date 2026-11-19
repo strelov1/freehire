@@ -16,6 +16,7 @@ Base URL: `https://freehire.me/api/v1`
 - [What is not here](#what-is-not-here)
 - [External vs internal endpoints](#external-vs-internal-endpoints)
 - [Filtering jobs](#filtering-jobs)
+- [Booking links](#booking-links)
 - [Jobs](#jobs)
 - [Company feedback](#company-feedback)
 - [Auth](#auth)
@@ -337,6 +338,32 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 - **Jobs stating Secret or Top Secret clearance** — `clearance_levels=secret,top_secret`
 
 - **Only jobs that need a security clearance** — `requires_clearance=true`
+
+## Booking links
+
+### `POST /me/applications/{id}/booking-link`
+
+**Auth:** Session only
+
+Turn on an application's booking link.
+
+Turn on the caller's booking link for one of their applications. Pro or Ultra only (402).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer (int64) | yes |  |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `timezone` | string | yes | The candidate's IANA zone, sent by the browser; the default hours are wall-clock times in it. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/applications/<id>/booking-link" -b cookies.txt
+```
 
 ## Jobs
 

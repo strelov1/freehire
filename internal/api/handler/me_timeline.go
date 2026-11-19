@@ -101,6 +101,11 @@ func (h *timelineHandlers) GetInterviews(ctx context.Context, params apigen.GetI
 		return nil, err
 	}
 
+	out := scheduledInterviewsWire(found)
+	return &apigen.GetInterviewsOK{Data: out, Meta: apigen.TimelineMeta{From: from, To: to, Count: int64(len(out))}}, nil
+}
+
+func scheduledInterviewsWire(found []apptimeline.Interview) []apigen.ScheduledInterview {
 	out := make([]apigen.ScheduledInterview, 0, len(found))
 	for _, iv := range found {
 		out = append(out, apigen.ScheduledInterview{
@@ -117,7 +122,7 @@ func (h *timelineHandlers) GetInterviews(ctx context.Context, params apigen.GetI
 			JobSlug:     optString(iv.JobSlug),
 		})
 	}
-	return &apigen.GetInterviewsOK{Data: out, Meta: apigen.TimelineMeta{From: from, To: to, Count: int64(len(out))}}, nil
+	return out
 }
 
 func optInt64(n int64) apigen.OptInt64 {

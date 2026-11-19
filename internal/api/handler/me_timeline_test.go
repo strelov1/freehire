@@ -311,3 +311,7 @@ type scheduledInterview struct {
 	RoleTitle     string     `json:"role_title,omitempty"`
 	JobSlug       string     `json:"job_slug,omitempty"`
 }
+
+func (s timelineStore) ListApplicationInterviews(context.Context, db.ListApplicationInterviewsParams) ([]db.ListApplicationInterviewsRow, error) {
+	return nil, nil
+}

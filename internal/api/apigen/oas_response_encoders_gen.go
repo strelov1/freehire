@@ -168,6 +168,19 @@ func encodeBlockConversationResponse(response *BlockConversationNoContent, w htt
 	return nil
 }
 
+func encodeBookBookingLinkSlotResponse(response *BookBookingLinkSlotCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeBookSessionResponse(response *BookSessionCreated, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(201)
@@ -1231,6 +1244,19 @@ func encodeDuplicateCVResponse(response *DuplicateCVCreated, w http.ResponseWrit
 	return nil
 }
 
+func encodeEnableBookingLinkResponse(response *EnableBookingLinkCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeEngagementStatsResponse(response *EngagementStatsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -1462,6 +1488,19 @@ func encodeGetBillingManageResponse(response *GetBillingManageOK, w http.Respons
 }
 
 func encodeGetBillingSubscriptionResponse(response *GetBillingSubscriptionOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetBookingLinkSlotsResponse(response *MentorshipSlotsPage, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 

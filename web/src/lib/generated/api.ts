@@ -396,6 +396,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/booking/{token}/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Book a slot through a booking link.
+         * @description Book one of a link's slots. A taken or no longer offered slot is 409 `slot_unavailable`.
+         */
+        post: operations["bookBookingLinkSlot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/booking/{token}/slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a booking link's free slots.
+         * @description A link's free slots from now to its horizon, in the viewer's zone (UTC when unknown; `meta.timezone` says which).
+         */
+        get: operations["getBookingLinkSlots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/catalogue/snapshots": {
         parameters: {
             query?: never;
@@ -2093,6 +2133,26 @@ export interface paths {
          *     no slug left to address it by. Same `stage` vocabulary and body shape.
          */
         patch: operations["trackApplication"];
+        trace?: never;
+    };
+    "/me/applications/{id}/booking-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn on an application's booking link.
+         * @description Turn on the caller's booking link for one of their applications. Pro or Ultra only (402).
+         */
+        post: operations["enableBookingLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/me/applications/{id}/stage": {
@@ -6644,6 +6704,28 @@ export interface components {
         BillingUrl: {
             url: string;
         };
+        BookingLinkBookBody: {
+            /** @description RFC 3339; must be one of the offered slots. */
+            starts_at: string;
+            /** @description The booker's name, shown to the candidate; 1-200 characters, no control characters. */
+            name: string;
+            /** @description The booker's bare email address, shown to the candidate. */
+            email: string;
+        };
+        BookingLinkBooking: {
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+        };
+        BookingLinkEnableBody: {
+            /** @description The candidate's IANA zone, sent by the browser; the default hours are wall-clock times in it. */
+            timezone: string;
+        };
+        BookingLinkOut: {
+            /** @description The link's public page. The same URL on every call. */
+            url: string;
+        };
         BuddyActivity: {
             days: components["schemas"]["BuddyActivityDay"][];
         };
@@ -8099,6 +8181,15 @@ export interface components {
             stage_suggestion?: components["schemas"]["StageSuggestion"];
             /** @description The caller's live auto-apply attempt for this job; absent when none exists. */
             auto_apply?: components["schemas"]["AutoApplyReviewInfo"];
+            /**
+             * Format: int64
+             * @description The application's own id, which the booking link is turned on by; absent for a job only saved.
+             */
+            application_id?: number;
+            /** @description The meetings arranged for this application, oldest first; cancelled ones are served. */
+            interviews: components["schemas"]["ScheduledInterview"][];
+            /** @description The application's booking link page; absent until the candidate turns it on. */
+            booking_url?: string;
         };
         InboxApplicationEmail: {
             /** Format: int64 */
@@ -11315,6 +11406,76 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["BillingOverview"];
                     };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    bookBookingLinkSlot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingLinkBookBody"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded and a new resource has been created as a result. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BookingLinkBooking"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getBookingLinkSlots: {
+        parameters: {
+            query?: {
+                tz?: string;
+            };
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MentorshipSlotsPage"];
                 };
             };
             /** @description An unexpected error response. */
@@ -16062,6 +16223,43 @@ export interface operations {
                      */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    enableBookingLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingLinkEnableBody"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded and a new resource has been created as a result. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BookingLinkOut"];
                     };
                 };
             };
@@ -23910,6 +24108,8 @@ export interface operations {
                      *         "applied_at": "2026-07-24T09:00:00Z",
                      *         "stage": "interview",
                      *         "followed_up_at": null,
+                     *         "application_id": 5120,
+                     *         "interviews": [],
                      *         "emails": [
                      *           {
                      *             "id": 4821,

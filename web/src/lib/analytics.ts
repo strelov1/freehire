@@ -111,6 +111,7 @@ function initPostHog(config: AnalyticsConfig): void {
         capture_pageview: false, // SPA navigation is captured manually (see layout)
         person_profiles: 'identified_only', // no anonymous profiles → saves quota
         session_recording: { maskAllInputs: true },
+        before_send: redactBookingEvent,
       });
       ph = posthog;
       drainPending(posthog);
@@ -118,6 +119,28 @@ function initPostHog(config: AnalyticsConfig): void {
     .catch(() => {
       loading = false; // let a later call retry the load
     });
+}
+
+// A booking link's path segment is its token, a credential for booking someone's time.
+const BOOKING_TOKEN = /\/booking\/[^/?#]+/g;
+const URL_PROPERTIES = ['$current_url', '$pathname', '$referrer', '$initial_current_url', '$initial_referrer'];
+
+/** Rewrites any /booking/<token> in a URL to /booking/:token. */
+export function redactBookingToken(url: string): string {
+  return url.replace(BOOKING_TOKEN, '/booking/:token');
+}
+
+/** PostHog before_send: keeps booking-link tokens out of the URL properties we send. */
+function redactBookingEvent<T extends { properties?: Record<string, unknown>; $set?: Record<string, unknown> } | null>(
+  event: T,
+): T {
+  for (const props of [event?.properties, event?.$set]) {
+    if (!props) continue;
+    for (const key of URL_PROPERTIES) {
+      if (typeof props[key] === 'string') props[key] = redactBookingToken(props[key]);
+    }
+  }
+  return event;
 }
 
 // True once GA has been injected, so a repeated initTrackers() (e.g. Accept after a

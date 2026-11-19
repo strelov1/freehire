@@ -81,6 +81,12 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/block
 	BlockConversation(ctx context.Context, params BlockConversationParams) error
+	// BookBookingLinkSlot implements bookBookingLinkSlot operation.
+	//
+	// Book one of a link's slots. A taken or no longer offered slot is 409 `slot_unavailable`.
+	//
+	// POST /booking/{token}/bookings
+	BookBookingLinkSlot(ctx context.Context, req *BookingLinkBookBody, params BookBookingLinkSlotParams) (*BookBookingLinkSlotCreated, error)
 	// BookSession implements bookSession operation.
 	//
 	// POST /mentors/{slug}/bookings
@@ -583,6 +589,12 @@ type Handler interface {
 	//
 	// POST /me/cvs/{id}/duplicate
 	DuplicateCV(ctx context.Context, params DuplicateCVParams) (*DuplicateCVCreated, error)
+	// EnableBookingLink implements enableBookingLink operation.
+	//
+	// Turn on the caller's booking link for one of their applications. Pro or Ultra only (402).
+	//
+	// POST /me/applications/{id}/booking-link
+	EnableBookingLink(ctx context.Context, req *BookingLinkEnableBody, params EnableBookingLinkParams) (*EnableBookingLinkCreated, error)
 	// EngagementStats implements engagementStats operation.
 	//
 	// `viewed` is the only field here that is not a signed-in count: it is bot-filtered job-page opens by
@@ -702,6 +714,13 @@ type Handler interface {
 	//
 	// GET /billing/subscription
 	GetBillingSubscription(ctx context.Context) (*GetBillingSubscriptionOK, error)
+	// GetBookingLinkSlots implements getBookingLinkSlots operation.
+	//
+	// A link's free slots from now to its horizon, in the viewer's zone (UTC when unknown; `meta.timezone`
+	// says which).
+	//
+	// GET /booking/{token}/slots
+	GetBookingLinkSlots(ctx context.Context, params GetBookingLinkSlotsParams) (*MentorshipSlotsPage, error)
 	// GetCV implements getCV operation.
 	//
 	// The document without its contact block to an API key.
