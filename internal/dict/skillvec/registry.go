@@ -1169,4 +1169,8 @@ var registry = []string{
 	"supply-chain-management",
 	"design-systems",
 	"nx",
+	"1c-bitrix",
+	"prisma",
+	"product-design",
+	"retool",
 }

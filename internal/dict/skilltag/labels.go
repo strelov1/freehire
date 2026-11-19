@@ -151,6 +151,7 @@ var displayNames = map[string]string{
 	"xunit":                    "xUnit",
 	// Numerals and punctuation the slug form cannot carry.
 	"1c":          "1C",
+	"1c-bitrix":   "1C-Bitrix",
 	"ab-testing":  "A/B Testing",
 	"as400":       "AS/400",
 	"ci-cd":       "CI/CD",

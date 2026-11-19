@@ -3,6 +3,7 @@
 
 export const SKILL_DESCRIPTIONS = {
   '1c': '1C is a business software platform used for enterprise resource planning, accounting, and automation of business processes.',
+  '1c-bitrix': '1C-Bitrix is a PHP content management system and web platform widely used in Russia and the CIS, with its D7 framework for custom development.',
   '3ds-max': '3ds Max is a 3D modeling and animation software application used to create digital images, models, and renderings for video games, films, and architectural visualizations.',
   'ab-testing': 'A/B Testing is a user experience research method used to compare two versions of a webpage or app to determine which one performs better based on a specific metric.',
   'abac': 'ABAC (attribute-based access control) is an authorization model that grants or denies access by evaluating attributes of the user, the resource and the context against policy rules.',
@@ -777,10 +778,12 @@ export const SKILL_DESCRIPTIONS = {
   'presto': 'Presto is a distributed SQL query engine used for running fast, interactive analytical queries against large data sets from various sources.',
   'preventive-maintenance': 'Preventive maintenance schedules inspections and servicing to reduce equipment failures before they occur.',
   'primavera-p6': 'Primavera P6 is an enterprise project management software used for planning, scheduling, and controlling complex projects. It allows users to manage resources, costs, and timelines across large-scale initiatives.',
+  'prisma': 'Prisma is an open-source ORM for Node.js and TypeScript with a schema language, a type-safe query client and migrations.',
   'process-improvement': 'Process improvement is the discipline of examining how work is currently done and changing it to remove waste, errors and delay.',
   'process-modeling': 'Process modeling is a technique for visually representing the sequential steps and decision points involved in a business workflow. It is used to analyze and document operational procedures to identify inefficiencies or design automated systems.',
   'process-safety-management': 'Process safety management (PSM) is the OSHA-regulated discipline for preventing catastrophic releases at facilities handling highly hazardous chemicals.',
   'procore': 'Procore is a cloud-based construction management software used to oversee project planning, financials, and documentation throughout the building lifecycle.',
+  'product-design': 'Product design is the practice of designing digital products end to end, from user research and flows to interface design and validation.',
   'professional-scrum-master': 'Professional Scrum Master is a certification that validates a professional\'s knowledge of the Scrum framework and their ability to fulfill the Scrum Master role.',
   'profibus': 'PROFIBUS is a fieldbus standard for communication between controllers and field devices in factory and process automation.',
   'profinet': 'PROFINET is an industrial Ethernet standard for communication between controllers and field devices in factory automation.',
@@ -838,6 +841,7 @@ export const SKILL_DESCRIPTIONS = {
   'requirements-gathering': 'Requirements Gathering is a project management process used to identify, document, and prioritize the specific needs and constraints of a software system.',
   'rest': 'REST is an architectural style for web APIs in which resources are addressed by URL and manipulated with standard HTTP methods.',
   'rest-assured': 'REST Assured is a Java library for writing automated tests of REST APIs.',
+  'retool': 'Retool is a low-code platform for building internal tools, admin panels and dashboards on top of databases and APIs.',
   'revenue-recognition': 'Revenue recognition is an accounting principle and a module within financial software that dictates the specific point in time when income is recorded in the books. It is used to ensure that a company\'s financial reporting complies with regulatory standards and matches the delivery of goods or services.',
   'reverse-engineering': 'Reverse Engineering is a technical process that involves analyzing a software application, hardware device, or system to understand its internal design and functionality. It is used to recover lost source code, identify security vulnerabilities, or create compatible systems without access to the original blueprints.',
   'revit': 'Revit is a building information modeling software used to create 3D models, generate 2D drawings, and document building projects for architecture, engineering, and construction.',

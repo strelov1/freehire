@@ -52,7 +52,10 @@ var wordAliases1 = map[string]string{
 	// 1c is the RU enterprise platform's own language. Gated (ambiguousWords) because a bare
 	// "1c" also occurs as a figure/list label in English prose; the Cyrillic "1с" form the RU
 	// market uses is a strong phrase alias instead.
-	"1c":         "1c",
+	"1c": "1c",
+	// A CVE is a published vulnerability; tracking CVEs is vulnerability management.
+	"cve":        "vulnerability-management",
+	"cves":       "vulnerability-management",
 	"nim":        "nim",
 	"zig":        "zig",
 	"assembly":   "assembly",
