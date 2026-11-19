@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/ingest/atsboard"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -17,7 +18,7 @@ import (
 // A board adapter may copy its catalogue label rather than read an employer from
 // the posting. For a new board, verify the association independently through the
 // employer's published website before supplying that label to the adapter.
-func (im *Importer) verifyEmployerBoard(ctx context.Context, origin db.Job, provider, board, website string) (string, error) {
+func (im *Importer) verifyEmployerBoard(ctx context.Context, origin db.Job, provider, board, region, website string) (string, error) {
 	if website == "" && im.q != nil {
 		slug := origin.CompanySlug
 		if slug == "" {
@@ -52,8 +53,9 @@ func (im *Importer) verifyEmployerBoard(ctx context.Context, origin db.Job, prov
 		ResolveCompany(context.Context, string) (string, string, string, bool)
 	})
 	if website != "" && ok {
-		source, tenant, _, found := resolver.ResolveCompany(ctx, website)
-		if found && source == provider && strings.EqualFold(tenant, board) {
+		source, tenant, canonical, found := resolver.ResolveCompany(ctx, website)
+		sameRegion := provider != "lever" || atsboard.Region(canonical) == region
+		if found && source == provider && strings.EqualFold(tenant, board) && sameRegion {
 			return website, nil
 		}
 	}

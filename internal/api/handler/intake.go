@@ -59,6 +59,9 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 	if slug != "" {
 		return intakeOutcome{Status: outcomeFound, PublicSlug: slug}, nil
 	}
+	if sources.LinkedInPostingID(pageURL) != "" {
+		return s.resolveLinkedIn(ctx, userID, pageURL, surface)
+	}
 
 	intake, err := s.contribution.Inspect(ctx, pageURL)
 	if err != nil {
@@ -75,12 +78,20 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 		// A transient fetch or parse failure, not a verdict on the page.
 		log.Printf("intake: import %s: %v", pageURL, err)
 	}
+	return s.finishIntake(ctx, userID, pageURL, surface, intake, res, imported)
+}
 
+// finishIntake preserves the same attribution and outcomes for ordinary ATS links
+// and LinkedIn discoveries after their application destination has been checked.
+func (s *intakeService) finishIntake(ctx context.Context, userID int64, pageURL, surface string, intake contribution.Intake, res linkimport.Result, imported bool) (intakeOutcome, error) {
 	companySlug, novel, err := s.record(ctx, userID, pageURL, surface, intake)
 	if err != nil {
 		return intakeOutcome{}, err
 	}
+	return s.intakeResult(ctx, intake, res, imported, companySlug, novel), nil
+}
 
+func (s *intakeService) intakeResult(ctx context.Context, intake contribution.Intake, res linkimport.Result, imported bool, companySlug string, novel bool) intakeOutcome {
 	out := intakeOutcome{Board: intake.Board, CompanySlug: companySlug, NovelBoard: novel}
 	switch {
 	case imported && res.Deduped:
@@ -102,7 +113,7 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 	if out.CompanySlug == "" {
 		out.CompanySlug = s.companyAlreadyCarried(ctx, res)
 	}
-	return out, nil
+	return out
 }
 
 // companyAlreadyCarried names the employer of a just-imported posting when the catalog holds
@@ -147,7 +158,7 @@ func (s *intakeService) record(ctx context.Context, userID int64, pageURL, surfa
 	case err == nil:
 		return "", res.Rewardable && res.Contribution.Status == contribution.StatusPending, nil
 	case errors.Is(err, contribution.ErrBoardAlreadyTracked):
-		_, slug, _ := s.contribution.CompanyForBoard(ctx, intake.Source, intake.Board)
+		_, slug, _ := s.contribution.CompanyForBoard(ctx, intake.Source, intake.Board, intake.Region)
 		return slug, false, nil
 	case errors.Is(err, contribution.ErrBoardAlreadyContributed),
 		errors.Is(err, contribution.ErrUnsupportedATS):
@@ -181,10 +192,10 @@ func renderIntakeOutcome(out intakeOutcome, frontendOrigin string, emphasize fun
 	case outcomeReview:
 		// Imported, but the page named no board we know how to crawl, so no crawl is promised.
 		if out.CompanySlug != "" {
-			return "✅ Added — we already carry this company. Its careers site isn't one we can crawl yet, so we'll look at it by hand.\n" +
+			return "✅ Added — we already carry this company. We'll check by hand how to collect more of its jobs.\n" +
 				jobURL(frontendOrigin, out.PublicSlug) + companyURL(frontendOrigin, out.CompanySlug)
 		}
-		return "✅ Added. Its careers site isn't one we can crawl yet — we'll check by hand whether we can pull the rest of its jobs.\n" +
+		return "✅ Added. We'll check by hand how to collect more jobs from this employer.\n" +
 			jobURL(frontendOrigin, out.PublicSlug)
 	}
 	// outcomeQueued. Failing to read the page says nothing about recognising the board, and

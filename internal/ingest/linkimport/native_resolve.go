@@ -30,16 +30,34 @@ type destinationCatalog struct {
 	fallback sources.CompanyEntry
 }
 
-func (c destinationCatalog) Entry(ctx context.Context, source, board string) (sources.CompanyEntry, bool, error) {
-	if c.stored != nil {
-		e, found, err := c.stored.Entry(ctx, source, board)
-		if err != nil || found {
-			return e, found, err
+func (c destinationCatalog) storedEntry(ctx context.Context, source, board string) (sources.CompanyEntry, bool, error) {
+	if c.stored == nil {
+		return sources.CompanyEntry{}, false, nil
+	}
+	if source == "lever" {
+		if regional, ok := c.stored.(interface {
+			EntryForRegion(context.Context, string, string, string) (sources.CompanyEntry, bool, error)
+		}); ok {
+			return regional.EntryForRegion(ctx, source, board, c.fallback.Region)
 		}
+	}
+	e, found, err := c.stored.Entry(ctx, source, board)
+	if source == "lever" && (e.Region == "eu") != (c.fallback.Region == "eu") {
+		found = false
+	}
+	return e, found, err
+}
+
+func (c destinationCatalog) Entry(ctx context.Context, source, board string) (sources.CompanyEntry, bool, error) {
+	e, found, err := c.storedEntry(ctx, source, board)
+	if err != nil || found {
+		return e, found, err
 	}
 	return c.fallback, true, nil
 }
 
+// ResolveNative retains verified board metadata on a later posting-read failure.
+// A Job is available only when the returned error is nil.
 func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw, employerWebsite string) (NativeDestination, error) {
 	registry, catalog := im.ingest, im.catalog
 	source, board, canonical, ok := atsboard.Recognize(raw)
@@ -58,39 +76,38 @@ func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw, employer
 			return NativeDestination{}, fmt.Errorf("native provider %s is disabled by its operator", source)
 		}
 	}
-	known := false
-	if catalog != nil {
-		stored, found, err := catalog.Entry(ctx, source, board)
-		if err != nil {
-			return NativeDestination{}, err
-		}
-		// The catalogue may hold this board under another spelling of the same identity (a
-		// Njoyn link on the generic clients host); the posting belongs under the stored one.
-		if found {
-			known, board = true, stored.Board
-		}
+	c := destinationCatalog{stored: catalog, fallback: sources.CompanyEntry{Provider: source, Board: board, Company: row.Company, Region: atsboard.Region(canonical)}}
+	stored, known, err := c.storedEntry(ctx, source, board)
+	if err != nil {
+		return NativeDestination{}, err
+	}
+	// The catalogue may hold this board under another spelling of the same identity (a
+	// Njoyn link on the generic clients host); the posting belongs under the stored one.
+	if known {
+		board = stored.Board
 	}
 	if !known {
-		var err error
-		employerWebsite, err = im.verifyEmployerBoard(ctx, row, source, board, employerWebsite)
+		employerWebsite, err = im.verifyEmployerBoard(ctx, row, source, board, c.fallback.Region, employerWebsite)
 		if err != nil {
 			return NativeDestination{}, err
 		}
 	}
-	c := destinationCatalog{stored: catalog, fallback: sources.CompanyEntry{Provider: source, Board: board, Company: row.Company, Region: atsboard.Region(canonical)}}
+
 	e, _, err := c.Entry(ctx, source, board)
 	if err != nil {
 		return NativeDestination{}, err
 	}
+	verified := NativeDestination{Entry: e, EmployerWebsite: employerWebsite}
 	j, found, err := linksource.ResolveOnBoard(ctx, registry, c, source, board, raw)
 	if err != nil {
-		return NativeDestination{}, err
+		return verified, err
 	}
 	if !found || j.Unreadable || j.Removed || strings.TrimSpace(j.Description) == "" {
-		return NativeDestination{}, fmt.Errorf("native ATS did not return a readable live posting for the destination")
+		return verified, fmt.Errorf("native ATS did not return a readable live posting for the destination")
 	}
 	if normalize.CompanySlug(j.Company) != normalize.CompanySlug(row.Company) || !strings.EqualFold(strings.Join(strings.Fields(j.Title), " "), strings.Join(strings.Fields(row.Title), " ")) {
-		return NativeDestination{}, fmt.Errorf("native posting's employer or title differs; refusing automatic identity transfer")
+		return verified, fmt.Errorf("native posting's employer or title differs; refusing automatic identity transfer")
 	}
-	return NativeDestination{Entry: e, Job: j, EmployerWebsite: employerWebsite}, nil
+	verified.Job = j
+	return verified, nil
 }

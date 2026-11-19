@@ -86,6 +86,11 @@
   Cheap refresh and ATS-coverage retirement map numeric discoveries to those legacy keys.
 
 
+- The shared contribute/resolve intake uses the same application classification and native
+  ATS proof. Hidden destinations may contribute an observed employer board without
+  publishing a guessed vacancy. It never imports an unverified LinkedIn JSON-LD page as
+  a generic `weblink` posting.
+
 - On 2026-11-16, the crawl host's existing Scrapling HTTP fetcher with its proxy and
   Chrome fingerprint read full public postings `4472812273` and `4490679811` with correct
   canonical identities and 27 related cards each. LinkedIn therefore uses this existing
@@ -95,3 +100,27 @@
   destinations remained hidden; changing User-Agent to Mobile Safari added no ATS link
   and requires no new service option. Application-method and native-employer proof
   remain mandatory. Without Scrapling configuration the prior transport is retained.
+  Shared API intake applies the configured tier only to its LinkedIn adapter; arbitrary
+  ATS URL resolution keeps its SSRF-guarded client. Invalid configured LinkedIn fetch
+  credentials leave that reader unavailable and its submissions queued for triage.
+
+
+## Shared link intake
+
+The same intake accepts LinkedIn posting URLs. `linkimport.PrepareLinkedIn` checks the
+primary application method before any generic import can run. Confirmed internal Apply
+may be stored as LinkedIn; an external posting must resolve to a verified native ATS.
+An observed employer board may be contributed even when its exact posting cannot be read.
+Inspect and record that board before the native write: recording now creates the board,
+so reversing this order loses contributor attribution. Verified native board metadata survives a later posting read failure, so an ATS that
+labels jobs from its board entry keeps the real employer when polling resumes.
+Verified employer names can travel
+through `Intake.Company`; ordinary URL-only submissions still use the placeholder name.
+`InspectResolved` retains a verified native board and its region even when the posting
+uses a vanity host. Region travels through recording into the board catalogue. Recorded
+boards adopt their provider schedule even after a posting read fails; existing operator
+pauses remain unchanged.
+Unknown, closed and unreadable postings are queued without publication.
+
+Lever US and EU coverage, company lookup and employer proof retain their API residency;
+native resolution reads the matching stored board entry and preserves its configuration.

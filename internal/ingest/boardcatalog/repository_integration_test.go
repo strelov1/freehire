@@ -148,6 +148,23 @@ func TestEntryPrefersTheLiveBoardOverARetiredSpelling(t *testing.T) {
 	}
 }
 
+// A regional lookup that misses (no EU row, or a retired one) must not fall back to the
+// same slug's live board in another region.
+func TestEntryForRegionDoesNotFallBackToAnotherRegion(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Pool(t)
+	repo := NewQueriesRepository(db.New(pool))
+	if _, err := pool.Exec(ctx, `INSERT INTO boards (provider, board, region, company, status) VALUES ('lever', 'acme', '', 'Acme US', 'active'), ('lever', 'gone', '', 'Gone US', 'active'), ('lever', 'gone', 'eu', 'Gone EU', 'retired')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	for _, board := range []string{"acme", "gone"} {
+		e, found, err := repo.EntryForRegion(ctx, "lever", board, "eu")
+		if err != nil || found && e.Region != "eu" {
+			t.Fatalf("EntryForRegion(%s, eu) = %+v, %v, %v; want no US board", board, e, found, err)
+		}
+	}
+}
+
 // A rejected row (a validation failure) does not claim the identity: correcting the
 // mistake and resubmitting must succeed, not collide with the earlier bad attempt.
 func TestInsertAcceptsResubmissionAfterRejection(t *testing.T) {

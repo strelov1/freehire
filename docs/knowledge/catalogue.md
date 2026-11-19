@@ -4,7 +4,7 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-16T23:59:30+00:00
+  at: 2026-11-17T00:30:07+00:00
 sources:
   - resource: ../../internal/job/job/upsert.go
   - resource: ../../internal/platform/db/queries/jobs_linkedin_identity.sql
@@ -15,6 +15,13 @@ sources:
   - resource: ../../internal/ingest/pipeline/pipeline_write.go
   - resource: ../../internal/ingest/sources/providers/linkedin.md
   - resource: ../../internal/ingest/linkimport/native_write.go
+  - resource: ../../internal/ingest/linkimport/native_resolve.go
+  - resource: ../../internal/ingest/linkimport/native_employer.go
+  - resource: ../../internal/ingest/boardcatalog/repository.go
+  - resource: ../../internal/ingest/linkimport/linkedin.go
+  - resource: ../../internal/api/handler/intake_linkedin.go
+  - resource: ../../internal/api/handler/intake_sources.go
+  - resource: ../../internal/ingest/contribution/contribution.go
   - resource: ../../cmd/ingest/native_ownership.go
   - resource: ../../internal/job/job/upsert.go
   - resource: ../../internal/ingest/sources/linkedin_related.go
@@ -62,6 +69,13 @@ public slug. Employer website discovery onboards native boards for the existing 
 so the ATS adapter owns subsequent updates and closure. See the
 [LinkedIn provider reference](../../internal/ingest/sources/providers/linkedin.md) and
 [ownership curator](../agents/workers/ops.md#promote-job-source).
+
+The shared link intake accepts LinkedIn job URLs. Configured Scrapling transport is applied
+only to its LinkedIn adapter; other URL resolvers keep their guarded client. It verifies
+the application method before importing, attributes a discovered native board and its
+region to the signed-in contributor, and queues unreadable or unverified destinations
+without publishing them. A recorded board adopts its provider even after a failed posting
+read, while an existing operator pause remains unchanged.
 
 ## WantApply regional inventory
 

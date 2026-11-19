@@ -60,6 +60,23 @@ lookup and writes. A production-candidate integration run exposed a competing pu
 unique check before the ordinary upsert conflict branch. This is a write correctness rule;
 provider request pacing and unrelated posting writes keep their existing behavior.
 
+## LinkedIn intake and related discovery — 2026-11-16
+
+Updated catalogue provenance for shared LinkedIn link intake, contributor attribution,
+numeric posting identity with legacy-row preservation, and bounded first-level related
+job discovery. Configured API fetch routing changes only LinkedIn; arbitrary ATS URL
+resolvers keep their guarded transport. This describes the checkout implementation, not a
+production rollout.
+
+Verified native intake preserves regional board identity and contributor attribution on
+vanity posting hosts. A recorded board adopts its provider even when the exact posting
+read fails, while operator pauses remain intact. Evidence is the focused handler
+integration suite; production verification is separate.
+
+Preserved independently verified native employer metadata across a later posting-read
+failure. The regression covers pending-board naming and a successful native retry with
+an adapter that labels jobs from its board entry; no unverified posting is published.
+
 ## LinkedIn throttle retries — 2026-11-17
 
 The first 80-search harvest run (2026-11-17) logged ten detail 429s in 25 minutes through the

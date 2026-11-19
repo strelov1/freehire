@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -54,37 +53,12 @@ func (d *nativeDiscovery) resolveCompany(ctx context.Context, discovered sources
 }
 
 func (d *nativeDiscovery) discoverCompanyBoard(ctx context.Context, slug string, discovered sources.Job) (bool, error) {
-	website := discovered.CompanyWebsite
-	if website == "" {
-		company, err := d.q.GetCompany(ctx, slug)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return false, err
-		}
-		if err == nil {
-			var info struct {
-				Website string `json:"website"`
-			}
-			if json.Unmarshal(company.CompanyInfo, &info) == nil {
-				website = info.Website
-			}
-		}
+	destination, canonical, err := d.importer.LinkedInEmployerBoard(ctx, slug, discovered)
+	if err != nil {
+		return false, err
 	}
-	if website == "" && discovered.CompanyProfileURL != "" {
-		if reader, ok := d.registry["linkedin"].(interface {
-			CompanyWebsite(context.Context, string) (string, error)
-		}); ok {
-			var err error
-			website, err = reader.CompanyWebsite(ctx, discovered.CompanyProfileURL)
-			if err != nil {
-				log.Printf("ingest: employer website unavailable for LinkedIn discovery %s: %v", discovered.ExternalID, err)
-			}
-		}
-	}
-	if website == "" {
-		log.Printf("ingest: LinkedIn discovery %s has no accessible ATS address or employer website; not publishing as LinkedIn", discovered.ExternalID)
-		return false, nil
-	}
-	source, board, canonical, found := d.boards.ResolveCompany(ctx, website)
+	source, board := destination.Source, destination.Board
+	found := source != "" && board != ""
 	if !found || d.registry[source] == nil || sources.ProviderKind(d.registry, source) != "ats" {
 		log.Printf("ingest: no native ATS discovered for %s; not publishing as LinkedIn", discovered.ExternalID)
 		return false, nil

@@ -87,14 +87,16 @@ type RecordInput struct {
 	URL         string
 	Source      string
 	Board       string
+	Region      string
 	Surface     string
+	Company     string
 }
 
 // Repository is the persistence contract, expressed in package domain types. Record inserts
 // the contribution, mapping a duplicate board to ErrBoardAlreadyContributed.
 type Repository interface {
-	BoardTracked(ctx context.Context, source, board string) (bool, error)
-	CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error)
+	BoardTracked(ctx context.Context, source, board, region string) (bool, error)
+	CompanyForBoard(ctx context.Context, source, board, region string) (name, slug string, ok bool, err error)
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
 	BoardByAshbyJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
 	Record(ctx context.Context, in RecordInput) (Contribution, error)
@@ -149,9 +151,12 @@ type SubmitResult struct {
 type Intake struct {
 	Source     string
 	Board      string
+	Region     string
 	Canonical  string
 	Recognized bool
 	Tracked    bool
+	// Company is supplied only by an intake that verified the employer's posting.
+	Company string
 }
 
 // Inspect resolves a link to its board and reports whether the catalogue already crawls it,
@@ -163,11 +168,21 @@ func (s *Service) Inspect(ctx context.Context, rawURL string) (Intake, error) {
 	if !ok {
 		return Intake{}, nil
 	}
-	tracked, err := s.repo.BoardTracked(ctx, source, board)
+	return s.InspectResolved(ctx, Intake{Source: source, Board: board, Region: atsboard.Region(canonical), Canonical: canonical})
+}
+
+// InspectResolved checks coverage for a board already verified by a caller. It
+// preserves native board metadata when its job URL uses an unrecognized vanity host.
+func (s *Service) InspectResolved(ctx context.Context, it Intake) (Intake, error) {
+	if it.Source == "" || it.Board == "" {
+		return Intake{}, nil
+	}
+	tracked, err := s.repo.BoardTracked(ctx, it.Source, it.Board, it.Region)
 	if err != nil {
 		return Intake{}, err
 	}
-	return Intake{Source: source, Board: board, Canonical: canonical, Recognized: true, Tracked: tracked}, nil
+	it.Recognized, it.Tracked = true, tracked
+	return it, nil
 }
 
 // RecordIntake persists a link already inspected, so the board is resolved once even when
@@ -191,7 +206,9 @@ func (s *Service) RecordIntake(ctx context.Context, in SubmitInput, it Intake) (
 		URL:         it.Canonical,
 		Source:      it.Source,
 		Board:       it.Board,
+		Region:      it.Region,
 		Surface:     surface,
+		Company:     it.Company,
 	})
 	return SubmitResult{Contribution: rec, Source: it.Source, Board: it.Board, Rewardable: err == nil}, err
 }
@@ -247,10 +264,10 @@ func logUnrecognized(submittedBy int64, rawURL string) {
 
 // CompanyForBoard resolves the company already tracked on a (source, board) — for the "we
 // already cover this" reply, so the caller can link to the company page. ok=false when the
-// board has no resolved company. The (source, board) come from Submit, so no re-recognition
+// board has no resolved company. The (source, board, region) come from Submit, so no re-recognition
 // (or re-fetch, for a resolved vanity domain) is needed.
-func (s *Service) CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool) {
-	name, slug, found, err := s.repo.CompanyForBoard(ctx, source, board)
+func (s *Service) CompanyForBoard(ctx context.Context, source, board, region string) (name, slug string, ok bool) {
+	name, slug, found, err := s.repo.CompanyForBoard(ctx, source, board, region)
 	if err != nil || !found {
 		return "", "", false
 	}

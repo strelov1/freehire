@@ -282,8 +282,19 @@ func (r *QueriesRepository) ListActiveForProvider(ctx context.Context, provider 
 // stores it under rather than minting a second namespace for it.
 func (r *QueriesRepository) Entry(ctx context.Context, provider, board string) (sources.CompanyEntry, bool, error) {
 	row, err := r.q.GetBoardForResolve(ctx, db.GetBoardForResolveParams{Provider: provider, Board: board})
+	return r.resolvedBoardEntry(ctx, provider, board, nil, row, err)
+}
+
+// EntryForRegion retains the exact catalogue identity for ATS API residencies.
+func (r *QueriesRepository) EntryForRegion(ctx context.Context, provider, board, region string) (sources.CompanyEntry, bool, error) {
+	row, err := r.q.GetBoardForResolveInRegion(ctx, db.GetBoardForResolveInRegionParams{Provider: provider, Board: board, Region: region})
+	return r.resolvedBoardEntry(ctx, provider, board, &region, row, err)
+}
+
+// region nil matches a live spelling in any region; set, only in that one.
+func (r *QueriesRepository) resolvedBoardEntry(ctx context.Context, provider, board string, region *string, row db.Board, err error) (sources.CompanyEntry, bool, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
-		return r.liveSpelling(ctx, provider, board)
+		return r.liveSpelling(ctx, provider, board, region)
 	}
 	if err != nil {
 		return sources.CompanyEntry{}, false, err
@@ -296,7 +307,7 @@ func (r *QueriesRepository) Entry(ctx context.Context, provider, board string) (
 	// second name has been retired in favour of the board a crawl stores under (Njoyn's
 	// clients/corp/21001 for cgi/corp/21001), a link by it must land on the live one.
 	if b.Status == StatusRetired {
-		if live, found, err := r.liveSpelling(ctx, provider, board); err != nil || found {
+		if live, found, err := r.liveSpelling(ctx, provider, board, region); err != nil || found {
 			return live, found, err
 		}
 	}
@@ -304,7 +315,7 @@ func (r *QueriesRepository) Entry(ctx context.Context, provider, board string) (
 }
 
 // liveSpelling finds the live board whose identity is board's under a different spelling.
-func (r *QueriesRepository) liveSpelling(ctx context.Context, provider, board string) (sources.CompanyEntry, bool, error) {
+func (r *QueriesRepository) liveSpelling(ctx context.Context, provider, board string, region *string) (sources.CompanyEntry, bool, error) {
 	want, ok := sources.BoardDedupeKey(sources.CompanyEntry{Provider: provider, Board: board})
 	if !ok {
 		return sources.CompanyEntry{}, false, nil
@@ -315,6 +326,9 @@ func (r *QueriesRepository) liveSpelling(ctx context.Context, provider, board st
 	}
 	for _, b := range live {
 		e := b.CompanyEntry()
+		if region != nil && e.Region != *region {
+			continue
+		}
 		if k, _ := sources.BoardDedupeKey(sources.CompanyEntry{Provider: provider, Board: e.Board}); k == want {
 			return e, true, nil
 		}
