@@ -46,7 +46,7 @@ require (
 	github.com/redis/go-redis/v9 v9.23.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/testcontainers/testcontainers-go v0.45.0
-	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
+	github.com/testcontainers/testcontainers-go/modules/postgres v0.45.0
 	github.com/tmc/langchaingo v0.1.15
 	github.com/valyala/fasthttp v1.77.0
 	github.com/xuri/excelize/v2 v2.11.1
