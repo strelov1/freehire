@@ -7,7 +7,6 @@ import type {
   CatalogSizePoint,
   DirectApplication,
   DirectApplyForm,
-  EmbedProgress,
   EngagementStats,
   FacetCounts,
   IngestStatus,
@@ -284,17 +283,6 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     return requestData<CatalogScale>(`/api/v1/stats/catalog`);
   }
 
-  /** Semantic-embedding coverage of the catalogue for the public /semantic-search page.
-   *  Unmeasured figures are `null`. Aggregate-only, unauthenticated. */
-  async function embedProgress(): Promise<EmbedProgress> {
-    return requestData<EmbedProgress>(`/api/v1/stats/embeddings`);
-  }
-
-  /** The same-origin URL for the live stream of `embedProgress` documents (public). */
-  function embedProgressStreamUrl(): string {
-    return `${baseUrl}/api/v1/stats/embeddings/stream`;
-  }
-
   /** The public status read: the site/API's own live status (`site`), plus a
    *  per-provider ingest-fleet health rollup with a derived
    *  operational/degraded/down verdict and an overall status. Sanitized
@@ -338,8 +326,6 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     statsFacets,
     skillNeighbours,
     catalogScale,
-    embedProgress,
-    embedProgressStreamUrl,
     ingestStatus,
     listSources,
   };

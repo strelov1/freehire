@@ -30,15 +30,14 @@ embeddings no longer fit on the server's disk.
 ## What changed
 
 We moved to a new server with room for the index. And embeddings no longer come
-from our machines alone: the [volunteer client](/semantic-search) lets anyone
+from our machines alone: the volunteer client lets anyone
 lend their computer for a while, run the embedding model locally, and send the
 results back.
 
 ## What it does not cover yet
 
 Only technical postings have embeddings for now. Postings outside IT are still
-found by keywords alone. The [semantic search page](/semantic-search) shows,
-live, how much of the catalogue is covered and how fast the rest is going.
+found by keywords alone.
 
 ## Where to use it
 
