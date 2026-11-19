@@ -115,7 +115,10 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical,
 	source, externalID := jobIdentity(e, j)
 	slug := canonicalCompanySlug(canon, j.Company)
 	if j.CompanyKey != "" {
-		slug = normalize.CompanySlug(j.CompanyKey)
+		// The key, not the shared label, is the company; the registry may have re-keyed it.
+		if slug = canonicalCompanySlug(canon, j.CompanyKey); slug == "" {
+			slug = normalize.CompanySlug(j.CompanyKey)
+		}
 	}
 	return job.New(job.Draft{
 		// Empty unless the registry re-keys this employer, and empty is what Draft reads as

@@ -99,6 +99,9 @@ func distinctCompanySlugs(raw []sources.Job) []string {
 	names := make([]string, len(raw))
 	for i, j := range raw {
 		names[i] = j.Company
+		if j.CompanyKey != "" {
+			names[i] = j.CompanyKey
+		}
 	}
 	return distinctSlugs(names)
 }

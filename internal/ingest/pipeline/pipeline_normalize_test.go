@@ -131,3 +131,18 @@ func TestNormalizeJobCompanyKeyKeepsSlugPerBoard(t *testing.T) {
 		t.Errorf("company %q slugs %q / %q", a.Fields().Company, a.Fields().CompanySlug, b.Fields().CompanySlug)
 	}
 }
+
+// A merge that retired a board's id-keyed slug still applies to its postings under the label.
+func TestNormalizeJobCompanyKeyResolvesAlias(t *testing.T) {
+	canon := func(slug string) string {
+		if slug == "boardaaa" {
+			return "acme"
+		}
+		return slug
+	}
+	j, err := normalizeJob(sources.CompanyEntry{Provider: "paycor", Board: "b"},
+		sources.Job{ExternalID: "1", Title: "Dev", Company: "Employer via Paycor", CompanyKey: "boardaaa"}, canon, false)
+	if err != nil || j.Fields().CompanySlug != "acme" {
+		t.Errorf("slug = %q, err %v; want acme", j.Fields().CompanySlug, err)
+	}
+}
