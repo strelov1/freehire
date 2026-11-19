@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api } from '#lib/api.js';
   import Seo from '#lib/components/Seo.svelte';
@@ -14,7 +13,7 @@
 
 <Seo
   title="Semantic search — freehire"
-  description="Search tech jobs by meaning, not just keywords. Live progress of semantic embeddings across the freehire catalogue, and how AI agents use semantic search to find better matches."
+  description="Search tech jobs by meaning, not just keywords. Live progress of semantic embeddings across the freehire catalogue."
   {canonical}
 />
 
@@ -30,28 +29,4 @@
   </header>
 
   <EmbeddingProgress initial={data.progress} streamUrl={api.embedProgressStreamUrl()} />
-
-  <section class="mt-14">
-    <h2 class="text-2xl font-semibold tracking-tight">For AI agents</h2>
-    <div class="mt-4 max-w-2xl space-y-4 leading-relaxed text-muted-foreground">
-      <p>
-        An agent rarely knows the job title it is looking for. It knows what its user wants to do — “keep payment
-        systems secure”, “build tools for teachers” — and a keyword search misses every posting that says the same thing
-        in other words.
-      </p>
-      <p>
-        So agents can ask for semantic search: the query is embedded and ranked by meaning as well as by keywords, over
-        the same embeddings counted above. It is available through the MCP server, the CLI and the agent API — set <code
-          class="font-mono text-sm">semantic</code
-        >
-        to <code class="font-mono text-sm">true</code> on a search, and the response says whether the semantic ranking actually
-        ran. For a plain job title, keywords still answer better.
-      </p>
-      <p>
-        <a href={resolve('/agents')} class="font-medium text-foreground underline underline-offset-4 hover:no-underline"
-          >Connect your agent →</a
-        >
-      </p>
-    </div>
-  </section>
 </div>
