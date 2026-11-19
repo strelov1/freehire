@@ -239,6 +239,7 @@ func All(c HTTPClient) map[string]Source {
 			NewSpeedrun(c),
 		},
 		aggregatorSources(c, seekNetworkDetail),
+		remoteBoardSources(c),
 		ruCompanySources(c),
 	)...)
 	registerSpecialTransports(registry, c)
