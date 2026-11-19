@@ -32,7 +32,7 @@ func (darwinbox) Provider() string { return "darwinbox" }
 
 // fullBoardListing: the walk ends only at an empty page, and a board whose walk does not add up
 // to the job_counts the first page declared fails rather than returning what it gathered.
-func (darwinbox) fullBoardListing() {}
+func (darwinbox) FullBoardListing() {}
 
 // darwinboxPageSize is the page the API serves whatever larger limit is requested.
 const darwinboxPageSize = 100

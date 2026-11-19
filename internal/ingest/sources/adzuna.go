@@ -61,14 +61,14 @@ func NewAdzuna(c JSONGetter, appID, appKey string) Source {
 func (adzuna) Provider() string { return "adzuna" }
 
 // adzuna aggregates postings from many employers, so it stays in the source facet.
-func (adzuna) aggregator() {}
+func (adzuna) Aggregator() {}
 
-func (adzuna) sweepGrace() time.Duration { return adzunaSweepGrace }
+func (adzuna) SweepGrace() time.Duration { return adzunaSweepGrace }
 
 // Unseen is not evidence a posting closed: a crawl reaches only a small slice of a much deeper
 // feed, most of which is older than 21 days. cmd/adzuna-liveness reads Adzuna's own /details page
 // and closes on a 404/410.
-func (adzuna) livenessProbed() {}
+func (adzuna) LivenessProbed() {}
 
 // adzunaID reads a posting's id, which the API emits as a JSON string for most postings but as a
 // bare number for some. A page hitting it must decode rather than fail whole, mirroring

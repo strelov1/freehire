@@ -87,10 +87,10 @@ func NewASUS(c HTMLGetter) Source { return asus{http: c} }
 func (asus) Provider() string { return "asus" }
 
 // asus is single-company, so its config entry carries no board.
-func (asus) boardless() {}
+func (asus) Boardless() {}
 
 // fullBoardListing: see the type comment and the fullBoardListing interface (source.go).
-func (asus) fullBoardListing() {}
+func (asus) FullBoardListing() {}
 
 // asusListed is one listing row: the posting's id and title, all a seen posting needs.
 type asusListed struct {

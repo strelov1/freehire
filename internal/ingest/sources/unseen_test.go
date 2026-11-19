@@ -17,7 +17,7 @@ func (f fakeSelfClosingSource) Fetch(context.Context, CompanyEntry) ([]Job, erro
 	return nil, nil
 }
 
-func (f fakeSelfClosingSource) selfClosing() {}
+func (f fakeSelfClosingSource) SelfClosing() {}
 
 // fakeLivenessProbedSource re-lists only the newest slice of its feed and has its older
 // postings judged by a probe instead (see livenessProbed).
@@ -29,8 +29,8 @@ func (f fakeLivenessProbedSource) Fetch(context.Context, CompanyEntry) ([]Job, e
 	return nil, nil
 }
 
-func (f fakeLivenessProbedSource) aggregator()     {}
-func (f fakeLivenessProbedSource) livenessProbed() {}
+func (f fakeLivenessProbedSource) Aggregator()     {}
+func (f fakeLivenessProbedSource) LivenessProbed() {}
 
 func TestUnseenWindowsFloorsEveryCrawledProviderAndLeavesTheRestOut(t *testing.T) {
 	const floor = 14 * 24 * time.Hour

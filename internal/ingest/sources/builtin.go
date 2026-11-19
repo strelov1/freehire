@@ -88,9 +88,9 @@ func NewBuiltIn(c HTMLGetter) Source {
 }
 
 func (builtin) Provider() string          { return "builtin" }
-func (builtin) boardless()                {}
-func (builtin) aggregator()               {}
-func (builtin) sweepGrace() time.Duration { return builtinSweepGrace }
+func (builtin) Boardless()                {}
+func (builtin) Aggregator()               {}
+func (builtin) SweepGrace() time.Duration { return builtinSweepGrace }
 
 // builtinCard is what a listing card states about a posting: enough for identity, for the
 // coverage gate (employer).

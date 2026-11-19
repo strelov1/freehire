@@ -28,7 +28,7 @@ func NewAviasales(c JSONGetter) Source { return aviasales{http: c} }
 func (aviasales) Provider() string { return "aviasales" }
 
 // aviasales is single-company, so its config entries carry no board.
-func (aviasales) boardless() {}
+func (aviasales) Boardless() {}
 
 // avItem is one vacancy from the list response (no description here).
 type avItem struct {

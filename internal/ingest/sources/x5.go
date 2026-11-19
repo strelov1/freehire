@@ -40,7 +40,7 @@ func NewX5(c JSONGetter) Source { return x5{http: c} }
 func (x5) Provider() string { return "x5" }
 
 // x5 is single-company, so its config entries carry no board.
-func (x5) boardless() {}
+func (x5) Boardless() {}
 
 // x5Item is one vacancy as the list returns it — everything but the body.
 type x5Item struct {

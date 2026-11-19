@@ -36,11 +36,11 @@ func NewJoppy(c joppyHTTP) Source { return joppy{http: c} }
 func (joppy) Provider() string { return "joppy" }
 
 // joppy is a single global directory, so its config entry carries no board.
-func (joppy) boardless() {}
+func (joppy) Boardless() {}
 
 // joppy aggregates postings from many companies (company per posting), so it stays in the
 // source facet.
-func (joppy) aggregator() {}
+func (joppy) Aggregator() {}
 
 const (
 	joppyBaseURL       = "https://www.joppy.me"

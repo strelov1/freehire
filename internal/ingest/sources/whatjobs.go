@@ -192,17 +192,17 @@ func (w whatjobs) Provider() string { return w.provider }
 // whatjobs lists many employers under one account, so it stays in the source facet and takes each
 // posting's company from the feed. It is deliberately NOT boardless: the keyword board is what
 // selects the slice to crawl, and an entry without one has nothing to fetch.
-func (whatjobs) aggregator() {}
+func (whatjobs) Aggregator() {}
 
 // whatjobs crawls a keyword slice, never the whole catalogue, so its unseen jobs need a window
 // wider than the sweep default. See whatjobsSweepGrace.
-func (whatjobs) sweepGrace() time.Duration { return whatjobsSweepGrace }
+func (whatjobs) SweepGrace() time.Duration { return whatjobsSweepGrace }
 
 // A keyword board is read only to whatjobsMaxPages or until relevance collapses, so it never
 // proves it listed the whole keyword; the grace window absorbs that, and a stored posting a
 // finished keyword board has not listed for whatjobsSweepGrace is closed per board. See
 // sliceBoardListing.
-func (whatjobs) sliceBoardListing() {}
+func (whatjobs) SliceBoardListing() {}
 
 // whatjobsPosting is the part of a feed posting worth reading. snippet is the FULL description HTML
 // despite its name and despite the vendor's documentation, which calls it a highlighted excerpt.

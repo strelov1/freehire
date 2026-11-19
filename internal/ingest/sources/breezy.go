@@ -31,11 +31,11 @@ func (breezy) Provider() string { return "breezy" }
 // fullBoardListing: the /json listing is a single unpaginated request returning the board's
 // whole postings array. Detail fetches are best-effort per posting. See the fullBoardListing
 // interface for the bar.
-func (breezy) fullBoardListing() {}
+func (breezy) FullBoardListing() {}
 
 // emptyBoardListing: an unknown or retired board answers 404 with an HTML
 // page, and an emptied one answers 200 with a bare []; a null body fails Fetch. See the emptyBoardListing interface for the bar.
-func (breezy) emptyBoardListing() {}
+func (breezy) EmptyBoardListing() {}
 
 // breezyPosting is one item from the /json listing. The description is not here — it
 // lives on the position page (see detail).

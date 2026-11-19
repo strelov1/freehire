@@ -71,7 +71,7 @@ func NewFeishuJobs(c feishuJobsHTTP) Source {
 func (feishuJobs) Provider() string { return "feishujobs" }
 
 // fullBoardListing: see the type comment and the fullBoardListing interface (source.go).
-func (feishuJobs) fullBoardListing() {}
+func (feishuJobs) FullBoardListing() {}
 
 type feishuJobsNode struct {
 	ID     string          `json:"id"`

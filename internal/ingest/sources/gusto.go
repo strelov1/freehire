@@ -52,7 +52,7 @@ func (gusto) Provider() string { return "gusto" }
 // fullBoardListing: list proves completeness by paginating to a genuinely empty page, and treats
 // a page failure or reaching gustoMaxPages as a hard Fetch failure. See the fullBoardListing
 // interface (source.go) for the bar.
-func (gusto) fullBoardListing() {}
+func (gusto) FullBoardListing() {}
 
 const (
 	gustoBaseURL = "https://jobs.gusto.com"

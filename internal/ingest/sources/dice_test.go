@@ -450,16 +450,16 @@ func TestDiceUnreadablePostingsAreDeferredNotStoredBodyless(t *testing.T) {
 
 func TestDiceIsABoardlessAggregatorWithItsOwnSweepGrace(t *testing.T) {
 	s := NewDice(&diceFake{})
-	if _, ok := s.(interface{ boardless() }); !ok {
+	if _, ok := s.(interface{ Boardless() }); !ok {
 		t.Error("not boardless")
 	}
-	if _, ok := s.(interface{ aggregator() }); !ok {
+	if _, ok := s.(interface{ Aggregator() }); !ok {
 		t.Error("not an aggregator")
 	}
 	if _, ok := s.(CoverageGated); !ok {
 		t.Error("not coverage gated")
 	}
-	if g, ok := s.(interface{ sweepGrace() time.Duration }); !ok || g.sweepGrace() != diceSweepGrace {
+	if g, ok := s.(interface{ SweepGrace() time.Duration }); !ok || g.SweepGrace() != diceSweepGrace {
 		t.Error("no sweep grace")
 	}
 }

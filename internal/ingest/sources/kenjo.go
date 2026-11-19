@@ -34,7 +34,7 @@ func NewKenjo(c JSONGetter) Source { return kenjo{http: c} }
 func (kenjo) Provider() string { return "kenjo" }
 
 // fullBoardListing: the listing is one unpaginated answer carrying every open position.
-func (kenjo) fullBoardListing() {}
+func (kenjo) FullBoardListing() {}
 
 // kenjoBoard is the shape of a career-site label.
 var kenjoBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

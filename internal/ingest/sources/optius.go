@@ -62,10 +62,10 @@ func NewOptius(c HTMLGetter) Source {
 func (optius) Provider() string { return "optius" }
 
 // One national board, no per-tenant id.
-func (optius) boardless() {}
+func (optius) Boardless() {}
 
 // Hundreds of employers and agencies post here, each named per posting.
-func (optius) aggregator() {}
+func (optius) Aggregator() {}
 
 // One country's market (see nationalMarket).
 func (optius) marketCountries(CompanyEntry) []string { return []string{"si"} }

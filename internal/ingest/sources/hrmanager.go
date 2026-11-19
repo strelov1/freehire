@@ -56,7 +56,7 @@ func NewHRManager(c JSONGetter) Source { return hrManager{http: c} }
 func (hrManager) Provider() string { return "hrmanager" }
 
 // fullBoardListing: see the type comment and the fullBoardListing interface (source.go).
-func (hrManager) fullBoardListing() {}
+func (hrManager) FullBoardListing() {}
 
 type hrManagerList struct {
 	CustomerAlias     string `json:"CustomerAlias"`

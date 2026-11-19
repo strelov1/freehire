@@ -26,7 +26,7 @@ func NewKuper(c JSONGetter) Source { return kuper{http: c} }
 func (kuper) Provider() string { return "kuper" }
 
 // kuper is single-company, so its config entries carry no board.
-func (kuper) boardless() {}
+func (kuper) Boardless() {}
 
 // kuperVacancy is one posting from the vacancies block (description inline).
 type kuperVacancyItem struct {

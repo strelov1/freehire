@@ -27,7 +27,7 @@ func (careerplug) Provider() string { return "careerplug" }
 
 // fullBoardListing: Fetch's crawlAllPagedLinks fails the whole crawl on a mid-listing error or
 // a cap-truncated walk. See the fullBoardListing interface for the bar.
-func (careerplug) fullBoardListing() {}
+func (careerplug) FullBoardListing() {}
 
 // careerplugMaxPages bounds listing pagination so a board that clamps ?page=N to its last
 // page (serving the same links forever) cannot loop; the no-new-links check ends it sooner.

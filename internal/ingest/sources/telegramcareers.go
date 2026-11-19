@@ -26,7 +26,7 @@ func NewTelegramCareers(c HTMLGetter) Source { return telegramcareers{http: c} }
 func (telegramcareers) Provider() string { return "telegramcareers" }
 
 // telegramcareers serves a single company, so its config entry carries no board.
-func (telegramcareers) boardless() {}
+func (telegramcareers) Boardless() {}
 
 func (t telegramcareers) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	root, err := t.http.GetHTML(ctx, telegramJobsURL)

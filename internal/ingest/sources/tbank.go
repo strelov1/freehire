@@ -80,7 +80,7 @@ func NewTBank(c tbankHTTP) Source { return tbank{http: c} }
 func (tbank) Provider() string { return "tbank" }
 
 // tbank is single-company, so its config entries carry no board.
-func (tbank) boardless() {}
+func (tbank) Boardless() {}
 
 func (b tbank) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	vacancies, err := b.list(ctx)

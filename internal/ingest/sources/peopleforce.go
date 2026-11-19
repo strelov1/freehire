@@ -31,7 +31,7 @@ func (peopleforce) Provider() string { return "peopleforce" }
 // fullBoardListing: Fetch proves completeness by paginating until the listing's own nav stops
 // naming a page after this one, and treats a page failure or reaching peopleforceMaxPages as a
 // hard Fetch failure. See the fullBoardListing interface (source.go) for the bar.
-func (peopleforce) fullBoardListing() {}
+func (peopleforce) FullBoardListing() {}
 
 // peopleforceMaxPages caps the ?page=N walk so a listing whose nav never stops naming a next
 // page cannot loop forever. It is a backstop, not the end signal: this source clamps an

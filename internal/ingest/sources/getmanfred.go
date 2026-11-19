@@ -32,10 +32,10 @@ func NewGetmanfred(c JSONGetter) Source { return getmanfred{http: c} }
 func (getmanfred) Provider() string { return "getmanfred" }
 
 // getmanfred is a marketplace with one global feed, so its config entries carry no board.
-func (getmanfred) boardless() {}
+func (getmanfred) Boardless() {}
 
 // getmanfred aggregates postings from many companies, so it stays in the source facet.
-func (getmanfred) aggregator() {}
+func (getmanfred) Aggregator() {}
 
 // getmanfredOffer is one offer. The list carries identity + company + location + salary; the
 // detail endpoint adds the Markdown body fields (Introduction…WhatOffering) and the Techs stack,

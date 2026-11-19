@@ -37,12 +37,12 @@ func NewIBM(c JSONPoster) Source { return ibm{http: c} }
 func (ibm) Provider() string { return "ibm" }
 
 // ibm is single-company, so its config entry carries no board.
-func (ibm) boardless() {}
+func (ibm) Boardless() {}
 
 // fullBoardListing: every page carries the index's exact hit count (`relation: "eq"`), and
 // Fetch fails unless the distinct postings it read equal that count. Any page failing fails the
 // crawl — a later page included — so a truncated walk can never pass for a smaller catalogue.
-func (ibm) fullBoardListing() {}
+func (ibm) FullBoardListing() {}
 
 // ibmPosting is one hit's _source. The field_keyword_NN names are the index's generic facet
 // slots; what each holds was read off the live index (see ibmSourceFields).

@@ -31,9 +31,9 @@ func NewBeehire(c beehireHTTP) Source { return beehire{http: c} }
 
 func (beehire) Provider() string { return "beehire" }
 
-func (beehire) fullBoardListing() {}
+func (beehire) FullBoardListing() {}
 
-func (beehire) emptyBoardListing() {}
+func (beehire) EmptyBoardListing() {}
 
 func (s beehire) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	board := strings.ToLower(strings.TrimSpace(e.Board))

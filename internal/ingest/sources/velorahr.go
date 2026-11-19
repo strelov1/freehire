@@ -47,7 +47,7 @@ func (velorahr) Provider() string { return "velorahr" }
 // fullBoardListing: one request asks for a window far wider than any site, and an answer that
 // fills the window fails the crawl, so a successful crawl is the site's whole listing. See the
 // fullBoardListing interface.
-func (velorahr) fullBoardListing() {}
+func (velorahr) FullBoardListing() {}
 
 const (
 	velorahrAPIBase = "https://api.velorahr.com/api/public/career-site/"

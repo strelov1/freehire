@@ -52,9 +52,9 @@ func NewHalyk(c HTMLGetter) Source { return halyk{http: c} }
 
 func (halyk) Provider() string { return "halyk" }
 
-func (halyk) boardless() {}
+func (halyk) Boardless() {}
 
-func (halyk) fullBoardListing() {}
+func (halyk) FullBoardListing() {}
 
 func (s halyk) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	cards, err := s.list(ctx)

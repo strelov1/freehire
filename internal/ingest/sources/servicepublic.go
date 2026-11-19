@@ -87,13 +87,13 @@ func NewServicePublic(c HTMLGetter) Source {
 func (servicepublic) Provider() string { return "servicepublic" }
 
 // One national board, no per-tenant id.
-func (servicepublic) boardless() {}
+func (servicepublic) Boardless() {}
 
 // Thousands of public employers post here, each named per posting.
-func (servicepublic) aggregator() {}
+func (servicepublic) Aggregator() {}
 
 // A run re-lists only part of the catalogue, so the sweep waits for the window to come round.
-func (servicepublic) sweepGrace() time.Duration { return servicepublicSweepGrace }
+func (servicepublic) SweepGrace() time.Duration { return servicepublicSweepGrace }
 
 // servicepublicCard is one listing card.
 type servicepublicCard struct {

@@ -77,10 +77,10 @@ func NewDualoo(sitemap XMLGetter, pages HTMLGetter) Source {
 func (dualoo) Provider() string { return "dualoo" }
 
 // The sitemap index is the whole crawl; no per-customer board is needed to reach a posting.
-func (dualoo) boardless() {}
+func (dualoo) Boardless() {}
 
 // Many employers publish through it, each named per posting.
-func (dualoo) aggregator() {}
+func (dualoo) Aggregator() {}
 
 // dualooPostingPath matches a posting's path in either of its two forms and captures its UUID.
 var dualooPostingPath = regexp.MustCompile(`^/(?:portal/[a-z0-9-]+|link)/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/detail$`)

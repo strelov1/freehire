@@ -47,7 +47,7 @@ func (beesite) Provider() string { return "beesite" }
 // fullBoardListing: every page states SearchResultCountAll, and the walk fails unless the
 // distinct postings read equal it. Any page failing, a full page that adds nothing, and the page
 // cap all fail the crawl.
-func (beesite) fullBoardListing() {}
+func (beesite) FullBoardListing() {}
 
 type beesiteResponse struct {
 	SearchResult struct {

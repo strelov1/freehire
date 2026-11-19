@@ -60,7 +60,7 @@ func (peoplesoft) Provider() string { return "peoplesoft" }
 // fullBoardListing: the result list states its row count, and the walk keeps posting back until
 // the page holds that many rows. A page that fails, a postback that adds no row before the count
 // is reached, and the postback cap all fail the crawl.
-func (peoplesoft) fullBoardListing() {}
+func (peoplesoft) FullBoardListing() {}
 
 // peoplesoftBoard is a parsed board id.
 type peoplesoftBoard struct {

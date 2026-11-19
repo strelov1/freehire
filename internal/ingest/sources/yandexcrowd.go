@@ -27,7 +27,7 @@ func NewYandexCrowd(c LargeTextGetter) Source { return yandexcrowd{http: c} }
 func (yandexcrowd) Provider() string { return "yandexcrowd" }
 
 // yandexcrowd is single-company, so its config entry carries no board.
-func (yandexcrowd) boardless() {}
+func (yandexcrowd) Boardless() {}
 
 const (
 	yandexCrowdListURL = "https://crowd.yandex.ru/vacancies"

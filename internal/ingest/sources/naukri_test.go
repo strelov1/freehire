@@ -158,7 +158,7 @@ func TestNaukriRegistrationAndMarkers(t *testing.T) {
 	if _, ok := s.(HydratingSource); !ok {
 		t.Error("naukri should be a HydratingSource")
 	}
-	if g, ok := s.(sweepGrace); !ok || g.sweepGrace() != naukriSweepGrace {
+	if g, ok := s.(sweepGrace); !ok || g.SweepGrace() != naukriSweepGrace {
 		t.Error("naukri should declare its own sweep grace")
 	}
 	// The board is the slice to crawl, and the walk is window-capped, so neither marker holds.

@@ -57,9 +57,9 @@ func NewCryptocurrencyJobs(c cryptocurrencyjobsHTTP) Source { return cryptocurre
 
 func (cryptocurrencyjobs) Provider() string { return "cryptocurrencyjobs" }
 
-func (cryptocurrencyjobs) boardless() {}
+func (cryptocurrencyjobs) Boardless() {}
 
-func (cryptocurrencyjobs) aggregator() {}
+func (cryptocurrencyjobs) Aggregator() {}
 
 // cryptocurrencyjobsItem is one RSS <item>: the title is "Role at Company", description is
 // the plain-text body, and guid is the native posting id (same value as link).

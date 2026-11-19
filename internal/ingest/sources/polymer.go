@@ -34,7 +34,7 @@ func (polymer) Provider() string { return "polymer" }
 // fullBoardListing: the walk ends only on a page the API marks last (or the page count it
 // states), and fails unless the distinct postings read reach the stated count. Any page
 // failing, a page that adds nothing before the end, and the page cap all fail the crawl.
-func (polymer) fullBoardListing() {}
+func (polymer) FullBoardListing() {}
 
 const (
 	polymerAPI = "https://api.polymer.co/v1/hire/organizations/"

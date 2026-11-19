@@ -48,7 +48,7 @@ func NewKaspi(c kaspiHTTP) Source { return kaspi{http: c} }
 func (kaspi) Provider() string { return "kaspi" }
 
 // kaspi is single-company, so its config entries carry no board.
-func (kaspi) boardless() {}
+func (kaspi) Boardless() {}
 
 func (k kaspi) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	locs, err := sitemapJobLocs(ctx, k.http, kaspiSitemapURL, kaspiVacancyID)

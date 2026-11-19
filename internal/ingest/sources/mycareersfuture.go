@@ -28,9 +28,9 @@ func NewMyCareersFuture(c JSONGetter) Source { return mycareersfuture{http: c} }
 
 func (mycareersfuture) Provider() string { return "mycareersfuture" }
 
-func (mycareersfuture) boardless() {}
+func (mycareersfuture) Boardless() {}
 
-func (mycareersfuture) aggregator() {}
+func (mycareersfuture) Aggregator() {}
 
 // mcfPosting is one job from the v2 list, body inline (no detail call).
 type mcfPosting struct {

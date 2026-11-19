@@ -40,7 +40,7 @@ func (helixjobs) Provider() string { return "helixjobs" }
 
 // fullBoardListing: the walk fails unless it collects exactly the number of postings the list
 // states, and its page cap is a ceiling that fails the crawl rather than ending it.
-func (helixjobs) fullBoardListing() {}
+func (helixjobs) FullBoardListing() {}
 
 const helixjobsHost = "helixjobs.com"
 

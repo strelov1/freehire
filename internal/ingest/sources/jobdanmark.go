@@ -42,10 +42,10 @@ func NewJobdanmark(c jobdanmarkClient) Source { return jobdanmark{http: c} }
 func (jobdanmark) Provider() string { return "jobdanmark" }
 
 // jobdanmark is a national portal with one global feed, so its config entry carries no board.
-func (jobdanmark) boardless() {}
+func (jobdanmark) Boardless() {}
 
 // jobdanmark aggregates postings from many employers, so it stays in the source facet.
-func (jobdanmark) aggregator() {}
+func (jobdanmark) Aggregator() {}
 
 // jobdanmarkSearchBody is the POST search request. An empty JobTypes/Filters with the Text
 // location mode returns the unfiltered catalogue.

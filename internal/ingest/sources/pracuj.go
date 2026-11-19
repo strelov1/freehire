@@ -123,10 +123,10 @@ func NewPracuj(c HTMLGetter) Source {
 func (pracuj) Provider() string { return "pracuj" }
 
 // One national board, no per-tenant id.
-func (pracuj) boardless() {}
+func (pracuj) Boardless() {}
 
 // Tens of thousands of employers and agencies post here, each named per posting.
-func (pracuj) aggregator() {}
+func (pracuj) Aggregator() {}
 
 // pracujPosting is one search result: a posting and its offers, one per city.
 type pracujPosting struct {

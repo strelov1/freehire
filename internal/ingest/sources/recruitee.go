@@ -35,11 +35,11 @@ func (recruitee) Provider() string { return "recruitee" }
 
 // fullBoardListing: Fetch is a single unpaginated request returning the board's whole offers
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
-func (recruitee) fullBoardListing() {}
+func (recruitee) FullBoardListing() {}
 
 // emptyBoardListing: an unknown board answers 404, and an emptied one answers 200 with
 // "offers": []; an envelope without the array fails Fetch. See the emptyBoardListing interface.
-func (recruitee) emptyBoardListing() {}
+func (recruitee) EmptyBoardListing() {}
 
 func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	url := fmt.Sprintf(recruiteeBaseURL, e.Board)

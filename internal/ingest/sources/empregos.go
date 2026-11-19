@@ -83,14 +83,14 @@ func NewEmpregos(c JSONPoster) Source {
 func (empregos) Provider() string { return "empregos" }
 
 // One national board, no per-tenant id.
-func (empregos) boardless() {}
+func (empregos) Boardless() {}
 
 // Thousands of employers post here, each named per posting.
-func (empregos) aggregator() {}
+func (empregos) Aggregator() {}
 
 // empregos cannot prove it read the postings that name no state, so an unseen one may be live;
 // cmd/liveness follows a removed posting's redirect to /404.
-func (empregos) livenessProbed() {}
+func (empregos) LivenessProbed() {}
 
 type empregosFilter struct {
 	FacetItem   int    `json:"facetItem"`

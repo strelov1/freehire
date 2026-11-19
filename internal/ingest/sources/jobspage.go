@@ -37,7 +37,7 @@ func (jobspage) Provider() string { return "jobspage" }
 
 // fullBoardListing: the listing is one unpaginated page carrying the board's whole jobs array
 // — no loop that could stop early. See the fullBoardListing interface for the bar.
-func (jobspage) fullBoardListing() {}
+func (jobspage) FullBoardListing() {}
 
 // jobspageNextData is the slice of a listing page's __NEXT_DATA__ we read. JobsData is a
 // pointer so a page that lost the key is told apart from a board with no openings, which the

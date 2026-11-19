@@ -50,7 +50,7 @@ func NewHomerun(c homerunGetter) Source { return homerun{http: c} }
 func (homerun) Provider() string { return "homerun" }
 
 // fullBoardListing: the feed is one unpaginated document carrying every open vacancy.
-func (homerun) fullBoardListing() {}
+func (homerun) FullBoardListing() {}
 
 // homerunBoard is the shape of a tenant label.
 var homerunBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

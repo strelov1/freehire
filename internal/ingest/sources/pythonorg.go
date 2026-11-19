@@ -38,8 +38,8 @@ var pythonorgPostingRE = regexp.MustCompile(`^/jobs/([0-9]+)/$`)
 func NewPythonOrg(c HTMLGetter) Source { return pythonorg{http: c} }
 
 func (pythonorg) Provider() string { return "pythonorg" }
-func (pythonorg) boardless()       {}
-func (pythonorg) aggregator()      {}
+func (pythonorg) Boardless()       {}
+func (pythonorg) Aggregator()      {}
 
 // pythonorgCard is what a listing card states about a posting.
 type pythonorgCard struct {

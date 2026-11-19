@@ -72,10 +72,10 @@ func NewCatho(c cathoHTTP) Source {
 func (catho) Provider() string { return "catho" }
 
 // One national board, no per-tenant id.
-func (catho) boardless() {}
+func (catho) Boardless() {}
 
 // Tens of thousands of employers post here, each named per posting.
-func (catho) aggregator() {}
+func (catho) Aggregator() {}
 
 // cathoPosting is one sitemap entry: the posting's numeric id and its canonical URL.
 type cathoPosting struct {

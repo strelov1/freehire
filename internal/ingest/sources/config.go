@@ -91,7 +91,7 @@ func (c Config) Validate(registry map[string]Source) error {
 			return fmt.Errorf("sources: %s entry for company %q has empty board", provider, e.Company)
 		}
 		if v, ok := src.(boardValidator); ok && e.Board != "" {
-			if err := v.validateBoard(e.Board); err != nil {
+			if err := v.ValidateBoard(e.Board); err != nil {
 				return fmt.Errorf("sources: %s board %q: %w", provider, e.Board, err)
 			}
 		}

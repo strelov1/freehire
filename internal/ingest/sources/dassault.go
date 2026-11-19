@@ -41,13 +41,13 @@ func NewDassault(c XMLGetter) Source { return dassault{http: c} }
 func (dassault) Provider() string { return "dassault" }
 
 // dassault is single-company, so its config entry carries no board.
-func (dassault) boardless() {}
+func (dassault) Boardless() {}
 
 // fullBoardListing: every page states the hit count (`nhits`), and Fetch fails unless the
 // distinct postings read equal it. Any page failing — a later one included — fails the crawl.
 // The answer's `estimated` attribute is NOT the proof: it read "true" while nhits and the distinct
 // cards read agreed, so it says nothing usable about the count; the count check carries the claim.
-func (dassault) fullBoardListing() {}
+func (dassault) FullBoardListing() {}
 
 // dassaultAnswer is the Exalead response (served as application/javascript, but XML).
 type dassaultAnswer struct {

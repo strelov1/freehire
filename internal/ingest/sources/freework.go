@@ -70,10 +70,10 @@ func NewFreeWork(c HTTPClient) Source {
 func (freework) Provider() string { return "freework" }
 
 // One national board, no per-tenant id.
-func (freework) boardless() {}
+func (freework) Boardless() {}
 
 // Hundreds of consultancies and agencies post here, each named per posting.
-func (freework) aggregator() {}
+func (freework) Aggregator() {}
 
 type freeworkLocation struct {
 	Label       string `json:"label"`

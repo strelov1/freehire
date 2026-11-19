@@ -71,13 +71,13 @@ var (
 func NewGolangJobs(c golangJobsHTTP) Source { return golangJobs{http: c, now: time.Now} }
 
 func (golangJobs) Provider() string { return "golangjobs" }
-func (golangJobs) boardless()       {}
-func (golangJobs) aggregator()      {}
+func (golangJobs) Boardless()       {}
+func (golangJobs) Aggregator()      {}
 
 // fullCatalog: Fetch reads every page of the one table and fails on any read error, on an empty
 // table, on a count that moves mid-read, on reaching golangJobsMaxPages and on any gap between
 // the postings read and the table's count. See the fullCatalog interface (source.go) for the bar.
-func (golangJobs) fullCatalog() {}
+func (golangJobs) FullCatalog() {}
 
 // golangJobsBackend is the Supabase project the app bundle names.
 type golangJobsBackend struct {

@@ -45,7 +45,7 @@ func NewTochka(c tochkaHTTP) Source { return tochka{http: c} }
 func (tochka) Provider() string { return "tochka" }
 
 // tochka is single-company, so its config entries carry no board.
-func (tochka) boardless() {}
+func (tochka) Boardless() {}
 
 func (t tochka) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	locs, err := t.vacancyLocs(ctx)

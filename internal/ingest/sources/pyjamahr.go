@@ -34,7 +34,7 @@ const pyjamahrMaxPages = 500
 // fullBoardListing: the "next"-URL walk proves the whole set of open postings by reaching a
 // null next; reaching pyjamahrMaxPages while next is still set fails the whole Fetch instead.
 // A detail-fetch failure for one posting becomes an Unreadable marker rather than a silent drop.
-func (pyjamahr) fullBoardListing() {}
+func (pyjamahr) FullBoardListing() {}
 
 func (s pyjamahr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	items, err := s.list(ctx, e.Board)

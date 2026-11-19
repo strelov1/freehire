@@ -49,7 +49,7 @@ func NewCoveto(c covetoGetter) Source { return coveto{http: c} }
 func (coveto) Provider() string { return "coveto" }
 
 // fullBoardListing: the RSS feed is one unpaginated document carrying every open posting.
-func (coveto) fullBoardListing() {}
+func (coveto) FullBoardListing() {}
 
 // covetoBoard is the shape of a tenant label: the customer number.
 var covetoBoard = regexp.MustCompile(`^k[0-9]{3,7}$`)

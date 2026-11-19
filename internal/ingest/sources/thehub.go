@@ -30,9 +30,9 @@ func NewTheHub(c thehubHTTP) Source { return thehub{http: c} }
 
 func (thehub) Provider() string { return "thehub" }
 
-func (thehub) boardless() {}
+func (thehub) Boardless() {}
 
-func (thehub) aggregator() {}
+func (thehub) Aggregator() {}
 
 func (s thehub) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	jobSitemap, err := resolveSubSitemap(ctx, s.http, "https://thehub.io/sitemap.xml", "jobs")

@@ -43,10 +43,10 @@ func NewFourDayWeek(c fourDayWeekHTTP) Source { return fourDayWeek{http: c} }
 func (fourDayWeek) Provider() string { return "4dayweek" }
 
 // 4dayweek needs no board id (one API), so its config carries no board.
-func (fourDayWeek) boardless() {}
+func (fourDayWeek) Boardless() {}
 
 // 4dayweek aggregates postings from many companies, so it stays in the source facet.
-func (fourDayWeek) aggregator() {}
+func (fourDayWeek) Aggregator() {}
 
 // fourDayWeekLocation is one location entry; the primary (or first) supplies the display string.
 type fourDayWeekLocation struct {

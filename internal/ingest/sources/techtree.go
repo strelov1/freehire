@@ -28,9 +28,9 @@ func NewTechTree(c techtreeHTTP) Source { return techtree{http: c} }
 
 func (techtree) Provider() string { return "techtree" }
 
-func (techtree) boardless() {}
+func (techtree) Boardless() {}
 
-func (techtree) aggregator() {}
+func (techtree) Aggregator() {}
 
 const techtreeSitemapURL = "https://jobs.techtree.dev/sitemap.xml"
 

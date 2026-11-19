@@ -73,13 +73,13 @@ func (edjoin) Provider() string { return "edjoin" }
 
 // Every district on the platform is its own employer, read from the posting, so edjoin stays
 // in the source facet and in the cross-source duplicate suppression set.
-func (edjoin) aggregator() {}
+func (edjoin) Aggregator() {}
 
 // fullBoardListing: list proves completeness by either a genuinely empty page or reaching the
 // platform's own exact totalRecords, and treats any page failure or reaching edjoinMaxPages
 // without either proof as a hard Fetch failure. See the fullBoardListing interface (source.go)
 // for the bar.
-func (edjoin) fullBoardListing() {}
+func (edjoin) FullBoardListing() {}
 
 const (
 	edjoinBaseURL = "https://www.edjoin.org"

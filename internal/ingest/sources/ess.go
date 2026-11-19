@@ -94,10 +94,10 @@ func NewESS(c essHTTP) Source {
 func (ess) Provider() string { return "ess" }
 
 // One national exchange, no per-tenant id.
-func (ess) boardless() {}
+func (ess) Boardless() {}
 
 // Thousands of employers post here, each named per vacancy.
-func (ess) aggregator() {}
+func (ess) Aggregator() {}
 
 // One country's market (see nationalMarket).
 func (ess) marketCountries(CompanyEntry) []string { return []string{"si"} }

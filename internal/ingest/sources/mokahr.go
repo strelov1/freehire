@@ -111,7 +111,7 @@ func (mokahr) Provider() string { return "mokahr" }
 var _ HydratingSource = mokahr{}
 
 // fullBoardListing: see the type comment and the fullBoardListing interface (source.go).
-func (mokahr) fullBoardListing() {}
+func (mokahr) FullBoardListing() {}
 
 type mokahrQuery struct {
 	SiteID int    `json:"siteId"`

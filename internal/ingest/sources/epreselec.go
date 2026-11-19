@@ -51,7 +51,7 @@ func (epreselec) Provider() string { return "epreselec" }
 
 // fullBoardListing: the list is one unpaginated page, and its length is checked against the
 // count the page states.
-func (epreselec) fullBoardListing() {}
+func (epreselec) FullBoardListing() {}
 
 const (
 	// epreselecMaxNewPerBoard bounds the bodies one board buys in a run: each is a page carrying the

@@ -32,7 +32,7 @@ func NewAvito(c avitoHTTP) Source { return avito{http: c} }
 func (avito) Provider() string { return "avito" }
 
 // avito is single-company, so its config entries carry no board.
-func (avito) boardless() {}
+func (avito) Boardless() {}
 
 func (a avito) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	index, err := getSitemap(ctx, a.http, avitoSitemapIndexURL)

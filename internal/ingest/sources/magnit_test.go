@@ -13,7 +13,7 @@ func TestMagnitProviderIsBoardless(t *testing.T) {
 	if got := s.Provider(); got != "magnit" {
 		t.Errorf("Provider() = %q, want magnit", got)
 	}
-	if _, ok := s.(interface{ boardless() }); !ok {
+	if _, ok := s.(interface{ Boardless() }); !ok {
 		t.Error("magnit must be boardless: it is one employer's own careers API")
 	}
 	if _, ok := s.(HydratingSource); !ok {

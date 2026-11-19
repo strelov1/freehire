@@ -52,7 +52,7 @@ func NewQuanta(c JSONGetter) Source { return quanta{http: c} }
 func (quanta) Provider() string { return "quanta" }
 
 // quanta is single-company, so its config entry carries no board.
-func (quanta) boardless() {}
+func (quanta) Boardless() {}
 
 type quantaResponse struct {
 	Jobs *[]quantaJob `json:"jobResult"`

@@ -30,7 +30,7 @@ func (humanbit) Provider() string { return "humanbit" }
 // fullBoardListing: the listing proves the whole set of open postings, and a detail-fetch failure
 // for one posting becomes an Unreadable marker rather than a silent drop (see detail). A listing
 // fetch/decode failure fails the whole Fetch.
-func (humanbit) fullBoardListing() {}
+func (humanbit) FullBoardListing() {}
 
 func (h humanbit) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	listingURL := fmt.Sprintf("https://jobs.humanbit.ai/%s", e.Board)

@@ -70,10 +70,10 @@ func NewShine(c shineHTTP) Source {
 func (shine) Provider() string { return "shine" }
 
 // One national board, no per-tenant id.
-func (shine) boardless() {}
+func (shine) Boardless() {}
 
 // Tens of thousands of employers and consultancies post here, each named per posting.
-func (shine) aggregator() {}
+func (shine) Aggregator() {}
 
 // shinePosting is one sitemap entry: the posting's id, its URL, and the title and employer its
 // path spells — which is all the gate needs to judge it before its page is bought.

@@ -34,7 +34,7 @@ func (dvinci) Provider() string { return "dvinci" }
 
 // fullBoardListing: the board document is one unpaginated answer carrying every live
 // publication — no loop that could stop early.
-func (dvinci) fullBoardListing() {}
+func (dvinci) FullBoardListing() {}
 
 // dvinciBoard is the shape of a careers host: lowercase DNS labels, at least one dot.
 var dvinciBoard = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)

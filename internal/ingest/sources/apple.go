@@ -43,7 +43,7 @@ func NewApple(c appleHTTP) Source { return apple{http: c} }
 func (apple) Provider() string { return "apple" }
 
 // apple is single-company, so its config entries carry no board.
-func (apple) boardless() {}
+func (apple) Boardless() {}
 
 // appleLocation is one location on a posting; name is the human display string.
 type appleLocation struct {

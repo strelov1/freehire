@@ -17,7 +17,7 @@ type hrsmart struct{ http HTMLResolvedGetter }
 
 func NewHRsmart(c HTMLResolvedGetter) Source { return hrsmart{http: c} }
 func (hrsmart) Provider() string             { return "hrsmart" }
-func (hrsmart) fullBoardListing()            {}
+func (hrsmart) FullBoardListing()            {}
 
 var (
 	hrsmartHost    = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*\.hrdepartment\.com$`)

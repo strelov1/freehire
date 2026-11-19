@@ -113,7 +113,7 @@ func TestWhatJobsDeclaresWideSweepGrace(t *testing.T) {
 	if !ok {
 		t.Fatal("whatjobs should declare a sweepGrace window")
 	}
-	if got := s.sweepGrace(); got != 14*24*time.Hour {
+	if got := s.SweepGrace(); got != 14*24*time.Hour {
 		t.Errorf("sweepGrace() = %v, want 14 days", got)
 	}
 }

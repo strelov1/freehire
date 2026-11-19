@@ -37,7 +37,7 @@ func (recruiterflow) Provider() string { return "recruiterflow" }
 // embedded in one page load, so there is no further page a truncated read could ever miss.
 // A detail-fetch failure for one posting becomes an Unreadable marker rather than a silent
 // drop, as in recrutei/humanbit. A listing fetch or decode failure fails the whole Fetch outright.
-func (recruiterflow) fullBoardListing() {}
+func (recruiterflow) FullBoardListing() {}
 
 func (s recruiterflow) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	items, err := s.list(ctx, e.Board)

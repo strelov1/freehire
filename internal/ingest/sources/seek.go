@@ -84,7 +84,7 @@ func (s seekCrawler) BoardURLPrefix(region string) (string, bool) {
 // its own ATS appears here too, so the cross-source dedup pass prefers the first-party copy. Unlike
 // the boardless aggregators seek still requires a board (the subclassification id) to bound the
 // crawl, so it is not boardless.
-func (seekCrawler) aggregator() {}
+func (seekCrawler) Aggregator() {}
 
 // sweepGrace widens the unseen sweep because the crawl reaches only a SLICE of each subclassification:
 // SEEK stops serving results past roughly the 550th (see seekMaxPages), so the busiest slices
@@ -94,20 +94,20 @@ func (seekCrawler) aggregator() {}
 // back, writing a phantom removal into job_daily_stats each cycle. The marker is sound here because
 // liveness CANNOT be probed instead: SEEK's own job pages sit behind the same Cloudflare interstitial
 // as its search pages.
-func (seek) sweepGrace() time.Duration { return 14 * 24 * time.Hour }
+func (seek) SweepGrace() time.Duration { return 14 * 24 * time.Hour }
 
 // sliceBoardListing: the 14-day sweepGrace window stands in for a full listing. A finished slice
 // closes its own postings unseen for that long, so a posting whose company dropped out of the capped
 // pages still closes. The tail of a busy slice past SEEK's result window cannot be told from a
 // removal, and is left to the window alone, as WhatJobs does. See the sliceBoardListing interface.
-func (seek) sliceBoardListing() {}
+func (seek) SliceBoardListing() {}
 
 // fullBoardListing: JobStreet has no SEEK-style result window, and at pageSize 100 the search's
 // totalCount equals the distinct postings a full walk reads. The walk fails on a later page's
 // error, on the page ceiling,
 // and on a distinct count that differs from the last page's totalCount. See the
 // fullBoardListing interface for the bar.
-func (jobStreet) fullBoardListing() {}
+func (jobStreet) FullBoardListing() {}
 
 const (
 	seekPageSize = 100

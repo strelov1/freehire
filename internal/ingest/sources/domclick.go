@@ -26,7 +26,7 @@ func NewDomclick(c JSONGetter) Source { return domclick{http: c} }
 func (domclick) Provider() string { return "domclick" }
 
 // domclick is single-company, so its config entries carry no board.
-func (domclick) boardless() {}
+func (domclick) Boardless() {}
 
 // dcItem is one vacancy from the list response. work_format (REMOTE/HYBRID/ON_SITE)
 // drives the remote flag without a detail request; the body comes from the detail.

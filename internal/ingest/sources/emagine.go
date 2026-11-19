@@ -47,7 +47,7 @@ func NewEmagine(list JSONPoster, detail JSONGetter) Source {
 
 func (emagine) Provider() string { return "emagine" }
 
-func (emagine) boardless() {}
+func (emagine) Boardless() {}
 
 // emagineSearchRequest is the listing request. Sorted by ascending id: stable under concurrent
 // publishing, unlike the recency sort, where a mid-crawl ad shifts later pages and hides a posting.

@@ -127,10 +127,10 @@ func NewJobsCh(c jobschHTTP) Source {
 func (jobsch) Provider() string { return "jobsch" }
 
 // One national pool, no per-tenant id.
-func (jobsch) boardless() {}
+func (jobsch) Boardless() {}
 
 // Tens of thousands of employers and agencies post here, each named per posting.
-func (jobsch) aggregator() {}
+func (jobsch) Aggregator() {}
 
 // jobschPosting is one posting the crawl knows of: its id, the site whose page is bought for it,
 // and — when a search page named it — its card.

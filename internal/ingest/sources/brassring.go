@@ -73,7 +73,7 @@ func (brassring) Provider() string { return "brassring" }
 // fullBoardListing: the listing states its total, and the walk keeps paging until it holds that
 // many rows. A page that fails, an empty page before the total is reached, and the page cap all
 // fail the crawl rather than returning a truncated board as a complete one.
-func (brassring) fullBoardListing() {}
+func (brassring) FullBoardListing() {}
 
 // brassringBoard is a parsed board id.
 type brassringBoard struct {

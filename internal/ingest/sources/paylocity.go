@@ -39,7 +39,7 @@ func (paylocity) Provider() string { return "paylocity" }
 // company's whole Jobs array (no pagination). Per-job detail fetches are best-effort (only
 // downgrade the description, never drop the posting). See the fullBoardListing interface for
 // the bar.
-func (paylocity) fullBoardListing() {}
+func (paylocity) FullBoardListing() {}
 
 func (s paylocity) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	listURL := fmt.Sprintf("%s/Recruiting/Jobs/All/%s", paylocityBase, e.Board)

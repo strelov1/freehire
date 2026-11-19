@@ -76,7 +76,7 @@ func (schoolspring) Provider() string { return "schoolspring" }
 // posting and many of those employers also publish the same posting on their own ATS, so the
 // cross-source dedup pass prefers the first-party copy. It still requires a board (the search
 // keyword) to bound the crawl, so it is not boardless.
-func (schoolspring) aggregator() {}
+func (schoolspring) Aggregator() {}
 
 const (
 	// schoolspringAPI is the SPA's own backend. The human-facing site (www.schoolspring.com)

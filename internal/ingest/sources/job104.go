@@ -87,7 +87,7 @@ func NewJob104(search HeaderJSONGetter, static JSONGetter) Source {
 func (job104) Provider() string { return "job104" }
 
 // Many employers post here, each named per posting.
-func (job104) aggregator() {}
+func (job104) Aggregator() {}
 
 // job104Code is one node of the platform's category and area trees.
 type job104Code struct {

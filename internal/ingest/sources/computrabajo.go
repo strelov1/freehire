@@ -64,7 +64,7 @@ func NewComputrabajo(c HTMLGetter) Source {
 func (computrabajo) Provider() string { return "computrabajo" }
 
 // Thousands of employers and agencies post here, each named per posting.
-func (computrabajo) aggregator() {}
+func (computrabajo) Aggregator() {}
 
 // computrabajoCountry is a board: a two-letter country subdomain.
 var computrabajoCountry = regexp.MustCompile(`^[a-z]{2}$`)

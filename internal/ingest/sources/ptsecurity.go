@@ -44,7 +44,7 @@ func NewPtsecurity(c HTMLGetter) Source { return ptsecurity{http: c} }
 func (ptsecurity) Provider() string { return "ptsecurity" }
 
 // ptsecurity is single-company, so its config entries carry no board.
-func (ptsecurity) boardless() {}
+func (ptsecurity) Boardless() {}
 
 // ptsecurityListing is the vacancy-list component's data prop: the vacancies grouped by the
 // site's "activity" (a group with id "_no-activity" holds the ungrouped ones), and the

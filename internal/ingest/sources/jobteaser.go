@@ -86,7 +86,7 @@ func NewJobTeaser(sitemap XMLGetter, pages HTMLGetter) Source {
 func (jobteaser) Provider() string { return "jobteaser" }
 
 // Thousands of employers post here, each named per posting.
-func (jobteaser) aggregator() {}
+func (jobteaser) Aggregator() {}
 
 // jobteaserLanguage is a board: a two-letter URL prefix.
 var jobteaserLanguage = regexp.MustCompile(`^[a-z]{2}$`)

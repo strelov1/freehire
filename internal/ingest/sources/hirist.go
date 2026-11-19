@@ -119,7 +119,7 @@ func (s hirist) Provider() string { return s.site.provider }
 // Every posting names its own employer, so both sites stay in the source facet and in the
 // cross-source duplicate suppression set — which matters here, since roughly half of hirist's
 // postings are copied from the employer's own careers site (the API's "crawled" flag).
-func (hirist) aggregator() {}
+func (hirist) Aggregator() {}
 
 type hiristLocation struct {
 	Name string `json:"name"`

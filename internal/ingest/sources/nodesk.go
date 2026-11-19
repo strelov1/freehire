@@ -47,9 +47,9 @@ func NewNoDesk(c nodeskHTTP) Source { return nodesk{http: c} }
 
 func (nodesk) Provider() string { return "nodesk" }
 
-func (nodesk) boardless() {}
+func (nodesk) Boardless() {}
 
-func (nodesk) aggregator() {}
+func (nodesk) Aggregator() {}
 
 // nodeskItem is one RSS <item>: the title is "Role at Company", description is the plain-text
 // body, and guid is the native posting id (same value as link).

@@ -43,7 +43,7 @@ func (hiringroom) Provider() string { return "hiringroom" }
 // fullBoardListing: every page states the portal's total, and the walk fails unless the
 // distinct vacancies read equal it. Any page failing, a page that adds nothing before the total
 // is reached, and the page cap all fail the crawl.
-func (hiringroom) fullBoardListing() {}
+func (hiringroom) FullBoardListing() {}
 
 // hiringroomPage is the pager's answer.
 type hiringroomPage struct {

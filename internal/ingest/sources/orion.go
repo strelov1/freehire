@@ -33,7 +33,7 @@ func NewOrion(c TextGetter) Source { return orion{list: c} }
 
 func (orion) Provider() string { return "orion" }
 
-func (orion) boardless() {}
+func (orion) Boardless() {}
 
 func (o orion) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	var jobs []Job

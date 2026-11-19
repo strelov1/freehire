@@ -79,7 +79,7 @@ func (harri) Provider() string { return "harri" }
 // fullBoardListing: the walk pages by `start` until it has read the search's own `hits`, and
 // fails unless the distinct ids read equal it. A page failing, a page answering empty before the
 // count is reached, or the page ceiling being hit fails the crawl.
-func (harri) fullBoardListing() {}
+func (harri) FullBoardListing() {}
 
 const (
 	harriAPIBase   = "https://gateway.harri.com"

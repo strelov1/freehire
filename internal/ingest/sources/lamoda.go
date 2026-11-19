@@ -27,7 +27,7 @@ func NewLamoda(c JSONGetter) Source { return lamoda{http: c} }
 func (lamoda) Provider() string { return "lamoda" }
 
 // lamoda is single-company, so its config entries carry no board.
-func (lamoda) boardless() {}
+func (lamoda) Boardless() {}
 
 // lamodaItem is one vacancy from the list response (summary only; body comes from detail).
 type lamodaItem struct {

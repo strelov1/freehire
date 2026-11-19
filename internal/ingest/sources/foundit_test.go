@@ -284,7 +284,7 @@ func TestFounditIsARegisteredBoardlessAggregator(t *testing.T) {
 	if _, ok := s.(aggregator); !ok {
 		t.Error("foundit should be an aggregator")
 	}
-	if g, ok := s.(interface{ sweepGrace() time.Duration }); !ok || g.sweepGrace() != founditSweepGrace {
+	if g, ok := s.(interface{ SweepGrace() time.Duration }); !ok || g.SweepGrace() != founditSweepGrace {
 		t.Error("foundit should declare its sweep grace")
 	}
 }

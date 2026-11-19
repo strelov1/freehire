@@ -76,7 +76,7 @@ func NewJobleads(c jobleadsHTTP) Source { return jobleads{http: c, details: &syn
 func (jobleads) Provider() string { return "jobleads" }
 
 // jobleads aggregates postings from many companies, so it stays in the source facet.
-func (jobleads) aggregator() {}
+func (jobleads) Aggregator() {}
 
 // jobleads is NOT boardless: an entry's board is the search keyword selecting its slice of
 // the catalogue, like whatjobs/hh/seek.
@@ -85,7 +85,7 @@ func (jobleads) aggregator() {}
 // vdb ranking rotates between runs and the window end is volatile, so a posting can drift
 // out of and back into a keyword's window; the API cannot be liveness-probed either (the
 // posting pages sit behind the same Cloudflare edge).
-func (jobleads) sweepGrace() time.Duration { return jobleadsSweepGrace }
+func (jobleads) SweepGrace() time.Duration { return jobleadsSweepGrace }
 
 // jobleadsSearchReq is the site's own frontend request. engineOptions IS load-bearing:
 // every 200 carried engineType "vdbSearch", so the adapter always states it.

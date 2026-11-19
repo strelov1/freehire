@@ -107,12 +107,12 @@ func NewEures(c euresHTTP) Source { return eures{http: c, depthCap: euresDepthCa
 func (eures) Provider() string { return "eures" }
 
 // aggregator marks eures for cross-source dedup suppression — see the eures doc comment.
-func (eures) aggregator() {}
+func (eures) Aggregator() {}
 
 // fullBoardListing: every walk is checked against the total the search states, and a country
 // past the depth cap is split into regions whose union is checked against the country's total;
 // any shortfall fails the crawl. See the eures doc comment and the fullBoardListing interface.
-func (eures) fullBoardListing() {}
+func (eures) FullBoardListing() {}
 
 // euresSearchRequest is one search request. Every filter array the adapter does not use is sent
 // as an explicit empty slice, matching the request schema's requirement that these fields be

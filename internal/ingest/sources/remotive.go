@@ -26,9 +26,9 @@ func NewRemotive(c JSONGetter) Source { return remotive{http: c} }
 
 func (remotive) Provider() string { return "remotive" }
 
-func (remotive) boardless() {}
+func (remotive) Boardless() {}
 
-func (remotive) aggregator() {}
+func (remotive) Aggregator() {}
 
 // remotivePosting is one posting from the /api/remote-jobs feed, body inline (no detail call).
 type remotivePosting struct {

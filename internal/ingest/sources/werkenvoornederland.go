@@ -56,10 +56,10 @@ func NewWerkenVoorNederland(c werkenVoorNederlandHTTP) Source {
 func (werkenVoorNederland) Provider() string { return "werkenvoornederland" }
 
 // One national catalogue, no per-tenant id.
-func (werkenVoorNederland) boardless() {}
+func (werkenVoorNederland) Boardless() {}
 
 // Hundreds of government organisations post here, each named per posting.
-func (werkenVoorNederland) aggregator() {}
+func (werkenVoorNederland) Aggregator() {}
 
 // wvnPostingCode matches the reference that ends every posting path, /vacatures/<slug>-<code>,
 // where the code is the organisation's abbreviation, the year and a number (CJIB-2026-9570,

@@ -72,10 +72,10 @@ func NewITJobs(c HTMLGetter) Source {
 func (itjobs) Provider() string { return "itjobs" }
 
 // One national board, no per-tenant id.
-func (itjobs) boardless() {}
+func (itjobs) Boardless() {}
 
 // Hundreds of employers and IT consultancies post here, each named per posting.
-func (itjobs) aggregator() {}
+func (itjobs) Aggregator() {}
 
 // itjobsCard is one listing card: what the gate and the job need before the page is bought.
 type itjobsCard struct {

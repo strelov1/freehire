@@ -29,9 +29,9 @@ func NewRemotli(c JSONGetter) Source { return remotli{http: c} }
 
 func (remotli) Provider() string { return "remotli" }
 
-func (remotli) boardless() {}
+func (remotli) Boardless() {}
 
-func (remotli) aggregator() {}
+func (remotli) Aggregator() {}
 
 // remotliResponse is one page: postings plus pagination info used to decide whether another
 // page is due. Each element of Jobs is wrapped one level deep under its own "jobs" key.

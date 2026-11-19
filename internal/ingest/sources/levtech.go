@@ -91,8 +91,8 @@ func levtechRefused(err error) bool {
 	var se *StatusError
 	return errors.As(err, &se) && se.Code == http.StatusForbidden
 }
-func (levtech) boardless()  {}
-func (levtech) aggregator() {}
+func (levtech) Boardless()  {}
+func (levtech) Aggregator() {}
 
 func (s levtech) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return s.FetchNew(ctx, e, func(string) bool { return false })

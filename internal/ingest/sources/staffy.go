@@ -24,7 +24,7 @@ func NewStaffy(c HTMLGetter) Source { return staffy{http: c} }
 func (staffy) Provider() string { return "staffy" }
 
 // staffy is single-company, so its config entry carries no board.
-func (staffy) boardless() {}
+func (staffy) Boardless() {}
 
 const staffyListingURL = "https://jobs.wearestaffy.com/vacantes"
 
@@ -33,7 +33,7 @@ const staffyListingURL = "https://jobs.wearestaffy.com/vacantes"
 // count" posture scalis/recrutei/pyjamahr use. A mismatch, a listing fetch failure, or finding
 // no declared total at all fails the whole Fetch. A detail-fetch failure for one posting
 // becomes an Unreadable marker rather than a silent drop.
-func (staffy) fullBoardListing() {}
+func (staffy) FullBoardListing() {}
 
 func (s staffy) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	locs, err := s.list(ctx)

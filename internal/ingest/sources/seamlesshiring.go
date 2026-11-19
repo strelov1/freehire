@@ -30,9 +30,9 @@ func NewSeamlessHiring(c seamlesshiringHTTP) Source { return seamlesshiring{http
 
 func (seamlesshiring) Provider() string { return "seamlesshiring" }
 
-func (seamlesshiring) fullBoardListing() {}
+func (seamlesshiring) FullBoardListing() {}
 
-func (seamlesshiring) emptyBoardListing() {}
+func (seamlesshiring) EmptyBoardListing() {}
 
 type seamlesshiringJob struct {
 	ID        int    `json:"id"`

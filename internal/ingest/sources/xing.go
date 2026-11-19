@@ -93,10 +93,10 @@ func NewXing(c xingHTTP) Source {
 func (xing) Provider() string { return "xing" }
 
 // One national board, no per-tenant id.
-func (xing) boardless() {}
+func (xing) Boardless() {}
 
 // Tens of thousands of employers post here, each named per posting.
-func (xing) aggregator() {}
+func (xing) Aggregator() {}
 
 // xingPosting is one sitemap entry: the posting's numeric id and its canonical URL.
 type xingPosting struct {

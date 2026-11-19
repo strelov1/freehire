@@ -72,15 +72,15 @@ func NewEchoJobs(c echojobsHTTP) Source { return echojobs{http: c} }
 func (echojobs) Provider() string { return "echojobs" }
 
 // echojobs is a marketplace with one global feed, so its config entries carry no board.
-func (echojobs) boardless() {}
+func (echojobs) Boardless() {}
 
 // echojobs aggregates postings from many companies, so it stays in the source facet.
-func (echojobs) aggregator() {}
+func (echojobs) Aggregator() {}
 
-func (echojobs) sweepGrace() time.Duration { return echojobsSweepGrace }
+func (echojobs) SweepGrace() time.Duration { return echojobsSweepGrace }
 
 // echojobs reads only its freshness window of a far deeper feed; cmd/liveness GETs its job page.
-func (echojobs) livenessProbed() {}
+func (echojobs) LivenessProbed() {}
 
 // Fetch fully hydrates every posting the sitemap walk finds within the freshness window. Unlike
 // FetchNew it has no seen-set to skip already-ingested postings — the sitemap carries no field a

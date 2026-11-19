@@ -57,9 +57,9 @@ func (idealtraits) Provider() string { return "idealtraits" }
 // fullBoardListing: list reads the board until it holds exactly the jobcount the platform
 // reports, and fails the crawl on any page error or shortfall. See the fullBoardListing
 // interface for the bar.
-func (idealtraits) fullBoardListing() {}
+func (idealtraits) FullBoardListing() {}
 
-func (idealtraits) emptyBoardListing() {}
+func (idealtraits) EmptyBoardListing() {}
 
 const idealtraitsOrigin = "https://app.idealtraits.com"
 

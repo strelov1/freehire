@@ -57,10 +57,10 @@ func NewFeinaActiva(c JSONGetter) Source {
 func (feinaactiva) Provider() string { return "feinaactiva" }
 
 // One regional board, no per-tenant id.
-func (feinaactiva) boardless() {}
+func (feinaactiva) Boardless() {}
 
 // Thousands of employers, councils and public bodies post here, each named per offer.
-func (feinaactiva) aggregator() {}
+func (feinaactiva) Aggregator() {}
 
 type feinaactivaPage struct {
 	Total    int                `json:"total"`

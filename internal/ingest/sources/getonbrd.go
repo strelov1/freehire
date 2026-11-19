@@ -32,9 +32,9 @@ func NewGetonbrd(c JSONGetter) Source { return getonbrd{http: c} }
 
 func (getonbrd) Provider() string { return "getonbrd" }
 
-func (getonbrd) boardless() {}
+func (getonbrd) Boardless() {}
 
-func (getonbrd) aggregator() {}
+func (getonbrd) Aggregator() {}
 
 // getonbrdJob is one job resource from the JSON:API list. The company is a relationship
 // reference (an id only); its name comes from a separate company lookup.

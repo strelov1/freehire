@@ -79,16 +79,16 @@ func NewGlints(c glintsHTTP) Source {
 func (glints) Provider() string { return "glints" }
 
 // boardless marks glints as having no per-tenant board id: one crawl covers the whole site.
-func (glints) boardless() {}
+func (glints) Boardless() {}
 
 // aggregator keeps glints in the source facet: one crawl aggregates postings from many
 // companies, so filtering by source=glints is meaningful.
-func (glints) aggregator() {}
+func (glints) Aggregator() {}
 
 // fullCatalog: the listing reads the sitemap index and every job shard, and fails on any shard
 // still unreadable after its attempts, or on a listing with no posting in it, so a
 // finished crawl has seen every posting the site lists. See the fullCatalog interface (source.go).
-func (glints) fullCatalog() {}
+func (glints) FullCatalog() {}
 
 var (
 	// glintsShardRE selects the job sitemaps (sitemap_job_<country>_<n>.xml) from the index; the

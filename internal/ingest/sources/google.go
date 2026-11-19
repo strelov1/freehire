@@ -42,7 +42,7 @@ func NewGoogle(c HTMLGetter) Source { return google{http: c} }
 func (google) Provider() string { return "google" }
 
 // google is single-company, so its config entries carry no board.
-func (google) boardless() {}
+func (google) Boardless() {}
 
 func (g google) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	var jobs []Job

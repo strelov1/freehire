@@ -34,7 +34,7 @@ const scalisMaxPages = 500
 
 // fullBoardListing: completeness is proven by paginating to a genuinely empty page; a
 // later-page failure or reaching scalisMaxPages is a hard Fetch failure (see source.go).
-func (scalis) fullBoardListing() {}
+func (scalis) FullBoardListing() {}
 
 func (s scalis) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	var jobs []Job

@@ -73,10 +73,10 @@ func NewTurijobs(sitemap XMLGetter, pages HTMLGetter) Source {
 func (turijobs) Provider() string { return "turijobs" }
 
 // One national board, no per-tenant id.
-func (turijobs) boardless() {}
+func (turijobs) Boardless() {}
 
 // Hundreds of hotel groups, restaurants and agencies post here, each named per posting.
-func (turijobs) aggregator() {}
+func (turijobs) Aggregator() {}
 
 // turijobsPosting is one sitemap entry: the id, the URL, and the title its path spells — all the
 // title gate needs before the page is bought. The path names no employer.

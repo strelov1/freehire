@@ -41,9 +41,9 @@ func NewNoFluffJobs(c nofluffjobsHTTP) Source { return nofluffjobs{http: c} }
 
 func (nofluffjobs) Provider() string { return "nofluffjobs" }
 
-func (nofluffjobs) boardless() {}
+func (nofluffjobs) Boardless() {}
 
-func (nofluffjobs) aggregator() {}
+func (nofluffjobs) Aggregator() {}
 
 // nofluffjobsListing is the single listing document.
 type nofluffjobsListing struct {

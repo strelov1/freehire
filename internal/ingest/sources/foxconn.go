@@ -61,7 +61,7 @@ func NewFoxconn(c JSONGetter) Source { return foxconn{http: c} }
 func (foxconn) Provider() string { return "foxconn" }
 
 // foxconn is single-company, so its config entry carries no board.
-func (foxconn) boardless() {}
+func (foxconn) Boardless() {}
 
 // foxconnVacancy is one vacancy, from the listing or the detail. The body is split over
 // numbered desc_N fields; which ones a posting fills varies (desc_4 is always the duties).

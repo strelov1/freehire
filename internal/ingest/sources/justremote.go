@@ -45,9 +45,9 @@ func NewJustRemote(c justremoteHTTP) Source { return justremote{http: c} }
 
 func (justremote) Provider() string { return "justremote" }
 
-func (justremote) boardless() {}
+func (justremote) Boardless() {}
 
-func (justremote) aggregator() {}
+func (justremote) Aggregator() {}
 
 // justremotePosting is one entry of the listing's jobsState.entity.all.
 type justremotePosting struct {

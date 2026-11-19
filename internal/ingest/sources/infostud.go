@@ -69,10 +69,10 @@ func NewInfostud(c TextGetter) Source {
 func (infostud) Provider() string { return "infostud" }
 
 // One national search, no per-tenant id.
-func (infostud) boardless() {}
+func (infostud) Boardless() {}
 
 // Thousands of employers post here, each named per posting.
-func (infostud) aggregator() {}
+func (infostud) Aggregator() {}
 
 // One country's market (see nationalMarket).
 func (infostud) marketCountries(CompanyEntry) []string { return []string{"rs"} }

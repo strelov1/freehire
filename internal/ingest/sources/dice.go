@@ -93,9 +93,9 @@ func NewDice(c HTMLGetter) Source {
 }
 
 func (dice) Provider() string          { return "dice" }
-func (dice) boardless()                {}
-func (dice) aggregator()               {}
-func (dice) sweepGrace() time.Duration { return diceSweepGrace }
+func (dice) Boardless()                {}
+func (dice) Aggregator()               {}
+func (dice) SweepGrace() time.Duration { return diceSweepGrace }
 
 // diceRow is one result of the search page.
 type diceRow struct {

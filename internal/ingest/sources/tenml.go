@@ -38,7 +38,7 @@ func NewTenML(c HTMLGetter) Source { return tenml{http: c} }
 func (tenml) Provider() string { return "10ml" }
 
 // tenml is single-company, so its config entry carries no board.
-func (tenml) boardless() {}
+func (tenml) Boardless() {}
 
 func (t tenml) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	root, err := t.http.GetHTML(ctx, tenmlListingURL)

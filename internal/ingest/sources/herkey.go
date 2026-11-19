@@ -74,12 +74,12 @@ func pacedHerKeyGetter(c HeaderJSONGetter) HeaderJSONGetter {
 }
 
 func (herkey) Provider() string { return "herkey" }
-func (herkey) boardless()       {}
-func (herkey) aggregator()      {}
+func (herkey) Boardless()       {}
+func (herkey) Aggregator()      {}
 
 // herkey lists its whole catalogue every run and fails any walk it cannot prove complete
 // against the index's own total, so a posting the run did not see is gone.
-func (herkey) fullCatalog() {}
+func (herkey) FullCatalog() {}
 
 // herkeyListing is one row of the search index.
 type herkeyListing struct {

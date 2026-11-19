@@ -24,12 +24,12 @@ func NewJobicy(c JSONGetter) Source { return jobicy{http: c} }
 
 func (jobicy) Provider() string { return "jobicy" }
 
-func (jobicy) boardless() {}
+func (jobicy) Boardless() {}
 
-func (jobicy) aggregator() {}
+func (jobicy) Aggregator() {}
 
 // jobicy's feed carries only its newest postings; cmd/liveness reads the job page's 410.
-func (jobicy) livenessProbed() {}
+func (jobicy) LivenessProbed() {}
 
 // jobicyPosting is one posting from the /api/v2 feed, body inline (no detail call).
 type jobicyPosting struct {

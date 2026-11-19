@@ -76,7 +76,7 @@ func (occ) Provider() string { return "occ" }
 
 // Every posting names its own employer, so occ stays in the source facet and in the
 // cross-source duplicate suppression set.
-func (occ) aggregator() {}
+func (occ) Aggregator() {}
 
 // occCard is what a listing card states about a posting.
 type occCard struct {

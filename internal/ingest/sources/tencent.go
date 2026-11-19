@@ -64,10 +64,10 @@ func NewTencent(c JSONGetter) Source { return tencent{http: c} }
 func (tencent) Provider() string { return "tencent" }
 
 // tencent is single-company, so its config entry carries no board.
-func (tencent) boardless() {}
+func (tencent) Boardless() {}
 
 // fullBoardListing: see the type comment and the fullBoardListing interface (source.go).
-func (tencent) fullBoardListing() {}
+func (tencent) FullBoardListing() {}
 
 type tencentQueryResult struct {
 	Code int `json:"Code"`

@@ -39,12 +39,12 @@ func NewGarena(c garenaHTTP) Source { return garena{http: c} }
 func (garena) Provider() string { return "garena" }
 
 // garena is single-company, so its config entry carries no board.
-func (garena) boardless() {}
+func (garena) Boardless() {}
 
 // fullBoardListing: the listing is ONE unpaginated request returning the whole catalogue, the
 // ashby shape — there is no later page that could fail and leave a truncated walk, and a
 // response without its `jobs` array fails the crawl rather than reading as an empty board.
-func (garena) fullBoardListing() {}
+func (garena) FullBoardListing() {}
 
 type garenaTags struct {
 	Location []string `json:"location"`

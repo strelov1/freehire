@@ -22,7 +22,7 @@ func (f fakeBoardlessSource) Provider() string { return f.provider }
 
 func (f fakeBoardlessSource) Fetch(context.Context, CompanyEntry) ([]Job, error) { return nil, nil }
 
-func (f fakeBoardlessSource) boardless() {}
+func (f fakeBoardlessSource) Boardless() {}
 
 // fakeAggregatorSource is boardless (no board id) but aggregates many companies,
 // so it declares itself an aggregator and must stay in the source facet.
@@ -34,8 +34,8 @@ func (f fakeAggregatorSource) Fetch(context.Context, CompanyEntry) ([]Job, error
 	return nil, nil
 }
 
-func (f fakeAggregatorSource) boardless()  {}
-func (f fakeAggregatorSource) aggregator() {}
+func (f fakeAggregatorSource) Boardless()  {}
+func (f fakeAggregatorSource) Aggregator() {}
 
 // fakeGraceSource declares a sweep window wider than the default: its crawl reaches only a
 // slice of its catalogue, so the default window would close a posting that merely drifted
@@ -49,9 +49,9 @@ func (f fakeGraceSource) Provider() string { return f.provider }
 
 func (f fakeGraceSource) Fetch(context.Context, CompanyEntry) ([]Job, error) { return nil, nil }
 
-func (f fakeGraceSource) aggregator() {}
+func (f fakeGraceSource) Aggregator() {}
 
-func (f fakeGraceSource) sweepGrace() time.Duration { return f.grace }
+func (f fakeGraceSource) SweepGrace() time.Duration { return f.grace }
 
 // fakeFullBoardListingSource declares that its Fetch structurally proves it lists a board to
 // completion (see fullBoardListing), so its boards are eligible for the sweep's board-scoped
@@ -64,7 +64,7 @@ func (f fakeFullBoardListingSource) Fetch(context.Context, CompanyEntry) ([]Job,
 	return nil, nil
 }
 
-func (f fakeFullBoardListingSource) fullBoardListing() {}
+func (f fakeFullBoardListingSource) FullBoardListing() {}
 
 func TestRegIndexesByProvider(t *testing.T) {
 	r := reg(fakeSource{"greenhouse"}, fakeSource{"lever"})

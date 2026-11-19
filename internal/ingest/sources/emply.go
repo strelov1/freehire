@@ -36,7 +36,7 @@ func (emply) Provider() string { return "emply" }
 // the distinct vacancy ids read to equal it. Any page failing, a page answering empty before
 // the count is reached, a page repeating what was already read, or the page ceiling being hit
 // fails the crawl — none of them is reported as a complete board.
-func (emply) fullBoardListing() {}
+func (emply) FullBoardListing() {}
 
 const (
 	emplyCareerApex = ".career.emply.com"

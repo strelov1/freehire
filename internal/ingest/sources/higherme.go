@@ -34,7 +34,7 @@ func (higherme) Provider() string { return "higherme" }
 
 // fullBoardListing: Fetch walks the listing to its declared last page and fails unless the
 // postings it read match the listing's own total. See the fullBoardListing interface.
-func (higherme) fullBoardListing() {}
+func (higherme) FullBoardListing() {}
 
 const (
 	highermeAPI = "https://api.higherme.com/classic"

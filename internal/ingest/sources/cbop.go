@@ -52,10 +52,10 @@ func NewCBOP(c JSONPoster) Source {
 func (cbop) Provider() string { return "cbop" }
 
 // One national board, no per-tenant id.
-func (cbop) boardless() {}
+func (cbop) Boardless() {}
 
 // Thousands of employers, each named per offer.
-func (cbop) aggregator() {}
+func (cbop) Aggregator() {}
 
 // cbopResponse is one search answer. A row the service cannot render fails the whole page with
 // "status": 500 and a null payload under HTTP 200.

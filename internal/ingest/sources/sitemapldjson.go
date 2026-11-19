@@ -42,7 +42,7 @@ func NewSitemapLDJSON(c sitemapldjsonHTTP) Source {
 func (sitemapldjson) Provider() string { return "sitemapldjson" }
 
 // unknownOrigin: the board is any sitemap URL, so the posting's origin is not the adapter's.
-func (sitemapldjson) unknownOrigin() {}
+func (sitemapldjson) UnknownOrigin() {}
 
 func (s sitemapldjson) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return s.crawl(ctx, e, func(string) bool { return false })

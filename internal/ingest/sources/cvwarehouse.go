@@ -41,7 +41,7 @@ func (cvwarehouse) Provider() string { return "cvwarehouse" }
 
 // fullBoardListing: one page (plus its sections) carries every listed vacancy, and any page that
 // fails fails the crawl.
-func (cvwarehouse) fullBoardListing() {}
+func (cvwarehouse) FullBoardListing() {}
 
 // cvwarehouseRequestInterval paces the provider: one host serves every customer's pages, each
 // 0.3-0.6 MB, so the whole fleet's run is a few hundred requests and needs no more than this.

@@ -57,7 +57,7 @@ func (eightfold) Provider() string { return "eightfold" }
 // own count is authoritative, no artificial cap exists, and any page error discards what was
 // collected and fails the whole listing. Detail fetches are best-effort per posting (list-only
 // fallback, logged). See the fullBoardListing interface for the bar.
-func (eightfold) fullBoardListing() {}
+func (eightfold) FullBoardListing() {}
 
 // eightfoldBoard is a configured board split into the host and tenant domain the endpoints need.
 type eightfoldBoard struct {

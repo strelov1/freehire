@@ -54,10 +54,10 @@ func NewJobindex(c TextGetter) Source { return jobindex{http: c} }
 func (jobindex) Provider() string { return "jobindex" }
 
 // jobindex is one national board with one catalogue, so its entry carries no board.
-func (jobindex) boardless() {}
+func (jobindex) Boardless() {}
 
 // jobindex aggregates many employers, so it stays in the source facet.
-func (jobindex) aggregator() {}
+func (jobindex) Aggregator() {}
 
 // jobindexStash is the part of the page's Stash object the crawl reads.
 type jobindexStash struct {

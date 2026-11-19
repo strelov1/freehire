@@ -82,10 +82,10 @@ func NewNSZ(c HTMLResolvedGetter) Source {
 func (nsz) Provider() string { return "nsz" }
 
 // One national search, no per-tenant id.
-func (nsz) boardless() {}
+func (nsz) Boardless() {}
 
 // Hundreds of employers post here, each named per vacancy.
-func (nsz) aggregator() {}
+func (nsz) Aggregator() {}
 
 // One country's market (see nationalMarket).
 func (nsz) marketCountries(CompanyEntry) []string { return []string{"rs"} }

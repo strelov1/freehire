@@ -119,13 +119,13 @@ func NewClearedJobs(c clearedjobsHTTP) Source {
 func (clearedjobs) Provider() string { return "clearedjobs" }
 
 // One national board, no per-tenant id.
-func (clearedjobs) boardless() {}
+func (clearedjobs) Boardless() {}
 
 // Hundreds of employers post here, each named per posting.
-func (clearedjobs) aggregator() {}
+func (clearedjobs) Aggregator() {}
 
 // The crawl lists ~96% of the board, not all of it; see clearedjobsSweepGrace.
-func (clearedjobs) sweepGrace() time.Duration { return clearedjobsSweepGrace }
+func (clearedjobs) SweepGrace() time.Duration { return clearedjobsSweepGrace }
 
 // clearedjobsPosting is one listed posting: its id (the number ending the URL slug) and URL.
 type clearedjobsPosting struct {

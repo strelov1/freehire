@@ -25,7 +25,7 @@ func (keka) Provider() string { return "keka" }
 
 // fullBoardListing: the jobs-active endpoint returns the whole open-postings array in one
 // request, so a listing failure aborts the Fetch rather than returning a partial board.
-func (keka) fullBoardListing() {}
+func (keka) FullBoardListing() {}
 
 func (s keka) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base := fmt.Sprintf("https://%s.keka.com/careers", e.Board)

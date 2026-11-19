@@ -36,7 +36,7 @@ func (successfactors) Provider() string { return "successfactors" }
 // fullBoardListing: Fetch is a single sitemap fetch with no pagination loop — it either
 // succeeds with the whole listing or fails outright. See the fullBoardListing interface for
 // the bar.
-func (successfactors) fullBoardListing() {}
+func (successfactors) FullBoardListing() {}
 
 func (s successfactors) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return s.FetchNew(ctx, e, func(string) bool { return false })

@@ -38,7 +38,7 @@ func NewEasyCruit(c XMLGetter) Source { return easycruit{http: c} }
 func (easycruit) Provider() string { return "easycruit" }
 
 // fullBoardListing: the list export is one unpaginated document carrying every open vacancy.
-func (easycruit) fullBoardListing() {}
+func (easycruit) FullBoardListing() {}
 
 // easycruitBoard is the shape of a career-site label.
 var easycruitBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

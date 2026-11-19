@@ -110,7 +110,7 @@ func NewInfoJobsBR(c infojobsBRHTTP) Source {
 func (infojobsBR) Provider() string { return "infojobsbr" }
 
 // Thousands of employers post here, each named per card.
-func (infojobsBR) aggregator() {}
+func (infojobsBR) Aggregator() {}
 
 // infojobsBRCard is one listing card: everything the listing states about a posting.
 type infojobsBRCard struct {

@@ -78,10 +78,10 @@ func NewMojeDelo(c HeaderJSONGetter) Source {
 func (mojedelo) Provider() string { return "mojedelo" }
 
 // One national board, no per-tenant id.
-func (mojedelo) boardless() {}
+func (mojedelo) Boardless() {}
 
 // Thousands of employers and staffing agencies post here, each named per posting.
-func (mojedelo) aggregator() {}
+func (mojedelo) Aggregator() {}
 
 // One country's market (see nationalMarket).
 func (mojedelo) marketCountries(CompanyEntry) []string { return []string{"si"} }

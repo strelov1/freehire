@@ -107,12 +107,12 @@ func pacedArc(c arcHTTP) arcHTTP {
 }
 
 func (arc) Provider() string { return "arc" }
-func (arc) boardless()       {}
-func (arc) aggregator()      {}
+func (arc) Boardless()       {}
+func (arc) Aggregator()      {}
 
 // arc lists its whole catalogue every run and fails any walk whose distinct postings fall
 // short of the listing's own stated total, so a posting the run did not see is gone.
-func (arc) fullCatalog() {}
+func (arc) FullCatalog() {}
 
 // arcListing is one row of the signed-in search.
 type arcListing struct {

@@ -92,7 +92,7 @@ func NewFranceTravail(c francetravailHTTP, clientID, clientSecret string) Source
 func (francetravail) Provider() string { return "francetravail" }
 
 // Tens of thousands of employers post here, each named per offer.
-func (francetravail) aggregator() {}
+func (francetravail) Aggregator() {}
 
 // francetravailToken caches the access token across the run's boards; it lives ~25 minutes.
 type francetravailToken struct {

@@ -43,7 +43,7 @@ func NewHROffice(c hrofficeGetter) Source { return hroffice{http: c} }
 func (hroffice) Provider() string { return "hroffice" }
 
 // fullBoardListing: the listing is one unpaginated answer carrying every open vacancy.
-func (hroffice) fullBoardListing() {}
+func (hroffice) FullBoardListing() {}
 
 // hrofficeBoard is the shape of a career-site label.
 var hrofficeBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

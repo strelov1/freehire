@@ -31,7 +31,7 @@ func NewJoin(c JSONPoster) Source {
 func (join) Provider() string { return "join" }
 
 // Listing pages are validated through the declared end before detail reads begin.
-func (join) fullBoardListing() {}
+func (join) FullBoardListing() {}
 
 // joinJob is one item of the list response. The description is absent here (detail only).
 type joinJob struct {

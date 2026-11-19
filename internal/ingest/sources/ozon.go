@@ -28,7 +28,7 @@ func NewOzon(c JSONGetter) Source { return ozon{http: c} }
 func (ozon) Provider() string { return "ozon" }
 
 // ozon is single-company, so its config entries carry no board.
-func (ozon) boardless() {}
+func (ozon) Boardless() {}
 
 // ozonItem is one vacancy from the list response (no description here). Only items whose
 // VacancyType is external_vacancy are kept.

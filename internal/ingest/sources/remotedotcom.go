@@ -52,10 +52,10 @@ func NewRemotedotcom(c HeaderTextGetter) Source { return remotedotcom{http: c} }
 func (remotedotcom) Provider() string { return "remotedotcom" }
 
 // remote.com is one public listing with no per-tenant board id.
-func (remotedotcom) boardless() {}
+func (remotedotcom) Boardless() {}
 
 // remote.com aggregates postings from many employers, so it stays in the source facet.
-func (remotedotcom) aggregator() {}
+func (remotedotcom) Aggregator() {}
 
 // remotedotcomListing is the listing's "jobsData" object. totalPages bounds the walk exactly,
 // so the adapter never guesses a page budget.

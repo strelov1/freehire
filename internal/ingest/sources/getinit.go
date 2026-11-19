@@ -40,7 +40,7 @@ func NewGetInIT(c sitemapBoardHTTP) Source {
 }
 
 // One national board, no per-tenant id.
-func (getinit) boardless() {}
+func (getinit) Boardless() {}
 
 // Employers post here, each named per posting.
-func (getinit) aggregator() {}
+func (getinit) Aggregator() {}

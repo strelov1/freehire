@@ -91,12 +91,12 @@ func (wuzzuf) Provider() string { return "wuzzuf" }
 
 // Every posting names its own employer, so wuzzuf stays in the source facet and in the
 // cross-source duplicate suppression set.
-func (wuzzuf) aggregator() {}
+func (wuzzuf) Aggregator() {}
 
 // fullBoardListing: Fetch walks the role's search to a short page and fails unless the ids
 // read equal the search's count, all distinct, and every document is of the board's role. See
 // the fullBoardListing interface (source.go) for the bar.
-func (wuzzuf) fullBoardListing() {}
+func (wuzzuf) FullBoardListing() {}
 
 // wuzzufPageState is the slice of a search page's store state the crawl reads: the search
 // result, keyed by the page's own path, and the job documents of its rows.

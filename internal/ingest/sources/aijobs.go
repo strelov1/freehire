@@ -51,10 +51,10 @@ func NewAijobs(c aijobsHTTP, maxNewPerRun int) Source {
 func (aijobs) Provider() string { return "aijobs" }
 
 // aijobs needs no board id (one global feed), so its config carries no board.
-func (aijobs) boardless() {}
+func (aijobs) Boardless() {}
 
 // aijobs aggregates postings from many companies, so it stays in the source facet.
-func (aijobs) aggregator() {}
+func (aijobs) Aggregator() {}
 
 // FetchNew is the hydrating crawl cmd/ingest drives: it walks the listing (crawlListing) and
 // fetches detail only for postings seen reports as new; a re-listed posting seen already has is

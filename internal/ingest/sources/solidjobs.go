@@ -39,7 +39,7 @@ func NewSolidJobs(c JSONGetter) Source { return solidjobs{http: c} }
 
 func (solidjobs) Provider() string { return "solidjobs" }
 
-func (solidjobs) aggregator() {}
+func (solidjobs) Aggregator() {}
 
 // solidjobsResponse is the one reachable page (see the KNOWN LIMITATION doc above).
 type solidjobsResponse struct {

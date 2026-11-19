@@ -32,7 +32,7 @@ func NewDataArt(c dataartHTTP) Source { return dataart{http: c} }
 func (dataart) Provider() string { return "dataart" }
 
 // dataart is single-company, so its config entries carry no board.
-func (dataart) boardless() {}
+func (dataart) Boardless() {}
 
 func (d dataart) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
 	// Keep only canonical English vacancy pages: the listing root, unrelated pages, and the

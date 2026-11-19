@@ -27,7 +27,7 @@ func NewLumenalta(c JSONGetter) Source { return lumenalta{http: c} }
 func (lumenalta) Provider() string { return "lumenalta" }
 
 // lumenalta is single-company, so its config entries carry no board.
-func (lumenalta) boardless() {}
+func (lumenalta) Boardless() {}
 
 // lumenaltaResponse is the list response. Meta.Total is the catalogue size, used to stop
 // paging; Data is empty past the last page.

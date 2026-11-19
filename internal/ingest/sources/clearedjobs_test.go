@@ -319,13 +319,13 @@ func TestClearedJobsParsePosting(t *testing.T) {
 
 func TestClearedJobsIsAnAggregatorWithAGraceWindow(t *testing.T) {
 	s := NewClearedJobs(nil)
-	if _, ok := s.(interface{ aggregator() }); !ok {
+	if _, ok := s.(interface{ Aggregator() }); !ok {
 		t.Error("clearedjobs is not an aggregator")
 	}
-	if _, ok := s.(interface{ boardless() }); !ok {
+	if _, ok := s.(interface{ Boardless() }); !ok {
 		t.Error("clearedjobs is not boardless")
 	}
-	if g, ok := s.(sweepGrace); !ok || g.sweepGrace() != clearedjobsSweepGrace {
+	if g, ok := s.(sweepGrace); !ok || g.SweepGrace() != clearedjobsSweepGrace {
 		t.Error("clearedjobs does not declare its sweep grace")
 	}
 }

@@ -59,17 +59,17 @@ func NewGulfTalent(c gulftalentHTTP) Source {
 func (gulftalent) Provider() string { return "gulftalent" }
 
 // boardless marks gulftalent as having no per-tenant board id: one crawl covers the whole site.
-func (gulftalent) boardless() {}
+func (gulftalent) Boardless() {}
 
 // aggregator keeps gulftalent in the source facet: one crawl aggregates postings from many
 // companies, so filtering by source=gulftalent is meaningful (not redundant with the company
 // filter).
-func (gulftalent) aggregator() {}
+func (gulftalent) Aggregator() {}
 
 // fullCatalog: listing reads the sitemap index and every job shard, and fails on any of them
 // unreadable or on a listing with no posting in it, so a finished crawl has seen every posting
 // the site lists. See the fullCatalog interface (source.go) for the bar.
-func (gulftalent) fullCatalog() {}
+func (gulftalent) FullCatalog() {}
 
 const (
 	gulftalentSitemapURL = "https://www.gulftalent.com/sitemap.xml"

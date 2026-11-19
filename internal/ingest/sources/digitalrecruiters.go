@@ -72,7 +72,7 @@ func (digitalrecruiters) Provider() string { return "digitalrecruiters" }
 
 // fullBoardListing: the listing is read whole and its item count is checked against the count
 // the API states; any shortfall fails the crawl. See the fullBoardListing interface.
-func (digitalrecruiters) fullBoardListing() {}
+func (digitalrecruiters) FullBoardListing() {}
 
 const (
 	drAPI = "https://api.digitalrecruiters.com"

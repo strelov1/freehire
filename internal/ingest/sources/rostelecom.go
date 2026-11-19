@@ -33,7 +33,7 @@ func NewRostelecom(c JSONGetter) Source { return rostelecom{http: c} }
 func (rostelecom) Provider() string { return "rostelecom" }
 
 // rostelecom is single-company, so its config entry carries no board.
-func (rostelecom) boardless() {}
+func (rostelecom) Boardless() {}
 
 // rostelecomNamed is the {id, name} pair the API uses for cities, directions and tags.
 type rostelecomNamed struct {

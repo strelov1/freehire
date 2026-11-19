@@ -30,7 +30,7 @@ func NewUber(c uberHTTP) Source { return uber{http: c} }
 func (uber) Provider() string { return "uber" }
 
 // uber is single-company, so its config entries carry no board.
-func (uber) boardless() {}
+func (uber) Boardless() {}
 
 // uberSitemapURL is jobs.uber.com's flat job sitemap: a <urlset> of /en/jobs/<id>/ detail URLs.
 const uberSitemapURL = "https://jobs.uber.com/en/jobs/sitemap.xml"

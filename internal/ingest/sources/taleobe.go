@@ -38,7 +38,7 @@ func (taleobe) Provider() string { return "taleobe" }
 
 // fullBoardListing: the feed is a single unpaginated document listing every open posting of
 // the career site. See the fullBoardListing interface for the bar.
-func (taleobe) fullBoardListing() {}
+func (taleobe) FullBoardListing() {}
 
 // taleobeFeed is the RSS document a career site publishes.
 type taleobeFeed struct {

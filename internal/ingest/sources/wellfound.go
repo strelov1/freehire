@@ -43,7 +43,7 @@ func (wellfound) Provider() string { return "wellfound" }
 
 // Each posting names its own hiring startup (resolved via the reverse index below), matching
 // bayt/gulftalent's shape: a board selects a slice of a shared, multi-employer catalogue.
-func (wellfound) aggregator() {}
+func (wellfound) Aggregator() {}
 
 const (
 	// wellfoundRoleSearchURL is a role-taxonomy search page, paginated by ?page=N — confirmed

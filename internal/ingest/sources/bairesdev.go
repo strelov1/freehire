@@ -77,7 +77,7 @@ func (b bairesdev) applyURL(applyLink string) string {
 func (bairesdev) Provider() string { return "bairesdev" }
 
 // bairesdev has one global talent listing, so its config entry carries no board.
-func (bairesdev) boardless() {}
+func (bairesdev) Boardless() {}
 
 // bairesDevRef is one distinct posting to hydrate: the career-site id and the job id parsed from a
 // listing row's apply link, plus the locations aggregated from every row that shares this job id

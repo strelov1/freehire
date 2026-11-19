@@ -43,10 +43,10 @@ func (personio) Provider() string { return "personio" }
 // failure fails the Fetch. The English and detail-page fallbacks are best-effort and only
 // affect body richness, never whether a position is counted. See the fullBoardListing
 // interface for the bar.
-func (personio) fullBoardListing() {}
+func (personio) FullBoardListing() {}
 
 // Native XML roots and JSON arrays distinguish empty feeds from missing listings.
-func (personio) emptyBoardListing() {}
+func (personio) EmptyBoardListing() {}
 
 // personioPosition is one open position in a board's XML feed (search() builds the same
 // shape from search.json). Personio splits the body across one or more jobDescription HTML

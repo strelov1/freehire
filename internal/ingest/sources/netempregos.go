@@ -87,12 +87,12 @@ func NewNetEmpregos(c TextGetter) Source {
 func (netempregos) Provider() string { return "netempregos" }
 
 // One national board, no per-tenant id.
-func (netempregos) boardless() {}
+func (netempregos) Boardless() {}
 
 // Thousands of employers and agencies post here, each named per posting.
-func (netempregos) aggregator() {}
+func (netempregos) Aggregator() {}
 
-func (netempregos) sweepGrace() time.Duration { return netempregosSweepGrace }
+func (netempregos) SweepGrace() time.Duration { return netempregosSweepGrace }
 
 // netempregosPosting is one posting the feeds name. Only the RSS names the title, employer,
 // category, zone and publication time; a posting the sitemap alone names carries its id and URL.

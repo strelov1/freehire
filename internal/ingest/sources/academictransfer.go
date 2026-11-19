@@ -50,10 +50,10 @@ func NewAcademicTransfer(c academicTransferHTTP) Source {
 func (academicTransfer) Provider() string { return "academictransfer" }
 
 // One national catalogue, no per-tenant id.
-func (academicTransfer) boardless() {}
+func (academicTransfer) Boardless() {}
 
 // Universities, medical centres and institutes post here, each named per posting.
-func (academicTransfer) aggregator() {}
+func (academicTransfer) Aggregator() {}
 
 // academicTransferPostingPath matches a posting URL, /<lang>/jobs/<id>/<slug>/. A posting is
 // listed once, under the language it was written in; the slug is decoration.

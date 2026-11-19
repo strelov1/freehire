@@ -54,9 +54,9 @@ func NewDynamiteJobs(sitemap XMLGetter, pages HTMLGetter) Source {
 
 func (dynamitejobs) Provider() string { return "dynamitejobs" }
 
-func (dynamitejobs) boardless() {}
+func (dynamitejobs) Boardless() {}
 
-func (dynamitejobs) aggregator() {}
+func (dynamitejobs) Aggregator() {}
 
 func (d dynamitejobs) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
 	return d.FetchNew(ctx, ce, func(string) bool { return false })

@@ -33,7 +33,7 @@ func (metacareers) Provider() string { return "meta" }
 
 // boardless marks meta as a single-company source: its config entry omits board, and it is
 // excluded from the source facet (redundant with the company filter), like google/amazon.
-func (metacareers) boardless() {}
+func (metacareers) Boardless() {}
 
 // metaSitemapURL is Meta's flat jobsearch sitemap: a <urlset> of job_details page URLs.
 const metaSitemapURL = "https://www.metacareers.com/jobsearch/sitemap.xml"

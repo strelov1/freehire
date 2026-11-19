@@ -78,7 +78,7 @@ func pacedEngageGetter(c JSONGetter) JSONGetter {
 func (engage) Provider() string { return "engage" }
 
 // Every row names its own employer, so the source is an aggregator over its tenants.
-func (engage) aggregator() {}
+func (engage) Aggregator() {}
 
 // engageRow is one search row, reduced to what the adapter reads. Rows come in two shapes that
 // disagree on scalar types (a number in one is a string in the other), so every scalar the

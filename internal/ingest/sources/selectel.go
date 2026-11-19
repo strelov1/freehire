@@ -38,7 +38,7 @@ func NewSelectel(c HTMLGetter) Source { return selectel{http: c} }
 func (selectel) Provider() string { return "selectel" }
 
 // selectel is single-company, so its config entries carry no board.
-func (selectel) boardless() {}
+func (selectel) Boardless() {}
 
 // selectelItem is one vacancy as the listing's payload carries it. The tag (the site's own
 // rubric) and timetable_mode (a schedule: flexible / shift / fixed) are deliberately not read:

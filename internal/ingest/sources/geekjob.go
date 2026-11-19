@@ -28,15 +28,15 @@ func NewGeekjob(c HTMLGetter) Source { return geekjob{http: c} }
 
 func (geekjob) Provider() string { return "geekjob" }
 
-func (geekjob) boardless() {}
+func (geekjob) Boardless() {}
 
-func (geekjob) aggregator() {}
+func (geekjob) Aggregator() {}
 
 // geekjob lists its whole catalogue each run (one global /vacancies/N walk to the tail), so the
 // post-run sweep may close unseen jobs by source — retiring a company that dropped out of the feed
 // entirely, which the crawled-company scope cannot reach. Sound only because a truncated walk
 // errors (Fetch uses crawlAllPagedLinks): a partial listing must not be mistaken for a shrunken one.
-func (geekjob) fullCatalog() {}
+func (geekjob) FullCatalog() {}
 
 const (
 	// geekjobBaseURL is the site root the listing's relative /vacancy/<id> links resolve against.

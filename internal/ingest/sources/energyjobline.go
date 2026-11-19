@@ -43,11 +43,11 @@ func NewEnergyJobline(sitemap XMLGetter, pages HTMLGetter) Source {
 func (energyjobline) Provider() string { return "energyjobline" }
 
 // energyjobline is single-sitemap, so its config entry carries no board.
-func (energyjobline) boardless() {}
+func (energyjobline) Boardless() {}
 
 // aggregator documents that one crawl aggregates postings from many companies (the
 // employer comes from each posting, not the configured entry).
-func (energyjobline) aggregator() {}
+func (energyjobline) Aggregator() {}
 
 func (e energyjobline) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
 	return e.FetchNew(ctx, ce, func(string) bool { return false })

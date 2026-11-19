@@ -56,7 +56,7 @@ func (a alignerr) applyURL(jobURL string) string {
 func (alignerr) Provider() string { return "alignerr" }
 
 // alignerr is single-company, so its config entry carries no board.
-func (alignerr) boardless() {}
+func (alignerr) Boardless() {}
 
 const (
 	alignerrListURL = "https://www.alignerr.com/jobs"

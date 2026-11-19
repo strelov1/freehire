@@ -61,10 +61,10 @@ func NewSwissDevJobs(c swissdevjobsHTTP) Source {
 func (swissdevjobs) Provider() string { return "swissdevjobs" }
 
 // One national board, no per-tenant id.
-func (swissdevjobs) boardless() {}
+func (swissdevjobs) Boardless() {}
 
 // The employer is named per posting.
-func (swissdevjobs) aggregator() {}
+func (swissdevjobs) Aggregator() {}
 
 // swissdevjobsJob is one feed row; the posting page's state adds the three text fields.
 type swissdevjobsJob struct {

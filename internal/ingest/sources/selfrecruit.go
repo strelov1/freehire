@@ -35,7 +35,7 @@ const selfrecruitMaxPages = 100
 // fullBoardListing: crawlAllPagedLinks fails the whole Fetch on ANY page failing, not just
 // the first, so this marker's "whole listing or fail outright" guarantee holds even
 // though the listing is paginated.
-func (selfrecruit) fullBoardListing() {}
+func (selfrecruit) FullBoardListing() {}
 
 func (s selfrecruit) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base, err := url.Parse(fmt.Sprintf("https://%s.selfrecruit.ge/", e.Board))

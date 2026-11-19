@@ -24,9 +24,9 @@ func NewWeWorkRemotely(c XMLGetter) Source { return weworkremotely{http: c} }
 
 func (weworkremotely) Provider() string { return "weworkremotely" }
 
-func (weworkremotely) boardless() {}
+func (weworkremotely) Boardless() {}
 
-func (weworkremotely) aggregator() {}
+func (weworkremotely) Aggregator() {}
 
 // wwrItem is one RSS <item>: the title is "Company: Role", region is the location, and the
 // description carries the HTML body inline.

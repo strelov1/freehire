@@ -52,12 +52,12 @@ var jumpitZone = time.FixedZone("KST", 9*60*60)
 func NewJumpit(c JSONGetter) Source { return jumpit{http: c} }
 
 func (jumpit) Provider() string { return "jumpit" }
-func (jumpit) boardless()       {}
-func (jumpit) aggregator()      {}
+func (jumpit) Boardless()       {}
+func (jumpit) Aggregator()      {}
 
 // fullCatalog: one crawl lists the whole open catalogue, and list fails rather than returning
 // a short one, so an open posting the run did not see is gone.
-func (jumpit) fullCatalog() {}
+func (jumpit) FullCatalog() {}
 
 type jumpitListPage struct {
 	Result struct {
