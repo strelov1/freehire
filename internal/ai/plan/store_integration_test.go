@@ -443,14 +443,14 @@ func TestUsageOnProReportsUnlimited(t *testing.T) {
 		t.Fatalf("Usage: %v", err)
 	}
 	for _, u := range usage {
-		// auto-apply is the deliberate exception to "pro is the same product without the
-		// ceilings": pro carries a real daily count there, and it is what the tier above is
-		// sold on. Asserted as a countable limit rather than skipped, so the day somebody
-		// makes it unlimited this test says so.
-		if u.Feature == FeatureAutoApply {
+		// auto-apply and recruiter contacts are the deliberate exceptions to "pro is the same
+		// product without the ceilings": pro carries a real daily count there, and it is what
+		// the tier above is sold on. Asserted as a countable limit rather than skipped, so the
+		// day somebody makes one unlimited this test says so.
+		if u.Feature == FeatureAutoApply || u.Feature == FeatureRecruiterContact {
 			if u.Unlimited {
-				t.Error("auto-apply reports unlimited to a pro caller; its ceiling is what " +
-					"the tier above is sold on")
+				t.Errorf("%q reports unlimited to a pro caller; its ceiling is what "+
+					"the tier above is sold on", u.Feature)
 			}
 			continue
 		}
