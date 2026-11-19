@@ -116,6 +116,12 @@ func TestCallToolRunsADeferredToolUnderItsOwnName(t *testing.T) {
 			t.Errorf("call_tool %s: %v %v, want a tool error", name, res, err)
 		}
 	}
+	// A misspelt "arguments" must not run the target with no arguments.
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: toolCallTool,
+		Arguments: map[string]any{"name": "buddy_join", "argument": map[string]any{"x": 1}}})
+	if (err == nil && !res.IsError) || err != nil && !strings.Contains(err.Error(), "argument") {
+		t.Errorf("call_tool with an undeclared field: %v %v, want it refused", res, err)
+	}
 	if len(*calls) != 2 {
 		t.Errorf("refused calls ran: %v", *calls)
 	}

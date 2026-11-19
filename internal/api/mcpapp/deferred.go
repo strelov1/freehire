@@ -1,6 +1,7 @@
 package mcpapp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"slices"
@@ -131,7 +132,11 @@ func deferMiddleware(served map[string]bool) mcp.Middleware {
 					Name      string          `json:"name"`
 					Arguments json.RawMessage `json:"arguments"`
 				}
-				if json.Unmarshal(call.Params.Arguments, &in) == nil && served[in.Name] {
+				// A field the schema does not declare (a typo of "arguments") leaves the call as
+				// call_tool, whose schema validation rejects it, rather than running the target with {}.
+				decoder := json.NewDecoder(bytes.NewReader(call.Params.Arguments))
+				decoder.DisallowUnknownFields()
+				if decoder.Decode(&in) == nil && served[in.Name] {
 					call.Params.Name, call.Params.Arguments = in.Name, in.Arguments
 					if len(in.Arguments) == 0 || string(in.Arguments) == "null" {
 						call.Params.Arguments = json.RawMessage("{}")
@@ -139,6 +144,9 @@ func deferMiddleware(served map[string]bool) mcp.Middleware {
 				}
 			}
 			res, err := next(ctx, method, req)
+			if err != nil {
+				return res, err
+			}
 			if list, ok := res.(*mcp.ListToolsResult); ok && method == "tools/list" {
 				list.Tools = slices.DeleteFunc(list.Tools, func(tool *mcp.Tool) bool { return served[tool.Name] })
 			}
