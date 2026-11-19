@@ -79,10 +79,10 @@ func NewBumeran(c HTTPClient) Source {
 func (bumeran) Provider() string { return "bumeran" }
 
 // One national pool, no per-tenant id.
-func (bumeran) boardless() {}
+func (bumeran) Boardless() {}
 
 // Thousands of employers and agencies post here, each named per posting.
-func (bumeran) aggregator() {}
+func (bumeran) Aggregator() {}
 
 var bumeranHeaders = map[string]string{"x-site-id": bumeranSiteID, "Referer": bumeranReferer}
 

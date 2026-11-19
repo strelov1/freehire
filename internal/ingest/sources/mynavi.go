@@ -67,7 +67,7 @@ func NewMynavi(c HTMLGetter) Source { return mynavi{http: c, spent: new(atomic.I
 func (mynavi) Provider() string { return "mynavi" }
 
 // Every posting names its own employer.
-func (mynavi) aggregator() {}
+func (mynavi) Aggregator() {}
 
 func (s mynavi) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return s.FetchNew(ctx, e, func(string) bool { return false })

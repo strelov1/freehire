@@ -71,9 +71,9 @@ const (
 )
 
 func (linkedIn) Provider() string { return "linkedin" }
-func (linkedIn) aggregator()      {}
-func (linkedIn) livenessProbed()  {}
-func (linkedIn) probeClosing()    {}
+func (linkedIn) Aggregator()      {}
+func (linkedIn) LivenessProbed()  {}
+func (linkedIn) ProbeClosing()    {}
 
 // LinkedInPostingURL is the canonical public URL of a numeric posting id, the one spelling
 // every adapter path and the pipeline's identity rule share.

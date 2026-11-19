@@ -37,7 +37,7 @@ func (gupy) Provider() string { return "gupy" }
 
 // fullBoardListing: the career-page listing is one unpaginated response carrying every
 // published posting, and a failed listing fails the Fetch. See the fullBoardListing interface for the bar.
-func (gupy) fullBoardListing() {}
+func (gupy) FullBoardListing() {}
 
 // gupyPosting is one entry of a career page's listing.
 type gupyPosting struct {

@@ -114,9 +114,9 @@ func (naukri) Provider() string { return "naukri" }
 
 // Every posting names its own employer, so naukri stays in the source facet and in the
 // cross-source duplicate suppression set.
-func (naukri) aggregator() {}
+func (naukri) Aggregator() {}
 
-func (naukri) sweepGrace() time.Duration { return naukriSweepGrace }
+func (naukri) SweepGrace() time.Duration { return naukriSweepGrace }
 
 // naukriListing is one search row, reduced to what the adapter reads.
 type naukriListing struct {

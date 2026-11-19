@@ -69,7 +69,7 @@ func (instahyre) Provider() string { return "instahyre" }
 
 // Every posting names its own employer, so Instahyre stays in the source facet and in the
 // cross-source duplicate suppression set.
-func (instahyre) aggregator() {}
+func (instahyre) Aggregator() {}
 
 // instahyreListing is one search row, reduced to what the adapter reads.
 type instahyreListing struct {

@@ -47,11 +47,11 @@ func (hh) Provider() string { return "hh" }
 // posts on its own ATS appears here too, so the cross-source dedup pass prefers the first-party
 // ATS copy over the hh.ru re-listing. Unlike the boardless aggregators hh still requires a board
 // (professional_role id) to bound the crawl, so it is not boardless.
-func (hh) aggregator() {}
+func (hh) Aggregator() {}
 
 // hh reads each role as only its newest ~2000 postings of the last 7 days, so a live posting
 // older than that is never listed again; cmd/liveness reads its archived flag off the page.
-func (hh) livenessProbed() {}
+func (hh) LivenessProbed() {}
 
 // hh deliberately does NOT implement fullBoardListing: hh.ru's search UI caps a query's reachable
 // depth at ~2000 results regardless of a role's true count (see crawl), so the adapter cannot

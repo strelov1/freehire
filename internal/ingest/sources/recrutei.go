@@ -38,7 +38,7 @@ func (recrutei) Provider() string { return "recrutei" }
 // listRecrutei). A detail-fetch failure for one posting becomes an Unreadable marker rather
 // than a silent drop, as in geekhunter/humanbit. A listing fetch, decode, or completeness-check failure
 // fails the whole Fetch outright.
-func (recrutei) fullBoardListing() {}
+func (recrutei) FullBoardListing() {}
 
 func (s recrutei) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	items, err := s.list(ctx, e.Board)

@@ -42,8 +42,8 @@ var torrePostRE = regexp.MustCompile(`^https://torre\.ai/post/([A-Za-z0-9]+)(?:-
 func NewTorre(c torreHTTP) Source { return torre{http: c} }
 
 func (torre) Provider() string { return "torre" }
-func (torre) boardless()       {}
-func (torre) aggregator()      {}
+func (torre) Boardless()       {}
+func (torre) Aggregator()      {}
 
 type torreListing struct {
 	ID  string

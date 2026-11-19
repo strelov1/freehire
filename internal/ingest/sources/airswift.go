@@ -43,7 +43,7 @@ func NewAirswift(sitemap XMLGetter, pages HTMLGetter) Source {
 func (airswift) Provider() string { return "airswift" }
 
 // airswift is single-sitemap, so its config entry carries no board.
-func (airswift) boardless() {}
+func (airswift) Boardless() {}
 
 func (a airswift) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
 	urls, err := sitemapJobLocs(ctx, a.sitemap, airswiftSitemapURL, airswiftJobID)

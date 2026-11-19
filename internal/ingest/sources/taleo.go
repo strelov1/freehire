@@ -53,7 +53,7 @@ func (taleo) Provider() string { return "taleo" }
 // authoritative (pages until it's reached or an empty page), and a walk that still yields
 // requisitions past the page cap fails rather than returning a truncated result as success.
 // See the fullBoardListing interface for the bar.
-func (taleo) fullBoardListing() {}
+func (taleo) FullBoardListing() {}
 
 // taleoBoard is a configured board split into the tenant host and careersection number.
 type taleoBoard struct {

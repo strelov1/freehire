@@ -79,13 +79,13 @@ var techInAsiaTechPositions = map[string]bool{
 func NewTechInAsia(c techInAsiaHTTP) Source { return techInAsia{http: c} }
 
 func (techInAsia) Provider() string { return "techinasia" }
-func (techInAsia) boardless()       {}
-func (techInAsia) aggregator()      {}
+func (techInAsia) Boardless()       {}
+func (techInAsia) Aggregator()      {}
 
 // fullCatalog: Fetch reads every page of the one index and fails on any query error, on a
 // count that is not exhaustive, on reaching techInAsiaMaxPages and on any gap between the
 // postings read and the index's count. See the fullCatalog interface (source.go) for the bar.
-func (techInAsia) fullCatalog() {}
+func (techInAsia) FullCatalog() {}
 
 type techInAsiaCreds struct {
 	appID, apiKey string

@@ -39,11 +39,11 @@ func NewDevGlobalJobs(c JSONGetter) Source { return devglobaljobs{http: c} }
 
 func (devglobaljobs) Provider() string { return "devglobaljobs" }
 
-func (devglobaljobs) boardless() {}
+func (devglobaljobs) Boardless() {}
 
-func (devglobaljobs) aggregator() {}
+func (devglobaljobs) Aggregator() {}
 
-func (devglobaljobs) sweepGrace() time.Duration { return devglobaljobsSweepGrace }
+func (devglobaljobs) SweepGrace() time.Duration { return devglobaljobsSweepGrace }
 
 type devglobaljobsPosting struct {
 	ID                 int64  `json:"id"`

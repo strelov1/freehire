@@ -27,7 +27,7 @@ func NewAlfaBank(c JSONGetter) Source { return alfabank{http: c} }
 func (alfabank) Provider() string { return "alfabank" }
 
 // alfabank is single-company, so its config entries carry no board.
-func (alfabank) boardless() {}
+func (alfabank) Boardless() {}
 
 // alfaItem is one vacancy from the list response (description inline).
 type alfaItem struct {

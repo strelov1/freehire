@@ -107,10 +107,10 @@ func newJustJoinSite(c justjoinHTTP, provider, host, offerPath string, tech bool
 func (s justjoinSite) Provider() string { return s.provider }
 
 // One national board each, no per-tenant id.
-func (justjoinSite) boardless() {}
+func (justjoinSite) Boardless() {}
 
 // Thousands of employers and agencies post here, each named per offer.
-func (justjoinSite) aggregator() {}
+func (justjoinSite) Aggregator() {}
 
 // justjoinPosting is one sitemap entry: the offer's slug, its URL and when the site last touched
 // it.

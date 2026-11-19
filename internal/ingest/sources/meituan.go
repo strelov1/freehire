@@ -49,10 +49,10 @@ func NewMeituan(c JSONPoster) Source { return meituan{http: c} }
 func (meituan) Provider() string { return "meituan" }
 
 // meituan is single-company, so its config entry carries no board.
-func (meituan) boardless() {}
+func (meituan) Boardless() {}
 
 // fullBoardListing: see the type comment and the fullBoardListing interface (source.go).
-func (meituan) fullBoardListing() {}
+func (meituan) FullBoardListing() {}
 
 type meituanCode struct {
 	Code    string   `json:"code"`

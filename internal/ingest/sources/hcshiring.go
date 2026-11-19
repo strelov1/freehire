@@ -37,7 +37,7 @@ func (hcshiring) Provider() string { return "hcshiring" }
 // fullBoardListing: the walk reads every page up to the listing's own totalPages and then
 // requires the distinct ids read to equal its totalJobs. Any page failing, or the page ceiling
 // being reached first, fails the crawl rather than reporting a partial board as complete.
-func (hcshiring) fullBoardListing() {}
+func (hcshiring) FullBoardListing() {}
 
 const (
 	hcsApex = ".hcshiring.com"

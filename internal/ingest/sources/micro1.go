@@ -50,7 +50,7 @@ func NewMicro1(c micro1HTTP, referral string) Source {
 func (micro1) Provider() string { return "micro1" }
 
 // micro1 is single-company, so its config entries carry no board.
-func (micro1) boardless() {}
+func (micro1) Boardless() {}
 
 // Fetch enumerates the sitemap, keeps the canonical /post/<uuid> URLs, and fetches each
 // posting's detail concurrently.

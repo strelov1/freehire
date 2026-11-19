@@ -30,7 +30,7 @@ func (herp) Provider() string { return "herp" }
 // fullBoardListing: a failure fetching the company page or any requisition-group page fails
 // the whole Fetch — never a silently truncated listing. See the fullBoardListing interface
 // for the bar.
-func (herp) fullBoardListing() {}
+func (herp) FullBoardListing() {}
 
 func (h herp) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base, err := url.Parse(fmt.Sprintf("https://herp.careers/v1/%s", e.Board))

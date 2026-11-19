@@ -29,7 +29,7 @@ func (smartRecruiters) Provider() string { return "smartrecruiters" }
 // fullBoardListing: listPostings proves completeness — totalFound is authoritative (pages
 // until offset >= totalFound or an empty page, no artificial cap). See the fullBoardListing
 // interface for the bar.
-func (smartRecruiters) fullBoardListing() {}
+func (smartRecruiters) FullBoardListing() {}
 
 // smartRecruitersSeniorityMap maps the SmartRecruiters experienceLevel enum onto freehire's
 // seniority vocabulary. Values not in the map (notably "not_applicable", plus any unknown/empty

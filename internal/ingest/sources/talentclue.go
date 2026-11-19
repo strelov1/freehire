@@ -64,7 +64,7 @@ func (talentclue) Provider() string { return "talentclue" }
 
 // fullBoardListing: one API call answers the client's whole open listing, with no page or
 // offset to walk; it either succeeds or fails the crawl. See the fullBoardListing interface.
-func (talentclue) fullBoardListing() {}
+func (talentclue) FullBoardListing() {}
 
 const (
 	// talentclueCrawlDelay is robots.txt's Crawl-delay on the API and the tenant hosts.

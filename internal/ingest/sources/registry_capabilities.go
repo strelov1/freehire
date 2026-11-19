@@ -68,7 +68,7 @@ func SweepGraceWindows(reg map[string]Source) map[string]time.Duration {
 	out := make(map[string]time.Duration)
 	for name, src := range reg {
 		if s, ok := src.(sweepGrace); ok {
-			out[name] = s.sweepGrace()
+			out[name] = s.SweepGrace()
 		}
 	}
 	return out
@@ -100,7 +100,7 @@ func UnseenWindows(reg map[string]Source, floor time.Duration) map[string]time.D
 		}
 		window := floor
 		if s, ok := src.(sweepGrace); ok {
-			window = max(window, s.sweepGrace())
+			window = max(window, s.SweepGrace())
 		}
 		out[name] = window
 	}

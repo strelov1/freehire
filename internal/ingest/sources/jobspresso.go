@@ -25,9 +25,9 @@ func NewJobspresso(c XMLGetter) Source { return jobspresso{http: c} }
 
 func (jobspresso) Provider() string { return "jobspresso" }
 
-func (jobspresso) boardless() {}
+func (jobspresso) Boardless() {}
 
-func (jobspresso) aggregator() {}
+func (jobspresso) Aggregator() {}
 
 // jobspressoItem is one RSS <item>. Company and location are packed into <dc:creator>, the
 // numeric post id lives in the <guid>'s p= param, and the body is in <content:encoded> (with a

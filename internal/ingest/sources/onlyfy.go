@@ -45,7 +45,7 @@ func (onlyfy) Provider() string { return "onlyfy" }
 
 // fullBoardListing: the walk ends only when the distinct postings reach the count the listing
 // states, and any page failing fails the board.
-func (onlyfy) fullBoardListing() {}
+func (onlyfy) FullBoardListing() {}
 
 // onlyfyPageSize is how many rows one listing request asks for.
 const onlyfyPageSize = 100

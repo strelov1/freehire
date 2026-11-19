@@ -34,7 +34,7 @@ func (greythr) Provider() string { return "greythr" }
 
 // fullBoardListing: published_jobs returns the board's whole set of published openings in one
 // response, so a listing failure fails the crawl rather than leaving a partial board.
-func (greythr) fullBoardListing() {}
+func (greythr) FullBoardListing() {}
 
 // greythrHostPattern is the shape of a board: one tenant label on greythr.com. The adapter builds
 // its request URLs from the board, so nothing else may pass.

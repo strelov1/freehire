@@ -27,9 +27,9 @@ func NewStartupAndVC(c HTMLGetter) Source { return startupandvc{http: c} }
 
 func (startupandvc) Provider() string { return "startupandvc" }
 
-func (startupandvc) boardless() {}
+func (startupandvc) Boardless() {}
 
-func (startupandvc) aggregator() {}
+func (startupandvc) Aggregator() {}
 
 const (
 	// startupandvcBaseURL is the site root the listing's relative /venture-capital-jobs/<slug>

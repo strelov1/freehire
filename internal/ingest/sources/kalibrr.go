@@ -61,12 +61,12 @@ func (kalibrr) Provider() string { return "kalibrr" }
 
 // Every posting names its own employer, so kalibrr stays in the source facet and in the
 // cross-source duplicate suppression set.
-func (kalibrr) aggregator() {}
+func (kalibrr) Aggregator() {}
 
 // fullBoardListing: Fetch reads the board in one request and fails unless the rows read equal
 // the source's own count, all distinct, all of the board's country and function, and the count
 // fits kalibrrLimit. See the fullBoardListing interface (source.go) for the bar.
-func (kalibrr) fullBoardListing() {}
+func (kalibrr) FullBoardListing() {}
 
 type kalibrrResult struct {
 	Count *int         `json:"count"`

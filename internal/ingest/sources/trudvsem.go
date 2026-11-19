@@ -53,7 +53,7 @@ func (trudvsem) Provider() string { return "trudvsem" }
 // listing reorders mid-walk (a posting edited during the crawl jumps to the head of the
 // listing) can be missed by one crawl; the sweep's 48h unseen window, against a region crawled
 // several times a day, is what absorbs that. See the fullBoardListing interface for the bar.
-func (trudvsem) fullBoardListing() {}
+func (trudvsem) FullBoardListing() {}
 
 // trudvsemResponse is one vacancies page. A page past the end of a region's results 500s
 // (surfaced as a transport error), so the loop stops before requesting one by watching the

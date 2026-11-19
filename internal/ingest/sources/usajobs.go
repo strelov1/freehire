@@ -42,10 +42,10 @@ func NewUSAJobs(c HeaderJSONGetter, apiKey string) Source {
 func (usajobs) Provider() string { return "usajobs" }
 
 // usajobs needs no board id (one API), so its config carries no board.
-func (usajobs) boardless() {}
+func (usajobs) Boardless() {}
 
 // usajobs aggregates postings from many federal agencies, so it stays in the source facet.
-func (usajobs) aggregator() {}
+func (usajobs) Aggregator() {}
 
 // usajobsResponse is the envelope of the search API; only the items are read.
 type usajobsResponse struct {

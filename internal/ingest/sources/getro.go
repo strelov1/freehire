@@ -46,7 +46,7 @@ func (getro) Provider() string { return "getro" }
 // getro aggregates postings from many companies (company per posting), so it stays in the source
 // facet and its ATS-duplicate copies are suppressed by the cross-source dedup pass. It is NOT
 // boardless — the board is the numeric network id the search API requires.
-func (getro) aggregator() {}
+func (getro) Aggregator() {}
 
 const (
 	// getroSearchURL is the public job-search endpoint; the path segment is the numeric network

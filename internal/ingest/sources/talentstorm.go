@@ -34,7 +34,7 @@ func NewTalentstorm(c HeaderJSONGetter) Source { return talentstorm{http: c} }
 func (talentstorm) Provider() string { return "talentstorm" }
 
 // fullBoardListing: pagination=false answers every published offer at once.
-func (talentstorm) fullBoardListing() {}
+func (talentstorm) FullBoardListing() {}
 
 // talentstormBoard is the shape of a career-site label.
 var talentstormBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

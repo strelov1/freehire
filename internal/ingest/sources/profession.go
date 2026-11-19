@@ -100,7 +100,7 @@ func (profession) Provider() string { return "profession" }
 
 // Every posting names its own employer, so profession stays in the source facet and in
 // the cross-source duplicate suppression set.
-func (profession) aggregator() {}
+func (profession) Aggregator() {}
 
 const (
 	professionBaseURL = "https://www.profession.hu"

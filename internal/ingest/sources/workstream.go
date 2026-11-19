@@ -64,7 +64,7 @@ func (workstream) Provider() string { return "workstream" }
 // fullBoardListing: list proves completeness by either a stated, in-range totalPages reached or a
 // genuinely empty page, and treats any page failure or reaching workstreamMaxPages with no stated
 // count as a hard Fetch failure. See the fullBoardListing interface (source.go) for the bar.
-func (workstream) fullBoardListing() {}
+func (workstream) FullBoardListing() {}
 
 const (
 	workstreamBaseURL = "https://www.workstream.us"

@@ -42,10 +42,10 @@ func NewLandingJobs(c JSONGetter) Source { return landingjobs{http: c} }
 func (landingjobs) Provider() string { return "landingjobs" }
 
 // landing.jobs is one global feed, so its config entry carries no board.
-func (landingjobs) boardless() {}
+func (landingjobs) Boardless() {}
 
 // landing.jobs carries postings from many companies, so it stays in the source facet.
-func (landingjobs) aggregator() {}
+func (landingjobs) Aggregator() {}
 
 // landingjobsPosting is one posting, body inline (no detail call).
 //

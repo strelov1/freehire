@@ -34,8 +34,8 @@ const japanDevSitemapIndexURL = "https://japan-dev.com/sitemap.xml"
 func NewJapanDev(c japandevHTTP) Source { return japandev{http: c} }
 
 func (japandev) Provider() string { return "japandev" }
-func (japandev) boardless()       {}
-func (japandev) aggregator()      {}
+func (japandev) Boardless()       {}
+func (japandev) Aggregator()      {}
 
 // japanDevListing is the identity the sitemap gives us for one posting. ExternalID is the
 // posting slug, not Japan Dev's numeric database id: the slug is available before hydration,

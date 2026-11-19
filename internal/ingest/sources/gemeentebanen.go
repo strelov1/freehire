@@ -55,10 +55,10 @@ func NewGemeentebanen(c gemeentebanenHTTP) Source {
 func (gemeentebanen) Provider() string { return "gemeentebanen" }
 
 // One national catalogue, no per-tenant id.
-func (gemeentebanen) boardless() {}
+func (gemeentebanen) Boardless() {}
 
 // Hundreds of municipalities post here, each named per posting.
-func (gemeentebanen) aggregator() {}
+func (gemeentebanen) Aggregator() {}
 
 // gemeentebanenPostingPath matches a posting URL, /vacatures/<id>/<employer-slug>/<title-slug>.
 // The slugs are decoration, so the id is the identity.

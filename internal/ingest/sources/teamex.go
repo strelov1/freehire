@@ -38,10 +38,10 @@ func NewTeamex(c JSONPoster) Source { return teamex{http: c} }
 func (teamex) Provider() string { return "teamex" }
 
 // teamex is a marketplace with one global feed, so its config entries carry no board.
-func (teamex) boardless() {}
+func (teamex) Boardless() {}
 
 // teamex aggregates postings from many employers, so it stays in the source facet.
-func (teamex) aggregator() {}
+func (teamex) Aggregator() {}
 
 // teamexListResponse is one page of the filter endpoint: Data.Paging.TotalCount is the
 // catalogue size used to stop pagination; Data.Data is the page of postings.

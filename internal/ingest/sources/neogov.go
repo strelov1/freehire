@@ -37,7 +37,7 @@ func (neogov) Provider() string { return "neogov" }
 // source's own declared total, and treats a later-page failure or reaching neogovMaxPages
 // without either proof as a hard Fetch failure. See the fullBoardListing interface (source.go)
 // for the bar.
-func (neogov) fullBoardListing() {}
+func (neogov) FullBoardListing() {}
 
 // neogovMaxPages bounds the walk far above any real agency's posting count.
 const neogovMaxPages = 200

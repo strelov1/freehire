@@ -57,16 +57,16 @@ func NewJobnet(c HeaderJSONGetter) Source { return jobnet{http: c} }
 func (jobnet) Provider() string { return "jobnet" }
 
 // jobnet is a national portal with one global feed, so its config entry carries no board.
-func (jobnet) boardless() {}
+func (jobnet) Boardless() {}
 
 // jobnet aggregates postings from many employers, so it stays in the source facet.
-func (jobnet) aggregator() {}
+func (jobnet) Aggregator() {}
 
 // fullCatalog: Fetch reads every occupation slice to its end and fails on any request failing,
 // on a facet that does not account for the stated total, and on a slice that came back short, so
 // a finished crawl has listed every ad the portal serves. See the fullCatalog interface
 // (source.go) for the bar.
-func (jobnet) fullCatalog() {}
+func (jobnet) FullCatalog() {}
 
 // jobnetSearchResponse is one BFF search page: TotalJobAdCount is the size of what the query
 // matched; JobAds is the page; the occupations facet counts the catalogue by occupation. Only

@@ -33,10 +33,10 @@ func NewTecla(c JSONGetter) Source { return tecla{http: c} }
 func (tecla) Provider() string { return "tecla" }
 
 // tecla is a marketplace with one global feed, so its config entries carry no board.
-func (tecla) boardless() {}
+func (tecla) Boardless() {}
 
 // tecla aggregates postings from many companies, so it stays in the source facet.
-func (tecla) aggregator() {}
+func (tecla) Aggregator() {}
 
 // teclaResponse is the getPublicJobs response: Data.Jobs is the page, Data.Pagination.CountPages
 // the total page count used to stop pagination.

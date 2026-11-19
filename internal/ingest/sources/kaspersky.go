@@ -55,7 +55,7 @@ func NewKaspersky(c kasperskyHTTP) Source { return kaspersky{http: c} }
 func (kaspersky) Provider() string { return "kaspersky" }
 
 // kaspersky is single-company, so its config entries carry no board.
-func (kaspersky) boardless() {}
+func (kaspersky) Boardless() {}
 
 // kasperskyNamed is the {name, engName} shape of the listing's dictionary-backed fields. name
 // is Russian for Russian places and categories and English for the rest; engName is English

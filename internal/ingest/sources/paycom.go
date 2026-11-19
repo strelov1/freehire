@@ -54,7 +54,7 @@ const (
 // back empty short of that total, and on reaching paycomMaxPages first. A posting whose detail
 // the platform answers 404 is dropped (its own "Active job posting not found"); any other
 // failed detail is an unreadableDetail marker. See the fullBoardListing interface for the bar.
-func (paycom) fullBoardListing() {}
+func (paycom) FullBoardListing() {}
 
 func (s paycom) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// The SSR portal shell embeds the session JWT + the regional Mantle host; any job-id path

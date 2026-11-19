@@ -40,7 +40,7 @@ func NewMTS(c mtsHTTP) Source { return mts{http: c} }
 func (mts) Provider() string { return "mts" }
 
 // mts is single-company, so its config entries carry no board.
-func (mts) boardless() {}
+func (mts) Boardless() {}
 
 // mtsListRequest is the filtered/career POST body; offset paginates to pageInfo.total.
 type mtsListRequest struct {

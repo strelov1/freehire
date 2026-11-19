@@ -33,10 +33,10 @@ func NewPowerToFly(c JSONGetter) Source { return powertofly{http: c} }
 func (powertofly) Provider() string { return "powertofly" }
 
 // powertofly needs no board id (one API), so its config carries no board.
-func (powertofly) boardless() {}
+func (powertofly) Boardless() {}
 
 // powertofly aggregates postings from many companies, so it stays in the source facet.
-func (powertofly) aggregator() {}
+func (powertofly) Aggregator() {}
 
 // fullCatalog: Fetch pages the one feed to its natural end (meta.next_page null) and fails on
 // any page error, on an empty page that still names a next page, and on reaching
@@ -45,7 +45,7 @@ func (powertofly) aggregator() {}
 // a run's postings are skipped as already covered by the employer's own ATS, so their stored
 // copies are never refreshed, and the company-scoped sweep, which reaches only the companies
 // a run wrote, never closed them. See the fullCatalog interface (source.go).
-func (powertofly) fullCatalog() {}
+func (powertofly) FullCatalog() {}
 
 // powertoflyPlace is a structured country/state/city object; only its title is used.
 type powertoflyPlace struct {

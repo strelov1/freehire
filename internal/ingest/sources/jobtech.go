@@ -57,11 +57,11 @@ func NewJobtech(c StreamGetter) Source { return jobtech{http: c} }
 
 func (jobtech) Provider() string { return "jobtech" }
 
-func (jobtech) boardless() {}
+func (jobtech) Boardless() {}
 
-func (jobtech) aggregator() {}
+func (jobtech) Aggregator() {}
 
-func (jobtech) selfClosing() {}
+func (jobtech) SelfClosing() {}
 
 // jobtechItem is one element of the JobStream array: an ad, body inline
 // (description.text_formatted is HTML), plus the removed flag that drives a close.

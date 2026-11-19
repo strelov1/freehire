@@ -55,7 +55,7 @@ func (hrmdirect) Provider() string { return "hrmdirect" }
 
 // fullBoardListing: the board is one request whose distinct postings must reach the total the
 // same answer states, or the crawl fails. See the fullBoardListing interface for the bar.
-func (hrmdirect) fullBoardListing() {}
+func (hrmdirect) FullBoardListing() {}
 
 // hrmdirectMaxPostings is the page size the single listing request asks for. It is a cap, not a
 // cost: the API answers what the board holds. A board past the cap fails its crawl rather than

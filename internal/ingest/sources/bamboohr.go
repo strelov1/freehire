@@ -29,12 +29,12 @@ func (bambooHR) Provider() string { return "bamboohr" }
 // fullBoardListing: the list request is a single unpaginated call returning the board's whole
 // result array — no loop that could stop early. Detail fetches are best-effort per posting.
 // See the fullBoardListing interface for the bar.
-func (bambooHR) fullBoardListing() {}
+func (bambooHR) FullBoardListing() {}
 
 // emptyBoardListing: an unknown board redirects to an HTML page (ErrBoardGone or a decode
 // failure), and an emptied one answers 200 with "result": []; an envelope without the array fails
 // Fetch. See the emptyBoardListing interface for the bar.
-func (bambooHR) emptyBoardListing() {}
+func (bambooHR) EmptyBoardListing() {}
 
 // bambooHRBoardGone reports whether a careers-list request was redirected off the board's
 // own careers path, and to where. That is how BambooHR says it is not serving a board: the

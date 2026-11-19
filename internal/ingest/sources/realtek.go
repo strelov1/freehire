@@ -73,7 +73,7 @@ func NewRealtek(c realtekHTTP) Source { return realtek{http: c} }
 func (realtek) Provider() string { return "realtek" }
 
 // realtek is single-company, so its config entry carries no board.
-func (realtek) boardless() {}
+func (realtek) Boardless() {}
 
 type realtekListResponse struct {
 	Pass bool          `json:"Pass"`

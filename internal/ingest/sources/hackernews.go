@@ -56,16 +56,16 @@ func NewHackerNews(c JSONGetter) Source { return hackernews{http: c} }
 func (hackernews) Provider() string { return "hackernews" }
 
 // One global thread, no per-tenant board.
-func (hackernews) boardless() {}
+func (hackernews) Boardless() {}
 
 // Every post names its own employer.
-func (hackernews) aggregator() {}
+func (hackernews) Aggregator() {}
 
 // social: a posting here is a comment in the monthly "Who is hiring?" thread.
-func (hackernews) social() {}
+func (hackernews) Social() {}
 
 // Both threads are read whole every run and a failed read fails the crawl.
-func (hackernews) fullCatalog() {}
+func (hackernews) FullCatalog() {}
 
 const (
 	// hackernewsThreadSearchURL lists the whoishiring account's newest stories. Ten covers the

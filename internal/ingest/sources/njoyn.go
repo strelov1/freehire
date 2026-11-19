@@ -64,7 +64,7 @@ func (njoyn) Provider() string { return "njoyn" }
 
 // fullBoardListing: the listing is walked to the last page its pager states, and the crawl
 // fails otherwise.
-func (njoyn) fullBoardListing() {}
+func (njoyn) FullBoardListing() {}
 
 const (
 	njoynRequestInterval = 5 * time.Second
@@ -109,7 +109,7 @@ func njoynClientID(board string) string {
 // can only hold under that client's own career host, which a link alone does not say. A link
 // on the generic host is still recognised (atsboard), so a client the catalogue already has
 // resolves to that board through njoynClientID instead of reaching here as a new one.
-func (njoyn) validateBoard(board string) error {
+func (njoyn) ValidateBoard(board string) error {
 	b, err := parseNjoynBoard(board)
 	if err != nil {
 		return err

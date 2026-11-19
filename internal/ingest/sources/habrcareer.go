@@ -53,16 +53,16 @@ func NewHabrCareer(c habrCareerHTTP) Source { return habrCareer{http: c} }
 func (habrCareer) Provider() string { return "habr_career" }
 
 // habr_career has one global listing, so its config entries carry no board.
-func (habrCareer) boardless() {}
+func (habrCareer) Boardless() {}
 
 // habr_career aggregates postings from many companies, so it stays in the source facet.
-func (habrCareer) aggregator() {}
+func (habrCareer) Aggregator() {}
 
 // habr_career lists its whole catalogue every run (one global, date-sorted listing paged to the
 // end), so the post-run sweep may close unseen jobs by source — retiring a company that dropped
 // out of the feed entirely, which the crawled-company scope cannot reach. Sound only because a
 // truncated crawl errors (see Fetch): a partial listing must not be mistaken for a shrunken one.
-func (habrCareer) fullCatalog() {}
+func (habrCareer) FullCatalog() {}
 
 // habrListResponse is one /api/frontend/vacancies page: List is the page, Meta.TotalPages bounds
 // pagination.

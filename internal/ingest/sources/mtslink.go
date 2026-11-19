@@ -28,7 +28,7 @@ func NewMtslink(c JSONGetter) Source { return mtslink{http: c} }
 func (mtslink) Provider() string { return "mtslink" }
 
 // mtslink is single-company, so its config entries carry no board.
-func (mtslink) boardless() {}
+func (mtslink) Boardless() {}
 
 // mtsItem is one vacancy from the list response (body fields are empty here). Only items
 // whose State is OPEN are kept.

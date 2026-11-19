@@ -66,11 +66,11 @@ func NewInfoJobs(c TextGetter) Source { return infojobs{http: c, maxNewPerRun: i
 
 func (infojobs) Provider() string { return "infojobs" }
 
-func (infojobs) boardless() {}
+func (infojobs) Boardless() {}
 
-func (infojobs) aggregator() {}
+func (infojobs) Aggregator() {}
 
-func (infojobs) fullCatalog() {}
+func (infojobs) FullCatalog() {}
 
 // infojobsListProps is the subset of a listing page's __INITIAL_PROPS__ we read: the page of
 // offers; on the root page the catalogue's total and its categories with their counts; on a

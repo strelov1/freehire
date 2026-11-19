@@ -37,7 +37,7 @@ func (eploy) Provider() string { return "eploy" }
 // so reading it IS reaching the natural end. A failed or undecodable sitemap fails the crawl,
 // and so does a sitemap INDEX, which would mean the inventory had been split across documents
 // this adapter does not read.
-func (eploy) fullBoardListing() {}
+func (eploy) FullBoardListing() {}
 
 // eployVacancyPath is a vacancy page's path: /vacancies/<id>/<slug>.html.
 var eployVacancyPath = regexp.MustCompile(`^/vacancies/(\d+)/[^/]+\.html$`)

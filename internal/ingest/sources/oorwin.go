@@ -42,7 +42,7 @@ func (oorwin) Provider() string { return "oorwin" }
 
 // fullBoardListing: the walk ends only once it holds the listing's own stated total, and any
 // page failing fails the crawl.
-func (oorwin) fullBoardListing() {}
+func (oorwin) FullBoardListing() {}
 
 const (
 	oorwinAPI      = "https://api.oorwin.ai/api/v2/careers/"

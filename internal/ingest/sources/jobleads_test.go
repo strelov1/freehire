@@ -81,8 +81,8 @@ func TestJobleadsMarkers(t *testing.T) {
 	if !ok {
 		t.Fatal("jobleads should implement the sweepGrace marker")
 	}
-	if want := 14 * 24 * time.Hour; g.sweepGrace() != want {
-		t.Errorf("sweepGrace() = %v, want %v (volatile vdb window)", g.sweepGrace(), want)
+	if want := 14 * 24 * time.Hour; g.SweepGrace() != want {
+		t.Errorf("sweepGrace() = %v, want %v (volatile vdb window)", g.SweepGrace(), want)
 	}
 }
 

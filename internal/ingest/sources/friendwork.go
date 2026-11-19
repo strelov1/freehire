@@ -32,7 +32,7 @@ func (friendwork) Provider() string { return "friendwork" }
 
 // fullBoardListing: Fetch is a single unpaginated request returning the tenant's whole published
 // list — no loop that could stop early. See the fullBoardListing interface for the bar.
-func (friendwork) fullBoardListing() {}
+func (friendwork) FullBoardListing() {}
 
 // friendworkResponse is the CareerPortal payload. Company is the tenant's own name; the
 // per-publication "company" field is null on tenants seen, so it is not modelled.

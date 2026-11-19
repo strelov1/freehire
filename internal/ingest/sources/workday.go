@@ -57,7 +57,7 @@ func (workday) Provider() string { return "workday" }
 // uncapped board to its own reported total, and splitByFacet either resolves a capped board
 // via facet subdivision or fails the crawl outright rather than return a partial listing as a
 // success (see splitByFacet). See the fullBoardListing interface for the bar.
-func (workday) fullBoardListing() {}
+func (workday) FullBoardListing() {}
 
 // emptyBoardListing: listPostings fails a non-2xx answer (an unknown tenant is 422, an unknown
 // site 404) and an undecodable one (a challenge or HTML page), and it fails a first page whose
@@ -65,7 +65,7 @@ func (workday) fullBoardListing() {}
 // collection present and empty with total 0 is an empty board. Quiet backoff is left alone: a
 // board turning empty changes its fingerprint, which ends the quiet state, and later empty
 // crawls pause at most quietMax, each ending with Quiet == 0 so boardListedEmpty admits it.
-func (workday) emptyBoardListing() {}
+func (workday) EmptyBoardListing() {}
 
 // workdayBoard is a configured board parsed into the parts the CXS endpoints need, plus the
 // board's prefix on the public careers site — which is not the CXS path, and differs between

@@ -38,12 +38,12 @@ func (jobboardly) Provider() string { return "jobboardly" }
 // jobboardly aggregates postings from many companies (company per posting), so it stays in the
 // source facet and its ATS-duplicate copies are suppressed by the cross-source dedup pass. It is
 // NOT boardless — the board is the tenant subdomain.
-func (jobboardly) aggregator() {}
+func (jobboardly) Aggregator() {}
 
 // fullBoardListing: /jobs.json is one unpaginated document carrying the board's whole catalogue,
 // and a failed or undecodable response fails the crawl. See the fullBoardListing interface for
 // the bar.
-func (jobboardly) fullBoardListing() {}
+func (jobboardly) FullBoardListing() {}
 
 // jobboardlyMoney is one salary bound in minor units.
 type jobboardlyMoney struct {

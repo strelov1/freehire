@@ -48,8 +48,8 @@ const (
 func NewITviec(c HTMLGetter) Source { return itviec{http: c} }
 
 func (itviec) Provider() string { return "itviec" }
-func (itviec) boardless()       {}
-func (itviec) aggregator()      {}
+func (itviec) Boardless()       {}
+func (itviec) Aggregator()      {}
 
 // itviecListing is what a listing card states about a posting: its key (the external id) and the
 // slug its page lives under.

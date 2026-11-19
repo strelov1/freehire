@@ -41,7 +41,7 @@ func NewKontur(c HTMLGetter) Source { return kontur{http: c} }
 func (kontur) Provider() string { return "kontur" }
 
 // kontur is single-company, so its config entries carry no board.
-func (kontur) boardless() {}
+func (kontur) Boardless() {}
 
 // konturCard is one vacancy as the listing shows it: the id and the title. The card's location
 // and work-format lines are summaries ("Екатеринбург и ещё 8 городов") of what the vacancy page

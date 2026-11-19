@@ -92,13 +92,13 @@ func (wttj) Provider() string { return "wttj" }
 
 // Every posting names its own employer, so wttj stays in the source facet and in the
 // cross-source duplicate suppression set.
-func (wttj) aggregator() {}
+func (wttj) Aggregator() {}
 
 // fullBoardListing: list verifies every window's hits against the index's exact count for that
 // window, checks that the windows cover the board's whole unwindowed count, and fails the crawl
 // on any query error, on a board that matches nothing, on a single-second window over the cap and
 // on reaching wttjMaxQueries. See the fullBoardListing interface (source.go) for the bar.
-func (wttj) fullBoardListing() {}
+func (wttj) FullBoardListing() {}
 
 // wttjCreds is the Algolia application id and search key /api/env publishes.
 type wttjCreds struct {

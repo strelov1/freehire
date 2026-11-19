@@ -39,10 +39,10 @@ func NewGetmatch(c JSONGetter) Source { return getmatch{http: c} }
 func (getmatch) Provider() string { return "getmatch" }
 
 // getmatch is a marketplace with one global feed, so its config entries carry no board.
-func (getmatch) boardless() {}
+func (getmatch) Boardless() {}
 
 // getmatch aggregates postings from many companies, so it stays in the source facet.
-func (getmatch) aggregator() {}
+func (getmatch) Aggregator() {}
 
 // getmatchListResponse is the /api/offers page: Meta.Total is the catalogue size used to stop
 // pagination; Offers is the page.

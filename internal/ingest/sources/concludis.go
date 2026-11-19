@@ -49,7 +49,7 @@ func (concludis) Provider() string { return "concludis" }
 
 // fullBoardListing: the walk fails unless it collects exactly the number of positions the list
 // states, and its page cap is a ceiling that fails the crawl rather than ending it.
-func (concludis) fullBoardListing() {}
+func (concludis) FullBoardListing() {}
 
 // concludisListPath is the complete-list address every tenant serves.
 const concludisListPath = "/prj/lst/a181a603769c1f98ad927e7367c7aa51/GesamtlisteOffenePositionen.htm"

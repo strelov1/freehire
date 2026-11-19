@@ -154,13 +154,13 @@ func pacedStartupJobsSite(c HTMLGetter) HTMLGetter {
 func (startupjobs) Provider() string { return "startupjobs" }
 
 // startup.jobs is one public catalogue with no per-tenant board.
-func (startupjobs) boardless() {}
+func (startupjobs) Boardless() {}
 
 // It re-lists many employers' postings, most of them from ATSes freehire crawls directly.
-func (startupjobs) aggregator() {}
+func (startupjobs) Aggregator() {}
 
 // Every run lists the whole catalogue or fails; see the type comment.
-func (startupjobs) fullCatalog() {}
+func (startupjobs) FullCatalog() {}
 
 // startupjobsIndex is what the homepage's meta tags name: which Algolia application, with
 // which search key, holds the postings.

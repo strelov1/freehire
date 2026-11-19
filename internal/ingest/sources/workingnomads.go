@@ -27,9 +27,9 @@ func NewWorkingNomads(c JSONGetter) Source { return workingnomads{http: c} }
 
 func (workingnomads) Provider() string { return "workingnomads" }
 
-func (workingnomads) boardless() {}
+func (workingnomads) Boardless() {}
 
-func (workingnomads) aggregator() {}
+func (workingnomads) Aggregator() {}
 
 // workingNomadsPosting is one posting from the /api/exposed_jobs/ feed, body inline.
 type workingNomadsPosting struct {

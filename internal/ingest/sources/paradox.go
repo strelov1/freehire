@@ -78,7 +78,7 @@ func pacedParadoxGetter(c HeaderJSONGetter) HeaderJSONGetter {
 func (paradox) Provider() string { return "paradox" }
 
 // fullBoardListing: see the type comment and the fullBoardListing interface (source.go).
-func (paradox) fullBoardListing() {}
+func (paradox) FullBoardListing() {}
 
 const (
 	// paradoxPageSize is the listing page size. The server spends roughly 50 ms per row, so a

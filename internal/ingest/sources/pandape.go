@@ -112,7 +112,7 @@ func (s pandape) Provider() string { return s.domain.provider }
 // fullBoardListing: every page states the tenant's total and whether it is the last; the walk
 // ends only on isLast and fails unless the distinct vacancies read reach the stated total. Any
 // page failing, a page that adds nothing before the end, and the page cap all fail the crawl.
-func (pandape) fullBoardListing() {}
+func (pandape) FullBoardListing() {}
 
 // pandapePage is the pager's answer.
 type pandapePage struct {

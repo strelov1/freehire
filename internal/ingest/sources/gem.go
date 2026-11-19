@@ -56,7 +56,7 @@ func NewGem(c JSONPoster) Source { return gem{http: c} }
 
 func (gem) Provider() string { return "gem" }
 
-func (gem) sweepGrace() time.Duration { return gemSweepGrace }
+func (gem) SweepGrace() time.Duration { return gemSweepGrace }
 
 // gemRequest is a GraphQL request body. Both operations share this shape; the variables
 // carry boardId (and, for detail, extId).

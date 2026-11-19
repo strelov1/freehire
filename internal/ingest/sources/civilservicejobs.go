@@ -77,14 +77,14 @@ func NewCivilServiceJobs(c csjHTTP) Source {
 func (civilServiceJobs) Provider() string { return "civilservicejobs" }
 
 // One national board, no per-tenant id.
-func (civilServiceJobs) boardless() {}
+func (civilServiceJobs) Boardless() {}
 
 // Hundreds of departments and agencies post here, each named per card.
-func (civilServiceJobs) aggregator() {}
+func (civilServiceJobs) Aggregator() {}
 
 // The empty search lists the whole catalogue, and listCards fails unless it read at least as
 // many distinct postings as the site says it holds — so an unseen posting is gone.
-func (civilServiceJobs) fullCatalog() {}
+func (civilServiceJobs) FullCatalog() {}
 
 // csjCard is one listing row: everything the search page states about a posting.
 type csjCard struct {

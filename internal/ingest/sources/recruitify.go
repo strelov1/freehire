@@ -43,7 +43,7 @@ func (recruitify) Provider() string { return "recruitify" }
 
 // fullBoardListing: the listing is paginated to its natural end (an empty page), and a page that
 // fails, or a walk that reaches recruitifyMaxPages first, fails the crawl.
-func (recruitify) fullBoardListing() {}
+func (recruitify) FullBoardListing() {}
 
 const (
 	recruitifyAPI = "https://api.recruitify.ai/apply"

@@ -94,10 +94,10 @@ func NewSapoEmprego(c sapoempregoHTTP) Source {
 func (sapoemprego) Provider() string { return "sapoemprego" }
 
 // One national board, no per-tenant id.
-func (sapoemprego) boardless() {}
+func (sapoemprego) Boardless() {}
 
 // Thousands of employers and agencies post here, each named per posting.
-func (sapoemprego) aggregator() {}
+func (sapoemprego) Aggregator() {}
 
 // sapoempregoPosting is one sitemap entry: the posting's id (a UUID), its URL and when the site
 // last touched it.

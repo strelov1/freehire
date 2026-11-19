@@ -291,7 +291,7 @@ func TestBuiltInRegistration(t *testing.T) {
 	if _, ok := s.(boardless); !ok {
 		t.Error("builtin is not boardless")
 	}
-	if g, ok := s.(sweepGrace); !ok || g.sweepGrace() != 30*24*time.Hour {
+	if g, ok := s.(sweepGrace); !ok || g.SweepGrace() != 30*24*time.Hour {
 		t.Error("builtin does not declare its 30-day sweep grace")
 	}
 	for _, marker := range []bool{isFullCatalog(s), isFullBoardListing(s)} {

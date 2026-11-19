@@ -47,7 +47,7 @@ func NewOnstrider(c onstriderHTTP, referral string) Source {
 func (onstrider) Provider() string { return "onstrider" }
 
 // onstrider is single-company (the real employer is hidden), so its config entry carries no board.
-func (onstrider) boardless() {}
+func (onstrider) Boardless() {}
 
 func (s onstrider) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
 	var sitemap struct {

@@ -96,11 +96,11 @@ func NewCadremploi(c cadremploiHTTP) Source {
 func (cadremploi) Provider() string { return "cadremploi" }
 
 // One national board, no per-tenant id.
-func (cadremploi) boardless() {}
+func (cadremploi) Boardless() {}
 
 // Thousands of employers, recruitment firms and franchise networks post here, each named per
 // posting.
-func (cadremploi) aggregator() {}
+func (cadremploi) Aggregator() {}
 
 // cadremploiPosting is one sitemap entry: the posting's id, its URL and when the site last
 // touched it.

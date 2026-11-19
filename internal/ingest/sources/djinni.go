@@ -42,13 +42,13 @@ func NewDjinni(c HTMLResolvedGetter) Source { return djinni{http: c} }
 
 func (djinni) Provider() string { return "djinni" }
 
-func (djinni) boardless() {}
+func (djinni) Boardless() {}
 
-func (djinni) aggregator() {}
+func (djinni) Aggregator() {}
 
 // djinni's listing names only about the last month of postings, so an older
 // live posting is never listed again; cmd/liveness reads the job page's inactive-ad alert.
-func (djinni) livenessProbed() {}
+func (djinni) LivenessProbed() {}
 
 // Fetch pages the listing from page 1 upward, mapping each page's JSON-LD JobPosting array to
 // jobs. It stops at the end of the feed, detected by the redirect: a past-the-end page 302s to

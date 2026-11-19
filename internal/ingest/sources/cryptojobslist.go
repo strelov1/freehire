@@ -70,10 +70,10 @@ func NewCryptoJobsList(sitemap XMLGetter, pages HTMLGetter) Source {
 func (cryptojobslist) Provider() string { return "cryptojobslist" }
 
 // One board, no per-tenant id.
-func (cryptojobslist) boardless() {}
+func (cryptojobslist) Boardless() {}
 
 // Hundreds of employers post here, each named per posting.
-func (cryptojobslist) aggregator() {}
+func (cryptojobslist) Aggregator() {}
 
 // cryptojobslistPosting is one sitemap entry: the slug that identifies the posting, its URL and
 // the title the slug spells (employer suffix included — only the identity is relied on).

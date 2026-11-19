@@ -30,7 +30,7 @@ func NewAmazon(c JSONGetter) Source { return amazon{http: c} }
 func (amazon) Provider() string { return "amazon" }
 
 // amazon is single-company, so its config entries carry no board.
-func (amazon) boardless() {}
+func (amazon) Boardless() {}
 
 // amazonResponse is the search response. Hits is the catalogue size; Jobs is empty past
 // the last page.

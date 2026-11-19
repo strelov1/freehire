@@ -40,7 +40,7 @@ func NewFirefish(c XMLGetter) Source { return firefish{http: c} }
 func (firefish) Provider() string { return "firefish" }
 
 // fullBoardListing: the feed is one unpaginated document carrying every open vacancy.
-func (firefish) fullBoardListing() {}
+func (firefish) FullBoardListing() {}
 
 // firefishBoard is the shape of a careers host (careers.arnoldclark.com,
 // jobs.firefishsoftware.com, or any host the Recognize table lets through).

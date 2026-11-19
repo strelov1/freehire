@@ -32,10 +32,10 @@ func NewVagas(c HTMLGetter) Source { return vagas{http: c} }
 func (vagas) Provider() string { return "vagas" }
 
 // vagas is a national board crawled by fixed area listings, not per company.
-func (vagas) boardless() {}
+func (vagas) Boardless() {}
 
 // vagas aggregates postings from many companies, so it stays in the source facet.
-func (vagas) aggregator() {}
+func (vagas) Aggregator() {}
 
 // vagasListingURL is one page of the whole catalogue. The search path is /vagas-de-<query>, and an
 // EMPTY query is the unfiltered catalogue (the site links it from its home page). The

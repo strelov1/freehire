@@ -62,7 +62,7 @@ func NewMegafon(c JSONGetter) Source { return megafon{http: c} }
 func (megafon) Provider() string { return "megafon" }
 
 // megafon is single-company, so its config entry carries no board.
-func (megafon) boardless() {}
+func (megafon) Boardless() {}
 
 // megafonCity is a city as both the cities endpoint and a listed posting state it.
 type megafonCity struct {

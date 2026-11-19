@@ -81,10 +81,10 @@ func NewMediaTek(c mediatekHTTP) Source { return mediatek{http: c} }
 func (mediatek) Provider() string { return "mediatek" }
 
 // mediatek is single-company, so its config entry carries no board.
-func (mediatek) boardless() {}
+func (mediatek) Boardless() {}
 
 // fullBoardListing: see the type comment and the fullBoardListing interface (source.go).
-func (mediatek) fullBoardListing() {}
+func (mediatek) FullBoardListing() {}
 
 type mediatekSearchInput struct {
 	Locale string `json:"locales"`

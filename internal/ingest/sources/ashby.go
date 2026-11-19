@@ -22,11 +22,11 @@ func (ashby) Provider() string { return "ashby" }
 
 // fullBoardListing: Fetch is a single unpaginated request returning the board's whole jobs
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
-func (ashby) fullBoardListing() {}
+func (ashby) FullBoardListing() {}
 
 // emptyBoardListing: an unknown board answers 404, and an emptied one answers 200 with "jobs": [];
 // an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
-func (ashby) emptyBoardListing() {}
+func (ashby) EmptyBoardListing() {}
 
 func (a ashby) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// includeCompensation=true is required: omitted, the API silently drops the compensation

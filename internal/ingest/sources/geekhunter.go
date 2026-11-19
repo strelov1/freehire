@@ -33,7 +33,7 @@ const geekhunterBase = "https://www.geekhunter.com/pt"
 // fullBoardListing: the board's /jobs page inlines every open posting in one ItemList ld+json
 // block (matching numberOfItems; no pagination), so a listing failure aborts the whole Fetch rather than silently
 // returning a partial board.
-func (geekhunter) fullBoardListing() {}
+func (geekhunter) FullBoardListing() {}
 
 func (s geekhunter) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	root, err := s.http.GetHTML(ctx, fmt.Sprintf("%s/%s/jobs", geekhunterBase, e.Board))

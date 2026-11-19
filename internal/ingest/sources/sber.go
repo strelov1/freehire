@@ -26,7 +26,7 @@ func NewSber(c JSONGetter) Source { return sber{http: c} }
 func (sber) Provider() string { return "sber" }
 
 // sber is single-company (one configured entry), so its config carries no board.
-func (sber) boardless() {}
+func (sber) Boardless() {}
 
 // sberVac is one publication with its body inline (no detail call).
 type sberVac struct {

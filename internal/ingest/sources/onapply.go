@@ -48,10 +48,10 @@ func NewOnapply(c JSONGetter) Source {
 func (onapply) Provider() string { return "onapply" }
 
 // One vendor-wide index, no per-tenant id.
-func (onapply) boardless() {}
+func (onapply) Boardless() {}
 
 // Hundreds of employers post here, each named per posting.
-func (onapply) aggregator() {}
+func (onapply) Aggregator() {}
 
 type onapplyPage struct {
 	Total *int `json:"total"`

@@ -47,9 +47,9 @@ func NewHiringThing(c HTMLGetter) Source { return hiringthing{http: c} }
 
 func (hiringthing) Provider() string { return "hiringthing" }
 
-func (hiringthing) fullBoardListing() {}
+func (hiringthing) FullBoardListing() {}
 
-func (hiringthing) emptyBoardListing() {}
+func (hiringthing) EmptyBoardListing() {}
 
 // Fetch is the list-only fallback HydratingSource specifies for a caller that cannot supply a
 // seen set; it hydrates every posting. FetchNew is the path cmd/ingest drives.

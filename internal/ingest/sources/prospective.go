@@ -92,7 +92,7 @@ func (prospective) Provider() string { return "prospective" }
 
 // fullBoardListing: the listing is walked to its natural end, a short page, and any page failing
 // fails the crawl. See the fullBoardListing interface and list.
-func (prospective) fullBoardListing() {}
+func (prospective) FullBoardListing() {}
 
 // prospectiveListing is one page of a medium's listing.
 type prospectiveListing struct {

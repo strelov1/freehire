@@ -39,7 +39,7 @@ func (potok) Provider() string { return "potok" }
 
 // fullBoardListing: the listing is a single unpaginated page carrying every open posting, and a
 // page that is not that listing fails the crawl. See the fullBoardListing interface for the bar.
-func (potok) fullBoardListing() {}
+func (potok) FullBoardListing() {}
 
 // potokPosting is one listing row: everything the platform states about a posting bar its body
 // and schedule. team is the group the tenant files it under — a department on most tenants, the

@@ -36,7 +36,7 @@ func (ukg) Provider() string { return "ukg" }
 // fullBoardListing: list() proves completeness — totalCount is authoritative (pages until
 // skip >= totalCount or an empty page, no artificial cap). See the fullBoardListing interface
 // for the bar.
-func (ukg) fullBoardListing() {}
+func (ukg) FullBoardListing() {}
 
 // ukgPageSize is the listing page size. LoadSearchResults reports totalCount, so pagination
 // stops once every posting is collected.

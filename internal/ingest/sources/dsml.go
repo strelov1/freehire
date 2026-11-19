@@ -31,7 +31,7 @@ func NewDSML(c sitemapBoardHTTP) Source {
 }
 
 // One board, no per-tenant id.
-func (dsml) boardless() {}
+func (dsml) Boardless() {}
 
 // Companies post here, each named per posting.
-func (dsml) aggregator() {}
+func (dsml) Aggregator() {}

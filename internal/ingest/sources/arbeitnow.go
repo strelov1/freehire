@@ -31,10 +31,10 @@ func NewArbeitnow(c JSONGetter) Source { return arbeitnow{http: c} }
 func (arbeitnow) Provider() string { return "arbeitnow" }
 
 // arbeitnow needs no board id (one API), so its config carries no board.
-func (arbeitnow) boardless() {}
+func (arbeitnow) Boardless() {}
 
 // arbeitnow aggregates postings from many companies, so it stays in the source facet.
-func (arbeitnow) aggregator() {}
+func (arbeitnow) Aggregator() {}
 
 // arbeitnowPosting is one posting from the job-board API, body inline (no detail call).
 type arbeitnowPosting struct {

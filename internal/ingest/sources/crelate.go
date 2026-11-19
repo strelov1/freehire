@@ -30,7 +30,7 @@ func (crelate) Provider() string { return "crelate" }
 
 // aggregator: a Crelate portal lists many client companies, so it stays in the source facet and
 // each job's company comes from the posting, not the board.
-func (crelate) aggregator() {}
+func (crelate) Aggregator() {}
 
 // crelateResponse is the GetAllJobs envelope.
 type crelateResponse struct {

@@ -40,7 +40,7 @@ func (flatchr) Provider() string { return "flatchr" }
 
 // fullBoardListing: the board document is one unpaginated answer carrying every published
 // vacancy — no loop that could stop early.
-func (flatchr) fullBoardListing() {}
+func (flatchr) FullBoardListing() {}
 
 // flatchrBoard is the shape of a board slug.
 var flatchrBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

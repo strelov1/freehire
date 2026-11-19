@@ -78,10 +78,10 @@ func NewSpainJobs(c spainjobsHTTP) Source {
 func (spainjobs) Provider() string { return "spainjobs" }
 
 // One national board, no per-tenant id.
-func (spainjobs) boardless() {}
+func (spainjobs) Boardless() {}
 
 // Thousands of employers, each named per posting.
-func (spainjobs) aggregator() {}
+func (spainjobs) Aggregator() {}
 
 // spainjobsPosting is one sitemap entry: the id, the URL, the employer slug and title slug the
 // path spells, and the entry's lastmod.

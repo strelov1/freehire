@@ -21,7 +21,7 @@ type yandex struct {
 	http JSONGetter
 }
 
-func (yandex) boardless() {}
+func (yandex) Boardless() {}
 
 const (
 	yandexListURL    = "https://yandex.%s/jobs/api/publications"

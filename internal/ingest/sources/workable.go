@@ -34,12 +34,12 @@ func (workable) Provider() string { return "workable" }
 
 // fullBoardListing: Fetch is a single unpaginated request returning the board's whole jobs
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
-func (workable) fullBoardListing() {}
+func (workable) FullBoardListing() {}
 
 // emptyBoardListing: an unknown account answers 404, and an emptied one answers 200 with its
 // account object and "jobs": []; an object without the array fails Fetch. See the
 // emptyBoardListing interface for the bar.
-func (workable) emptyBoardListing() {}
+func (workable) EmptyBoardListing() {}
 
 func (w workable) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	url := fmt.Sprintf("%s/%s?details=true", workableBaseURL, e.Board)

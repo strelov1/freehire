@@ -35,9 +35,9 @@ func NewJobylon(c jobylonHTTP) Source { return jobylon{http: c} }
 
 func (jobylon) Provider() string { return "jobylon" }
 
-func (jobylon) boardless() {}
+func (jobylon) Boardless() {}
 
-func (jobylon) aggregator() {}
+func (jobylon) Aggregator() {}
 
 const (
 	// jobylonSitemapIndex is the global sitemap index; its "sitemap-jobs" child lists every job.

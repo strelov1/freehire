@@ -37,10 +37,10 @@ func NewTopco(c topcoClient) Source { return topco{http: c} }
 func (topco) Provider() string { return "topco" }
 
 // topco is one careers page with no per-tenant board id.
-func (topco) boardless() {}
+func (topco) Boardless() {}
 
 // topco aggregates postings from many portfolio companies, so it stays in the source facet.
-func (topco) aggregator() {}
+func (topco) Aggregator() {}
 
 // topcoVacancy is the subset of a careers-flight vacancies entry the adapter maps. Location is
 // always null in the flight (the ecosystem's roles are global/remote); the body fields are the

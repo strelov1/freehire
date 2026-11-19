@@ -78,7 +78,7 @@ func NewWORK180(sitemap XMLGetter, pages HTMLGetter) Source {
 }
 
 func (work180) Provider() string { return "work180" }
-func (work180) aggregator()      {}
+func (work180) Aggregator()      {}
 
 // work180Listing is what a sitemap entry states about one posting.
 type work180Listing struct {

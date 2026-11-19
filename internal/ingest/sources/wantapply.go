@@ -34,12 +34,12 @@ func NewWantapplyCy(c JSONGetter) Source {
 	return wantapply{http: c, host: "wantapply.cy", provider: "wantapply-cy"}
 }
 func (s wantapply) Provider() string { return s.provider }
-func (wantapply) boardless()         {}
-func (wantapply) aggregator()        {}
+func (wantapply) Boardless()         {}
+func (wantapply) Aggregator()        {}
 
 // Every page must be read, and the unique count must match the API's total, before Fetch
 // succeeds. A partial listing never licenses the source-wide unseen sweep.
-func (wantapply) fullCatalog() {}
+func (wantapply) FullCatalog() {}
 
 func (s wantapply) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	filters := map[string]any{"domain": "tech"}

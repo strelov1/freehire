@@ -27,9 +27,9 @@ func NewTheMuse(c JSONGetter) Source { return themuse{http: c} }
 
 func (themuse) Provider() string { return "themuse" }
 
-func (themuse) boardless() {}
+func (themuse) Boardless() {}
 
-func (themuse) aggregator() {}
+func (themuse) Aggregator() {}
 
 // themuseResponse is one page: postings plus the (unreliable, see above) catalogue-wide page
 // count used only as a defensive upper bound.

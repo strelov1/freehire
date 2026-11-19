@@ -28,7 +28,7 @@ func NewRWB(c JSONGetter) Source { return rwb{http: c} }
 func (rwb) Provider() string { return "rwb" }
 
 // rwb is single-company, so its config entries carry no board.
-func (rwb) boardless() {}
+func (rwb) Boardless() {}
 
 // rwbItem is one vacancy from the list response (no description here). The list carries the
 // city and employment types, which drive location and the remote flag.

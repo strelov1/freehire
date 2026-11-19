@@ -20,12 +20,12 @@ func NewRemoteOK(c JSONGetter) Source { return remoteokSource{http: c} }
 
 func (remoteokSource) Provider() string { return "remoteok" }
 
-func (remoteokSource) boardless() {}
+func (remoteokSource) Boardless() {}
 
-func (remoteokSource) aggregator() {}
+func (remoteokSource) Aggregator() {}
 
 // remoteok's feed carries only its newest postings; cmd/liveness reads the job page's closed banner.
-func (remoteokSource) livenessProbed() {}
+func (remoteokSource) LivenessProbed() {}
 
 // remoteokPosting is one posting from the /api feed. The feed's first element is a legal
 // notice (no id/slug); it is skipped by the empty-id guard in toJob.

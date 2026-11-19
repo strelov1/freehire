@@ -124,11 +124,11 @@ func (p kariyernetPacer) PostJSON(ctx context.Context, url string, body, v any) 
 func (kariyernet) Provider() string { return "kariyernet" }
 
 // boardless: one crawl covers the whole slice, there is no per-tenant board id.
-func (kariyernet) boardless() {}
+func (kariyernet) Boardless() {}
 
 // Every posting names its own employer, so Kariyer.net stays in the source facet and in the
 // cross-source duplicate suppression set.
-func (kariyernet) aggregator() {}
+func (kariyernet) Aggregator() {}
 
 // kariyernetItem is one search row, reduced to what the adapter reads.
 type kariyernetItem struct {

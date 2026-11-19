@@ -33,7 +33,7 @@ func TestKasperskyProviderIsBoardless(t *testing.T) {
 	if got := s.Provider(); got != "kaspersky" {
 		t.Errorf("Provider() = %q, want kaspersky", got)
 	}
-	if _, ok := s.(interface{ boardless() }); !ok {
+	if _, ok := s.(interface{ Boardless() }); !ok {
 		t.Error("kaspersky must be boardless: it is one employer's own careers site")
 	}
 	if _, ok := s.(HydratingSource); !ok {

@@ -44,7 +44,7 @@ func NewDodo(c JSONGetter) Source { return dodo{http: c} }
 func (dodo) Provider() string { return "dodo" }
 
 // dodo is single-company, so its config entries carry no board.
-func (dodo) boardless() {}
+func (dodo) Boardless() {}
 
 // dodoItem is one vacancy from the (flattened) list response (no description here).
 type dodoItem struct {

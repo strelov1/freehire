@@ -26,14 +26,14 @@ func NewCutshort(c XMLGetter) Source { return cutshort{http: c} }
 
 func (cutshort) Provider() string { return "cutshort" }
 
-func (cutshort) boardless() {}
+func (cutshort) Boardless() {}
 
-func (cutshort) aggregator() {}
+func (cutshort) Aggregator() {}
 
 // fullBoardListing: Fetch is one GET of an unpaginated XML document that is the whole inventory
 // Cutshort elects to syndicate. Reaching the document is the proof; there is no page loop that
 // could stop early. See the fullBoardListing interface for the bar.
-func (cutshort) fullBoardListing() {}
+func (cutshort) FullBoardListing() {}
 
 // cutshortFeed is the root <source> document: a flat list of <job> elements.
 type cutshortFeed struct {

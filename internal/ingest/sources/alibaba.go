@@ -53,10 +53,10 @@ func NewAlibaba(c HeaderJSONPoster) Source { return alibaba{http: c} }
 func (alibaba) Provider() string { return "alibaba" }
 
 // alibaba is single-company, so its config entry carries no board.
-func (alibaba) boardless() {}
+func (alibaba) Boardless() {}
 
 // fullBoardListing: see the type comment and the fullBoardListing interface (source.go).
-func (alibaba) fullBoardListing() {}
+func (alibaba) FullBoardListing() {}
 
 type alibabaQuery struct {
 	Channel       string   `json:"channel"`

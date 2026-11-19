@@ -105,7 +105,7 @@ func (s mojposao) getter(m mojposaoMarket) HeaderJSONGetter {
 func (mojposao) Provider() string { return "mojposao" }
 
 // Thousands of employers post here, each named per posting.
-func (mojposao) aggregator() {}
+func (mojposao) Aggregator() {}
 
 // Each board is one country's market (see nationalMarket): mojposao.hr Croatia, mojposao.ba Bosnia.
 func (mojposao) marketCountries(e CompanyEntry) []string {

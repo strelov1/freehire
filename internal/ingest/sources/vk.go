@@ -45,7 +45,7 @@ func newVK(c vkHTTP, interval time.Duration) vk { return vk{http: c, interval: i
 func (vk) Provider() string { return "vk" }
 
 // vk is single-company, so its config entries carry no board.
-func (vk) boardless() {}
+func (vk) Boardless() {}
 
 // vkResult is one vacancy from the list response (no description here). Remote is a flag the
 // API sets directly, so no location heuristic is needed.

@@ -72,10 +72,10 @@ func NewTaleez(sitemap XMLGetter, pages HTMLGetter) Source {
 func (taleez) Provider() string { return "taleez" }
 
 // No per-customer listing exists; the one sitemap is the whole crawl.
-func (taleez) boardless() {}
+func (taleez) Boardless() {}
 
 // Many employers publish through it, each named per posting.
-func (taleez) aggregator() {}
+func (taleez) Aggregator() {}
 
 // taleezToken is a posting's identity: the last path segment of /apply/<token>, either a short
 // id ("fmudc") or a title slug.

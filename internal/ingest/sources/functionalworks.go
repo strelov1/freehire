@@ -34,10 +34,10 @@ func NewFunctionalWorks(c JSONPoster) Source { return functionalWorks{http: c} }
 func (functionalWorks) Provider() string { return "functionalworks" }
 
 // functionalworks needs no board id (one GraphQL endpoint), so its config carries no board.
-func (functionalWorks) boardless() {}
+func (functionalWorks) Boardless() {}
 
 // functionalworks aggregates postings from many companies, so it stays in the source facet.
-func (functionalWorks) aggregator() {}
+func (functionalWorks) Aggregator() {}
 
 // functionalWorksPosting is one posting from the GraphQL feed, body inline (no detail call).
 type functionalWorksPosting struct {

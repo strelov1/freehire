@@ -58,7 +58,7 @@ func (hireclick) Provider() string { return "hireclick" }
 // fullBoardListing: the list endpoint is a single unpaginated request returning the board's
 // whole job list, and any failure to read it fails the Fetch. See the fullBoardListing
 // interface for the bar.
-func (hireclick) fullBoardListing() {}
+func (hireclick) FullBoardListing() {}
 
 func (s hireclick) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	postings, err := s.list(ctx, e)

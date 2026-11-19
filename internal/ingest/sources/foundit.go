@@ -85,13 +85,13 @@ func NewFoundit(c founditHTTP) Source {
 func (foundit) Provider() string { return "foundit" }
 
 // boardless: one crawl covers the whole national catalogue.
-func (foundit) boardless() {}
+func (foundit) Boardless() {}
 
 // Every posting names its own employer, so foundit stays in the source facet and in the
 // cross-source duplicate suppression set.
-func (foundit) aggregator() {}
+func (foundit) Aggregator() {}
 
-func (foundit) sweepGrace() time.Duration { return founditSweepGrace }
+func (foundit) SweepGrace() time.Duration { return founditSweepGrace }
 
 // founditPosting is one sitemap entry: the posting's id and URL. The URL's slug spells the
 // title, employer and place run together with nothing to split them on, so none is read from it.

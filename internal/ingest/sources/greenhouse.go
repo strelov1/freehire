@@ -32,11 +32,11 @@ func (greenhouse) Provider() string { return "greenhouse" }
 
 // fullBoardListing: Fetch is a single unpaginated request returning the board's whole jobs
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
-func (greenhouse) fullBoardListing() {}
+func (greenhouse) FullBoardListing() {}
 
 // emptyBoardListing: an unknown board answers 404, and an emptied one answers 200 with
 // "jobs": []; an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
-func (greenhouse) emptyBoardListing() {}
+func (greenhouse) EmptyBoardListing() {}
 
 func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// pay_transparency=true is what unlocks pay_input_ranges; without it the API omits

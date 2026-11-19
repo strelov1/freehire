@@ -51,7 +51,7 @@ func NewInploi(c inploiHTTP) Source {
 
 func (inploi) Provider() string { return "inploi" }
 
-func (inploi) fullBoardListing() {}
+func (inploi) FullBoardListing() {}
 
 func (s inploi) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return s.FetchNew(ctx, e, func(string) bool { return false })

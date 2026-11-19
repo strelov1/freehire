@@ -28,9 +28,9 @@ func NewCareersGov(c JSONGetter) Source { return careersgov{http: c} }
 
 func (careersgov) Provider() string { return "careersgov" }
 
-func (careersgov) boardless() {}
+func (careersgov) Boardless() {}
 
-func (careersgov) aggregator() {}
+func (careersgov) Aggregator() {}
 
 // careersgovPosting is one row of the file. Only `hrp` rows (the government HR platform) are
 // decoded into it: the `greenhouse` and `workable` rows mirror ATS boards crawled under their

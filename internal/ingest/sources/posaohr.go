@@ -92,10 +92,10 @@ func NewPosaoHR(c posaoHRGetter) Source {
 func (posaoHR) Provider() string { return "posaohr" }
 
 // One national board, no per-tenant id.
-func (posaoHR) boardless() {}
+func (posaoHR) Boardless() {}
 
 // Hundreds of employers and agencies post here, each named per posting.
-func (posaoHR) aggregator() {}
+func (posaoHR) Aggregator() {}
 
 // One country's market (see nationalMarket).
 func (posaoHR) marketCountries(CompanyEntry) []string { return []string{"hr"} }

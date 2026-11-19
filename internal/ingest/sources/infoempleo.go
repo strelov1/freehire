@@ -74,10 +74,10 @@ func NewInfoempleo(c HTMLGetter) Source {
 func (infoempleo) Provider() string { return "infoempleo" }
 
 // One national board, no per-tenant id.
-func (infoempleo) boardless() {}
+func (infoempleo) Boardless() {}
 
 // Thousands of employers and agencies post here, each named per posting.
-func (infoempleo) aggregator() {}
+func (infoempleo) Aggregator() {}
 
 // infoempleoCard is one listing card: what the gate and the job need before the page is bought.
 type infoempleoCard struct {

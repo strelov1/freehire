@@ -28,8 +28,8 @@ func TestDevGlobalJobsMarkers(t *testing.T) {
 	if _, ok := s.(CoverageGated); !ok {
 		t.Error("devglobaljobs should implement CoverageGated")
 	}
-	if gs, ok := s.(sweepGrace); !ok || gs.sweepGrace() != 30*24*time.Hour {
-		t.Errorf("devglobaljobs sweepGrace() = %v, want 30 days", gs.sweepGrace())
+	if gs, ok := s.(sweepGrace); !ok || gs.SweepGrace() != 30*24*time.Hour {
+		t.Errorf("devglobaljobs sweepGrace() = %v, want 30 days", gs.SweepGrace())
 	}
 	if !slices.Contains(FilterableProviders(), "devglobaljobs") {
 		t.Error("FilterableProviders() should include devglobaljobs")

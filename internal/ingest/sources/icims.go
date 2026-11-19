@@ -33,7 +33,7 @@ func (icims) Provider() string { return "icims" }
 // fullBoardListing: jobLocs fails the whole crawl when the root sitemap or any sub-sitemap
 // fetch fails, rather than returning the other sub-sitemaps' postings as a complete board.
 // See the fullBoardListing interface for the bar.
-func (icims) fullBoardListing() {}
+func (icims) FullBoardListing() {}
 
 func (s icims) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	host := icimsHost(e.Board)

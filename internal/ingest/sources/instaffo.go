@@ -34,9 +34,9 @@ func NewInstaffo(c instaffoHTTP) Source { return instaffo{http: c} }
 
 func (instaffo) Provider() string { return "instaffo" }
 
-func (instaffo) boardless() {}
+func (instaffo) Boardless() {}
 
-func (instaffo) aggregator() {}
+func (instaffo) Aggregator() {}
 
 func (s instaffo) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	// The needle is the full "sitemap-jobs" stem, not "jobs": the site's own host carries

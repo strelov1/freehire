@@ -35,7 +35,7 @@ func NewJettyCloud(c HTMLGetter) Source { return jettycloud{http: c} }
 func (jettycloud) Provider() string { return "jettycloud" }
 
 // jettycloud is single-company, so its config entries carry no board.
-func (jettycloud) boardless() {}
+func (jettycloud) Boardless() {}
 
 func (j jettycloud) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	urls, err := j.vacancyURLs(ctx)

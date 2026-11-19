@@ -35,7 +35,7 @@ func (hrmos) Provider() string { return "hrmos" }
 // fullBoardListing: crawlAllPagedLinks fails the whole Fetch if ANY listing page fails, not
 // just the first — never a silently truncated listing. See the fullBoardListing interface
 // for the bar.
-func (hrmos) fullBoardListing() {}
+func (hrmos) FullBoardListing() {}
 
 func (h hrmos) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base, err := url.Parse(fmt.Sprintf("https://hrmos.co/pages/%s/jobs", e.Board))

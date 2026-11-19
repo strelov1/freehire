@@ -86,9 +86,9 @@ func (s workatastartup) algoliaKey(ctx context.Context) (string, error) {
 
 func (workatastartup) Provider() string { return "workatastartup" }
 
-func (workatastartup) boardless() {}
+func (workatastartup) Boardless() {}
 
-func (workatastartup) aggregator() {}
+func (workatastartup) Aggregator() {}
 
 // waasHit is one job from the Algolia index, body inline (no detail call). remote is
 // "no" | "yes" | "only"; search_path is the canonical job URL. locations_for_search is

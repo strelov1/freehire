@@ -29,11 +29,11 @@ func (lever) Provider() string { return "lever" }
 // fullBoardListing: Fetch is a single unpaginated request returning the board's whole
 // postings array — no loop that could stop early. See the fullBoardListing interface for
 // the bar.
-func (lever) fullBoardListing() {}
+func (lever) FullBoardListing() {}
 
 // emptyBoardListing: an unknown board answers 404, and an emptied one answers 200 with a bare [];
 // a null body fails Fetch. See the emptyBoardListing interface for the bar.
-func (lever) emptyBoardListing() {}
+func (lever) EmptyBoardListing() {}
 
 func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base := leverBaseURL

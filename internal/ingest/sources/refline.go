@@ -75,10 +75,10 @@ func NewRefline(robots TextGetter, sitemap XMLGetter, pages HTMLGetter) Source {
 func (refline) Provider() string { return "refline" }
 
 // The sitemaps robots.txt names are the whole crawl; no per-customer board is needed.
-func (refline) boardless() {}
+func (refline) Boardless() {}
 
 // Many employers publish through it, each named per posting.
-func (refline) aggregator() {}
+func (refline) Aggregator() {}
 
 // reflinePostingPath matches /<customer>/<job>/pub/<publication>/index.html.
 var reflinePostingPath = regexp.MustCompile(`^/([0-9]+)/([0-9]+)/pub/([0-9a-z]+)/index\.html$`)

@@ -84,10 +84,10 @@ func NewTyomarkkinatori(c tmtClient) Source { return tyomarkkinatori{http: c} }
 func (tyomarkkinatori) Provider() string { return "tyomarkkinatori" }
 
 // tyomarkkinatori is a national portal with one global feed, so its config entry carries no board.
-func (tyomarkkinatori) boardless() {}
+func (tyomarkkinatori) Boardless() {}
 
 // tyomarkkinatori aggregates postings from many employers, so it stays in the source facet.
-func (tyomarkkinatori) aggregator() {}
+func (tyomarkkinatori) Aggregator() {}
 
 // tmtLang is a Finnish public-sector multilingual value: a map of ISO-639-1 code → text, present
 // for whichever languages the employer filled in ("fi", "sv", "en", commonly just one).

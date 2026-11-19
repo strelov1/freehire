@@ -88,10 +88,10 @@ func NewCake(c cakeHTTP) Source {
 func (cake) Provider() string { return "cake" }
 
 // One central catalogue, no per-tenant id.
-func (cake) boardless() {}
+func (cake) Boardless() {}
 
 // Many employers post here, each named per posting.
-func (cake) aggregator() {}
+func (cake) Aggregator() {}
 
 type cakeSearchRequest struct {
 	Query   string              `json:"query"`

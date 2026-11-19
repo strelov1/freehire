@@ -66,10 +66,10 @@ func NewReed(c HeaderJSONGetter, apiKey string) Source { return reed{http: c, ap
 func (reed) Provider() string { return "reed" }
 
 // reed needs no board id (one API), so its config carries no board.
-func (reed) boardless() {}
+func (reed) Boardless() {}
 
 // reed aggregates postings from many employers, so it stays in the source facet.
-func (reed) aggregator() {}
+func (reed) Aggregator() {}
 
 // reedSearchResponse is one search page; only the ids are read from the list (it truncates
 // the description and omits externalUrl — both come from the per-job detail).

@@ -37,7 +37,7 @@ func NewMagnit(c JSONGetter) Source { return magnit{http: c} }
 func (magnit) Provider() string { return "magnit" }
 
 // magnit is single-company, so its config entries carry no board.
-func (magnit) boardless() {}
+func (magnit) Boardless() {}
 
 // magnitNamed is the {name} shape every dictionary-backed field of the API shares.
 type magnitNamed struct {

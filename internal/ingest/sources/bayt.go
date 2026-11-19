@@ -45,7 +45,7 @@ func (bayt) Provider() string { return "bayt" }
 // comes from each posting, not the configured entry). bayt is board-based (board = country), so it
 // already appears in the source facet without this marker; the marker records the multi-company
 // nature and future-proofs facet inclusion should bayt ever become boardless.
-func (bayt) aggregator() {}
+func (bayt) Aggregator() {}
 
 // fullBoardListing: the listing walk proves completeness by paginating sequentially to the
 // pager's last page (or a genuinely empty page, where no pager is rendered), and treats a page
@@ -53,7 +53,7 @@ func (bayt) aggregator() {}
 // posting on a merely-unreadable fetch (see detail's own comment) — a plain drop there
 // would have defeated this marker's promise given bayt's documented throttling risk. See
 // the fullBoardListing interface (source.go) for the bar.
-func (bayt) fullBoardListing() {}
+func (bayt) FullBoardListing() {}
 
 const (
 	baytBaseURL = "https://www.bayt.com"

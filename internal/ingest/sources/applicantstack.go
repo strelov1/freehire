@@ -49,7 +49,7 @@ func (applicantstack) Provider() string { return "applicantstack" }
 
 // fullBoardListing: list pages the listing until the distinct postings read equal the total the
 // pager states, and fails the crawl otherwise. See the fullBoardListing interface for the bar.
-func (applicantstack) fullBoardListing() {}
+func (applicantstack) FullBoardListing() {}
 
 const (
 	// applicantstackCrawlDelay is robots.txt's Crawl-delay, applied per tenant host.

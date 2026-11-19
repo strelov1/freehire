@@ -35,7 +35,7 @@ func (teamtailor) Provider() string { return "teamtailor" }
 
 // fullBoardListing: jobURLs paginates to a genuinely empty page; a later-page failure or hitting
 // ttMaxPages fails the crawl instead of returning a partial list.
-func (teamtailor) fullBoardListing() {}
+func (teamtailor) FullBoardListing() {}
 
 // ttMaxPages bounds listing pagination so a board that never returns an empty page cannot loop
 // forever. Real boards run past 100 pages, so it is a safety ceiling; reaching it fails the crawl

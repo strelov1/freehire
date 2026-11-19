@@ -36,7 +36,7 @@ func NewHireHive(c hirehiveHTTP) Source { return hirehive{http: c} }
 
 func (hirehive) Provider() string { return "hirehive" }
 
-func (hirehive) fullBoardListing() {}
+func (hirehive) FullBoardListing() {}
 
 func (s hirehive) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	board := strings.ToLower(strings.TrimSpace(e.Board))

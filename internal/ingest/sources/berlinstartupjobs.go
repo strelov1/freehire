@@ -46,7 +46,7 @@ func NewBerlinStartupJobs(c sitemapBoardHTTP) Source {
 }
 
 // One board, no per-tenant id.
-func (berlinstartupjobs) boardless() {}
+func (berlinstartupjobs) Boardless() {}
 
 // Startups post here, each named per posting.
-func (berlinstartupjobs) aggregator() {}
+func (berlinstartupjobs) Aggregator() {}

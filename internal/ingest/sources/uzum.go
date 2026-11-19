@@ -48,7 +48,7 @@ func NewUzum(c uzumHTTP) Source { return uzum{http: c} }
 func (uzum) Provider() string { return "uzum" }
 
 // uzum is single-company, so its config entries carry no board.
-func (uzum) boardless() {}
+func (uzum) Boardless() {}
 
 func (u uzum) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	locs, err := sitemapJobLocs(ctx, u.http, uzumSitemapURL, uzumVacancyID)

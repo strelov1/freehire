@@ -26,7 +26,7 @@ func NewTwoGIS(c HTMLGetter) Source { return twogis{http: c} }
 func (twogis) Provider() string { return "2gis" }
 
 // twogis is single-company, so its config entries carry no board.
-func (twogis) boardless() {}
+func (twogis) Boardless() {}
 
 func (t twogis) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base, err := url.Parse(twogisBaseURL + "/")

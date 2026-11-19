@@ -66,10 +66,10 @@ func NewWorkwise(c workwiseHTTP) Source {
 func (workwise) Provider() string { return "workwise" }
 
 // One platform-wide catalogue, no per-tenant id.
-func (workwise) boardless() {}
+func (workwise) Boardless() {}
 
 // Thousands of employers post here, each named per posting.
-func (workwise) aggregator() {}
+func (workwise) Aggregator() {}
 
 type workwisePosting struct {
 	id  int64

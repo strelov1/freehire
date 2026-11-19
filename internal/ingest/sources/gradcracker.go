@@ -93,13 +93,13 @@ func pacedGradcracker(c HTMLGetter) HTMLGetter {
 func (gradcracker) Provider() string { return "gradcracker" }
 
 // One catalogue; see the type comment for why it is not a board per discipline.
-func (gradcracker) boardless() {}
+func (gradcracker) Boardless() {}
 
 // Many employers, the employer read from each listing card.
-func (gradcracker) aggregator() {}
+func (gradcracker) Aggregator() {}
 
 // Every run reads the whole listing or fails; see the type comment.
-func (gradcracker) fullCatalog() {}
+func (gradcracker) FullCatalog() {}
 
 // gradcrackerCard is one listing card: everything Gradcracker states about a posting bar its body.
 type gradcrackerCard struct {

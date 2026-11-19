@@ -42,7 +42,7 @@ func NewLesta(c lestaHTTP) Source { return lesta{http: c} }
 func (lesta) Provider() string { return "lesta" }
 
 // lesta is single-company, so its config entries carry no board.
-func (lesta) boardless() {}
+func (lesta) Boardless() {}
 
 // lestaItem is one vacancy from the listing. category_name ("Dev", "Art", "General") and
 // project_name (the game) are not read: the rubric is too coarse to be a category — an
