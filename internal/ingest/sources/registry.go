@@ -7,6 +7,8 @@ import (
 	"maps"
 	"slices"
 	"sync"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/ats"
 )
 
 // Taxonomy assembles the registry for classification rather than crawling: every adapter this
@@ -39,15 +41,15 @@ func All(c HTTPClient) map[string]Source {
 	seekNetworkDetail := newSeekDetailNetwork(pacedSeekPoster(c), nil)
 	registry := reg(slices.Concat(
 		[]Source{
-			NewGreenhouse(c),
+			ats.NewGreenhouse(c),
 			NewHRsmart(c),
-			NewLever(c),
-			NewAshby(c),
+			ats.NewLever(c),
+			ats.NewAshby(c),
 			// Rate-paced (pacedWorkableGetter): all boards share one metered widget host, and
 			// unpaced the run 429s. See pacer.go.
 			NewWorkable(pacedWorkableGetter(c)),
 			NewWorkableMarketplace(c),
-			NewRecruitee(c),
+			ats.NewRecruitee(c),
 			// Rate-paced (pacedSmartRecruitersGetter): all boards share one metered API host,
 			// and unpaced the run's own aggregate volume 429s nearly all of them. See pacer.go.
 			NewSmartRecruiters(pacedSmartRecruitersGetter(c)),
@@ -231,7 +233,7 @@ func All(c HTTPClient) map[string]Source {
 			NewJobscore(c),
 			NewCrelate(c),
 			// Ashby boards whose public Posting API is disabled, served via the embed GraphQL.
-			NewAshbyGraphQL(c),
+			ats.NewAshbyGraphQL(c),
 			// VC talent network, board = portfolio company slug: listed only for the early-stage
 			// companies that host their application there instead of on an ATS of their own.
 			NewSpeedrun(c),

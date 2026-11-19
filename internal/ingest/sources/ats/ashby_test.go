@@ -1,4 +1,4 @@
-package sources
+package ats
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 func TestAshbyProvider(t *testing.T) {
@@ -19,14 +21,8 @@ func TestAshbyProvider(t *testing.T) {
 // listing failure aborts the whole Fetch rather than returning a partial result.
 func TestAshbyMarkers(t *testing.T) {
 	s := NewAshby(nil)
-	if _, ok := s.(fullBoardListing); !ok {
+	if _, ok := s.(interface{ FullBoardListing() }); !ok {
 		t.Error("ashby should implement the fullBoardListing marker")
-	}
-}
-
-func TestAshbyRegisteredAsFullBoardListing(t *testing.T) {
-	if !FullBoardListingProviders(All(nil))["ashby"] {
-		t.Error("FullBoardListingProviders(All(nil)) should include ashby")
 	}
 }
 
@@ -34,7 +30,7 @@ func TestAshbyRegisteredAsFullBoardListing(t *testing.T) {
 // success — the property TestAshbyMarkers' fullBoardListing claim rests on.
 func TestAshbyFetchPropagatesAListingError(t *testing.T) {
 	fake := &fakeHTTP{err: errors.New("boom")}
-	if _, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+	if _, err := NewAshby(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "acme"}); err == nil {
 		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
@@ -55,7 +51,7 @@ func TestAshbyFetch(t *testing.T) {
 		]
 	}`}
 
-	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewAshby(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Ashby", Provider: "ashby", Board: "ashby",
 	})
 	if err != nil {
@@ -94,10 +90,10 @@ func TestAshbyFetch(t *testing.T) {
 	// This posting carries no workplaceType, so isRemote is the fallback that resolves
 	// the mode — and Remote follows from that resolved mode (see MapAshbyPosting).
 	if !j.Remote {
-		t.Error("Remote = false, want true from the isRemote fallback")
+		t.Error("Remote = false, want true from the kit.IsRemote fallback")
 	}
 	if j.WorkMode != "remote" {
-		t.Errorf("WorkMode = %q, want remote from the isRemote fallback", j.WorkMode)
+		t.Errorf("WorkMode = %q, want remote from the kit.IsRemote fallback", j.WorkMode)
 	}
 	if j.PostedAt == nil {
 		t.Error("PostedAt = nil, want parsed publishedAt with milliseconds")
@@ -123,7 +119,7 @@ func TestAshbyFetchWorkplaceTypeBeatsIsRemote(t *testing.T) {
 		]
 	}`}
 
-	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewAshby(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Surfshark", Provider: "ashby", Board: "surfshark",
 	})
 	if err != nil {
@@ -159,7 +155,7 @@ func TestAshbyFetchDecodesStructuredCountry(t *testing.T) {
 		]
 	}`}
 
-	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewAshby(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Ramp", Provider: "ashby", Board: "ramp",
 	})
 	if err != nil {
@@ -182,7 +178,7 @@ func TestAshbyFetchNoAddressLeavesCountriesEmpty(t *testing.T) {
 		]
 	}`}
 
-	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewAshby(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Acme", Provider: "ashby", Board: "acme",
 	})
 	if err != nil {
@@ -195,7 +191,7 @@ func TestAshbyFetchNoAddressLeavesCountriesEmpty(t *testing.T) {
 
 func TestAshbyFetchRequestsCompensation(t *testing.T) {
 	fake := &fakeHTTP{body: `{"jobs": []}`}
-	if _, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Provider: "ashby", Board: "acme"}); err != nil {
+	if _, err := NewAshby(fake).Fetch(context.Background(), kit.CompanyEntry{Company: "Acme", Provider: "ashby", Board: "acme"}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if !strings.Contains(fake.gotURL, "includeCompensation=true") {
@@ -219,7 +215,7 @@ func TestAshbyFetchReadsSalaryComponent(t *testing.T) {
 			}
 		}]
 	}`}
-	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{Company: "OpenAI", Provider: "ashby", Board: "openai"})
+	jobs, err := NewAshby(fake).Fetch(context.Background(), kit.CompanyEntry{Company: "OpenAI", Provider: "ashby", Board: "openai"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -249,7 +245,7 @@ func TestAshbyFetchIgnoresNonSalaryComponents(t *testing.T) {
 			}
 		}]
 	}`}
-	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Provider: "ashby", Board: "acme"})
+	jobs, err := NewAshby(fake).Fetch(context.Background(), kit.CompanyEntry{Company: "Acme", Provider: "ashby", Board: "acme"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}

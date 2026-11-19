@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/ingest/sources/ats"
 )
 
 // The verification stack substitutes only the external board response; normalization,
@@ -56,7 +57,7 @@ func TestVerificationSeed(t *testing.T) {
 	}
 	defer pool.Close()
 	runner := pipeline.Runner{
-		Registry: map[string]sources.Source{"greenhouse": sources.NewGreenhouse(verificationBoard{})},
+		Registry: map[string]sources.Source{"greenhouse": ats.NewGreenhouse(verificationBoard{})},
 		Store:    newDBStore(pool, 1, nil, nil, defaultSeenPolicy()),
 	}
 	stats, err := runner.Run(ctx, []sources.CompanyEntry{{Provider: "greenhouse", Board: "freehire-verification", Company: "Freehire Verification"}})

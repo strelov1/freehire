@@ -1,9 +1,11 @@
-package sources
+package ats
 
 import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 // leverBaseURL is the Lever postings API root (default/US host). leverEUBaseURL is the
@@ -18,11 +20,11 @@ const (
 // postings whose body is split across HTML description/lists/additional fields, which
 // the adapter assembles, so no per-posting detail request is needed.
 type lever struct {
-	http JSONGetter
+	http kit.JSONGetter
 }
 
 // NewLever builds the Lever adapter over the given HTTP client.
-func NewLever(c JSONGetter) Source { return lever{http: c} }
+func NewLever(c kit.JSONGetter) kit.Source { return lever{http: c} }
 
 func (lever) Provider() string { return "lever" }
 
@@ -35,7 +37,7 @@ func (lever) FullBoardListing() {}
 // a null body fails Fetch. See the emptyBoardListing interface for the bar.
 func (lever) EmptyBoardListing() {}
 
-func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+func (l lever) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error) {
 	base := leverBaseURL
 	if e.Region == "eu" {
 		base = leverEUBaseURL
@@ -72,10 +74,10 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("lever: fetch board %s: %w", e.Board, err)
 	}
 	if postings == nil {
-		return nil, errListingAbsent("lever", e.Board, "postings")
+		return nil, kit.ErrListingAbsent("lever", e.Board, "postings")
 	}
 
-	jobs := make([]Job, 0, len(postings))
+	jobs := make([]kit.Job, 0, len(postings))
 	for _, p := range postings {
 		// Lever splits the body across description + lists (each a heading and its
 		// HTML items) + additional; the plain mirror is unreliable, so assemble the
@@ -92,24 +94,24 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 		body.WriteString(p.Additional)
 
-		job := Job{
+		job := kit.Job{
 			ExternalID:     p.ID,
 			URL:            p.HostedURL,
 			Title:          p.Text,
 			Company:        e.Company,
 			Location:       p.Categories.Location,
-			Description:    sanitizeHTML(body.String()),
-			Remote:         isRemote(p.Categories.Location),
-			WorkMode:       workplaceTypeMode(p.WorkplaceType),
-			Countries:      countryFromCode(p.Country),
-			PostedAt:       parseEpochMillis(p.CreatedAt),
+			Description:    kit.SanitizeHTML(body.String()),
+			Remote:         kit.IsRemote(p.Categories.Location),
+			WorkMode:       kit.WorkplaceTypeMode(p.WorkplaceType),
+			Countries:      kit.CountryFromCode(p.Country),
+			PostedAt:       kit.ParseEpochMillis(p.CreatedAt),
 			EmploymentType: leverEmploymentType(p.Categories.Commitment),
 			// team is the narrower label, nested under department on Lever.
-			Team: firstNonEmpty(strings.TrimSpace(p.Categories.Team), strings.TrimSpace(p.Categories.Department)),
+			Team: kit.FirstNonEmpty(strings.TrimSpace(p.Categories.Team), strings.TrimSpace(p.Categories.Department)),
 		}
 		if p.SalaryRange != nil {
 			if period := leverSalaryPeriod(p.SalaryRange.Interval); period != "" {
-				min, max := roundSalaryPart(p.SalaryRange.Min), roundSalaryPart(p.SalaryRange.Max)
+				min, max := kit.RoundSalaryPart(p.SalaryRange.Min), kit.RoundSalaryPart(p.SalaryRange.Max)
 				if min != nil || max != nil {
 					job.SalaryMin, job.SalaryMax = min, max
 					job.SalaryCurrency = p.SalaryRange.Currency

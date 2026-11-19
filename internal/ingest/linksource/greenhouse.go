@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/ingest/sources/ats"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 )
 
@@ -55,7 +56,7 @@ func (g greenhouse) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 	}
 	api := fmt.Sprintf("https://%s/v1/boards/%s/jobs/%s?content=true&pay_transparency=true", apiHost, board, id)
 
-	var j sources.GreenhousePosting
+	var j ats.GreenhousePosting
 	if err := g.http.GetJSON(ctx, api, &j); err != nil {
 		return sources.Job{}, false, err
 	}
@@ -66,7 +67,7 @@ func (g greenhouse) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 	// The posting→Job mapping is shared with the greenhouse board adapter so the two
 	// produce identical facets; only the identity differs (namespaced id, and the company
 	// from the API's company_name — the board list endpoint does not serve it).
-	job := sources.MapGreenhousePosting(j)
+	job := ats.MapGreenhousePosting(j)
 	job.ExternalID = externalid.Namespace(board, id)
 	job.Company = j.CompanyName
 	return job, true, nil

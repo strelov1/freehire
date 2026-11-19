@@ -1,4 +1,4 @@
-package sources
+package ats
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 func TestRecruiteeProvider(t *testing.T) {
@@ -19,14 +21,8 @@ func TestRecruiteeProvider(t *testing.T) {
 // aborts the whole Fetch.
 func TestRecruiteeMarkers(t *testing.T) {
 	s := NewRecruitee(nil)
-	if _, ok := s.(fullBoardListing); !ok {
+	if _, ok := s.(interface{ FullBoardListing() }); !ok {
 		t.Error("recruitee should implement the fullBoardListing marker")
-	}
-}
-
-func TestRecruiteeRegisteredAsFullBoardListing(t *testing.T) {
-	if !FullBoardListingProviders(All(nil))["recruitee"] {
-		t.Error("FullBoardListingProviders(All(nil)) should include recruitee")
 	}
 }
 
@@ -34,7 +30,7 @@ func TestRecruiteeRegisteredAsFullBoardListing(t *testing.T) {
 // success — the property TestRecruiteeMarkers' fullBoardListing claim rests on.
 func TestRecruiteeFetchPropagatesAListingError(t *testing.T) {
 	fake := &fakeHTTP{err: errors.New("boom")}
-	if _, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+	if _, err := NewRecruitee(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "acme"}); err == nil {
 		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
@@ -65,7 +61,7 @@ func TestRecruiteeFetch(t *testing.T) {
 		]
 	}`}
 
-	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Acme", Provider: "recruitee", Board: "acme",
 	})
 	if err != nil {
@@ -119,7 +115,7 @@ func TestRecruiteeFetchHybridOffer(t *testing.T) {
 		]
 	}`}
 
-	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Acme", Provider: "recruitee", Board: "acme",
 	})
 	if err != nil {
@@ -160,7 +156,7 @@ func TestRecruiteeFetchYieldsApplyForm(t *testing.T) {
 		]
 	}`}
 
-	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), kit.CompanyEntry{Company: "Acme", Board: "acme"})
 	if err != nil || len(jobs) != 1 {
 		t.Fatalf("Fetch() = %d jobs, err=%v, want 1", len(jobs), err)
 	}
@@ -196,7 +192,7 @@ func TestRecruiteeFetchYieldsApplyForm(t *testing.T) {
 func TestRecruiteeFetchAlwaysYieldsAForm(t *testing.T) {
 	fake := &fakeHTTP{body: `{"offers":[{"id":1,"title":"Dev","careers_url":"https://a.recruitee.com/o/dev"}]}`}
 
-	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), kit.CompanyEntry{Company: "Acme", Board: "acme"})
 	if err != nil || len(jobs) != 1 {
 		t.Fatalf("Fetch() = %d jobs, err=%v", len(jobs), err)
 	}
@@ -210,7 +206,7 @@ func TestRecruiteeFetchReadsSalary(t *testing.T) {
 	fake := &fakeHTTP{body: `{"offers":[{"id":1,"title":"Marketing Manager",
 		"salary":{"min":"50000","max":"70000","period":"year","currency":"EUR"}}]}`}
 
-	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), kit.CompanyEntry{Company: "Acme", Board: "acme"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -232,7 +228,7 @@ func TestRecruiteeFetchAllNullSalaryLeavesEmpty(t *testing.T) {
 	fake := &fakeHTTP{body: `{"offers":[{"id":1,"title":"Dev",
 		"salary":{"min":null,"max":null,"period":null,"currency":null}}]}`}
 
-	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), kit.CompanyEntry{Company: "Acme", Board: "acme"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -246,7 +242,7 @@ func TestRecruiteeFetchOneSidedSalaryStillCounts(t *testing.T) {
 	fake := &fakeHTTP{body: `{"offers":[{"id":1,"title":"Dev",
 		"salary":{"min":null,"max":"70000","period":"year","currency":"EUR"}}]}`}
 
-	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), kit.CompanyEntry{Company: "Acme", Board: "acme"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}

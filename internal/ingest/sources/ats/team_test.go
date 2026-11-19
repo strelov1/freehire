@@ -1,9 +1,11 @@
-package sources
+package ats
 
 import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 // Team is the ATS's own department label: Greenhouse's most specific department, Lever's and
@@ -49,7 +51,7 @@ func TestLeverTeam(t *testing.T) {
 		{"id":"2","text":"B","hostedUrl":"u2","categories":{"department":"Sales"}},
 		{"id":"3","text":"C","hostedUrl":"u3","categories":{}}
 	]`}
-	jobs, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"})
+	jobs, err := NewLever(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "acme", Company: "Acme"})
 	if err != nil {
 		t.Fatal(err)
 	}

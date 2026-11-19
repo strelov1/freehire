@@ -15,6 +15,9 @@ last adapter leaves, `kit_aliases.go` re-exports the kernel under its old names;
 code in a family calls `kit.X` directly. A marker is a method with an exported name
 (`FullBoardListing()`), so a family adapter can declare it.
 
+Families so far: [`sources/ats`](ats/AGENTS.md) (greenhouse, lever, ashby, recruitee). A family
+imports only `kit` (and `applyform`) of ingest; `.golangci.yml` rule `sources-families` holds it.
+
 ## Scope
 
 Read [Scope](AGENT-REFERENCE.md#scope) before work involving this topic.
