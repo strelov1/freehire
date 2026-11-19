@@ -118,6 +118,11 @@ func (naukri) Aggregator() {}
 
 func (naukri) SweepGrace() time.Duration { return naukriSweepGrace }
 
+// sliceBoardListing: a functional area is a 7-day, page-capped slice, so the 14-day sweepGrace
+// stands in for a full listing. Without it a posting closed only through the company scope, and
+// an employer whose last posting left the search never re-entered it, so the row stayed open.
+func (naukri) SliceBoardListing() {}
+
 // naukriListing is one search row, reduced to what the adapter reads.
 type naukriListing struct {
 	JobID         string `json:"jobId"`
@@ -179,8 +184,8 @@ func (s naukri) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(ext
 	return s.hydrate(ctx, rows, naukriTechAreas[e.Board], seen, gate)
 }
 
-// list walks the area's freshness window newest first. The first page failing fails the board;
-// a later page failing ends the walk with what was read. The walk ends at the declared total, a
+// list walks the area's freshness window newest first. Any page failing, or coming back empty
+// well short of the declared total, fails the board. The walk ends at the declared total, a
 // short page, or the platform's deepest page — a truncated area is logged, not failed, since
 // the window is a property of the platform rather than of this crawl.
 func (s naukri) list(ctx context.Context, area string) ([]naukriListing, error) {
@@ -197,12 +202,10 @@ func (s naukri) list(ctx context.Context, area string) ([]naukriListing, error) 
 		q.Set("sort", "f") // freshness: newest first, so the detail budget buys the newest
 		q.Set("pageNo", strconv.Itoa(page))
 		var p naukriSearchPage
+		// Any failed page fails the board: a partial walk would qualify it for the board-scoped
+		// close (sliceBoardListing) and close the postings on the pages it never read.
 		if err := s.http.GetJSONWithHeaders(ctx, naukriSearchURL+q.Encode(), naukriAppHeaders, &p); err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("naukri: area %s: %w", area, err)
-			}
-			log.Printf("naukri: area %s: page %d failed; keeping %d postings read: %v", area, page, len(out), err)
-			break
+			return nil, fmt.Errorf("naukri: area %s: page %d: %w", area, page, err)
 		}
 		if page == 1 {
 			total = p.NoOfJobs
@@ -213,6 +216,11 @@ func (s naukri) list(ctx context.Context, area string) ([]naukriListing, error) 
 			}
 			ids[r.JobID] = true
 			out = append(out, r)
+		}
+		// An empty page well short of the declared total is a truncated listing, not the end; one
+		// page of slack absorbs postings that closed while the walk ran.
+		if len(p.JobDetails) == 0 && len(out)+naukriPageSize < total {
+			return nil, fmt.Errorf("naukri: area %s: page %d empty with %d of %d read", area, page, len(out), total)
 		}
 		if len(p.JobDetails) == 0 || page*naukriPageSize >= total {
 			break
