@@ -1169,3 +1169,5 @@ spend-analysis	Spend Analysis is collecting and classifying what an organisation
 rfx	RFx is the family of formal requests a buyer sends to suppliers to compare offers: a request for quotation (RFQ), proposal (RFP) or information (RFI).
 mrp	MRP (material requirements planning) is a planning method that works out which materials and components to order, and when, to meet a production schedule.
 excel	Microsoft Excel is a spreadsheet application used to organise, calculate and analyse data with formulas, pivot tables and charts.
+nx	Nx: A build system and monorepo tool for JavaScript and TypeScript workspaces, with task caching and project-graph-aware builds.
+design-systems	Design Systems: The practice of building and maintaining a shared library of UI components, patterns and guidelines that keeps a product's interfaces consistent.

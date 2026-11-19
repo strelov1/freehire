@@ -31,8 +31,6 @@ func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.T
 	// Dictionary suggestions are cookie-only over REST; keep the corresponding
 	// account tool with OAuth grants rather than widening full-scope API keys.
 	all = append(all, assistants.dictionaryMCPTools()...)
-	// Profile writes are cookie-only over REST (PUT /me/profile), so grant-only here too.
-	all = append(all, assistants.profileMCPTools()...)
 	// Storing a CV and reading its status are cookie-only over REST (PUT/GET /me/resume).
 	all = append(all, assistants.cvSetupMCPTools(origin)...)
 	all = append(all, assistants.buddies.mcpTools()...)
@@ -41,7 +39,7 @@ func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.T
 
 // mcpKeyTools is what the same server offers a full-scope API key: everything an OAuth grant
 // gets except cookie-only actions (auto-apply, dictionary suggestions, problem reports and
-// interview buddies).
+// interview buddies). update_profile is the one cookie-only REST write served to a key.
 //
 // A key reaches this server so the local freehire-mcp package, which holds a key and no
 // grant, can manage job alerts without a second implementation. Auto-apply stays with the
@@ -54,6 +52,11 @@ func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool 
 	all = append(all, assistants.unreadMailTool(origin))
 	// Read-only, and GET /me/plan is open to a key over REST.
 	all = append(all, assistants.planMCPTool(origin))
+	// PUT /me/profile is cookie-only over REST, but a key-driven agent (the local freehire-mcp
+	// package) must be able to keep the profile's skills in step with the evidence it holds.
+	// The tool writes only the job-search preferences and headline/summary: no credential,
+	// email or key management, so a full-scope key gets it.
+	all = append(all, assistants.profileMCPTools()...)
 	// An MCP client keeps every result in its context, so it gets the bounded facets.
 	// search_jobs, get_job and get_company are listed only so the instructions and prompts see
 	// them as served; the catalogue's own tools answer those names.

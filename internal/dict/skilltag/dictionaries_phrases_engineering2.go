@@ -14,6 +14,15 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"figma plugin", "figma-plugins"},
 	{"monorepo", "monorepo"},
 	{"monorepos", "monorepo"},
+	// Bare "nx" and "design system(s)" are résumé-only (resumeAcronyms); job text reaches them
+	// only through phrases that cannot mean Siemens NX or "design systems that scale".
+	{"nx monorepo", "nx"},
+	{"nx workspace", "nx"},
+	{"nrwl nx", "nx"},
+	{"ui design system", "design-systems"},
+	{"react design system", "design-systems"},
+	{"design system library", "design-systems"},
+	{"design systems team", "design-systems"},
 	{"system integration", "system-integration"},
 	{"systems integration", "system-integration"},
 	{"data reconciliation", "data-reconciliation"},

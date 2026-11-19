@@ -102,8 +102,12 @@ func canonicalizeToken(tok string, o options) (string, bool) {
 		return c, true
 	}
 	if o.resumeAcronyms {
-		if c, ok := resumeAcronyms[cased]; ok {
-			return c, true
+		// Case-folded: an asserted token ("design systems", "NX") is a list entry, not prose,
+		// so the capital that guards these surfaces in Parse is not required here.
+		for surface, c := range resumeAcronyms {
+			if strings.EqualFold(cased, surface) {
+				return c, true
+			}
 		}
 	}
 
