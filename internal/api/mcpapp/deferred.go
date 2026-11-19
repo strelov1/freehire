@@ -116,7 +116,11 @@ func addToolSearch(server *mcp.Server, tools []assistant.Tool) {
 		Annotations: &mcp.ToolAnnotations{Title: "Run an account tool", DestructiveHint: &destructive, OpenWorldHint: &openWorld},
 		Description: "Runs an account tool that is not in the tool list, by its name, with its arguments; returns that tool's result.",
 	}, func(context.Context, *mcp.CallToolRequest, callToolInput) (*mcp.CallToolResult, any, error) {
-		return errorResult("this runs only the tools find_tools returns; a listed tool is called directly"), nil, nil
+		// Only a name or field the caller got wrong reaches here: a refusal, not a fault of ours.
+		const reason = "this runs only the tools find_tools returns; a listed tool is called directly"
+		result := errorResult(reason)
+		result.Meta = mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": "invalid_request", reasonKey: reason}}
+		return result, nil, nil
 	})
 	server.AddReceivingMiddleware(deferMiddleware(served))
 }
