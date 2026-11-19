@@ -254,6 +254,39 @@ func TestRecruiterContacts_NoWebsiteAndFeatureOff(t *testing.T) {
 	}
 }
 
+// The job page offers the lookup only where it can run: feature on and a company website.
+func TestRecruiterContacts_JobDetailSaysWhereALookupCanRun(t *testing.T) {
+	fx := newContactsFixture(t, nil, 5)
+	available := func(configured bool, slug string) bool {
+		t.Helper()
+		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+		mountJobsContract(app, &jobsHandlers{queries: db.New(fx.pool), recruiterContacts: configured}, middleware{})
+		resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/jobs/"+slug, nil), -1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var body struct {
+			Data struct {
+				Available bool `json:"recruiter_contacts_available"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil || resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("GET %s: %d %v", slug, resp.StatusCode, err)
+		}
+		return body.Data.Available
+	}
+	if !available(true, "job-a") {
+		t.Error("configured, company with a website: want available")
+	}
+	if available(true, "no-site") {
+		t.Error("company without a website: want unavailable")
+	}
+	if available(false, "job-a") {
+		t.Error("feature off: want unavailable")
+	}
+}
+
 func TestDeleteExpiredJobRecruiterContacts(t *testing.T) {
 	fx := newContactsFixture(t, nil, 5)
 	ctx := context.Background()

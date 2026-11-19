@@ -13,7 +13,7 @@
 
   // Static effective date — freehire has no Date.now-driven content, and a hard
   // date is what a privacy policy needs. Bump this whenever the policy changes.
-  const lastUpdated = 'November 5, 2026';
+  const lastUpdated = 'November 19, 2026';
 </script>
 
 <Seo
@@ -116,6 +116,29 @@
         that vacancy receives it. We keep a record of the application so you cannot send it twice and so it shows in
         your tracking; we also remember your answers to prefill your next application, and delete them on request (see
         Your rights below).
+      </p>
+    </section>
+
+    <section class="flex flex-col gap-3">
+      <h2 class="text-xl font-semibold tracking-tight">Recruiter contacts</h2>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        On a paid plan, a member can ask who recruits for a job's company. We then show up to three people whose job
+        title says they recruit there, with their name, title and work email. These come from a business-contact data
+        provider that compiles them from public sources such as company websites. We do this in our legitimate interest
+        in helping candidates reach the person hiring, and we ask members to write personally, not to mass-mail.
+      </p>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        We keep the contacts found for a job for 30 days so that other members looking at the same job see the same
+        answer. Separately, we record every time an address is shown and to which member, for 12 months, so we can
+        answer a request about it.
+      </p>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        If you are one of these people, write to
+        <a href="mailto:{contactEmail}" class="font-medium text-foreground underline-offset-4 hover:underline"
+          >{contactEmail}</a
+        >
+        to ask where your address came from or to have it removed. A removed address is never shown again, including from
+        contacts already found.
       </p>
     </section>
 
