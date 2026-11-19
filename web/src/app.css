@@ -92,6 +92,43 @@
     max(0.5rem, env(safe-area-inset-left));
 }
 
+/* How much of the top edge the site header covers right now: its own h-14, or 0 while
+   it is slid away (TopBar sets `data-header-hidden` on <html> when the visitor scrolls
+   down). Everything pinned under the header reads this one value, so a sticky rail
+   moves up with the header instead of leaving a 56px hole where it used to be. */
+:root {
+  --header-offset: 3.5rem;
+  --header-top: 0px;
+}
+/* Hidden, the header sits at -(3.5rem + 1px): its h-14 plus the 1px bottom border, so no hairline is left. */
+:root[data-header-hidden] {
+  --header-offset: 0rem;
+  --header-top: calc(-3.5rem - 1px);
+}
+/* The header itself, then what is pinned flush under it (a sticky bar) and pinned with
+   1.5rem of air (a side rail or card). All slide together on one transition. */
+@utility top-site-header {
+  top: var(--header-top);
+  transition: top 250ms ease;
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+@utility top-header {
+  top: var(--header-offset);
+  transition: top 250ms ease;
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+@utility top-header-air {
+  top: calc(var(--header-offset) + 1.5rem);
+  transition: top 250ms ease;
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {

@@ -9,6 +9,7 @@
   import BrandMark from './BrandMark.svelte';
   import { isApiReferenceRoute, isWideHeaderRoute } from '#lib/shellLayout.js';
   import { HEADER_LINKS } from '#lib/siteNav.js';
+  import { siteHeader } from '#lib/siteHeader.svelte.js';
 
   // The header is three slots — logo | search | menu — identical on every
   // viewport. Nav links, the account items, the theme toggle, and the auth
@@ -78,6 +79,32 @@
   // than stretching across the monitor.
   const wideHeader = $derived(isWideHeaderRoute(page.url.pathname));
 
+  // The header slides away while the visitor scrolls down and comes back on any scroll
+  // up, the way Safari's bars do: reading a long list gets the full screen, and the
+  // header is one flick away rather than at the top of the page. Near the top it always
+  // shows, and it comes back whenever focus enters it (a keyboard user tabbing to it).
+  // The state lives on <html> as `data-header-hidden` so the sticky rails pinned under
+  // the header (`top-header`, `top-header-air` in app.css) follow it from one variable.
+  // `top` rather than a transform: a transform would become the containing block for
+  // the mobile menu's `position: fixed` drawer, the same trap as backdrop-blur below.
+  let lastScrollY = 0;
+  let headerEl: HTMLElement | undefined = $state();
+  const SCROLL_SLOP = 6; // ignore trackpad jitter so the bar does not flicker
+  function onWindowScroll() {
+    const y = window.scrollY;
+    const delta = y - lastScrollY;
+    // The header's own height (taller under a larger root font): it never slides away over nothing.
+    const hideAfter = headerEl?.offsetHeight ?? 57;
+    if (y < hideAfter) siteHeader.hidden = false;
+    // Never slide away a control that holds focus: PageDown from a focused link would hide it.
+    else if (delta > SCROLL_SLOP) siteHeader.hidden = !headerEl?.contains(document.activeElement);
+    else if (delta < -SCROLL_SLOP) siteHeader.hidden = false;
+    if (Math.abs(delta) > SCROLL_SLOP || y < hideAfter) lastScrollY = y;
+  }
+  $effect(() => {
+    document.documentElement.toggleAttribute('data-header-hidden', siteHeader.hidden);
+  });
+
   // A failed OAuth callback lands back wherever that attempt's `returnTo` pointed,
   // carrying `?auth_error` (appended by the backend — see internal/api/handler/oauth.go)
   // — which could be ANY page, not just one that itself knows about /signin. This is
@@ -88,7 +115,9 @@
   // that lands here via client-side navigation never remounts it, so onMount would
   // fire only on a cold load and miss the in-app bounce. afterNavigate covers both
   // the initial load and every later navigation, and stays off the SSR path.
+  // It also brings back a header the previous page scrolled away.
   afterNavigate(({ shallow }) => {
+    siteHeader.hidden = false;
     if (shallow) return; // SvelteKit 3 fires this for shallow routing too
     if (!page.url.searchParams.has('auth_error')) return;
     const query = [...page.url.searchParams]
@@ -104,7 +133,12 @@
 <!-- Solid (not backdrop-blur) on purpose: a backdrop-filter here would become the
      containing block for the mobile menu's `position: fixed` full-screen drawer,
      pinning it to the header instead of the viewport and breaking it. -->
-<header class="sticky top-0 z-40 border-b border-border bg-background">
+<svelte:window onscroll={onWindowScroll} />
+<header
+  bind:this={headerEl}
+  class="top-site-header sticky z-40 border-b border-border bg-background"
+  onfocusin={() => (siteHeader.hidden = false)}
+>
   <div class={['mx-auto flex h-14 items-center gap-3 px-4 sm:gap-4', wideHeader ? 'max-w-none' : 'max-w-6xl']}>
     <!-- Wide header only: the two side slots grow from a zero basis, so the free space
          splits evenly between them and the search sits on the container's axis — the
@@ -141,19 +175,16 @@
                between its Location scope and the field. Without it the first link sat
                one word-gap from "freehire" and read as part of it. -->
           <div aria-hidden="true" class="h-5 w-px shrink-0 bg-border"></div>
+          <!-- Labels only, no glyphs: a row of icon+word pairs reads as one busy strip,
+               and the word already names the destination. The burger keeps the glyphs. -->
           {#each HEADER_LINKS as link, i (link.href)}
-            {@const Icon = link.icon}
             <a
               href={resolve(toPath(link.href))}
               class={[
-                'flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground',
+                'flex items-center whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground',
                 i >= LINKS_BELOW_LG && 'hidden lg:flex',
               ]}
             >
-              <!-- Label alone on a phone. The glyph is 22px with its gap and both links
-                   carry one, which at 320px pushed "Companies" under the burger; the word
-                   is what names the destination, so the glyph is what gives way. -->
-              <Icon class="hidden size-4 shrink-0 sm:block" aria-hidden="true" />
               {link.label}
             </a>
           {/each}

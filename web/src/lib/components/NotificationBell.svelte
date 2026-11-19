@@ -135,7 +135,7 @@
         aria-label="Notifications"
         aria-modal={modal ? 'true' : undefined}
         {@attach modal ? focusTrap() : undefined}
-        class="z-50 overflow-y-auto overscroll-contain max-sm:animate-modal-fade border border-border bg-background shadow-lg max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-14 max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-h-[min(70vh,32rem)] sm:rounded-md"
+        class="z-50 overflow-y-auto overscroll-contain max-sm:animate-modal-fade border border-border bg-background shadow-lg max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-header max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-h-[min(70vh,32rem)] sm:rounded-md"
       >
         <div class="flex items-center justify-between border-b border-border px-3 py-2">
           <span class="text-sm font-semibold">Notifications</span>

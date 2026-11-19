@@ -120,7 +120,9 @@
   <aside class="hidden w-72 shrink-0 md:block">
     <!-- `top-20` is the site header's own `h-14` plus 24px of air, matching the companies
          sidebar: at `top-6` the opaque sticky header covers the card's first rows. -->
-    <div class="sticky top-20 max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
+    <div
+      class="sticky top-header-air max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4"
+    >
       <TalentFilterSummary store={filters} onOpen={() => (modalOpen = true)} />
     </div>
   </aside>

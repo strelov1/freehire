@@ -9,7 +9,12 @@
   // full-width drawer row on mobile (icon + "GitHub" label + count pushed right).
   // The count comes from the shared store — the first mounted instance loads it,
   // every other instance just reads it reactively.
-  let { variant = 'inline', class: className = '' }: { variant?: 'inline' | 'row'; class?: string } = $props();
+  // `outline`: the line mark the site header uses beside lucide's stroke glyphs.
+  let {
+    variant = 'inline',
+    outline = false,
+    class: className = '',
+  }: { variant?: 'inline' | 'row'; outline?: boolean; class?: string } = $props();
 
   onMount(() => {
     void githubStars.load();
@@ -43,7 +48,11 @@
   )}
 >
   <!-- eslint-enable svelte/no-navigation-without-resolve -->
-  <ProviderIcon provider="github" />
+  <!-- size-5 in the bar to match the bell beside it; drawer rows stay size-4 like their neighbours. -->
+  <ProviderIcon
+    provider={outline ? 'github-outline' : 'github'}
+    class={outline && variant === 'inline' ? 'size-5' : undefined}
+  />
   {#if variant === 'row'}
     <span>GitHub</span>
     <span class="ml-auto tabular-nums text-xs">{label}</span>

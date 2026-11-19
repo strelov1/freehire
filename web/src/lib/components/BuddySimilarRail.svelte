@@ -29,7 +29,7 @@
 
 <!-- The rail owns its column: with nobody to suggest, nothing reserves the width. -->
 {#if people.length}
-  <aside class="xl:sticky xl:top-20 xl:w-68 xl:shrink-0 xl:self-start">
+  <aside class="xl:sticky xl:top-header-air xl:w-68 xl:shrink-0 xl:self-start">
     <section class="rounded-xl border border-border bg-card p-4">
       <div class="mb-1 flex items-baseline justify-between">
         <h2 class="text-sm font-semibold">People like you</h2>

@@ -26,7 +26,7 @@
        pinned 24px from the VIEWPORT, so the opaque header (`sticky top-0`) covered its
        first 32px — here, the "Filters" heading — for the whole scroll. The max-height
        is then what is left of the viewport, less the same 24px at the bottom. -->
-  <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-4 overflow-y-auto">
+  <div class="sticky top-header-air flex max-h-[calc(100vh-6.5rem)] flex-col gap-4 overflow-y-auto">
     {@render top?.()}
     <!-- Card chrome only once there are filters to list: around one "All filters" button it
          was a framed box holding nothing. -->
