@@ -3,6 +3,8 @@ package sources
 import (
 	"context"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/ats"
 )
 
 // emptyBoardListingAdapters is every adapter granted emptyBoardListing, with the answer each
@@ -16,11 +18,11 @@ var emptyBoardListingAdapters = map[string]struct {
 	"personio":       {func(f *fakeHTTP) Source { return NewPersonio(f) }, `<workzag-jobs/>`, []string{`<html></html>`, `<error></error>`, `<workzag-jobs><error>temporarily unavailable</error></workzag-jobs>`, `<workzag-jobs>temporarily unavailable</workzag-jobs>`}},
 	"hiringthing":    {func(f *fakeHTTP) Source { return NewHiringThing(f) }, htListingHTML(), []string{`<html></html>`, `<div data-react-class="HiringThing.Components.JobFiltersContainer" data-react-props="{}"></div>`}},
 	"idealtraits":    {func(f *fakeHTTP) Source { return NewIdealTraits(f) }, `{"joblist":"","jobcount":0}`, []string{`{}`, `{"joblist":""}`, `{"jobcount":0}`, `{"joblist":null,"jobcount":0}`}},
-	"greenhouse":     {func(f *fakeHTTP) Source { return NewGreenhouse(f) }, `{"jobs":[],"meta":{"total":0}}`, []string{`{}`, `{"jobs":null}`, `{"status":404}`}},
-	"ashby":          {func(f *fakeHTTP) Source { return NewAshby(f) }, `{"jobs":[],"apiVersion":"1"}`, []string{`{}`, `{"jobs":null}`, `{"apiVersion":"1"}`}},
-	"lever":          {func(f *fakeHTTP) Source { return NewLever(f) }, `[]`, []string{`null`}},
+	"greenhouse":     {func(f *fakeHTTP) Source { return ats.NewGreenhouse(f) }, `{"jobs":[],"meta":{"total":0}}`, []string{`{}`, `{"jobs":null}`, `{"status":404}`}},
+	"ashby":          {func(f *fakeHTTP) Source { return ats.NewAshby(f) }, `{"jobs":[],"apiVersion":"1"}`, []string{`{}`, `{"jobs":null}`, `{"apiVersion":"1"}`}},
+	"lever":          {func(f *fakeHTTP) Source { return ats.NewLever(f) }, `[]`, []string{`null`}},
 	"workable":       {func(f *fakeHTTP) Source { return NewWorkable(f) }, `{"name":"Acme","description":"","jobs":[]}`, []string{`{}`, `{"name":"Acme"}`, `{"jobs":null}`}},
-	"recruitee":      {func(f *fakeHTTP) Source { return NewRecruitee(f) }, `{"offers":[]}`, []string{`{}`, `{"offers":null}`}},
+	"recruitee":      {func(f *fakeHTTP) Source { return ats.NewRecruitee(f) }, `{"offers":[]}`, []string{`{}`, `{"offers":null}`}},
 	"breezy":         {func(f *fakeHTTP) Source { return NewBreezy(f) }, `[]`, []string{`null`}},
 	"bamboohr":       {func(f *fakeHTTP) Source { return NewBambooHR(f) }, `{"meta":{"totalCount":0},"result":[]}`, []string{`{}`, `{"meta":{"totalCount":0}}`, `{"result":null}`}},
 	"workday":        {func(f *fakeHTTP) Source { return NewWorkday(f) }, `{"total":0,"jobPostings":[],"facets":[]}`, []string{`{}`, `{"total":0}`, `{"jobPostings":null}`, `{"total":5,"jobPostings":[]}`}},

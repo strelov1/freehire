@@ -1,4 +1,4 @@
-package sources
+package ats
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 func TestGreenhouseProvider(t *testing.T) {
@@ -21,14 +23,8 @@ func TestGreenhouseProvider(t *testing.T) {
 // early, so any listing failure aborts the whole Fetch rather than returning a partial result.
 func TestGreenhouseMarkers(t *testing.T) {
 	s := NewGreenhouse(nil)
-	if _, ok := s.(fullBoardListing); !ok {
+	if _, ok := s.(interface{ FullBoardListing() }); !ok {
 		t.Error("greenhouse should implement the fullBoardListing marker")
-	}
-}
-
-func TestGreenhouseRegisteredAsFullBoardListing(t *testing.T) {
-	if !FullBoardListingProviders(All(nil))["greenhouse"] {
-		t.Error("FullBoardListingProviders(All(nil)) should include greenhouse")
 	}
 }
 
@@ -36,7 +32,7 @@ func TestGreenhouseRegisteredAsFullBoardListing(t *testing.T) {
 // success — the property TestGreenhouseMarkers' fullBoardListing claim rests on.
 func TestGreenhouseFetchPropagatesAListingError(t *testing.T) {
 	fake := &fakeHTTP{err: errors.New("boom")}
-	if _, err := NewGreenhouse(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+	if _, err := NewGreenhouse(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "acme"}); err == nil {
 		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
@@ -55,7 +51,7 @@ func TestGreenhouseFetchDecodesAndSanitizesContent(t *testing.T) {
 		]
 	}`}
 
-	jobs, err := NewGreenhouse(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewGreenhouse(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Dropbox", Provider: "greenhouse", Board: "dropbox",
 	})
 	if err != nil {
@@ -88,7 +84,7 @@ func TestGreenhouseFetch(t *testing.T) {
 		]
 	}`}
 
-	jobs, err := NewGreenhouse(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewGreenhouse(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "GitLab", Provider: "greenhouse", Board: "gitlab",
 	})
 	if err != nil {
@@ -189,7 +185,7 @@ func TestGreenhouseFetchReadsEmploymentTypeMetadata(t *testing.T) {
 		]
 	}`}
 
-	jobs, err := NewGreenhouse(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewGreenhouse(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Acme", Provider: "greenhouse", Board: "acme",
 	})
 	if err != nil {
@@ -204,15 +200,15 @@ func TestGreenhouseFetchReadsEmploymentTypeMetadata(t *testing.T) {
 // the postings list) carries an employer-authored "about us" field for a meaningful
 // share of boards (confirmed live: Coinbase, Figma, Asana).
 func TestGreenhouseImplementsCompanyDescriber(t *testing.T) {
-	if _, ok := NewGreenhouse(nil).(CompanyDescriber); !ok {
-		t.Error("greenhouse should implement CompanyDescriber")
+	if _, ok := NewGreenhouse(nil).(kit.CompanyDescriber); !ok {
+		t.Error("greenhouse should implement kit.CompanyDescriber")
 	}
 }
 
 func TestGreenhouseCompanyDescriptionSanitizesContent(t *testing.T) {
 	fake := &fakeHTTP{body: `{"name":"Coinbase","content":"<p>Ready to be pushed</p><script>alert(1)</script>"}`}
 
-	got, err := NewGreenhouse(fake).(CompanyDescriber).CompanyDescription(context.Background(), CompanyEntry{Board: "coinbase"})
+	got, err := NewGreenhouse(fake).(kit.CompanyDescriber).CompanyDescription(context.Background(), kit.CompanyEntry{Board: "coinbase"})
 	if err != nil {
 		t.Fatalf("CompanyDescription: %v", err)
 	}
@@ -227,7 +223,7 @@ func TestGreenhouseCompanyDescriptionSanitizesContent(t *testing.T) {
 func TestGreenhouseCompanyDescriptionEmptyContentYieldsEmptyString(t *testing.T) {
 	fake := &fakeHTTP{body: `{"name":"Greenhouse","content":""}`}
 
-	got, err := NewGreenhouse(fake).(CompanyDescriber).CompanyDescription(context.Background(), CompanyEntry{Board: "greenhouse"})
+	got, err := NewGreenhouse(fake).(kit.CompanyDescriber).CompanyDescription(context.Background(), kit.CompanyEntry{Board: "greenhouse"})
 	if err != nil {
 		t.Fatalf("CompanyDescription: %v", err)
 	}
@@ -237,9 +233,9 @@ func TestGreenhouseCompanyDescriptionEmptyContentYieldsEmptyString(t *testing.T)
 }
 
 func TestGreenhouseCompanyDescriptionPropagatesAFetchError(t *testing.T) {
-	fake := &fakeHTTP{err: &StatusError{Method: "GET", Code: 404, URL: "https://boards-api.greenhouse.io/v1/boards/gone"}}
+	fake := &fakeHTTP{err: &kit.StatusError{Method: "GET", Code: 404, URL: "https://boards-api.greenhouse.io/v1/boards/gone"}}
 
-	_, err := NewGreenhouse(fake).(CompanyDescriber).CompanyDescription(context.Background(), CompanyEntry{Board: "gone"})
+	_, err := NewGreenhouse(fake).(kit.CompanyDescriber).CompanyDescription(context.Background(), kit.CompanyEntry{Board: "gone"})
 	if err == nil {
 		t.Fatal("expected an error for a 404 board, got nil")
 	}
@@ -295,7 +291,7 @@ func TestGreenhouseOfficeCountry(t *testing.T) {
 // Omitted, the API drops pay_input_ranges entirely rather than returning it empty.
 func TestGreenhouseFetchRequestsPayTransparency(t *testing.T) {
 	fake := &fakeHTTP{body: `{"jobs": []}`}
-	if _, err := NewGreenhouse(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err != nil {
+	if _, err := NewGreenhouse(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "acme"}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if !strings.Contains(fake.gotURL, "pay_transparency=true") {

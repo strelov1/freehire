@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"github.com/strelov1/freehire/internal/ingest/sources/ats"
 	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 )
 
@@ -63,7 +64,7 @@ func TestApplyScraplingEgressRefusesAURLWithoutAToken(t *testing.T) {
 
 func TestApplyScraplingEgressRewiresOnlyRegisteredProviders(t *testing.T) {
 	scraplingEnv(t)
-	other := NewGreenhouse(NewClient())
+	other := ats.NewGreenhouse(NewClient())
 	registry := map[string]Source{"bayt": NewBayt(nil), "greenhouse": other}
 	before := registry["bayt"]
 	if err := ApplyScraplingEgress(registry); err != nil {

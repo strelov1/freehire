@@ -7,6 +7,7 @@ import (
 	"regexp"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/ingest/sources/ats"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 )
 
@@ -47,7 +48,7 @@ func (a ashby) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 	board, id := m[1], m[2]
 
 	var resp struct {
-		Jobs []sources.AshbyPosting `json:"jobs"`
+		Jobs []ats.AshbyPosting `json:"jobs"`
 	}
 	api := fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", board)
 	if err := a.http.GetJSON(ctx, api, &resp); err != nil {
@@ -61,7 +62,7 @@ func (a ashby) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 		// The posting→Job mapping is shared with the ashby board adapter so the two
 		// produce identical facets; only the identity differs (namespaced id, and the
 		// company humanized from the board slug — the per-board API carries no name).
-		job := sources.MapAshbyPosting(j)
+		job := ats.MapAshbyPosting(j)
 		job.ExternalID = externalid.Namespace(board, id)
 		if job.URL == "" {
 			job.URL = "https://jobs.ashbyhq.com/" + board + "/" + id

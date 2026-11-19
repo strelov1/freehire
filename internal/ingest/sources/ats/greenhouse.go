@@ -1,4 +1,4 @@
-package sources
+package ats
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/location"
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
 )
 
@@ -22,11 +23,11 @@ const greenhouseBaseURL = "https://boards-api.greenhouse.io/v1/boards"
 // description inline when asked with content=true, so no per-posting detail request
 // is needed.
 type greenhouse struct {
-	http JSONGetter
+	http kit.JSONGetter
 }
 
 // NewGreenhouse builds the Greenhouse adapter over the given HTTP client.
-func NewGreenhouse(c JSONGetter) Source { return greenhouse{http: c} }
+func NewGreenhouse(c kit.JSONGetter) kit.Source { return greenhouse{http: c} }
 
 func (greenhouse) Provider() string { return "greenhouse" }
 
@@ -38,7 +39,7 @@ func (greenhouse) FullBoardListing() {}
 // "jobs": []; an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
 func (greenhouse) EmptyBoardListing() {}
 
-func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+func (g greenhouse) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error) {
 	// pay_transparency=true is what unlocks pay_input_ranges; without it the API omits
 	// the field entirely rather than returning it empty.
 	url := fmt.Sprintf("%s/%s/jobs?content=true&pay_transparency=true", greenhouseBaseURL, e.Board)
@@ -50,10 +51,10 @@ func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("greenhouse: fetch board %s: %w", e.Board, err)
 	}
 	if resp.Jobs == nil {
-		return nil, errListingAbsent("greenhouse", e.Board, "jobs")
+		return nil, kit.ErrListingAbsent("greenhouse", e.Board, "jobs")
 	}
 
-	jobs := make([]Job, 0, len(resp.Jobs))
+	jobs := make([]kit.Job, 0, len(resp.Jobs))
 	for _, j := range resp.Jobs {
 		job := MapGreenhousePosting(j)
 		job.ExternalID = strconv.FormatInt(j.ID, 10)
@@ -67,7 +68,7 @@ func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // endpoint, one extra request per board crawl, not per posting. Unlike the listing's
 // content=true field, this one is raw (not entity-encoded) HTML. An employer who has not
 // filled the field in yields ("", nil), not an error.
-func (g greenhouse) CompanyDescription(ctx context.Context, e CompanyEntry) (string, error) {
+func (g greenhouse) CompanyDescription(ctx context.Context, e kit.CompanyEntry) (string, error) {
 	url := fmt.Sprintf("%s/%s", greenhouseBaseURL, e.Board)
 
 	var resp struct {
@@ -79,7 +80,7 @@ func (g greenhouse) CompanyDescription(ctx context.Context, e CompanyEntry) (str
 	if resp.Content == "" {
 		return "", nil
 	}
-	return sanitizeHTML(resp.Content), nil
+	return kit.SanitizeHTML(resp.Content), nil
 }
 
 // GreenhousePosting is one job from the Greenhouse public boards API (the list endpoint
@@ -152,14 +153,14 @@ type GreenhouseMetadataField struct {
 // pipeline namespaces it by board) and the configured company; the link resolver
 // namespaces the id itself and takes the company from the API's company_name (a TG link
 // can point at a board the crawl config does not list).
-func MapGreenhousePosting(j GreenhousePosting) Job {
-	job := Job{
+func MapGreenhousePosting(j GreenhousePosting) kit.Job {
+	job := kit.Job{
 		URL:               j.AbsoluteURL,
 		Title:             j.Title,
 		Location:          j.Location.Name,
-		Description:       sanitizeHTML(html.UnescapeString(j.Content)),
-		Remote:            isRemote(j.Location.Name),
-		PostedAt:          parseRFC3339(j.UpdatedAt),
+		Description:       kit.SanitizeHTML(html.UnescapeString(j.Content)),
+		Remote:            kit.IsRemote(j.Location.Name),
+		PostedAt:          kit.ParseRFC3339(j.UpdatedAt),
 		EmploymentType:    greenhouseMetadataEmploymentType(j.Metadata),
 		FallbackCountries: greenhouseOfficeCountry(j),
 		Team:              greenhouseTeam(j),
@@ -217,10 +218,10 @@ func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, c
 	}
 	scale := currencyMinorUnits(r.CurrencyType)
 	if r.MinCents != nil {
-		salaryMin = roundSalaryPart(float64(*r.MinCents) / scale)
+		salaryMin = kit.RoundSalaryPart(float64(*r.MinCents) / scale)
 	}
 	if r.MaxCents != nil {
-		salaryMax = roundSalaryPart(float64(*r.MaxCents) / scale)
+		salaryMax = kit.RoundSalaryPart(float64(*r.MaxCents) / scale)
 	}
 	if salaryMin == nil && salaryMax == nil {
 		return nil, nil, "", ""

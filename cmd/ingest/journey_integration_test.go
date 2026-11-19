@@ -37,6 +37,7 @@ import (
 	"github.com/strelov1/freehire/internal/engage/reminder"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/ingest/sources/ats"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
@@ -93,7 +94,7 @@ func TestJourneyCrawledBoardToDeliveredAlert(t *testing.T) {
 	defer board.Close()
 	runner := pipeline.Runner{
 		Store:    newDBStore(pool, 1, newCrawledSet(), nil, defaultSeenPolicy()),
-		Registry: map[string]sources.Source{"ashby": sources.NewAshby(boardGetter{board.URL})},
+		Registry: map[string]sources.Source{"ashby": ats.NewAshby(boardGetter{board.URL})},
 	}
 	stats, err := runner.Run(ctx, []sources.CompanyEntry{{Provider: "ashby", Board: "acme", Company: "Acme"}})
 	if err != nil {

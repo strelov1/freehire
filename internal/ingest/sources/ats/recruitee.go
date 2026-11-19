@@ -1,4 +1,4 @@
-package sources
+package ats
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 // recruiteeSalary is Recruitee's salary object: every field is present but null when unstated.
@@ -25,11 +26,11 @@ const recruiteeBaseURL = "https://%s.recruitee.com/api/offers/"
 // across separate description and requirements HTML fields, which the adapter combines,
 // so no per-posting detail request is needed.
 type recruitee struct {
-	http JSONGetter
+	http kit.JSONGetter
 }
 
 // NewRecruitee builds the Recruitee adapter over the given HTTP client.
-func NewRecruitee(c JSONGetter) Source { return recruitee{http: c} }
+func NewRecruitee(c kit.JSONGetter) kit.Source { return recruitee{http: c} }
 
 func (recruitee) Provider() string { return "recruitee" }
 
@@ -41,7 +42,7 @@ func (recruitee) FullBoardListing() {}
 // "offers": []; an envelope without the array fails Fetch. See the emptyBoardListing interface.
 func (recruitee) EmptyBoardListing() {}
 
-func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+func (r recruitee) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error) {
 	url := fmt.Sprintf(recruiteeBaseURL, e.Board)
 
 	var resp struct {
@@ -65,26 +66,26 @@ func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("recruitee: fetch board %s: %w", e.Board, err)
 	}
 	if resp.Offers == nil {
-		return nil, errListingAbsent("recruitee", e.Board, "offers")
+		return nil, kit.ErrListingAbsent("recruitee", e.Board, "offers")
 	}
 
-	jobs := make([]Job, 0, len(resp.Offers))
+	jobs := make([]kit.Job, 0, len(resp.Offers))
 	for _, o := range resp.Offers {
 		form := applyform.FromRecruitee(o.RecruiteeOffer)
 		// Recruitee splits the body across separate description and requirements HTML.
-		job := Job{
+		job := kit.Job{
 			ApplyForm:   &form,
 			ExternalID:  strconv.FormatInt(o.ID, 10),
 			URL:         o.CareersURL,
 			Title:       o.Title,
 			Company:     e.Company,
 			Location:    o.Location,
-			Description: sanitizeHTML(o.Description + o.Requirements),
+			Description: kit.SanitizeHTML(o.Description + o.Requirements),
 			Remote:      o.Remote,
-			WorkMode:    workModeFromRemoteHybrid(o.Remote, o.Hybrid),
-			PostedAt:    parseSpaceTime(o.CreatedAt),
+			WorkMode:    kit.WorkModeFromRemoteHybrid(o.Remote, o.Hybrid),
+			PostedAt:    kit.ParseSpaceTime(o.CreatedAt),
 		}
-		if o.Salary.Period != nil && isSalaryPeriod(*o.Salary.Period) {
+		if o.Salary.Period != nil && kit.IsSalaryPeriod(*o.Salary.Period) {
 			min, max := recruiteeSalaryPart(o.Salary.Min), recruiteeSalaryPart(o.Salary.Max)
 			if min != nil || max != nil {
 				job.SalaryMin, job.SalaryMax = min, max
@@ -110,5 +111,5 @@ func recruiteeSalaryPart(s *string) *int {
 	if err != nil {
 		return nil
 	}
-	return roundSalaryPart(v)
+	return kit.RoundSalaryPart(v)
 }

@@ -182,6 +182,19 @@ linters:
               desc: "ingest is layer 7; engage is layer 7. A block imports only blocks strictly below it."
             - pkg: github.com/strelov1/freehire/internal/api
               desc: "ingest is layer 7; api is layer 8. A block imports only blocks strictly below it."
+        # Not generated: inside the ingest block, an adapter family (sources/<family>, #4586)
+        # reaches only the adapter kernel. sources imports the family for its registry, and the
+        # rest of ingest (pipeline, boardcatalog, ...) calls adapters, never the reverse.
+        sources-families:
+          list-mode: lax
+          files: ["**/internal/ingest/sources/ats/**"]
+          allow:
+            - github.com/strelov1/freehire/internal/ingest/sources/kit
+            # Job.ApplyForm is an applyform type.
+            - github.com/strelov1/freehire/internal/ingest/applyform
+          deny:
+            - pkg: github.com/strelov1/freehire/internal/ingest
+              desc: "a sources family imports only sources/kit and applyform of ingest (#4586)."
     errcheck:
       # Best-effort cleanup calls whose error has no actionable recipient: a deferred
       # Close/RemoveAll/Rollback runs after the operation it's cleaning up already

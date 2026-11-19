@@ -1,9 +1,11 @@
-package sources
+package ats
 
 import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 func TestAshbyGraphQLProvider(t *testing.T) {
@@ -24,7 +26,7 @@ func TestAshbyGraphQLFetch(t *testing.T) {
 			"descriptionHtml":"<p>About Chainlink</p>  "
 		}}}`)
 
-	jobs, err := NewAshbyGraphQL(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewAshbyGraphQL(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Chainlink Labs", Provider: "ashbygraphql", Board: "chainlink-labs",
 	})
 	if err != nil {
@@ -70,7 +72,7 @@ func TestAshbyGraphQLFetchSkipsFailedDetail(t *testing.T) {
 			{"id":"missing-2","title":"Designer","locationName":"Remote"}
 		]}}}`)
 	// No op=ApiJobPosting route → every detail call errors → both dropped.
-	jobs, err := NewAshbyGraphQL(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewAshbyGraphQL(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Chainlink Labs", Provider: "ashbygraphql", Board: "chainlink-labs",
 	})
 	if err != nil {

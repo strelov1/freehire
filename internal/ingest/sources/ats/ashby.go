@@ -1,9 +1,11 @@
-package sources
+package ats
 
 import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 // ashbyBaseURL is the Ashby public job-board API root.
@@ -12,11 +14,11 @@ const ashbyBaseURL = "https://api.ashbyhq.com/posting-api/job-board"
 // ashby adapts the Ashby public job-board API. The list endpoint carries an HTML
 // description and the posting's workplace type, so no per-posting detail request is needed.
 type ashby struct {
-	http JSONGetter
+	http kit.JSONGetter
 }
 
 // NewAshby builds the Ashby adapter over the given HTTP client.
-func NewAshby(c JSONGetter) Source { return ashby{http: c} }
+func NewAshby(c kit.JSONGetter) kit.Source { return ashby{http: c} }
 
 func (ashby) Provider() string { return "ashby" }
 
@@ -28,7 +30,7 @@ func (ashby) FullBoardListing() {}
 // an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
 func (ashby) EmptyBoardListing() {}
 
-func (a ashby) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+func (a ashby) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error) {
 	// includeCompensation=true is required: omitted, the API silently drops the compensation
 	// object rather than erroring.
 	url := fmt.Sprintf("%s/%s?includeCompensation=true", ashbyBaseURL, e.Board)
@@ -40,10 +42,10 @@ func (a ashby) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("ashby: fetch board %s: %w", e.Board, err)
 	}
 	if resp.Jobs == nil {
-		return nil, errListingAbsent("ashby", e.Board, "jobs")
+		return nil, kit.ErrListingAbsent("ashby", e.Board, "jobs")
 	}
 
-	jobs := make([]Job, 0, len(resp.Jobs))
+	jobs := make([]kit.Job, 0, len(resp.Jobs))
 	for _, j := range resp.Jobs {
 		job := MapAshbyPosting(j)
 		job.ExternalID = j.ID
@@ -109,29 +111,29 @@ type AshbyCompensationComponent struct {
 // pipeline namespaces it by board) and the configured company; the link resolver
 // namespaces the id itself and derives the company from the board slug (the per-board API
 // carries no company name).
-func MapAshbyPosting(j AshbyPosting) Job {
-	mode := firstNonEmpty(workplaceTypeMode(j.WorkplaceType), workModeFromRemote(j.IsRemote))
-	job := Job{
+func MapAshbyPosting(j AshbyPosting) kit.Job {
+	mode := kit.FirstNonEmpty(kit.WorkplaceTypeMode(j.WorkplaceType), kit.WorkModeFromRemote(j.IsRemote))
+	job := kit.Job{
 		URL:            j.JobURL,
 		Title:          j.Title,
 		Location:       j.Location,
-		Description:    sanitizeHTML(j.DescriptionHTML),
-		Remote:         mode == "remote" || isRemote(j.Location),
+		Description:    kit.SanitizeHTML(j.DescriptionHTML),
+		Remote:         mode == "remote" || kit.IsRemote(j.Location),
 		WorkMode:       mode,
-		Countries:      countryFromCode(j.Address.PostalAddress.AddressCountry),
-		PostedAt:       parseRFC3339(j.PublishedAt),
+		Countries:      kit.CountryFromCode(j.Address.PostalAddress.AddressCountry),
+		PostedAt:       kit.ParseRFC3339(j.PublishedAt),
 		EmploymentType: ashbyEmploymentType(j.EmploymentType),
 		// team is the narrower label, nested under department on Ashby.
-		Team: firstNonEmpty(strings.TrimSpace(j.Team), strings.TrimSpace(j.Department)),
+		Team: kit.FirstNonEmpty(strings.TrimSpace(j.Team), strings.TrimSpace(j.Department)),
 	}
 	if c, ok := ashbySalaryComponent(j.Compensation); ok {
 		if period := ashbySalaryPeriod(c.Interval); period != "" {
 			var min, max *int
 			if c.MinValue != nil {
-				min = roundSalaryPart(*c.MinValue)
+				min = kit.RoundSalaryPart(*c.MinValue)
 			}
 			if c.MaxValue != nil {
-				max = roundSalaryPart(*c.MaxValue)
+				max = kit.RoundSalaryPart(*c.MaxValue)
 			}
 			if min != nil || max != nil {
 				job.SalaryMin, job.SalaryMax = min, max

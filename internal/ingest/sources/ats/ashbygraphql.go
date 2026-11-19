@@ -1,8 +1,10 @@
-package sources
+package ats
 
 import (
 	"context"
 	"fmt"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 // ashbyGraphQL adapts Ashby boards whose public Posting API (see ashby.go) is disabled, so the
@@ -12,7 +14,7 @@ import (
 // postings without a description, so each posting takes a detail query, the same list+detail shape
 // as SmartRecruiters.
 type ashbyGraphQL struct {
-	http JSONPoster
+	http kit.JSONPoster
 }
 
 const (
@@ -31,7 +33,7 @@ const (
 )
 
 // NewAshbyGraphQL builds the Ashby embed-GraphQL adapter over the given HTTP client.
-func NewAshbyGraphQL(c JSONPoster) Source { return ashbyGraphQL{http: c} }
+func NewAshbyGraphQL(c kit.JSONPoster) kit.Source { return ashbyGraphQL{http: c} }
 
 func (ashbyGraphQL) Provider() string { return "ashbygraphql" }
 
@@ -49,7 +51,7 @@ type ashbyGQLBrief struct {
 	LocationName string `json:"locationName"`
 }
 
-func (a ashbyGraphQL) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+func (a ashbyGraphQL) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error) {
 	body := ashbyGQLRequest{
 		OperationName: ashbyGQLListOp,
 		Variables:     map[string]any{"organizationHostedJobsPageName": e.Board},
@@ -67,14 +69,14 @@ func (a ashbyGraphQL) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) 
 	}
 
 	postings := resp.Data.JobBoard.JobPostings
-	return fetchDetails(postings, defaultDetailWorkers, func(p ashbyGQLBrief) (Job, bool) {
+	return kit.FetchDetails(postings, kit.DefaultDetailWorkers, func(p ashbyGQLBrief) (kit.Job, bool) {
 		return a.detail(ctx, e, p)
 	}), nil
 }
 
 // detail fetches one posting's descriptionHtml and maps it to a Job, returning ok=false when
 // the detail request fails so the caller skips just that posting.
-func (a ashbyGraphQL) detail(ctx context.Context, e CompanyEntry, p ashbyGQLBrief) (Job, bool) {
+func (a ashbyGraphQL) detail(ctx context.Context, e kit.CompanyEntry, p ashbyGQLBrief) (kit.Job, bool) {
 	body := ashbyGQLRequest{
 		OperationName: ashbyGQLDetailOp,
 		Variables: map[string]any{
@@ -91,16 +93,16 @@ func (a ashbyGraphQL) detail(ctx context.Context, e CompanyEntry, p ashbyGQLBrie
 		} `json:"data"`
 	}
 	if err := a.http.PostJSON(ctx, ashbyGQLURL+"?op="+ashbyGQLDetailOp, body, &resp); err != nil {
-		return Job{}, false
+		return kit.Job{}, false
 	}
 
-	return Job{
+	return kit.Job{
 		ExternalID:  p.ID,
 		URL:         ashbyGQLJobURL + e.Board + "/" + p.ID,
 		Title:       p.Title,
 		Company:     e.Company,
 		Location:    p.LocationName,
-		Description: sanitizeHTML(resp.Data.JobPosting.DescriptionHTML),
-		Remote:      isRemote(p.LocationName),
+		Description: kit.SanitizeHTML(resp.Data.JobPosting.DescriptionHTML),
+		Remote:      kit.IsRemote(p.LocationName),
 	}, true
 }

@@ -1,4 +1,4 @@
-package sources
+package ats
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 func TestLeverProvider(t *testing.T) {
@@ -19,14 +21,8 @@ func TestLeverProvider(t *testing.T) {
 // any listing failure aborts the whole Fetch rather than returning a partial result.
 func TestLeverMarkers(t *testing.T) {
 	s := NewLever(nil)
-	if _, ok := s.(fullBoardListing); !ok {
+	if _, ok := s.(interface{ FullBoardListing() }); !ok {
 		t.Error("lever should implement the fullBoardListing marker")
-	}
-}
-
-func TestLeverRegisteredAsFullBoardListing(t *testing.T) {
-	if !FullBoardListingProviders(All(nil))["lever"] {
-		t.Error("FullBoardListingProviders(All(nil)) should include lever")
 	}
 }
 
@@ -34,7 +30,7 @@ func TestLeverRegisteredAsFullBoardListing(t *testing.T) {
 // success — the property TestLeverMarkers' fullBoardListing claim rests on.
 func TestLeverFetchPropagatesAListingError(t *testing.T) {
 	fake := &fakeHTTP{err: errors.New("boom")}
-	if _, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+	if _, err := NewLever(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "acme"}); err == nil {
 		t.Fatal("Fetch succeeded despite a listing error")
 	}
 }
@@ -52,7 +48,7 @@ func TestLeverFetch(t *testing.T) {
 		}
 	]`}
 
-	jobs, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewLever(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Lever", Provider: "lever", Board: "lever",
 	})
 	if err != nil {
@@ -114,7 +110,7 @@ func TestLeverFetchDecodesStructuredCountry(t *testing.T) {
 		}
 	]`}
 
-	jobs, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewLever(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "1inch", Provider: "lever", Board: "1inch",
 	})
 	if err != nil {
@@ -144,7 +140,7 @@ func TestLeverFetchAssemblesBodyFromAllFields(t *testing.T) {
 		}
 	]`}
 
-	jobs, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewLever(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Spotify", Provider: "lever", Board: "spotify",
 	})
 	if err != nil {
@@ -183,7 +179,7 @@ func TestLeverFetchHandlesEmptyHeadingsAndFields(t *testing.T) {
 		}
 	]`}
 
-	jobs, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewLever(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Acme", Provider: "lever", Board: "acme",
 	})
 	if err != nil {
@@ -202,7 +198,7 @@ func TestLeverFetchHandlesEmptyHeadingsAndFields(t *testing.T) {
 func TestLeverFetchDefaultsToGlobalHost(t *testing.T) {
 	// No region set: the board lives on Lever's default (US) API host.
 	fake := &fakeHTTP{body: `[]`}
-	if _, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{
+	if _, err := NewLever(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "Smile.io", Provider: "lever", Board: "Smile.io",
 	}); err != nil {
 		t.Fatalf("Fetch: %v", err)
@@ -223,7 +219,7 @@ func TestLeverFetchReadsSalaryRange(t *testing.T) {
 			"salaryRange": {"min": 3000, "max": 10000, "currency": "SGD", "interval": "per-month-salary"}
 		}
 	]`}
-	jobs, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{Company: "Binance", Provider: "lever", Board: "binance"})
+	jobs, err := NewLever(fake).Fetch(context.Background(), kit.CompanyEntry{Company: "Binance", Provider: "lever", Board: "binance"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -246,7 +242,7 @@ func TestLeverFetchIgnoresNonWageSalaryRange(t *testing.T) {
 		{"id": "1", "text": "A", "salaryRange": {"min": 500, "max": 500, "currency": "USD", "interval": "one-time"}},
 		{"id": "2", "text": "B", "salaryRange": {"min": 0, "max": 0, "currency": "CAD", "interval": "per-year-salary"}}
 	]`}
-	jobs, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Provider: "lever", Board: "acme"})
+	jobs, err := NewLever(fake).Fetch(context.Background(), kit.CompanyEntry{Company: "Acme", Provider: "lever", Board: "acme"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -276,7 +272,7 @@ func TestLeverFetchEURegionUsesEUHost(t *testing.T) {
 	// region: eu selects Lever's EU data-residency host (e.g. XM, Silverfin live there;
 	// their boards 404 on the default host).
 	fake := &fakeHTTP{body: `[]`}
-	if _, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{
+	if _, err := NewLever(fake).Fetch(context.Background(), kit.CompanyEntry{
 		Company: "XM", Provider: "lever", Board: "xm", Region: "eu",
 	}); err != nil {
 		t.Fatalf("Fetch: %v", err)

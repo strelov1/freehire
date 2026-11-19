@@ -36,7 +36,7 @@ A few notes cover more than one adapter, and a note can name other adapters too,
 
 ## How it works
 
-**Board registry:** each adapter implements the `Source` interface and speaks a common normalized `Job` shape. `sources.All` is the registry map. Adapters are in `internal/ingest/sources/` — one `.go` file per provider (`greenhouse.go`, `lever.go`, `ashby.go`, …) with matching `_test.go` files. `config.go` holds `Config.Validate` (the registry check) and `BoardDedupeKey` (the identity two catalog rows are one crawl target under).
+**Board registry:** each adapter implements the `Source` interface and speaks a common normalized `Job` shape. `sources.All` is the registry map. Adapters are in `internal/ingest/sources/` and, as they move out by family, in its subpackages (`sources/ats`: `greenhouse.go`, `lever.go`, `ashby.go`, …) — one `.go` file per provider with matching `_test.go` files. `config.go` holds `Config.Validate` (the registry check) and `BoardDedupeKey` (the identity two catalog rows are one crawl target under).
 
 **Ingest pipeline:** `cmd/ingest` loads the provider's live boards from the catalog, then delegates to the `pipeline.Runner` which fetches each board once, normalizes postings, and `UpsertJob`s them (idempotent on the dedup key). New postings are enqueued into `enrichment_outbox` in the same transaction (transactional-outbox).
 
