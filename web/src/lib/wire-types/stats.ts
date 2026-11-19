@@ -100,11 +100,6 @@ export type EngagementStats = components['schemas']['Engagement'];
  *  `ats_platforms` are meaningful; the rest are zero. */
 export type CatalogScale = components['schemas']['CatalogScale'];
 
-/** Semantic-embedding coverage of the catalogue, behind the public /semantic-search
- *  page (`GET /api/v1/stats/embeddings` and its stream). Every figure is `null`
- *  until it has been measured — render that as "measuring", never as 0. */
-export type EmbedProgress = components['schemas']['EmbeddingProgress'];
-
 /** The derived health verdict for a provider (and the fleet) on the public
  *  /status page. */
 export type HealthStatus = components['schemas']['HealthStatus'];
