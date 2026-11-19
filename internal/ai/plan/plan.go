@@ -44,6 +44,9 @@ const (
 	FeatureAutoApply Feature = "auto-apply"
 	// FeatureMailReply is one drafted reply to a received hiring email: a single model call.
 	FeatureMailReply Feature = "mail-reply"
+	// FeatureRecruiterContact is the first view of one job's recruiter contacts. No model call: a
+	// paid lookup at a contact-data provider, so both tiers carry a real daily ceiling.
+	FeatureRecruiterContact Feature = "recruiter-contact"
 )
 
 // AllFeatures lists every metered feature. Tests walk it and the usage surface reports each
@@ -51,7 +54,7 @@ const (
 func AllFeatures() []Feature {
 	return []Feature{
 		FeatureTailor, FeatureFit, FeatureAssistant, FeatureDictation, FeatureCoverLetter,
-		FeatureAutoApply, FeatureMailReply,
+		FeatureAutoApply, FeatureMailReply, FeatureRecruiterContact,
 	}
 }
 
@@ -175,6 +178,13 @@ func DefaultConfig() Config {
 			FeatureMailReply: {
 				pro:     tierAllowance{daily: 60, unlimited: true},
 				ultra:   tierAllowance{daily: 180, unlimited: true},
+				enforce: true,
+			},
+			// Real ceilings on both tiers: each first view can cost a provider lookup, and the
+			// count is what separates the two plans.
+			FeatureRecruiterContact: {
+				pro:     tierAllowance{daily: 5},
+				ultra:   tierAllowance{daily: 20},
 				enforce: true,
 			},
 		},

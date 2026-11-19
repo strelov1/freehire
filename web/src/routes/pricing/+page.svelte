@@ -66,6 +66,7 @@
     'cover-letter': 'Cover letters',
     'auto-apply': 'Background auto-apply',
     'mail-reply': 'Reply drafts to recruiter emails',
+    'recruiter-contact': 'Recruiter contacts for a job',
   };
   const label = (id: string) => FEATURE_LABELS[id] ?? id;
 

@@ -98,6 +98,7 @@ var gatedRoutes = []gatedRoute{
 	{fiber.MethodPost, "/api/v1/assistant/sessions/00000000-0000-0000-0000-000000000001/voice-token", plan.FeatureAssistant},
 	{fiber.MethodPost, "/api/v1/assistant/sessions/00000000-0000-0000-0000-000000000001/autopilot", plan.FeatureTailor},
 	{fiber.MethodPost, "/api/v1/jobs/some-job/auto-apply", plan.FeatureAutoApply},
+	{fiber.MethodPost, "/api/v1/jobs/some-job/recruiter-contacts", plan.FeatureRecruiterContact},
 	{fiber.MethodPost, "/api/v1/me/cvs/tailor", plan.FeatureTailor},
 	{fiber.MethodPost, "/api/v1/me/cvs/00000000-0000-0000-0000-000000000001/tailor-session", plan.FeatureTailor},
 	{fiber.MethodPost, "/api/v1/me/cvs/00000000-0000-0000-0000-000000000001/cover-letter", plan.FeatureCoverLetter},
@@ -149,8 +150,9 @@ func gatedApp(t *testing.T, plans paidEntitlement) *fiber.App {
 	}
 	api := app.Group("/api/v1")
 	matchH, assistantH, intentH, autofillH, inboxH := &matchHandlers{}, &assistantHandlers{}, &intentHandlers{}, &autofillHandlers{}, &inboxHandlers{}
+	contactsH := &recruiterContactHandlers{}
 	contract := newContract(contractHandlers{matchHandlers: matchH, assistantHandlers: assistantH, intentHandlers: intentH,
-		autofillHandlers: autofillH, inboxHandlers: inboxH})
+		autofillHandlers: autofillH, inboxHandlers: inboxH, recruiterContactHandlers: contactsH})
 	matchH.register(api, mw, contract)
 	assistantH.register(api, mw, contract)
 	(&cvHandlers{}).register(api, mw, cvContract(&cvHandlers{}))
@@ -161,6 +163,7 @@ func gatedApp(t *testing.T, plans paidEntitlement) *fiber.App {
 	intentH.register(api, mw, contract)
 	inboxH.register(api, mw, contract)
 	autofillH.register(api, mw, contract)
+	contactsH.register(api, mw, contract)
 	return app
 }
 

@@ -8149,9 +8149,10 @@ func (s *CvPlanRefusal) SetUpgradeURL(val OptString) {
 	s.UpgradeURL = val
 }
 
-func (*CvPlanRefusal) draftCVCoverLetterRes() {}
-func (*CvPlanRefusal) draftEmailReplyRes()    {}
-func (*CvPlanRefusal) tailorCVRes()           {}
+func (*CvPlanRefusal) draftCVCoverLetterRes()    {}
+func (*CvPlanRefusal) draftEmailReplyRes()       {}
+func (*CvPlanRefusal) findRecruiterContactsRes() {}
+func (*CvPlanRefusal) tailorCVRes()              {}
 
 // One CV: its document and the state around it.
 // Ref: #/components/schemas/CvRecord
@@ -11922,6 +11923,23 @@ func (s *FindModeratedUserOK) GetData() ModeratedUser {
 func (s *FindModeratedUserOK) SetData(val ModeratedUser) {
 	s.Data = val
 }
+
+// A single item: `{"data": ...}`.
+type FindRecruiterContactsOK struct {
+	Data []RecruiterContact `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *FindRecruiterContactsOK) GetData() []RecruiterContact {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *FindRecruiterContactsOK) SetData(val []RecruiterContact) {
+	s.Data = val
+}
+
+func (*FindRecruiterContactsOK) findRecruiterContactsRes() {}
 
 // One analysed job in the caller's list.
 // Ref: #/components/schemas/FitAnalysedJob
@@ -24126,6 +24144,98 @@ func (s *RecordViewOK) GetData() Interaction {
 // SetData sets the value of Data.
 func (s *RecordViewOK) SetData(val Interaction) {
 	s.Data = val
+}
+
+// One person to write to about a job, found from public sources.
+// Ref: #/components/schemas/RecruiterContact
+type RecruiterContact struct {
+	Name  string `json:"name"`
+	Title string `json:"title"`
+	Email string `json:"email"`
+	// `high` for a verified address, `medium` for a likely one.
+	Confidence RecruiterContactConfidence `json:"confidence"`
+}
+
+// GetName returns the value of Name.
+func (s *RecruiterContact) GetName() string {
+	return s.Name
+}
+
+// GetTitle returns the value of Title.
+func (s *RecruiterContact) GetTitle() string {
+	return s.Title
+}
+
+// GetEmail returns the value of Email.
+func (s *RecruiterContact) GetEmail() string {
+	return s.Email
+}
+
+// GetConfidence returns the value of Confidence.
+func (s *RecruiterContact) GetConfidence() RecruiterContactConfidence {
+	return s.Confidence
+}
+
+// SetName sets the value of Name.
+func (s *RecruiterContact) SetName(val string) {
+	s.Name = val
+}
+
+// SetTitle sets the value of Title.
+func (s *RecruiterContact) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetEmail sets the value of Email.
+func (s *RecruiterContact) SetEmail(val string) {
+	s.Email = val
+}
+
+// SetConfidence sets the value of Confidence.
+func (s *RecruiterContact) SetConfidence(val RecruiterContactConfidence) {
+	s.Confidence = val
+}
+
+// `high` for a verified address, `medium` for a likely one.
+type RecruiterContactConfidence string
+
+const (
+	RecruiterContactConfidenceHigh   RecruiterContactConfidence = "high"
+	RecruiterContactConfidenceMedium RecruiterContactConfidence = "medium"
+)
+
+// AllValues returns all RecruiterContactConfidence values.
+func (RecruiterContactConfidence) AllValues() []RecruiterContactConfidence {
+	return []RecruiterContactConfidence{
+		RecruiterContactConfidenceHigh,
+		RecruiterContactConfidenceMedium,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s RecruiterContactConfidence) MarshalText() ([]byte, error) {
+	switch s {
+	case RecruiterContactConfidenceHigh:
+		return []byte(s), nil
+	case RecruiterContactConfidenceMedium:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *RecruiterContactConfidence) UnmarshalText(data []byte) error {
+	switch RecruiterContactConfidence(data) {
+	case RecruiterContactConfidenceHigh:
+		*s = RecruiterContactConfidenceHigh
+		return nil
+	case RecruiterContactConfidenceMedium:
+		*s = RecruiterContactConfidenceMedium
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // A single item: `{"data": ...}`.

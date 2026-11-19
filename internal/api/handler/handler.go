@@ -394,7 +394,8 @@ func Register(app *fiber.App, cfg Config) {
 		searchHandlers:               searchH,
 		companiesHandlers:            companiesH,
 		cvHandlers:                   cvH,
-		inboxHandlers:                inboxH}
+		inboxHandlers:                inboxH,
+		recruiterContactHandlers:     &recruiterContactHandlers{queries: queries, plans: plans, finder: cfg.RecruiterContacts}}
 	contract := newContract(handlers)
 	emailPrefsH.register(api, mw, contract)
 

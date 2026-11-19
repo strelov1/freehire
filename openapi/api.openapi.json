@@ -7056,6 +7056,89 @@
         ]
       }
     },
+    "/jobs/{slug}/recruiter-contacts": {
+      "post": {
+        "operationId": "findRecruiterContacts",
+        "summary": "Find who recruits for a job.",
+        "description": "Up to three people at the job's company who recruit, with their work email. The first view\nof a job draws one from your daily `recruiter-contact` allowance; looking again at a job you\nalready opened is free, and an empty result or a failure costs nothing. `[]` when nobody\nusable is known. 402 without a paid plan or with the allowance spent; 404 for an unknown job\nor when the feature is off; 422 when the company has no website on record; 503 when the\nlookup is unavailable (try later, nothing was charged).",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The job `public_slug`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RecruiterContact"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": [
+                    {
+                      "name": "Anna Lee",
+                      "title": "Senior Technical Recruiter",
+                      "email": "anna@acme.io",
+                      "confidence": "high"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvPlanRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
     "/jobs/{slug}/reports": {
       "post": {
         "operationId": "createJobReport",
@@ -33900,6 +33983,35 @@
             "$ref": "#/components/schemas/ThreadCursorMeta"
           }
         }
+      },
+      "RecruiterContact": {
+        "type": "object",
+        "required": [
+          "name",
+          "title",
+          "email",
+          "confidence"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium"
+            ],
+            "description": "`high` for a verified address, `medium` for a likely one."
+          }
+        },
+        "description": "One person to write to about a job, found from public sources."
       },
       "ReferralCVOption": {
         "type": "object",

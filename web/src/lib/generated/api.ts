@@ -1825,6 +1825,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/{slug}/recruiter-contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Find who recruits for a job.
+         * @description Up to three people at the job's company who recruit, with their work email. The first view
+         *     of a job draws one from your daily `recruiter-contact` allowance; looking again at a job you
+         *     already opened is free, and an empty result or a failure costs nothing. `[]` when nobody
+         *     usable is known. 402 without a paid plan or with the allowance spent; 404 for an unknown job
+         *     or when the feature is off; 422 when the company has no website on record; 503 when the
+         *     lookup is unavailable (try later, nothing was charged).
+         */
+        post: operations["findRecruiterContacts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{slug}/reports": {
         parameters: {
             query?: never;
@@ -9499,6 +9524,17 @@ export interface components {
             data: components["schemas"]["RecentThread"][];
             meta: components["schemas"]["ThreadCursorMeta"];
         };
+        /** @description One person to write to about a job, found from public sources. */
+        RecruiterContact: {
+            name: string;
+            title: string;
+            email: string;
+            /**
+             * @description `high` for a verified address, `medium` for a likely one.
+             * @enum {string}
+             */
+            confidence: "high" | "medium";
+        };
         ReferralCVOption: {
             id: string;
             title: string;
@@ -15260,6 +15296,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FitRefusal"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    findRecruiterContacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The job `public_slug`. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "name": "Anna Lee",
+                     *           "title": "Senior Technical Recruiter",
+                     *           "email": "anna@acme.io",
+                     *           "confidence": "high"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["RecruiterContact"][];
+                    };
+                };
+            };
+            /** @description Client error */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvPlanRefusal"];
                 };
             };
             /** @description An unexpected error response. */

@@ -89,6 +89,7 @@ type contractHandlers struct {
 	*resumeHandlers
 	*cvHandlers
 	*inboxHandlers
+	*recruiterContactHandlers
 	*authHandlers
 }
 

@@ -38,6 +38,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/blobstore"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/config"
+	"github.com/strelov1/freehire/internal/platform/contactfinder"
 	"github.com/strelov1/freehire/internal/platform/database"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -395,6 +396,8 @@ func runServer(cfg config.Settings) error {
 		ServedHosts: cfg.ServedHosts,
 
 		Plan: planConfig,
+		// Reads its own environment, like Billing: unset means the feature is off.
+		RecruiterContacts: contactfinder.FromEnv(),
 
 		AWSRegion:       cfg.AWSRegion,
 		NotifyEmailFrom: cfg.NotifyEmailFrom,

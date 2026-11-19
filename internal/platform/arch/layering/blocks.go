@@ -41,7 +41,11 @@ var blocks = map[string][]string{
 		// browseruse is the HTTP client for the browser-use.com cloud agent API and knows nothing
 		// about ATS forms, like llm and aigateway. Its one caller is api/atsapply.
 		"browseruse",
-		"cache", "config", "database", "db",
+		"cache", "config",
+		// contactfinder is the HTTP client of the private contact-finder service, domain-free like
+		// browseruse. Its caller is api/handler.
+		"contactfinder",
+		"database", "db",
 		"externalid", "flexjson", "htmltext", "isoweek", "jev", "llm", "llmschema", "migrate",
 		"mailmeta", "modroot", "observability", "outbox", "pgconv", "pgerr", "safehttp", "stringset", "testdb",
 		"tokencrypt",

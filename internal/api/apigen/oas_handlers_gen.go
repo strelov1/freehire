@@ -9926,6 +9926,106 @@ func (s *Server) handleFindModeratedUserRequest(args [0]string, argsEscaped bool
 	}
 }
 
+// handleFindRecruiterContactsRequest handles findRecruiterContacts operation.
+//
+// Up to three people at the job's company who recruit, with their work email. The first view of a job
+// draws one from your daily `recruiter-contact` allowance; looking again at a job you already opened
+// is free, and an empty result or a failure costs nothing. `[]` when nobody usable is known. 402
+// without a paid plan or with the allowance spent; 404 for an unknown job or when the feature is off;
+// 422 when the company has no website on record; 503 when the lookup is unavailable (try later,
+// nothing was charged).
+//
+// POST /jobs/{slug}/recruiter-contacts
+func (s *Server) handleFindRecruiterContactsRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: FindRecruiterContactsOperation,
+			ID:   "findRecruiterContacts",
+		}
+	)
+	params, err := decodeFindRecruiterContactsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response FindRecruiterContactsRes
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    FindRecruiterContactsOperation,
+			OperationSummary: "Find who recruits for a job.",
+			OperationID:      "findRecruiterContacts",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = FindRecruiterContactsParams
+			Response = FindRecruiterContactsRes
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackFindRecruiterContactsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.FindRecruiterContacts(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.FindRecruiterContacts(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeFindRecruiterContactsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleForgotPasswordRequest handles forgotPassword operation.
 //
 // Always answers `202`, whether or not the address has an account — this is deliberately not an

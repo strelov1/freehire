@@ -710,6 +710,42 @@ curl "https://freehire.me/api/v1/jobs/<slug>/copies"
 }
 ```
 
+### `POST /jobs/{slug}/recruiter-contacts`
+
+**Auth:** Session or API key
+
+Find who recruits for a job.
+
+Up to three people at the job's company who recruit, with their work email. The first view
+of a job draws one from your daily `recruiter-contact` allowance; looking again at a job you
+already opened is free, and an empty result or a failure costs nothing. `[]` when nobody
+usable is known. 402 without a paid plan or with the allowance spent; 404 for an unknown job
+or when the feature is off; 422 when the company has no website on record; 503 when the
+lookup is unavailable (try later, nothing was charged).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/jobs/<slug>/recruiter-contacts" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "name": "Anna Lee",
+      "title": "Senior Technical Recruiter",
+      "email": "anna@acme.io",
+      "confidence": "high"
+    }
+  ]
+}
+```
+
 ### `POST /ojcp/v1/search`
 
 **Auth:** Public

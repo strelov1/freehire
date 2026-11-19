@@ -1309,6 +1309,37 @@ func encodeFindModeratedUserResponse(response *FindModeratedUserOK, w http.Respo
 	return nil
 }
 
+func encodeFindRecruiterContactsResponse(response FindRecruiterContactsRes, w http.ResponseWriter) error {
+	switch response := response.(type) {
+	case *FindRecruiterContactsOK:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(200)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *CvPlanRefusal:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(402)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
 func encodeForgotPasswordResponse(response *ForgotPasswordAccepted, w http.ResponseWriter) error {
 	w.WriteHeader(202)
 

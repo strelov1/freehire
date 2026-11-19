@@ -19,6 +19,7 @@ import (
 	"github.com/strelov1/freehire/internal/job/recentfeed"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
 	"github.com/strelov1/freehire/internal/platform/cache"
+	"github.com/strelov1/freehire/internal/platform/contactfinder"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 	"github.com/strelov1/freehire/internal/search/embedprogress"
@@ -139,6 +140,9 @@ type Config struct {
 	// Plan carries what each plan allows per day, per feature, and whether a refusal is
 	// enforced yet. Every metered AI surface draws on it.
 	Plan plan.Config
+	// RecruiterContacts is the contact-finder client; nil (CONTACT_FINDER_URL unset) turns the
+	// recruiter-contacts route into a 404.
+	RecruiterContacts *contactfinder.Client
 	// Billing connects the Pro subscription at the payment provider to users.pro_until, which Plan reads. Optional and off
 	// by default: with no provider credentials the billing routes are not mounted at all.
 	Billing billing.Config

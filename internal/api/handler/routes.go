@@ -155,6 +155,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// (see inboxHandlers). Registered after the static /me/tracking/* routes so
 	// /me/tracking/:slug does not shadow them.
 	h.inboxHandlers.register(api, mw, contract)
+	h.recruiterContactHandlers.register(api, mw, contract)
 	// Résumé/CV surfaces: verdict, ATS report, extraction, storage (see
 	// resumeHandlers).
 	h.resumeHandlers.register(api, mw, contract)

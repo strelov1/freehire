@@ -17,6 +17,10 @@ type DraftEmailReplyRes interface {
 	draftEmailReplyRes()
 }
 
+type FindRecruiterContactsRes interface {
+	findRecruiterContactsRes()
+}
+
 type PostAssistantExtendRes interface {
 	postAssistantExtendRes()
 }

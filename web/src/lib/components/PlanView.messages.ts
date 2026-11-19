@@ -73,6 +73,7 @@ export const messages = defineMessages(
         'cover-letter': 'Cover letters',
         'auto-apply': 'Automatic applications',
         'mail-reply': 'Reply drafts',
+        'recruiter-contact': 'Recruiter contacts',
       },
     },
     usage: {
@@ -146,6 +147,7 @@ export const messages = defineMessages(
           'cover-letter': 'Сопроводительные письма',
           'auto-apply': 'Автоматические отклики',
           'mail-reply': 'Черновики ответов',
+          'recruiter-contact': 'Контакты рекрутеров',
         },
       },
       usage: {

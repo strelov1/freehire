@@ -624,6 +624,17 @@ type Handler interface {
 	//
 	// GET /moderation/users
 	FindModeratedUser(ctx context.Context, params FindModeratedUserParams) (*FindModeratedUserOK, error)
+	// FindRecruiterContacts implements findRecruiterContacts operation.
+	//
+	// Up to three people at the job's company who recruit, with their work email. The first view of a job
+	// draws one from your daily `recruiter-contact` allowance; looking again at a job you already opened
+	// is free, and an empty result or a failure costs nothing. `[]` when nobody usable is known. 402
+	// without a paid plan or with the allowance spent; 404 for an unknown job or when the feature is off;
+	// 422 when the company has no website on record; 503 when the lookup is unavailable (try later,
+	// nothing was charged).
+	//
+	// POST /jobs/{slug}/recruiter-contacts
+	FindRecruiterContacts(ctx context.Context, params FindRecruiterContactsParams) (FindRecruiterContactsRes, error)
 	// ForgotPassword implements forgotPassword operation.
 	//
 	// Always answers `202`, whether or not the address has an account — this is deliberately not an
