@@ -109,12 +109,18 @@ func TestCallToolRunsADeferredToolUnderItsOwnName(t *testing.T) {
 	if got := strings.Join(*calls, "|"); got != `unsubscribe {"id":7}|buddy_join {}` {
 		t.Errorf("calls: %s", got)
 	}
-	// A listed tool, or one this session is not served, is not run through call_tool.
+	// A listed tool, or one this session is not served, is not run through call_tool, and the
+	// refusal is counted as the caller's mistake, not an internal error.
+	refused := mcpToolCalls.WithLabelValues(surfaceMCP, toolCallTool, "tool_error", "invalid_request")
+	refusedBefore := testutil.ToFloat64(refused)
 	for _, name := range []string{"my_jobs", "buddy_leave", "search_jobs"} {
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: toolCallTool, Arguments: map[string]any{"name": name}})
 		if err != nil || !res.IsError {
 			t.Errorf("call_tool %s: %v %v, want a tool error", name, res, err)
 		}
+	}
+	if delta := testutil.ToFloat64(refused) - refusedBefore; delta != 3 {
+		t.Errorf("call_tool refusals counted as invalid_request %v times, want 3", delta)
 	}
 	// A misspelt "arguments" must not run the target with no arguments.
 	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: toolCallTool,
