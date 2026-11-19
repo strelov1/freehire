@@ -1,6 +1,8 @@
-package sources
+package aggregators
 
 import (
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -37,7 +39,7 @@ const (
 )
 
 // NewNoFluffJobs builds the NoFluffJobs adapter over the given two-stage client.
-func NewNoFluffJobs(c nofluffjobsHTTP) Source { return nofluffjobs{http: c} }
+func NewNoFluffJobs(c nofluffjobsHTTP) kit.Source { return nofluffjobs{http: c} }
 
 func (nofluffjobs) Provider() string { return "nofluffjobs" }
 
@@ -116,12 +118,12 @@ func (s nofluffjobs) crawl(ctx context.Context) ([]nofluffjobsPosting, error) {
 }
 
 // Fetch is the list-only crawl (no description) — the fallback for a non-hydrating pipeline.
-func (s nofluffjobs) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
+func (s nofluffjobs) Fetch(ctx context.Context, _ kit.CompanyEntry) ([]kit.Job, error) {
 	postings, err := s.crawl(ctx)
 	if err != nil {
 		return nil, err
 	}
-	jobs := make([]Job, 0, len(postings))
+	jobs := make([]kit.Job, 0, len(postings))
 	for _, p := range postings {
 		if job, ok := p.toJob(); ok {
 			jobs = append(jobs, job)
@@ -134,15 +136,15 @@ func (s nofluffjobs) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 // catalogue does not already have (seen). A seen posting yields the list-only job (no detail
 // request, marked SeenRefresh so the pipeline refreshes liveness without wiping the hydrated body);
 // an unseen posting is hydrated; a single detail failure is isolated (logged, list-only fallback).
-func (s nofluffjobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+func (s nofluffjobs) FetchNew(ctx context.Context, _ kit.CompanyEntry, seen func(externalID string) bool) ([]kit.Job, error) {
 	postings, err := s.crawl(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return fetchDetails(postings, defaultDetailWorkers, func(p nofluffjobsPosting) (Job, bool) {
+	return kit.FetchDetails(postings, kit.DefaultDetailWorkers, func(p nofluffjobsPosting) (kit.Job, bool) {
 		base, ok := p.toJob()
 		if !ok {
-			return Job{}, false // unusable posting — dropped, as in Fetch
+			return kit.Job{}, false // unusable posting — dropped, as in Fetch
 		}
 		if seen(base.ExternalID) {
 			base.SeenRefresh = true
@@ -176,17 +178,17 @@ func (d nofluffjobsDetail) description() string {
 			parts = append(parts, s)
 		}
 	}
-	return sanitizeHTML(strings.Join(parts, "\n"))
+	return kit.SanitizeHTML(strings.Join(parts, "\n"))
 }
 
 // toJob maps a listing posting to a Job, returning ok=false for an unusable posting (no id to key
 // on, no url slug to build the canonical URL, or no company which would break the slug). Skills and
 // seniority come straight from the listing — no detail request needed for the structured facets.
-func (p nofluffjobsPosting) toJob() (Job, bool) {
+func (p nofluffjobsPosting) toJob() (kit.Job, bool) {
 	if p.ID == "" || p.URL == "" || p.Name == "" {
-		return Job{}, false
+		return kit.Job{}, false
 	}
-	job := Job{
+	job := kit.Job{
 		ExternalID: p.ID,
 		URL:        fmt.Sprintf(nofluffjobsOfferURL, p.URL),
 		Title:      strings.TrimSpace(p.Title),
@@ -243,7 +245,7 @@ func nofluffjobsCountries(places []nofluffjobsPlace) []string {
 	for _, place := range places {
 		codes = append(codes, place.Country.Code)
 	}
-	return countriesFromCodes(codes)
+	return kit.CountriesFromCodes(codes)
 }
 
 // nofluffjobsSeniority maps NoFluffJobs' first seniority grade into freehire's vocabulary. Its

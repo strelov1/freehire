@@ -2,6 +2,8 @@ package sources
 
 import (
 	"os"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/aggregators"
 )
 
 // registerSpecialTransports adds the providers All cannot list in its plain reg call: the keyed
@@ -42,7 +44,7 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	}
 	// Adzuna's credential is an app_id/app_key pair rather than a single key; both must be set.
 	if appID, appKey := os.Getenv("ADZUNA_APP_ID"), os.Getenv("ADZUNA_APP_KEY"); c == nil || (appID != "" && appKey != "") {
-		registry["adzuna"] = NewAdzuna(c, appID, appKey)
+		registry["adzuna"] = aggregators.NewAdzuna(c, appID, appKey)
 	}
 	// whatjobs' credential is a publisher id rather than an API key, and it is per-country — one
 	// account per market, each under its own provider name (whatjobsMarkets). Rather than one

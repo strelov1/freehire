@@ -1,6 +1,8 @@
-package sources
+package aggregators
 
 import (
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
+
 	"context"
 	"encoding/json"
 	"errors"
@@ -52,14 +54,14 @@ const nofluffjobsListingJSON = `{"postings":[
 
 func TestNoFluffJobsFetchMapsAndDrops(t *testing.T) {
 	jobs, err := NewNoFluffJobs(&nofluffjobsFake{listing: nofluffjobsListingJSON}).
-		Fetch(context.Background(), CompanyEntry{})
+		Fetch(context.Background(), kit.CompanyEntry{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if len(jobs) != 3 {
 		t.Fatalf("len(jobs) = %d, want 3 (no-company dropped)", len(jobs))
 	}
-	byID := map[string]Job{}
+	byID := map[string]kit.Job{}
 	for _, j := range jobs {
 		byID[j.ExternalID] = j
 	}
@@ -129,7 +131,7 @@ func TestNoFluffJobsFetchNewHydratesNewOnly(t *testing.T) {
 		detailErr: map[string]bool{"err-3": true},
 	}
 	seen := func(id string) bool { return id == "seen-1" }
-	jobs, err := NewNoFluffJobs(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{}, seen)
+	jobs, err := NewNoFluffJobs(fake).(kit.HydratingSource).FetchNew(context.Background(), kit.CompanyEntry{}, seen)
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
 	}
@@ -141,7 +143,7 @@ func TestNoFluffJobsFetchNewHydratesNewOnly(t *testing.T) {
 	if !slices.Equal(fake.detailSlugs, []string{"err-3", "new-2"}) {
 		t.Errorf("detail slugs = %v, want [err-3 new-2] (seen-1 not fetched)", fake.detailSlugs)
 	}
-	byID := map[string]Job{}
+	byID := map[string]kit.Job{}
 	for _, j := range jobs {
 		byID[j.ExternalID] = j
 	}
@@ -177,24 +179,18 @@ func TestNoFluffJobsSeniority(t *testing.T) {
 	}
 }
 
-func TestNoFluffJobsProviderRegistered(t *testing.T) {
+func TestNoFluffJobsMarkers(t *testing.T) {
 	s := NewNoFluffJobs(nil)
 	if s.Provider() != "nofluffjobs" {
 		t.Errorf("Provider() = %q", s.Provider())
 	}
-	if _, ok := s.(boardless); !ok {
+	if _, ok := s.(interface{ Boardless() }); !ok {
 		t.Error("nofluffjobs should be boardless")
 	}
-	if _, ok := s.(aggregator); !ok {
+	if _, ok := s.(interface{ Aggregator() }); !ok {
 		t.Error("nofluffjobs should be an aggregator")
 	}
-	if _, ok := s.(HydratingSource); !ok {
-		t.Error("nofluffjobs should implement HydratingSource")
-	}
-	if _, ok := All(nil)["nofluffjobs"]; !ok {
-		t.Error("All() should register nofluffjobs")
-	}
-	if !slices.Contains(FilterableProviders(), "nofluffjobs") {
-		t.Error("FilterableProviders() should include nofluffjobs")
+	if _, ok := s.(kit.HydratingSource); !ok {
+		t.Error("nofluffjobs should implement kit.HydratingSource")
 	}
 }

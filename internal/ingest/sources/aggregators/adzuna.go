@@ -1,6 +1,8 @@
-package sources
+package aggregators
 
 import (
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,7 +22,7 @@ import (
 // path segment), the category in CompanyEntry.Board. Category is a hard filter, unlike whatjobs'
 // relevance-ranked keyword search, so no corroboration logic is needed.
 type adzuna struct {
-	http   JSONGetter
+	http   kit.JSONGetter
 	appID  string
 	appKey string
 }
@@ -54,7 +56,7 @@ const (
 )
 
 // NewAdzuna builds the Adzuna adapter over the given HTTP client and credential pair.
-func NewAdzuna(c JSONGetter, appID, appKey string) Source {
+func NewAdzuna(c kit.JSONGetter, appID, appKey string) kit.Source {
 	return adzuna{http: c, appID: appID, appKey: appKey}
 }
 
@@ -108,7 +110,7 @@ type adzunaPosting struct {
 // Fetch reads one country+category slice. Per the house pagination rule, a failure on the first
 // page is a board-level error; a failure on a later page ends the walk with what was already
 // gathered. Pagination stops on an empty page or at adzunaMaxPages.
-func (a adzuna) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+func (a adzuna) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error) {
 	return a.fetch(ctx, e, adzunaMaxDaysOld)
 }
 
@@ -116,11 +118,11 @@ func (a adzuna) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // out as max_days_old, which Adzuna's search API documents as "the age of the oldest advertisement
 // in days that will be returned" (https://developer.adzuna.com/docs/search). A window under one
 // day still asks for one, the finest grain the parameter has.
-func (a adzuna) FetchRecent(ctx context.Context, e CompanyEntry, window time.Duration) ([]Job, error) {
+func (a adzuna) FetchRecent(ctx context.Context, e kit.CompanyEntry, window time.Duration) ([]kit.Job, error) {
 	return a.fetch(ctx, e, max(1, int(window/(24*time.Hour))))
 }
 
-func (a adzuna) fetch(ctx context.Context, e CompanyEntry, maxDaysOld int) ([]Job, error) {
+func (a adzuna) fetch(ctx context.Context, e kit.CompanyEntry, maxDaysOld int) ([]kit.Job, error) {
 	country := strings.TrimSpace(e.Region)
 	if country == "" {
 		return nil, fmt.Errorf("adzuna: company %q has a blank country (Region)", e.Company)
@@ -130,7 +132,7 @@ func (a adzuna) fetch(ctx context.Context, e CompanyEntry, maxDaysOld int) ([]Jo
 		return nil, fmt.Errorf("adzuna: company %q has a blank category board", e.Company)
 	}
 
-	var jobs []Job
+	var jobs []kit.Job
 	for page := 1; page <= adzunaMaxPages; page++ {
 		var resp struct {
 			Results []adzunaPosting `json:"results"`
@@ -166,14 +168,14 @@ func adzunaPageURL(country, category string, page, maxDaysOld int, appID, appKey
 	return fmt.Sprintf("%s/%s/search/%d?%s", adzunaBaseURL, country, page, q.Encode())
 }
 
-func (p adzunaPosting) toJob() Job {
-	return Job{
+func (p adzunaPosting) toJob() kit.Job {
+	return kit.Job{
 		ExternalID:  string(p.ID),
 		URL:         p.RedirectURL,
 		Title:       p.Title,
 		Company:     p.Company.DisplayName,
 		Location:    p.Location.DisplayName,
 		Description: p.Description,
-		PostedAt:    parseRFC3339(p.Created),
+		PostedAt:    kit.ParseRFC3339(p.Created),
 	}
 }

@@ -1,6 +1,8 @@
-package sources
+package aggregators
 
 import (
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
+
 	"context"
 	"encoding/json"
 	"errors"
@@ -58,7 +60,7 @@ func TestAdzunaFetchMapsFields(t *testing.T) {
 	}}
 	adz := adzuna{http: http, appID: "id1", appKey: "key1"}
 
-	jobs, err := adz.Fetch(context.Background(), CompanyEntry{Region: "gb", Board: "it-jobs"})
+	jobs, err := adz.Fetch(context.Background(), kit.CompanyEntry{Region: "gb", Board: "it-jobs"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -95,7 +97,7 @@ func TestAdzunaFetchAcceptsNumericID(t *testing.T) {
 	}`
 	http := &adzunaHTTP{pages: []string{adzunaPageJSON(numericIDJob), adzunaPageJSON("")}}
 
-	jobs, err := (adzuna{http: http, appID: "id", appKey: "key"}).Fetch(context.Background(), CompanyEntry{Region: "gb", Board: "it-jobs"})
+	jobs, err := (adzuna{http: http, appID: "id", appKey: "key"}).Fetch(context.Background(), kit.CompanyEntry{Region: "gb", Board: "it-jobs"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -109,7 +111,7 @@ func TestAdzunaFetchRequestsCorrectURL(t *testing.T) {
 	http := &adzunaHTTP{pages: []string{adzunaPageJSON("")}}
 	adz := adzuna{http: http, appID: "myid", appKey: "mykey"}
 
-	if _, err := adz.Fetch(context.Background(), CompanyEntry{Region: "us", Board: "it-jobs"}); err != nil {
+	if _, err := adz.Fetch(context.Background(), kit.CompanyEntry{Region: "us", Board: "it-jobs"}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if len(http.gotURLs) != 1 {
@@ -155,7 +157,7 @@ func TestAdzunaFetchRecentSendsTheRunWindow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			http := &adzunaHTTP{pages: []string{adzunaPageJSON("")}}
 			adz := adzuna{http: http, appID: "id", appKey: "key"}
-			if _, err := adz.FetchRecent(context.Background(), CompanyEntry{Region: "gb", Board: "it-jobs"}, tc.window); err != nil {
+			if _, err := adz.FetchRecent(context.Background(), kit.CompanyEntry{Region: "gb", Board: "it-jobs"}, tc.window); err != nil {
 				t.Fatalf("FetchRecent: %v", err)
 			}
 			parsed, err := url.Parse(http.gotURLs[0])
@@ -179,7 +181,7 @@ func TestAdzunaFetchStopsWhenTheWindowRunsOut(t *testing.T) {
 		adzunaPageJSON(""),
 	}}
 
-	jobs, err := (adzuna{http: http, appID: "id", appKey: "key"}).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "it-jobs"})
+	jobs, err := (adzuna{http: http, appID: "id", appKey: "key"}).Fetch(context.Background(), kit.CompanyEntry{Region: "au", Board: "it-jobs"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -231,10 +233,10 @@ func TestAdzunaPageBudgetStaysWithinTheDailyCeiling(t *testing.T) {
 // empty category would fetch Adzuna's whole unfiltered country feed).
 func TestAdzunaFetchRejectsBlankBoard(t *testing.T) {
 	adz := adzuna{http: &adzunaHTTP{}, appID: "id", appKey: "key"}
-	if _, err := adz.Fetch(context.Background(), CompanyEntry{Region: "", Board: "it-jobs"}); err == nil {
+	if _, err := adz.Fetch(context.Background(), kit.CompanyEntry{Region: "", Board: "it-jobs"}); err == nil {
 		t.Fatal("want error on blank country")
 	}
-	if _, err := adz.Fetch(context.Background(), CompanyEntry{Region: "gb", Board: ""}); err == nil {
+	if _, err := adz.Fetch(context.Background(), kit.CompanyEntry{Region: "gb", Board: ""}); err == nil {
 		t.Fatal("want error on blank category")
 	}
 }
@@ -242,7 +244,7 @@ func TestAdzunaFetchRejectsBlankBoard(t *testing.T) {
 // A failed first page is a board-level error.
 func TestAdzunaFetchFirstPageFailure(t *testing.T) {
 	http := &adzunaHTTP{failPage: 1, pages: []string{adzunaPageJSON("")}}
-	if _, err := (adzuna{http: http, appID: "id", appKey: "key"}).Fetch(context.Background(), CompanyEntry{Region: "gb", Board: "it-jobs"}); err == nil {
+	if _, err := (adzuna{http: http, appID: "id", appKey: "key"}).Fetch(context.Background(), kit.CompanyEntry{Region: "gb", Board: "it-jobs"}); err == nil {
 		t.Fatal("want error on first-page failure")
 	}
 }
@@ -253,7 +255,7 @@ func TestAdzunaFetchLaterPageFailureReturnsPartial(t *testing.T) {
 		pages:    []string{adzunaPageJSON(adzunaJobJSON("1", "A")), adzunaPageJSON(adzunaJobJSON("2", "B"))},
 		failPage: 2,
 	}
-	jobs, err := (adzuna{http: http, appID: "id", appKey: "key"}).Fetch(context.Background(), CompanyEntry{Region: "gb", Board: "it-jobs"})
+	jobs, err := (adzuna{http: http, appID: "id", appKey: "key"}).Fetch(context.Background(), kit.CompanyEntry{Region: "gb", Board: "it-jobs"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}

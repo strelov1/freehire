@@ -1,6 +1,8 @@
-package sources
+package aggregators
 
 import (
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
+
 	"context"
 	"encoding/json"
 	"errors"
@@ -90,22 +92,14 @@ func jobnetFakeAds(occupation string, n int) []jobnetFakeAd {
 	return ads
 }
 
-func fetchJobnet(t *testing.T, f *jobnetCatalogue) ([]Job, error) {
+func fetchJobnet(t *testing.T, f *jobnetCatalogue) ([]kit.Job, error) {
 	t.Helper()
-	return NewJobnet(f).Fetch(context.Background(), CompanyEntry{Company: "Jobnet", Provider: "jobnet"})
+	return NewJobnet(f).Fetch(context.Background(), kit.CompanyEntry{Company: "Jobnet", Provider: "jobnet"})
 }
 
 func TestJobnetProvider(t *testing.T) {
 	if got := NewJobnet(nil).Provider(); got != "jobnet" {
 		t.Errorf("Provider() = %q, want %q", got, "jobnet")
-	}
-}
-
-// jobnet lists its whole catalogue or fails, so it is swept by source: an ad gone from the
-// listing closes whatever employer it belonged to.
-func TestJobnetRegisteredFullCatalog(t *testing.T) {
-	if !slices.Contains(FullCatalogProviders(All(nil)), "jobnet") {
-		t.Error("jobnet should be fullCatalog")
 	}
 }
 
@@ -275,4 +269,4 @@ func TestJobnetSlices(t *testing.T) {
 }
 
 // compile-time guard that the fake satisfies the role the adapter depends on.
-var _ HeaderJSONGetter = (*jobnetCatalogue)(nil)
+var _ kit.HeaderJSONGetter = (*jobnetCatalogue)(nil)
