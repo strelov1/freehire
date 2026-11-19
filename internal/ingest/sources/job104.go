@@ -61,7 +61,7 @@ const (
 const job104RequestInterval = 1200 * time.Millisecond
 
 // job104RateLimitRetries and job104RateLimitBackoff retry a refused (403/429), failed (5xx) or
-// unanswered search, the wait doubling from 5 s up to retryDelayCap. The Scrapling client retries
+// unanswered search, the wait doubling from 5 s up to kit.RetryWhile's 30 s cap. The Scrapling client retries
 // nothing itself (see newScraplingClient), so without this one 429 fails the whole board.
 const (
 	job104RateLimitRetries = 4

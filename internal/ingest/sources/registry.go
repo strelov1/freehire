@@ -1,3 +1,6 @@
+// Package sources holds the modular job-source adapters and the registry that maps
+// a platform key to its adapter. Each adapter implements one ATS platform; adding a
+// platform is a new file plus one line in All. The kernel they share lives in sources/kit.
 package sources
 
 import (

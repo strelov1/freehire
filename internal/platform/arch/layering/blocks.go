@@ -159,7 +159,7 @@ var blocks = map[string][]string{
 	"ingest": {
 		"adzunadesc", "applyform", "atsboard", "atsdetect", "boardcatalog", "boardresolve",
 		"catalogstats", "contribution", "directapply", "employer", "ingestsched", "jdresolve", "linkimport",
-		"linksource", "moderation", "pipeline", "rederive", "screeninganswers", "sources", "sourcestats",
+		"linksource", "moderation", "pipeline", "rederive", "screeninganswers", "sources", "sources/kit", "sourcestats",
 		"submission", "sweep", "telegram",
 	},
 	// socialdigest is outbound engagement like broadcast and notify, with a public audience.

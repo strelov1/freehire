@@ -138,7 +138,7 @@ func TestWorkdaySplitsRecursesIntoSecondDimensionWhenSliceStillCapped(t *testing
 // at that depth is paged as-is (best effort) rather than recursed further.
 // A board still capped after exhausting maxFacetDepth cannot be proven complete, so the crawl
 // must fail loudly rather than return the depth limit's leaf slice as if it were the whole
-// board (see the fullBoardListing marker's bar, internal/ingest/sources/source.go: an adapter
+// board (see the fullBoardListing marker's bar, internal/ingest/sources/markers.go: an adapter
 // that returns a partial listing as an unqualified success is exactly the solidjobs shape that
 // forced freehire#2337's revert).
 func TestWorkdaySplitFailsAtMaxDepth(t *testing.T) {
