@@ -88,6 +88,7 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		NewRecruiterflow(c),
 		NewMyCareersFuture(c),
 		NewCareersGov(c),
+		NewFlexProfessionals(c),
 		NewWorkingNomads(c),
 		NewPowerToFly(c),
 		NewHimalayas(c),
