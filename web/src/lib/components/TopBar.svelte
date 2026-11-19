@@ -9,6 +9,7 @@
   import BrandMark from './BrandMark.svelte';
   import { isApiReferenceRoute, isWideHeaderRoute } from '#lib/shellLayout.js';
   import { HEADER_LINKS } from '#lib/siteNav.js';
+  import { siteHeader } from '#lib/siteHeader.svelte.js';
 
   // The header is three slots — logo | search | menu — identical on every
   // viewport. Nav links, the account items, the theme toggle, and the auth
@@ -86,7 +87,6 @@
   // the header (`top-header`, `top-header-air` in app.css) follow it from one variable.
   // `top` rather than a transform: a transform would become the containing block for
   // the mobile menu's `position: fixed` drawer, the same trap as backdrop-blur below.
-  let headerHidden = $state(false);
   let lastScrollY = 0;
   let headerEl: HTMLElement;
   const HIDE_AFTER = 56; // the header's own height: it never slides away over nothing
@@ -94,14 +94,14 @@
   function onWindowScroll() {
     const y = window.scrollY;
     const delta = y - lastScrollY;
-    if (y < HIDE_AFTER) headerHidden = false;
+    if (y < HIDE_AFTER) siteHeader.hidden = false;
     // Never slide away a control that holds focus: PageDown from a focused link would hide it.
-    else if (delta > SCROLL_SLOP) headerHidden = !headerEl.contains(document.activeElement);
-    else if (delta < -SCROLL_SLOP) headerHidden = false;
+    else if (delta > SCROLL_SLOP) siteHeader.hidden = !headerEl.contains(document.activeElement);
+    else if (delta < -SCROLL_SLOP) siteHeader.hidden = false;
     if (Math.abs(delta) > SCROLL_SLOP || y < HIDE_AFTER) lastScrollY = y;
   }
   $effect(() => {
-    document.documentElement.toggleAttribute('data-header-hidden', headerHidden);
+    document.documentElement.toggleAttribute('data-header-hidden', siteHeader.hidden);
   });
 
   // A failed OAuth callback lands back wherever that attempt's `returnTo` pointed,
@@ -116,7 +116,7 @@
   // the initial load and every later navigation, and stays off the SSR path.
   // It also brings back a header the previous page scrolled away.
   afterNavigate(({ shallow }) => {
-    headerHidden = false;
+    siteHeader.hidden = false;
     if (shallow) return; // SvelteKit 3 fires this for shallow routing too
     if (!page.url.searchParams.has('auth_error')) return;
     const query = [...page.url.searchParams]
@@ -136,7 +136,7 @@
 <header
   bind:this={headerEl}
   class="top-site-header sticky z-40 border-b border-border bg-background"
-  onfocusin={() => (headerHidden = false)}
+  onfocusin={() => (siteHeader.hidden = false)}
 >
   <div class={['mx-auto flex h-14 items-center gap-3 px-4 sm:gap-4', wideHeader ? 'max-w-none' : 'max-w-6xl']}>
     <!-- Wide header only: the two side slots grow from a zero basis, so the free space

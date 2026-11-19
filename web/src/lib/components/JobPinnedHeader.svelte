@@ -4,6 +4,7 @@
   import { companyLogoUrl } from '#lib/logo.js';
   import type { Job } from '#lib/types.js';
   import { EntityLogo } from '#lib/ui/index.js';
+  import { siteHeader } from '#lib/siteHeader.svelte.js';
 
   // `lang` is the posting's own language for its title (undefined when English).
   let { job, lang, actions }: { job: Job; lang: string | undefined; actions: Snippet } = $props();
@@ -18,7 +19,9 @@
   // The obvious alternative — pinning the real header and collapsing it — cannot say
   // that: its flow box loses ~90px the instant it pins, jerking the paragraph the
   // reader is mid-sentence in, and again in reverse on the way back up.
-  const PINNED_HEADER_TOP = 56; // `top-14` on the rail below, and the top bar's own `h-14`.
+  // Where the rail below pins: under the top bar (its `h-14`), or at the very top while the
+  // bar is slid away. Reading it here re-creates the observer when the header moves.
+  const pinnedHeaderTop = $derived(siteHeader.hidden ? 0 : 56);
   let headerSentinel: HTMLElement | undefined = $state();
   let headerPinned = $state(false);
   $effect(() => {
@@ -31,16 +34,16 @@
         // `isIntersecting` alone also reads false while the sentinel is BELOW the fold,
         // which is where it sits on a short viewport before anything has been scrolled.
         // The rect settles which edge it left by.
-        headerPinned = !entry.isIntersecting && entry.boundingClientRect.top < PINNED_HEADER_TOP;
+        headerPinned = !entry.isIntersecting && entry.boundingClientRect.top < pinnedHeaderTop;
       },
-      { rootMargin: `-${PINNED_HEADER_TOP}px 0px 0px 0px` },
+      { rootMargin: `-${pinnedHeaderTop}px 0px 0px 0px` },
     );
     io.observe(el);
     return () => io.disconnect();
   });
 </script>
 
-<!-- The pinned header (see PINNED_HEADER_TOP). The overlay spans JobView's content column, which
+<!-- The pinned header (see pinnedHeaderTop). The overlay spans JobView's content column, which
      is what gives the rail inside it something to travel: a `sticky` element is
      clamped to its containing block, and the column is exactly the stretch the bar
      should stay pinned over — it releases at the end of the posting, not over the
