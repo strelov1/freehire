@@ -42,3 +42,14 @@ func deref(p *int) any {
 	}
 	return *p
 }
+
+func TestRubMonthlySalary(t *testing.T) {
+	from, to := 100000.4, 150000.0
+	lo, hi, cur, per := RubMonthlySalary(&from, &to)
+	if deref(lo) != 100000 || deref(hi) != 150000 || cur != "RUB" || per != "month" {
+		t.Errorf("RubMonthlySalary = %v %v %q %q", deref(lo), deref(hi), cur, per)
+	}
+	if lo, hi, cur, per := RubMonthlySalary(nil, nil); lo != nil || hi != nil || cur != "" || per != "" {
+		t.Errorf("no bounds: got %v %v %q %q, want no salary", lo, hi, cur, per)
+	}
+}

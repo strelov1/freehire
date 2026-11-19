@@ -55,3 +55,18 @@ func TestDetailUnreadable(t *testing.T) {
 		})
 	}
 }
+
+func TestCollapseSpace(t *testing.T) {
+	if got := CollapseSpace("  Senior \n\t Engineer  "); got != "Senior Engineer" {
+		t.Errorf("CollapseSpace = %q", got)
+	}
+}
+
+func TestSanitizeHTMLAndErrListingAbsent(t *testing.T) {
+	if got := SanitizeHTML(`<p>Role</p><script>x()</script>`); got != "<p>Role</p>" {
+		t.Errorf("SanitizeHTML = %q", got)
+	}
+	if err := ErrListingAbsent("greenhouse", "acme", "jobs"); err == nil || err.Error() != `greenhouse: board acme: the listing response carries no "jobs" collection` {
+		t.Errorf("ErrListingAbsent = %v", err)
+	}
+}
