@@ -4,8 +4,8 @@ package main
 
 // The data path a posting takes, end to end (#4587): a crawled board, the ingest write,
 // the search outbox, the drain into Meilisearch, the projection the API serves, a saved
-// search's alert and the email it sends, then a save through the tracking writer and the
-// reminder email it produces. Every unit on that path has its own test; this
+// search's alert and the email it sends, then a save and an
+// application through the tracking writer and the reminder and follow-up emails they produce. Every unit on that path has its own test; this
 // one exists for the seams between them, where every failure the catalogue actually had
 // lived (a salary stored but never served, a row searchable in Postgres and absent from
 // the index). Only external I/O is stubbed: the board is an httptest server replaying a
@@ -28,10 +28,12 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/notify"
+	"github.com/strelov1/freehire/internal/engage/nudge"
 	"github.com/strelov1/freehire/internal/engage/reminder"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -208,6 +210,24 @@ func TestJourneyCrawledBoardToDeliveredAlert(t *testing.T) {
 	}
 	if len(mailer.sent) != 1 || !strings.Contains(mailer.sent[0].Text, row.Title) || !strings.Contains(mailer.sent[0].Text, origin+"/jobs/"+row.PublicSlug) {
 		t.Fatalf("reminder emails = %+v, want one linking the saved posting", mailer.sent)
+	}
+
+	// 7. Apply: the same writer records the application, and once it has gone silent past
+	// the applied stage's threshold the nudge engine sends the follow-up email.
+	applied := "applied"
+	if _, err := tracking.Track(ctx, user, row.PublicSlug, &applied, nil, appevent.SourceUser); err != nil {
+		t.Fatal(err)
+	}
+	if tag, err := pool.Exec(ctx, `UPDATE applications SET applied_at = now() - interval '25 days' WHERE user_id = $1 AND job_id = $2`, user, id); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("tracked %d applications (%v), want 1", tag.RowsAffected(), err)
+	}
+	mailer.sent = nil
+	nudges := nudge.Router{notify.ChannelEmail: nudge.NewEmailNotifier(mailer, "alerts@freehire.test", origin, links)}
+	if _, err := nudge.New(q, nudges, nudge.DefaultConfig()).Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(mailer.sent) != 1 || !strings.Contains(mailer.sent[0].Text, row.Title) {
+		t.Fatalf("nudge emails = %+v, want one follow-up on the application", mailer.sent)
 	}
 }
 
