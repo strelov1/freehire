@@ -5,11 +5,10 @@ import (
 	"log"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	sweeppolicy "github.com/strelov1/freehire/internal/ingest/sweep"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 var _ pipeline.PostingReadRecorder = (*dbStore)(nil)
@@ -49,10 +48,10 @@ func (s *dbStore) addLinkedInReads(ctx context.Context, set map[string]bool) {
 	if lookup.Before(prune) {
 		prune = lookup
 	}
-	if err := s.q.PruneLinkedInPostingsRead(ctx, pgtype.Timestamptz{Time: prune, Valid: true}); err != nil {
+	if err := s.q.PruneLinkedInPostingsRead(ctx, pgconv.Instant(prune)); err != nil {
 		log.Printf("ingest: linkedin read-cache prune: %v", err)
 	}
-	ids, err := s.q.LinkedInPostingsReadSince(ctx, pgtype.Timestamptz{Time: lookup, Valid: true})
+	ids, err := s.q.LinkedInPostingsReadSince(ctx, pgconv.Instant(lookup))
 	if err != nil {
 		log.Printf("ingest: linkedin read-cache lookup failed, re-reading its postings: %v", err)
 		return

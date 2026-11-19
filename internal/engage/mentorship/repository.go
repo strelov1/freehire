@@ -47,7 +47,7 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository 
 func (r *QueriesRepository) CreateProfile(ctx context.Context, in ProfileInput) (Profile, error) {
 	row, err := r.q.CreateMentorProfile(ctx, db.CreateMentorProfileParams{
 		UserID:             in.UserID,
-		CompanySlug:        optionalText(in.CompanySlug),
+		CompanySlug:        pgconv.Text(in.CompanySlug),
 		Slug:               in.Slug,
 		DisplayName:        in.DisplayName,
 		Headline:           in.Headline,
@@ -203,11 +203,11 @@ func (r *QueriesRepository) ListPendingProfiles(ctx context.Context) ([]PendingP
 // parameter, which the query reads as "unfiltered".
 func (r *QueriesRepository) ListPublishedProfiles(ctx context.Context, f DirectoryFilter) ([]Profile, error) {
 	rows, err := r.q.ListPublishedMentors(ctx, db.ListPublishedMentorsParams{
-		CompanySlug:   optionalText(f.CompanySlug),
-		Topic:         optionalText(f.Topic),
-		Language:      optionalText(f.Language),
-		Seniority:     optionalText(f.Seniority),
-		Query:         optionalText(f.Query),
+		CompanySlug:   pgconv.Text(f.CompanySlug),
+		Topic:         pgconv.Text(f.Topic),
+		Language:      pgconv.Text(f.Language),
+		Seniority:     pgconv.Text(f.Seniority),
+		Query:         pgconv.Text(f.Query),
 		NoReviewsOnly: f.NoReviewsOnly,
 		RowLimit:      f.Limit,
 	})
@@ -361,14 +361,6 @@ func daysOf(d time.Duration) int32 {
 		days++
 	}
 	return days
-}
-
-// optionalText turns an empty filter field into the NULL the query reads as "unfiltered".
-func optionalText(s string) pgtype.Text {
-	if s == "" {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: s, Valid: true}
 }
 
 // numericFloat reads an aggregate average, treating an absent one as zero.

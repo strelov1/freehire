@@ -1,0 +1,21 @@
+id: pgconv-not-literals
+language: Go
+severity: error
+message: "a hand-written pgtype.Timestamptz/Text literal; fix: pgconv.Instant(t), pgconv.TextValid(s) or pgconv.Text(s) (empty string is NULL)"
+note: >-
+  internal/platform/pgconv is the one place a Go value becomes a nullable pgx argument, so the
+  NULL rule (what counts as unset) is written once. A local copy drifts: the same helper was
+  re-declared in a dozen domains under different names. A condition pgconv has no helper for
+  (Valid: !t.IsZero()) is not matched; add the helper there instead of a new local one.
+rule:
+  any:
+    - pattern: "pgtype.Timestamptz{Time: $T, Valid: true}"
+    - pattern: "pgtype.Text{String: $S, Valid: true}"
+    - pattern: "pgtype.Text{String: $S, Valid: $S != \"\"}"
+files:
+  - cmd/**/*.go
+  - internal/**/*.go
+ignores:
+  - "**/*_test.go"
+  - internal/platform/db/**
+  - internal/platform/pgconv/**

@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/application/maillink"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // domainLearner adapts the gmailsync self-learning cache to maillink.Learner: a
@@ -130,7 +131,7 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 		LinkSource:      textOrNull(r.LinkSource),
 		MatchConfidence: pgtype.Float4{Float32: float32(r.Confidence), Valid: matched},
 		StatusSignal:    textOrNull(string(r.Signal)),
-		Model:           pgtype.Text{String: model, Valid: true},
+		Model:           pgconv.TextValid(model),
 		ID:              r.EmailID,
 		UserID:          userID,
 	}); err != nil {
@@ -185,5 +186,5 @@ func int8OrNull(v int64) pgtype.Int8 {
 }
 
 func textOrNull(s string) pgtype.Text {
-	return pgtype.Text{String: s, Valid: s != ""}
+	return pgconv.Text(s)
 }

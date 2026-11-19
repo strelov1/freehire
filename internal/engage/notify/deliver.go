@@ -248,9 +248,9 @@ func (r *Runner) recordNotification(ctx context.Context, info db.GetSubscription
 	}
 	var publicSlug pgtype.Text
 	if slug != "" {
-		publicSlug = pgtype.Text{String: slug, Valid: true}
+		publicSlug = pgconv.TextValid(slug)
 	}
-	dedupKey := pgtype.Text{String: digestDedupKey(info.SavedSearchID, jobIDs), Valid: true}
+	dedupKey := pgconv.TextValid(digestDedupKey(info.SavedSearchID, jobIDs))
 	id, err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
 		UserID:     info.UserID,
 		Kind:       kindSubscriptionDigest,

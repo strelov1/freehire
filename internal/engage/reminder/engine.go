@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/application/deliverywindow"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -389,7 +387,7 @@ func (r *Runner) recordNotification(ctx context.Context, b *batch) {
 		Body:   body,
 	}
 	if len(b.msgs) == 1 {
-		arg.PublicSlug = pgtype.Text{String: b.msgs[0].Slug, Valid: true}
+		arg.PublicSlug = pgconv.TextValid(b.msgs[0].Slug)
 	} else {
 		arg.Jobs = jobsSnapshot(b.msgs)
 	}

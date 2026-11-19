@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // unreadAfter is how long a message sits unread before its recipient is told. Five minutes
@@ -102,7 +102,7 @@ func NewNotifier(q *db.Queries, cfg NotifierConfig, kinds ...Kind) *Notifier {
 // run retries; one channel succeeding counts as sent.
 func (n *Notifier) NotifyUnread(ctx context.Context, now time.Time) (NotifyResult, error) {
 	due, err := n.q.ListUnreadDue(ctx, db.ListUnreadDueParams{
-		Cutoff:  pgtype.Timestamptz{Time: now.Add(-unreadAfter), Valid: true},
+		Cutoff:  pgconv.Instant(now.Add(-unreadAfter)),
 		MaxRows: n.cfg.MaxPerRun,
 	})
 	if err != nil {
@@ -115,7 +115,7 @@ func (n *Notifier) NotifyUnread(ctx context.Context, now time.Time) (NotifyResul
 		if !ok {
 			continue
 		}
-		claimedAt := pgtype.Timestamptz{Time: now, Valid: true}
+		claimedAt := pgconv.Instant(now)
 		_, err := n.q.ClaimUnread(ctx, db.ClaimUnreadParams{
 			ClaimedAt: claimedAt, ConversationID: d.ConversationID, UserID: d.UserID,
 			PrevNotifiedAt: d.PrevNotifiedAt, LastRead: d.LastRead,
@@ -177,7 +177,7 @@ func (n *Notifier) deliver(ctx context.Context, d db.ListUnreadDueRow, nt Notice
 	// Best-effort history row: a failure here must never fail the delivery it records.
 	if _, err := n.q.RecordNotification(ctx, db.RecordNotificationParams{
 		UserID: d.UserID, Kind: nt.NotificationKind, Title: nt.Title, Body: nt.Line,
-		DedupKey: pgtype.Text{String: fmt.Sprintf("%s:%d:%d", d.Kind, d.ConversationID, d.OldestID), Valid: true},
+		DedupKey: pgconv.TextValid(fmt.Sprintf("%s:%d:%d", d.Kind, d.ConversationID, d.OldestID)),
 	}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("messaging: recording notification: %v", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // ExistingExternalIDs returns the external_ids already stored for the board about to be crawled: the seen-set for a hydrating source, so detail is fetched only for postings the catalogue lacks. Implements pipeline.seenLookup.
@@ -28,8 +29,8 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 	if s.seen.refetchAll {
 		return set, nil
 	}
-	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-s.seen.hydrationWindow), Valid: true}
-	bodyCutoff := pgtype.Timestamptz{Time: s.seen.bodies.Cutoff, Valid: true}
+	cutoff := pgconv.Instant(time.Now().Add(-s.seen.hydrationWindow))
+	bodyCutoff := pgconv.Instant(s.seen.bodies.Cutoff)
 	deadlineFrom := pgtype.Date{Time: time.Now().UTC().Add(-pipeline.DeadlineRecheckWindow), Valid: true}
 	if board == "" {
 		rows, err := s.q.ExistingExternalIDs(ctx, db.ExistingExternalIDsParams{

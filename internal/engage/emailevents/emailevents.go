@@ -12,9 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // Retention is how long an event keeps its message id before only daily counts remain.
@@ -119,7 +118,7 @@ func decode(body string) (db.RecordEmailEventParams, time.Time, error) {
 		Type:       eventType,
 		Campaign:   campaign,
 		Variant:    first(e.Mail.Tags["variant"]),
-		OccurredAt: pgtype.Timestamptz{Time: at, Valid: true},
+		OccurredAt: pgconv.Instant(at),
 	}, e.Mail.Timestamp, nil
 }
 
@@ -182,7 +181,7 @@ func Drain(ctx context.Context, src Source, store Store, now time.Time) (Stats, 
 func RollUp(ctx context.Context, store Store, now time.Time) error {
 	for {
 		rows, err := store.RollUpExpiredEmailEvents(ctx, db.RollUpExpiredEmailEventsParams{
-			Before:  pgtype.Timestamptz{Time: now.Add(-Retention), Valid: true},
+			Before:  pgconv.Instant(now.Add(-Retention)),
 			MaxRows: rollUpBatch,
 		})
 		if err != nil {

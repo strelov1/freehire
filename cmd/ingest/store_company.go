@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // RecordCompanyWebsite stores a posting's stated employer website on its company row
@@ -33,7 +34,7 @@ func (s *dbStore) RecordCompanyWebsite(ctx context.Context, companySlug, website
 func (s *dbStore) CompanyDescriptionDue(ctx context.Context, slug string, checkedSince time.Time) (bool, error) {
 	due, err := s.q.CompanyDescriptionDue(ctx, db.CompanyDescriptionDueParams{
 		Slug:         slug,
-		CheckedSince: pgtype.Timestamptz{Time: checkedSince, Valid: true},
+		CheckedSince: pgconv.Instant(checkedSince),
 	})
 	if err != nil {
 		return false, fmt.Errorf("company description due %s: %w", slug, err)

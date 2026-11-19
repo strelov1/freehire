@@ -1,0 +1,20 @@
+id: pgconv-not-literals
+snapshots:
+  "var a = pgtype.Text{String: s, Valid: s != \"\"}":
+    labels:
+    - source: "pgtype.Text{String: s, Valid: s != \"\"}"
+      style: primary
+      start: 8
+      end: 46
+  "var a = pgtype.Text{String: s, Valid: true}":
+    labels:
+    - source: "pgtype.Text{String: s, Valid: true}"
+      style: primary
+      start: 8
+      end: 43
+  "var a = pgtype.Timestamptz{Time: t, Valid: true}":
+    labels:
+    - source: "pgtype.Timestamptz{Time: t, Valid: true}"
+      style: primary
+      start: 8
+      end: 48

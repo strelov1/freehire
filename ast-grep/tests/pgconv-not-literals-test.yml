@@ -1,0 +1,9 @@
+id: pgconv-not-literals
+valid:
+  - "var a = pgconv.Instant(t)"
+  - "var a = pgtype.Text{}"
+  - "var a = pgtype.Timestamptz{Time: t, Valid: !t.IsZero()}"
+invalid:
+  - "var a = pgtype.Timestamptz{Time: t, Valid: true}"
+  - "var a = pgtype.Text{String: s, Valid: true}"
+  - "var a = pgtype.Text{String: s, Valid: s != \"\"}"

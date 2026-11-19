@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // PostgresRepository is the Repository backed by the generated queries. It holds no
@@ -78,7 +77,7 @@ func (r *PostgresRepository) RecordPing(ctx context.Context, c Candidate, engine
 // PingsSince sums BOTH ledgers: the budget belongs to the engine, and a company page
 // costs what a posting does.
 func (r *PostgresRepository) PingsSince(ctx context.Context, engine string, since time.Time) (int64, error) {
-	at := pgtype.Timestamptz{Time: since, Valid: true}
+	at := pgconv.Instant(since)
 
 	jobs, err := r.q.CountJobSearchPingsSince(ctx, db.CountJobSearchPingsSinceParams{Engine: engine, Since: at})
 	if err != nil {

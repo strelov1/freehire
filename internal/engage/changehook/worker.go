@@ -8,9 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 const (
@@ -43,7 +42,7 @@ type Stats struct{ Subscriptions, Changes, Failed, Disabled int64 }
 // "finished transactions only" bound and privacy rule, so a subscriber sees what GET /jobs/changes would.
 func (w *Worker) Run(ctx context.Context) (Stats, error) {
 	var st struct{ subs, changes, failed, disabled atomic.Int64 }
-	started := pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	started := pgconv.Instant(time.Now())
 	// Database errors fail the run (exit 1); an endpoint refusing is a delivery outcome.
 	var errMu sync.Mutex
 	var errs []error

@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
@@ -70,7 +71,7 @@ func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board, region
 		Region:            region,
 		LastIngestedCount: pgtype.Int4{Int32: int32(ingested), Valid: true},
 		Reached:           reached,
-		Fingerprint:       pgtype.Text{String: fingerprint, Valid: fingerprint != ""},
+		Fingerprint:       pgconv.Text(fingerprint),
 	})
 	if err != nil {
 		return err
@@ -81,7 +82,7 @@ func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board, region
 				Provider:    provider,
 				Board:       board,
 				Region:      region,
-				QuietUntil:  pgtype.Timestamptz{Time: time.Now().Add(d), Valid: true},
+				QuietUntil:  pgconv.Instant(time.Now().Add(d)),
 				QuietStreak: streak,
 			}); err != nil {
 				return err
@@ -106,7 +107,7 @@ func (h *boardHealth) RecordFailure(ctx context.Context, provider, board, region
 		Provider:  provider,
 		Board:     board,
 		Region:    region,
-		LastError: pgtype.Text{String: cause.Error(), Valid: true},
+		LastError: pgconv.TextValid(cause.Error()),
 		BoardGone: errors.Is(cause, sources.ErrBoardGone),
 	})
 	if err != nil {
@@ -120,7 +121,7 @@ func (h *boardHealth) RecordFailure(ctx context.Context, provider, board, region
 		Provider:            provider,
 		Board:               board,
 		Region:              region,
-		CooldownUntil:       pgtype.Timestamptz{Time: time.Now().Add(d), Valid: true},
+		CooldownUntil:       pgconv.Instant(time.Now().Add(d)),
 		ConsecutiveFailures: failures,
 	})
 	if err != nil {

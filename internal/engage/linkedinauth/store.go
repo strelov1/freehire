@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // PostgresStore is the Store backed by the generated queries. Expiry rules live in renew.go.
@@ -45,7 +46,7 @@ func (s *PostgresStore) Save(ctx context.Context, t Token) error {
 		Channel:          Channel,
 		AccessToken:      t.AccessToken,
 		AccessExpiresAt:  pgTime(t.ExpiresAt),
-		RefreshToken:     pgText(t.RefreshToken),
+		RefreshToken:     pgconv.Text(t.RefreshToken),
 		RefreshExpiresAt: pgTime(t.RefreshExpiresAt),
 		Scope:            t.Scope,
 	})
@@ -56,7 +57,7 @@ func (s *PostgresStore) Renew(ctx context.Context, previous string, t Token) (bo
 		Channel:             Channel,
 		AccessToken:         t.AccessToken,
 		AccessExpiresAt:     pgTime(t.ExpiresAt),
-		RefreshToken:        pgText(t.RefreshToken),
+		RefreshToken:        pgconv.Text(t.RefreshToken),
 		RefreshExpiresAt:    pgTime(t.RefreshExpiresAt),
 		PreviousAccessToken: previous,
 	})
@@ -100,13 +101,5 @@ func pgTime(t time.Time) pgtype.Timestamptz {
 	if t.IsZero() {
 		return pgtype.Timestamptz{}
 	}
-	return pgtype.Timestamptz{Time: t.UTC(), Valid: true}
-}
-
-// pgText maps an empty string to SQL NULL, for the same reason.
-func pgText(s string) pgtype.Text {
-	if s == "" {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: s, Valid: true}
+	return pgconv.Instant(t.UTC())
 }

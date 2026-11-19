@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // coverageFreshness is how recently a non-aggregator posting must have been SEEN for its
@@ -51,7 +51,7 @@ func newCoverage(pool *pgxpool.Pool) *coverage {
 				FoldedCompanies: folded,
 				Aggregators:     aggregators,
 				Countries:       countries,
-				SeenAfter:       pgtype.Timestamptz{Time: seenAfter, Valid: true},
+				SeenAfter:       pgconv.Instant(seenAfter),
 			})
 		},
 	}

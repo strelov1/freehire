@@ -29,10 +29,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/safehttp"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -47,12 +46,6 @@ const (
 	// concurrency caps simultaneous probes: orphan postings span many hosts, so this
 	// keeps the worker from hammering any single employer site while staying brisk.
 	concurrency = 8
-	// lockKey is the Postgres advisory-lock key that serializes liveness runs. Cron
-	// offers no host-level guarantee against stacking, and two runs probing the same
-	// orphan seconds apart would collapse the "two consecutive expired reads" grace
-	// into one burst — closing a job on a transient blip. A second run that can't take
-	// the lock exits cleanly. The value is an arbitrary constant unique to this worker.
-	lockKey = 0x66686c76 // "fhlv" — freehire liveness; the key list lives in internal/platform/migrate
 )
 
 // unsignalledSources carry no close signal at all: no re-crawl that could stop seeing
@@ -201,27 +194,16 @@ func run() int {
 	// Single-flight: hold a session-scoped advisory lock on a dedicated connection
 	// for the whole run so overlapping cron invocations can't strike the same orphan
 	// twice within one burst. A run that can't take the lock exits cleanly.
-	lockConn, err := pool.Acquire(ctx)
+	release, locked, err := worker.TryLock(ctx, pool, worker.LivenessLockKey)
 	if err != nil {
-		log.Printf("acquire lock connection: %v", err)
-		return 1
-	}
-	var locked bool
-	if err := lockConn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", int64(lockKey)).Scan(&locked); err != nil {
-		lockConn.Release()
 		log.Printf("liveness lock: %v", err)
 		return 1
 	}
 	if !locked {
-		lockConn.Release()
 		log.Print("liveness: another run holds the lock — exiting")
 		return 0
 	}
-	defer func() {
-		// Best-effort unlock; releasing/closing the connection drops the session lock anyway.
-		_, _ = lockConn.Exec(ctx, "SELECT pg_advisory_unlock($1)", int64(lockKey))
-		lockConn.Release()
-	}()
+	defer release()
 
 	// The candidate set is "every open job whose source is not a registered ATS
 	// provider" — the taxonomy keys are the exclusion list, so a new adapter never
@@ -334,7 +316,7 @@ func run() int {
 		sourcesToExpire := filterSources(unsignalledSources, *sourceFilter)
 		expired, err := queries.CloseStaleUnsignalledJobs(ctx, db.CloseStaleUnsignalledJobsParams{
 			Sources: sourcesToExpire,
-			Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
+			Cutoff:  pgconv.Instant(time.Now().Add(-expiryWindow)),
 		})
 		if err != nil {
 			// Log and carry on: a failing guess-half (e.g. a lock wait against a concurrent
@@ -351,8 +333,8 @@ func run() int {
 		unseenFor := unseenWindow(sourcesToExpireDespiteRegistered, registeredSweepGrace)
 		expiredRegistered, err := queries.CloseStaleUnseenUnprobeableJobs(ctx, db.CloseStaleUnseenUnprobeableJobsParams{
 			Sources:    sourcesToExpireDespiteRegistered,
-			Cutoff:     pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
-			SeenCutoff: pgtype.Timestamptz{Time: time.Now().Add(-unseenFor), Valid: true},
+			Cutoff:     pgconv.Instant(time.Now().Add(-expiryWindow)),
+			SeenCutoff: pgconv.Instant(time.Now().Add(-unseenFor)),
 		})
 		if err != nil {
 			log.Printf("liveness: expire stale expireDespiteRegistered jobs: %v", err)

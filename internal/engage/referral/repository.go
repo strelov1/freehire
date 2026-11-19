@@ -178,8 +178,8 @@ func (r *QueriesRepository) CreateRequest(ctx context.Context, in RequestInput) 
 		CvKind:          in.CVKind,
 		CvID:            in.CVID,
 		LinkedinUrl:     in.LinkedInURL,
-		ContactTelegram: textOrNull(in.ContactTelegram),
-		ContactEmail:    textOrNull(in.ContactEmail),
+		ContactTelegram: pgconv.Text(in.ContactTelegram),
+		ContactEmail:    pgconv.Text(in.ContactEmail),
 		Note:            in.Note,
 	})
 	if err != nil {
@@ -315,13 +315,4 @@ func int64PtrFrom(n pgtype.Int8) *int64 {
 	}
 	v := n.Int64
 	return &v
-}
-
-// textOrNull wraps a string as a pgtype.Text, storing NULL for an empty string so the
-// contact column carries a real value or nothing.
-func textOrNull(s string) pgtype.Text {
-	if s == "" {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: s, Valid: true}
 }

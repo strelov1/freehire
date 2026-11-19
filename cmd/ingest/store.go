@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobdedup"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -107,7 +108,7 @@ func cheapWrite(r db.RefreshUnchangedJobRow) written {
 // withheldIfSeenBefore is the last_seen_at before which search had withheld a posting as
 // unseen (search.UnseenWindow); a liveness write that moves it past this requeues the posting.
 func withheldIfSeenBefore() pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: time.Now().Add(-search.UnseenWindow), Valid: true}
+	return pgconv.Instant(time.Now().Add(-search.UnseenWindow))
 }
 
 // errCheapFenced reports that the cheap write matched the stored row but was refused because the row's state changed while it waited (a close, a content or metadata edit). Taking the jobs row now would reverse the lock order (jobs, then activity) and deadlock against a closer, so persist returns, saveOnce rolls back, and save retries in a fresh transaction.

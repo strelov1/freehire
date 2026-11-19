@@ -12,6 +12,7 @@ import (
 	sweeppolicy "github.com/strelov1/freehire/internal/ingest/sweep"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // crawlReachedNothing reports a run that tried and wrote nothing: boards or saves failed and
@@ -69,7 +70,7 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 		}
 		_, hasGrace := grace[provider]
 		window := sweeppolicy.SweepWindowFor(grace, provider)
-		cutoff := pgtype.Timestamptz{Time: now.Add(-window), Valid: true}
+		cutoff := pgconv.Instant(now.Add(-window))
 		// Board evidence admits this provider to dispatch without granting the broader
 		// company/source scope: that still requires an ingested or refreshed posting.
 		if !truncated && sweeppolicy.ShouldSweep(runStats[provider]) {
