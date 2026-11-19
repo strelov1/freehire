@@ -108,7 +108,7 @@ func (h *recruiterContactHandlers) contacts(ctx context.Context, jobID int64, do
 		}
 		age := time.Since(row.FoundAt.Time)
 		if age < recruiterContactsTTL && (len(cached) > 0 || age < recruiterContactsEmptyTTL) {
-			return h.withoutSuppressed(ctx, jobID, cached, row.FoundAt.Time)
+			return h.withoutSuppressed(ctx, jobID, cached, row.FoundAt.Time, userID)
 		}
 	}
 
@@ -124,8 +124,8 @@ func (h *recruiterContactHandlers) contacts(ctx context.Context, jobID int64, do
 }
 
 // withoutSuppressed drops cached addresses removed on request since they were found, and
-// rewrites the cache without them. A check that fails is a failure: a removal must hold.
-func (h *recruiterContactHandlers) withoutSuppressed(ctx context.Context, jobID int64, cached []contactfinder.Contact, foundAt time.Time) ([]contactfinder.Contact, error) {
+// rewrites the cache without them. The finder logs the rest as shown to userID. A check that fails is a failure: a removal must hold.
+func (h *recruiterContactHandlers) withoutSuppressed(ctx context.Context, jobID int64, cached []contactfinder.Contact, foundAt time.Time, userID int64) ([]contactfinder.Contact, error) {
 	if len(cached) == 0 {
 		return cached, nil
 	}
@@ -133,7 +133,7 @@ func (h *recruiterContactHandlers) withoutSuppressed(ctx context.Context, jobID 
 	for i, c := range cached {
 		emails[i] = c.Email
 	}
-	suppressed, err := h.finder.Suppressed(ctx, emails)
+	suppressed, err := h.finder.Suppressed(ctx, emails, strconv.FormatInt(userID, 10))
 	if err != nil {
 		return nil, err
 	}

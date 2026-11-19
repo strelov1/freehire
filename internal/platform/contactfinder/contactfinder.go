@@ -49,9 +49,7 @@ func FromEnv() *Client {
 }
 
 // Find returns up to three recruiter contacts at domain, [] when nothing usable is known.
-// userRef is recorded with this lookup only: a later serve of the cached answer reaches the
-// service as a Suppressed check, which carries no viewer. shortcut: cache serves are not
-// attributed to their viewer, add a user_ref to /v1/check if every disclosure must be logged.
+// userRef is recorded by the service so a person can learn to whom their address was shown.
 func (c *Client) Find(ctx context.Context, domain, userRef string) ([]Contact, error) {
 	var out struct {
 		Contacts []Contact `json:"contacts"`
@@ -65,12 +63,14 @@ func (c *Client) Find(ctx context.Context, domain, userRef string) ([]Contact, e
 	return out.Contacts, nil
 }
 
-// Suppressed returns which of emails were asked to be removed since they were found.
-func (c *Client) Suppressed(ctx context.Context, emails []string) (map[string]bool, error) {
+// Suppressed returns which of emails must not be shown: removed on request since they were found,
+// or no longer traceable. The service logs every other address as shown to userRef, so a serve
+// from the cache is on record like a lookup.
+func (c *Client) Suppressed(ctx context.Context, emails []string, userRef string) (map[string]bool, error) {
 	var out struct {
 		Suppressed []string `json:"suppressed"`
 	}
-	if err := c.post(ctx, "/v1/check", map[string][]string{"emails": emails}, &out); err != nil {
+	if err := c.post(ctx, "/v1/check", map[string]any{"emails": emails, "user_ref": userRef}, &out); err != nil {
 		return nil, err
 	}
 	set := make(map[string]bool, len(out.Suppressed))

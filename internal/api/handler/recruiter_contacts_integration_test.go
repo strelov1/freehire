@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ type fakeFinder struct {
 	suppressed string // the JSON list /v1/check returns
 	finds      atomic.Int32
 	checks     atomic.Int32
+	checkRef   atomic.Value // user_ref of the last /v1/check
 }
 
 func (f *fakeFinder) client(t *testing.T) *contactfinder.Client {
@@ -42,6 +44,11 @@ func (f *fakeFinder) client(t *testing.T) *contactfinder.Client {
 			_, _ = w.Write([]byte(`{"contacts":` + f.contacts + `}`))
 		case "/v1/check":
 			f.checks.Add(1)
+			var body struct {
+				UserRef string `json:"user_ref"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f.checkRef.Store(body.UserRef)
 			_, _ = w.Write([]byte(`{"suppressed":` + f.suppressed + `}`))
 		}
 	}))
@@ -143,6 +150,10 @@ func TestRecruiterContacts_FirstViewChargesRepeatIsFreeSecondUserPaysFromCache(t
 	}
 	if n := finder.checks.Load(); n != 2 {
 		t.Errorf("checks = %d, want one per cache hit", n)
+	}
+	// The cache serve is reported to the service as shown to its viewer.
+	if ref, want := finder.checkRef.Load(), strconv.FormatInt(fx.bob, 10); ref != want {
+		t.Errorf("last check user_ref = %v, want %s", ref, want)
 	}
 }
 

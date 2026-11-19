@@ -62,12 +62,12 @@ func TestFailuresAreUnavailable(t *testing.T) {
 
 func TestSuppressed(t *testing.T) {
 	c := fake(t, func(path string, body map[string]any) (int, string) {
-		if path != "/v1/check" || len(body["emails"].([]any)) != 2 {
+		if path != "/v1/check" || len(body["emails"].([]any)) != 2 || body["user_ref"] != "42" {
 			return http.StatusBadRequest, ""
 		}
 		return http.StatusOK, `{"suppressed":["b@acme.com"]}`
 	})
-	got, err := c.Suppressed(context.Background(), []string{"a@acme.com", "b@acme.com"})
+	got, err := c.Suppressed(context.Background(), []string{"a@acme.com", "b@acme.com"}, "42")
 	if err != nil || !got["b@acme.com"] || got["a@acme.com"] {
 		t.Fatalf("got %v, %v", got, err)
 	}
