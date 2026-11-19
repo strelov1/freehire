@@ -157,13 +157,10 @@ func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (
 
 	values, unsupported := input.QueryValues()
 	limit, offset := input.Page()
-	res, outcome, err := runAgentSearch(ctx, h.search, values, limit, offset, input.WantsSemantic())
+	res, err := runAgentSearch(ctx, h.search, values, limit, offset)
 	if err != nil {
 		return ojcp.SearchJobsResponse{}, err
 	}
-	// A semantic search over no text is the plain filtered listing, so the flag was not
-	// honoured and says so like any dropped param.
-	unsupported = outcome.noted(unsupported)
 
 	jobs := make([]ojcp.JobPosting, 0, len(res.Hits))
 	for _, hit := range res.Hits {
@@ -177,7 +174,6 @@ func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (
 		Offset:            offset,
 		Jobs:              jobs,
 		IgnoredParams:     unsupported,
-		Semantic:          outcome.wire(ojcp.SemanticUnavailable),
 	}.Finalize(), nil
 }
 

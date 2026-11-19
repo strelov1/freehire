@@ -14,24 +14,16 @@ import (
 
 func TestRunAgentSearch(t *testing.T) {
 	fs := &fakeSearcher{res: search.SearchResult{Total: 3}}
-	res, outcome, err := runAgentSearch(context.Background(), fs, url.Values{"q": {"go"}}, 5, 10, true)
+	res, err := runAgentSearch(context.Background(), fs, url.Values{"q": {"go"}}, 5, 10)
 	if err != nil || res.Total != 3 {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}
 	if fs.got.Query != "go" || fs.got.Limit != 5 || fs.got.Offset != 10 {
 		t.Errorf("params = %+v", fs.got)
 	}
-	if outcome != semanticUnavailable {
-		t.Errorf("outcome = %v, want semanticUnavailable", outcome)
-	}
-
-	_, outcome, _ = runAgentSearch(context.Background(), fs, url.Values{}, 5, 0, true)
-	if got := outcome.noted(nil); len(got) != 1 || got[0] != "semantic" {
-		t.Errorf("noted = %v, want [semantic]", got)
-	}
 
 	boom := errors.New("boom")
-	if _, _, err := runAgentSearch(context.Background(), &fakeSearcher{err: boom}, url.Values{}, 5, 0, false); !errors.Is(err, boom) {
+	if _, err := runAgentSearch(context.Background(), &fakeSearcher{err: boom}, url.Values{}, 5, 0); !errors.Is(err, boom) {
 		t.Errorf("err = %v, want boom", err)
 	}
 }

@@ -28,8 +28,8 @@ const qPrefixParam = "q_prefix"
 var publicJobSearchParams = slices.Concat(jobSearchParams, []string{hideSeenParam, hideAppliedCompaniesParam, minSkillMatchParam})
 
 // agentSearchParams is jobSearchParams plus the agent endpoint's own two: the
-// response-format selector and the opt-in semantic search.
-var agentSearchParams = slices.Concat(jobSearchParams, []string{"description_format", "semantic"})
+// response-format selector.
+var agentSearchParams = slices.Concat(jobSearchParams, []string{"description_format"})
 
 // ignoredParams reports the query params of this request that neither the filter
 // nor the endpoint itself reads. They are echoed in the response meta instead of

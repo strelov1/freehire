@@ -125,7 +125,6 @@ func observeSearchQuality(surface, name string, result *mcp.CallToolResult) []an
 		Jobs          []json.RawMessage `json:"jobs"`
 		Results       []json.RawMessage `json:"results"`
 		IgnoredParams []string          `json:"ignored_params"`
-		Semantic      string            `json:"semantic"`
 	}
 	if json.Unmarshal(payload, &summary) != nil {
 		return nil
@@ -143,18 +142,7 @@ func observeSearchQuality(surface, name string, result *mcp.CallToolResult) []an
 	if ignored {
 		mcpSearchQuality.WithLabelValues(surface, "ignored_filters").Inc()
 	}
-	semantic := "not_requested"
-	switch summary.Semantic {
-	case "applied", "unavailable":
-		semantic = summary.Semantic
-	}
-	if semantic == "unavailable" {
-		mcpSearchQuality.WithLabelValues(surface, "semantic_fallback").Inc()
-	}
-	if semantic != "not_requested" {
-		mcpSearchQuality.WithLabelValues(surface, "semantic_requested").Inc()
-	}
-	attrs := []any{"returned_results", returned, "ignored_filters", ignored, "semantic", semantic}
+	attrs := []any{"returned_results", returned, "ignored_filters", ignored}
 	if ignored {
 		// ignored_params entries read param=value; only the name may reach a log, and an
 		// entry without the "=" is not that shape, so it is not trusted to be a name.

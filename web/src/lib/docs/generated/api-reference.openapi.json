@@ -229,15 +229,6 @@
               "type": "string"
             },
             "explode": false
-          },
-          {
-            "name": "semantic",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "explode": false
           }
         ],
         "responses": {
@@ -13902,10 +13893,6 @@
                         "default": 0
                       }
                     }
-                  },
-                  "semantic": {
-                    "type": "boolean",
-                    "description": "Extension. `true` asks for meaning-based ranking, which is\ncurrently not available: the answer is the keyword search and\n`semantic` says `unavailable`. Without a non-empty `query` it is\nreported in `ignored_params` instead.\n"
                   }
                 }
               }
@@ -13956,14 +13943,6 @@
                       "items": {
                         "type": "string"
                       }
-                    },
-                    "semantic": {
-                      "type": "string",
-                      "enum": [
-                        "applied",
-                        "unavailable"
-                      ],
-                      "description": "Extension. Which search answered a request that sent\n`semantic: true`; omitted when it did not.\n"
                     },
                     "total_is_lower_bound": {
                       "type": "boolean",
@@ -14842,10 +14821,6 @@
           "total_is_lower_bound": {
             "type": "boolean",
             "description": "True when `total` counts only what was read, not the whole match."
-          },
-          "semantic": {
-            "type": "string",
-            "description": "\"unavailable\" when `semantic=true` was asked and the request was answered by keywords."
           }
         }
       },

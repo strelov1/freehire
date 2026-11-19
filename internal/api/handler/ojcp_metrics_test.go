@@ -32,14 +32,14 @@ func ojcpQualityCount(t *testing.T, signal string) float64 {
 	return 0
 }
 
-func TestOJCPRESTSearchQualityExcludesInvalidRequestsAndCountsFallback(t *testing.T) {
-	signals := []string{"all", "empty", "ignored_filters", "semantic_requested", "semantic_fallback"}
+func TestOJCPRESTSearchQualityExcludesInvalidRequests(t *testing.T) {
+	signals := []string{"all", "empty", "ignored_filters"}
 	before := map[string]float64{}
 	for _, signal := range signals {
 		before[signal] = ojcpQualityCount(t, signal)
 	}
 	app := ojcpApp(&fakeSearcher{}, fakeOJCPStore{})
-	doPost(t, app, "/ojcp/v1/search", `{"query":"go","semantic":true,"location":{"radius_miles":20}}`)
+	doPost(t, app, "/ojcp/v1/search", `{"query":"go","location":{"radius_miles":20}}`)
 	doPost(t, app, "/ojcp/v1/search", `{`)
 	doPost(t, ojcpApp(nil, fakeOJCPStore{}), "/ojcp/v1/search", `{}`)
 	// The shared business method is also used by MCP, which has its own counters.

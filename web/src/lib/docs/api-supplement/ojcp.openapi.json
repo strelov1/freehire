@@ -66,10 +66,6 @@
                         "default": 0
                       }
                     }
-                  },
-                  "semantic": {
-                    "type": "boolean",
-                    "description": "Extension. `true` asks for meaning-based ranking, which is\ncurrently not available: the answer is the keyword search and\n`semantic` says `unavailable`. Without a non-empty `query` it is\nreported in `ignored_params` instead.\n"
                   }
                 }
               }
@@ -120,14 +116,6 @@
                       "items": {
                         "type": "string"
                       }
-                    },
-                    "semantic": {
-                      "type": "string",
-                      "enum": [
-                        "applied",
-                        "unavailable"
-                      ],
-                      "description": "Extension. Which search answered a request that sent\n`semantic: true`; omitted when it did not.\n"
                     },
                     "total_is_lower_bound": {
                       "type": "boolean",

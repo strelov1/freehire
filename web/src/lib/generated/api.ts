@@ -6281,8 +6281,6 @@ export interface components {
             ignored_values?: components["schemas"]["IgnoredValues"];
             /** @description True when `total` counts only what was read, not the whole match. */
             total_is_lower_bound?: boolean;
-            /** @description "unavailable" when `semantic=true` was asked and the request was answered by keywords. */
-            semantic?: string;
         };
         AgentJobSearchPage: {
             data: unknown[];
@@ -10463,7 +10461,6 @@ export interface operations {
                 offset?: string;
                 /** @description `text` or `markdown`; anything else leaves the stored HTML. */
                 description_format?: string;
-                semantic?: string;
             };
             header?: never;
             path?: never;

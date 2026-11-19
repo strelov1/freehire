@@ -484,8 +484,6 @@ type AgentJobSearchMeta struct {
 	IgnoredValues jx.Raw         `json:"ignored_values"`
 	// True when `total` counts only what was read, not the whole match.
 	TotalIsLowerBound OptBool `json:"total_is_lower_bound"`
-	// "unavailable" when `semantic=true` was asked and the request was answered by keywords.
-	Semantic OptString `json:"semantic"`
 }
 
 // GetTotal returns the value of Total.
@@ -518,11 +516,6 @@ func (s *AgentJobSearchMeta) GetTotalIsLowerBound() OptBool {
 	return s.TotalIsLowerBound
 }
 
-// GetSemantic returns the value of Semantic.
-func (s *AgentJobSearchMeta) GetSemantic() OptString {
-	return s.Semantic
-}
-
 // SetTotal sets the value of Total.
 func (s *AgentJobSearchMeta) SetTotal(val int64) {
 	s.Total = val
@@ -551,11 +544,6 @@ func (s *AgentJobSearchMeta) SetIgnoredValues(val jx.Raw) {
 // SetTotalIsLowerBound sets the value of TotalIsLowerBound.
 func (s *AgentJobSearchMeta) SetTotalIsLowerBound(val OptBool) {
 	s.TotalIsLowerBound = val
-}
-
-// SetSemantic sets the value of Semantic.
-func (s *AgentJobSearchMeta) SetSemantic(val OptString) {
-	s.Semantic = val
 }
 
 // Ref: #/components/schemas/AgentJobSearchPage

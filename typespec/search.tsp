@@ -24,9 +24,6 @@ model JobSearchPage {
 
 model AgentJobSearchMeta {
   ...JobSearchMeta;
-
-  /** "unavailable" when `semantic=true` was asked and the request was answered by keywords. */
-  semantic?: string;
 }
 
 model AgentJobSearchPage {
@@ -214,8 +211,6 @@ op agentSearchJobs(
 
   /** `text` or `markdown`; anything else leaves the stored HTML. */
   @query description_format?: string,
-
-  @query semantic?: string,
 ): {
   @header("Cache-Control") cacheControl?: string;
   @body body: AgentJobSearchPage;

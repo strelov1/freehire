@@ -17,9 +17,8 @@ import (
 // agent. The caller supplies the page and projects the result.
 //
 // There is no sort directive or match vector: a text query gets the index's relevance order,
-// an empty one the freshest first (defaultSort). The outcome reports what became of the opt-in
-// `semantic` flag, in the surface's own vocabulary.
-func runAgentSearch(ctx context.Context, s searcher, values url.Values, limit, offset int, semanticAsked bool) (search.SearchResult, semanticOutcome, error) {
+// an empty one the freshest first (defaultSort).
+func runAgentSearch(ctx context.Context, s searcher, values url.Values, limit, offset int) (search.SearchResult, error) {
 	params := search.SearchParams{
 		Query:  values.Get("q"),
 		Filter: search.FilterFromValues(values),
@@ -28,12 +27,11 @@ func runAgentSearch(ctx context.Context, s searcher, values url.Values, limit, o
 		Offset: offset,
 	}
 	res, err := s.Search(ctx, params)
-	outcome := semanticOutcomeFor(params, semanticAsked)
 	if err != nil {
-		return search.SearchResult{}, outcome, err
+		return search.SearchResult{}, err
 	}
 	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
-	return res, outcome, nil
+	return res, nil
 }
 
 // loadAgentJob loads one posting through load (the surface's own visibility rule), projects it
@@ -70,13 +68,4 @@ func (h *searchHandlers) markdownJobs(ctx context.Context, hits []search.JobDocu
 		jobs[i] = hit.Job
 	}
 	return jobs, nil
-}
-
-// noted appends "semantic" to ignored when the flag was dropped, so it reads like any other
-// param the request carried that did nothing.
-func (o semanticOutcome) noted(ignored []string) []string {
-	if o == semanticDropped {
-		return append(ignored, "semantic")
-	}
-	return ignored
 }

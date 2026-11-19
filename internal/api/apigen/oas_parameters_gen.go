@@ -173,7 +173,6 @@ type AgentSearchJobsParams struct {
 	Offset OptString `json:",omitempty,omitzero"`
 	// `text` or `markdown`; anything else leaves the stored HTML.
 	DescriptionFormat OptString `json:",omitempty,omitzero"`
-	Semantic          OptString `json:",omitempty,omitzero"`
 }
 
 func unpackAgentSearchJobsParams(packed middleware.Parameters) (params AgentSearchJobsParams) {
@@ -247,15 +246,6 @@ func unpackAgentSearchJobsParams(packed middleware.Parameters) (params AgentSear
 		}
 		if v, ok := packed[key]; ok {
 			params.DescriptionFormat = v.(OptString)
-		}
-	}
-	{
-		key := middleware.ParameterKey{
-			Name: "semantic",
-			In:   "query",
-		}
-		if v, ok := packed[key]; ok {
-			params.Semantic = v.(OptString)
 		}
 	}
 	return params
@@ -587,47 +577,6 @@ func decodeAgentSearchJobsParams(args [0]string, argsEscaped bool, r *http.Reque
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "description_format",
-			In:   "query",
-			Err:  err,
-		}
-	}
-	// Decode query: semantic.
-	if err := func() error {
-		cfg := uri.QueryParameterDecodingConfig{
-			Name:    "semantic",
-			Style:   uri.QueryStyleForm,
-			Explode: false,
-		}
-
-		if err := q.HasParam(cfg); err == nil {
-			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
-				var paramsDotSemanticVal string
-				if err := func() error {
-					val, err := d.DecodeValue()
-					if err != nil {
-						return err
-					}
-
-					c, err := conv.ToString(val)
-					if err != nil {
-						return err
-					}
-
-					paramsDotSemanticVal = c
-					return nil
-				}(); err != nil {
-					return err
-				}
-				params.Semantic.SetTo(paramsDotSemanticVal)
-				return nil
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
-	}(); err != nil {
-		return params, &ogenerrors.DecodeParamError{
-			Name: "semantic",
 			In:   "query",
 			Err:  err,
 		}
