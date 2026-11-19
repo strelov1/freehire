@@ -127,13 +127,16 @@ export function roleSkillsIntro(role: InsightRole): string {
   return `Across ${sample.toLocaleString('en-US')} open ${name} postings that list skills, the ones mentioned most often are ${top}.`;
 }
 
+function seniorityRank(s: string): number {
+  const i = (SENIORITY_ORDER as readonly string[]).indexOf(s);
+  return i === -1 ? SENIORITY_ORDER.length + 1 : i;
+}
+
 /** Sort salary bands into seniority order (category-wide '' band last). */
 export function sortBandsBySeniority(bands: InsightSalaryBand[]): InsightSalaryBand[] {
-  const rank = (s: string) => {
-    const i = (SENIORITY_ORDER as readonly string[]).indexOf(s);
-    return i === -1 ? SENIORITY_ORDER.length + 1 : i;
-  };
-  return [...bands].sort((a, b) => rank(a.seniority) - rank(b.seniority) || b.sample_size - a.sample_size);
+  return [...bands].sort(
+    (a, b) => seniorityRank(a.seniority) - seniorityRank(b.seniority) || b.sample_size - a.sample_size,
+  );
 }
 
 /** Format an integer salary figure in its currency, compactly (e.g. $155,000). */
