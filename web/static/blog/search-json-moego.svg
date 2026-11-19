@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" role="img" aria-labelledby="t d">
+  <title id="t">Search JSON got 2.7x faster</title>
+  <desc id="d">Encoding one search page of 20 jobs took 503.7 microseconds with encoding/json and 183.7 with moego on our production CPU. A search request takes about 47 milliseconds at the median, so the 0.3 ms saved is about 0.7 percent of it.</desc>
+  <style>
+    text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #fafafa; }
+    .muted { fill: #a1a1aa; }
+    .dim { fill: #71717a; }
+    .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .accent { fill: #4ade80; }
+  </style>
+  <defs>
+    <linearGradient id="g" x1="0" x2="1">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#4ade80"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="1200" fill="#0a0a0a"/>
+  <rect x="24" y="24" width="1152" height="1152" rx="28" fill="none" stroke="#27272a" stroke-width="2"/>
+
+  <!-- header -->
+  <g transform="translate(80 92) scale(0.07)">
+    <path fill="#fafafa" fill-rule="evenodd" d="M256 56C366.457 56 456 145.543 456 256C456 366.457 366.457 456 256 456C145.543 456 56 366.457 56 256C56 145.543 145.543 56 256 56ZM256 166L346 256L256 346L166 256L256 166Z"/>
+  </g>
+  <text x="128" y="119" font-size="24" font-weight="600">freehire</text>
+  <text x="232" y="119" font-size="24" class="dim">· engineering</text>
+
+  <text x="80" y="228" font-size="72" font-weight="800" letter-spacing="-2">Search JSON got</text>
+  <text x="80" y="310" font-size="72" font-weight="800" letter-spacing="-2"><tspan class="accent">2.7x faster</tspan>.</text>
+  <text x="80" y="362" font-size="28" class="muted">Same API, same bytes. Measured on our production CPU.</text>
+
+  <!-- panel 1: encode time -->
+  <rect x="80" y="412" width="1040" height="356" rx="20" fill="#18181b" stroke="#27272a"/>
+  <text x="112" y="462" font-size="22" font-weight="600" letter-spacing="1.5" class="muted">ENCODING ONE SEARCH PAGE · 20 JOBS</text>
+
+  <text x="112" y="522" font-size="24" class="mono muted">encoding/json</text>
+  <rect x="112" y="538" width="800" height="44" rx="10" fill="#3f3f46"/>
+  <text x="932" y="570" font-size="30" font-weight="700" class="mono">503.7 µs</text>
+
+  <text x="112" y="628" font-size="24" class="mono accent">moego</text>
+  <rect x="112" y="644" width="292" height="44" rx="10" fill="url(#g)"/>
+  <text x="424" y="676" font-size="30" font-weight="700" class="mono accent">183.7 µs</text>
+
+  <text x="112" y="740" font-size="22" class="muted">Memory <tspan fill="#fafafa" font-weight="700">−12%</tspan>   ·   Allocations <tspan fill="#fafafa" font-weight="700">−33%</tspan>   ·   Output <tspan fill="#fafafa" font-weight="700">byte-identical</tspan></text>
+
+  <!-- panel 2: share of a request -->
+  <rect x="80" y="796" width="1040" height="264" rx="20" fill="#18181b" stroke="#27272a"/>
+  <text x="112" y="846" font-size="22" font-weight="600" letter-spacing="1.5" class="muted">…BUT ONE SEARCH REQUEST TAKES ~47 MS</text>
+
+  <rect x="112" y="876" width="976" height="56" rx="12" fill="#3f3f46"/>
+  <text x="136" y="914" font-size="24" fill="#d4d4d8">waiting on Meilisearch, network, everything else</text>
+  <rect x="1078" y="876" width="10" height="56" fill="#4ade80"/>
+  <path d="M1083 940 L1083 966 L940 966" fill="none" stroke="#4ade80" stroke-width="2"/>
+  <text x="928" y="974" font-size="26" font-weight="700" text-anchor="end" class="accent">JSON saved 0.3 ms ≈ 0.7%</text>
+
+  <text x="112" y="1028" font-size="24" class="muted">You won't feel it. The server's CPU will, on every page.</text>
+
+  <!-- footer -->
+  <text x="80" y="1128" font-size="18" class="dim">Intel i7-8700, 1 core, median of 6 runs · request latency: median over 7 days</text>
+  <text x="1120" y="1128" font-size="20" font-weight="600" text-anchor="end">freehire.me/blog</text>
+</svg>
