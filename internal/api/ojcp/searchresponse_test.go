@@ -80,28 +80,3 @@ func TestJobDetailResponseCarriesThePosting(t *testing.T) {
 		t.Fatalf("job detail response rejected: %v", err)
 	}
 }
-
-func TestSearchResponseWithTheSemanticExtensionStillConforms(t *testing.T) {
-	for _, v := range []string{SemanticApplied, SemanticUnavailable} {
-		resp := SearchJobsResponse{Query: "payments", Jobs: searchPage(), Semantic: v}.Finalize()
-		if err := validateAgainstSchema(t, schemaSearchJobsResponse, resp); err != nil {
-			t.Fatalf("response with semantic=%q rejected: %v", v, err)
-		}
-	}
-}
-
-func TestSearchInputWantsSemanticOnlyOnAnExplicitTrue(t *testing.T) {
-	yes, no := true, false
-	for _, tc := range []struct {
-		in   SearchInput
-		want bool
-	}{
-		{SearchInput{}, false},
-		{SearchInput{Semantic: &no}, false},
-		{SearchInput{Semantic: &yes}, true},
-	} {
-		if got := tc.in.WantsSemantic(); got != tc.want {
-			t.Errorf("WantsSemantic(%v) = %v, want %v", tc.in.Semantic, got, tc.want)
-		}
-	}
-}

@@ -156,14 +156,6 @@ shows. Neither is a trade worth making.
 **Do not make them share a tool registration.** What they must share — and do — is the
 `Reader`, so they cannot disagree about what is in the catalogue.
 
-## Semantic search
-
-`search_jobs` still takes `semantic: true`, but it is currently not available: the index
-carries no description vectors, so the request is answered by keywords and the result's
-`semantic` says `unavailable` — never an error. The outcome is decided by
-`semanticOutcomeFor` (`internal/api/handler/semantic_search.go`), shared with OJCP and
-`/agent/jobs/search`, so the three cannot disagree.
-
 ## What the tools must not do
 
 - **Hand an internal error's text to the agent.** On the signed-in server a failed tool's

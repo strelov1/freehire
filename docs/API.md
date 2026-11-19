@@ -673,7 +673,6 @@ The `search_jobs` tool of the [Open Job Context Protocol](https://spec.ojcp.dev/
 | `location` | object | no |  |
 | `filters` | object | no |  |
 | `pagination` | object | no |  |
-| `semantic` | boolean | no | Extension. `true` asks for meaning-based ranking, which is currently not available: the answer is the keyword search and `semantic` says `unavailable`. Without a non-empty `query` it is reported in `ignored_params` instead.  |
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/ojcp/v1/search"
@@ -1306,7 +1305,6 @@ Plus every filter in the "Filtering jobs" section.
 | `limit` | string | no | Page size, 1–100. (e.g. `20`) |
 | `offset` | string | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
 | `description_format` | string | no | `text` or `markdown`; anything else leaves the stored HTML. |
-| `semantic` | string | no |  |
 
 ```bash
 curl "https://freehire.me/api/v1/agent/jobs/search"

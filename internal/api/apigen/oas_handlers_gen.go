@@ -582,10 +582,6 @@ func (s *Server) handleAgentSearchJobsRequest(args [0]string, argsEscaped bool, 
 					Name: "description_format",
 					In:   "query",
 				}: params.DescriptionFormat,
-				{
-					Name: "semantic",
-					In:   "query",
-				}: params.Semantic,
 			},
 			Raw: r,
 		}

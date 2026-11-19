@@ -22,13 +22,11 @@ type jobDescriptions interface {
 // runJobSearch core), but every result is rehydrated with the full description from Postgres,
 // in a selectable format. The truncated preview stays exclusive to /jobs/search. Public and
 // unauthenticated like the other job reads.
-//
-// `semantic=true` is accepted but never honoured (see semanticOutcome): meta.semantic is then
-// "unavailable", omitted when not asked.
+
 func (h *searchHandlers) AgentSearchJobs(ctx context.Context, _ apigen.AgentSearchJobsParams) (*apigen.AgentJobSearchPageHeaders, error) {
 	vals := contractQuery(ctx)
 	userID, _ := auth.UserIDFromContext(ctx)
-	out, err := h.runJobSearch(ctx, vals, userID, wantsParam(vals, "semantic"), nil, "", nil)
+	out, err := h.runJobSearch(ctx, vals, userID, nil, "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +56,6 @@ func (h *searchHandlers) AgentSearchJobs(ctx context.Context, _ apigen.AgentSear
 		Total: res.Total, Limit: int64(out.limit), Offset: int64(out.offset),
 		IgnoredParams: contractIgnoredParams(ignored),
 		IgnoredValues: contractIgnoredValues(ignoredJobValues(vals)),
-		Semantic:      optString(out.semantic),
 	}
 	if res.TotalIsLowerBound {
 		meta.TotalIsLowerBound = apigen.NewOptBool(true)

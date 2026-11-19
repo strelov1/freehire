@@ -53,12 +53,12 @@ func TestSearchJobs_ExactAnswer(t *testing.T) {
 
 func TestAgentSearchJobs_ExactAnswer(t *testing.T) {
 	fake := &fakeSearcher{res: search.SearchResult{Total: 0}}
-	status, body := rawGet(t, agentSearchApp(fake, &fakeDescriptions{}), "/api/v1/agent/jobs/search?semantic=true&country=it")
+	status, body := rawGet(t, agentSearchApp(fake, &fakeDescriptions{}), "/api/v1/agent/jobs/search?country=it")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, body %s", status, body)
 	}
 	want := `{"data":[],"meta":{"total":0,"limit":20,"offset":0,` +
-		`"ignored_params":[{"param":"country","did_you_mean":"countries"},{"param":"semantic"}]}}`
+		`"ignored_params":[{"param":"country","did_you_mean":"countries"}]}}`
 	if body != want {
 		t.Errorf("body =\n%s\nwant\n%s", body, want)
 	}

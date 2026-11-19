@@ -251,15 +251,6 @@
               "type": "string"
             },
             "explode": false
-          },
-          {
-            "name": "semantic",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "explode": false
           }
         ],
         "responses": {
@@ -23701,10 +23692,6 @@
           "total_is_lower_bound": {
             "type": "boolean",
             "description": "True when `total` counts only what was read, not the whole match."
-          },
-          "semantic": {
-            "type": "string",
-            "description": "\"unavailable\" when `semantic=true` was asked and the request was answered by keywords."
           }
         }
       },

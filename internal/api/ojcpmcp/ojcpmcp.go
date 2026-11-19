@@ -74,9 +74,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		OutputSchema: searchJobsOutputSchema,
 		Description: "Search freehire's job catalogue. Returns OJCP JobPostings, each with " +
 			"the application paths it can be applied through and whether an agent can submit " +
-			"unattended. Filters this provider could not honour are named in ignored_params. " +
-			"The semantic flag is currently not available: a request that sets it is answered " +
-			"by keywords and its semantic field says unavailable.",
+			"unattended. Filters this provider could not honour are named in ignored_params.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ojcp.SearchInput) (*mcp.CallToolResult, ojcp.SearchJobsResponse, error) {
 		out, err := r.SearchJobs(ctx, in)
 		return nil, out, toolError(err)

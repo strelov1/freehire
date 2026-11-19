@@ -63,3 +63,21 @@ func TestOJCPNotFoundDoesNotBecomeAnInternalFailure(t *testing.T) {
 		t.Fatal("protocol not-found classified as an internal failure")
 	}
 }
+
+func connectOJCP(t *testing.T, r Reader) *mcp.ClientSession {
+	t.Helper()
+	ctx := context.Background()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	server, err := newServer(r, "").Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).
+		Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}

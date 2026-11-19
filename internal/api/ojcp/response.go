@@ -16,23 +16,10 @@ type SearchJobsResponse struct {
 	// (OJCP permits them): an answer that widens because a parameter was not understood
 	// has to say so.
 	IgnoredParams []string `json:"ignored_params,omitempty"`
-	// Semantic reports which search answered an agent that asked for semantic search
-	// (SearchInput.Semantic); omitted when it did not ask. Only SemanticUnavailable is
-	// produced today. An extension, like IgnoredParams: a keyword-only answer has to say so.
-	Semantic string `json:"semantic,omitempty"`
 	// TotalIsLowerBound marks TotalResults as "at least this many" rather than a count.
-	// An extension, for the reason Semantic is one.
+	// An extension, for the reason IgnoredParams is one.
 	TotalIsLowerBound bool `json:"total_is_lower_bound,omitempty"`
 }
-
-// The two values of SearchJobsResponse.Semantic.
-const (
-	// SemanticApplied: the query was embedded and the hybrid search ran.
-	SemanticApplied = "applied"
-	// SemanticUnavailable: semantic ranking could not run, and the answer is the keyword
-	// search.
-	SemanticUnavailable = "unavailable"
-)
 
 // Finalize stamps the version and derives the counts. `jobs` is required by the schema, so
 // an empty page serialises as [] rather than null.

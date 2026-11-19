@@ -60,21 +60,11 @@ type SearchJobsResult struct {
 	// IgnoredParams names the filters this tool could not honour; an answer that widens must
 	// say so rather than refuse (a retired facet must not break a saved search).
 	IgnoredParams []string `json:"ignored_params,omitempty" jsonschema:"filters that were not applied; the answer is wider than asked. Replace the value and search again rather than reporting that nothing was found"`
-	// Semantic reports what became of a `semantic: true` request. Only SemanticUnavailable
-	// is produced today: semantic matching is not available, so it is answered by keywords.
-	// Omitted when not asked.
-	Semantic string `json:"semantic,omitempty" jsonschema:"unavailable: a semantic request was answered by keywords only"`
 	// TotalIsLowerBound: the total is "this many and maybe more", not a count.
 	TotalIsLowerBound bool `json:"total_is_lower_bound,omitempty" jsonschema:"true: total is a minimum, not a count — say 'at least', never 'of N'"`
 	// Next is one sentence naming what else freehire can do with these results (nextHints).
 	Next string `json:"next,omitempty" jsonschema:"what else freehire can do with these results"`
 }
-
-// The two values of SearchJobsResult.Semantic.
-const (
-	SemanticApplied     = "applied"
-	SemanticUnavailable = "unavailable"
-)
 
 // JobResult is one posting in full: the summary plus what only a chosen posting is worth
 // reading.

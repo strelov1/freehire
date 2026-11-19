@@ -51,7 +51,7 @@ failures rather than internal failures.
   Finite buckets cover sizes through 64 MiB. Grafana shows overflow separately
   and omits p95 when that percentile would fall in the unbounded bucket.
 - `freehire_mcp_search_quality_total{surface,signal}` counts `all`, `empty`,
-  `ignored_filters`, `semantic_requested`, and `semantic_fallback` signals for
+  and `ignored_filters` signals for
   successful job searches, including research search. Signals overlap. Empty means
   the returned page is empty, including a page requested beyond the last match.
 - `freehire_mcp_problem_reports_total{surface,category}` counts accepted report calls
@@ -87,7 +87,7 @@ before any proxy compression. The dashboard uses mean bytes and a separate
 64 MiB overflow share, so large responses cannot silently cap a size percentile.
 
 `freehire_ojcp_rest_search_quality_total{signal}` records successful REST searches:
-`all`, `empty`, `ignored_filters`, `semantic_requested`, `semantic_fallback`.
+`all`, `empty`, `ignored_filters`.
 Signals overlap. Invalid input and failed searches are excluded. These metrics do
 not retain request/response payloads or infer unique users or conversations.
 MCP attribution and optional conversation correlation follow the rules above.

@@ -29,14 +29,7 @@ type SearchInput struct {
 	// The jsonschema tag is required: without it the SDK publishes the boolean schema `true`,
 	// which strict MCP clients reject for the whole tool list.
 	CandidateContext any `json:"candidate_context,omitempty" jsonschema:"accepted and ignored: this surface is anonymous and takes no candidate data"`
-	// Semantic asks for meaning-based ranking, currently not available: a request that sets
-	// it is answered by keywords and the response's `semantic` says unavailable. An
-	// extension. A pointer so only an explicit true asks.
-	Semantic *bool `json:"semantic,omitempty" jsonschema:"Extension: currently not available. A request that sets it is answered by keywords, and the response's semantic field reports unavailable."`
 }
-
-// WantsSemantic reports whether the agent asked for semantic search.
-func (in SearchInput) WantsSemantic() bool { return in.Semantic != nil && *in.Semantic }
 
 // SearchLocation is where the agent wants the work to be.
 type SearchLocation struct {

@@ -73,12 +73,10 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 
 	values := in.QueryValues()
 	limit, offset := in.Page()
-	res, outcome, err := runAgentSearch(ctx, h.search, values, limit, offset, in.WantsSemantic())
+	res, err := runAgentSearch(ctx, h.search, values, limit, offset)
 	if err != nil {
 		return mcpapp.SearchJobsResult{}, err
 	}
-	// A dropped semantic flag had no text to apply to, so it says so like any dropped filter.
-	ignored := outcome.noted(in.Unsupported())
 
 	// The hits carry the index's truncated description and are not rehydrated from Postgres
 	// (/agent/jobs/search does, for programmatic readers). Here it would spend the turn's
@@ -93,8 +91,7 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 		Total:             int(res.Total),
 		Offset:            offset,
 		Jobs:              jobs,
-		IgnoredParams:     ignored,
-		Semantic:          outcome.wire(mcpapp.SemanticUnavailable),
+		IgnoredParams:     in.Unsupported(),
 		TotalIsLowerBound: res.TotalIsLowerBound,
 	}, nil
 }

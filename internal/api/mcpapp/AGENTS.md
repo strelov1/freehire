@@ -21,10 +21,6 @@ Read [A session the freehire CLI opened](AGENT-REFERENCE.md#a-session-the-freehi
 
 Read [Why there are two MCP servers](AGENT-REFERENCE.md#why-there-are-two-mcp-servers) before work involving this topic.
 
-## Semantic search
-
-Read [Semantic search](AGENT-REFERENCE.md#semantic-search) before work involving this topic.
-
 ## What the tools must not do
 
 Read [What the tools must not do](AGENT-REFERENCE.md#what-the-tools-must-not-do) before work involving this topic.

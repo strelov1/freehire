@@ -324,7 +324,7 @@ func (h *assistantHandlers) searchJobs() assistant.Tool {
 
 			limit, offset := toolPage(in.Limit, in.Offset)
 			vals.Set("q", in.Query)
-			res, _, err := runAgentSearch(ctx, h.search.search, vals, limit, offset, false)
+			res, err := runAgentSearch(ctx, h.search.search, vals, limit, offset)
 			if err != nil {
 				return nil, searchToolError(err)
 			}

@@ -1771,22 +1771,15 @@ func (s *AgentJobSearchMeta) encodeFields(e *jx.Encoder) {
 			s.TotalIsLowerBound.Encode(e)
 		}
 	}
-	{
-		if s.Semantic.Set {
-			e.FieldStart("semantic")
-			s.Semantic.Encode(e)
-		}
-	}
 }
 
-var jsonFieldsNameOfAgentJobSearchMeta = [7]string{
+var jsonFieldsNameOfAgentJobSearchMeta = [6]string{
 	0: "total",
 	1: "limit",
 	2: "offset",
 	3: "ignored_params",
 	4: "ignored_values",
 	5: "total_is_lower_bound",
-	6: "semantic",
 }
 
 // Decode decodes AgentJobSearchMeta from json.
@@ -1871,16 +1864,6 @@ func (s *AgentJobSearchMeta) Decode(d *jx.Decoder) error {
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"total_is_lower_bound\"")
-			}
-		case "semantic":
-			if err := func() error {
-				s.Semantic.Reset()
-				if err := s.Semantic.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"semantic\"")
 			}
 		default:
 			return d.Skip()

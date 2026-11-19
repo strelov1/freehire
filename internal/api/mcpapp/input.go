@@ -69,15 +69,9 @@ type SearchInput struct {
 
 	PostedWithinDays int `json:"posted_within_days,omitempty"`
 
-	// Semantic is a POINTER like VisaSponsorship: absent and false both mean keyword search.
-	Semantic *bool `json:"semantic,omitempty" jsonschema:"currently not available: a request that sets it is answered by keywords and its semantic field says unavailable"`
-
 	Limit  int `json:"limit,omitempty" jsonschema:"results per page"`
 	Offset int `json:"offset,omitempty"`
 }
-
-// WantsSemantic reports whether the caller asked for semantic search.
-func (in SearchInput) WantsSemantic() bool { return in.Semantic != nil && *in.Semantic }
 
 // CompanySearchInput is search_companies' input, deliberately smaller than the job one to
 // save schema tokens on every turn.

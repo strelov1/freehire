@@ -104,14 +104,6 @@ and the manifest; the two transports that publish it live elsewhere:
   relays this sentence to a candidate and possibly to the employer. Criteria are rendered as
   sentences, never as their internal codes.
 
-- **`semantic` is an extension in both directions.** The input's `semantic: true` asks for
-  meaning-based ranking, which is currently not available: the index carries no description
-  vectors, so such a request is answered by keywords and the response's `semantic` says
-  `unavailable` (omitted when the agent did not ask). It follows `ignored_params`: an answer
-  that is keyword-only must say so, or an agent reads keyword relevance as a match on meaning.
-  A `semantic: true` with no query is reported in `ignored_params` instead. The outcome is
-  decided in `internal/api/handler/semantic_search.go` (`semanticOutcomeFor`).
-
 ## Known gaps in the standard
 
 The reason to hold a seat rather than ask for one:

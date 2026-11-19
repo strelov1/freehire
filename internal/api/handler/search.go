@@ -15,7 +15,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
-	"github.com/strelov1/freehire/internal/api/ojcp"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/engage/companywatch"
@@ -170,7 +169,7 @@ func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsPara
 	private := match != nil ||
 		(userID != 0 && !seenIgnored && wantsParam(vals, hideSeenParam)) ||
 		(userID != 0 && !appliedIgnored && wantsParam(vals, hideAppliedCompaniesParam))
-	out, err := h.runJobSearch(ctx, vals, userID, false, seen, appliedFrag, match)
+	out, err := h.runJobSearch(ctx, vals, userID, seen, appliedFrag, match)
 	if err != nil {
 		return nil, err
 	}
@@ -227,14 +226,12 @@ func wantsParam(vals url.Values, key string) bool {
 }
 
 // jobSearchOutcome is what runJobSearch hands back: the raw hits, the applied
-// limit/offset, the value-level ignored-param reports, and, when semantic search was asked
-// for but could not apply, that keywords answered instead (ojcp.SemanticUnavailable).
+// limit/offset and the value-level ignored-param reports.
 type jobSearchOutcome struct {
-	res      search.SearchResult
-	limit    int
-	offset   int
-	dropped  []search.UnknownParam
-	semantic string
+	res     search.SearchResult
+	limit   int
+	offset  int
+	dropped []search.UnknownParam
 	// formerEmployers reports that the "Hiring again" filter was applied, which makes
 	// former_employers one of the endpoint's own params rather than an ignored one.
 	formerEmployers bool
@@ -266,13 +263,11 @@ func (o jobSearchOutcome) own(base []string) []string {
 // naming a field outside the searchable vocabulary plus any filter params dropped by the
 // degrade below, for the caller to merge into its ignoredParams(vals, own) report.
 //
-// wantSemantic is the caller's semantic flag, which is never honoured (see
-// semanticOutcome); one with nothing to apply to is reported as a dropped param.
 // exclude names job ids to keep out of the result (hide_seen); nil excludes nothing.
 // personal is the applied-company exclusion fragment; empty leaves the result unchanged.
 // match, when set, keeps only postings at or above the caller's minimum skill match (see
 // skillMatchFilter).
-func (h *searchHandlers) runJobSearch(ctx context.Context, vals url.Values, userID int64, wantSemantic bool, exclude []int64, personal string, match *skillMatchFilter) (jobSearchOutcome, error) {
+func (h *searchHandlers) runJobSearch(ctx context.Context, vals url.Values, userID int64, exclude []int64, personal string, match *skillMatchFilter) (jobSearchOutcome, error) {
 	if h.search == nil {
 		return jobSearchOutcome{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
@@ -297,28 +292,28 @@ func (h *searchHandlers) runJobSearch(ctx context.Context, vals url.Values, user
 	if err != nil {
 		return jobSearchOutcome{}, err
 	}
-	out, err := h.executeJobSearch(ctx, vals, jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, watch: watch, hasWatch: watchApplied, vector: h.matchVectorFor(ctx, userID, vals), exclude: exclude, personal: personal, wantSemantic: wantSemantic, match: match})
+	out, err := h.executeJobSearch(ctx, vals, jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, watch: watch, hasWatch: watchApplied, vector: h.matchVectorFor(ctx, userID, vals), exclude: exclude, personal: personal, match: match})
 	// Both are one person's own sets; no shared cache may keep the answer.
 	out.private = formerApplied || watchApplied
 	return out, err
 }
 
 type jobSearchInput struct {
-	limit, offset        int
-	former               []string
-	hasFormer            bool
-	watch                []string
-	hasWatch             bool
-	vector               []float32
-	exclude              []int64
-	personal             string
-	wantSemantic, strict bool
-	match                *skillMatchFilter
+	limit, offset int
+	former        []string
+	hasFormer     bool
+	watch         []string
+	hasWatch      bool
+	vector        []float32
+	exclude       []int64
+	personal      string
+	strict        bool
+	match         *skillMatchFilter
 }
 
 func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, in jobSearchInput) (jobSearchOutcome, error) {
 	limit, offset := in.limit, in.offset
-	vector, exclude, personal, wantSemantic, strict := in.vector, in.exclude, in.personal, in.wantSemantic, in.strict
+	vector, exclude, personal, strict := in.vector, in.exclude, in.personal, in.strict
 
 	companies, companiesApplied := personalCompanies(in.former, in.hasFormer, in.watch, in.hasWatch)
 	if companiesApplied && len(companies) == 0 {
@@ -352,18 +347,13 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 	}
 	dropped := qFieldsIgnored
 	var (
-		res     search.SearchResult
-		outcome semanticOutcome
-		err     error
+		res search.SearchResult
+		err error
 	)
 	if in.match != nil {
 		res, err = in.match.scan(ctx, h.search, params)
 	} else {
 		res, err = h.search.Search(ctx, params)
-		outcome = semanticOutcomeFor(params, wantSemantic)
-	}
-	if outcome == semanticDropped {
-		dropped = append(dropped, search.UnknownParam{Param: "semantic"})
 	}
 
 	if err != nil {
@@ -395,7 +385,6 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 	h.recordQuery(vals.Get("q"))
 	return jobSearchOutcome{
 		res: res, limit: limit, offset: offset, dropped: dropped,
-		semantic:        outcome.wire(ojcp.SemanticUnavailable),
 		formerEmployers: in.hasFormer,
 		watchlist:       in.hasWatch,
 	}, nil

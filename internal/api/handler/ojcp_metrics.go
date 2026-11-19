@@ -19,11 +19,4 @@ func observeOJCPRESTSearch(resp ojcp.SearchJobsResponse) {
 	if len(resp.IgnoredParams) > 0 {
 		ojcpRESTSearchQuality.WithLabelValues("ignored_filters").Inc()
 	}
-	switch resp.Semantic {
-	case ojcp.SemanticApplied, ojcp.SemanticUnavailable:
-		ojcpRESTSearchQuality.WithLabelValues("semantic_requested").Inc()
-		if resp.Semantic == ojcp.SemanticUnavailable {
-			ojcpRESTSearchQuality.WithLabelValues("semantic_fallback").Inc()
-		}
-	}
 }

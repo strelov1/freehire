@@ -21,7 +21,7 @@ func TestAnalyticsLogsSafeSearchQualityAndConversation(t *testing.T) {
 	records := captureToolLogs(t)
 	reader := readerThatFinds(t)
 	reader.searchJobs = func(context.Context, SearchInput) (SearchJobsResult, error) {
-		return SearchJobsResult{Jobs: []JobSummary{}, Total: 0, IgnoredParams: []string{"private-filter"}, Semantic: SemanticUnavailable}, nil
+		return SearchJobsResult{Jobs: []JobSummary{}, Total: 0, IgnoredParams: []string{"private-filter"}}, nil
 	}
 	session := connect(t, reader)
 	_, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -36,7 +36,7 @@ func TestAnalyticsLogsSafeSearchQualityAndConversation(t *testing.T) {
 	if start["conversation_id"] == nil || start["conversation_id"] != finish["conversation_id"] {
 		t.Fatalf("missing conversation correlation: %v", finish)
 	}
-	if finish["client"] != "claude" || finish["returned_results"] != float64(0) || finish["ignored_filters"] != true || finish["semantic"] != "unavailable" {
+	if finish["client"] != "claude" || finish["returned_results"] != float64(0) || finish["ignored_filters"] != true {
 		t.Fatalf("missing safe dimensions: %v", finish)
 	}
 	if n, ok := finish["response_bytes"].(float64); !ok || n <= 0 {
