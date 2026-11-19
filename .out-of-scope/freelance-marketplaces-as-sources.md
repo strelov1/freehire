@@ -1,8 +1,8 @@
 # Upwork, Toptal, We Are Rosie and Gun.io as sources
 
-This project does not crawl Upwork, Toptal, We Are Rosie or Gun.io. It reads job boards and ATS platforms
-that publish vacancies; Gun.io and Hubstaff Talent, the freelance marketplaces that do publish
-readable listings, are crawled as ordinary sources.
+This project does not crawl Upwork, Toptal, We Are Rosie or Gun.io. It reads job boards and ATS
+platforms that publish vacancies; Hubstaff Talent, the one freelance marketplace on that list that
+publishes a readable listing, is crawled as an ordinary source.
 
 ## Why this is out of scope
 
