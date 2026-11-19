@@ -208,7 +208,7 @@ var blocks = map[string][]string{
 	// reads prose. Both adapt the same Reader.
 	// apigen is generated from typespec/ by ogen (`make api-contract`) and implemented by
 	// handler. It imports nothing of ours.
-	"api": {"apigen", "atsapply", "candidateprofile", "handler", "mcpapp", "ogimage", "ojcp", "ojcpmcp", "realtime"},
+	"api": {"apigen", "atsapply", "candidateprofile", "handler", "handler/jobs", "mcpapp", "ogimage", "ojcp", "ojcpmcp", "realtime"},
 }
 
 // Assignment is the flattened package → block view the move script drives from.

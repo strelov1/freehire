@@ -1,4 +1,7 @@
-package handler
+// Package jobs is the public catalogue surface of the HTTP API (#4586): the reads a visitor
+// makes to find jobs, without an account. handler embeds its handlers in the contract server
+// and mounts their routes; this package imports nothing of handler.
+package jobs
 
 import (
 	"context"
@@ -12,22 +15,24 @@ import (
 // citySearchLimit bounds a single /geo/cities response.
 const citySearchLimit = 20
 
-// geoHandlers serves public geography reference reads (city autocomplete). Unauthenticated:
+// GeoHandlers serves public geography reference reads (city autocomplete). Unauthenticated:
 // it is dictionary data, not user-scoped.
-type geoHandlers struct{}
+type GeoHandlers struct{}
 
-func newGeoHandlers() *geoHandlers {
-	return &geoHandlers{}
+// NewGeoHandlers returns the city-autocomplete handlers.
+func NewGeoHandlers() *GeoHandlers {
+	return &GeoHandlers{}
 }
 
-func (h *geoHandlers) register(api fiber.Router, contract fiber.Handler) {
+// Register mounts the routes; contract is the generated server's handler.
+func (h *GeoHandlers) Register(api fiber.Router, contract fiber.Handler) {
 	api.Get("/geo/cities", contract)
 }
 
 // SearchCities backs GET /geo/cities?q=&country=: a population-ranked prefix search
 // over the embedded GeoNames city dictionary (location.SearchCities), optionally
 // narrowed to one country. A blank q yields an empty (not null) list.
-func (h *geoHandlers) SearchCities(_ context.Context, params apigen.SearchCitiesParams) (*apigen.SearchCitiesOK, error) {
+func (h *GeoHandlers) SearchCities(_ context.Context, params apigen.SearchCitiesParams) (*apigen.SearchCitiesOK, error) {
 	matches := location.SearchCities(params.Q.Value, params.Country.Value, citySearchLimit)
 	out := make([]apigen.CityMatch, len(matches))
 	for i, m := range matches {
