@@ -17,16 +17,16 @@
   // Until one read succeeds the figures are unknown, not zero; a later failed refresh keeps
   // the last good ones (AsyncData keeps its value on error).
   let loaded = $state(false);
+  const load = () => {
+    now = new Date();
+    void usage
+      .run(() => api.getApiUsage())
+      .then(() => {
+        if (usage.status === 'ready') loaded = true;
+      });
+  };
   $effect(() => {
     if (!isAuthenticated()) return;
-    const load = () => {
-      now = new Date();
-      void usage
-        .run(() => api.getApiUsage())
-        .then(() => {
-          if (usage.status === 'ready') loaded = true;
-        });
-    };
     load();
     const timer = setInterval(load, 60_000);
     return () => clearInterval(timer);
