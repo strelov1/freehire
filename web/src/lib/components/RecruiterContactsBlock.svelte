@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Copy, UserSearch } from '@lucide/svelte';
+  import { Check, Copy, SquarePen, UserSearch } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { api, type RecruiterContact } from '#lib/api.js';
   import { isPlanRefusal } from '#lib/api-core.js';
@@ -10,6 +10,7 @@
   import { errorMessage } from '#lib/utils.js';
   import { Button } from '#lib/ui/index.js';
   import PlanLimitLink from './PlanLimitLink.svelte';
+  import ReferralMessageDialog from './ReferralMessageDialog.svelte';
   import { messages } from './RecruiterContactsBlock.messages';
 
   // Shown on a job whose detail says a lookup can run (recruiter_contacts_available). A paid
@@ -25,6 +26,7 @@
   let error = $state<string | null>(null);
   let refused = $state(false); // a 402: the server's sentence and the plan link, never a retry
   let copied = $state<string | null>(null);
+  let drafting = $state<RecruiterContact | null>(null);
 
   async function find() {
     loading = true;
@@ -106,6 +108,15 @@
           </div>
           <button
             type="button"
+            onclick={() => (drafting = c)}
+            aria-label={format(s.draft, { name: c.name })}
+            title={format(s.draft, { name: c.name })}
+            class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <SquarePen class="size-4" />
+          </button>
+          <button
+            type="button"
             onclick={() => copy(c.email)}
             aria-label={format(s.copy, { email: c.email })}
             class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -118,3 +129,7 @@
     <p class="text-xs text-muted-foreground">{s.note}</p>
   {/if}
 </section>
+
+{#if drafting}
+  <ReferralMessageDialog slug={jobSlug} company={companyName} recipient={drafting} onClose={() => (drafting = null)} />
+{/if}

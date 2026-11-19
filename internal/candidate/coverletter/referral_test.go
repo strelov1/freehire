@@ -92,9 +92,31 @@ func TestReferralInputRejectsUnknownChannelAndUnboundedProfile(t *testing.T) {
 		{Channel: "sms", Profile: "Sam"},
 		{Channel: "email", Profile: "   "},
 		{Channel: "linkedin", Profile: strings.Repeat("x", MaxReferralProfileRunes+1)},
+		{Channel: "linkedin", Profile: "Sam", Purpose: PurposeRecruiter},
+		{Channel: "email", Profile: "Sam", Purpose: "sales"},
 	} {
 		if r.Valid() {
 			t.Fatalf("unexpected valid referral: channel=%q length=%d", r.Channel, len(r.Profile))
 		}
+	}
+}
+
+// A recruiter message asks about the vacancy, never for a referral, under the same evidence gate.
+func TestRecruiterDraftWritesAboutTheVacancyNotAReferral(t *testing.T) {
+	kept := manualAtom("I cut build time by 30 percent")
+	body := "Subject: Backend Engineer at Acme\nHello Ana, I am interested in the Backend Engineer role at Acme. I cut build time by 30 percent in a previous project. Could you tell me who handles this role or what the next step is? Thank you."
+	model := &scriptedModel{responses: []string{fmt.Sprintf(`{"body":%q,"cited_atom_ids":[%q]}`, body, kept.ID.String())}}
+	in := testInput([]experience.Atom{kept})
+	in.Referral = &Referral{Channel: "email", Purpose: PurposeRecruiter, Profile: "Ana Sandu, Technical Recruiter at Acme"}
+	draft, err := NewAnalyzer(llm.NewWithModel(model)).Draft(context.Background(), in)
+	if err != nil || draft == nil {
+		t.Fatalf("Draft = (%v, %v)", draft, err)
+	}
+	sent := model.sent()
+	if !strings.Contains(sent, "email to the recruiter") || strings.Contains(sent, "referral request") {
+		t.Fatal("the recruiter prompt was not the one sent")
+	}
+	if !strings.Contains(sent, "Ana Sandu, Technical Recruiter at Acme") {
+		t.Fatal("the recipient never reached the prompt")
 	}
 }

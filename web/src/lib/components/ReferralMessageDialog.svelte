@@ -1,14 +1,25 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Check, Copy, Loader2 } from '@lucide/svelte';
+  import { untrack } from 'svelte';
+  import { Check, Copy, Loader2, Mail } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { trackPlanRefusal } from '#lib/api.js';
   import { Button, Dialog } from '#lib/ui/index.js';
 
-  let { slug, company, onClose }: { slug: string; company: string; onClose: () => void } = $props();
+  type Recipient = { name: string; title: string; email: string };
+  // With a recipient (a recruiter the seeker already revealed) nothing is pasted: the draft is
+  // an email to that person about the vacancy, not a referral request.
+  let {
+    slug,
+    company,
+    recipient,
+    onClose,
+  }: { slug: string; company: string; recipient?: Recipient; onClose: () => void } = $props();
   let open = $state(true);
-  let channel = $state<'linkedin' | 'email'>('linkedin');
-  let profile = $state('');
+  // The dialog is mounted once per recipient, so the initial values are the whole story.
+  const fixed = untrack(() => (recipient ? `${recipient.name}, ${recipient.title} at ${company}` : ''));
+  let channel = $state<'linkedin' | 'email'>(fixed ? 'email' : 'linkedin');
+  let profile = $state(fixed);
   let message = $state('');
   let cited = $state.raw<{ id: string; claim?: string }[]>([]);
   let drafting = $state(false);
@@ -55,7 +66,7 @@
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
-        body: JSON.stringify({ channel, profile: profile.trim() }),
+        body: JSON.stringify({ channel, profile: profile.trim(), ...(recipient && { purpose: 'recruiter' }) }),
         signal: controller.signal,
       });
       if (!response.ok || !response.body) {
@@ -86,6 +97,14 @@
     }
   }
 
+  /** The draft as a mailto query: its leading "Subject:" line becomes the subject. */
+  function mailQuery(text: string): string {
+    const match = /^\s*Subject:\s*(.+)\n+/i.exec(text);
+    const subject = match?.[1]?.trim() ?? '';
+    const body = match ? text.slice(match[0].length) : text;
+    return `subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+
   /** Copy only after the seeker presses the button; FreeHire never sends the message. */
   async function copy() {
     try {
@@ -98,40 +117,51 @@
   }
 </script>
 
-<Dialog bind:open title={`Draft a message · ${company}`} class="sm:max-w-xl">
+<Dialog
+  bind:open
+  title={recipient ? `Email ${recipient.name} · ${company}` : `Draft a message · ${company}`}
+  class="sm:max-w-xl"
+>
   <div class="space-y-4">
-    <p class="text-sm text-muted-foreground">
-      Paste a few lines from a public profile. We will use them once to draft a message you can edit and send yourself.
-      Closing this window clears the text.
-    </p>
-    <label class="block text-sm font-medium" for="referral-channel">Message type</label>
-    <select
-      id="referral-channel"
-      bind:value={channel}
-      disabled={drafting}
-      class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-    >
-      <option value="linkedin">LinkedIn DM</option>
-      <option value="email">Email</option>
-    </select>
-    <label class="block text-sm font-medium" for="recipient-profile">Contact's public profile text</label>
-    <textarea
-      id="recipient-profile"
-      bind:value={profile}
-      disabled={drafting}
-      maxlength="4000"
-      rows="5"
-      placeholder="Name, current role, and a few relevant lines"
-      class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"></textarea>
-    <p class="text-xs text-muted-foreground">
-      The draft uses your job and candidate-stated experience. The contact text is not saved.
-    </p>
+    {#if recipient}
+      <p class="text-sm text-muted-foreground">
+        A short email to {recipient.name} ({recipient.title}) about this job, drafted from your experience bank. Edit
+        it, then send it yourself.
+      </p>
+    {:else}
+      <p class="text-sm text-muted-foreground">
+        Paste a few lines from a public profile. We will use them once to draft a message you can edit and send
+        yourself. Closing this window clears the text.
+      </p>
+      <label class="block text-sm font-medium" for="referral-channel">Message type</label>
+      <select
+        id="referral-channel"
+        bind:value={channel}
+        disabled={drafting}
+        class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+      >
+        <option value="linkedin">LinkedIn DM</option>
+        <option value="email">Email</option>
+      </select>
+      <label class="block text-sm font-medium" for="recipient-profile">Contact's public profile text</label>
+      <textarea
+        id="recipient-profile"
+        bind:value={profile}
+        disabled={drafting}
+        maxlength="4000"
+        rows="5"
+        placeholder="Name, current role, and a few relevant lines"
+        class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"></textarea>
+      <p class="text-xs text-muted-foreground">
+        The draft uses your job and candidate-stated experience. The contact text is not saved.
+      </p>
+    {/if}
     <Button variant="outline" disabled={drafting || !profile.trim()} onclick={() => void generate()}>
       {#if drafting}
         <Loader2 class="size-4 animate-spin" aria-hidden="true" />
         Writing…
       {:else}
-        Draft message
+        {recipient ? 'Draft email' : 'Draft message'}
       {/if}
     </Button>
     {#if error}
@@ -166,6 +196,14 @@
           <Copy class="size-4" aria-hidden="true" /> Copy message
         {/if}
       </Button>
+      {#if recipient}
+        <a
+          href="mailto:{recipient.email}?{mailQuery(message)}"
+          class="inline-flex items-center gap-2 text-sm text-primary underline-offset-4 hover:underline"
+        >
+          <Mail class="size-4" aria-hidden="true" /> Open in email
+        </a>
+      {/if}
     {/if}
   </div>
 </Dialog>

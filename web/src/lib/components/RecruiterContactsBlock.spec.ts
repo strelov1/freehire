@@ -69,3 +69,31 @@ it("shows the server's refusal with the plan link, and a failure as unavailable 
     await screen.findByText("Couldn't look up contacts right now. Nothing was charged, try again later."),
   ).not.toBeNull();
 });
+
+it('drafts an email to one contact and opens it in the mail app with its subject', async () => {
+  findRecruiterContacts.mockResolvedValue([
+    { name: 'Anna Lee', title: 'Technical Recruiter', email: 'anna@acme.io', confidence: 'high' },
+  ]);
+  const draft = 'Subject: Backend role at Acme\n\nHello Anna, I am interested in the role.';
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(`event: message\ndata: ${JSON.stringify({ body: draft, cited: [] })}\n\n`, { status: 200 }),
+    );
+  vi.stubGlobal('fetch', fetchMock);
+  render(RecruiterContactsBlock, props);
+  await fireEvent.click(screen.getByRole('button', { name: 'Show recruiter contacts' }));
+  await fireEvent.click(await screen.findByRole('button', { name: 'Draft an email to Anna Lee' }));
+  await fireEvent.click(await screen.findByRole('button', { name: 'Draft email' }));
+
+  const link = await screen.findByRole('link', { name: 'Open in email' });
+  expect(link.getAttribute('href')).toBe(
+    `mailto:anna@acme.io?subject=${encodeURIComponent('Backend role at Acme')}&body=${encodeURIComponent('Hello Anna, I am interested in the role.')}`,
+  );
+  expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual({
+    channel: 'email',
+    profile: 'Anna Lee, Technical Recruiter at Acme',
+    purpose: 'recruiter',
+  });
+  vi.unstubAllGlobals();
+});
