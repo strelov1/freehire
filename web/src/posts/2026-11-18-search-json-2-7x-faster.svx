@@ -1,0 +1,89 @@
+---
+title: We made search JSON 2.7x faster. Nobody will notice, and that's fine
+date: 2026-11-18
+summary: Swapping Go's standard JSON encoder for moego on our search pages cut encoding time from 504 µs to 184 µs per page on the production CPU. Here is how we measured it, why the site is not visibly faster, and where we kept the old encoder on purpose.
+type: article
+tags:
+  - engineering
+  - performance
+  - search
+draft: false
+---
+
+Every time you open a search page on freehire, the API takes 20 job postings and turns
+each one into JSON before sending it to your browser. For years that was Go's standard
+library, `encoding/json`. It is correct and boring. It is also not fast.
+
+This week we replaced it, on that one path, with [moego](https://github.com/MoeForge/moego),
+a young Go library that offers the same API and produces the same bytes. This post is
+about what that bought us, measured on the machine that actually serves you, and about
+what it did not buy us.
+
+## Why we looked at JSON at all
+
+We profiled the search handler offline. Of the CPU the handler itself spends, 61% went
+into encoding JSON. That sounds like a big target. It is less impressive once you zoom
+out: across the whole API, JSON encoding was 3.2% of the profile. Most of the time a
+search takes is waiting on Postgres and the search engine, not on our own code.
+
+So we expected a small win in CPU and almost nothing in latency. We shipped it anyway,
+because the change is a few lines and our server is busy.
+
+## What changed
+
+Two places, both encoding data we produce ourselves:
+
+- the list encoder behind the search page and four other job lists;
+- the documents we send to our search index, Meilisearch.
+
+Everything that comes **in** from users still goes through the standard library. moego is
+three weeks old, labelled `v0.1.0-alpha.4`, and contains hand-written assembly. That is
+fine for turning our own structs into text. It is not something we want parsing input
+from strangers yet.
+
+## Measuring it on the real machine
+
+The first benchmarks ran on a laptop with an Apple M1 Pro, and showed about 3.1x on a
+search page. But our production server is an Intel i7-8700, and moego has a separate
+assembly path for that architecture. Laptop numbers say little about it.
+
+So we took a real search page, 20 postings fetched from our own public API, and ran the
+same loop production runs, once per posting, six times with each encoder, directly on
+the production server, at low priority on one core:
+
+| Per search page (20 jobs) | `encoding/json` | moego | Change |
+|---|--:|--:|--:|
+| Time (median of 6) | 503.7 µs | 183.7 µs | **2.7x faster** |
+| Memory | 171 KB | 150.5 KB | −12% |
+| Allocations | 60 | 40 | −33% |
+
+Before timing anything, the benchmark compared both encoders' output for every posting.
+They were identical, byte for byte.
+
+## Why you won't feel it
+
+A typical request to the job list takes 30–55 ms at the median. Encoding saves about
+0.3 ms of that. Less than one percent.
+
+We did look at production latency before and after the release, and it tells you
+nothing: search times swing by whole seconds within an hour depending on what else the
+database is doing. A third of a millisecond disappears in that noise.
+
+What the change does give us is CPU. The same server runs the API, the database, the
+search engine and a set of background workers, and it is rarely idle. Spending a third
+of the CPU on the same output is a small, permanent discount on every page anyone loads.
+
+## What we left alone
+
+- **Incoming requests.** Untrusted input stays on the standard library until moego has
+  more mileage.
+- **Reading search results.** The Meilisearch client decodes each hit with
+  `encoding/json` internally, past the hook we can replace.
+- **Ingest.** JSON is 0.1% of the crawler's profile. Not worth the risk.
+
+## The takeaway
+
+Profile first, then be honest about the denominator. A 2.7x speedup on 3% of the work is
+a good trade when it costs a few lines and keeps the output identical. It is not a reason
+to tell anyone the site got faster. If search feels slow, the fix is in the database and
+the index, and that is where we're spending our time.
