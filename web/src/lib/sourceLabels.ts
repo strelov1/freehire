@@ -37,6 +37,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   mycareersfuture: 'My Careers Future',
   careersgov: 'Careers@Gov',
   flexprofessionals: 'FlexProfessionals',
+  crossover: 'Crossover',
   nofluffjobs: 'No Fluff Jobs',
   powertofly: 'PowerToFly',
   // Vendor brands, spelled the way the vendor spells them. Title-casing a slug yields
