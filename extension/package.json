@@ -43,7 +43,7 @@
     "happy-dom": "^21.0.4",
     "oxfmt": "0.77.0",
     "oxlint": "^1.77.0",
-    "svelte-check": "^4.7.3",
+    "svelte-check": "^4.7.8",
     "svelte-eslint-parser": "^1.8.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
