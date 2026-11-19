@@ -25,7 +25,7 @@ func NewFlexProfessionals(c JSONGetter) Source { return flexprofessionals{http: 
 
 func (flexprofessionals) Provider() string { return "flexprofessionals" }
 
-func (flexprofessionals) boardless() {}
+func (flexprofessionals) Boardless() {}
 
 type flexprofessionalsPost struct {
 	ID    int    `json:"id"`

@@ -54,9 +54,9 @@ func NewSkipTheDrive(c skipthedriveHTTP) Source { return skipthedrive{http: c, n
 
 func (skipthedrive) Provider() string { return "skipthedrive" }
 
-func (skipthedrive) boardless() {}
+func (skipthedrive) Boardless() {}
 
-func (skipthedrive) aggregator() {}
+func (skipthedrive) Aggregator() {}
 
 type skipthedrivePosting struct {
 	id, url, title, company string

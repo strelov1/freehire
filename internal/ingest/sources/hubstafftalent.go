@@ -62,9 +62,9 @@ func NewHubstaffTalent(c hubstafftalentHTTP) Source {
 
 func (hubstafftalent) Provider() string { return "hubstafftalent" }
 
-func (hubstafftalent) boardless() {}
+func (hubstafftalent) Boardless() {}
 
-func (hubstafftalent) aggregator() {}
+func (hubstafftalent) Aggregator() {}
 
 // hubstafftalentHourly reads a card's "$8/hr" pay. A fixed-price card shows a budget ("$500"),
 // not a rate, and is left unread.

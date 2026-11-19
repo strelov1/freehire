@@ -29,9 +29,9 @@ func NewCrossover(c JSONGetter) Source { return crossover{http: c} }
 
 func (crossover) Provider() string { return "crossover" }
 
-func (crossover) boardless() {}
+func (crossover) Boardless() {}
 
-func (crossover) aggregator() {}
+func (crossover) Aggregator() {}
 
 type crossoverPipeline struct {
 	Code      string                 `json:"ProductCode"`
