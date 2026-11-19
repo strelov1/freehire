@@ -90,7 +90,8 @@ it('drafts an email to one contact and opens it in the mail app with its subject
   expect(link.getAttribute('href')).toBe(
     `mailto:anna@acme.io?subject=${encodeURIComponent('Backend role at Acme')}&body=${encodeURIComponent('Hello Anna, I am interested in the role.')}`,
   );
-  expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual({
+  const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+  expect(JSON.parse(String(init?.body))).toEqual({
     channel: 'email',
     profile: 'Anna Lee, Technical Recruiter at Acme',
     purpose: 'recruiter',
