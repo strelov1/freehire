@@ -42,6 +42,8 @@ type jobsHandlers struct {
 	// is not. See openJobTotal.
 	cache     cache.Cache
 	estimator catalogstats.Estimator
+	// recruiterContacts says the contact finder is configured, so the detail read may offer it.
+	recruiterContacts bool
 }
 
 func newJobsHandlers(queries *db.Queries, moderation *moderation.Service, postings sources.PostingURLResolver, c cache.Cache) *jobsHandlers {
@@ -206,6 +208,14 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 	// to false (block hidden), never failing the job read.
 	if avail, err := h.queries.CompanyHasApprovedReferrer(ctx, job.CompanySlug); err == nil {
 		view.ReferralAvailable = avail
+	}
+
+	// Recruiter contacts: offered only where a lookup can run, so nobody pays a click for a
+	// 422. Best-effort like the referral flag.
+	if h.recruiterContacts {
+		if d, err := h.queries.GetJobRecruiterDomain(ctx, job.PublicSlug); err == nil {
+			view.RecruiterContactsAvailable = d.Domain != ""
+		}
 	}
 
 	// Caller's own thumbs vote, overlaid only when signed in (OptionalAuth attaches

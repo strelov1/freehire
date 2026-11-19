@@ -1,0 +1,40 @@
+import { defineMessages } from '#lib/i18n/t.js';
+
+export const messages = defineMessages(
+  {
+    heading: 'Who recruits here',
+    pitch: 'Up to three recruiters at {company} with their work email, so you can write to a person.',
+    find: 'Show recruiter contacts',
+    finding: 'Looking…',
+    paidOnly: 'Available on Pro.',
+    viewPlans: 'View plans',
+    empty: 'Nobody who recruits at {company} is known yet. Nothing was charged.',
+    unavailable: "Couldn't look up contacts right now. Nothing was charged, try again later.",
+    high: 'Verified',
+    medium: 'Likely',
+    copy: 'Copy {email}',
+    draft: 'Draft an email to {name}',
+    copied: 'Copied',
+    copyFailed: "Couldn't copy to the clipboard.",
+    note: 'Found from public sources. Write personally, do not mass-mail.',
+  },
+  {
+    ru: {
+      heading: 'Кто здесь нанимает',
+      pitch: 'До трёх рекрутеров {company} с рабочей почтой, чтобы написать живому человеку.',
+      find: 'Показать контакты рекрутеров',
+      finding: 'Ищем…',
+      paidOnly: 'Доступно на тарифе Pro.',
+      viewPlans: 'Посмотреть тарифы',
+      empty: 'Рекрутеры {company} пока неизвестны. Списания не было.',
+      unavailable: 'Не удалось найти контакты. Списания не было, попробуйте позже.',
+      high: 'Проверен',
+      medium: 'Вероятный',
+      copy: 'Скопировать {email}',
+      draft: 'Написать письмо: {name}',
+      copied: 'Скопировано',
+      copyFailed: 'Не удалось скопировать в буфер обмена.',
+      note: 'Найдено в открытых источниках. Пишите лично, без массовых рассылок.',
+    },
+  },
+);

@@ -1232,6 +1232,12 @@ type JobDailyView struct {
 	AgentUniques int32 `json:"agent_uniques"`
 }
 
+type JobRecruiterContact struct {
+	JobID    int64              `json:"job_id"`
+	Contacts []byte             `json:"contacts"`
+	FoundAt  pgtype.Timestamptz `json:"found_at"`
+}
+
 type JobReminder struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`

@@ -95,6 +95,8 @@ func featureNoun(feature plan.Feature) string {
 		return "automatic applications"
 	case plan.FeatureMailReply:
 		return "reply drafts"
+	case plan.FeatureRecruiterContact:
+		return "recruiter contacts"
 	default:
 		return ""
 	}

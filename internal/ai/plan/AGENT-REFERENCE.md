@@ -1,9 +1,10 @@
 # Plan and allowance conventions
 
 ## Scope
-The plan a user is on and the per-day allowance each metered feature draws from. Five of the
-six are AI features whose cost is a model call; the sixth, auto-apply, is a headless browser
-submitting an application, and it is shaped differently for that reason wherever it differs.
+The plan a user is on and the per-day allowance each metered feature draws from. Most are AI
+features whose cost is a model call. Two are not: auto-apply is a headless browser submitting
+an application, and recruiter-contact is a paid lookup at a contact-data provider (behind the
+private contact-finder service). Each is shaped differently for that reason wherever it differs.
 One
 question in, yes or no out: `Consume(user, feature, ref)`. Which plan, what it allows, how
 much is left and whether a refusal is switched on are all this package's business.
@@ -251,6 +252,12 @@ transaction. `store.go` is the transaction around it and nothing else.
   honest answer to "we could not tell whether you may" is to say so, so `chargeAutoApply`
   answers 503 both when the charge errors and when the meter is absent. Nothing else in this
   package may copy that without an argument of the same shape.
+
+  recruiter-contact has one: each first view of a job can be a lookup we pay a third party
+  for, and its real daily ceilings (pro 5, ultra 20) are what the two plans differ on, so an
+  unmeasured view is unbounded spend. `FindRecruiterContacts` answers 503 when the charge
+  errors. Its reference is `job:<id>`, so a second look at the same job is free for good, and
+  an empty answer or a failed lookup gives the charge back.
 
 - **A refusal is 402 and must precede the stream.** Writing it after the headers are out
   makes it an event inside a 200 — invisible to anything checking status codes. Note that

@@ -80,6 +80,7 @@ func Register(app *fiber.App, cfg Config) {
 	// intake, which must agree on what a page is.
 	postingURLs := sources.NewPostingURLResolver(ingestClient)
 	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs, cfg.Cache)
+	jobsH.recruiterContacts = cfg.RecruiterContacts != nil
 	statsH := newStatsHandlers(queries, cfg.Cache, cfg.Pool)
 	recentFeedH := newRecentFeedHandlers(cfg.RecentJobsFeed)
 	// A nil *Sampler in an interface is not a nil interface, so the 503 path needs the
@@ -394,7 +395,8 @@ func Register(app *fiber.App, cfg Config) {
 		searchHandlers:               searchH,
 		companiesHandlers:            companiesH,
 		cvHandlers:                   cvH,
-		inboxHandlers:                inboxH}
+		inboxHandlers:                inboxH,
+		recruiterContactHandlers:     &recruiterContactHandlers{queries: queries, plans: plans, finder: cfg.RecruiterContacts}}
 	contract := newContract(handlers)
 	emailPrefsH.register(api, mw, contract)
 

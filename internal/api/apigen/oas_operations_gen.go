@@ -110,6 +110,7 @@ const (
 	FileProcessReportOperation              OperationName = "FileProcessReport"
 	FindJobOperation                        OperationName = "FindJob"
 	FindModeratedUserOperation              OperationName = "FindModeratedUser"
+	FindRecruiterContactsOperation          OperationName = "FindRecruiterContacts"
 	ForgotPasswordOperation                 OperationName = "ForgotPassword"
 	GetAgentPermissionsOperation            OperationName = "GetAgentPermissions"
 	GetApiPlanOperation                     OperationName = "GetApiPlan"

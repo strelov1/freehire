@@ -341,6 +341,11 @@ export interface Job {
    */
   referral_available?: boolean;
   /**
+   * RecruiterContactsAvailable is true when recruiter contacts can be looked up for the job:
+   * the feature is configured and its company has a website on record. Detail handler only.
+   */
+  recruiter_contacts_available?: boolean;
+  /**
    * AutoApplyStatus is the caller's own auto-apply status for this job: "queued" or
    * "declined" (the candidate's permanent decision), nil for no attempt or an anonymous
    * caller. Caller-scoped like MyVote: only the detail handler overlays it, keyed by

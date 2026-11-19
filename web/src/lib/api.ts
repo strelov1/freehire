@@ -37,6 +37,7 @@ import { bookingApi } from './api-methods/booking';
 export type {
   Slice,
   EmailPrefs,
+  RecruiterContact,
   InsightRoleCountryCell,
   InsightRoleCountries,
   InsightRolePulse,

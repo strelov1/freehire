@@ -5374,6 +5374,72 @@ func decodeFindModeratedUserParams(args [0]string, argsEscaped bool, r *http.Req
 	return params, nil
 }
 
+// FindRecruiterContactsParams is parameters of findRecruiterContacts operation.
+type FindRecruiterContactsParams struct {
+	// The job `public_slug`.
+	Slug string
+}
+
+func unpackFindRecruiterContactsParams(packed middleware.Parameters) (params FindRecruiterContactsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeFindRecruiterContactsParams(args [1]string, argsEscaped bool, r *http.Request) (params FindRecruiterContactsParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // GetApplicationFollowUpParams is parameters of getApplicationFollowUp operation.
 type GetApplicationFollowUpParams struct {
 	// The job `public_slug`.

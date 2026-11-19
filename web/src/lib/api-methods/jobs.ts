@@ -18,7 +18,7 @@ import type {
   UserGrowthPoint,
 } from '../types';
 import type { Display } from '#lib/generated/contracts.js';
-import type { JobCopy, Page, Slice } from '../api-types';
+import type { JobCopy, Page, RecruiterContact, Slice } from '../api-types';
 import type { components } from '#lib/generated/api.js';
 import { ApiError, jsonBody, query, toSlice } from '../api-core';
 
@@ -46,6 +46,14 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
    *  renders them; the source job is excluded by the backend. */
   async function getSimilarJobs(slug: string): Promise<Job[]> {
     return requestData<Job[]>(`/api/v1/jobs/${slug}/similar`);
+  }
+
+  /** Up to three people who recruit for the job's company. Paid: 402 without a plan or with
+   *  today's allowance spent; a job already opened is free. 503 when the lookup is down. */
+  async function findRecruiterContacts(slug: string): Promise<RecruiterContact[]> {
+    return requestData<RecruiterContact[]>(`/api/v1/jobs/${encodeURIComponent(slug)}/recruiter-contacts`, {
+      method: 'POST',
+    });
   }
 
   /** The questions this job's application will ask, as the ATS published them. 404s for
@@ -304,6 +312,7 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     listJobs,
     getJob,
     getSimilarJobs,
+    findRecruiterContacts,
     getApplyForm,
     getDirectApplyForm,
     sendDirectApplication,

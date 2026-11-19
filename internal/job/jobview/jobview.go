@@ -158,6 +158,9 @@ type Job struct {
 	// ReferralAvailable is true when the job's company has an approved employee referrer.
 	// Attached only by the detail handler; list rows leave it false.
 	ReferralAvailable bool `json:"referral_available,omitempty"`
+	// RecruiterContactsAvailable is true when recruiter contacts can be looked up for the job:
+	// the feature is configured and its company has a website on record. Detail handler only.
+	RecruiterContactsAvailable bool `json:"recruiter_contacts_available,omitempty"`
 	// AutoApplyStatus is the caller's own auto-apply status for this job: "queued" or
 	// "declined" (the candidate's permanent decision), nil for no attempt or an anonymous
 	// caller. Caller-scoped like MyVote: only the detail handler overlays it, keyed by

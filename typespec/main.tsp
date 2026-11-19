@@ -49,6 +49,7 @@ import "./booking-links.tsp";
 import "./mail.tsp";
 import "./mail-links.tsp";
 import "./fit.tsp";
+import "./recruiter-contacts.tsp";
 import "./autofill.tsp";
 import "./search-intent.tsp";
 import "./embeddings.tsp";

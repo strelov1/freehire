@@ -37,6 +37,9 @@ export interface Page<T> {
  *  switches govern — and nothing else about the account. */
 export type EmailPrefs = components['schemas']['EmailPrefs'];
 
+/** One person who recruits for a job's company (POST /jobs/{slug}/recruiter-contacts). */
+export type RecruiterContact = components['schemas']['RecruiterContact'];
+
 /** A patch, not a replace: an omitted switch keeps its stored value.
  *  `deactivateSearches` can only turn a digest OFF — a link that can only subtract
  *  cannot be used to sign anybody up for anything. */
