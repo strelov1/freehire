@@ -62,6 +62,7 @@ func newServer(tools []assistant.Tool, userID int64, origin string, reader Reade
 			Meta: mcp.Meta{"securitySchemes": oauthOnly},
 		}, loggedTool(surfaceMCP, tool.Name, accountToolHandler(tool, userID)))
 	}
+	addToolSearch(server, tools)
 	return server
 }
 

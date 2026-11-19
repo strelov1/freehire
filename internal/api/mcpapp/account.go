@@ -69,6 +69,9 @@ func accountInstructions(tools []assistant.Tool) string {
 	if served("list_unread_mail") {
 		out += accountMailInstructions
 	}
+	if slices.ContainsFunc(tools, func(t assistant.Tool) bool { return isDeferred(t.Name) }) {
+		out += accountDeferredInstructions
+	}
 	if served("suggest_dictionary_term") {
 		out += accountDictionaryInstructions
 	}
