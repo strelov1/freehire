@@ -1,6 +1,8 @@
-package sources
+package aggregators
 
 import (
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
+
 	"context"
 	"encoding/json"
 	"errors"
@@ -50,7 +52,7 @@ func (f *euresFake) GetJSON(_ context.Context, url string, v any) error {
 	if i := strings.Index(id, "?"); i >= 0 {
 		id = id[:i]
 	}
-	f.mu.Lock() // fetchDetails calls GetJSON from several workers at once
+	f.mu.Lock() // kit.FetchDetails calls GetJSON from several workers at once
 	f.detailCalls = append(f.detailCalls, id)
 	f.mu.Unlock()
 	if f.detailErr[id] {
@@ -96,7 +98,7 @@ func newTestEures(f *euresFake, depthCap int) eures {
 
 func TestEuresSearchRequestShape(t *testing.T) {
 	fake := &euresFake{}
-	if _, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "de"}); err != nil {
+	if _, err := NewEures(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "de"}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if len(fake.gotBodies) != 1 {
@@ -133,7 +135,7 @@ func TestEuresPaginates(t *testing.T) {
 	full := euresFullPage(euresPageSize, 0, euresPageSize+3)
 	short := euresFullPage(3, 1000, euresPageSize+3)
 	fake := &euresFake{searchByPage: map[int]string{1: full, 2: short}}
-	jobs, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "de"})
+	jobs, err := NewEures(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "de"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -152,7 +154,7 @@ func TestEuresFailsAShortWalk(t *testing.T) {
 		1: euresFullPage(euresPageSize, 0, 120),
 		2: euresFullPage(10, 100, 120),
 	}}
-	if _, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "de"}); err == nil {
+	if _, err := NewEures(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "de"}); err == nil {
 		t.Fatal("Fetch read 60 of 120 stated postings and reported success")
 	}
 }
@@ -164,7 +166,7 @@ func TestEuresToleratesAPostingWithdrawnMidWalk(t *testing.T) {
 		1: euresFullPage(euresPageSize, 0, euresPageSize+3),
 		2: euresFullPage(2, 1000, euresPageSize+2),
 	}}
-	jobs, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "de"})
+	jobs, err := NewEures(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "de"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -180,7 +182,7 @@ func TestEuresFailsWhenALaterPageStatesNoResults(t *testing.T) {
 		1: euresFullPage(euresPageSize, 0, 120),
 		2: `{"numberRecords":0,"jvs":[]}`,
 	}}
-	if _, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "de"}); err == nil {
+	if _, err := NewEures(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "de"}); err == nil {
 		t.Fatal("Fetch read 50 of 120 stated postings and reported success on a zero-total page")
 	}
 }
@@ -194,7 +196,7 @@ func TestEuresAcceptsAPostingTheSearchListsTwice(t *testing.T) {
 	  {"id":"ID-0","title":"T","employer":{"name":"Co"}},
 	  {"id":"ID-1","title":"T","employer":{"name":"Co"}}]}`
 	fake := &euresFake{searchByPage: map[int]string{1: page}}
-	jobs, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "de"})
+	jobs, err := NewEures(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "de"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -216,7 +218,7 @@ func TestEuresPartitionsCountAPostingTheSearchListsTwice(t *testing.T) {
 		"de1": {1: region},
 		"de2": {1: euresFullPage(1, 2, 1)},
 	}}
-	jobs, err := newTestEures(fake, 3).Fetch(context.Background(), CompanyEntry{Board: "de"})
+	jobs, err := newTestEures(fake, 3).Fetch(context.Background(), kit.CompanyEntry{Board: "de"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -235,7 +237,7 @@ func TestEuresPartitionsACountryPastTheDepthCap(t *testing.T) {
 		"de1":   {1: euresFullPage(3, 0, 3)}, // ID-0..ID-2
 		"de-NS": {1: euresFullPage(3, 2, 3)}, // ID-2..ID-4, ID-2 named in both
 	}}
-	jobs, err := newTestEures(fake, 4).Fetch(context.Background(), CompanyEntry{Board: "de"})
+	jobs, err := newTestEures(fake, 4).Fetch(context.Background(), kit.CompanyEntry{Board: "de"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -256,7 +258,7 @@ func TestEuresFailsWhenRegionsDoNotCoverTheCountry(t *testing.T) {
 		"de1":   {1: euresFullPage(3, 0, 3)},
 		"de-NS": {1: euresFullPage(2, 3, 2)},
 	}}
-	if _, err := newTestEures(fake, 4).Fetch(context.Background(), CompanyEntry{Board: "de"}); err == nil {
+	if _, err := newTestEures(fake, 4).Fetch(context.Background(), kit.CompanyEntry{Board: "de"}); err == nil {
 		t.Fatal("Fetch listed 5 of the country's 6 postings and reported success")
 	}
 }
@@ -267,7 +269,7 @@ func TestEuresFailsWhenARegionIsPastTheDepthCap(t *testing.T) {
 		"de":  {1: country},
 		"de1": {1: euresFullPage(1, 0, 5)},
 	}}
-	if _, err := newTestEures(fake, 4).Fetch(context.Background(), CompanyEntry{Board: "de"}); err == nil {
+	if _, err := newTestEures(fake, 4).Fetch(context.Background(), kit.CompanyEntry{Board: "de"}); err == nil {
 		t.Fatal("Fetch accepted a region the API cannot page to its end")
 	}
 }
@@ -276,7 +278,7 @@ func TestEuresFailsPastTheDepthCapWithNoRegions(t *testing.T) {
 	fake := &euresFake{searchByLoc: map[string]map[int]string{
 		"de": {1: euresFullPage(1, 0, 5)},
 	}}
-	if _, err := newTestEures(fake, 4).Fetch(context.Background(), CompanyEntry{Board: "de"}); err == nil {
+	if _, err := newTestEures(fake, 4).Fetch(context.Background(), kit.CompanyEntry{Board: "de"}); err == nil {
 		t.Fatal("Fetch accepted a country it cannot page to its end and cannot split")
 	}
 }
@@ -285,7 +287,7 @@ func TestEuresFailsPastTheDepthCapWithNoRegions(t *testing.T) {
 // the detail is read only for its location, which a stored posting already has.
 func TestEuresFetchNewSkipsTheDetailOfASeenPosting(t *testing.T) {
 	fake := &euresFake{searchByPage: map[int]string{1: euresFullPage(2, 0, 2)}}
-	jobs, err := NewEures(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "de"},
+	jobs, err := NewEures(fake).(kit.HydratingSource).FetchNew(context.Background(), kit.CompanyEntry{Board: "de"},
 		func(id string) bool { return id == "ID-0" })
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
@@ -293,7 +295,7 @@ func TestEuresFetchNewSkipsTheDetailOfASeenPosting(t *testing.T) {
 	if len(jobs) != 2 {
 		t.Fatalf("len(jobs) = %d, want 2", len(jobs))
 	}
-	byID := map[string]Job{}
+	byID := map[string]kit.Job{}
 	for _, j := range jobs {
 		byID[j.ExternalID] = j
 	}
@@ -326,7 +328,7 @@ func TestEuresMapsFieldsHappyPath(t *testing.T) {
 		searchByPage: map[int]string{1: page1},
 		detailByID:   map[string]string{"MTAwMDEtMTAwMTEzOTMxMS1TIDE": detail},
 	}
-	jobs, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "de"})
+	jobs, err := NewEures(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "de"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -368,7 +370,7 @@ func TestEuresMapsFieldsHappyPath(t *testing.T) {
 
 func TestEuresNoMatchingPostingsYieldsEmptyNotError(t *testing.T) {
 	fake := &euresFake{} // no searchByPage entries => every page answers zero records
-	jobs, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "mt"})
+	jobs, err := NewEures(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "mt"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -383,7 +385,7 @@ func TestEuresLocationFallsBackWhenDetailFails(t *testing.T) {
 		searchByPage: map[int]string{1: page1},
 		detailErr:    map[string]bool{"X1": true},
 	}
-	jobs, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "fr"})
+	jobs, err := NewEures(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "fr"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -413,7 +415,7 @@ func TestEuresReadsApplicationDeadlineFromPreferredProfile(t *testing.T) {
 				searchByPage: map[int]string{1: page},
 				detailByID:   map[string]string{"MzQ5MDQ0MCAxNA": `{"preferredLanguage":"sl","jvProfiles":{"en":{"lastApplicationDate":1792540800000},"sl":` + tc.profile + `}}`},
 			}
-			jobs, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "si"})
+			jobs, err := NewEures(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "si"})
 			if err != nil || len(jobs) != 1 {
 				t.Fatalf("Fetch: jobs=%d, err=%v", len(jobs), err)
 			}
@@ -456,33 +458,17 @@ func TestEuresMarkers(t *testing.T) {
 	if src.Provider() != "eures" {
 		t.Errorf("Provider() = %q, want eures", src.Provider())
 	}
-	if _, ok := src.(aggregator); !ok {
+	if _, ok := src.(interface{ Aggregator() }); !ok {
 		t.Error("eures must implement the aggregator marker (re-lists national PES/partner feeds)")
 	}
-	if _, ok := src.(boardless); ok {
+	if _, ok := src.(interface{ Boardless() }); ok {
 		t.Error("eures must NOT be boardless — board is the country code")
 	}
-	if _, ok := src.(fullBoardListing); !ok {
+	if _, ok := src.(interface{ FullBoardListing() }); !ok {
 		t.Error("eures must implement fullBoardListing — every walk is verified against the search's own total")
 	}
-	if _, ok := src.(fullCatalog); ok {
+	if _, ok := src.(interface{ FullCatalog() }); ok {
 		t.Error("eures must NOT be fullCatalog — one board is one country, not the whole EURES catalogue")
-	}
-	if _, ok := All(nil)["eures"]; !ok {
-		t.Error("All() should register provider eures")
-	}
-	if !slices.Contains(FilterableProviders(), "eures") {
-		t.Error("FilterableProviders() should include eures")
-	}
-	reg := All(nil)
-	if !slices.Contains(AggregatorProviders(reg), "eures") {
-		t.Error("AggregatorProviders() should include eures")
-	}
-	if !slices.Contains(BoardKeyedProviders(reg), "eures") {
-		t.Error("BoardKeyedProviders() should include eures (board = country)")
-	}
-	if slices.Contains(FullCatalogProviders(reg), "eures") {
-		t.Error("FullCatalogProviders() should NOT include eures (one board is one country)")
 	}
 }
 

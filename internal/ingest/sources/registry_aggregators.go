@@ -1,6 +1,10 @@
 package sources
 
-import "os"
+import (
+	"os"
+
+	"github.com/strelov1/freehire/internal/ingest/sources/aggregators"
+)
 
 // aggregatorSources are the multi-company aggregators and national job boards, one
 // registry entry each (see All). seekNetworkDetail is the detail network SEEK and
@@ -102,7 +106,7 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		NewRemotli(c),
 		NewLandingJobs(c),
 		NewTheMuse(c),
-		NewNoFluffJobs(c),
+		aggregators.NewNoFluffJobs(c),
 		// Just Join IT (justjoin.it) and its non-IT sibling RocketJobs (rocketjobs.pl): one
 		// platform, enumerated from each site's active-jobs sitemap, each new offer read from its
 		// page's Next.js flight. See justjoin.go.
@@ -114,8 +118,8 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		NewWantapply(c),
 		NewWantapplyCy(c),
 		NewInfoJobs(c),
-		NewJobtech(c),
-		NewJobnet(c),
+		aggregators.NewJobtech(c),
+		aggregators.NewJobnet(c),
 		NewJobdanmark(c),
 		NewJobindex(c),
 		NewEmagine(c, limitedEmagineGetter(c)),
@@ -125,7 +129,7 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// EURES: the EU's cross-border public employment portal, aggregating national PES
 		// and partner-board feeds across EU/EFTA countries. Board-based (board =
 		// country), aggregator-marked (see eures.go for the confirmed re-listing evidence).
-		NewEures(c),
+		aggregators.NewEures(c),
 		// International single-company adapters (boardless).
 		NewTelegramCareers(c),
 		NewAmazon(c),

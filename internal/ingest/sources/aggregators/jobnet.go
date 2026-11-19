@@ -1,6 +1,8 @@
-package sources
+package aggregators
 
 import (
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
+
 	"context"
 	"fmt"
 	"net/url"
@@ -22,7 +24,7 @@ import (
 // larger, so the crawl walks it in occupation slices that each fit the window (see Fetch). The
 // walk reads the whole catalogue or fails, so jobnet is swept by source (fullCatalog).
 type jobnet struct {
-	http HeaderJSONGetter
+	http kit.HeaderJSONGetter
 }
 
 const (
@@ -52,7 +54,7 @@ const (
 var jobnetHeaders = map[string]string{"x-csrf": "1"}
 
 // NewJobnet builds the Jobnet.dk adapter over the given header-capable JSON client.
-func NewJobnet(c HeaderJSONGetter) Source { return jobnet{http: c} }
+func NewJobnet(c kit.HeaderJSONGetter) kit.Source { return jobnet{http: c} }
 
 func (jobnet) Provider() string { return "jobnet" }
 
@@ -111,7 +113,7 @@ type jobnetAd struct {
 // the window serves on any page, and a slice whose walk listed nothing or ended a whole page or
 // more short of what it stated (the listing stopped serving). Less than a page of shortfall is
 // the drift of ads removed while the slice was walked, which the sweep's window absorbs.
-func (s jobnet) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
+func (s jobnet) Fetch(ctx context.Context, _ kit.CompanyEntry) ([]kit.Job, error) {
 	var head jobnetSearchResponse
 	if err := s.search(ctx, 1, 1, nil, &head); err != nil {
 		return nil, err
@@ -128,7 +130,7 @@ func (s jobnet) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	}
 
 	seen := make(map[string]bool, head.TotalJobAdCount)
-	var jobs []Job
+	var jobs []kit.Job
 	for _, occupations := range jobnetSlices(head.SearchFacets.Occupations, jobnetSliceAds, jobnetSliceOccupations) {
 		read, stated := 0, 0
 		for page := 1; ; page++ {
@@ -204,19 +206,19 @@ func jobnetSlices(facet []jobnetFacet, maxAds, maxIDs int) [][]string {
 // name (which would break the company slug). Remote/WorkMode are left unset: the search
 // response states no structured work arrangement, so the deterministic location dictionary
 // derives it downstream from the location string rather than the adapter guessing.
-func (a jobnetAd) toJob() (Job, bool) {
+func (a jobnetAd) toJob() (kit.Job, bool) {
 	if a.JobAdID == "" || a.HiringOrgName == "" {
-		return Job{}, false
+		return kit.Job{}, false
 	}
-	return Job{
+	return kit.Job{
 		ExternalID: a.JobAdID,
 		// External postings carry their own destination; jobnet-hosted ones fall back to the
 		// canonical id-based posting page.
-		URL:         firstNonEmpty(a.JobAdURL, fmt.Sprintf(jobnetJobURL, a.JobAdID)),
+		URL:         kit.FirstNonEmpty(a.JobAdURL, fmt.Sprintf(jobnetJobURL, a.JobAdID)),
 		Title:       a.Title,
 		Company:     a.HiringOrgName,
-		Description: sanitizeHTML(a.Description),
-		Location:    joinNonEmpty(a.PostalDistrictName, a.Country),
-		PostedAt:    parseRFC3339(a.PublicationDate),
+		Description: kit.SanitizeHTML(a.Description),
+		Location:    kit.JoinNonEmpty(a.PostalDistrictName, a.Country),
+		PostedAt:    kit.ParseRFC3339(a.PublicationDate),
 	}, true
 }

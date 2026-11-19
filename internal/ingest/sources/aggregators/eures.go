@@ -1,6 +1,8 @@
-package sources
+package aggregators
 
 import (
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
+
 	"context"
 	"fmt"
 	"slices"
@@ -51,8 +53,8 @@ type eures struct {
 // euresHTTP is the transport eures needs: a JSON POST for the paginated search, a JSON GET for
 // the per-posting detail (location and application deadline).
 type euresHTTP interface {
-	JSONPoster
-	JSONGetter
+	kit.JSONPoster
+	kit.JSONGetter
 }
 
 const (
@@ -102,7 +104,7 @@ var euresCountryNames = map[string]string{
 }
 
 // NewEures builds the EURES adapter over the given client. Keyless: registers unconditionally.
-func NewEures(c euresHTTP) Source { return eures{http: c, depthCap: euresDepthCap} }
+func NewEures(c euresHTTP) kit.Source { return eures{http: c, depthCap: euresDepthCap} }
 
 func (eures) Provider() string { return "eures" }
 
@@ -249,19 +251,19 @@ type euresLocation struct {
 
 // Fetch is the list-only fallback used when the pipeline cannot supply a seen set: it hydrates
 // every listed posting. FetchNew is the hydrating path ingest prefers.
-func (e eures) Fetch(ctx context.Context, entry CompanyEntry) ([]Job, error) {
+func (e eures) Fetch(ctx context.Context, entry kit.CompanyEntry) ([]kit.Job, error) {
 	return e.FetchNew(ctx, entry, func(string) bool { return false })
 }
 
 // FetchNew lists the board's whole country and fetches a posting's detail only when the
 // catalogue does not hold it; a seen posting is re-listed as a SeenRefresh.
-func (e eures) FetchNew(ctx context.Context, entry CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+func (e eures) FetchNew(ctx context.Context, entry kit.CompanyEntry, seen func(externalID string) bool) ([]kit.Job, error) {
 	country := strings.ToLower(strings.TrimSpace(entry.Board))
 	vacancies, err := e.list(ctx, country)
 	if err != nil {
 		return nil, fmt.Errorf("eures: board %q: %w", entry.Board, err)
 	}
-	return fetchDetails(vacancies, defaultDetailWorkers, func(v euresVacancy) (Job, bool) {
+	return kit.FetchDetails(vacancies, kit.DefaultDetailWorkers, func(v euresVacancy) (kit.Job, bool) {
 		if seen(v.ID) {
 			j := v.job()
 			j.SeenRefresh = true
@@ -379,8 +381,8 @@ func (e eures) search(ctx context.Context, location string, page int) (euresSear
 }
 
 // job is the identity every path shares — the shape a SeenRefresh carries.
-func (v euresVacancy) job() Job {
-	return Job{
+func (v euresVacancy) job() kit.Job {
+	return kit.Job{
 		ExternalID: v.ID,
 		URL:        euresPortalURL + v.ID + "?lang=en",
 		Title:      strings.TrimSpace(v.Title),
@@ -391,9 +393,9 @@ func (v euresVacancy) job() Job {
 	}
 }
 
-func (e eures) toJob(ctx context.Context, board string, v euresVacancy) Job {
+func (e eures) toJob(ctx context.Context, board string, v euresVacancy) kit.Job {
 	j := v.job()
-	j.Description = sanitizeHTML(v.Description)
+	j.Description = kit.SanitizeHTML(v.Description)
 	j.Location = euresCountryNames[strings.ToLower(board)]
 	var detail euresDetailResponse
 	if err := e.http.GetJSON(ctx, euresDetailURL+v.ID+"?requestLang=en", &detail); err == nil {
@@ -422,7 +424,7 @@ func (p euresProfile) locationText(fallback string) string {
 	if place == "" && len(loc.AddressLines) > 0 {
 		place = loc.AddressLines[0]
 	}
-	return distinctJoin([]string{place, countryName}, ", ", func(s string) string { return s })
+	return kit.DistinctJoin([]string{place, countryName}, ", ", func(s string) string { return s })
 }
 
 // euresCountries normalizes locationMap's country keys to freehire's canonical codes, sorted for

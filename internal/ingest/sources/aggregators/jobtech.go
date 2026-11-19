@@ -1,6 +1,8 @@
-package sources
+package aggregators
 
 import (
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
+
 	"bufio"
 	"cmp"
 	"context"
@@ -36,7 +38,7 @@ import (
 // cmd/liveness's jobtech pass is that miss's backstop, asking JobSearch about each ad unseen
 // past the sweep window (see cmd/liveness/jobtech.go).
 type jobtech struct {
-	http StreamGetter
+	http kit.StreamGetter
 }
 
 const (
@@ -53,7 +55,7 @@ const (
 )
 
 // NewJobtech builds the JobTech (Arbetsförmedlingen) adapter over the given streaming client.
-func NewJobtech(c StreamGetter) Source { return jobtech{http: c} }
+func NewJobtech(c kit.StreamGetter) kit.Source { return jobtech{http: c} }
 
 func (jobtech) Provider() string { return "jobtech" }
 
@@ -91,9 +93,9 @@ type jobtechItem struct {
 
 // Fetch collects the window into a slice (non-streaming callers and tests); the pipeline
 // uses FetchStream so the crawl persists incrementally rather than buffering.
-func (s jobtech) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var jobs []Job
-	err := s.FetchStream(ctx, e, func(j Job) { jobs = append(jobs, j) })
+func (s jobtech) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error) {
+	var jobs []kit.Job
+	err := s.FetchStream(ctx, e, func(j kit.Job) { jobs = append(jobs, j) })
 	return jobs, err
 }
 
@@ -114,7 +116,7 @@ func (s jobtech) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // A window that could not be read whole — the connection dropped, the body ended mid-array —
 // still emits what it decoded, then returns the failure: the run did not read its window, and
 // the part a cut-short read loses is exactly the removals.
-func (s jobtech) FetchStream(ctx context.Context, _ CompanyEntry, emit func(Job)) error {
+func (s jobtech) FetchStream(ctx context.Context, _ kit.CompanyEntry, emit func(kit.Job)) error {
 	spool, err := os.CreateTemp("", "jobtech-stream-*.json")
 	if err != nil {
 		return fmt.Errorf("jobtech: spool: %w", err)
@@ -147,7 +149,7 @@ func (s jobtech) FetchStream(ctx context.Context, _ CompanyEntry, emit func(Job)
 	removalsErr := eachJobtechItem(ctx, spool, func(it jobtechItem) {
 		if it.Removed && it.ID != "" && !removed[it.ID] {
 			removed[it.ID] = true
-			emit(Job{ExternalID: it.ID, Removed: true})
+			emit(kit.Job{ExternalID: it.ID, Removed: true})
 		}
 	})
 	liveErr := eachJobtechItem(ctx, spool, func(it jobtechItem) {
@@ -199,25 +201,25 @@ func eachJobtechItem(ctx context.Context, spool *os.File, fn func(jobtechItem)) 
 // display and a magnet for a wrong-brand logo.dev name match. Remote/WorkMode are left
 // unset: the API's remote_work flag is effectively always null, so the work arrangement is
 // derived downstream from the location string by the deterministic dictionary, not guessed.
-func (it jobtechItem) toJob() (Job, bool) {
+func (it jobtechItem) toJob() (kit.Job, bool) {
 	company := it.Employer.Workplace
 	if company == "" {
 		company = it.Employer.Name
 	}
 	if it.ID == "" || company == "" {
-		return Job{}, false
+		return kit.Job{}, false
 	}
 	desc := it.Description.TextFormatted
 	if desc == "" {
 		desc = it.Description.Text
 	}
-	return Job{
+	return kit.Job{
 		ExternalID:  it.ID,
 		URL:         it.WebpageURL,
 		Title:       it.Headline,
 		Company:     company,
-		Location:    joinNonEmpty(it.WorkplaceAddress.Municipality, it.WorkplaceAddress.Region, it.WorkplaceAddress.Country),
-		Description: sanitizeHTML(desc),
-		PostedAt:    parseLayout(jobtechDateLayout, it.PublicationDate),
+		Location:    kit.JoinNonEmpty(it.WorkplaceAddress.Municipality, it.WorkplaceAddress.Region, it.WorkplaceAddress.Country),
+		Description: kit.SanitizeHTML(desc),
+		PostedAt:    kit.ParseLayout(jobtechDateLayout, it.PublicationDate),
 	}, true
 }

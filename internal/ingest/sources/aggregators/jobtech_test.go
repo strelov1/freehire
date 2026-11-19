@@ -1,6 +1,8 @@
-package sources
+package aggregators
 
 import (
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
+
 	"context"
 	"errors"
 	"fmt"
@@ -34,26 +36,14 @@ func TestJobtechProvider(t *testing.T) {
 
 func TestJobtechMarkers(t *testing.T) {
 	s := NewJobtech(nil)
-	if _, ok := s.(boardless); !ok {
+	if _, ok := s.(interface{ Boardless() }); !ok {
 		t.Error("jobtech should implement the boardless marker")
 	}
-	if _, ok := s.(aggregator); !ok {
+	if _, ok := s.(interface{ Aggregator() }); !ok {
 		t.Error("jobtech should implement the aggregator marker")
 	}
-	if _, ok := s.(selfClosing); !ok {
+	if _, ok := s.(interface{ SelfClosing() }); !ok {
 		t.Error("jobtech should implement the selfClosing marker (it closes removed ads itself)")
-	}
-}
-
-func TestJobtechRegisteredAndFilterable(t *testing.T) {
-	if _, ok := All(nil)["jobtech"]; !ok {
-		t.Error("All() should register provider jobtech")
-	}
-	if !slices.Contains(FilterableProviders(), "jobtech") {
-		t.Error("FilterableProviders() should include jobtech")
-	}
-	if !slices.Contains(UnseenSweepExemptProviders(All(nil)), "jobtech") {
-		t.Error("UnseenSweepExemptProviders() should include jobtech")
 	}
 }
 
@@ -66,7 +56,7 @@ func TestJobtechStreamMapsLiveClosesRemovedDropsInvalid(t *testing.T) {
 {"id":"999","removed":false,"headline":"No employer drop","publication_date":"2026-06-10T11:00:00","employer":{"name":""}}
 ]`
 	fake := &fakeStream{body: body}
-	jobs, err := NewJobtech(fake).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewJobtech(fake).Fetch(context.Background(), kit.CompanyEntry{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -113,7 +103,7 @@ func TestJobtechPrefersWorkplaceOverLegalName(t *testing.T) {
 {"id":"1","removed":false,"webpage_url":"u","headline":"Butikssäljare","publication_date":"2026-06-10T12:00:00","employer":{"name":"Miro 461704 AB","workplace":"Direkten Nöje Casablanca"}},
 {"id":"2","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"Tatvanord AB"}}
 ]`
-	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), kit.CompanyEntry{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -130,7 +120,7 @@ func TestJobtechPrefersWorkplaceOverLegalName(t *testing.T) {
 
 func TestJobtechRequestsTrailingWindow(t *testing.T) {
 	fake := &fakeStream{body: `[]`}
-	if _, err := NewJobtech(fake).Fetch(context.Background(), CompanyEntry{}); err != nil {
+	if _, err := NewJobtech(fake).Fetch(context.Background(), kit.CompanyEntry{}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if !strings.Contains(fake.gotURL, "jobstream.api.jobtechdev.se/stream") || !strings.Contains(fake.gotURL, "date=") {
@@ -146,7 +136,7 @@ func TestJobtechKeepsPartialButReportsATruncatedBody(t *testing.T) {
 {"id":"1","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}},
 {"id":"2","removed":fal`
 	fake := &fakeStream{body: body}
-	jobs, err := NewJobtech(fake).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewJobtech(fake).Fetch(context.Background(), kit.CompanyEntry{})
 	if err == nil {
 		t.Fatal("Fetch should report a body cut short mid-array")
 	}
@@ -161,7 +151,7 @@ func TestJobtechReportsABodyMissingItsClosingBracket(t *testing.T) {
 	body := `[
 {"id":"1","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}}
 `
-	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), kit.CompanyEntry{})
 	if err == nil {
 		t.Fatal("Fetch should report a body that ends before its closing ]")
 	}
@@ -186,7 +176,7 @@ func TestJobtechReportsADroppedConnection(t *testing.T) {
 	body := `[
 {"id":"1","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}},
 `
-	jobs, err := NewJobtech(droppingStream{body: body}).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewJobtech(droppingStream{body: body}).Fetch(context.Background(), kit.CompanyEntry{})
 	if err == nil || !strings.Contains(err.Error(), "connection reset") {
 		t.Fatalf("Fetch error = %v, want the dropped read reported", err)
 	}
@@ -205,7 +195,7 @@ func TestJobtechAppliesRemovalsBeforeLiveAds(t *testing.T) {
 {"id":"3","removed":true},
 {"id":"4","removed":true}
 ]`
-	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), kit.CompanyEntry{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -225,7 +215,7 @@ func TestJobtechDoesNotEmitARemovedAdLive(t *testing.T) {
 {"id":"7","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}},
 {"id":"7","removed":true}
 ]`
-	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), kit.CompanyEntry{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -267,9 +257,9 @@ func TestJobtechReadsTheWholeWindowBeforeEmitting(t *testing.T) {
 {"id":"2","removed":true}
 ]`
 	done := false
-	src := NewJobtech(eofSignallingStream{body: body, done: &done}).(StreamingSource)
+	src := NewJobtech(eofSignallingStream{body: body, done: &done}).(kit.StreamingSource)
 	emitted := 0
-	err := src.FetchStream(context.Background(), CompanyEntry{}, func(j Job) {
+	err := src.FetchStream(context.Background(), kit.CompanyEntry{}, func(j kit.Job) {
 		emitted++
 		if !done {
 			t.Errorf("emitted %s before the stream was read to its end", j.ExternalID)
@@ -284,11 +274,11 @@ func TestJobtechReadsTheWholeWindowBeforeEmitting(t *testing.T) {
 }
 
 func TestJobtechErrorsWhenStreamFailsImmediately(t *testing.T) {
-	if _, err := NewJobtech(&fakeStream{err: errors.New("boom")}).Fetch(context.Background(), CompanyEntry{}); err == nil {
+	if _, err := NewJobtech(&fakeStream{err: errors.New("boom")}).Fetch(context.Background(), kit.CompanyEntry{}); err == nil {
 		t.Error("Fetch should return an error when the stream request fails")
 	}
 	// A body that is not a JSON array fails before any progress → a board error.
-	if _, err := NewJobtech(&fakeStream{body: `{"oops":1}`}).Fetch(context.Background(), CompanyEntry{}); err == nil {
+	if _, err := NewJobtech(&fakeStream{body: `{"oops":1}`}).Fetch(context.Background(), kit.CompanyEntry{}); err == nil {
 		t.Error("Fetch should error when the body is not a JSON array")
 	}
 }
