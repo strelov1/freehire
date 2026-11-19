@@ -161,12 +161,15 @@ func TestNaukriRegistrationAndMarkers(t *testing.T) {
 	if g, ok := s.(sweepGrace); !ok || g.SweepGrace() != naukriSweepGrace {
 		t.Error("naukri should declare its own sweep grace")
 	}
-	// The board is the slice to crawl, and the walk is window-capped, so neither marker holds.
+	// The board is the slice to crawl, and the walk is window-capped: a slice, not a full listing.
 	if _, ok := s.(boardless); ok {
 		t.Error("naukri is not boardless: a board is a functional area")
 	}
 	if _, ok := s.(fullBoardListing); ok {
 		t.Error("naukri must not claim fullBoardListing")
+	}
+	if !SliceBoardListingProviders(Taxonomy())["naukri"] {
+		t.Error("naukri must carry sliceBoardListing: the company scope leaks an employer's last posting")
 	}
 	if _, ok := All(nil)["naukri"]; !ok {
 		t.Error("All() should register naukri")
