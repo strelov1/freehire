@@ -1,0 +1,166 @@
+---
+title: "Ghost jobs: what 27 million postings say about listings nobody fills"
+date: 2026-11-18
+summary: Most real postings come down within two months. We measured how long seven million of them stayed up, how many sit open for months, and how often the same role is closed and posted again — and what none of that can prove.
+type: article
+tags:
+  - ghost-jobs
+  - data
+  - job-search
+draft: true
+---
+
+A ghost job is a posting nobody is working to fill. Published estimates put them between
+18% and 27% of listings, but those estimates rest on what hiring managers admit to in
+surveys. We can measure something else: how postings behave. We have crawled 27 million of
+them since June, and we record when each one appears, when it comes down, and why we
+think it came down.
+
+That cannot tell you what an employer intended. It can tell you what normal looks like,
+and how far from normal a posting has drifted.
+
+## How long does a real job posting stay up?
+
+Half of all postings come down within **32 days**. A quarter are gone in about two weeks;
+three in four within about two months.
+
+| time from posting to closing | share of postings |
+| --- | --- |
+| under a week | 8.0% |
+| 1 week to 1 month | 39.1% |
+| 1 to 3 months | 37.1% |
+| 3 to 6 months | 10.4% |
+| 6 months to a year | 3.2% |
+| a year or more | 2.1% |
+
+That is **6,515,334** postings that closed between mid-June, when we started watching, and
+mid-November, measured from the date the employer gave them to the day they disappeared. Three things are left out on purpose.
+Postings without an employer date are excluded, because our crawl date would make them look
+younger than they are. And only closes that say something about the posting count: it
+dropped off the employer's board, its source reported it removed, our checker found the page
+gone twice in a row, or the employer closed it on freehire. Postings we closed ourselves —
+an age rule for sources that never report a close, a board we stopped crawling — are out,
+because counting them would publish our crawler's schedule as the market's. And two hiring
+systems, Greenhouse and SAP SuccessFactors, are out because their date resets whenever a
+posting is edited (more on that below).
+
+So one in twenty postings stays up longer than six months. That is not proof of anything:
+some roles really are hard to fill, and some employers keep an "always hiring" posting on
+purpose. But it is the population where ghosts live.
+
+## How many open postings are already old?
+
+Now look at what is open today. Of **6,454,659** open postings that carry an employer
+date, the median one is **43 days** old.
+
+| open postings older than | share |
+| --- | --- |
+| 60 days | 41.0% |
+| 90 days | 32.8% |
+| 6 months | 20.3% |
+| a year | 11.2% |
+
+Those two tables do not contradict each other. Only 15.7% of the postings that closed had
+been up for three months or more, yet postings that old make up 32.8% of what is open right
+now. A posting that stays up for a year is on the board every day of that year; one that
+closes in a week is there for a week. So the old ones pile up.
+
+This is the part that matters when you are applying: **what you scroll through is not a
+sample of the jobs being filled.** It is weighted towards the postings that are not
+closing, and those are exactly the ones most likely to be ghosts.
+
+## The same job, posted again
+
+The other ghost story is the job that never stays down: closed, then posted again with
+a fresh date. We can match those, because we fingerprint each role by company, title and
+description, and ignore the posting date and link.
+
+Of the **2,378,460** postings that really closed between July and mid-September, about
+**108,000** were followed by a new posting of the same role at the same company within 60
+days — roughly **one close in twenty-two**. Among postings open today, **1.4%** are such a
+repost.
+
+That is lower than the folklore suggests, and it is a floor rather than an estimate. Our
+fingerprint only matches a repost whose description is unchanged; an employer who rewrites a
+paragraph before posting again gets past it. And we have only been watching since June, so
+a role reposted every six months has had one chance to show up.
+
+A repost is not a ghost by itself. A role that was filled, then reopened when the hire
+fell through, looks identical in the data. What a repost does tell you is that the posting
+date is not the age of the search.
+
+## Where postings stay up longest
+
+The hiring system an employer uses shapes both numbers. Here are the large ones whose
+posting date is the day the job was published:
+
+| hiring system | closed postings | median days to close | open postings older than 90 days |
+| --- | --- | --- | --- |
+| Workday | 1,265,723 | 42 | 32.8% |
+| Oracle | 447,858 | 28 | 28.5% |
+| SmartRecruiters | 359,780 | 31 | 61.1% |
+| UKG | 163,663 | 74 | 28.0% |
+| iCIMS | 140,181 | 40 | 39.5% |
+| Teamtailor | 122,246 | 40 | 38.8% |
+| Paylocity | 101,243 | 50 | 19.2% |
+| Lever | 93,699 | 17 | 48.2% |
+| Workable | 80,703 | 35 | 41.3% |
+| BambooHR | 77,079 | 44 | 50.3% |
+| Ashby | 71,623 | 41 | 33.8% |
+| Recruitee | 54,996 | 48 | 62.3% |
+
+Lever is the clearest case of the two numbers pulling apart. Postings that do close there
+close fast — half within 17 days — yet nearly half of what is open on Lever is older than
+three months. That is what a small group of postings that never close looks like.
+
+Greenhouse and SAP SuccessFactors are missing on purpose. Greenhouse gives the date a
+posting was last *edited*, and SuccessFactors the date its page last changed, so every
+small edit makes a posting look new. Job boards that show you a "posted" date often have
+the same problem.
+
+## Why companies post jobs they don't fill
+
+The reasons employers give in surveys are consistent: to keep a pipeline of candidates
+warm, to look like a company that is growing, to satisfy a rule that a role be advertised
+before an internal candidate gets it, or because nobody remembered to take the posting
+down. Only the last one is an accident, and it is probably the most common.
+
+## How to check a posting yourself
+
+- **Look at the date the employer gave it, not the date the job board shows.** Many boards
+  reset the date when a posting is refreshed.
+- **Search for the same title at the same company.** If it was closed and posted again two
+  or three times this year, the posting date is not the age of the search.
+- **Open the posting on the company's own careers page.** If it is gone there but still on a
+  job board, it is a leftover.
+- **Count the copies.** Twenty identical postings in twenty cities is usually one role, or a
+  pipeline, not twenty openings.
+- **Check for a salary range and a team.** Neither proves a posting is real, but a posting
+  that has neither and has been up for six months has little going for it.
+
+freehire does the first four for you. Every posting carries the date the employer gave it,
+duplicates are collapsed into one card, and [ghost-job warnings](/features/ghost-jobs) show
+the facts behind each flag — how long the posting has been up, how often it was reposted,
+what happened to people who applied — without claiming anything about the employer's
+intent.
+
+## What our data can't tell you
+
+We see postings, not hiring decisions. A posting that stayed up for a year may have hired
+three people from it. A posting that came down in a week may have been pulled because the
+budget was cut. Nothing here says a particular company lied, and we do not publish a list
+of companies, because the data cannot support one.
+
+## Questions people ask
+
+**Are ghost jobs illegal?** In most places, no. A few jurisdictions require that an
+advertised role be real or that its pay range be stated, but posting a job and not filling
+it is not, in itself, against the law.
+
+**How long should a job posting stay up?** Half of real postings come down within about a month,
+and three in four within about two months. A posting older than three months has outlasted
+more than 80% of the postings that closed, though old postings make up a third of
+what is open at any moment.
+
+**Does a reposted job mean nobody was hired?** No. It means the role was open again; it
+may have been filled and reopened, or never filled. Check how many times it was reposted.
