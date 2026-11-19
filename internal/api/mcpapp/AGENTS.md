@@ -53,6 +53,10 @@ Read [Prompts](AGENT-REFERENCE.md#prompts) before work involving this topic.
 
 Read [The widget](AGENT-REFERENCE-WIDGET.md#the-widget) before work involving this topic.
 
+## Unlisted tools: `find_tools` and `call_tool`
+
+Read [Unlisted tools: `find_tools` and `call_tool`](AGENT-REFERENCE-TOOL-SEARCH.md#unlisted-tools-find_tools-and-call_tool) before work involving this topic.
+
 ## Descriptions say what a tool returns, never which tool to call
 
 Read [Descriptions say what a tool returns, never which tool to call](AGENT-REFERENCE.md#descriptions-say-what-a-tool-returns-never-which-tool-to-call) before work involving this topic.

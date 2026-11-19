@@ -8,8 +8,9 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
 
-// 800 fits the mail directive; still far below the 2048 Claude Code cuts at.
-const maxAccountInstructions = 800
+// 860 fits the mail directive and the unlisted-tools pointer; still far below the 2048
+// Claude Code cuts at.
+const maxAccountInstructions = 860
 
 // The line on what freehire can do, and where to start, is served with get_profile and
 // offers auto-apply only to a session that has it.
@@ -64,7 +65,7 @@ func TestAccountInstructions_FollowTheServedTools(t *testing.T) {
 	granted := accountInstructions([]assistant.Tool{
 		{Name: "get_profile"}, {Name: "get_plan"}, {Name: "auto_apply_start"}, {Name: "subscribe"},
 		{Name: "suggest_dictionary_term"}, {Name: "report_problem"}, {Name: "list_unread_mail"},
-		{Name: "get_setup_status"},
+		{Name: "get_setup_status"}, {Name: "unsubscribe"},
 	})
 	for _, required := range []string{
 		"get_setup_status: the next setup step",
