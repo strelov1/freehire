@@ -88,13 +88,15 @@
   // the mobile menu's `position: fixed` drawer, the same trap as backdrop-blur below.
   let headerHidden = $state(false);
   let lastScrollY = 0;
+  let headerEl: HTMLElement;
   const HIDE_AFTER = 56; // the header's own height: it never slides away over nothing
   const SCROLL_SLOP = 6; // ignore trackpad jitter so the bar does not flicker
   function onWindowScroll() {
     const y = window.scrollY;
     const delta = y - lastScrollY;
     if (y < HIDE_AFTER) headerHidden = false;
-    else if (delta > SCROLL_SLOP) headerHidden = true;
+    // Never slide away a control that holds focus: PageDown from a focused link would hide it.
+    else if (delta > SCROLL_SLOP) headerHidden = !headerEl.contains(document.activeElement);
     else if (delta < -SCROLL_SLOP) headerHidden = false;
     if (Math.abs(delta) > SCROLL_SLOP || y < HIDE_AFTER) lastScrollY = y;
   }
@@ -132,6 +134,7 @@
      pinning it to the header instead of the viewport and breaking it. -->
 <svelte:window onscroll={onWindowScroll} />
 <header
+  bind:this={headerEl}
   class="top-site-header sticky z-40 border-b border-border bg-background"
   onfocusin={() => (headerHidden = false)}
 >

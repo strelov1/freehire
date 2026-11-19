@@ -100,10 +100,10 @@
   --header-offset: 3.5rem;
   --header-top: 0px;
 }
-/* Hidden, the header sits at -57px: its h-14 plus the 1px bottom border, so no hairline is left. */
+/* Hidden, the header sits at -(3.5rem + 1px): its h-14 plus the 1px bottom border, so no hairline is left. */
 :root[data-header-hidden] {
   --header-offset: 0rem;
-  --header-top: -57px;
+  --header-top: calc(-3.5rem - 1px);
 }
 /* The header itself, then what is pinned flush under it (a sticky bar) and pinned with
    1.5rem of air (a side rail or card). All slide together on one transition. */

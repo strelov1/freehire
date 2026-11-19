@@ -323,10 +323,12 @@
           "values": [
             "google",
             "github",
+            "github-outline",
             "telegram",
             "linkedin",
             "apple",
-            "discord"
+            "discord",
+            "discord-outline"
           ]
         },
         {
