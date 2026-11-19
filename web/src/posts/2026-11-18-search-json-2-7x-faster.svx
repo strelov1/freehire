@@ -19,12 +19,14 @@ a young Go library that offers the same API and produces the same bytes. This po
 about what that bought us, measured on the machine that actually serves you, and about
 what it did not buy us.
 
+![Encoding a search page: 503.7 µs with encoding/json, 183.7 µs with moego. A search request takes about 47 ms, so the saving is about 0.7% of it.](/blog/search-json-moego.svg)
+
 ## Why we looked at JSON at all
 
 We profiled the search handler offline. Of the CPU the handler itself spends, 61% went
 into encoding JSON. That sounds like a big target. It is less impressive once you zoom
 out: across the whole API, JSON encoding was 3.2% of the profile. Most of the time a
-search takes is waiting on Postgres and the search engine, not on our own code.
+search takes is waiting on our search engine, Meilisearch, not on our own code.
 
 So we expected a small win in CPU and almost nothing in latency. We shipped it anyway,
 because the change is a few lines and our server is busy.
@@ -62,12 +64,13 @@ They were identical, byte for byte.
 
 ## Why you won't feel it
 
-A typical request to the job list takes 30–55 ms at the median. Encoding saves about
-0.3 ms of that. Less than one percent.
+A search request takes about 47 ms at the median, over the last seven days. Almost all
+of that is waiting on Meilisearch. Encoding saves about 0.3 ms, roughly 0.7%. The plain
+job list, which reads from Postgres instead, is about 35 ms, so it is the same story there.
 
 We did look at production latency before and after the release, and it tells you
 nothing: search times swing by whole seconds within an hour depending on what else the
-database is doing. A third of a millisecond disappears in that noise.
+server is doing. A third of a millisecond disappears in that noise.
 
 What the change does give us is CPU. The same server runs the API, the database, the
 search engine and a set of background workers, and it is rarely idle. Spending a third
@@ -85,5 +88,5 @@ of the CPU on the same output is a small, permanent discount on every page anyon
 
 Profile first, then be honest about the denominator. A 2.7x speedup on 3% of the work is
 a good trade when it costs a few lines and keeps the output identical. It is not a reason
-to tell anyone the site got faster. If search feels slow, the fix is in the database and
+to tell anyone the site got faster. If search feels slow, the fix is in Meilisearch and
 the index, and that is where we're spending our time.
