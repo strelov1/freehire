@@ -159,6 +159,12 @@ var resumeAcronyms = map[string]string{
 	"Nx":             "nx",
 	"Design System":  "design-systems",
 	"Design Systems": "design-systems",
+	// "Prisma" is also Palo Alto's Prisma Cloud and the Spanish/Portuguese for prism, "Retool" an
+	// English verb, "product design" an industrial-design duty: job text reaches them only
+	// through the qualified phrases in dictionaries_phrases_engineering2.go.
+	"Prisma":         "prisma",
+	"Retool":         "retool",
+	"Product Design": "product-design",
 }
 
 // categoryScopedAcronym pairs a canonical with the job categories it may resolve for (see

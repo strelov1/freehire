@@ -2013,6 +2013,7 @@ export const COUNTRY_REGION_MAP = {
 export type CountryRegionMap = typeof COUNTRY_REGION_MAP;
 export const SKILL_LABELS = {
   '1c': '1C',
+  '1c-bitrix': '1C-Bitrix',
   '3ds-max': '3ds Max',
   'ab-testing': 'A/B Testing',
   'abac': 'ABAC',
@@ -2787,10 +2788,12 @@ export const SKILL_LABELS = {
   'presto': 'Presto',
   'preventive-maintenance': 'Preventive Maintenance',
   'primavera-p6': 'Primavera P6',
+  'prisma': 'Prisma',
   'process-improvement': 'Process Improvement',
   'process-modeling': 'Process Modeling',
   'process-safety-management': 'Process Safety Management (PSM)',
   'procore': 'Procore',
+  'product-design': 'Product Design',
   'professional-scrum-master': 'Professional Scrum Master',
   'profibus': 'PROFIBUS',
   'profinet': 'PROFINET',
@@ -2848,6 +2851,7 @@ export const SKILL_LABELS = {
   'requirements-gathering': 'Requirements Gathering',
   'rest': 'REST',
   'rest-assured': 'REST Assured',
+  'retool': 'Retool',
   'revenue-recognition': 'Revenue Recognition',
   'reverse-engineering': 'Reverse Engineering',
   'revit': 'Revit',

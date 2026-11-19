@@ -1171,3 +1171,7 @@ mrp	MRP (material requirements planning) is a planning method that works out whi
 excel	Microsoft Excel is a spreadsheet application used to organise, calculate and analyse data with formulas, pivot tables and charts.
 nx	Nx: A build system and monorepo tool for JavaScript and TypeScript workspaces, with task caching and project-graph-aware builds.
 design-systems	Design Systems: The practice of building and maintaining a shared library of UI components, patterns and guidelines that keeps a product's interfaces consistent.
+prisma	Prisma is an open-source ORM for Node.js and TypeScript with a schema language, a type-safe query client and migrations.
+retool	Retool is a low-code platform for building internal tools, admin panels and dashboards on top of databases and APIs.
+product-design	Product design is the practice of designing digital products end to end, from user research and flows to interface design and validation.
+1c-bitrix	1C-Bitrix is a PHP content management system and web platform widely used in Russia and the CIS, with its D7 framework for custom development.
