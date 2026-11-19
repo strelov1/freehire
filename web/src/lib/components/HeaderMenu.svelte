@@ -193,7 +193,7 @@
        bell is how they learn something happened, and it cannot be a tap deeper than
        the menu that would tell them. -->
   {#if !inAccount}
-    <GithubStars class="hidden sm:inline-flex" />
+    <GithubStars outline class="hidden sm:inline-flex" />
 
     <!-- eslint-disable svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
     <a
@@ -203,7 +203,7 @@
       aria-label="freehire on Discord"
       class={cn('hidden sm:inline-flex', iconButton)}
     >
-      <ProviderIcon provider="discord" />
+      <ProviderIcon provider="discord-outline" class="size-5" />
     </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
   {/if}
 
@@ -377,7 +377,7 @@
 
       <!-- Mobile-only: GitHub + theme + auth pinned to the bottom of the drawer. -->
       <div class="shrink-0 border-t border-border p-2 sm:hidden">
-        <GithubStars variant="row" class={cn(rowBase, 'text-muted-foreground')} />
+        <GithubStars variant="row" outline class={cn(rowBase, 'text-muted-foreground')} />
         <!-- eslint-disable svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
         <a
           href={DISCORD_URL}
@@ -387,7 +387,7 @@
           aria-label="freehire on Discord"
           class={cn(rowBase, 'text-muted-foreground')}
         >
-          <ProviderIcon provider="discord" class="size-4 shrink-0" />
+          <ProviderIcon provider="discord-outline" class="size-4 shrink-0" />
           <span>Discord</span>
         </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
         {@render themeButton()}

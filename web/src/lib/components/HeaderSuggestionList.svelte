@@ -53,7 +53,7 @@
         // margin reaches past them. It works only because the header draws no
         // `backdrop-filter` (see TopBar): one would make the header the containing
         // block and pin this panel to it instead of to the window.
-        'max-sm:fixed max-sm:bottom-0 max-sm:top-14 max-sm:max-h-none max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:top-full sm:mt-2 sm:rounded-md',
+        'max-sm:fixed max-sm:bottom-0 max-sm:top-header max-sm:max-h-none max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:top-full sm:mt-2 sm:rounded-md',
   )}
 >
   {#each rows as row, i (row.key)}

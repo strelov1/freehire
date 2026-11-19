@@ -208,7 +208,7 @@
              pinned 24px from the VIEWPORT, so the opaque header (`sticky top-0`) covered
              its first entry for the whole scroll. No max-height: this list is short
              enough that it never reaches the fold. -->
-        <nav class="sticky top-20 flex flex-col gap-1">
+        <nav class="sticky top-header-air flex flex-col gap-1">
           {@render navButtons()}
         </nav>
       </aside>

@@ -151,7 +151,7 @@
   function windowLayout(minimized: boolean, sheet: boolean): string {
     if (minimized) return 'flex w-72 rounded-lg border sm:w-64 sm:rounded-b-none sm:border-b-0';
     if (sheet)
-      return 'fixed inset-x-0 bottom-0 top-14 z-10 flex rounded-t-lg border border-b-0 sm:static sm:z-auto sm:h-112 sm:w-80';
+      return 'fixed inset-x-0 bottom-0 top-header z-10 flex rounded-t-lg border border-b-0 sm:static sm:z-auto sm:h-112 sm:w-80';
     return 'hidden rounded-t-lg border border-b-0 sm:flex sm:h-112 sm:w-80';
   }
 

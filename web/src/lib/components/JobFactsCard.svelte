@@ -26,7 +26,7 @@
        card pinned 24px from the viewport spends the whole read with its first 32px —
        the border, the padding, and the top of the match score — behind it. 80px is
        the header's 56 plus the same 24 of air the card was asking for. -->
-  <div class="sticky top-20 flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
+  <div class="sticky top-header-air flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
     <JobMatch {job} {matchAnalysis} />
 
     <!-- The pay and what applying costs, together: equity is the other half of the

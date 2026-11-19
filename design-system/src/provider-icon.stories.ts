@@ -8,7 +8,17 @@ const meta = {
   argTypes: {
     provider: {
       control: 'select',
-      options: ['google', 'chrome', 'github', 'telegram', 'linkedin', 'apple', 'discord'],
+      options: [
+        'google',
+        'chrome',
+        'github',
+        'github-outline',
+        'telegram',
+        'linkedin',
+        'apple',
+        'discord',
+        'discord-outline',
+      ],
     },
   },
 } satisfies Meta<typeof ProviderIcon>;

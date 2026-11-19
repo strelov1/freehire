@@ -55,7 +55,7 @@
      of the page. -->
 <div class="pointer-events-none absolute inset-x-0 top-0 bottom-14">
   <div bind:this={headerSentinel} aria-hidden="true" class="h-px w-full"></div>
-  <div class="sticky top-14 z-20 h-0">
+  <div class="sticky top-header z-20 h-0">
     <div
       class={[
         // Opaque, not frosted: the description slides directly under this and a

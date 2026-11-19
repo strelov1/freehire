@@ -92,10 +92,10 @@
            as two "Account sections" landmarks, one inside the other. The nav is the
            landmark. -->
       <div class={cn('hidden shrink-0 transition-[width] duration-200 lg:block', collapsed ? 'lg:w-14' : 'lg:w-56')}>
-        <!-- top-20 clears the sticky site header (h-14), the offset every other sticky
+        <!-- top-header-air clears the sticky site header (h-14), the offset every other sticky
              side panel uses; at top-6 the collapse toggle sat behind it. Capped to the
              window and scrollable, so on a short window the last links stay reachable. -->
-        <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-1 overflow-y-auto">
+        <div class="sticky top-header-air flex max-h-[calc(100vh-6.5rem)] flex-col gap-1 overflow-y-auto">
           <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
             <AccountNavGroups variant="sidebar" iconOnly={collapsed} />
           </nav>

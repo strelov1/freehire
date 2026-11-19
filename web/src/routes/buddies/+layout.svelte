@@ -68,7 +68,7 @@
     <BuddiesLandingView onJoin={join} />
   {:else}
     <div class="flex flex-col gap-4 lg:flex-row lg:gap-6">
-      <aside class="lg:sticky lg:top-20 lg:w-52 lg:shrink-0 lg:self-start">
+      <aside class="lg:sticky lg:top-header-air lg:w-52 lg:shrink-0 lg:self-start">
         <nav
           aria-label="Interview buddies"
           class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 lg:flex-col"
