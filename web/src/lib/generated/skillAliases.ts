@@ -282,7 +282,7 @@ export const SKILL_ALIASES = {
   'design-for-manufacturing': ['design for manufacturability', 'design for manufacturing'],
   'design-of-experiments': ['design of experiments'],
   'design-patterns': ['design pattern', 'design patterns', 'dizajnerski obrasci', 'dizajnerskih obrazaca', 'obrasci dizajna', 'obrazaca dizajna', 'padroes de design', 'padroes de projeto', 'padrões de design', 'padrões de projeto', 'patrones de diseno', 'patrones de diseño', 'patrons de conception', 'wzorcach projektowych', 'wzorcami projektowymi', 'wzorce projektowe', 'wzorcow projektowych', 'wzorców projektowych'],
-  'design-systems': ['Design System', 'Design Systems', 'design system components', 'design system library', 'design systems team', 'ui design system'],
+  'design-systems': ['Design System', 'Design Systems', 'design system library', 'design systems team', 'react design system', 'ui design system'],
   'design-thinking': ['design thinking'],
   'design-tokens': ['design token', 'design tokens'],
   'developer-advocacy': ['developer advocacy'],

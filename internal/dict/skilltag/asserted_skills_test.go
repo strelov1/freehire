@@ -36,6 +36,7 @@ func TestAssertedOnlySkills(t *testing.T) {
 		"Mechanical engineer: 3D modelling in Siemens NX and CATIA.",
 		"You will design systems that scale to millions of requests with Go and Kubernetes.",
 		"Backend engineer: you design system architecture for payments.",
+		"Design system components for aircraft engines using CATIA.",
 	} {
 		if got := Parse(text); slices.Contains(got, "nx") || slices.Contains(got, "design-systems") {
 			t.Errorf("Parse(%q) = %v, must not tag nx or design-systems", text, got)

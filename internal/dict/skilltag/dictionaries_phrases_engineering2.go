@@ -20,7 +20,7 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"nx workspace", "nx"},
 	{"nrwl nx", "nx"},
 	{"ui design system", "design-systems"},
-	{"design system components", "design-systems"},
+	{"react design system", "design-systems"},
 	{"design system library", "design-systems"},
 	{"design systems team", "design-systems"},
 	{"system integration", "system-integration"},
