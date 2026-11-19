@@ -65,6 +65,7 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// SkipTheDrive: WordPress remote board; listing = category pages, hydrating (body, location
 		// and the employer's apply link are on the posting page). See skipthedrive.go.
 		NewSkipTheDrive(c),
+		NewHubstaffTalent(c),
 		NewStartupAndVC(c),
 		// Hacker News "Ask HN: Who is hiring?": the two newest monthly threads, read whole
 		// through the Algolia HN API — one global feed, company per comment.
