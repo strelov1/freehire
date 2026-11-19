@@ -12,8 +12,8 @@ importers:
   .:
     dependencies:
       '@lucide/svelte':
-        specifier: ^1.66.0
-        version: 1.70.0(svelte@5.57.3(@typescript-eslint/types@8.67.0))
+        specifier: ^1.72.0
+        version: 1.72.0(svelte@5.57.3(@typescript-eslint/types@8.67.0))
       '@opentelemetry/api':
         specifier: ^1.10.0
         version: 1.10.0
@@ -225,8 +225,8 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@lucide/svelte@1.70.0':
-    resolution: {integrity: sha512-zvx7K/WLxo82c4ZYqbsfcYUPDVFrq4561xH0NHfSHJJbajj0AONTQ14EO095/WnfI4XUEl1tyS/nbjQNNiNxdQ==}
+  '@lucide/svelte@1.72.0':
+    resolution: {integrity: sha512-DRwtZ5p/m5ZRsNlfCzELJRDzd2z19mc76eMs8rwllx/JWfvykmLoTFs3RyzFN519ldQxHt8Jxum/LKukgzuTLQ==}
     peerDependencies:
       svelte: ^5
 
@@ -2288,7 +2288,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@lucide/svelte@1.70.0(svelte@5.57.3(@typescript-eslint/types@8.67.0))':
+  '@lucide/svelte@1.72.0(svelte@5.57.3(@typescript-eslint/types@8.67.0))':
     dependencies:
       svelte: 5.57.3(@typescript-eslint/types@8.67.0)
 
@@ -3170,7 +3170,7 @@ snapshots:
 
   freehire-design-system@file:../design-system(svelte@5.57.3(@typescript-eslint/types@8.67.0))(tailwindcss@4.3.3):
     dependencies:
-      '@lucide/svelte': 1.70.0(svelte@5.57.3(@typescript-eslint/types@8.67.0))
+      '@lucide/svelte': 1.72.0(svelte@5.57.3(@typescript-eslint/types@8.67.0))
       clsx: 2.1.1
       svelte: 5.57.3(@typescript-eslint/types@8.67.0)
       tailwind-merge: 3.7.0
