@@ -101,3 +101,25 @@ func TestSitemapBoardPostingKeepsAPostingWhoseSalaryIsABareNumber(t *testing.T) 
 		t.Errorf("numeric baseSalary decoded as an amount: %+v", p.BaseSalary.amount)
 	}
 }
+
+func TestLDJobPostingKeepsNoFieldsFromARejectedBlock(t *testing.T) {
+	rejected := `<script type="application/ld+json">{"@type":"JobPosting","baseSalary":{"currency":"USD","value":{"minValue":9000}},"title":42}</script>`
+	for name, accepted := range map[string]string{
+		"numeric baseSalary": `{"@type":"JobPosting","title":"Data Engineer","baseSalary":150000}`,
+		"no baseSalary":      `{"@type":"JobPosting","title":"Data Engineer"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			root, err := html.Parse(strings.NewReader(rejected + `<script type="application/ld+json">` + accepted + `</script>`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var p sitemapBoardPosting
+			if !ldJobPosting(root, &p) || p.Title != "Data Engineer" {
+				t.Fatalf("accepted block not decoded: %+v", p)
+			}
+			if p.BaseSalary.amount != nil {
+				t.Errorf("salary leaked from the rejected block: %+v", p.BaseSalary.amount)
+			}
+		})
+	}
+}
