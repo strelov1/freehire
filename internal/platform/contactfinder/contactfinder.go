@@ -49,7 +49,9 @@ func FromEnv() *Client {
 }
 
 // Find returns up to three recruiter contacts at domain, [] when nothing usable is known.
-// userRef is recorded by the service so a person can learn to whom their address was shown.
+// userRef is recorded with this lookup only: a later serve of the cached answer reaches the
+// service as a Suppressed check, which carries no viewer. shortcut: cache serves are not
+// attributed to their viewer, add a user_ref to /v1/check if every disclosure must be logged.
 func (c *Client) Find(ctx context.Context, domain, userRef string) ([]Contact, error) {
 	var out struct {
 		Contacts []Contact `json:"contacts"`

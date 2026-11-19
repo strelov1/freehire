@@ -68,6 +68,9 @@ func (h *recruiterContactHandlers) FindRecruiterContacts(ctx context.Context, pa
 		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "recruiter contacts are unavailable right now")
 	}
 
+	// shortcut: the same user sending twice at once shares one charge; if one request fails
+	// after the other served contacts, the release makes that view free and a reopen pays
+	// again. A per-user/job lock if double sends turn out common.
 	contacts, err := h.contacts(ctx, job.ID, job.Domain, userID)
 	if (err != nil || len(contacts) == 0) && d.Charge > 0 {
 		h.release(userID, ref)
