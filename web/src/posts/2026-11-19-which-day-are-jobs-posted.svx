@@ -1,0 +1,109 @@
+---
+title: "Which day are jobs posted? 10.7 million postings by weekday"
+date: 2026-11-19
+summary: Tuesday is the busiest day for new postings, the other weekdays sit close behind, and the weekend gets almost nothing. Where that changes, why one hiring system posts everything on a Saturday, and what it means for when you search.
+type: article
+tags:
+  - data
+  - job-search
+draft: true
+---
+
+"Jobs are posted on Monday" is one of those tips that gets repeated because it sounds
+right. We looked at the day of the week employers gave to **10.7 million** postings
+published between July and mid-November. Monday is not the peak.
+
+## Which day of the week are most jobs posted?
+
+| day | share of an average week's postings |
+| --- | --- |
+| Monday | 18.3% |
+| Tuesday | 20.1% |
+| Wednesday | 18.9% |
+| Thursday | 18.8% |
+| Friday | 17.7% |
+| Saturday | 3.1% |
+| Sunday | 3.0% |
+
+Tuesday is the busiest day: about one posting in five goes up on a Tuesday. Monday,
+Wednesday and Thursday sit close behind, Friday is the quietest weekday, and the gap between
+them is a couple of points at most. The weekend is close to empty: about 6% of postings for
+two days.
+
+The pattern holds across hiring systems. Workday, Oracle, iCIMS, UKG and Paylocity all put
+between 17% and 21% of their postings on each weekday and 1–3% on each weekend day.
+
+## The Saturday that wasn't
+
+Our first count said something else: 8.6% of postings on Saturday, more than twice the
+figure above. All of that came from one hiring system. **SAP SuccessFactors** postings in our
+data are dated Saturday 100% of the time — not because employers publish on Saturdays, but
+because the date it gives is the day the posting's page last changed, and those pages
+appear to be refreshed in one weekly batch.
+
+So we leave SuccessFactors out, and Greenhouse too, whose date is the last time a posting
+was edited. It is a reminder that a "posted" date is only as good as the system behind it.
+A job board that shows you "posted 2 days ago" may be showing you the day of a refresh.
+
+## Where the week looks different
+
+Most countries look like the table above. A few do not.
+
+| country | Mon | Tue | Wed | Thu | Fri | Sat | Sun |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| United States | 18.6% | 20.0% | 19.0% | 18.7% | 18.2% | 2.9% | 2.5% |
+| United Kingdom | 17.5% | 19.2% | 19.0% | 19.7% | 17.4% | 3.7% | 3.4% |
+| Germany | 16.8% | 19.1% | 16.7% | 18.2% | 18.1% | 5.9% | 5.2% |
+| France | 19.4% | 20.0% | 17.7% | 17.6% | 20.8% | 2.6% | 1.9% |
+| Brazil | 15.9% | 20.1% | 21.3% | 20.2% | 19.1% | 2.1% | 1.4% |
+| India | 18.7% | 18.0% | 19.5% | 18.4% | 17.3% | 5.1% | 3.0% |
+| Singapore | 17.9% | 19.3% | 17.9% | 17.7% | 17.7% | 5.0% | 4.6% |
+
+Germany, Singapore and India put noticeably more on the weekend: 11%, 10% and 8% of their
+postings, against 5.4% in the United States. France is the only large market where Friday
+is the busiest day.
+
+The clearest case is the Gulf. In Saudi Arabia and Qatar the weekend is Friday and
+Saturday, and the data shows it: **14% and 18% of postings are dated Sunday**, a working day
+there, and only about 6% Friday. The United Arab Emirates moved to a Saturday–Sunday weekend
+in 2022, and its postings moved with it — 16% on Friday, 4% on Sunday.
+
+## Do postings from some days close faster?
+
+Postings dated on a weekend come down sooner: of those that have closed, half were gone
+within about 20 days, against 26–28 days for postings from a weekday, and 14–15% closed
+within a week against 8–11%. (These postings are all from July on, so the medians are
+shorter than for postings of any age.) We would not read much into it. A large part of the
+weekend postings come from job aggregators that republish others' listings under their own
+date, and those close fast whichever day they appear.
+
+Among weekdays the difference is small, and a posting coming down says nothing about
+whether someone was hired.
+
+## What it means for your search
+
+- **Check for new postings on Tuesday to Thursday.** That is when most of them appear. A
+  saved search that alerts you daily does this for you.
+- **If you search once a week, do it at the end of the week.** By Friday afternoon most of
+  the week's postings are up; on Monday morning you are looking at last week's.
+- **Apply in the first week.** Of the postings that have closed, about one in ten came down
+  within seven days of going up, whichever day it appeared.
+- **Trust the employer's date over the board's.** A posting that says "today" on a board may
+  be weeks old on the employer's site.
+
+freehire shows the date the employer gave a posting, when there is one, and lets you
+[save a search](/features/notifications) and get a daily digest of new matches.
+
+## How we counted
+
+We took postings published from 1 July to 15 November 2026 that carry a publication date
+from the employer, counted each duplicate once, and grouped them by the day of that date.
+That window has 19 Mondays and Tuesdays but 20 of every other day, so the weekday shares
+are per day: each day's count divided by how many times it occurs, as a share of the week.
+Most hiring systems give only a date; for those that give a time we used UTC, so a posting
+published late on Friday evening in California counts as Saturday. Country figures use only
+postings with a single country. Greenhouse and SAP SuccessFactors are left out for the
+reasons above.
+
+The data shows when postings appear, not when they get the most applicants or when
+recruiters read them. We do not have that.
