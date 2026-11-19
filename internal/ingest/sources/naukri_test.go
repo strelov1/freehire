@@ -368,16 +368,13 @@ func TestNaukriWalksToTheDeclaredTotal(t *testing.T) {
 	}
 }
 
-func TestNaukriLaterPageFailureKeepsWhatWasRead(t *testing.T) {
+func TestNaukriLaterPageFailureFailsTheBoard(t *testing.T) {
 	f := &naukriFake{pages: naukriSyntheticPages(t, 3, naukriPageSize, 3*naukriPageSize), fail: map[string]error{}}
 	f.fail["page2"] = &StatusError{Method: "GET", Code: 502, URL: "naukri search"}
 	src := NewNaukri(f).(HydratingSource)
-	jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "5"}, func(string) bool { return true })
-	if err != nil {
-		t.Fatalf("FetchNew: %v", err)
-	}
-	if len(jobs) != naukriPageSize {
-		t.Errorf("got %d jobs, want the first page's %d", len(jobs), naukriPageSize)
+	// A partial walk must not reach the board-scoped close, which would close the unread pages.
+	if _, err := src.FetchNew(context.Background(), CompanyEntry{Board: "5"}, func(string) bool { return true }); err == nil {
+		t.Fatal("a board whose later search page fails must fail")
 	}
 }
 
@@ -401,6 +398,9 @@ func TestNaukriStopsAtThePlatformsDeepestPage(t *testing.T) {
 func naukriBacklogFake(t *testing.T, n int) *naukriFake {
 	t.Helper()
 	f := &naukriFake{pages: naukriSyntheticPages(t, 1, n, n), fail: map[string]error{}, details: map[string]string{}}
+	// All n rows sit on page 1, wider than naukriPageSize, so the walk asks for page 2; an empty
+	// page ends it.
+	f.pages["2"] = fmt.Sprintf(`{"noOfJobs":%d,"jobDetails":[]}`, n)
 	body := naukriRead(t, "naukri_job_181026004692.json")
 	var pages struct {
 		JobDetails []struct {

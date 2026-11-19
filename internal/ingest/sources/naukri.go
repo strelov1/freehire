@@ -202,12 +202,10 @@ func (s naukri) list(ctx context.Context, area string) ([]naukriListing, error) 
 		q.Set("sort", "f") // freshness: newest first, so the detail budget buys the newest
 		q.Set("pageNo", strconv.Itoa(page))
 		var p naukriSearchPage
+		// Any failed page fails the board: a partial walk would qualify it for the board-scoped
+		// close (sliceBoardListing) and close the postings on the pages it never read.
 		if err := s.http.GetJSONWithHeaders(ctx, naukriSearchURL+q.Encode(), naukriAppHeaders, &p); err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("naukri: area %s: %w", area, err)
-			}
-			log.Printf("naukri: area %s: page %d failed; keeping %d postings read: %v", area, page, len(out), err)
-			break
+			return nil, fmt.Errorf("naukri: area %s: page %d: %w", area, page, err)
 		}
 		if page == 1 {
 			total = p.NoOfJobs
