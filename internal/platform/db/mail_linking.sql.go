@@ -58,7 +58,7 @@ func (q *Queries) GetEmailIDByExternalID(ctx context.Context, arg GetEmailIDByEx
 }
 
 const getUserApplication = `-- name: GetUserApplication :one
-SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_at,
+SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_at, a.id AS application_id,
        (CASE WHEN a.applied_at IS NOT NULL THEN
           GREATEST(a.applied_at,
                    (SELECT max(e.received_at)
@@ -100,6 +100,7 @@ type GetUserApplicationRow struct {
 	Stage                pgtype.Text        `json:"stage"`
 	Notes                pgtype.Text        `json:"notes"`
 	FollowedUpAt         pgtype.Timestamptz `json:"followed_up_at"`
+	ApplicationID        pgtype.Int8        `json:"application_id"`
 	LastActivityAt       pgtype.Timestamptz `json:"last_activity_at"`
 	HasPendingSuggestion bool               `json:"has_pending_suggestion"`
 }
@@ -119,6 +120,7 @@ func (q *Queries) GetUserApplication(ctx context.Context, arg GetUserApplication
 		&i.Stage,
 		&i.Notes,
 		&i.FollowedUpAt,
+		&i.ApplicationID,
 		&i.LastActivityAt,
 		&i.HasPendingSuggestion,
 	)

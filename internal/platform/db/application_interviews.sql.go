@@ -40,6 +40,70 @@ func (q *Queries) CancelApplicationInterview(ctx context.Context, arg CancelAppl
 	return result.RowsAffected(), nil
 }
 
+const listApplicationInterviews = `-- name: ListApplicationInterviews :many
+SELECT i.id, i.application_id, i.ical_uid, i.starts_at, i.ends_at, i.title, i.join_url,
+       i.status, a.company_slug, a.role_title, j.public_slug AS job_slug
+  FROM application_interviews i
+  JOIN applications a ON a.id = i.application_id
+  LEFT JOIN jobs j    ON j.id = a.job_id
+ WHERE i.user_id        = $1
+   AND i.application_id = $2
+ ORDER BY i.starts_at, i.id
+`
+
+type ListApplicationInterviewsParams struct {
+	UserID        int64 `json:"user_id"`
+	ApplicationID int64 `json:"application_id"`
+}
+
+type ListApplicationInterviewsRow struct {
+	ID            int64              `json:"id"`
+	ApplicationID int64              `json:"application_id"`
+	IcalUid       string             `json:"ical_uid"`
+	StartsAt      pgtype.Timestamptz `json:"starts_at"`
+	EndsAt        pgtype.Timestamptz `json:"ends_at"`
+	Title         string             `json:"title"`
+	JoinUrl       string             `json:"join_url"`
+	Status        string             `json:"status"`
+	CompanySlug   string             `json:"company_slug"`
+	RoleTitle     string             `json:"role_title"`
+	JobSlug       pgtype.Text        `json:"job_slug"`
+}
+
+// One application's meetings, oldest first: the application panel's list, where
+// ListApplicationInterviewsInRange paints a month. Same columns so the two views agree.
+func (q *Queries) ListApplicationInterviews(ctx context.Context, arg ListApplicationInterviewsParams) ([]ListApplicationInterviewsRow, error) {
+	rows, err := q.db.Query(ctx, listApplicationInterviews, arg.UserID, arg.ApplicationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListApplicationInterviewsRow{}
+	for rows.Next() {
+		var i ListApplicationInterviewsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ApplicationID,
+			&i.IcalUid,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Title,
+			&i.JoinUrl,
+			&i.Status,
+			&i.CompanySlug,
+			&i.RoleTitle,
+			&i.JobSlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listApplicationInterviewsInRange = `-- name: ListApplicationInterviewsInRange :many
 SELECT i.id, i.application_id, i.ical_uid, i.starts_at, i.ends_at, i.title, i.join_url,
        i.status, a.company_slug, a.role_title, j.public_slug AS job_slug

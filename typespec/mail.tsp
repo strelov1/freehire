@@ -159,6 +159,15 @@ model InboxApplicationDetail {
 
   /** The caller's live auto-apply attempt for this job; absent when none exists. */
   auto_apply?: AutoApplyReviewInfo;
+
+  /** The application's own id, which the booking link is turned on by; absent for a job only saved. */
+  application_id?: int64;
+
+  /** The meetings arranged for this application, oldest first; cancelled ones are served. */
+  interviews: ScheduledInterview[];
+
+  /** The application's booking link page; absent until the candidate turns it on. */
+  booking_url?: string;
 }
 
 /** A chase the candidate sends themselves; `recipient` is absent when nobody ever replied. */
@@ -476,6 +485,8 @@ op ingestEmails(@body body: unknown): Data<InboxIngested> | Problem;
         applied_at: utcDateTime.fromISO("2026-07-24T09:00:00Z"),
         stage: "interview",
         followed_up_at: null,
+        application_id: 5120,
+        interviews: #[],
         emails: #[
           #{
             id: 4821,

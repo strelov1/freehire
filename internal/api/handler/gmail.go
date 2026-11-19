@@ -45,6 +45,8 @@ type inboxHandlers struct {
 	// timeline reads the ledger for the application panel's history, riding along with the
 	// linked-mail fetch.
 	timeline *apptimeline.Service
+	// bookingLinks reads the application's booking link URL for the panel; nil leaves it out.
+	bookingLinks *bookingLinkHandlers
 	// recall is the pull direction (from an application, find its mail). Nil without a
 	// model: the endpoint reports the feature off.
 	recall *mailrecall.Service

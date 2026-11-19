@@ -177,3 +177,7 @@ func TestForApplicationKeepsAnEventWhoseMessageIsGone(t *testing.T) {
 		t.Errorf("subject = %q, want none", events[0].EmailSubject)
 	}
 }
+
+func (s stubStore) ListApplicationInterviews(context.Context, db.ListApplicationInterviewsParams) ([]db.ListApplicationInterviewsRow, error) {
+	return nil, nil
+}

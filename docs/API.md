@@ -17,6 +17,7 @@ Base URL: `https://freehire.me/api/v1`
 - [External vs internal endpoints](#external-vs-internal-endpoints)
 - [Filtering jobs](#filtering-jobs)
 - [Onboarding](#onboarding)
+- [Booking links](#booking-links)
 - [Jobs](#jobs)
 - [Fit](#fit)
 - [Companies](#companies)
@@ -358,6 +359,58 @@ visitor who has no account and so no stored profile. Answers the top ten.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/onboarding/matches" -H 'Content-Type: application/json' -d '{"skills":["go","kubernetes","postgresql"],"query":"work_mode=remote&category=backend&posted_within_days=7"}'
+```
+
+## Booking links
+
+### `POST /booking/{token}/bookings`
+
+**Auth:** Public
+
+Book a slot through a booking link.
+
+Book one of a link's slots. A taken or no longer offered slot is 409 `slot_unavailable`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `token` | string | yes |  |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `starts_at` | string | yes | RFC 3339; must be one of the offered slots. |
+| `name` | string | yes | The booker's name, shown to the candidate; 1-200 characters, no control characters. |
+| `email` | string | yes | The booker's bare email address, shown to the candidate. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/booking/<token>/bookings" -H 'Content-Type: application/json' -d '{"starts_at":"2026-12-01T09:00:00Z","name":"Jane Recruiter","email":"jane@example.com"}'
+```
+
+### `GET /booking/{token}/slots`
+
+**Auth:** Public
+
+List a booking link's free slots.
+
+A link's free slots from now to its horizon, in the viewer's zone (UTC when unknown; `meta.timezone` says which).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `token` | string | yes |  |
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `tz` | string | no |  |
+
+```bash
+curl "https://freehire.me/api/v1/booking/<token>/slots"
 ```
 
 ## Jobs
@@ -5616,6 +5669,8 @@ curl "https://freehire.me/api/v1/me/tracking/<slug>" -H "Authorization: Bearer $
     "applied_at": "2026-07-24T09:00:00Z",
     "stage": "interview",
     "followed_up_at": null,
+    "application_id": 5120,
+    "interviews": [],
     "emails": [
       {
         "id": 4821,

@@ -8,6 +8,7 @@ import {
   isPrivateRoute,
   track,
   isFeatureEnabled,
+  redactBookingToken,
 } from './analytics';
 
 // These tests exercise the pure/guarded surface — no PostHog init happens (the
@@ -292,5 +293,15 @@ describe('trackSignupIfNew → GA4 sign-up', () => {
   it('sends it from the browser when the server refused the report', async () => {
     const refused = async () => ({ ok: false, json: async () => ({}) });
     expect(await signUp(refused)).toEqual([['event', 'sign_up', { method: 'oauth' }]]);
+  });
+});
+
+describe('redactBookingToken', () => {
+  it('replaces a booking-link token in a URL and leaves other paths alone', () => {
+    expect(redactBookingToken('https://freehire.me/booking/abcDEF_123-x?month=2026-11')).toBe(
+      'https://freehire.me/booking/:token?month=2026-11',
+    );
+    expect(redactBookingToken('/booking/abc')).toBe('/booking/:token');
+    expect(redactBookingToken('https://freehire.me/jobs/x')).toBe('https://freehire.me/jobs/x');
   });
 });

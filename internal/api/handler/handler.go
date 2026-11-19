@@ -27,6 +27,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/candidate/survey"
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
+	"github.com/strelov1/freehire/internal/engage/bookinglink"
 	"github.com/strelov1/freehire/internal/engage/changehook"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/problemreport"
@@ -314,6 +315,11 @@ func Register(app *fiber.App, cfg Config) {
 	assistantH.buddies = buddyH
 
 	mentorshipH, mentorSuggestionsH := newMentorshipSurfaces(cfg, queries, mailClient, photoStore, resumeStore, profileSvc, bank)
+	// The candidate's booking link. The token key is the server secret, so a database dump
+	// alone cannot rebuild a link's URL.
+	bookingLinks := bookinglink.New(bookinglink.NewQueriesRepository(queries, cfg.Pool), plans, []byte(cfg.JWTSecret))
+	bookingLinkH := newBookingLinkHandlers(bookingLinks, cfg.FrontendOrigin)
+	inboxH.bookingLinks = bookingLinkH
 
 	a.mountAppRoutes(app, cfg, queries)
 
@@ -369,6 +375,7 @@ func Register(app *fiber.App, cfg Config) {
 		promoHandlers:                promoH,
 		mentorSuggestionsHandlers:    mentorSuggestionsH,
 		mentorshipHandlers:           mentorshipH,
+		bookingLinkHandlers:          bookingLinkH,
 		savedSearchHandlers:          savedSearchH,
 		subscriptionHandlers:         subscriptionH,
 		timelineHandlers:             timelineH,

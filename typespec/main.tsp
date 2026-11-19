@@ -45,6 +45,7 @@ import "./resume.tsp";
 import "./cv.tsp";
 import "./cv-tailoring.tsp";
 import "./mentorship.tsp";
+import "./booking-links.tsp";
 import "./mail.tsp";
 import "./mail-links.tsp";
 import "./fit.tsp";

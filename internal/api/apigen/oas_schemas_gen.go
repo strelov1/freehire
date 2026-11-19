@@ -2743,6 +2743,21 @@ func (s *BillingUrl) SetURL(val string) {
 type BlockConversationNoContent struct{}
 
 // A single item: `{"data": ...}`.
+type BookBookingLinkSlotCreated struct {
+	Data BookingLinkBooking `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BookBookingLinkSlotCreated) GetData() BookingLinkBooking {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BookBookingLinkSlotCreated) SetData(val BookingLinkBooking) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type BookSessionCreated struct {
 	Data MentorshipBooking `json:"data"`
 }
@@ -2755,6 +2770,104 @@ func (s *BookSessionCreated) GetData() MentorshipBooking {
 // SetData sets the value of Data.
 func (s *BookSessionCreated) SetData(val MentorshipBooking) {
 	s.Data = val
+}
+
+// Ref: #/components/schemas/BookingLinkBookBody
+type BookingLinkBookBody struct {
+	// RFC 3339; must be one of the offered slots.
+	StartsAt string `json:"starts_at"`
+	// The booker's name, shown to the candidate; 1-200 characters, no control characters.
+	Name string `json:"name"`
+	// The booker's bare email address, shown to the candidate.
+	Email string `json:"email"`
+}
+
+// GetStartsAt returns the value of StartsAt.
+func (s *BookingLinkBookBody) GetStartsAt() string {
+	return s.StartsAt
+}
+
+// GetName returns the value of Name.
+func (s *BookingLinkBookBody) GetName() string {
+	return s.Name
+}
+
+// GetEmail returns the value of Email.
+func (s *BookingLinkBookBody) GetEmail() string {
+	return s.Email
+}
+
+// SetStartsAt sets the value of StartsAt.
+func (s *BookingLinkBookBody) SetStartsAt(val string) {
+	s.StartsAt = val
+}
+
+// SetName sets the value of Name.
+func (s *BookingLinkBookBody) SetName(val string) {
+	s.Name = val
+}
+
+// SetEmail sets the value of Email.
+func (s *BookingLinkBookBody) SetEmail(val string) {
+	s.Email = val
+}
+
+// Ref: #/components/schemas/BookingLinkBooking
+type BookingLinkBooking struct {
+	StartsAt time.Time `json:"starts_at"`
+	EndsAt   time.Time `json:"ends_at"`
+}
+
+// GetStartsAt returns the value of StartsAt.
+func (s *BookingLinkBooking) GetStartsAt() time.Time {
+	return s.StartsAt
+}
+
+// GetEndsAt returns the value of EndsAt.
+func (s *BookingLinkBooking) GetEndsAt() time.Time {
+	return s.EndsAt
+}
+
+// SetStartsAt sets the value of StartsAt.
+func (s *BookingLinkBooking) SetStartsAt(val time.Time) {
+	s.StartsAt = val
+}
+
+// SetEndsAt sets the value of EndsAt.
+func (s *BookingLinkBooking) SetEndsAt(val time.Time) {
+	s.EndsAt = val
+}
+
+// Ref: #/components/schemas/BookingLinkEnableBody
+type BookingLinkEnableBody struct {
+	// The candidate's IANA zone, sent by the browser; the default hours are wall-clock times in it.
+	Timezone string `json:"timezone"`
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *BookingLinkEnableBody) GetTimezone() string {
+	return s.Timezone
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *BookingLinkEnableBody) SetTimezone(val string) {
+	s.Timezone = val
+}
+
+// Ref: #/components/schemas/BookingLinkOut
+type BookingLinkOut struct {
+	// The link's public page. The same URL on every call.
+	URL string `json:"url"`
+}
+
+// GetURL returns the value of URL.
+func (s *BookingLinkOut) GetURL() string {
+	return s.URL
+}
+
+// SetURL sets the value of URL.
+func (s *BookingLinkOut) SetURL(val string) {
+	s.URL = val
 }
 
 // Ref: #/components/schemas/BuddyActivity
@@ -11202,6 +11315,21 @@ func (s *EmployerVacancyPatch) SetPostedAt(val OptNilDateTime) {
 	s.PostedAt = val
 }
 
+// A single item: `{"data": ...}`.
+type EnableBookingLinkCreated struct {
+	Data BookingLinkOut `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *EnableBookingLinkCreated) GetData() BookingLinkOut {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *EnableBookingLinkCreated) SetData(val BookingLinkOut) {
+	s.Data = val
+}
+
 // Ref: #/components/schemas/Engagement
 type Engagement struct {
 	Saved   int64 `json:"saved"`
@@ -13487,6 +13615,12 @@ type InboxApplicationDetail struct {
 	StageSuggestion OptStageSuggestion `json:"stage_suggestion"`
 	// The caller's live auto-apply attempt for this job; absent when none exists.
 	AutoApply OptAutoApplyReviewInfo `json:"auto_apply"`
+	// The application's own id, which the booking link is turned on by; absent for a job only saved.
+	ApplicationID OptInt64 `json:"application_id"`
+	// The meetings arranged for this application, oldest first; cancelled ones are served.
+	Interviews []ScheduledInterview `json:"interviews"`
+	// The application's booking link page; absent until the candidate turns it on.
+	BookingURL OptString `json:"booking_url"`
 }
 
 // GetJob returns the value of Job.
@@ -13544,6 +13678,21 @@ func (s *InboxApplicationDetail) GetAutoApply() OptAutoApplyReviewInfo {
 	return s.AutoApply
 }
 
+// GetApplicationID returns the value of ApplicationID.
+func (s *InboxApplicationDetail) GetApplicationID() OptInt64 {
+	return s.ApplicationID
+}
+
+// GetInterviews returns the value of Interviews.
+func (s *InboxApplicationDetail) GetInterviews() []ScheduledInterview {
+	return s.Interviews
+}
+
+// GetBookingURL returns the value of BookingURL.
+func (s *InboxApplicationDetail) GetBookingURL() OptString {
+	return s.BookingURL
+}
+
 // SetJob sets the value of Job.
 func (s *InboxApplicationDetail) SetJob(val jx.Raw) {
 	s.Job = val
@@ -13597,6 +13746,21 @@ func (s *InboxApplicationDetail) SetStageSuggestion(val OptStageSuggestion) {
 // SetAutoApply sets the value of AutoApply.
 func (s *InboxApplicationDetail) SetAutoApply(val OptAutoApplyReviewInfo) {
 	s.AutoApply = val
+}
+
+// SetApplicationID sets the value of ApplicationID.
+func (s *InboxApplicationDetail) SetApplicationID(val OptInt64) {
+	s.ApplicationID = val
+}
+
+// SetInterviews sets the value of Interviews.
+func (s *InboxApplicationDetail) SetInterviews(val []ScheduledInterview) {
+	s.Interviews = val
+}
+
+// SetBookingURL sets the value of BookingURL.
+func (s *InboxApplicationDetail) SetBookingURL(val OptString) {
+	s.BookingURL = val
 }
 
 // Ref: #/components/schemas/InboxApplicationEmail

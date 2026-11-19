@@ -910,6 +910,71 @@ func decodeBlockConversationParams(args [1]string, argsEscaped bool, r *http.Req
 	return params, nil
 }
 
+// BookBookingLinkSlotParams is parameters of bookBookingLinkSlot operation.
+type BookBookingLinkSlotParams struct {
+	Token string
+}
+
+func unpackBookBookingLinkSlotParams(packed middleware.Parameters) (params BookBookingLinkSlotParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "token",
+			In:   "path",
+		}
+		params.Token = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBookBookingLinkSlotParams(args [1]string, argsEscaped bool, r *http.Request) (params BookBookingLinkSlotParams, _ error) {
+	// Decode path: token.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "token",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Token = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "token",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // BookSessionParams is parameters of bookSession operation.
 type BookSessionParams struct {
 	Slug string
@@ -5050,6 +5115,71 @@ func decodeDuplicateCVParams(args [1]string, argsEscaped bool, r *http.Request) 
 	return params, nil
 }
 
+// EnableBookingLinkParams is parameters of enableBookingLink operation.
+type EnableBookingLinkParams struct {
+	ID int64
+}
+
+func unpackEnableBookingLinkParams(packed middleware.Parameters) (params EnableBookingLinkParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(int64)
+	}
+	return params
+}
+
+func decodeEnableBookingLinkParams(args [1]string, argsEscaped bool, r *http.Request) (params EnableBookingLinkParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToInt64(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // FileProcessReportParams is parameters of fileProcessReport operation.
 type FileProcessReportParams struct {
 	Slug string
@@ -5433,6 +5563,123 @@ func decodeGetBillingCheckoutParams(args [0]string, argsEscaped bool, r *http.Re
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "price",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// GetBookingLinkSlotsParams is parameters of getBookingLinkSlots operation.
+type GetBookingLinkSlotsParams struct {
+	Token string
+	Tz    OptString `json:",omitempty,omitzero"`
+}
+
+func unpackGetBookingLinkSlotsParams(packed middleware.Parameters) (params GetBookingLinkSlotsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "token",
+			In:   "path",
+		}
+		params.Token = packed[key].(string)
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "tz",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Tz = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeGetBookingLinkSlotsParams(args [1]string, argsEscaped bool, r *http.Request) (params GetBookingLinkSlotsParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode path: token.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "token",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Token = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "token",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	// Decode query: tz.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "tz",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotTzVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotTzVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Tz.SetTo(paramsDotTzVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "tz",
 			In:   "query",
 			Err:  err,
 		}

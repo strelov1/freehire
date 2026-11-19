@@ -19,6 +19,9 @@
   ],
   "tags": [
     {
+      "name": "Booking links"
+    },
+    {
       "name": "Jobs",
       "description": "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint."
     },
@@ -3083,6 +3086,71 @@
         "tags": [
           "Account"
         ]
+      }
+    },
+    "/me/applications/{id}/booking-link": {
+      "post": {
+        "operationId": "enableBookingLink",
+        "summary": "Turn on an application's booking link.",
+        "description": "Turn on the caller's booking link for one of their applications. Pro or Ultra only (402).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BookingLinkOut"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Booking links"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingLinkEnableBody"
+              },
+              "example": {
+                "timezone": "Europe/Berlin"
+              }
+            }
+          }
+        }
       }
     },
     "/me/attribution": {
@@ -11480,6 +11548,30 @@
         "properties": {
           "url": {
             "type": "string"
+          }
+        }
+      },
+      "BookingLinkEnableBody": {
+        "type": "object",
+        "required": [
+          "timezone"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "description": "The candidate's IANA zone, sent by the browser; the default hours are wall-clock times in it."
+          }
+        }
+      },
+      "BookingLinkOut": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The link's public page. The same URL on every call."
           }
         }
       },

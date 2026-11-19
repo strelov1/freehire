@@ -282,6 +282,28 @@ type BoardSubmission struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type BookingLink struct {
+	ID            int64              `json:"id"`
+	UserID        int64              `json:"user_id"`
+	ApplicationID int64              `json:"application_id"`
+	TokenSeed     []byte             `json:"token_seed"`
+	TokenHash     []byte             `json:"token_hash"`
+	Zone          string             `json:"zone"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type BookingLinkBooking struct {
+	ID             int64              `json:"id"`
+	LinkID         int64              `json:"link_id"`
+	UserID         int64              `json:"user_id"`
+	StartsAt       pgtype.Timestamptz `json:"starts_at"`
+	EndsAt         pgtype.Timestamptz `json:"ends_at"`
+	RecruiterName  string             `json:"recruiter_name"`
+	RecruiterEmail string             `json:"recruiter_email"`
+	Status         string             `json:"status"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
 // Send ledger for one-off campaigns. PK (user_id, campaign) = one send per pair, ever.
 type BroadcastEmail struct {
 	UserID   int64              `json:"user_id"`

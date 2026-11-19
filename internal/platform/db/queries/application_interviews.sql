@@ -165,6 +165,18 @@ SELECT i.id, i.application_id, i.ical_uid, i.starts_at, i.ends_at, i.title, i.jo
    AND i.starts_at <= sqlc.arg(to_at)
  ORDER BY i.starts_at, i.id;
 
+-- name: ListApplicationInterviews :many
+-- One application's meetings, oldest first: the application panel's list, where
+-- ListApplicationInterviewsInRange paints a month. Same columns so the two views agree.
+SELECT i.id, i.application_id, i.ical_uid, i.starts_at, i.ends_at, i.title, i.join_url,
+       i.status, a.company_slug, a.role_title, j.public_slug AS job_slug
+  FROM application_interviews i
+  JOIN applications a ON a.id = i.application_id
+  LEFT JOIN jobs j    ON j.id = a.job_id
+ WHERE i.user_id        = sqlc.arg(user_id)
+   AND i.application_id = sqlc.arg(application_id)
+ ORDER BY i.starts_at, i.id;
+
 -- name: UpsertCalendarGrant :exec
 -- Store the grant a calendar consent produced, and record that it now covers the calendar.
 --

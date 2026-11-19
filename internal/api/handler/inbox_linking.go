@@ -107,7 +107,31 @@ func (h *inboxHandlers) GetTrackedApplication(ctx context.Context, params apigen
 	if autoApply != nil {
 		detail.AutoApply = apigen.NewOptAutoApplyReviewInfo(autoApplyReviewInfoOut(autoApply))
 	}
+	detail.Interviews = []apigen.ScheduledInterview{}
+	if app.ApplicationID.Valid {
+		h.addApplicationExtras(ctx, &detail, userID, app.ApplicationID.Int64)
+	}
 	return &apigen.GetTrackedApplicationOK{Data: detail}, nil
+}
+
+// addApplicationExtras fills what hangs off the application row itself: its id, its
+// meetings and its booking link. Each degrades to absent on failure, like the history.
+func (h *inboxHandlers) addApplicationExtras(ctx context.Context, detail *apigen.InboxApplicationDetail, userID, appID int64) {
+	detail.ApplicationID = apigen.NewOptInt64(appID)
+	if found, err := h.timeline.InterviewsForApplication(ctx, userID, appID); err != nil {
+		log.Printf("tracking: reading interviews for user %d application %d: %v", userID, appID, err)
+	} else {
+		detail.Interviews = scheduledInterviewsWire(found)
+	}
+	if h.bookingLinks == nil {
+		return
+	}
+	token, ok, err := h.bookingLinks.links.TokenFor(ctx, userID, appID)
+	if err != nil {
+		log.Printf("tracking: reading booking link for user %d application %d: %v", userID, appID, err)
+	} else if ok {
+		detail.BookingURL = optString(h.bookingLinks.bookingURL(token))
+	}
 }
 
 // autoApplyReviewInfoOut maps the application layer's view of an attempt onto the contract's.
