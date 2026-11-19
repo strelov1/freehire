@@ -130,6 +130,12 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool) {
 		EmploymentType: schemaEmploymentRaw(p.EmploymentType),
 		PostedAt:       NotFuture(parseRFC3339OrDate(p.DatePosted)),
 	}
+	// The board states each posting's own currency (dsml.kz mixes KZT, USD and RUB).
+	if p.BaseSalary != nil {
+		if currency := strings.ToUpper(strings.TrimSpace(p.BaseSalary.Currency)); currency != "" {
+			p.BaseSalary.apply(&job, currency)
+		}
+	}
 	if job.Countries == nil && b.country != "" {
 		job.FallbackCountries = []string{b.country}
 	}
@@ -138,13 +144,14 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool) {
 
 // sitemapBoardPosting is the part of a posting page's JobPosting the board adapters read.
 type sitemapBoardPosting struct {
-	Title              string             `json:"title"`
-	Description        string             `json:"description"`
-	DatePosted         string             `json:"datePosted"`
-	EmploymentType     json.RawMessage    `json:"employmentType"`
-	JobLocationType    string             `json:"jobLocationType"`
-	JobLocation        sitemapBoardPlaces `json:"jobLocation"`
-	HiringOrganization sitemapldjsonOrg   `json:"hiringOrganization"`
+	Title              string                `json:"title"`
+	Description        string                `json:"description"`
+	DatePosted         string                `json:"datePosted"`
+	EmploymentType     json.RawMessage       `json:"employmentType"`
+	JobLocationType    string                `json:"jobLocationType"`
+	JobLocation        sitemapBoardPlaces    `json:"jobLocation"`
+	HiringOrganization sitemapldjsonOrg      `json:"hiringOrganization"`
+	BaseSalary         *schemaMonetaryAmount `json:"baseSalary"`
 }
 
 // sitemapBoardPlaces decodes jobLocation, a Place or an array of them, whose address is in turn
