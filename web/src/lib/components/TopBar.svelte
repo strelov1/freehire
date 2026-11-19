@@ -91,7 +91,8 @@
   let headerEl: HTMLElement | undefined = $state();
   const SCROLL_SLOP = 6; // ignore trackpad jitter so the bar does not flicker
   function onWindowScroll() {
-    const y = window.scrollY;
+    // Clamped: Safari's rubber-band reports scrollY past either edge, and settling back would read as a scroll.
+    const y = Math.min(Math.max(window.scrollY, 0), document.documentElement.scrollHeight - window.innerHeight);
     const delta = y - lastScrollY;
     // The header's own height (taller under a larger root font): it never slides away over nothing.
     const hideAfter = headerEl?.offsetHeight ?? 57;
