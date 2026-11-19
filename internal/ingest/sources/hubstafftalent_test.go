@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -29,7 +30,7 @@ type hubstaffFake struct {
 	pages   map[int]string // page number -> answer; absent pages answer an empty result
 	details map[string]string
 	failing map[string]bool
-	detailN int
+	detailN atomic.Int64
 }
 
 func (f *hubstaffFake) GetTextWithHeaders(_ context.Context, u string, h map[string]string) (string, error) {
@@ -47,7 +48,7 @@ func (f *hubstaffFake) GetTextWithHeaders(_ context.Context, u string, h map[str
 }
 
 func (f *hubstaffFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
-	f.detailN++
+	f.detailN.Add(1)
 	slug := strings.TrimPrefix(u, hubstafftalentBase+"/jobs/")
 	if f.failing[slug] {
 		return nil, fmt.Errorf("refused")
@@ -135,8 +136,8 @@ func TestHubstaffTalentSeenIsRefreshedWithoutDetail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
 	}
-	if f.detailN != 2 {
-		t.Errorf("detail requests = %d, want 2 (the stored posting costs none)", f.detailN)
+	if n := f.detailN.Load(); n != 2 {
+		t.Errorf("detail requests = %d, want 2 (the stored posting costs none)", n)
 	}
 	for _, j := range jobs {
 		if (j.ExternalID == "seo-writer-aa11") != j.SeenRefresh {
@@ -182,5 +183,18 @@ func TestHubstaffTalentListingWalksPagesAndFailsLoudly(t *testing.T) {
 	}
 	if _, err := hubstaffSource(&hubstaffFake{}, 1).Fetch(context.Background(), CompanyEntry{}); err == nil {
 		t.Error("an empty first page is a moved layout, not an empty marketplace")
+	}
+}
+
+func TestHubstaffTalentListingWalksPastAnUnmappablePage(t *testing.T) {
+	noClient := `<div class="search-result"><div class="main-details"><a class="name" href="/jobs/no-client-dd44">No Client</a></div></div>`
+	later := `<div class="search-result"><div class="main-details"><a class="name" href="/jobs/qa-ee55">QA Tester</a><div class="job-company"><a class="job-agency" href="#">Umbrella</a></div></div></div>`
+	f := &hubstaffFake{pages: map[int]string{1: hubstaffAnswer(hubstaffCards), 2: hubstaffAnswer(noClient), 3: hubstaffAnswer(later)}}
+	jobs, err := hubstaffSource(f, 0).(hubstafftalent).list(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(jobs) != 4 || jobs[3].ExternalID != "qa-ee55" {
+		t.Fatalf("got %d listed postings, want page 3's posting read after the unmappable page 2: %+v", len(jobs), jobs)
 	}
 }

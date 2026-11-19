@@ -86,6 +86,7 @@ func (s crossover) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		body[it.System.Codename] = crossoverBody(it.Elements)
 	}
 	jobs := make([]Job, 0, len(list.Records))
+	readable := 0
 	for _, p := range list.Records {
 		if p.Code == "" || p.Name == "" || p.Display == "" || p.Brand == nil {
 			continue
@@ -96,6 +97,11 @@ func (s crossover) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 			continue
 		}
 		jobs = append(jobs, p.toJob(desc))
+		readable++
+	}
+	// A body outage would otherwise pass as a healthy board of unreadable stubs.
+	if readable == 0 {
+		return nil, fmt.Errorf("crossover: no listed pipeline has a readable body")
 	}
 	return jobs, nil
 }
@@ -156,7 +162,8 @@ func (p crossoverPipeline) toJob(desc string) Job {
 	return job
 }
 
-// location lists the campus cities of an on-site posting, else the country, else "Remote".
+// location lists the campus cities of an on-site posting, else the country, else "Remote" for a
+// remote posting and nothing for one whose place is unknown.
 func (p crossoverPipeline) location() string {
 	var names []string
 	if p.Locations != nil {
@@ -171,6 +178,8 @@ func (p crossoverPipeline) location() string {
 		return strings.Join(names, "; ")
 	case p.Country != "":
 		return p.Country
+	case p.Model == "Remote":
+		return "Remote"
 	}
-	return "Remote"
+	return ""
 }

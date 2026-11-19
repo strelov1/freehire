@@ -75,6 +75,15 @@ func TestCrossoverFetchMapsPostings(t *testing.T) {
 	}
 }
 
+func TestCrossoverLocationFallback(t *testing.T) {
+	if got := (crossoverPipeline{Model: "Remote"}).location(); got != "Remote" {
+		t.Errorf("remote with no place = %q, want Remote", got)
+	}
+	if got := (crossoverPipeline{Model: "On-site"}).location(); got != "" {
+		t.Errorf("on-site with no place = %q, want empty", got)
+	}
+}
+
 func TestCrossoverFetchFailsOnEmptyListOrBodies(t *testing.T) {
 	empty := (&routedHTTP{}).route("profile-api", `{"records":[]}`)
 	if _, err := NewCrossover(empty).Fetch(context.Background(), CompanyEntry{}); err == nil {
@@ -83,5 +92,9 @@ func TestCrossoverFetchFailsOnEmptyListOrBodies(t *testing.T) {
 	noBodies := (&routedHTTP{}).routeErr("kontent-proxy", context.DeadlineExceeded).route("profile-api", crossoverList)
 	if _, err := NewCrossover(noBodies).Fetch(context.Background(), CompanyEntry{}); err == nil {
 		t.Error("a failed CMS read should fail the crawl")
+	}
+	emptyBodies := (&routedHTTP{}).route("kontent-proxy", `{"items":[]}`).route("profile-api", crossoverList)
+	if _, err := NewCrossover(emptyBodies).Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Error("a CMS answer with no readable body should fail the crawl")
 	}
 }

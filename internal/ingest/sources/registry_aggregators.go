@@ -48,24 +48,14 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		NewWorkAtAStartup(c),
 		NewJobStash(c),
 		NewArbeitnow(c),
-		NewRemoteOK(c),
-		NewJobicy(c),
 		// devglobaljobs rates list and detail requests at 120 req/min per IP; paced
 		// (pacedDevGlobalJobsGetter) so pagination and detail hydration share the bucket.
 		NewDevGlobalJobs(pacedDevGlobalJobsGetter(c)),
-		NewWeWorkRemotely(c),
 		// Cutshort: Indian hiring platform, one public syndication XML carrying every
 		// posting's body and structured facets inline. City-expanded rows collapse on
 		// partnerJobId. See cutshort.go.
 		NewCutshort(c),
-		NewNoDesk(c),
 		NewCryptocurrencyJobs(c),
-		NewJobspresso(c),
-		NewJustRemote(c),
-		// SkipTheDrive: WordPress remote board; listing = category pages, hydrating (body, location
-		// and the employer's apply link are on the posting page). See skipthedrive.go.
-		NewSkipTheDrive(c),
-		NewHubstaffTalent(c),
 		NewStartupAndVC(c),
 		// Hacker News "Ask HN: Who is hiring?": the two newest monthly threads, read whole
 		// through the Algolia HN API — one global feed, company per comment.
@@ -92,20 +82,13 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		NewRecruiterflow(c),
 		NewMyCareersFuture(c),
 		NewCareersGov(c),
-		NewFlexProfessionals(c),
-		NewCrossover(c),
-		NewWorkingNomads(c),
 		NewPowerToFly(c),
-		NewHimalayas(c),
-		NewRemotive(c),
-		NewRemotedotcom(c),
 		// wellfound needs no fingerprint-spoofing transport of its own (unlike bayt/gulftalent
 		// below) — its pages refuse every plain request, and the Scrapling tier serves them,
 		// wired in scraplingProviders. Without SCRAPLING_FETCH_URL this entry still exists
 		// (classification/dedup must know about it) but every crawl attempt simply 403s, the
 		// same shape bayt/gulftalent already have.
 		NewWellfound(c),
-		NewRemotli(c),
 		NewLandingJobs(c),
 		NewTheMuse(c),
 		NewNoFluffJobs(c),

@@ -131,11 +131,12 @@ func (s hubstafftalent) list(ctx context.Context) ([]Job, error) {
 		if err != nil {
 			return nil, fmt.Errorf("hubstafftalent: page %d: %w", page, err)
 		}
-		cards, err := hubstafftalentCards(body)
+		cards, raw, err := hubstafftalentCards(body)
 		if err != nil {
 			return nil, fmt.Errorf("hubstafftalent: page %d: %w", page, err)
 		}
-		if len(cards) == 0 {
+		// The end is a page with no card at all; a page whose cards all lack a client is not it.
+		if raw == 0 {
 			if page == 1 {
 				return nil, fmt.Errorf("hubstafftalent: first page holds no posting")
 			}
@@ -153,22 +154,23 @@ func (s hubstafftalent) list(ctx context.Context) ([]Job, error) {
 
 // hubstafftalentCards decodes one search answer: a JS call whose argument is the markup as a
 // string literal, whose escapes (\" \/ \n) are JSON's.
-func hubstafftalentCards(body string) ([]Job, error) {
+// It also returns the raw card count, mappable or not, which is what proves the listing's end.
+func hubstafftalentCards(body string) (jobs []Job, raw int, err error) {
 	_, after, ok := strings.Cut(body, `$('#results').html(`)
 	if !ok {
-		return nil, fmt.Errorf("no #results update in the answer")
+		return nil, 0, fmt.Errorf("no #results update in the answer")
 	}
 	var markup string
 	if err := json.NewDecoder(strings.NewReader(after)).Decode(&markup); err != nil {
-		return nil, fmt.Errorf("results markup: %w", err)
+		return nil, 0, fmt.Errorf("results markup: %w", err)
 	}
 	root, err := xhtml.Parse(strings.NewReader(markup))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	var jobs []Job
 	walk(root, func(n *xhtml.Node) bool {
 		if n.Type == xhtml.ElementNode && HasClass(n, "search-result") {
+			raw++
 			if j, ok := hubstafftalentCard(n); ok {
 				jobs = append(jobs, j)
 			}
@@ -176,7 +178,7 @@ func hubstafftalentCards(body string) ([]Job, error) {
 		}
 		return true
 	})
-	return jobs, nil
+	return jobs, raw, nil
 }
 
 // hubstafftalentCard maps one result card to a body-less Job; ok=false when it lacks the slug or
@@ -218,9 +220,11 @@ func hubstafftalentCard(card *xhtml.Node) (Job, bool) {
 	}
 	if pay := firstByClass(card, "pay-rate"); pay != nil {
 		if m := hubstafftalentHourly.FindStringSubmatch(collapseSpace(textContent(pay))); m != nil {
-			rate, _ := strconv.Atoi(m[1])
-			j.SalaryMin, j.SalaryMax = &rate, &rate
-			j.SalaryCurrency, j.SalaryPeriod = "USD", "hour"
+			// Bounded: a figure past any real hourly rate is a typo, and the column is int4.
+			if rate, err := strconv.Atoi(m[1]); err == nil && rate > 0 && rate <= 10000 {
+				j.SalaryMin, j.SalaryMax = &rate, &rate
+				j.SalaryCurrency, j.SalaryPeriod = "USD", "hour"
+			}
 		}
 	}
 	// The age tooltip holds the exact time; the visible text is "4 hrs ago".
