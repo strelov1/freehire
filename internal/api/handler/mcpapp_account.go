@@ -57,6 +57,9 @@ func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool 
 	// The tool writes only the job-search preferences and headline/summary: no credential,
 	// email or key management, so a full-scope key gets it.
 	all = append(all, assistants.profileMCPTools()...)
+	// The experience bank and tailored CVs: every route behind them takes a key over REST
+	// (the npm package reaches them so), and each tool runs that route's own handler.
+	all = append(all, assistants.cvMCPTools(origin)...)
 	// An MCP client keeps every result in its context, so it gets the bounded facets.
 	// search_jobs, get_job and get_company are listed only so the instructions and prompts see
 	// them as served; the catalogue's own tools answer those names.

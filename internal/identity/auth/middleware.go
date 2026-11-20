@@ -51,6 +51,15 @@ func ViaAPIKeyFromContext(ctx context.Context) bool {
 	return via
 }
 
+// AgentContext is the context a contract handler sees when an in-process caller (the
+// signed-in MCP server) runs it for userID on an agent's behalf. It reads as an API-key
+// request, so the agent meets the keyed caller's rules: redacted CV reads, edits as the
+// agent, no provenance laundering.
+func AgentContext(ctx context.Context, userID int64) context.Context {
+	ctx = context.WithValue(ctx, LocalsUserID, userID)   //nolint:staticcheck // Fiber Locals keys are plain strings
+	return context.WithValue(ctx, localsViaAPIKey, true) //nolint:staticcheck // Fiber Locals keys are plain strings
+}
+
 // KeyScope returns the authenticating key's scope, or "" for a cookie session.
 func KeyScope(c *fiber.Ctx) string {
 	scope, _ := c.Locals(localsKeyScope).(string)

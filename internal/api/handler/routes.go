@@ -45,6 +45,8 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	h.ojcp.register(api, mw)
 	// The MCP server: bearer-gated by an MCP OAuth grant or a full-scope key, reusing the
 	// assistant's tool set so the two surfaces cannot disagree about a tool.
+	// Its experience-bank tools run the /me/experience handler itself.
+	h.experienceH = h.experienceHandlers
 	mountMCP(api, h.assistantHandlers, h.mcpapp)
 	h.jobsHandlers.register(api, mw, contract)
 	h.companiesHandlers.register(api, mw, contract)

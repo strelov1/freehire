@@ -59,7 +59,10 @@ type assistantHandlers struct {
 	// buddies serves the interview-buddy and mock-interview tools of the signed-in MCP
 	// server (buddy_mcp_tools.go). Set by Register to the handler behind the cookie routes.
 	buddies *buddyHandlers
-	cv      *cvHandlers
+	// experienceH serves the MCP experience-bank tools (mcp_cv_tools.go): the handler behind
+	// /me/experience, so the two doors cannot disagree. Set by routes before mountMCP.
+	experienceH *experienceHandlers
+	cv          *cvHandlers
 	// profile backs the get_profile tool. Reusing the profile handlers keeps the tool and
 	// GET /me/profile on one assembly.
 	profile *profileHandlers

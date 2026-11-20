@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -166,6 +167,23 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"buddy_mock_settings_set":        assistant.EffectOverwrites,
 		"buddy_mock_schedule_set_weekly": assistant.EffectOverwrites,
 		"buddy_mock_schedule_delete":     assistant.EffectOverwrites,
+
+		"experience_list": assistant.EffectReads,
+		"cv_list":         assistant.EffectReads,
+		"cv_get":          assistant.EffectReads,
+		"cv_context":      assistant.EffectReads,
+		// Renders a PDF and returns its link; nothing is stored.
+		"cv_render":                  assistant.EffectReads,
+		"experience_add_employment":  assistant.EffectAdds,
+		"experience_add_achievement": assistant.EffectAdds,
+		// Creates a tailored copy (or reopens it); the base CV is untouched.
+		"cv_tailor": assistant.EffectAdds,
+		// Replace what is stored; the CV edit is undoable on the site, the bank has no undo.
+		"experience_update_employment":  assistant.EffectOverwrites,
+		"experience_update_achievement": assistant.EffectOverwrites,
+		"experience_remove_achievement": assistant.EffectOverwrites,
+		"experience_remove_employment":  assistant.EffectOverwrites,
+		"cv_edit":                       assistant.EffectOverwrites,
 	}
 	for _, tool := range mcpAccountTools(&assistantHandlers{}, testMCPOrigin) {
 		effect, known := want[tool.Name]
@@ -283,6 +301,39 @@ func TestMCPKeyTools_ServeNoBuddyTool(t *testing.T) {
 		}
 		if !granted[tool.Name] {
 			t.Errorf("%s: a buddy tool missing from the OAuth grant's set", tool.Name)
+		}
+	}
+}
+
+// The experience-bank and tailored-CV tools stay out of tools/list and are found by find_tools,
+// for a grant and a full-scope key alike.
+func TestMCPCVTools_AreUnlistedAndFound(t *testing.T) {
+	want := []string{"experience_list", "experience_add_employment", "experience_add_achievement",
+		"experience_update_employment", "experience_update_achievement", "experience_remove_achievement",
+		"experience_remove_employment", "cv_list", "cv_get", "cv_context", "cv_tailor", "cv_edit", "cv_render"}
+	for name, tools := range map[string][]assistant.Tool{
+		"grant": mcpAccountTools(&assistantHandlers{}, testMCPOrigin),
+		"key":   mcpKeyTools(&assistantHandlers{}, testMCPOrigin),
+	} {
+		session := connectMCPTools(t, tools, "42")
+		listed, err := session.ListTools(t.Context(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tool := range listed.Tools {
+			if slices.Contains(want, tool.Name) {
+				t.Errorf("%s: %s is in tools/list", name, tool.Name)
+			}
+		}
+		res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "find_tools", Arguments: map[string]any{"query": "experience bank tailored cv"}})
+		if err != nil || res.IsError {
+			t.Fatalf("%s: find_tools: %v %v", name, err, res)
+		}
+		text := res.Content[0].(*mcp.TextContent).Text
+		for _, tool := range want {
+			if !strings.Contains(text, `"name":"`+tool+`"`) {
+				t.Errorf("%s: find_tools does not return %s", name, tool)
+			}
 		}
 	}
 }
