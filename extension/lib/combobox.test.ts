@@ -249,6 +249,20 @@ describe('combobox.verify', () => {
     });
   });
 
+  it.each([
+    ['Nigeria', 'Niger', ['Niger', 'Nigeria']],
+    ['Papua New Guinea', 'Guinea', ['Guinea', 'Papua New Guinea']],
+    ['South Sudan', 'Sudan', ['Sudan', 'South Sudan']],
+    ['Not applicable', 'No', ['No', 'Not applicable']],
+    ['Norway', 'No', ['No', 'Norway']],
+  ])('reports a mismatch when %s was wanted but the shorter option %s was committed', async (wanted, got, opts) => {
+    reactSelect('Country', opts, { commitAs: () => got });
+    await combobox.open(document, 'Country');
+    await combobox.select(document, 'Country', wanted);
+
+    expect(combobox.verify(document, 'Country', wanted).status).toBe('mismatch');
+  });
+
   it('reports an untouched widget as holding nothing, not as verified', () => {
     reactSelect('Country', ['Germany']);
 
@@ -421,5 +435,74 @@ describe('combobox.runStep', () => {
     expect(await combobox.runStep(document, { action: 'open', label: 'Country', value: '' })).toEqual({
       status: 'not_found',
     });
+  });
+});
+
+/** An input stating `aria-expanded`, with its listbox left in the DOM and visible. */
+function stubbornListbox(expanded: 'input' | 'wrapper', optionTexts: string[] = ['Germany']) {
+  const label = document.createElement('label');
+  label.setAttribute('for', 's');
+  label.textContent = 'Country';
+  const input = document.createElement('input');
+  input.id = 's';
+  input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-controls', 'lb');
+  const wrapper = document.createElement('div');
+  wrapper.setAttribute('role', 'combobox');
+  wrapper.append(input);
+  (expanded === 'input' ? input : wrapper).setAttribute('aria-expanded', 'false');
+  const listbox = document.createElement('div');
+  listbox.id = 'lb';
+  listbox.setAttribute('role', 'listbox');
+  for (const t of optionTexts) {
+    const option = document.createElement('div');
+    option.setAttribute('role', 'option');
+    option.textContent = t;
+    listbox.append(option);
+  }
+  document.body.append(label, wrapper, listbox);
+  return { input, wrapper, listbox };
+}
+
+describe('combobox trusts a stated aria-expanded over a visible listbox', () => {
+  beforeEach(reset);
+
+  it.each(['input', 'wrapper'] as const)('treats aria-expanded=false on the %s as closed', async (where) => {
+    stubbornListbox(where);
+
+    expect(combobox.options(document, 'Country')).toEqual({ status: 'not_open', options: [] });
+    expect(await combobox.select(document, 'Country', 'Germany')).toEqual({ status: 'not_open' });
+  });
+});
+
+describe('combobox does not offer options the user cannot see', () => {
+  beforeEach(reset);
+
+  function openWithHiddenOptions() {
+    const { input, listbox } = stubbornListbox('input', ['Visible']);
+    input.setAttribute('aria-expanded', 'true');
+    const shell = document.createElement('div');
+    shell.hidden = true;
+    const inHidden = document.createElement('div');
+    inHidden.setAttribute('role', 'option');
+    inHidden.textContent = 'InHidden';
+    shell.append(inHidden);
+    const faded = document.createElement('div');
+    faded.setAttribute('role', 'option');
+    faded.style.opacity = '0';
+    faded.textContent = 'Faded';
+    listbox.append(shell, faded);
+  }
+
+  it('leaves out options under [hidden] or with opacity 0', () => {
+    openWithHiddenOptions();
+
+    expect(combobox.options(document, 'Country')).toEqual({ status: 'open', options: ['Visible'] });
+  });
+
+  it.each(['InHidden', 'Faded'])('answers no_option when asked to select %s', async (value) => {
+    openWithHiddenOptions();
+
+    expect(await combobox.select(document, 'Country', value)).toEqual({ status: 'no_option' });
   });
 });
