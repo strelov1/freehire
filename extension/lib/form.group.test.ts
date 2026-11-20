@@ -312,4 +312,13 @@ describe('fillByLabel on a group', () => {
     expect([us.checked, de.checked, ca.checked]).toEqual([true, true, false]);
     expect(outcomes).toEqual([{ label: 'Which countries are you authorized to work in?', status: 'filled' }]);
   });
+
+  it('keeps the control label for a lone checkbox under a legend', () => {
+    document.body.innerHTML =
+      '<fieldset><legend>Consent</legend><label><input type="checkbox" name="c"> I agree to the privacy policy</label></fieldset>';
+    expect(extractForm(document).map((f) => f.label)).toEqual(['I agree to the privacy policy']);
+    const [o] = fillByLabel(document, [{ label: 'I agree to the privacy policy', value: 'Yes' }]);
+    expect(o?.status).toBe('filled');
+    expect(document.querySelector<HTMLInputElement>('input')?.checked).toBe(true);
+  });
 });
