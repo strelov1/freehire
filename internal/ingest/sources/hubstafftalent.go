@@ -44,8 +44,9 @@ const (
 	// hubstafftalentMaxPages is a safety ceiling over the ~50 pages the site has.
 	hubstafftalentMaxPages = 100
 	// hubstafftalentRequestInterval holds the run under Cloudflare's rate rule: one request every
-	// 6s was answered in full across 25 pages, one a second was refused 6 times in 10.
-	hubstafftalentRequestInterval = 5 * time.Second
+	// 6s was answered in full across 25 pages, one a second was refused 6 times in 10, and one
+	// every 5s was refused at page 15 of a walk.
+	hubstafftalentRequestInterval = 6 * time.Second
 	// hubstafftalentMaxNewPerRun bounds the postings one run hydrates (~10 minutes at the pace
 	// above); the first run reads the newest, later runs the rest.
 	hubstafftalentMaxNewPerRun = 120
@@ -160,8 +161,8 @@ func hubstafftalentCards(body string) (jobs []Job, raw int, err error) {
 	if !ok {
 		return nil, 0, fmt.Errorf("no #results update in the answer")
 	}
-	var markup string
-	if err := json.NewDecoder(strings.NewReader(after)).Decode(&markup); err != nil {
+	markup, err := railsJSString(strings.TrimSpace(after))
+	if err != nil {
 		return nil, 0, fmt.Errorf("results markup: %w", err)
 	}
 	root, err := xhtml.Parse(strings.NewReader(markup))
@@ -179,6 +180,34 @@ func hubstafftalentCards(body string) (jobs []Job, raw int, err error) {
 		return true
 	})
 	return jobs, raw, nil
+}
+
+// railsJSString reads the double-quoted string literal s starts with, as Rails' escape_javascript
+// writes it: JSON's escapes plus \$, \' and \`, which a JSON decoder rejects.
+func railsJSString(s string) (string, error) {
+	if !strings.HasPrefix(s, `"`) {
+		return "", fmt.Errorf("no string literal")
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for i := 1; i < len(s); i++ {
+		c := s[i]
+		if c == '\\' && i+1 < len(s) {
+			i++
+			if next := s[i]; next != '$' && next != '\'' && next != '`' {
+				b.WriteByte(c)
+			}
+			b.WriteByte(s[i])
+			continue
+		}
+		b.WriteByte(c)
+		if c == '"' {
+			break
+		}
+	}
+	var out string
+	err := json.Unmarshal([]byte(b.String()), &out)
+	return out, err
 }
 
 // hubstafftalentCard maps one result card to a body-less Job; ok=false when it lacks the slug or

@@ -12,7 +12,7 @@ func remoteBoardSources(c HTTPClient) []Source {
 		NewJustRemote(c),
 		// SkipTheDrive: WordPress remote board; listing = category pages, hydrating (body, location
 		// and the employer's apply link are on the posting page). See skipthedrive.go.
-		NewSkipTheDrive(c),
+		NewSkipTheDrive(pacedSkipTheDrive(c)),
 		NewHubstaffTalent(c),
 		NewFlexProfessionals(c),
 		NewCrossover(c),

@@ -3,6 +3,7 @@ package sources
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -102,5 +103,27 @@ func TestCrawlAllPagedLinksNaturalEndAtCapIsNotTruncation(t *testing.T) {
 	}
 	if len(out) != 1 {
 		t.Fatalf("got %d links, want 1", len(out))
+	}
+}
+
+// refusingAfterFirst answers page 1 with one posting link and refuses every later page the way
+// a rate limiter does when the run's deadline is near.
+type refusingAfterFirst struct{}
+
+func (refusingAfterFirst) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	if !strings.HasSuffix(u, "page=1") {
+		return nil, errors.New("rate: Wait(n=1) would exceed context deadline")
+	}
+	return html.Parse(strings.NewReader(`<html><body><a href="/job/1">Role</a></body></html>`))
+}
+
+// A limiter refusal on a later page is the run ending, not the listing: it must surface so the
+// pipeline marks the board interrupted rather than reading a short listing as complete.
+func TestCrawlPagedLinksSurfacesALaterPageLimiterRefusal(t *testing.T) {
+	base, _ := url.Parse("https://example.com/")
+	_, err := crawlPagedLinks(context.Background(), refusingAfterFirst{}, 5, pagedFakeURL,
+		func(root *html.Node) []string { return pagedFakeLinks(base, root) })
+	if err == nil || !limiterRefused(err) {
+		t.Fatalf("err = %v, want the limiter refusal", err)
 	}
 }

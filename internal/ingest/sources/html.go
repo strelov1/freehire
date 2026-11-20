@@ -288,6 +288,12 @@ func crawlAllPagedLinks(ctx context.Context, get HTMLGetter, maxPages int, pageU
 	return pagedLinks(ctx, get, maxPages, pageURL, links, true)
 }
 
+// limiterRefused reports x/time/rate's refusal to wait past the context's deadline, which it
+// answers while ctx.Err() is still nil (the pipeline matches the same text, limiterOutOfRun).
+func limiterRefused(err error) bool {
+	return strings.Contains(err.Error(), "would exceed context deadline")
+}
+
 // pagedLinks is the shared paging loop. failOnGap makes a later-page fetch failure fail the whole
 // crawl (crawlAllPagedLinks) instead of ending the walk with what was gathered (crawlPagedLinks).
 //
@@ -304,7 +310,9 @@ func pagedLinks(ctx context.Context, get HTMLGetter, maxPages int, pageURL func(
 	for page := 1; page <= maxPages; page++ {
 		root, err := get.GetHTML(ctx, pageURL(page))
 		if err != nil {
-			if page == 1 || failOnGap {
+			// A rate limiter refusing ahead of the run's deadline is the run running out, not the
+			// listing ending: it must reach the pipeline, which reads it as an interruption.
+			if page == 1 || failOnGap || limiterRefused(err) {
 				return nil, err
 			}
 			reachedNaturalEnd = true

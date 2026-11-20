@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
+	"golang.org/x/time/rate"
 )
 
 // skipthedrive adapts skipthedrive.com, a WordPress remote-jobs aggregator. Boardless and
@@ -49,7 +50,25 @@ var (
 	skipthedriveIDRE       = regexp.MustCompile(`-(\d+)/?$`)
 )
 
-// NewSkipTheDrive builds the SkipTheDrive adapter over the given HTTP client.
+// skipthedriveRequestInterval paces every request of a run, listing and posting pages alike: an
+// unpaced walk of the ~23 categories (up to 33 pages each) drew 429s partway through. One a
+// second keeps a full run (~700 listing pages plus 600 posting pages) inside the unit's timeout.
+const skipthedriveRequestInterval = time.Second
+
+// pacedSkipTheDrive routes the sitemap, listing and posting requests through one limiter.
+func pacedSkipTheDrive(c skipthedriveHTTP) skipthedriveHTTP {
+	limiter := rate.NewLimiter(rate.Every(skipthedriveRequestInterval), 1)
+	return struct {
+		TextGetter
+		HTMLGetter
+	}{
+		rateLimitedTextGetter{inner: c, limiter: limiter},
+		rateLimitedHTMLGetter{inner: c, limiter: limiter},
+	}
+}
+
+// NewSkipTheDrive builds the SkipTheDrive adapter over the given HTTP client; production paces
+// it (pacedSkipTheDrive).
 func NewSkipTheDrive(c skipthedriveHTTP) Source { return skipthedrive{http: c, now: time.Now} }
 
 func (skipthedrive) Provider() string { return "skipthedrive" }

@@ -376,7 +376,8 @@ func (c *Client) PostJSON(ctx context.Context, url string, body, v any) error {
 }
 
 // request is the parameters of a single HTTP exchange issued by do. A non-nil body is
-// re-sent on each retry; the standard User-Agent/Accept headers always win over headers.
+// re-sent on each retry; the standard User-Agent always wins over headers, and accept applies
+// unless headers names its own Accept.
 // contentType is the Content-Type sent alongside a non-nil body; empty defaults to
 // "application/json" (every existing POST helper is JSON-bodied).
 type request struct {
@@ -433,15 +434,18 @@ func (c *Client) do(ctx context.Context, r request) error {
 		if err != nil {
 			return fmt.Errorf("sources: build request %s: %w", r.url, err)
 		}
-		// Custom headers go first; the standard headers below always win, so a caller
-		// can never accidentally override User-Agent/Accept.
+		// Custom headers go first; the User-Agent below always wins. Accept is the getter's
+		// default only: an endpoint that answers by content negotiation (Hubstaff Talent's
+		// listing returns its cards only to Accept: text/javascript) needs the caller's.
 		for k, val := range r.headers {
 			req.Header.Set(k, val)
 		}
 		if c.userAgent != "" {
 			req.Header.Set("User-Agent", c.userAgent)
 		}
-		req.Header.Set("Accept", r.accept)
+		if req.Header.Get("Accept") == "" {
+			req.Header.Set("Accept", r.accept)
+		}
 		if r.body != nil {
 			contentType := r.contentType
 			if contentType == "" {
