@@ -115,10 +115,10 @@ export function verify(doc: Document, label: string, expected: string): { status
   // when any of them accounts for it; reading only the first would report a
   // correct second pick as a failure.
   const wanted = normalizeLabel(expected);
-  const options = offered.get(widget) ?? [];
+  const others = offered.get(widget) ?? [];
   const matches = committed.some((shown) => {
     const text = normalizeLabel(shown);
-    return text === wanted || (!options.includes(text) && wanted.includes(text));
+    return text === wanted || (!others.includes(text) && wanted.includes(text));
   });
   return { status: matches ? 'verified' : 'mismatch', committed: committed.join(', ') };
 }
