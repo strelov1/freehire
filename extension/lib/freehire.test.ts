@@ -212,6 +212,7 @@ describe('match analysis allowance', () => {
     expect(allowanceRefuses(null)).toBe(false);
     expect(allowanceRefuses(a({ enforced: false }))).toBe(false);
     expect(allowanceRefuses(a({}))).toBe(true);
+    expect(allowanceRefuses(a({ used: 4 }))).toBe(false);
     expect(allowanceRefuses(a({ unlimited: true }))).toBe(false);
   });
   it('reports what is left', () => {
