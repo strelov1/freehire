@@ -232,13 +232,14 @@ func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 		Content: &types.EmailContent{
 			Simple: &types.Message{
 				Subject: &types.Content{Data: aws.String(m.Subject)},
-				Body: &types.Body{
-					Html: &types.Content{Data: aws.String(m.HTML)},
-					Text: &types.Content{Data: aws.String(m.Text)},
-				},
+				Body:    &types.Body{Text: &types.Content{Data: aws.String(m.Text)}},
 				Headers: m.headers(),
 			},
 		},
+	}
+	// An empty HTML part still wins in mail clients, which then show a blank letter.
+	if m.HTML != "" {
+		in.Content.Simple.Body.Html = &types.Content{Data: aws.String(m.HTML)}
 	}
 	if m.ReplyTo != "" {
 		in.ReplyToAddresses = []string{m.ReplyTo}

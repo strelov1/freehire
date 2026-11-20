@@ -262,3 +262,15 @@ func TestProductNotificationMarkerOnSimpleAndRawMessages(t *testing.T) {
 		t.Fatal("SMTP/raw transport lost product notification marker")
 	}
 }
+
+// A text-only mail (the support handover) must not carry an empty HTML part: Gmail shows
+// the HTML alternative, so the letter arrived blank.
+func TestTextOnlyMailHasNoHTMLPart(t *testing.T) {
+	in, err := (&Client{}).input(Message{From: "a@example.test", To: "b@example.test", Subject: "s", Text: "Body"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := in.Content.Simple.Body; body.Html != nil || *body.Text.Data != "Body" {
+		t.Fatalf("body: html=%v text=%v", body.Html, body.Text)
+	}
+}

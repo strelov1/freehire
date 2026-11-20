@@ -201,3 +201,14 @@ func TestAMessageWithNoAttachmentsIsStillValid(t *testing.T) {
 		t.Errorf("the message does not parse: %v", err)
 	}
 }
+
+// The SMTP transport sends these raw bytes: a text-only mail must not carry an empty HTML part.
+func TestRawTextOnlyMailHasNoHTMLPart(t *testing.T) {
+	raw, err := buildRawMessage(Message{From: "a@example.test", To: "b@example.test", Subject: "s", Text: "Body"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "text/html") || !strings.Contains(string(raw), "text/plain") {
+		t.Fatalf("raw message:\n%s", raw)
+	}
+}
