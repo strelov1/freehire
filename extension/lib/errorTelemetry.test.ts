@@ -31,6 +31,18 @@ describe('error telemetry', () => {
     expect(record.attributes['exception.stacktrace']).toContain('app.js');
     await telemetry?.shutdown();
   });
+  it('redacts a bare JWT from the message and the stack', async () => {
+    const exporter = new InMemoryLogRecordExporter();
+    const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
+    telemetry?.capture(new Error('session rejected eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOjF9.c2ln'));
+    await telemetry?.flush();
+    const [record] = exporter.getFinishedLogRecords();
+    if (!record) throw new Error('Expected one exported exception');
+    expect(record.attributes['exception.message']).toContain('[token]');
+    expect(record.attributes['exception.stacktrace']).toContain('[token]');
+    expect(JSON.stringify(record.attributes)).not.toContain('eyJ');
+    await telemetry?.shutdown();
+  });
   it('filters expected noise, deduplicates and bounds event volume', async () => {
     const exporter = new InMemoryLogRecordExporter();
     const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
