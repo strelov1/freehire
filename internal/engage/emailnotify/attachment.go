@@ -81,6 +81,9 @@ func writeAlternativeBody(mixed *multipart.Writer, htmlBody, textBody string) er
 		{"text/plain; charset=utf-8", textBody},
 		{"text/html; charset=utf-8", htmlBody},
 	} {
+		if part.content == "" && part.contentType == "text/html; charset=utf-8" {
+			continue // an empty HTML part still wins in mail clients, which then show a blank letter
+		}
 		w, err := alternative.CreatePart(textproto.MIMEHeader{
 			"Content-Type":              {part.contentType},
 			"Content-Transfer-Encoding": {"base64"},
