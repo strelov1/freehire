@@ -229,4 +229,30 @@ describe('fillByLabel', () => {
     expect(applicationInput.value).toBe('ilya@example.com');
     expect(outcomes).toEqual([{ label: 'Email', status: 'filled' }]);
   });
+
+  it('ticks a lone checkbox for "Yes", unticks for "No"', () => {
+    const box = labeledInput('adult', 'Are you 18 or older?', { type: 'checkbox' });
+    for (const [value, checked] of [
+      ['Yes', true],
+      ['No', false],
+      ['yes ', true],
+    ] as const) {
+      box.checked = !checked;
+      const [o] = fillByLabel(document, [{ label: 'Are you 18 or older?', value }]);
+      expect(o?.status).toBe('filled');
+      expect(box.checked).toBe(checked);
+    }
+  });
+
+  it('answers a native select by its option value', () => {
+    const label = document.createElement('label');
+    label.setAttribute('for', 'cty');
+    label.textContent = 'Country';
+    const select = document.createElement('select');
+    select.id = 'cty';
+    select.innerHTML = '<option value="1">France</option><option value="4417">Germany</option>';
+    document.body.append(label, select);
+    fillByLabel(document, [{ label: 'Country', value: '4417' }]);
+    expect(select.value).toBe('4417');
+  });
 });
