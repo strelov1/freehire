@@ -85,4 +85,30 @@ func TestMCPCVTools_ActAsAKeyedCallerBehindThePaidGate(t *testing.T) {
 	if text, failed := callTool("experience_list", nil); failed || !strings.Contains(text, "Cut deploy time") {
 		t.Fatalf("experience_list = %q (failed %v)", text, failed)
 	}
+	// A correction changes what it names and keeps provenance and the rest.
+	fixed := mcpc.ok("call_tool", map[string]any{"name": "experience_update_achievement", "arguments": map[string]any{
+		"id": atom["id"], "metrics": []string{"20m -> 2m"}}})
+	if fixed["claim"] != atom["claim"] || fixed["provenance"] != atom["provenance"] {
+		t.Fatalf("corrected achievement = %v, want claim and provenance kept", fixed)
+	}
+	if text, failed := callTool("experience_update_achievement", map[string]any{"id": "not-an-id", "claim": "x"}); !failed {
+		t.Fatalf("update of a malformed id = %q, want refused", text)
+	}
+	mcpc.ok("call_tool", map[string]any{"name": "experience_remove_achievement", "arguments": map[string]any{"id": atom["id"]}})
+	mcpc.ok("call_tool", map[string]any{"name": "experience_remove_employment", "arguments": map[string]any{"id": placeID}})
+	if text, failed := callTool("experience_update_employment", map[string]any{"id": placeID, "role": "x"}); !failed || !strings.Contains(text, "no such place") {
+		t.Fatalf("update of a removed place = %q (failed %v)", text, failed)
+	}
+
+	// No fit analysis is cached for this vacancy: REST's 409, in its own words.
+	if text, failed := callTool("cv_context", map[string]any{"id": cvID}); !failed || !strings.Contains(text, "fit analysis") {
+		t.Fatalf("cv_context = %q (failed %v), want the 409", text, failed)
+	}
+	// This fixture wires no PDF renderer.
+	if text, failed := callTool("cv_render", map[string]any{"id": cvID}); !failed || !strings.Contains(text, "not available") {
+		t.Fatalf("cv_render = %q (failed %v), want the 501", text, failed)
+	}
+	if text, failed := callTool("cv_tailor", map[string]any{"job_slug": "no-such-job"}); !failed || !strings.Contains(text, "no-such-job") {
+		t.Fatalf("cv_tailor of an unknown vacancy = %q (failed %v)", text, failed)
+	}
 }

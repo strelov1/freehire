@@ -123,8 +123,11 @@ func overlay(current any, changes any) (jx.Raw, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := patch["company"]; ok {
-		delete(base, "name") // a project's label is served as name and wins over company on the way back in
+	// A project's label is served as name; the decoder reads company for either kind, so the
+	// label survives a kind change and a passed company replaces it.
+	if name, ok := base["name"]; ok {
+		base["company"] = name
+		delete(base, "name")
 	}
 	maps.Copy(base, patch)
 	return json.Marshal(base)
