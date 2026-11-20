@@ -21,6 +21,11 @@ var deferredTools = map[string]bool{
 	"unsave_job": true, "report_job": true, "update_subscription": true, "unsubscribe": true,
 	"answer_bank_list": true, "answer_bank_save": true, "answer_bank_delete": true,
 	"screening_answers_set": true, "auto_apply_retry": true, "auto_apply_cancel": true,
+	// The experience bank and tailored CVs (2026-11-20): new here, served unlisted from the start.
+	"experience_list": true, "experience_add_employment": true, "experience_add_achievement": true,
+	"experience_update_employment": true, "experience_update_achievement": true,
+	"experience_remove_achievement": true, "experience_remove_employment": true,
+	"cv_list": true, "cv_get": true, "cv_context": true, "cv_tailor": true, "cv_edit": true, "cv_render": true,
 }
 
 // isDeferred also covers every interview-buddy tool: 13 of them, about one call a month.
@@ -105,7 +110,7 @@ func addToolSearch(server *mcp.Server, tools []assistant.Tool) {
 	addCatalogueTool(server, &mcp.Tool{
 		Name: toolFindTools, Title: "Find account tools", Annotations: ReadOnly(),
 		Description: "Account tools not in the tool list (alert edits and deletion, the screening answer bank, " +
-			"mock-interview buddies and others), each with its description and input schema, best matches to the query first.",
+			"the experience bank, tailored CVs, mock-interview buddies and others), each with its description and input schema, best matches to the query first.",
 	}, func(_ context.Context, _ *mcp.CallToolRequest, in findToolsInput) (*mcp.CallToolResult, findToolsOutput, error) {
 		return nil, findToolsOutput{Tools: findDeferred(tools, in.Query)}, nil
 	})
