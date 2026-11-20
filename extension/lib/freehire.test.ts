@@ -201,8 +201,8 @@ describe('authenticated calls', () => {
       expect(call[1].credentials).toBe('omit');
       expect((call[1].headers as Record<string, string>).Authorization).toBe('Bearer tok');
     }
-    const post = (fetchMock.mock.calls as unknown as [string, RequestInit][]).at(1)?.[1];
-    expect((post?.headers as Record<string, string>)['Content-Type']).toBeTruthy();
+    const post = (fetchMock.mock.calls as unknown as [string, RequestInit][])[1];
+    expect((post?.[1].headers as Record<string, string> | undefined)?.['Content-Type']).toBeTruthy();
   });
 });
 
