@@ -6,6 +6,9 @@ import {
   partitionBlockers,
   pickTailoredCVForJob,
   runAgentAutofill,
+  getJob,
+  allowanceRefuses,
+  allowanceRemaining,
   type Blocker,
   type TailoredCV,
 } from './freehire';
@@ -182,5 +185,38 @@ describe('a 402 from a plain call', () => {
     const err = await runAgentAutofill('tok').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PlanRefused);
     expect((err as PlanRefused).upgradeUrl).toBeNull();
+  });
+});
+
+describe('authenticated calls', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('omit cookies and keep the Bearer header on GET and POST', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, text: async () => '{"data":{}}' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await getJob('slug', 'tok');
+    await runAgentAutofill('tok');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const call of fetchMock.mock.calls as unknown as [string, RequestInit][]) {
+      expect(call[1].credentials).toBe('omit');
+      expect((call[1].headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    }
+    const post = (fetchMock.mock.calls as unknown as [string, RequestInit][]).at(1)?.[1];
+    expect((post?.headers as Record<string, string>)['Content-Type']).toBeTruthy();
+  });
+});
+
+describe('match analysis allowance', () => {
+  const a = (o: object) => ({ used: 5, limit: 5, unlimited: false, enforced: true, resets_at: '', ...o });
+  it('refuses only when enforced, limited and exhausted', () => {
+    expect(allowanceRefuses(null)).toBe(false);
+    expect(allowanceRefuses(a({ enforced: false }))).toBe(false);
+    expect(allowanceRefuses(a({}))).toBe(true);
+    expect(allowanceRefuses(a({ unlimited: true }))).toBe(false);
+  });
+  it('reports what is left', () => {
+    expect(allowanceRemaining(a({ used: 7 }))).toBe(0);
+    expect(allowanceRemaining(a({ used: 2 }))).toBe(3);
+    expect(allowanceRemaining(a({ unlimited: true }))).toBeNull();
   });
 });
