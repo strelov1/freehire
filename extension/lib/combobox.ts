@@ -31,6 +31,9 @@ export type VerifyStatus = 'verified' | 'mismatch' | 'empty' | 'not_found' | 'am
 const SETTLE_MS = 1000;
 const POLL_MS = 25;
 
+/** The option texts each widget offered when `select` last read it, normalised. */
+const offered = new WeakMap<Element, string[]>();
+
 /**
  * Reveals the widget's listbox. Reports `did_not_open` rather than assuming, so
  * the agent stops instead of acting blind on a widget it cannot drive.
@@ -69,7 +72,12 @@ export async function select(doc: Document, label: string, value: string): Promi
   const widget = found.widget;
   if (!isOpen(widget)) return { status: 'not_open' };
 
-  const option = comboOptionNodes(widget).find((o) => normalizeLabel(shownText(o)) === normalizeLabel(value));
+  const nodes = comboOptionNodes(widget);
+  offered.set(
+    widget,
+    nodes.map((o) => normalizeLabel(shownText(o))),
+  );
+  const option = nodes.find((o) => normalizeLabel(shownText(o)) === normalizeLabel(value));
   if (!option) return { status: 'no_option' };
 
   press(option);
@@ -93,6 +101,9 @@ export async function select(doc: Document, label: string, value: string): Promi
  * "Åland Islands +358". The other direction looks equally reasonable and is
  * quietly wrong, since "No" sits inside "Norfolk Island" and would reinstate the
  * exact failure these primitives exist to prevent.
+ *
+ * Containment is not enough on its own: a committed text that is itself another
+ * whole option ("Niger" for "Nigeria") is a different answer, not a short form.
  */
 export function verify(doc: Document, label: string, expected: string): { status: VerifyStatus; committed: string } {
   const { widget, status } = findWidget(doc, label);
@@ -104,7 +115,11 @@ export function verify(doc: Document, label: string, expected: string): { status
   // when any of them accounts for it; reading only the first would report a
   // correct second pick as a failure.
   const wanted = normalizeLabel(expected);
-  const matches = committed.some((shown) => wanted.includes(normalizeLabel(shown)));
+  const options = offered.get(widget) ?? [];
+  const matches = committed.some((shown) => {
+    const text = normalizeLabel(shown);
+    return text === wanted || (!options.includes(text) && wanted.includes(text));
+  });
   return { status: matches ? 'verified' : 'mismatch', committed: committed.join(', ') };
 }
 
