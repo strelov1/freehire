@@ -14,7 +14,7 @@ export const messages = defineMessages(
     averageReplyRate: 'Average Reply Rate',
     everyOtherCandidate: 'every other candidate with a connected mailbox',
     footnote:
-      'A snapshot of where your applications stand now. Rates are a lower bound — a job rejected after an interview counts only as rejected.',
+      'The funnel shows where your applications stand now. The rates count every application that ever reached that stage, so a rejection after an interview still counts as an interview.',
   },
   {
     ru: {
@@ -35,7 +35,7 @@ export const messages = defineMessages(
       averageReplyRate: 'Средняя доля ответов',
       everyOtherCandidate: 'у всех остальных кандидатов с подключённым почтовым ящиком',
       footnote:
-        'Срез того, как обстоят дела с вашими заявками сейчас. Доли — это нижняя граница: вакансия, по которой пришёл отказ после собеседования, считается только как отказ.',
+        'Воронка показывает, где ваши заявки сейчас. Доли учитывают каждую заявку, которая когда-либо доходила до этой стадии, поэтому отказ после собеседования всё равно считается собеседованием.',
     },
   },
 );

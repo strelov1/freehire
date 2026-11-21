@@ -10449,6 +10449,16 @@ export interface components {
             stages: {
                 [key: string]: number;
             };
+            /**
+             * Format: int64
+             * @description Applications that ever reached interview or later (current stage or stage history).
+             */
+            reached_interview: number;
+            /**
+             * Format: int64
+             * @description Applications that ever reached offer or later (current stage or stage history).
+             */
+            reached_offer: number;
             /** @description The reply-rate benchmark, only when it clears its sample gate. */
             reply_rate?: components["schemas"]["ReplyRateBenchmark"];
         };
@@ -24071,6 +24081,8 @@ export interface operations {
                      *           "rejected": 1,
                      *           "withdrawn": 0
                      *         },
+                     *         "reached_interview": 5,
+                     *         "reached_offer": 2,
                      *         "reply_rate": {
                      *           "you": {
                      *             "applications": 12,

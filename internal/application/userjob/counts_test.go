@@ -27,6 +27,19 @@ func TestCountByStageKeepsTheWholeVocabulary(t *testing.T) {
 	}
 }
 
+// A rejection after an interview sits in the rejected group but still reached interview,
+// so the reached totals sum across groups, not just the interview/offer ones.
+func TestCountByStageSumsReachedAcrossGroups(t *testing.T) {
+	got := CountByStage([]StageCount{
+		{Stage: "interview", Count: 2, ReachedInterview: 2},
+		{Stage: "rejected", Count: 5, ReachedInterview: 3, ReachedOffer: 1},
+		{Stage: "", Count: 10},
+	})
+	if got.ReachedInterview != 5 || got.ReachedOffer != 1 {
+		t.Errorf("reached = %d/%d, want 5/1", got.ReachedInterview, got.ReachedOffer)
+	}
+}
+
 func TestCountByStageSumsToApplications(t *testing.T) {
 	got := CountByStage([]StageCount{
 		{Stage: "applied", Count: 3},

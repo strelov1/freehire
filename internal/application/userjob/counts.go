@@ -5,6 +5,10 @@ package userjob
 type StageCount struct {
 	Stage string
 	Count int64
+	// ReachedInterview and ReachedOffer count the rows of this group that ever stood at
+	// interview (offer) or later, by current stage or by the stage_set ledger.
+	ReachedInterview int64
+	ReachedOffer     int64
 }
 
 // Pipeline is the application-pipeline snapshot: the total application count and the
@@ -13,6 +17,10 @@ type StageCount struct {
 type Pipeline struct {
 	Applications int64            `json:"applications"`
 	Stages       map[string]int64 `json:"stages"`
+	// ReachedInterview and ReachedOffer are the applications that ever reached that stage
+	// or later, so a rejection after an interview still counts as an interview.
+	ReachedInterview int64 `json:"reached_interview"`
+	ReachedOffer     int64 `json:"reached_offer"`
 	// ReplyRate is the personal-vs-global employer reply-rate benchmark, present only
 	// when GateReplyRateBenchmark clears both sides — never a zero or an estimate below
 	// the sample gate, so omitempty is load-bearing here, not cosmetic.
@@ -36,6 +44,8 @@ func CountByStage(counts []StageCount) Pipeline {
 	var p Pipeline
 	for _, c := range counts {
 		p.Applications += c.Count
+		p.ReachedInterview += c.ReachedInterview
+		p.ReachedOffer += c.ReachedOffer
 		if !ValidStage(c.Stage) {
 			stages["applied"] += c.Count
 			continue

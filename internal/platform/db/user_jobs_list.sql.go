@@ -13,22 +13,36 @@ import (
 )
 
 const countMyJobsByStage = `-- name: CountMyJobsByStage :many
-SELECT stage, count(*) AS count
-FROM applications
-WHERE user_id = $1
-  AND (applied_at IS NOT NULL OR stage IS NOT NULL)
-GROUP BY stage
+SELECT a.stage, count(*) AS count,
+       count(*) FILTER (WHERE a.stage IN ('interview', 'offer', 'accepted') OR EXISTS (
+           SELECT 1 FROM application_events ev
+            WHERE ev.application_id = a.id AND ev.kind = 'stage_set' AND ev.retracted_at IS NULL
+              AND ev.signal IN ('interview', 'offer', 'accepted'))) AS reached_interview,
+       count(*) FILTER (WHERE a.stage IN ('offer', 'accepted') OR EXISTS (
+           SELECT 1 FROM application_events ev
+            WHERE ev.application_id = a.id AND ev.kind = 'stage_set' AND ev.retracted_at IS NULL
+              AND ev.signal IN ('offer', 'accepted'))) AS reached_offer
+FROM applications a
+WHERE a.user_id = $1
+  AND (a.applied_at IS NOT NULL OR a.stage IS NOT NULL)
+GROUP BY a.stage
 `
 
 type CountMyJobsByStageRow struct {
-	Stage pgtype.Text `json:"stage"`
-	Count int64       `json:"count"`
+	Stage            pgtype.Text `json:"stage"`
+	Count            int64       `json:"count"`
+	ReachedInterview int64       `json:"reached_interview"`
+	ReachedOffer     int64       `json:"reached_offer"`
 }
 
 // Per-stage application counts for the Pipeline snapshot. An application is any
 // row the user applied to or staged (saved-only rows are excluded); a row with
 // applied_at set but no stage groups under a NULL stage. The Go layer folds these
 // rows into the pipeline buckets.
+//
+// reached_interview / reached_offer count the applications that ever stood at that stage
+// or later: now, or in a stage_set from the ledger. Reading the current stage alone made
+// an interview that ended in a rejection vanish from the interview rate.
 func (q *Queries) CountMyJobsByStage(ctx context.Context, userID int64) ([]CountMyJobsByStageRow, error) {
 	rows, err := q.db.Query(ctx, countMyJobsByStage, userID)
 	if err != nil {
@@ -38,7 +52,12 @@ func (q *Queries) CountMyJobsByStage(ctx context.Context, userID int64) ([]Count
 	items := []CountMyJobsByStageRow{}
 	for rows.Next() {
 		var i CountMyJobsByStageRow
-		if err := rows.Scan(&i.Stage, &i.Count); err != nil {
+		if err := rows.Scan(
+			&i.Stage,
+			&i.Count,
+			&i.ReachedInterview,
+			&i.ReachedOffer,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

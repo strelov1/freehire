@@ -178,7 +178,12 @@ func (h *trackingHandlers) TrackingPipeline(ctx context.Context) (*apigen.Tracki
 		return nil, err
 	}
 
-	out := apigen.TrackingPipeline{Applications: pipeline.Applications, Stages: apigen.TrackingPipelineStages(pipeline.Stages)}
+	out := apigen.TrackingPipeline{
+		Applications:     pipeline.Applications,
+		Stages:           apigen.TrackingPipelineStages(pipeline.Stages),
+		ReachedInterview: pipeline.ReachedInterview,
+		ReachedOffer:     pipeline.ReachedOffer,
+	}
 	if pipeline.ReplyRate != nil {
 		out.ReplyRate = apigen.NewOptReplyRateBenchmark(apigen.ReplyRateBenchmark{
 			You:    apigen.ReplyRateSide(pipeline.ReplyRate.You),
