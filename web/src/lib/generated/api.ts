@@ -9291,7 +9291,7 @@ export interface components {
             tier: components["schemas"]["PlanPriceTier"];
         };
         /** @enum {string} */
-        PlanPriceInterval: "month" | "year";
+        PlanPriceInterval: "week" | "month" | "year";
         /** @enum {string} */
         PlanPriceTier: "pro" | "ultra" | "api" | "api_data";
         /**

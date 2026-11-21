@@ -4,6 +4,7 @@
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { formatMinorUnits } from '#lib/money.js';
+  import { PRICE_INCREASE_LABEL, upcomingCents } from '#lib/priceIncrease.js';
   import { promptLogin } from '#lib/signin.js';
   import type { ApiPlan, PublicPrice } from '#lib/types.js';
 
@@ -93,15 +94,24 @@
 
     <div class="grid gap-4 sm:grid-cols-2">
       {#each cards as card (card.price.id)}
+        {@const next = upcomingCents(card.price)}
         <section class="flex flex-col gap-4 rounded-xl border border-border p-6">
           <div class="flex flex-col gap-1">
             <h3 class="text-lg font-semibold">{card.name}</h3>
             <p class="text-3xl font-semibold tracking-tight">
+              {#if next}<s class="mr-1 text-xl font-normal text-muted-foreground"
+                  >{formatMinorUnits(next, card.price.currency, undefined, { trimWhole: true })}</s
+                >{/if}
               {money(card.price)}
               <span class="text-base font-normal text-muted-foreground"
                 >/ {card.price.interval === 'year' ? 'year' : 'month'}</span
               >
             </p>
+            {#if next}
+              <p class="text-sm font-medium text-brand">
+                Price goes up on {PRICE_INCREASE_LABEL}. Subscribe now and keep {money(card.price)}.
+              </p>
+            {/if}
             <p class="text-sm text-muted-foreground">{card.blurb}</p>
           </div>
           <ul class="flex flex-col gap-2 text-sm">

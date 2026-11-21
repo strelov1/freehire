@@ -36,6 +36,7 @@ export const messages = defineMessages(
       heading: 'Subscription',
       // "$5.00 / month" — the interval comes from the provider as `month`/`year`.
       interval: {
+        week: 'week',
         month: 'month',
         year: 'year',
       },
