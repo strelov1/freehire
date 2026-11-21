@@ -453,3 +453,37 @@ func TestEnqueueGatesOnDescription(t *testing.T) {
 		}
 	})
 }
+
+// Chunked enqueue: each call takes at most chunk_size jobs below the cursor, newest id first,
+// and returns the lowest id it took; a call past the oldest job returns cursor 0.
+func TestEnqueuePendingJobsChunks(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+	a := insertJob(t, pool, "a")
+	b := insertJob(t, pool, "b")
+	insertJob(t, pool, "c")
+
+	chunk := func(before int64) EnqueuePendingJobsRow {
+		t.Helper()
+		r, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion, BeforeID: before, ChunkSize: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	if r := chunk(0); r != (EnqueuePendingJobsRow{LastID: b, Enqueued: 2}) {
+		t.Fatalf("first chunk = %+v, want {LastID:%d Enqueued:2} (c, b)", r, b)
+	}
+	if r := chunk(b); r != (EnqueuePendingJobsRow{LastID: a, Enqueued: 1}) {
+		t.Fatalf("second chunk = %+v, want {LastID:%d Enqueued:1}", r, a)
+	}
+	if r := chunk(a); r != (EnqueuePendingJobsRow{}) {
+		t.Fatalf("past the oldest = %+v, want zero", r)
+	}
+	// A rerun walks the same jobs but enqueues nothing new.
+	if r := chunk(0); r != (EnqueuePendingJobsRow{LastID: b, Enqueued: 0}) {
+		t.Fatalf("rerun = %+v, want {LastID:%d Enqueued:0}", r, b)
+	}
+}

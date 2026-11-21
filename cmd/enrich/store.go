@@ -27,11 +27,32 @@ func newDBStore(pool *pgxpool.Pool, includeNonTech bool) *dbStore {
 	return &dbStore{pool: pool, q: db.New(pool), includeNonTech: includeNonTech}
 }
 
+// enqueueChunk is how many jobs one EnqueuePendingJobs call queues: small enough that each
+// commits in seconds, so ingest's enqueue never waits long on its keys.
+const enqueueChunk = 5000
+
+// Enqueue walks the catalogue newest-first in committed chunks, so a run stopped mid-pass
+// keeps what it queued.
+// shortcut: no persisted cursor, every run restarts the pass from the newest id; persist one
+// if the repeated scan shows up as load.
 func (s *dbStore) Enqueue(ctx context.Context, targetVersion int) (int64, error) {
-	return s.q.EnqueuePendingJobs(ctx, db.EnqueuePendingJobsParams{
-		TargetVersion:  int32(targetVersion), //nolint:gosec // enrich.Version, a small constant
-		IncludeNonTech: s.includeNonTech,
-	})
+	var total, before int64
+	for {
+		r, err := s.q.EnqueuePendingJobs(ctx, db.EnqueuePendingJobsParams{
+			BeforeID:       before,
+			TargetVersion:  int32(targetVersion), //nolint:gosec // enrich.Version, a small constant
+			IncludeNonTech: s.includeNonTech,
+			ChunkSize:      enqueueChunk,
+		})
+		if err != nil {
+			return total, err
+		}
+		total += r.Enqueued
+		if r.LastID == 0 {
+			return total, nil
+		}
+		before = r.LastID
+	}
 }
 
 func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]enrich.Claimed, error) {

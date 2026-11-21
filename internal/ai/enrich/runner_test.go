@@ -46,6 +46,9 @@ type fakeStore struct {
 	// completeErr fails the write-back for an outbox id.
 	completeErr map[int64]error
 
+	// enqueueN is what Enqueue reports adding.
+	enqueueN int64
+
 	mu        sync.Mutex
 	reapCalls int
 	enqueued  bool
@@ -56,7 +59,7 @@ type fakeStore struct {
 
 func (s *fakeStore) Enqueue(_ context.Context, _ int) (int64, error) {
 	s.enqueued = true
-	return 0, nil
+	return s.enqueueN, nil
 }
 
 func (s *fakeStore) Claim(_ context.Context, _, _ int) ([]Claimed, error) {
@@ -355,5 +358,27 @@ func TestRun_nilProgressIsAllowed(t *testing.T) {
 	}}
 	if _, err := (Runner{Provider: prov, Store: store, wait: noWait}).Run(context.Background(), opts()); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+}
+
+// The enqueue runs alongside the drain, so entries it adds after the queue first ran dry
+// must still be drained in the same run, not left for the next deploy's restart.
+func TestRun_drainsWhatTheEnqueueAddedAfterTheQueueRanDry(t *testing.T) {
+	store := &fakeStore{
+		// The first drain finds nothing; the second claims what the enqueue added.
+		claims:   [][]Claimed{{}, {{OutboxID: 1, JobID: 100, TargetVersion: Version}}},
+		jobs:     map[int64]JobInput{100: {Title: "Go dev"}},
+		enqueueN: 1,
+	}
+	prov := &funcProvider{fn: func(JobInput) (Enrichment, error) {
+		return Enrichment{Seniority: "senior", WorkMode: "remote"}, nil
+	}}
+
+	stats, err := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats != (Stats{Enriched: 1}) {
+		t.Errorf("stats = %+v, want {Enriched:1}", stats)
 	}
 }
