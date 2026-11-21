@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -46,8 +47,10 @@ type fakeStore struct {
 	// completeErr fails the write-back for an outbox id.
 	completeErr map[int64]error
 
-	// enqueueN is what Enqueue reports adding.
-	enqueueN int64
+	// enqueueN is what Enqueue reports adding; when enqueueBlock is set, Enqueue returns
+	// only once it is closed.
+	enqueueN     int64
+	enqueueBlock chan struct{}
 
 	mu        sync.Mutex
 	reapCalls int
@@ -59,6 +62,9 @@ type fakeStore struct {
 
 func (s *fakeStore) Enqueue(_ context.Context, _ int) (int64, error) {
 	s.enqueued = true
+	if s.enqueueBlock != nil {
+		<-s.enqueueBlock
+	}
 	return s.enqueueN, nil
 }
 
@@ -361,16 +367,23 @@ func TestRun_nilProgressIsAllowed(t *testing.T) {
 	}
 }
 
-// The enqueue runs alongside the drain, so entries it adds after the queue first ran dry
-// must still be drained in the same run, not left for the next deploy's restart.
-func TestRun_drainsWhatTheEnqueueAddedAfterTheQueueRanDry(t *testing.T) {
+// The enqueue runs alongside the drain, so entries it commits while still running must be
+// drained then, not after the whole pass: here Enqueue returns only once the entry it
+// "committed" has been written, so a runner that waits for it first never returns.
+func TestRun_drainsWhileTheEnqueueIsStillRunning(t *testing.T) {
+	defer func(d time.Duration) { enqueuePoll = d }(enqueuePoll)
+	enqueuePoll = time.Millisecond
+
+	block := make(chan struct{})
 	store := &fakeStore{
-		// The first drain finds nothing; the second claims what the enqueue added.
-		claims:   [][]Claimed{{}, {{OutboxID: 1, JobID: 100, TargetVersion: Version}}},
-		jobs:     map[int64]JobInput{100: {Title: "Go dev"}},
-		enqueueN: 1,
+		// The first drain finds nothing; a later one claims what the enqueue added.
+		claims:       [][]Claimed{{}, {{OutboxID: 1, JobID: 100, TargetVersion: Version}}},
+		jobs:         map[int64]JobInput{100: {Title: "Go dev"}},
+		enqueueN:     1,
+		enqueueBlock: block,
 	}
 	prov := &funcProvider{fn: func(JobInput) (Enrichment, error) {
+		defer close(block)
 		return Enrichment{Seniority: "senior", WorkMode: "remote"}, nil
 	}}
 

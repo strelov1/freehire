@@ -143,8 +143,7 @@ func sleepCtx(ctx context.Context, d time.Duration) {
 //
 // The enqueue runs alongside the drain, not before it: a whole-catalogue pass takes longer
 // than the gap between deploys, and every deploy restarts the run, so a drain that waited
-// for it never started. Once the drain finds the queue empty it waits for the enqueue and
-// drains again whatever that added.
+// for it never started. While the enqueue runs, an idle drain retries each enqueuePoll.
 func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 	// Reap first so the reported depth is work, not residue. Best-effort: housekeeping must
 	// never stop enrichment.
@@ -200,21 +199,38 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 		return nil
 	}
 
-	if err := drain(); err != nil {
-		stopEnqueue()
-		<-enq
-		return stats, err
+	// Drain, and while the enqueue is still going, drain again each enqueuePoll so the
+	// chunks it commits are taken as they land; stop after a drain that follows its end.
+	enqueueDone := false
+	for {
+		if err := drain(); err != nil {
+			stopEnqueue()
+			if !enqueueDone {
+				<-enq
+			}
+			return stats, err
+		}
+		if enqueueDone {
+			return stats, nil
+		}
+		select {
+		case res := <-enq:
+			enqueueDone = true
+			if res.err != nil {
+				return stats, fmt.Errorf("enqueue: %w", res.err)
+			}
+			log.Printf("enrich: enqueued %d pending", res.n)
+		case <-time.After(enqueuePoll):
+		case <-ctx.Done():
+			<-enq
+			return stats, ctx.Err()
+		}
 	}
-	res := <-enq
-	if res.err != nil {
-		return stats, fmt.Errorf("enqueue: %w", res.err)
-	}
-	log.Printf("enrich: enqueued %d pending", res.n)
-	if res.n > 0 {
-		return stats, drain()
-	}
-	return stats, nil
 }
+
+// enqueuePoll is how often an idle drain looks again for work while the enqueue runs.
+// A var so tests can shorten it.
+var enqueuePoll = time.Minute
 
 // run carries one Run's dependencies so the per-entry helpers use the receiver.
 type run struct {
