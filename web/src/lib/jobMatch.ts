@@ -33,7 +33,9 @@ export function toneText(severity: BlockerSeverity): string {
 const CHIP_BASE = 'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium';
 export const haveChipClass = `${CHIP_BASE} border-brand/30 bg-brand-muted text-brand-strong`;
 export const adjacentChipClass = `${CHIP_BASE} border-warning/30 bg-warning/10 text-warning-strong`;
-export const missingChipClass = `${CHIP_BASE} border-destructive/30 bg-destructive/10 text-destructive-strong`;
+// Neutral, not red: a skill the reader lacks is a gap, not an error, and a column of red
+// pills outshouted the score above it. The red dot on the group heading still names it.
+export const missingChipClass = `${CHIP_BASE} border-border bg-transparent text-muted-foreground`;
 
 /** Which state the match block renders. `loading` is the brief window while an
  *  authenticated viewer's profile is still being fetched — shown before we know

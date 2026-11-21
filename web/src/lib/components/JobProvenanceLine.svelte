@@ -51,9 +51,10 @@
   </p>
 
   <div class="flex max-w-full shrink-0 flex-wrap items-center gap-x-2 gap-y-2 lg:gap-x-3">
-    <!-- Who backed the employer. The page has room the feed card does not, so the
-         badge carries the brand name too and links to that collection's roles. -->
-    <BackerBadge collections={job.collections} withLabel />
+    <!-- Who backed the employer: the marks alone, as on the feed card, at most three.
+         Labelled pills for every backer (Stripe has six) took a whole line and buried the
+         title under them; the rest fold into "+N", whose list links each collection. -->
+    <BackerBadge collections={job.collections} max={3} />
 
     <!-- How long this has really been open, on the provenance line rather than under
          the title: it is a fact ABOUT the posting, like the company and the backer,
