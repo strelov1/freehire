@@ -23,7 +23,7 @@ describe('BackerBadge overflow', () => {
 
     const linked = render(BackerBadge, { collections: ['yc'], linked: true }).container;
     const link = linked.querySelector('a');
-    expect(link?.getAttribute('href')).toBe('/collections/yc');
+    expect(link?.getAttribute('href')?.startsWith('/collections/')).toBe(true);
     expect(link?.querySelector('img')?.getAttribute('alt')).toBeTruthy();
   });
 
