@@ -165,10 +165,19 @@ function isHttpError(error: unknown): error is { status: number; message?: unkno
 
 type ErrorTelemetry = ReturnType<typeof createErrorTelemetry>;
 
-// Only discard stacks whose every recognizable frame belongs to an extension.
+// Only discard stacks whose every recognizable frame is code we did not ship.
 // V8 uses "at fn (url)"; Firefox and Safari use "fn@url".
+//
+// Two kinds of location are foreign. An extension's own files. And any http(s) location
+// outside /_app/: everything we ship to the window is a module there (see foreignParseError
+// for the one inline script, which every e2e run executes). A script a visitor's extension or
+// in-app browser INJECTS into the page has no file of its own, so its frames carry the page's
+// URL — "global code@https://freehire.me/jobs/<slug>:1:16" for a wallet probing
+// window.ethereum, or a recursion at line 236 of a 134-line document. Those two families
+// filled the client stream with ~70 events a day and were read as a release regression.
 const EXTENSION_FRAME = /^(?:chrome|moz|safari|safari-web|edge)-extension:\/\//i;
-function fromExtensionOnly(error: unknown): boolean {
+const NOT_SHIPPED_FRAME = /^https?:\/\/[^/]+\/(?!_app\/)/i;
+function fromForeignCodeOnly(error: unknown): boolean {
   if (!(error instanceof Error) || typeof error.stack !== 'string') return false;
   const frames = error.stack.split('\n').filter((line) => /^\s*at\s+|@\S+:\d+/.test(line));
   return (
@@ -178,7 +187,7 @@ function fromExtensionOnly(error: unknown): boolean {
         .trim()
         .replace(/^at\s+(?:.*?\s+\()?/, '')
         .replace(/^.*?@/, '');
-      return EXTENSION_FRAME.test(location);
+      return EXTENSION_FRAME.test(location) || NOT_SHIPPED_FRAME.test(location);
     })
   );
 }
@@ -201,11 +210,11 @@ export function installErrorListeners(
   telemetry: Pick<NonNullable<ErrorTelemetry>, 'capture'> | undefined,
   owns?: (error: Error, filename: string) => boolean,
 ) {
-  // The extension-only filter serves the caller with no predicate of its own (the web
+  // The foreign-code filter serves the caller with no predicate of its own (the web
   // client, where every window event is adopted by default). A caller that passes `owns`
   // already answers provenance — for a browser extension the extension's own frames ARE
   // its code — so its answer stands alone.
-  const foreign = owns ? undefined : fromExtensionOnly;
+  const foreign = owns ? undefined : fromForeignCodeOnly;
   target.addEventListener('error', (event) => {
     const failure = event as ErrorEvent;
     if (failure.error == null) return;

@@ -301,9 +301,40 @@ it('handles Firefox and Safari extension stacks while retaining mixed stacks', (
   }
   expect(capture).not.toHaveBeenCalled();
   const mixed = new Error('mixed');
-  mixed.stack = 'execute@moz-extension://visitor/content.js:1:2\nrender@https://freehire.test/app.js:3:4';
+  mixed.stack =
+    'execute@moz-extension://visitor/content.js:1:2\nrender@https://freehire.test/_app/immutable/chunks/app.js:3:4';
   target.dispatchEvent(Object.assign(new Event('error'), { error: mixed }));
   expect(capture).toHaveBeenCalledWith(mixed);
+});
+
+it('drops errors whose every frame is a script injected into the page', () => {
+  const capture = vi.fn();
+  const target = new EventTarget();
+  installErrorListeners(target, { capture });
+  // Production stacks (2026-11-21): a wallet probe and an injected recursion, both attributed
+  // to the document's URL because the injected code has no file of its own.
+  const wallet = new TypeError("undefined is not an object (evaluating 'window.ethereum.selectedAddress = undefined')");
+  wallet.stack = 'global code@https://freehire.test/jobs/senior-data-engineer-kitopi-ktkdoqgy:1:16';
+  const recursion = new RangeError('Maximum call stack size exceeded.');
+  recursion.stack = [
+    '@https://freehire.test/signin:195:249',
+    'Fk@https://freehire.test/mcp:236:392',
+    'Dk@https://freehire.test/mcp:236:70',
+  ].join('\n');
+  const chromeInjected = new Error('injected');
+  chromeInjected.stack = 'Error: injected\n    at https://freehire.test/jobs/a-job:12:5';
+  for (const error of [wallet, recursion, chromeInjected]) {
+    target.dispatchEvent(Object.assign(new Event('error'), { error }));
+  }
+  target.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason: recursion }));
+  expect(capture).not.toHaveBeenCalled();
+
+  // One frame in a module we ship keeps the stack: the injected code may have called ours.
+  const ours = new TypeError('page defect');
+  ours.stack =
+    'render@https://freehire.test/_app/immutable/nodes/12.abc.js:1:2\n@https://freehire.test/jobs/a-job:236:70';
+  target.dispatchEvent(Object.assign(new Event('error'), { error: ours }));
+  expect(capture).toHaveBeenCalledWith(ours);
 });
 
 it('drops parse errors from scripts we did not ship while keeping our own', () => {
