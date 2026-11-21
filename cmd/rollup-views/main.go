@@ -106,18 +106,18 @@ func run() int {
 	}
 
 	// Runs even after a failed pass: the chunks that did commit moved view_count too.
-	// shortcut: a failed push is not retried; those documents keep their old figure until
+	// shortcut: a failed or cut-short push (pushBudget) is not retried; those documents keep their old figure until
 	// the job is viewed again or the drain rewrites it. Persist the pending ids if the
 	// "Most viewed" sort ever needs to be exact.
 	if len(viewDeltas) > 0 && cfg.MeiliKey != "" {
 		done := worker.Stage("search view counts")
-		n, err := pushViewCounts(ctx, db.New(pool), search.NewClient(cfg.MeiliURL, cfg.MeiliKey), viewDeltas)
+		n, skipped, err := pushViewCounts(ctx, db.New(pool), search.NewClient(cfg.MeiliURL, cfg.MeiliKey), viewDeltas, time.Now().Add(pushBudget))
 		done()
 		if err != nil {
 			log.Printf("search view counts: wrote %d, then failed (%d jobs touched): %v", n, len(viewDeltas), err)
 			exit = 1
 		} else {
-			log.Printf("rollup-views: wrote view_count of %d of %d touched job(s) to the search index", n, len(viewDeltas))
+			log.Printf("rollup-views: wrote view_count of %d of %d touched job(s) to the search index, %d left past the %v budget", n, len(viewDeltas), skipped, pushBudget)
 		}
 	}
 	return exit
