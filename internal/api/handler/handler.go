@@ -212,7 +212,6 @@ func Register(app *fiber.App, cfg Config) {
 	referralMessageH := newReferralMessageHandlers(queries, bank, resumeStore, fitSvc, letterDeps.chain, llmBinding{client: cfg.LLM, keys: llmKeys}, plans)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
-	discordH := newDiscordHandlers(cfg.DiscordLinker, cfg.DiscordClientID, cfg.FrontendOrigin, cfg.CookieSecure)
 	// The pull direction is wired only where there is a model to ask; left nil, its endpoint
 	// reports the feature off.
 	if cfg.LLM != nil {
@@ -412,6 +411,5 @@ func Register(app *fiber.App, cfg Config) {
 		speech:           speechH,
 		webhook:          webhookH,
 		telegram:         telegramH,
-		discord:          discordH,
 	})
 }

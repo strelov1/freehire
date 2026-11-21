@@ -233,7 +233,7 @@ func TestRunBackfill_PaginatesAcrossMultiplePages(t *testing.T) {
 }
 
 // TestRunBackfill_SkipsOverAFailingCompanyRatherThanAborting locks in the repo's
-// established convention (see backfill-talent-handle, discord-sync): a per-company
+// established convention (see backfill-talent-handle): a per-company
 // failure is counted and stepped over, never fatal to the whole run. Without this, a
 // single company whose name deterministically breaks the Wikidata lookup — a decode
 // error, an unexpected status doWithRetry doesn't retry — would become the first

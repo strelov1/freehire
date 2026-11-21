@@ -9,6 +9,7 @@ const retired = {
   'backfill-justjoin': 'Removed source backfill.',
   'backfill-requirements': 'Requirements now use the queue.',
   'discord-register-commands': 'Removed registration worker.',
+  'discord-sync': 'Removed paid Discord role sync.',
   'hire-api': 'Previous server binary name.',
   prune: 'Removed hard-deletion worker.',
   reslug: 'Completed company slug migration.',

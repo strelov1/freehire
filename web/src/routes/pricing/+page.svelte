@@ -7,7 +7,7 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { PRO_PERKS } from '#lib/proPerks.js';
   import Seo from '#lib/components/Seo.svelte';
-  import { ProviderIcon, SectionLabel, buttonVariants, cn } from '#lib/ui/index.js';
+  import { SectionLabel, buttonVariants, cn } from '#lib/ui/index.js';
   import type { PlanTierAllowance, PlansMatrix, PublicPrice } from '#lib/types.js';
   import { Check } from '@lucide/svelte';
   import type { PageData } from './$types';
@@ -280,18 +280,6 @@
     </div>
   {/snippet}
 
-  <!-- The one thing on this page that is NOT a daily amount, so it cannot be a row in the
-     allowance lists: free does not get a smaller share of it, it gets none. It is rendered on
-     the paid cards and simply absent from the free one, because a crossed-out row would say
-     "you cannot" — the thing this page is built to never say. A snippet, so the two paid
-     cards cannot drift apart about how the one perk they share is worded. -->
-  {#snippet discordPerk()}
-    <p class="flex items-baseline gap-2 text-sm">
-      <ProviderIcon provider="discord" class="size-4 shrink-0 translate-y-0.5" />
-      <span class="text-muted-foreground">Members-only channels on the community Discord.</span>
-    </p>
-  {/snippet}
-
   <!-- Three tracks only when there is a third card to fill one: a grid fixed at
      lg:grid-cols-3 with two children leaves the third an empty gap on wide screens instead
      of the two cards sharing the row the way they already do at the sm breakpoint.
@@ -342,8 +330,6 @@
       </div>
       {@render perkList(PRO_PERKS)}
       {@render allowanceList(rows, 'pro')}
-
-      {@render discordPerk()}
 
       {#if chosen}
         {#if isAuthenticated()}
@@ -416,8 +402,6 @@
           </p>
         </div>
         {@render allowanceList(rows, 'ultra')}
-
-        {@render discordPerk()}
 
         {#if isAuthenticated()}
           <button

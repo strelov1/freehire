@@ -3,7 +3,7 @@
 // any send failed; run it every 10 minutes, independent of cmd/billing-sync's hourly cadence.
 //
 // It is its own worker, not a pass inside cmd/billing-sync, for layering: identity/billing must
-// not import engage, which this mails through (as cmd/discord-sync).
+// not import engage, which this mails through.
 //
 // Needs:
 //

@@ -50,7 +50,7 @@ func run() int {
 		return 1
 	}
 
-	// Gated BEFORE Bootstrap, like discord-sync and billing-sync: with no engine configured
+	// Gated BEFORE Bootstrap, like billing-sync: with no engine configured
 	// an unconfigured deployment must run without touching the database, so clearing the
 	// credentials leaves a green timer on a host with no DATABASE_URL.
 	//
