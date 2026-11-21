@@ -1,0 +1,17 @@
+-- Drop discord_links again. The paid Discord channels it existed for (0144) are removed in
+-- this same change: the link/unlink endpoints, cmd/discord-sync and the integrations card.
+--
+-- The table held nothing but a mapping — user_id -> discord_user_id, plus the link/grant/sync
+-- timestamps. No content, nothing derived from it, and nothing else reads it: its queries are
+-- deleted here.
+--
+-- Archive the rows on the host before releasing (pg_dump --column-inserts -t discord_links),
+-- because a DROP is the one step nothing else can undo.
+--
+-- CASCADE is deliberately NOT used: if something still depends on this table, the drop
+-- should fail and say so rather than quietly take the dependant with it.
+--
+-- The rule below fires on every DROP TABLE, because dropping one breaks existing clients.
+-- Its only clients are the endpoints and the timer removed in this change.
+-- squawk-ignore ban-drop-table
+DROP TABLE IF EXISTS public.discord_links;

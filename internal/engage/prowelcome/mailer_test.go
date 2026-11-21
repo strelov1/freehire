@@ -87,20 +87,6 @@ func TestMailer_RenderLinksDiscordAndLinkedIn(t *testing.T) {
 	}
 }
 
-func TestMailer_RenderExplainsHowToJoinTheProChat(t *testing.T) {
-	mail, err := newMailer(&fakeSender{}).render(plan.TierPro, time.Now().Add(30*24*time.Hour), "tok")
-	if err != nil {
-		t.Fatalf("render: %v", err)
-	}
-	const wantURL = "https://freehire.me/my/integrations?utm_source=email"
-	if !strings.Contains(mail.html, wantURL) {
-		t.Errorf("html does not link the integrations page (%s) for connecting Discord", wantURL)
-	}
-	if !strings.Contains(mail.text, wantURL) {
-		t.Errorf("text does not link the integrations page (%s) for connecting Discord", wantURL)
-	}
-}
-
 func TestMailer_SendUsesHumanReplyTo(t *testing.T) {
 	sender := &fakeSender{}
 	m := newMailer(sender)

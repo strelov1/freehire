@@ -2329,44 +2329,6 @@ curl -X POST "https://freehire.me/api/v1/me/telegram/link" -b cookies.txt
 }
 ```
 
-### `GET /me/discord`
-
-**Auth:** Session only
-
-Your Discord link status, and whether the paid role is on it.
-
-```bash
-curl "https://freehire.me/api/v1/me/discord" -b cookies.txt
-```
-
-```json
-{
-  "data": {
-    "enabled": true,
-    "linked": true,
-    "role_granted": true
-  }
-}
-```
-
-### `DELETE /me/discord`
-
-**Auth:** Session only
-
-Unlink your Discord account, giving up the paid role with it.
-
-```bash
-curl -X DELETE "https://freehire.me/api/v1/me/discord" -b cookies.txt
-```
-
-```json
-{
-  "data": {
-    "linked": false
-  }
-}
-```
-
 ### `GET /me/webhook`
 
 **Auth:** Session only

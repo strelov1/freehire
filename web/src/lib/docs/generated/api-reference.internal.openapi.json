@@ -10253,60 +10253,6 @@
         ]
       }
     },
-    "/me/discord": {
-      "get": {
-        "summary": "Your Discord link status, and whether the paid role is on it.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "example": {
-                  "data": {
-                    "enabled": true,
-                    "linked": true,
-                    "role_granted": true
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          }
-        ],
-        "tags": [
-          "Alerts"
-        ]
-      },
-      "delete": {
-        "summary": "Unlink your Discord account, giving up the paid role with it.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "example": {
-                  "data": {
-                    "linked": false
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          }
-        ],
-        "tags": [
-          "Alerts"
-        ]
-      }
-    },
     "/me/webhook": {
       "get": {
         "summary": "Your webhook destination for saved-search matches, or null if none is configured.",

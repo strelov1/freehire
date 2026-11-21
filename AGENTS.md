@@ -146,7 +146,6 @@ Each is self-contained and can be read independently.
 | **Mentorship marketplace** | [internal/engage/mentorship/AGENTS.md](internal/engage/mentorship/AGENTS.md) |
 | **Daily social digest** | [internal/engage/socialdigest/AGENTS.md](internal/engage/socialdigest/AGENTS.md) |
 | **LinkedIn credential** | [internal/engage/linkedinauth/AGENTS.md](internal/engage/linkedinauth/AGENTS.md) |
-| **Discord paid channels** | [internal/engage/discordlink/AGENTS.md](internal/engage/discordlink/AGENTS.md) |
 | **`internal/api`** block | [internal/api/AGENTS.md](internal/api/AGENTS.md) |
 | **HTTP handlers** (responses, errors, routes) | [internal/api/handler/AGENTS.md](internal/api/handler/AGENTS.md) |
 | **Auto-apply browser driver** | [internal/api/atsapply/AGENTS.md](internal/api/atsapply/AGENTS.md) |
