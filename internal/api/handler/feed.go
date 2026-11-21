@@ -21,7 +21,10 @@ import (
 )
 
 // Reasons the feed returns no cards instead of searching the whole index (AD-3).
-const feedReasonNoProfile = "no_profile"
+const (
+	feedReasonNoProfile     = "no_profile"
+	feedReasonSourceChanged = "source_changed"
+)
 
 var feedDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Name:    "freehire_me_feed_duration_seconds",
@@ -29,10 +32,10 @@ var feedDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets: prometheus.DefBuckets,
 }, []string{"outcome"})
 
-// excludedJobs is the tracking read the feed skips saved and dismissed jobs by, the same
-// set the swipe deck excludes.
+// excludedJobs is the tracking read the feed skips jobs by: those saved, dismissed or
+// applied to before the paging snapshot (AD-7).
 type excludedJobs interface {
-	ExcludedJobIDs(ctx context.Context, userID int64) ([]int64, error)
+	FeedExcludedJobIDs(ctx context.Context, userID int64, before time.Time) ([]int64, error)
 }
 
 // feedPlans is the plan check the feed is gated on. *plan.Store in production.
@@ -50,14 +53,15 @@ type feedHandlers struct {
 	plans    feedPlans
 	rank     *feed.Reranker
 	cvs      feedCVs
+	cursors  *feed.Signer
 }
 
 // newFeedHandlers is nil with the flag off, so the route is never registered.
-func newFeedHandlers(on bool, s searcher, p profileReader, e excludedJobs, pl feedPlans, cvs feedCVs, jevKey string, c cache.Cache) *feedHandlers {
+func newFeedHandlers(on bool, s searcher, p profileReader, e excludedJobs, pl feedPlans, cvs feedCVs, jevKey string, c cache.Cache, cursorKey []byte) *feedHandlers {
 	if !on {
 		return nil
 	}
-	return &feedHandlers{search: s, profiles: p, excluded: e, plans: pl, rank: newFeedReranker(jevKey, c), cvs: cvs}
+	return &feedHandlers{search: s, profiles: p, excluded: e, plans: pl, rank: newFeedReranker(jevKey, c), cvs: cvs, cursors: feed.NewSigner(cursorKey)}
 }
 
 func (h *feedHandlers) register(api fiber.Router, mw middleware) {
@@ -86,6 +90,8 @@ type feedMeta struct {
 	Degraded string `json:"degraded,omitempty"`
 	// Ranking is how the page is ordered: fit (Jev), skills (vector) or date (no vector). Open enum.
 	Ranking string `json:"ranking,omitempty"`
+	// NextCursor pages on; absent on the last page. Opaque: clients never parse it (AD-7).
+	NextCursor string `json:"next_cursor,omitempty"`
 }
 
 // Feed returns one page of jobs matching the caller's profile, best match first.
@@ -108,7 +114,8 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	} else if err != nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "Cannot verify your plan right now")
 	}
-	limit, offset, err := pageParams(c)
+	limit, _ := pageParamsBounded(c, defaultLimit, maxLimit) // paging is by cursor, never offset
+	cur, err := h.pageCursor(c, userID)
 	if err != nil {
 		return err
 	}
@@ -124,19 +131,24 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	version := profileVersion(profile)
+	if cur.Offset > 0 && cur.Version != version {
+		return empty(feedReasonSourceChanged)
+	}
 	vals, reason := feed.ProfileQuery(profile)
 	if reason != "" {
 		return empty(reason)
 	}
-	excluded, err := h.excluded.ExcludedJobIDs(c.Context(), userID)
+	excluded, err := h.excluded.FeedExcludedJobIDs(c.Context(), userID, time.Unix(cur.SnapshotAt, 0))
 	if err != nil {
 		return err
 	}
 
 	params := search.SearchParams{
-		Filter: withExcludedIDs(search.FilterFromValues(vals), excluded),
+		// Jobs indexed after the snapshot never shift a window; they appear after a restart.
+		Filter: withFilterGroup(withExcludedIDs(search.FilterFromValues(vals), excluded), search.Lte("created_ts", int(cur.SnapshotAt))),
 		Limit:  limit,
-		Offset: offset,
+		Offset: cur.Offset,
 	}
 	meta := feedMeta{Source: "profile"}
 	if len(profile.Skills) > 0 {
@@ -159,6 +171,7 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 		cards, meta.Ranking = h.rerankCards(c.Context(), userID, res.Hits, cards)
 	}
 	meta.Total = res.Total
+	meta.NextCursor = h.nextCursor(cur, version, limit, len(res.Hits), res.Total)
 	outcome = "ok"
 	return c.JSON(fiber.Map{"data": cards, "meta": meta})
 }

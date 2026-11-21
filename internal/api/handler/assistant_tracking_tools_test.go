@@ -135,6 +135,10 @@ func (r *trackingRepo) ExcludedJobIDs(context.Context, int64, int32) ([]int64, e
 	return nil, nil
 }
 
+func (r *trackingRepo) FeedExcludedJobIDs(context.Context, int64, time.Time, int32) ([]int64, error) {
+	return nil, nil
+}
+
 func trackingAPI(repo *trackingRepo) *assistantHandlers {
 	return &assistantHandlers{tracking: &trackingHandlers{tracking: jobtracking.New(repo)}}
 }

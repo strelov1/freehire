@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -28,7 +29,9 @@ func (f feedProfile) Get(context.Context, int64) (userprofile.Profile, error) { 
 
 type feedExcluded []int64
 
-func (f feedExcluded) ExcludedJobIDs(context.Context, int64) ([]int64, error) { return f, nil }
+func (f feedExcluded) FeedExcludedJobIDs(context.Context, int64, time.Time) ([]int64, error) {
+	return f, nil
+}
 
 type feedPlansFake struct{ err error }
 
@@ -46,7 +49,7 @@ func feedAppPlans(s searcher, prof feedProfile, plans feedPlans) (*fiber.App, *a
 
 func feedAppRank(s searcher, prof feedProfile, plans feedPlans, rank *feed.Reranker, cvs feedCVs) (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &feedHandlers{search: s, profiles: prof, excluded: feedExcluded{10}, plans: plans, rank: rank, cvs: cvs}
+	h := &feedHandlers{search: s, profiles: prof, excluded: feedExcluded{10}, plans: plans, rank: rank, cvs: cvs, cursors: feed.NewSigner([]byte("cursor-key"))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/feed", auth.RequireAuth(iss, testVersions), h.Feed)
 	return app, iss
@@ -222,5 +225,120 @@ func TestFeed_NoJevKeyRanksBySkills(t *testing.T) {
 	status, body := deckGet(t, app, iss, "/api/v1/me/feed")
 	if status != fiber.StatusOK || body["meta"].(map[string]any)["ranking"] != "skills" {
 		t.Errorf("status = %d, meta = %v", status, body["meta"])
+	}
+}
+
+type feedExcludedAt struct{ before []time.Time }
+
+func (f *feedExcludedAt) FeedExcludedJobIDs(_ context.Context, _ int64, before time.Time) ([]int64, error) {
+	f.before = append(f.before, before)
+	return []int64{10}, nil
+}
+
+var feedUpdated = time.Unix(1_700_000_000, 0)
+
+func feedPagingApp(s searcher, ex *feedExcludedAt, updated time.Time) (*fiber.App, *auth.Issuer) {
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	prof := feedProfile{p: userprofile.Profile{Skills: []string{"go"}, UpdatedAt: &updated}}
+	h := &feedHandlers{search: s, profiles: prof, excluded: ex, plans: feedPlansFake{}, cursors: feed.NewSigner([]byte("cursor-key"))}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/me/feed", auth.RequireAuth(iss, testVersions), h.Feed)
+	return app, iss
+}
+
+func nextCursorOf(body map[string]any) string {
+	s, _ := body["meta"].(map[string]any)["next_cursor"].(string)
+	return s
+}
+
+func TestFeed_CursorPagesOverAFixedSnapshot(t *testing.T) {
+	fake := &fakeSearcher{res: search.SearchResult{Total: 3, Hits: []search.JobDocument{{ID: 1, Job: jobview.Job{PublicSlug: "a"}}, {ID: 2, Job: jobview.Job{PublicSlug: "b"}}}}}
+	ex := &feedExcludedAt{}
+	app, iss := feedPagingApp(fake, ex, feedUpdated)
+
+	// offset is ignored: page 1 starts at 0 and hands out a cursor.
+	asked := time.Now()
+	_, body := deckGet(t, app, iss, "/api/v1/me/feed?limit=2&offset=20")
+	cur := nextCursorOf(body)
+	if cur == "" || fake.got.Offset != 0 || fake.got.Limit != 2 {
+		t.Fatalf("page 1: cursor=%q params=%#v", cur, fake.got)
+	}
+	snap := ex.before[0]
+	if !snap.Equal(snap.Truncate(time.Second)) {
+		t.Errorf("snapshot %v is not whole seconds", snap)
+	}
+	// Rounded up: an action earlier in the request's second is before the snapshot.
+	if !snap.After(asked) {
+		t.Errorf("snapshot %v not after the request at %v", snap, asked)
+	}
+	if !filterHas(fake.got.Filter.([][]string), fmt.Sprintf("created_ts <= %d", snap.Unix())) {
+		t.Errorf("page 1 not bounded by the snapshot: %#v", fake.got.Filter)
+	}
+
+	// An action between pages changes nothing: page 2 reuses the snapshot and the next window.
+	fake.res = search.SearchResult{Total: 3, Hits: []search.JobDocument{{ID: 3, Job: jobview.Job{PublicSlug: "c"}}}}
+	status, body := deckGet(t, app, iss, "/api/v1/me/feed?limit=2&cursor="+cur)
+	if status != fiber.StatusOK || fake.got.Offset != 2 {
+		t.Fatalf("page 2: status=%d params=%#v", status, fake.got)
+	}
+	if !ex.before[1].Equal(snap) || !filterHas(fake.got.Filter.([][]string), fmt.Sprintf("created_ts <= %d", snap.Unix())) {
+		t.Errorf("page 2 snapshot moved: %v vs %v", ex.before[1], snap)
+	}
+	if nextCursorOf(body) != "" {
+		t.Errorf("last (short) page still has a cursor")
+	}
+}
+
+func TestFeed_NoCursorAtTheTotalOrPastTheWindow(t *testing.T) {
+	fake := &fakeSearcher{res: search.SearchResult{Total: 1, Hits: []search.JobDocument{{ID: 1, Job: jobview.Job{PublicSlug: "a"}}}}}
+	app, iss := feedPagingApp(fake, &feedExcludedAt{}, feedUpdated)
+	if _, body := deckGet(t, app, iss, "/api/v1/me/feed?limit=1"); nextCursorOf(body) != "" {
+		t.Errorf("cursor at the total")
+	}
+	h := &feedHandlers{cursors: feed.NewSigner([]byte("k"))}
+	if got := h.nextCursor(feed.Cursor{Offset: maxPageWindow - 1}, 0, 1, 1, 1_000_000); got != "" {
+		t.Errorf("cursor past maxPageWindow")
+	}
+}
+
+func TestFeed_ChangedProfileIsSourceChanged(t *testing.T) {
+	fake := &fakeSearcher{res: search.SearchResult{Total: 9, Hits: []search.JobDocument{{ID: 1, Job: jobview.Job{PublicSlug: "a"}}}}}
+	app, iss := feedPagingApp(fake, &feedExcludedAt{}, feedUpdated)
+	_, body := deckGet(t, app, iss, "/api/v1/me/feed?limit=1")
+	cur := nextCursorOf(body)
+
+	edited, iss2 := feedPagingApp(fake, &feedExcludedAt{}, feedUpdated.Add(time.Second))
+	*fake = fakeSearcher{}
+	status, body := deckGet(t, edited, iss2, "/api/v1/me/feed?cursor="+cur)
+	if status != fiber.StatusOK || body["meta"].(map[string]any)["reason"] != feedReasonSourceChanged || len(body["data"].([]any)) != 0 {
+		t.Fatalf("status=%d body=%v", status, body)
+	}
+	if fake.got.Limit != 0 {
+		t.Errorf("searched after the source changed")
+	}
+}
+
+func TestFeed_BadCursorIs400(t *testing.T) {
+	app, iss := feedPagingApp(&fakeSearcher{}, &feedExcludedAt{}, feedUpdated)
+	sg := feed.NewSigner([]byte("cursor-key"))
+	now := time.Now()
+	good := feed.Cursor{UserID: 7, Source: "profile", SnapshotAt: now.Unix(), Offset: 1, ExpiresAt: now.Add(time.Hour).Unix()}
+	tampered := sg.Sign(good)
+	flipped := byte('A') // a different first payload character, so the tag no longer matches
+	if tampered[0] == 'A' {
+		flipped = 'B'
+	}
+	tampered = string(flipped) + tampered[1:]
+	expired, otherUser, otherSource := good, good, good
+	expired.ExpiresAt = now.Add(-time.Minute).Unix()
+	otherUser.UserID = 8
+	otherSource.Source = "saved:1"
+	for name, c := range map[string]string{
+		"tampered": tampered, "malformed": "nonsense", "expired": sg.Sign(expired),
+		"other user": sg.Sign(otherUser), "other source": sg.Sign(otherSource),
+	} {
+		if status, _ := deckGet(t, app, iss, "/api/v1/me/feed?cursor="+c); status != fiber.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", name, status)
+		}
 	}
 }

@@ -105,4 +105,6 @@ export interface FeedMeta {
   degraded?: string;
   /** How the page is ordered: fit (Jev), skills (vector), date (no vector). */
   ranking?: 'fit' | 'skills' | 'date' | string;
+  /** Opaque, signed; send as ?cursor= for the next page. Absent on the last page. */
+  next_cursor?: string;
 }

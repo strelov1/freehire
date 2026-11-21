@@ -80,6 +80,9 @@ func (stubTrackingRepo) AppliedCompanySlugs(context.Context, int64, int32) ([]st
 func (stubTrackingRepo) ExcludedJobIDs(context.Context, int64, int32) ([]int64, error) {
 	return nil, nil
 }
+func (stubTrackingRepo) FeedExcludedJobIDs(context.Context, int64, time.Time, int32) ([]int64, error) {
+	return nil, nil
+}
 func (stubTrackingRepo) PipelineCounts(context.Context, int64) ([]userjob.StageCount, error) {
 	return nil, nil
 }
