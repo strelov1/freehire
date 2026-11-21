@@ -53,7 +53,7 @@ it('says so when nobody is known', async () => {
   findRecruiterContacts.mockResolvedValue([]);
   render(RecruiterContactsBlock, props);
   await fireEvent.click(screen.getByRole('button', { name: 'Show recruiter contacts' }));
-  expect(await screen.findByText('Nobody who recruits at Acme is known yet. Nothing was charged.')).not.toBeNull();
+  expect(await screen.findByText("We couldn't find recruiter contacts at Acme.")).not.toBeNull();
 });
 
 it("shows the server's refusal with the plan link, and a failure as unavailable with a retry", async () => {
@@ -65,9 +65,7 @@ it("shows the server's refusal with the plan link, and a failure as unavailable 
 
   findRecruiterContacts.mockRejectedValueOnce(new ApiError(503, 'recruiter contacts are unavailable right now'));
   await fireEvent.click(screen.getByRole('button', { name: 'Show recruiter contacts' }));
-  expect(
-    await screen.findByText("Couldn't look up contacts right now. Nothing was charged, try again later."),
-  ).not.toBeNull();
+  expect(await screen.findByText("Couldn't load contacts right now. Try again in a few minutes.")).not.toBeNull();
 });
 
 it('drafts an email to one contact and opens it in the mail app with its subject', async () => {

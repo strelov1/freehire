@@ -36,6 +36,7 @@
         { label: 'Browser extension', href: resolve('/features/extension') },
         { label: 'Inbox', href: resolve('/features/inbox') },
         { label: 'CV tailoring', href: resolve('/features/tailor') },
+        { label: 'Recruiter contacts', href: resolve('/features/recruiter-contacts') },
         { label: 'Application tracking', href: resolve('/features/tracking') },
         { label: 'Notifications', href: resolve('/features/notifications') },
         { label: 'Referrals', href: resolve('/features/referrals') },
