@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -19,26 +20,31 @@ const companyBatchSize = 500
 // recomputeRoleDuplicates refreshes jobs.duplicate_of in batches of companies, returning the total rows
 // re-marked. Batching avoids both a round trip per company (see companyBatchSize) and one whole-catalogue
 // UPDATE whose lock window would stall concurrent ingest writes. Best-effort like every batch here.
+//
+// It resumes like the fuzzy pass (passCursor): measured 2026-11-21 one walk had grown past 3.5h, and
+// restarted from the top every run it never finished inside the 4h unit, nor let the passes after it run.
 func recomputeRoleDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
 	companies, err := q.CompaniesWithRoleClusters(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return forCompanyBatches(ctx, companies, q.RecomputeRoleDuplicatesForCompanies)
+	cursor := &passCursor{store: q, pass: rolePassName}
+	return forCompanyBatchesResuming(ctx, cursor, companies, q.RecomputeRoleDuplicatesForCompanies)
 }
 
 // suppressAggregatorDuplicates marks each open aggregator posting that duplicates a first-party ATS posting
 // (same company, normalized title, compatible country) as a duplicate of that row, in batches of companies,
 // returning the total rows re-marked. The aggregator set comes from the taxonomy registry's aggregator()
 // markers so it is the same here as on the ingest host: a keyed adapter whose credential lives only where the
-// crawl runs must still be classified. Best-effort and lock-scoped like recomputeRoleDuplicates.
+// crawl runs must still be classified. Best-effort, lock-scoped and resuming like recomputeRoleDuplicates.
 func suppressAggregatorDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
 	aggregators := sources.AggregatorProviders(sources.Taxonomy())
 	companies, err := q.CompaniesWithAggregatorPostings(ctx, aggregators)
 	if err != nil {
 		return 0, err
 	}
-	return forCompanyBatches(ctx, companies, func(ctx context.Context, batch []string) (int64, error) {
+	cursor := &passCursor{store: q, pass: aggregatorPassName}
+	return forCompanyBatchesResuming(ctx, cursor, companies, func(ctx context.Context, batch []string) (int64, error) {
 		return q.SuppressAggregatorDuplicatesForCompanies(ctx, db.SuppressAggregatorDuplicatesForCompaniesParams{
 			FoldedCompanies: foldCompanySlugs(batch),
 			Aggregators:     aggregators,
@@ -61,11 +67,31 @@ func foldCompanySlugs(slugs []string) []string {
 	return folded
 }
 
+// rolePassName and aggregatorPassName key the batched passes' resume points in marker_pass_cursors.
+const (
+	rolePassName       = "role"
+	aggregatorPassName = "aggregator"
+)
+
+// forCompanyBatchesResuming is forCompanyBatches over the companies after cursor's saved point, saving
+// the last company of every batch it gets past and clearing the point once the walk reaches the end.
+func forCompanyBatchesResuming(ctx context.Context, cursor *passCursor, companies []string, fn func(context.Context, []string) (int64, error)) (int64, error) {
+	companies, err := cursor.resume(ctx, companies)
+	if err != nil {
+		return 0, err
+	}
+	total, err := forCompanyBatches(ctx, companies, fn, func(point string) { cursor.save(ctx, point) })
+	return total, errors.Join(err, cursor.finish(ctx))
+}
+
 // forCompanyBatches runs fn once per companyBatchSize-sized slice of companies, summing the rows it reports
 // re-marked. Batches are independent, so one failure (e.g. a statement timeout) is counted and skipped and
 // must not starve the rest; any failure turns the result into an aggregate error (the caller is best-effort).
 // Coarser than per-company: a bad batch costs up to companyBatchSize companies their update.
-func forCompanyBatches(ctx context.Context, companies []string, fn func(context.Context, []string) (int64, error)) (int64, error) {
+//
+// checkpoint receives the last company of each batch the walk gets past — completed or failed, so an
+// always-failing batch cannot pin a resumed walk — and never one a cancellation cut off.
+func forCompanyBatches(ctx context.Context, companies []string, fn func(context.Context, []string) (int64, error), checkpoint func(lastFinished string)) (int64, error) {
 	var total int64
 	var done, failures int
 	var lastErr error
@@ -80,10 +106,12 @@ func forCompanyBatches(ctx context.Context, companies []string, fn func(context.
 			}
 			failures++
 			lastErr = fmt.Errorf("batch of %d companies (starting %q): %w", len(batch), batch[0], err)
+			checkpoint(batch[len(batch)-1])
 			continue
 		}
 		done++
 		total += n
+		checkpoint(batch[len(batch)-1])
 	}
 	if failures > 0 {
 		return total, fmt.Errorf("%d batches failed out of %d companies (batch size %d); last: %w",

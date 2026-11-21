@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // Reindex holds the operational guards for the reindex command (cmd/reindex). Meilisearch is
 // configured via the shared Settings; this holds only the disk-safety knobs.
 type Reindex struct {
@@ -22,6 +24,11 @@ type Reindex struct {
 	// Takes precedence over Dedup: it short-circuits before the disk guard and Meilisearch client
 	// setup, and Dedup is not consulted.
 	DedupOnly bool
+	// DedupBudget bounds a DedupOnly run (REINDEX_DEDUP_BUDGET, default 3h40m; 0 disables). Every
+	// marker pass resumes from where the previous run stopped, so a run that spends its budget saves
+	// its place and exits 0 rather than being killed by its unit's timeout (TimeoutStartSec=4h) and
+	// reported as a failure every run. Keep it below that timeout.
+	DedupBudget time.Duration
 }
 
 // LoadReindex reads the reindex disk-guard config, all optional. MEILI_MASTER_KEY is enforced
@@ -32,6 +39,7 @@ func LoadReindex() Reindex {
 		MinFreeGB:    envInt("REINDEX_MIN_FREE_GB", 70),
 		Dedup:        envBool("REINDEX_DEDUP", false),
 		DedupOnly:    envBool("REINDEX_DEDUP_ONLY", false),
+		DedupBudget:  envDuration("REINDEX_DEDUP_BUDGET", 3*time.Hour+40*time.Minute),
 	}
 	// A negative floor would make `free < floor` always false, silently disabling the guard. Clamp to 0.
 	if r.MinFreeGB < 0 {

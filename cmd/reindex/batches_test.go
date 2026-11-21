@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -28,7 +30,7 @@ func TestForCompanyBatchesIsolatesOneFailure(t *testing.T) {
 			return 0, errors.New("statement timeout")
 		}
 		return int64(len(batch)), nil
-	})
+	}, func(string) {})
 	if calls != 3 {
 		t.Fatalf("ran %d batches, want all 3 attempted despite the failure", calls)
 	}
@@ -54,7 +56,7 @@ func TestForCompanyBatchesStopsOnCancellation(t *testing.T) {
 			return 0, ctx.Err()
 		}
 		return int64(len(batch)), nil
-	})
+	}, func(string) {})
 	if calls != 2 {
 		t.Fatalf("ran %d batches, want it to stop at the cancelled one (2)", calls)
 	}
@@ -72,4 +74,46 @@ func TestForCompanyBatchesStopsOnCancellation(t *testing.T) {
 	if want := int64(companyBatchSize); total != want {
 		t.Fatalf("total = %d, want %d from the batch that completed", total, want)
 	}
+}
+
+// The resume point advances past every batch the walk gets past, failed ones included (a batch
+// that always fails must not pin the walk), and never past one a cancellation cut off.
+func TestForCompanyBatchesCheckpointsFinishedBatchesOnly(t *testing.T) {
+	companies := chunkable([]string{"a", "b", "c", "d", "e"})
+	ctx, cancel := context.WithCancel(context.Background())
+	var calls int
+	var points []string
+	_, _ = forCompanyBatches(ctx, companies, func(ctx context.Context, batch []string) (int64, error) {
+		calls++
+		switch calls {
+		case 2:
+			return 0, errors.New("statement timeout")
+		case 3:
+			cancel()
+			return 0, ctx.Err()
+		}
+		return 1, nil
+	}, func(point string) { points = append(points, point) })
+	if want := lastOfBatches(companies)[:2]; !slices.Equal(points, want) {
+		t.Fatalf("checkpoints = %v, want the last company of the two batches before the cancelled one, %v", points, want)
+	}
+}
+
+// chunkable spreads companies so each lands in its own batch.
+func chunkable(companies []string) []string {
+	out := make([]string, 0, len(companies)*companyBatchSize)
+	for _, c := range companies {
+		for i := range companyBatchSize {
+			out = append(out, fmt.Sprintf("%s-%04d", c, i))
+		}
+	}
+	return out
+}
+
+func lastOfBatches(companies []string) []string {
+	var out []string
+	for batch := range slices.Chunk(companies, companyBatchSize) {
+		out = append(out, batch[len(batch)-1])
+	}
+	return out
 }

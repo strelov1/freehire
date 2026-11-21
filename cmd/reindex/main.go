@@ -11,6 +11,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -111,6 +112,11 @@ func run() int {
 	// It is also the one mode whose exit code carries the passes' outcome: they are log-and-continue so a
 	// failure cannot stop the rebuild after them, but here there is no rebuild to protect.
 	if rcfg.DedupOnly {
+		if rcfg.DedupBudget > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, rcfg.DedupBudget)
+			defer cancel()
+		}
 		return dedupOnlyExit(ctx, q, int(fuzzyWorkers))
 	}
 
@@ -250,32 +256,48 @@ func dedupOnlyExit(ctx context.Context, q *db.Queries, fuzzyWorkers int) int {
 // Each runs per company in short transactions, never a table-wide lock that would stall ingest.
 //
 // It returns how many passes failed. Full-rebuild callers ignore it; REINDEX_DEDUP_ONLY does not, since
-// there these passes ARE the run.
+// there these passes ARE the run. A pass the run's own deadline (REINDEX_DEDUP_BUDGET) stopped has not
+// failed: it saved its place and the next run carries on from there.
 func refreshDuplicateMarkers(ctx context.Context, q *db.Queries, fuzzyWorkers int) int {
+	passes := []struct {
+		failed, done string
+		run          func() (int64, error)
+	}{
+		{"recompute role duplicates", "recomputed role duplicates", func() (int64, error) { return recomputeRoleDuplicates(ctx, q) }},
+		{"suppress aggregator duplicates", "suppressed aggregator duplicates", func() (int64, error) { return suppressAggregatorDuplicates(ctx, q) }},
+		{"collapse fuzzy duplicates", "collapsed fuzzy duplicates", func() (int64, error) { return collapseFuzzyDuplicates(ctx, q, fuzzyWorkers) }},
+	}
 	failed := 0
-
-	if n, err := recomputeRoleDuplicates(ctx, q); err != nil {
-		failed++
-		log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
-	} else if n > 0 {
-		log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
+	for _, pass := range passes {
+		n, err := pass.run()
+		switch {
+		case err != nil && budgetSpent(ctx, err):
+			log.Printf("reindex: %s: run budget spent, the next run resumes it (%d rows re-marked)", pass.failed, n)
+		case err != nil:
+			failed++
+			log.Printf("reindex: %s (continuing with prior markers): %v", pass.failed, err)
+		case n > 0:
+			log.Printf("reindex: %s (%d rows re-marked)", pass.done, n)
+		}
 	}
-
-	if n, err := suppressAggregatorDuplicates(ctx, q); err != nil {
-		failed++
-		log.Printf("reindex: suppress aggregator duplicates (continuing with prior markers): %v", err)
-	} else if n > 0 {
-		log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
-	}
-
-	if n, err := collapseFuzzyDuplicates(ctx, q, fuzzyWorkers); err != nil {
-		failed++
-		log.Printf("reindex: collapse fuzzy duplicates (continuing with prior markers): %v", err)
-	} else if n > 0 {
-		log.Printf("reindex: collapsed fuzzy duplicates (%d rows re-marked)", n)
-	}
-
 	return failed
+}
+
+// budgetSpent reports whether err is the run's own deadline and nothing else: a SIGTERM (Canceled), a
+// statement timeout or a resume point that failed to save beside the deadline is still a failure.
+func budgetSpent(ctx context.Context, err error) bool {
+	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return false
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, e := range joined.Unwrap() {
+			if !budgetSpent(ctx, e) {
+				return false
+			}
+		}
+		return true
+	}
+	return errors.Is(err, context.DeadlineExceeded)
 }
 
 // rebuilder builds a brand-new index out of band and atomically swaps it into production. Prepare creates a

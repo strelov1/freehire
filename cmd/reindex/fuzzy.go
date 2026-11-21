@@ -3,12 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
 	"slices"
-	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/job/jobdedup"
 	"github.com/strelov1/freehire/internal/job/jobhash"
@@ -31,8 +26,7 @@ const fuzzyPassName = "fuzzy"
 // fuzzyPassStore is fuzzyDedupQuerier plus the pass's resume point.
 type fuzzyPassStore interface {
 	fuzzyDedupQuerier
-	GetMarkerPassCursor(ctx context.Context, pass string) (string, error)
-	SetMarkerPassCursor(ctx context.Context, arg db.SetMarkerPassCursorParams) error
+	cursorStore
 }
 
 // collapseFuzzyDuplicates marks near-identical reposts the exact passes left split, company by
@@ -46,47 +40,18 @@ type fuzzyPassStore interface {
 //
 // Descriptions are loaded only for buckets that survive the size filter: titles are cheap to ship, descriptions are not.
 func collapseFuzzyDuplicates(ctx context.Context, q fuzzyPassStore, workers int) (int64, error) {
-	after, err := q.GetMarkerPassCursor(ctx, fuzzyPassName)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return 0, fmt.Errorf("read resume point: %w", err)
-	}
+	cursor := &passCursor{store: q, pass: fuzzyPassName}
 	companies, err := q.CompaniesWithFuzzyDedupCandidates(ctx)
 	if err != nil {
 		return 0, err
 	}
-	// Sorted here rather than by the query: the comparison with the saved point is Go's, so the
-	// order has to be Go's too — Postgres's collation would order the same slugs differently.
-	slices.Sort(companies)
-	if after != "" {
-		all := len(companies)
-		start, found := slices.BinarySearch(companies, after)
-		if found {
-			start++
-		}
-		companies = companies[start:]
-		log.Printf("reindex: fuzzy pass resuming after %q: %d of %d companies left", after, len(companies), all)
-	}
-
-	// A failed save does not stop the walk, but if the LAST one failed it is reported with the outcome:
-	// the stored point is stale, so the next run re-covers ground and marker-only mode must exit non-zero.
-	var saveErr error
-	save := func(point string) {
-		// The run context is already cancelled by the unit SIGTERM, so the write gets its own short one.
-		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
-		saveErr = q.SetMarkerPassCursor(sctx, db.SetMarkerPassCursorParams{Pass: fuzzyPassName, AfterCompany: point})
-		if saveErr != nil {
-			saveErr = fmt.Errorf("save resume point %q: %w", point, saveErr)
-			log.Printf("reindex: fuzzy pass: %v", saveErr) // now, not hours later: a killed run never returns it
-		}
+	if companies, err = cursor.resume(ctx, companies); err != nil {
+		return 0, err
 	}
 	total, err := forEachCompany(ctx, companies, workers, func(ctx context.Context, company string) (int64, error) {
 		return collapseFuzzyDuplicatesForCompany(ctx, q, company)
-	}, save)
-	if ctx.Err() == nil {
-		save("") // the walk reached the end: the next run starts from the top
-	}
-	return total, errors.Join(err, saveErr)
+	}, func(point string) { cursor.save(ctx, point) })
+	return total, errors.Join(err, cursor.finish(ctx))
 }
 
 func collapseFuzzyDuplicatesForCompany(ctx context.Context, q fuzzyDedupQuerier, company string) (int64, error) {
