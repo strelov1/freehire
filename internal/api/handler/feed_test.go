@@ -2,11 +2,14 @@ package handler
 
 import (
 	"context"
+	"errors"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/job/jobview"
@@ -24,9 +27,19 @@ type feedExcluded []int64
 
 func (f feedExcluded) ExcludedJobIDs(context.Context, int64) ([]int64, error) { return f, nil }
 
+type feedPlansFake struct{ err error }
+
+func (f feedPlansFake) RequirePaid(context.Context, int64) (plan.Tier, error) {
+	return plan.TierPro, f.err
+}
+
 func feedApp(s searcher, prof feedProfile) (*fiber.App, *auth.Issuer) {
+	return feedAppPlans(s, prof, feedPlansFake{})
+}
+
+func feedAppPlans(s searcher, prof feedProfile, plans feedPlans) (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &feedHandlers{search: s, profiles: prof, excluded: feedExcluded{10}}
+	h := &feedHandlers{search: s, profiles: prof, excluded: feedExcluded{10}, plans: plans}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/feed", auth.RequireAuth(iss, testVersions), h.Feed)
 	return app, iss
@@ -85,5 +98,38 @@ func TestFeed_NoSkillsDegradesToDefaultOrder(t *testing.T) {
 	}
 	if fake.got.Vector != nil {
 		t.Errorf("vector sent without skills")
+	}
+}
+
+func TestFeed_PlanGate(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err  error
+		want int
+	}{
+		"free":        {plan.ErrPaymentRequired, fiber.StatusPaymentRequired},
+		"plan unread": {errors.New("db down"), fiber.StatusServiceUnavailable},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := &fakeSearcher{}
+			app, iss := feedAppPlans(fake, feedProfile{p: userprofile.Profile{Skills: []string{"go"}}}, feedPlansFake{err: tc.err})
+			if status, _ := deckGet(t, app, iss, "/api/v1/me/feed"); status != tc.want {
+				t.Fatalf("status = %d, want %d", status, tc.want)
+			}
+			if fake.got.Limit != 0 {
+				t.Errorf("searched for a refused caller: %#v", fake.got)
+			}
+		})
+	}
+}
+
+func TestFeed_SignedOutIs401(t *testing.T) {
+	app, _ := feedApp(&fakeSearcher{}, feedProfile{})
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/me/feed", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", resp.StatusCode)
 	}
 }

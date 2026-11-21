@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/jobmatch"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
@@ -23,7 +24,7 @@ const feedReasonNoProfile = "no_profile"
 
 var feedDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Name:    "freehire_me_feed_duration_seconds",
-	Help:    "GET /me/feed latency by outcome (ok, empty, error).",
+	Help:    "GET /me/feed latency by outcome (ok, empty, payment_required, error).",
 	Buckets: prometheus.DefBuckets,
 }, []string{"outcome"})
 
@@ -33,6 +34,11 @@ type excludedJobs interface {
 	ExcludedJobIDs(ctx context.Context, userID int64) ([]int64, error)
 }
 
+// feedPlans is the plan check the feed is gated on. *plan.Store in production.
+type feedPlans interface {
+	RequirePaid(ctx context.Context, userID int64) (plan.Tier, error)
+}
+
 // feedHandlers serves the match feed: the caller's profile turned into a search
 // (feed.ProfileQuery), never relaxed, each card carrying a deterministic match block (AD-4).
 // Registered only when ME_FEED_ENABLED is set.
@@ -40,6 +46,15 @@ type feedHandlers struct {
 	search   searcher
 	profiles profileReader
 	excluded excludedJobs
+	plans    feedPlans
+}
+
+// newFeedHandlers is nil with the flag off, so the route is never registered.
+func newFeedHandlers(on bool, s searcher, p profileReader, e excludedJobs, pl feedPlans) *feedHandlers {
+	if !on {
+		return nil
+	}
+	return &feedHandlers{search: s, profiles: p, excluded: e, plans: pl}
 }
 
 func (h *feedHandlers) register(api fiber.Router, mw middleware) {
@@ -80,6 +95,13 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
+	}
+	// A paid feature (AD-10): judged before any profile or search read.
+	if _, err := h.plans.RequirePaid(c.Context(), userID); errors.Is(err, plan.ErrPaymentRequired) {
+		outcome = "payment_required"
+		return fiber.NewError(fiber.StatusPaymentRequired, "The match feed needs Pro or Ultra")
+	} else if err != nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "Cannot verify your plan right now")
 	}
 	limit, offset, err := pageParams(c)
 	if err != nil {

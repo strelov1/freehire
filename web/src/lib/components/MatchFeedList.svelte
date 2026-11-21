@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
+  import { isPlanRefusal } from '#lib/api-core.js';
   import type { FeedCard, FeedMeta } from '#lib/types.js';
   import { ensureDismissedLoaded, isDismissed } from '#lib/dismissedJobs.svelte.js';
   import { isSaved } from '#lib/savedJobs.svelte.js';
@@ -10,6 +11,7 @@
   import MatchBlock from './MatchBlock.svelte';
   import HiddenToast from './HiddenToast.svelte';
   import { HiddenJobUndo } from './hiddenJobUndo.svelte';
+  import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
 
   // The match feed as a list: every card with its explanation, save and hide in the corner.
@@ -22,6 +24,8 @@
   let loading = $state(true);
   let loadingMore = $state(false);
   let failed = $state(false);
+  // The plan lapsed since the page loaded: the API refuses with 402.
+  let paywalled = $state(false);
   let more = $state(false);
   const hidden = new HiddenJobUndo();
   const visible = $derived(cards.filter((c) => !isDismissed(c.public_slug)));
@@ -43,8 +47,9 @@
         (c) => !isSaved(c.public_slug) && !isDismissed(c.public_slug) && !hasViewed(c.public_slug),
       ).length;
       await fetchPage(untouched);
-    } catch {
-      failed = true;
+    } catch (e) {
+      if (isPlanRefusal(e)) paywalled = true;
+      else failed = true;
     } finally {
       loadingMore = false;
     }
@@ -54,8 +59,9 @@
     void ensureDismissedLoaded();
     try {
       await fetchPage(0);
-    } catch {
-      failed = true;
+    } catch (e) {
+      if (isPlanRefusal(e)) paywalled = true;
+      else failed = true;
     } finally {
       loading = false;
     }
@@ -69,7 +75,9 @@
   </p>
 {/if}
 
-{#if loading}
+{#if paywalled}
+  <MatchesUpgrade price={null} />
+{:else if loading}
   <States state="loading" />
 {:else if failed && cards.length === 0}
   <States state="error" message="Failed to load your matches." />

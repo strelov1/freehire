@@ -14,7 +14,7 @@
   const more = (n: number) => (n > MAX ? ` +${n - MAX}` : '');
 </script>
 
-<dl class="grid w-full gap-1 rounded-lg bg-muted/50 px-3 py-2 text-[0.8125rem] leading-snug">
+<dl class="grid w-full gap-1 rounded-lg bg-muted/50 px-3 py-2 text-sm leading-snug">
   {#if match.why.length}
     <div class="flex gap-1.5">
       <dt class="shrink-0 font-medium text-brand">Fits</dt>
@@ -23,7 +23,7 @@
   {/if}
   {#if match.may_not_fit.length}
     <div class="flex gap-1.5">
-      <dt class="shrink-0 font-medium text-amber-700 dark:text-amber-400">Missing</dt>
+      <dt class="shrink-0 font-medium text-warning-strong">Missing</dt>
       <dd class="min-w-0 text-muted-foreground">
         {match.may_not_fit.slice(0, MAX).join(', ')}{more(match.may_not_fit.length)}
       </dd>

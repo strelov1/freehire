@@ -50,3 +50,14 @@ func newAgentSurfaces(cfg Config, queries *db.Queries, sb searchBackends) (*ojcp
 	mcpappH.agentViews = cfg.AgentViews
 	return ojcpH, mcpappH
 }
+
+// newSuggestHandlers wires the completion dictionary. Left nil when search is unconfigured: a
+// nil *suggest.Service in the interface would pass the handler's "not configured" check and
+// then dereference nil.
+func newSuggestHandlers(cfg Config) *suggestHandlers {
+	h := &suggestHandlers{}
+	if cfg.Suggest != nil {
+		h.suggest = cfg.Suggest
+	}
+	return h
+}

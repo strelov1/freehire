@@ -2,10 +2,12 @@
   import { onMount } from 'svelte';
   import { Heart, RotateCcw, X } from '@lucide/svelte';
   import { api } from '#lib/api.js';
+  import { isPlanRefusal } from '#lib/api-core.js';
   import type { FeedCard } from '#lib/types.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import SwipeCardBody from './SwipeCardBody.svelte';
   import MatchBlock from './MatchBlock.svelte';
+  import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
 
   // The match feed one card at a time, full screen like the swipe deck. Skip and Save write
@@ -16,6 +18,8 @@
   let cards = $state<FeedCard[]>([]);
   let loading = $state(true);
   let failed = $state(false);
+  // The plan lapsed while swipe was open: the API refuses with 402.
+  let paywalled = $state(false);
   let last = $state<{ card: FeedCard; action: 'save' | 'dismiss' } | null>(null);
   const current = $derived(cards[0]);
 
@@ -24,8 +28,9 @@
     failed = false;
     try {
       cards = (await api.meFeed(PAGE)).data;
-    } catch {
-      failed = true;
+    } catch (e) {
+      if (isPlanRefusal(e)) paywalled = true;
+      else failed = true;
     } finally {
       loading = false;
     }
@@ -76,7 +81,7 @@
   aria-labelledby="match-swipe-title"
   {@attach focusTrap()}
 >
-  <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+  <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-safe">
     <h1 id="match-swipe-title" class="text-sm font-medium text-muted-foreground">Matches · by my profile</h1>
     <button
       type="button"
@@ -101,13 +106,11 @@
       {/key}
     </main>
 
-    <footer
-      class="flex shrink-0 items-center justify-center gap-6 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2"
-    >
+    <footer class="flex shrink-0 items-center justify-center gap-6 px-4 pb-safe pt-2">
       <button
         type="button"
         aria-label="Skip"
-        class="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card text-rose-500 shadow-md transition hover:bg-accent active:scale-95"
+        class="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card text-destructive shadow-md transition hover:bg-accent active:scale-95"
         onclick={() => judge('dismiss')}
       >
         <X class="size-7" />
@@ -130,6 +133,8 @@
         <Heart class="size-7" />
       </button>
     </footer>
+  {:else if paywalled}
+    <div class="flex flex-1 items-center justify-center"><MatchesUpgrade price={null} /></div>
   {:else if loading}
     <div class="flex flex-1 items-center justify-center"><States state="loading" /></div>
   {:else if failed}
