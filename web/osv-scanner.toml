@@ -1,8 +1,0 @@
-
-# Build and dev tooling (Vite, Vitest, tinyglobby/fdir, unplugin); globs come from repository config.
-# Also in the closure of @scalar/api-reference via @unhead/vue -> unplugin, the build-plugin half of
-# @unhead, which ScalarReference.svelte never imports: it loads only the browser bundle, on the API docs page.
-[[IgnoredVulns]]
-id = "GHSA-fc5q-39xc-vjpf"
-reason = "No patched picomatch release (affects <=4.0.7). Only build and test tools match globs, with patterns from checked-in config. The runtime path (@scalar/api-reference -> @unhead/vue -> unplugin) is the bundler plugin, not called in the browser docs page, and never sees request input, so the extglob ReDoS is unreachable in production."
-effectiveUntil = 2026-12-18
