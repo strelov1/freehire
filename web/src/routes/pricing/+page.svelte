@@ -28,8 +28,23 @@
 
   const monthly = $derived(proPrices.find((p) => p.interval === 'month') ?? null);
   const annual = $derived(proPrices.find((p) => p.interval === 'year') ?? null);
-  // A one-week Pro for somebody who only wants to try it; shown only when the deployment sells one.
+  // A weekly Pro for somebody who only wants to try it; shown only when the deployment sells one.
   const weekly = $derived(proPrices.find((p) => p.interval === 'week') ?? null);
+  // Offered only to a signed-in free account: checkout moves a live subscription onto the
+  // price it is given, so a paying subscriber must never be one click from the weekly price.
+  let onFreePlan = $state(false);
+  $effect(() => {
+    onFreePlan = false;
+    if (!isAuthenticated()) return;
+    let alive = true;
+    api
+      .myPlan()
+      .then((p) => alive && (onFreePlan = p.plan === 'free'))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  });
   const ultraMonthly = $derived(ultraPrices.find((p) => p.interval === 'month') ?? null);
   const ultraAnnual = $derived(ultraPrices.find((p) => p.interval === 'year') ?? null);
 
@@ -385,7 +400,7 @@
             </div>
             {#if checked !== null}
               <p class="text-sm text-muted-foreground">
-                {checked}% off your first month. It is applied when you continue.
+                {checked}% off your first payment. It is applied when you continue.
               </p>
             {/if}
             {#if codeError}
@@ -400,14 +415,14 @@
           >
             {busy ? 'Opening checkout…' : 'Upgrade to Pro'}
           </button>
-          {#if weekly}
+          {#if weekly && onFreePlan}
             <button
               type="button"
               class={buttonVariants({ variant: 'outline', size: 'lg' })}
               disabled={busy}
               onclick={() => buy(weekly)}
             >
-              Just trying it? {money(weekly)} for a week
+              Just trying it? {money(weekly)} a week, cancel anytime
             </button>
           {/if}
         {:else}
