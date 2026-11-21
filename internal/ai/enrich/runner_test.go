@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -46,6 +47,11 @@ type fakeStore struct {
 	// completeErr fails the write-back for an outbox id.
 	completeErr map[int64]error
 
+	// enqueueN is what Enqueue reports adding; when enqueueBlock is set, Enqueue returns
+	// only once it is closed.
+	enqueueN     int64
+	enqueueBlock chan struct{}
+
 	mu        sync.Mutex
 	reapCalls int
 	enqueued  bool
@@ -56,7 +62,10 @@ type fakeStore struct {
 
 func (s *fakeStore) Enqueue(_ context.Context, _ int) (int64, error) {
 	s.enqueued = true
-	return 0, nil
+	if s.enqueueBlock != nil {
+		<-s.enqueueBlock
+	}
+	return s.enqueueN, nil
 }
 
 func (s *fakeStore) Claim(_ context.Context, _, _ int) ([]Claimed, error) {
@@ -355,5 +364,34 @@ func TestRun_nilProgressIsAllowed(t *testing.T) {
 	}}
 	if _, err := (Runner{Provider: prov, Store: store, wait: noWait}).Run(context.Background(), opts()); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+}
+
+// The enqueue runs alongside the drain, so entries it commits while still running must be
+// drained then, not after the whole pass: here Enqueue returns only once the entry it
+// "committed" has been written, so a runner that waits for it first never returns.
+func TestRun_drainsWhileTheEnqueueIsStillRunning(t *testing.T) {
+	defer func(d time.Duration) { enqueuePoll = d }(enqueuePoll)
+	enqueuePoll = time.Millisecond
+
+	block := make(chan struct{})
+	store := &fakeStore{
+		// The first drain finds nothing; a later one claims what the enqueue added.
+		claims:       [][]Claimed{{}, {{OutboxID: 1, JobID: 100, TargetVersion: Version}}},
+		jobs:         map[int64]JobInput{100: {Title: "Go dev"}},
+		enqueueN:     1,
+		enqueueBlock: block,
+	}
+	prov := &funcProvider{fn: func(JobInput) (Enrichment, error) {
+		defer close(block)
+		return Enrichment{Seniority: "senior", WorkMode: "remote"}, nil
+	}}
+
+	stats, err := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats != (Stats{Enriched: 1}) {
+		t.Errorf("stats = %+v, want {Enriched:1}", stats)
 	}
 }

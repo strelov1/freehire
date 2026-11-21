@@ -23,7 +23,8 @@ type Claimed struct {
 // Store is the persistence the runner needs, in domain terms so the runner is independent
 // of the DB layer.
 type Store interface {
-	// Enqueue adds outbox entries for jobs not yet enriched to targetVersion.
+	// Enqueue adds outbox entries for jobs not yet enriched to targetVersion. It runs
+	// concurrently with Claim and the rest, and may take longer than a whole run.
 	Enqueue(ctx context.Context, targetVersion int) (int64, error)
 	// Claim leases up to batch live, unleased entries.
 	Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error)
@@ -139,6 +140,10 @@ func sleepCtx(ctx context.Context, d time.Duration) {
 
 // Run enqueues pending jobs and drains the queue until no claimable entries remain.
 // A failure on a single entry is recorded and never aborts the run.
+//
+// The enqueue runs alongside the drain, not before it: a whole-catalogue pass takes longer
+// than the gap between deploys, and every deploy restarts the run, so a drain that waited
+// for it never started. While the enqueue runs, an idle drain retries each enqueuePoll.
 func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 	// Reap first so the reported depth is work, not residue. Best-effort: housekeeping must
 	// never stop enrichment.
@@ -149,39 +154,85 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 		log.Printf("enrich: reaped %d entries whose job closed or became a repost", reaped)
 	}
 
-	enqueued, err := r.Store.Enqueue(ctx, opt.TargetVersion)
-	if err != nil {
-		return Stats{Reaped: int(reaped)}, fmt.Errorf("enqueue: %w", err)
+	enqCtx, stopEnqueue := context.WithCancel(ctx)
+	defer stopEnqueue()
+	type enqueueResult struct {
+		n   int64
+		err error
 	}
-	log.Printf("enrich: enqueued %d pending, draining (concurrency=%d)", enqueued, opt.Concurrency)
+	enq := make(chan enqueueResult, 1)
+	go func() {
+		n, err := r.Store.Enqueue(enqCtx, opt.TargetVersion)
+		enq <- enqueueResult{n, err}
+	}()
+	log.Printf("enrich: draining (concurrency=%d) while pending jobs are enqueued", opt.Concurrency)
 
 	rn := &run{provider: r.Provider, store: r.Store, opt: opt, progress: r.Progress}
 	wait := r.wait
 	if wait == nil {
 		wait = sleepCtx
 	}
+	stats := Stats{Reaped: int(reaped)}
+	// One backoff for the whole run, fed run-wide counts, so an outage keeps growing the
+	// pause across the drain passes below.
 	var backoff upstreamBackoff
-	s, err := outbox.RunPool(ctx, r.Store, outbox.RunOptions{
-		// Wave sized to the concurrency so each entry's lease stays about one LLM call.
-		BatchSize:    opt.Concurrency,
-		LeaseSeconds: opt.LeaseSeconds,
-		Concurrency:  opt.Concurrency,
-		OnWave: func(cum outbox.Stats) {
-			// Heartbeat so a long drain isn't silent.
-			log.Printf("enrich: progress enriched=%d failed=%d dead=%d", cum.Succeeded, cum.Failed, cum.DeadLettered)
-			// OnWave runs between waves with nothing claimed, so pausing here holds no lease.
-			if d := backoff.next(cum.Succeeded, rn.upstreamFailed.Load()); d > 0 {
-				log.Printf("enrich: whole wave refused upstream, pausing %s", d)
-				wait(ctx, d)
-			}
-		},
-	}, rn.process)
-	stats := Stats{Enriched: s.Succeeded, Failed: s.Failed, DeadLettered: s.DeadLettered, Reaped: int(reaped)}
-	if err != nil {
-		return stats, fmt.Errorf("claim: %w", err)
+	drain := func() error {
+		s, err := outbox.RunPool(ctx, r.Store, outbox.RunOptions{
+			// Wave sized to the concurrency so each entry's lease stays about one LLM call.
+			BatchSize:    opt.Concurrency,
+			LeaseSeconds: opt.LeaseSeconds,
+			Concurrency:  opt.Concurrency,
+			OnWave: func(cum outbox.Stats) {
+				// Heartbeat so a long drain isn't silent.
+				log.Printf("enrich: progress enriched=%d failed=%d dead=%d", stats.Enriched+cum.Succeeded, stats.Failed+cum.Failed, stats.DeadLettered+cum.DeadLettered)
+				// OnWave runs between waves with nothing claimed, so pausing here holds no lease.
+				if d := backoff.next(stats.Enriched+cum.Succeeded, rn.upstreamFailed.Load()); d > 0 {
+					log.Printf("enrich: whole wave refused upstream, pausing %s", d)
+					wait(ctx, d)
+				}
+			},
+		}, rn.process)
+		stats.Enriched += s.Succeeded
+		stats.Failed += s.Failed
+		stats.DeadLettered += s.DeadLettered
+		if err != nil {
+			return fmt.Errorf("claim: %w", err)
+		}
+		return nil
 	}
-	return stats, nil
+
+	// Drain, and while the enqueue is still going, drain again each enqueuePoll so the
+	// chunks it commits are taken as they land; stop after a drain that follows its end.
+	enqueueDone := false
+	for {
+		if err := drain(); err != nil {
+			stopEnqueue()
+			if !enqueueDone {
+				<-enq
+			}
+			return stats, err
+		}
+		if enqueueDone {
+			return stats, nil
+		}
+		select {
+		case res := <-enq:
+			enqueueDone = true
+			if res.err != nil {
+				return stats, fmt.Errorf("enqueue: %w", res.err)
+			}
+			log.Printf("enrich: enqueued %d pending", res.n)
+		case <-time.After(enqueuePoll):
+		case <-ctx.Done():
+			<-enq
+			return stats, ctx.Err()
+		}
+	}
 }
+
+// enqueuePoll is how often an idle drain looks again for work while the enqueue runs.
+// A var so tests can shorten it.
+var enqueuePoll = time.Minute
 
 // run carries one Run's dependencies so the per-entry helpers use the receiver.
 type run struct {

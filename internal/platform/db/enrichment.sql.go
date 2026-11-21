@@ -174,21 +174,38 @@ func (q *Queries) EnqueueEnrichmentForCompanySlugs(ctx context.Context, arg Enqu
 	return result.RowsAffected(), nil
 }
 
-const enqueuePendingJobs = `-- name: EnqueuePendingJobs :execrows
-INSERT INTO enrichment_outbox (job_id, target_version)
-SELECT id, $1::int
-FROM jobs
-WHERE closed_at IS NULL
-  AND duplicate_of IS NULL
-  AND (enriched_at IS NULL OR enrichment_version < $1::int)
-  AND (is_tech IS TRUE OR $2::boolean)
-  AND description <> ''
-ON CONFLICT (job_id, target_version) DO NOTHING
+const enqueuePendingJobs = `-- name: EnqueuePendingJobs :one
+WITH batch AS (
+    SELECT id
+    FROM jobs
+    WHERE id < COALESCE(NULLIF($1::bigint, 0), 9223372036854775807)
+      AND closed_at IS NULL
+      AND duplicate_of IS NULL
+      AND (enriched_at IS NULL OR enrichment_version < $2::int)
+      AND (is_tech IS TRUE OR $3::boolean)
+      AND description <> ''
+    ORDER BY id DESC
+    LIMIT NULLIF($4::int, 0)
+), ins AS (
+    INSERT INTO enrichment_outbox (job_id, target_version)
+    SELECT id, $2::int FROM batch
+    ON CONFLICT (job_id, target_version) DO NOTHING
+    RETURNING 1
+)
+SELECT COALESCE((SELECT min(id) FROM batch), 0)::bigint AS last_id,
+       (SELECT count(*) FROM ins)::bigint AS enqueued
 `
 
 type EnqueuePendingJobsParams struct {
+	BeforeID       int64 `json:"before_id"`
 	TargetVersion  int32 `json:"target_version"`
 	IncludeNonTech bool  `json:"include_non_tech"`
+	ChunkSize      int32 `json:"chunk_size"`
+}
+
+type EnqueuePendingJobsRow struct {
+	LastID   int64 `json:"last_id"`
+	Enqueued int64 `json:"enqueued"`
 }
 
 // Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
@@ -206,12 +223,23 @@ type EnqueuePendingJobsParams struct {
 // backfill only, so every open posting with a body is enriched and its category asked of the
 // model (#4412). The ingest-time EnqueueJobEnrichment stays tech-only: it is the fast path for
 // a new technical posting, and the next enrich run's backfill picks up the rest.
-func (q *Queries) EnqueuePendingJobs(ctx context.Context, arg EnqueuePendingJobsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, enqueuePendingJobs, arg.TargetVersion, arg.IncludeNonTech)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+//
+// One call enqueues one chunk: up to chunk_size eligible jobs below before_id, newest id
+// first along jobs_sitemap_idx, and returns the lowest id it took as the next cursor (0 once
+// nothing is left). A whole-catalogue INSERT ran past 45 minutes with include_non_tech, so
+// deploys killed it and rolled it back, and its uncommitted rows blocked ingest's own
+// enqueue on the same keys; a chunk commits on its own. Zero before_id and zero chunk_size
+// mean no cursor and no limit (one pass, as the integration tests use it).
+func (q *Queries) EnqueuePendingJobs(ctx context.Context, arg EnqueuePendingJobsParams) (EnqueuePendingJobsRow, error) {
+	row := q.db.QueryRow(ctx, enqueuePendingJobs,
+		arg.BeforeID,
+		arg.TargetVersion,
+		arg.IncludeNonTech,
+		arg.ChunkSize,
+	)
+	var i EnqueuePendingJobsRow
+	err := row.Scan(&i.LastID, &i.Enqueued)
+	return i, err
 }
 
 const recordEnrichmentFailure = `-- name: RecordEnrichmentFailure :one

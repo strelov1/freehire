@@ -1,4 +1,4 @@
--- name: EnqueuePendingJobs :execrows
+-- name: EnqueuePendingJobs :one
 -- Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 -- schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
 -- user will see should not consume LLM budget. Gated on the same is_tech = true and
@@ -14,15 +14,32 @@
 -- backfill only, so every open posting with a body is enriched and its category asked of the
 -- model (#4412). The ingest-time EnqueueJobEnrichment stays tech-only: it is the fast path for
 -- a new technical posting, and the next enrich run's backfill picks up the rest.
-INSERT INTO enrichment_outbox (job_id, target_version)
-SELECT id, sqlc.arg(target_version)::int
-FROM jobs
-WHERE closed_at IS NULL
-  AND duplicate_of IS NULL
-  AND (enriched_at IS NULL OR enrichment_version < sqlc.arg(target_version)::int)
-  AND (is_tech IS TRUE OR sqlc.arg(include_non_tech)::boolean)
-  AND description <> ''
-ON CONFLICT (job_id, target_version) DO NOTHING;
+--
+-- One call enqueues one chunk: up to chunk_size eligible jobs below before_id, newest id
+-- first along jobs_sitemap_idx, and returns the lowest id it took as the next cursor (0 once
+-- nothing is left). A whole-catalogue INSERT ran past 45 minutes with include_non_tech, so
+-- deploys killed it and rolled it back, and its uncommitted rows blocked ingest's own
+-- enqueue on the same keys; a chunk commits on its own. Zero before_id and zero chunk_size
+-- mean no cursor and no limit (one pass, as the integration tests use it).
+WITH batch AS (
+    SELECT id
+    FROM jobs
+    WHERE id < COALESCE(NULLIF(sqlc.arg(before_id)::bigint, 0), 9223372036854775807)
+      AND closed_at IS NULL
+      AND duplicate_of IS NULL
+      AND (enriched_at IS NULL OR enrichment_version < sqlc.arg(target_version)::int)
+      AND (is_tech IS TRUE OR sqlc.arg(include_non_tech)::boolean)
+      AND description <> ''
+    ORDER BY id DESC
+    LIMIT NULLIF(sqlc.arg(chunk_size)::int, 0)
+), ins AS (
+    INSERT INTO enrichment_outbox (job_id, target_version)
+    SELECT id, sqlc.arg(target_version)::int FROM batch
+    ON CONFLICT (job_id, target_version) DO NOTHING
+    RETURNING 1
+)
+SELECT COALESCE((SELECT min(id) FROM batch), 0)::bigint AS last_id,
+       (SELECT count(*) FROM ins)::bigint AS enqueued;
 
 -- name: EnqueueEnrichmentForCompanySlugs :execrows
 -- Scoped, one-off re-enqueue used by cmd/backfill-company-type-hint: force OPEN,
