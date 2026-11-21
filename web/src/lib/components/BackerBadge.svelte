@@ -18,12 +18,15 @@
   let {
     collections,
     withLabel = false,
+    linked = false,
     size = 'size-4',
     max = Infinity,
     class: className,
   }: {
     collections?: string[] | null;
     withLabel?: boolean;
+    /** Link an unlabelled mark to its collection. Off by default: the feed card is itself a link. */
+    linked?: boolean;
     size?: string;
     /** Show at most this many; the rest fold into one "+N" disclosure listing them as links. */
     max?: number;
@@ -50,6 +53,16 @@
            reader gets the whole sentence, so "Y Combinator" is never announced as
            though it described the role. -->
       <span class="sr-only">— {badge.alt}</span>
+    </a>
+  {:else if linked}
+    <a href={resolve('/collections/[slug]', { slug: badge.slug })} title={badge.alt} class="inline-flex shrink-0">
+      <img
+        src={badge.mark}
+        alt={badge.alt}
+        class={cn(size, 'rounded-sm object-contain', className)}
+        loading="lazy"
+        decoding="async"
+      />
     </a>
   {:else}
     <img
