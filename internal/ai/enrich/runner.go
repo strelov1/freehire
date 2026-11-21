@@ -173,8 +173,10 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 		wait = sleepCtx
 	}
 	stats := Stats{Reaped: int(reaped)}
+	// One backoff for the whole run, fed run-wide counts, so an outage keeps growing the
+	// pause across the drain passes below.
+	var backoff upstreamBackoff
 	drain := func() error {
-		backoff := upstreamBackoff{lastUpstreamFailed: rn.upstreamFailed.Load()}
 		s, err := outbox.RunPool(ctx, r.Store, outbox.RunOptions{
 			// Wave sized to the concurrency so each entry's lease stays about one LLM call.
 			BatchSize:    opt.Concurrency,
@@ -184,7 +186,7 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 				// Heartbeat so a long drain isn't silent.
 				log.Printf("enrich: progress enriched=%d failed=%d dead=%d", stats.Enriched+cum.Succeeded, stats.Failed+cum.Failed, stats.DeadLettered+cum.DeadLettered)
 				// OnWave runs between waves with nothing claimed, so pausing here holds no lease.
-				if d := backoff.next(cum.Succeeded, rn.upstreamFailed.Load()); d > 0 {
+				if d := backoff.next(stats.Enriched+cum.Succeeded, rn.upstreamFailed.Load()); d > 0 {
 					log.Printf("enrich: whole wave refused upstream, pausing %s", d)
 					wait(ctx, d)
 				}
