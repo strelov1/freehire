@@ -26,6 +26,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,6 +68,10 @@ func eachPerSource[T any](items []T, source func(T) string, fn func(T)) {
 	wg.Wait()
 }
 
+// llmProviders are the placeholder providers a model names from posting text; each is capped
+// at COMPANY_NAMES_LLM_MAX boards a run.
+var llmProviders = []string{"adp", "paycor"}
+
 func main() { worker.Main(run) }
 
 func run() int {
@@ -97,15 +102,15 @@ func run() int {
 	sort.Slice(renames, func(i, j int) bool { return renames[i].oldSlug < renames[j].oldSlug })
 
 	placeholders := companyname.NewPlaceholderRegistry(client)
-	// adp states the employer only in the posting text, so a model reads that text
-	// (postingTextResolver): only when LLM_* is configured, and at most COMPANY_NAMES_LLM_MAX
+	// adp (and paycor, where the listing title names no employer) states the employer only in
+	// the posting text, so a model reads that text (postingTextResolver): only when LLM_* is configured, and at most COMPANY_NAMES_LLM_MAX
 	// boards a run (unset = all), since each board costs one call.
 	llmMax, err := worker.EnvInt64("COMPANY_NAMES_LLM_MAX", 0)
 	if err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
-	if *provider != "" && *provider != "adp" {
+	if *provider != "" && !slices.Contains(llmProviders, *provider) {
 		// No model for a run that cannot use it.
 	} else if lcfg := config.LoadLLM(); lcfg.Require() == nil {
 		model, flush, err := llm.NewClient(lcfg.Settings(lcfg.Model), "company-names")
@@ -118,8 +123,9 @@ func run() int {
 		// enrichment's.
 		model = model.As("", nil, llm.Feature("company-names"))
 		placeholders["adp"] = postingTextResolver{q: queries, model: model, source: "adp"}
+		placeholders["paycor"] = newPaycorResolver(placeholders["paycor"], postingTextResolver{q: queries, model: model, source: "paycor", vendor: "Paycor"})
 	} else {
-		log.Printf("LLM_* not configured: adp placeholder boards are left for a run that has it")
+		log.Printf("LLM_* not configured: %s placeholder boards are left for a run that has it", strings.Join(llmProviders, ", "))
 	}
 	if *provider != "" {
 		r, ok := placeholders[*provider]
@@ -135,7 +141,9 @@ func run() int {
 		return 1
 	}
 	// Days since the epoch, times the cap: the window advances by one cap a day (capProvider).
-	boards = capProvider(boards, "adp", llmMax, time.Now().UTC().Unix()/86400*llmMax)
+	for _, p := range llmProviders {
+		boards = capProvider(boards, p, llmMax, time.Now().UTC().Unix()/86400*llmMax)
+	}
 	boardRenames, unresolved := resolvePlaceholders(ctx, boards, placeholders)
 	sort.Slice(boardRenames, func(i, j int) bool {
 		a, b := boardRenames[i], boardRenames[j]

@@ -82,6 +82,19 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
   boards: 38 named, every one the employer the postings state; ~$0.0013 a board at Z.ai's
   public price.
 
+Paycor uses the same route as a second step: `cmd/backfill-company-names` tries the listing
+title first (`ExtractPaycorTitle`) and, when that names no employer, has the model read the
+board's postings (`paycorResolver`, same `GroundedName` guard, same `COMPANY_NAMES_LLM_MAX` cap
+per provider). Traps: the vendor's own name ("Paycor", also as a whole word inside a longer
+name) is refused, as is a name over 100 runes or with a control character; a board id that is
+not a 32-hex clientId reaches neither a URL nor the model; the listing's logo alt ("Paycor
+Logo") and its `homeUrl`/`descUrl` host are never used as a name, and no request goes to a host
+taken from page content. Prompt injection in a posting can at most name the tenant's own board,
+because the answer must appear verbatim in that board's postings. Without `LLM_*` the run logs
+that adp and paycor boards are left alone. Yield: not measured here (no production access in
+the implementing session); record the named/refused counts of the first `--provider=paycor
+--dry-run` here. Boards that stay unnamed keep the neutral label; hiding them is an owner decision.
+
 `cmd/backfill-company-names` runs this as its second pass, driven by the BOARD
 (`ListPlaceholderCompanyBoards`), and renames the board and its stored jobs in one transaction:
 the pass finds its work by the board, so a board renamed without its jobs is never listed again.
