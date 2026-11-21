@@ -5,7 +5,9 @@
   import { isPlanRefusal } from '#lib/api-core.js';
   import type { FeedCard } from '#lib/types.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
+  import SwipeCard from './SwipeCard.svelte';
   import SwipeCardBody from './SwipeCardBody.svelte';
+  import { FLY_MS, SwipeGesture } from './swipeGesture.svelte.js';
   import MatchBlock from './MatchBlock.svelte';
   import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
@@ -22,6 +24,7 @@
   let paywalled = $state(false);
   let last = $state<{ card: FeedCard; action: 'save' | 'dismiss' } | null>(null);
   const current = $derived(cards[0]);
+  const gesture = new SwipeGesture();
 
   async function load() {
     loading = true;
@@ -36,24 +39,35 @@
     }
   }
 
+  // Fling the card off, drop it after the fly-off and write optimistically. A failed write
+  // puts the card back so nothing is lost silently.
   async function judge(action: 'save' | 'dismiss') {
     const card = current;
-    if (!card) return;
-    cards = cards.slice(1);
+    if (!card || gesture.exiting) return;
+    gesture.fling(action);
     last = { card, action };
-    try {
-      await (action === 'save' ? api.saveJob(card.public_slug) : api.dismissJob(card.public_slug));
-    } catch {
-      // The write failed: put the card back so nothing is lost silently.
-      cards = [card, ...cards];
-      last = null;
+    const write = action === 'save' ? api.saveJob(card.public_slug) : api.dismissJob(card.public_slug);
+    // Settled either way so a rejection is handled below, not as an unhandled one here.
+    const written = write.then(
+      () => true,
+      () => false,
+    );
+    await new Promise((r) => setTimeout(r, FLY_MS));
+    cards = cards.filter((c) => c !== card);
+    gesture.settle();
+    if (!(await written)) {
+      // Restore only if not since undone (undo clears `last`), or the card would be queued twice.
+      if (last?.card === card) {
+        cards = [card, ...cards];
+        last = null;
+      }
       return;
     }
     if (cards.length === 0) await load();
   }
 
   async function undo() {
-    if (!last) return;
+    if (!last || gesture.exiting) return;
     const { card, action } = last;
     last = null;
     await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
@@ -94,17 +108,20 @@
   </header>
 
   {#if current}
-    <main class="relative min-h-0 flex-1 px-4 py-2">
-      {#key current.public_slug}
-        <article
-          aria-label={`Job: ${current.title} at ${current.company || 'unknown company'}`}
-          class="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-xl md:max-w-2xl"
-        >
-          <div class="shrink-0 px-4 pt-4"><MatchBlock match={current.match} /></div>
-          <SwipeCardBody job={current} />
-        </article>
-      {/key}
-    </main>
+    {#key current.public_slug}
+      <SwipeCard
+        {gesture}
+        label={`Job: ${current.title} at ${current.company || 'unknown company'}`}
+        hasNext={cards.length > 1}
+        onCommit={judge}
+      >
+        <SwipeCardBody job={current}>
+          {#snippet match()}
+            <MatchBlock match={current.match} />
+          {/snippet}
+        </SwipeCardBody>
+      </SwipeCard>
+    {/key}
 
     <footer class="flex shrink-0 items-center justify-center gap-6 px-4 pb-safe pt-2">
       <button
