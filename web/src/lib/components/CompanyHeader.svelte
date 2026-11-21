@@ -131,9 +131,12 @@
     <!-- Feedback + votes ride the end of the industries/links row below. With no such row
          they follow Watch: a row of their own left a bare company's card mostly empty.
          On a phone they would squeeze the name to nothing, so there they wrap below. After
-         Watch in the DOM, not reordered by CSS, so Tab moves the way the eye does. -->
+         Watch in the DOM, not reordered by CSS, so Tab moves the way the eye does.
+         ml-auto: when Watch's right-aligned hint wraps it onto a row below, it stays right. -->
     {#if !hasMeta}
-      {@render feedback('flex shrink-0 items-center gap-x-4 max-sm:basis-full max-sm:justify-end')}
+      {@render feedback(
+        'ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-x-4 gap-y-2 max-sm:basis-full',
+      )}
     {/if}
   </div>
   <!-- The employer-level fact, where it belongs: an AI interviewer is a property of
