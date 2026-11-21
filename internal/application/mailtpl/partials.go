@@ -151,13 +151,15 @@ const companyLogoBase = "https://logo.freehire.me/"
 
 // NewJob builds a Job, resolving the company's logo URL and its fallback monogram.
 //
-// The monogram rides in the image's alt text: email has no onerror hook, so a
-// blocked or missing image must degrade into something readable by itself.
+// Email has no onerror hook, and on a 404 Apple Mail draws a broken-image glyph beside
+// the alt text, so the URL asks the proxy for ?fallback=monogram: a company with no
+// logo gets a drawn letter tile instead of a 404. The monogram still rides in the alt
+// text for a client that blocks images altogether.
 func NewJob(title, company, salary, url string) Job {
 	j := Job{Title: title, Company: company, Salary: salary, URL: url}
 	if company != "" {
 		first, _ := utf8.DecodeRuneInString(company)
-		j.LogoURL = companyLogoBase + neturl.PathEscape(company)
+		j.LogoURL = companyLogoBase + neturl.PathEscape(company) + "?fallback=monogram"
 		j.Monogram = string(unicode.ToUpper(first))
 	}
 	return j
