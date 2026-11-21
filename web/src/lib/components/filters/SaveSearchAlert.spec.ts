@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SaveSearchAlert from './SaveSearchAlert.svelte';
 
@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   subs: [] as { id: number; saved_search_id: number; channel: string }[],
 }));
 
+const goto = vi.hoisted(() => vi.fn());
+vi.mock('$app/navigation', () => ({ goto }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
 vi.mock('#lib/signin.js', () => ({ promptSignIn: vi.fn() }));
@@ -16,6 +18,11 @@ vi.mock('#lib/savedSearches.svelte.js', () => ({
       return state.items;
     },
     ensureLoaded: vi.fn(),
+    create: vi.fn(async (name: string, query: string) => {
+      const s = { id: 2, name, query };
+      state.items = [...state.items, s];
+      return s;
+    }),
   },
 }));
 vi.mock('#lib/notifications.svelte.js', () => ({
@@ -55,5 +62,13 @@ describe('SaveSearchAlert', () => {
     render(SaveSearchAlert, { query: 'seniority=senior', alerts: 'manage' });
     expect(screen.queryByText(notice)).toBeNull();
     expect(screen.getByText('Get new-job alerts')).toBeTruthy();
+  });
+
+  it('saves an unsaved search and opens its alerts in one click', async () => {
+    render(SaveSearchAlert, { query: 'seniority=senior', alerts: 'manage' });
+    expect(screen.queryByText('Save filter')).toBeNull();
+    await fireEvent.click(screen.getByText('Get new-job alerts'));
+    await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/my/notifications/searches'));
+    expect(state.items.map((s) => s.query)).toEqual(['seniority=senior']);
   });
 });
