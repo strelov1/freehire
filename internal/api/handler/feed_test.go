@@ -10,9 +10,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/candidate/cv"
+	"github.com/strelov1/freehire/internal/candidate/jevrank"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/search/feed"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -38,8 +41,12 @@ func feedApp(s searcher, prof feedProfile) (*fiber.App, *auth.Issuer) {
 }
 
 func feedAppPlans(s searcher, prof feedProfile, plans feedPlans) (*fiber.App, *auth.Issuer) {
+	return feedAppRank(s, prof, plans, nil, nil)
+}
+
+func feedAppRank(s searcher, prof feedProfile, plans feedPlans, rank *feed.Reranker, cvs feedCVs) (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &feedHandlers{search: s, profiles: prof, excluded: feedExcluded{10}, plans: plans}
+	h := &feedHandlers{search: s, profiles: prof, excluded: feedExcluded{10}, plans: plans, rank: rank, cvs: cvs}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/feed", auth.RequireAuth(iss, testVersions), h.Feed)
 	return app, iss
@@ -131,5 +138,89 @@ func TestFeed_SignedOutIs401(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", resp.StatusCode)
+	}
+}
+
+type fakeScorer struct {
+	scores map[string]float64
+	calls  int
+}
+
+func (f *fakeScorer) Rank(_ context.Context, _ string, jobs []jevrank.Job) []jevrank.Result {
+	f.calls++
+	out := make([]jevrank.Result, len(jobs))
+	for i, j := range jobs {
+		out[i] = jevrank.Result{Slug: j.Slug, Score: f.scores[j.Slug], OK: true}
+	}
+	return out
+}
+
+type fakeCVs struct {
+	ok  bool
+	err error
+}
+
+func (f fakeCVs) BaseCV(context.Context, int64) (cv.Record, bool, error) {
+	return cv.Record{}, f.ok, f.err
+}
+
+func rankHits() *fakeSearcher {
+	hit := func(slug string) search.JobDocument {
+		return search.JobDocument{Job: jobview.Job{PublicSlug: slug, Title: slug}}
+	}
+	return &fakeSearcher{res: search.SearchResult{Total: 3, Hits: []search.JobDocument{hit("a"), hit("b"), hit("c")}}}
+}
+
+func feedRanked(t *testing.T, prof userprofile.Profile, cvs fakeCVs, sc *fakeScorer) (slugs []string, ranking any) {
+	t.Helper()
+	rr := feed.NewReranker(sc, nil, time.Second, time.Hour)
+	app, iss := feedAppRank(rankHits(), feedProfile{p: prof}, feedPlansFake{}, rr, cvs)
+	status, body := deckGet(t, app, iss, "/api/v1/me/feed")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d: %v", status, body)
+	}
+	for _, c := range body["data"].([]any) {
+		slugs = append(slugs, c.(map[string]any)["public_slug"].(string))
+	}
+	return slugs, body["meta"].(map[string]any)["ranking"]
+}
+
+func TestFeed_RerankByFit(t *testing.T) {
+	sc := &fakeScorer{scores: map[string]float64{"a": 0.1, "b": 0.9, "c": 0.5}}
+	slugs, ranking := feedRanked(t, userprofile.Profile{Skills: []string{"go"}}, fakeCVs{ok: true}, sc)
+	if ranking != "fit" || len(slugs) != 3 || slugs[0] != "b" || slugs[1] != "c" || slugs[2] != "a" {
+		t.Errorf("ranking = %v, slugs = %v", ranking, slugs)
+	}
+}
+
+func TestFeed_RerankFallsBackToSkills(t *testing.T) {
+	for name, cvs := range map[string]fakeCVs{"no base cv": {}, "cv read error": {err: errors.New("db down")}} {
+		t.Run(name, func(t *testing.T) {
+			sc := &fakeScorer{}
+			slugs, ranking := feedRanked(t, userprofile.Profile{Skills: []string{"go"}}, cvs, sc)
+			if ranking != "skills" || len(slugs) != 3 || slugs[0] != "a" || sc.calls != 0 {
+				t.Errorf("ranking = %v, slugs = %v, calls = %d", ranking, slugs, sc.calls)
+			}
+		})
+	}
+}
+
+func TestFeed_DegradedRankingIsDateWithoutJev(t *testing.T) {
+	sc := &fakeScorer{}
+	_, ranking := feedRanked(t, userprofile.Profile{Seniorities: []string{"senior"}}, fakeCVs{ok: true}, sc)
+	if ranking != "date" || sc.calls != 0 {
+		t.Errorf("ranking = %v, calls = %d", ranking, sc.calls)
+	}
+}
+
+func TestFeed_NoJevKeyRanksBySkills(t *testing.T) {
+	rr := newFeedReranker("", nil)
+	if rr != nil {
+		t.Fatal("a reranker without a Jev key must be nil")
+	}
+	app, iss := feedAppRank(rankHits(), feedProfile{p: userprofile.Profile{Skills: []string{"go"}}}, feedPlansFake{}, rr, fakeCVs{ok: true})
+	status, body := deckGet(t, app, iss, "/api/v1/me/feed")
+	if status != fiber.StatusOK || body["meta"].(map[string]any)["ranking"] != "skills" {
+		t.Errorf("status = %d, meta = %v", status, body["meta"])
 	}
 }

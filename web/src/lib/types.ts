@@ -103,4 +103,6 @@ export interface FeedMeta {
   total: number;
   reason?: string;
   degraded?: string;
+  /** How the page is ordered: fit (Jev), skills (vector), date (no vector). */
+  ranking?: 'fit' | 'skills' | 'date' | string;
 }

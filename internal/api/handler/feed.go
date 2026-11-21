@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/search/feed"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -47,14 +48,16 @@ type feedHandlers struct {
 	profiles profileReader
 	excluded excludedJobs
 	plans    feedPlans
+	rank     *feed.Reranker
+	cvs      feedCVs
 }
 
 // newFeedHandlers is nil with the flag off, so the route is never registered.
-func newFeedHandlers(on bool, s searcher, p profileReader, e excludedJobs, pl feedPlans) *feedHandlers {
+func newFeedHandlers(on bool, s searcher, p profileReader, e excludedJobs, pl feedPlans, cvs feedCVs, jevKey string, c cache.Cache) *feedHandlers {
 	if !on {
 		return nil
 	}
-	return &feedHandlers{search: s, profiles: p, excluded: e, plans: pl}
+	return &feedHandlers{search: s, profiles: p, excluded: e, plans: pl, rank: newFeedReranker(jevKey, c), cvs: cvs}
 }
 
 func (h *feedHandlers) register(api fiber.Router, mw middleware) {
@@ -81,6 +84,8 @@ type feedMeta struct {
 	// Degraded is "no_match_vector" when the profile has no skills, so cards come in the
 	// search's default order rather than by match.
 	Degraded string `json:"degraded,omitempty"`
+	// Ranking is how the page is ordered: fit (Jev), skills (vector) or date (no vector). Open enum.
+	Ranking string `json:"ranking,omitempty"`
 }
 
 // Feed returns one page of jobs matching the caller's profile, best match first.
@@ -148,6 +153,10 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	cards := make([]feedCard, len(res.Hits))
 	for i, hit := range res.Hits {
 		cards[i] = feedCard{Job: hit.Job, Match: matchBlock(hit.Job, profile.Skills)}
+	}
+	meta.Ranking = "date"
+	if meta.Degraded == "" {
+		cards, meta.Ranking = h.rerankCards(c.Context(), userID, res.Hits, cards)
 	}
 	meta.Total = res.Total
 	outcome = "ok"
