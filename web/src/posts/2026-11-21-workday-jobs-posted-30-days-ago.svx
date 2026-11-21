@@ -1,0 +1,118 @@
+---
+title: "Workday jobs: what \"Posted 30+ Days Ago\" hides, in 842,756 postings"
+date: 2026-11-21
+summary: Workday is the hiring system behind more open postings than any other we crawl. Two in three of them are older than the "30+ days" its career sites stop counting at. How old they really are, how long they stay up, and what the posting does not tell you.
+type: article
+tags:
+  - ats
+  - data
+  - job-search
+draft: true
+---
+
+If you have looked for a job at a large company, you have probably filled in a Workday
+form. It is the hiring system behind more open postings than any other we crawl:
+**842,756** of them right now, at **5,424** employers. This is the first in a series on
+what the big hiring systems look like from the job seeker's side, and it starts with the
+biggest.
+
+## "Posted 30+ Days Ago" is most of the board
+
+A Workday career site does not show the date a job was posted. It shows "Posted Today",
+"Posted 3 Days Ago", and after a month, "Posted 30+ Days Ago" — whether the posting is
+five weeks old or two years. Behind that label, Workday's own data carries the real date,
+and we keep it.
+
+| open Workday postings older than | share |
+| --- | --- |
+| 30 days | 66.8% |
+| 60 days | 43.9% |
+| 90 days | 31.8% |
+| 6 months | 14.3% |
+| a year | 5.3% |
+
+**Two in three** open Workday postings are past the point where the label stops counting.
+The median one is **50 days** old; across all the other sources we can date, it is 40, and
+59% are past 30 days. One Workday posting in twenty has been up for more than a year, and
+on the career site it looks the same as one posted five weeks ago.
+
+## How long a Workday posting stays up
+
+Of the **1,295,156** Workday postings we saw come down since June, half were gone within
+**42 days**. A quarter came down within 20 days, three in four within 76. Only 5% closed in
+their first week, and 19% stayed up three months or more.
+
+That is slower than the market: across all sources, half of closed postings were gone
+within 32 days ([more on that here](/blog/2026-11-18-how-long-job-postings-really-stay-up)). Workday
+is used mostly by large employers, and they tend to hire slowly: more approvals, more
+interview rounds, and more postings kept open to fill the same role many times over.
+
+Those two numbers explain each other. A posting that closes in a month is on the board for a
+month; one that stays up for a year is there every day of that year. So the board fills up
+with old postings, and a 42-day median to close becomes a board where two thirds of what you
+see is past the 30-day mark.
+
+## What a Workday posting tells you, and what it does not
+
+Workday gives every employer the same fields, but several are optional, and many
+employers leave them empty.
+
+- **The date.** Always there in the data: every open Workday posting we hold has one. The
+  career site just rounds it off.
+- **Remote or not.** Workday has a field for it, yet for **84%** of open postings neither
+  that field nor the description gave us an answer. Of the rest, hybrid is the most common answer (7.5% of all postings),
+  then on-site (5.0%) and remote (3.9%). For the rest, the answer is somewhere in the
+  description, or nowhere.
+- **Full or part time.** Workday's own field only knows those two. Contracts, internships
+  and fixed-term roles have to be read out of the title or the text: 9% of open postings are
+  contracts and 3% internships by our reading, and for 39% we could not tell.
+- **Pay.** The posting data Workday career sites give out has no pay field. Where there is a
+  range, it is in the description. In the United States **35%** of open Workday postings
+  name a dollar figure there, against 22% for everything else we crawl — and where the law
+  asks for it, about half do.
+
+| state | Workday postings with a dollar figure |
+| --- | --- |
+| New York | 59.5% |
+| Massachusetts | 52.5% |
+| Illinois | 51.7% |
+| California | 50.1% |
+| Texas | 28.7% |
+| Ohio | 23.6% |
+| Pennsylvania | 20.9% |
+| Florida | 20.6% |
+
+The first four require a pay range in job postings; the last four do not. Even under the
+law, half the postings show no dollar figure. Some state the range in another form, and
+some fall outside a law that covers only employers above a certain size; we cannot tell
+those apart from the ones that simply leave pay out.
+
+## When Workday postings go up
+
+Workday postings follow the working week more strictly than most: Tuesday gets 20.7% of
+them, Wednesday 20.3%, Friday 17.6%, and each weekend day about 1%, against 3% across the
+market. Tuesday is the busiest day across the market too ([the full breakdown](/blog/2026-11-19-which-day-are-jobs-posted)).
+
+## What it means for your search
+
+- **Treat "30+ Days Ago" as "unknown, probably much older".** Of the postings with that
+  label, two in three are more than two months old, and one in five more than six months.
+- **Find the real date before you spend an hour on the form.** freehire shows the date the
+  employer gave the posting, so a Workday job posted 14 months ago says so.
+- **Apply early, but do not rule out an old posting.** Postings at large employers stay
+  open for a long time, and some of the old ones are roles that hire continuously. An old
+  posting is worth a check, not an automatic skip.
+- **Expect one account per employer.** Each company's Workday site is separate, so applying
+  to five companies means five sign-ups. A password manager saves a lot of time.
+
+## How we counted
+
+Open postings are those live on employers' Workday career sites as of 21 November 2026,
+counted once each, from public career sites only. The posting date is the start date
+Workday gives for the posting. Pay is counted from a sample of open US postings: a posting
+counts if its description names a dollar amount, so a sign-on bonus counts too, and states
+are read from the location where it names one. Closed postings are those that disappeared from the
+employer's site between mid-June, when we started watching, and mid-November; the time is
+measured from the posting date to the day it disappeared, and postings we stopped tracking
+for our own reasons (a board we could not reach, for example) are left out. A posting
+coming down does not mean someone was hired.
