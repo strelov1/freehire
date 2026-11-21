@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SaveSearchAlert from './SaveSearchAlert.svelte';
+import { savedSearches } from '#lib/savedSearches.svelte.js';
 
 const state = vi.hoisted(() => ({
   items: [] as { id: number; name: string; query: string }[],
@@ -39,6 +40,7 @@ const notice = 'Add a filter to get alerts: this search covers every job.';
 beforeEach(() => {
   state.items = [];
   state.subs = [];
+  goto.mockClear();
 });
 
 describe('SaveSearchAlert', () => {
@@ -70,5 +72,13 @@ describe('SaveSearchAlert', () => {
     await fireEvent.click(screen.getByText('Get new-job alerts'));
     await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/my/notifications/searches'));
     expect(state.items.map((s) => s.query)).toEqual(['seniority=senior']);
+  });
+
+  it('stays put and shows the error when the save fails', async () => {
+    vi.mocked(savedSearches.create).mockRejectedValueOnce(new Error('network'));
+    render(SaveSearchAlert, { query: 'seniority=senior', alerts: 'manage' });
+    await fireEvent.click(screen.getByText('Get new-job alerts'));
+    await vi.waitFor(() => expect(screen.getByText('Could not save. Please try again.')).toBeTruthy());
+    expect(goto).not.toHaveBeenCalled();
   });
 });
