@@ -199,7 +199,8 @@
 
   const haveChip = haveChipClass;
   const adjChip = adjacentChipClass;
-  const missChip = missingChipClass;
+  // The missing chip has no fill for `brightness-95` to darken, so it shows hover as a tint.
+  const missChip = `${missingChipClass} hover:bg-muted`;
   // A not-held chip is a control: pressing it asks whether the viewer holds the skill after
   // all, or wants to be shown less of it. The ring marks which one the open row belongs to.
   // An avoided skill keeps its place in the group — the job still asks for it and the score

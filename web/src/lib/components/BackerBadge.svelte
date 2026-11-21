@@ -8,7 +8,7 @@
   //
   // The mark carries the meaning on its own: at feed size a reader recognises the
   // orange Y long before they would read a word. `withLabel` adds the brand name for
-  // the surfaces with room for it (the job and company pages), where the badge also
+  // the surfaces with room for it (the company page), where the badge also
   // becomes a link to the collection.
   //
   // No monogram fallback, unlike EntityLogo: a letter tile standing in for the a16z
