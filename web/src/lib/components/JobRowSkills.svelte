@@ -12,12 +12,12 @@
     haveSet,
   }: { shownSkills: string[]; extraSkills: number; haveSet: Set<string> | null } = $props();
 
-  // A chip is red when the viewer's own profile lacks the skill — the same source as the
-  // strip below, so the chips and the percentage can never tell different stories. With
-  // no profile to compare against there is nothing to tint: the chips are plain facts.
-  function chipVariant(skill: string): 'brand' | 'missing' | 'outline' {
-    if (haveSet) return haveSet.has(skill.toLowerCase()) ? 'brand' : 'missing';
-    return 'outline';
+  // A chip is tinted when the viewer's own profile has the skill — the same source as the
+  // strip below, so the chips and the percentage can never tell different stories. A
+  // skill they lack stays a plain outline, not red: a gap is not an error, and a row of
+  // red chips on every card shouted louder than the title.
+  function chipVariant(skill: string): 'brand' | 'outline' {
+    return haveSet?.has(skill.toLowerCase()) ? 'brand' : 'outline';
   }
 </script>
 
