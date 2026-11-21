@@ -17,6 +17,16 @@ describe('BackerBadge overflow', () => {
     expect(hrefs.every((h) => h?.startsWith('/collections/'))).toBe(true);
   });
 
+  it('links unlabelled marks only when asked, keeping the brand as alt text', () => {
+    const plain = render(BackerBadge, { collections: ['yc'] }).container;
+    expect(plain.querySelector('a')).toBeNull();
+
+    const linked = render(BackerBadge, { collections: ['yc'], linked: true }).container;
+    const link = linked.querySelector('a');
+    expect(link?.getAttribute('href')?.startsWith('/collections/')).toBe(true);
+    expect(link?.querySelector('img')?.getAttribute('alt')).toBeTruthy();
+  });
+
   it('renders no disclosure when everything fits', () => {
     const { container } = render(BackerBadge, { collections: ['yc'], max: 3 });
     expect(container.querySelector('details')).toBeNull();
