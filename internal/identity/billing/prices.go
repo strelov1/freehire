@@ -18,7 +18,7 @@ type PublicPrice struct {
 	// formats; nothing here rounds.
 	AmountCents int64  `json:"amount_cents"`
 	Currency    string `json:"currency"`
-	// Interval is "month" or "year".
+	// Interval is "week", "month" or "year".
 	Interval string `json:"interval"`
 	// Default marks the price a new subscriber is sold unless they choose otherwise.
 	Default bool `json:"default"`

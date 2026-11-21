@@ -33200,6 +33200,7 @@
       "PlanPriceInterval": {
         "type": "string",
         "enum": [
+          "week",
           "month",
           "year"
         ]

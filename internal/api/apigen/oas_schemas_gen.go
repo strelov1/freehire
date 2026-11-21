@@ -22670,6 +22670,7 @@ func (s *PlanPrice) SetTier(val PlanPriceTier) {
 type PlanPriceInterval string
 
 const (
+	PlanPriceIntervalWeek  PlanPriceInterval = "week"
 	PlanPriceIntervalMonth PlanPriceInterval = "month"
 	PlanPriceIntervalYear  PlanPriceInterval = "year"
 )
@@ -22677,6 +22678,7 @@ const (
 // AllValues returns all PlanPriceInterval values.
 func (PlanPriceInterval) AllValues() []PlanPriceInterval {
 	return []PlanPriceInterval{
+		PlanPriceIntervalWeek,
 		PlanPriceIntervalMonth,
 		PlanPriceIntervalYear,
 	}
@@ -22685,6 +22687,8 @@ func (PlanPriceInterval) AllValues() []PlanPriceInterval {
 // MarshalText implements encoding.TextMarshaler.
 func (s PlanPriceInterval) MarshalText() ([]byte, error) {
 	switch s {
+	case PlanPriceIntervalWeek:
+		return []byte(s), nil
 	case PlanPriceIntervalMonth:
 		return []byte(s), nil
 	case PlanPriceIntervalYear:
@@ -22697,6 +22701,9 @@ func (s PlanPriceInterval) MarshalText() ([]byte, error) {
 // UnmarshalText implements encoding.TextUnmarshaler.
 func (s *PlanPriceInterval) UnmarshalText(data []byte) error {
 	switch PlanPriceInterval(data) {
+	case PlanPriceIntervalWeek:
+		*s = PlanPriceIntervalWeek
+		return nil
 	case PlanPriceIntervalMonth:
 		*s = PlanPriceIntervalMonth
 		return nil

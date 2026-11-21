@@ -6576,6 +6576,8 @@ func (s *PlanPrice) Validate() error {
 
 func (s PlanPriceInterval) Validate() error {
 	switch s {
+	case "week":
+		return nil
 	case "month":
 		return nil
 	case "year":

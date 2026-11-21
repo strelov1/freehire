@@ -4,6 +4,7 @@
   import { api } from '#lib/api.js';
   import { promptSignIn } from '#lib/signin.js';
   import { formatMinorUnits } from '#lib/money.js';
+  import { PRICE_INCREASE_LABEL, upcomingCents } from '#lib/priceIncrease.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { PRO_PERKS } from '#lib/proPerks.js';
   import Seo from '#lib/components/Seo.svelte';
@@ -27,6 +28,8 @@
 
   const monthly = $derived(proPrices.find((p) => p.interval === 'month') ?? null);
   const annual = $derived(proPrices.find((p) => p.interval === 'year') ?? null);
+  // A one-week Pro for somebody who only wants to try it; shown only when the deployment sells one.
+  const weekly = $derived(proPrices.find((p) => p.interval === 'week') ?? null);
   const ultraMonthly = $derived(ultraPrices.find((p) => p.interval === 'month') ?? null);
   const ultraAnnual = $derived(ultraPrices.find((p) => p.interval === 'year') ?? null);
 
@@ -143,8 +146,8 @@
     }
   }
 
-  async function buy() {
-    if (!chosen || busy) return;
+  async function buy(price: PublicPrice | null = chosen) {
+    if (!price || busy) return;
     busy = true;
     error = null;
 
@@ -178,7 +181,7 @@
     }
 
     try {
-      const { url } = await api.billingCheckout(chosen.id);
+      const { url } = await api.billingCheckout(price.id);
       window.location.href = url;
     } catch {
       error = 'Checkout is not available right now. Please try again in a moment.';
@@ -329,12 +332,21 @@
       <div class="flex flex-col gap-1">
         <h2 class="text-lg font-semibold">Pro</h2>
         {#if chosen}
+          {@const next = upcomingCents(chosen)}
           <p class="text-3xl font-semibold tracking-tight">
+            {#if next}<s class="mr-1 text-xl font-normal text-muted-foreground"
+                >{formatMinorUnits(next, chosen.currency, undefined, { trimWhole: true })}</s
+              >{/if}
             {money(chosen)}
             <span class="text-base font-normal text-muted-foreground"
               >/ {chosen.interval === 'year' ? 'year' : 'month'}</span
             >
           </p>
+          {#if next}
+            <p class="text-sm font-medium text-brand">
+              Price goes up on {PRICE_INCREASE_LABEL}. Subscribe now and keep {money(chosen)}.
+            </p>
+          {/if}
         {:else}
           <p class="text-3xl font-semibold tracking-tight text-muted-foreground">—</p>
         {/if}
@@ -380,9 +392,24 @@
               <p class="text-sm text-destructive">{codeError}</p>
             {/if}
           </div>
-          <button type="button" class={buttonVariants({ variant: 'cta', size: 'lg' })} disabled={busy} onclick={buy}>
+          <button
+            type="button"
+            class={buttonVariants({ variant: 'cta', size: 'lg' })}
+            disabled={busy}
+            onclick={() => buy()}
+          >
             {busy ? 'Opening checkout…' : 'Upgrade to Pro'}
           </button>
+          {#if weekly}
+            <button
+              type="button"
+              class={buttonVariants({ variant: 'outline', size: 'lg' })}
+              disabled={busy}
+              onclick={() => buy(weekly)}
+            >
+              Just trying it? {money(weekly)} for a week
+            </button>
+          {/if}
         {:else}
           <!-- Signing in first is not a hurdle we invented: the purchase is attached to an
                account, and a payment made before there is one lands on nobody. The dialog

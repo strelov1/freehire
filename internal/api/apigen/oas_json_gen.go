@@ -65834,6 +65834,8 @@ func (s *PlanPriceInterval) Decode(d *jx.Decoder) error {
 	}
 	// Try to use constant string.
 	switch PlanPriceInterval(v) {
+	case PlanPriceIntervalWeek:
+		*s = PlanPriceIntervalWeek
 	case PlanPriceIntervalMonth:
 		*s = PlanPriceIntervalMonth
 	case PlanPriceIntervalYear:
