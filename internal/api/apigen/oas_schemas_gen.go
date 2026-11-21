@@ -30652,6 +30652,10 @@ func (s *TrackingMeta) SetCounts(val TrackingCounts) {
 type TrackingPipeline struct {
 	Applications int64                  `json:"applications"`
 	Stages       TrackingPipelineStages `json:"stages"`
+	// Applications that ever reached interview or later (current stage or stage history).
+	ReachedInterview int64 `json:"reached_interview"`
+	// Applications that ever reached offer or later (current stage or stage history).
+	ReachedOffer int64 `json:"reached_offer"`
 	// The reply-rate benchmark, only when it clears its sample gate.
 	ReplyRate OptReplyRateBenchmark `json:"reply_rate"`
 }
@@ -30664,6 +30668,16 @@ func (s *TrackingPipeline) GetApplications() int64 {
 // GetStages returns the value of Stages.
 func (s *TrackingPipeline) GetStages() TrackingPipelineStages {
 	return s.Stages
+}
+
+// GetReachedInterview returns the value of ReachedInterview.
+func (s *TrackingPipeline) GetReachedInterview() int64 {
+	return s.ReachedInterview
+}
+
+// GetReachedOffer returns the value of ReachedOffer.
+func (s *TrackingPipeline) GetReachedOffer() int64 {
+	return s.ReachedOffer
 }
 
 // GetReplyRate returns the value of ReplyRate.
@@ -30679,6 +30693,16 @@ func (s *TrackingPipeline) SetApplications(val int64) {
 // SetStages sets the value of Stages.
 func (s *TrackingPipeline) SetStages(val TrackingPipelineStages) {
 	s.Stages = val
+}
+
+// SetReachedInterview sets the value of ReachedInterview.
+func (s *TrackingPipeline) SetReachedInterview(val int64) {
+	s.ReachedInterview = val
+}
+
+// SetReachedOffer sets the value of ReachedOffer.
+func (s *TrackingPipeline) SetReachedOffer(val int64) {
+	s.ReachedOffer = val
 }
 
 // SetReplyRate sets the value of ReplyRate.

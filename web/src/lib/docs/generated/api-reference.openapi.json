@@ -10959,6 +10959,8 @@
                       "rejected": 1,
                       "withdrawn": 0
                     },
+                    "reached_interview": 5,
+                    "reached_offer": 2,
                     "reply_rate": {
                       "you": {
                         "applications": 12,
@@ -23317,7 +23319,9 @@
         "type": "object",
         "required": [
           "applications",
-          "stages"
+          "stages",
+          "reached_interview",
+          "reached_offer"
         ],
         "properties": {
           "applications": {
@@ -23330,6 +23334,16 @@
               "type": "integer",
               "format": "int64"
             }
+          },
+          "reached_interview": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Applications that ever reached interview or later (current stage or stage history)."
+          },
+          "reached_offer": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Applications that ever reached offer or later (current stage or stage history)."
           },
           "reply_rate": {
             "$ref": "#/components/schemas/ReplyRateBenchmark",

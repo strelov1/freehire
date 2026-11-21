@@ -20,6 +20,8 @@ vi.mock('#lib/auth.svelte.js', () => ({
 const baseStats: PipelineStats = {
   applications: 12,
   stages: { applied: 12 } as PipelineStats['stages'],
+  reached_interview: 0,
+  reached_offer: 0,
 };
 
 beforeEach(() => {

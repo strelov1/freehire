@@ -15,18 +15,21 @@
 <div class="flex flex-col items-center gap-1">
   <svg viewBox="0 0 100 100" class="h-28 w-28" role="img" aria-label="{label}: {display}">
     <circle cx="50" cy="50" r={R} fill="none" stroke-width="9" class="stroke-muted" />
-    <circle
-      cx="50"
-      cy="50"
-      r={R}
-      fill="none"
-      stroke="currentColor"
-      stroke-width="9"
-      stroke-linecap="round"
-      stroke-dasharray={dash}
-      transform="rotate(-90 50 50)"
-      class="text-foreground transition-[stroke-dasharray] duration-500"
-    />
+    <!-- A round linecap draws a zero-length arc as a dot, so 0% draws no arc at all. -->
+    {#if fraction > 0}
+      <circle
+        cx="50"
+        cy="50"
+        r={R}
+        fill="none"
+        stroke="currentColor"
+        stroke-width="9"
+        stroke-linecap="round"
+        stroke-dasharray={dash}
+        transform="rotate(-90 50 50)"
+        class="text-foreground transition-[stroke-dasharray] duration-500"
+      />
+    {/if}
     <text x="50" y="50" dy="0.34em" text-anchor="middle" class="fill-foreground text-[1.45rem] font-semibold">
       {display}
     </text>

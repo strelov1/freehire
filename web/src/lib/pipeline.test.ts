@@ -4,9 +4,11 @@ import { STAGE_VALUES } from './generated/contracts';
 import { PIPELINE_BANDS, interviewRate, offerRate, replyRate } from './pipeline';
 import type { PipelineStats } from './types';
 
-const stats = (stages: Record<string, number>): PipelineStats => ({
+const stats = (stages: Record<string, number>, reached = { interview: 0, offer: 0 }): PipelineStats => ({
   applications: Object.values(stages).reduce((a, b) => a + b, 0),
   stages: Object.fromEntries(STAGE_VALUES.map((s) => [s, stages[s] ?? 0])) as PipelineStats['stages'],
+  reached_interview: reached.interview,
+  reached_offer: reached.offer,
 });
 
 // The bands ARE the board's columns — same ids, same labels, same order. A funnel that
@@ -29,19 +31,19 @@ describe('PIPELINE_BANDS', () => {
   });
 });
 
-// Both rates are a current-status snapshot and so a lower bound: an application rejected
-// after interviewing is only ever counted as rejected.
+// Both rates read the server's history counts, not the current stage: an application
+// rejected after interviewing is still an interview.
 describe('rates', () => {
-  it('counts everyone at or past interview', () => {
-    const s = stats({ applied: 77, interview: 20, offer: 2, accepted: 1 });
+  it('divides the reached counts by applications', () => {
+    const s = stats({ applied: 77, interview: 20, offer: 2, accepted: 1 }, { interview: 23, offer: 3 });
     expect(interviewRate(s)).toBeCloseTo(0.23);
     expect(offerRate(s)).toBeCloseTo(0.03);
   });
 
-  it('reads the counts per stage, not per band', () => {
-    // screening and responded sit in the `applied` band but are not interviews.
-    const s = stats({ applied: 50, screening: 30, responded: 20 });
-    expect(interviewRate(s)).toBe(0);
+  it('counts an interview that ended in a rejection', () => {
+    const s = stats({ applied: 6, rejected: 4 }, { interview: 4, offer: 1 });
+    expect(interviewRate(s)).toBeCloseTo(0.4);
+    expect(offerRate(s)).toBeCloseTo(0.1);
   });
 
   it('yields zero without dividing by zero', () => {

@@ -50,18 +50,18 @@ export function bandBreakdown(s: PipelineStats, band: PipelineBand): { stage: st
   return band.stages.map((stage) => ({ stage, count: countAt(s, stage) }));
 }
 
-/** Share of applications that reached an interview or beyond. A current-status
- *  snapshot, so it is a lower bound (a job rejected after interviewing counts
- *  only as rejected). Zero applications yields 0 without dividing by zero. */
+/** Share of applications that ever reached an interview or beyond. The server counts
+ *  the stage history, so a job rejected after interviewing still counts. Zero
+ *  applications yields 0 without dividing by zero. */
 export function interviewRate(s: PipelineStats): number {
   if (s.applications === 0) return 0;
-  return (s.stages.interview + s.stages.offer + s.stages.accepted) / s.applications;
+  return s.reached_interview / s.applications;
 }
 
-/** Share of applications that reached an offer or beyond. Same snapshot caveat. */
+/** Share of applications that ever reached an offer or beyond. */
 export function offerRate(s: PipelineStats): number {
   if (s.applications === 0) return 0;
-  return (s.stages.offer + s.stages.accepted) / s.applications;
+  return s.reached_offer / s.applications;
 }
 
 /** Answered share of one side of the reply-rate benchmark (you or global). The

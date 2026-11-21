@@ -2570,6 +2570,8 @@ curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer
       "rejected": 1,
       "withdrawn": 0
     },
+    "reached_interview": 5,
+    "reached_offer": 2,
     "reply_rate": {
       "you": {
         "applications": 12,
