@@ -81,7 +81,7 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	limit, _, err := pageParams(c)
+	limit, offset, err := pageParams(c)
 	if err != nil {
 		return err
 	}
@@ -109,6 +109,7 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	params := search.SearchParams{
 		Filter: withExcludedIDs(search.FilterFromValues(vals), excluded),
 		Limit:  limit,
+		Offset: offset,
 	}
 	meta := feedMeta{Source: "profile"}
 	if len(profile.Skills) > 0 {
