@@ -59,7 +59,12 @@
   <div class="flex items-center gap-4">
     <UserSearch class="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
     <div class="min-w-0 flex-1">
-      <h3 class="text-sm font-semibold">{s.heading}</h3>
+      <h3 class="text-sm font-semibold">
+        {s.heading}
+        {#if !paid}<span class="ml-1 rounded-sm bg-brand-muted px-1.5 py-0.5 text-xs font-medium text-brand-strong"
+            >Pro</span
+          >{/if}
+      </h3>
       {#if contacts === null}
         <p class="text-xs text-muted-foreground">{format(s.pitch, { company: companyName })}</p>
       {/if}
@@ -78,7 +83,12 @@
   </div>
 
   {#if !paid}
-    <p class="text-xs text-muted-foreground">{s.paidOnly}</p>
+    <p class="text-xs text-muted-foreground">
+      {s.paidOnly}
+      <a href={resolve('/features/recruiter-contacts')} class="font-medium text-foreground hover:underline"
+        >{s.learnMore}</a
+      >
+    </p>
   {/if}
 
   {#if error}
