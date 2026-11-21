@@ -1,7 +1,7 @@
 // Wire types mirroring the backend JSON (internal/db models and query rows).
 // Timestamps marshal as RFC3339 strings when present, or null.
 
-import type { JobMatch, Blocker, Report as ATSReportContract } from './generated/contracts';
+import type { Job as ContractJob, JobMatch, Blocker, Report as ATSReportContract } from './generated/contracts';
 /** @public — the app's vocabulary for the generated contract; a name is carried here
  *  whether or not a screen reads it yet. */
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
@@ -89,3 +89,18 @@ export type * from './wire-types/community';
 export type * from './wire-types/experience';
 export type * from './wire-types/mentors';
 export type * from './wire-types/onboarding';
+
+/** A match-feed card: the job plus the server's explanation of it (GET /me/feed). The
+ *  client renders these lists as given and never recomputes them. */
+export type FeedCard = ContractJob & {
+  match: { why: string[]; may_not_fit: string[]; unknown: string[] };
+};
+
+/** reason: why the feed is empty without searching (no_profile, no_usable_fields).
+ *  degraded: no_match_vector when the profile has no skills to rank by. */
+export interface FeedMeta {
+  source: 'profile';
+  total: number;
+  reason?: string;
+  degraded?: string;
+}

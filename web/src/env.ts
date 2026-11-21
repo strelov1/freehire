@@ -20,6 +20,7 @@ export const variables = defineEnvVars({
   PUBLIC_POSTHOG_KEY: { public: true, schema: optional },
   PUBLIC_POSTHOG_HOST: { public: true, schema: optional },
   PUBLIC_OPEN_WITHIN: { public: true, schema: optional },
+  PUBLIC_MATCHES: { public: true, schema: optional },
   API_INTERNAL_URL: { schema: optional },
   SSR_API_TIMEOUT_MS: { schema: optional },
 });

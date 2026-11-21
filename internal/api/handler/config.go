@@ -49,11 +49,13 @@ type Config struct {
 	CookieDomains           []string
 	OAuthRegistry           *oauth.Registry
 	AuthV2Enabled           bool
-	MobileAuthCallbacks     map[string]string
-	RecentAuthTTL           time.Duration
-	AppleNative             *appleauth.Client
-	AppleGrantKeys          *appleauth.KeyRing
-	Search                  *search.Client
+	// MeFeedEnabled registers GET /me/feed; off, the route does not exist.
+	MeFeedEnabled       bool
+	MobileAuthCallbacks map[string]string
+	RecentAuthTTL       time.Duration
+	AppleNative         *appleauth.Client
+	AppleGrantKeys      *appleauth.KeyRing
+	Search              *search.Client
 	// Suggest answers the search box's completions from the dictionary index (cmd/build-suggestions writes it).
 	// Nil disables /suggest with a 503; the rest of the site is unaffected and the box offers nothing.
 	Suggest *suggest.Service

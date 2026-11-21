@@ -259,6 +259,10 @@ func Register(app *fiber.App, cfg Config) {
 	// A closed posting stays in the index until the drain removes it; the page hides it meanwhile.
 	searchH.removals = queries
 	timelineH := newTimelineHandlers(queries)
+	var feedH *feedHandlers
+	if cfg.MeFeedEnabled {
+		feedH = &feedHandlers{search: jobSearch, profiles: profileSvc, excluded: tracking}
+	}
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)
 	// Same nil-interface trap as jobSearch: assign only when non-nil, or the handler's "no
@@ -413,5 +417,6 @@ func Register(app *fiber.App, cfg Config) {
 		webhook:          webhookH,
 		telegram:         telegramH,
 		discord:          discordH,
+		feed:             feedH,
 	})
 }
