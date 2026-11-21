@@ -71,9 +71,9 @@ The [MCP setup guide](/mcp) has instructions for each assistant. For Claude Code
 claude mcp add --transport http freehire https://freehire.me/api/v1/mcp
 ```
 
-When you want personal tools, run `claude mcp login freehire`. In Codex, add the
+Then run `claude mcp login freehire` before your first search. In Codex, add the
 same URL with `codex mcp add freehire --url https://freehire.me/api/v1/mcp`, then
-run `codex mcp login freehire` to connect your account. Approve access in your
+run `codex mcp login freehire` before your first search. Approve access in your
 browser. You do not need to copy a token into the configuration.
 
 ChatGPT supports public search and account access through the same Freehire
