@@ -95,6 +95,11 @@ func run() int {
 	rebuildEmbedProgress(ctx, analytics, cfg.RedisURL)
 	done()
 
+	// And the page-view totals behind /stats/engagement: a full pass over job_daily_views.
+	done = worker.Stage("view totals")
+	rebuildViewTotals(ctx, analytics, cfg.RedisURL)
+	done()
+
 	return exit
 }
 

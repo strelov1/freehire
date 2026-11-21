@@ -60,6 +60,42 @@ ORDER BY d;
 -- Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 -- every column is a scalar total, so no user identifier or row-level field is
 -- selected. saved / applied are user_jobs interaction-row totals across all users.
+-- The view figures are NOT here: see GetPageViewTotals, which only cmd/rollup-stats runs.
+--
+-- The other five mirror event-total semantics from their own tables:
+-- cvs_uploaded is the count of users holding a stored résumé (one per user, so also a
+-- people count); cvs_tailored counts CVs created as a per-vacancy copy, read off the
+-- is_tailored flag rather than job_id — deleting a vacancy nulls the link (0058);
+-- alert_subscribers is a PEOPLE count — the accounts holding at least one active
+-- notification subscription, whatever the channel — because one person subscribed to
+-- three searches over two channels is still one person who turned alerts on;
+-- inboxes_connected adds the live Gmail grants to the claimed hosted mailboxes (both are
+-- one-per-user and both are a deliberate connect action, so the sum is a count of
+-- inboxes, not of people); and saved_searches is every saved search. All five read tiny
+-- tables — unlike `viewed`, none of them needs a rollup to stay fast.
+SELECT
+    count(*) FILTER (WHERE saved_at IS NOT NULL)::int   AS saved,
+    -- applications live in their own table now, and counting them there is also the
+    -- honest count: one that outlived its posting is still an application somebody made.
+    (SELECT count(*) FROM applications WHERE applied_at IS NOT NULL)::int AS applied,
+    (SELECT count(*) FROM users WHERE resume_object_key IS NOT NULL)::int AS cvs_uploaded,
+    (SELECT count(*) FROM cvs WHERE is_tailored)::int AS cvs_tailored,
+    (SELECT count(DISTINCT user_id) FROM subscriptions WHERE active)::int AS alert_subscribers,
+    ((SELECT count(*) FROM gmail_connections WHERE status = 'connected')
+        + (SELECT count(*) FROM mailboxes))::int AS inboxes_connected,
+    (SELECT count(*) FROM saved_searches)::int AS saved_searches
+FROM user_jobs;
+
+-- name: GetPageViewTotals :one
+-- The engagement endpoint's two view figures, measured by cmd/rollup-stats on the
+-- analytics replica and published as a snapshot (viewlog.StoreTotals). The API reads
+-- the snapshot and runs this itself only when there is none.
+--
+-- **It does not belong on a request path, and it was on one until 2026-11-21.**
+-- Measured that day on the replica: 75,315,608 rows in 7,998 MB, 22.6s for one cold
+-- pass (551k buffers read), and the endpoint's 10-minute cache meant a recompute on the
+-- primary every ten minutes, 43 of them a day ending in a statement timeout.
+--
 -- "viewed" is the human view total (anonymous + signed-in, every visitor) produced by
 -- the nginx-log aggregation worker. It sums the worker's per-day rollup
 -- (job_daily_views), NOT jobs.view_count — a SUM over the 6M-row jobs table seqscans
@@ -69,8 +105,8 @@ ORDER BY d;
 -- **The rollup is not small.** This comment used to call it "small and fast", which was
 -- wrong and expensive: measured 2026-09-16 it holds 9,944,162 rows in 843 MB, carries
 -- exactly one index (the `(day, job_id)` primary key) and grows by a row per job per
--- day forever. Both figures below therefore come out of ONE aggregate pass, in a CTE,
--- and a second pass over this table must not be added. Reading it twice is what made
+-- day forever. Both figures below therefore come out of ONE aggregate pass, and a
+-- second pass over this table must not be added. Reading it twice is what made
 -- /open unusable the day `viewed_since` landed: as its own scalar subquery,
 -- `min(day) WHERE page_uniques > 0` planned an ascending walk of the primary key that
 -- heap-fetched every row to test an unindexed column, and since the ~4.7M rows before
@@ -80,11 +116,9 @@ ORDER BY d;
 -- and on a host whose crawl fleet already saturates the disk the cold-cache case
 -- reached 16s. Folded into one pass it is 64k buffer touches, 78x fewer.
 --
--- The seam this leaves: one pass is still a full scan of a table that only grows, so
--- these two figures belong in a published snapshot (`cmd/rollup-stats`, the way
--- `/stats/catalog` is fed — "never count on a request path") before the scan grows
--- back into the same problem. Not built yet because one pass restored the endpoint to
--- its peers (~0.6s, the same as /stats/facets), and that is where the need stops today.
+-- One pass is still a full scan of a table that only grows, which is why it moved
+-- into the snapshot (above).
+--
 -- It sums `page_uniques`, NEVER `uniques` — the same rule social-digest's ranking
 -- follows, and for the same reason: `uniques` fuses bot-filtered page opens with
 -- UNFILTERED API reads, and crawlers are most of this host's traffic. Measured
@@ -106,42 +140,9 @@ ORDER BY d;
 -- actually carries a count), never a constant naming the migration: if the history is
 -- ever recovered the window widens on its own, and a hardcoded date would then lie in
 -- the other direction. NULL means nothing has been rolled up yet.
---
--- The remaining five mirror event-total semantics from their own tables:
--- cvs_uploaded is the count of users holding a stored résumé (one per user, so also a
--- people count); cvs_tailored counts CVs created as a per-vacancy copy, read off the
--- is_tailored flag rather than job_id — deleting a vacancy nulls the link (0058);
--- alert_subscribers is a PEOPLE count — the accounts holding at least one active
--- notification subscription, whatever the channel — because one person subscribed to
--- three searches over two channels is still one person who turned alerts on;
--- inboxes_connected adds the live Gmail grants to the claimed hosted mailboxes (both are
--- one-per-user and both are a deliberate connect action, so the sum is a count of
--- inboxes, not of people); and saved_searches is every saved search. All five read tiny
--- tables — unlike `viewed`, none of them needs a rollup to stay fast.
-WITH views AS (
-    -- Both view figures in one pass over the 9.9M-row rollup. `FILTER` rather than a
-    -- second subquery with a WHERE: see the note above for what the second pass cost.
-    SELECT COALESCE(sum(page_uniques), 0)::int            AS viewed,
-           min(day) FILTER (WHERE page_uniques > 0)::date AS viewed_since
-    FROM job_daily_views
-)
-SELECT
-    count(*) FILTER (WHERE saved_at IS NOT NULL)::int   AS saved,
-    -- applications live in their own table now, and counting them there is also the
-    -- honest count: one that outlived its posting is still an application somebody made.
-    (SELECT count(*) FROM applications WHERE applied_at IS NOT NULL)::int AS applied,
-    -- Read as two scalar subqueries over the CTE, never joined to user_jobs: a
-    -- CROSS JOIN would need a GROUP BY, and that turns an EMPTY user_jobs from one
-    -- all-zero row into NO rows, which is an error for a `:one` query.
-    (SELECT viewed FROM views)       AS viewed,
-    (SELECT viewed_since FROM views) AS viewed_since,
-    (SELECT count(*) FROM users WHERE resume_object_key IS NOT NULL)::int AS cvs_uploaded,
-    (SELECT count(*) FROM cvs WHERE is_tailored)::int AS cvs_tailored,
-    (SELECT count(DISTINCT user_id) FROM subscriptions WHERE active)::int AS alert_subscribers,
-    ((SELECT count(*) FROM gmail_connections WHERE status = 'connected')
-        + (SELECT count(*) FROM mailboxes))::int AS inboxes_connected,
-    (SELECT count(*) FROM saved_searches)::int AS saved_searches
-FROM user_jobs;
+SELECT COALESCE(sum(page_uniques), 0)::bigint          AS viewed,
+       min(day) FILTER (WHERE page_uniques > 0)::date AS viewed_since
+FROM job_daily_views;
 
 -- name: ListJobActivity :many
 -- Dense activity series over [from, to] at the given granularity. A daily

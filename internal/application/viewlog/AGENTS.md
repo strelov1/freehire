@@ -78,3 +78,10 @@ parses as nothing silently counts nothing.
   `uniques` + `agent_uniques`, a total-reach figure mixing people, API reads and agents (the
   most-viewed sort and the job page show it as such). The only human-only figure is
   `page_uniques`.
+- **The site-wide total is a snapshot, never a request-path sum.** `cmd/rollup-stats`
+  sums `page_uniques` over the whole rollup on the replica (`GetPageViewTotals`) and
+  publishes it with its window (`StoreTotals`, key `viewlog:totals:v1`, 7-day TTL);
+  `/api/v1/stats/engagement` reads it (`LoadTotals`) and sums the rollup itself only when
+  nothing is published. Measured 2026-11-21 the rollup held 75.3M rows in 8 GB and one
+  pass took 22.6s cold, so the endpoint's old recompute on every 10-minute cache miss
+  ended in a statement timeout 43 times a day.
