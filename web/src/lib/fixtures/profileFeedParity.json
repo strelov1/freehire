@@ -1,0 +1,1220 @@
+[
+  {
+    "name": "typical: skills, specializations, senior, remote global",
+    "profile": {
+      "specializations": [
+        "backend",
+        "devops"
+      ],
+      "skills": [
+        "go",
+        "kubernetes",
+        "postgresql"
+      ],
+      "seniorities": [
+        "senior"
+      ],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "work_modes": [
+          "remote"
+        ],
+        "remote": {
+          "regions": [
+            "global"
+          ]
+        },
+        "base": {
+          "country": "de",
+          "city": "Berlin"
+        },
+        "relocation": {
+          "open": false
+        }
+      }
+    },
+    "params": {
+      "category": "backend,devops",
+      "regions": "global",
+      "seniority": "senior",
+      "seniority_include_unspecified": "true",
+      "skills": "go,kubernetes,postgresql",
+      "work_mode": "remote"
+    }
+  },
+  {
+    "name": "empty profile",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {}
+  },
+  {
+    "name": "over budget: 120 skills cut at a whole value",
+    "profile": {
+      "specializations": [],
+      "skills": [
+        "skill-001",
+        "skill-002",
+        "skill-003",
+        "skill-004",
+        "skill-005",
+        "skill-006",
+        "skill-007",
+        "skill-008",
+        "skill-009",
+        "skill-010",
+        "skill-011",
+        "skill-012",
+        "skill-013",
+        "skill-014",
+        "skill-015",
+        "skill-016",
+        "skill-017",
+        "skill-018",
+        "skill-019",
+        "skill-020",
+        "skill-021",
+        "skill-022",
+        "skill-023",
+        "skill-024",
+        "skill-025",
+        "skill-026",
+        "skill-027",
+        "skill-028",
+        "skill-029",
+        "skill-030",
+        "skill-031",
+        "skill-032",
+        "skill-033",
+        "skill-034",
+        "skill-035",
+        "skill-036",
+        "skill-037",
+        "skill-038",
+        "skill-039",
+        "skill-040",
+        "skill-041",
+        "skill-042",
+        "skill-043",
+        "skill-044",
+        "skill-045",
+        "skill-046",
+        "skill-047",
+        "skill-048",
+        "skill-049",
+        "skill-050",
+        "skill-051",
+        "skill-052",
+        "skill-053",
+        "skill-054",
+        "skill-055",
+        "skill-056",
+        "skill-057",
+        "skill-058",
+        "skill-059",
+        "skill-060",
+        "skill-061",
+        "skill-062",
+        "skill-063",
+        "skill-064",
+        "skill-065",
+        "skill-066",
+        "skill-067",
+        "skill-068",
+        "skill-069",
+        "skill-070",
+        "skill-071",
+        "skill-072",
+        "skill-073",
+        "skill-074",
+        "skill-075",
+        "skill-076",
+        "skill-077",
+        "skill-078",
+        "skill-079",
+        "skill-080",
+        "skill-081",
+        "skill-082",
+        "skill-083",
+        "skill-084",
+        "skill-085",
+        "skill-086",
+        "skill-087",
+        "skill-088",
+        "skill-089",
+        "skill-090",
+        "skill-091",
+        "skill-092",
+        "skill-093",
+        "skill-094",
+        "skill-095",
+        "skill-096",
+        "skill-097",
+        "skill-098",
+        "skill-099",
+        "skill-100",
+        "skill-101",
+        "skill-102",
+        "skill-103",
+        "skill-104",
+        "skill-105",
+        "skill-106",
+        "skill-107",
+        "skill-108",
+        "skill-109",
+        "skill-110",
+        "skill-111",
+        "skill-112",
+        "skill-113",
+        "skill-114",
+        "skill-115",
+        "skill-116",
+        "skill-117",
+        "skill-118",
+        "skill-119",
+        "skill-120"
+      ],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "skills": "skill-001,skill-002,skill-003,skill-004,skill-005,skill-006,skill-007,skill-008,skill-009,skill-010,skill-011,skill-012,skill-013,skill-014,skill-015,skill-016,skill-017,skill-018,skill-019,skill-020,skill-021,skill-022,skill-023,skill-024,skill-025,skill-026,skill-027,skill-028,skill-029,skill-030,skill-031,skill-032,skill-033,skill-034,skill-035,skill-036,skill-037,skill-038,skill-039,skill-040,skill-041,skill-042,skill-043,skill-044,skill-045,skill-046,skill-047,skill-048,skill-049,skill-050,skill-051,skill-052,skill-053,skill-054,skill-055,skill-056,skill-057,skill-058,skill-059,skill-060,skill-061,skill-062,skill-063,skill-064,skill-065,skill-066,skill-067,skill-068,skill-069,skill-070,skill-071,skill-072,skill-073,skill-074,skill-075,skill-076,skill-077,skill-078,skill-079,skill-080"
+    }
+  },
+  {
+    "name": "entry level: intern and junior",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [
+        "intern",
+        "junior"
+      ],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "experience_only_seniority_unspecified": "true",
+      "experience_years_max": "2",
+      "seniority": "intern,junior",
+      "seniority_include_unspecified": "true"
+    }
+  },
+  {
+    "name": "intern only caps at one year",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [
+        "intern"
+      ],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "experience_only_seniority_unspecified": "true",
+      "experience_years_max": "1",
+      "seniority": "intern",
+      "seniority_include_unspecified": "true"
+    }
+  },
+  {
+    "name": "all eight levels impose nothing",
+    "profile": {
+      "specializations": [],
+      "skills": [
+        "python"
+      ],
+      "seniorities": [
+        "c_level",
+        "principal",
+        "staff",
+        "lead",
+        "senior",
+        "middle",
+        "junior",
+        "intern"
+      ],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "skills": "python"
+    }
+  },
+  {
+    "name": "unknown level dropped and lifts the experience cap",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [
+        "junior",
+        "wizard"
+      ],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "seniority": "junior",
+      "seniority_include_unspecified": "true"
+    }
+  },
+  {
+    "name": "staff and principal, no experience bound",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [
+        "principal",
+        "staff"
+      ],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "seniority": "staff,principal",
+      "seniority_include_unspecified": "true"
+    }
+  },
+  {
+    "name": "remote anywhere: remote+onsite, base city, eu reach adds base country",
+    "profile": {
+      "specializations": [],
+      "skills": [
+        "react"
+      ],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "work_modes": [
+          "onsite",
+          "remote"
+        ],
+        "remote": {
+          "regions": [
+            "eu"
+          ]
+        },
+        "base": {
+          "country": "pt",
+          "city": "Lisbon"
+        },
+        "relocation": {
+          "open": false
+        }
+      }
+    },
+    "params": {
+      "cities": "Lisbon",
+      "countries": "pt",
+      "skills": "react",
+      "work_mode": "onsite,remote",
+      "work_mode_remote_anywhere": "true",
+      "work_mode_remote_countries": "pt",
+      "work_mode_remote_regions": "eu"
+    }
+  },
+  {
+    "name": "remote anywhere: all three modes, global+in reach already holds base",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "work_modes": [
+          "hybrid",
+          "remote",
+          "onsite"
+        ],
+        "remote": {
+          "regions": [
+            "global"
+          ],
+          "countries": [
+            "in"
+          ]
+        },
+        "base": {
+          "country": "in",
+          "city": "Bengaluru"
+        },
+        "relocation": {
+          "open": false
+        }
+      }
+    },
+    "params": {
+      "cities": "Bengaluru",
+      "countries": "in",
+      "work_mode": "hybrid,remote,onsite",
+      "work_mode_remote_anywhere": "true",
+      "work_mode_remote_countries": "in",
+      "work_mode_remote_regions": "global"
+    }
+  },
+  {
+    "name": "remote anywhere: no reach stays unbounded",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "work_modes": [
+          "remote",
+          "hybrid"
+        ],
+        "remote": {},
+        "base": {
+          "country": "br",
+          "city": "São Paulo"
+        },
+        "relocation": {
+          "open": false
+        }
+      }
+    },
+    "params": {
+      "cities": "São Paulo",
+      "countries": "br",
+      "work_mode": "remote,hybrid",
+      "work_mode_remote_anywhere": "true"
+    }
+  },
+  {
+    "name": "remote anywhere: relocation targets bound the physical arm, no relocation facet",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "work_modes": [
+          "remote",
+          "hybrid"
+        ],
+        "remote": {},
+        "base": {},
+        "relocation": {
+          "open": true,
+          "regions": [
+            "uk"
+          ]
+        }
+      }
+    },
+    "params": {
+      "regions": "uk",
+      "work_mode": "remote,hybrid",
+      "work_mode_remote_anywhere": "true"
+    }
+  },
+  {
+    "name": "relocation open with regions, onsite only",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "work_modes": [
+          "onsite"
+        ],
+        "remote": {},
+        "base": {
+          "country": "in",
+          "city": "Pune"
+        },
+        "relocation": {
+          "open": true,
+          "regions": [
+            "eu"
+          ],
+          "countries": [
+            "de"
+          ],
+          "cities": [
+            "Berlin"
+          ]
+        }
+      }
+    },
+    "params": {
+      "cities": "Pune,Berlin",
+      "countries": "in,de",
+      "regions": "eu",
+      "relocation": "supported,required",
+      "work_mode": "onsite"
+    }
+  },
+  {
+    "name": "relocation closed ignores its targets",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "work_modes": [
+          "onsite"
+        ],
+        "remote": {},
+        "base": {
+          "country": "pl",
+          "city": "Warsaw"
+        },
+        "relocation": {
+          "open": false,
+          "countries": [
+            "de"
+          ]
+        }
+      }
+    },
+    "params": {
+      "cities": "Warsaw",
+      "countries": "pl",
+      "work_mode": "onsite"
+    }
+  },
+  {
+    "name": "remote only withholds base",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "work_modes": [
+          "remote"
+        ],
+        "remote": {
+          "regions": [
+            "eu"
+          ]
+        },
+        "base": {
+          "country": "ua",
+          "city": "Kyiv"
+        },
+        "relocation": {
+          "open": false
+        }
+      }
+    },
+    "params": {
+      "regions": "eu",
+      "work_mode": "remote"
+    }
+  },
+  {
+    "name": "countries-only reach, work modes missing",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "remote": {
+          "countries": [
+            "in"
+          ]
+        },
+        "base": {
+          "country": "in",
+          "city": "Delhi"
+        },
+        "relocation": {
+          "open": false
+        }
+      }
+    },
+    "params": {
+      "countries": "in"
+    }
+  },
+  {
+    "name": "excludes overlap: include wins; sources and companies excluded",
+    "profile": {
+      "specializations": [],
+      "skills": [
+        "go",
+        "rust"
+      ],
+      "seniorities": [],
+      "excluded_skills": [
+        "rust",
+        "php"
+      ],
+      "excluded_sources": [
+        "linkedin",
+        "indeed"
+      ],
+      "excluded_companies": [
+        "acme",
+        "globex"
+      ],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "company_slug_exclude": "acme,globex",
+      "skills": "go,rust",
+      "skills_exclude": "php",
+      "source_exclude": "linkedin,indeed"
+    }
+  },
+  {
+    "name": "job languages and trimming with repeats",
+    "profile": {
+      "specializations": [],
+      "skills": [
+        " go ",
+        "go",
+        "",
+        "C#"
+      ],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [
+        "acme",
+        "initech",
+        "acme"
+      ],
+      "job_languages": [
+        "en",
+        "de"
+      ],
+      "location_preferences": null
+    },
+    "params": {
+      "company_slug_exclude": "initech,acme",
+      "posting_language": "en,de",
+      "skills": "go,C#"
+    }
+  },
+  {
+    "name": "over budget in UTF-16 units: bytes, runes and UTF-16 cut at different values",
+    "profile": {
+      "specializations": [],
+      "skills": [
+        "001😀",
+        "002😀",
+        "003😀",
+        "004😀",
+        "005😀",
+        "006😀",
+        "007😀",
+        "008😀",
+        "009😀",
+        "010😀",
+        "011😀",
+        "012😀",
+        "013😀",
+        "014😀",
+        "015😀",
+        "016😀",
+        "017😀",
+        "018😀",
+        "019😀",
+        "020😀",
+        "021😀",
+        "022😀",
+        "023😀",
+        "024😀",
+        "025😀",
+        "026😀",
+        "027😀",
+        "028😀",
+        "029😀",
+        "030😀",
+        "031😀",
+        "032😀",
+        "033😀",
+        "034😀",
+        "035😀",
+        "036😀",
+        "037😀",
+        "038😀",
+        "039😀",
+        "040😀",
+        "041😀",
+        "042😀",
+        "043😀",
+        "044😀",
+        "045😀",
+        "046😀",
+        "047😀",
+        "048😀",
+        "049😀",
+        "050😀",
+        "051😀",
+        "052😀",
+        "053😀",
+        "054😀",
+        "055😀",
+        "056😀",
+        "057😀",
+        "058😀",
+        "059😀",
+        "060😀",
+        "061😀",
+        "062😀",
+        "063😀",
+        "064😀",
+        "065😀",
+        "066😀",
+        "067😀",
+        "068😀",
+        "069😀",
+        "070😀",
+        "071😀",
+        "072😀",
+        "073😀",
+        "074😀",
+        "075😀",
+        "076😀",
+        "077😀",
+        "078😀",
+        "079😀",
+        "080😀",
+        "081😀",
+        "082😀",
+        "083😀",
+        "084😀",
+        "085😀",
+        "086😀",
+        "087😀",
+        "088😀",
+        "089😀",
+        "090😀",
+        "091😀",
+        "092😀",
+        "093😀",
+        "094😀",
+        "095😀",
+        "096😀",
+        "097😀",
+        "098😀",
+        "099😀",
+        "100😀",
+        "101😀",
+        "102😀",
+        "103😀",
+        "104😀",
+        "105😀",
+        "106😀",
+        "107😀",
+        "108😀",
+        "109😀",
+        "110😀",
+        "111😀",
+        "112😀",
+        "113😀",
+        "114😀",
+        "115😀",
+        "116😀",
+        "117😀",
+        "118😀",
+        "119😀",
+        "120😀",
+        "121😀",
+        "122😀",
+        "123😀",
+        "124😀",
+        "125😀",
+        "126😀",
+        "127😀",
+        "128😀",
+        "129😀",
+        "130😀",
+        "131😀",
+        "132😀",
+        "133😀",
+        "134😀",
+        "135😀",
+        "136😀",
+        "137😀",
+        "138😀",
+        "139😀",
+        "140😀",
+        "141😀",
+        "142😀",
+        "143😀",
+        "144😀",
+        "145😀",
+        "146😀",
+        "147😀",
+        "148😀",
+        "149😀",
+        "150😀",
+        "151😀",
+        "152😀",
+        "153😀",
+        "154😀",
+        "155😀",
+        "156😀",
+        "157😀",
+        "158😀",
+        "159😀",
+        "160😀",
+        "161😀",
+        "162😀",
+        "163😀",
+        "164😀",
+        "165😀",
+        "166😀",
+        "167😀",
+        "168😀",
+        "169😀",
+        "170😀",
+        "171😀",
+        "172😀",
+        "173😀",
+        "174😀",
+        "175😀",
+        "176😀",
+        "177😀",
+        "178😀",
+        "179😀",
+        "180😀",
+        "181😀",
+        "182😀",
+        "183😀",
+        "184😀",
+        "185😀",
+        "186😀",
+        "187😀",
+        "188😀",
+        "189😀",
+        "190😀",
+        "191😀",
+        "192😀",
+        "193😀",
+        "194😀",
+        "195😀",
+        "196😀",
+        "197😀",
+        "198😀",
+        "199😀",
+        "200😀",
+        "201😀",
+        "202😀",
+        "203😀",
+        "204😀",
+        "205😀",
+        "206😀",
+        "207😀",
+        "208😀",
+        "209😀",
+        "210😀",
+        "211😀",
+        "212😀",
+        "213😀",
+        "214😀",
+        "215😀",
+        "216😀",
+        "217😀",
+        "218😀",
+        "219😀",
+        "220😀",
+        "221😀",
+        "222😀",
+        "223😀",
+        "224😀",
+        "225😀",
+        "226😀",
+        "227😀",
+        "228😀",
+        "229😀",
+        "230😀",
+        "231😀",
+        "232😀",
+        "233😀",
+        "234😀",
+        "235😀",
+        "236😀",
+        "237😀",
+        "238😀",
+        "239😀",
+        "240😀",
+        "241😀",
+        "242😀",
+        "243😀",
+        "244😀",
+        "245😀",
+        "246😀",
+        "247😀",
+        "248😀",
+        "249😀",
+        "250😀"
+      ],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "skills": "001😀,002😀,003😀,004😀,005😀,006😀,007😀,008😀,009😀,010😀,011😀,012😀,013😀,014😀,015😀,016😀,017😀,018😀,019😀,020😀,021😀,022😀,023😀,024😀,025😀,026😀,027😀,028😀,029😀,030😀,031😀,032😀,033😀,034😀,035😀,036😀,037😀,038😀,039😀,040😀,041😀,042😀,043😀,044😀,045😀,046😀,047😀,048😀,049😀,050😀,051😀,052😀,053😀,054😀,055😀,056😀,057😀,058😀,059😀,060😀,061😀,062😀,063😀,064😀,065😀,066😀,067😀,068😀,069😀,070😀,071😀,072😀,073😀,074😀,075😀,076😀,077😀,078😀,079😀,080😀,081😀,082😀,083😀,084😀,085😀,086😀,087😀,088😀,089😀,090😀,091😀,092😀,093😀,094😀,095😀,096😀,097😀,098😀,099😀,100😀,101😀,102😀,103😀,104😀,105😀,106😀,107😀,108😀,109😀,110😀,111😀,112😀,113😀,114😀,115😀,116😀,117😀,118😀,119😀,120😀,121😀,122😀,123😀,124😀,125😀,126😀,127😀,128😀,129😀,130😀,131😀,132😀,133😀"
+    }
+  },
+  {
+    "name": "trim like JS: U+FEFF trimmed, U+0085 kept",
+    "profile": {
+      "specializations": [],
+      "skills": [
+        "\uFEFFgo\uFEFF",
+        "\u0085rust",
+        " \uFEFF "
+      ],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [
+        "\uFEFFacme"
+      ],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "company_slug_exclude": "acme",
+      "skills": "go,\u0085rust"
+    }
+  },
+  {
+    "name": "excluded skills over 800 chars",
+    "profile": {
+      "specializations": [],
+      "skills": [
+        "go"
+      ],
+      "seniorities": [],
+      "excluded_skills": [
+        "avoid-001",
+        "avoid-002",
+        "avoid-003",
+        "avoid-004",
+        "avoid-005",
+        "avoid-006",
+        "avoid-007",
+        "avoid-008",
+        "avoid-009",
+        "avoid-010",
+        "avoid-011",
+        "avoid-012",
+        "avoid-013",
+        "avoid-014",
+        "avoid-015",
+        "avoid-016",
+        "avoid-017",
+        "avoid-018",
+        "avoid-019",
+        "avoid-020",
+        "avoid-021",
+        "avoid-022",
+        "avoid-023",
+        "avoid-024",
+        "avoid-025",
+        "avoid-026",
+        "avoid-027",
+        "avoid-028",
+        "avoid-029",
+        "avoid-030",
+        "avoid-031",
+        "avoid-032",
+        "avoid-033",
+        "avoid-034",
+        "avoid-035",
+        "avoid-036",
+        "avoid-037",
+        "avoid-038",
+        "avoid-039",
+        "avoid-040",
+        "avoid-041",
+        "avoid-042",
+        "avoid-043",
+        "avoid-044",
+        "avoid-045",
+        "avoid-046",
+        "avoid-047",
+        "avoid-048",
+        "avoid-049",
+        "avoid-050",
+        "avoid-051",
+        "avoid-052",
+        "avoid-053",
+        "avoid-054",
+        "avoid-055",
+        "avoid-056",
+        "avoid-057",
+        "avoid-058",
+        "avoid-059",
+        "avoid-060",
+        "avoid-061",
+        "avoid-062",
+        "avoid-063",
+        "avoid-064",
+        "avoid-065",
+        "avoid-066",
+        "avoid-067",
+        "avoid-068",
+        "avoid-069",
+        "avoid-070",
+        "avoid-071",
+        "avoid-072",
+        "avoid-073",
+        "avoid-074",
+        "avoid-075",
+        "avoid-076",
+        "avoid-077",
+        "avoid-078",
+        "avoid-079",
+        "avoid-080",
+        "avoid-081",
+        "avoid-082",
+        "avoid-083",
+        "avoid-084",
+        "avoid-085",
+        "avoid-086",
+        "avoid-087",
+        "avoid-088",
+        "avoid-089",
+        "avoid-090",
+        "avoid-091",
+        "avoid-092",
+        "avoid-093",
+        "avoid-094",
+        "avoid-095",
+        "avoid-096",
+        "avoid-097",
+        "avoid-098",
+        "avoid-099",
+        "avoid-100",
+        "avoid-101",
+        "avoid-102",
+        "avoid-103",
+        "avoid-104",
+        "avoid-105",
+        "avoid-106",
+        "avoid-107",
+        "avoid-108",
+        "avoid-109",
+        "avoid-110",
+        "avoid-111",
+        "avoid-112",
+        "avoid-113",
+        "avoid-114",
+        "avoid-115",
+        "avoid-116",
+        "avoid-117",
+        "avoid-118",
+        "avoid-119",
+        "avoid-120"
+      ],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "skills": "go",
+      "skills_exclude": "avoid-001,avoid-002,avoid-003,avoid-004,avoid-005,avoid-006,avoid-007,avoid-008,avoid-009,avoid-010,avoid-011,avoid-012,avoid-013,avoid-014,avoid-015,avoid-016,avoid-017,avoid-018,avoid-019,avoid-020,avoid-021,avoid-022,avoid-023,avoid-024,avoid-025,avoid-026,avoid-027,avoid-028,avoid-029,avoid-030,avoid-031,avoid-032,avoid-033,avoid-034,avoid-035,avoid-036,avoid-037,avoid-038,avoid-039,avoid-040,avoid-041,avoid-042,avoid-043,avoid-044,avoid-045,avoid-046,avoid-047,avoid-048,avoid-049,avoid-050,avoid-051,avoid-052,avoid-053,avoid-054,avoid-055,avoid-056,avoid-057,avoid-058,avoid-059,avoid-060,avoid-061,avoid-062,avoid-063,avoid-064,avoid-065,avoid-066,avoid-067,avoid-068,avoid-069,avoid-070,avoid-071,avoid-072,avoid-073,avoid-074,avoid-075,avoid-076,avoid-077,avoid-078,avoid-079,avoid-080"
+    }
+  },
+  {
+    "name": "excluded sources over 200 chars",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [
+        "source-01",
+        "source-02",
+        "source-03",
+        "source-04",
+        "source-05",
+        "source-06",
+        "source-07",
+        "source-08",
+        "source-09",
+        "source-10",
+        "source-11",
+        "source-12",
+        "source-13",
+        "source-14",
+        "source-15",
+        "source-16",
+        "source-17",
+        "source-18",
+        "source-19",
+        "source-20",
+        "source-21",
+        "source-22",
+        "source-23",
+        "source-24",
+        "source-25",
+        "source-26",
+        "source-27",
+        "source-28",
+        "source-29",
+        "source-30"
+      ],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "source_exclude": "source-01,source-02,source-03,source-04,source-05,source-06,source-07,source-08,source-09,source-10,source-11,source-12,source-13,source-14,source-15,source-16,source-17,source-18,source-19,source-20"
+    }
+  },
+  {
+    "name": "junior alone caps at two years",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [
+        "junior"
+      ],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": null
+    },
+    "params": {
+      "experience_only_seniority_unspecified": "true",
+      "experience_years_max": "2",
+      "seniority": "junior",
+      "seniority_include_unspecified": "true"
+    }
+  },
+  {
+    "name": "relocation open with no targets",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "work_modes": [
+          "onsite"
+        ],
+        "remote": {},
+        "base": {
+          "country": "tr",
+          "city": "Istanbul"
+        },
+        "relocation": {
+          "open": true
+        }
+      }
+    },
+    "params": {
+      "cities": "Istanbul",
+      "countries": "tr",
+      "relocation": "supported,required",
+      "work_mode": "onsite"
+    }
+  },
+  {
+    "name": "remote anywhere: all three modes as onsite,hybrid,remote",
+    "profile": {
+      "specializations": [],
+      "skills": [],
+      "seniorities": [],
+      "excluded_skills": [],
+      "excluded_sources": [],
+      "excluded_companies": [],
+      "job_languages": [],
+      "location_preferences": {
+        "work_modes": [
+          "onsite",
+          "hybrid",
+          "remote"
+        ],
+        "remote": {
+          "regions": [
+            "eu"
+          ]
+        },
+        "base": {
+          "country": "es",
+          "city": "Madrid"
+        },
+        "relocation": {
+          "open": false
+        }
+      }
+    },
+    "params": {
+      "cities": "Madrid",
+      "countries": "es",
+      "work_mode": "onsite,hybrid,remote",
+      "work_mode_remote_anywhere": "true",
+      "work_mode_remote_countries": "es",
+      "work_mode_remote_regions": "eu"
+    }
+  }
+]

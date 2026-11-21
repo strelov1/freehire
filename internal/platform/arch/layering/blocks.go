@@ -153,7 +153,7 @@ var blocks = map[string][]string{
 		"userjob", "viewlog",
 	},
 	"search": {
-		"catalogexport", "embedprogress", "facetidx", "facetsnapshot", "savedsearch", "search", "searchdrain", "searchintent",
+		"catalogexport", "embedprogress", "facetidx", "facetsnapshot", "feed", "savedsearch", "search", "searchdrain", "searchintent",
 		"serveprobe", "suggest",
 	},
 	// catalogstats is here, not in job, because it imports nothing from job: it takes cache,
