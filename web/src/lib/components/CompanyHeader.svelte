@@ -125,15 +125,16 @@
         </div>
       {/if}
     </div>
-    <!-- Feedback + votes ride the end of the industries/links row below. With no such row
-         they sit beside Watch: a row of their own left a bare company's card mostly empty.
-         On a phone they would squeeze the name to nothing, so there they wrap below. -->
-    {#if !hasMeta}
-      {@render feedback('flex shrink-0 items-center gap-x-4 max-sm:order-last max-sm:basis-full max-sm:justify-end')}
-    {/if}
     <!-- flex-1 above lets the name/tagline use the full width; the Watch button stays
          top-right and never shrinks (it collapses to an icon on mobile itself). -->
     <WatchCompanyButton {slug} companyName={company.name} />
+    <!-- Feedback + votes ride the end of the industries/links row below. With no such row
+         they follow Watch: a row of their own left a bare company's card mostly empty.
+         On a phone they would squeeze the name to nothing, so there they wrap below. After
+         Watch in the DOM, not reordered by CSS, so Tab moves the way the eye does. -->
+    {#if !hasMeta}
+      {@render feedback('flex shrink-0 items-center gap-x-4 max-sm:basis-full max-sm:justify-end')}
+    {/if}
   </div>
   <!-- The employer-level fact, where it belongs: an AI interviewer is a property of
        how this company hires, not of any one posting. Renders nothing until somebody
