@@ -1,7 +1,7 @@
 ---
 title: One MCP connection for search and your freehire account
 date: 2026-11-05
-summary: 'Public search and personal tools now share one freehire MCP address. Search without an account, then connect with OAuth to save jobs, track applications and manage alerts.'
+summary: 'Search and personal tools now share one freehire MCP address. Sign in with OAuth when you add it, then search, save jobs, track applications and manage alerts.'
 type: changelog
 tags:
   - mcp
@@ -9,6 +9,15 @@ tags:
   - api
 draft: false
 ---
+
+**Update, 13 November 2026:** the hosted MCP now requires sign-in for every tool,
+search included, because Claude.ai and other assistants only offer sign-in when a
+server asks for it on the first request. If you added freehire before that date
+and your assistant now says the server asked for sign-in but the connector does
+not use it, remove the connector and add it again with the same address. A
+connector saved with the older `/api/v1/mcp/account` address keeps working; if it
+asks you to sign in again, do. The parts below about searching without an account
+describe the setup before this change.
 
 Search 4.9 million unique open jobs from your AI assistant, then save the ones
 worth pursuing. freehire now uses one hosted MCP address for public search and
@@ -62,9 +71,9 @@ The [MCP setup guide](/mcp) has instructions for each assistant. For Claude Code
 claude mcp add --transport http freehire https://freehire.me/api/v1/mcp
 ```
 
-When you want personal tools, run `claude mcp login freehire`. In Codex, add the
+Then run `claude mcp login freehire` before your first search. In Codex, add the
 same URL with `codex mcp add freehire --url https://freehire.me/api/v1/mcp`, then
-run `codex mcp login freehire` to connect your account. Approve access in your
+run `codex mcp login freehire` before your first search. Approve access in your
 browser. You do not need to copy a token into the configuration.
 
 ChatGPT supports public search and account access through the same Freehire
@@ -87,8 +96,3 @@ industry for the dictionary, and report a failed operation. An empty search alon
 is not evidence that a dictionary term is missing. Problem reports should omit
 secrets and personal documents.
 
-**Update, 13 November 2026:** the hosted MCP now requires sign-in for every tool,
-search included, because Claude.ai and other assistants only offer sign-in when a
-server asks for it on the first request. A connector saved with
-the older `/api/v1/mcp/account` address keeps working; if it asks you to sign in
-again, do.

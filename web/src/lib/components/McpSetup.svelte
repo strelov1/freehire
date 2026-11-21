@@ -48,6 +48,7 @@
         'Choose Add custom connector.',
         'Name it freehire, paste the address, and choose Add, then sign in to freehire when asked.',
         'Start a new chat, turn the freehire connector on, and ask a job question.',
+        'If Claude says freehire is set up as not requiring sign-in, remove the connector and add it again: connectors added before 13 November 2026 were saved without sign-in.',
       ],
     },
     {
