@@ -56,9 +56,10 @@
 </script>
 
 <section class="flex flex-col gap-3 rounded-lg border border-border px-4 py-3.5">
-  <div class="flex items-center gap-4">
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
     <UserSearch class="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
-    <div class="min-w-0 flex-1">
+    <!-- basis: on a phone the action wraps to its own row instead of squeezing the text -->
+    <div class="min-w-0 flex-1 basis-56">
       <h3 class="text-sm font-semibold">
         {s.heading}
         {#if !paid}<span class="ml-1 rounded-sm bg-brand-muted px-1.5 py-0.5 text-xs font-medium text-brand-strong"
@@ -71,7 +72,7 @@
     </div>
     {#if contacts === null}
       {#if paid}
-        <Button variant="outline" size="sm" onclick={find} disabled={loading}>
+        <Button variant="outline" size="sm" onclick={find} disabled={loading} class="w-full sm:w-auto">
           {loading ? s.finding : s.find}
         </Button>
       {:else}
