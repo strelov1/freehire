@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/job/liveness"
 )
@@ -75,7 +76,9 @@ func TestLinkedInProbeCannotCloseAfterRedirectToAnotherJob(t *testing.T) {
 // Through the rotating proxy a refusal names one exit IP, so it skips the posting instead of
 // ending the pass, and the pass gets the larger budget.
 func TestLinkedInProxiedProbeSkipsRefusal(t *testing.T) {
+	var deadline time.Time
 	client := &http.Client{Transport: linkedInTransport(func(r *http.Request) (*http.Response, error) {
+		deadline, _ = r.Context().Deadline()
 		return &http.Response{StatusCode: http.StatusTooManyRequests, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header), Request: r}, nil
 	})}
 	pass := linkedInPass(client, true)
@@ -85,5 +88,9 @@ func TestLinkedInProxiedProbeSkipsRefusal(t *testing.T) {
 	}
 	if pass.maxPerRun <= linkedInPass(client, false).maxPerRun {
 		t.Fatalf("proxied budget %d is not larger than direct", pass.maxPerRun)
+	}
+	// The service's exit-IP retries need longer than a direct probe's deadline.
+	if left := time.Until(deadline); left <= probeTimeout {
+		t.Fatalf("proxied deadline in %v, want more than %v", left, probeTimeout)
 	}
 }
