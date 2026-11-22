@@ -42,6 +42,9 @@ export interface FormField {
   /** True for a custom-widget combobox (react-select and friends), which the
    *  simple filler must not write into — see `fillByLabel`. */
   combo: boolean;
+  /** The page's message rejecting the current answer (Easy Apply's "Invalid input",
+   *  or aria-invalid); absent while the page has not rejected it. */
+  invalid?: string;
   /**
    * The answers on offer: a native `<select>`'s options, a group's option
    * labels, or a combobox's options where it exposes them while closed. A
@@ -192,13 +195,15 @@ export type RuntimeMessage =
   // things that make the panel offer "Add this job" (see lib/addJob.ts).
   | { kind: 'GET_JOB_POSTING_MARKUP' }
   | { kind: 'JOB_POSTING_MARKUP'; present: boolean }
-  | { kind: 'FORM'; fields: FormField[]; uploads: Upload[] }
+  // `easyApply`: the frame is showing a LinkedIn Easy Apply dialog, an application
+  // that offers no file field because LinkedIn keeps the CV itself.
+  | { kind: 'FORM'; fields: FormField[]; uploads: Upload[]; easyApply?: boolean }
   // Reading a form and filling it both fan out across the tab's frames in the
   // background relay: an apply form is routinely served from an ATS iframe, and
   // a page carrying any other iframe (a map, an ad) would otherwise be answered
   // by whichever frame replied first — in practice the empty one.
   | { kind: 'GET_FRAMED_FORM' }
-  | { kind: 'FRAMED_FORM'; fields: FramedField[]; uploads: FramedUpload[] }
+  | { kind: 'FRAMED_FORM'; fields: FramedField[]; uploads: FramedUpload[]; easyApply?: boolean }
   // `reveal` makes a fill visible: the page scrolls to the question and outlines
   // it as the value lands, which is how the panel's walk is watched. Absent for
   // the agent's own tool-driven fills, which must stay silent.

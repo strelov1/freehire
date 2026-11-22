@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -43,6 +44,7 @@ func eployParse(t *testing.T, name string) *html.Node {
 // eployFake serves fixed bodies by URL; an unknown URL is a 404.
 type eployFake struct {
 	pages map[string]string
+	mu    sync.Mutex
 	gets  []string
 }
 
@@ -55,7 +57,9 @@ func (f *eployFake) GetXML(_ context.Context, u string, v any) error {
 }
 
 func (f *eployFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.mu.Lock()
 	f.gets = append(f.gets, u)
+	f.mu.Unlock()
 	body, ok := f.pages[u]
 	if !ok {
 		return nil, &StatusError{Method: "GET", Code: 410, URL: u}

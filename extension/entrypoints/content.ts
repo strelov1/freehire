@@ -2,6 +2,7 @@ import { startErrorTelemetry } from '../lib/telemetry';
 import { extractSnapshot, hasJobPostingMarkup } from '../lib/scraper';
 import { extractForm, extractUploads, fillByLabel } from '../lib/form';
 import { revealField } from '../lib/revealField';
+import { easyApplyDialog } from '../lib/easyApply';
 import { runStep } from '../lib/combobox';
 import { debounce } from '../lib/debounce';
 import type { RuntimeMessage } from '../lib/protocol';
@@ -64,6 +65,7 @@ export default defineContentScript({
             kind: 'FORM',
             fields: extractForm(document),
             uploads: extractUploads(document),
+            easyApply: easyApplyDialog(document) !== null,
           });
         case 'FILL_BY_LABEL':
           // A revealed fill scrolls to each question and outlines it as the value

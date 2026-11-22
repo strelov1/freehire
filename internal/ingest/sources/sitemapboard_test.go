@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/xml"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -14,11 +15,12 @@ import (
 // sitemapBoardFake serves fixture files by URL; an unknown URL answers 404, the way a closed
 // posting does.
 type sitemapBoardFake struct {
-	t     *testing.T
-	dir   string
-	files map[string]string // URL → fixture name
-	mu    sync.Mutex
-	got   []string
+	t                   *testing.T
+	dir                 string
+	files               map[string]string // URL → fixture name
+	missingDetailStatus int               // defaults to 404
+	mu                  sync.Mutex
+	got                 []string
 }
 
 func (f *sitemapBoardFake) read(url string) ([]byte, error) {
@@ -47,6 +49,9 @@ func (f *sitemapBoardFake) GetXML(_ context.Context, url string, v any) error {
 func (f *sitemapBoardFake) GetHTML(_ context.Context, url string) (*html.Node, error) {
 	b, err := f.read(url)
 	if err != nil {
+		if f.missingDetailStatus != 0 {
+			return nil, &StatusError{Method: "GET", Code: f.missingDetailStatus, URL: url}
+		}
 		return nil, err
 	}
 	return html.Parse(strings.NewReader(string(b)))
@@ -63,11 +68,28 @@ func (f *sitemapBoardFake) fetched(url string) bool {
 	return false
 }
 
-func TestSitemapBoardFailsWhenNoRequestedPageYieldsAPosting(t *testing.T) {
-	// The sitemap reads but every posting page answers 404: an outage, not an empty catalogue.
-	f := &sitemapBoardFake{t: t, dir: "getinit", files: map[string]string{getinitSitemapURL: "sitemap.xml"}}
+func TestSitemapBoardFailsWhenEveryDetailIsUnreadable(t *testing.T) {
+	f := &sitemapBoardFake{
+		t: t, dir: "getinit", files: map[string]string{getinitSitemapURL: "sitemap.xml"},
+		missingDetailStatus: http.StatusServiceUnavailable,
+	}
 	if _, err := fastGetInIT(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
 		t.Fatal("a crawl whose every page failed must not report success to board health")
+	}
+}
+
+func TestSitemapBoardAcceptsConfirmedGoneDetails(t *testing.T) {
+	for _, status := range []int{http.StatusNotFound, http.StatusGone} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			f := &sitemapBoardFake{
+				t: t, dir: "getinit", files: map[string]string{getinitSitemapURL: "sitemap.xml"},
+				missingDetailStatus: status,
+			}
+			jobs, err := fastGetInIT(f).Fetch(context.Background(), CompanyEntry{})
+			if err != nil || len(jobs) != 0 {
+				t.Fatalf("got %d jobs and %v, want empty success for confirmed removals", len(jobs), err)
+			}
+		})
 	}
 }
 

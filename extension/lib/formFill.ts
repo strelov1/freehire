@@ -103,7 +103,7 @@ async function deterministicAutofill(token: string, panel: FillPanel, force = fa
     // A careers page keeps the application behind an "Apply" button and shows a
     // job-alert signup meanwhile; filling that one silently is worse than
     // declining, so the user is told and can insist.
-    if (!force && !looksLikeApplication(formReply.uploads)) {
+    if (!force && !looksLikeApplication(formReply.uploads, formReply.easyApply)) {
       panel.notice(
         `This doesn't look like the application form — ${formReply.fields.length} field${
           formReply.fields.length === 1 ? '' : 's'

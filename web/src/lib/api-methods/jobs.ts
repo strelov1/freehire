@@ -210,6 +210,12 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     return request<{ data: FeedCard[]; meta: FeedMeta }>(`/api/v1/me/feed?${params}`);
   }
 
+  /** Moves the feed's "seen" watermark to the snapshot of a page's `meta.seen_cursor`. Call
+   *  once the candidate has passed the last new card; the server never moves it back. */
+  async function markFeedSeen(cursor: string): Promise<void> {
+    await request<unknown>('/api/v1/me/feed/seen', jsonBody('POST', { cursor }));
+  }
+
   /** Facet-distribution counts for the analytics page. `params` carries the same
    *  query text and facet filters as `searchJobs` (built by the caller, e.g. via
    *  `filtersToParams`); the endpoint returns counts instead of a page of jobs.
@@ -340,6 +346,7 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     interpretSearch,
     swipeDeck,
     meFeed,
+    markFeedSeen,
     facetCounts,
     jobsActivity,
     userGrowth,

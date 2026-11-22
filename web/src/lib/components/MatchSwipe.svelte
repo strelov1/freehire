@@ -5,6 +5,7 @@
   import { api } from '#lib/api.js';
   import { ApiError, isPlanRefusal } from '#lib/api-core.js';
   import type { FeedCard } from '#lib/types.js';
+  import { Badge } from '#lib/ui/index.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import { menuNav } from '#lib/actions/menuNav.js';
   import { track } from '#lib/analytics.js';
@@ -13,6 +14,7 @@
   import SwipeCard from './SwipeCard.svelte';
   import SwipeCardBody from './SwipeCardBody.svelte';
   import { FLY_MS, SwipeGesture } from './swipeGesture.svelte.js';
+  import FeedNewEnd from './FeedNewEnd.svelte';
   import MatchBlock from './MatchBlock.svelte';
   import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
@@ -40,6 +42,19 @@
   // An Undo in flight: a new judgment now could land before its inverse and be erased by it.
   let undoing = $state(false);
   const current = $derived(cards[0]);
+  // New cards come first; between the last one and the first rest card there is a pause screen.
+  // The server's seen_cursor is posted once, when the candidate gets past the last new card.
+  let hadNew = $state(false);
+  let restShown = $state(false);
+  let seenCursor = $state<string | undefined>();
+  const paused = $derived(!!current && !current.is_new && hadNew && !restShown);
+  $effect(() => {
+    if (seenCursor && !loading && (paused || (!current && hadNew))) {
+      const c = seenCursor;
+      seenCursor = undefined;
+      api.markFeedSeen(c).catch(() => {}); // the watermark only decides what is new next time
+    }
+  });
   // A judgment now would race the fly-off, the apply dwell or an Undo's write.
   const busy = () => gesture.exiting || undoing || applying;
   const applyClass =
@@ -50,7 +65,10 @@
     loading = true;
     failed = false;
     try {
-      const data = (await api.meFeed(PAGE)).data;
+      const res = await api.meFeed(PAGE);
+      const data = res.data;
+      if (data.some((c) => c.is_new)) hadNew = true;
+      seenCursor = res.meta?.seen_cursor ?? seenCursor;
       // Append, not replace: an Undo during the request may have put a card back.
       const have = new Set(cards.map((c) => c.public_slug));
       cards = [...cards, ...data.filter((c) => !have.has(c.public_slug))];
@@ -80,7 +98,7 @@
     showToast(message);
     announce(message, 'assertive');
   }
-  const describe = (c: FeedCard) => `${c.title} at ${c.company || 'unknown company'}`;
+  const describe = (c: FeedCard) => `${c.title} at ${c.company || 'unknown company'}${c.is_new ? ', new' : ''}`;
 
   // Fling the card off, drop it after the fly-off and write optimistically. A failed write
   // puts the card back so nothing is lost silently; a 404 (job gone) leaves it dropped.
@@ -203,6 +221,7 @@
     if (t?.closest('input,textarea,select,[contenteditable],[role=menu],[role^=menuitem]')) return;
     const dialog = t?.closest('[role=dialog]');
     if (dialog && dialog !== e.currentTarget) return;
+    if (paused && e.key !== 'Escape') return; // the first rest card is hidden behind the pause screen
     if (e.key === 'ArrowLeft') judge('dismiss');
     else if (e.key === 'ArrowRight') judge('save');
     else if (e.key.toLowerCase() === 'u') undo();
@@ -231,7 +250,7 @@
   <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-safe">
     <h1 id="match-swipe-title" class="text-sm font-medium text-muted-foreground">Matches · by my profile</h1>
     <div class="ml-auto flex items-center gap-2">
-      {#if current}
+      {#if current && !paused}
         <div class="relative" bind:this={menuRoot}>
           <button
             type="button"
@@ -275,7 +294,9 @@
     </div>
   </header>
 
-  {#if current}
+  {#if current && paused}
+    <FeedNewEnd onContinue={() => (restShown = true)} />
+  {:else if current}
     {#key current.public_slug}
       <SwipeCard
         {gesture}
@@ -284,6 +305,9 @@
         onCommit={judge}
       >
         <SwipeCardBody job={current}>
+          {#snippet badge()}
+            {#if current.is_new}<Badge variant="brand" class="ml-auto shrink-0">New</Badge>{/if}
+          {/snippet}
           {#snippet match()}
             <MatchBlock match={current.match} />
           {/snippet}
