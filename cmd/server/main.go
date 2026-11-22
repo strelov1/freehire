@@ -252,6 +252,10 @@ func runServer(cfg config.Settings) error {
 	// Dictation uses the same gateway and key (/audio/transcriptions). Nil when the gateway is
 	// unset, which the composer reads as "no microphone here".
 	speechClient := speech.New(cfg.BaseURL, cfg.APIKey, cfg.STTModel)
+	interviewAudio := speech.NewElevenLabs(cfg.ElevenLabsAPIKey, cfg.ElevenLabsVoiceID)
+	if cfg.ElevenLabsViaBifrost {
+		interviewAudio = speech.NewElevenLabsGateway(cfg.BaseURL, cfg.APIKey, cfg.ElevenLabsVoiceID)
+	}
 
 	// Voice mode's Realtime credential rides the same gateway and key (litellm fronts
 	// /v1/realtime/client_secrets). Nil when the gateway or REALTIME_MODEL is unset, which the
@@ -384,6 +388,7 @@ func runServer(cfg config.Settings) error {
 		LLMKeys:                     llmKeys,
 		Speech:                      speechClient,
 		Realtime:                    realtimeClient,
+		InterviewAudio:              interviewAudio,
 
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,

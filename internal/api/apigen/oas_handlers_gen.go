@@ -24449,6 +24449,291 @@ func (s *Server) handlePostAssistantExtendRequest(args [1]string, argsEscaped bo
 	}
 }
 
+// handlePostAssistantInterviewRepeatRequest handles postAssistantInterviewRepeat operation.
+//
+// Opens a fresh rehearsal with the question saved in the feedback.
+//
+// POST /assistant/sessions/{id}/interview-repeat
+func (s *Server) handlePostAssistantInterviewRepeatRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: PostAssistantInterviewRepeatOperation,
+			ID:   "postAssistantInterviewRepeat",
+		}
+	)
+	params, err := decodePostAssistantInterviewRepeatParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *PostAssistantInterviewRepeatOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    PostAssistantInterviewRepeatOperation,
+			OperationSummary: "",
+			OperationID:      "postAssistantInterviewRepeat",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = PostAssistantInterviewRepeatParams
+			Response = *PostAssistantInterviewRepeatOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackPostAssistantInterviewRepeatParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.PostAssistantInterviewRepeat(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.PostAssistantInterviewRepeat(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodePostAssistantInterviewRepeatResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handlePostAssistantInterviewReportRequest handles postAssistantInterviewReport operation.
+//
+// Saves feedback about the candidate’s answers in one owned rehearsal.
+//
+// POST /assistant/sessions/{id}/interview-report
+func (s *Server) handlePostAssistantInterviewReportRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: PostAssistantInterviewReportOperation,
+			ID:   "postAssistantInterviewReport",
+		}
+	)
+	params, err := decodePostAssistantInterviewReportParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response PostAssistantInterviewReportRes
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    PostAssistantInterviewReportOperation,
+			OperationSummary: "",
+			OperationID:      "postAssistantInterviewReport",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = PostAssistantInterviewReportParams
+			Response = PostAssistantInterviewReportRes
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackPostAssistantInterviewReportParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.PostAssistantInterviewReport(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.PostAssistantInterviewReport(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodePostAssistantInterviewReportResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handlePostAssistantInterviewSpeechRequest handles postAssistantInterviewSpeech operation.
+//
+// Synthesizes the last completed interviewer reply in an owned interview rehearsal.
+//
+// POST /assistant/sessions/{id}/interview-speech
+func (s *Server) handlePostAssistantInterviewSpeechRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: PostAssistantInterviewSpeechOperation,
+			ID:   "postAssistantInterviewSpeech",
+		}
+	)
+	params, err := decodePostAssistantInterviewSpeechParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response PostAssistantInterviewSpeechRes
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    PostAssistantInterviewSpeechOperation,
+			OperationSummary: "Speak the latest interviewer reply.",
+			OperationID:      "postAssistantInterviewSpeech",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = PostAssistantInterviewSpeechParams
+			Response = PostAssistantInterviewSpeechRes
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackPostAssistantInterviewSpeechParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.PostAssistantInterviewSpeech(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.PostAssistantInterviewSpeech(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodePostAssistantInterviewSpeechResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handlePostAssistantVoiceTokenRequest handles postAssistantVoiceToken operation.
 //
 // Only on an `interview` session; `409` otherwise. The audio itself never reaches this server: take

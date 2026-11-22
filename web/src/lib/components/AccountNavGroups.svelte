@@ -1,7 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { resolve } from '$app/paths';
-  import { toPath } from '#lib/pathname.js';
+  import { resolvePathname } from '#lib/pathname.js';
   import { currentUser } from '#lib/auth.svelte.js';
   import { activeSection, workspaceFor, workspaceNav } from '#lib/accountNav.js';
   import { accountNavIcons, workspaceIcons } from '#lib/accountNavIcons.js';
@@ -76,8 +75,9 @@
     {@const active = item.href === activeHref}
     {@const Icon = accountNavIcons[item.href]}
     {@const label = navLabel(s, item.href, item.label)}
+    <!-- eslint-disable svelte/no-navigation-without-resolve -- resolvePathname calls SvelteKit resolve for these typed navigation paths -->
     <a
-      href={resolve(toPath(item.href))}
+      href={resolvePathname(item.href)}
       aria-current={active ? 'page' : undefined}
       title={compact ? label : undefined}
       onclick={onnavigate}
@@ -90,5 +90,6 @@
         {label}
       {/if}
     </a>
+    <!-- eslint-enable svelte/no-navigation-without-resolve -->
   {/each}
 {/each}

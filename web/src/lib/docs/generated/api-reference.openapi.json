@@ -15245,6 +15245,29 @@
           "allowance": {}
         }
       },
+      "AssistantInterviewReport": {
+        "type": "object",
+        "required": [
+          "strength",
+          "improvement",
+          "quote",
+          "question"
+        ],
+        "properties": {
+          "strength": {
+            "type": "string"
+          },
+          "improvement": {
+            "type": "string"
+          },
+          "quote": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          }
+        }
+      },
       "AssistantPlanRefusal": {
         "type": "object",
         "required": [
@@ -15301,7 +15324,14 @@
           "session": {
             "$ref": "#/components/schemas/AssistantSession"
           },
-          "messages": {}
+          "messages": {},
+          "elevenlabs_voice": {
+            "type": "boolean",
+            "description": "Optional ElevenLabs recording and playback on an interview rehearsal."
+          },
+          "interview_report": {
+            "$ref": "#/components/schemas/AssistantInterviewReport"
+          }
         },
         "description": "A conversation with its full transcript; `messages` is the stored transcript as is."
       },

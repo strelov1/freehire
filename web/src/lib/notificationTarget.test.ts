@@ -40,23 +40,21 @@ describe('notificationTarget', () => {
     });
   });
 
-  // The two nudge kinds the tracking board itself is about — even though the row
-  // still carries the job's slug (design.md decision 5), web links to the board.
   it('sends a follow-up nudge to the tracking board, not the job', () => {
     expect(notificationTarget({ kind: 'nudge_follow_up', public_slug: 'acme-go-engineer' })).toEqual({
       kind: 'tracking',
     });
   });
 
-  it('sends an interview-prep nudge to the tracking board, not the job', () => {
+  it('opens the application drawer from an interview-prep notification', () => {
     expect(notificationTarget({ kind: 'nudge_interview_prep', public_slug: 'acme-go-engineer' })).toEqual({
       kind: 'tracking',
+      slug: 'acme-go-engineer',
     });
   });
 
   // The three auto-apply outcome kinds now deep-link to the specific application's
-  // drawer, like auto_apply_ready_for_review already does — unlike follow-up/
-  // interview-prep above, which stay on the bare board.
+  // drawer, like auto_apply_ready_for_review already does.
   it.each(['nudge_auto_apply_submitted', 'nudge_auto_apply_blocked', 'nudge_auto_apply_failed'] as const)(
     'sends a %s nudge to the specific application',
     (kind) => {

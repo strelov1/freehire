@@ -347,6 +347,8 @@
         {tailorIsPrimary}
         {tailoring}
         onTailor={startTailoring}
+        jobSlug={item.job?.public_slug}
+        stage={item.stage}
         {offersFollowUp}
         followedUp={!!item.followed_up_at}
         onFollowUp={() => onfollowup(item)}

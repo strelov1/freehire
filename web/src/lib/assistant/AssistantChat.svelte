@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { createSession, listSessions, getSession, deleteSession } from '#lib/assistant/api.js';
+  import { createSession, listSessions, getSession, deleteSession, type InterviewReport } from '#lib/assistant/api.js';
   import { track } from '#lib/analytics.js';
   import type { Attachment, TurnStart } from '#lib/assistant/client.js';
   import { chatFromTranscript, initChat, reduceTurnEvent, type ChatState } from '#lib/assistant/chat.js';
   import SessionRail from '#lib/assistant/SessionRail.svelte';
   import ChatInputArea from './ChatInputArea.svelte';
+  import RehearsalInput from './RehearsalInput.svelte';
   import ChatGone from './ChatGone.svelte';
   import ChatDeleteConfirm from './ChatDeleteConfirm.svelte';
   import ChatSwitchConfirm from './ChatSwitchConfirm.svelte';
@@ -34,12 +35,6 @@
   import { messages } from './AssistantChat.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
-
-  // The agent chat. The agent runs inside the freehire backend, so this is an
-  // ordinary authenticated API surface: the session list, one session's stored
-  // transcript, and a turn that streams its events over SSE. There is no
-  // connection to hold, nothing to install, and no separate agent login.
-  // Everything streaming-shaped runs client-side, so SSR renders only the shell.
 
   type Phase = 'loading' | 'ready';
 
@@ -100,6 +95,8 @@
 
   // Voice mode: a hands-free call on an `interview` session (see ChatInputArea).
   let voiceCallOpen = $state(false);
+  let elevenLabsVoice = $state(false);
+  let interviewReport = $state<InterviewReport>();
 
   function closeVoiceCall() {
     voiceCallOpen = false;
@@ -265,20 +262,14 @@
   // every later address change, which is Forward appearing to do nothing.
   async function openSession(id: string, fromAddress = false, discardQueued = false) {
     if (activeId === id && chat.messages.length > 0) return;
-    // A message typed while the current turn was streaming sits in `queue`, waiting
-    // for the turn to finish so endTurn() can drain it — cancelTurn() below stops the
-    // turn but never drains the queue, so switching here would otherwise wipe out
-    // whatever the user just typed with no trace and no way back. The switch waits on
-    // the dialog: this call returns as a refusal would, and confirming re-enters it.
+    // Wait for confirmation before dropping unsent messages.
     if (queue.length > 0 && !discardQueued) {
       switchConfirm?.ask(id, fromAddress);
       return;
     }
     switching = true;
     cancelTurn();
-    // Navigating away from a session must end its call rather than silently carry it
-    // over to whichever session id lands next — the {#key activeId} on VoiceCall
-    // guards the same correctness issue structurally; this is the deliberate one.
+    // End the call before switching its transcript.
     voiceCallOpen = false;
     try {
       chat = initChat();
@@ -286,22 +277,23 @@
       alerts.bulletCap = null;
       activeId = id;
       activePreset = null;
-      // Raise the guard HERE, not after the fetch below: the URL-following effect reruns
-      // the moment activeId changes, which is during the await — set it late and the
-      // effect has already reopened the conversation we just left.
+      elevenLabsVoice = false;
+      interviewReport = undefined;
+      // The URL-following effect must see this before the await.
       navigatingTo = fromAddress ? null : id;
-      const { session: meta, messages: transcriptMessages } = await getSession(id);
+      const { session: meta, messages: transcriptMessages, elevenlabs_voice, interview_report } = await getSession(id);
       if (disposed) return;
-      // A tailoring conversation is reachable by id but belongs to a CV and only makes
-      // sense beside it. Opening one here would show a conversation the rail cannot list
-      // and the user cannot get back to. The unbound presets — chat and the experience
-      // interviewer — are both at home here.
       if (showSessionRail && !opensInRail(meta.preset)) {
         alerts.notFound = true;
         return;
       }
       activePreset = meta.preset;
+      elevenLabsVoice = elevenlabs_voice === true;
+      interviewReport = interview_report;
       chat = chatFromTranscript(transcriptMessages);
+      if (showSessionRail && !sessions.some((item) => item.id === id)) {
+        sessions = upsertSession(sessions, fromSummary(meta, NEW_CHAT_LABEL));
+      }
       if (meta.label?.trim()) sessions = setLabel(sessions, id, labelFromMessage(meta.label));
       onSessionChange?.(id);
     } finally {
@@ -608,21 +600,42 @@
           onretry={() => startTurn({ kind: 'retry' })}
         />
 
-        <ChatInputArea
-          bind:draft
-          bind:attachments
-          bind:voiceCallOpen
-          sessionId={activeId}
-          queue={queue.items}
-          turnActive={turns.active}
-          support={isSupport}
-          disabled={phase !== 'ready' || switching}
-          interview={activePreset === 'interview'}
-          onSubmit={submitText}
-          onRemoveQueued={(id) => queue.remove(id)}
-          onCancel={cancelTurn}
-          onClose={closeVoiceCall}
-        />
+        {#snippet input(busy: boolean)}
+          <ChatInputArea
+            bind:draft
+            bind:attachments
+            bind:voiceCallOpen
+            sessionId={activeId}
+            queue={queue.items}
+            turnActive={turns.active}
+            support={isSupport}
+            disabled={phase !== 'ready' || switching || busy}
+            interview={activePreset === 'interview'}
+            {elevenLabsVoice}
+            transcript={chat.messages}
+            onSubmit={submitText}
+            onRemoveQueued={(id) => queue.remove(id)}
+            onCancel={cancelTurn}
+            onClose={closeVoiceCall}
+          />
+        {/snippet}
+        {#if activePreset === 'interview' && activeId}
+          {@const id = activeId}
+          {#key id}
+            <RehearsalInput
+              id={activeId}
+              initialReport={interviewReport}
+              transcript={chat.messages}
+              callOpen={voiceCallOpen}
+              ready={canStartTurn && queue.length === 0}
+              open={(next) => (activeId === id ? openSession(next) : Promise.resolve())}
+            >
+              {#snippet children(busy)}{@render input(busy)}{/snippet}
+            </RehearsalInput>
+          {/key}
+        {:else}
+          {@render input(false)}
+        {/if}
       </div>
     </div>
   {/if}

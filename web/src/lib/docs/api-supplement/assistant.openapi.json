@@ -222,6 +222,65 @@
           "Assistant"
         ]
       }
+    },
+    "/assistant/sessions/{id}/interview-transcriptions": {
+      "post": {
+        "summary": "Transcribe an interview practice answer with ElevenLabs.",
+        "description": "Only for a job-bound rehearsal owned by the caller. Uses one dictation allowance for a usable transcription. The recording and the transcript are never appended to the chat by this request. Returns 501 when ElevenLabs is unconfigured.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The rehearsal session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "text": "I measured error rates."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
     }
   }
 }

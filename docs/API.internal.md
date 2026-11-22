@@ -835,6 +835,56 @@ curl -X PUT "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
 
 The same agent the web app and browser extension chat with, over HTTP: create a conversation, then post messages to it. All routes accept the session cookie or an API key (`autopilot` is cookie-only — see below) and act on a session you own; someone else’s session id answers `404`, same as one that never existed. Turns run one at a time per session — a message sent while one is already running queues rather than running alongside it. `preset` selects which conversation this is: `chat` (default), `profile` (the experience interviewer), `browse` (a browsing session held from the extension’s side panel), `interview` (a mock-interview rehearsal), `debrief` (after a real one) or `apply` (the conversation about one automatic application) — the last three must name the vacancy via `?job=<slug>`, an application you already hold. An application holds one `apply` conversation: asking again returns it with `200` instead of creating a second. A `tailor` session cannot be created here; it is minted by the CV tailoring bootstrap, which knows the CV and vacancy to bind it to.
 
+### `POST /assistant/sessions/{id}/interview-repeat`
+
+**Auth:** Session only
+
+Opens a fresh rehearsal with the question saved in the feedback.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/interview-repeat" -b cookies.txt
+```
+
+### `POST /assistant/sessions/{id}/interview-report`
+
+**Auth:** Session only
+
+Saves feedback about the candidate’s answers in one owned rehearsal.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/interview-report" -b cookies.txt
+```
+
+### `POST /assistant/sessions/{id}/interview-speech`
+
+**Auth:** Session only
+
+Speak the latest interviewer reply.
+
+Synthesizes the last completed interviewer reply in an owned interview rehearsal.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | The session id. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/interview-speech" -b cookies.txt
+```
+
 ### `POST /assistant/sessions/{id}/autopilot`
 
 **Auth:** Session only
@@ -851,6 +901,38 @@ Session-only, not API-key — an unattended run edits a CV, and the browser is t
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/autopilot" -b cookies.txt
+```
+
+### `POST /assistant/sessions/{id}/interview-transcriptions`
+
+**Auth:** Session only
+
+Transcribe an interview practice answer with ElevenLabs.
+
+Only for a job-bound rehearsal owned by the caller. Uses one dictation allowance for a usable transcription. The recording and the transcript are never appended to the chat by this request. Returns 501 when ElevenLabs is unconfigured.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The rehearsal session id. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `file` | string (binary) | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/interview-transcriptions" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "text": "I measured error rates."
+  }
+}
 ```
 
 ## Submissions

@@ -1185,6 +1185,69 @@ func (s *AssistantExtension) SetAllowance(val jx.Raw) {
 	s.Allowance = val
 }
 
+// Ref: #/components/schemas/AssistantInterviewRepeat
+type AssistantInterviewRepeat struct {
+	SessionID string `json:"session_id"`
+}
+
+// GetSessionID returns the value of SessionID.
+func (s *AssistantInterviewRepeat) GetSessionID() string {
+	return s.SessionID
+}
+
+// SetSessionID sets the value of SessionID.
+func (s *AssistantInterviewRepeat) SetSessionID(val string) {
+	s.SessionID = val
+}
+
+// Ref: #/components/schemas/AssistantInterviewReport
+type AssistantInterviewReport struct {
+	Strength    string `json:"strength"`
+	Improvement string `json:"improvement"`
+	Quote       string `json:"quote"`
+	Question    string `json:"question"`
+}
+
+// GetStrength returns the value of Strength.
+func (s *AssistantInterviewReport) GetStrength() string {
+	return s.Strength
+}
+
+// GetImprovement returns the value of Improvement.
+func (s *AssistantInterviewReport) GetImprovement() string {
+	return s.Improvement
+}
+
+// GetQuote returns the value of Quote.
+func (s *AssistantInterviewReport) GetQuote() string {
+	return s.Quote
+}
+
+// GetQuestion returns the value of Question.
+func (s *AssistantInterviewReport) GetQuestion() string {
+	return s.Question
+}
+
+// SetStrength sets the value of Strength.
+func (s *AssistantInterviewReport) SetStrength(val string) {
+	s.Strength = val
+}
+
+// SetImprovement sets the value of Improvement.
+func (s *AssistantInterviewReport) SetImprovement(val string) {
+	s.Improvement = val
+}
+
+// SetQuote sets the value of Quote.
+func (s *AssistantInterviewReport) SetQuote(val string) {
+	s.Quote = val
+}
+
+// SetQuestion sets the value of Question.
+func (s *AssistantInterviewReport) SetQuestion(val string) {
+	s.Question = val
+}
+
 // The 402 a spent or missing allowance answers with.
 // Ref: #/components/schemas/AssistantPlanRefusal
 type AssistantPlanRefusal struct {
@@ -1224,8 +1287,10 @@ func (s *AssistantPlanRefusal) SetUpgradeURL(val OptString) {
 	s.UpgradeURL = val
 }
 
-func (*AssistantPlanRefusal) postAssistantExtendRes() {}
-func (*AssistantPlanRefusal) postJobAutoApplyRes()    {}
+func (*AssistantPlanRefusal) postAssistantExtendRes()          {}
+func (*AssistantPlanRefusal) postAssistantInterviewReportRes() {}
+func (*AssistantPlanRefusal) postAssistantInterviewSpeechRes() {}
+func (*AssistantPlanRefusal) postJobAutoApplyRes()             {}
 
 // One conversation.
 // Ref: #/components/schemas/AssistantSession
@@ -1303,6 +1368,9 @@ func (s *AssistantSession) SetJobID(val OptInt64) {
 type AssistantSessionDetail struct {
 	Session  AssistantSession `json:"session"`
 	Messages jx.Raw           `json:"messages"`
+	// Optional ElevenLabs recording and playback on an interview rehearsal.
+	ElevenlabsVoice OptBool                     `json:"elevenlabs_voice"`
+	InterviewReport OptAssistantInterviewReport `json:"interview_report"`
 }
 
 // GetSession returns the value of Session.
@@ -1315,6 +1383,16 @@ func (s *AssistantSessionDetail) GetMessages() jx.Raw {
 	return s.Messages
 }
 
+// GetElevenlabsVoice returns the value of ElevenlabsVoice.
+func (s *AssistantSessionDetail) GetElevenlabsVoice() OptBool {
+	return s.ElevenlabsVoice
+}
+
+// GetInterviewReport returns the value of InterviewReport.
+func (s *AssistantSessionDetail) GetInterviewReport() OptAssistantInterviewReport {
+	return s.InterviewReport
+}
+
 // SetSession sets the value of Session.
 func (s *AssistantSessionDetail) SetSession(val AssistantSession) {
 	s.Session = val
@@ -1323,6 +1401,16 @@ func (s *AssistantSessionDetail) SetSession(val AssistantSession) {
 // SetMessages sets the value of Messages.
 func (s *AssistantSessionDetail) SetMessages(val jx.Raw) {
 	s.Messages = val
+}
+
+// SetElevenlabsVoice sets the value of ElevenlabsVoice.
+func (s *AssistantSessionDetail) SetElevenlabsVoice(val OptBool) {
+	s.ElevenlabsVoice = val
+}
+
+// SetInterviewReport sets the value of InterviewReport.
+func (s *AssistantSessionDetail) SetInterviewReport(val OptAssistantInterviewReport) {
+	s.InterviewReport = val
 }
 
 // Ref: #/components/schemas/AssistantSessionList
@@ -20762,6 +20850,52 @@ func (o OptApplyJob) Or(d ApplyJob) ApplyJob {
 	return d
 }
 
+// NewOptAssistantInterviewReport returns new OptAssistantInterviewReport with value set to v.
+func NewOptAssistantInterviewReport(v AssistantInterviewReport) OptAssistantInterviewReport {
+	return OptAssistantInterviewReport{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptAssistantInterviewReport is optional AssistantInterviewReport.
+type OptAssistantInterviewReport struct {
+	Value AssistantInterviewReport
+	Set   bool
+}
+
+// IsSet returns true if OptAssistantInterviewReport was set.
+func (o OptAssistantInterviewReport) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptAssistantInterviewReport) Reset() {
+	var v AssistantInterviewReport
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptAssistantInterviewReport) SetTo(v AssistantInterviewReport) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptAssistantInterviewReport) Get() (v AssistantInterviewReport, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptAssistantInterviewReport) Or(d AssistantInterviewReport) AssistantInterviewReport {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptAssistantSessionRequest returns new OptAssistantSessionRequest with value set to v.
 func NewOptAssistantSessionRequest(v AssistantSessionRequest) OptAssistantSessionRequest {
 	return OptAssistantSessionRequest{
@@ -23175,6 +23309,80 @@ func (s *PostAssistantExtendOK) SetData(val AssistantExtension) {
 }
 
 func (*PostAssistantExtendOK) postAssistantExtendRes() {}
+
+// A single item: `{"data": ...}`.
+type PostAssistantInterviewRepeatOK struct {
+	Data AssistantInterviewRepeat `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PostAssistantInterviewRepeatOK) GetData() AssistantInterviewRepeat {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PostAssistantInterviewRepeatOK) SetData(val AssistantInterviewRepeat) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type PostAssistantInterviewReportOK struct {
+	Data AssistantInterviewReport `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PostAssistantInterviewReportOK) GetData() AssistantInterviewReport {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PostAssistantInterviewReportOK) SetData(val AssistantInterviewReport) {
+	s.Data = val
+}
+
+func (*PostAssistantInterviewReportOK) postAssistantInterviewReportRes() {}
+
+type PostAssistantInterviewSpeechOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s PostAssistantInterviewSpeechOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// PostAssistantInterviewSpeechOKHeaders wraps PostAssistantInterviewSpeechOK with response headers.
+type PostAssistantInterviewSpeechOKHeaders struct {
+	CacheControl string
+	Response     PostAssistantInterviewSpeechOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *PostAssistantInterviewSpeechOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *PostAssistantInterviewSpeechOKHeaders) GetResponse() PostAssistantInterviewSpeechOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *PostAssistantInterviewSpeechOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *PostAssistantInterviewSpeechOKHeaders) SetResponse(val PostAssistantInterviewSpeechOK) {
+	s.Response = val
+}
+
+func (*PostAssistantInterviewSpeechOKHeaders) postAssistantInterviewSpeechRes() {}
 
 // A single item: `{"data": ...}`.
 type PostAssistantVoiceTokenOK struct {

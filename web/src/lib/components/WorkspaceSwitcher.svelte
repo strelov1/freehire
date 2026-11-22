@@ -5,7 +5,7 @@
   import { currentUser } from '#lib/auth.svelte.js';
   import { activeSection, visibleAccountNav, visibleWorkspaces, type AccountNavItem } from '#lib/accountNav.js';
   import { workspaceIcons } from '#lib/accountNavIcons.js';
-  import { toPath } from '#lib/pathname.js';
+  import { resolvePathname } from '#lib/pathname.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { messages, navLabel } from '#lib/i18n/shell.js';
   import { t } from '#lib/i18n/t.js';
@@ -52,8 +52,9 @@
   <div id={`${uid}-${id}-links`} role="group" aria-labelledby={`${uid}-${id}-trigger`} hidden={!open}>
     {#if open}
       {#each links as item (item.href)}
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- resolvePathname calls SvelteKit resolve for these typed navigation paths -->
         <a
-          href={resolve(toPath(item.href))}
+          href={resolvePathname(item.href)}
           role="menuitem"
           aria-current={current?.href === item.href ? 'page' : undefined}
           onclick={onselect}
@@ -65,6 +66,7 @@
         >
           {navLabel(s, item.href, item.label)}
         </a>
+        <!-- eslint-enable svelte/no-navigation-without-resolve -->
       {/each}
     {/if}
   </div>

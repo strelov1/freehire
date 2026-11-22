@@ -734,6 +734,177 @@
         ]
       }
     },
+    "/assistant/sessions/{id}/interview-repeat": {
+      "post": {
+        "operationId": "postAssistantInterviewRepeat",
+        "description": "Opens a fresh rehearsal with the question saved in the feedback.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AssistantInterviewRepeat"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/interview-report": {
+      "post": {
+        "operationId": "postAssistantInterviewReport",
+        "description": "Saves feedback about the candidate’s answers in one owned rehearsal.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AssistantInterviewReport"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantPlanRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/interview-speech": {
+      "post": {
+        "operationId": "postAssistantInterviewSpeech",
+        "summary": "Speak the latest interviewer reply.",
+        "description": "Synthesizes the last completed interviewer reply in an owned interview rehearsal.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "audio/mpeg": {
+                "schema": {
+                  "contentMediaType": "audio/mpeg"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantPlanRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
     "/assistant/sessions/{id}/voice-token": {
       "post": {
         "operationId": "postAssistantVoiceToken",
@@ -24460,6 +24631,40 @@
           "allowance": {}
         }
       },
+      "AssistantInterviewRepeat": {
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        }
+      },
+      "AssistantInterviewReport": {
+        "type": "object",
+        "required": [
+          "strength",
+          "improvement",
+          "quote",
+          "question"
+        ],
+        "properties": {
+          "strength": {
+            "type": "string"
+          },
+          "improvement": {
+            "type": "string"
+          },
+          "quote": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          }
+        }
+      },
       "AssistantPlanRefusal": {
         "type": "object",
         "required": [
@@ -24516,7 +24721,14 @@
           "session": {
             "$ref": "#/components/schemas/AssistantSession"
           },
-          "messages": {}
+          "messages": {},
+          "elevenlabs_voice": {
+            "type": "boolean",
+            "description": "Optional ElevenLabs recording and playback on an interview rehearsal."
+          },
+          "interview_report": {
+            "$ref": "#/components/schemas/AssistantInterviewReport"
+          }
         },
         "description": "A conversation with its full transcript; `messages` is the stored transcript as is."
       },
