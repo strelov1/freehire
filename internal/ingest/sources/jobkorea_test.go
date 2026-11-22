@@ -195,6 +195,22 @@ func TestJobKoreaRefreshesStoredPostingsWithoutRequests(t *testing.T) {
 	}
 }
 
+func TestJobKoreaKeepsDateOnlyDeadlineThroughItsKoreanCalendarDay(t *testing.T) {
+	var ld jobkoreaLD
+	ld.Title = "Engineer"
+	ld.HiringOrganization.Name = "Acme"
+	ld.ValidThrough = "2026-12-10"
+	posting := jobkoreaPosting{id: 1}
+	now := time.Date(2026, 12, 10, 12, 0, 0, 0, jobkoreaZone)
+	job, ok := jobkoreaJob(ld, posting, now)
+	if !ok || job.ApplicationDeadline == nil || job.ApplicationDeadline.Format(time.DateOnly) != ld.ValidThrough {
+		t.Fatalf("posting should be open with deadline %s, got %v (open=%v)", ld.ValidThrough, job.ApplicationDeadline, ok)
+	}
+	if _, ok := jobkoreaJob(ld, posting, now.AddDate(0, 0, 1)); ok {
+		t.Fatal("posting remained open beyond its deadline day")
+	}
+}
+
 func TestJobKoreaBoundsNewPostingsPerRun(t *testing.T) {
 	s := newJobKoreaForTest(&jobkoreaFake{})
 	s.maxNewPerRun = 1

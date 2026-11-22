@@ -327,8 +327,7 @@ func jobkoreaGone(err error) error {
 
 // jobkoreaDeadline reads validThrough, a bare date or a date and minute in KST.
 func jobkoreaDeadline(s string) *time.Time {
-	s = strings.TrimSpace(s)
-	for _, layout := range []string{"2006-01-02T15:04:05", "2006-01-02T15:04", "2006-01-02"} {
+	for _, layout := range []string{"2006-01-02T15:04:05", "2006-01-02T15:04", time.DateOnly} {
 		if t, err := time.ParseInLocation(layout, s, jobkoreaZone); err == nil {
 			return &t
 		}
@@ -346,9 +345,16 @@ func jobkoreaJob(ld jobkoreaLD, p jobkoreaPosting, now time.Time) (Job, bool) {
 	if title == "" || company == "" {
 		return Job{}, false
 	}
-	deadline := jobkoreaDeadline(ld.ValidThrough)
-	if deadline != nil && deadline.Before(now) {
-		return Job{}, false
+	validThrough := strings.TrimSpace(ld.ValidThrough)
+	deadline := jobkoreaDeadline(validThrough)
+	if deadline != nil {
+		expires := *deadline
+		if len(validThrough) == len(time.DateOnly) {
+			expires = expires.AddDate(0, 0, 1)
+		}
+		if !now.Before(expires) {
+			return Job{}, false
+		}
 	}
 	j := Job{
 		ExternalID:        p.externalID(),
@@ -360,10 +366,7 @@ func jobkoreaJob(ld jobkoreaLD, p jobkoreaPosting, now time.Time) (Job, bool) {
 		FallbackCountries: []string{"kr"},
 		PostedAt:          parseRFC3339OrDate(strings.TrimSpace(ld.DatePosted)),
 	}
-	if deadline != nil {
-		d := deadline.UTC()
-		j.ApplicationDeadline = &d
-	}
+	j.ApplicationDeadline = deadline
 	switch strings.ToUpper(strings.TrimSpace(ld.EmploymentType)) {
 	case "FULL_TIME":
 		j.EmploymentType = "full_time"
