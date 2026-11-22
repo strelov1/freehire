@@ -124,9 +124,9 @@ func (s saramin) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return s.FetchNew(ctx, e, func(string) bool { return false })
 }
 
-// FetchNew walks the whole listing, refreshes the postings already stored by identity, and reads
-// a body for up to maxNewPerRun of the rest, newest id first. A posting whose page cannot be
-// read is not yielded; a later run tries again.
+// FetchNew walks the whole listing, refreshes seen postings by identity, and reads a body for
+// up to maxNewPerRun of the rest, newest id first. Failed reads preserve the listing's liveness
+// evidence so a stored posting can stay open while its body is retried.
 func (s saramin) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	cards, err := s.list(ctx)
 	if err != nil {
@@ -151,7 +151,7 @@ func (s saramin) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externa
 		job, ok, err := s.detail(ctx, c)
 		if err != nil {
 			log.Printf("saramin: posting %s failed; deferring: %v", c.id, err)
-			return Job{}, false
+			return unreadableDetail(c.id, fmt.Sprintf(saraminPostingURL, c.id), c.company), true
 		}
 		answered.Add(1)
 		return job, ok
@@ -358,8 +358,7 @@ func (s saramin) detail(ctx context.Context, c saraminCard) (Job, bool, error) {
 		return err
 	})
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if !detailUnreadable(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

@@ -181,20 +181,25 @@ func TestSaraminFetchNew(t *testing.T) {
 	}
 }
 
-func TestSaraminDetailFailureIsDeferredNotGone(t *testing.T) {
+func TestSaraminUnreadableDetailKeepsListingIdentity(t *testing.T) {
 	f := newSaraminFake(t)
 	f.failID = "55598463"
 	delete(f.bodies, "55598463")
 	s := newSaraminTest(t, f)
-	jobs, err := s.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	jobs, err := s.Fetch(context.Background(), CompanyEntry{})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(jobs) != 2 {
+		t.Fatalf("jobs = %+v, want a readable posting and an unreadable marker; the 404 is omitted", jobs)
+	}
 	for _, j := range jobs {
-		if j.ExternalID == "55598463" {
-			t.Error("a posting whose body could not be read must not be yielded")
+		if j.ExternalID == "55598463" && j.Unreadable && !j.SeenRefresh && j.Description == "" &&
+			j.Company == "(주)한림이앤지" && j.URL == fmt.Sprintf(saraminPostingURL, j.ExternalID) {
+			return
 		}
 	}
+	t.Errorf("jobs lack the unreadable posting's listing identity: %+v", jobs)
 }
 
 func TestSaraminNothingAnsweredFails(t *testing.T) {
@@ -202,8 +207,8 @@ func TestSaraminNothingAnsweredFails(t *testing.T) {
 	f.bodies = nil
 	f.failID = "*"
 	s := newSaraminTest(t, f)
-	if _, err := s.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
-		t.Fatal("a crawl whose every body request failed must fail")
+	if _, err := s.FetchNew(context.Background(), CompanyEntry{}, func(id string) bool { return id == "55617109" }); err == nil {
+		t.Fatal("a crawl whose every body request failed must fail even with a seen refresh")
 	}
 }
 
