@@ -22,6 +22,10 @@ import (
 //   - cgi_detail_closed: the notice served for a posting id that is gone.
 //   - cgi_refused: the whole body the site served every request once it refused the client,
 //     with a documentation address in place of the client's IP.
+//   - laval_listing_page1 and laval_detail_J1126-0070: the second site template, Société de
+//     transport de Laval's (lavaltransit.njoyn.com, site CL2, clid 60406), recorded through the
+//     Scrapling tier on 2026-11-22: the #searchtable listing cut to three rows, and a posting's
+//     ld+json and #njnContentContainer. Session tokens (tbtoken, chk) are replaced.
 //   - radware_block: Radware's bot wall (validate.perfdrive.com), where a datacenter IP is
 //     redirected, recorded from the crawl host 2026-11-17 and cut to its title and CAPTCHA
 //     notice, without the per-request tokens and the client's address.
@@ -366,5 +370,53 @@ func TestNjoynListingDoesNotAskAgainAfterARefusal(t *testing.T) {
 		route("pn=2", njoynFixture(t, "cgi_refused.html"))
 	if _, err := testNjoyn(fake).FetchNew(context.Background(), cgiEntry, func(string) bool { return true }); !errors.Is(err, errNjoynRefused) || fake.calls != 2 {
 		t.Errorf("err = %v after %d requests, want the refusal after 2", err, fake.calls)
+	}
+}
+
+var lavalEntry = CompanyEntry{Company: "Société de transport de Laval", Provider: "njoyn", Board: "lavaltransit/cl2/60406"}
+
+func TestNjoynReadsTheSearchtableTemplate(t *testing.T) {
+	rows, at, of, err := njoynListingPage(njoynParse(t, "laval_listing_page1.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if at != 1 || of != 1 || len(rows) != 3 {
+		t.Fatalf("page = %d of %d with %d rows, want 1 of 1 with 3", at, of, len(rows))
+	}
+	// No id column: the identity is the link's Jobid; no country column either.
+	if r := rows[0]; r.id != "J1126-0070" || r.brid != "383743" || r.title != "Conseiller∙ère en Cybersécurité" || r.city != "Laval" || r.country != "" {
+		t.Errorf("first row = %+v", r)
+	}
+}
+
+func TestNjoynFetchesALavalPosting(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("Page=joblisting&lang=1&pn=1", njoynFixture(t, "laval_listing_page1.html")).
+		route("Jobid=J1126-0070", njoynFixture(t, "laval_detail_J1126-0070.html"))
+	jobs, err := testNjoyn(fake).FetchNew(context.Background(), lavalEntry, func(id string) bool { return id != "J1126-0070" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("got %d jobs, want the board's 3", len(jobs))
+	}
+	j := jobs[0]
+	if j.ExternalID != "J1126-0070" || j.SeenRefresh {
+		t.Fatalf("first job = %s (SeenRefresh %v), want the hydrated J1126-0070", j.ExternalID, j.SeenRefresh)
+	}
+	if !strings.Contains(j.Description, "En accompagnement") || !strings.Contains(j.Description, "Conditions de travail") {
+		t.Errorf("description lacks the posting: %.200q", j.Description)
+	}
+	if j.Location != "Laval, QC, CA" || len(j.Countries) != 1 || j.Countries[0] != "ca" {
+		t.Errorf("Location = %q, Countries = %v", j.Location, j.Countries)
+	}
+	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2026-11-05" {
+		t.Errorf("PostedAt = %v", j.PostedAt)
+	}
+	if j.ApplicationDeadline == nil || j.ApplicationDeadline.Format("2006-01-02") != "2026-12-22" {
+		t.Errorf("ApplicationDeadline = %v", j.ApplicationDeadline)
+	}
+	if !strings.Contains(j.URL, "lavaltransit.njoyn.com/cl2/") || !strings.Contains(j.URL, "Jobid=J1126-0070") {
+		t.Errorf("URL = %q", j.URL)
 	}
 }
