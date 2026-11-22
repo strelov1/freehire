@@ -34,6 +34,8 @@ func TestParse_Korean(t *testing.T) {
 		{"[화장품 ODM상장사] IT인프라 담당 (서버/네트워크/전산장비 등)", "system_administration", ""},
 		{"[채용대행] 서울전선 본사 전산 개발 및 IT 경력사원 채용", "software_engineering", ""},
 		// Beyond IT.
+		{"스마트팩토리 기계설계", "engineering_design", ""},
+		{"마트 직원 모집", "retail", ""},
 		{"[뷰티브랜드] 국내 영업 담당", "sales", ""},
 		{"(주)대현단자 납품영업직원 채용", "sales", ""},
 		{"[CHAI CRE.W] 광고기획 AE 모집(경력 13년 이상)", "marketing", ""},
@@ -127,6 +129,7 @@ func TestParse_KoreanSeniority(t *testing.T) {
 		{"자동차부품 생산직 경력자 우대 · 신입가능", ""},
 		// Words that contain a grade word without stating one.
 		{"보험대리점 영업 모집", ""},
+		{"보험대리점 영업 팀장 모집", "lead"},
 		{"대리운전 기사 모집", ""},
 		{"2027 하이테크과정 신입생 모집", ""},
 	}

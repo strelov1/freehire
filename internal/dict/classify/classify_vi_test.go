@@ -32,6 +32,7 @@ func TestParse_Vietnamese(t *testing.T) {
 		{"Nhân Viên Kinh Doanh Phần Mềm", "sales", ""},
 		{"Giảng Viên Công Nghệ Thông Tin", "education", ""},
 		// Beyond IT.
+		{"Kỹ Sư Bảo Trì", "industrial_engineering", ""},
 		{"Nhân Viên Kinh Doanh", "sales", ""},
 		{"Trưởng Phòng Kinh Doanh Bất Động Sản", "sales", ""},
 		{"Nhân Viên Kế Toán - Ưu Tiên Có Kinh Nghiệm", "finance", ""},
@@ -101,6 +102,8 @@ func TestIsTech_Vietnamese(t *testing.T) {
 	}
 	for _, title := range []string{
 		"Nhân Viên Kinh Doanh Phần Mềm", // a software seller
+		"Nhân Viên Kinh Doanh Công Nghệ Thông Tin",
+		"Nhân Viên Kinh Doanh CNTT",
 		"Nhân Viên Kế Toán",
 		"Giảng Viên Ngành Hóa Học",
 		"Kỹ Sư Hệ Thống",

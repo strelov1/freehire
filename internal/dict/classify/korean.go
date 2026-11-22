@@ -168,16 +168,12 @@ var koreanTechTerms = []string{
 	"블록체인", "소프트웨어 테스트", "qa 엔지니어",
 }
 
-// koreanBothGrades is what a headline says about WHO MAY APPLY rather than the grade of the role: 신입/경력 is an advertisement open to a new graduate AND an experienced hire ("신입/경력", "신입 및 경력", "경력/신입", "신입·경력직"), and 신입가능, 신입환영, 신입무관 say a new graduate is welcome. None states a grade. Cut before the grade words are read, or nearly every Korean headline would read as junior.
-var koreanBothGrades = regexp.MustCompile(`신입\s*[/·,.&+~\s]*(?:및|또는|혹은)?\s*경력|경력\s*[/·,.&+~\s]*(?:및|또는|혹은)?\s*신입|신입\s*(?:도\s*)?(?:가능|환영|무관|경단)`)
+// koreanGradeBlind masks eligibility phrases and words that contain a grade without stating one.
+// For example, 신입/경력 accepts applicants at different levels and 대리점 means an agency.
+var koreanGradeBlind = regexp.MustCompile(`신입\s*[/·,.&+~\s]*(?:및|또는|혹은)?\s*경력|경력\s*[/·,.&+~\s]*(?:및|또는|혹은)?\s*신입|신입\s*(?:도\s*)?(?:가능|환영|무관|경단)|대리점|대리운전|대리인|신입생`)
 
 // koreanSeniorityTable lists the grade words of a Korean title, highest first. The corporate ladder (사원, 주임, 대리, 과장, 차장, 부장) is mapped where a rung says a level: 주임 is the first rung above a clerk, 대리 the mid-level, 과장 and 차장 the senior ones, 팀장 and 부장 the leads. 사원 ("employee") and 책임 ("in charge") state nothing and are not here.
 var koreanSeniorityTable = []aliasEntry{
-	// Vetoes: words that contain a grade word without stating one. 대리점 and 대리운전 are an agency and a chauffeur, 신입생 a new pupil.
-	{"대리점", ""},
-	{"대리운전", ""},
-	{"대리인", ""},
-	{"신입생", ""},
 	{"수석", "principal"},
 	{"팀장", "lead"},
 	{"파트장", "lead"},
@@ -198,7 +194,7 @@ var koreanSeniorityTable = []aliasEntry{
 
 // matchKoreanSeniority resolves the grade of a lowercased title the other tables left unresolved.
 func matchKoreanSeniority(lower string) string {
-	return matchOrdered(koreanBothGrades.ReplaceAllString(lower, " "), koreanSeniorityTable)
+	return matchOrdered(koreanGradeBlind.ReplaceAllString(lower, " "), koreanSeniorityTable)
 }
 
 // isKoreanTech reports whether a lowercased title states a confidently technical role in Korean.
