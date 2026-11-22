@@ -49,6 +49,33 @@ func TestUnreadablePostingRefreshesOpenRowsWithoutDoubleCounting(t *testing.T) {
 	}
 }
 
+func TestUnreadableStreamingPostingRefreshesWithoutSaving(t *testing.T) {
+	src := fakeStreamingSource{provider: "eightfold", failAfter: -1, jobs: []sources.Job{
+		{ExternalID: "1", Title: "Data Engineer", Company: "Acme", URL: "https://example.com/jobs/1"},
+		{ExternalID: "2", Title: "Unusable replacement", Unreadable: true},
+	}}
+	store := &fakeStore{refreshCompanies: []string{"stored-employer"}}
+	r := Runner{Registry: registry(src), Store: store}
+	e := sources.CompanyEntry{Provider: "eightfold", Board: "host.example/dom", Company: "Acme"}
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{e})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := stats.Total()
+	if st.Unreadable != 1 || st.Refreshed != 1 || st.Ingested != 1 || st.Skipped != 0 || st.Failed != 0 {
+		t.Fatalf("stats = %+v, want one saved posting and one unreadable identity refresh", st)
+	}
+	if len(store.saved) != 1 || store.saved[0].Fields().ExternalID != "host.example/dom:1" || len(store.touched) != 0 {
+		t.Fatalf("unexpected content or reopening writes: saved=%+v touched=%+v", store.saved, store.touched)
+	}
+	if got := store.refreshed["eightfold"]; !slices.Equal(got, []string{"host.example/dom:2"}) {
+		t.Errorf("open-only refresh got %v", got)
+	}
+	if !slices.Contains(st.UnprovenCompanies, "stored-employer") {
+		t.Errorf("unproven companies = %v, want the unreadable posting's stored employer", st.UnprovenCompanies)
+	}
+}
+
 func TestUnreadableBoardWithholdsStoredFranchiseCompany(t *testing.T) {
 	for _, unknown := range []bool{false, true} {
 		t.Run(fmt.Sprintf("seenUnknown=%t", unknown), func(t *testing.T) {

@@ -25,8 +25,7 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 		listed []string // every posting the stream named, for the listing fingerprint
 	)
 	// The buffered path resolves a whole board's companies in one batched call because it
-	// already has every posting in hand; a streaming source (jobtech is the one aggregator on
-	// this path today) never does, so this resolves — and memoizes — one company at a time as
+	// already has every posting in hand. A streaming source resolves and memoizes one company at a time as
 	// postings arrive. cache is read/written only from within emit, which already serializes
 	// access via mu, so it needs no locking of its own.
 	canon := r.streamCompanyCanonical(ctx, e)
@@ -56,12 +55,20 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			// A close is not counted as ingested — Stats.Ingested is saved jobs only.
 			return
 		}
+		if j.Unreadable {
+			t.recordUnreadable(e, j)
+			return
+		}
 		r.saveOne(ctx, e, j, canon, &t)
 	}
 
 	err := ss.FetchStream(ctx, e, emit)
 	st := t.st
-	st.Refreshed, st.RefreshFailed, _ = r.refreshCovered(ctx, e, t.refreshIDs)
+	var refreshedCompanies []string
+	st.Refreshed, st.RefreshFailed, refreshedCompanies = r.refreshCovered(ctx, e, t.refreshIDs)
+	if !boardReadWhatItListed(st) {
+		st.UnprovenCompanies = refreshedCompanies
+	}
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, st.Skipped, total, t.firstErr)
