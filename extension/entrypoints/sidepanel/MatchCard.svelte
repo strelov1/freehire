@@ -19,6 +19,8 @@
     type TailoredCV,
   } from '../../lib/freehire';
   import { categoryLabel, countryLabel, regionLabel, workModeLabel } from '../../lib/labels';
+  import { tailorRunFor } from './tailorRun.svelte';
+  import TailorProgress from './TailorProgress.svelte';
   import { ensureSavedLoaded, isSaved, markSaved, markUnsaved } from '../../lib/savedJobs';
 
   let { job, match, hasUploadField }: { job: FreehireJob; match: JobMatch; hasUploadField: boolean } = $props();
@@ -143,25 +145,46 @@
   let attaching = $state(false);
   let attachError = $state('');
   let attached = $state(false);
+  let slug = $derived(job.public_slug);
+  let run = $derived(tailorRunFor(slug));
   $effect(() => {
-    const slug = job.public_slug;
+    const current = slug;
     tailoredCV = null;
     // A stale "Attached ✓" (or error) from the PREVIOUS job must not survive the
     // navigation — this effect already reruns on every slug change, so it is the one
     // place both resets are guaranteed to run before the new job's own attempt.
     attached = false;
     attachError = '';
-    if (slug === '') return;
+    if (current === '') return;
     getToken()
-      .then((token) => (token ? getTailoredCVForJob(slug, token) : null))
+      .then((token) => (token ? getTailoredCVForJob(current, token) : null))
       .then((cv) => {
-        if (job.public_slug === slug) tailoredCV = cv;
+        if (slug !== current) return;
+        tailoredCV = cv;
+        // A run started before the panel last loaded may still be going: follow it.
+        if (cv && !run.running && !run.finished) run.start();
       })
       .catch(() => {});
   });
   // Firefox has no chrome.debugger, the only way background can place a file into
   // an upload field — so the action is not offered there at all.
-  let showAttach = $derived(!import.meta.env.FIREFOX && isCatalogJob && hasUploadField && tailoredCV !== null);
+  let showAttach = $derived(
+    !import.meta.env.FIREFOX && isCatalogJob && hasUploadField && tailoredCV !== null && !run.running,
+  );
+
+  // A tailoring run started from here runs in the freehire tab it opens (the server starts
+  // one only for a signed-in browser, where it can be watched and undone); the panel follows
+  // its progress on the CV and offers the attach once it is over.
+  $effect(() => {
+    if (run.finished && run.cv) tailoredCV = run.cv;
+  });
+  let runCv = $derived(run.cv ?? tailoredCV);
+  let watchUrl = $derived(runCv ? `${tailorUrl}?cv=${encodeURIComponent(runCv.id)}` : tailorUrl);
+
+  function startTailoring() {
+    void browser.tabs.create({ url: tailorUrl, active: false });
+    run.start();
+  }
 
   async function attachTailoredCV() {
     if (attaching || !tailoredCV) return;
@@ -270,6 +293,19 @@
       {/if}
     </div>
 
+    {#if run.running}
+      <TailorProgress {run} {watchUrl} />
+    {:else if run.error}
+      <p class="hint attach-err"><TriangleAlert class="icon-sm" /> Tailoring: {run.error}</p>
+    {:else if tailoredCV}
+      <a class="analysis-link" href={watchUrl} target="_blank" rel="noreferrer">Open your tailored CV →</a>
+    {:else if analysis}
+      <Button class="tailor" variant="primary" size="sm" onclick={() => (confirmOpen = true)}>
+        Tailor my CV
+        <SquarePen class="icon-sm" />
+      </Button>
+    {/if}
+
     {#if showAttach}
       <div class="attach">
         <Button class="attach-btn" variant="outline" size="sm" disabled={attaching} onclick={attachTailoredCV}>
@@ -314,9 +350,7 @@
   bind:open={confirmOpen}
   title={`Tailor your CV for ${job.title}?`}
   confirmLabel={tailorConfirmLabel}
-  onConfirm={() => {
-    window.open(tailorUrl, '_blank', 'noopener,noreferrer');
-  }}
+  onConfirm={startTailoring}
 >
   <div class="confirm-body">
     <div class="confirm-section">

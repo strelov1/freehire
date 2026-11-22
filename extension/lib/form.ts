@@ -12,18 +12,25 @@
 import { collapse, comboOptions, displayedValues, isComboWidget } from './comboWidget';
 import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, Upload } from './protocol';
 import type { AutofillProfile } from './freehire';
-import { formatAuthorizedCountries, normalizeLabel } from './fieldKeys';
+import { easyApplyDialog, easyApplyFieldError, isStoredResumeChoice } from './easyApply';
+import { formatAuthorizedCountries, matchFieldKey, normalizeLabel } from './fieldKeys';
 
 export type Fillable = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
 // Input types that are not free-fill targets.
 const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image', 'file']);
 
-/** The ordered list of fillable controls on the page. */
+/**
+ * The ordered list of fillable controls on the page. An open Easy Apply dialog is
+ * the whole application, so only its controls count: LinkedIn's search box and
+ * message composer sit on the same page.
+ */
 function collectFillable(doc: Document): Fillable[] {
-  const all = Array.from(doc.querySelectorAll<Fillable>('input, select, textarea'));
+  const easyApply = easyApplyDialog(doc);
+  const all = Array.from((easyApply ?? doc).querySelectorAll<Fillable>('input, select, textarea'));
   return all.filter((el) => {
     if (el.disabled) return false;
+    if (easyApply && isStoredResumeChoice(el)) return false;
     if (el instanceof HTMLInputElement && SKIP_TYPES.has(el.type)) return false;
     if (isHidden(el)) return false;
     return true;
@@ -208,6 +215,8 @@ function describeQuestion({ label, controls }: Question, index: number, forms: H
     value: el.value ?? '',
     combo: isComboWidget(el),
   };
+  const invalid = fieldError(el);
+  if (invalid) field.invalid = invalid;
 
   if (controls.length > 1) {
     // A group: the options are the controls' own labels, and its value is
@@ -273,8 +282,46 @@ export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
     if (question.controls.length === 1 && isComboWidget(question.controls[0])) {
       return { label, status: 'deferred_combobox' as const };
     }
-    return { label, status: answerQuestion(question, value) ? ('filled' as const) : ('no_option' as const) };
+    const answer = needsNumber(question, label) ? (numericAnswer(value) ?? value) : value;
+    return { label, status: answerQuestion(question, answer) ? ('filled' as const) : ('no_option' as const) };
   });
+}
+
+/** The page's own verdict that a control's answer is wrong, as its message; '' when none. */
+function fieldError(el: Fillable): string {
+  return easyApplyFieldError(el) || (el.getAttribute('aria-invalid') === 'true' ? 'Invalid' : '');
+}
+
+/**
+ * Whether a single text control takes a bare number. The markup says so for a
+ * number input or a numeric keyboard; Easy Apply's salary question says nothing yet
+ * rejects anything but digits ("5000 USD/month" is "Invalid input").
+ */
+function needsNumber({ controls }: Question, label: string): boolean {
+  if (controls.length !== 1) return false;
+  const [el] = controls;
+  if (!(el instanceof HTMLInputElement)) return false;
+  if (el.type === 'number' || /^(numeric|decimal)$/.test(el.inputMode)) return true;
+  return matchFieldKey(label) === 'desiredSalary' && easyApplyDialog(el.ownerDocument)?.contains(el) === true;
+}
+
+/**
+ * The first amount in a free-text answer as plain digits: "5000 USD/month" → "5000",
+ * "€60,000" → "60000", "60k" → "60000". Null when the answer holds no number, so the
+ * caller keeps the text rather than writing nothing.
+ */
+export function numericAnswer(value: string): string | null {
+  const m = /(\d[\d.,\s]*\d|\d)\s*(k\b)?/i.exec(value);
+  if (!m?.[1]) return null;
+  // A separator followed by exactly three digits groups thousands; any other is a decimal point.
+  const n = Number(
+    m[1]
+      .replace(/[.,\s](?=\d{3}(?!\d))/g, '')
+      .replace(',', '.')
+      .replace(/\s/g, ''),
+  );
+  if (!Number.isFinite(n)) return null;
+  return String(Math.round(m[2] ? n * 1000 : n));
 }
 
 /**
