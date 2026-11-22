@@ -201,10 +201,13 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
   }
 
   /** One page of the caller's match feed: jobs matching their profile, best match first,
-   *  each with the server's explanation. Saved and dismissed jobs are excluded server-side,
-   *  so the next page's offset counts only the cards still unjudged. Authenticated. */
-  async function meFeed(limit: number, offset = 0): Promise<{ data: FeedCard[]; meta: FeedMeta }> {
-    return request<{ data: FeedCard[]; meta: FeedMeta }>(`/api/v1/me/feed${query(limit, offset)}`);
+   *  each with the server's explanation. Page 1 without a cursor; later pages pass the
+   *  previous page's `meta.next_cursor`, which pins the set so saving or hiding never
+   *  shifts it. Authenticated. */
+  async function meFeed(limit: number, cursor?: string): Promise<{ data: FeedCard[]; meta: FeedMeta }> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return request<{ data: FeedCard[]; meta: FeedMeta }>(`/api/v1/me/feed?${params}`);
   }
 
   /** Facet-distribution counts for the analytics page. `params` carries the same

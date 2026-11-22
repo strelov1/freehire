@@ -2,11 +2,9 @@
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
-  import { isPlanRefusal } from '#lib/api-core.js';
+  import { ApiError, isPlanRefusal } from '#lib/api-core.js';
   import type { FeedCard, FeedMeta } from '#lib/types.js';
   import { ensureDismissedLoaded, isDismissed } from '#lib/dismissedJobs.svelte.js';
-  import { isSaved } from '#lib/savedJobs.svelte.js';
-  import { hasViewed } from '#lib/viewedJobs.svelte.js';
   import JobRow from './JobRow.svelte';
   import MatchBlock from './MatchBlock.svelte';
   import HiddenToast from './HiddenToast.svelte';
@@ -26,27 +24,34 @@
   let failed = $state(false);
   // The plan lapsed since the page loaded: the API refuses with 402.
   let paywalled = $state(false);
-  let more = $state(false);
+  // The signed cursor for the next page; absent on the last one.
+  let cursor = $state<string | undefined>();
   const hidden = new HiddenJobUndo();
   const visible = $derived(cards.filter((c) => !isDismissed(c.public_slug)));
 
-  async function fetchPage(offset: number) {
-    const res = await api.meFeed(PAGE, offset);
+  async function fetchPage(next?: string): Promise<void> {
+    let res;
+    try {
+      res = await api.meFeed(PAGE, next);
+    } catch (e) {
+      // An expired or rejected cursor: start over from page 1 rather than fail.
+      if (next && e instanceof ApiError && e.status === 400) return fetchPage();
+      throw e;
+    }
+    // The profile changed under the cursor: start over too. Never put this reason in `meta`,
+    // which would show the empty-profile screen.
+    if (next && res.meta.reason === 'source_changed') return fetchPage();
     meta = res.meta;
-    more = res.data.length === PAGE;
+    cursor = res.meta.next_cursor;
     const have = new Set(cards.map((c) => c.public_slug));
     cards = [...cards, ...res.data.filter((c) => !have.has(c.public_slug))];
   }
 
-  // The server leaves out every job the reader has touched since (saved, hidden, opened),
-  // so the next page starts after only the loaded cards still untouched.
+  // A restart lands on page 1 again; cards already shown are skipped, not repeated.
   async function showMore() {
     loadingMore = true;
     try {
-      const untouched = cards.filter(
-        (c) => !isSaved(c.public_slug) && !isDismissed(c.public_slug) && !hasViewed(c.public_slug),
-      ).length;
-      await fetchPage(untouched);
+      await fetchPage(cursor);
     } catch (e) {
       if (isPlanRefusal(e)) paywalled = true;
       else failed = true;
@@ -58,7 +63,7 @@
   onMount(async () => {
     void ensureDismissedLoaded();
     try {
-      await fetchPage(0);
+      await fetchPage();
     } catch (e) {
       if (isPlanRefusal(e)) paywalled = true;
       else failed = true;
@@ -109,7 +114,7 @@
       </li>
     {/each}
   </ul>
-  {#if more}
+  {#if cursor}
     <button
       type="button"
       class="mx-auto rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-medium transition hover:bg-accent disabled:opacity-50"
