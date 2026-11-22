@@ -81,11 +81,18 @@ func LinkedInPostingURL(id string) string { return "https://www.linkedin.com/job
 
 var linkedInID = regexp.MustCompile(`(?:^|-)\d+$`)
 
+// isLinkedInURL reports an https LinkedIn host on the default port, refusing a lookalike host
+// such as linkedin.com.example.test.
+func isLinkedInURL(u *url.URL) bool {
+	host := strings.ToLower(u.Hostname())
+	return u.Scheme == "https" && u.Port() == "" && (host == "linkedin.com" || strings.HasSuffix(host, ".linkedin.com"))
+}
+
 // LinkedInPostingID returns the native numeric ID of a public LinkedIn job URL.
 // Non-LinkedIn hosts and paths are rejected before a liveness request is issued.
 func LinkedInPostingID(raw string) string {
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || (u.Hostname() != "linkedin.com" && !strings.HasSuffix(u.Hostname(), ".linkedin.com")) || u.Port() != "" {
+	if err != nil || !isLinkedInURL(u) {
 		return ""
 	}
 	path := strings.TrimSuffix(u.Path, "/")
