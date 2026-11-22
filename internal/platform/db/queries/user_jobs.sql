@@ -163,7 +163,7 @@ LIMIT $2;
 -- name: FeedExcludedJobIDs :many
 -- Job ids the match feed leaves out for a paging snapshot: saved, dismissed or applied
 -- strictly before `before`, so an action taken after the snapshot cannot shift a window the
--- reader is paging through. Viewed jobs stay. Newest action first and capped (`row_limit`) so the
+-- reader is paging through. Viewed jobs and tracked-but-unapplied applications stay. Newest action first and capped (`row_limit`) so the
 -- search's `id NOT IN (...)` filter stays bounded.
 SELECT job_id FROM (
     SELECT uj.job_id AS job_id, uj.saved_at AS at FROM user_jobs uj
@@ -172,8 +172,8 @@ SELECT job_id FROM (
     SELECT uj.job_id, uj.dismissed_at FROM user_jobs uj
      WHERE uj.user_id = sqlc.arg(user_id) AND uj.dismissed_at < sqlc.arg(before)::timestamptz
     UNION ALL
-    SELECT a.job_id, a.created_at FROM applications a
-     WHERE a.user_id = sqlc.arg(user_id) AND a.job_id IS NOT NULL AND a.created_at < sqlc.arg(before)::timestamptz
+    SELECT a.job_id, a.applied_at FROM applications a
+     WHERE a.user_id = sqlc.arg(user_id) AND a.job_id IS NOT NULL AND a.applied_at < sqlc.arg(before)::timestamptz
 ) x
 GROUP BY job_id
 ORDER BY max(at) DESC

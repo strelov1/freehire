@@ -24,7 +24,9 @@
   let failed = $state(false);
   // The plan lapsed while swipe was open: the API refuses with 402.
   let paywalled = $state(false);
-  let last = $state<{ card: FeedCard; action: 'save' | 'dismiss' } | null>(null);
+  type Outcome = 'ok' | 'gone' | 'failed';
+  // The last judgment and its write: Undo waits for the write so its DELETE cannot overtake it.
+  let last = $state<{ card: FeedCard; action: 'save' | 'dismiss'; written: Promise<Outcome> } | null>(null);
   const current = $derived(cards[0]);
   const gesture = new SwipeGesture();
 
@@ -32,7 +34,10 @@
     loading = true;
     failed = false;
     try {
-      cards = (await api.meFeed(PAGE)).data;
+      const data = (await api.meFeed(PAGE)).data;
+      // Append, not replace: an Undo during the request may have put a card back.
+      const have = new Set(cards.map((c) => c.public_slug));
+      cards = [...cards, ...data.filter((c) => !have.has(c.public_slug))];
     } catch (e) {
       if (isPlanRefusal(e)) paywalled = true;
       else failed = true;
@@ -59,13 +64,13 @@
     const card = current;
     if (!card || gesture.exiting) return;
     gesture.fling(action);
-    last = { card, action };
     const write = action === 'save' ? api.saveJob(card.public_slug) : api.dismissJob(card.public_slug);
     // Settled either way so a rejection is handled below, not as an unhandled one here.
-    const written = write.then(
-      () => 'ok' as const,
-      (e) => (e instanceof ApiError && e.status === 404 ? ('gone' as const) : ('failed' as const)),
+    const written: Promise<Outcome> = write.then(
+      () => 'ok',
+      (e) => (e instanceof ApiError && e.status === 404 ? 'gone' : 'failed'),
     );
+    last = { card, action, written };
     await new Promise((r) => setTimeout(r, FLY_MS));
     cards = cards.filter((c) => c !== card);
     gesture.settle();
@@ -90,14 +95,22 @@
   // The card returns at once; if the write fails it leaves again and Undo stays available.
   async function undo() {
     if (!last || gesture.exiting) return;
-    const { card, action } = last;
+    const { card, action, written } = last;
     last = null;
     cards = [card, ...cards];
+    // judge() handles a failed or gone write first (it awaited earlier): the card stays back
+    // with its toast, or leaves for good.
+    const outcome = await written;
+    if (outcome === 'gone') {
+      cards = cards.filter((c) => c !== card);
+      if (cards.length === 0) await load();
+    }
+    if (outcome !== 'ok') return;
     try {
       await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
     } catch {
       cards = cards.filter((c) => c !== card);
-      last = { card, action };
+      last = { card, action, written };
       fail(toastCopy.undo);
       return;
     }
@@ -211,6 +224,15 @@
   {:else}
     <div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
       <p class="text-lg font-semibold">You're all caught up</p>
+      {#if last}
+        <button
+          type="button"
+          class="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-accent"
+          onclick={undo}
+        >
+          Undo last
+        </button>
+      {/if}
       <button
         type="button"
         class="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-accent"

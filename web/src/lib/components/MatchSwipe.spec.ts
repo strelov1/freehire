@@ -148,6 +148,30 @@ describe('MatchSwipe', () => {
       await vi.waitFor(() => expect(announce).toHaveBeenCalledWith('Undone. A Job is back.'));
     });
 
+    it('undo waits for the save to land before unsaving', async () => {
+      const dlg = await open();
+      let landed!: () => void;
+      saveJob.mockReturnValue(new Promise<void>((r) => (landed = r)));
+      await fireEvent.keyDown(dlg, { key: 'ArrowRight' });
+      await shown('B Job');
+      await fireEvent.keyDown(dlg, { key: 'u' });
+      await shown('A Job');
+      expect(unsaveJob).not.toHaveBeenCalled();
+      landed();
+      await vi.waitFor(() => expect(unsaveJob).toHaveBeenCalledWith('a-job'));
+    });
+
+    it('offers Undo on the caught-up screen after the last card', async () => {
+      meFeed.mockResolvedValueOnce({ data: [mk('a-job', 'A Job')] }).mockResolvedValue({ data: [] });
+      saveJob.mockResolvedValue(undefined);
+      unsaveJob.mockResolvedValue(undefined);
+      render(MatchSwipe, { onClose: () => {} });
+      await fireEvent.click(await screen.findByLabelText('Save'));
+      await fireEvent.click(await screen.findByText('Undo last'));
+      await shown('A Job');
+      await vi.waitFor(() => expect(unsaveJob).toHaveBeenCalledWith('a-job'));
+    });
+
     it('ignores modifiers, repeats and fields', async () => {
       const dlg = await open();
       await fireEvent.keyDown(dlg, { key: 'ArrowRight', ctrlKey: true });

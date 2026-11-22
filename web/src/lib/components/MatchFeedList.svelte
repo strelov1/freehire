@@ -97,7 +97,7 @@
       href={resolve('/my/profile')}>Fill in my profile</a
     >
   </div>
-{:else if visible.length === 0}
+{:else if visible.length === 0 && !cursor}
   <div class="flex flex-col items-center gap-3 py-16 text-center">
     <p class="text-lg font-semibold">You're all caught up</p>
     <p class="text-sm text-muted-foreground">No more jobs match your profile right now.</p>

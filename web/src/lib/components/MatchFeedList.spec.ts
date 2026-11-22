@@ -6,7 +6,11 @@ const meFeed = vi.fn();
 vi.mock('#lib/api.js', () => ({ api: { meFeed: (...a: unknown[]) => meFeed(...a), plans: vi.fn() } }));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/matches') } }));
-vi.mock('#lib/dismissedJobs.svelte.js', () => ({ ensureDismissedLoaded: vi.fn(), isDismissed: () => false }));
+const dismissed = new Set<string>();
+vi.mock('#lib/dismissedJobs.svelte.js', () => ({
+  ensureDismissedLoaded: vi.fn(),
+  isDismissed: (slug: string) => dismissed.has(slug),
+}));
 
 const { default: MatchFeedList } = await import('./MatchFeedList.svelte');
 
@@ -25,6 +29,15 @@ const page = (slugs: string[], meta: Record<string, unknown> = {}) => ({
 describe('MatchFeedList', () => {
   beforeEach(() => {
     meFeed.mockReset();
+    dismissed.clear();
+  });
+
+  it('keeps "Show more" when every loaded card is hidden but another page exists', async () => {
+    dismissed.add('a');
+    meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
+    render(MatchFeedList);
+    expect(await screen.findByText('Show more matches')).toBeTruthy();
+    expect(screen.queryByText("You're all caught up")).toBeNull();
   });
 
   it('shows the upgrade screen, not an error, when the plan lapsed (402)', async () => {

@@ -44,20 +44,22 @@ func TestFeedExcludedJobIDs(t *testing.T) {
 	ago := func(d time.Duration) time.Time { return before.Add(-d) }
 
 	saved, dismissed, applied := job("saved"), job("dismissed"), job("applied")
-	late, viewed := job("late"), job("viewed")
+	late, viewed, tracked := job("late"), job("viewed"), job("tracked")
 	exec(`INSERT INTO user_jobs (user_id, job_id, saved_at) VALUES ($1, $2, $3)`, userID, saved, ago(3*time.Hour))
 	exec(`INSERT INTO user_jobs (user_id, job_id, dismissed_at) VALUES ($1, $2, $3)`, userID, dismissed, ago(2*time.Hour))
 	exec(`INSERT INTO applications (user_id, job_id, applied_at, created_at) VALUES ($1, $2, $3, $3)`, userID, applied, ago(time.Hour))
 	exec(`INSERT INTO user_jobs (user_id, job_id, saved_at) VALUES ($1, $2, $3)`, userID, late, before.Add(time.Minute))
 	exec(`INSERT INTO user_jobs (user_id, job_id) VALUES ($1, $2)`, userID, viewed)
 	exec(`INSERT INTO applications (user_id, job_id, applied_at, created_at) VALUES ($1, NULL, $2, $2)`, userID, ago(time.Minute))
+	// Tracked (notes only, or progress cleared) but never applied: not an exclusion.
+	exec(`INSERT INTO applications (user_id, job_id, created_at) VALUES ($1, $2, $3)`, userID, tracked, ago(4*time.Hour))
 
 	got, err := repo.FeedExcludedJobIDs(ctx, userID, before, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := []int64{applied, dismissed, saved}; !slices.Equal(got, want) {
-		t.Fatalf("ids = %v, want %v (newest action first; late save, viewed row and NULL job_id left out)", got, want)
+		t.Fatalf("ids = %v, want %v (newest action first; late save, viewed row, unapplied tracking and NULL job_id left out)", got, want)
 	}
 	if got, err = repo.FeedExcludedJobIDs(ctx, userID, before, 2); err != nil || !slices.Equal(got, []int64{applied, dismissed}) {
 		t.Fatalf("capped ids = %v, %v; want the two newest", got, err)

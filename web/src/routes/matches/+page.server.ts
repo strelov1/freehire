@@ -11,7 +11,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ parent, url, fetch }) => {
   if (!matchesEnabled({ PUBLIC_MATCHES })) error(404, 'Not found');
   const { user } = await parent();
-  if (!user) redirect(302, signinUrl({ returnTo: url.pathname, cancelTo: '/', mode: 'login' }));
+  if (!user) redirect(302, signinUrl({ returnTo: url.pathname + url.search, cancelTo: '/', mode: 'login' }));
   if ((user.tier ?? 'free') !== 'free') return { paid: true, price: null };
   // A failed price load drops the price; the button falls back to /pricing.
   try {

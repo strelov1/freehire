@@ -39,7 +39,7 @@
       onpointerdown={gesture.down}
       onpointermove={gesture.move}
       onpointerup={() => gesture.up(onCommit)}
-      onpointercancel={() => gesture.up(onCommit)}
+      onpointercancel={() => gesture.reset()}
     >
       <!-- Swipe-direction stamps, fading in with drag distance. They anchor to the
            non-scrolling frame so they stay put as the content below scrolls. -->
