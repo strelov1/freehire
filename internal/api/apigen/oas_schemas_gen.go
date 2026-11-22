@@ -980,6 +980,101 @@ func (s *ApiUsageDay) SetErrors(val int64) {
 	s.Errors = val
 }
 
+// The interaction after an apply, plus the application it wrote.
+// Ref: #/components/schemas/AppliedInteraction
+type AppliedInteraction struct {
+	JobID       int64       `json:"job_id"`
+	ViewedAt    NilDateTime `json:"viewed_at"`
+	SavedAt     NilDateTime `json:"saved_at"`
+	AppliedAt   NilDateTime `json:"applied_at"`
+	DismissedAt NilDateTime `json:"dismissed_at"`
+	Stage       NilString   `json:"stage"`
+	Notes       NilString   `json:"notes"`
+	// The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}`
+	// to undo.
+	ApplicationID string `json:"application_id"`
+}
+
+// GetJobID returns the value of JobID.
+func (s *AppliedInteraction) GetJobID() int64 {
+	return s.JobID
+}
+
+// GetViewedAt returns the value of ViewedAt.
+func (s *AppliedInteraction) GetViewedAt() NilDateTime {
+	return s.ViewedAt
+}
+
+// GetSavedAt returns the value of SavedAt.
+func (s *AppliedInteraction) GetSavedAt() NilDateTime {
+	return s.SavedAt
+}
+
+// GetAppliedAt returns the value of AppliedAt.
+func (s *AppliedInteraction) GetAppliedAt() NilDateTime {
+	return s.AppliedAt
+}
+
+// GetDismissedAt returns the value of DismissedAt.
+func (s *AppliedInteraction) GetDismissedAt() NilDateTime {
+	return s.DismissedAt
+}
+
+// GetStage returns the value of Stage.
+func (s *AppliedInteraction) GetStage() NilString {
+	return s.Stage
+}
+
+// GetNotes returns the value of Notes.
+func (s *AppliedInteraction) GetNotes() NilString {
+	return s.Notes
+}
+
+// GetApplicationID returns the value of ApplicationID.
+func (s *AppliedInteraction) GetApplicationID() string {
+	return s.ApplicationID
+}
+
+// SetJobID sets the value of JobID.
+func (s *AppliedInteraction) SetJobID(val int64) {
+	s.JobID = val
+}
+
+// SetViewedAt sets the value of ViewedAt.
+func (s *AppliedInteraction) SetViewedAt(val NilDateTime) {
+	s.ViewedAt = val
+}
+
+// SetSavedAt sets the value of SavedAt.
+func (s *AppliedInteraction) SetSavedAt(val NilDateTime) {
+	s.SavedAt = val
+}
+
+// SetAppliedAt sets the value of AppliedAt.
+func (s *AppliedInteraction) SetAppliedAt(val NilDateTime) {
+	s.AppliedAt = val
+}
+
+// SetDismissedAt sets the value of DismissedAt.
+func (s *AppliedInteraction) SetDismissedAt(val NilDateTime) {
+	s.DismissedAt = val
+}
+
+// SetStage sets the value of Stage.
+func (s *AppliedInteraction) SetStage(val NilString) {
+	s.Stage = val
+}
+
+// SetNotes sets the value of Notes.
+func (s *AppliedInteraction) SetNotes(val NilString) {
+	s.Notes = val
+}
+
+// SetApplicationID sets the value of ApplicationID.
+func (s *AppliedInteraction) SetApplicationID(val string) {
+	s.ApplicationID = val
+}
+
 // Ref: #/components/schemas/ApplyJob
 type ApplyJob struct {
 	// The day the application was sent, `2026-07-29`. Absent, null or empty means now.
@@ -17050,16 +17145,16 @@ func (s *MarkAllReadInboxOK) SetData(val InboxMarked) {
 
 // A single item: `{"data": ...}`.
 type MarkAppliedOK struct {
-	Data Interaction `json:"data"`
+	Data AppliedInteraction `json:"data"`
 }
 
 // GetData returns the value of Data.
-func (s *MarkAppliedOK) GetData() Interaction {
+func (s *MarkAppliedOK) GetData() AppliedInteraction {
 	return s.Data
 }
 
 // SetData sets the value of Data.
-func (s *MarkAppliedOK) SetData(val Interaction) {
+func (s *MarkAppliedOK) SetData(val AppliedInteraction) {
 	s.Data = val
 }
 

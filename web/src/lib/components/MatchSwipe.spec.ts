@@ -7,6 +7,8 @@ const saveJob = vi.fn();
 const dismissJob = vi.fn();
 const unsaveJob = vi.fn();
 const undismissJob = vi.fn();
+const markJobApplied = vi.fn();
+const untrackApplication = vi.fn();
 vi.mock('#lib/api.js', () => ({
   api: {
     meFeed: (...a: unknown[]) => meFeed(...a),
@@ -14,16 +16,21 @@ vi.mock('#lib/api.js', () => ({
     dismissJob: (...a: unknown[]) => dismissJob(...a),
     unsaveJob: (...a: unknown[]) => unsaveJob(...a),
     undismissJob: (...a: unknown[]) => undismissJob(...a),
+    markJobApplied: (...a: unknown[]) => markJobApplied(...a),
+    untrackApplication: (...a: unknown[]) => untrackApplication(...a),
     plans: vi.fn(),
   },
 }));
+vi.mock('#lib/analytics.js', () => ({ track: vi.fn() }));
 const announce = vi.fn();
 vi.mock('#lib/announce.svelte.js', () => ({ announce: (...a: unknown[]) => announce(...a) }));
 vi.mock('./JobMatch.svelte', async () => {
   const stub = await import('../../../vitest-stubs/JobMatchMarker.svelte');
   return { default: stub.default };
 });
-vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
+vi.mock('$app/paths', () => ({
+  resolve: (path: string, p?: Record<string, string>) => path.replace(/\[(\w+)\]/g, (_, k) => p?.[k] ?? ''),
+}));
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/matches') } }));
 
 const { default: MatchSwipe } = await import('./MatchSwipe.svelte');
@@ -198,6 +205,131 @@ describe('MatchSwipe', () => {
       dlg.appendChild(item);
       await fireEvent.keyDown(item, { key: 'ArrowRight' });
       expect(saveJob).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('apply', () => {
+    const mk = (slug: string, title: string, extra: Record<string, unknown> = {}) => ({
+      public_slug: slug,
+      title,
+      company: 'Acme',
+      url: `https://acme.test/${slug}`,
+      skills: [] as string[],
+      match: { why: ['Go'], may_not_fit: [], unknown: [] },
+      ...extra,
+    });
+    async function open(first: Record<string, unknown> = {}) {
+      meFeed.mockResolvedValue({ data: [mk('a-job', 'A Job', first), mk('b-job', 'B Job')] });
+      markJobApplied.mockResolvedValue({ application_id: 'a17' });
+      untrackApplication.mockResolvedValue({});
+      render(MatchSwipe, { onClose: () => {} });
+      await screen.findByLabelText('Job: A Job at Acme');
+      return screen.getByRole('dialog');
+    }
+    const shown = (t: string) => vi.waitFor(() => expect(screen.getByLabelText(`Job: ${t} at Acme`)).toBeTruthy());
+    const applyLink = () => screen.getByLabelText("Apply to A Job on the employer's site (opens in a new tab)");
+    const alreadyApplied = async () => {
+      await fireEvent.click(screen.getByLabelText('More actions for Acme'));
+      await fireEvent.click(await screen.findByRole('menuitem', { name: 'Already applied' }));
+    };
+    beforeEach(() => {
+      announce.mockClear();
+      markJobApplied.mockReset();
+      untrackApplication.mockReset();
+      saveJob.mockReset();
+    });
+
+    it('external Apply opens the employer, marks applied, advances and offers Undo in the toast', async () => {
+      await open();
+      const link = applyLink() as HTMLAnchorElement;
+      expect(link.getAttribute('href')).toBe('https://acme.test/a-job');
+      expect(link.getAttribute('target')).toBe('_blank');
+      await fireEvent.click(link);
+      expect(markJobApplied).toHaveBeenCalledWith('a-job');
+      await shown('B Job');
+      expect(await screen.findByText('Applied to A Job, opened in a new tab.')).toBeTruthy();
+      expect(announce).toHaveBeenCalledWith('Applied to A Job, opened in a new tab. Next: B Job at Acme');
+    });
+
+    it('Undo from the toast deletes only the application by its id', async () => {
+      await open();
+      await fireEvent.click(applyLink());
+      await shown('B Job');
+      await fireEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+      await shown('A Job');
+      expect(untrackApplication).toHaveBeenCalledWith('a17');
+      expect(unsaveJob).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(announce).toHaveBeenCalledWith('Undone. A Job is back.'));
+    });
+
+    it('Undo is ignored while the applied card is still flying off', async () => {
+      const dlg = await open();
+      await fireEvent.click(applyLink());
+      await fireEvent.keyDown(dlg, { key: 'u' });
+      await shown('B Job');
+      expect(screen.queryByLabelText('Job: A Job at Acme')).toBeNull();
+      expect(untrackApplication).not.toHaveBeenCalled();
+    });
+
+    it('Already applied marks, advances and announces, without a toast or a tab', async () => {
+      await open();
+      await alreadyApplied();
+      expect(markJobApplied).toHaveBeenCalledWith('a-job');
+      await shown('B Job');
+      await vi.waitFor(() => expect(announce).toHaveBeenCalledWith('Marked as applied. Next: B Job at Acme'));
+      expect(screen.queryByText(/opened in a new tab/)).toBeNull();
+    });
+
+    it('U undoes an Already applied by application id', async () => {
+      const dlg = await open();
+      await alreadyApplied();
+      await shown('B Job');
+      await fireEvent.keyDown(dlg, { key: 'u' });
+      await shown('A Job');
+      expect(untrackApplication).toHaveBeenCalledWith('a17');
+    });
+
+    it('direct apply links to the job page and writes nothing', async () => {
+      await open({ direct_apply: true });
+      const link = screen.getByLabelText('Apply to A Job on freehire (opens in a new tab)') as HTMLAnchorElement;
+      expect(link.getAttribute('href')).toBe('/jobs/a-job');
+      await fireEvent.click(link);
+      expect(markJobApplied).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Job: A Job at Acme')).toBeTruthy();
+    });
+
+    it('a closed job has no Apply but keeps the menu', async () => {
+      await open({ closed_at: '2026-11-01T00:00:00Z' });
+      expect(screen.queryByLabelText(/^Apply to /)).toBeNull();
+      expect(screen.getByLabelText('More actions for Acme')).toBeTruthy();
+    });
+
+    it('a failed apply brings the card back with a toast and an assertive announce', async () => {
+      await open();
+      markJobApplied.mockRejectedValue(new ApiError(500, 'boom'));
+      await fireEvent.click(applyLink());
+      expect(await screen.findByText("Didn't mark as applied — try again")).toBeTruthy();
+      await shown('A Job');
+      expect(announce).toHaveBeenCalledWith("Didn't mark as applied — try again", 'assertive');
+    });
+
+    it('a 404 on apply drops the card silently and disables Undo', async () => {
+      await open();
+      markJobApplied.mockRejectedValue(new ApiError(404, 'gone'));
+      await alreadyApplied();
+      await shown('B Job');
+      await vi.waitFor(() => expect((screen.getByLabelText('Undo last') as HTMLButtonElement).disabled).toBe(true));
+      expect(screen.queryByText(/try again/)).toBeNull();
+    });
+
+    it('arrow keys judge nothing while the menu is open', async () => {
+      const dlg = await open();
+      await fireEvent.click(screen.getByLabelText('More actions for Acme'));
+      await screen.findByRole('menu');
+      await fireEvent.keyDown(dlg, { key: 'ArrowRight' });
+      await fireEvent.keyDown(dlg, { key: 'ArrowLeft' });
+      expect(saveJob).not.toHaveBeenCalled();
+      expect(dismissJob).not.toHaveBeenCalled();
     });
   });
 });

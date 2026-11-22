@@ -24,6 +24,13 @@ model Interaction {
   notes: string | null;
 }
 
+/** The interaction after an apply, plus the application it wrote. */
+model AppliedInteraction {
+  ...Interaction;
+  /** The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}` to undo. */
+  application_id: string;
+}
+
 model ApplyJob {
   /** The day the application was sent, `2026-07-29`. Absent, null or empty means now. */
   applied_on?: string | null;
@@ -274,12 +281,13 @@ op recordView(/** The job `public_slug`. */ @path slug: string): Data<Interactio
         dismissed_at: null,
         stage: null,
         notes: null,
+        application_id: "a17",
       },
     },
 })
 @route("/jobs/{slug}/apply")
 @post
-op markApplied(/** The job `public_slug`. */ @path slug: string, @body body?: ApplyJob): Data<Interaction> | Problem;
+op markApplied(/** The job `public_slug`. */ @path slug: string, @body body?: ApplyJob): Data<AppliedInteraction> | Problem;
 
 @summary("Save (bookmark) the job.")
 @useAuth(SessionOrKey)

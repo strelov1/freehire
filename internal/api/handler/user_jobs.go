@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -168,7 +169,12 @@ func (h *trackingHandlers) MarkApplied(ctx context.Context, req apigen.OptApplyJ
 	if err != nil {
 		return nil, trackingError(err)
 	}
-	return &apigen.MarkAppliedOK{Data: interactionOut(interaction)}, nil
+	i := interactionOut(interaction)
+	return &apigen.MarkAppliedOK{Data: apigen.AppliedInteraction{
+		JobID: i.JobID, ViewedAt: i.ViewedAt, SavedAt: i.SavedAt, AppliedAt: i.AppliedAt,
+		DismissedAt: i.DismissedAt, Stage: i.Stage, Notes: i.Notes,
+		ApplicationID: applicationRefPrefix + strconv.FormatInt(interaction.ApplicationID, 10),
+	}}, nil
 }
 
 // statedApplyDay reads the optional day from the request. It answers nil when the caller sent

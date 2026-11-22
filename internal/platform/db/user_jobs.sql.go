@@ -422,7 +422,7 @@ WITH prior AS (
      WHERE NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
 )
 SELECT t.user_id, t.job_id, t.viewed_at, u.applied_at, t.saved_at,
-       u.stage, u.notes, t.dismissed_at, t.vote, u.followed_up_at
+       u.stage, u.notes, t.dismissed_at, t.vote, u.followed_up_at, u.id AS application_id
   FROM touch t, upsert u
 `
 
@@ -434,16 +434,17 @@ type MarkJobAppliedParams struct {
 }
 
 type MarkJobAppliedRow struct {
-	UserID       int64              `json:"user_id"`
-	JobID        int64              `json:"job_id"`
-	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
-	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
-	SavedAt      pgtype.Timestamptz `json:"saved_at"`
-	Stage        pgtype.Text        `json:"stage"`
-	Notes        pgtype.Text        `json:"notes"`
-	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
-	Vote         pgtype.Int2        `json:"vote"`
-	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+	UserID        int64              `json:"user_id"`
+	JobID         int64              `json:"job_id"`
+	ViewedAt      pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt     pgtype.Timestamptz `json:"applied_at"`
+	SavedAt       pgtype.Timestamptz `json:"saved_at"`
+	Stage         pgtype.Text        `json:"stage"`
+	Notes         pgtype.Text        `json:"notes"`
+	DismissedAt   pgtype.Timestamptz `json:"dismissed_at"`
+	Vote          pgtype.Int2        `json:"vote"`
+	FollowedUpAt  pgtype.Timestamptz `json:"followed_up_at"`
+	ApplicationID int64              `json:"application_id"`
 }
 
 // Mark a job as applied for a user. Idempotent and independent of a prior view:
@@ -492,6 +493,7 @@ func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) 
 		&i.DismissedAt,
 		&i.Vote,
 		&i.FollowedUpAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }

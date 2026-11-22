@@ -52,6 +52,7 @@ func datedApplyFixture(t *testing.T, email, ext, slug string) (*fiber.App, strin
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app := fiber.New()
 	app.Post("/api/v1/jobs/:slug/apply", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
+	app.Delete("/api/v1/me/applications/:id", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 	token, err := iss.Issue(userID, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
@@ -186,5 +187,62 @@ func TestDatedApply_RefusesAnUnbelievableDateWithoutWriting(t *testing.T) {
 	}
 	if applications != 0 {
 		t.Errorf("applications = %d, want 0: a refused date must write nothing", applications)
+	}
+}
+
+// The apply response carries the id of the application it wrote, on the undated and the dated
+// path alike, and deleting by it removes that application but leaves the saved mark: the
+// match card's Undo must not unsave a job the candidate saved earlier.
+func TestApply_ReturnsTheApplicationIDAndUndoKeepsTheSavedMark(t *testing.T) {
+	for _, tc := range []struct{ name, body string }{
+		{"undated", ``},
+		{"dated", fmt.Sprintf(`{"applied_on":%q}`, time.Now().UTC().AddDate(0, 0, -3).Format("2006-01-02"))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			slug := "apply-id-" + tc.name + "-t35nijto"
+			app, token, userID, pool, ctx := datedApplyFixture(t, tc.name+"-id@example.test", "id-"+tc.name, slug)
+			if _, err := pool.Exec(ctx,
+				`INSERT INTO user_jobs (user_id, job_id, saved_at)
+				 SELECT $1, id, now() FROM jobs WHERE public_slug = $2`, userID, slug); err != nil {
+				t.Fatalf("seed saved mark: %v", err)
+			}
+			status, body := applyOn(t, app, token, slug, tc.body)
+			if status != fiber.StatusOK {
+				t.Fatalf("status = %d, body = %s", status, body)
+			}
+			var out struct {
+				Data struct {
+					ApplicationID string `json:"application_id"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal([]byte(body), &out); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			var id int64
+			if err := pool.QueryRow(ctx, `SELECT id FROM applications WHERE user_id = $1`, userID).Scan(&id); err != nil {
+				t.Fatalf("read application: %v", err)
+			}
+			if want := fmt.Sprintf("a%d", id); out.Data.ApplicationID != want {
+				t.Fatalf("application_id = %q, want %q", out.Data.ApplicationID, want)
+			}
+
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodDelete,
+				"/api/v1/me/applications/"+out.Data.ApplicationID, nil)
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token}) //nolint:gosec // a request cookie: the Set-Cookie attributes do not apply
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("Test: %v", err)
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode != fiber.StatusOK {
+				t.Fatalf("undo status = %d", resp.StatusCode)
+			}
+			var applications, saved int
+			_ = pool.QueryRow(ctx, `SELECT count(*) FROM applications WHERE user_id = $1`, userID).Scan(&applications)
+			_ = pool.QueryRow(ctx, `SELECT count(*) FROM user_jobs WHERE user_id = $1 AND saved_at IS NOT NULL`, userID).Scan(&saved)
+			if applications != 0 || saved != 1 {
+				t.Errorf("applications = %d (want 0), saved marks = %d (want 1)", applications, saved)
+			}
+		})
 	}
 }

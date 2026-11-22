@@ -7,8 +7,15 @@
     message,
     onClose,
     duration = 5000,
+    action,
     class: cls = '',
-  }: { message: string; onClose: () => void; duration?: number; class?: string } = $props();
+  }: {
+    message: string;
+    onClose: () => void;
+    duration?: number;
+    action?: { label: string; onClick: () => void };
+    class?: string;
+  } = $props();
 
   let hovered = $state(false);
   let focused = $state(false);
@@ -40,5 +47,17 @@
     onfocusout={() => (focused = false)}
   >
     {message}
+    {#if action}
+      <button
+        type="button"
+        class="ml-3 font-semibold text-brand underline-offset-2 hover:underline"
+        onclick={() => {
+          action.onClick();
+          onClose();
+        }}
+      >
+        {action.label}
+      </button>
+    {/if}
   </div>
 </div>

@@ -84,7 +84,7 @@ WITH prior AS (
      WHERE NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
 )
 SELECT t.user_id, t.job_id, t.viewed_at, u.applied_at, t.saved_at,
-       u.stage, u.notes, t.dismissed_at, t.vote, u.followed_up_at
+       u.stage, u.notes, t.dismissed_at, t.vote, u.followed_up_at, u.id AS application_id
   FROM touch t, upsert u;
 
 -- name: SaveJob :one

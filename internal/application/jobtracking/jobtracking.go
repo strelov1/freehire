@@ -25,6 +25,8 @@ type Interaction struct {
 	DismissedAt *time.Time
 	Stage       *string
 	Notes       *string
+	// ApplicationID is the applications row an apply wrote; 0 on every other path.
+	ApplicationID int64
 }
 
 // Filter selects which interactions a listing returns. It is a controlled
