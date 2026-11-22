@@ -188,14 +188,18 @@ func (s efinancialcareers) FetchStream(ctx context.Context, _ CompanyEntry, emit
 	if err := cut(url.Values{}, root.Meta.TotalResults, 0); err != nil {
 		return fmt.Errorf("efinancialcareers: %w", err)
 	}
-	if want := float64(root.Meta.TotalResults) * efinancialcareersMinShare; float64(len(listed)) < want || len(listed) == 0 {
-		return fmt.Errorf("efinancialcareers: listed %d distinct postings of the %d the search states", len(listed), root.Meta.TotalResults)
+	distinct := len(listed) + len(unreadable)
+	if want := float64(root.Meta.TotalResults) * efinancialcareersMinShare; float64(distinct) < want {
+		return fmt.Errorf("efinancialcareers: listed %d distinct postings of the %d the search states", distinct, root.Meta.TotalResults)
+	}
+	if len(listed) == 0 {
+		return fmt.Errorf("efinancialcareers: listed %d postings and none were readable", distinct)
 	}
 	// Overlapping facet slices may later supply a usable copy of an unreadable row.
 	for id := range unreadable {
 		emit(unreadableDetail(id, "", ""))
 	}
-	log.Printf("efinancialcareers: listed %d distinct postings of %d", len(listed), root.Meta.TotalResults)
+	log.Printf("efinancialcareers: listed %d distinct postings of %d (%d unreadable)", distinct, root.Meta.TotalResults, len(unreadable))
 	return nil
 }
 

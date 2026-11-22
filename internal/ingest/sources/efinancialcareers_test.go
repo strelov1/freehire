@@ -48,7 +48,7 @@ func (f *efcHTTP) GetJSON(_ context.Context, raw string, v any) error {
 }
 
 func TestEFinancialCareersWholeCatalogueUnderTheWindowWalkedAsOne(t *testing.T) {
-	f := &efcHTTP{t: t, total: 2}
+	f := &efcHTTP{t: t, total: 3}
 	var jobs []Job
 	s := efinancialcareers{http: f, limiter: noWait{}}
 	if err := s.FetchStream(context.Background(), CompanyEntry{}, func(j Job) { jobs = append(jobs, j) }); err != nil {
@@ -91,12 +91,12 @@ func TestEFinancialCareersWholeCatalogueUnderTheWindowWalkedAsOne(t *testing.T) 
 
 // The plan: country cuts the catalogue, an oversized country is cut by sector, a sector with no
 // sub-sector falls through to seniority, and a slice that fits is walked as it stands. The fixture
-// pages repeat the same two postings, so the run also ends short of the stated total and fails.
+// pages repeat the same three listing identities, so the run ends short of the stated total and fails.
 func TestEFinancialCareersOversizedCatalogueIsCutAndShortfallFails(t *testing.T) {
 	f := &efcHTTP{t: t}
 	s := efinancialcareers{http: f, limiter: noWait{}}
 	err := s.FetchStream(context.Background(), CompanyEntry{}, func(Job) {})
-	if err == nil || !strings.Contains(err.Error(), "2 distinct postings of the 21000") {
+	if err == nil || !strings.Contains(err.Error(), "3 distinct postings of the 21000") {
 		t.Fatalf("err = %v, want a shortfall", err)
 	}
 	var walked []string
