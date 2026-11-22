@@ -28,9 +28,14 @@ type sitemapBoard struct {
 	id func(loc string) string
 	// country is the fallback for a posting whose JobPosting states none.
 	country string
-	http    sitemapBoardHTTP
-	limiter waiter
-	maxNew  int
+	// techHint marks every posting technical, for a board that is IT-only by its own definition.
+	techHint bool
+	// ignoreTelecommute drops the JobPosting's TELECOMMUTE flag, for a board that sets it
+	// without the posting offering remote work (ictjobs).
+	ignoreTelecommute bool
+	http              sitemapBoardHTTP
+	limiter           waiter
+	maxNew            int
 }
 
 type sitemapBoardHTTP interface {
@@ -116,7 +121,7 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool) {
 	if title == "" || company == "" {
 		return Job{}, false
 	}
-	remote := strings.EqualFold(strings.TrimSpace(p.JobLocationType), "TELECOMMUTE")
+	remote := !b.ignoreTelecommute && strings.EqualFold(strings.TrimSpace(p.JobLocationType), "TELECOMMUTE")
 	job := Job{
 		ExternalID:     b.id(loc),
 		URL:            loc,
@@ -129,6 +134,7 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool) {
 		WorkMode:       workModeFromRemote(remote),
 		EmploymentType: schemaEmploymentRaw(p.EmploymentType),
 		PostedAt:       NotFuture(parseRFC3339OrDate(p.DatePosted)),
+		IsTechHint:     b.techHint,
 	}
 	// The board states each posting's own currency (dsml.kz mixes KZT, USD and RUB).
 	if salary := p.BaseSalary.amount; salary != nil {

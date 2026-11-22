@@ -137,6 +137,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   swissdevjobs: 'SwissDevJobs',
   getinit: 'Get in IT',
   berlinstartupjobs: 'Berlin Startup Jobs',
+  ictjobs: 'ICTJobs',
   dsml: 'DSML Kazakhstan',
   onapply: 'onapply',
   workwise: 'Workwise',
