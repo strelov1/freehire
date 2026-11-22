@@ -76,9 +76,10 @@ describe('error telemetry', () => {
       service: 'freehire-web',
       exporter,
     });
-    vi.stubGlobal('window', {});
-    vi.stubGlobal('location', new URL('https://freehire.me/jobs?q=secret&ref=token-private'));
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (test-agent) Chrome ExtensionBot/1.0' });
+    vi.stubGlobal('window', {
+      location: new URL('https://freehire.me/jobs?q=secret&ref=token-private#fragment'),
+      navigator: { userAgent: 'Mozilla/5.0 (test-agent) Chrome ExtensionBot/1.0' },
+    });
     try {
       telemetry?.capture(new Error('appendChild defect'));
       await telemetry?.flush();
