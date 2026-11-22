@@ -87,7 +87,6 @@ ChatGPT, Claude or any agent over MCP.
 - **The AI assistant**, unlimited
 - **The browser extension fills application forms** for you
 - **Auto-apply in the background**, within a daily limit
-- Members-only channels on the community Discord
 
 Cancel any time; not what you expected — email within 14 days for a refund.
 **[See plans →](https://freehire.me/pricing?utm_source=github&utm_medium=readme&utm_campaign=plans)**

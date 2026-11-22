@@ -20,6 +20,7 @@ model PlanFeature {
 }
 
 union PlanPriceInterval {
+  "week",
   "month",
   "year",
 }

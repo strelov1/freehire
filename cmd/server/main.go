@@ -389,8 +389,6 @@ func runServer(cfg config.Settings) error {
 		TelegramBotUsername:   cfg.TelegramBotUsername,
 		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
 
-		DiscordLinker:   buildDiscordLinker(cfg, pool),
-		DiscordClientID: cfg.DiscordClientID,
 		// Billing reads its own environment: the credentials are the provider's, nothing
 		// else in the fleet needs them, and an absent one means the subsystem is simply off.
 		Billing:     billing.ConfigFromEnv(),

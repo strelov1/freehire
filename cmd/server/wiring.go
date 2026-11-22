@@ -9,28 +9,12 @@ import (
 	"time"
 	_ "time/tzdata"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/strelov1/freehire/internal/api/handler"
 	"github.com/strelov1/freehire/internal/api/ojcp"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
-	"github.com/strelov1/freehire/internal/engage/discordlink"
 	"github.com/strelov1/freehire/internal/platform/config"
-	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 	"github.com/strelov1/freehire/internal/search/suggest"
 )
-
-// buildDiscordLinker adapts discordlink.NewFromSettings to what the handler config takes.
-// It returns the INTERFACE, not *discordlink.Service: a nil *Service in an interface field is
-// not a nil interface, so the handler's "unconfigured means unmounted" check would mount the
-// routes onto a service that panics on first use.
-func buildDiscordLinker(cfg config.Settings, pool *pgxpool.Pool) handler.DiscordLinker {
-	svc, ok := discordlink.NewFromSettings(cfg, db.New(pool))
-	if !ok {
-		return nil
-	}
-	return svc
-}
 
 // buildGmail wires the Connect-Gmail inbox from config: it needs the Google OAuth
 // client (reused from sign-in) and the 32-byte token-encryption key. Any piece

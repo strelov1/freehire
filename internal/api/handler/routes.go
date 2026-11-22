@@ -24,7 +24,6 @@ type routeHandlers struct {
 	speech          *speechHandlers
 	webhook         *webhookHandlers
 	telegram        *telegramHandlers
-	discord         *discordHandlers
 	// feed is nil unless ME_FEED_ENABLED.
 	feed *feedHandlers
 }
@@ -181,10 +180,6 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 
 	// Telegram linking + the inbound bot webhook (see telegramHandlers).
 	h.telegram.register(api, mw)
-
-	// Discord linking for the paid channels. Registers nothing when the feature is
-	// unconfigured (see discordHandlers).
-	h.discord.register(api, mw)
 }
 
 // mountAppRoutes mounts what sits on the app itself rather than under /api/v1: the CORS

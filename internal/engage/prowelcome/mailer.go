@@ -83,9 +83,6 @@ type content struct {
 	LinkedInURL  string
 	LinkedInIcon string
 	PortraitURL  string
-	// IntegrationsURL is where the reader connects their Discord account to claim the
-	// paid-tier channel; every paying tier gets the same role.
-	IntegrationsURL string
 }
 
 // tierLabel is the only place a plan.Tier becomes the word this letter uses; Pro and
@@ -108,14 +105,13 @@ func (m *Mailer) render(tier plan.Tier, until time.Time, unsubscribe string) (re
 	}
 
 	c := content{
-		TierLabel:       label,
-		UntilLabel:      until.Format("January 2, 2006"),
-		DiscordURL:      mailtpl.DiscordURL,
-		DiscordIcon:     m.baseURL + "/email-icon-discord.png",
-		LinkedInURL:     mailtpl.LinkedInURL,
-		LinkedInIcon:    m.baseURL + "/email-icon-linkedin.png",
-		PortraitURL:     m.baseURL + "/ilya.jpg",
-		IntegrationsURL: m.baseURL + "/my/integrations?utm_source=email",
+		TierLabel:    label,
+		UntilLabel:   until.Format("January 2, 2006"),
+		DiscordURL:   mailtpl.DiscordURL,
+		DiscordIcon:  m.baseURL + "/email-icon-discord.png",
+		LinkedInURL:  mailtpl.LinkedInURL,
+		LinkedInIcon: m.baseURL + "/email-icon-linkedin.png",
+		PortraitURL:  m.baseURL + "/ilya.jpg",
 	}
 
 	var buf bytes.Buffer
@@ -133,6 +129,6 @@ func (m *Mailer) render(tier plan.Tier, until time.Time, unsubscribe string) (re
 	return rendered{
 		subject: "Welcome to freehire " + label + "!",
 		html:    html,
-		text:    text(label, c.UntilLabel, c.IntegrationsURL) + emailprefs.TextFooter(unsubscribe),
+		text:    text(label, c.UntilLabel) + emailprefs.TextFooter(unsubscribe),
 	}, nil
 }

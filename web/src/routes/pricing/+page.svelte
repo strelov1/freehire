@@ -4,10 +4,11 @@
   import { api } from '#lib/api.js';
   import { promptSignIn } from '#lib/signin.js';
   import { formatMinorUnits } from '#lib/money.js';
+  import { PRICE_INCREASE_LABEL, upcomingCents } from '#lib/priceIncrease.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { PRO_PERKS } from '#lib/proPerks.js';
   import Seo from '#lib/components/Seo.svelte';
-  import { ProviderIcon, SectionLabel, buttonVariants, cn } from '#lib/ui/index.js';
+  import { SectionLabel, buttonVariants, cn } from '#lib/ui/index.js';
   import type { PlanTierAllowance, PlansMatrix, PublicPrice } from '#lib/types.js';
   import { Check } from '@lucide/svelte';
   import type { PageData } from './$types';
@@ -27,6 +28,23 @@
 
   const monthly = $derived(proPrices.find((p) => p.interval === 'month') ?? null);
   const annual = $derived(proPrices.find((p) => p.interval === 'year') ?? null);
+  // A weekly Pro for somebody who only wants to try it; shown only when the deployment sells one.
+  const weekly = $derived(proPrices.find((p) => p.interval === 'week') ?? null);
+  // Offered only to a signed-in free account: checkout moves a live subscription onto the
+  // price it is given, so a paying subscriber must never be one click from the weekly price.
+  let onFreePlan = $state(false);
+  $effect(() => {
+    onFreePlan = false;
+    if (!isAuthenticated()) return;
+    let alive = true;
+    api
+      .myPlan()
+      .then((p) => alive && (onFreePlan = p.plan === 'free'))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  });
   const ultraMonthly = $derived(ultraPrices.find((p) => p.interval === 'month') ?? null);
   const ultraAnnual = $derived(ultraPrices.find((p) => p.interval === 'year') ?? null);
 
@@ -143,8 +161,8 @@
     }
   }
 
-  async function buy() {
-    if (!chosen || busy) return;
+  async function buy(price: PublicPrice | null = chosen) {
+    if (!price || busy) return;
     busy = true;
     error = null;
 
@@ -178,7 +196,7 @@
     }
 
     try {
-      const { url } = await api.billingCheckout(chosen.id);
+      const { url } = await api.billingCheckout(price.id);
       window.location.href = url;
     } catch {
       error = 'Checkout is not available right now. Please try again in a moment.';
@@ -280,18 +298,6 @@
     </div>
   {/snippet}
 
-  <!-- The one thing on this page that is NOT a daily amount, so it cannot be a row in the
-     allowance lists: free does not get a smaller share of it, it gets none. It is rendered on
-     the paid cards and simply absent from the free one, because a crossed-out row would say
-     "you cannot" — the thing this page is built to never say. A snippet, so the two paid
-     cards cannot drift apart about how the one perk they share is worded. -->
-  {#snippet discordPerk()}
-    <p class="flex items-baseline gap-2 text-sm">
-      <ProviderIcon provider="discord" class="size-4 shrink-0 translate-y-0.5" />
-      <span class="text-muted-foreground">Members-only channels on the community Discord.</span>
-    </p>
-  {/snippet}
-
   <!-- Three tracks only when there is a third card to fill one: a grid fixed at
      lg:grid-cols-3 with two children leaves the third an empty gap on wide screens instead
      of the two cards sharing the row the way they already do at the sm breakpoint.
@@ -329,12 +335,21 @@
       <div class="flex flex-col gap-1">
         <h2 class="text-lg font-semibold">Pro</h2>
         {#if chosen}
+          {@const next = upcomingCents(chosen)}
           <p class="text-3xl font-semibold tracking-tight">
+            {#if next}<s class="mr-1 text-xl font-normal text-muted-foreground"
+                >{formatMinorUnits(next, chosen.currency, undefined, { trimWhole: true })}</s
+              >{/if}
             {money(chosen)}
             <span class="text-base font-normal text-muted-foreground"
               >/ {chosen.interval === 'year' ? 'year' : 'month'}</span
             >
           </p>
+          {#if next}
+            <p class="text-sm font-medium text-brand">
+              Price goes up on {PRICE_INCREASE_LABEL}. Subscribe now and keep {money(chosen)}.
+            </p>
+          {/if}
         {:else}
           <p class="text-3xl font-semibold tracking-tight text-muted-foreground">—</p>
         {/if}
@@ -342,8 +357,6 @@
       </div>
       {@render perkList(PRO_PERKS)}
       {@render allowanceList(rows, 'pro')}
-
-      {@render discordPerk()}
 
       {#if chosen}
         {#if isAuthenticated()}
@@ -373,16 +386,31 @@
             </div>
             {#if checked !== null}
               <p class="text-sm text-muted-foreground">
-                {checked}% off your first month. It is applied when you continue.
+                {checked}% off your first payment. It is applied when you continue.
               </p>
             {/if}
             {#if codeError}
               <p class="text-sm text-destructive">{codeError}</p>
             {/if}
           </div>
-          <button type="button" class={buttonVariants({ variant: 'cta', size: 'lg' })} disabled={busy} onclick={buy}>
+          <button
+            type="button"
+            class={buttonVariants({ variant: 'cta', size: 'lg' })}
+            disabled={busy}
+            onclick={() => buy()}
+          >
             {busy ? 'Opening checkout…' : 'Upgrade to Pro'}
           </button>
+          {#if weekly && onFreePlan}
+            <button
+              type="button"
+              class={buttonVariants({ variant: 'outline', size: 'lg' })}
+              disabled={busy}
+              onclick={() => buy(weekly)}
+            >
+              Just trying it? {money(weekly)} a week, cancel anytime
+            </button>
+          {/if}
         {:else}
           <!-- Signing in first is not a hurdle we invented: the purchase is attached to an
                account, and a payment made before there is one lands on nobody. The dialog
@@ -392,6 +420,12 @@
             class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'mt-auto')}
             onclick={promptSignIn}>Sign in to upgrade</button
           >
+          <!-- A guest has no subscription to move, so the trial is safe to show; buying still needs an account. -->
+          {#if weekly}
+            <button type="button" class={buttonVariants({ variant: 'outline', size: 'lg' })} onclick={promptSignIn}>
+              Just trying it? {money(weekly)} a week, cancel anytime
+            </button>
+          {/if}
         {/if}
         {#if error}
           <p class="text-sm text-destructive">{error}</p>
@@ -416,8 +450,6 @@
           </p>
         </div>
         {@render allowanceList(rows, 'ultra')}
-
-        {@render discordPerk()}
 
         {#if isAuthenticated()}
           <button

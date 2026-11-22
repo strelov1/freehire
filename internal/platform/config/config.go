@@ -197,9 +197,6 @@ type Settings struct {
 	// DiscordDigestWebhookURL is the incoming-webhook URL cmd/social-digest posts the daily
 	// "most viewed" list to. Unset means not configured, not a failed run. The URL is itself the
 	// credential and does not expire.
-	//
-	// Unrelated to the five Discord values below: this posts into a public channel, those
-	// authenticate a role-managing bot. Neither may switch the other on.
 	DiscordDigestWebhookURL string
 
 	// The daily digest's LinkedIn channel: the application that posts to our company page, and
@@ -214,21 +211,6 @@ type Settings struct {
 	LinkedInClientSecret   string
 	LinkedInRedirectURI    string
 	LinkedInOrganizationID string
-
-	// Discord paid channels (internal/engage/discordlink): the bot that keeps the paid role in step
-	// with the subscription, and the OAuth app users link Discord through.
-	//
-	// Optional as a set: any missing value turns the feature off (link routes 404, SPA omits the
-	// card, cmd/discord-sync is a no-op; see DiscordPaidAccessConfigured), so users never start an
-	// OAuth flow that cannot finish.
-	//
-	// The guild and role ids are configured, not discovered: a role found by name would follow a
-	// rename and grant access to whatever the name lands on.
-	DiscordClientID     string
-	DiscordClientSecret string
-	DiscordBotToken     string
-	DiscordGuildID      string
-	DiscordPaidRoleID   string
 
 	// OnboardingReplyTo is the human inbox answering the founder signup sequence. Unset disables
 	// the sequence: the send address is a no-reply, so replies would reach nobody.
@@ -411,12 +393,6 @@ func Load() Settings {
 		LinkedInClientSecret:   os.Getenv("LINKEDIN_CLIENT_SECRET"),
 		LinkedInRedirectURI:    os.Getenv("LINKEDIN_REDIRECT_URI"),
 		LinkedInOrganizationID: os.Getenv("LINKEDIN_ORGANIZATION_ID"),
-
-		DiscordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
-		DiscordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
-		DiscordBotToken:     os.Getenv("DISCORD_BOT_TOKEN"),
-		DiscordGuildID:      os.Getenv("DISCORD_GUILD_ID"),
-		DiscordPaidRoleID:   os.Getenv("DISCORD_PAID_ROLE_ID"),
 
 		OnboardingReplyTo: os.Getenv("ONBOARDING_REPLY_TO"),
 

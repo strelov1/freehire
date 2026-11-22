@@ -65834,6 +65834,8 @@ func (s *PlanPriceInterval) Decode(d *jx.Decoder) error {
 	}
 	// Try to use constant string.
 	switch PlanPriceInterval(v) {
+	case PlanPriceIntervalWeek:
+		*s = PlanPriceIntervalWeek
 	case PlanPriceIntervalMonth:
 		*s = PlanPriceIntervalMonth
 	case PlanPriceIntervalYear:
@@ -89266,6 +89268,14 @@ func (s *TrackingPipeline) encodeFields(e *jx.Encoder) {
 		s.Stages.Encode(e)
 	}
 	{
+		e.FieldStart("reached_interview")
+		e.Int64(s.ReachedInterview)
+	}
+	{
+		e.FieldStart("reached_offer")
+		e.Int64(s.ReachedOffer)
+	}
+	{
 		if s.ReplyRate.Set {
 			e.FieldStart("reply_rate")
 			s.ReplyRate.Encode(e)
@@ -89273,10 +89283,12 @@ func (s *TrackingPipeline) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfTrackingPipeline = [3]string{
+var jsonFieldsNameOfTrackingPipeline = [5]string{
 	0: "applications",
 	1: "stages",
-	2: "reply_rate",
+	2: "reached_interview",
+	3: "reached_offer",
+	4: "reply_rate",
 }
 
 // Decode decodes TrackingPipeline from json.
@@ -89310,6 +89322,30 @@ func (s *TrackingPipeline) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"stages\"")
 			}
+		case "reached_interview":
+			requiredBitSet[0] |= 1 << 2
+			if err := func() error {
+				v, err := d.Int64()
+				s.ReachedInterview = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"reached_interview\"")
+			}
+		case "reached_offer":
+			requiredBitSet[0] |= 1 << 3
+			if err := func() error {
+				v, err := d.Int64()
+				s.ReachedOffer = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"reached_offer\"")
+			}
 		case "reply_rate":
 			if err := func() error {
 				s.ReplyRate.Reset()
@@ -89330,7 +89366,7 @@ func (s *TrackingPipeline) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00000011,
+		0b00001111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

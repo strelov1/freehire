@@ -15,13 +15,11 @@ var body = template.Must(mailtpl.Partials().New("pro-welcome").Parse(`
 {{template "p" "Just reply to this email, or reach me on LinkedIn or Discord, whichever is easiest for you."}}
 {{template "icon-button" (mailIconLink .DiscordURL "Join the Discord" .DiscordIcon)}}
 {{template "p-link" (mailTextLink "Or connect on" .LinkedInURL "LinkedIn")}}
-{{template "p" (printf "Being on %s also unlocks a private channel on that Discord. Connect your Discord account from your integrations page and the paid channel opens automatically — no separate invite to wait for." .TierLabel)}}
-{{template "p-link" (mailTextLink "Connect it here:" .IntegrationsURL "your integrations page")}}
 ` + "\n" + `{{template "signature" .}}`))
 
 // text builds the plain-text alternative, spelling links out the way onboarding's own
 // text bodies do.
-func text(tierLabel, untilLabel, integrationsURL string) string {
+func text(tierLabel, untilLabel string) string {
 	return "Hi — I'm Ilya, I built freehire. Thank you for subscribing, and congratulations on\n" +
 		"being one of freehire's earliest paying members!\n\n" +
 		"You're now on " + tierLabel + ", running through " + untilLabel + ".\n\n" +
@@ -31,9 +29,5 @@ func text(tierLabel, untilLabel, integrationsURL string) string {
 		"for you.\n\n" +
 		"Join the Discord: " + mailtpl.DiscordURL + "\n\n" +
 		"Or connect on LinkedIn: " + mailtpl.LinkedInURL + "\n\n" +
-		"Being on " + tierLabel + " also unlocks a private channel on that Discord. Connect your\n" +
-		"Discord account from your integrations page and the paid channel opens automatically —\n" +
-		"no separate invite to wait for.\n\n" +
-		"Connect it here: " + integrationsURL + "\n\n" +
 		"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
 }

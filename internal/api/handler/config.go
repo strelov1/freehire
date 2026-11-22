@@ -123,12 +123,6 @@ type Config struct {
 	TelegramBotToken      string
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
-	// DiscordLinker enables the paid Discord channels: linking an account, and the role
-	// that follows the subscription. Nil = the feature is off and its routes are not
-	// registered at all, so they 404 rather than reporting a feature that half exists.
-	// DiscordClientID builds the consent URL; it is only read when the linker is present.
-	DiscordLinker   DiscordLinker
-	DiscordClientID string
 	// GmailConnector + GmailCipher enable the Connect-Gmail inbox. Both nil = the
 	// feature is off (connect routes unregistered, inbox empty).
 	GmailConnector *gmailsync.Connector

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
+  import { goto } from '$app/navigation';
   import { Bell, Bookmark, ChevronRight } from '@lucide/svelte';
   import { ApiError } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -90,6 +91,14 @@
     if (autostart) void save();
   });
 
+  // The sidebar's alerts button on an unsaved search: save it in the same click, then
+  // open the alert settings, so there is no separate "Save filter" step first.
+  async function saveAndOpenAlerts() {
+    await save();
+    if (!error) await goto(resolve('/my/notifications/searches'));
+  }
+  const alertsNow = $derived(alerts === 'manage' && queryNarrows(query));
+
   // The brand fill is earned by a search worth saving: on an unfiltered feed this button
   // was the loudest thing on the page while there was nothing yet to save.
   const saveVariant = $derived(queryNarrows(query) ? 'primary' : 'outline');
@@ -101,7 +110,7 @@
       <Bookmark class={saveBig ? 'size-[1.15rem]' : 'size-4'} aria-hidden="true" />
       Save this search
     </Button>
-  {:else if !matched}
+  {:else if !matched && !alertsNow}
     <Button variant={saveVariant} size={saveBig ? 'lg' : 'md'} onclick={save} disabled={busy} class={saveBtnClass}>
       <Bookmark class={saveBig ? 'size-[1.15rem]' : 'size-4'} aria-hidden="true" />
       {busy ? 'Saving…' : 'Save filter'}
@@ -112,14 +121,16 @@
     <Button
       variant="secondary"
       size="lg"
-      href={resolve('/my/notifications/searches')}
+      href={matched ? resolve('/my/notifications/searches') : undefined}
+      onclick={matched ? undefined : saveAndOpenAlerts}
+      disabled={busy}
       class="w-full justify-center gap-2 rounded-xl font-semibold"
     >
       <Bell class="size-4" aria-hidden="true" />
       Get new-job alerts
       <ChevronRight class="size-4 text-muted-foreground" aria-hidden="true" />
     </Button>
-  {:else}
+  {:else if matched}
     <AlertChannels savedSearchId={matched.id} showLabel={alertsLabel} />
   {/if}
 

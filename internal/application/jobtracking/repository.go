@@ -515,7 +515,10 @@ func (r *QueriesRepository) PipelineCounts(ctx context.Context, userID int64) ([
 	}
 	counts := make([]userjob.StageCount, 0, len(rows))
 	for _, row := range rows {
-		counts = append(counts, userjob.StageCount{Stage: row.Stage.String, Count: row.Count})
+		counts = append(counts, userjob.StageCount{
+			Stage: row.Stage.String, Count: row.Count,
+			ReachedInterview: row.ReachedInterview, ReachedOffer: row.ReachedOffer,
+		})
 	}
 	return counts, nil
 }
