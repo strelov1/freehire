@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"sync"
 	"sync/atomic"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/job/liveness"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -69,9 +72,14 @@ func (s *stats) apply(ctx context.Context, queries *db.Queries, c candidate, ver
 	switch verdict {
 	case liveness.Expired:
 		res, err := queries.MarkLivenessExpired(ctx, db.MarkLivenessExpiredParams{
-			ID:        c.id,
-			Threshold: closeThreshold,
+			ID:         c.id,
+			Threshold:  closeThreshold,
+			SeenBefore: c.seenBefore,
 		})
+		if c.seenBefore.Valid && errors.Is(err, pgx.ErrNoRows) {
+			// Ingest saw the posting again before the probe could record its verdict.
+			return
+		}
 		if err != nil {
 			// The verdict was reached but the DB update did not apply — a real
 			// failure the exit code must surface, not a silent log-and-continue.

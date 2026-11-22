@@ -29,6 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -253,8 +255,9 @@ func run() int {
 
 	// unsignalledSources come back as orphans and are split off below: only those
 	// unsignalledPass can judge are probed (see unsignalledSources).
+	cutoff := time.Now().Add(-staleCutoff)
 	selected, staleCandidates, err := selectProbeCandidates(ctx, queries,
-		probeScope{source: *sourceFilter, jobIDs: jobIDs}, atsProviders, probeDespiteRegistered, time.Now().Add(-staleCutoff))
+		probeScope{source: *sourceFilter, jobIDs: jobIDs}, atsProviders, probeDespiteRegistered, cutoff)
 	if err != nil {
 		log.Printf("select candidates: %v", err)
 		return 1
@@ -267,23 +270,24 @@ func run() int {
 	pacedStale := make(map[string][]candidate)
 	candidates, unsignalledProbed := routeUnsignalled(selected, pacedStale)
 	orphanCount := len(candidates)
-	for _, c := range staleCandidates {
+	for _, row := range staleCandidates {
+		c := staleCandidate(row, cutoff)
 		switch {
-		case slices.Contains(probeDespiteRegisteredGET, c.Source):
-			getProbeStale = append(getProbeStale, staleCandidate(c))
-		case c.Source == "himalayas":
-			himalayasStale = append(himalayasStale, staleCandidate(c))
-		case c.Source == "echojobs":
-			echojobsStale = append(echojobsStale, staleCandidate(c))
-		case slices.ContainsFunc(paced, func(p pacedPass) bool { return p.source == c.Source }):
-			pacedStale[c.Source] = append(pacedStale[c.Source], staleCandidate(c))
+		case slices.Contains(probeDespiteRegisteredGET, c.source):
+			getProbeStale = append(getProbeStale, c)
+		case c.source == "himalayas":
+			himalayasStale = append(himalayasStale, c)
+		case c.source == "echojobs":
+			echojobsStale = append(echojobsStale, c)
+		case slices.ContainsFunc(paced, func(p pacedPass) bool { return p.source == c.source }):
+			pacedStale[c.source] = append(pacedStale[c.source], c)
 		default:
 			// Unreachable in practice — every probeDespiteRegistered member is one of
 			// the branches above — but a candidate silently going unverified
 			// (rather than erroring loudly) is exactly the class of bug this worker
 			// exists to avoid, so a future member added to probeDespiteRegistered
 			// without wiring its evidence path here fails visibly instead.
-			log.Printf("liveness: %s has no wired evidence path for probeDespiteRegistered — skipping %s", c.Source, c.PublicSlug)
+			log.Printf("liveness: %s has no wired evidence path for probeDespiteRegistered — skipping %s", c.source, c.publicSlug)
 		}
 	}
 	pacedCounts := make([]string, 0, len(paced))
@@ -374,6 +378,7 @@ type candidate struct {
 	url        string
 	externalID string
 	strikes    int32
+	seenBefore pgtype.Timestamptz
 }
 
 func orphanCandidates(rows []db.SelectOrphanLivenessCandidatesRow) []candidate {
@@ -388,9 +393,9 @@ func orphanCandidate(r db.SelectOrphanLivenessCandidatesRow) candidate {
 	return candidate{id: r.ID, publicSlug: r.PublicSlug, source: r.Source, url: r.URL, strikes: r.LivenessStrikes}
 }
 
-func staleCandidate(r db.SelectStaleRegisteredCandidatesRow) candidate {
+func staleCandidate(r db.SelectStaleRegisteredCandidatesRow, cutoff time.Time) candidate {
 	return candidate{
 		id: r.ID, publicSlug: r.PublicSlug, source: r.Source, url: r.URL,
-		externalID: r.ExternalID, strikes: r.LivenessStrikes,
+		externalID: r.ExternalID, strikes: r.LivenessStrikes, seenBefore: pgconv.Instant(cutoff),
 	}
 }
