@@ -218,3 +218,17 @@ func TestDeliver_CancelsWhenApplicationGone(t *testing.T) {
 		t.Errorf("must cancel at fire, cancelled = %v", store.cancelled)
 	}
 }
+
+// A review-ready reminder is worth sending only while the job can still be applied to.
+func TestActionable_AutoApplyReviewReady_OnlyWhileJobOpen(t *testing.T) {
+	r := newRunner(&fakeStore{}, &fakeNotifier{})
+	row := untrackedRow(KindAutoApplyReviewReady)
+	row.JobOpen = true
+	if !r.actionable(row) {
+		t.Error("actionable() = false for an open job, want true")
+	}
+	row.JobOpen = false
+	if r.actionable(row) {
+		t.Error("actionable() = true for a closed job, want false")
+	}
+}

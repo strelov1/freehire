@@ -214,3 +214,48 @@ func TestMatch_AutoApplyOutcomeKinds_SecondPassDoesNotReRecord(t *testing.T) {
 		t.Errorf("application_nudges rows = %d, want 3 (one per kind, no duplicates)", count)
 	}
 }
+
+// Only a tailored, previewed, undecided entry on an open job is waiting for review.
+func TestListAutoApplyReviewReadyCandidates_OnlyPendingOnOpenJobs(t *testing.T) {
+	pool := testdb.Pool(t)
+	queries := db.New(pool)
+	ctx := context.Background()
+
+	userID := seedNudgeIntegrationUser(t, pool, "review-ready@example.test")
+	seedNotificationSettings(t, pool, userID, []string{"email"})
+	seed := func(externalID string, closed bool, set string) int64 {
+		t.Helper()
+		var jobID int64
+		if err := pool.QueryRow(ctx,
+			`INSERT INTO jobs (source, external_id, url, title, company, public_slug, closed_at)
+			 VALUES ('test', $1, 'http://example.test', 'Go Dev', 'Acme', $1, CASE WHEN $2 THEN now() END)
+			 RETURNING id`, externalID, closed).Scan(&jobID); err != nil {
+			t.Fatalf("insert job: %v", err)
+		}
+		if _, err := pool.Exec(ctx,
+			`WITH cv AS (INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}') RETURNING id)
+			 INSERT INTO auto_apply_queue (user_id, job_id, tailored_cv_id, resolved_preview)
+			 SELECT $1, $2, cv.id, '{"fields":[]}' FROM cv`, userID, jobID); err != nil {
+			t.Fatalf("insert queue entry: %v", err)
+		}
+		if set != "" {
+			if _, err := pool.Exec(ctx, "UPDATE auto_apply_queue SET "+set+" WHERE job_id = $1", jobID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return jobID
+	}
+	want := seed("review-ready-open", false, "")
+	seed("review-ready-closed", true, "")
+	seed("review-ready-approved", false, "review_decision = 'approved'")
+	seed("review-ready-blocked", false, "blocked_at = now()")
+	seed("review-ready-no-preview", false, "resolved_preview = NULL")
+
+	rows, err := queries.ListAutoApplyReviewReadyCandidates(ctx, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].JobID != want {
+		t.Errorf("rows = %+v, want only job %d", rows, want)
+	}
+}

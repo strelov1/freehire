@@ -140,6 +140,23 @@ JOIN notification_settings ns ON ns.user_id = q.user_id AND ns.enabled
 WHERE q.failed_at IS NOT NULL
   AND q.failed_at > now() - make_interval(days => sqlc.arg(window_days)::int);
 
+-- name: ListAutoApplyReviewReadyCandidates :many
+-- Queue entries waiting for the candidate's approval: tailored, previewed, undecided,
+-- and neither parked nor dead-lettered (the predicate DeriveStatus calls
+-- pending_review), on a job still open. The entry's created_at is the episode, so a
+-- re-tailor that recomputes the preview does not nudge again. Bounded to a recency
+-- window on created_at for the same first-deploy reason as the other candidate scans.
+SELECT q.user_id, q.job_id, q.created_at
+FROM auto_apply_queue q
+JOIN jobs j ON j.id = q.job_id AND j.closed_at IS NULL
+JOIN notification_settings ns ON ns.user_id = q.user_id AND ns.enabled
+WHERE q.review_decision IS NULL
+  AND q.tailored_cv_id IS NOT NULL
+  AND q.resolved_preview IS NOT NULL
+  AND q.blocked_at IS NULL
+  AND q.failed_at IS NULL
+  AND q.created_at > now() - make_interval(days => sqlc.arg(window_days)::int);
+
 -- name: RecordNudge :execrows
 -- Record one matched nudge candidate. The unique index on
 -- (user_id, job_id, kind, episode_key) makes this idempotent — re-scanning the
