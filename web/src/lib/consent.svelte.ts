@@ -3,7 +3,14 @@
 // consent.ts (unit-tested); this module adds the $state runes on top, so it is
 // verified visually rather than in the plain-node vitest environment.
 import { browser } from '$app/env';
-import { type ConsentChoice, needsBanner, readConsent, regionNeedsConsent, writeConsent } from './consent';
+import {
+  clearGaCookies,
+  type ConsentChoice,
+  needsBanner,
+  readConsent,
+  regionNeedsConsent,
+  writeConsent,
+} from './consent';
 
 function resolveTimezone(): string {
   try {
@@ -21,6 +28,9 @@ function resolveTimezone(): string {
 const regionRequired = browser ? regionNeedsConsent(resolveTimezone()) : false;
 
 let choice = $state<ConsentChoice | null>(browser ? readConsent() : null);
+// A refusal recorded before GA cookies were cleared on withdrawal still has them; drop them
+// on every load so they never reach the server's GA4 sign-up.
+if (choice === 'denied') clearGaCookies();
 let forcedOpen = $state(false);
 
 /** Whether non-essential trackers may run now. An explicit choice is authoritative
@@ -51,6 +61,7 @@ export function deny(): void {
   choice = 'denied';
   forcedOpen = false;
   writeConsent('denied');
+  clearGaCookies();
 }
 
 /** Re-open the banner so a previously recorded choice can be changed

@@ -317,16 +317,12 @@ func TestOAuthAuthorizeSubmit_AttributesFreshSignupToClient(t *testing.T) {
 	approve(old)
 	approve(fresh) // a second approval must not count the sign-up again
 
-	// The GA4 send runs off the request.
+	signUpSends.Wait() // the GA4 send runs off the request
 	gaCalls := func() [][3]string {
 		ga.mu.Lock()
 		defer ga.mu.Unlock()
 		return append([][3]string(nil), ga.calls...)
 	}
-	for deadline := time.Now().Add(5 * time.Second); len(gaCalls()) == 0 && time.Now().Before(deadline); {
-		time.Sleep(20 * time.Millisecond)
-	}
-	time.Sleep(200 * time.Millisecond) // let a wrong extra send show up
 	if got := gaCalls(); len(got) != 1 || got[0] != [3]string{"111.222", "1700000000", "oauth"} {
 		t.Errorf("GA4 sign_up calls = %v, want exactly one [111.222 1700000000 oauth]", got)
 	}

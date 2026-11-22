@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -100,6 +101,10 @@ func (in signupAttributionRequest) params(userID int64) db.InsertSignupAttributi
 	}
 }
 
+// signUpSends counts the detached GA4 sends in flight, so a test can wait for them
+// instead of sleeping (the paywallWrites pattern).
+var signUpSends sync.WaitGroup
+
 // oauthAppMedium marks an account that was created to connect an OAuth client (Claude,
 // ChatGPT, Cursor over MCP) rather than on the site itself.
 const oauthAppMedium = "oauth_app"
@@ -125,7 +130,11 @@ func (h *authHandlers) attributeOAuthAppSignup(ctx context.Context, userID int64
 	if inserted == 1 && h.ga4 != nil {
 		clientID, sessionID := ga4mp.IDsFromCookies(cookie, os.Getenv("GA4_MEASUREMENT_ID"))
 		// Off the request: nobody waits on the answer, and the client's redirect must not.
-		go h.sendSignUp(userID, clientID, sessionID, "oauth") //nolint:gosec // G118: ctx is fasthttp's RequestCtx, recycled once the handler returns
+		signUpSends.Add(1)
+		go func() { //nolint:gosec // G118: ctx is fasthttp's RequestCtx, recycled once the handler returns
+			defer signUpSends.Done()
+			h.sendSignUp(userID, clientID, sessionID, "oauth")
+		}()
 	}
 }
 
