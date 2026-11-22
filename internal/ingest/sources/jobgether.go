@@ -209,13 +209,17 @@ func (s jobgether) detail(ctx context.Context, loc string) (Job, bool, error) {
 			return Job{}, false, nil
 		}
 	}
+	body := sanitizeHTML(html.UnescapeString(p.Description))
+	if strings.TrimSpace(textFromHTML(body)) == "" {
+		return Job{}, false, errors.New("posting description has no readable text")
+	}
 	job := Job{
 		ExternalID:          jobgetherID(loc),
 		URL:                 loc,
 		Title:               title,
 		Company:             company,
 		Countries:           countriesFromCodes(p.countryCodes()),
-		Description:         sanitizeHTML(html.UnescapeString(p.Description)),
+		Description:         body,
 		Remote:              true,
 		WorkMode:            "remote",
 		EmploymentType:      schemaEmploymentRaw(p.EmploymentType),

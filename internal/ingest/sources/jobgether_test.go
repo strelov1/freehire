@@ -179,7 +179,7 @@ func TestJobgetherFailsWhenOnlyStoredPostingsAreReadable(t *testing.T) {
 
 func TestJobgetherKeepsUnreadableIdentityOnPartialFailure(t *testing.T) {
 	f := newJobgetherFake(t)
-	f.files[jobgetherUSURL] = "unreadable.html"
+	f.files[jobgetherUSURL] = "posting-markup-only.html"
 	jobs, err := fastJobgether(f).Fetch(context.Background(), CompanyEntry{})
 	if err != nil || len(jobs) != 2 {
 		t.Fatalf("got %d jobs and %v, want the BR posting and an unreadable marker", len(jobs), err)
@@ -190,6 +190,20 @@ func TestJobgetherKeepsUnreadableIdentityOnPartialFailure(t *testing.T) {
 		}
 	}
 	t.Fatalf("missing unreadable US posting identity: %+v", jobs)
+}
+
+func TestJobgetherFailsWhenNoRequestedDescriptionHasText(t *testing.T) {
+	for _, fixture := range []string{"posting-no-description.html", "posting-markup-only.html"} {
+		t.Run(fixture, func(t *testing.T) {
+			f := newJobgetherFake(t)
+			f.files[jobgetherUSURL] = fixture
+			seen := func(id string) bool { return id != "6b02a8451870ab7f4cb42437" }
+			jobs, err := fastJobgether(f).FetchNew(context.Background(), CompanyEntry{}, seen)
+			if err == nil || len(jobs) != 0 {
+				t.Fatalf("got %d jobs and %v, want the only requested detail to count as unreadable", len(jobs), err)
+			}
+		})
+	}
 }
 
 func TestJobgetherExpiredAndGoneDetailsCountAsAnswered(t *testing.T) {
