@@ -67,6 +67,7 @@
   let target = $state<EmployerApplicationStage>('new');
   let message = $state('');
   let notes = $state('');
+  let pendingNotes: { id: number; text: string } | null = null;
   let savingWorkspace = $state(false);
   let workspaceFeedback = $state<{ text: string; error: boolean } | null>(null);
   let moving = $state(false);
@@ -84,13 +85,14 @@
     openId = a.id;
     target = a.stage;
     message = '';
-    notes = a.employer_notes ?? '';
+    notes = pendingNotes?.id === a.id ? pendingNotes.text : (a.employer_notes ?? '');
     workspaceFeedback = null;
   }
 
   async function saveWorkspace(a: EmployerApplication, markViewed: boolean) {
     if (savingWorkspace || moving) return;
     savingWorkspace = true;
+    if (!markViewed) pendingNotes = { id: a.id, text: notes };
     workspaceFeedback = null;
     try {
       const updated = await api.updateEmployerApplicationWorkspace(
@@ -106,6 +108,7 @@
       if (openId === a.id) workspaceFeedback = { text: s.workspaceError, error: true };
       announce(s.workspaceError, 'assertive');
     } finally {
+      pendingNotes = null;
       savingWorkspace = false;
     }
   }

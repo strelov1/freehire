@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmployerApplication } from '#lib/types.js';
 import EmployerApplications from './EmployerApplications.svelte';
 
-const { listEmployerApplications, listEmployerVacancies, moveEmployerApplication } = vi.hoisted(() => ({
-  listEmployerApplications: vi.fn(),
-  listEmployerVacancies: vi.fn(),
-  moveEmployerApplication: vi.fn(),
-}));
+const { listEmployerApplications, listEmployerVacancies, moveEmployerApplication, updateEmployerApplicationWorkspace } =
+  vi.hoisted(() => ({
+    listEmployerApplications: vi.fn(),
+    listEmployerVacancies: vi.fn(),
+    moveEmployerApplication: vi.fn(),
+    updateEmployerApplicationWorkspace: vi.fn(),
+  }));
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('$app/state', () => ({ page: { data: { locale: 'en' }, url: new URL('http://localhost/') } }));
@@ -16,6 +18,7 @@ vi.mock('#lib/api.js', () => ({
     listEmployerApplications,
     listEmployerVacancies,
     moveEmployerApplication,
+    updateEmployerApplicationWorkspace,
     employerApplicationCVUrl: (id: number) => `/api/v1/employer/applications/${id}/cv`,
   },
   ApiError: class extends Error {},
@@ -150,5 +153,31 @@ describe('EmployerApplications', () => {
     resolveMove({ application: application({ stage: 'rejected' }), candidate_notified: true });
     expect(await screen.findByText(/c@example\.test: Moved/)).toBeTruthy();
     expect((screen.getByLabelText(/Message to the candidate/) as HTMLTextAreaElement).value).toBe('For B');
+  });
+  it('keeps a pending notes draft when its application is reopened before saving finishes', async () => {
+    let resolveSave!: (saved: EmployerApplication) => void;
+    listEmployerApplications.mockResolvedValue(
+      page([application({ employer_notes: 'Old notes' }), application({ id: 2, candidate_email: 'd@example.test' })], {
+        new: 2,
+      }),
+    );
+    updateEmployerApplicationWorkspace.mockImplementation(() => new Promise((resolve) => (resolveSave = resolve)));
+    render(EmployerApplications);
+
+    const first = await screen.findByRole('button', { name: /c@example\.test/ });
+    await fireEvent.click(first);
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Private team notes' }), {
+      target: { value: 'Current draft' },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save notes' }));
+    await fireEvent.click(screen.getByRole('button', { name: /d@example\.test/ }));
+    await fireEvent.click(first);
+
+    const reopened = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Private team notes' });
+    expect(reopened.value).toBe('Current draft');
+    await fireEvent.input(reopened, { target: { value: 'Later edit' } });
+    resolveSave(application({ employer_notes: 'Current draft' }));
+    expect(await screen.findByText('Notes saved.')).toBeTruthy();
+    expect(reopened.value).toBe('Later edit');
   });
 });
