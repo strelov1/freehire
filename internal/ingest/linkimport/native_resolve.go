@@ -34,7 +34,7 @@ func (c destinationCatalog) storedEntry(ctx context.Context, source, board strin
 	if c.stored == nil {
 		return sources.CompanyEntry{}, false, nil
 	}
-	if source == "lever" {
+	if source == "lever" || source == "mokahr" {
 		if regional, ok := c.stored.(interface {
 			EntryForRegion(context.Context, string, string, string) (sources.CompanyEntry, bool, error)
 		}); ok {
@@ -42,8 +42,11 @@ func (c destinationCatalog) storedEntry(ctx context.Context, source, board strin
 		}
 	}
 	e, found, err := c.stored.Entry(ctx, source, board)
-	if source == "lever" && (e.Region == "eu") != (c.fallback.Region == "eu") {
-		found = false
+	switch source {
+	case "lever":
+		found = found && (e.Region == "eu") == (c.fallback.Region == "eu")
+	case "mokahr":
+		found = found && e.Region == c.fallback.Region
 	}
 	return e, found, err
 }

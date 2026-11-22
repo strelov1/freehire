@@ -463,3 +463,50 @@ func TestBoardCoverageDoesNotReadAClearCompanyCareerPageAsAPosting(t *testing.T)
 		})
 	}
 }
+
+func TestMokaHRBoardCoverageHydratesTheFragmentPosting(t *testing.T) {
+	const root = "https://app.mokahr.com/social-recruitment/hengrui/145996"
+	const earlier = "d5cfe41a-9a9b-41a0-a064-7627c45025f9"
+	const target = "9ef6ed89-30bc-4ac9-a55d-76eaa5d2475b"
+	adapter := &fakeHydratingBoard{provider: "mokahr", jobs: []sources.Job{
+		{ExternalID: earlier, URL: root + "#/job/" + earlier, Title: "Earlier vacancy"},
+		{ExternalID: target, URL: root + "#/job/" + target, Title: "Requested vacancy", Description: "Details"},
+	}}
+	coverage := NewBoardCoverage(map[string]sources.Source{"mokahr": adapter}, nil)
+	job, found, err := coverage.Resolve(context.Background(), root+"?utm_source=test#/job/"+target)
+	if err != nil || !found || job.Title != "Requested vacancy" || job.SeenRefresh || !slices.Equal(adapter.hydrated, []string{target}) {
+		t.Fatalf("resolved %+v, %v, %v, hydrated %v", job, found, err, adapter.hydrated)
+	}
+	if _, found, err := coverage.Resolve(context.Background(), root); err != nil || found {
+		t.Fatalf("board root returned a posting: %v, %v", found, err)
+	}
+}
+
+type mokaRegionalCatalog struct{}
+
+func (mokaRegionalCatalog) Entry(context.Context, string, string) (sources.CompanyEntry, bool, error) {
+	return sources.CompanyEntry{}, false, errors.New("unexpected cross-region lookup")
+}
+
+func (mokaRegionalCatalog) EntryForRegion(_ context.Context, provider, board, region string) (sources.CompanyEntry, bool, error) {
+	if region != "r1" {
+		return sources.CompanyEntry{}, false, fmt.Errorf("wrong region %q", region)
+	}
+	return sources.CompanyEntry{Provider: provider, Board: board, Region: region, Company: "Acme R1"}, true, nil
+}
+
+func TestMokaHRBoardCoverageUsesTheR1EntryOrFallback(t *testing.T) {
+	const id = "749997fb-fd4b-4384-9ea5-2b6fb7f10afc"
+	const raw = "https://hire-r1.mokahr.com/social-recruitment/acme/2933#/job/" + id
+	for _, catalog := range []BoardCatalog{mokaRegionalCatalog{}, nil} {
+		adapter := &fakeBoard{provider: "mokahr", jobs: []sources.Job{{ExternalID: id, URL: raw, Title: "Engineer"}}}
+		coverage := NewBoardCoverage(map[string]sources.Source{"mokahr": adapter}, catalog)
+		_, found, err := coverage.Resolve(context.Background(), raw)
+		if err != nil || !found || len(adapter.asked) != 1 || adapter.asked[0].Region != "r1" {
+			t.Fatalf("resolved %v, %v, entry %+v", found, err, adapter.asked)
+		}
+		if catalog != nil && adapter.asked[0].Company != "Acme R1" {
+			t.Fatalf("discarded regional catalogue entry %+v", adapter.asked[0])
+		}
+	}
+}
