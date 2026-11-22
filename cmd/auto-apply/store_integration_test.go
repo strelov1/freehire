@@ -212,8 +212,11 @@ func TestDBStore_ClaimForPreviewAndSetPreview(t *testing.T) {
 		queueID := insertTailoredQueueRowForTest(t, pool, user, job)
 
 		preview := autoapply.ResolvedPreview{Fields: []autoapply.PreviewField{{Label: "First name", Value: "Ada"}}}
-		if err := store.SetPreview(ctx, queueID, preview); err != nil {
-			t.Fatalf("SetPreview: %v", err)
+		// Twice: a re-tailor recomputes the preview, and must not notify again.
+		for range 2 {
+			if err := store.SetPreview(ctx, queueID, preview); err != nil {
+				t.Fatalf("SetPreview: %v", err)
+			}
 		}
 
 		var stored []byte

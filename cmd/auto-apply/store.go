@@ -207,7 +207,9 @@ func (s *dbStore) SetPreview(ctx context.Context, queueID int64, preview autoapp
 		Title:      "Your application is ready to review",
 		Body:       fmt.Sprintf("We tailored your CV for %s at %s — take a look before it goes out.", row.Title, row.Company),
 		PublicSlug: pgconv.TextValid(row.PublicSlug),
-	}); err != nil {
+		// A re-tailor clears and recomputes the preview; the candidate hears about each entry once.
+		DedupKey: pgconv.TextValid(fmt.Sprintf("auto_apply_ready:%d", queueID)),
+	}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		// Best-effort: a failure here must never fail the preview write.
 		log.Printf("auto-apply: recording ready-for-review notification for queue entry %d: %v", queueID, err)
 	}
