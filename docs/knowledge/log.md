@@ -117,4 +117,5 @@ Recorded the status-only backstop and its worker ownership in
 
 Recorded the identity-only refresh for unreadable eFinancialCareers listings and the
 shared ingest stream. Source coverage counts listed identities. The pipeline keeps their
-unreadable tally and refreshes existing open rows without rewriting posting content.
+unreadable tally and refreshes existing open rows without rewriting posting content. When
+stream coverage is unproven it withholds every identified employer from the company sweep.

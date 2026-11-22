@@ -52,10 +52,11 @@ func TestUnreadablePostingRefreshesOpenRowsWithoutDoubleCounting(t *testing.T) {
 func TestUnreadableStreamingPostingRefreshesWithoutSaving(t *testing.T) {
 	src := fakeStreamingSource{provider: "eightfold", failAfter: -1, jobs: []sources.Job{
 		{ExternalID: "1", Title: "Data Engineer", Company: "Acme", URL: "https://example.com/jobs/1"},
-		{ExternalID: "2", Title: "Unusable replacement", Unreadable: true},
+		{ExternalID: "2", Title: "Unusable replacement", Company: "Listed Employer", Unreadable: true},
 	}}
 	store := &fakeStore{refreshCompanies: []string{"stored-employer"}}
-	r := Runner{Registry: registry(src), Store: store}
+	aliases := &fakeAliases{canon: map[string]string{"acme": "acme-canonical"}}
+	r := Runner{Registry: registry(src), Store: store, Aliases: aliases}
 	e := sources.CompanyEntry{Provider: "eightfold", Board: "host.example/dom", Company: "Acme"}
 	stats, err := r.Run(context.Background(), []sources.CompanyEntry{e})
 	if err != nil {
@@ -71,8 +72,9 @@ func TestUnreadableStreamingPostingRefreshesWithoutSaving(t *testing.T) {
 	if got := store.refreshed["eightfold"]; !slices.Equal(got, []string{"host.example/dom:2"}) {
 		t.Errorf("open-only refresh got %v", got)
 	}
-	if !slices.Contains(st.UnprovenCompanies, "stored-employer") {
-		t.Errorf("unproven companies = %v, want the unreadable posting's stored employer", st.UnprovenCompanies)
+	want := []string{"acme-canonical", "listed-employer", "stored-employer"}
+	if !slices.Equal(st.UnprovenCompanies, want) {
+		t.Errorf("unproven companies = %v, want %v", st.UnprovenCompanies, want)
 	}
 }
 
