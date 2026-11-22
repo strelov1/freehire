@@ -39,10 +39,14 @@ func Instant(t time.Time) pgtype.Timestamptz {
 // NULL too: converting it would wrap into an unrelated number (a mistyped salary
 // becoming a negative one), and an unknown value is the honest reading of it.
 func Int4(n *int) pgtype.Int4 {
-	if n == nil || *n > math.MaxInt32 || *n < math.MinInt32 {
+	if n == nil {
 		return pgtype.Int4{}
 	}
-	return pgtype.Int4{Int32: int32(*n), Valid: true}
+	v := *n
+	if v > math.MaxInt32 || v < math.MinInt32 {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(v), Valid: true}
 }
 
 // IntPtr maps a nullable DB int to an optional int: an invalid (NULL) value becomes
