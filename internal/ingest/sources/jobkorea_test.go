@@ -22,8 +22,9 @@ var jobkoreaFixtures embed.FS
 // block of two postings and their body frames). 50342033 has a text body, 50398006 a body that
 // is one image. An id with no fixture answers 404.
 type jobkoreaFake struct {
-	pageErr  error
-	frameErr error
+	pageErr   error
+	frameErr  error
+	frameHTML string
 
 	mu   sync.Mutex
 	gets []string
@@ -59,6 +60,9 @@ func (f *jobkoreaFake) GetHTML(_ context.Context, u string) (*html.Node, error) 
 	if strings.Contains(u, "GI_Read_Comt_Ifrm") {
 		if f.frameErr != nil {
 			return nil, f.frameErr
+		}
+		if f.frameHTML != "" {
+			return html.Parse(strings.NewReader(f.frameHTML))
 		}
 		kind, tail = "frame", u[strings.Index(u, "Gno=")+4:]
 	} else {
@@ -221,6 +225,14 @@ func TestJobKoreaDefersAPostingWhoseFrameFails(t *testing.T) {
 	jobs, err := jobkoreaFetchAll(t, newJobKoreaForTest(f), func(string) bool { return false })
 	if err == nil {
 		t.Fatalf("every posting failed to read its body; the crawl must fail, got %+v", jobs)
+	}
+}
+
+func TestJobKoreaDefersAPostingWhoseFrameLacksContent(t *testing.T) {
+	f := &jobkoreaFake{frameHTML: "<html><body>Service temporarily unavailable</body></html>"}
+	jobs, err := jobkoreaFetchAll(t, newJobKoreaForTest(f), func(string) bool { return false })
+	if err == nil || len(jobs) != 0 {
+		t.Fatalf("unrecognized body frames should defer both postings, got %d jobs and error %v", len(jobs), err)
 	}
 }
 

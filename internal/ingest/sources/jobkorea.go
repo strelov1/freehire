@@ -286,7 +286,12 @@ func (s jobkorea) detail(ctx context.Context, p jobkoreaPosting) (Job, bool, err
 		}
 		return Job{}, false, err
 	}
-	if body := jobkoreaBody(frame); body != "" {
+	content := firstByID(frame, "detail-content")
+	if content == nil {
+		return Job{}, false, errors.New("body frame lacks #detail-content")
+	}
+	// An image-only posting keeps the JobPosting summary.
+	if body := sanitizeHTML(innerHTML(content)); strings.TrimSpace(textFromHTML(body)) != "" {
 		job.Description = body
 	}
 	return job, true, nil
@@ -318,20 +323,6 @@ func jobkoreaGone(err error) error {
 		return nil
 	}
 	return err
-}
-
-// jobkoreaBody renders the poster's own body from the frame, "" when the frame has none (a
-// poster who uploaded the posting as one image has markup but no text).
-func jobkoreaBody(frame *html.Node) string {
-	n := firstByID(frame, "detail-content")
-	if n == nil {
-		return ""
-	}
-	body := sanitizeHTML(innerHTML(n))
-	if strings.TrimSpace(textFromHTML(body)) == "" {
-		return ""
-	}
-	return body
 }
 
 // jobkoreaDeadline reads validThrough, a bare date or a date and minute in KST.
