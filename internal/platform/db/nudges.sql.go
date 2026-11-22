@@ -87,6 +87,13 @@ const getNudgeForDelivery = `-- name: GetNudgeForDelivery :one
 SELECT n.id, n.user_id, n.job_id, n.kind,
        j.title, j.company, j.public_slug, j.url,
        (j.closed_at IS NULL)::bool AS job_open,
+       -- The same pending_review predicate ListAutoApplyReviewReadyCandidates matches on, so a
+       -- review-ready nudge held by quiet hours or a retry is dropped once the entry is decided.
+       EXISTS(SELECT 1 FROM auto_apply_queue q
+               WHERE q.user_id = n.user_id AND q.job_id = n.job_id
+                 AND q.review_decision IS NULL AND q.tailored_cv_id IS NOT NULL
+                 AND q.resolved_preview IS NOT NULL AND q.blocked_at IS NULL
+                 AND q.failed_at IS NULL)::bool AS auto_apply_review_pending,
        COALESCE(n.episode_key = j.closed_at, false)::bool AS job_closed_episode_current,
        COALESCE(ns.enabled, false)::bool AS notifications_enabled,
        COALESCE(ns.channels, '{}'::text[]) AS channels,
@@ -138,6 +145,7 @@ type GetNudgeForDeliveryRow struct {
 	PublicSlug              string             `json:"public_slug"`
 	URL                     string             `json:"url"`
 	JobOpen                 bool               `json:"job_open"`
+	AutoApplyReviewPending  bool               `json:"auto_apply_review_pending"`
 	JobClosedEpisodeCurrent bool               `json:"job_closed_episode_current"`
 	NotificationsEnabled    bool               `json:"notifications_enabled"`
 	Channels                []string           `json:"channels"`
@@ -179,6 +187,7 @@ func (q *Queries) GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeFo
 		&i.PublicSlug,
 		&i.URL,
 		&i.JobOpen,
+		&i.AutoApplyReviewPending,
 		&i.JobClosedEpisodeCurrent,
 		&i.NotificationsEnabled,
 		&i.Channels,

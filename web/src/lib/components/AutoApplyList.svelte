@@ -44,10 +44,15 @@
   let confirmEach = $state<boolean | null>(null);
   let settingSaving = $state(false);
   let settingError = $state<string | null>(null);
+  // Refresh re-reads the setting too, so a failed first read can recover.
   $effect(() => {
     if (!isAuthenticated()) return;
+    void revision;
     api.getAutoApplySettings().then(
-      (r) => (confirmEach = r.confirm_each),
+      (r) => {
+        confirmEach = r.confirm_each;
+        settingError = null;
+      },
       () => (settingError = s.confirmEach.loadError),
     );
   });

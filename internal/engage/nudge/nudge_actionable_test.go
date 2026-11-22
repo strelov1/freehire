@@ -219,16 +219,21 @@ func TestDeliver_CancelsWhenApplicationGone(t *testing.T) {
 	}
 }
 
-// A review-ready reminder is worth sending only while the job can still be applied to.
+// A review-ready reminder is worth sending only while the job is open and the entry still waits.
 func TestActionable_AutoApplyReviewReady_OnlyWhileJobOpen(t *testing.T) {
 	r := newRunner(&fakeStore{}, &fakeNotifier{})
 	row := untrackedRow(KindAutoApplyReviewReady)
-	row.JobOpen = true
+	row.JobOpen, row.AutoApplyReviewPending = true, true
 	if !r.actionable(row) {
-		t.Error("actionable() = false for an open job, want true")
+		t.Error("actionable() = false for an open job still in review, want true")
 	}
 	row.JobOpen = false
 	if r.actionable(row) {
 		t.Error("actionable() = true for a closed job, want false")
+	}
+	// Decided (approved, declined, parked) while the nudge waited for delivery.
+	row.JobOpen, row.AutoApplyReviewPending = true, false
+	if r.actionable(row) {
+		t.Error("actionable() = true for an entry no longer in review, want false")
 	}
 }

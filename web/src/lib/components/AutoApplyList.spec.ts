@@ -78,4 +78,18 @@ describe('Activity auto-apply list', () => {
     expect(setAutoApplySettings).toHaveBeenCalledWith({ confirm_each: true });
     await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
   });
+
+  it('reads the setting again on refresh after a failed first read', async () => {
+    listAutoApply.mockResolvedValue({ attempts: [] });
+    getAutoApplySettings
+      .mockReset()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ confirm_each: true });
+    render(AutoApplyList);
+    expect(await screen.findByText("Couldn't load this setting.")).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+    const toggle = screen.getByRole('switch', { name: 'Confirm every application' });
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    expect(screen.queryByText("Couldn't load this setting.")).toBeNull();
+  });
 });

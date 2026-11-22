@@ -454,7 +454,7 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 		// Permanent once matched; nothing to re-derive.
 		return true
 	case KindAutoApplyReviewReady:
-		return info.JobOpen
+		return info.JobOpen && info.AutoApplyReviewPending
 	default:
 		return false
 	}
