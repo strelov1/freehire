@@ -1,6 +1,7 @@
 package pgconv
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -76,5 +77,21 @@ func TestTextFromPtr(t *testing.T) {
 	empty := ""
 	if got := TextFromPtr(&empty); !got.Valid || got.String != "" {
 		t.Errorf("TextFromPtr(\"\") = %+v, want a valid empty string", got)
+	}
+}
+
+func TestInt4(t *testing.T) {
+	if got := Int4(nil); got.Valid {
+		t.Errorf("Int4(nil) = %+v, want invalid", got)
+	}
+	n := 7
+	if got := Int4(&n); !got.Valid || got.Int32 != 7 {
+		t.Errorf("Int4(&7) = %+v, want valid 7", got)
+	}
+	// A value outside int32 would wrap into an unrelated number; it is unknown, not that.
+	for _, v := range []int{math.MaxInt32 + 1, math.MinInt32 - 1} {
+		if got := Int4(&v); got.Valid {
+			t.Errorf("Int4(&%d) = %+v, want invalid", v, got)
+		}
 	}
 }
