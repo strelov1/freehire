@@ -34,6 +34,7 @@ var probedButWithheld = map[string]string{
 	"gradcracker":    "the probe's backlog is days deep",
 	"engage":         "the probe's backlog is days deep",
 	"betterteam":     "the probe's backlog is days deep",
+	"dice":           "keep the 31-day unseen window while the bounded probe samples the backlog",
 }
 
 // A source this worker probes is usually one whose crawl cannot re-list every live posting, so

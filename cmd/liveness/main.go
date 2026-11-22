@@ -101,14 +101,14 @@ const expiryWindow = 45 * 24 * time.Hour
 // whose postings age out of it never re-enters CloseUnseenJobs' crawled-slug scope and
 // its last posting stays open forever. They stay in atsProviders (the sweep still owns
 // their normal closes) and are only added back as liveness candidates, restricted to jobs
-// past the sweep's own staleness window (staleCutoff).
+// past the default staleness window (staleCutoff).
 //
 // Per-source leaks: empregos reads only postings that name a state and cannot prove it
 // read the rest; djinni lists only the last month, arbeitnow the last week; 4dayweek
 // drops an employer's company from the sweep scope when it leaves the feed; torre's
 // sitemap still names some closed postings; jobtech is never swept, it closes from its
 // change feed, and a removal missed inside the feed's 72h window is never resent.
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed", "arbeitsagentur", "xing", "gradcracker", "engage", "betterteam", "linkedin"}
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed", "arbeitsagentur", "xing", "gradcracker", "engage", "betterteam", "linkedin", "dice"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the plain
 // GET-then-Classify probe. Every other member needs its own evidence path, decided case by
@@ -128,14 +128,13 @@ func pacedPasses(client *http.Client) []pacedPass {
 		arbeitnowPass(client),
 		jobtechPass(client, jobtechAdAPI),
 		linkedInPass(client),
+		dicePass(client),
 		workdayPass(client),
 	}, catalogStatusPasses(client)...)
 }
 
-// staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window) via the
-// shared sources.DefaultSweepGrace symbol: a probeDespiteRegistered job only becomes a
-// liveness candidate once the sweep would already have closed it were the company_slug
-// scope not in the way.
+// staleCutoff uses ingest's default unseen window to decide when a posting
+// becomes eligible for a probe. A source can have a longer sweep grace, as Dice does.
 const staleCutoff = sources.DefaultSweepGrace
 
 // expireDespiteRegisteredPrefixes lists registered-provider FAMILIES with the same
