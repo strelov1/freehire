@@ -1,11 +1,26 @@
 package sources
 
+import "net/http"
+
 // boardlessJobBoardSources lists public national and specialist job boards with no tenant key.
 func boardlessJobBoardSources(c HTTPClient) []Source {
 	// Unstop returns several megabytes per page and can exceed the shared client's timeout.
 	var unstopHTTP JSONGetter
 	if c != nil {
 		unstopHTTP = pacedUnstopGetter(NewLongTimeoutClient())
+	}
+	helloworkHTTP := c
+	if direct, ok := c.(*Client); ok && direct != nil {
+		// The adapter paces its own retries. Keep every new wire attempt above that limiter.
+		singleAttempt := *direct
+		singleAttempt.maxRetries = 0
+		singleAttempt.refusalClient = nil
+		if direct.httpClient != nil {
+			transport := *direct.httpClient
+			transport.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+			singleAttempt.httpClient = &transport
+		}
+		helloworkHTTP = &singleAttempt
 	}
 	return []Source{
 		// Unstop: Indian student and early-career platform, jobs and internships. The open
@@ -41,7 +56,7 @@ func boardlessJobBoardSources(c HTTPClient) []Source {
 		// because robots.txt disallows every query string and the sitemap host answers 403; each new
 		// posting's body is read from its page. Plain client, paced to one request a second. See
 		// hellowork.go.
-		NewHelloWork(c),
+		NewHelloWork(helloworkHTTP),
 		// karriere.at: Austria's largest general job board, enumerated from its jobs sitemap, each new
 		// posting read from its page's schema.org JobPosting over a plain client. See karriereat.go.
 		NewKarriereAt(c, c),

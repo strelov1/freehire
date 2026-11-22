@@ -3,9 +3,11 @@ type: Reference
 title: Operations ownership
 description: Find authoritative deployment configuration and distinguish it from application code.
 generated:
-  by: codex/gpt-6.1-sol
-  at: 2026-11-14T22:00:00-03:00
+  by: codex
+  at: 2026-11-22T18:52:19+00:00
 sources:
+  - resource: ../../cmd/liveness/catalog_status.go
+  - resource: ../agents/workers/ingest.md
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/AGENTS.md
 ---
 
@@ -27,6 +29,7 @@ documentation. A successful SSH connection alone does not verify topology.
 ## Application evidence
 
 - [Worker reference](../agents/workers.md): command requirements and traps.
+- [Source-specific status probes](../../cmd/liveness/catalog_status.go) define the evidence and pacing for catalogue backstops.
 - [CI checks](../agents/ci-checks.md): validation requirements for a change.
 - [Architecture](architecture.md): which application block owns the behavior.
 

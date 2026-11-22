@@ -5,8 +5,12 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,7 +23,10 @@ var helloworkFixtures embed.FS
 // helloworkFake serves trimmed copies of the live pages (2026-11-22). A URL with no fixture
 // answers 404, which for a posting is the site's "gone".
 type helloworkFake struct {
-	pageErr error
+	pageErr   error
+	errByURL  map[string]error
+	htmlByURL map[string]string
+	finalURL  map[string]string
 
 	mu    sync.Mutex
 	pages []string
@@ -43,6 +50,12 @@ func (f *helloworkFake) GetHTML(_ context.Context, u string) (*html.Node, error)
 	if f.pageErr != nil {
 		return nil, f.pageErr
 	}
+	if err := f.errByURL[u]; err != nil {
+		return nil, err
+	}
+	if body, ok := f.htmlByURL[u]; ok {
+		return html.Parse(strings.NewReader(body))
+	}
 	name, ok := helloworkFixtureFor[u]
 	if !ok {
 		return nil, &StatusError{Method: "GET", Code: 404, URL: u}
@@ -52,6 +65,11 @@ func (f *helloworkFake) GetHTML(_ context.Context, u string) (*html.Node, error)
 		panic(err)
 	}
 	return html.Parse(bytes.NewReader(raw))
+}
+
+func (f *helloworkFake) GetHTMLResolved(ctx context.Context, u string) (*html.Node, string, error) {
+	root, err := f.GetHTML(ctx, u)
+	return root, firstNonEmpty(f.finalURL[u], u), err
 }
 
 func fastHelloWork(f *helloworkFake) hellowork {
@@ -107,6 +125,50 @@ func TestHelloWorkRotationMovesBetweenRuns(t *testing.T) {
 	}
 }
 
+func TestHelloWorkFrontierRotatesByRemainingBudget(t *testing.T) {
+	for hour, want := range []string{
+		helloworkBase + "/fr-fr/emploi/domaine_informatique-ville_lyon-69000.html",
+		helloworkBase + "/fr-fr/emploi/domaine_restauration.html",
+	} {
+		f := &helloworkFake{htmlByURL: map[string]string{
+			helloworkHome: `<a href="/fr-fr/emploi/domaine_informatique.html">Informatique</a>`,
+		}}
+		s := fastHelloWork(f)
+		s.maxListPages = 2
+		s.now = func() time.Time { return time.Unix(int64(hour)*3600, 0) }
+		if _, err := s.list(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.pages) != 3 || f.pages[2] != want {
+			t.Errorf("hour %d requested %v, want %s after the home page and field", hour, f.pages, want)
+		}
+	}
+}
+
+func TestHelloWorkFollowsOnlyCleanSameOriginLinks(t *testing.T) {
+	field := helloworkBase + "/fr-fr/emploi/domaine_informatique.html"
+	f := &helloworkFake{finalURL: map[string]string{helloworkHome: helloworkBase + "/fr-fr/accueil/index.html"}, htmlByURL: map[string]string{
+		helloworkHome: `<a href="../emploi/domaine_informatique.html">Informatique</a>`,
+		field: `<a href="../emplois/85769467.html">SAP</a>
+<a href="metier_devops.html">DevOps</a>
+<a href="//www.hellowork.com/fr-fr/emplois/85769864.html">Dev</a>
+<a href="https://www.hellowork.com/fr-fr/emplois/85769931.html">Server</a>
+<a href="//elsewhere.example/fr-fr/emplois/99999999.html">Offsite</a>
+<a href="http://www.hellowork.com/fr-fr/emplois/99999998.html">HTTP</a>
+<a href="../emplois/99999997.html?">Empty query</a>
+<a href="../emplois/99999996.html?p=2">Query</a>
+<a href="../alternance/metier_assistant-manager.html">Alternance</a>`,
+	}}
+	got, err := fastHelloWork(f).list(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{85769931, 85769864, 85769766, 85769467}
+	if !slices.Equal(got, want) {
+		t.Errorf("ids = %v, want %v", got, want)
+	}
+}
+
 func TestHelloWorkFetchReadsNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	f := &helloworkFake{}
 	jobs, err := fastHelloWork(f).FetchNew(context.Background(), CompanyEntry{},
@@ -147,6 +209,9 @@ func TestHelloWorkFetchReadsNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	if sap.PostedAt == nil || !sap.PostedAt.Equal(time.Date(2026, 11, 22, 9, 36, 25, 0, time.UTC)) {
 		t.Errorf("PostedAt = %v", sap.PostedAt)
 	}
+	if sap.ApplicationDeadline == nil || !sap.ApplicationDeadline.Equal(time.Date(2026, 12, 22, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("ApplicationDeadline = %v, want 2026-12-22", sap.ApplicationDeadline)
+	}
 
 	waiter := byID["85769931"]
 	if waiter.EmploymentType != "contract" || waiter.IsTechHint {
@@ -176,6 +241,83 @@ func TestHelloWorkGonePostingIsDroppedNotFailed(t *testing.T) {
 	}
 }
 
+func TestHelloWorkFailedDetailKeepsUnreadableIdentity(t *testing.T) {
+	const uri = helloworkBase + "/fr-fr/emplois/85769864.html"
+	for _, fixture := range []struct {
+		name string
+		fake *helloworkFake
+	}{
+		{"refused", &helloworkFake{errByURL: map[string]error{uri: &StatusError{Code: http.StatusForbidden}}}},
+		{"invalid posting", &helloworkFake{htmlByURL: map[string]string{
+			uri: `<script type="application/ld+json">{"@type":"JobPosting","title":"Engineer"}</script>`,
+		}}},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			jobs, err := fastHelloWork(fixture.fake).FetchNew(context.Background(), CompanyEntry{Company: "HelloWork"},
+				func(id string) bool { return id != "85769864" && id != "85769931" })
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, j := range jobs {
+				if j.ExternalID == "85769864" {
+					if !j.Unreadable || j.URL != uri || j.Company != "" {
+						t.Errorf("unexpected unreadable marker: %+v", j)
+					}
+					return
+				}
+			}
+			t.Fatal("failed posting did not yield an unreadable marker")
+		})
+	}
+}
+
+func TestHelloWorkInvalidPostingDoesNotCountAsAnAnswer(t *testing.T) {
+	const uri = helloworkBase + "/fr-fr/emplois/85769864.html"
+	f := &helloworkFake{htmlByURL: map[string]string{
+		uri: `<script type="application/ld+json">{"@type":"JobPosting","title":"Engineer"}</script>`,
+	}}
+	_, err := fastHelloWork(f).FetchNew(context.Background(), CompanyEntry{},
+		func(id string) bool { return id != "85769864" })
+	if err == nil {
+		t.Fatal("a crawl whose only attempted posting was invalid must fail")
+	}
+}
+
+func TestHelloWorkKeepsPostingsWithFormattedSalary(t *testing.T) {
+	const uri = helloworkBase + "/fr-fr/emplois/85769864.html"
+	f := &helloworkFake{htmlByURL: map[string]string{
+		uri: `<script type="application/ld+json">
+{"@type":"JobPosting","title":"Engineer","description":"Build web applications",
+"hiringOrganization":{"name":"Example"},"baseSalary":{"currency":"EUR","value":"38 000,00"}}
+</script>`,
+	}}
+	job, ok, err := fastHelloWork(f).detail(context.Background(), 85769864)
+	if err != nil || !ok {
+		t.Fatalf("formatted salary dropped posting: ok=%v, err=%v", ok, err)
+	}
+	if job.Title != "Engineer" || job.SalaryMin != nil || job.SalaryMax != nil {
+		t.Errorf("unexpected job: %+v", job)
+	}
+}
+
+func TestHelloWorkDeadlinePreservesTheStatedCalendarDay(t *testing.T) {
+	const uri = helloworkBase + "/fr-fr/emplois/85769864.html"
+	f := &helloworkFake{htmlByURL: map[string]string{
+		uri: `<script type="application/ld+json">
+{"@type":"JobPosting","title":"Engineer","description":"Build web applications",
+"hiringOrganization":{"name":"Example"},"validThrough":"2099-12-22T00:30:00+01:00"}
+</script>`,
+	}}
+	job, ok, err := fastHelloWork(f).detail(context.Background(), 85769864)
+	if err != nil || !ok {
+		t.Fatalf("detail: ok=%v, err=%v", ok, err)
+	}
+	want := time.Date(2099, 12, 22, 0, 0, 0, 0, time.UTC)
+	if job.ApplicationDeadline == nil || !job.ApplicationDeadline.Equal(want) {
+		t.Errorf("ApplicationDeadline = %v, want %v", job.ApplicationDeadline, want)
+	}
+}
+
 func TestHelloWorkNewPostingsAreBoundedNewestFirst(t *testing.T) {
 	f := &helloworkFake{}
 	s := fastHelloWork(f)
@@ -195,10 +337,78 @@ func TestHelloWorkNewPostingsAreBoundedNewestFirst(t *testing.T) {
 	}
 }
 
+func TestHelloWorkDetailBudgetReachesOlderUnseenPostings(t *testing.T) {
+	for hour, want := range []string{"85769766", "85769467"} {
+		f := &helloworkFake{}
+		s := fastHelloWork(f)
+		s.maxNewPerRun = 4
+		s.now = func() time.Time { return time.Unix(int64(hour)*3600, 0) }
+		jobs, err := s.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+		if err != nil {
+			t.Fatal(err)
+		}
+		var detailReads int
+		for _, u := range f.pages {
+			if strings.Contains(u, "/emplois/") {
+				detailReads++
+			}
+		}
+		if detailReads != 4 || len(jobs) != 2 || jobs[0].ExternalID != "85769931" || jobs[1].ExternalID != want {
+			t.Errorf("hour %d read %d details, yielded %v, want newest and %s in four requests", hour, detailReads, jobs, want)
+		}
+	}
+}
+
 func TestHelloWorkCrawlThatAnsweredNothingFails(t *testing.T) {
 	s := fastHelloWork(&helloworkFake{pageErr: &StatusError{Method: "GET", Code: 403}})
 	if _, err := s.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
 		t.Fatal("a crawl whose every request was refused must fail")
+	}
+}
+
+func TestHelloWorkRegistryPacesEachAttemptAndStopsRedirects(t *testing.T) {
+	var attempts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/retry":
+			if attempts.Add(1) <= 2 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}
+		case "/redirect":
+			http.Redirect(w, r, "/retry?p=2", http.StatusFound)
+		default:
+			t.Errorf("unexpected request %s", r.URL)
+		}
+	}))
+	defer srv.Close()
+
+	shared := NewClient()
+	shared.httpClient = srv.Client()
+	shared.retryDelay = 0
+	s := All(shared)["hellowork"].(hellowork)
+	if got := s.http.(*Client); got == shared || got.backoff != shared.backoff {
+		t.Error("HelloWork must use an isolated client with the shared host backoff")
+	}
+	gate := &recordingWaiter{}
+	s.limiter = gate
+	s.retryBackoff = time.Millisecond
+	if _, _, err := s.page(context.Background(), srv.URL+"/retry"); err != nil {
+		t.Fatal(err)
+	}
+	if got := attempts.Load(); got != 3 || gate.calls != 3 {
+		t.Errorf("attempts=%d admissions=%d, want 3 each", got, gate.calls)
+	}
+	if _, _, err := s.page(context.Background(), srv.URL+"/redirect"); err == nil || attempts.Load() != 3 {
+		t.Errorf("redirect returned err=%v after %d retry-endpoint requests, want a rejected redirect", err, attempts.Load())
+	}
+	before := attempts.Load()
+	resp, err := shared.httpClient.Get(srv.URL + "/redirect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || attempts.Load() != before+1 {
+		t.Error("shared client must still follow redirects")
 	}
 }
 

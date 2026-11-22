@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -24,8 +25,8 @@ import (
 // aggregator.
 //
 // robots.txt disallows `/*?`, so every query string is off limits: the search page, its `?p=`
-// pagination (the pager is a form that submits `p`) and the sitemap's host, which also answers
-// Cloudflare's 403 to every client we have. What is left is the site's own landing pages with
+// pagination (the pager is a form that submits `p`) and the sitemap, which returned a 403 from
+// Cloudflare in testing. The crawl uses the site's own landing pages with
 // clean URLs: /fr-fr/emploi/domaine_<field>.html, metier_<job>.html and
 // domaine_<field>-ville_<city>.html, each showing the 20 newest-ranked postings and linking a few
 // dozen siblings. The crawl reads the home page's fields, then a rotating slice of the pages
@@ -36,7 +37,7 @@ import (
 // Each unseen posting's facts come from its own page's schema.org JobPosting. See
 // providers/hellowork.md.
 type hellowork struct {
-	http         HTMLGetter
+	http         HTMLResolvedGetter
 	limiter      waiter
 	now          func() time.Time
 	maxListPages int
@@ -45,7 +46,8 @@ type hellowork struct {
 }
 
 const (
-	helloworkBase = "https://www.hellowork.com"
+	helloworkHost = "www.hellowork.com"
+	helloworkBase = "https://" + helloworkHost
 	helloworkHome = helloworkBase + "/fr-fr/"
 	// helloworkPostingURL is a posting's own page and its public URL.
 	helloworkPostingURL = helloworkBase + "/fr-fr/emplois/%d.html"
@@ -64,8 +66,9 @@ const (
 	// first. Each page names ~20 postings, ~19 of them new to the run (measured over 60 pages:
 	// 1,168 distinct ids).
 	helloworkMaxListPages = 300
-	// helloworkMaxNewPerRun bounds how many unseen postings one run reads, newest id first:
-	// with the listing, ~1,500 requests at one a second is ~25 minutes, inside the scheduler's
+	// helloworkMaxNewPerRun bounds how many unseen postings one run reads. Three quarters
+	// go to the newest ids and the rest to a rotating window of older unseen ids. With
+	// the listing, ~1,500 requests at one a second is ~25 minutes, inside the scheduler's
 	// 2,400 s crawl budget with room for the writes after the fetch.
 	helloworkMaxNewPerRun = 1200
 
@@ -74,7 +77,7 @@ const (
 )
 
 // NewHelloWork builds the HelloWork adapter over the given client.
-func NewHelloWork(c HTMLGetter) Source {
+func NewHelloWork(c HTMLResolvedGetter) Source {
 	return hellowork{
 		http:         c,
 		limiter:      rate.NewLimiter(rate.Every(helloworkRequestInterval), 1),
@@ -103,8 +106,7 @@ func (s hellowork) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // FetchNew collects the posting ids the landing pages show, refreshes the ones already stored
-// and reads up to maxNewPerRun of the rest, newest id first. A posting whose page cannot be read
-// is not yielded; a later run tries again.
+// and reads up to maxNewPerRun of the rest. Unreadable postings retain only their identity.
 func (s hellowork) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	ids, err := s.list(ctx)
 	if err != nil {
@@ -112,35 +114,32 @@ func (s hellowork) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 	}
 	var jobs []Job
 	var unseen []int64
-	deferred := 0
 	for _, id := range ids {
 		ext := strconv.FormatInt(id, 10)
 		if seen(ext) {
 			jobs = append(jobs, Job{ExternalID: ext, URL: fmt.Sprintf(helloworkPostingURL, id), SeenRefresh: true})
 			continue
 		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
 		unseen = append(unseen, id)
 	}
+	backlog := s.maxNewPerRun / 4
+	picked := hydrationLanes(unseen, s.maxNewPerRun-backlog, backlog, s.now())
 	var answered atomic.Int64
-	read := fetchDetails(unseen, helloworkDetailWorkers, func(id int64) (Job, bool) {
+	read := fetchDetails(picked, helloworkDetailWorkers, func(id int64) (Job, bool) {
 		job, ok, err := s.detail(ctx, id)
 		if err != nil {
 			log.Printf("hellowork: posting %d failed; deferring: %v", id, err)
-			return Job{}, false
+			return unreadableDetail(strconv.FormatInt(id, 10), fmt.Sprintf(helloworkPostingURL, id), ""), true
 		}
 		answered.Add(1)
 		return job, ok
 	})
 	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
 	// site reported gone.
-	if len(unseen) > 0 && answered.Load() == 0 {
-		return nil, fmt.Errorf("hellowork: requested %d posting pages and none answered", len(unseen))
+	if len(picked) > 0 && answered.Load() == 0 {
+		return nil, fmt.Errorf("hellowork: requested %d posting pages and none answered", len(picked))
 	}
-	if deferred > 0 {
+	if deferred := len(unseen) - len(picked); deferred > 0 {
 		log.Printf("hellowork: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
 	}
 	return append(jobs, read...), nil
@@ -150,11 +149,11 @@ func (s hellowork) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 // name, and returns every posting id shown, newest first. The home page failing fails the crawl;
 // a later page failing is skipped, and a crawl in which no landing page answered fails.
 func (s hellowork) list(ctx context.Context) ([]int64, error) {
-	home, err := s.page(ctx, helloworkHome)
+	home, homeURL, err := s.page(ctx, helloworkHome)
 	if err != nil {
 		return nil, fmt.Errorf("hellowork: home page: %w", err)
 	}
-	_, fields := helloworkLinks(home)
+	_, fields := helloworkLinks(home, homeURL)
 	if len(fields) == 0 {
 		return nil, errors.New("hellowork: the home page names no landing page")
 	}
@@ -164,7 +163,7 @@ func (s hellowork) list(ctx context.Context) ([]int64, error) {
 	next := map[string]bool{}
 	read := func(path string) error {
 		visited[path] = true
-		root, err := s.page(ctx, helloworkBase+path)
+		root, pageURL, err := s.page(ctx, helloworkBase+path)
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -173,7 +172,7 @@ func (s hellowork) list(ctx context.Context) ([]int64, error) {
 			return nil
 		}
 		answered++
-		postings, links := helloworkLinks(root)
+		postings, links := helloworkLinks(root, pageURL)
 		for _, id := range postings {
 			ids[id] = true
 		}
@@ -199,7 +198,7 @@ func (s hellowork) list(ctx context.Context) ([]int64, error) {
 		}
 	}
 	sort.Strings(frontier)
-	for _, p := range helloworkRotate(frontier, s.now(), s.maxListPages) {
+	for _, p := range helloworkRotate(frontier, s.now(), budget) {
 		if budget == 0 {
 			break
 		}
@@ -232,9 +231,13 @@ func helloworkRotate(frontier []string, now time.Time, width int) []string {
 	return append(append([]string{}, frontier[start:]...), frontier[:start]...)
 }
 
-// helloworkLinks reads one page's posting ids and landing-page paths, in document order, each
-// once.
-func helloworkLinks(root *html.Node) (postings []int64, landings []string) {
+// helloworkLinks resolves the page's links and collects each allowed posting id and landing
+// path once, in document order.
+func helloworkLinks(root *html.Node, pageURL string) (postings []int64, landings []string) {
+	base, err := url.Parse(pageURL)
+	if err != nil {
+		return nil, nil
+	}
 	seenID := map[int64]bool{}
 	seenPath := map[string]bool{}
 	walk(root, func(n *html.Node) bool {
@@ -242,14 +245,23 @@ func helloworkLinks(root *html.Node) (postings []int64, landings []string) {
 			return true
 		}
 		href := strings.TrimSpace(Attr(n, "href"))
-		if m := helloworkPostingPath.FindStringSubmatch(href); m != nil {
+		if href == "" {
+			return true
+		}
+		u, err := base.Parse(href)
+		if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Hostname(), helloworkHost) ||
+			(u.Port() != "" && u.Port() != "443") || u.User != nil || u.ForceQuery || u.RawQuery != "" || u.Fragment != "" {
+			return true
+		}
+		path := u.EscapedPath()
+		if m := helloworkPostingPath.FindStringSubmatch(path); m != nil {
 			if id, err := strconv.ParseInt(m[1], 10, 64); err == nil && id > 0 && !seenID[id] {
 				seenID[id] = true
 				postings = append(postings, id)
 			}
-		} else if helloworkLandingPath.MatchString(href) && !seenPath[href] {
-			seenPath[href] = true
-			landings = append(landings, href)
+		} else if helloworkLandingPath.MatchString(path) && !seenPath[path] {
+			seenPath[path] = true
+			landings = append(landings, path)
 		}
 		return true
 	})
@@ -257,17 +269,18 @@ func helloworkLinks(root *html.Node) (postings []int64, landings []string) {
 }
 
 // page fetches one page under the shared pacer, asking again when the edge refuses it.
-func (s hellowork) page(ctx context.Context, u string) (*html.Node, error) {
+func (s hellowork) page(ctx context.Context, u string) (*html.Node, string, error) {
 	var root *html.Node
+	var pageURL string
 	err := retryWhile(ctx, helloworkRetries, s.retryBackoff, helloworkRefused, func() error {
 		if err := s.limiter.Wait(ctx); err != nil {
 			return err
 		}
 		var err error
-		root, err = s.http.GetHTML(ctx, u)
+		root, pageURL, err = s.http.GetHTMLResolved(ctx, u)
 		return err
 	})
-	return root, err
+	return root, pageURL, err
 }
 
 // helloworkRefused reports an answer worth asking again: a refusal, a rate limit or a server
@@ -284,6 +297,7 @@ type helloworkLD struct {
 	Title              string          `json:"title"`
 	Description        string          `json:"description"`
 	DatePosted         string          `json:"datePosted"`
+	ValidThrough       string          `json:"validThrough"`
 	EmploymentType     json.RawMessage `json:"employmentType"`
 	OccupationalCat    string          `json:"occupationalCategory"`
 	HiringOrganization struct {
@@ -296,23 +310,17 @@ type helloworkLD struct {
 		} `json:"address"`
 	} `json:"jobLocation"`
 	BaseSalary struct {
-		Currency string `json:"currency"`
-		Value    struct {
-			UnitText string         `json:"unitText"`
-			MinValue flexjson.Float `json:"minValue"`
-			MaxValue flexjson.Float `json:"maxValue"`
-		} `json:"value"`
+		Currency string          `json:"currency"`
+		Value    json.RawMessage `json:"value"`
 	} `json:"baseSalary"`
 }
 
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
-// is gone (404, or 410 for an id that was never or is no longer assigned) or a page carrying no
-// usable posting; an error is the absence of an answer.
+// is gone (404 or 410). An error means there was no usable answer.
 func (s hellowork) detail(ctx context.Context, id int64) (Job, bool, error) {
-	root, err := s.page(ctx, fmt.Sprintf(helloworkPostingURL, id))
+	root, _, err := s.page(ctx, fmt.Sprintf(helloworkPostingURL, id))
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if !detailUnreadable(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
@@ -322,7 +330,10 @@ func (s hellowork) detail(ctx context.Context, id int64) (Job, bool, error) {
 		return Job{}, false, errors.New("page carries no JobPosting")
 	}
 	job, ok := helloworkJob(ld, id)
-	return job, ok, nil
+	if !ok {
+		return Job{}, false, errors.New("JobPosting is missing title, employer or description")
+	}
+	return job, true, nil
 }
 
 // helloworkJob maps a posting's JobPosting to a Job. ok is false for one with no title, employer
@@ -335,30 +346,51 @@ func helloworkJob(ld helloworkLD, id int64) (Job, bool) {
 		return Job{}, false
 	}
 	j := Job{
-		ExternalID:        strconv.FormatInt(id, 10),
-		URL:               fmt.Sprintf(helloworkPostingURL, id),
-		Title:             title,
-		Company:           company,
-		Description:       body,
-		Location:          helloworkPlace(ld),
-		FallbackCountries: []string{"fr"},
-		PostedAt:          parseRFC3339OrDate(strings.TrimSpace(ld.DatePosted)),
-		IsTechHint:        helloworkTechCategory(ld.OccupationalCat),
-		EmploymentType:    helloworkEmploymentType(ld.EmploymentType),
+		ExternalID:          strconv.FormatInt(id, 10),
+		URL:                 fmt.Sprintf(helloworkPostingURL, id),
+		Title:               title,
+		Company:             company,
+		Description:         body,
+		Location:            helloworkPlace(ld),
+		FallbackCountries:   []string{"fr"},
+		PostedAt:            parseRFC3339OrDate(strings.TrimSpace(ld.DatePosted)),
+		ApplicationDeadline: helloworkDeadline(ld.ValidThrough),
+		IsTechHint:          helloworkTechCategory(ld.OccupationalCat),
+		EmploymentType:      helloworkEmploymentType(ld.EmploymentType),
 	}
-	sal := ld.BaseSalary
-	period := map[string]string{"YEAR": "year", "MONTH": "month", "DAY": "day", "HOUR": "hour"}[strings.ToUpper(strings.TrimSpace(sal.Value.UnitText))]
-	if cur := strings.TrimSpace(sal.Currency); cur != "" && period != "" && sal.Value.MinValue > 0 {
-		lo := int(sal.Value.MinValue)
+	var bounds struct {
+		UnitText string         `json:"unitText"`
+		MinValue flexjson.Float `json:"minValue"`
+		MaxValue flexjson.Float `json:"maxValue"`
+	}
+	if err := json.Unmarshal(ld.BaseSalary.Value, &bounds); err != nil {
+		return j, true
+	}
+	period := map[string]string{"YEAR": "year", "MONTH": "month", "DAY": "day", "HOUR": "hour"}[strings.ToUpper(strings.TrimSpace(bounds.UnitText))]
+	if cur := strings.TrimSpace(ld.BaseSalary.Currency); cur != "" && period != "" && bounds.MinValue > 0 {
+		lo := int(bounds.MinValue)
 		j.SalaryMin = &lo
-		if sal.Value.MaxValue >= sal.Value.MinValue {
-			hi := int(sal.Value.MaxValue)
+		if bounds.MaxValue >= bounds.MinValue {
+			hi := int(bounds.MaxValue)
 			j.SalaryMax = &hi
 		}
 		j.SalaryCurrency = strings.ToUpper(cur)
 		j.SalaryPeriod = period
 	}
 	return j, true
+}
+
+// helloworkDeadline preserves the stated calendar day even when the timestamp has an offset.
+func helloworkDeadline(raw string) *time.Time {
+	raw = strings.TrimSpace(raw)
+	for _, layout := range []string{time.RFC3339Nano, time.DateOnly} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			year, month, day := t.Date()
+			deadline := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+			return &deadline
+		}
+	}
+	return nil
 }
 
 // helloworkPlace joins the city and the region ("Lyon, Auvergne-Rhône-Alpes"); a posting filed

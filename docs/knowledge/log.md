@@ -97,3 +97,8 @@ The LinkedIn limiter's 2s spacing became `LINKEDIN_REQUEST_INTERVAL` (default un
 100ms..10s, invalid fails the crawl). Requests already leave through the rotating proxy with a
 new exit IP each, and 158 searches after the 429 retry met no refusal at 2s, so the per-process
 spacing, not LinkedIn, was the throughput bound. Ops lowers it in steps.
+
+## HelloWork liveness backstop — 2026-11-22
+
+Recorded the status-only backstop and its worker ownership in
+[operations](operations.md#application-evidence).
