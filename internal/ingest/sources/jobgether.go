@@ -98,15 +98,15 @@ func (s jobgether) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 	}
 	// A random slice, not the sitemap's first: a page that stays unreadable stays unseen, and a
 	// fixed prefix would hand it the same slot every run while later pages starve.
-	rand.Shuffle(len(unseen), func(i, j int) { unseen[i], unseen[j] = unseen[j], unseen[i] })
 	if deferred := len(unseen) - s.maxNew; deferred > 0 {
 		log.Printf("jobgether: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNew)
+		rand.Shuffle(len(unseen), func(i, j int) { unseen[i], unseen[j] = unseen[j], unseen[i] }) //nolint:gosec // Only selects which postings to crawl this run.
 		unseen = unseen[:s.maxNew]
 	}
 	read := fetchDetails(unseen, sitemapBoardDetailWorkers, func(loc string) (Job, bool) {
 		return s.detail(ctx, loc)
 	})
-	if len(unseen) > 0 && len(read) == 0 && len(jobs) == 0 {
+	if len(unseen) > 0 && len(read) == 0 {
 		return nil, fmt.Errorf("jobgether: requested %d posting pages and none yielded a posting", len(unseen))
 	}
 	return append(jobs, read...), nil

@@ -59,10 +59,6 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// posting's body and structured facets inline. City-expanded rows collapse on
 		// partnerJobId. See cutshort.go.
 		NewCutshort(c),
-		// Unstop: Indian student and early-career platform, jobs and internships. The open
-		// catalogue is one keyless public search feed per kind with bodies inline, paced to its
-		// robots.txt Crawl-delay (pacedUnstopGetter). See unstop.go.
-		NewUnstop(pacedUnstopGetter(c)),
 		NewCryptocurrencyJobs(c),
 		NewStartupAndVC(c),
 		// Hacker News "Ask HN: Who is hiring?": the two newest monthly threads, read whole
@@ -263,9 +259,6 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// Berlin Startup Jobs: Berlin startup board. post-sitemap.xml names the whole catalogue;
 		// posting pages carry a schema.org JobPosting. Paced, see berlinstartupjobs.go.
 		NewBerlinStartupJobs(c),
-		// ICTJobs: Switzerland's IT-only job board. post-sitemap.xml names the whole catalogue;
-		// posting pages carry a schema.org JobPosting. Paced, see ictjobs.go.
-		NewICTJobs(c),
 		// DSML Kazakhstan: the Kazakh data/ML community board. sitemap.xml names the whole
 		// catalogue; posting pages carry a schema.org JobPosting. Paced, see dsml.go.
 		NewDSML(c),
@@ -275,10 +268,6 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// Jumpit: Saramin's IT-only board for South Korea. One JSON listing request names the whole
 		// catalogue; a per-posting detail carries the body. Paced, see jumpitRequestInterval.
 		NewJumpit(pacedJumpitGetter(c)),
-		// Saramin: South Korea's largest general job board, every trade. The site's own category
-		// listing names the whole catalogue; each new posting's body is read from the iframe its page
-		// embeds. Paced, and the edge wants the browser-compatible User-Agent. See saramin.go.
-		compatibleUASource(c, NewSaramin),
 		// WORK180: board of women-endorsed employers, enumerated by regional site (board =
 		// au/uk/us) through each region's jobs sitemap; posting pages carry a schema.org
 		// JobPosting. Pages are paced to robots.txt's Crawl-delay, see work180RequestInterval.
@@ -317,15 +306,6 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// posting's page carries the rest. The site refuses a plain client, so production reaches
 		// it through the Scrapling tier (scraplingtier.go). See glints.go.
 		NewGlints(c),
-		// VietnamWorks: Vietnam's largest job board, listed from the search API its own frontend
-		// calls and hydrating each new posting's body from the flight stream its page inlines.
-		// Served over plain HTTP. See vietnamworks.go.
-		NewVietnamworks(c),
-		// eFinancialCareers: the global finance and fintech job board, read from the JSON search
-		// API behind its own frontend (rows carry the whole body), the whole catalogue every run,
-		// cut by country and sector under the search's 10,000-result cap. Plain HTTP from the
-		// crawl host. See efinancialcareers.go.
-		NewEFinancialCareers(c),
 		// XING Jobs: the DACH professional network's job board, enumerated from its gzip job
 		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
 		// See xing.go.
@@ -415,11 +395,6 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// catalogue is the search's leading ~63 pages (closed projects follow it); each new
 		// posting's body is read from its page's schema.org JobPosting. Paced, see levtech.go.
 		NewLevtech(pacedHTMLGetter(c, levtechRequestInterval, levtechRequestBurst)),
-		// Authentic Jobs: a design and developer job board on WordPress / WP Job Manager,
-		// boardless. robots.txt bars query strings and sets a 3 s crawl delay, so the catalogue is
-		// read through the plugin's query-free listing endpoint and the REST item route, paced.
-		// See authenticjobs.go.
-		NewAuthenticJobs(c),
 		// EDJOIN: California's K-12 education board, multi-company aggregator enumerated by
 		// job type (board) over one central index, hydrating bodies from each posting page's
 		// schema.org block. The board is a job type and not a district on purpose — see

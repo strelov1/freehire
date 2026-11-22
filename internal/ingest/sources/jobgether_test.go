@@ -18,6 +18,7 @@ const (
 )
 
 func newJobgetherFake(t *testing.T) *sitemapBoardFake {
+	t.Helper()
 	return &sitemapBoardFake{t: t, dir: "jobgether", files: map[string]string{
 		jobgetherSitemapURL:                          "index-offers.xml",
 		"https://jobgether.com/sitemap/offers-1.xml": "offers-1.xml",
@@ -145,7 +146,10 @@ func TestJobgetherBoundsNewPagesPerRun(t *testing.T) {
 	f := newJobgetherFake(t)
 	s := fastJobgether(f)
 	s.maxNew = 1
-	if _, err := s.Fetch(context.Background(), CompanyEntry{}); err != nil {
+	seen := func(id string) bool {
+		return id == jobgetherID(jobgetherGoneURL) || id == jobgetherID(jobgetherLapsedURL)
+	}
+	if _, err := s.FetchNew(context.Background(), CompanyEntry{}, seen); err != nil {
 		t.Fatal(err)
 	}
 	pages := 0
@@ -159,6 +163,16 @@ func TestJobgetherBoundsNewPagesPerRun(t *testing.T) {
 	}
 }
 
+func TestJobgetherFailsWhenOnlyStoredPostingsAreReadable(t *testing.T) {
+	f := newJobgetherFake(t)
+	delete(f.files, jobgetherBRURL)
+	delete(f.files, jobgetherLapsedURL)
+	seen := func(id string) bool { return id == jobgetherID(jobgetherUSURL) }
+	if _, err := fastJobgether(f).FetchNew(context.Background(), CompanyEntry{}, seen); err == nil {
+		t.Fatal("refreshing a stored posting must not hide a failure to read every requested detail")
+	}
+}
+
 func TestJobgetherFailsWhenNoShardReadable(t *testing.T) {
 	f := &sitemapBoardFake{t: t, dir: "jobgether", files: map[string]string{jobgetherSitemapURL: "index-offers.xml"}}
 	if _, err := fastJobgether(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
@@ -167,7 +181,7 @@ func TestJobgetherFailsWhenNoShardReadable(t *testing.T) {
 }
 
 func TestJobgetherIsABoardlessAggregator(t *testing.T) {
-	var s Source = NewJobgether(newJobgetherFake(t))
+	s := NewJobgether(newJobgetherFake(t))
 	if _, ok := s.(interface{ Boardless() }); !ok {
 		t.Error("not boardless")
 	}

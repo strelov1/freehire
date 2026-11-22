@@ -24,19 +24,16 @@ type unstop struct {
 
 const (
 	unstopListURL = "https://unstop.com/api/public/opportunity/search-result"
-	// unstopPerPage is the largest page measured to be honoured (100); the open catalogue is
-	// ~1,600 postings, so a run is under twenty requests.
-	unstopPerPage = 100
+	// The two feeds each fit in two 500-row pages. Smaller pages repeated IDs at their
+	// boundaries, and 500 rows keeps each payload below the size of a single 1,000-row page.
+	unstopPerPage = 500
 	// unstopMaxPages bounds one feed so a response that never reaches its last page cannot loop.
-	// It is twice what the 10,000-row window would need.
 	unstopMaxPages = 200
 	// unstopRequestInterval honours the robots.txt Crawl-delay of 1.
 	unstopRequestInterval = time.Second
-	// unstopCountTolerance is the share of a feed's reported total that may go missing from a
-	// finished crawl, in percent. The listing is offset-paged over a live set, so a posting that
-	// expires mid-crawl shifts the rest up and one page boundary skips a row; a crawl that lost
-	// more than this is a broken one.
-	unstopCountTolerance = 2
+	// The reported total can exceed the rows returned even when the feed fits on one page
+	// (662 reported internships, 640 rows). Leave room for that gap and minor offset drift.
+	unstopCountTolerance = 5
 )
 
 // unstopFeeds are the two opportunity kinds that are postings. The value is the endpoint's
@@ -119,7 +116,7 @@ func (u unstop) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 func (u unstop) feed(ctx context.Context, feed string) ([]Job, error) {
 	var jobs []Job
 	seen := map[int]bool{}
-	total := 0
+	var total int
 	for page := 1; ; page++ {
 		if page > unstopMaxPages {
 			return nil, fmt.Errorf("unstop: %s: no last page after %d pages", feed, unstopMaxPages)

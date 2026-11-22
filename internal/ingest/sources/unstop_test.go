@@ -159,6 +159,26 @@ func TestUnstopFetchFailsOnPageError(t *testing.T) {
 	}
 }
 
+func TestUnstopFetchAcceptsMeasuredListingCountGap(t *testing.T) {
+	fake := newUnstopFake(t)
+	rows := make([]unstopPosting, 640)
+	for i := range rows {
+		rows[i].ID = i + 1
+	}
+	var page unstopPage
+	page.Data.Total = 662
+	page.Data.LastPage = 1
+	page.Data.Data = rows
+	body, err := json.Marshal(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.pages[unstopURL("internships", 1)] = string(body)
+	if _, err := NewUnstop(fake).Fetch(context.Background(), CompanyEntry{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestUnstopFetchFailsOnShortCrawl(t *testing.T) {
 	fake := newUnstopFake(t)
 	// The feed reports 100 postings and its only page holds three.
@@ -202,7 +222,7 @@ func TestUnstopSkipsPostingsItCannotStandBehind(t *testing.T) {
 }
 
 func TestUnstopIsRegisteredAsFullCatalogAggregator(t *testing.T) {
-	var s Source = NewUnstop(nil)
+	s := NewUnstop(nil)
 	if _, ok := s.(fullCatalog); !ok {
 		t.Error("unstop must be a fullCatalog source")
 	}

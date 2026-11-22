@@ -215,15 +215,6 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// client, so the crawl is really served once ApplyScraplingEgress rebuilds it over the fetch
 	// service (scraplingtier.go). See foundit.go.
 	registry["foundit"] = NewFoundit(c)
-	// JobKorea (jobkorea.co.kr): South Korea's general job board, read whole from the sitemaps
-	// robots.txt names, each new posting's page and body frame read plainly (no bot wall).
-	// See jobkorea.go.
-	registry["jobkorea"] = NewJobKorea(c)
-	// HelloWork (France): a window of the catalogue read from the site's clean-URL landing pages,
-	// because robots.txt disallows every query string and the sitemap host answers 403; each new
-	// posting's body is read from its page. Plain client, paced to one request a second. See
-	// hellowork.go.
-	registry["hellowork"] = NewHelloWork(c)
 	// hirist.tech and iimjobs.com: one Indian job platform on two sites, enumerated by category
 	// (board) through the API their web app calls, hydrating each new posting's body from the
 	// posting API. Every request of a run is paced to one a second. See hirist.go.
@@ -312,9 +303,6 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// Taleez: a French ATS with no per-customer listing, enumerated from its job sitemap, each
 	// new posting read from its page's schema.org JobPosting. See taleez.go.
 	registry["taleez"] = NewTaleez(c, c)
-	// karriere.at: Austria's largest general job board, enumerated from its jobs sitemap, each new
-	// posting read from its page's schema.org JobPosting over a plain client. See karriereat.go.
-	registry["karriereat"] = NewKarriereAt(c, c)
 	// Dualoo: a Swiss ATS for SMEs and municipalities, enumerated from its per-customer sitemaps,
 	// each new posting read from its page's schema.org JobPosting. See dualoo.go.
 	registry["dualoo"] = NewDualoo(c, c)

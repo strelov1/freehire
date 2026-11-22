@@ -264,7 +264,7 @@ func TestVietnamworksFailedSearchFailsTheCrawl(t *testing.T) {
 }
 
 func TestVietnamworksIsBoardlessAggregator(t *testing.T) {
-	var s Source = NewVietnamworks(newVietnamworksFake(t))
+	s := NewVietnamworks(newVietnamworksFake(t))
 	if _, ok := s.(interface{ Boardless() }); !ok {
 		t.Error("vietnamworks must be boardless")
 	}
