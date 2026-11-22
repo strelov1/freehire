@@ -54,9 +54,12 @@ func TestEFinancialCareersWholeCatalogueUnderTheWindowWalkedAsOne(t *testing.T) 
 	if err := s.FetchStream(context.Background(), CompanyEntry{}, func(j Job) { jobs = append(jobs, j) }); err != nil {
 		t.Fatal(err)
 	}
-	// The third row has no body and is dropped.
-	if len(jobs) != 2 {
-		t.Fatalf("got %d jobs, want 2", len(jobs))
+	// The third row has no body, but its listing still establishes its identity.
+	if len(jobs) != 3 {
+		t.Fatalf("got %d results, want two postings and one unreadable marker", len(jobs))
+	}
+	if got := jobs[2]; got.ExternalID != "25003998" || !got.Unreadable {
+		t.Fatalf("expected the blank-body listing's unreadable identity, got %+v", got)
 	}
 	if q := f.seen[1]; q.Get("sortBy") != "POSTED_DATE" || q.Get("filters.countryId") != "" {
 		t.Errorf("walk query = %v", q)

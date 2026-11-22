@@ -127,6 +127,7 @@ var efcDimensions = []struct{ facet, filter string }{
 // falls more than 2% short of the total the search states.
 func (s efinancialcareers) FetchStream(ctx context.Context, _ CompanyEntry, emit func(Job)) error {
 	listed := map[string]bool{}
+	unreadable := map[string]bool{}
 	walk := func(filters url.Values, total int) error {
 		for p := 1; (p-1)*efinancialcareersPageSize < total; p++ {
 			page, err := s.page(ctx, filters, p, "")
@@ -134,10 +135,17 @@ func (s efinancialcareers) FetchStream(ctx context.Context, _ CompanyEntry, emit
 				return fmt.Errorf("slice %s page %d: %w", filters.Encode(), p, err)
 			}
 			for _, r := range page.Data {
-				if j, ok := r.job(); ok && !listed[j.ExternalID] {
-					listed[j.ExternalID] = true
-					emit(j)
+				if r.JobID == "" || listed[r.JobID] {
+					continue
 				}
+				j, ok := r.job()
+				if !ok {
+					unreadable[r.JobID] = true
+					continue
+				}
+				listed[r.JobID] = true
+				delete(unreadable, r.JobID)
+				emit(j)
 			}
 			if len(page.Data) < efinancialcareersPageSize {
 				return nil
@@ -182,6 +190,10 @@ func (s efinancialcareers) FetchStream(ctx context.Context, _ CompanyEntry, emit
 	}
 	if want := float64(root.Meta.TotalResults) * efinancialcareersMinShare; float64(len(listed)) < want || len(listed) == 0 {
 		return fmt.Errorf("efinancialcareers: listed %d distinct postings of the %d the search states", len(listed), root.Meta.TotalResults)
+	}
+	// Overlapping facet slices may later supply a usable copy of an unreadable row.
+	for id := range unreadable {
+		emit(unreadableDetail(id, "", ""))
 	}
 	log.Printf("efinancialcareers: listed %d distinct postings of %d", len(listed), root.Meta.TotalResults)
 	return nil
