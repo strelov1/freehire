@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -50,7 +51,7 @@ func (s odoo) detail(ctx context.Context, e CompanyEntry, loc string) (Job, bool
 	if err != nil {
 		return Job{}, false
 	}
-	description := sanitizeHTML(itempropHTML(root, "description"))
+	description := odooDescription(root)
 	if description == "" {
 		return Job{}, false // not a JobPosting page (or an empty stub) — skip it
 	}
@@ -67,6 +68,31 @@ func (s odoo) detail(ctx context.Context, e CompanyEntry, loc string) (Job, bool
 		Remote:      isRemote(location),
 		PostedAt:    parseDate(itempropAttr(root, "datePosted")),
 	}, true
+}
+
+// odooDescription also reads job content built with Odoo's website editor, whose
+// snippets can replace the description itemprop inside the JobPosting.
+func odooDescription(root *html.Node) string {
+	if description := sanitizeHTML(itempropHTML(root, "description")); description != "" {
+		return description
+	}
+	var content strings.Builder
+	walk(root, func(n *html.Node) bool {
+		itemType := Attr(n, "itemtype")
+		if itemType != "https://schema.org/JobPosting" && itemType != "http://schema.org/JobPosting" {
+			return true
+		}
+		walk(n, func(section *html.Node) bool {
+			snippet := Attr(section, "data-snippet")
+			if section.Data == "section" && strings.HasPrefix(snippet, "s_") && snippet != "s_call_to_action" {
+				content.WriteString(innerHTML(section))
+				return false
+			}
+			return true
+		})
+		return false
+	})
+	return sanitizeHTML(content.String())
 }
 
 // odooJobIDPattern captures the trailing numeric id from a /jobs/<slug>-<id> or

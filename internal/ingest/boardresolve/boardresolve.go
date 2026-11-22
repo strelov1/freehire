@@ -12,6 +12,7 @@ package boardresolve
 import (
 	"context"
 	"net/url"
+	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/atsboard"
 	"github.com/strelov1/freehire/internal/ingest/atsdetect"
@@ -64,11 +65,50 @@ func New() *Resolver { return &Resolver{http: sources.NewClient()} }
 //
 // ok=false when the fetch fails or no board is found.
 func (r *Resolver) Resolve(ctx context.Context, rawURL string) (source, board, canonical string, ok bool) {
-	html, err := r.http.GetText(ctx, rawURL)
+	if multiEmployerIndex(rawURL) {
+		return "", "", "", false
+	}
+	html, final, err := r.fetchPage(ctx, rawURL)
 	if err != nil {
 		return "", "", "", false
 	}
-	return resolveContent(html, rawURL)
+	if final != rawURL {
+		if s, b, canonical, found := atsboard.Recognize(final); found {
+			return s, b, canonical, true
+		}
+	}
+	return resolveContent(html, final)
+}
+
+// An outgoing link on a multi-employer index identifies a featured job, not a
+// tenant to which the submitted index belongs.
+func multiEmployerIndex(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	path := strings.TrimSuffix(u.Path, "/")
+	switch host {
+	case "web3.career", "jobboard.catch-talents.de":
+		return path == ""
+	case "employmenthero.com":
+		return path == "" || path == "/jobs"
+	default:
+		return false
+	}
+}
+
+// fetchPage keeps the host that served the HTML, which can differ from a pasted
+// vanity URL after a redirect.
+func (r *Resolver) fetchPage(ctx context.Context, rawURL string) (body, final string, err error) {
+	if resolved, ok := r.http.(interface {
+		GetTextResolved(context.Context, string) (string, string, error)
+	}); ok {
+		return resolved.GetTextResolved(ctx, rawURL)
+	}
+	body, err = r.http.GetText(ctx, rawURL)
+	return body, rawURL, err
 }
 
 func resolveContent(html, rawURL string) (source, board, canonical string, ok bool) {
@@ -82,6 +122,10 @@ func resolveContent(html, rawURL string) (source, board, canonical string, ok bo
 		if s, b, _, matched := atsboard.Recognize(u); matched {
 			return s, b, stripTails(rawURL), true
 		}
+	}
+
+	if s, b, canonical, found := resolveCustomDomain(html, rawURL); found {
+		return s, b, canonical, true
 	}
 
 	// 3. The host IS the board. Radancy, Phenom, Jibe and Teamtailor tenants serve from the

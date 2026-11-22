@@ -122,3 +122,20 @@ func TestOdooRegisteredInAll(t *testing.T) {
 		t.Errorf("Provider() = %q", s.Provider())
 	}
 }
+
+func TestOdooFetchesCustomRecruitmentSnippets(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/jobs/detail/engineer-5", `<h1>Engineer</h1><section data-snippet="s_text_block">Outside the job</section>
+<div itemscope itemtype="https://schema.org/JobPosting">
+<section data-snippet="s_text_block"><p>Build software.</p></section>
+<section data-snippet="s_call_to_action"><p>Apply now.</p></section>
+</div>`).
+		route("/jobs", odooListingHTML("engineer-5"))
+	jobs, err := NewOdoo(fake).Fetch(context.Background(), CompanyEntry{Board: "acme.com"})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("Fetch got %v, %v", jobs, err)
+	}
+	if got := jobs[0].Description; got != "<p>Build software.</p>" {
+		t.Fatalf("description = %q", got)
+	}
+}
