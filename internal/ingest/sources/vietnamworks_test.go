@@ -242,6 +242,36 @@ func TestVietnamworksPageWithoutABodyIsSkipped(t *testing.T) {
 	}
 }
 
+func TestVietnamworksDetailReadsOnlyItsRecord(t *testing.T) {
+	for _, tc := range []struct {
+		name, flight string
+		wantBody     bool
+	}{
+		{"missing record fields", `27:{"jobId":2125488,"jobTitle":"Target"}`, false},
+		{"missing requirements", `27:{"jobTitle":"Target {with braces}","jobId":2125488,"jobDescription":"<p>Target body</p>"}`, true},
+		{"missing text row", `27:{"jobId":2125488,"jobDescription":"<p>Target body</p>","jobRequirement":"$29"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newVietnamworksFake(t)
+			// A length-prefixed text row can run directly into the target model row.
+			flight := "7:Tb,<p>text</p>" + tc.flight + "\n" + `28:{"jobId":1,"jobDescription":"<p>Unrelated body</p>","jobRequirement":"<p>Unrelated requirements</p>"}` + "\n"
+			encoded, err := json.Marshal(flight)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.pages[vwITURL] = `<script>self.__next_f.push([1,` + string(encoded) + `])</script>`
+			jobs, err := newTestVietnamworks(f).Fetch(context.Background(), CompanyEntry{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			job, found := vwByID(jobs, vwITID)
+			if found != tc.wantBody || (found && (!strings.Contains(job.Description, "Target body") || strings.Contains(job.Description, "Unrelated"))) {
+				t.Errorf("found = %t, description = %q, want target body = %t", found, job.Description, tc.wantBody)
+			}
+		})
+	}
+}
+
 func TestVietnamworksCrawlThatReadsNothingFails(t *testing.T) {
 	f := newVietnamworksFake(t)
 	f.pages = map[string]string{}

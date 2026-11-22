@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -280,17 +281,23 @@ func (v vietnamworks) detail(ctx context.Context, r vietnamworksRow) (Job, bool)
 // Each is either inline or a "$<hex>" reference to a text row; both are read from the posting's
 // own record, found by its id, since the page also carries other postings' records.
 func vietnamworksBody(flight string, id int64) string {
-	at := strings.Index(flight, `"jobId":`+strconv.FormatInt(id, 10)+`,`)
-	if at < 0 {
+	record, ok := vietnamworksFlightRecord(flight, id)
+	if !ok {
 		return ""
 	}
 	rows := nextFlightTextRows(flight)
 	var parts []string
-	for _, f := range []struct{ key, heading string }{
-		{"jobDescription", "Mô tả công việc"},
-		{"jobRequirement", "Yêu cầu công việc"},
+	for _, f := range []struct{ value, heading string }{
+		{record.Description, "Mô tả công việc"},
+		{record.Requirement, "Yêu cầu công việc"},
 	} {
-		text := vietnamworksFlightField(flight[at:], f.key, rows)
+		text := f.value
+		if vietnamworksTextRef.MatchString(text) {
+			text, ok = rows[text[1:]]
+			if !ok {
+				return ""
+			}
+		}
 		if strings.TrimSpace(textFromHTML(text)) == "" {
 			continue
 		}
@@ -299,24 +306,41 @@ func vietnamworksBody(flight string, id int64) string {
 	return sanitizeHTML(strings.Join(parts, ""))
 }
 
-// vietnamworksFlightField reads the string field key from the record at the head of s, resolving
-// a "$<hex>" reference through the text rows.
-func vietnamworksFlightField(s, key string, rows map[string]string) string {
-	marker := `"` + key + `":`
-	at := strings.Index(s, marker)
-	if at < 0 {
-		return ""
-	}
-	var value string
-	if err := json.NewDecoder(strings.NewReader(s[at+len(marker):])).Decode(&value); err != nil {
-		return ""
-	}
-	if ref, ok := strings.CutPrefix(value, "$"); ok {
-		if row, found := rows[ref]; found {
-			return row
+var vietnamworksTextRef = regexp.MustCompile(`^\$[0-9a-f]+$`)
+
+type vietnamworksDetailRecord struct {
+	ID          int64  `json:"jobId"`
+	Description string `json:"jobDescription"`
+	Requirement string `json:"jobRequirement"`
+}
+
+// vietnamworksFlightRecord finds the model row for id. Text rows have byte lengths and may
+// contain newlines or run directly into the next row. Other rows end at a newline.
+func vietnamworksFlightRecord(flight string, id int64) (vietnamworksDetailRecord, bool) {
+	for flight != "" {
+		_, payload, ok := strings.Cut(flight, ":")
+		if !ok {
+			break
+		}
+		if row, isText := strings.CutPrefix(payload, "T"); isText {
+			length, text, found := strings.Cut(row, ",")
+			n, err := strconv.ParseUint(length, 16, 64)
+			if !found || err != nil || n > uint64(len(text)) {
+				break
+			}
+			flight = text[n:]
+			continue
+		}
+		var line string
+		line, flight, _ = strings.Cut(payload, "\n")
+		if strings.HasPrefix(line, "{") && strings.Contains(line, `"jobId"`) {
+			var record vietnamworksDetailRecord
+			if json.Unmarshal([]byte(line), &record) == nil && record.ID == id {
+				return record, true
+			}
 		}
 	}
-	return value
+	return vietnamworksDetailRecord{}, false
 }
 
 func (r vietnamworksRow) job(description string) Job {
