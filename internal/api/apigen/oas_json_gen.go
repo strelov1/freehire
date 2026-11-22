@@ -3120,8 +3120,10 @@ func (s *AppliedInteraction) encodeFields(e *jx.Encoder) {
 		s.Notes.Encode(e)
 	}
 	{
-		e.FieldStart("application_id")
-		e.Str(s.ApplicationID)
+		if s.ApplicationID.Set {
+			e.FieldStart("application_id")
+			s.ApplicationID.Encode(e)
+		}
 	}
 }
 
@@ -3218,11 +3220,9 @@ func (s *AppliedInteraction) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"notes\"")
 			}
 		case "application_id":
-			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
-				v, err := d.Str()
-				s.ApplicationID = string(v)
-				if err != nil {
+				s.ApplicationID.Reset()
+				if err := s.ApplicationID.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -3239,7 +3239,7 @@ func (s *AppliedInteraction) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b11111111,
+		0b01111111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

@@ -422,7 +422,9 @@ WITH prior AS (
      WHERE NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
 )
 SELECT t.user_id, t.job_id, t.viewed_at, u.applied_at, t.saved_at,
-       u.stage, u.notes, t.dismissed_at, t.vote, u.followed_up_at, u.id AS application_id
+       u.stage, u.notes, t.dismissed_at, t.vote, u.followed_up_at, u.id AS application_id,
+       -- No prior row (applied or only being prepared) = this call created the application.
+       NOT EXISTS (SELECT 1 FROM prior) AS created
   FROM touch t, upsert u
 `
 
@@ -445,6 +447,7 @@ type MarkJobAppliedRow struct {
 	Vote          pgtype.Int2        `json:"vote"`
 	FollowedUpAt  pgtype.Timestamptz `json:"followed_up_at"`
 	ApplicationID int64              `json:"application_id"`
+	Created       bool               `json:"created"`
 }
 
 // Mark a job as applied for a user. Idempotent and independent of a prior view:
@@ -494,6 +497,7 @@ func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) 
 		&i.Vote,
 		&i.FollowedUpAt,
 		&i.ApplicationID,
+		&i.Created,
 	)
 	return i, err
 }

@@ -24241,8 +24241,7 @@
           "applied_at",
           "dismissed_at",
           "stage",
-          "notes",
-          "application_id"
+          "notes"
         ],
         "properties": {
           "job_id": {
@@ -24319,7 +24318,7 @@
           },
           "application_id": {
             "type": "string",
-            "description": "The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}` to undo."
+            "description": "The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}` to undo.\nAbsent when the application existed before this call, since undoing would delete history this call did not write."
           }
         },
         "description": "The interaction after an apply, plus the application it wrote."

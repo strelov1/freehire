@@ -72,6 +72,10 @@
   function showToast(message: string, action?: { label: string; onClick: () => void }) {
     toast = { message, id: (toast?.id ?? 0) + 1, action };
   }
+  // A toast's Undo belongs to the judgment it announced; any newer one makes it stale.
+  const dropToastAction = () => {
+    if (toast?.action) toast = { ...toast, action: undefined };
+  };
   function fail(message: string) {
     showToast(message);
     announce(message, 'assertive');
@@ -84,6 +88,7 @@
   async function judge(action: Action, opts: { openedTab?: boolean } = {}) {
     const card = current;
     if (!card || busy()) return;
+    dropToastAction();
     const ref: Last['ref'] = {};
     let write: Promise<unknown>;
     if (action === 'apply') {
@@ -118,10 +123,15 @@
       if (cards.length === 0) await load();
       return;
     }
+    // The application existed before this apply (no id): undoing it would delete history we did not write.
+    if (action === 'apply' && !ref.id && last?.card === card) last = null;
     const next = cards[0] ? ` Next: ${describe(cards[0])}` : '';
     if (action === 'apply' && opts.openedTab) {
       const done = `Applied to ${card.title}, opened in a new tab.`;
-      showToast(done, { label: 'Undo', onClick: () => last?.card === card && undo() });
+      showToast(
+        done,
+        ref.id && last?.card === card ? { label: 'Undo', onClick: () => last?.card === card && undo() } : undefined,
+      );
       announce(done + next);
     } else if (action === 'apply') {
       announce(`Marked as applied.${next}`);
@@ -151,6 +161,7 @@
     // An apply card is still in `cards` for its FLY_MS; restoring it now would duplicate it.
     if (!last || gesture.exiting || applying) return;
     const { card, action, written, ref } = last;
+    dropToastAction();
     last = null;
     cards = [card, ...cards];
     undoing = true;
@@ -164,7 +175,13 @@
       }
       if (outcome !== 'ok') return;
       if (action === 'apply') {
-        if (ref.id) await api.untrackApplication(ref.id);
+        if (!ref.id) {
+          // Nothing of ours to delete: the card leaves again, like a gone job.
+          cards = cards.filter((c) => c !== card);
+          if (cards.length === 0) await load();
+          return;
+        }
+        await api.untrackApplication(ref.id);
       } else await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
     } catch {
       cards = cards.filter((c) => c !== card);
@@ -369,10 +386,9 @@
       </button>
     </div>
   {/if}
+  {#if toast}
+    {#key toast.id}
+      <FeedToast class="mb-28" message={toast.message} action={toast.action} onClose={() => (toast = null)} />
+    {/key}
+  {/if}
 </div>
-
-{#if toast}
-  {#key toast.id}
-    <FeedToast class="mb-28" message={toast.message} action={toast.action} onClose={() => (toast = null)} />
-  {/key}
-{/if}

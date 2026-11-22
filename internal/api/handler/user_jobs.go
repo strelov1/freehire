@@ -170,11 +170,14 @@ func (h *trackingHandlers) MarkApplied(ctx context.Context, req apigen.OptApplyJ
 		return nil, trackingError(err)
 	}
 	i := interactionOut(interaction)
-	return &apigen.MarkAppliedOK{Data: apigen.AppliedInteraction{
+	out := apigen.AppliedInteraction{
 		JobID: i.JobID, ViewedAt: i.ViewedAt, SavedAt: i.SavedAt, AppliedAt: i.AppliedAt,
 		DismissedAt: i.DismissedAt, Stage: i.Stage, Notes: i.Notes,
-		ApplicationID: applicationRefPrefix + strconv.FormatInt(interaction.ApplicationID, 10),
-	}}, nil
+	}
+	if interaction.ApplicationID != 0 {
+		out.ApplicationID.SetTo(applicationRefPrefix + strconv.FormatInt(interaction.ApplicationID, 10))
+	}
+	return &apigen.MarkAppliedOK{Data: out}, nil
 }
 
 // statedApplyDay reads the optional day from the request. It answers nil when the caller sent

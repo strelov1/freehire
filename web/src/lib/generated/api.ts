@@ -6452,8 +6452,11 @@ export interface components {
             dismissed_at: string | null;
             stage: string | null;
             notes: string | null;
-            /** @description The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}` to undo. */
-            application_id: string;
+            /**
+             * @description The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}` to undo.
+             *     Absent when the application existed before this call, since undoing would delete history this call did not write.
+             */
+            application_id?: string;
         };
         ApplyJob: {
             /** @description The day the application was sent, `2026-07-29`. Absent, null or empty means now. */

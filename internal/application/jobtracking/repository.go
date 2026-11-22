@@ -118,7 +118,9 @@ func (r *QueriesRepository) MarkAppliedOn(ctx context.Context, userID, jobID int
 		return Interaction{}, err
 	}
 	out := toInteraction(assembledRow(row))
-	out.ApplicationID = applied.ApplicationID
+	if applied.Created {
+		out.ApplicationID = applied.ApplicationID
+	}
 	return out, nil
 }
 
@@ -152,7 +154,9 @@ func (r *QueriesRepository) markApplied(ctx context.Context, userID, jobID int64
 		SavedAt: row.SavedAt, Stage: row.Stage, Notes: row.Notes, DismissedAt: row.DismissedAt,
 		Vote: row.Vote, FollowedUpAt: row.FollowedUpAt,
 	})
-	out.ApplicationID = row.ApplicationID
+	if row.Created {
+		out.ApplicationID = row.ApplicationID
+	}
 	return out, nil
 }
 

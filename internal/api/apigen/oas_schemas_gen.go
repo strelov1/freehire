@@ -991,8 +991,9 @@ type AppliedInteraction struct {
 	Stage       NilString   `json:"stage"`
 	Notes       NilString   `json:"notes"`
 	// The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}`
-	// to undo.
-	ApplicationID string `json:"application_id"`
+	// to undo. Absent when the application existed before this call, since undoing would delete history
+	// this call did not write.
+	ApplicationID OptString `json:"application_id"`
 }
 
 // GetJobID returns the value of JobID.
@@ -1031,7 +1032,7 @@ func (s *AppliedInteraction) GetNotes() NilString {
 }
 
 // GetApplicationID returns the value of ApplicationID.
-func (s *AppliedInteraction) GetApplicationID() string {
+func (s *AppliedInteraction) GetApplicationID() OptString {
 	return s.ApplicationID
 }
 
@@ -1071,7 +1072,7 @@ func (s *AppliedInteraction) SetNotes(val NilString) {
 }
 
 // SetApplicationID sets the value of ApplicationID.
-func (s *AppliedInteraction) SetApplicationID(val string) {
+func (s *AppliedInteraction) SetApplicationID(val OptString) {
 	s.ApplicationID = val
 }
 

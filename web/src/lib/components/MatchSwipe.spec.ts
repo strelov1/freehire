@@ -237,6 +237,7 @@ describe('MatchSwipe', () => {
       markJobApplied.mockReset();
       untrackApplication.mockReset();
       saveJob.mockReset();
+      dismissJob.mockReset();
     });
 
     it('external Apply opens the employer, marks applied, advances and offers Undo in the toast', async () => {
@@ -269,6 +270,26 @@ describe('MatchSwipe', () => {
       await shown('B Job');
       expect(screen.queryByLabelText('Job: A Job at Acme')).toBeNull();
       expect(untrackApplication).not.toHaveBeenCalled();
+    });
+
+    it('drops the toast Undo once another card is judged', async () => {
+      await open();
+      await fireEvent.click(applyLink());
+      await shown('B Job');
+      await screen.findByRole('button', { name: 'Undo' });
+      dismissJob.mockResolvedValue(undefined);
+      await fireEvent.click(screen.getByLabelText('Skip'));
+      await vi.waitFor(() => expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull());
+    });
+
+    it('offers no Undo when the application already existed (no application_id)', async () => {
+      await open();
+      markJobApplied.mockResolvedValue({});
+      await fireEvent.click(applyLink());
+      await shown('B Job');
+      expect(await screen.findByText('Applied to A Job, opened in a new tab.')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+      await vi.waitFor(() => expect((screen.getByLabelText('Undo last') as HTMLButtonElement).disabled).toBe(true));
     });
 
     it('Already applied marks, advances and announces, without a toast or a tab', async () => {

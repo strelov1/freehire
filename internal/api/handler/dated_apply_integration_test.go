@@ -246,3 +246,29 @@ func TestApply_ReturnsTheApplicationIDAndUndoKeepsTheSavedMark(t *testing.T) {
 		})
 	}
 }
+
+// An application the candidate was only preparing (stage and notes, no applied_at) already exists:
+// applying promotes it but returns no application_id, so the card's Undo cannot delete that history.
+func TestApply_OmitsTheApplicationIDWhenItExisted(t *testing.T) {
+	slug := "apply-existed-t35nijto"
+	app, token, userID, pool, ctx := datedApplyFixture(t, "existed-id@example.test", "existed-1", slug)
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO applications (user_id, job_id, company_slug, role_title, stage, notes)
+		 SELECT $1, id, company_slug, title, 'interview', 'call booked' FROM jobs WHERE public_slug = $2`, userID, slug); err != nil {
+		t.Fatalf("seed application: %v", err)
+	}
+	status, body := applyOn(t, app, token, slug, ``)
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, body = %s", status, body)
+	}
+	if strings.Contains(body, "application_id") {
+		t.Errorf("response carries application_id for a pre-existing application: %s", body)
+	}
+	var stage, notes string
+	if err := pool.QueryRow(ctx, `SELECT stage, notes FROM applications WHERE user_id = $1`, userID).Scan(&stage, &notes); err != nil {
+		t.Fatalf("read application: %v", err)
+	}
+	if stage != "interview" || notes != "call booked" {
+		t.Errorf("stage/notes = %q/%q, want interview/call booked", stage, notes)
+	}
+}

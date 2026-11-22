@@ -27,8 +27,11 @@ model Interaction {
 /** The interaction after an apply, plus the application it wrote. */
 model AppliedInteraction {
   ...Interaction;
-  /** The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}` to undo. */
-  application_id: string;
+  /**
+   * The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}` to undo.
+   * Absent when the application existed before this call, since undoing would delete history this call did not write.
+   */
+  application_id?: string;
 }
 
 model ApplyJob {
