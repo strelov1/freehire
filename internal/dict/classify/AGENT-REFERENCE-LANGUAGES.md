@@ -90,8 +90,10 @@ Measured 2026-11-22 on 2,419 distinct Saramin and JobKorea headlines (all 21 Sar
 
 Grades (`koreanSeniorityTable`): 수석 principal, 팀장/파트장/부장 lead, 시니어/선임/차장/과장 senior, 대리 middle, 주니어/주임/신입 junior, 인턴 intern; 사원 and 책임 state nothing. `신입/경력` ("open to both"), `신입가능`, `신입환영` and `신입무관` say who may apply, not the grade, and are cut first (`koreanGradeBlind`). The same mask removes 대리점/대리운전/대리인 and 신입생 while preserving other grade words in the title.
 
+Korean programmer evidence requires a software or web qualifier. A CNC programmer resolves to manufacturing.
+
 ## Vietnamese titles
 
-`vietnamese.go` and `vietnamese_general.go` match folded phrases after the other Latin-script fallbacks. The fold removes accents and maps đ to d. A Vietnamese-specific letter or role phrase must be present before any alias can match. Explicit role phrases take precedence over the field they name. The infrastructure project-manager regression in `classify_vi_test.go` pins that distinction.
+`vietnamese.go` and `vietnamese_general.go` match folded phrases after the other Latin-script fallbacks. The fold removes accents and maps đ to d. A Vietnamese-specific letter or role phrase must be present before any alias can match. Explicit role phrases take precedence over the field they name. The infrastructure project-manager regression in `classify_vi_test.go` pins that distinction. Store roles outrank generic sales. Recruiting requires a role phrase because `tuyen dung` also introduces hiring announcements. Generic system management and operation require an IT estate. Generic CNC and PLC programming do not signal software work.
 
 Measured on 7,551 distinct VietnamWorks titles sampled on 2026-11-22. Of the 4,473 with Vietnamese letters, 896 (20.0%) resolved a category before the change and 2,818 (63.0%) afterward.
