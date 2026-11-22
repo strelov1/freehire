@@ -101,7 +101,13 @@ The same call sends the GA4 `sign_up` from the server through the Measurement Pr
 and answers `{"data":{"ga4_sent":bool}}`; the browser sends `sign_up` itself ONLY when that
 is false, because GA4 has no event-level dedup and both sending would count the account
 twice. Never send a client id the visitor did not give: it exists only after they accepted
-analytics.
+analytics, and refusing consent expires the `_ga` cookies (`web/src/lib/consent.ts`).
+
+An account created inside an OAuth client's sign-in (Claude, ChatGPT, Cursor over MCP) never
+loads the SPA, so the browser report never comes. Approving the consent screen
+(`OAuthAuthorizeSubmit`) records it instead, with `utm_medium = 'oauth_app'` and the client's
+https redirect host as `referrer_host`, and sends the GA4 `sign_up` from the visitor's own
+`_ga` cookies when they are present.
 
 Source report — a LEFT JOIN, since accounts from before 0228, from mobile, or whose browser
 could not report have no row:

@@ -99,3 +99,18 @@ func TestSignUpHTTPRefusalIsNotUncertain(t *testing.T) {
 		t.Fatalf("a 400 is a definite failure, got %v", err)
 	}
 }
+
+func TestIDsFromCookies(t *testing.T) {
+	jar := map[string]string{"_ga": "GA1.1.1234567890.1700000000", "_ga_6P1PZ719T0": "GS2.1.s1700001111$o1$g1"}
+	cid, sid := IDsFromCookies(func(k string) string { return jar[k] }, "G-6P1PZ719T0")
+	if cid != "1234567890.1700000000" || sid != "1700001111" {
+		t.Fatalf("got %q %q", cid, sid)
+	}
+	jar["_ga_6P1PZ719T0"] = "GS1.1.1700002222.3.0"
+	if _, sid = IDsFromCookies(func(k string) string { return jar[k] }, "G-6P1PZ719T0"); sid != "1700002222" {
+		t.Fatalf("GS1 session: got %q", sid)
+	}
+	if cid, sid = IDsFromCookies(func(string) string { return "" }, "G-6P1PZ719T0"); cid != "" || sid != "" {
+		t.Fatalf("no cookies must give no ids, got %q %q", cid, sid)
+	}
+}

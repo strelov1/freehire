@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CONSENT_KEY, needsBanner, readConsent, regionNeedsConsent, writeConsent } from './consent';
+import { CONSENT_KEY, gaCookieExpiries, needsBanner, readConsent, regionNeedsConsent, writeConsent } from './consent';
 import { must } from './utils';
 
 // A minimal in-memory localStorage stub for the read/write round-trip tests. The
@@ -101,5 +101,23 @@ describe('readConsent / writeConsent', () => {
     expect(() => readConsent()).not.toThrow();
     expect(readConsent()).toBe(null);
     expect(() => writeConsent('granted')).not.toThrow();
+  });
+});
+
+describe('gaCookieExpiries', () => {
+  it('expires every GA cookie host-only and on each parent domain, nothing else', () => {
+    const cookie = 'hire_session=x; _ga=GA1.1.1.2; _ga_6P1PZ719T0=GS2.1.s1; ph_x=1';
+    expect(gaCookieExpiries(cookie, 'www.freehire.me')).toEqual([
+      '_ga=; Max-Age=0; path=/',
+      '_ga=; Max-Age=0; path=/; domain=www.freehire.me',
+      '_ga=; Max-Age=0; path=/; domain=freehire.me',
+      '_ga_6P1PZ719T0=; Max-Age=0; path=/',
+      '_ga_6P1PZ719T0=; Max-Age=0; path=/; domain=www.freehire.me',
+      '_ga_6P1PZ719T0=; Max-Age=0; path=/; domain=freehire.me',
+    ]);
+  });
+
+  it('gives nothing without GA cookies', () => {
+    expect(gaCookieExpiries('hire_session=x', 'freehire.me')).toEqual([]);
   });
 });

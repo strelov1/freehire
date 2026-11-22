@@ -214,6 +214,9 @@ func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 	if err != nil {
 		return fmt.Errorf("persist authorization code for user %d: %w", userID, err)
 	}
+	h.attributeOAuthAppSignup(c.Context(), userID, params.RedirectURI, func(name string) string {
+		return strings.Clone(c.Cookies(name)) // the GA4 send outlives the request; fiber reuses its buffer
+	})
 
 	return redirect(url.Values{"code": {code}, "state": {params.State}})
 }
