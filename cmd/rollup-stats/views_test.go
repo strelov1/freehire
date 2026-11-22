@@ -65,3 +65,8 @@ func TestPublishViewTotalsStoresNothingOnFailure(t *testing.T) {
 		t.Fatal("a failed measurement must not publish")
 	}
 }
+
+// A malformed REDIS_URL costs the snapshot, not the run: it is reported and nothing is read.
+func TestRebuildViewTotalsSkipsWithoutACache(t *testing.T) {
+	rebuildViewTotals(context.Background(), nil, "::not a redis url")
+}
