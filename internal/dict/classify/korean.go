@@ -104,8 +104,10 @@ var koreanTechCategoryTable = []aliasEntry{
 	{"데브옵스", "devops"},
 	{"인프라 엔지니어", "devops"},
 	{"서버 운영", "system_administration"},
-	{"시스템 운영", "system_administration"},
-	{"시스템 관리", "system_administration"},
+	{"it 시스템 운영", "system_administration"},
+	{"it시스템 운영", "system_administration"},
+	{"it 시스템 관리", "system_administration"},
+	{"it시스템 관리", "system_administration"},
 	{"서버 관리", "system_administration"},
 	{"it 인프라", "system_administration"},
 	{"it인프라", "system_administration"},
@@ -174,13 +176,14 @@ var koreanTechTerms = []string{
 	"프론트엔드", "프런트엔드", "백엔드", "풀스택", "안드로이드", "앱 개발", "앱개발", "임베디드", "펌웨어",
 	"정보보호", "정보보안", "사이버보안", "보안관제", "보안 관제", "모의해킹", "침해사고", "머신러닝",
 	"딥러닝", "데이터 사이언티스트", "데이터사이언티스트", "데이터 엔지니어", "데이터엔지니어",
-	"클라우드 엔지니어", "데브옵스", "네트워크 엔지니어", "서버 운영", "시스템 운영", "전산직", "전산 담당",
+	"클라우드 엔지니어", "데브옵스", "네트워크 엔지니어", "서버 운영", "전산직", "전산 담당",
+	"it 시스템 운영", "it시스템 운영", "it 시스템 관리", "it시스템 관리",
 	"블록체인", "소프트웨어 테스트", "qa 엔지니어",
 }
 
 // koreanGradeBlind masks eligibility phrases and words that contain a grade without stating one.
 // For example, 신입/경력 accepts applicants at different levels and 대리점 means an agency.
-var koreanGradeBlind = regexp.MustCompile(`신입\s*[/·,.&+~\s]*(?:및|또는|혹은)?\s*경력|경력\s*[/·,.&+~\s]*(?:및|또는|혹은)?\s*신입|신입\s*(?:도\s*)?(?:가능|환영|무관|경단)|대리점|대리운전|대리인|신입생`)
+var koreanGradeBlind = regexp.MustCompile(`신입\s*[/·,.&+~\s]*(?:및|또는|혹은)?\s*경력|경력\s*[/·,.&+~\s]*(?:및|또는|혹은)?\s*신입|신입\s*(?:도\s*)?(?:가능|환영|무관|경단)|대리점|대리운전|대리인|신입생|주차장`)
 
 // koreanSeniorityTable lists the grade words of a Korean title, highest first. The corporate ladder (사원, 주임, 대리, 과장, 차장, 부장) is mapped where a rung says a level: 주임 is the first rung above a clerk, 대리 the mid-level, 과장 and 차장 the senior ones, 팀장 and 부장 the leads. 사원 ("employee") and 책임 ("in charge") state nothing and are not here.
 var koreanSeniorityTable = []aliasEntry{

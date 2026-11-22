@@ -38,6 +38,10 @@ func TestParse_Korean(t *testing.T) {
 		{"[채용대행] 서울전선 본사 전산 개발 및 IT 경력사원 채용", "software_engineering", ""},
 		// Beyond IT.
 		{"사무직 계약사원 모집", "administration", ""},
+		{"품질 관리 시스템 운영 담당자", "industrial_engineering", ""},
+		{"품질 관리 시스템 관리 담당자", "industrial_engineering", ""},
+		{"IT 시스템 운영 담당자", "system_administration", ""},
+		{"IT시스템 관리 담당자", "system_administration", ""},
 		{"계약사원 모집", "", ""},
 		{"약사 모집", "healthcare", ""},
 		{"스마트팩토리 기계설계", "engineering_design", ""},
@@ -116,6 +120,8 @@ func TestIsTech_Korean(t *testing.T) {
 		"[알라딘] AI 데이터 엔지니어 (경력직)",
 		"임베디드 SW 기술지원",
 		"서버 운영 엔지니어",
+		"IT 시스템 운영 담당자",
+		"IT시스템 관리 담당자",
 	} {
 		if !IsTech(title) {
 			t.Errorf("IsTech(%q) = false, want true", title)
@@ -126,7 +132,8 @@ func TestIsTech_Korean(t *testing.T) {
 		"전자광학 개발자 모집",
 		"CNC 프로그래머",
 		"PLC 프로그래머 모집",
-		"[삼성/하이닉스 1차 협력사] 사무/관리 정규직 채용",
+		"품질 관리 시스템 운영 담당자",
+		"품질 관리 시스템 관리 담당자", "[삼성/하이닉스 1차 협력사] 사무/관리 정규직 채용",
 		"[K-뉴딜] 어도비 AI 콘텐츠 마케팅 과정",
 		"보안사원 채용",
 	} {
@@ -160,6 +167,9 @@ func TestParse_KoreanSeniority(t *testing.T) {
 		{"보험대리점 영업 모집", ""},
 		{"보험대리점 영업 팀장 모집", "lead"},
 		{"대리운전 기사 모집", ""},
+		{"주차장 관리원 모집", ""},
+		{"주차장 관리원 신입 모집", "junior"},
+		{"주차장 관리 차장 채용", "senior"},
 		{"2027 하이테크과정 신입생 모집", ""},
 	}
 	for _, c := range cases {
