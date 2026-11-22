@@ -97,6 +97,10 @@ Read [Turkish IT titles](AGENT-REFERENCE-LANGUAGES.md#turkish-it-titles) before 
 
 Read [Korean titles](AGENT-REFERENCE-LANGUAGES.md#korean-titles) before work involving this topic.
 
+## Vietnamese titles
+
+Read [Vietnamese titles](AGENT-REFERENCE-LANGUAGES.md#vietnamese-titles) before work involving this topic.
+
 ## Serving: dict-only
 
 Read [Serving: dict-only](AGENT-REFERENCE.md#serving-dict-only) before work involving this topic.

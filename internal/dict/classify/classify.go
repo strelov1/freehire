@@ -1,4 +1,4 @@
-// Package classify derives a job's seniority and role category deterministically from its title. It is a curated dictionary, not a model: it resolves known English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Croatian and Serbian, Slovenian, Turkish, Korean, Japanese and Chinese title terms and emits nothing for what it cannot resolve. Canonical values come from the vocabularies the enrichment contract defines (vocab.SeniorityValues / vocab.CategoryValues), so the parser, the enrichment payload and the search facet share one set of values.
+// Package classify derives a job's seniority and role category deterministically from its title. It is a curated dictionary, not a model: it resolves known English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Croatian and Serbian, Slovenian, Turkish, Vietnamese, Korean, Japanese and Chinese title terms and emits nothing for what it cannot resolve. Canonical values come from the vocabularies the enrichment contract defines (vocab.SeniorityValues / vocab.CategoryValues), so the parser, the enrichment payload and the search facet share one set of values.
 package classify
 
 import (
@@ -34,7 +34,7 @@ func matchCategory(lower string) string {
 	lower = unchefFrench(ptGenderSuffix.Replace(lower))
 	c := matchOrdered(cutBackEndShifts(lower), categoryTable)
 	if c == "" {
-		// Nothing in the main table: try the German (german.go), Dutch, Danish, Spanish, Portuguese (unless the Spanish table vetoed the title), French, Polish, Croatian/Serbian (bcs.go) and Turkish (turkish.go) heads in that order.
+		// Nothing in the main table: try the German (german.go), Dutch, Danish, Spanish, Portuguese (unless the Spanish table vetoed the title), French, Polish, Croatian/Serbian (bcs.go), Turkish (turkish.go) and Vietnamese (vietnamese.go) heads in that order.
 		if c := matchHeads(lower, germanCategoryTable); c != "" {
 			return c
 		}
@@ -59,6 +59,9 @@ func matchCategory(lower string) string {
 		}
 		if c == "" {
 			c = matchTurkishCategory(lower)
+		}
+		if c == "" {
+			c = matchVietnameseCategory(lower)
 		}
 	}
 	if c == categoryNone {
@@ -135,7 +138,10 @@ func matchSeniority(lower string) string {
 	if s := matchBCSSeniority(lower); s != "" {
 		return s
 	}
-	return matchTurkishSeniority(lower)
+	if s := matchTurkishSeniority(lower); s != "" {
+		return s
+	}
+	return matchVietnameseSeniority(lower)
 }
 
 // semiSenior is Latin America's spelled-out middle grade — "Semi Senior",

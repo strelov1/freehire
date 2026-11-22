@@ -107,3 +107,8 @@ The LinkedIn limiter's 2s spacing became `LINKEDIN_REQUEST_INTERVAL` (default un
 100ms..10s, invalid fails the crawl). Requests already leave through the rotating proxy with a
 new exit IP each, and 158 searches after the 429 retry met no refusal at 2s, so the per-process
 spacing, not LinkedIn, was the throughput bound. Ops lowers it in steps.
+
+## Korean and Vietnamese title dictionaries — 2026-11-22
+
+Recorded the title dictionary and role picker alias generator in the
+[catalogue concept](catalogue.md#title-classification).

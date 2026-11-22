@@ -106,7 +106,6 @@ var koreanTechCategoryTable = []aliasEntry{
 	{"it 인프라", "system_administration"},
 	{"it인프라", "system_administration"},
 	{"인프라 운영", "system_administration"},
-	{"dba", "system_administration"},
 	// The IT department's desk: 전산 is the company's computing.
 	{"전산직", "it_support"},
 	{"전산 담당", "it_support"},
