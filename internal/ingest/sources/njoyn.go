@@ -306,15 +306,16 @@ func njoynListingPage(root *html.Node) (rows []njoynRow, at, of int, err error) 
 	if njoynRefused(root) {
 		return nil, 0, 0, errNjoynRefused
 	}
-	table := firstByClass(root, "table-result-search")
+	table := njoynResultsTable(root)
 	if table == nil {
 		return nil, 0, 0, errNjoynNoListing
 	}
+	cols := njoynTableColumns(table)
 	walk(table, func(n *html.Node) bool {
 		if n.Type != html.ElementNode || n.Data != "tr" {
 			return true
 		}
-		if r, ok := njoynListingRow(n); ok {
+		if r, ok := njoynListingRow(n, cols); ok {
 			rows = append(rows, r)
 		}
 		return false
@@ -331,11 +332,53 @@ func njoynListingPage(root *html.Node) (rows []njoynRow, at, of int, err error) 
 	return rows, at, of, nil
 }
 
-// njoynListingRow reads one <tr>: id, title, category, city, country. A row without a posting
-// link (the header) is skipped.
-func njoynListingRow(tr *html.Node) (njoynRow, bool) {
+// njoynResultsTable finds the listing's table in either of the two site templates seen: CGI's
+// (.table-result-search: Id, Title, Category, City, Country) and the one Société de transport de
+// Laval runs (#searchtable: Title, Category, Job Type, City — no id column, no country).
+func njoynResultsTable(root *html.Node) *html.Node {
+	if t := firstByClass(root, "table-result-search"); t != nil {
+		return t
+	}
+	return firstByID(root, "searchtable")
+}
+
+// njoynColumns is where a listing table keeps the fields read here; -1 is a column it lacks.
+type njoynColumns struct{ title, city, country int }
+
+// njoynTableColumns reads the column positions from the table's header row, by their English
+// labels (the listing is always asked for with lang=1).
+func njoynTableColumns(table *html.Node) njoynColumns {
+	cols := njoynColumns{title: -1, city: -1, country: -1}
+	walk(table, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "tr" {
+			return true
+		}
+		i := 0
+		for th := n.FirstChild; th != nil; th = th.NextSibling {
+			if th.Type != html.ElementNode || th.Data != "th" {
+				continue
+			}
+			switch strings.ToLower(strings.TrimSpace(textContent(th))) {
+			case "title":
+				cols.title = i
+			case "city":
+				cols.city = i
+			case "country":
+				cols.country = i
+			}
+			i++
+		}
+		return i == 0 // a data row has no header cells and changes nothing
+	})
+	return cols
+}
+
+// njoynListingRow reads one <tr> through the table's columns. The posting's identity (Jobid,
+// BRID) comes from its link, which every template carries; a row without one (the header) is
+// skipped. A table with no Title column names the posting by its link's text.
+func njoynListingRow(tr *html.Node, cols njoynColumns) (njoynRow, bool) {
 	var cells []string
-	var href string
+	var href, linkText string
 	for td := tr.FirstChild; td != nil; td = td.NextSibling {
 		if td.Type != html.ElementNode || td.Data != "td" {
 			continue
@@ -343,18 +386,29 @@ func njoynListingRow(tr *html.Node) (njoynRow, bool) {
 		cells = append(cells, strings.Join(strings.Fields(textContent(td)), " "))
 		if a := firstByTag(td, "a"); a != nil && href == "" {
 			href = Attr(a, "href")
+			linkText = strings.Join(strings.Fields(textContent(a)), " ")
 		}
 	}
+	cell := func(i int) string {
+		if i < 0 || i >= len(cells) {
+			return ""
+		}
+		return cells[i]
+	}
 	id, brid := njoynPostingRef(href)
-	if id == "" || len(cells) < 5 {
+	title := cell(cols.title)
+	if cols.title < 0 {
+		title = linkText
+	}
+	if id == "" || title == "" {
 		return njoynRow{}, false
 	}
 	return njoynRow{
 		id:      id,
 		brid:    brid,
-		title:   cells[1],
-		city:    cells[3],
-		country: cells[4],
+		title:   title,
+		city:    cell(cols.city),
+		country: cell(cols.country),
 		remote:  strings.EqualFold(Attr(tr, "remotework"), "true"),
 	}, true
 }
@@ -402,7 +456,7 @@ func njoynDetail(ctx context.Context, get HTMLGetter, e CompanyEntry, b njoynBoa
 		return Job{}, errNjoynRefused
 	}
 	var ld njoynPosting
-	content := firstByClass(root, "job-posting-content")
+	content := njoynPostingContent(root)
 	if !ldJobPosting(root, &ld) || content == nil {
 		return Job{}, errNjoynNoPosting
 	}
@@ -423,6 +477,16 @@ func njoynDetail(ctx context.Context, get HTMLGetter, e CompanyEntry, b njoynBoa
 	}
 	j.EmploymentType = schemaEmploymentType(ld.EmploymentType)
 	return j, nil
+}
+
+// njoynPostingContent is the whole posting in either template: CGI's .job-posting-content, or
+// the #njnContentContainer the Laval template puts the posting (and its Job Number/Title/Type
+// header) in.
+func njoynPostingContent(root *html.Node) *html.Node {
+	if c := firstByClass(root, "job-posting-content"); c != nil {
+		return c
+	}
+	return firstByID(root, "njnContentContainer")
 }
 
 // njoynPlaces renders each jobLocation as "City, Region, Country" (several joined by "; ") and
