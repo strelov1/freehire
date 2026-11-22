@@ -59,6 +59,10 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// posting's body and structured facets inline. City-expanded rows collapse on
 		// partnerJobId. See cutshort.go.
 		NewCutshort(c),
+		// Unstop: Indian student and early-career platform, jobs and internships. The open
+		// catalogue is one keyless public search feed per kind with bodies inline, paced to its
+		// robots.txt Crawl-delay (pacedUnstopGetter). See unstop.go.
+		NewUnstop(pacedUnstopGetter(c)),
 		NewCryptocurrencyJobs(c),
 		NewStartupAndVC(c),
 		// Hacker News "Ask HN: Who is hiring?": the two newest monthly threads, read whole
