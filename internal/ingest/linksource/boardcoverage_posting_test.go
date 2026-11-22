@@ -91,7 +91,7 @@ func (f compleoDetailHTTP) GetHTML(_ context.Context, raw string) (*html.Node, e
 }
 
 func TestCompleoPostingFetchReturnsNamespacedVacancy(t *testing.T) {
-	const raw = "http://tester:dummy@jobs.compleo.app:80/wafx/jobdetail/HJ06276A?utm_source=test"
+	const raw = "http://tester@jobs.compleo.app:80/wafx/jobdetail/HJ06276A?utm_source=test"
 	adapter := sources.NewCompleo(compleoDetailHTTP{t: t})
 	coverage := NewBoardCoverage(map[string]sources.Source{"compleo": adapter}, nil)
 	job, found, err := coverage.Resolve(context.Background(), raw)
