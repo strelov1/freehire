@@ -87,7 +87,8 @@ func Derive(in Input) Derived {
 	// adapter's country is an office address (Ashby's postalAddress US beside "Remote |
 	// North America or Europe"), and replacing the line with it narrowed a Europe-open
 	// role to one country.
-	lineWins := len(in.Countries) > 0 && lineOutranksCountries(geo, in.Countries)
+	worldwide := worldwideLine(geo, in.Location)
+	lineWins := len(in.Countries) > 0 && (worldwide || lineOutranksCountries(geo, in.Countries))
 	if len(in.Countries) > 0 && !lineWins {
 		countries = in.Countries
 		regions = regionsForCountries(in.Countries)
@@ -98,7 +99,7 @@ func Derive(in Input) Derived {
 	// row fed back by backfill-derive) stating a country, a subdivision or a free
 	// phrase as a "region" must not reach the facet, and one that folds to nothing
 	// is no signal at all.
-	if r := location.NormalizeRegions(in.Regions); len(r) > 0 {
+	if r := location.NormalizeRegions(in.Regions); len(r) > 0 && !worldwide {
 		if lineWins {
 			// rederive feeds a stored row's regions back beside its country; a line that
 			// outranks the country must not be narrowed back by them.
@@ -336,6 +337,21 @@ func lineOutranksCountries(geo location.Geo, structured []string) bool {
 		}
 	}
 	return true
+}
+
+// worldwideLine reports whether the location line states nothing but a worldwide scope
+// ("Worldwide", "Remote / Worldwide"): no country, no city, only the global bucket, and
+// the word is "worldwide" itself. Such a line is the posting's own reach, so it outranks
+// a structured country (the employer's office on Workday or jobboardly) and a stored
+// row's regions, which WithoutShadowedGlobal would otherwise let drop the global. The
+// softer open-anywhere words ("Anywhere", "Global") still yield to the country: a US
+// employer's "Anywhere" usually means anywhere in the US.
+func worldwideLine(geo location.Geo, line string) bool {
+	if len(geo.Countries) != 0 || len(geo.Cities) != 0 || !slices.Equal(geo.Regions, []string{"global"}) {
+		return false
+	}
+	l := strings.ToLower(line)
+	return strings.Contains(l, "worldwide") || strings.Contains(l, "world wide") || strings.Contains(l, "world-wide")
 }
 
 // unionSorted is the sorted, deduplicated union of two string sets.

@@ -453,6 +453,29 @@ func TestDerive_StructuredGeographyShadow(t *testing.T) {
 		})
 	}
 }
+
+// A line that states only a worldwide scope is the posting's own reach; the adapter's
+// country beside it is the employer's office (Workday, jobboardly), and a stored row's
+// columns fed back by backfill-derive must not narrow it again.
+func TestDerive_WorldwideLineBeatsStructuredCountry(t *testing.T) {
+	for _, tc := range []struct {
+		location           string
+		countries, regions []string
+	}{
+		{"Worldwide", []string{"de"}, nil},
+		{"Worldwide", []string{"de"}, []string{"eu"}},
+		{"Remote / Worldwide", []string{"us"}, []string{"north_america"}},
+		{"Remote, Worldwide", []string{"us"}, nil},
+	} {
+		t.Run(tc.location, func(t *testing.T) {
+			got := Derive(Input{Title: "Backend Engineer", Location: tc.location, Countries: tc.countries, Regions: tc.regions})
+			if !reflect.DeepEqual(got.Regions, []string{"global"}) || len(got.Countries) != 0 {
+				t.Fatalf("countries = %v, regions = %v, want none and [global]", got.Countries, got.Regions)
+			}
+		})
+	}
+}
+
 func TestDerive_NegativeStructuredExperience(t *testing.T) {
 	n := -1
 	got := Derive(Input{Title: "Backend Engineer", ExperienceYearsMin: &n})
