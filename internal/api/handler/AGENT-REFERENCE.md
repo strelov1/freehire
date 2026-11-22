@@ -83,7 +83,7 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   zero must not reach a page as if it were a measurement.
 - Tests construct the feature struct directly with fakes/stubs (e.g.
   `&trackingHandlers{tracking: ...}`) and mount routes on a bare `fiber.App`.
-- Central `handler.RenderError` (wired in `cmd/server` via `fiber.Config{ErrorHandler: handler.RenderError}`) renders JSON envelope: a `codedError`→its status with a `code` field, `*fiber.Error`→its code, `pgx.ErrNoRows`→404, FK-violation (SQLSTATE 23503)→404, `inbox.ErrNotFound`→404, `inbox.InvalidError`/`inbox.ErrSlugRequired`/`search.ErrBadQuery`→400, `inbox.ErrPendingSuggestion`→409, `context.Canceled`→499 (client closed request), everything else→500.
+- Central `handler.RenderError` (wired in `cmd/server` via `fiber.Config{ErrorHandler: handler.RenderError}`) renders JSON envelope: a `codedError`→its status with a `code` field, `*fiber.Error`→its code, `pgx.ErrNoRows`→404, FK-violation (SQLSTATE 23503)→404, `inbox.ErrNotFound`→404, `inbox.InvalidError`/`inbox.ErrSlugRequired`/`search.ErrBadQuery`→400, `inbox.ErrPendingSuggestion`→409, `context.Canceled`→499 (client closed request), `search.ErrBusy` (Meilisearch's search queue full)→503 with `Retry-After: 10`, not reported, everything else→500.
 - Handlers signal failure by returning an error — `fiber.NewError(status, msg)` for specific codes, bare error (e.g. `pgx.ErrNoRows`) for common cases. Don't hand-roll per-handler error JSON; don't re-map `ErrNoRows` in read handlers (just `return err`).
 
 ## Auth Handlers (`auth.go`)

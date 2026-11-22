@@ -154,6 +154,25 @@ func TestRenderError_UnconfiguredServiceIsNotReported(t *testing.T) {
 	}
 }
 
+// A full Meilisearch queue tells the caller when to retry, as Meilisearch told us, and
+// stays out of the exception logs.
+func TestRenderError_BusySearchSaysWhenToRetry(t *testing.T) {
+	app, tr := reportingApp(t, func(*fiber.Ctx) error {
+		return fmt.Errorf("search: query: %w: too many search requests", search.ErrBusy)
+	})
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/x", nil))
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusServiceUnavailable || resp.Header.Get(fiber.HeaderRetryAfter) != "10" {
+		t.Errorf("status = %d, Retry-After = %q; want 503 and 10", resp.StatusCode, resp.Header.Get(fiber.HeaderRetryAfter))
+	}
+	if got := tr.count(); got != 0 {
+		t.Errorf("reported exceptions = %d, want 0", got)
+	}
+}
+
 // errorApp mounts a route that returns errFn's error through RenderError, so the
 // status mapping can be asserted end to end.
 func errorApp(errFn func(*fiber.Ctx) error) *fiber.App {
@@ -223,6 +242,7 @@ func TestClassify_ReportsOnlyUnexpected500(t *testing.T) {
 		{"client disconnect is not a fault", context.Canceled, statusClientClosedRequest, false},
 		{"wrapped client disconnect still 499", fmt.Errorf("search: query: %w", context.Canceled), statusClientClosedRequest, false},
 		{"malformed search query maps to 400", fmt.Errorf("search: query: %w: bad filter", search.ErrBadQuery), fiber.StatusBadRequest, false},
+		{"full search queue is a busy 503, not a fault", fmt.Errorf("search: query: %w: too many search requests", search.ErrBusy), fiber.StatusServiceUnavailable, false},
 		{"server-side timeout is still reported", context.DeadlineExceeded, fiber.StatusInternalServerError, true},
 		// An autopilot run refused for want of a fit analysis has already said so to the
 		// candidate, on the stream they were reading, in words they can act on. Filing it
