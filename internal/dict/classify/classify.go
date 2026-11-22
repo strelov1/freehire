@@ -21,7 +21,7 @@ type Classification struct {
 func Parse(title string) Classification {
 	lower := strings.ToLower(title)
 	return Classification{
-		// The grade is read with the grade-blind role names cut out, so a grade word owned by a role name ("Member of Technical Staff") is not mistaken for the grade. The category reads the untouched title.
+		// The grade is read with the grade-blind role names cut out, so a grade word owned by a role name ("Member of Technical Staff") is not mistaken for the grade. The category uses its own alias masks.
 		Seniority: matchSeniority(lower),
 		Category:  matchCategory(lower),
 	}
@@ -32,7 +32,7 @@ func Parse(title string) Classification {
 // The Brazilian-Portuguese gender parentheticals are folded first, as IsNonTech folds them: "Operador(a) de Caixa" must not be recognised as non-technical yet filed nowhere.
 func matchCategory(lower string) string {
 	lower = unchefFrench(ptGenderSuffix.Replace(lower))
-	c := matchOrdered(cutBackEndShifts(lower), categoryTable)
+	c := matchOrdered(koreanCategoryNoise.Replace(cutBackEndShifts(lower)), categoryTable)
 	if c == "" {
 		// Nothing in the main table: try the German (german.go), Dutch, Danish, Spanish, Portuguese (unless the Spanish table vetoed the title), French, Polish, Croatian/Serbian (bcs.go), Turkish (turkish.go) and Vietnamese (vietnamese.go) heads in that order.
 		if c := matchHeads(lower, germanCategoryTable); c != "" {
@@ -166,7 +166,7 @@ var (
 //
 // A blind alias contributes nothing: categoryNone is not a category.
 func Categories(text string) []string {
-	out := matchAllOrdered(cutBackEndShifts(strings.ToLower(text)), categoryTable)
+	out := matchAllOrdered(koreanCategoryNoise.Replace(cutBackEndShifts(strings.ToLower(text))), categoryTable)
 	return slices.DeleteFunc(out, func(c string) bool { return c == categoryNone })
 }
 

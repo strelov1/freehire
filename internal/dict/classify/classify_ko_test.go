@@ -1,6 +1,9 @@
 package classify
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 // TestParse_Korean pins the Korean tables (korean.go, korean_general.go): live headlines from
 // Saramin and JobKorea (2026-11-22), each filed where its English twin is. Measured on 2,419
@@ -34,6 +37,9 @@ func TestParse_Korean(t *testing.T) {
 		{"[화장품 ODM상장사] IT인프라 담당 (서버/네트워크/전산장비 등)", "system_administration", ""},
 		{"[채용대행] 서울전선 본사 전산 개발 및 IT 경력사원 채용", "software_engineering", ""},
 		// Beyond IT.
+		{"사무직 계약사원 모집", "administration", ""},
+		{"계약사원 모집", "", ""},
+		{"약사 모집", "healthcare", ""},
 		{"스마트팩토리 기계설계", "engineering_design", ""},
 		{"스마트팩토리 생산관리 담당자", "manufacturing", ""},
 		{"마트 직원 모집", "retail", ""},
@@ -66,6 +72,7 @@ func TestParse_Korean(t *testing.T) {
 		{"[글로벌기업/상여금180%]음료용 빨대 생산직 대규모채용", "manufacturing", ""},
 		{"cnc,mct 오퍼레이터 오래하실분", "manufacturing", ""},
 		{"CNC 프로그래머", "manufacturing", ""},
+		{"PLC 프로그래머 모집", "", ""},
 		{"소프트웨어 프로그래머", "software_engineering", ""},
 		{"헬러코리아 연구소 기구설계 신입/경력 엔지니어 충원 채용", "engineering_design", ""},
 		{"지열공사현장 안전관리자 모집", "occupational_safety", ""},
@@ -81,6 +88,21 @@ func TestParse_Korean(t *testing.T) {
 		got := Parse(c.title)
 		if got.Category != c.category || got.Seniority != c.seniority {
 			t.Errorf("Parse(%q) = {category %q, seniority %q}, want {%q, %q}", c.title, got.Category, got.Seniority, c.category, c.seniority)
+		}
+	}
+}
+
+func TestCategories_KoreanContractEmployees(t *testing.T) {
+	for _, tc := range []struct {
+		title string
+		want  []string
+	}{
+		{"사무직 계약사원 모집", []string{"administration"}},
+		{"계약사원 및 약사 모집", []string{"healthcare"}},
+		{"계약사원 모집", nil},
+	} {
+		if got := Categories(tc.title); !slices.Equal(got, tc.want) {
+			t.Errorf("Categories(%q) = %v, want %v", tc.title, got, tc.want)
 		}
 	}
 }
@@ -103,6 +125,7 @@ func TestIsTech_Korean(t *testing.T) {
 	for _, title := range []string{
 		"전자광학 개발자 모집",
 		"CNC 프로그래머",
+		"PLC 프로그래머 모집",
 		"[삼성/하이닉스 1차 협력사] 사무/관리 정규직 채용",
 		"[K-뉴딜] 어도비 AI 콘텐츠 마케팅 과정",
 		"보안사원 채용",

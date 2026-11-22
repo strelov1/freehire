@@ -2,6 +2,7 @@ package classify
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
 )
@@ -21,6 +22,9 @@ import (
 
 // koreanCategoryTable lists the Korean category aliases in precedence order: the technical block, then the other professions.
 var koreanCategoryTable = append(append([]aliasEntry{}, koreanTechCategoryTable...), koreanGeneralCategoryTable...)
+
+// Contract employee contains the pharmacist alias, but describes the contract only.
+var koreanCategoryNoise = strings.NewReplacer("계약사원", " ")
 
 var koreanTechCategoryTable = []aliasEntry{
 	// Vetoes. A training course is not a job ("[국비지원] AI·SW 교육생모집", a bootcamp for 데이터 분석), and a bare 보안 is as often the guard of a mall as information security.
@@ -137,11 +141,13 @@ var koreanTechCategoryTable = []aliasEntry{
 	{"웹 개발", "software_engineering"},
 	{"웹개발", "software_engineering"},
 	{"웹 프로그래머", "software_engineering"},
+	{"웹프로그래머", "software_engineering"},
+	{"소프트웨어 프로그래머", "software_engineering"},
+	{"소프트웨어프로그래머", "software_engineering"},
 	{"전산 개발", "software_engineering"},
 	{"전산개발", "software_engineering"},
 	{"어플리케이션 개발", "software_engineering"},
 	{"애플리케이션 개발", "software_engineering"},
-	{"프로그래머", "software_engineering"},
 	{"게임 개발", "software_engineering"},
 	{"게임개발", "software_engineering"},
 	{"sw 개발", "software_engineering"},
