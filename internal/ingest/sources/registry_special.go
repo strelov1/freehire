@@ -274,6 +274,15 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// from its page's schema.org JobPosting. Its edge refuses a plain client: crawled through the
 	// Scrapling tier (scraplingProviders). See clearedjobs.go.
 	registry["clearedjobs"] = NewClearedJobs(c)
+	if c == nil {
+		registry["jobscz"] = NewJobsCz(nil)
+	} else {
+		registry["jobscz"] = pacedJobsCz(jobsCzClient())
+	}
+	registry["dribbble"] = NewDribbble(c)
+	registry["awwwards"] = NewAwwwards(c)
+	registry["jobbankca"] = NewJobBankCA(c)
+	registry["naukrigulf"] = NewNaukrigulf(c)
 	// JobTeaser: the European careers platform of business and engineering schools, one board per
 	// posting language, enumerated from its job-ads sitemaps, each new posting's body read from its
 	// page's schema.org JobPosting. Pages behind Cloudflare: read through the Scrapling tier

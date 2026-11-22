@@ -10,6 +10,14 @@ sets sub-day windows. Evidence is a live guest-API measurement: keyword-less
 flow exceeds it), so big markets need windows of a few hours. `harvest-linkedin` gained
 `--jobage-hours` and a per-entry `jobage_hours`. No production rollout is asserted.
 
+## Additional job boards — 2026-11-22
+
+Added crawl-host measurements and captured-response tests for Jobs.cz, ClearanceJobs,
+Naukrigulf, Dribbble, Awwwards, Canada's Job Bank, CV-Online and CVbankas. The provider
+notes record catalogue coverage, request rates, and cases where the source exposes
+only a bounded listing or a partner redirect. The generated source catalogue and
+display labels come from the local registration. Production runs are verified separately.
+
 ## 2026-11-17
 
 Documented the optional LinkedIn Easy Apply listing pass (`tenants.easyapply_pages`). Evidence is a

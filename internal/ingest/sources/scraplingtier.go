@@ -34,6 +34,12 @@ type scraplingProvider struct {
 // It is applied after the proxy and fingerprint tiers and overrides them for these providers;
 // without SCRAPLING_FETCH_URL nothing here runs and each keeps the transport those tiers gave it.
 var scraplingProviders = map[string]scraplingProvider{
+	"jobbankca": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewJobBankCA(f)
+	}},
+	"naukrigulf": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewNaukrigulf(f)
+	}},
 	// Public full postings are refused directly; HTTP + proxy exposes recommendations.
 	"linkedin": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewLinkedIn(f)
