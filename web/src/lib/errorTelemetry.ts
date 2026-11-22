@@ -21,7 +21,10 @@ function sanitize(value: string, limit: number): string {
     .replace(/(?:https?|file|chrome-extension|moz-extension):\/\/[^\s)"'<>]+/gi, (raw) => {
       try {
         const url = new URL(raw);
-        return `${url.protocol}//${url.host}${url.pathname}`;
+        const [, section = '', token] = url.pathname.split('/', 3);
+        // Booking paths contain the access token itself, including in stack frames.
+        const path = token && decodeURIComponent(section) === 'booking' ? '/booking/[token]' : url.pathname;
+        return `${url.protocol}//${url.host}${path}`;
       } catch {
         return '[url]';
       }
@@ -47,7 +50,7 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         'deployment.environment.name': options.environment || 'development',
       }),
       logRecordLimits: {
-        attributeCountLimit: 8,
+        attributeCountLimit: 9,
         attributeValueLengthLimit: 8192,
       },
       processors: [
@@ -124,6 +127,10 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         }
         if (seen.size >= 20 || seen.has(key)) return;
         seen.add(key);
+        // The Location fields exclude credentials, query parameters, and fragments.
+        const url =
+          typeof window === 'undefined' ? '' : sanitize(window.location.origin + window.location.pathname, 256);
+        const userAgent = typeof window === 'undefined' ? '' : sanitize(window.navigator.userAgent, 256);
         logger.emit({
           severityNumber: SeverityNumber.ERROR,
           severityText: 'ERROR',
@@ -135,6 +142,8 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
             'exception.stacktrace': stack,
             ...(route && { 'http.route': route }),
             ...(method && { 'http.request.method': method }),
+            ...(url && { url }),
+            ...(userAgent && { user_agent: userAgent }),
             ...(context.errorId && { 'error.id': sanitize(context.errorId, 64) }),
           },
         });
