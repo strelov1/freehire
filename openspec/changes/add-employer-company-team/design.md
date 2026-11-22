@@ -71,7 +71,7 @@ author) and disappears from the team's dashboard.
   themselves before going.
 ## Recruiter access and activity
 
-The account holder retains ownership. Migration 0297 gives existing members the
+The account holder retains ownership. Migration 0298 gives existing members the
 manager role with their existing company, vacancy, team and inbox permissions.
 Previously issued invitations retain their original behavior until used, replaced
 or expired. An invitation created or renewed after the upgrade grants recruiter
@@ -84,7 +84,7 @@ membership and leave. The account holder and managers can manage the company
 profile, vacancies, membership and invitations. All access requires an active
 company account.
 
-Migration 0296 adds the company activity log. Stage and note edits are recorded
+Migration 0297 adds the company activity log. Stage and note edits are recorded
 in the same database statement as the change. Team changes record invitations,
 withdrawals, joins and removals. Recruiters can read application events, and
 managers can also read team events. The log omits applicant email addresses,
@@ -94,6 +94,6 @@ The actor is linked to their user ID and displayed by their current work
 address while they remain in the company. Deleting a company account removes
 its activity. Earlier actions have no activity rows.
 
-Apply migrations 0296 and 0297 before starting the new server. The earlier
+Apply migrations 0297 and 0298 before starting the new server. The earlier
 server treats every team member as a manager. Once recruiter access is in use,
 a rollback must keep the role-aware authorization in place.

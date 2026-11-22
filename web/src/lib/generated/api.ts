@@ -7330,6 +7330,11 @@ export interface components {
             open_prev_30d: number;
             /** Format: int64 */
             growth_30d: number;
+            /**
+             * Format: date-time
+             * @description When a company that had not been hiring started again; set only for those (sort=new).
+             */
+            hiring_started_at?: string;
         };
         /** @description A row of the catalogue: the company, its open-job count and a few company-info facts for the card. */
         CompanyListItem: {
@@ -12890,6 +12895,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "query": "candidate@example.com"
+                 *     }
+                 */
                 "application/json": components["schemas"]["EmployerApplicationSearch"];
             };
         };
@@ -13023,6 +13033,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "mark_viewed": true
+                 *     }
+                 */
                 "application/json": components["schemas"]["EmployerApplicationWorkspace"];
             };
         };
@@ -13766,7 +13781,7 @@ export interface operations {
     insightsCompanies: {
         parameters: {
             query?: {
-                /** @description Rank by openings or by growth. */
+                /** @description Rank by openings (open), growth (growth, -growth) or list companies that just started hiring (new). */
                 sort?: string;
                 /** @description Ignore companies below this many open roles. */
                 min_open?: string;

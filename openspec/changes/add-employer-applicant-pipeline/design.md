@@ -114,7 +114,7 @@ of the hiring stage. The employer team shares one private note field per
 application. Updating that field does not change applicant tracking or send
 email. Stage changes retain the existing tracking and email behavior.
 
-Migration 0296 adds the fields and activity log. Existing delivered applications
+Migration 0297 adds the fields and activity log. Existing delivered applications
 start with an empty note and no recorded review. Their stages and CV snapshots
 are preserved. Applications from before CV archiving remain readable and display
 that the original was available only by email.

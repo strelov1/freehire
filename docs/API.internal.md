@@ -4348,7 +4348,7 @@ Search delivered applications before pagination. An unknown stage returns 400.
 | `query` | string | yes | A literal search in candidate email, message and answers. |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/employer/applications/search" -b cookies.txt
+curl -X POST "https://freehire.me/api/v1/employer/applications/search" -b cookies.txt -H 'Content-Type: application/json' -d '{"query":"candidate@example.com"}'
 ```
 
 ### `GET /employer/applications/{id}/cv`
@@ -4437,7 +4437,7 @@ Mark an application reviewed or save private notes.
 | `employer_notes` | string | no | Replace the private team notes. The empty string clears them. |
 
 ```bash
-curl -X PATCH "https://freehire.me/api/v1/employer/applications/<id>/workspace" -b cookies.txt
+curl -X PATCH "https://freehire.me/api/v1/employer/applications/<id>/workspace" -b cookies.txt -H 'Content-Type: application/json' -d '{"mark_viewed":true}'
 ```
 
 ### `POST /employer/claim`

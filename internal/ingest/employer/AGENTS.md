@@ -162,7 +162,7 @@ for the full design record.
   company because each is a letter freehire sends to an address the account typed. A letter
   that fails withdraws its invitation, so the list never shows somebody as invited who was
   never told. A new recruiter invitation also requires a confirmed Freehire account email
-  matching the invited address. Manager invitations issued before migration 0297 keep
+  matching the invited address. Manager invitations issued before migration 0298 keep
   their previous link-based acceptance until they are used, replaced or expire.
 - **Every change to a team runs under the company's lock** (`LockEmployerCompany`, a
   transaction advisory lock): an invitation, a withdrawal and a removal (each rechecking,

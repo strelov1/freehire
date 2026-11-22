@@ -32,6 +32,7 @@ func (r iteratorForCopyInsightsCompanyGrowth) Values() ([]interface{}, error) {
 		r.rows[0].CompanySlug,
 		r.rows[0].OpenCount,
 		r.rows[0].OpenCountPrev,
+		r.rows[0].HiringStartedAt,
 	}, nil
 }
 
@@ -40,7 +41,7 @@ func (r iteratorForCopyInsightsCompanyGrowth) Err() error {
 }
 
 func (q *Queries) CopyInsightsCompanyGrowth(ctx context.Context, arg []CopyInsightsCompanyGrowthParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"insights_company_growth"}, []string{"company_slug", "open_count", "open_count_prev"}, &iteratorForCopyInsightsCompanyGrowth{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"insights_company_growth"}, []string{"company_slug", "open_count", "open_count_prev", "hiring_started_at"}, &iteratorForCopyInsightsCompanyGrowth{rows: arg})
 }
 
 // iteratorForCopyInsightsCompanyLifetime implements pgx.CopyFromSource.

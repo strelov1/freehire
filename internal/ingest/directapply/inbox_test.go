@@ -355,3 +355,15 @@ func TestInboxMove_TheLetterFollowsTheCommit(t *testing.T) {
 		t.Errorf("letter sent with committed=%v, notified=%v; want one letter after the commit", n.committed, res.Notified)
 	}
 }
+
+func TestInbox_RejectsInvalidWorkspaceText(t *testing.T) {
+	inbox := newInboxHarness().inbox()
+	ctx := context.Background()
+	if _, err := inbox.List(ctx, employerID, InboxFilter{Search: "Go\x00SQL"}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("search with NUL: got %v, want ErrInvalid", err)
+	}
+	notes := strings.Repeat("é", 4001)
+	if _, err := inbox.UpdateWorkspace(ctx, employerID, 1, false, &notes); !errors.Is(err, ErrInvalid) {
+		t.Errorf("oversized notes: got %v, want ErrInvalid", err)
+	}
+}
