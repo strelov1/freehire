@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -99,6 +100,58 @@ func (in signupAttributionRequest) params(userID int64) db.InsertSignupAttributi
 	}
 }
 
+// oauthAppMedium marks an account that was created to connect an OAuth client (Claude,
+// ChatGPT, Cursor over MCP) rather than on the site itself.
+const oauthAppMedium = "oauth_app"
+
+// attributeOAuthAppSignup records how an account created inside an OAuth client's sign-in
+// arrived. That person goes from sign-in through the server-rendered consent screen straight
+// back to the client and never loads the SPA, so the browser's report never comes. The source
+// is the client's https redirect host (a loopback or custom-scheme app has none). The SQL
+// ignores an account older than ten minutes, so connecting a client later records nothing.
+// The GA4 sign_up goes out only for the first record and only with the visitor's own `_ga`
+// cookies (present after consent), sent with the consent form from our origin.
+// Best effort, like the browser report: a failure must not block the approval.
+func (h *authHandlers) attributeOAuthAppSignup(ctx context.Context, userID int64, redirectURI string, cookie func(string) string) {
+	in := signupAttributionRequest{UTMMedium: oauthAppMedium, LandingPath: "/api/v1/oauth/authorize"}
+	if u, err := url.Parse(redirectURI); err == nil && strings.EqualFold(u.Scheme, "https") {
+		in.ReferrerHost = u.Hostname()
+	}
+	inserted, err := h.queries.InsertSignupAttribution(ctx, in.params(userID))
+	if err != nil {
+		log.Printf("attribution: storing oauth app sign-up for user %d: %v", userID, err)
+		return
+	}
+	if inserted == 1 && h.ga4 != nil {
+		clientID, sessionID := ga4mp.IDsFromCookies(cookie, os.Getenv("GA4_MEASUREMENT_ID"))
+		// Off the request: nobody waits on the answer, and the client's redirect must not.
+		go h.sendSignUp(userID, clientID, sessionID, "oauth") //nolint:gosec // G118: ctx is fasthttp's RequestCtx, recycled once the handler returns
+	}
+}
+
+// sendSignUp sends the GA4 sign_up and reports whether the browser must stay out of it.
+// `sent` answers "should the browser stay out of it?", not "did Google confirm?". GA4 cannot
+// dedupe, so doubtful cases settle toward the server owning the event: a send that may have
+// reached Google before the connection failed. Only a definite failure (nothing configured,
+// no client id, a refusal) leaves it to the browser.
+func (h *authHandlers) sendSignUp(userID int64, clientID, sessionID, method string) (sent bool) {
+	if h.ga4 == nil || !ga4mp.ValidClientID(clientID) {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	switch err := h.ga4.SignUp(ctx, clientID, sessionID, method); {
+	case err == nil:
+		return true
+	case errors.Is(err, ga4mp.ErrUncertain):
+		log.Printf("attribution: GA4 sign_up for user %d may not have been delivered: %v", userID, err)
+		return true
+	default:
+		log.Printf("attribution: GA4 sign_up for user %d: %v", userID, err)
+		return false
+	}
+}
+
 // ReportSignupAttribution records how the caller's brand-new account arrived and,
 // when the browser handed over a Google Analytics client id, sends the GA4 `sign_up`
 // from here. A failure to store or send never surfaces as an error: attribution is
@@ -122,30 +175,14 @@ func (h *authHandlers) ReportSignupAttribution(ctx context.Context, req *apigen.
 		return &apigen.ReportSignupAttributionOK{Data: apigen.AccountAttributionResult{}}, nil
 	}
 	// Only the first report for an account sends the event, so a retry or replay cannot count
-	// one sign-up twice in GA.
-	//
-	// `sent` answers "should the browser stay out of it?", not "did Google confirm?". GA4 cannot
-	// dedupe, so doubtful cases settle toward the server owning the event: a report that lost
-	// the insert race, and a send that may have reached Google before the connection failed.
-	// Only a definite failure (nothing configured, no client id, a refusal) leaves it to the
-	// browser.
+	// one sign-up twice in GA. A report that lost the insert race leaves it to the winner.
 	sent := inserted == 0
-	if inserted == 1 && h.ga4 != nil && ga4mp.ValidClientID(in.GAClientID) {
+	if inserted == 1 {
 		method := "oauth"
 		if in.Method == "password" {
 			method = "password"
 		}
-		sendCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-		defer cancel()
-		switch err := h.ga4.SignUp(sendCtx, in.GAClientID, in.GASessionID, method); {
-		case err == nil:
-			sent = true
-		case errors.Is(err, ga4mp.ErrUncertain):
-			sent = true
-			log.Printf("attribution: GA4 sign_up for user %d may not have been delivered: %v", userID, err)
-		default:
-			log.Printf("attribution: GA4 sign_up for user %d: %v", userID, err)
-		}
+		sent = h.sendSignUp(userID, in.GAClientID, in.GASessionID, method)
 	}
 	return &apigen.ReportSignupAttributionOK{Data: apigen.AccountAttributionResult{Ga4Sent: sent}}, nil
 }
