@@ -330,6 +330,9 @@ func TestInboxRepository_PreservesStageWhenUpdatingWorkspace(t *testing.T) {
 	f := newInboxFixture(t)
 	ctx := context.Background()
 	id := f.apply(t, f.vacancy, f.candidate, "cv", true)
+	if _, err := f.repo.SetStage(ctx, f.employer, id, directapply.StageInterview); err != nil {
+		t.Fatalf("SetStage: %v", err)
+	}
 	notes := "Discuss scheduling"
 	if err := f.repo.UpdateWorkspace(ctx, f.other, id, true, &notes); !errors.Is(err, directapply.ErrNotFound) {
 		t.Fatalf("other employer updated workspace: %v", err)
@@ -338,7 +341,7 @@ func TestInboxRepository_PreservesStageWhenUpdatingWorkspace(t *testing.T) {
 		t.Fatalf("UpdateWorkspace: %v", err)
 	}
 	app, err := f.repo.Get(ctx, f.employer, id)
-	if err != nil || app.ViewedAt == nil || app.EmployerNotes != notes || app.Stage != directapply.StageNew {
+	if err != nil || app.ViewedAt == nil || app.EmployerNotes != notes || app.Stage != directapply.StageInterview {
 		t.Fatalf("workspace = %+v, %v; want viewed and notes saved with the original stage", app, err)
 	}
 }
