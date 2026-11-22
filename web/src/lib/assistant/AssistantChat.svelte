@@ -627,8 +627,8 @@
               initialReport={interviewReport}
               transcript={chat.messages}
               callOpen={voiceCallOpen}
-              ready={canStartTurn && queue.length === 0}
-              open={(next) => (activeId === id ? openSession(next) : Promise.resolve())}
+              ready={canStartTurn() && queue.length === 0}
+              onReplay={(next) => (activeId === id ? openSession(next) : Promise.resolve())}
             >
               {#snippet children(busy)}{@render input(busy)}{/snippet}
             </RehearsalInput>

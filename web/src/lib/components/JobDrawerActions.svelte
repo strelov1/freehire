@@ -27,7 +27,7 @@
     tailoring: boolean;
     onTailor: () => void;
     jobSlug?: string | null;
-    stage: string;
+    stage: string | null;
     offersFollowUp: boolean;
     followedUp: boolean;
     onFollowUp: () => void;
@@ -36,7 +36,7 @@
   const s = $derived(t(messages, locale()));
 
   const canRehearse = $derived(!!jobSlug && (stage === 'screening' || stage === 'interview'));
-  const canDebrief = $derived(!!jobSlug && ['interview', 'offer', 'accepted', 'rejected'].includes(stage));
+  const canDebrief = $derived(!!jobSlug && ['interview', 'offer', 'accepted', 'rejected'].includes(stage ?? ''));
   let startingInterview = $state(false);
   let interviewError = $state(false);
   let disposed = false;

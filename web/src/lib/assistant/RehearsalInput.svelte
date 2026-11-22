@@ -12,7 +12,7 @@
     transcript,
     callOpen,
     ready,
-    open,
+    onReplay,
     children,
   }: {
     id: string;
@@ -20,7 +20,7 @@
     transcript: ChatMessage[];
     callOpen: boolean;
     ready: boolean;
-    open: (id: string) => Promise<void>;
+    onReplay: (id: string) => Promise<void>;
     children: Snippet<[boolean]>;
   } = $props();
 
@@ -57,7 +57,7 @@
     const currentID = id;
     try {
       const result = await repeatInterviewQuestion(currentID);
-      await open(result.session_id);
+      await onReplay(result.session_id);
     } catch {
       error = s.interviewRepeatError;
     } finally {
