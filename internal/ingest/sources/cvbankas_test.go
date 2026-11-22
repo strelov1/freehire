@@ -33,6 +33,7 @@ func cvbankasFixture(tb testing.TB, name string) *html.Node {
 type cvbankasFake struct {
 	t       testing.TB
 	pageErr error
+	details map[string]*html.Node
 
 	mu    sync.Mutex
 	asked []string
@@ -47,6 +48,8 @@ func (f *cvbankasFake) GetHTML(_ context.Context, u string) (*html.Node, error) 
 	switch {
 	case strings.HasPrefix(u, cvbankasBase+"/?page="):
 		return cvbankasFixture(f.t, "list.html"), nil
+	case f.details[u] != nil:
+		return f.details[u], nil
 	case u == cvbankasPiguURL:
 		if f.pageErr != nil {
 			return nil, f.pageErr
@@ -149,6 +152,49 @@ func TestCVbankasNoAnswerFailsBoard(t *testing.T) {
 	s.http = errorGetter{}
 	if _, err := s.list(context.Background()); err == nil {
 		t.Fatal("a failed first listing page must fail the crawl")
+	}
+}
+
+func TestCVbankasUnparseableDetailIsUnreadable(t *testing.T) {
+	rows := cvbankasRows(cvbankasFixture(t, "list.html"))
+	const challenge = `<html><body><h1>Just a moment</h1></body></html>`
+	for _, tc := range []struct {
+		name      string
+		html      string
+		allFailed bool
+	}{
+		{"partial outage", challenge, false},
+		{"markup-only body", `<section itemprop="description"><p>&nbsp;</p></section>`, false},
+		{"total outage", challenge, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			blocked, err := html.Parse(strings.NewReader(tc.html))
+			if err != nil {
+				t.Fatal(err)
+			}
+			f := &cvbankasFake{t: t, details: map[string]*html.Node{rows[1].url: blocked}}
+			if tc.allFailed {
+				f.details[rows[0].url] = blocked
+			}
+			s := NewCVbankas(f).(cvbankas)
+			jobs, err := s.FetchNew(context.Background(), CompanyEntry{}, func(id string) bool { return id == rows[2].id })
+			if tc.allFailed {
+				if err == nil || !strings.Contains(err.Error(), "none answered") || len(jobs) != 0 {
+					t.Fatalf("got %d jobs and %v, want a board failure despite the seen posting", len(jobs), err)
+				}
+				return
+			}
+			if err != nil || len(jobs) != 3 {
+				t.Fatalf("got %d jobs and %v, want a hydrated posting, an unreadable marker and a seen refresh", len(jobs), err)
+			}
+			for _, j := range jobs {
+				if j.ExternalID == rows[1].id && j.URL == rows[1].url && j.Company == rows[1].company &&
+					j.Unreadable && j.Description == "" {
+					return
+				}
+			}
+			t.Errorf("unreadable posting's listing identity missing: %+v", jobs)
+		})
 	}
 }
 

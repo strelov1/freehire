@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"net/http"
 	"regexp"
 	"slices"
 	"strconv"
@@ -116,7 +115,7 @@ func (s cvbankas) FetchNew(ctx context.Context, _ CompanyEntry, seen func(extern
 		job, ok, err := s.detail(ctx, r)
 		if err != nil {
 			log.Printf("cvbankas: posting %s failed; deferring: %v", r.id, err)
-			return unreadableDetail(r.id, r.url, ""), true
+			return unreadableDetail(r.id, r.url, r.company), true
 		}
 		answered.Add(1)
 		return job, ok
@@ -257,18 +256,20 @@ func cvbankasNumber(s string) (int, bool) {
 }
 
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
-// is gone (404/410) or a page with no body; an error is the absence of an answer.
+// is gone (404/410). An unreadable or incomplete posting yields an error.
 func (s cvbankas) detail(ctx context.Context, r cvbankasRow) (Job, bool, error) {
 	root, err := s.http.GetHTML(ctx, r.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if !detailUnreadable(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
 	}
 	job, ok := cvbankasJob(root, r)
-	return job, ok, nil
+	if !ok {
+		return Job{}, false, errors.New("page carries no usable posting")
+	}
+	return job, true, nil
 }
 
 // cvbankasJob maps a posting page and its listing row to a Job. ok is false for one with no
@@ -291,7 +292,7 @@ func cvbankasJob(root *html.Node, r cvbankasRow) (Job, bool) {
 	if d := findItemprops(root, "description"); len(d) > 0 {
 		body = sanitizeHTML(innerHTML(d[0]))
 	}
-	if title == "" || company == "" || strings.TrimSpace(body) == "" {
+	if title == "" || company == "" || strings.TrimSpace(textFromHTML(body)) == "" {
 		return Job{}, false
 	}
 	j := Job{
