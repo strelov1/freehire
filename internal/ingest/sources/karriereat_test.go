@@ -23,8 +23,9 @@ var karriereatFixtures embed.FS
 // karriereatFake serves the fixtures. A posting with no page fixture answers 404, as a removed
 // posting does.
 type karriereatFake struct {
-	pageErr  error
-	pageHTML string
+	pageErr   error
+	pageErrID string
+	pageHTML  string
 
 	mu    sync.Mutex
 	pages []string
@@ -45,13 +46,13 @@ func (f *karriereatFake) GetHTML(_ context.Context, u string) (*html.Node, error
 	f.mu.Lock()
 	f.pages = append(f.pages, u)
 	f.mu.Unlock()
-	if f.pageErr != nil {
+	id := u[strings.LastIndex(u, "/")+1:]
+	if f.pageErr != nil && (f.pageErrID == "" || f.pageErrID == id) {
 		return nil, f.pageErr
 	}
 	if f.pageHTML != "" {
 		return html.Parse(strings.NewReader(f.pageHTML))
 	}
-	id := u[strings.LastIndex(u, "/")+1:]
 	raw, err := karriereatFixtures.ReadFile("testdata/karriereat/posting_" + id + ".html")
 	if err != nil {
 		return nil, &StatusError{Method: "GET", Code: 404, URL: u}
@@ -143,6 +144,21 @@ func TestKarriereAtFailsWhenEveryPostingLacksABody(t *testing.T) {
 	if err == nil || len(jobs) != 0 {
 		t.Fatalf("got %d jobs and %v, want a failed crawl when every posting is incomplete", len(jobs), err)
 	}
+}
+
+func TestKarriereAtKeepsUnreadableIdentityOnPartialFailure(t *testing.T) {
+	f := &karriereatFake{pageErr: errors.New("connection refused"), pageErrID: "10039924"}
+	seen := func(id string) bool { return id == "7611468" }
+	jobs, err := newTestKarriereAt(f).FetchNew(context.Background(), CompanyEntry{}, seen)
+	if err != nil || len(jobs) != 3 {
+		t.Fatalf("got %d jobs and %v, want a refresh, a readable posting and an unreadable marker", len(jobs), err)
+	}
+	for _, j := range jobs {
+		if j.ExternalID == "10039924" && j.URL == "https://www.karriere.at/jobs/10039924" && j.Unreadable && !j.SeenRefresh {
+			return
+		}
+	}
+	t.Fatalf("missing unreadable posting identity: %+v", jobs)
 }
 
 func TestKarriereAtJobDropsPostingWithoutEmployerOrBody(t *testing.T) {

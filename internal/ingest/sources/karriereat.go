@@ -104,7 +104,7 @@ func (s karriereat) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // FetchNew lists the sitemap, refreshes the postings already stored, and reads a bounded slice of
-// the rest. A posting whose page cannot be read is not yielded; a later run tries again.
+// the rest. Unreadable details retain their listing identity when at least one attempted detail answers.
 func (s karriereat) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	postings, err := s.list(ctx)
 	if err != nil {
@@ -129,7 +129,7 @@ func (s karriereat) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exte
 		job, ok, err := s.detail(ctx, p)
 		if err != nil {
 			log.Printf("karriereat: posting %s failed; deferring: %v", p.id, err)
-			return Job{}, false
+			return unreadableDetail(p.id, p.url, ""), true
 		}
 		answered.Add(1)
 		return job, ok
