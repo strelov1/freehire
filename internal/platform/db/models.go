@@ -898,6 +898,12 @@ type FacetdOutbox struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type FeedState struct {
+	UserID int64              `json:"user_id"`
+	Source string             `json:"source"`
+	SeenAt pgtype.Timestamptz `json:"seen_at"`
+}
+
 type GhostReport struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
