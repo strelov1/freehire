@@ -161,6 +161,20 @@ describe('MatchSwipe', () => {
       await vi.waitFor(() => expect(unsaveJob).toHaveBeenCalledWith('a-job'));
     });
 
+    it('ignores a new judgment while an Undo waits for the save', async () => {
+      const dlg = await open();
+      let landed!: () => void;
+      saveJob.mockReturnValueOnce(new Promise<void>((r) => (landed = r)));
+      await fireEvent.keyDown(dlg, { key: 'ArrowRight' });
+      await shown('B Job');
+      await fireEvent.keyDown(dlg, { key: 'u' });
+      await shown('A Job');
+      await fireEvent.keyDown(dlg, { key: 'ArrowRight' });
+      expect(saveJob).toHaveBeenCalledTimes(1);
+      landed();
+      await vi.waitFor(() => expect(unsaveJob).toHaveBeenCalledWith('a-job'));
+    });
+
     it('offers Undo on the caught-up screen after the last card', async () => {
       meFeed.mockResolvedValueOnce({ data: [mk('a-job', 'A Job')] }).mockResolvedValue({ data: [] });
       saveJob.mockResolvedValue(undefined);

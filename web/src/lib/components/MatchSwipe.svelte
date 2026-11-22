@@ -27,6 +27,8 @@
   type Outcome = 'ok' | 'gone' | 'failed';
   // The last judgment and its write: Undo waits for the write so its DELETE cannot overtake it.
   let last = $state<{ card: FeedCard; action: 'save' | 'dismiss'; written: Promise<Outcome> } | null>(null);
+  // An Undo in flight: a new judgment now could land before its inverse and be erased by it.
+  let undoing = $state(false);
   const current = $derived(cards[0]);
   const gesture = new SwipeGesture();
 
@@ -62,7 +64,7 @@
   // puts the card back so nothing is lost silently; a 404 (job gone) leaves it dropped.
   async function judge(action: 'save' | 'dismiss') {
     const card = current;
-    if (!card || gesture.exiting) return;
+    if (!card || gesture.exiting || undoing) return;
     gesture.fling(action);
     const write = action === 'save' ? api.saveJob(card.public_slug) : api.dismissJob(card.public_slug);
     // Settled either way so a rejection is handled below, not as an unhandled one here.
@@ -98,21 +100,24 @@
     const { card, action, written } = last;
     last = null;
     cards = [card, ...cards];
-    // judge() handles a failed or gone write first (it awaited earlier): the card stays back
-    // with its toast, or leaves for good.
-    const outcome = await written;
-    if (outcome === 'gone') {
-      cards = cards.filter((c) => c !== card);
-      if (cards.length === 0) await load();
-    }
-    if (outcome !== 'ok') return;
+    undoing = true;
     try {
+      // judge() handles a failed or gone write first (it awaited earlier): the card stays back
+      // with its toast, or leaves for good.
+      const outcome = await written;
+      if (outcome === 'gone') {
+        cards = cards.filter((c) => c !== card);
+        if (cards.length === 0) await load();
+      }
+      if (outcome !== 'ok') return;
       await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
     } catch {
       cards = cards.filter((c) => c !== card);
       last = { card, action, written };
       fail(toastCopy.undo);
       return;
+    } finally {
+      undoing = false;
     }
     announce(`Undone. ${card.title} is back.`);
   }
