@@ -81,8 +81,11 @@
       newEnded = true;
     }
     cursor = res.meta.next_cursor;
-    const have = new Set(cards.map((c) => c.public_slug));
-    cards = [...cards, ...res.data.filter((c) => !have.has(c.public_slug))];
+    // A card shown again after a restart takes this session's copy: its New mark may have changed.
+    const fresh = new Map(res.data.map((c) => [c.public_slug, c]));
+    const kept = cards.map((c) => fresh.get(c.public_slug) ?? c);
+    const have = new Set(kept.map((c) => c.public_slug));
+    cards = [...kept, ...res.data.filter((c) => !have.has(c.public_slug))];
   }
 
   // A restart lands on page 1 again; cards already shown are skipped, not repeated.

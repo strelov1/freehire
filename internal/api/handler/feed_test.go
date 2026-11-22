@@ -302,9 +302,9 @@ func TestFeed_CursorPagesOverAFixedSnapshot(t *testing.T) {
 	if !acted.After(asked) {
 		t.Errorf("action cutoff %v not after the request at %v", acted, asked)
 	}
-	// Jobs stop at the last fully elapsed second: one created later in this second may be
-	// inserted after the read.
-	snap := asked.Unix() - 1
+	// Jobs stop at the last fully elapsed second of the same instant: one created later in
+	// that second may be inserted after the read.
+	snap := acted.Unix() - 2
 	if !filterHas(fake.got.Filter.([][]string), fmt.Sprintf("created_ts <= %d", snap)) {
 		t.Errorf("page 1 not bounded by the snapshot %d: %#v", snap, fake.got.Filter)
 	}

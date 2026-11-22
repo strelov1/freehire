@@ -148,6 +148,19 @@ describe('MatchFeedList', () => {
     expect(markFeedSeen).not.toHaveBeenCalled();
   });
 
+  it('drops a stale New badge when a restart returns the card as seen', async () => {
+    meFeed
+      .mockResolvedValueOnce(page(['n1', 'r1'], { seen_cursor: 's1', next_cursor: 'c1' }, ['n1']))
+      .mockRejectedValueOnce(new ApiError(400, 'invalid cursor'))
+      .mockResolvedValueOnce(page(['n1', 'r1', 'r2']));
+    render(MatchFeedList);
+    await fireEvent.click(await screen.findByText('Show the rest'));
+    await fireEvent.click(await screen.findByText('Show more matches'));
+    expect(await screen.findByText('r2')).toBeTruthy();
+    expect(screen.queryByText('New')).toBeNull();
+    expect(screen.queryByText("That's everything new")).toBeNull();
+  });
+
   it('posts seen at the end when new cards have no rest behind them', async () => {
     meFeed.mockResolvedValueOnce(page(['n1'], { seen_cursor: 's1' }, ['n1']));
     render(MatchFeedList);
