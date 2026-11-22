@@ -16,7 +16,8 @@ import (
 
 // saraminFixtures holds trimmed live responses fetched on 2026-11-22: three rows of the IT
 // category's first listing page (a company with no profile link, one with a group and a stock
-// badge, and one with a homepage-apply button), and the body iframe of a posting written as text.
+// badge, and one with a homepage-apply button), the empty listing from page 107, and the body
+// iframe of a posting written as text.
 // The image-only body is a hand-cut stand-in for the common case of a posting published as
 // pictures.
 //
@@ -39,7 +40,8 @@ func saraminFixture(t *testing.T, name string) *html.Node {
 // saraminFake serves the listing by category and page, and bodies by posting id.
 type saraminFake struct {
 	mu     sync.Mutex
-	lists  map[string]*html.Node // "cat/page" -> page; an absent page is an empty listing
+	lists  map[string]*html.Node // "cat/page" -> page
+	empty  *html.Node            // default for listing pages
 	bodies map[string]*html.Node // id -> iframe; an absent id is a 404
 	failID string                // answers 503; "*" answers every body with it
 	asked  []string
@@ -54,7 +56,7 @@ func (f *saraminFake) GetHTML(_ context.Context, url string) (*html.Node, error)
 		if n, ok := f.lists[fmt.Sprintf("%d/%d", cat, page)]; ok {
 			return n, nil
 		}
-		return html.Parse(strings.NewReader("<html><body></body></html>"))
+		return f.empty, nil
 	}
 	for id, n := range f.bodies {
 		if url == fmt.Sprintf(saraminDetailURL, id) {
@@ -94,6 +96,7 @@ func newSaraminFake(t *testing.T) *saraminFake {
 	t.Helper()
 	list := saraminFixture(t, "list.html")
 	return &saraminFake{
+		empty: saraminFixture(t, "list_empty.html"),
 		// The same page under the IT category and another: its postings are deduplicated and
 		// keep the tech hint from the IT one.
 		lists: map[string]*html.Node{
@@ -204,6 +207,26 @@ func TestSaraminNothingAnsweredFails(t *testing.T) {
 	}
 }
 
+func TestSaraminMissingRequiredCardFieldsFailHydration(t *testing.T) {
+	f := newSaraminFake(t)
+	list, err := html.Parse(strings.NewReader(`
+<div id="default_list_wrap"><section class="list_recruiting"><div class="list_body">
+    <div id="rec-11" class="list_item"><div class="company_nm"><span class="str_tit">Employer</span></div></div>
+    <div id="rec-12" class="list_item"><a id="rec_link_12" class="str_tit">Posting</a></div>
+</div></section></div>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.lists = map[string]*html.Node{"2/1": list}
+	s := newSaraminTest(t, f)
+	if _, err := s.Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Fatal("a crawl whose every identified new card is malformed must fail")
+	}
+	if got := f.detailAsked(); got != 0 {
+		t.Errorf("detail requests = %d, want 0", got)
+	}
+}
+
 func TestSaraminBoundsNewPostings(t *testing.T) {
 	f := newSaraminFake(t)
 	s := newSaraminTest(t, f)
@@ -223,6 +246,19 @@ func TestSaraminListPageFailureFailsCrawl(t *testing.T) {
 	}
 }
 
+func TestSaraminUnexpectedHTMLDoesNotEndCategory(t *testing.T) {
+	f := newSaraminFake(t)
+	page, err := html.Parse(strings.NewReader(`<html><body><div class="info_empty">No suggestions</div></body></html>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.lists["2/2"] = page
+	s := newSaraminTest(t, f)
+	if _, err := s.Fetch(context.Background(), CompanyEntry{}); err == nil || !strings.Contains(err.Error(), "category 2: page 2:") {
+		t.Fatalf("second listing page error = %v", err)
+	}
+}
+
 type failingListFake struct{}
 
 func (failingListFake) GetHTML(context.Context, string) (*html.Node, error) {
@@ -230,7 +266,7 @@ func (failingListFake) GetHTML(context.Context, string) (*html.Node, error) {
 }
 
 func TestSaraminEmptyListingFails(t *testing.T) {
-	s := newSaraminTest(t, &saraminFake{})
+	s := newSaraminTest(t, &saraminFake{empty: saraminFixture(t, "list_empty.html")})
 	if _, err := s.Fetch(context.Background(), CompanyEntry{}); err == nil {
 		t.Fatal("a listing with no posting must fail the crawl")
 	}

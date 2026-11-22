@@ -157,7 +157,7 @@ func (s saramin) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externa
 		return job, ok
 	})
 	if len(unseen) > 0 && answered.Load() == 0 {
-		return nil, fmt.Errorf("saramin: requested %d posting pages and none answered", len(unseen))
+		return nil, fmt.Errorf("saramin: attempted to read %d new postings and none answered", len(unseen))
 	}
 	if deferred > 0 {
 		log.Printf("saramin: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
@@ -236,7 +236,7 @@ feed:
 	return out, nil
 }
 
-// walkCategory reads one category's pages until one carries no card.
+// walkCategory reads one category's pages until the listing explicitly reports no results.
 func (s saramin) walkCategory(ctx context.Context, cat int) ([]saraminCard, error) {
 	var out []saraminCard
 	for page := 1; page <= saraminMaxPages; page++ {
@@ -265,7 +265,19 @@ func (s saramin) listPage(ctx context.Context, cat, page int) ([]saraminCard, er
 	if err != nil {
 		return nil, err
 	}
-	return saraminParseCards(root), nil
+	wrap := firstByID(root, "default_list_wrap")
+	if wrap == nil {
+		return nil, errors.New("page carries no category listing")
+	}
+	list := firstByClass(wrap, "list_body")
+	if list == nil {
+		return nil, errors.New("category listing has no body")
+	}
+	cards := saraminParseCards(list)
+	if len(cards) == 0 && firstByClass(list, "info_empty") == nil {
+		return nil, errors.New("category listing carries neither posting cards nor an empty result")
+	}
+	return cards, nil
 }
 
 // saraminRefused reports an answer worth asking again: a rate limit or a server failure.
@@ -331,11 +343,10 @@ func saraminParseCards(root *xhtml.Node) []saraminCard {
 }
 
 // detail reads one posting's body and builds its Job. ok=false with a nil error is the site's
-// answer that the posting is gone (404/410) or a card that names no title or employer; an error
-// is the absence of an answer.
+// answer that the posting is gone (404/410). An unreadable posting yields an error.
 func (s saramin) detail(ctx context.Context, c saraminCard) (Job, bool, error) {
 	if c.title == "" || c.company == "" {
-		return Job{}, false, nil
+		return Job{}, false, errors.New("listing card is missing its title or employer")
 	}
 	var root *xhtml.Node
 	err := retryWhile(ctx, saraminRetries, s.retryBackoff, saraminRefused, func() error {
