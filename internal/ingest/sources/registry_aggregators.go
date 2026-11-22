@@ -314,6 +314,9 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// both job sitemaps plus the newest date-sorted search pages, each new posting's body read
 		// from its page's server-rendered state. See jobsch.go.
 		NewJobsCh(c),
+		NewClearanceJobs(c),
+		NewCVOnline(c),
+		pacedCVbankas(c),
 		// onapply: a German ATS whose vendor-wide job board exposes one keyless search index
 		// over every tenant, each hit carrying the whole posting. See onapply.go.
 		NewOnapply(c),

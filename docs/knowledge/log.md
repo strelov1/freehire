@@ -107,3 +107,11 @@ The LinkedIn limiter's 2s spacing became `LINKEDIN_REQUEST_INTERVAL` (default un
 100ms..10s, invalid fails the crawl). Requests already leave through the rotating proxy with a
 new exit IP each, and 158 searches after the 429 retry met no refusal at 2s, so the per-process
 spacing, not LinkedIn, was the throughput bound. Ops lowers it in steps.
+
+## Additional job boards — 2026-11-22
+
+Added crawl-host measurements and captured-response tests for Jobs.cz, ClearanceJobs,
+Naukrigulf, Dribbble, Awwwards, Canada's Job Bank, CV-Online and CVbankas. The provider
+notes record catalogue coverage, request rates, and cases where the source exposes
+only a bounded listing or a partner redirect. The generated source catalogue and
+display labels come from the local registration. Production runs are verified separately.
