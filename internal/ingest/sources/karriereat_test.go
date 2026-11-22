@@ -23,7 +23,8 @@ var karriereatFixtures embed.FS
 // karriereatFake serves the fixtures. A posting with no page fixture answers 404, as a removed
 // posting does.
 type karriereatFake struct {
-	pageErr error
+	pageErr  error
+	pageHTML string
 
 	mu    sync.Mutex
 	pages []string
@@ -46,6 +47,9 @@ func (f *karriereatFake) GetHTML(_ context.Context, u string) (*html.Node, error
 	f.mu.Unlock()
 	if f.pageErr != nil {
 		return nil, f.pageErr
+	}
+	if f.pageHTML != "" {
+		return html.Parse(strings.NewReader(f.pageHTML))
 	}
 	id := u[strings.LastIndex(u, "/")+1:]
 	raw, err := karriereatFixtures.ReadFile("testdata/karriereat/posting_" + id + ".html")
@@ -128,6 +132,16 @@ func TestKarriereAtFailsWhenNoPageAnswers(t *testing.T) {
 	f := &karriereatFake{pageErr: errors.New("connection refused")}
 	if _, err := newTestKarriereAt(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
 		t.Fatal("want an error when every page read failed")
+	}
+}
+
+func TestKarriereAtFailsWhenEveryPostingLacksABody(t *testing.T) {
+	f := &karriereatFake{pageHTML: `<script type="application/ld+json">
+	{"@type":"JobPosting","title":"Engineer","hiringOrganization":{"name":"Acme"},"description":""}
+	</script>`}
+	jobs, err := newTestKarriereAt(f).Fetch(context.Background(), CompanyEntry{})
+	if err == nil || len(jobs) != 0 {
+		t.Fatalf("got %d jobs and %v, want a failed crawl when every posting is incomplete", len(jobs), err)
 	}
 }
 

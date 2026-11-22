@@ -207,7 +207,10 @@ func (s karriereat) detail(ctx context.Context, p karriereatPosting) (Job, bool,
 		return Job{}, false, errKarriereatNoPosting
 	}
 	job, ok := karriereatJob(ld, p)
-	return job, ok, nil
+	if !ok {
+		return Job{}, false, errors.New("JobPosting lacks a title, employer or body")
+	}
+	return job, true, nil
 }
 
 // karriereatJob maps a posting's JobPosting to a Job. ok is false for one with no title, employer
