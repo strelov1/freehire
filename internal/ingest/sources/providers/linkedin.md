@@ -14,6 +14,19 @@
   2026-11-17 on the live guest API: with `f_AL=true` 6 of 6 cards had the on-site apply
   control, without it 1 of 8 (7 off-site). An empty first Easy Apply page is not an error and
   a refusal keeps earlier progress. 40 pages is recommended. The completion line logs `easyapply_listed`.
+  **Firehose searches.** A board whose keyword is the sentinel `*` (`sources.LinkedInAnyKeyword`)
+  omits the `keywords` parameter, so the search lists the whole location; everything else
+  (seen-set, Easy Apply pass, related jobs, native ATS discovery, detail-only application
+  classification) is unchanged, and the completion log shows `keyword="*"`. Register one per
+  location (`Company` label `LinkedIn <location> all jobs`). Optional `tenants.jobage_hours`
+  (unsigned decimal 1..720, same strict validation) overrides `jobage` and sends
+  `f_TPR=r<hours*3600>`; absent keeps the day window. Measured on the live guest API
+  2026-11-22: keyword-less `location=Germany&f_TPR=r86400&f_AL=true` returns cards, but a
+  query's listing tops out around 600-700 cards (`start=700` empty for Germany and once for
+  the US; the US 24h Easy Apply flow exceeds it), and cards past that depth are unreachable.
+  So a big market needs a window of a few hours (and a deep `easyapply_pages`), crawled often
+  enough that consecutive windows overlap; a day-long window silently drops the tail. The
+  completion log shows `window_hours`.
   Raw card counts advance
   the listing offset, so a page limit is not a fixed posting count. Each completed search
   logs its configured page limit/age, primary listed/read counts and returned count including
