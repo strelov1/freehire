@@ -340,17 +340,21 @@ func lineOutranksCountries(geo location.Geo, structured []string) bool {
 }
 
 // worldwideLine reports whether the location line states nothing but a worldwide scope
-// ("Worldwide", "Remote / Worldwide"): no country, no city, only the global bucket, and
-// the word is "worldwide" itself. Such a line is the posting's own reach, so it outranks
-// a structured country (the employer's office on Workday or jobboardly) and a stored
-// row's regions, which WithoutShadowedGlobal would otherwise let drop the global. The
-// softer open-anywhere words ("Anywhere", "Global") still yield to the country: a US
-// employer's "Anywhere" usually means anywhere in the US.
+// ("Worldwide", "Remote / Worldwide", "Global Remote"): no country, no city, only the
+// global bucket, and the word is "worldwide" itself or "global" beside "remote". Such a
+// line is the posting's own reach, so it outranks a structured country (the employer's
+// office on Workday, jobboardly or Lever) and a stored row's regions, which
+// WithoutShadowedGlobal would otherwise let drop the global. The softer words still yield
+// to the country: a US employer's "Anywhere" usually means anywhere in the US, and a bare
+// "Global" is as often a company name or a headquarters label.
 func worldwideLine(geo location.Geo, line string) bool {
 	if len(geo.Countries) != 0 || len(geo.Cities) != 0 || !slices.Equal(geo.Regions, []string{"global"}) {
 		return false
 	}
 	l := strings.ToLower(line)
+	if strings.Contains(l, "global") && strings.Contains(l, "remote") {
+		return true
+	}
 	return strings.Contains(l, "worldwide") || strings.Contains(l, "world wide") || strings.Contains(l, "world-wide")
 }
 
