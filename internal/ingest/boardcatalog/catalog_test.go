@@ -24,6 +24,14 @@ func TestValidateRejectsEmptyBoardForBoardBasedProvider(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsTheLinkedInFirehoseSentinel(t *testing.T) {
+	in := InsertInput{Provider: "linkedin", Board: sources.LinkedInAnyKeyword, Region: "Germany", Company: "LinkedIn Germany all jobs",
+		Tenants: map[string]string{"pages": "10", "jobage": "7", "jobage_hours": "6"}}
+	if err := Validate(in, sources.Taxonomy()); err != nil {
+		t.Fatalf("Validate rejected the keyword-less linkedin search: %v", err)
+	}
+}
+
 func TestValidateAcceptsEmptyBoardForBoardlessProvider(t *testing.T) {
 	err := Validate(InsertInput{Provider: "ozon", Company: "Ozon"}, sources.Taxonomy())
 	if err != nil {

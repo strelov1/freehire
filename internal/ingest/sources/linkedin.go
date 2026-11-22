@@ -195,7 +195,7 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 	if strings.TrimSpace(e.Board) == "" || strings.TrimSpace(e.Region) == "" {
 		return nil, fmt.Errorf("linkedin: board keyword and region location are required")
 	}
-	pageLimit, jobAgeDays, easyPages, err := linkedInSearchOptions(e.Tenants)
+	pageLimit, windowSeconds, easyPages, err := linkedInSearchOptions(e.Tenants)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,10 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 	pass := func(extra url.Values, limit int, emptyOK bool) error {
 		offset := 0
 		for page := 0; page < limit; page++ {
-			params := url.Values{"keywords": {e.Board}, "location": {e.Region}, "f_TPR": {"r" + strconv.Itoa(jobAgeDays*24*60*60)}, "sortBy": {"DD"}, "start": {strconv.Itoa(offset)}}
+			params := url.Values{"location": {e.Region}, "f_TPR": {"r" + strconv.Itoa(windowSeconds)}, "sortBy": {"DD"}, "start": {strconv.Itoa(offset)}}
+			if strings.TrimSpace(e.Board) != LinkedInAnyKeyword {
+				params.Set("keywords", e.Board)
+			}
 			for k, v := range extra {
 				params[k] = v
 			}
@@ -319,6 +322,6 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 		jobs = slices.DeleteFunc(jobs, func(j Job) bool { return j.SeenRefresh && j.ExternalID == closedSeed })
 	}
 	jobs = append(jobs, recs...)
-	log.Printf("linkedin: search keyword=%q region=%q page_limit=%d jobage_days=%d easyapply_pages=%d easyapply_listed=%d listed=%d read=%d refreshed=%d returned=%d", e.Board, e.Region, pageLimit, jobAgeDays, easyPages, easyListed, listed, read, refreshed, len(jobs))
+	log.Printf("linkedin: search keyword=%q region=%q page_limit=%d window_hours=%d easyapply_pages=%d easyapply_listed=%d listed=%d read=%d refreshed=%d returned=%d", e.Board, e.Region, pageLimit, windowSeconds/3600, easyPages, easyListed, listed, read, refreshed, len(jobs))
 	return jobs, nil
 }

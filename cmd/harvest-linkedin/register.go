@@ -36,6 +36,12 @@ func registrationPlan(queries []query) ([]boardcatalog.InsertInput, error) {
 			Company: "LinkedIn " + q.Location + " " + q.Keywords,
 			Tenants: map[string]string{"pages": strconv.Itoa(q.Pages), "jobage": strconv.Itoa(q.JobAge)},
 		}
+		if q.Keywords == sources.LinkedInAnyKeyword {
+			in.Company = "LinkedIn " + q.Location + " all jobs"
+		}
+		if q.JobAgeHours > 0 {
+			in.Tenants["jobage_hours"] = strconv.Itoa(q.JobAgeHours)
+		}
 		if q.EasyApplyPages > 0 {
 			in.Tenants["easyapply_pages"] = strconv.Itoa(q.EasyApplyPages)
 		}
@@ -55,8 +61,8 @@ func runRegisterSearches(queries []query, apply bool) int {
 	}
 	if !apply {
 		for _, in := range inputs {
-			log.Printf("harvest-linkedin: would register keyword=%q location=%q pages=%s jobage=%s easyapply_pages=%s status=pending",
-				in.Board, in.Region, in.Tenants["pages"], in.Tenants["jobage"], in.Tenants["easyapply_pages"])
+			log.Printf("harvest-linkedin: would register keyword=%q location=%q pages=%s jobage=%s jobage_hours=%s easyapply_pages=%s status=pending",
+				in.Board, in.Region, in.Tenants["pages"], in.Tenants["jobage"], in.Tenants["jobage_hours"], in.Tenants["easyapply_pages"])
 		}
 		log.Printf("harvest-linkedin: preview planned=%d added=0 rejected=0; existing catalogue not read; pass --apply to register", len(inputs))
 		return 0
