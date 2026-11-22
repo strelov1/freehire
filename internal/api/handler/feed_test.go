@@ -294,16 +294,19 @@ func TestFeed_CursorPagesOverAFixedSnapshot(t *testing.T) {
 	if cur == "" || fake.got.Offset != 0 || fake.got.Limit != 2 {
 		t.Fatalf("page 1: cursor=%q params=%#v", cur, fake.got)
 	}
-	snap := ex.before[0]
-	if !snap.Equal(snap.Truncate(time.Second)) {
-		t.Errorf("snapshot %v is not whole seconds", snap)
+	acted := ex.before[0]
+	if !acted.Equal(acted.Truncate(time.Second)) {
+		t.Errorf("action cutoff %v is not whole seconds", acted)
 	}
-	// Rounded up: an action earlier in the request's second is before the snapshot.
-	if !snap.After(asked) {
-		t.Errorf("snapshot %v not after the request at %v", snap, asked)
+	// Rounded up: an action earlier in the request's second is before the cutoff.
+	if !acted.After(asked) {
+		t.Errorf("action cutoff %v not after the request at %v", acted, asked)
 	}
-	if !filterHas(fake.got.Filter.([][]string), fmt.Sprintf("created_ts <= %d", snap.Unix())) {
-		t.Errorf("page 1 not bounded by the snapshot: %#v", fake.got.Filter)
+	// Jobs stop at the last fully elapsed second: one created later in this second may be
+	// inserted after the read.
+	snap := asked.Unix() - 1
+	if !filterHas(fake.got.Filter.([][]string), fmt.Sprintf("created_ts <= %d", snap)) {
+		t.Errorf("page 1 not bounded by the snapshot %d: %#v", snap, fake.got.Filter)
 	}
 
 	// An action between pages changes nothing: page 2 reuses the snapshot and the next window.
@@ -312,8 +315,8 @@ func TestFeed_CursorPagesOverAFixedSnapshot(t *testing.T) {
 	if status != fiber.StatusOK || fake.got.Offset != 2 {
 		t.Fatalf("page 2: status=%d params=%#v", status, fake.got)
 	}
-	if !ex.before[1].Equal(snap) || !filterHas(fake.got.Filter.([][]string), fmt.Sprintf("created_ts <= %d", snap.Unix())) {
-		t.Errorf("page 2 snapshot moved: %v vs %v", ex.before[1], snap)
+	if !ex.before[1].Equal(acted) || !filterHas(fake.got.Filter.([][]string), fmt.Sprintf("created_ts <= %d", snap)) {
+		t.Errorf("page 2 snapshot moved: %v vs %v", ex.before[1], acted)
 	}
 	if nextCursorOf(body) != "" {
 		t.Errorf("last (short) page still has a cursor")
@@ -480,9 +483,14 @@ func TestFeed_SnapshotStaysBelowTheDrainHighWater(t *testing.T) {
 	st := &feedStateFake{hw: time.Now().Add(-time.Hour).Truncate(time.Second)}
 	ex := &feedExcludedAt{}
 	app, iss := feedStateApp(&scriptedSearcher{restHits: docs("r1")}, ex, feedUpdated, st)
+	asked := time.Now()
 	deckGet(t, app, iss, "/api/v1/me/feed")
-	if want := st.hw.Unix() - 1; ex.before[0].Unix() != want {
-		t.Errorf("snapshot = %d, want %d (below the pending job's second)", ex.before[0].Unix(), want)
+	if want := st.hw.Unix() - 1; st.seen.Unix() != want {
+		t.Errorf("snapshot = %d, want %d (below the pending job's second)", st.seen.Unix(), want)
+	}
+	// Actions since the pending job still leave the feed: their cutoff is the session start.
+	if !ex.before[0].After(asked) {
+		t.Errorf("action cutoff %v follows the drain high-water, want after %v", ex.before[0], asked)
 	}
 }
 

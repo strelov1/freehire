@@ -182,7 +182,7 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	if reason != "" {
 		return empty(reason)
 	}
-	excluded, err := h.excluded.FeedExcludedJobIDs(c.Context(), userID, time.Unix(cur.SnapshotAt, 0))
+	excluded, err := h.excluded.FeedExcludedJobIDs(c.Context(), userID, time.Unix(cur.ActedBefore, 0))
 	if err != nil {
 		return err
 	}

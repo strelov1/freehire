@@ -29,8 +29,11 @@ func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64) (feed.Cursor, erro
 	if raw == "" {
 		now := time.Now()
 		// Rounded up to the next whole second: a save made earlier in this same second is
-		// still before the snapshot, so a refetch right after an action leaves the job out.
-		snap := now.Unix() + 1
+		// still before the cutoff, so a refetch right after an action leaves the job out.
+		acted := now.Unix() + 1
+		// The job snapshot is the last fully elapsed second: a job created later in the current
+		// one may land after this read, and must still be new on the next visit.
+		snap := now.Unix() - 1
 		hw, ok, err := h.state.SearchDrainHighWater(c.Context())
 		if err != nil {
 			return feed.Cursor{}, err
@@ -49,7 +52,7 @@ func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64) (feed.Cursor, erro
 		if seenAt < snap {
 			phase = feed.PhaseNew
 		}
-		return feed.Cursor{UserID: userID, Source: feedSourceProfile, SnapshotAt: snap, SeenAt: seenAt, Phase: phase, ExpiresAt: now.Add(feed.CursorTTL).Unix()}, nil
+		return feed.Cursor{UserID: userID, Source: feedSourceProfile, SnapshotAt: snap, SeenAt: seenAt, ActedBefore: acted, Phase: phase, ExpiresAt: now.Add(feed.CursorTTL).Unix()}, nil
 	}
 	cur, err := h.verifyCursor(raw, userID)
 	if err != nil || (cur.Phase != feed.PhaseNew && cur.Phase != feed.PhaseRest) {

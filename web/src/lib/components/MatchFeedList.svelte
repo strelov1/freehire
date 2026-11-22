@@ -155,7 +155,7 @@
   </ul>
   <InfiniteScroll enabled={newEndInView && !loading} onLoad={postSeen} />
   {#if paused}
-    <FeedNewEnd onContinue={showRest} />
+    <FeedNewEnd onContinue={showRest} focus={false} />
   {:else if cursor}
     <button
       type="button"

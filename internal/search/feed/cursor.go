@@ -34,6 +34,10 @@ type Cursor struct {
 	// SeenAt is the feed watermark the session started from (unix seconds): new cards are
 	// created after it, so it stays fixed for the whole session.
 	SeenAt int64 `json:"w,omitempty"`
+	// ActedBefore is the session start, rounded up to the next second (unix seconds): saves,
+	// dismissals and applications before it leave the feed. Kept apart from SnapshotAt, which
+	// can sit well in the past while the search index catches up.
+	ActedBefore int64 `json:"a,omitempty"`
 }
 
 const (

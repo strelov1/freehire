@@ -20,5 +20,5 @@ UPDATE feed_state SET seen_at = GREATEST(seen_at, sqlc.arg(at)::timestamptz)
 -- shortcut: a job stuck in the outbox longer than 24h can never be new; widen the window if
 -- the outbox-age alert shows longer stalls.
 SELECT min(j.created_at)::timestamptz AS high_water FROM jobs j
- WHERE j.closed_at IS NULL AND j.created_at > now() - interval '24 hours'
+ WHERE j.closed_at IS NULL AND NOT j.is_private AND j.created_at > now() - interval '24 hours'
    AND EXISTS (SELECT 1 FROM search_outbox o WHERE o.job_id = j.id AND o.failed_at IS NULL);

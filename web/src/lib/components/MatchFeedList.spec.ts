@@ -108,6 +108,8 @@ describe('MatchFeedList', () => {
     expect(await screen.findByText("That's everything new")).toBeTruthy();
     expect(screen.getAllByText('New')).toHaveLength(1);
     expect(screen.queryByText('r1')).toBeNull();
+    // Focus would scroll the list past the new cards above the pause screen.
+    expect(document.activeElement).not.toBe(screen.getByText("That's everything new"));
     // Rendering the list is not passing the new cards: seen waits for the scroll.
     expect(markFeedSeen).not.toHaveBeenCalled();
     reveal();
