@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/platform/flexjson"
+	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
 )
 
@@ -27,14 +28,18 @@ import (
 // The posting set comes from the site's sitemaps, because robots.txt disallows /middleware/,
 // the JSON API the web app itself calls: the nine active-jobs files list every active posting
 // and todays-jobs-sitemap the newest ones not yet in them. They carry nothing but each posting's
-// URL, so every fact is bought with the posting page's schema.org JobPosting: the adapter
-// hydrates only postings the catalogue lacks, newest id first, and refreshes the rest by
-// identity. Akamai refuses a plain client, so production reads sitemaps and pages through the
-// Scrapling tier (scraplingtier.go). See providers/foundit.md.
+// URL, so every fact is bought with a schema.org JobPosting: the adapter hydrates only postings
+// the catalogue lacks, newest id first, and refreshes the rest by identity. The /job/<slug>
+// pages answer Akamai's 403 from the crawl host on every route, so the JobPosting is read from
+// the seeker job-details page, /seeker/job-details?id=<id>, which robots.txt allows. Akamai
+// refuses a plain client, so production reads sitemaps and pages through the Scrapling tier
+// (scraplingtier.go). See providers/foundit.md.
 type foundit struct {
 	http         founditHTTP
 	limiter      waiter
 	maxNewPerRun int
+	// retryBackoff is the first pause before a refused page is asked again; it doubles.
+	retryBackoff time.Duration
 }
 
 // founditHTTP is the transport the adapter needs: the sitemaps as a raw stream (the .gz files
@@ -47,6 +52,9 @@ type founditHTTP interface {
 const (
 	founditBase         = "https://www.foundit.in"
 	founditSitemapIndex = founditBase + "/xmlsitemap/sitemap-index.xml"
+	// founditDetailURL is the page a posting's body is read from. The posting's own /job/ page
+	// carries the same block but is refused (403) from the crawl host on every route.
+	founditDetailURL = founditBase + "/seeker/job-details?id=%d"
 	// The index names ~60 files of search landing pages beside the posting ones; these two
 	// needles select the posting files (active-jobs-sitemap0..8.xml.gz and todays-jobs-sitemap.xml).
 	founditActiveNeedle = "/active-jobs-sitemap"
@@ -58,6 +66,11 @@ const (
 	// days (the copy read on 2026-11-17 was generated on the 15th), so a posting can leave
 	// todays-jobs-sitemap before the active files name it and read as unseen for a while.
 	founditSweepGrace = 7 * 24 * time.Hour
+
+	// A refused page (403) is asked again up to founditRetries times: the proxy rotates exits and
+	// a refusal is one bad exit, not the site's verdict on the posting.
+	founditRetries      = 2
+	founditRetryBackoff = 2 * time.Second
 
 	// founditRequestInterval paces every request of a run, sitemap and posting page alike, at one
 	// a second — a courtesy ceiling toward a large site, not a measured limit.
@@ -79,6 +92,7 @@ func NewFoundit(c founditHTTP) Source {
 		http:         c,
 		limiter:      rate.NewLimiter(rate.Every(founditRequestInterval), 1),
 		maxNewPerRun: founditMaxNewPerRun,
+		retryBackoff: founditRetryBackoff,
 	}
 }
 
@@ -235,8 +249,9 @@ func (s foundit) sitemap(ctx context.Context, loc string) (sitemapDoc, error) {
 }
 
 // founditLD is the part of the posting page's schema.org JobPosting the adapter reads.
-// datePosted is "16-11-2026", day first. baseSalary is a MonetaryAmount whose value reads "Not
-// disclosed" when the poster hid it, so its figures are read leniently.
+// datePosted is "2026-11-16" on the seeker page ("16-11-2026", day first, on the /job/ page).
+// baseSalary is a MonetaryAmount whose value reads "Not disclosed" when the poster hid it, so its
+// figures are read leniently; the seeker page carries none.
 type founditLD struct {
 	Title              string `json:"title"`
 	Description        string `json:"description"`
@@ -262,10 +277,15 @@ type founditLD struct {
 // is gone (404) or a page carrying no usable posting; an error is the absence of an answer
 // (Akamai's 403 included, which says nothing about the posting).
 func (s foundit) detail(ctx context.Context, p founditPosting) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
-	root, err := s.http.GetHTML(ctx, p.url)
+	var root *html.Node
+	err := retryWhile(ctx, founditRetries, s.retryBackoff, founditRefused, func() error {
+		if err := s.limiter.Wait(ctx); err != nil {
+			return err
+		}
+		var err error
+		root, err = s.http.GetHTML(ctx, fmt.Sprintf(founditDetailURL, p.id))
+		return err
+	})
 	if err != nil {
 		var se *StatusError
 		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
@@ -279,6 +299,22 @@ func (s foundit) detail(ctx context.Context, p founditPosting) (Job, bool, error
 	}
 	job, ok := founditJob(ld, p)
 	return job, ok, nil
+}
+
+// founditRefused reports an answer worth asking again: Akamai's 403, a rate limit or a server
+// failure, none of which the Scrapling client retries itself.
+func founditRefused(err error) bool {
+	var se *StatusError
+	return errors.As(err, &se) && (se.Code == http.StatusForbidden || se.Code == http.StatusTooManyRequests || se.Code >= 500)
+}
+
+// founditPostedAt reads datePosted in either layout the site uses.
+func founditPostedAt(s string) *time.Time {
+	s = strings.TrimSpace(s)
+	if t := parseRFC3339OrDate(s); t != nil {
+		return t
+	}
+	return parseLayout("02-01-2006", s)
 }
 
 // founditJob maps a posting's JobPosting to a Job. ok is false for one with no title, employer
@@ -298,7 +334,7 @@ func founditJob(ld founditLD, p founditPosting) (Job, bool) {
 		Description:       body,
 		Location:          founditPlaces(ld.JobLocation),
 		FallbackCountries: []string{"in"},
-		PostedAt:          parseLayout("02-01-2006", strings.TrimSpace(ld.DatePosted)),
+		PostedAt:          founditPostedAt(ld.DatePosted),
 	}
 	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
 		j.WorkMode, j.Remote = "remote", true

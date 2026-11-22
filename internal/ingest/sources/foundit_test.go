@@ -76,15 +76,16 @@ func (f *founditFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
 	if f.pageErr != nil {
 		return nil, f.pageErr
 	}
-	if !strings.HasSuffix(u, "-69824181") {
-		return nil, &StatusError{Method: "GET", Code: 403, URL: u}
+	if u != fmt.Sprintf(founditDetailURL, 69831148) {
+		return nil, &StatusError{Method: "GET", Code: 404, URL: u}
 	}
-	return html.Parse(bytes.NewReader(founditFixture("job_69824181.html")))
+	return html.Parse(bytes.NewReader(founditFixture("seeker_69831148.html")))
 }
 
 func fastFoundit(f *founditFake) foundit {
 	s := NewFoundit(f).(foundit)
 	s.limiter = nopWaiter{}
+	s.retryBackoff = time.Millisecond
 	return s
 }
 
@@ -101,9 +102,9 @@ func TestFounditListsEverySitemapPostingNewestFirstOnce(t *testing.T) {
 	for _, p := range postings {
 		ids = append(ids, p.id)
 	}
-	// 5 distinct postings across the three files; 69802546 is in both active files and the
+	// 6 distinct postings across the three files; 69802546 is in both active files and the
 	// search landing page is no posting. Newest id first.
-	want := []int64{69831149, 69824181, 69818763, 69802547, 69802546, 44138175}
+	want := []int64{69831149, 69831148, 69818763, 69802547, 69802546, 44138175}
 	if fmt.Sprint(ids) != fmt.Sprint(want) {
 		t.Errorf("ids = %v, want %v", ids, want)
 	}
@@ -112,11 +113,11 @@ func TestFounditListsEverySitemapPostingNewestFirstOnce(t *testing.T) {
 func TestFounditFetchReadsNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	f := newFounditFake()
 	jobs, err := fastFoundit(f).FetchNew(context.Background(), CompanyEntry{},
-		func(id string) bool { return id != "69824181" })
+		func(id string) bool { return id != "69831148" })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(f.pages) != 1 || !strings.HasSuffix(f.pages[0], "-69824181") {
+	if len(f.pages) != 1 || f.pages[0] != fmt.Sprintf(founditDetailURL, 69831148) {
 		t.Fatalf("page reads = %v, want only the unseen posting", f.pages)
 	}
 	if len(jobs) != 6 {
@@ -137,13 +138,13 @@ func TestFounditFetchReadsNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	if refreshed != 5 {
 		t.Errorf("refreshed %d, want 5", refreshed)
 	}
-	if read.ExternalID != "69824181" || read.Title != "Consultant - Advanced Engineering" || read.Company != "Infosys Limited" {
+	if read.ExternalID != "69831148" || !strings.HasPrefix(read.Title, "Product Data") || read.Company != "Bosch India" {
 		t.Errorf("identity = %+v", read)
 	}
-	if !strings.Contains(read.Description, "collaborative engineering team") {
+	if !strings.Contains(read.Description, "bill of materials") {
 		t.Errorf("Description = %q", read.Description)
 	}
-	if read.Location != "Bengaluru / Bangalore, Karnataka, India" || read.EmploymentType != "full_time" {
+	if read.Location != "India" || read.EmploymentType != "full_time" {
 		t.Errorf("Location/EmploymentType = %q/%q", read.Location, read.EmploymentType)
 	}
 	if read.PostedAt == nil || !read.PostedAt.Equal(time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)) {
@@ -165,12 +166,13 @@ func TestFounditReadsAtMostTheRunBoundNewestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The two newest ids are asked about (69831149 has no page, 69824181 has); nothing past the
+	// The two newest ids are asked about (69831149 has no page, 69831148 has); nothing past the
 	// bound is read, and the deferred postings are not yielded body-less.
-	if len(f.pages) != 2 || !strings.HasSuffix(f.pages[0], "-69831149") && !strings.HasSuffix(f.pages[1], "-69831149") {
+	got := strings.Join(f.pages, " ")
+	if len(f.pages) != 2 || !strings.Contains(got, "id=69831149") || !strings.Contains(got, "id=69831148") {
 		t.Errorf("page reads = %v, want the two newest", f.pages)
 	}
-	if len(jobs) != 1 || jobs[0].ExternalID != "69824181" {
+	if len(jobs) != 1 || jobs[0].ExternalID != "69831148" {
 		t.Errorf("jobs = %+v, want only the readable one of the two", jobs)
 	}
 }
@@ -188,6 +190,45 @@ func TestFounditFailsWhenTheIndexNamesNoActiveFile(t *testing.T) {
 	f.files = map[string]string{founditSitemapIndex: "today.xml"} // a urlset where the index should be
 	if _, err := fastFoundit(f).list(context.Background()); err == nil {
 		t.Fatal("an index naming no active-jobs file must fail")
+	}
+}
+
+// refuseThenServe refuses the first n page reads with Akamai's 403 and serves the rest, as the
+// rotating proxy does when an exit is bad.
+type refuseThenServe struct {
+	*founditFake
+	refuse int
+}
+
+func (r *refuseThenServe) GetHTML(ctx context.Context, u string) (*html.Node, error) {
+	r.mu.Lock()
+	refused := len(r.pages) < r.refuse
+	r.mu.Unlock()
+	if refused {
+		r.mu.Lock()
+		r.pages = append(r.pages, u)
+		r.mu.Unlock()
+		return nil, &StatusError{Method: "GET", Code: 403, URL: u}
+	}
+	return r.founditFake.GetHTML(ctx, u)
+}
+
+func TestFounditAsksAgainAfterARefusedPage(t *testing.T) {
+	r := &refuseThenServe{founditFake: newFounditFake(), refuse: founditRetries}
+	s := NewFoundit(r).(foundit)
+	s.limiter, s.retryBackoff = nopWaiter{}, time.Millisecond
+	jobs, err := s.FetchNew(context.Background(), CompanyEntry{}, func(id string) bool { return id != "69831148" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	var read int
+	for _, j := range jobs {
+		if !j.SeenRefresh {
+			read++
+		}
+	}
+	if read != 1 || len(r.pages) != founditRetries+1 {
+		t.Errorf("read %d postings in %d requests, want 1 after %d refusals", read, len(r.pages), founditRetries)
 	}
 }
 
