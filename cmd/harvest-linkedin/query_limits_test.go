@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 func TestLoadQueriesRequiresIntegerScalarsForLimits(t *testing.T) {
@@ -41,5 +43,20 @@ func TestLoadQueriesAcceptsTheCheckedInHarvestWorklist(t *testing.T) {
 	queries, err := loadQueries(filepath.Join("..", "..", "harvest", "linkedin-queries.yml"))
 	if err != nil || len(queries) != 1654 {
 		t.Fatalf("checked-in harvest: searches=%d, %v", len(queries), err)
+	}
+	// A firehose lane rotation takes ~13h, so a shorter window skips postings between visits;
+	// the primary pass is one page so detail reads go to the Easy Apply pass.
+	firehose := 0
+	for _, q := range queries {
+		if q.Keywords != sources.LinkedInAnyKeyword {
+			continue
+		}
+		firehose++
+		if q.JobAgeHours != 24 || q.Pages != 1 {
+			t.Errorf("firehose %q: jobage_hours=%d pages=%d, want 24 and 1", q.Location, q.JobAgeHours, q.Pages)
+		}
+	}
+	if firehose != 125 {
+		t.Errorf("checked-in harvest: firehose searches=%d, want 125", firehose)
 	}
 }
