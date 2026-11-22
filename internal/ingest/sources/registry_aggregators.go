@@ -321,6 +321,11 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// calls and hydrating each new posting's body from the flight stream its page inlines.
 		// Served over plain HTTP. See vietnamworks.go.
 		NewVietnamworks(c),
+		// eFinancialCareers: the global finance and fintech job board, read from the JSON search
+		// API behind its own frontend (rows carry the whole body), the whole catalogue every run,
+		// cut by country and sector under the search's 10,000-result cap. Plain HTTP from the
+		// crawl host. See efinancialcareers.go.
+		NewEFinancialCareers(c),
 		// XING Jobs: the DACH professional network's job board, enumerated from its gzip job
 		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
 		// See xing.go.

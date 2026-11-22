@@ -28,6 +28,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   jettycloud: 'JettyCloud',
   '10ml': '10ML',
   edjoin: 'EDJOIN',
+  efinancialcareers: 'eFinancialCareers',
   weworkremotely: 'We Work Remotely',
   dynamitejobs: 'Dynamite Jobs',
   hackernews: 'Hacker News',
