@@ -130,6 +130,26 @@ func TestKoreanThumbnailAndNailServices(t *testing.T) {
 	}
 }
 
+func TestKoreanBranchAndStoreManagers(t *testing.T) {
+	for _, tc := range []struct{ title, want string }{
+		{"은행 지점장 모집", ""},
+		{"보험사 지점장 채용", ""},
+		{"은행 지점장 / 백엔드 개발자", "backend"},
+		{"보험사 지점장 / 점장 채용", "retail"},
+	} {
+		if got := Parse(tc.title).Category; got != tc.want {
+			t.Errorf("Parse(%q).Category = %q, want %q", tc.title, got, tc.want)
+		}
+		var want []string
+		if tc.want != "" {
+			want = []string{tc.want}
+		}
+		if got := Categories(tc.title); !slices.Equal(got, want) {
+			t.Errorf("Categories(%q) = %v, want %v", tc.title, got, want)
+		}
+	}
+}
+
 func TestIsTech_Korean(t *testing.T) {
 	for _, title := range []string{
 		"[유닛블랙] 백엔드 개발자",
