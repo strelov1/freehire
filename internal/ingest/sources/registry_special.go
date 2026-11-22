@@ -215,6 +215,10 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// client, so the crawl is really served once ApplyScraplingEgress rebuilds it over the fetch
 	// service (scraplingtier.go). See foundit.go.
 	registry["foundit"] = NewFoundit(c)
+	// JobKorea (jobkorea.co.kr): South Korea's general job board, read whole from the sitemaps
+	// robots.txt names, each new posting's page and body frame read plainly (no bot wall).
+	// See jobkorea.go.
+	registry["jobkorea"] = NewJobKorea(c)
 	// hirist.tech and iimjobs.com: one Indian job platform on two sites, enumerated by category
 	// (board) through the API their web app calls, hydrating each new posting's body from the
 	// posting API. Every request of a run is paced to one a second. See hirist.go.

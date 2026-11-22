@@ -164,6 +164,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   clearedjobs: 'ClearedJobs',
   pracuj: 'Pracuj.pl',
   jobteaser: 'JobTeaser',
+  jobkorea: 'JobKorea',
   kariyernet: 'Kariyer.net',
   karriereat: 'karriere.at',
   itjobs: 'ITJobs.pt',
