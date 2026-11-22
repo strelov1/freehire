@@ -44,7 +44,9 @@ func recognizePathPattern(u *url.URL, host, src, mode, apex string) (source, boa
 		return "", "", "", false
 	}
 	u.RawQuery, u.Fragment = "", ""
-	if !p.keepPostingPath {
+	if p.keepPostingPath {
+		u.Scheme, u.User = "https", nil
+	} else {
 		u.Path = fmt.Sprintf(p.listing, board)
 	}
 	switch {

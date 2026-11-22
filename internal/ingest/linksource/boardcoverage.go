@@ -2,6 +2,7 @@ package linksource
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"net/url"
 	"regexp"
@@ -124,7 +125,10 @@ func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, catalog 
 	}
 
 	entry := sources.CompanyEntry{Provider: source, Board: board, Region: atsboard.Region(raw)}
-	_, moka := mokaHRPostingRef(raw)
+	postingID, moka := mokaHRPostingRef(raw)
+	if source == "mokahr" && moka && postingID == "" {
+		return sources.Job{}, false, nil
+	}
 	if catalog != nil {
 		stored, found, err := boardCoverageEntry(ctx, catalog, entry, entry.Region != "" || (source == "mokahr" && moka))
 		if err != nil {
@@ -133,6 +137,10 @@ func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, catalog 
 		if found {
 			entry = stored
 		}
+	}
+
+	if source == "mokahr" && strings.TrimSpace(entry.Company) == "" {
+		return sources.Job{}, false, fmt.Errorf("mokahr: catalogue has no employer for board %q in region %q", board, entry.Region)
 	}
 
 	jobs, err := fetchForResolve(ctx, adapter, entry, raw)
@@ -173,6 +181,19 @@ func boardCoverageEntry(ctx context.Context, catalog BoardCatalog, e sources.Com
 // target's external id is guessed from raw's path segments and query values (postingRefs), the
 // same heuristic pickPosting's id fallback uses to identify a posting once the board is in hand.
 func fetchForResolve(ctx context.Context, adapter sources.Source, e sources.CompanyEntry, raw string) ([]sources.Job, error) {
+	if direct, ok := adapter.(interface {
+		FetchPosting(context.Context, string) (sources.Job, bool, error)
+	}); ok {
+		// A recognized URL on this tenant can be fetched directly without reading its sitemap.
+		provider, board, canonical, recognized := atsboard.Recognize(raw)
+		if recognized && provider == e.Provider && board == e.Board {
+			job, found, err := direct.FetchPosting(ctx, canonical)
+			if err != nil || !found {
+				return nil, err
+			}
+			return []sources.Job{job}, nil
+		}
+	}
 	hs, hydrating := adapter.(sources.HydratingSource)
 	if !hydrating {
 		return adapter.Fetch(ctx, e)

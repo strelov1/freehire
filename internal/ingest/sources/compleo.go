@@ -2,7 +2,9 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -51,22 +53,25 @@ func (s compleo) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 
 	return fetchDetails(mine, defaultDetailWorkers, func(loc string) (Job, bool) {
-		return s.detail(ctx, loc)
+		job, found, _ := s.FetchPosting(ctx, loc)
+		return job, found
 	}), nil
 }
 
-// detail fetches one job page and maps its JobPosting ld+json to a Job, returning ok=false when
-// the page fetch fails, carries no JobPosting, or lacks an employer (which would break the
-// company slug). The employer comes from the posting, not the board file: a Compleo tenant may
-// be a recruiter posting on behalf of the hiring company.
-func (s compleo) detail(ctx context.Context, loc string) (Job, bool) {
+// FetchPosting reads a Compleo detail URL from the sitemap or the board recognizer.
+// The employer on the posting may differ from the recruiting agency operating the board.
+func (s compleo) FetchPosting(ctx context.Context, loc string) (Job, bool, error) {
 	root, err := s.http.GetHTML(ctx, loc)
 	if err != nil {
-		return Job{}, false
+		var status *StatusError
+		if errors.As(err, &status) && (status.Code == http.StatusNotFound || status.Code == http.StatusGone) {
+			return Job{}, false, nil
+		}
+		return Job{}, false, fmt.Errorf("compleo: posting %s: %w", compleoJobID(loc), err)
 	}
 	var p compleoPosting
 	if !ldJobPosting(root, &p) || p.HiringOrganization.Name == "" {
-		return Job{}, false
+		return Job{}, false, nil
 	}
 
 	location := p.JobLocation.Address.Location()
@@ -80,7 +85,7 @@ func (s compleo) detail(ctx context.Context, loc string) (Job, bool) {
 		Description: sanitizeHTML(html.UnescapeString(p.Description)),
 		Remote:      isRemote(location) || isRemote(p.Title),
 		PostedAt:    parseRFC3339(p.DatePosted),
-	}, true
+	}, true, nil
 }
 
 // compleoPosting is the schema.org JobPosting decoded from a Compleo job page. jobLocation is a
