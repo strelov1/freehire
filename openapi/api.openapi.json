@@ -4418,7 +4418,7 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "Rank by openings or by growth.",
+            "description": "Rank by openings (open), growth (growth, -growth) or list companies that just started hiring (new).",
             "schema": {
               "type": "string"
             },
@@ -27027,6 +27027,12 @@
           "growth_30d": {
             "type": "integer",
             "format": "int64"
+          },
+          "hiring_started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When a company that had not been hiring started again; set only for those (sort=new).",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
       },

@@ -964,9 +964,10 @@ type IngestSchedule struct {
 }
 
 type InsightsCompanyGrowth struct {
-	CompanySlug   string `json:"company_slug"`
-	OpenCount     int32  `json:"open_count"`
-	OpenCountPrev int32  `json:"open_count_prev"`
+	CompanySlug     string             `json:"company_slug"`
+	OpenCount       int32              `json:"open_count"`
+	OpenCountPrev   int32              `json:"open_count_prev"`
+	HiringStartedAt pgtype.Timestamptz `json:"hiring_started_at"`
 }
 
 type InsightsCompanyLifetime struct {

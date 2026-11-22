@@ -6152,6 +6152,8 @@ type CompanyInsight struct {
 	OpenNow     int64  `json:"open_now"`
 	OpenPrev30d int64  `json:"open_prev_30d"`
 	Growth30d   int64  `json:"growth_30d"`
+	// When a company that had not been hiring started again; set only for those (sort=new).
+	HiringStartedAt OptDateTime `json:"hiring_started_at"`
 }
 
 // GetCompanySlug returns the value of CompanySlug.
@@ -6179,6 +6181,11 @@ func (s *CompanyInsight) GetGrowth30d() int64 {
 	return s.Growth30d
 }
 
+// GetHiringStartedAt returns the value of HiringStartedAt.
+func (s *CompanyInsight) GetHiringStartedAt() OptDateTime {
+	return s.HiringStartedAt
+}
+
 // SetCompanySlug sets the value of CompanySlug.
 func (s *CompanyInsight) SetCompanySlug(val string) {
 	s.CompanySlug = val
@@ -6202,6 +6209,11 @@ func (s *CompanyInsight) SetOpenPrev30d(val int64) {
 // SetGrowth30d sets the value of Growth30d.
 func (s *CompanyInsight) SetGrowth30d(val int64) {
 	s.Growth30d = val
+}
+
+// SetHiringStartedAt sets the value of HiringStartedAt.
+func (s *CompanyInsight) SetHiringStartedAt(val OptDateTime) {
+	s.HiringStartedAt = val
 }
 
 // A row of the catalogue: the company, its open-job count and a few company-info facts for the card.

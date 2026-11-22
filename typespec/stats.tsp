@@ -147,6 +147,9 @@ model CompanyInsight {
   open_now: int64;
   open_prev_30d: int64;
   growth_30d: int64;
+
+  /** When a company that had not been hiring started again; set only for those (sort=new). */
+  hiring_started_at?: utcDateTime;
 }
 
 model CompaniesMeta {
@@ -746,7 +749,7 @@ op insightsSalaryHistory(
 @route("/insights/companies")
 @get
 op insightsCompanies(
-  /** Rank by openings or by growth. */
+  /** Rank by openings (open), growth (growth, -growth) or list companies that just started hiring (new). */
   @query sort?: string,
   /** Ignore companies below this many open roles. */
   @query min_open?: string,

@@ -48,31 +48,97 @@ DELETE FROM insights_company_growth;
 -- insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
 -- uses open-as-of @prev_ts. Companies open at neither point are dropped (HAVING) to
 -- keep the table lean.
+-- hiring_started_at marks a company that just started hiring, NULL otherwise. Four gates:
+--   1. Quiet before: no posting from ANY source existed by @prev_ts and was still open
+--      after @quiet_ts, so everything open now appeared inside the window and nothing
+--      was open in the months before it.
+--   2. Not an aggregator (@aggregators): they surface small employers we have never
+--      seen, which reads as "new" on every crawl.
+--   3. Not a crawl artifact: the posting appeared at least 7 days after we started
+--      crawling its board (board_health.first_seen_at; external_id is "<board>:<id>").
+--      A board's first crawl imports every posting it already had, so a company whose
+--      first jobs share the board's first day only became visible to us.
+--   4. The company's own board, checked afterwards by SharedCompanyBoards on the
+--      first_source/first_board returned here (a second reference to jobs in this
+--      statement makes sqlc reject the unqualified columns as ambiguous).
+-- The value is the earliest open posting that passes gates 2 and 3. board_health is
+-- folded to one row per board first: it keys on (provider, board, region), and joining it
+-- raw would count a multi-region board's postings once per region.
 SELECT
-    (company_slug)::text AS company_slug,
-    (count(*) FILTER (WHERE closed_at IS NULL)::int)::integer AS open_count,
-    (count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int)::integer AS open_count_prev
-FROM jobs
-WHERE company_slug <> '' AND duplicate_of IS NULL
-GROUP BY company_slug
-HAVING count(*) FILTER (WHERE closed_at IS NULL) > 0
-    OR count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts'))) > 0;
+    (g.company_slug)::text AS company_slug,
+    (g.open_count)::integer AS open_count,
+    (g.open_count_prev)::integer AS open_count_prev,
+    (CASE WHEN g.active_before = 0 THEN g.started_at END)::timestamptz AS hiring_started_at,
+    (coalesce(g.first_source, ''))::text AS first_source,
+    (coalesce(g.first_board, ''))::text AS first_board
+FROM (
+    SELECT
+        company_slug,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('quiet_ts')))::int AS active_before,
+        min(created_at) FILTER (WHERE fresh) AS started_at,
+        (array_agg(source ORDER BY created_at) FILTER (WHERE fresh))[1] AS first_source,
+        (array_agg(split_part(external_id, ':', 1) ORDER BY created_at) FILTER (WHERE fresh))[1] AS first_board
+    FROM jobs
+    LEFT JOIN (
+        SELECT provider, lower(board) AS board_key, min(first_seen_at) AS board_first_seen_at
+        FROM board_health
+        GROUP BY provider, lower(board)
+    ) boards ON boards.provider = jobs.source AND boards.board_key = lower(split_part(jobs.external_id, ':', 1))
+    CROSS JOIN LATERAL (
+        SELECT (closed_at IS NULL
+            AND NOT is_private
+            AND source <> ALL (sqlc.arg('aggregators')::text[])
+            AND created_at >= board_first_seen_at + interval '7 days') IS TRUE AS fresh
+    ) f
+    WHERE company_slug <> '' AND duplicate_of IS NULL
+    GROUP BY company_slug
+    HAVING count(*) FILTER (WHERE closed_at IS NULL) > 0
+        OR count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts'))) > 0
+) g;
+
+-- name: SharedCompanyBoards :many
+-- Compute on the read connection. Gate 4 of ComputeInsightsCompanyGrowth's
+-- hiring_started_at: of the candidate companies, the ones whose board also lists another
+-- company. Job portals (trudvsem, arbeitsagentur, eures) carry no aggregator marker but
+-- list thousands of employers per board, so a portal's employer is never a fresh starter.
+-- The board prefix is a range on jobs_source_extid_pattern_idx: ~>=~ / ~<~ are the
+-- byte-order operators text_pattern_ops indexes, a runtime LIKE pattern is not, and ';'
+-- is the byte after ':'.
+SELECT (c.company_slug)::text AS company_slug
+FROM (
+    SELECT unnest(sqlc.arg('company_slugs')::text[]) AS company_slug,
+           unnest(sqlc.arg('sources')::text[]) AS source,
+           unnest(sqlc.arg('boards')::text[]) AS board
+) c
+WHERE EXISTS (
+    SELECT 1 FROM jobs o
+    WHERE o.source = c.source
+      AND o.external_id ~>=~ (c.board || ':')
+      AND o.external_id ~<~ (c.board || ';')
+      AND o.company_slug <> c.company_slug
+);
 
 -- name: ListInsightsCompanies :many
 -- The leaderboard read: companies ranked by growth (open_count - open_count_prev),
 -- '-growth' (freezing) reverses it, 'open' ranks by raw size; open_count is the
 -- tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).
+-- 'new' keeps only companies that just started hiring, most recent start first.
 -- company_name falls back to the slug when no companies row exists.
 SELECT
     g.company_slug,
     coalesce(c.name, g.company_slug) AS company_name,
     g.open_count,
     g.open_count_prev,
-    (g.open_count - g.open_count_prev)::int AS growth
+    (g.open_count - g.open_count_prev)::int AS growth,
+    g.hiring_started_at
 FROM insights_company_growth g
 LEFT JOIN companies c ON c.slug = g.company_slug
 WHERE g.open_count >= sqlc.arg('min_open')::int
+  AND (sqlc.arg('sort')::text <> 'new' OR g.hiring_started_at IS NOT NULL)
 ORDER BY
+    (CASE WHEN sqlc.arg('sort')::text = 'new' THEN g.hiring_started_at END) DESC NULLS LAST,
     (CASE
         WHEN sqlc.arg('sort')::text = 'open'     THEN g.open_count
         WHEN sqlc.arg('sort')::text = '-growth'  THEN -(g.open_count - g.open_count_prev)
