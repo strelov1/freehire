@@ -22,6 +22,10 @@ func TestParse_Vietnamese(t *testing.T) {
 		{"Kỹ Sư Lập Trình .NET (Biết Tiếng Trung)", "software_engineering", ""},
 		{"Chuyên Viên Lập Trình (Thu Nhập Hấp Dẫn)", "software_engineering", ""},
 		{"Lập Trình Viên", "software_engineering", ""},
+		{"Chuyên Viên Tuyển Dụng Lập Trình Viên", "recruiting", ""},
+		{"Tuyển Dụng Lập Trình Viên", "software_engineering", ""},
+		{"Giảng Viên Lập Trình", "education", ""},
+		{"Lập Trình Phần Mềm Kế Toán", "software_engineering", ""},
 		{"Kỹ Sư Phần Mềm (AI Agent Developer)", "software_engineering", ""},
 		{"Kỹ Sư Quản Trị Cơ Sở Dữ Liệu - DBA", "devops", ""},
 		{"Kiểm Thử (Manual Testing)", "qa", ""},
@@ -120,6 +124,8 @@ func TestIsTech_Vietnamese(t *testing.T) {
 		"Kỹ Sư Lập Trình PLC",
 		"Vận Hành Và Lập Trình Máy CNC",
 		"Giảng Viên Ngành Hóa Học",
+		"Giảng Viên Lập Trình",
+		"Chuyên Viên Tuyển Dụng Lập Trình Viên",
 		"Kỹ Sư Hệ Thống",
 	} {
 		if IsTech(title) {

@@ -2,6 +2,7 @@ package classify
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
@@ -21,18 +22,21 @@ import (
 // Table order is the precedence: vetoes, then the technical disciplines, then the heads that outrank a field word (a seller of software is a seller), then the generic software words. koreanGeneralCategoryTable (korean_general.go) carries every other profession.
 
 // koreanCategoryTable lists the Korean category aliases in precedence order: the technical block, then the other professions.
-var koreanCategoryTable = append(append([]aliasEntry{}, koreanTechCategoryTable...), koreanGeneralCategoryTable...)
+var koreanCategoryTable = slices.Concat(koreanCategoryVetoes, koreanTechCategoryTable, koreanGeneralCategoryTable)
 
 // Contract employee contains the pharmacist alias, but describes the contract only.
 var koreanCategoryNoise = strings.NewReplacer("계약사원", " ")
 
-var koreanTechCategoryTable = []aliasEntry{
-	// Vetoes. A training course is not a job ("[국비지원] AI·SW 교육생모집", a bootcamp for 데이터 분석), and a bare 보안 is as often the guard of a mall as information security.
+// Reject non-job listings before interpreting the subject they name.
+var koreanCategoryVetoes = []aliasEntry{
 	{"교육생", categoryNone},
 	{"부트캠프", categoryNone},
 	{"캠퍼스", categoryNone},
 	{"과정", categoryNone},
 	{"공동구매", categoryNone},
+}
+
+var koreanTechCategoryTable = []aliasEntry{
 	{"보안사원", "public_safety"},
 	{"보안요원", "public_safety"},
 	// Security, machine learning and AI before the fields they sit in.
@@ -212,6 +216,9 @@ func matchKoreanSeniority(lower string) string {
 
 // isKoreanTech reports whether a lowercased title states a confidently technical role in Korean.
 func isKoreanTech(lower string) bool {
+	if matchOrdered(lower, koreanCategoryVetoes) == categoryNone {
+		return false
+	}
 	for _, term := range koreanTechTerms {
 		if wordmatch.Contains(lower, term, titleBoundary) {
 			return true

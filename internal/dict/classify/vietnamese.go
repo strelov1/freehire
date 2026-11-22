@@ -18,10 +18,24 @@ import (
 //
 // Table order is the precedence: the vetoes and the lecturer, the technical disciplines, the heads that outrank a field word (a seller of software is a seller), then the generic software words. vietnameseGeneralCategoryTable (vietnamese_general.go) carries every other profession.
 
-var vietnameseTechCategoryTable = []aliasEntry{
-	// The lecturer teaches the subject: "Giảng Viên Công Nghệ Thông Tin" is a teacher.
+// Teachers and explicit recruiting roles retain their category when the title names their subject.
+var vietnameseRoleOverrides = []aliasEntry{
 	{"giang vien", "education"},
 	{"giao vien", "education"},
+	{"can bo tuyen dung", "recruiting"},
+	{"nhan vien tuyen dung", "recruiting"},
+	{"chuyen vien tuyen dung", "recruiting"},
+	{"chuyen vien cao cap tuyen dung", "recruiting"},
+	{"chuyen vien tu van tuyen dung", "recruiting"},
+	{"chuyen vien phu trach tuyen dung", "recruiting"},
+	{"truong nhom tuyen dung", "recruiting"},
+	{"truong phong tuyen dung", "recruiting"},
+	{"truong bo phan tuyen dung", "recruiting"},
+	{"giam doc tuyen dung", "recruiting"},
+	{"thuc tap sinh tuyen dung", "recruiting"},
+}
+
+var vietnameseTechCategoryTable = []aliasEntry{
 	// Security, machine learning and AI before the fields they sit in.
 	{"an ninh thong tin", "security"},
 	{"an ninh mang", "security"},
@@ -220,6 +234,9 @@ func vietnameseProgrammingCategory(words []string) string {
 // matchVietnameseCategory resolves the category of a lowercased title the other tables left unresolved. A blind alias answers categoryNone.
 func matchVietnameseCategory(lower string) string {
 	words := vietnameseWords(lower)
+	if c, ok := matchStems(words, vietnameseRoleOverrides); ok {
+		return c
+	}
 	if c, ok := matchStems(words, vietnameseTechCategoryTable); ok {
 		return c
 	}
@@ -239,6 +256,9 @@ func matchVietnameseSeniority(lower string) string {
 // isVietnameseTech reports whether a lowercased title states a confidently technical role in Vietnamese.
 func isVietnameseTech(lower string) bool {
 	words := vietnameseWords(lower)
+	if _, claimed := matchStems(words, vietnameseRoleOverrides); claimed {
+		return false
+	}
 	_, ok := matchStems(words, vietnameseTechTerms)
 	return ok || vietnameseProgrammingCategory(words) == "software_engineering"
 }

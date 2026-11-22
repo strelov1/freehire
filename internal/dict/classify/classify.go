@@ -166,8 +166,17 @@ var (
 //
 // A blind alias contributes nothing: categoryNone is not a category.
 func Categories(text string) []string {
-	out := matchAllOrdered(koreanCategoryNoise.Replace(cutBackEndShifts(strings.ToLower(text))), categoryTable)
-	return slices.DeleteFunc(out, func(c string) bool { return c == categoryNone })
+	lower := strings.ToLower(text)
+	out := matchAllOrdered(koreanCategoryNoise.Replace(cutBackEndShifts(lower)), categoryTable)
+	out = slices.DeleteFunc(out, func(c string) bool { return c == categoryNone })
+	// The Vietnamese rules claim a title's subject using its role. Score each
+	// rendered line separately so one CV role does not claim the rest of the CV.
+	for line := range strings.SplitSeq(lower, "\n") {
+		if c := matchVietnameseCategory(line); c != "" && c != categoryNone && !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // matchAllOrdered returns the distinct canonical values of every alias, in priority order, that occurs as a whole word in title. Aliases sharing a canonical ("backend"/"back-end") are deduplicated, first seen wins.

@@ -19,6 +19,22 @@ func TestTitleCategoryExactTitleEarnsBothItems(t *testing.T) {
 	}
 }
 
+func TestVietnameseTitleCategoryCreditsRenderedRole(t *testing.T) {
+	for _, tc := range []struct {
+		cv   string
+		want int
+	}{
+		{"KINH NGHIỆM\nLẬP TRÌNH VIÊN\nKế toán năm 2021", WeightTitle},
+		{"KINH NGHIỆM\nKế toán năm 2021\nKỹ Sư Phần Mềm", titleCategoryPoints},
+		{"Chuyên Viên Tuyển Dụng Lập Trình Viên", titleExactPoints},
+	} {
+		score := titleCategory("Lập Trình Viên", tc.cv)
+		if score.Earned != tc.want || score.Weight != WeightTitle {
+			t.Errorf("CV %q earned %d of %d, want %d of %d", tc.cv, score.Earned, score.Weight, tc.want, WeightTitle)
+		}
+	}
+}
+
 // The title is matched case- and spacing-insensitively: a CV that sets its heading in caps
 // is the same claim as one that does not.
 func TestTitleCategoryMatchIgnoresCaseAndSpacing(t *testing.T) {
