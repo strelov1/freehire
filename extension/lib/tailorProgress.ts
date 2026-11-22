@@ -6,7 +6,7 @@
 // to is re-stamped with what it made of it. Counting the stamped ones is the progress.
 
 /** One requirement of the run's report, as `GET /me/cvs/:id` returns it. */
-export interface AutopilotEntry {
+interface AutopilotEntry {
   requirement: string;
   status: string;
 }
