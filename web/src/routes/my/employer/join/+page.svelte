@@ -63,6 +63,7 @@
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) error = s.alreadyMember;
       else if (err instanceof ApiError && err.status === 404) status = 'dead';
+      else if (err instanceof ApiError && err.status === 403 && preview?.role === 'recruiter') error = s.verifiedEmail;
       else error = s.error;
     } finally {
       joining = false;
@@ -90,7 +91,10 @@
       </p>
       <AccountPageHeading>{format(s.title, { company: preview.company_name })}</AccountPageHeading>
       <p class="text-sm text-muted-foreground">
-        {format(s.body, { company: preview.company_name, email: preview.email })}
+        {format(preview.role === 'recruiter' ? s.recruiterBody : s.body, {
+          company: preview.company_name,
+          email: preview.email,
+        })}
       </p>
     </header>
     {#if error}

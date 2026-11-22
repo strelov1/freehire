@@ -125,7 +125,7 @@ func TestInboxRepository_HidesAnUndeliveredApplication(t *testing.T) {
 	if err != nil || len(apps) != 0 {
 		t.Fatalf("List = %+v, %v; want an unsent application hidden", apps, err)
 	}
-	counts, err := f.repo.Counts(ctx, f.employer, "")
+	counts, _, err := f.repo.Counts(ctx, f.employer, directapply.InboxFilter{})
 	if err != nil || len(counts) != 0 {
 		t.Errorf("Counts = %v, %v; want nothing counted", counts, err)
 	}
@@ -175,11 +175,11 @@ func TestInboxRepository_MovesAndCountsStages(t *testing.T) {
 		t.Errorf("Get = %+v, %v; want interview with a change time", a, err)
 	}
 
-	counts, err := f.repo.Counts(ctx, f.employer, "acme-platform")
+	counts, _, err := f.repo.Counts(ctx, f.employer, directapply.InboxFilter{JobSlug: "acme-platform"})
 	if err != nil || counts[directapply.StageInterview] != 1 || len(counts) != 1 {
 		t.Errorf("Counts = %v, %v", counts, err)
 	}
-	if counts, err := f.repo.Counts(ctx, f.employer, "another-vacancy"); err != nil || len(counts) != 0 {
+	if counts, _, err := f.repo.Counts(ctx, f.employer, directapply.InboxFilter{JobSlug: "another-vacancy"}); err != nil || len(counts) != 0 {
 		t.Errorf("Counts for another vacancy = %v, %v; want none", counts, err)
 	}
 	if apps, err := f.repo.List(ctx, f.employer, directapply.InboxFilter{Stage: directapply.StageNew, Limit: 50}); err != nil || len(apps) != 0 {

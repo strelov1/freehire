@@ -32,10 +32,10 @@ was rejected: it would erase who published what and break `updated_by`.
 trigger. `UserID` stays the claimant's, the account's address in moderator and admin routes.
 
 ### 4. Joining by a mailed link
-The team types a work address; a link carrying a 256-bit token goes there; whoever follows
-it signed in may join, and acts under the invited address. Possession of the link is the
-proof of the address, exactly as the claim's code is. Not by domain: a verified domain does
-not tell freehire who on it may hire, and public and academic domains would need exceptions.
+An owner or manager enters a colleague's work address. The recipient opens the mailed
+256-bit link and accepts it from a verified matching Freehire account. Previously
+issued invitations use link possession as proof of the address for their remaining
+lifetime. Access is granted to an address the employer chose individually.
 The token is stored only as SHA-256, consumed by the acceptance statement, valid seven days;
 one live invitation per (company, address) — a resend replaces the token. Open invitations
 are capped at 20 per company (each is a letter to an address the account typed). A failed
@@ -69,6 +69,31 @@ author) and disappears from the team's dashboard.
   both run under a per-user advisory lock (`LockEmployerActor`) in their own transaction.
 - **A removed member's invitations** are withdrawn with them, so they cannot re-invite
   themselves before going.
-- **No roles** means any member can remove any other. Chosen deliberately for now; roles
-  would add a column to `company_account_members` and a check in `RemoveMember` and the
-  vacancy writes.
+## Recruiter access and activity
+
+The account holder retains ownership. Migration 0297 gives existing members the
+manager role with their existing company, vacancy, team and inbox permissions.
+Previously issued invitations retain their original behavior until used, replaced
+or expired. An invitation created or renewed after the upgrade grants recruiter
+access and can be accepted only by an account with the matching verified work email.
+
+Recruiters can list company vacancies and handle delivered applications, including
+those on closed vacancies. They can download the submitted CV, record a review,
+move the hiring stage and edit private team notes. They can see their own
+membership and leave. The account holder and managers can manage the company
+profile, vacancies, membership and invitations. All access requires an active
+company account.
+
+Migration 0296 adds the company activity log. Stage and note edits are recorded
+in the same database statement as the change. Team changes record invitations,
+withdrawals, joins and removals. Recruiters can read application events, and
+managers can also read team events. The log omits applicant email addresses,
+note text, invitation tokens, candidate messages and CV contents. Removing a
+candidate deletes their application, its archived CV, notes and activity rows.
+The actor is linked to their user ID and displayed by their current work
+address while they remain in the company. Deleting a company account removes
+its activity. Earlier actions have no activity rows.
+
+Apply migrations 0296 and 0297 before starting the new server. The earlier
+server treats every team member as a manager. Once recruiter access is in use,
+a rollback must keep the role-aware authorization in place.

@@ -30,6 +30,10 @@ func newFakeTeam(holder int64) *fakeTeam {
 	}
 }
 
+func (f *fakeTeam) Activity(context.Context, string, int64, int64) ([]Activity, error) {
+	panic("unexpected activity read")
+}
+
 func (f *fakeTeam) Members(context.Context, string) ([]Member, error) { return f.members, nil }
 
 func (f *fakeTeam) Invitations(context.Context, string) ([]Invitation, error) {

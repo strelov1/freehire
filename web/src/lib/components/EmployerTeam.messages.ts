@@ -4,7 +4,10 @@ export const messages = defineMessages(
   {
     title: 'Team',
     intro:
-      'Everyone here acts for the company as you do: they see and move applications, and publish, edit and close vacancies. A colleague joins by a link mailed to their work address.',
+      'Recruiters handle company applications. The account holder and managers also manage the team, profile and vacancies.',
+    recruiterIntro: 'You have recruiter access to your company’s applications.',
+    recruiter: 'Recruiter',
+    manager: 'Manager',
     loadError: "Couldn't load the team.",
     holder: 'Account holder',
     you: 'you',
@@ -21,7 +24,7 @@ export const messages = defineMessages(
     withdraw: 'Withdraw',
     inviteLabel: 'Invite a colleague',
     invitePlaceholder: 'colleague@company.com',
-    inviteHint: 'Their work address. The link works once, for seven days; inviting again sends a new one.',
+    inviteHint: 'Send recruiter access to a work address. The single-use link expires after seven days.',
     invite: 'Send invitation',
     inviting: 'Sending…',
     invited: 'Invitation sent to {email}.',
@@ -31,7 +34,10 @@ export const messages = defineMessages(
     ru: {
       title: 'Команда',
       intro:
-        'Все участники действуют от имени компании так же, как вы: видят отклики и ведут их по стадиям, публикуют, редактируют и закрывают вакансии. Коллега присоединяется по ссылке, которая приходит на его рабочую почту.',
+        'Рекрутеры работают с откликами компании. Владелец и менеджеры также управляют командой, профилем и вакансиями.',
+      recruiterIntro: 'У вас есть доступ к откликам компании в роли рекрутера.',
+      recruiter: 'Рекрутер',
+      manager: 'Менеджер',
       loadError: 'Не удалось загрузить команду.',
       holder: 'Владелец аккаунта',
       you: 'вы',
@@ -48,8 +54,7 @@ export const messages = defineMessages(
       withdraw: 'Отозвать',
       inviteLabel: 'Пригласить коллегу',
       invitePlaceholder: 'colleague@company.com',
-      inviteHint:
-        'Рабочий адрес коллеги. Ссылка одноразовая и действует семь дней; повторное приглашение пришлёт новую.',
+      inviteHint: 'Пригласите рекрутера по рабочему адресу. Одноразовая ссылка действует семь дней.',
       invite: 'Отправить приглашение',
       inviting: 'Отправляем…',
       invited: 'Приглашение отправлено на {email}.',

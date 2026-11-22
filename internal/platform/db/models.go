@@ -498,6 +498,7 @@ type CompanyAccountInvitation struct {
 	InvitedBy   int64              `json:"invited_by"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	Role        string             `json:"role"`
 }
 
 type CompanyAccountMember struct {
@@ -506,6 +507,7 @@ type CompanyAccountMember struct {
 	WorkEmail   string             `json:"work_email"`
 	InvitedBy   pgtype.Int8        `json:"invited_by"`
 	JoinedAt    pgtype.Timestamptz `json:"joined_at"`
+	Role        string             `json:"role"`
 }
 
 type CompanyFeedback struct {
@@ -776,6 +778,8 @@ type DirectApplication struct {
 	CvKind         string             `json:"cv_kind"`
 	Stage          string             `json:"stage"`
 	StageChangedAt pgtype.Timestamptz `json:"stage_changed_at"`
+	ViewedAt       pgtype.Timestamptz `json:"viewed_at"`
+	EmployerNotes  string             `json:"employer_notes"`
 }
 
 type DirectApplicationCv struct {
@@ -839,6 +843,18 @@ type EmailEventDaily struct {
 	Variant  string      `json:"variant"`
 	Type     string      `json:"type"`
 	Count    int64       `json:"count"`
+}
+
+type EmployerActivity struct {
+	ID            int64              `json:"id"`
+	CompanySlug   string             `json:"company_slug"`
+	ActorID       pgtype.Int8        `json:"actor_id"`
+	ApplicationID pgtype.Int8        `json:"application_id"`
+	Action        string             `json:"action"`
+	PreviousStage pgtype.Text        `json:"previous_stage"`
+	Stage         pgtype.Text        `json:"stage"`
+	SubjectEmail  pgtype.Text        `json:"subject_email"`
+	OccurredAt    pgtype.Timestamptz `json:"occurred_at"`
 }
 
 type EnrichmentOutbox struct {

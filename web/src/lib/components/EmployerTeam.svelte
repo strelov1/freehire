@@ -13,7 +13,7 @@
   import States from './States.svelte';
 
   // Leaving ends the caller's access to the company; the host returns to the claim view.
-  let { onLeft }: { onLeft: () => void } = $props();
+  let { onLeft, recruiter = false }: { onLeft: () => void; recruiter?: boolean } = $props();
 
   const s = $derived(t(messages, locale()));
   const me = $derived(currentUser()?.id ?? 0);
@@ -90,7 +90,7 @@
       <Users class="size-4 text-muted-foreground" />
       {s.title}
     </h2>
-    <p class="text-sm text-muted-foreground">{s.intro}</p>
+    <p class="text-sm text-muted-foreground">{recruiter ? s.recruiterIntro : s.intro}</p>
   </div>
 
   {#if team.status === 'loading' && !team.value}
@@ -113,6 +113,7 @@
           {#if m.holder}
             <Badge variant="outline">{s.holder}</Badge>
           {:else}
+            <Badge variant="outline">{m.role === 'recruiter' ? s.recruiter : s.manager}</Badge>
             <Button variant="ghost" size="sm" onclick={() => askRemove(m)}>
               {m.user_id === me ? s.leave : s.remove}
             </Button>
@@ -141,17 +142,19 @@
       </div>
     {/if}
 
-    <form onsubmit={invite} class="flex flex-col gap-1">
-      <label for="team-invite" class="flex items-center gap-1.5 text-sm font-medium">
-        <UserPlus class="size-3.5 text-muted-foreground" />
-        {s.inviteLabel}
-      </label>
-      <div class="flex gap-2">
-        <Input id="team-invite" bind:value={email} type="email" placeholder={s.invitePlaceholder} class="w-full" />
-        <Button type="submit" disabled={inviting || !email.trim()}>{inviting ? s.inviting : s.invite}</Button>
-      </div>
-      <span class="text-xs text-muted-foreground">{s.inviteHint}</span>
-    </form>
+    {#if !recruiter}
+      <form onsubmit={invite} class="flex flex-col gap-1">
+        <label for="team-invite" class="flex items-center gap-1.5 text-sm font-medium">
+          <UserPlus class="size-3.5 text-muted-foreground" />
+          {s.inviteLabel}
+        </label>
+        <div class="flex gap-2">
+          <Input id="team-invite" bind:value={email} type="email" placeholder={s.invitePlaceholder} class="w-full" />
+          <Button type="submit" disabled={inviting || !email.trim()}>{inviting ? s.inviting : s.invite}</Button>
+        </div>
+        <span class="text-xs text-muted-foreground">{s.inviteHint}</span>
+      </form>
+    {/if}
 
     {#if error}
       <p class="text-sm text-destructive">{error}</p>

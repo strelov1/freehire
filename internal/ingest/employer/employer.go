@@ -65,12 +65,26 @@ type Account struct {
 	CompanyName string
 	WorkEmail   string
 	Member      bool
+	Role        string
 	Status      string
 	VerifiedAt  *time.Time
 	// EmailConfirmedAt is when the claimant consumed the code mailed to WorkEmail; nil
 	// until then. An unconfirmed claim is invisible to moderators and cannot be activated.
 	EmailConfirmedAt *time.Time
 	CreatedAt        time.Time
+}
+
+const RoleRecruiter = "recruiter"
+
+// AccessRole describes the caller's permissions, including legacy members.
+func (a Account) AccessRole() string {
+	if !a.Member {
+		return "owner"
+	}
+	if a.Role == RoleRecruiter {
+		return RoleRecruiter
+	}
+	return "manager"
 }
 
 // EmailConfirmed reports whether the claimant has proven they can read WorkEmail.

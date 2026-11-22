@@ -12551,7 +12551,7 @@ func (s *Server) handleGetEmployerCompanyRequest(args [0]string, argsEscaped boo
 
 // handleGetEmployerTeamRequest handles getEmployerTeam operation.
 //
-// Everyone who acts for the caller's company, and the invitations still open.
+// The company team and open invitations. A recruiter sees their own membership.
 //
 // GET /employer/team
 func (s *Server) handleGetEmployerTeamRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -17362,7 +17362,7 @@ func (s *Server) handleInterpretSearchRequest(args [0]string, argsEscaped bool, 
 
 // handleInviteEmployerTeamMemberRequest handles inviteEmployerTeamMember operation.
 //
-// Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again
+// Mails a colleague a single-use recruiter invitation, valid seven days. Inviting an address again
 // replaces its link. 429 past twenty open invitations.
 //
 // POST /employer/team/invitations
@@ -17871,7 +17871,8 @@ func (s *Server) handleJobsActivityRequest(args [0]string, argsEscaped bool, w h
 
 // handleJoinEmployerTeamRequest handles joinEmployerTeam operation.
 //
-// Joins the team an invitation link invites to. 409 when the caller already acts for a company.
+// Joins the team. A recruiter must sign in with the matching verified email. 409 when the caller
+// already acts for a company.
 //
 // POST /employer/team/join
 func (s *Server) handleJoinEmployerTeamRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -19711,6 +19712,101 @@ func (s *Server) handleListDismissedSlugsRequest(args [0]string, argsEscaped boo
 	}
 
 	if err := encodeListDismissedSlugsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleListEmployerActivityRequest handles listEmployerActivity operation.
+//
+// Up to 30 company audit events, newest first. Recruiters see application activity.
+//
+// GET /employer/activity
+func (s *Server) handleListEmployerActivityRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ListEmployerActivityOperation,
+			ID:   "listEmployerActivity",
+		}
+	)
+	params, err := decodeListEmployerActivityParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *ListEmployerActivityOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListEmployerActivityOperation,
+			OperationSummary: "",
+			OperationID:      "listEmployerActivity",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "before",
+					In:   "query",
+				}: params.Before,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = ListEmployerActivityParams
+			Response = *ListEmployerActivityOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackListEmployerActivityParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListEmployerActivity(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListEmployerActivity(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListEmployerActivityResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -30094,6 +30190,128 @@ func (s *Server) handleSearchCitiesRequest(args [0]string, argsEscaped bool, w h
 	}
 }
 
+// handleSearchEmployerApplicationsRequest handles searchEmployerApplications operation.
+//
+// Search delivered applications before pagination. An unknown stage returns 400.
+//
+// POST /employer/applications/search
+func (s *Server) handleSearchEmployerApplicationsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: SearchEmployerApplicationsOperation,
+			ID:   "searchEmployerApplications",
+		}
+	)
+	params, err := decodeSearchEmployerApplicationsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeSearchEmployerApplicationsRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *EmployerApplicationsPage
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    SearchEmployerApplicationsOperation,
+			OperationSummary: "Search applications sent to your vacancies.",
+			OperationID:      "searchEmployerApplications",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "job",
+					In:   "query",
+				}: params.Job,
+				{
+					Name: "stage",
+					In:   "query",
+				}: params.Stage,
+				{
+					Name: "limit",
+					In:   "query",
+				}: params.Limit,
+				{
+					Name: "offset",
+					In:   "query",
+				}: params.Offset,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *EmployerApplicationSearch
+			Params   = SearchEmployerApplicationsParams
+			Response = *EmployerApplicationsPage
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackSearchEmployerApplicationsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.SearchEmployerApplications(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.SearchEmployerApplications(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeSearchEmployerApplicationsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleSearchJobsRequest handles searchJobs operation.
 //
 // Free-text `q` plus any filter (the "Filtering jobs" section). Repeated values OR; `<param>_mode=and`
@@ -33951,6 +34169,116 @@ func (s *Server) handleUpdateEmailPrefsRequest(args [0]string, argsEscaped bool,
 	}
 
 	if err := encodeUpdateEmailPrefsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleUpdateEmployerApplicationWorkspaceRequest handles updateEmployerApplicationWorkspace operation.
+//
+// Mark an application reviewed or save private notes.
+//
+// PATCH /employer/applications/{id}/workspace
+func (s *Server) handleUpdateEmployerApplicationWorkspaceRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: UpdateEmployerApplicationWorkspaceOperation,
+			ID:   "updateEmployerApplicationWorkspace",
+		}
+	)
+	params, err := decodeUpdateEmployerApplicationWorkspaceParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeUpdateEmployerApplicationWorkspaceRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *UpdateEmployerApplicationWorkspaceOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    UpdateEmployerApplicationWorkspaceOperation,
+			OperationSummary: "Mark an application reviewed or save private notes.",
+			OperationID:      "updateEmployerApplicationWorkspace",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *EmployerApplicationWorkspace
+			Params   = UpdateEmployerApplicationWorkspaceParams
+			Response = *UpdateEmployerApplicationWorkspaceOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackUpdateEmployerApplicationWorkspaceParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.UpdateEmployerApplicationWorkspace(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.UpdateEmployerApplicationWorkspace(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeUpdateEmployerApplicationWorkspaceResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

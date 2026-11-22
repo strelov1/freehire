@@ -27,6 +27,15 @@ func (f teamFixture) invite(t *testing.T, email string, expires time.Time) []byt
 	return h[:]
 }
 
+func (f teamFixture) verifiedUser(t *testing.T, email string) int64 {
+	t.Helper()
+	id := seedUser(t, f.pool, email)
+	if _, err := f.pool.Exec(context.Background(), "UPDATE users SET email_verified = true WHERE id = $1", id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 func TestTeam_InvitationsThatCannotBeAccepted(t *testing.T) {
 	f := newTeamFixture(t)
 	ctx := context.Background()
@@ -40,7 +49,7 @@ func TestTeam_InvitationsThatCannotBeAccepted(t *testing.T) {
 	}
 
 	// The holder of another account cannot become a member.
-	other := seedUser(t, f.pool, "hr@globex.test")
+	other := f.verifiedUser(t, "hr2@acme.test")
 	if _, err := f.pool.Exec(ctx, `INSERT INTO company_accounts (user_id, company_slug, company_name, work_email, status) VALUES ($1, 'globex', 'Globex', 'hr@globex.test', 'active')`, other); err != nil {
 		t.Fatalf("seed globex: %v", err)
 	}
@@ -55,6 +64,30 @@ func TestTeam_InvitationsThatCannotBeAccepted(t *testing.T) {
 	}
 	if err := f.repo.Accept(ctx, seedUser(t, f.pool, "new@example.test"), live); !errors.Is(err, employer.ErrInvitationInvalid) {
 		t.Errorf("Accept into a revoked account err = %v", err)
+	}
+}
+
+func TestTeam_ExistingInvitationRetainsManagerAccess(t *testing.T) {
+	f := newTeamFixture(t)
+	ctx := context.Background()
+	user := seedUser(t, f.pool, "personal@example.test")
+	hash := sha256.Sum256([]byte("existing-invitation"))
+	if _, err := f.pool.Exec(ctx, `INSERT INTO company_account_invitations (company_slug, email, token_hash, invited_by, expires_at)
+		VALUES ('acme', 'legacy@acme.test', $1, $2, now() + interval '1 hour')`, hash[:], f.holder); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.repo.Accept(ctx, user, hash[:]); err != nil {
+		t.Fatal(err)
+	}
+	account, err := f.repo.GetByUserID(ctx, user)
+	if err != nil || account.AccessRole() != "manager" {
+		t.Fatalf("legacy account = %+v, %v", account, err)
+	}
+	next := sha256.Sum256([]byte("new-invitation"))
+	if _, err := f.repo.Invite(ctx, employer.NewInvitation{
+		CompanySlug: "acme", Email: "new@acme.test", TokenHash: next[:], InvitedBy: user, ExpiresAt: time.Now().Add(time.Hour),
+	}, 20); err != nil {
+		t.Fatalf("legacy manager invites a recruiter: %v", err)
 	}
 }
 
@@ -96,10 +129,7 @@ func TestTeam_InvitationCapAndResend(t *testing.T) {
 func TestTeam_RemovalWithdrawsTheMembersInvitations(t *testing.T) {
 	f := newTeamFixture(t)
 	ctx := context.Background()
-	member := seedUser(t, f.pool, "dev.personal@example.test")
-	if err := f.repo.Accept(ctx, member, f.invite(t, "dev@acme.test", time.Now().Add(time.Hour))); err != nil {
-		t.Fatalf("Accept: %v", err)
-	}
+	member := f.member(t, "dev.personal@example.test", "dev@acme.test")
 	h := sha256.Sum256([]byte("member-invites-themselves"))
 	if _, err := f.repo.Invite(ctx, employer.NewInvitation{
 		CompanySlug: "acme", Email: "me-again@acme.test", TokenHash: h[:], InvitedBy: member, ExpiresAt: time.Now().Add(time.Hour),
@@ -143,7 +173,7 @@ func TestTeam_ReviewFixes(t *testing.T) {
 	})
 
 	t.Run("a removed member can no longer invite, withdraw or remove", func(t *testing.T) {
-		member := seedUser(t, f.pool, "m.personal@example.test")
+		member := f.verifiedUser(t, "m@acme.test")
 		if err := inv("m@acme.test", h("m"), f.holder, until, 20); err != nil {
 			t.Fatalf("Invite m: %v", err)
 		}
@@ -158,7 +188,7 @@ func TestTeam_ReviewFixes(t *testing.T) {
 		}
 		// A request the member queued before their removal, carried out after it, changes
 		// nothing: the actor is rechecked under the company's lock.
-		colleague := seedUser(t, f.pool, "c.personal@example.test")
+		colleague := f.verifiedUser(t, "c@acme.test")
 		if err := inv("c@acme.test", h("c"), f.holder, until, 20); err != nil {
 			t.Fatalf("Invite c: %v", err)
 		}
@@ -205,7 +235,7 @@ func TestTeam_ReviewFixes(t *testing.T) {
 func TestTeam_AnInvitationMakesAMember(t *testing.T) {
 	f := newTeamFixture(t)
 	ctx := context.Background()
-	member := seedUser(t, f.pool, "someone@gmail.com")
+	member := f.verifiedUser(t, "dev@acme.test")
 	hash := f.invite(t, "dev@acme.test", time.Now().Add(time.Hour))
 
 	if p, status, err := f.repo.Preview(ctx, hash); err != nil || p.CompanyName != "Acme" || p.Email != "dev@acme.test" || status != employer.StatusActive {

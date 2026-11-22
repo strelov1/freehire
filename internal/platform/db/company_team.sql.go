@@ -15,21 +15,30 @@ const acceptCompanyInvitation = `-- name: AcceptCompanyInvitation :one
 WITH inv AS (
     DELETE FROM company_account_invitations i
     USING company_accounts ca
-    WHERE i.token_hash = $2
+    WHERE i.token_hash = $1
       AND i.expires_at > now()
       AND ca.company_slug = i.company_slug
       AND ca.status = 'active'
-      AND NOT EXISTS (SELECT 1 FROM company_accounts own WHERE own.user_id = $1)
-    RETURNING i.company_slug, i.email, i.invited_by
+      AND NOT EXISTS (SELECT 1 FROM company_accounts own WHERE own.user_id = $2)
+          AND (i.role = 'manager' OR EXISTS (
+          SELECT 1 FROM users u WHERE u.id = $2
+          AND u.email_verified AND lower(u.email) = lower(i.email)
+      ))
+    RETURNING i.company_slug, i.email, i.invited_by, i.role
+), accepted AS (
+    INSERT INTO company_account_members (user_id, company_slug, work_email, invited_by, role)
+    SELECT $2, inv.company_slug, inv.email, inv.invited_by, inv.role FROM inv
+    RETURNING company_slug, user_id, work_email
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, action, subject_email)
+    SELECT company_slug, user_id, 'member_joined', work_email FROM accepted
 )
-INSERT INTO company_account_members (user_id, company_slug, work_email, invited_by)
-SELECT $1, inv.company_slug, inv.email, inv.invited_by FROM inv
-RETURNING company_slug
+SELECT company_slug FROM accepted
 `
 
 type AcceptCompanyInvitationParams struct {
-	UserID    int64  `json:"user_id"`
 	TokenHash []byte `json:"token_hash"`
+	UserID    int64  `json:"user_id"`
 }
 
 // Consumes a live invitation to an active account and makes user_id a member, in one
@@ -38,34 +47,72 @@ type AcceptCompanyInvitationParams struct {
 // claimant here, or as a member through company_account_members' primary key, which a
 // concurrent acceptance hits as a unique violation.
 func (q *Queries) AcceptCompanyInvitation(ctx context.Context, arg AcceptCompanyInvitationParams) (string, error) {
-	row := q.db.QueryRow(ctx, acceptCompanyInvitation, arg.UserID, arg.TokenHash)
+	row := q.db.QueryRow(ctx, acceptCompanyInvitation, arg.TokenHash, arg.UserID)
 	var company_slug string
 	err := row.Scan(&company_slug)
 	return company_slug, err
 }
 
-const deleteCompanyInvitation = `-- name: DeleteCompanyInvitation :execrows
-DELETE FROM company_account_invitations
-WHERE id = $1 AND company_slug = $2
+const canActForCompany = `-- name: CanActForCompany :one
+SELECT EXISTS (
+    SELECT 1 FROM company_accounts ca
+    WHERE ca.company_slug = $1 AND ca.status = 'active'
+      AND (ca.user_id = $2 OR EXISTS (
+          SELECT 1 FROM company_account_members m
+          WHERE m.company_slug = ca.company_slug AND m.user_id = $2
+            AND (NOT $3::boolean OR m.role = 'manager')
+      ))
+)::boolean AS allowed
+`
+
+type CanActForCompanyParams struct {
+	CompanySlug    string `json:"company_slug"`
+	UserID         int64  `json:"user_id"`
+	RequireManager bool   `json:"require_manager"`
+}
+
+// Team mutations check current status and role under the company lock.
+func (q *Queries) CanActForCompany(ctx context.Context, arg CanActForCompanyParams) (bool, error) {
+	row := q.db.QueryRow(ctx, canActForCompany, arg.CompanySlug, arg.UserID, arg.RequireManager)
+	var allowed bool
+	err := row.Scan(&allowed)
+	return allowed, err
+}
+
+const deleteCompanyInvitation = `-- name: DeleteCompanyInvitation :one
+WITH withdrawn AS (
+    DELETE FROM company_account_invitations i
+    WHERE i.id = $1 AND i.company_slug = $2
+    RETURNING i.company_slug, i.email
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, action, subject_email)
+    SELECT company_slug, $3::bigint, 'invitation_withdrawn', email FROM withdrawn
+)
+SELECT count(*)::bigint FROM withdrawn
 `
 
 type DeleteCompanyInvitationParams struct {
 	ID          int64  `json:"id"`
 	CompanySlug string `json:"company_slug"`
+	ActorID     int64  `json:"actor_id"`
 }
 
 // Withdraws one of a company's invitations; its link stops working at once.
 func (q *Queries) DeleteCompanyInvitation(ctx context.Context, arg DeleteCompanyInvitationParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteCompanyInvitation, arg.ID, arg.CompanySlug)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, deleteCompanyInvitation, arg.ID, arg.CompanySlug, arg.ActorID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
-const deleteCompanyInvitationByToken = `-- name: DeleteCompanyInvitationByToken :execrows
-DELETE FROM company_account_invitations
-WHERE company_slug = $1 AND token_hash = $2
+const deleteCompanyInvitationByToken = `-- name: DeleteCompanyInvitationByToken :exec
+WITH withdrawn AS (
+    DELETE FROM company_account_invitations i
+    WHERE i.company_slug = $1 AND i.token_hash = $2
+    RETURNING i.company_slug, i.invited_by, i.email
+)
+INSERT INTO employer_activity (company_slug, actor_id, action, subject_email)
+SELECT company_slug, invited_by, 'invitation_withdrawn', email FROM withdrawn
 `
 
 type DeleteCompanyInvitationByTokenParams struct {
@@ -75,12 +122,9 @@ type DeleteCompanyInvitationByTokenParams struct {
 
 // Withdraws the invitation a failed letter carried — only while it still holds that token:
 // a resend that replaced the token in the meantime mailed a link that must keep working.
-func (q *Queries) DeleteCompanyInvitationByToken(ctx context.Context, arg DeleteCompanyInvitationByTokenParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteCompanyInvitationByToken, arg.CompanySlug, arg.TokenHash)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) DeleteCompanyInvitationByToken(ctx context.Context, arg DeleteCompanyInvitationByTokenParams) error {
+	_, err := q.db.Exec(ctx, deleteCompanyInvitationByToken, arg.CompanySlug, arg.TokenHash)
+	return err
 }
 
 const employerTeamIncludes = `-- name: EmployerTeamIncludes :one
@@ -107,12 +151,12 @@ func (q *Queries) EmployerTeamIncludes(ctx context.Context, arg EmployerTeamIncl
 const getCompanyAccountForUser = `-- name: GetCompanyAccountForUser :one
 
 SELECT ca.user_id, ca.company_slug, ca.company_name, ca.status, ca.verified_at,
-       ca.email_confirmed_at, ca.created_at, ca.work_email AS acting_email, false AS member
+       ca.email_confirmed_at, ca.created_at, ca.work_email AS acting_email, false AS member, 'owner'::text AS role
 FROM company_accounts ca
 WHERE ca.user_id = $1
 UNION ALL
 SELECT ca.user_id, ca.company_slug, ca.company_name, ca.status, ca.verified_at,
-       ca.email_confirmed_at, ca.created_at, m.work_email AS acting_email, true AS member
+       ca.email_confirmed_at, ca.created_at, m.work_email AS acting_email, true AS member, m.role
 FROM company_account_members m
 JOIN company_accounts ca ON ca.company_slug = m.company_slug
 WHERE m.user_id = $1
@@ -128,6 +172,7 @@ type GetCompanyAccountForUserRow struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	ActingEmail      string             `json:"acting_email"`
 	Member           bool               `json:"member"`
+	Role             string             `json:"role"`
 }
 
 // A company account's team: its members and the invitations that bring them in
@@ -151,12 +196,13 @@ func (q *Queries) GetCompanyAccountForUser(ctx context.Context, userID int64) (G
 		&i.CreatedAt,
 		&i.ActingEmail,
 		&i.Member,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getCompanyInvitationByToken = `-- name: GetCompanyInvitationByToken :one
-SELECT i.email, i.company_slug, ca.company_name, ca.status
+SELECT i.email, i.company_slug, ca.company_name, ca.status, i.role
 FROM company_account_invitations i
 JOIN company_accounts ca ON ca.company_slug = i.company_slug
 WHERE i.token_hash = $1 AND i.expires_at > now()
@@ -167,6 +213,7 @@ type GetCompanyInvitationByTokenRow struct {
 	CompanySlug string `json:"company_slug"`
 	CompanyName string `json:"company_name"`
 	Status      string `json:"status"`
+	Role        string `json:"role"`
 }
 
 // The live invitation a link names, with the company and the status of the account it
@@ -180,30 +227,9 @@ func (q *Queries) GetCompanyInvitationByToken(ctx context.Context, tokenHash []b
 		&i.CompanySlug,
 		&i.CompanyName,
 		&i.Status,
+		&i.Role,
 	)
 	return i, err
-}
-
-const isCompanyActor = `-- name: IsCompanyActor :one
-SELECT EXISTS (
-    SELECT 1 FROM company_accounts ca WHERE ca.company_slug = $1 AND ca.user_id = $2
-    UNION ALL
-    SELECT 1 FROM company_account_members m WHERE m.company_slug = $1 AND m.user_id = $2
-)::boolean AS acts
-`
-
-type IsCompanyActorParams struct {
-	CompanySlug string `json:"company_slug"`
-	UserID      int64  `json:"user_id"`
-}
-
-// Whether the user acts for the company — as its claimant or a member — right now. Read
-// under LockEmployerCompany, so a removal that committed first is seen.
-func (q *Queries) IsCompanyActor(ctx context.Context, arg IsCompanyActorParams) (bool, error) {
-	row := q.db.QueryRow(ctx, isCompanyActor, arg.CompanySlug, arg.UserID)
-	var acts bool
-	err := row.Scan(&acts)
-	return acts, err
 }
 
 const listCompanyInvitations = `-- name: ListCompanyInvitations :many
@@ -247,13 +273,13 @@ func (q *Queries) ListCompanyInvitations(ctx context.Context, companySlug string
 }
 
 const listCompanyTeam = `-- name: ListCompanyTeam :many
-SELECT t.user_id, t.work_email, t.joined_at, t.holder
+SELECT t.user_id, t.work_email, t.joined_at, t.holder, t.role
 FROM (
-    SELECT ca.user_id, ca.work_email, COALESCE(ca.verified_at, ca.created_at) AS joined_at, true AS holder
+    SELECT ca.user_id, ca.work_email, COALESCE(ca.verified_at, ca.created_at) AS joined_at, true AS holder, 'owner'::text AS role
     FROM company_accounts ca
     WHERE ca.company_slug = $1
     UNION ALL
-    SELECT m.user_id, m.work_email, m.joined_at, false AS holder
+    SELECT m.user_id, m.work_email, m.joined_at, false AS holder, m.role
     FROM company_account_members m
     WHERE m.company_slug = $1
 ) t
@@ -265,6 +291,7 @@ type ListCompanyTeamRow struct {
 	WorkEmail string             `json:"work_email"`
 	JoinedAt  pgtype.Timestamptz `json:"joined_at"`
 	Holder    bool               `json:"holder"`
+	Role      string             `json:"role"`
 }
 
 // Everyone who acts for a company: the claimant first (holder), then members by when they
@@ -283,6 +310,70 @@ func (q *Queries) ListCompanyTeam(ctx context.Context, companySlug string) ([]Li
 			&i.WorkEmail,
 			&i.JoinedAt,
 			&i.Holder,
+			&i.Role,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEmployerActivity = `-- name: ListEmployerActivity :many
+SELECT a.id, a.action, a.application_id, a.previous_stage, a.stage, a.subject_email, a.occurred_at,
+       COALESCE(CASE WHEN ca.user_id = a.actor_id THEN ca.work_email ELSE m.work_email END, '')::text AS actor_email
+FROM employer_activity a
+JOIN company_accounts ca ON ca.company_slug = a.company_slug AND ca.status = 'active'
+LEFT JOIN company_account_members m ON m.user_id = a.actor_id AND m.company_slug = a.company_slug
+WHERE ca.company_slug = $1
+  AND (ca.user_id = $2 OR EXISTS (
+      SELECT 1 FROM company_account_members reader
+      WHERE reader.user_id = $2 AND reader.company_slug = ca.company_slug
+        AND (reader.role = 'manager' OR a.application_id IS NOT NULL)
+  ))
+  AND ($3::bigint IS NULL OR a.id < $3::bigint)
+ORDER BY a.id DESC
+LIMIT 30
+`
+
+type ListEmployerActivityParams struct {
+	CompanySlug string      `json:"company_slug"`
+	ActorID     int64       `json:"actor_id"`
+	BeforeID    pgtype.Int8 `json:"before_id"`
+}
+
+type ListEmployerActivityRow struct {
+	ID            int64              `json:"id"`
+	Action        string             `json:"action"`
+	ApplicationID pgtype.Int8        `json:"application_id"`
+	PreviousStage pgtype.Text        `json:"previous_stage"`
+	Stage         pgtype.Text        `json:"stage"`
+	SubjectEmail  pgtype.Text        `json:"subject_email"`
+	OccurredAt    pgtype.Timestamptz `json:"occurred_at"`
+	ActorEmail    string             `json:"actor_email"`
+}
+
+func (q *Queries) ListEmployerActivity(ctx context.Context, arg ListEmployerActivityParams) ([]ListEmployerActivityRow, error) {
+	rows, err := q.db.Query(ctx, listEmployerActivity, arg.CompanySlug, arg.ActorID, arg.BeforeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEmployerActivityRow{}
+	for rows.Next() {
+		var i ListEmployerActivityRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Action,
+			&i.ApplicationID,
+			&i.PreviousStage,
+			&i.Stage,
+			&i.SubjectEmail,
+			&i.OccurredAt,
+			&i.ActorEmail,
 		); err != nil {
 			return nil, err
 		}
@@ -392,7 +483,7 @@ const removeCompanyMember = `-- name: RemoveCompanyMember :one
 WITH removed AS (
     DELETE FROM company_account_members m
     WHERE m.user_id = $1 AND m.company_slug = $2
-    RETURNING m.user_id AS removed_id
+    RETURNING m.user_id AS removed_id, m.company_slug, m.work_email
 ), handed AS (
     UPDATE jobs
     SET created_by = (SELECT ca.user_id FROM company_accounts ca WHERE ca.company_slug = $2)
@@ -402,6 +493,12 @@ WITH removed AS (
     DELETE FROM company_account_invitations i
     WHERE i.invited_by IN (SELECT removed.removed_id FROM removed)
       AND i.company_slug = $2
+    RETURNING i.company_slug, i.email
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, action, subject_email)
+    SELECT company_slug, $3::bigint, 'member_removed', work_email FROM removed
+    UNION ALL
+    SELECT company_slug, $3::bigint, 'invitation_withdrawn', email FROM withdrawn
 )
 SELECT count(*)::bigint AS removed FROM removed
 `
@@ -409,6 +506,7 @@ SELECT count(*)::bigint AS removed FROM removed
 type RemoveCompanyMemberParams struct {
 	MemberID    int64  `json:"member_id"`
 	CompanySlug string `json:"company_slug"`
+	ActorID     int64  `json:"actor_id"`
 }
 
 // Removes a member from a company's team, and in the same statement hands the vacancies they
@@ -418,15 +516,16 @@ type RemoveCompanyMemberParams struct {
 // an address of their own and walk straight back in. The claimant is never a member row, so
 // cannot be removed here. Returns how many members were removed (0 or 1).
 func (q *Queries) RemoveCompanyMember(ctx context.Context, arg RemoveCompanyMemberParams) (int64, error) {
-	row := q.db.QueryRow(ctx, removeCompanyMember, arg.MemberID, arg.CompanySlug)
+	row := q.db.QueryRow(ctx, removeCompanyMember, arg.MemberID, arg.CompanySlug, arg.ActorID)
 	var removed int64
 	err := row.Scan(&removed)
 	return removed, err
 }
 
 const upsertCompanyInvitation = `-- name: UpsertCompanyInvitation :one
-INSERT INTO company_account_invitations (company_slug, email, token_hash, invited_by, expires_at)
-SELECT $1, $2, $3, $4, $5
+WITH invitation AS (
+INSERT INTO company_account_invitations (company_slug, email, token_hash, invited_by, expires_at, role)
+SELECT $1, $2, $3, $4, $5, 'recruiter'
 WHERE EXISTS (
         SELECT 1 FROM company_account_invitations
         WHERE company_slug = $1 AND lower(email) = lower($2)
@@ -438,8 +537,13 @@ WHERE EXISTS (
     ) < $6::bigint
 ON CONFLICT (company_slug, lower(email)) DO UPDATE
 SET email = EXCLUDED.email, token_hash = EXCLUDED.token_hash, invited_by = EXCLUDED.invited_by,
-    created_at = now(), expires_at = EXCLUDED.expires_at
-RETURNING id, email, created_at, expires_at
+    created_at = now(), expires_at = EXCLUDED.expires_at, role = EXCLUDED.role
+RETURNING id, email, created_at, expires_at, company_slug, invited_by
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, action, subject_email)
+    SELECT company_slug, invited_by, 'invited', email FROM invitation
+)
+SELECT id, email, created_at, expires_at FROM invitation
 `
 
 type UpsertCompanyInvitationParams struct {

@@ -76,17 +76,18 @@ WHERE job_id = $1 AND user_id = $2;
 -- one vacancy and one stage — or to the one application `id` names, which is how a single
 -- application is read. Reached through jobs_created_by_idx.
 SELECT da.id, j.public_slug AS job_slug, j.title AS job_title, u.email AS candidate_email,
-       da.cv_kind, da.note, da.answers, da.stage, da.stage_changed_at, da.sent_at,
+       da.cv_kind, da.note, da.answers, da.stage, da.stage_changed_at, da.sent_at, da.viewed_at, da.employer_notes,
        EXISTS (SELECT 1 FROM direct_application_cvs c WHERE c.application_id = da.id) AS has_cv
 FROM direct_applications da
 JOIN jobs j ON j.id = da.job_id
 JOIN users u ON u.id = da.user_id
-WHERE j.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(employer_id)::bigint)))
+WHERE j.created_by = ANY(ARRAY(SELECT active_employer_team(sqlc.arg(employer_id)::bigint)))
   AND j.source = 'employer'
   AND da.sent_at IS NOT NULL
   AND (sqlc.narg(job_slug)::text IS NULL OR j.public_slug = sqlc.narg(job_slug)::text)
   AND (sqlc.narg(stage)::text IS NULL OR da.stage = sqlc.narg(stage)::text)
   AND (sqlc.narg(id)::bigint IS NULL OR da.id = sqlc.narg(id)::bigint)
+  AND employer_application_matches(COALESCE(sqlc.narg(search)::text, ''), u.email, da.note, da.answers)
 ORDER BY da.sent_at DESC, da.id DESC
 LIMIT sqlc.arg(row_limit)::int OFFSET sqlc.arg(row_offset)::int;
 
@@ -94,10 +95,14 @@ LIMIT sqlc.arg(row_limit)::int OFFSET sqlc.arg(row_offset)::int;
 -- How many delivered applications sit at each stage, under the same vacancy narrowing as
 -- ListEmployerApplications but never its stage one: the inbox shows every stage's count
 -- beside the stage it is filtered to. A stage with no application is absent.
-SELECT da.stage, count(*)::bigint AS applications
+SELECT da.stage, count(*)::bigint AS applications,
+       count(*) FILTER (
+           WHERE employer_application_matches(COALESCE(sqlc.narg(search)::text, ''), u.email, da.note, da.answers)
+       )::bigint AS matches
 FROM direct_applications da
 JOIN jobs j ON j.id = da.job_id
-WHERE j.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(employer_id)::bigint)))
+JOIN users u ON u.id = da.user_id
+WHERE j.created_by = ANY(ARRAY(SELECT active_employer_team(sqlc.arg(employer_id)::bigint)))
   AND j.source = 'employer'
   AND da.sent_at IS NOT NULL
   AND (sqlc.narg(job_slug)::text IS NULL OR j.public_slug = sqlc.narg(job_slug)::text)
@@ -111,36 +116,72 @@ FROM direct_application_cvs c
 JOIN direct_applications da ON da.id = c.application_id
 JOIN jobs j ON j.id = da.job_id
 WHERE c.application_id = sqlc.arg(id)
-  AND j.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(employer_id)::bigint)))
+  AND j.created_by = ANY(ARRAY(SELECT active_employer_team(sqlc.arg(employer_id)::bigint)))
   AND j.source = 'employer'
   AND da.sent_at IS NOT NULL;
 
 -- name: SetDirectApplicationStage :one
--- Moves a delivered application to a stage in the employer's pipeline and reports what the
--- move needs downstream: whether it changed anything (`changed` is false when it already
--- stood there, so a repeated click notifies nobody twice), and who the candidate is and
--- what they applied to. One UPDATE, so the comparison with the current stage is made on the
--- row as it is when the update reaches it — a concurrent move that committed first is seen,
--- not an older snapshot of it. stage_changed_at moves only with the stage, which is how the
--- RETURNING tells a change from a no-op. No row: not the employer's. Callers serialise the
--- whole move per application (LockDirectApplication).
-WITH moved AS (
-    UPDATE direct_applications da
-    SET stage = sqlc.arg(stage)::text,
-        stage_changed_at = CASE WHEN da.stage = sqlc.arg(stage)::text THEN da.stage_changed_at ELSE now() END
-    FROM jobs j
+-- Stage moves are serialised per application by LockDirectApplication. Capture the
+-- previous stage for the audit in the same statement as the write.
+WITH target AS MATERIALIZED (
+    SELECT da.id, da.stage, j.created_by AS author_id
+    FROM direct_applications da
+    JOIN jobs j ON j.id = da.job_id
     WHERE da.id = sqlc.arg(id)
-      AND j.id = da.job_id
-      AND j.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(employer_id)::bigint)))
+      AND j.created_by = ANY(ARRAY(SELECT active_employer_team(sqlc.arg(employer_id)::bigint)))
       AND j.source = 'employer'
       AND da.sent_at IS NOT NULL
-    RETURNING da.user_id, da.job_id, (da.stage_changed_at IS NOT DISTINCT FROM now())::boolean AS changed
+    FOR UPDATE OF da
+), moved AS (
+    UPDATE direct_applications da
+    SET stage = sqlc.arg(stage)::text,
+        stage_changed_at = CASE WHEN target.stage = sqlc.arg(stage)::text THEN da.stage_changed_at ELSE now() END
+    FROM target
+    WHERE da.id = target.id
+    RETURNING da.id, da.user_id, da.job_id, target.author_id, target.stage AS previous_stage,
+              (target.stage <> da.stage)::boolean AS changed
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, application_id, action, previous_stage, stage)
+    SELECT ca.company_slug, sqlc.arg(employer_id)::bigint, m.id, 'stage_changed', m.previous_stage, sqlc.arg(stage)::text
+    FROM moved m
+    JOIN company_accounts ca ON ca.user_id = m.author_id OR ca.company_slug = (
+        SELECT company_slug FROM company_account_members WHERE user_id = m.author_id
+    )
+    WHERE m.changed
 )
 SELECT m.changed, m.user_id AS candidate_id, u.email AS candidate_email,
        m.job_id, j.public_slug AS job_slug, j.title AS job_title, j.company
 FROM moved m
 JOIN jobs j ON j.id = m.job_id
 JOIN users u ON u.id = m.user_id;
+
+-- name: UpdateEmployerApplicationWorkspace :one
+WITH target AS MATERIALIZED (
+    SELECT da.id, da.employer_notes, j.created_by AS author_id
+    FROM direct_applications da
+    JOIN jobs j ON j.id = da.job_id
+    WHERE da.id = sqlc.arg(id)
+      AND j.created_by = ANY(ARRAY(SELECT active_employer_team(sqlc.arg(employer_id)::bigint)))
+      AND j.source = 'employer'
+      AND da.sent_at IS NOT NULL
+    FOR UPDATE OF da
+), updated AS (
+    UPDATE direct_applications da
+    SET employer_notes = COALESCE(sqlc.narg(employer_notes)::text, target.employer_notes),
+        viewed_at = CASE WHEN sqlc.arg(mark_viewed)::boolean THEN COALESCE(da.viewed_at, now()) ELSE da.viewed_at END
+    FROM target
+    WHERE da.id = target.id
+    RETURNING da.id, target.author_id, (target.employer_notes <> da.employer_notes) AS notes_changed
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, application_id, action)
+    SELECT ca.company_slug, sqlc.arg(employer_id)::bigint, updated.id, 'notes_changed'
+    FROM updated
+    JOIN company_accounts ca ON ca.user_id = updated.author_id OR ca.company_slug = (
+        SELECT company_slug FROM company_account_members WHERE user_id = updated.author_id
+    )
+    WHERE updated.notes_changed
+)
+SELECT id FROM updated;
 
 -- name: LockDirectApplication :exec
 -- Serialises everything one employer move does to one application — the stage write, the

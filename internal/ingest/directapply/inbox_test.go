@@ -40,15 +40,23 @@ func (f *fakeInbox) List(_ context.Context, id int64, flt InboxFilter) ([]InboxA
 	return out, nil
 }
 
-func (f *fakeInbox) Counts(_ context.Context, id int64, _ string) (map[Stage]int64, error) {
+func (f *fakeInbox) Counts(_ context.Context, id int64, flt InboxFilter) (map[Stage]int64, int64, error) {
 	out := map[Stage]int64{}
 	if id != employerID {
-		return out, nil
+		return out, 0, nil
 	}
+	var total int64
 	for _, a := range f.apps {
 		out[a.Stage]++
+		if flt.Stage == "" || flt.Stage == a.Stage {
+			total++
+		}
 	}
-	return out, nil
+	return out, total, nil
+}
+
+func (f *fakeInbox) UpdateWorkspace(_ context.Context, _, _ int64, _ bool, _ *string) error {
+	panic("unexpected workspace update")
 }
 
 func (f *fakeInbox) Get(_ context.Context, id, appID int64) (InboxApplication, error) {
