@@ -225,7 +225,7 @@ func TestAgentPermissions_OnlyTheBrowserMayTurnItOn(t *testing.T) {
 			strings.NewReader(`{"agents_may_apply":true}`))
 		req.Header.Set("Content-Type", "application/json")
 		if withCookie {
-			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		}
 		if bearer != "" {
 			req.Header.Set("Authorization", "Bearer "+bearer)

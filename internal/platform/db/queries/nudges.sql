@@ -215,8 +215,10 @@ SELECT n.id, n.user_id, n.job_id, n.kind,
        (j.closed_at IS NULL)::bool AS job_open,
        -- The same pending_review predicate ListAutoApplyReviewReadyCandidates matches on, so a
        -- review-ready nudge held by quiet hours or a retry is dropped once the entry is decided.
+       -- created_at = episode_key: a re-queued entry is a new episode with its own nudge.
        EXISTS(SELECT 1 FROM auto_apply_queue q
                WHERE q.user_id = n.user_id AND q.job_id = n.job_id
+                 AND q.created_at = n.episode_key
                  AND q.review_decision IS NULL AND q.tailored_cv_id IS NOT NULL
                  AND q.resolved_preview IS NOT NULL AND q.blocked_at IS NULL
                  AND q.failed_at IS NULL)::bool AS auto_apply_review_pending,

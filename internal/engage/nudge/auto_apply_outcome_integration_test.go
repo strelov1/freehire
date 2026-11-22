@@ -14,6 +14,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -257,5 +258,59 @@ func TestListAutoApplyReviewReadyCandidates_OnlyPendingOnOpenJobs(t *testing.T) 
 	}
 	if len(rows) != 1 || rows[0].JobID != want {
 		t.Errorf("rows = %+v, want only job %d", rows, want)
+	}
+}
+
+// A review-ready nudge is bound to its queue entry: once the candidate withdraws and re-queues
+// the job, the held nudge no longer reads as pending (the new entry records its own).
+func TestGetNudgeForDelivery_ReviewPendingBoundToEpisode(t *testing.T) {
+	pool := testdb.Pool(t)
+	queries := db.New(pool)
+	ctx := context.Background()
+
+	userID := seedNudgeIntegrationUser(t, pool, "review-episode@example.test")
+	var jobID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, company, public_slug)
+		 VALUES ('test', 'review-episode', 'http://example.test', 'Go Dev', 'Acme', 'review-episode')
+		 RETURNING id`).Scan(&jobID); err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+	queue := func() pgtype.Timestamptz {
+		t.Helper()
+		var created pgtype.Timestamptz
+		if err := pool.QueryRow(ctx,
+			`WITH cv AS (INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}') RETURNING id)
+			 INSERT INTO auto_apply_queue (user_id, job_id, tailored_cv_id, resolved_preview)
+			 SELECT $1, $2, cv.id, '{"fields":[]}' FROM cv RETURNING created_at`, userID, jobID).Scan(&created); err != nil {
+			t.Fatalf("insert queue entry: %v", err)
+		}
+		return created
+	}
+	episode := queue()
+	if _, err := queries.RecordNudge(ctx, db.RecordNudgeParams{UserID: userID, JobID: jobID, Kind: KindAutoApplyReviewReady, EpisodeKey: episode}); err != nil {
+		t.Fatal(err)
+	}
+	var nudgeID int64
+	if err := pool.QueryRow(ctx, `SELECT id FROM application_nudges WHERE user_id = $1 AND job_id = $2`, userID, jobID).Scan(&nudgeID); err != nil {
+		t.Fatal(err)
+	}
+	pending := func() bool {
+		t.Helper()
+		info, err := queries.GetNudgeForDelivery(ctx, nudgeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info.AutoApplyReviewPending
+	}
+	if !pending() {
+		t.Fatal("pending = false for the nudge's own entry, want true")
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM auto_apply_queue WHERE job_id = $1`, jobID); err != nil {
+		t.Fatal(err)
+	}
+	queue()
+	if pending() {
+		t.Error("pending = true against a re-queued entry, want false")
 	}
 }

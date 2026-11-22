@@ -44,22 +44,29 @@
   let confirmEach = $state<boolean | null>(null);
   let settingSaving = $state(false);
   let settingError = $state<string | null>(null);
+  // A save bumps this, so a read that started before it cannot overwrite the saved value.
+  let settingGeneration = 0;
   // Refresh re-reads the setting too, so a failed first read can recover.
   $effect(() => {
     if (!isAuthenticated()) return;
     void revision;
+    const generation = settingGeneration;
     api.getAutoApplySettings().then(
       (r) => {
+        if (generation !== settingGeneration) return;
         confirmEach = r.confirm_each;
         settingError = null;
       },
-      () => (settingError = s.confirmEach.loadError),
+      () => {
+        if (generation === settingGeneration) settingError = s.confirmEach.loadError;
+      },
     );
   });
 
   async function toggleConfirmEach(): Promise<void> {
     if (confirmEach === null || settingSaving) return;
     settingSaving = true;
+    settingGeneration += 1;
     settingError = null;
     try {
       confirmEach = (await api.setAutoApplySettings({ confirm_each: !confirmEach })).confirm_each;
