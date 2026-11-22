@@ -67,6 +67,7 @@ describe('JobsApiPlayground', () => {
     render(JobsApiPlayground);
     await fireEvent.click(screen.getByRole('button', { name: /Run request/ }));
     await waitFor(() => expect(screen.getByText(/keyless budget/)).toBeTruthy());
+    expect(screen.getByText('429 Too Many Requests')).toBeTruthy();
   });
 
   it('says when nothing matches instead of printing an empty list as a success', async () => {
@@ -80,6 +81,29 @@ describe('JobsApiPlayground', () => {
     );
     render(JobsApiPlayground);
     await fireEvent.click(screen.getByRole('button', { name: /Run request/ }));
-    await waitFor(() => expect(screen.getByText(/no open postings match/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/No open postings match/)).toBeTruthy());
+  });
+
+  it('clears a chosen source the new type no longer offers, and keeps one it does', async () => {
+    render(JobsApiPlayground, {
+      props: {
+        sources: [
+          { source: 'greenhouse', kind: 'ats' },
+          { source: 'adzuna', kind: 'aggregator' },
+        ],
+      },
+    });
+    const typeSelect = screen.getByLabelText('Source type') as HTMLSelectElement;
+    const sourceSelect = screen.getByLabelText('Source') as HTMLSelectElement;
+
+    await fireEvent.change(sourceSelect, { target: { value: 'adzuna' } });
+    await fireEvent.change(typeSelect, { target: { value: 'ats' } });
+    expect(sourceSelect.value).toBe('');
+    expect(screen.queryByText(/source=adzuna/)).toBeNull();
+
+    await fireEvent.change(sourceSelect, { target: { value: 'greenhouse' } });
+    await fireEvent.change(typeSelect, { target: { value: '' } });
+    expect(sourceSelect.value).toBe('greenhouse');
+    expect(screen.getByText(/source=greenhouse/)).toBeTruthy();
   });
 });

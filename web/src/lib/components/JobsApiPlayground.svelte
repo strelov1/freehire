@@ -33,7 +33,9 @@
   let running = $state(false);
   let copied = $state(false);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
-  let error = $state<string | null>(null);
+  // `status` is the one-line verdict for the status row; `message` is the recovery text,
+  // shown in the response pane where it has room on any screen.
+  let error = $state<{ status: string; message: string } | null>(null);
   let result = $state<{ total: number; ms: number; body: string } | null>(null);
 
   // The source picker narrows to the chosen type, so the two filters cannot be set to a
@@ -130,17 +132,31 @@
     const started = performance.now();
     try {
       const res = await fetch(path, { headers: { accept: 'application/json' } });
-      if (res.status === 429)
-        throw new Error('The keyless budget for your address is spent for this minute — try again shortly.');
-      if (!res.ok) throw new Error(`The API answered ${res.status}.`);
+      if (res.status === 429) {
+        error = {
+          status: '429 Too Many Requests',
+          message: 'The keyless budget for your address is spent for this minute. Try again shortly.',
+        };
+        return;
+      }
+      if (!res.ok) {
+        error = {
+          status: `${res.status} error`,
+          message: 'The API could not answer this request. Try again in a moment.',
+        };
+        return;
+      }
       const body: { data: Posting[]; meta: { total: number; limit: number; offset: number } } = await res.json();
       result = {
         total: body.meta.total,
         ms: Math.round(performance.now() - started),
         body: pretty({ data: body.data.map(trim), meta: body.meta }),
       };
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'The request failed.';
+    } catch {
+      error = {
+        status: 'Request failed',
+        message: 'The request did not reach the API. Check your connection and try again.',
+      };
     } finally {
       running = false;
     }
@@ -251,11 +267,9 @@
     {#if running}
       <span>Requesting…</span>
     {:else if error}
-      <span class="text-destructive">{error}</span>
+      <span class="text-destructive">{error.status}</span>
     {:else if result?.total === 0}
-      <span
-        ><span class="text-foreground">200 OK</span> · no open postings match — try a broader keyword or fewer filters</span
-      >
+      <span><span class="text-foreground">200 OK</span> · 0 matches</span>
     {:else if result}
       <span
         ><span class="text-foreground">200 OK</span> · {result.total.toLocaleString('en-US')}
@@ -265,7 +279,15 @@
       <span>Sample response — press Run for a live one, no key needed</span>
     {/if}
   </div>
-  <pre
-    class="h-80 overflow-auto px-4 pb-4 pt-2 font-mono text-xs leading-relaxed text-muted-foreground">{result?.body ??
-      (running || error ? '' : SAMPLE)}</pre>
+  {#if error || result?.total === 0}
+    <!-- The recovery text lives here rather than in the one-line status row, which would clip it
+         on a narrow screen. Same fixed height as the response, so the card keeps its size. -->
+    <p class="h-80 px-4 pb-4 pt-2 text-sm leading-relaxed {error ? 'text-destructive' : 'text-muted-foreground'}">
+      {error ? error.message : 'No open postings match. Try a broader keyword or fewer filters.'}
+    </p>
+  {:else}
+    <pre
+      class="h-80 overflow-auto px-4 pb-4 pt-2 font-mono text-xs leading-relaxed text-muted-foreground">{result?.body ??
+        (running ? '' : SAMPLE)}</pre>
+  {/if}
 </div>
