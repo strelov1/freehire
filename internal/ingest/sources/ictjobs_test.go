@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -84,5 +85,46 @@ func TestICTJobsFailsWhenTheSitemapIsUnreadable(t *testing.T) {
 	f := &sitemapBoardFake{t: t, dir: "ictjobs", files: map[string]string{}}
 	if _, err := fastICTJobs(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
 		t.Fatal("an unreadable sitemap must fail the run, or the sweep closes every posting")
+	}
+}
+
+func TestICTJobsStoredPostingDoesNotHideFreshDetailFailure(t *testing.T) {
+	f := &sitemapBoardFake{
+		t: t, dir: "ictjobs", files: map[string]string{ictjobsSitemapURL: "sitemap.xml"},
+		missingDetailStatus: http.StatusServiceUnavailable,
+	}
+	seen := func(id string) bool { return id == "it-security-cyber-security/security-engineer-a-80-100" }
+	jobs, err := fastICTJobs(f).FetchNew(context.Background(), CompanyEntry{}, seen)
+	if err == nil || len(jobs) != 0 {
+		t.Fatalf("got %d jobs and %v, want a failed crawl when the only new detail is unreadable", len(jobs), err)
+	}
+	if !f.fetched(ictjobsGoneURL) || f.fetched(ictjobsLiveURL) {
+		t.Fatalf("requested %v, want a detail request only for the unseen posting", f.got)
+	}
+}
+
+func TestICTJobsPreservesUnreadablePostingIdentityOnPartialFailure(t *testing.T) {
+	f := &sitemapBoardFake{
+		t: t, dir: "ictjobs", files: map[string]string{
+			ictjobsSitemapURL: "sitemap.xml",
+			ictjobsLiveURL:    "posting.html",
+		},
+		missingDetailStatus: http.StatusServiceUnavailable,
+	}
+	jobs, err := fastICTJobs(f).Fetch(context.Background(), CompanyEntry{})
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("got %d jobs and %v, want the readable posting and an unreadable marker", len(jobs), err)
+	}
+	byID := make(map[string]Job, len(jobs))
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	live := byID["it-security-cyber-security/security-engineer-a-80-100"]
+	if live.URL != ictjobsLiveURL || live.Unreadable || !strings.Contains(live.Description, "Fortinet") {
+		t.Errorf("unexpected readable posting: %+v", live)
+	}
+	unreadable := byID["software-entwicklung/gone-role"]
+	if unreadable.URL != ictjobsGoneURL || !unreadable.Unreadable || unreadable.SeenRefresh {
+		t.Errorf("unexpected unreadable marker: %+v", unreadable)
 	}
 }

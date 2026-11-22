@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"log"
 	"math/rand/v2"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -64,8 +66,8 @@ func (b sitemapBoard) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) 
 	return b.FetchNew(ctx, e, func(string) bool { return false })
 }
 
-// FetchNew refreshes the postings already stored and hydrates up to maxNew of the rest. A page
-// that cannot be read is not yielded: nothing is stored for it yet, so a later run tries again.
+// FetchNew refreshes the postings already stored and hydrates up to maxNew of the rest. Unreadable
+// details retain their listing identity when at least one attempted detail answers.
 func (b sitemapBoard) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	if err := b.limiter.Wait(ctx); err != nil {
 		return nil, err
@@ -94,32 +96,43 @@ func (b sitemapBoard) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 		log.Printf("%s: %d new postings past this run's bound of %d, deferred to later runs", b.provider, deferred, b.maxNew)
 		unseen = unseen[:b.maxNew]
 	}
+	var answered atomic.Int64
 	read := fetchDetails(unseen, sitemapBoardDetailWorkers, func(loc string) (Job, bool) {
-		return b.detail(ctx, loc)
+		job, ok, err := b.detail(ctx, loc)
+		if err != nil {
+			log.Printf("%s: posting %s failed; deferring: %v", b.provider, loc, err)
+			// This board's sitemap identifies the posting but names no employer.
+			return unreadableDetail(b.id(loc), loc, ""), true
+		}
+		answered.Add(1)
+		return job, ok
 	})
-	if len(unseen) > 0 && len(read) == 0 && len(jobs) == 0 {
-		return nil, fmt.Errorf("%s: requested %d posting pages and none yielded a posting", b.provider, len(unseen))
+	if len(unseen) > 0 && answered.Load() == 0 {
+		return nil, fmt.Errorf("%s: requested %d posting pages and none answered", b.provider, len(unseen))
 	}
 	return append(jobs, read...), nil
 }
 
-func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool) {
+// detail returns a nil error for a readable posting or a confirmed removal (404/410).
+func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool, error) {
 	if err := b.limiter.Wait(ctx); err != nil {
-		return Job{}, false
+		return Job{}, false, err
 	}
 	root, err := b.http.GetHTML(ctx, loc)
 	if err != nil {
-		log.Printf("%s: posting %s: %v", b.provider, loc, err)
-		return Job{}, false
+		if detailUnreadable(err) {
+			return Job{}, false, err
+		}
+		return Job{}, false, nil
 	}
 	var p sitemapBoardPosting
 	if !ldJobPosting(root, &p) {
-		return Job{}, false
+		return Job{}, false, errors.New("page carries no JobPosting")
 	}
 	title := strings.TrimSpace(p.Title)
 	company := strings.TrimSpace(p.HiringOrganization.Name)
 	if title == "" || company == "" {
-		return Job{}, false
+		return Job{}, false, errors.New("posting lacks a title or employer")
 	}
 	remote := !b.ignoreTelecommute && strings.EqualFold(strings.TrimSpace(p.JobLocationType), "TELECOMMUTE")
 	job := Job{
@@ -145,7 +158,7 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool) {
 	if job.Countries == nil && b.country != "" {
 		job.FallbackCountries = []string{b.country}
 	}
-	return job, true
+	return job, true, nil
 }
 
 // sitemapBoardPosting is the part of a posting page's JobPosting the board adapters read.
