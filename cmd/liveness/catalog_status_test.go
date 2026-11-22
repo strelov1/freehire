@@ -78,6 +78,7 @@ func TestCatalogStatusScopedBackstops(t *testing.T) {
 		{"gradcracker", "87479", "https://www.gradcracker.com/hub/1/company/graduate-job/87479/software-engineer"},
 		{"engage", "352500:17322826", "https://en-gage.net/owltech/work_17322826/"},
 		{"betterteam", "surpluscityinc:retail-store-associate-10", "https://surpluscityinc.betterteam.com/retail-store-associate-10"},
+		{"hellowork", ":85769766", "https://www.hellowork.com/fr-fr/emplois/85769766.html"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.source, func(t *testing.T) {
@@ -113,6 +114,15 @@ func TestCatalogStatusScopedBackstops(t *testing.T) {
 				}
 				if tc.source == "engage" && pass.interval != 3500*time.Millisecond {
 					t.Fatal("lost measured pacing")
+				}
+				if tc.source == "hellowork" {
+					query := candidate{url: tc.url + "?page=2", externalID: tc.id}
+					if got := pass.check(context.Background(), query); got.verdict != liveness.Uncertain || calls != 1 {
+						t.Fatal("requested a query URL forbidden by HelloWork", got)
+					}
+					if pass.interval != time.Second {
+						t.Fatal("lost HelloWork pacing")
+					}
 				}
 				if pass.maxPerRun != 500 {
 					t.Fatalf("unbounded pass: %+v", pass)

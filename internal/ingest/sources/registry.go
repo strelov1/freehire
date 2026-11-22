@@ -242,6 +242,7 @@ func All(c HTTPClient) map[string]Source {
 			NewSpeedrun(c),
 		},
 		aggregatorSources(c, seekNetworkDetail),
+		boardlessJobBoardSources(c),
 		remoteBoardSources(c),
 		ruCompanySources(c),
 	)...)

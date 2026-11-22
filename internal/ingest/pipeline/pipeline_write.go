@@ -21,6 +21,14 @@ type boardTally struct {
 	refreshIDs []string
 }
 
+// recordUnreadable retains a listed posting's identity for the open-only refresh.
+// The unreadable tally still represents incomplete evidence for the sweep.
+func (t *boardTally) recordUnreadable(e sources.CompanyEntry, j sources.Job) {
+	t.st.Unreadable++
+	_, externalID := jobIdentity(e, j)
+	t.refreshIDs = append(t.refreshIDs, externalID)
+}
+
 // writeBoard writes raw through saveConcurrency workers, each tallying into its own
 // boardTally, and merges them. Everything a write touches is safe to share: the Store already
 // serves boards concurrently, and canon is a read-only lookup built up front.
@@ -93,13 +101,8 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 // ingestOne applies one fetched posting: counts an unreadable one, refreshes a re-listed one,
 // and saves the rest, tallying the outcome into t.
 func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, canon companyCanonical, t *boardTally) {
-	// A posting the listing named but whose detail could not be read. There is nothing to
-	// write, but a stored row must retain the listing's liveness evidence. Count it
-	// as unreadable even after refreshing: the sweep still has incomplete evidence.
 	if j.Unreadable {
-		t.st.Unreadable++
-		_, externalID := jobIdentity(e, j)
-		t.refreshIDs = append(t.refreshIDs, externalID)
+		t.recordUnreadable(e, j)
 		return
 	}
 	// A SeenRefresh carries identity only and never proves an application method, so it is

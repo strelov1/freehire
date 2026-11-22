@@ -108,7 +108,7 @@ const expiryWindow = 45 * 24 * time.Hour
 // drops an employer's company from the sweep scope when it leaves the feed; torre's
 // sitemap still names some closed postings; jobtech is never swept, it closes from its
 // change feed, and a removal missed inside the feed's 72h window is never resent.
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed", "arbeitsagentur", "xing", "gradcracker", "engage", "betterteam", "linkedin"}
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed", "arbeitsagentur", "xing", "gradcracker", "engage", "betterteam", "linkedin", "hellowork"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the plain
 // GET-then-Classify probe. Every other member needs its own evidence path, decided case by
