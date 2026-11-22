@@ -1,6 +1,9 @@
 package classify
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 // TestParse_Vietnamese pins the Vietnamese tables (vietnamese.go, vietnamese_general.go): live
 // titles from VietnamWorks (2026-11-22), each filed where its English twin is. Measured on 7,551
@@ -197,6 +200,28 @@ func TestVietnameseTablesLeaveOtherLanguagesAlone(t *testing.T) {
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.category {
 			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.category)
+		}
+	}
+}
+
+func TestCategories_VietnameseRoleSpans(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want []string
+	}{
+		{"Kỹ Sư Phần Mềm / Kỹ Sư Dữ Liệu", []string{"software_engineering", "data_engineering"}},
+		{"Kỹ Sư Phần Mềm và Kỹ Sư Dữ Liệu", []string{"data_engineering", "software_engineering"}},
+		{"Giảng Viên Công Nghệ Thông Tin / Kỹ Sư Dữ Liệu", []string{"education", "data_engineering"}},
+		{"Chuyên Viên Tuyển Dụng Lập Trình Viên | Kỹ Sư Phần Mềm", []string{"recruiting", "software_engineering"}},
+		{"Lập Trình Di Động và Lập Trình Viên", []string{"mobile", "software_engineering"}},
+		{"Phân Tích Kinh Doanh", []string{"business_analysis"}},
+		{"Nhân Viên Lập Trình CNC ; Kỹ Sư Lập Trình PLC", []string{"manufacturing"}},
+		{"Kỹ Sư Lập Trình PLC / Lập Trình Viên", []string{"software_engineering"}},
+		{"Frontend Engineer / ATTT / Ky Su Phan Mem", []string{"frontend", "software_engineering"}},
+		{"Kỹ Sư / Phần Mềm", nil},
+	} {
+		if got := Categories(tc.text); !slices.Equal(got, tc.want) {
+			t.Errorf("Categories(%q) = %v, want %v", tc.text, got, tc.want)
 		}
 	}
 }

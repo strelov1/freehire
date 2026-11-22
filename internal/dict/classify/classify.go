@@ -169,34 +169,29 @@ func Categories(text string) []string {
 	lower := strings.ToLower(text)
 	out := matchAllOrdered(koreanCategoryNoise.Replace(cutBackEndShifts(lower)), categoryTable)
 	out = slices.DeleteFunc(out, func(c string) bool { return c == categoryNone })
-	// The Vietnamese rules claim a title's subject using its role. Score each
-	// rendered line separately so one CV role does not claim the rest of the CV.
-	for line := range strings.SplitSeq(lower, "\n") {
-		if c := matchVietnameseCategory(line); c != "" && c != categoryNone && !slices.Contains(out, c) {
-			out = append(out, c)
-		}
-	}
-	return out
+	return appendVietnameseCategories(out, lower)
 }
 
 // matchAllOrdered returns the distinct canonical values of every alias, in priority order, that occurs as a whole word in title. Aliases sharing a canonical ("backend"/"back-end") are deduplicated, first seen wins.
 //
 // An occurrence wholly inside the span an EARLIER alias already matched does not count: the table's precedence applied per occurrence. "Front End Cashier" was read by the retail alias declared above the frontend one, and "Information Security Officer" must not pick up the guard category of the "security officer" it contains. A shorter alias that also occurs OUTSIDE every claimed span still counts: "Security Officer, Information Security" names both.
-func matchAllOrdered(title string, table []aliasEntry) []string {
+func matchAllOrdered(title string, tables ...[]aliasEntry) []string {
 	var out []string
 	seen := map[string]bool{}
 	var claimed [][2]int
-	for _, e := range table {
-		hit := false
-		for _, span := range occurrences(title, e.alias) {
-			if !within(span, claimed) {
-				hit = true
+	for _, table := range tables {
+		for _, e := range table {
+			hit := false
+			for _, span := range occurrences(title, e.alias) {
+				if !within(span, claimed) {
+					hit = true
+				}
+				claimed = append(claimed, span)
 			}
-			claimed = append(claimed, span)
-		}
-		if hit && !seen[e.canonical] {
-			seen[e.canonical] = true
-			out = append(out, e.canonical)
+			if hit && !seen[e.canonical] {
+				seen[e.canonical] = true
+				out = append(out, e.canonical)
+			}
 		}
 	}
 	return out

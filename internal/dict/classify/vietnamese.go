@@ -247,6 +247,33 @@ func matchVietnameseCategory(lower string) string {
 	return c
 }
 
+// appendVietnameseCategories reads Vietnamese role spans from rendered CV text. Explicit
+// separators bound a teacher's subject or a recruiter's hiring specialty to its own role.
+func appendVietnameseCategories(out []string, lower string) []string {
+	for span := range strings.FieldsFuncSeq(lower, func(r rune) bool {
+		return strings.ContainsRune("\r\n/|;,•", r)
+	}) {
+		for _, c := range vietnameseSpanCategories(span) {
+			if c != categoryNone && !slices.Contains(out, c) {
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
+func vietnameseSpanCategories(span string) []string {
+	words := vietnameseWords(span)
+	if len(words) == 0 {
+		return nil
+	}
+	if c, ok := matchStems(words, vietnameseRoleOverrides); ok {
+		return []string{c}
+	}
+	programming := []aliasEntry{{"lap trinh", vietnameseProgrammingCategory(words)}}
+	return matchAllOrdered(strings.Join(words, " "), vietnameseTechCategoryTable, programming, vietnameseGeneralCategoryTable)
+}
+
 // matchVietnameseSeniority resolves the grade of a lowercased title the other tables left unresolved.
 func matchVietnameseSeniority(lower string) string {
 	s, _ := matchStems(vietnameseWords(lower), vietnameseSeniorityTable)

@@ -35,6 +35,22 @@ func TestVietnameseTitleCategoryCreditsRenderedRole(t *testing.T) {
 	}
 }
 
+func TestVietnameseCVScoreCreditsMultipleRolesOnOneLine(t *testing.T) {
+	score := Compute(Input{
+		JobTitle: "Kỹ Sư Phần Mềm",
+		CVText:   "Kỹ Sư Phần Mềm / Kỹ Sư Dữ Liệu",
+	})
+	for _, category := range score.Categories {
+		if category.ID == CategoryTitle {
+			if !category.Available || category.Earned != WeightTitle || category.Weight != WeightTitle {
+				t.Errorf("Job Title Match = %+v, want %d of %d", category, WeightTitle, WeightTitle)
+			}
+			return
+		}
+	}
+	t.Fatal("score has no Job Title Match category")
+}
+
 // The title is matched case- and spacing-insensitively: a CV that sets its heading in caps
 // is the same claim as one that does not.
 func TestTitleCategoryMatchIgnoresCaseAndSpacing(t *testing.T) {

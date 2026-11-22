@@ -113,6 +113,6 @@ spacing, not LinkedIn, was the throughput bound. Ops lowers it in steps.
 Recorded the title dictionary and role picker alias generator in the
 [catalogue concept](catalogue.md#title-classification).
 
-Vietnamese role categories now reach CV matching through the rendered text. A focused scorer
-regression covers exact titles and equivalent roles. Korean course and Vietnamese teaching
-and recruiting titles retain their exclusions from technical-job search.
+Vietnamese role categories now reach CV matching through rendered text. Scorer regressions
+cover exact titles, equivalent roles and multiple roles on one rendered line. Korean course
+and Vietnamese teaching and recruiting titles retain their exclusions from technical-job search.
