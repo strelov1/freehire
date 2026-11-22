@@ -402,11 +402,15 @@ func TestHelloWorkRegistryPacesEachAttemptAndStopsRedirects(t *testing.T) {
 		t.Errorf("redirect returned err=%v after %d retry-endpoint requests, want a rejected redirect", err, attempts.Load())
 	}
 	before := attempts.Load()
-	resp, err := shared.httpClient.Get(srv.URL + "/redirect")
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/redirect", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	resp, err := shared.httpClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || attempts.Load() != before+1 {
 		t.Error("shared client must still follow redirects")
 	}
