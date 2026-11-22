@@ -4,6 +4,7 @@
 package pgconv
 
 import (
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -34,9 +35,11 @@ func Instant(t time.Time) pgtype.Timestamptz {
 }
 
 // Int4 maps an optional int to the pgtype the generated params expect: nil becomes
-// the zero (NULL) value, a non-nil pointer a valid int32.
+// the zero (NULL) value, a non-nil pointer a valid int32. A value outside int32 is
+// NULL too: converting it would wrap into an unrelated number (a mistyped salary
+// becoming a negative one), and an unknown value is the honest reading of it.
 func Int4(n *int) pgtype.Int4 {
-	if n == nil {
+	if n == nil || *n > math.MaxInt32 || *n < math.MinInt32 {
 		return pgtype.Int4{}
 	}
 	return pgtype.Int4{Int32: int32(*n), Valid: true}
