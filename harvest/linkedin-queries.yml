@@ -341,3 +341,13 @@ matrix:
     locations: [Netherlands]
   - keywords: [softwareentwickler]
     locations: [Switzerland]
+  # --- 2026-11-22 beyond IT ---
+  # Four days on, the 729-search roster had saturated: 79% of listed cards were already stored
+  # and daily growth fell from ~27k to ~700 published postings (71,905 in total). The Easy Apply
+  # pass ended on its own before its 40-page cap in 869 of 911 searches, so depth was not the
+  # limit; the search space was. The owner chose to widen beyond IT: common non-IT professions
+  # in the twenty largest markets, and narrower IT specialisations in the twelve largest.
+  - keywords: [sales manager, account executive, business development manager, sales representative, marketing manager, digital marketing specialist, content writer, customer service representative, customer success manager, accountant, financial analyst, hr manager, recruiter, project manager, operations manager, administrative assistant, graphic designer, ux designer, logistics coordinator, supply chain analyst, mechanical engineer, electrical engineer, civil engineer, nurse, teacher]
+    locations: [United States, United Kingdom, India, Germany, France, Canada, Australia, Netherlands, Spain, Italy, Brazil, Poland, Mexico, Singapore, United Arab Emirates, Ireland, Sweden, Switzerland, Portugal, Israel]
+  - keywords: [react developer, node.js developer, angular developer, vue developer, typescript developer, php developer, ruby on rails developer, kotlin developer, flutter developer, react native developer, c++ developer, rust developer, scala developer, kubernetes engineer, aws engineer, azure engineer, data architect, bi analyst, power bi developer, salesforce developer, sap consultant, servicenow developer, blockchain developer, unity developer, game developer]
+    locations: [United States, United Kingdom, Germany, France, India, Canada, Australia, Netherlands, Spain, Italy, Brazil, Poland]
