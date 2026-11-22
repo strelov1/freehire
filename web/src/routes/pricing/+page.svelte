@@ -420,6 +420,12 @@
             class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'mt-auto')}
             onclick={promptSignIn}>Sign in to upgrade</button
           >
+          <!-- A guest has no subscription to move, so the trial is safe to show; buying still needs an account. -->
+          {#if weekly}
+            <button type="button" class={buttonVariants({ variant: 'outline', size: 'lg' })} onclick={promptSignIn}>
+              Just trying it? {money(weekly)} a week, cancel anytime
+            </button>
+          {/if}
         {/if}
         {#if error}
           <p class="text-sm text-destructive">{error}</p>
