@@ -140,7 +140,7 @@ var seniorityTable = []aliasEntry{
 // fragments ("AWS", "SE", "PM") that the aliases below would otherwise claim first.
 // The Chinese block (chinese.go) closes it, behind everything a title could already
 // resolve to.
-var categoryTable = slices.Concat(japaneseCategoryTable, coreCategoryTable, japaneseTrailCategoryTable, chineseCategoryTable)
+var categoryTable = slices.Concat(japaneseCategoryTable, coreCategoryTable, japaneseTrailCategoryTable, chineseCategoryTable, koreanCategoryTable)
 
 var coreCategoryTable = slices.Concat(
 	coreCategoryTable1,

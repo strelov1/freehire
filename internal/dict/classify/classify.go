@@ -1,4 +1,4 @@
-// Package classify derives a job's seniority and role category deterministically from its title. It is a curated dictionary, not a model: it resolves known English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Croatian and Serbian, Slovenian, Turkish, Japanese and Chinese title terms and emits nothing for what it cannot resolve. Canonical values come from the vocabularies the enrichment contract defines (vocab.SeniorityValues / vocab.CategoryValues), so the parser, the enrichment payload and the search facet share one set of values.
+// Package classify derives a job's seniority and role category deterministically from its title. It is a curated dictionary, not a model: it resolves known English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Croatian and Serbian, Slovenian, Turkish, Korean, Japanese and Chinese title terms and emits nothing for what it cannot resolve. Canonical values come from the vocabularies the enrichment contract defines (vocab.SeniorityValues / vocab.CategoryValues), so the parser, the enrichment payload and the search facet share one set of values.
 package classify
 
 import (
@@ -102,6 +102,9 @@ func matchSeniority(lower string) string {
 		return s
 	}
 	if s := matchOrdered(lower, chineseSeniorityTable); s != "" {
+		return s
+	}
+	if s := matchKoreanSeniority(lower); s != "" {
 		return s
 	}
 	// Nothing in the main table: try the Indian rungs and entry-hire words (india.go), then the German, Dutch, Danish, Spanish, Portuguese, French, Polish and Croatian/Serbian grade words in that order.

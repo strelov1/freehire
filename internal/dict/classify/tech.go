@@ -212,5 +212,5 @@ func IsTech(title string) bool {
 			return true
 		}
 	}
-	return isTurkishTech(lower)
+	return isTurkishTech(lower) || isKoreanTech(lower)
 }
