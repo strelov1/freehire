@@ -6442,6 +6442,22 @@ export interface components {
              */
             errors: number;
         };
+        /** @description The interaction after an apply, plus the application it wrote. */
+        AppliedInteraction: {
+            /** Format: int64 */
+            job_id: number;
+            viewed_at: string | null;
+            saved_at: string | null;
+            applied_at: string | null;
+            dismissed_at: string | null;
+            stage: string | null;
+            notes: string | null;
+            /**
+             * @description The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}` to undo.
+             *     Absent when the application existed before this call, since undoing would delete history this call did not write.
+             */
+            application_id?: string;
+        };
         ApplyJob: {
             /** @description The day the application was sent, `2026-07-29`. Absent, null or empty means now. */
             applied_on?: string | null;
@@ -14532,12 +14548,13 @@ export interface operations {
                      *         "applied_at": "2026-07-27T12:00:00Z",
                      *         "dismissed_at": null,
                      *         "stage": null,
-                     *         "notes": null
+                     *         "notes": null,
+                     *         "application_id": "a17"
                      *       }
                      *     }
                      */
                     "application/json": {
-                        data: components["schemas"]["Interaction"];
+                        data: components["schemas"]["AppliedInteraction"];
                     };
                 };
             };

@@ -1952,7 +1952,8 @@ curl -X POST "https://freehire.me/api/v1/jobs/<slug>/apply" -H "Authorization: B
     "applied_at": "2026-07-27T12:00:00Z",
     "dismissed_at": null,
     "stage": null,
-    "notes": null
+    "notes": null,
+    "application_id": "a17"
   }
 }
 ```

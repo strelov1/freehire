@@ -98,9 +98,10 @@ func (r *QueriesRepository) MarkAppliedOn(ctx context.Context, userID, jobID int
 	if err := qtx.LockJobForApply(ctx, jobID); err != nil {
 		return Interaction{}, err
 	}
-	if _, err := qtx.MarkJobApplied(ctx, db.MarkJobAppliedParams{
+	applied, err := qtx.MarkJobApplied(ctx, db.MarkJobAppliedParams{
 		UserID: userID, JobID: jobID, At: stated, EventSource: source,
-	}); err != nil {
+	})
+	if err != nil {
 		return Interaction{}, err
 	}
 	row, err := qtx.RedateApplication(ctx, db.RedateApplicationParams{
@@ -116,7 +117,11 @@ func (r *QueriesRepository) MarkAppliedOn(ctx context.Context, userID, jobID int
 	if err := tx.Commit(ctx); err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(assembledRow(row)), nil
+	out := toInteraction(assembledRow(row))
+	if applied.Created {
+		out.ApplicationID = applied.ApplicationID
+	}
+	return out, nil
 }
 
 // markApplied is the shared apply transaction. An invalid `at` means "stamp now()".
@@ -143,8 +148,16 @@ func (r *QueriesRepository) markApplied(ctx context.Context, userID, jobID int64
 	if err := tx.Commit(ctx); err != nil {
 		return Interaction{}, err
 	}
-	// See RecordView.
-	return toInteraction(assembledRow(row)), nil
+	// The extra application_id column keeps this row from converting to assembledRow wholesale.
+	out := toInteraction(assembledRow{
+		UserID: row.UserID, JobID: row.JobID, ViewedAt: row.ViewedAt, AppliedAt: row.AppliedAt,
+		SavedAt: row.SavedAt, Stage: row.Stage, Notes: row.Notes, DismissedAt: row.DismissedAt,
+		Vote: row.Vote, FollowedUpAt: row.FollowedUpAt,
+	})
+	if row.Created {
+		out.ApplicationID = row.ApplicationID
+	}
+	return out, nil
 }
 
 // SaveJob saves (bookmarks) a job for a user.

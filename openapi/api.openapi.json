@@ -5928,7 +5928,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/Interaction"
+                      "$ref": "#/components/schemas/AppliedInteraction"
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
@@ -5941,7 +5941,8 @@
                     "applied_at": "2026-07-27T12:00:00Z",
                     "dismissed_at": null,
                     "stage": null,
-                    "notes": null
+                    "notes": null,
+                    "application_id": "a17"
                   }
                 }
               }
@@ -24230,6 +24231,97 @@
           }
         },
         "description": "The account's API requests on one UTC day."
+      },
+      "AppliedInteraction": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "viewed_at",
+          "saved_at",
+          "applied_at",
+          "dismissed_at",
+          "stage",
+          "notes"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "viewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "applied_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dismissed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "application_id": {
+            "type": "string",
+            "description": "The tracking-listing row id of the application (`a<id>`); pass it to `DELETE /me/applications/{id}` to undo.\nAbsent when the application existed before this call, since undoing would delete history this call did not write."
+          }
+        },
+        "description": "The interaction after an apply, plus the application it wrote."
       },
       "ApplyJob": {
         "type": "object",

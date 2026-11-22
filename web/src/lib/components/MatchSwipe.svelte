@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Heart, RotateCcw, X } from '@lucide/svelte';
+  import { ExternalLink, Heart, MoreHorizontal, RotateCcw, X } from '@lucide/svelte';
+  import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { ApiError, isPlanRefusal } from '#lib/api-core.js';
   import type { FeedCard } from '#lib/types.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
+  import { menuNav } from '#lib/actions/menuNav.js';
+  import { track } from '#lib/analytics.js';
   import { announce } from '#lib/announce.svelte.js';
   import FeedToast from './FeedToast.svelte';
   import SwipeCard from './SwipeCard.svelte';
@@ -26,10 +29,21 @@
   let paywalled = $state(false);
   type Outcome = 'ok' | 'gone' | 'failed';
   // The last judgment and its write: Undo waits for the write so its DELETE cannot overtake it.
-  let last = $state<{ card: FeedCard; action: 'save' | 'dismiss'; written: Promise<Outcome> } | null>(null);
+  // `ref.id` is the application an apply wrote, filled when its write lands, so Undo can delete just it.
+  type Action = 'save' | 'dismiss' | 'apply';
+  type Last = { card: FeedCard; action: Action; written: Promise<Outcome>; ref: { id?: string } };
+  let last = $state<Last | null>(null);
+  // An apply card is on screen for FLY_MS without the swipe sweep; no second judgment in that window.
+  let applying = $state(false);
+  let menuOpen = $state(false);
+  let menuRoot = $state<HTMLElement | null>(null);
   // An Undo in flight: a new judgment now could land before its inverse and be erased by it.
   let undoing = $state(false);
   const current = $derived(cards[0]);
+  // A judgment now would race the fly-off, the apply dwell or an Undo's write.
+  const busy = () => gesture.exiting || undoing || applying;
+  const applyClass =
+    'flex w-full max-w-md items-center justify-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold text-brand-foreground shadow-md transition hover:opacity-90';
   const gesture = new SwipeGesture();
 
   async function load() {
@@ -52,30 +66,50 @@
     save: "Didn't save — try again",
     dismiss: "Didn't skip — try again",
     undo: "Didn't undo — try again",
+    apply: "Didn't mark as applied — try again",
   };
-  let toast = $state<{ message: string; id: number } | null>(null);
+  let toast = $state<{ message: string; id: number; action?: { label: string; onClick: () => void } } | null>(null);
+  function showToast(message: string, action?: { label: string; onClick: () => void }) {
+    toast = { message, id: (toast?.id ?? 0) + 1, action };
+  }
+  // A toast's Undo belongs to the judgment it announced; any newer one makes it stale.
+  const dropToastAction = () => {
+    if (toast?.action) toast = { ...toast, action: undefined };
+  };
   function fail(message: string) {
-    toast = { message, id: (toast?.id ?? 0) + 1 };
+    showToast(message);
     announce(message, 'assertive');
   }
   const describe = (c: FeedCard) => `${c.title} at ${c.company || 'unknown company'}`;
 
   // Fling the card off, drop it after the fly-off and write optimistically. A failed write
   // puts the card back so nothing is lost silently; a 404 (job gone) leaves it dropped.
-  async function judge(action: 'save' | 'dismiss') {
+  // Apply (and Already applied) leave the same way minus the sweep.
+  async function judge(action: Action, opts: { openedTab?: boolean } = {}) {
     const card = current;
-    if (!card || gesture.exiting || undoing) return;
-    gesture.fling(action);
-    const write = action === 'save' ? api.saveJob(card.public_slug) : api.dismissJob(card.public_slug);
+    if (!card || busy()) return;
+    dropToastAction();
+    const ref: Last['ref'] = {};
+    let write: Promise<unknown>;
+    if (action === 'apply') {
+      applying = true;
+      write = api.markJobApplied(card.public_slug).then((r) => {
+        ref.id = r.application_id;
+      });
+    } else {
+      gesture.fling(action);
+      write = action === 'save' ? api.saveJob(card.public_slug) : api.dismissJob(card.public_slug);
+    }
     // Settled either way so a rejection is handled below, not as an unhandled one here.
     const written: Promise<Outcome> = write.then(
       () => 'ok',
       (e) => (e instanceof ApiError && e.status === 404 ? 'gone' : 'failed'),
     );
-    last = { card, action, written };
+    last = { card, action, written, ref };
     await new Promise((r) => setTimeout(r, FLY_MS));
     cards = cards.filter((c) => c !== card);
-    gesture.settle();
+    if (action === 'apply') applying = false;
+    else gesture.settle();
     const outcome = await written;
     if (outcome === 'failed') {
       // Restore unless undo already put it back, or the card would be queued twice.
@@ -89,15 +123,45 @@
       if (cards.length === 0) await load();
       return;
     }
-    const verb = action === 'save' ? 'Saved' : 'Skipped';
-    announce(cards[0] ? `${verb}. Next: ${describe(cards[0])}` : `${verb}.`);
+    // The application existed before this apply (no id): undoing it would delete history we did not write.
+    if (action === 'apply' && !ref.id && last?.card === card) last = null;
+    const next = cards[0] ? ` Next: ${describe(cards[0])}` : '';
+    if (action === 'apply' && opts.openedTab) {
+      const done = `Applied to ${card.title}, opened in a new tab.`;
+      showToast(
+        done,
+        ref.id && last?.card === card ? { label: 'Undo', onClick: () => last?.card === card && undo() } : undefined,
+      );
+      announce(done + next);
+    } else if (action === 'apply') {
+      announce(`Marked as applied.${next}`);
+    } else {
+      announce(`${action === 'save' ? 'Saved' : 'Skipped'}.${next}`);
+    }
     if (cards.length === 0) await load();
+  }
+
+  const markApplied = () => {
+    menuOpen = false;
+    return judge('apply');
+  };
+  // The link opens the employer's tab by itself; this records the intent and the application.
+  function onApplyClick(e: MouseEvent) {
+    // judge() would bail while busy: keep the tab from opening with nothing recorded.
+    if (!current || busy()) {
+      e.preventDefault();
+      return;
+    }
+    track('job_apply', { slug: current.public_slug, source: current.source });
+    judge('apply', { openedTab: true });
   }
 
   // The card returns at once; if the write fails it leaves again and Undo stays available.
   async function undo() {
-    if (!last || gesture.exiting) return;
-    const { card, action, written } = last;
+    // An apply card is still in `cards` for its FLY_MS; restoring it now would duplicate it.
+    if (!last || gesture.exiting || applying) return;
+    const { card, action, written, ref } = last;
+    dropToastAction();
     last = null;
     cards = [card, ...cards];
     undoing = true;
@@ -110,10 +174,18 @@
         if (cards.length === 0) await load();
       }
       if (outcome !== 'ok') return;
-      await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
+      if (action === 'apply') {
+        if (!ref.id) {
+          // Nothing of ours to delete: the card leaves again, like a gone job.
+          cards = cards.filter((c) => c !== card);
+          if (cards.length === 0) await load();
+          return;
+        }
+        await api.untrackApplication(ref.id);
+      } else await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
     } catch {
       cards = cards.filter((c) => c !== card);
-      last = { card, action, written };
+      last = { card, action, written, ref };
       fail(toastCopy.undo);
       return;
     } finally {
@@ -126,7 +198,7 @@
   // fires with focus inside it (or on body, when nothing is focused); fields, menus and
   // nested dialogs keep their own keys.
   function onKey(e: KeyboardEvent) {
-    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented || menuOpen) return;
     const t = e.target as HTMLElement | null;
     if (t?.closest('input,textarea,select,[contenteditable],[role=menu],[role^=menuitem]')) return;
     const dialog = t?.closest('[role=dialog]');
@@ -142,7 +214,10 @@
   onMount(load);
 </script>
 
-<svelte:window onkeydown={(e) => e.target === document.body && onKey(e)} />
+<svelte:window
+  onkeydown={(e) => e.target === document.body && onKey(e)}
+  onclick={(e) => menuOpen && !menuRoot?.contains(e.target as Node) && (menuOpen = false)}
+/>
 
 <div
   class="fixed inset-0 z-50 flex flex-col bg-background text-foreground"
@@ -155,14 +230,49 @@
 >
   <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-safe">
     <h1 id="match-swipe-title" class="text-sm font-medium text-muted-foreground">Matches · by my profile</h1>
-    <button
-      type="button"
-      aria-label="Back to the feed"
-      class="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card transition hover:bg-accent"
-      onclick={onClose}
-    >
-      <X class="size-5" />
-    </button>
+    <div class="ml-auto flex items-center gap-2">
+      {#if current}
+        <div class="relative" bind:this={menuRoot}>
+          <button
+            type="button"
+            aria-label={`More actions for ${current.company || 'unknown company'}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            class="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card transition hover:bg-accent"
+            onclick={() => (menuOpen = !menuOpen)}
+          >
+            <MoreHorizontal class="size-5" />
+          </button>
+          {#if menuOpen}
+            <div
+              role="menu"
+              aria-label="More actions"
+              tabindex="-1"
+              class="absolute right-0 top-full z-10 mt-2 w-48 rounded-md border border-border bg-background py-1 shadow-lg"
+              onkeydown={(e) => e.key === 'Escape' && ((menuOpen = false), e.stopPropagation())}
+              {@attach menuNav({ onclose: () => (menuOpen = false) })}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                class="flex w-full px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                onclick={markApplied}
+              >
+                Already applied
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+      <button
+        type="button"
+        aria-label="Back to the feed"
+        class="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card transition hover:bg-accent"
+        onclick={onClose}
+      >
+        <X class="size-5" />
+      </button>
+    </div>
   </header>
 
   {#if current}
@@ -212,6 +322,35 @@
       </button>
     </footer>
 
+    {#if !current.closed_at}
+      <div class="flex shrink-0 justify-center px-4 pb-3">
+        {#if current.direct_apply === true}
+          <a
+            href={resolve('/jobs/[slug]', { slug: current.public_slug })}
+            target="_blank"
+            rel="noopener noreferrer"
+            onclick={() => track('job_apply', { slug: current.public_slug, source: current.source })}
+            aria-label={`Apply to ${current.title} on freehire (opens in a new tab)`}
+            class={applyClass}
+          >
+            Apply <ExternalLink class="size-4" />
+          </a>
+        {:else if current.url}
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- the employer's own site, not an internal route -->
+          <a
+            href={current.url}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            aria-label={`Apply to ${current.title} on the employer's site (opens in a new tab)`}
+            class={applyClass}
+            onclick={onApplyClick}
+          >
+            Apply <ExternalLink class="size-4" />
+          </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
+        {/if}
+      </div>
+    {/if}
+
     <p class="hidden shrink-0 pb-3 text-center text-xs text-muted-foreground md:block">
       <kbd class="rounded border border-border px-1">←</kbd> skip ·
       <kbd class="rounded border border-border px-1">→</kbd> save ·
@@ -247,10 +386,9 @@
       </button>
     </div>
   {/if}
+  {#if toast}
+    {#key toast.id}
+      <FeedToast class="mb-28" message={toast.message} action={toast.action} onClose={() => (toast = null)} />
+    {/key}
+  {/if}
 </div>
-
-{#if toast}
-  {#key toast.id}
-    <FeedToast class="mb-28" message={toast.message} onClose={() => (toast = null)} />
-  {/key}
-{/if}

@@ -7,6 +7,9 @@ import type { Card as JobCard } from '../generated/contracts';
  *  `applied_at` are null until then. Returned by the view/apply/save endpoints. */
 export type UserJob = components['schemas']['Interaction'];
 
+/** The apply response: the interaction plus the id of the application it wrote. */
+export type AppliedJob = components['schemas']['AppliedInteraction'];
+
 /** One item of the my-jobs listing: the job in the shared wire shape with the
  *  caller's interaction timestamps riding alongside. */
 export type MyJob = Omit<components['schemas']['TrackedJob'], 'job'> & {

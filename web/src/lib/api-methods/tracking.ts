@@ -1,6 +1,7 @@
 import type { Http } from '../api-core';
 import type {
   AgentPermissions,
+  AppliedJob,
   Allowance,
   AutoApplyList,
   BankedAnswer,
@@ -40,9 +41,12 @@ export function trackingApi({ call, request, requestData }: Http) {
     return jobInteraction(slug, 'view');
   }
 
-  /** Mark a job as applied for the current user. */
-  function markJobApplied(slug: string): Promise<UserJob> {
-    return jobInteraction(slug, 'apply');
+  /** Mark a job as applied for the current user. `application_id` is the row id
+   *  `untrackApplication` takes to undo exactly this application. */
+  function markJobApplied(slug: string): Promise<AppliedJob> {
+    return requestData<AppliedJob>(`/api/v1/jobs/${encodeURIComponent(slug)}/apply`, {
+      method: 'POST',
+    });
   }
 
   /** Save (bookmark) a job for the current user. Whether a reminder is scheduled
