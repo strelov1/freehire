@@ -334,4 +334,20 @@ func TestAutoApplySettings_OnlyTheBrowserMaySetIt(t *testing.T) {
 	if confirmEach, err := queries.GetAutoApplyConfirmEach(context.Background(), userID); err != nil || !confirmEach {
 		t.Fatalf("auto_apply_confirm_each = %v err=%v, want true", confirmEach, err)
 	}
+
+	get := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/auto-apply-settings", nil)
+	get.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	resp, err := app.Test(get)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Data struct {
+			ConfirmEach bool `json:"confirm_each"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil || resp.StatusCode != fiber.StatusOK || !body.Data.ConfirmEach {
+		t.Fatalf("GET = %d %+v err=%v, want 200 with confirm_each true", resp.StatusCode, body, err)
+	}
 }

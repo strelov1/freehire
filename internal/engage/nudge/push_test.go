@@ -131,6 +131,7 @@ func TestPushNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 		{KindAutoApplySubmitted, "🎉 Application submitted"},
 		{KindAutoApplyBlocked, "⚠️ Needs your attention"},
 		{KindAutoApplyFailed, "Auto-apply couldn't submit"},
+		{KindAutoApplyReviewReady, "📝 Ready to send"},
 	}
 	for _, c := range cases {
 		t.Run(c.kind+"/single", func(t *testing.T) {

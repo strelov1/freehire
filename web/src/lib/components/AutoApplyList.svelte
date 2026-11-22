@@ -70,6 +70,7 @@
     settingError = null;
     try {
       confirmEach = (await api.setAutoApplySettings({ confirm_each: !confirmEach })).confirm_each;
+      settingError = null; // a load error from a read overlapping the save is now moot
     } catch {
       settingError = s.confirmEach.saveError;
     } finally {
