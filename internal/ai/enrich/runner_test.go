@@ -59,11 +59,11 @@ type fakeStore struct {
 	mu        sync.Mutex
 	reapCalls int
 	enqueued  bool
-	// reapedFirst records whether Reap had run when Enqueue started.
-	reapedFirst bool
 	completed []int64
 	failed    []int64
 	failMax   []int
+	// reapedFirst records whether Reap had run when Enqueue started.
+	reapedFirst bool
 }
 
 func (s *fakeStore) Enqueue(_ context.Context, _ int) (int64, error) {
