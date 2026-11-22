@@ -134,8 +134,8 @@ func (s jobkorea) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // FetchNew lists every posting the sitemaps name, refreshes the ones already stored, and reads
-// up to maxNewPerRun of the rest, including a rotating backlog window. A posting whose page
-// cannot be read is deferred to a later run.
+// up to maxNewPerRun of the rest, including a rotating backlog window. Unreadable details retain
+// their listing identity when at least one attempted detail answers.
 func (s jobkorea) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	postings, err := s.list(ctx)
 	if err != nil {
@@ -159,7 +159,7 @@ func (s jobkorea) FetchNew(ctx context.Context, _ CompanyEntry, seen func(extern
 		job, ok, err := s.detail(ctx, p)
 		if err != nil {
 			log.Printf("jobkorea: posting %d failed; deferring: %v", p.id, err)
-			return Job{}, false
+			return unreadableDetail(p.externalID(), p.url, ""), true
 		}
 		answered.Add(1)
 		return job, ok

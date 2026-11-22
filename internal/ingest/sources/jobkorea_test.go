@@ -264,6 +264,21 @@ func TestJobKoreaDefersAPostingWhoseFrameFails(t *testing.T) {
 	}
 }
 
+func TestJobKoreaKeepsUnreadableIdentityWhenAnotherPostingExpired(t *testing.T) {
+	f := &jobkoreaFake{frameErr: &StatusError{Method: "GET", Code: 503, URL: "frame"}}
+	s := newJobKoreaForTest(f)
+	s.now = func() time.Time { return time.Date(2026, 12, 5, 0, 0, 0, 0, time.UTC) }
+	jobs, err := s.Fetch(context.Background(), CompanyEntry{})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("got %d jobs and %v, want only the posting whose frame was unreadable", len(jobs), err)
+	}
+	j := jobs[0]
+	if j.ExternalID != "50342033" || j.URL != "https://www.jobkorea.co.kr/Recruit/GI_Read/50342033" ||
+		!j.Unreadable || j.SeenRefresh {
+		t.Fatalf("unexpected unreadable marker: %+v", j)
+	}
+}
+
 func TestJobKoreaDefersAPostingWhoseFrameLacksContent(t *testing.T) {
 	f := &jobkoreaFake{frameHTML: "<html><body>Service temporarily unavailable</body></html>"}
 	jobs, err := jobkoreaFetchAll(t, newJobKoreaForTest(f), func(string) bool { return false })
