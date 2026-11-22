@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	xhtml "golang.org/x/net/html"
@@ -103,18 +105,25 @@ func (s jobgether) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 		rand.Shuffle(len(unseen), func(i, j int) { unseen[i], unseen[j] = unseen[j], unseen[i] }) //nolint:gosec // Only selects which postings to crawl this run.
 		unseen = unseen[:s.maxNew]
 	}
+	var answered atomic.Int64
 	read := fetchDetails(unseen, sitemapBoardDetailWorkers, func(loc string) (Job, bool) {
-		return s.detail(ctx, loc)
+		job, ok, err := s.detail(ctx, loc)
+		if err != nil {
+			log.Printf("jobgether: posting %s failed; deferring: %v", loc, err)
+			return Job{}, false
+		}
+		answered.Add(1)
+		return job, ok
 	})
-	if len(unseen) > 0 && len(read) == 0 {
-		return nil, fmt.Errorf("jobgether: requested %d posting pages and none yielded a posting", len(unseen))
+	if len(unseen) > 0 && answered.Load() == 0 {
+		return nil, fmt.Errorf("jobgether: requested %d posting pages and none answered", len(unseen))
 	}
 	return append(jobs, read...), nil
 }
 
 // locs walks the offers sitemap index to every shard and returns the posting URLs, each once.
-// A shard that cannot be read fails the run: a silently shorter listing would let the unseen
-// sweep close every posting that lived in it.
+// An unreadable shard or one that names no posting fails the run. A shorter listing could let
+// the unseen sweep close the missed postings.
 func (s jobgether) locs(ctx context.Context) ([]string, error) {
 	index, err := getSitemap(ctx, s.http, jobgetherSitemapURL)
 	if err != nil {
@@ -133,17 +142,22 @@ func (s jobgether) locs(ctx context.Context) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("jobgether: sitemap %s: %w", sm.Loc, err)
 		}
+		hasPosting := false
 		for _, u := range shard.URLs {
 			id := jobgetherID(u.Loc)
-			if id == "" || dup[id] {
+			if id == "" {
+				continue
+			}
+			hasPosting = true
+			if dup[id] {
 				continue
 			}
 			dup[id] = true
 			out = append(out, u.Loc)
 		}
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("jobgether: sitemap names no posting")
+		if !hasPosting {
+			return nil, fmt.Errorf("jobgether: sitemap %s names no posting", sm.Loc)
+		}
 	}
 	return out, nil
 }
@@ -163,23 +177,26 @@ type jobgetherPosting struct {
 	BaseSalary                    sitemapBoardSalary `json:"baseSalary"`
 }
 
-func (s jobgether) detail(ctx context.Context, loc string) (Job, bool) {
+// detail returns a nil error for a readable posting, including one that is gone or expired.
+func (s jobgether) detail(ctx context.Context, loc string) (Job, bool, error) {
 	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false
+		return Job{}, false, err
 	}
 	root, err := s.http.GetHTML(ctx, loc)
 	if err != nil {
-		log.Printf("jobgether: posting %s: %v", loc, err)
-		return Job{}, false
+		if detailUnreadable(err) {
+			return Job{}, false, err
+		}
+		return Job{}, false, nil
 	}
 	var p jobgetherPosting
 	if !ldJobPosting(root, &p) {
-		return Job{}, false
+		return Job{}, false, errors.New("page carries no JobPosting")
 	}
 	title := strings.TrimSpace(p.Title)
 	company := strings.TrimSpace(p.HiringOrganization.Name)
 	if title == "" || company == "" {
-		return Job{}, false
+		return Job{}, false, errors.New("JobPosting lacks a title or employer")
 	}
 	// The sitemap keeps naming a posting after it has lapsed; its own validThrough says so.
 	validThrough := strings.TrimSpace(p.ValidThrough)
@@ -190,7 +207,7 @@ func (s jobgether) detail(ctx context.Context, loc string) (Job, bool) {
 			expires = expires.AddDate(0, 0, 1)
 		}
 		if !time.Now().Before(expires) {
-			return Job{}, false
+			return Job{}, false, nil
 		}
 	}
 	job := Job{
@@ -214,7 +231,7 @@ func (s jobgether) detail(ctx context.Context, loc string) (Job, bool) {
 	if target := jobgetherApplyURL(root); target != "" {
 		job.ApplyMethod, job.ExternalApplyURL = ApplyExternal, target
 	}
-	return job, true
+	return job, true, nil
 }
 
 func jobgetherDeadline(raw string) *time.Time {

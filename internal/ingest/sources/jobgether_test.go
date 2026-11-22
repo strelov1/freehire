@@ -168,11 +168,39 @@ func TestJobgetherBoundsNewPagesPerRun(t *testing.T) {
 
 func TestJobgetherFailsWhenOnlyStoredPostingsAreReadable(t *testing.T) {
 	f := newJobgetherFake(t)
-	delete(f.files, jobgetherBRURL)
-	delete(f.files, jobgetherLapsedURL)
+	for _, loc := range []string{jobgetherBRURL, jobgetherLapsedURL, jobgetherGoneURL} {
+		f.files[loc] = "unreadable.html"
+	}
 	seen := func(id string) bool { return id == jobgetherID(jobgetherUSURL) }
 	if _, err := fastJobgether(f).FetchNew(context.Background(), CompanyEntry{}, seen); err == nil {
 		t.Fatal("refreshing a stored posting must not hide a failure to read every requested detail")
+	}
+}
+
+func TestJobgetherExpiredAndGoneDetailsCountAsAnswered(t *testing.T) {
+	for _, loc := range []string{jobgetherLapsedURL, jobgetherGoneURL} {
+		t.Run(jobgetherID(loc), func(t *testing.T) {
+			f := newJobgetherFake(t)
+			seen := func(id string) bool { return id != jobgetherID(loc) }
+			jobs, err := fastJobgether(f).FetchNew(context.Background(), CompanyEntry{}, seen)
+			if err != nil || len(jobs) != 3 {
+				t.Fatalf("got %d jobs and %v, want three refreshes and no error", len(jobs), err)
+			}
+			for _, j := range jobs {
+				if !j.SeenRefresh || j.ExternalID == jobgetherID(loc) {
+					t.Errorf("unexpected result for terminal detail %s: %+v", loc, j)
+				}
+			}
+		})
+	}
+}
+
+func TestJobgetherFailsWhenOneShardIsEmpty(t *testing.T) {
+	f := newJobgetherFake(t)
+	f.files["https://jobgether.com/sitemap/offers-2.xml"] = "offers-empty.xml"
+	jobs, err := fastJobgether(f).Fetch(context.Background(), CompanyEntry{})
+	if err == nil || len(jobs) != 0 {
+		t.Fatalf("got %d jobs and %v, want the empty second shard to fail the whole listing", len(jobs), err)
 	}
 }
 
