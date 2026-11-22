@@ -55,3 +55,15 @@ func TestDedupOnlyExitsNonZeroWhenThePassesFailed(t *testing.T) {
 		t.Errorf("exit code = %d, want 1 for a run that re-marked nothing it was asked to", got)
 	}
 }
+
+// REINDEX_DEDUP_BUDGET ends the run before its unit's timeout kills it. The passes have saved
+// their places by then, so a run that only ran out of budget exits 0 rather than reading as a
+// failure every run, the way the killed runs did from 2026-11-20.
+func TestDedupOnlyExitsZeroWhenOnlyTheBudgetRanOut(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
+	<-ctx.Done()
+	if failed := refreshDuplicateMarkers(ctx, db.New(failingDBTX{err: context.DeadlineExceeded}), 4); failed != 0 {
+		t.Errorf("failed passes = %d, want 0 for passes the run's own deadline stopped", failed)
+	}
+}
