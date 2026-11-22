@@ -81,8 +81,7 @@ func (s jobgether) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // FetchNew refreshes the postings already stored by identity and hydrates up to maxNew of the
-// rest. A page that cannot be read is not yielded: nothing is stored for it yet, so a later run
-// tries it again.
+// rest. Unreadable details retain their listing identity when at least one attempted detail answers.
 func (s jobgether) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	locs, err := s.locs(ctx)
 	if err != nil {
@@ -110,7 +109,7 @@ func (s jobgether) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 		job, ok, err := s.detail(ctx, loc)
 		if err != nil {
 			log.Printf("jobgether: posting %s failed; deferring: %v", loc, err)
-			return Job{}, false
+			return unreadableDetail(jobgetherID(loc), loc, ""), true
 		}
 		answered.Add(1)
 		return job, ok

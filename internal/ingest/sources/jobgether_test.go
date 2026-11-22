@@ -177,6 +177,21 @@ func TestJobgetherFailsWhenOnlyStoredPostingsAreReadable(t *testing.T) {
 	}
 }
 
+func TestJobgetherKeepsUnreadableIdentityOnPartialFailure(t *testing.T) {
+	f := newJobgetherFake(t)
+	f.files[jobgetherUSURL] = "unreadable.html"
+	jobs, err := fastJobgether(f).Fetch(context.Background(), CompanyEntry{})
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("got %d jobs and %v, want the BR posting and an unreadable marker", len(jobs), err)
+	}
+	for _, j := range jobs {
+		if j.URL == jobgetherUSURL && j.ExternalID == "6b02a8451870ab7f4cb42437" && j.Unreadable && !j.SeenRefresh {
+			return
+		}
+	}
+	t.Fatalf("missing unreadable US posting identity: %+v", jobs)
+}
+
 func TestJobgetherExpiredAndGoneDetailsCountAsAnswered(t *testing.T) {
 	for _, loc := range []string{jobgetherLapsedURL, jobgetherGoneURL} {
 		t.Run(jobgetherID(loc), func(t *testing.T) {
