@@ -24,6 +24,8 @@ type routeHandlers struct {
 	speech          *speechHandlers
 	webhook         *webhookHandlers
 	telegram        *telegramHandlers
+	// feed is nil unless ME_FEED_ENABLED.
+	feed *feedHandlers
 }
 
 // mountRoutes mounts every feature surface's routes on api (and the v2 auth routes on app).
@@ -69,6 +71,9 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// Per-user job interactions, tracking reads, and reminder controls (see trackingHandlers).
 	// The interaction writes precede the vote routes.
 	h.trackingHandlers.register(api, mw, contract)
+	if h.feed != nil {
+		h.feed.register(api, mw)
+	}
 	// The ledger's dated read, behind the tracking calendar; its own namespace, not under /me/tracking.
 	h.timelineHandlers.register(api, mw, contract)
 	h.voteHandlers.register(api, mw, contract)

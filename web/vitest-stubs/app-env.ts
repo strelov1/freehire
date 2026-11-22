@@ -3,3 +3,4 @@
 export const browser = false;
 
 export const PUBLIC_OPEN_WITHIN = '';
+export const PUBLIC_MATCHES = '';

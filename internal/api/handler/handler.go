@@ -234,12 +234,7 @@ func Register(app *fiber.App, cfg Config) {
 	searchH := newSearchHandlers(jobSearch, facets, queries, cfg.Cache, profileSvc)
 	searchH.agentViews = cfg.AgentViews
 	ojcpH, mcpappH := newAgentSurfaces(cfg, queries, sb)
-	// The completion dictionary. Left nil when search is unconfigured: a nil *suggest.Service
-	// in the interface would pass the handler's "not configured" check and then dereference nil.
-	suggestH := &suggestHandlers{}
-	if cfg.Suggest != nil {
-		suggestH.suggest = cfg.Suggest
-	}
+	suggestH := newSuggestHandlers(cfg)
 	// Reads the same saved profile as the assistant, so a profile-seeded search and a
 	// profile-aware conversation agree.
 	intentH := newIntentHandlers(llmBinding{client: cmp.Or(cfg.SearchIntentLLM, cfg.LLM), keys: llmKeys})
@@ -258,6 +253,7 @@ func Register(app *fiber.App, cfg Config) {
 	// A closed posting stays in the index until the drain removes it; the page hides it meanwhile.
 	searchH.removals = queries
 	timelineH := newTimelineHandlers(queries)
+	feedH := newFeedHandlers(cfg.MeFeedEnabled, jobSearch, profileSvc, tracking, plans, cvStore, cfg.TypesafeAPIKey, cfg.Cache, []byte(cfg.JWTSecret))
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)
 	// Same nil-interface trap as jobSearch: assign only when non-nil, or the handler's "no
@@ -411,5 +407,6 @@ func Register(app *fiber.App, cfg Config) {
 		speech:           speechH,
 		webhook:          webhookH,
 		telegram:         telegramH,
+		feed:             feedH,
 	})
 }

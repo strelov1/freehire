@@ -32,3 +32,9 @@ const TRUTHY = new Set(['1', 'true', 'on', 'yes']);
 export function openWithinEnabled(env: Record<string, string | undefined>): boolean {
   return TRUTHY.has((env.PUBLIC_OPEN_WITHIN ?? '').trim().toLowerCase());
 }
+
+/** Whether /matches, the profile match feed, exists. Dark until it ships; the API route
+ *  behind it (GET /me/feed) has its own switch, ME_FEED_ENABLED. */
+export function matchesEnabled(env: Record<string, string | undefined>): boolean {
+  return TRUTHY.has((env.PUBLIC_MATCHES ?? '').trim().toLowerCase());
+}

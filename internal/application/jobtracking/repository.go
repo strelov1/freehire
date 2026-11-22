@@ -493,6 +493,12 @@ func (r *QueriesRepository) ExcludedJobIDs(ctx context.Context, userID int64, li
 	return r.q.ExcludedJobIDs(ctx, db.ExcludedJobIDsParams{UserID: userID, Limit: limit})
 }
 
+// FeedExcludedJobIDs returns up to limit job ids the caller saved, dismissed or applied
+// to before the instant.
+func (r *QueriesRepository) FeedExcludedJobIDs(ctx context.Context, userID int64, before time.Time, limit int32) ([]int64, error) {
+	return r.q.FeedExcludedJobIDs(ctx, db.FeedExcludedJobIDsParams{UserID: userID, Before: pgconv.Instant(before), RowLimit: limit})
+}
+
 // AppliedCompanySlugs returns the company slugs of the employers the caller has
 // applied to, from at most maxApplications of their newest applications.
 func (r *QueriesRepository) AppliedCompanySlugs(ctx context.Context, userID int64, maxApplications int32) ([]string, error) {

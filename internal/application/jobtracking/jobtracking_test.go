@@ -183,6 +183,11 @@ func (f *fakeRepo) ExcludedJobIDs(_ context.Context, _ int64, limit int32) ([]in
 	return f.excludedResult, f.excludedErr
 }
 
+func (f *fakeRepo) FeedExcludedJobIDs(_ context.Context, _ int64, _ time.Time, limit int32) ([]int64, error) {
+	f.excludedLimit = limit
+	return f.excludedResult, f.excludedErr
+}
+
 func (f *fakeRepo) AppliedCompanySlugs(_ context.Context, _ int64, maxApplications int32) ([]string, error) {
 	f.appliedCoLimit = maxApplications
 	return f.appliedCoResult, nil

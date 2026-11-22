@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/application/userjob"
@@ -148,6 +149,15 @@ func TestExcludedJobIDs_PassthroughWithCap(t *testing.T) {
 	}
 	if repo.excludedLimit != 1000 {
 		t.Errorf("repo received limit %d, want 1000 (excludedJobsCap)", repo.excludedLimit)
+	}
+}
+
+func TestFeedExcludedJobIDs_PassthroughWithCap(t *testing.T) {
+	repo := newRepo()
+	repo.excludedResult = []int64{4, 5}
+	ids, err := jobtracking.New(repo).FeedExcludedJobIDs(ctx(), userID, time.Now())
+	if err != nil || len(ids) != 2 || repo.excludedLimit != 1000 {
+		t.Errorf("ids=%v err=%v limit=%d, want 2 ids capped at 1000", ids, err, repo.excludedLimit)
 	}
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
   import { cardTags, formatSalary } from '#lib/enrichment.js';
   import { companyLogoUrl } from '#lib/logo.js';
@@ -7,8 +8,9 @@
   import JobMatch from './JobMatch.svelte';
 
   // What a swipe card shows, inside its frame: the employer, title, salary, tags, synopsis,
-  // match, description and the link out. SwipeDeck owns the drag and the frame.
-  let { job }: { job: Job } = $props();
+  // match, description and the link out. SwipeCard owns the drag and the frame.
+  // `match`, when given, renders under the title in place of the JobMatch coverage bar.
+  let { job, match }: { job: Job; match?: Snippet } = $props();
 
   const salary = $derived(job.enrichment ? formatSalary(job.enrichment) : null);
   const tags = $derived(cardTags(job));
@@ -47,6 +49,8 @@
     <h2 class="line-clamp-3 text-2xl font-bold tracking-tight">{job.title}</h2>
   </div>
 
+  {@render match?.()}
+
   {#if salary}
     <div class="text-lg font-bold tracking-tight text-brand-strong">
       {salary}
@@ -68,12 +72,14 @@
   {/if}
 
   <!-- Personal profile-match block (reuses the detail-page component). Keyed
-       by slug via SwipeDeck's {#key}, so a fresh instance fetches per card.
-       No match analysis handed in: the deck is rapid triage with no
+       by slug via the parent's {#key} (the deck or the match feed's swipe mode), so a
+       fresh instance fetches per card. No match analysis handed in: a swipe card is rapid triage with no
        call-to-action row of its own, and reading one per card would spend a
        request on the cached verdict of a job almost none of which has ever been
        analysed. The deterministic coverage bar is what this card is for. -->
-  <JobMatch {job} matchAnalysis={null} />
+  {#if !match}
+    <JobMatch {job} matchAnalysis={null} />
+  {/if}
 
   {#if job.description}
     <!-- Description is server-sanitized HTML (see internal/sources), safe to

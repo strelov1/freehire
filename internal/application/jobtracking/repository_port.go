@@ -102,6 +102,10 @@ type Repository interface {
 	// with (viewed, saved, applied, or dismissed), most-recently-touched first.
 	ExcludedJobIDs(ctx context.Context, userID int64, limit int32) ([]int64, error)
 
+	// FeedExcludedJobIDs returns up to limit job ids the caller saved, dismissed or
+	// applied to before the instant, newest action first.
+	FeedExcludedJobIDs(ctx context.Context, userID int64, before time.Time, limit int32) ([]int64, error)
+
 	// AppliedCompanySlugs returns the company slugs of the employers the caller has
 	// applied to, drawn from at most maxApplications of their newest applications.
 	AppliedCompanySlugs(ctx context.Context, userID int64, maxApplications int32) ([]string, error)

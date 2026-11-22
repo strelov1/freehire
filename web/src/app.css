@@ -76,6 +76,11 @@
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+/* The top twin of pb-safe, for a full-screen overlay's header: clear of the status bar. */
+@utility pt-safe {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
 /* Offset for a toast or banner fixed to the screen's bottom edge: 1rem (bottom-4), or
    clear of the phone's home indicator where that is taller. Same viewport-fit=cover
    dependency as pb-safe. */

@@ -172,6 +172,52 @@ func (q *Queries) ExcludedJobIDs(ctx context.Context, arg ExcludedJobIDsParams) 
 	return items, nil
 }
 
+const feedExcludedJobIDs = `-- name: FeedExcludedJobIDs :many
+SELECT job_id FROM (
+    SELECT uj.job_id AS job_id, uj.saved_at AS at FROM user_jobs uj
+     WHERE uj.user_id = $1 AND uj.saved_at < $2::timestamptz
+    UNION ALL
+    SELECT uj.job_id, uj.dismissed_at FROM user_jobs uj
+     WHERE uj.user_id = $1 AND uj.dismissed_at < $2::timestamptz
+    UNION ALL
+    SELECT a.job_id, a.applied_at FROM applications a
+     WHERE a.user_id = $1 AND a.job_id IS NOT NULL AND a.applied_at < $2::timestamptz
+) x
+GROUP BY job_id
+ORDER BY max(at) DESC
+LIMIT $3
+`
+
+type FeedExcludedJobIDsParams struct {
+	UserID   int64              `json:"user_id"`
+	Before   pgtype.Timestamptz `json:"before"`
+	RowLimit int32              `json:"row_limit"`
+}
+
+// Job ids the match feed leaves out for a paging snapshot: saved, dismissed or applied
+// strictly before `before`, so an action taken after the snapshot cannot shift a window the
+// reader is paging through. Viewed jobs and tracked-but-unapplied applications stay. Newest action first and capped (`row_limit`) so the
+// search's `id NOT IN (...)` filter stays bounded.
+func (q *Queries) FeedExcludedJobIDs(ctx context.Context, arg FeedExcludedJobIDsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, feedExcludedJobIDs, arg.UserID, arg.Before, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var job_id int64
+		if err := rows.Scan(&job_id); err != nil {
+			return nil, err
+		}
+		items = append(items, job_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getJobVote = `-- name: GetJobVote :one
 SELECT COALESCE((SELECT vote FROM user_jobs WHERE user_id = $1 AND job_id = $2), 0)::smallint AS my_vote
 `

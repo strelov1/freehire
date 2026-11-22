@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { prefersReducedMotion } from 'svelte/motion';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -14,18 +13,16 @@
   import { markViewed } from '#lib/viewedJobs.svelte.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import FilterModal from './filters/FilterModal.svelte';
+  import SwipeCard from './SwipeCard.svelte';
   import SwipeCardBody from './SwipeCardBody.svelte';
+  import { FLY_MS, SwipeGesture } from './swipeGesture.svelte.js';
   import States from './States.svelte';
 
   type Judgement = 'save' | 'dismiss';
 
-  // Batch size and the "top up before it runs dry" threshold. COMMIT_PX is how
-  // far a card must be dragged before the gesture counts as a decision.
+  // Batch size and the "top up before it runs dry" threshold.
   const LIMIT = 12;
   const PREFETCH_AT = 4;
-  const COMMIT_PX = 100;
-  // How long the judged card takes to fly off-screen before it's dropped.
-  const FLY_MS = 300;
 
   // The deck honors the /jobs filters carried in the URL. Unlike the old fixed
   // snapshot, the filters are now editable in-session: a FilterStore mirrors them
@@ -51,12 +48,8 @@
   // under the old filters is discarded instead of appending stale cards.
   let gen = 0;
 
-  // Live drag offset of the active card (px); 0 when settled.
-  let dragX = $state(0);
-  let dragging = $state(false);
-  let startX = 0;
-  // The active card is mid fly-off: guards re-entry and drives the fade-out.
-  let exiting = $state(false);
+  // Drag state of the active card; SwipeCard renders it.
+  const gesture = new SwipeGesture();
 
   // The filter drawer (reuses the shared job FilterModal).
   let modalOpen = $state(false);
@@ -69,17 +62,6 @@
     (c) => (counts = c),
   );
   const previewCount = (params: URLSearchParams) => api.facetCounts(params).then((c) => c.total);
-
-  // The card transitions (springs back or flies off) whenever it isn't tracking
-  // the finger. The grow-in intro is a CSS keyframe on mount, not a transition —
-  // see the `.swipe-card` animation below — so no frame-timing dance is needed.
-  const animate = $derived(!dragging);
-  // Tilt tracks the drag but is capped so the fly-off doesn't spin wildly; the
-  // card fades out as it leaves. Under reduced motion the card never tilts.
-  const rotation = $derived(prefersReducedMotion.current ? 0 : Math.max(-18, Math.min(18, dragX / 24)));
-  const cardOpacity = $derived(exiting ? 0 : 1);
-  // Decision stamps fade in with drag distance, reaching full at the commit point.
-  const stampOpacity = $derived(Math.min(1, Math.abs(dragX) / COMMIT_PX));
 
   const current = $derived(queue[0] ?? null);
   const next = $derived(queue[1] ?? null);
@@ -123,9 +105,7 @@
     loading = false;
     error = false;
     exhausted = false;
-    dragX = 0;
-    dragging = false;
-    exiting = false;
+    gesture.reset();
     void loadBatch();
   }
 
@@ -134,16 +114,10 @@
   // the decision isn't silently lost. Guarded against re-entry mid-flight.
   function judge(kind: Judgement) {
     const job = queue[0];
-    if (!job || exiting) return;
+    if (!job || gesture.exiting) return;
 
-    // Fling the card off toward its side. dragging=false lets the transition run;
-    // dragX past the viewport width carries it fully off-screen. Under reduced motion
-    // the card stays where it is and only fades (`exiting` drives the opacity), so the
-    // judgement is still visible without anything sweeping across the screen.
-    const dir = kind === 'save' ? 1 : -1;
-    exiting = true;
-    dragging = false;
-    if (!prefersReducedMotion.current) dragX = dir * (window.innerWidth + 200);
+    // Fling the card off toward its side (fade only under reduced motion).
+    gesture.fling(kind);
     last = { job, kind };
     // Snapshot the reload generation: a resetDeck() mid-flight bumps `gen` and
     // replaces `queue` wholesale, so the deferred slice below must not touch a
@@ -175,8 +149,7 @@
     setTimeout(() => {
       if (myGen !== gen) return; // resetDeck() already replaced the queue and its own state
       queue = queue.slice(1);
-      dragX = 0;
-      exiting = false;
+      gesture.settle();
       prefetchIfLow();
     }, FLY_MS);
   }
@@ -187,7 +160,7 @@
     // so without the `exiting` gate an undo mid-flight would re-queue the card while
     // judge()'s deferred slice and failed-send restore are still pending — leaving a
     // duplicate. Undo is available once the card has settled (exiting=false).
-    if (!last || exiting) return;
+    if (!last || gesture.exiting) return;
     const { job, kind } = last;
     last = null;
     queue = [job, ...queue];
@@ -200,59 +173,6 @@
     const qs = toSearchString(deckParams());
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended query string
     goto(resolve('/jobs') + (qs ? `?${qs}` : ''));
-  }
-
-  // --- Pointer drag on the active card (touch + mouse) ---------------------
-  // The card now both swipes horizontally AND scrolls its content vertically, so a
-  // gesture's axis is locked on first movement: a mostly-vertical drag is left to
-  // native scroll (touch-action: pan-y on the scroll area), a horizontal one drives
-  // the swipe. We therefore defer setPointerCapture/dragging until we know it's a
-  // horizontal swipe — capturing up front would swallow every vertical scroll.
-  let startY = 0;
-  let axis: 'none' | 'x' | 'y' = 'none';
-  let activePointer = -1;
-  const AXIS_LOCK_PX = 8;
-
-  function onPointerDown(e: PointerEvent) {
-    if (!current || exiting) return;
-    // Let clicks on links/buttons inside the card through — capturing the pointer
-    // for a drag would swallow their click (e.g. "Open full details").
-    if ((e.target as HTMLElement).closest('a, button')) return;
-    startX = e.clientX;
-    startY = e.clientY;
-    axis = 'none';
-    activePointer = e.pointerId;
-  }
-  function onPointerMove(e: PointerEvent) {
-    if (e.pointerId !== activePointer || axis === 'y') return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    if (axis === 'none') {
-      // Wait for enough travel to reveal intent before committing to an axis.
-      const adx = Math.abs(dx);
-      const ady = Math.abs(dy);
-      if (adx < AXIS_LOCK_PX && ady < AXIS_LOCK_PX) return;
-      if (ady > adx) {
-        axis = 'y'; // vertical intent — hand off to native scroll, never swipe
-        return;
-      }
-      axis = 'x';
-      dragging = true;
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    }
-    dragX = dx;
-  }
-  function onPointerUp() {
-    activePointer = -1;
-    axis = 'none';
-    if (!dragging) return;
-    if (dragX > COMMIT_PX) judge('save');
-    else if (dragX < -COMMIT_PX) judge('dismiss');
-    else {
-      // Not far enough — spring back.
-      dragX = 0;
-      dragging = false;
-    }
   }
 
   // --- Keyboard (desktop) --------------------------------------------------
@@ -335,7 +255,7 @@
   {@attach focusTrap()}
 >
   <!-- Top bar: Filters (left) · Close (right). Safe-area top padding clears the notch. -->
-  <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+  <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-safe">
     <button
       type="button"
       onclick={() => (modalOpen = true)}
@@ -368,61 +288,23 @@
   </header>
 
   {#if current}
-    <!-- Card stage: the card fills the available height, Tinder-style. -->
-    <main class="relative min-h-0 flex-1 px-4 py-3">
-      <div class="relative mx-auto h-full w-full max-w-md select-none md:max-w-2xl">
-        {#if next}
-          <div
-            class="absolute inset-0 scale-95 rounded-3xl border border-border bg-card opacity-60"
-            aria-hidden="true"
-          ></div>
-        {/if}
-
-        {#key current.public_slug}
-          <div
-            role="group"
-            aria-label={`Job: ${current.title} at ${current.company || 'unknown company'}`}
-            class="swipe-card absolute inset-0 flex flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-xl duration-300 ease-out"
-            class:transition={animate}
-            style={`transform: translate3d(${dragX}px, 0, 0) rotate(${rotation}deg); opacity: ${cardOpacity};`}
-            onpointerdown={onPointerDown}
-            onpointermove={onPointerMove}
-            onpointerup={onPointerUp}
-            onpointercancel={onPointerUp}
-          >
-            <!-- Swipe-direction stamps (Tinder-style), fading in with drag distance.
-                 They anchor to the non-scrolling frame so they stay put as the content
-                 below scrolls. -->
-            {#if dragX > 20}
-              <span
-                class="pointer-events-none absolute left-5 top-5 z-10 rotate-[-12deg] rounded-lg border-4 border-brand px-3 py-1 text-2xl font-extrabold uppercase tracking-wider text-brand"
-                style={`opacity: ${stampOpacity}`}
-              >
-                Save
-              </span>
-            {:else if dragX < -20}
-              <span
-                class="pointer-events-none absolute right-5 top-5 z-10 rotate-[12deg] rounded-lg border-4 border-rose-500 px-3 py-1 text-2xl font-extrabold uppercase tracking-wider text-rose-500"
-                style={`opacity: ${stampOpacity}`}
-              >
-                Skip
-              </span>
-            {/if}
-
-            <SwipeCardBody job={current} />
-          </div>
-        {/key}
-      </div>
-    </main>
+    {#key current.public_slug}
+      <SwipeCard
+        {gesture}
+        label={`Job: ${current.title} at ${current.company || 'unknown company'}`}
+        hasNext={!!next}
+        onCommit={judge}
+      >
+        <SwipeCardBody job={current} />
+      </SwipeCard>
+    {/key}
 
     <!-- Action buttons (a tap alternative to swiping, and the desktop path). -->
-    <footer
-      class="flex shrink-0 items-center justify-center gap-6 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2"
-    >
+    <footer class="flex shrink-0 items-center justify-center gap-6 px-4 pb-safe pt-2">
       <button
         type="button"
         aria-label="Skip (dismiss)"
-        class="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card text-rose-500 shadow-md transition hover:bg-accent active:scale-95"
+        class="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card text-destructive shadow-md transition hover:bg-accent active:scale-95"
         onclick={() => judge('dismiss')}
       >
         <X class="size-7" />
@@ -495,46 +377,3 @@
   onClose={() => (modalOpen = false)}
   {previewCount}
 />
-
-<style>
-  /* Grow-in intro for each incoming card. Uses the independent `scale` property
-     (not transform: scale) so it composes with the drag/fly-off translate+rotate
-     on `transform` instead of fighting it. Re-triggers per card via {#key slug}. */
-  .swipe-card {
-    animation: card-in 300ms ease-out;
-    /* Force a dedicated GPU compositing layer so per-frame drag updates only
-       recomposite (no main-thread repaint) — kills the mobile drag jitter. The
-       tilt pivots around the card's bottom for a natural Tinder-like arc. */
-    will-change: transform;
-    transform-origin: center bottom;
-    backface-visibility: hidden;
-  }
-
-  @keyframes card-in {
-    from {
-      scale: 0.95;
-      opacity: 0.6;
-    }
-    to {
-      scale: 1;
-      opacity: 1;
-    }
-  }
-
-  /* Reduced motion keeps the card change visible as a plain fade: no grow-in here, and
-     judge() drops the fly-off and the tilt, leaving only the opacity transition. */
-  @keyframes card-in-fade {
-    from {
-      opacity: 0.6;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .swipe-card {
-      animation-name: card-in-fade;
-    }
-  }
-</style>

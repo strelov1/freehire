@@ -9,6 +9,8 @@ import type {
   DirectApplyForm,
   EngagementStats,
   FacetCounts,
+  FeedCard,
+  FeedMeta,
   IngestStatus,
   Interpretation,
   Job,
@@ -198,6 +200,16 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     return toSlice(await request<Page<Job>>(`/api/v1/me/tracking/swipe?${params}`), 0);
   }
 
+  /** One page of the caller's match feed: jobs matching their profile, best match first,
+   *  each with the server's explanation. Page 1 without a cursor; later pages pass the
+   *  previous page's `meta.next_cursor`, which pins the set so saving or hiding never
+   *  shifts it. Authenticated. */
+  async function meFeed(limit: number, cursor?: string): Promise<{ data: FeedCard[]; meta: FeedMeta }> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return request<{ data: FeedCard[]; meta: FeedMeta }>(`/api/v1/me/feed?${params}`);
+  }
+
   /** Facet-distribution counts for the analytics page. `params` carries the same
    *  query text and facet filters as `searchJobs` (built by the caller, e.g. via
    *  `filtersToParams`); the endpoint returns counts instead of a page of jobs.
@@ -327,6 +339,7 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     recordDictionaryGap,
     interpretSearch,
     swipeDeck,
+    meFeed,
     facetCounts,
     jobsActivity,
     userGrowth,

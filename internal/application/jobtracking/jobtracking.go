@@ -267,6 +267,13 @@ func (s *Service) ExcludedJobIDs(ctx context.Context, userID int64) ([]int64, er
 	return s.repo.ExcludedJobIDs(ctx, userID, excludedJobsCap)
 }
 
+// FeedExcludedJobIDs returns the job ids the caller saved, dismissed or applied to before
+// the instant — the match feed's exclusion set for one paging snapshot, capped at
+// excludedJobsCap.
+func (s *Service) FeedExcludedJobIDs(ctx context.Context, userID int64, before time.Time) ([]int64, error) {
+	return s.repo.FeedExcludedJobIDs(ctx, userID, before, excludedJobsCap)
+}
+
 // AppliedCompanySlugs returns the company slugs of the employers the caller has
 // applied to — the set the feed marks "you already applied to this company" by, and
 // the one /jobs/search's hide_applied_companies leaves out. Newest first, capped at

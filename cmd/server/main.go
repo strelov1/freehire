@@ -355,6 +355,7 @@ func runServer(cfg config.Settings) error {
 		CookieDomains:               cfg.CookieDomains,
 		OAuthRegistry:               oauthRegistry,
 		AuthV2Enabled:               cfg.AuthV2Enabled,
+		MeFeedEnabled:               cfg.MeFeedEnabled,
 		MobileAuthCallbacks:         cfg.MobileAuthCallbacks,
 		RecentAuthTTL:               cfg.RecentAuthTTL,
 		AppleNative:                 appleNative,
