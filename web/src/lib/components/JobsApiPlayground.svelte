@@ -2,9 +2,16 @@
   import { Check, Copy, LoaderCircle, Play } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { countryLabel } from '#lib/facets.js';
+  import { SOURCE_TYPE_LABELS } from '#lib/labels.js';
+  import { sourceLabel } from '#lib/sourceLabels.js';
+  import type { ProviderKind } from '#lib/types.js';
+
+  // The sources the source picker offers: the largest measured ones the landing already
+  // loaded for its source strip, so the demo never offers a source with nothing to find.
+  const { sources = [] }: { sources?: { source: string; kind: ProviderKind }[] } = $props();
 
   // The hero's live demo: a real, keyless request to the public search endpoint, built from
-  // two inputs and shown as the code that makes it and the answer it got. The read API
+  // a keyword and three filters and shown as the request and the answer it got. The read API
   // answers without a key for evaluation, so the demo needs no sign-in — which is the point
   // it makes. Until the visitor runs it, the panel shows a fixed sample, so the server-rendered
   // page (and a visitor without JavaScript) still sees what a response looks like.
@@ -17,22 +24,42 @@
     code,
     name: code ? countryLabel(code) : 'Anywhere',
   }));
+  const SOURCE_TYPES = Object.entries(SOURCE_TYPE_LABELS).map(([code, name]) => ({ code, name }));
+
   let q = $state('golang');
   let country = $state('de');
+  let sourceType = $state('');
+  let source = $state('');
   let running = $state(false);
   let copied = $state(false);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
   let error = $state<string | null>(null);
   let result = $state<{ total: number; ms: number; body: string } | null>(null);
 
+  // The source picker narrows to the chosen type, so the two filters cannot be set to a
+  // combination that matches nothing by construction.
+  const sourceOptions = $derived(
+    sources
+      .filter((s) => !sourceType || s.kind === sourceType)
+      .map((s) => ({ code: s.source, name: sourceLabel(s.source) })),
+  );
+  $effect(() => {
+    if (source && !sourceOptions.some((o) => o.code === source)) source = '';
+  });
+
   const query = $derived(
-    [q.trim() && `q=${encodeURIComponent(q.trim())}`, country && `countries=${country}`, `limit=${LIMIT}`]
+    [
+      q.trim() && `q=${encodeURIComponent(q.trim())}`,
+      country && `countries=${country}`,
+      sourceType && `source_type=${sourceType}`,
+      source && `source=${encodeURIComponent(source)}`,
+      `limit=${LIMIT}`,
+    ]
       .filter(Boolean)
       .join('&'),
   );
   const path = $derived(`/api/v1/jobs/search?${query}`);
 
-  // curl only: it reads the same in every stack, and the API reference has the rest.
   const code = $derived(`curl "${ORIGIN}${path}"
 # with a plan: -H "Authorization: Bearer $FREEHIRE_API_KEY"`);
 
@@ -134,51 +161,79 @@
 
 <div class="min-w-0 overflow-hidden rounded-xl border border-border bg-card" id="playground">
   <form
-    class="flex flex-wrap items-end gap-2 border-b border-border bg-secondary/60 p-3"
+    class="flex flex-col gap-2 border-b border-border bg-secondary/60 p-3"
     onsubmit={(e) => {
       e.preventDefault();
       run();
     }}
   >
-    <label class="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted-foreground">
-      Keyword
-      <input
-        bind:value={q}
-        maxlength="80"
-        class="h-9 rounded-md border border-border bg-background px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      />
-    </label>
-    <label class="flex flex-col gap-1 text-xs text-muted-foreground">
-      Country
-      <select
-        bind:value={country}
-        class="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    <div class="flex items-end gap-2">
+      <label class="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted-foreground">
+        Keyword
+        <input
+          bind:value={q}
+          maxlength="80"
+          class="h-9 rounded-md border border-border bg-background px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={running}
+        class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
       >
-        {#each COUNTRIES as c (c.code)}
-          <option value={c.code}>{c.name}</option>
-        {/each}
-      </select>
-    </label>
-    <button
-      type="submit"
-      disabled={running}
-      class="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
-    >
-      {#if running}
-        <LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-      {:else}
-        <Play class="size-4" aria-hidden="true" />
-      {/if}
-      Run request
-    </button>
+        {#if running}
+          <LoaderCircle class="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+        {:else}
+          <Play class="size-4" aria-hidden="true" />
+        {/if}
+        Run request
+      </button>
+    </div>
+    <div class="grid grid-cols-3 gap-2">
+      <label class="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
+        Country
+        <select
+          bind:value={country}
+          class="h-9 w-full min-w-0 rounded-md border border-border bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {#each COUNTRIES as c (c.code)}
+            <option value={c.code}>{c.name}</option>
+          {/each}
+        </select>
+      </label>
+      <label class="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
+        Source type
+        <select
+          bind:value={sourceType}
+          class="h-9 w-full min-w-0 rounded-md border border-border bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">Any type</option>
+          {#each SOURCE_TYPES as t (t.code)}
+            <option value={t.code}>{t.name}</option>
+          {/each}
+        </select>
+      </label>
+      <label class="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
+        Source
+        <select
+          bind:value={source}
+          class="h-9 w-full min-w-0 rounded-md border border-border bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">Any source</option>
+          {#each sourceOptions as o (o.code)}
+            <option value={o.code}>{o.name}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
   </form>
 
-  <div class="flex items-start gap-2 border-b border-border">
-    <pre class="min-w-0 flex-1 overflow-x-auto py-3 pl-4 font-mono text-xs leading-relaxed">{code}</pre>
+  <div class="flex items-center justify-between border-b border-border px-4 py-1">
+    <span class="font-mono text-xs text-muted-foreground">GET /api/v1/jobs/search</span>
     <button
       type="button"
       onclick={copy}
-      class="m-2 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {#if copied}<Check class="size-3.5" aria-hidden="true" /> Copied{:else}<Copy
           class="size-3.5"
@@ -186,25 +241,31 @@
         /> Copy{/if}
     </button>
   </div>
+  <!-- Wrapped rather than scrolled sideways, so every filter stays readable in the request,
+       and a fixed height so the card never changes size. -->
+  <pre
+    class="h-24 overflow-auto whitespace-pre-wrap break-all border-b border-border px-4 py-3 font-mono text-xs leading-relaxed">{code}</pre>
 
-  <div class="flex items-center justify-between px-4 pt-3 font-mono text-xs text-muted-foreground" aria-live="polite">
+  <!-- One line, whatever it says: the card keeps a fixed height so the hero beside it never shifts. -->
+  <div class="truncate px-4 pt-3 font-mono text-xs text-muted-foreground" aria-live="polite">
     {#if running}
       <span>Requesting…</span>
     {:else if error}
       <span class="text-destructive">{error}</span>
     {:else if result?.total === 0}
       <span
-        ><span class="text-foreground">200 OK</span> · no open postings match — try a broader keyword or another country</span
+        ><span class="text-foreground">200 OK</span> · no open postings match — try a broader keyword or fewer filters</span
       >
     {:else if result}
       <span
-        ><span class="text-foreground">200 OK</span> · {result.total.toLocaleString('en-US')} matches · {result.ms} ms</span
+        ><span class="text-foreground">200 OK</span> · {result.total.toLocaleString('en-US')}
+        {result.total === 1 ? 'match' : 'matches'} · {result.ms} ms</span
       >
     {:else}
       <span>Sample response — press Run for a live one, no key needed</span>
     {/if}
   </div>
   <pre
-    class="max-h-80 min-h-40 overflow-auto px-4 pb-4 pt-2 font-mono text-xs leading-relaxed text-muted-foreground">{result?.body ??
+    class="h-80 overflow-auto px-4 pb-4 pt-2 font-mono text-xs leading-relaxed text-muted-foreground">{result?.body ??
       (running || error ? '' : SAMPLE)}</pre>
 </div>

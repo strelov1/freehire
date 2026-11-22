@@ -240,7 +240,7 @@
         </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
       </div>
 
-      <JobsApiPlayground />
+      <JobsApiPlayground sources={sources?.top ?? []} />
     </div>
 
     {#if figures.length > 0}

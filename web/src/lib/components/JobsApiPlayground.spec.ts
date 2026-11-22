@@ -5,13 +5,29 @@ import JobsApiPlayground from './JobsApiPlayground.svelte';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('JobsApiPlayground', () => {
-  it('shows a sample until run, and the curl command for the current inputs', async () => {
+  it('shows a sample until run, and the request for the current filters', async () => {
     render(JobsApiPlayground);
     expect(screen.getByText(/Sample response/)).toBeTruthy();
     expect(
       screen.getByText(/curl "https:\/\/freehire\.me\/api\/v1\/jobs\/search\?q=golang&countries=de&limit=3"/),
     ).toBeTruthy();
     expect(screen.queryByRole('tab')).toBeNull();
+  });
+
+  it('adds source type and source to the request, the source list narrowed to the type', async () => {
+    render(JobsApiPlayground, {
+      props: {
+        sources: [
+          { source: 'greenhouse', kind: 'ats' },
+          { source: 'adzuna', kind: 'aggregator' },
+        ],
+      },
+    });
+    await fireEvent.change(screen.getByLabelText('Source type'), { target: { value: 'ats' } });
+    const sourceSelect = screen.getByLabelText('Source') as HTMLSelectElement;
+    expect([...sourceSelect.options].map((o) => o.value)).toEqual(['', 'greenhouse']);
+    await fireEvent.change(sourceSelect, { target: { value: 'greenhouse' } });
+    expect(screen.getByText(/countries=de&source_type=ats&source=greenhouse&limit=3/)).toBeTruthy();
   });
 
   it('runs a keyless request against the live endpoint and prints the trimmed answer', async () => {
