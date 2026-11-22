@@ -35,9 +35,11 @@ type habrCareerHTTP interface {
 const (
 	habrListURL    = "https://career.habr.com/api/frontend/vacancies?type=all&sort=date&page=%d"
 	habrVacancyURL = "https://career.habr.com/vacancies/%d"
-	// habrMaxPages bounds pagination so a wrong or missing meta.totalPages cannot loop. The API
-	// caps the listing well below this (see the package-doc ceiling).
-	habrMaxPages = 50
+	// habrMaxPages bounds pagination so a wrong or missing meta.totalPages cannot loop. It is a
+	// ceiling that FAILS the crawl, never a place to stop: the listing grew to 63 pages
+	// (2026-11-22) while this was 50, and the walk ended at page 50 as a success, so the
+	// source-scoped sweep closed every live posting past it on every run.
+	habrMaxPages = 200
 )
 
 // habrHeaders mirror what a browser sends to the JSON API; Habr serves the listing without
@@ -96,7 +98,12 @@ type habrLocation struct {
 
 func (h habrCareer) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	var vacancies []habrVacancy
-	for page := 1; page <= habrMaxPages; page++ {
+	for page := 1; ; page++ {
+		if page > habrMaxPages {
+			// The budget ran out before the listing's end was proven — a truncation like a failed
+			// page below, and failed for the same reason.
+			return nil, fmt.Errorf("habr_career: listing exceeds %d pages without reaching its end", habrMaxPages)
+		}
 		var resp habrListResponse
 		if err := h.http.GetJSONWithHeaders(ctx, fmt.Sprintf(habrListURL, page), habrHeaders, &resp); err != nil {
 			// Any page failing is a board error, not a truncation to salvage: habr_career is a

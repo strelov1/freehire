@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"regexp"
 	"slices"
@@ -226,6 +227,41 @@ func TestHabrCareerLaterPageErrorIsBoardError(t *testing.T) {
 	fake.failPage = map[int]bool{2: true}
 	if _, err := NewHabrCareer(fake).Fetch(context.Background(), CompanyEntry{Provider: "habr_career"}); err == nil {
 		t.Fatal("want an error when a later listing page fails (a truncated fullCatalog crawl must not look complete)")
+	}
+}
+
+// habrPagedFake serves a listing of n one-vacancy pages, each reporting totalPages, so a test can
+// model a catalogue longer than any fixed page budget without fixture files.
+func habrPagedFake(t *testing.T, n, totalPages int) *fakeHabrCareer {
+	fake := newHabrFake(t)
+	fake.pages = map[int]string{}
+	for p := 1; p <= n; p++ {
+		fake.pages[p] = fmt.Sprintf(`{"list":[{"id":%d,"title":"t"}],"meta":{"currentPage":%d,"totalPages":%d}}`, p, p, totalPages)
+	}
+	return fake
+}
+
+// Habr's listing outgrew the old 50-page budget (63 pages on 2026-11-22), and the crawl stopped
+// at page 50 as a success — so the source-scoped sweep closed every live posting past it. The
+// walk must follow meta.totalPages to the real end.
+func TestHabrCareerWalksPastFiftyPages(t *testing.T) {
+	fake := habrPagedFake(t, 63, 63)
+	jobs, err := NewHabrCareer(fake).Fetch(context.Background(), CompanyEntry{Provider: "habr_career"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 63 {
+		t.Fatalf("got %d jobs, want 63 (one per page, every page walked)", len(jobs))
+	}
+}
+
+// The page budget is a guard against a listing that never ends, not a second way to finish:
+// reaching it before the listing's end is proven must fail the crawl, or a fullCatalog sweep
+// mistakes the truncated walk for a shrunken catalogue and mass-closes the rest.
+func TestHabrCareerPageBudgetExhaustedIsBoardError(t *testing.T) {
+	fake := habrPagedFake(t, habrMaxPages+1, habrMaxPages+1)
+	if _, err := NewHabrCareer(fake).Fetch(context.Background(), CompanyEntry{Provider: "habr_career"}); err == nil {
+		t.Fatal("want an error when the listing outlasts the page budget (a truncated fullCatalog crawl must not look complete)")
 	}
 }
 
