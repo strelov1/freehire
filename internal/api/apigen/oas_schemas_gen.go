@@ -2275,6 +2275,39 @@ func (s *AutoApplyReviewStatus) UnmarshalText(data []byte) error {
 	}
 }
 
+// Ref: #/components/schemas/AutoApplySettings
+type AutoApplySettings struct {
+	// Wait for the account's approval on every auto-apply attempt, even one whose form asks nothing only
+	// the candidate can answer.
+	ConfirmEach bool `json:"confirm_each"`
+}
+
+// GetConfirmEach returns the value of ConfirmEach.
+func (s *AutoApplySettings) GetConfirmEach() bool {
+	return s.ConfirmEach
+}
+
+// SetConfirmEach sets the value of ConfirmEach.
+func (s *AutoApplySettings) SetConfirmEach(val bool) {
+	s.ConfirmEach = val
+}
+
+// Ref: #/components/schemas/AutoApplySettingsUpdate
+type AutoApplySettingsUpdate struct {
+	// Absent reads as false.
+	ConfirmEach OptBool `json:"confirm_each"`
+}
+
+// GetConfirmEach returns the value of ConfirmEach.
+func (s *AutoApplySettingsUpdate) GetConfirmEach() OptBool {
+	return s.ConfirmEach
+}
+
+// SetConfirmEach sets the value of ConfirmEach.
+func (s *AutoApplySettingsUpdate) SetConfirmEach(val OptBool) {
+	s.ConfirmEach = val
+}
+
 // A question the attempt could not answer. The attempt's internal error text is never here.
 // Ref: #/components/schemas/AutoApplyUnmappedField
 type AutoApplyUnmappedField struct {
@@ -12443,6 +12476,21 @@ func (s *GetAutoApplyListOK) GetData() AutoApplyList {
 
 // SetData sets the value of Data.
 func (s *GetAutoApplyListOK) SetData(val AutoApplyList) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetAutoApplySettingsOK struct {
+	Data AutoApplySettings `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetAutoApplySettingsOK) GetData() AutoApplySettings {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetAutoApplySettingsOK) SetData(val AutoApplySettings) {
 	s.Data = val
 }
 
@@ -27171,6 +27219,21 @@ func (s *SetAgentPermissionsOK) GetData() AgentPermissions {
 
 // SetData sets the value of Data.
 func (s *SetAgentPermissionsOK) SetData(val AgentPermissions) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type SetAutoApplySettingsOK struct {
+	Data AutoApplySettings `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SetAutoApplySettingsOK) GetData() AutoApplySettings {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SetAutoApplySettingsOK) SetData(val AutoApplySettings) {
 	s.Data = val
 }
 

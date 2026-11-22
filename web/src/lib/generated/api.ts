@@ -2234,6 +2234,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/auto-apply-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Readable with a session or an API key. */
+        get: operations["getAutoApplySettings"];
+        /** @description Session cookie only: whether attempts are sent without a review is the person's call. */
+        put: operations["setAutoApplySettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/auto-apply/{queueId}/review": {
         parameters: {
             query?: never;
@@ -6640,6 +6658,14 @@ export interface components {
          * @enum {string}
          */
         AutoApplyReviewStatus: "tailoring" | "pending_review" | "approved" | "blocked" | "declined" | "failed" | "tailor_failed";
+        AutoApplySettings: {
+            /** @description Wait for the account's approval on every auto-apply attempt, even one whose form asks nothing only the candidate can answer. */
+            confirm_each: boolean;
+        };
+        AutoApplySettingsUpdate: {
+            /** @description Absent reads as false. */
+            confirm_each?: boolean;
+        };
         /** @description A question the attempt could not answer. The attempt's internal error text is never here. */
         AutoApplyUnmappedField: {
             id: string;
@@ -16510,6 +16536,72 @@ export interface operations {
                      */
                     "application/json": {
                         data: components["schemas"]["AutoApplyList"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAutoApplySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AutoApplySettings"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setAutoApplySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoApplySettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AutoApplySettings"];
                     };
                 };
             };

@@ -870,25 +870,30 @@ const setAutoApplyResolvedPreview = `-- name: SetAutoApplyResolvedPreview :one
 WITH updated AS (
     UPDATE auto_apply_queue q
     SET resolved_preview = $1,
-        claimed_at       = NULL
-    WHERE q.id = $2 AND q.review_decision IS NULL
-    RETURNING q.job_id, q.user_id
+        claimed_at       = NULL,
+        review_decision  = CASE WHEN $2::boolean AND NOT usr.auto_apply_confirm_each THEN 'approved' END,
+        reviewed_at      = CASE WHEN $2::boolean AND NOT usr.auto_apply_confirm_each THEN now() END
+    FROM users usr
+    WHERE usr.id = q.user_id AND q.id = $3 AND q.review_decision IS NULL
+    RETURNING q.job_id, q.user_id, q.review_decision IS NOT NULL AS auto_approved
 )
-SELECT j.public_slug, j.title, j.company, u.user_id
+SELECT j.public_slug, j.title, j.company, u.user_id, u.auto_approved::boolean AS auto_approved
 FROM jobs j
 JOIN updated u ON u.job_id = j.id
 `
 
 type SetAutoApplyResolvedPreviewParams struct {
 	ResolvedPreview []byte `json:"resolved_preview"`
+	NoQuestions     bool   `json:"no_questions"`
 	ID              int64  `json:"id"`
 }
 
 type SetAutoApplyResolvedPreviewRow struct {
-	PublicSlug string `json:"public_slug"`
-	Title      string `json:"title"`
-	Company    string `json:"company"`
-	UserID     int64  `json:"user_id"`
+	PublicSlug   string `json:"public_slug"`
+	Title        string `json:"title"`
+	Company      string `json:"company"`
+	UserID       int64  `json:"user_id"`
+	AutoApproved bool   `json:"auto_approved"`
 }
 
 // Persists the answer-preview snapshot cmd/auto-apply's second claim pass computes once
@@ -908,14 +913,19 @@ type SetAutoApplyResolvedPreviewRow struct {
 // the preview claim's own lease expires would sit unclaimed by ClaimAutoApplyBatch for up
 // to AUTO_APPLY_LEASE_SECONDS after nothing is actually still working the row — a stale
 // lease from a claim that already finished successfully, not a live one.
+//
+// no_questions (nothing in the preview only the candidate can answer) approves the entry in
+// the same write unless the candidate asked to confirm each one (users.auto_apply_confirm_each);
+// auto_approved says which happened, so the caller tells them the matching thing.
 func (q *Queries) SetAutoApplyResolvedPreview(ctx context.Context, arg SetAutoApplyResolvedPreviewParams) (SetAutoApplyResolvedPreviewRow, error) {
-	row := q.db.QueryRow(ctx, setAutoApplyResolvedPreview, arg.ResolvedPreview, arg.ID)
+	row := q.db.QueryRow(ctx, setAutoApplyResolvedPreview, arg.ResolvedPreview, arg.NoQuestions, arg.ID)
 	var i SetAutoApplyResolvedPreviewRow
 	err := row.Scan(
 		&i.PublicSlug,
 		&i.Title,
 		&i.Company,
 		&i.UserID,
+		&i.AutoApproved,
 	)
 	return i, err
 }

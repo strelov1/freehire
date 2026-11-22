@@ -332,6 +332,7 @@ func Register(app *fiber.App, cfg Config) {
 	// cookie-authenticated caller.
 	emailPrefsH := newEmailPrefsHandlers(mail.prefs)
 	agentPermissionsH := &agentPermissionHandlers{queries: queries}
+	autoApplySettingsH := &autoApplySettingsHandlers{queries: queries}
 	userModerationH := newUserModerationHandlers(queries)
 	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
 	handlers := contractHandlers{conversationHandlers: conversationH,
@@ -353,6 +354,7 @@ func Register(app *fiber.App, cfg Config) {
 		GeoHandlers:                  geoH,
 		suggestHandlers:              suggestH,
 		agentPermissionHandlers:      agentPermissionsH,
+		autoApplySettingsHandlers:    autoApplySettingsH,
 		usageHandlers:                usageH,
 		plansHandlers:                plansH,
 		dictionaryHandlers:           dictionaryH,

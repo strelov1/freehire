@@ -183,8 +183,9 @@ func (s *dbStore) ClaimForPreview(ctx context.Context, batch, leaseSeconds int) 
 	return out, nil
 }
 
-// SetPreview persists the resolved answer preview and, on the write that first sets one,
-// records the ready-for-review notification (sent here, not at tailor-completion, so the
+// SetPreview persists the resolved answer preview, approving the entry in the same write when
+// it asks the candidate nothing (unless they confirm each one), and otherwise records the
+// ready-for-review notification (sent here, not at tailor-completion, so the
 // candidate never lands on an empty screen). pgx.ErrNoRows means a stale or retried pass lost
 // the race to an already-decided entry; see SetAutoApplyResolvedPreview's guard.
 func (s *dbStore) SetPreview(ctx context.Context, queueID int64, preview autoapply.ResolvedPreview) error {
@@ -193,13 +194,16 @@ func (s *dbStore) SetPreview(ctx context.Context, queueID int64, preview autoapp
 		return fmt.Errorf("encode resolved preview: %w", err)
 	}
 	row, err := s.q.SetAutoApplyResolvedPreview(ctx, db.SetAutoApplyResolvedPreviewParams{
-		ID: queueID, ResolvedPreview: payload,
+		ID: queueID, ResolvedPreview: payload, NoQuestions: !preview.AsksCandidate(),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
 		return fmt.Errorf("record resolved preview for queue entry %d: %w", queueID, err)
+	}
+	if row.AutoApproved {
+		return nil // the submit pass sends it; the submitted nudge tells the candidate
 	}
 	if _, err := s.q.RecordNotification(ctx, db.RecordNotificationParams{
 		UserID:     row.UserID,

@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -211,7 +212,10 @@ func TestDBStore_ClaimForPreviewAndSetPreview(t *testing.T) {
 		job := insertJobForTest(t, pool, "preview-set-job")
 		queueID := insertTailoredQueueRowForTest(t, pool, user, job)
 
-		preview := autoapply.ResolvedPreview{Fields: []autoapply.PreviewField{{Label: "First name", Value: "Ada"}}}
+		preview := autoapply.ResolvedPreview{
+			Fields:  []autoapply.PreviewField{{Label: "First name", Value: "Ada"}},
+			Pending: []autoapply.PreviewPending{{Label: "Desired salary"}},
+		}
 		// Twice: a re-tailor recomputes the preview, and must not notify again.
 		for range 2 {
 			if err := store.SetPreview(ctx, queueID, preview); err != nil {
@@ -239,6 +243,36 @@ func TestDBStore_ClaimForPreviewAndSetPreview(t *testing.T) {
 		}
 		if notifKind != "auto_apply_ready_for_review" {
 			t.Errorf("notification kind = %q, want auto_apply_ready_for_review", notifKind)
+		}
+	})
+
+	t.Run("SetPreview approves an entry that asks the candidate nothing, unless they confirm each", func(t *testing.T) {
+		truncateForAutoApply(t, pool)
+		preview := autoapply.ResolvedPreview{
+			Fields:  []autoapply.PreviewField{{Label: "First name", Value: "Ada"}},
+			Pending: []autoapply.PreviewPending{{Label: "Why us?", WillDraftAtSubmission: true}},
+		}
+		for _, confirmEach := range []bool{false, true} {
+			user := insertUserForTest(t, pool, fmt.Sprintf("preview-auto-%v@example.test", confirmEach))
+			if _, err := pool.Exec(ctx, "UPDATE users SET auto_apply_confirm_each = $2 WHERE id = $1", user, confirmEach); err != nil {
+				t.Fatal(err)
+			}
+			queueID := insertTailoredQueueRowForTest(t, pool, user, insertJobForTest(t, pool, fmt.Sprintf("preview-auto-job-%v", confirmEach)))
+			if err := store.SetPreview(ctx, queueID, preview); err != nil {
+				t.Fatalf("SetPreview: %v", err)
+			}
+			var decision *string
+			var notified int
+			if err := pool.QueryRow(ctx, `SELECT review_decision, (SELECT count(*) FROM user_notifications WHERE user_id = $2)
+				FROM auto_apply_queue WHERE id = $1`, queueID, user).Scan(&decision, &notified); err != nil {
+				t.Fatal(err)
+			}
+			if approved := decision != nil && *decision == "approved"; approved == confirmEach {
+				t.Errorf("confirm_each=%v: review_decision = %v", confirmEach, decision)
+			}
+			if wantNotified := map[bool]int{false: 0, true: 1}[confirmEach]; notified != wantNotified {
+				t.Errorf("confirm_each=%v: notifications = %d, want %d", confirmEach, notified, wantNotified)
+			}
 		}
 	})
 

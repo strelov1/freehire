@@ -9,6 +9,7 @@
   import { Badge, Button } from '#lib/ui/index.js';
   import { messages } from './activity.messages.js';
   import States from './States.svelte';
+  import ToggleSwitch from './ToggleSwitch.svelte';
 
   const s = $derived(t(messages, locale()).autoApply);
   let status = $state<'loading' | 'error' | 'ready'>('loading');
@@ -38,6 +39,31 @@
   function refresh() {
     revision += 1;
   }
+
+  // Settable only from the browser session: the server refuses the write from an API key.
+  let confirmEach = $state<boolean | null>(null);
+  let settingSaving = $state(false);
+  let settingError = $state<string | null>(null);
+  $effect(() => {
+    if (!isAuthenticated()) return;
+    api.getAutoApplySettings().then(
+      (r) => (confirmEach = r.confirm_each),
+      () => (settingError = s.confirmEach.loadError),
+    );
+  });
+
+  async function toggleConfirmEach(): Promise<void> {
+    if (confirmEach === null || settingSaving) return;
+    settingSaving = true;
+    settingError = null;
+    try {
+      confirmEach = (await api.setAutoApplySettings({ confirm_each: !confirmEach })).confirm_each;
+    } catch {
+      settingError = s.confirmEach.saveError;
+    } finally {
+      settingSaving = false;
+    }
+  }
 </script>
 
 <div class="flex flex-col gap-4">
@@ -46,6 +72,22 @@
     <Button variant="outline" size="sm" disabled={status === 'loading'} onclick={refresh}>
       <RefreshCw class="size-3.5" />{s.refresh}
     </Button>
+  </div>
+
+  <div class="flex items-start justify-between gap-4 rounded-lg border border-border px-4 py-3">
+    <div class="flex min-w-0 flex-col gap-0.5">
+      <span class="text-sm font-medium">{s.confirmEach.label}</span>
+      <span class="text-xs text-muted-foreground">{s.confirmEach.detail}</span>
+      {#if settingError}
+        <span class="text-xs text-destructive">{settingError}</span>
+      {/if}
+    </div>
+    <ToggleSwitch
+      on={confirmEach ?? false}
+      label={s.confirmEach.label}
+      disabled={confirmEach === null || settingSaving}
+      onToggle={toggleConfirmEach}
+    />
   </div>
 
   {#if status === 'loading'}

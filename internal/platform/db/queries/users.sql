@@ -331,3 +331,9 @@ WHERE id = sqlc.arg(user_id)::bigint
    OR username = sqlc.arg(query)::text
 ORDER BY (id = sqlc.arg(user_id)::bigint) DESC
 LIMIT 1;
+
+-- name: GetAutoApplyConfirmEach :one
+SELECT auto_apply_confirm_each FROM users WHERE id = sqlc.arg(id);
+
+-- name: SetAutoApplyConfirmEach :exec
+UPDATE users SET auto_apply_confirm_each = sqlc.arg(auto_apply_confirm_each) WHERE id = sqlc.arg(id);

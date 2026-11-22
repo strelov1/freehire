@@ -186,14 +186,21 @@ WHERE id = sqlc.arg(id);
 -- the preview claim's own lease expires would sit unclaimed by ClaimAutoApplyBatch for up
 -- to AUTO_APPLY_LEASE_SECONDS after nothing is actually still working the row — a stale
 -- lease from a claim that already finished successfully, not a live one.
+--
+-- no_questions (nothing in the preview only the candidate can answer) approves the entry in
+-- the same write unless the candidate asked to confirm each one (users.auto_apply_confirm_each);
+-- auto_approved says which happened, so the caller tells them the matching thing.
 WITH updated AS (
     UPDATE auto_apply_queue q
     SET resolved_preview = sqlc.arg(resolved_preview),
-        claimed_at       = NULL
-    WHERE q.id = sqlc.arg(id) AND q.review_decision IS NULL
-    RETURNING q.job_id, q.user_id
+        claimed_at       = NULL,
+        review_decision  = CASE WHEN sqlc.arg(no_questions)::boolean AND NOT usr.auto_apply_confirm_each THEN 'approved' END,
+        reviewed_at      = CASE WHEN sqlc.arg(no_questions)::boolean AND NOT usr.auto_apply_confirm_each THEN now() END
+    FROM users usr
+    WHERE usr.id = q.user_id AND q.id = sqlc.arg(id) AND q.review_decision IS NULL
+    RETURNING q.job_id, q.user_id, q.review_decision IS NOT NULL AS auto_approved
 )
-SELECT j.public_slug, j.title, j.company, u.user_id
+SELECT j.public_slug, j.title, j.company, u.user_id, u.auto_approved::boolean AS auto_approved
 FROM jobs j
 JOIN updated u ON u.job_id = j.id;
 

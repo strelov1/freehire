@@ -292,3 +292,46 @@ func TestJobAutoApplyRetryAndCancelRoutes(t *testing.T) {
 }
 
 func jsonText(t *testing.T, v any) string { return string(mustJSON(t, v)) }
+
+// Whether attempts go out without a review is the person's call: an API key may read the
+// switch but not set it.
+func TestAutoApplySettings_OnlyTheBrowserMaySetIt(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyEnqueueTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	_, _, mw := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "")
+	queries := db.New(pool)
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "confirm-each@example.test")
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	settings := &autoApplySettingsHandlers{queries: queries}
+	settings.register(app.Group("/api/v1"), mw, newContract(contractHandlers{autoApplySettingsHandlers: settings}))
+
+	put := func(withCookie bool, bearer string) int {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/me/auto-apply-settings",
+			strings.NewReader(`{"confirm_each":true}`))
+		req.Header.Set("Content-Type", "application/json")
+		if withCookie {
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		}
+		if bearer != "" {
+			req.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if got := put(false, "fhk_whatever"); got != fiber.StatusUnauthorized {
+		t.Fatalf("PUT with an API key = %d, want 401", got)
+	}
+	if got := put(true, ""); got != fiber.StatusOK {
+		t.Fatalf("PUT with the cookie = %d, want 200", got)
+	}
+	if confirmEach, err := queries.GetAutoApplyConfirmEach(context.Background(), userID); err != nil || !confirmEach {
+		t.Fatalf("auto_apply_confirm_each = %v err=%v, want true", confirmEach, err)
+	}
+}

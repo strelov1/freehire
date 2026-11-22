@@ -211,6 +211,17 @@ func (q *Queries) GetAgentsMayApply(ctx context.Context, id int64) (bool, error)
 	return agents_may_apply, err
 }
 
+const getAutoApplyConfirmEach = `-- name: GetAutoApplyConfirmEach :one
+SELECT auto_apply_confirm_each FROM users WHERE id = $1
+`
+
+func (q *Queries) GetAutoApplyConfirmEach(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, getAutoApplyConfirmEach, id)
+	var auto_apply_confirm_each bool
+	err := row.Scan(&auto_apply_confirm_each)
+	return auto_apply_confirm_each, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language,
        (banned_at IS NOT NULL)::boolean AS banned
@@ -559,6 +570,20 @@ type SetAgentsMayApplyParams struct {
 
 func (q *Queries) SetAgentsMayApply(ctx context.Context, arg SetAgentsMayApplyParams) error {
 	_, err := q.db.Exec(ctx, setAgentsMayApply, arg.AgentsMayApply, arg.ID)
+	return err
+}
+
+const setAutoApplyConfirmEach = `-- name: SetAutoApplyConfirmEach :exec
+UPDATE users SET auto_apply_confirm_each = $1 WHERE id = $2
+`
+
+type SetAutoApplyConfirmEachParams struct {
+	AutoApplyConfirmEach bool  `json:"auto_apply_confirm_each"`
+	ID                   int64 `json:"id"`
+}
+
+func (q *Queries) SetAutoApplyConfirmEach(ctx context.Context, arg SetAutoApplyConfirmEachParams) error {
+	_, err := q.db.Exec(ctx, setAutoApplyConfirmEach, arg.AutoApplyConfirmEach, arg.ID)
 	return err
 }
 

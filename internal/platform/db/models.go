@@ -2040,14 +2040,15 @@ type User struct {
 	// When the one-time welcome email for this account's first paying tier was sent. NULL until sent; never cleared once set, so a later renewal or resubscription is not re-welcomed.
 	ProWelcomeSentAt pgtype.Timestamptz `json:"pro_welcome_sent_at"`
 	// When the one-time "you ran into today's limit" nudge was sent. NULL until sent; never cleared once set.
-	LimitNudgeSentAt   pgtype.Timestamptz `json:"limit_nudge_sent_at"`
-	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
-	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
-	AgentsMayApply     bool               `json:"agents_may_apply"`
-	LastActiveAt       pgtype.Timestamptz `json:"last_active_at"`
-	BannedAt           pgtype.Timestamptz `json:"banned_at"`
-	BanReason          pgtype.Text        `json:"ban_reason"`
-	BannedBy           pgtype.Int8        `json:"banned_by"`
+	LimitNudgeSentAt     pgtype.Timestamptz `json:"limit_nudge_sent_at"`
+	ApiUntilStripe       pgtype.Timestamptz `json:"api_until_stripe"`
+	ApiDataUntilStripe   pgtype.Timestamptz `json:"api_data_until_stripe"`
+	AgentsMayApply       bool               `json:"agents_may_apply"`
+	LastActiveAt         pgtype.Timestamptz `json:"last_active_at"`
+	BannedAt             pgtype.Timestamptz `json:"banned_at"`
+	BanReason            pgtype.Text        `json:"ban_reason"`
+	BannedBy             pgtype.Int8        `json:"banned_by"`
+	AutoApplyConfirmEach bool               `json:"auto_apply_confirm_each"`
 }
 
 type UserBlock struct {
