@@ -102,6 +102,9 @@ func TestJobgetherMapsAPosting(t *testing.T) {
 	if us.PostedAt == nil || us.PostedAt.Format("2006-01-02") != "2026-11-22" {
 		t.Errorf("posted at = %v", us.PostedAt)
 	}
+	if us.ApplicationDeadline == nil || us.ApplicationDeadline.Format("2006-01-02") != "2099-01-01" {
+		t.Errorf("application deadline = %v, want 2099-01-01", us.ApplicationDeadline)
+	}
 	if us.SalaryMin == nil || *us.SalaryMin != 97750 || us.SalaryMax == nil || *us.SalaryMax != 132250 || us.SalaryCurrency != "USD" {
 		t.Errorf("salary = %v-%v %s", us.SalaryMin, us.SalaryMax, us.SalaryCurrency)
 	}

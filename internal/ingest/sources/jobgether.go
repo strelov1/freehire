@@ -182,20 +182,29 @@ func (s jobgether) detail(ctx context.Context, loc string) (Job, bool) {
 		return Job{}, false
 	}
 	// The sitemap keeps naming a posting after it has lapsed; its own validThrough says so.
-	if end := parseRFC3339OrDate(strings.TrimSpace(p.ValidThrough)); end != nil && end.Before(time.Now()) {
-		return Job{}, false
+	validThrough := strings.TrimSpace(p.ValidThrough)
+	deadline := jobgetherDeadline(validThrough)
+	if deadline != nil {
+		expires := *deadline
+		if len(validThrough) == len(time.DateOnly) {
+			expires = expires.AddDate(0, 0, 1)
+		}
+		if !time.Now().Before(expires) {
+			return Job{}, false
+		}
 	}
 	job := Job{
-		ExternalID:     jobgetherID(loc),
-		URL:            loc,
-		Title:          title,
-		Company:        company,
-		Countries:      countriesFromCodes(p.countryCodes()),
-		Description:    sanitizeHTML(html.UnescapeString(p.Description)),
-		Remote:         true,
-		WorkMode:       "remote",
-		EmploymentType: schemaEmploymentRaw(p.EmploymentType),
-		PostedAt:       NotFuture(parseRFC3339OrDate(strings.TrimSpace(p.DatePosted))),
+		ExternalID:          jobgetherID(loc),
+		URL:                 loc,
+		Title:               title,
+		Company:             company,
+		Countries:           countriesFromCodes(p.countryCodes()),
+		Description:         sanitizeHTML(html.UnescapeString(p.Description)),
+		Remote:              true,
+		WorkMode:            "remote",
+		EmploymentType:      schemaEmploymentRaw(p.EmploymentType),
+		PostedAt:            NotFuture(parseRFC3339OrDate(strings.TrimSpace(p.DatePosted))),
+		ApplicationDeadline: deadline,
 	}
 	if salary := p.BaseSalary.amount; salary != nil {
 		if currency := strings.ToUpper(strings.TrimSpace(salary.Currency)); currency != "" {
@@ -206,6 +215,15 @@ func (s jobgether) detail(ctx context.Context, loc string) (Job, bool) {
 		job.ApplyMethod, job.ExternalApplyURL = ApplyExternal, target
 	}
 	return job, true
+}
+
+func jobgetherDeadline(raw string) *time.Time {
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999-0700", time.DateOnly} {
+		if date, err := time.Parse(layout, raw); err == nil {
+			return &date
+		}
+	}
+	return nil
 }
 
 // countryCodes lists where the posting may be worked from: the applicant requirements when it
