@@ -119,13 +119,18 @@ func TestAutoApplyOverMCP_FullFlow(t *testing.T) {
 	if _, err := queries.SetAutoApplyTailoredCV(ctx, db.SetAutoApplyTailoredCVParams{ID: entry.ID, TailoredCvID: &cv}); err != nil {
 		t.Fatal(err)
 	}
-	preview := []byte(`{"fields":[{"label":"Email","value":"a@b.c"}],"pending":[{"label":"Why us?","will_draft_at_submission":false}]}`)
+	preview := []byte(`{"fields":[{"label":"Email","value":"a@b.c"}],"pending":[{"label":"Why us?","will_draft_at_submission":false},{"label":"Cover letter","will_draft_at_submission":true}]}`)
 	if _, err := queries.SetAutoApplyResolvedPreview(ctx, db.SetAutoApplyResolvedPreviewParams{ID: entry.ID, ResolvedPreview: preview}); err != nil {
 		t.Fatal(err)
 	}
 	view := mcpc.ok("auto_apply_get", slug)
 	if view["status"] != "pending_review" || !strings.Contains(jsonText(t, view["pending_answers"]), "Why us?") {
 		t.Fatalf("view = %v, want pending_review listing the pending question", view)
+	}
+	// A question the submission drafts from the CV is not put to the person.
+	if strings.Contains(jsonText(t, view["pending_answers"]), "Cover letter") ||
+		!strings.Contains(jsonText(t, view["drafted_at_submission"]), "Cover letter") {
+		t.Fatalf("view = %v, want the drafted question listed apart from pending_answers", view)
 	}
 
 	// The agent relays the person's answer; it is theirs, so it is sendable.

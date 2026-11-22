@@ -133,6 +133,25 @@ var labelAnswerKeyFor = []struct {
 	{"age_18_or_older", []string{"18 or older"}},
 }
 
+// labelExactAnswerKey answers a basic contact field asked under an opaque id ("Phone
+// Number" as question_123, field-email) by its whole label, never by a keyword in it:
+// "Referrer email" or "Preferred location" must not pick up the candidate's own.
+var labelExactAnswerKey = map[string]string{
+	"phone": "phone", "phone number": "phone", "mobile": "phone", "mobile number": "phone", "mobile phone": "phone",
+	"first name": "first_name", "legal first name": "first_name", "what is your legal first name?": "first_name",
+	"last name": "last_name", "legal last name": "last_name", "surname": "last_name", "what is your legal last name?": "last_name",
+	"name": "full_name", "full name": "full_name", "legal name": "full_name", "full legal name": "full_name",
+	"email": "email", "email address": "email",
+	"location": "location", "current location": "location", "your location": "location", "location (city, state)": "location",
+}
+
+// matchExactLabelAnswerKey looks a label up in labelExactAnswerKey, ignoring case, the
+// spacing around it and a required-field asterisk.
+func matchExactLabelAnswerKey(label string) (string, bool) {
+	key, ok := labelExactAnswerKey[strings.ToLower(strings.TrimSpace(strings.TrimRight(strings.TrimSpace(label), "*")))]
+	return key, ok
+}
+
 // matchLabelAnswerKey returns the answer key a field's label matches, if any.
 func matchLabelAnswerKey(label string) (string, bool) {
 	lower := strings.ToLower(label)
@@ -239,6 +258,9 @@ func answerKeysFor(f MergedField) []string {
 	// An opaque id (a custom question): match its label against the known categories. An id
 	// match is more trustworthy and is never shadowed by this.
 	if key, ok := matchLabelAnswerKey(f.Label); ok {
+		keys = append(keys, key)
+	}
+	if key, ok := matchExactLabelAnswerKey(f.Label); ok {
 		keys = append(keys, key)
 	}
 	// The bank: an answer given to this same question earlier. Last, so a typed fact always

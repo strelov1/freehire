@@ -85,3 +85,29 @@ func TestResolve_IDMatchTakesPriorityOverLabelKeywordMatch(t *testing.T) {
 		t.Fatalf("plan.Fields = %+v, want the direct id match", plan.Fields)
 	}
 }
+
+// Basic contact fields asked under an opaque id resolve by their whole label, and only by
+// it: a label that merely contains "email" or "location" stays unanswered.
+func TestResolve_MatchesBasicContactFieldsByExactLabel(t *testing.T) {
+	answers := map[string]string{
+		"phone": "+1 555", "last_name": "Lovelace", "email": "ada@example.test", "location": "London",
+	}
+	cases := []struct{ label, want string }{
+		{"Phone Number", "+1 555"},
+		{"Last Name *", "Lovelace"},
+		{"  Email address ", "ada@example.test"},
+		{"Current Location", "London"},
+		{"Referrer email", ""},
+		{"Preferred location", ""},
+	}
+	for _, c := range cases {
+		plan := Resolve([]MergedField{{ID: "question_1", Label: c.label, Kind: "text", Required: true}}, answers, false)
+		got := ""
+		if len(plan.Fields) == 1 {
+			got = plan.Fields[0].Value
+		}
+		if got != c.want {
+			t.Errorf("%q resolved to %q, want %q", c.label, got, c.want)
+		}
+	}
+}

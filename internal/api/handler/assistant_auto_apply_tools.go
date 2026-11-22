@@ -235,9 +235,11 @@ type autoApplyAttemptView struct {
 	MayHaveReachedEmployer bool `json:"may_have_reached_employer,omitempty"`
 	// OpenQuestions are the form fields a submission attempt stopped on (status blocked).
 	OpenQuestions []autoapply.UnmappedField `json:"open_questions,omitempty"`
-	// PendingAnswers are the questions the review preview could not answer yet (status
-	// pending_review); will_draft_at_submission ones are written from the CV when it submits.
+	// PendingAnswers are the questions only the person can answer (status pending_review).
 	PendingAnswers []autoapply.PreviewPending `json:"pending_answers,omitempty"`
+	// DraftedAtSubmission are the questions written from the CV when it submits. Kept out of
+	// PendingAnswers so they are not put to the person as questions.
+	DraftedAtSubmission []string `json:"drafted_at_submission,omitempty"`
 	// Answers are what will be sent, as the preview resolved them (status pending_review).
 	Answers []autoapply.PreviewField `json:"answers,omitempty"`
 	History []autoApplyEventView     `json:"history"`
@@ -278,7 +280,13 @@ func (h *assistantHandlers) autoApplyView(ctx context.Context, userID int64, slu
 		view.Status = string(info.Status)
 		view.OpenQuestions = info.Unmapped
 		if info.ResolvedPreview != nil {
-			view.PendingAnswers = info.ResolvedPreview.Pending
+			for _, p := range info.ResolvedPreview.Pending {
+				if p.WillDraftAtSubmission {
+					view.DraftedAtSubmission = append(view.DraftedAtSubmission, p.Label)
+				} else {
+					view.PendingAnswers = append(view.PendingAnswers, p)
+				}
+			}
 			view.Answers = info.ResolvedPreview.Fields
 		}
 		view.MayHaveReachedEmployer = info.MayHaveReachedEmployer
