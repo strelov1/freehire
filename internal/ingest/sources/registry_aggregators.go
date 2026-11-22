@@ -275,6 +275,10 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// Jumpit: Saramin's IT-only board for South Korea. One JSON listing request names the whole
 		// catalogue; a per-posting detail carries the body. Paced, see jumpitRequestInterval.
 		NewJumpit(pacedJumpitGetter(c)),
+		// Saramin: South Korea's largest general job board, every trade. The site's own category
+		// listing names the whole catalogue; each new posting's body is read from the iframe its page
+		// embeds. Paced, and the edge wants the browser-compatible User-Agent. See saramin.go.
+		compatibleUASource(c, NewSaramin),
 		// WORK180: board of women-endorsed employers, enumerated by regional site (board =
 		// au/uk/us) through each region's jobs sitemap; posting pages carry a schema.org
 		// JobPosting. Pages are paced to robots.txt's Crawl-delay, see work180RequestInterval.
