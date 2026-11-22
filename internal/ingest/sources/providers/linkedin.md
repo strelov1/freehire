@@ -86,7 +86,8 @@
   with a matching LinkedIn job link inside this section, deduplicating against every
   primary listing page. Hydrate at most 20 additional identities through the ordinary
   guest reader, preserving application-method classification and native ATS handoff.
-  Depth is one: recommendation pages never seed another full-page read. All requests
+  Depth is one: recommendation pages never seed another full-page read. Firehose (`*`) searches skip
+  recommendations: they already list the whole market, newest first. All requests
   share the adapter's existing limiter. A companion failure preserves the primary crawl;
   a recommendation refusal stops that branch and preserves earlier readable jobs.
 

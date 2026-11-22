@@ -136,3 +136,10 @@ Recorded the title dictionary and role picker alias generator in the
 Vietnamese role categories now reach CV matching through rendered text. Scorer regressions
 cover exact titles, equivalent roles and multiple roles on one rendered line. Korean course
 and Vietnamese teaching and recruiting titles retain their exclusions from technical-job search.
+
+## LinkedIn firehose skips recommendations — 2026-11-22
+
+In the first firehose hour detail reads were 83% of LinkedIn requests. A keyword-less search
+already lists the whole market newest first, so the related-jobs companion (one full page plus
+up to 20 recommendation detail reads per search) only added older postings. Firehose searches
+skip it; keyword searches keep it.
