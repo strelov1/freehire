@@ -39,6 +39,7 @@ type contractHandlers struct {
 	*jobs.GeoHandlers
 	*suggestHandlers
 	*agentPermissionHandlers
+	*autoApplySettingsHandlers
 	*usageHandlers
 	*plansHandlers
 	*dictionaryHandlers

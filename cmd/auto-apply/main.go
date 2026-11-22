@@ -145,6 +145,14 @@ func run() int {
 		log.Printf("auto-apply: %d attempt(s) had no tailoring progress for %s; marked tailor_failed", n, time.Duration(staleTailoringSeconds)*time.Second)
 	}
 
+	// Withdraw undecided attempts on jobs closed for three days: nobody can act on them.
+	// Best-effort, like the sweep above.
+	if n, err := queries.CancelAutoApplyEntriesForClosedJobs(ctx, int64((72 * time.Hour).Seconds())); err != nil {
+		log.Printf("auto-apply: withdrawing attempts on closed jobs: %v", err)
+	} else if n > 0 {
+		log.Printf("auto-apply: withdrew %d undecided attempt(s) on jobs closed for 3 days", n)
+	}
+
 	store := newDBStore(pool)
 	stats, err := autoapply.Run(ctx, store, answers, sidecar, autoapply.RunOptions{
 		BatchSize:    acfg.BatchSize,

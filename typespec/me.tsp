@@ -14,6 +14,16 @@ model AgentPermissionsUpdate {
   agents_may_apply?: boolean;
 }
 
+model AutoApplySettings {
+  /** Wait for the account's approval on every auto-apply attempt, even one whose form asks nothing only the candidate can answer. */
+  confirm_each: boolean;
+}
+
+model AutoApplySettingsUpdate {
+  /** Absent reads as false. */
+  confirm_each?: boolean;
+}
+
 /** Today's AI use on the account's own model credential. No money: the plan bounds use. */
 model Usage {
   requests: int64;
@@ -38,6 +48,19 @@ op getAgentPermissions(): Data<AgentPermissions> | Problem;
 @route("/me/agent-permissions")
 @put
 op setAgentPermissions(@body body: AgentPermissionsUpdate): Data<AgentPermissions> | Problem;
+
+/** Readable with a session or an API key. */
+@useAuth(SessionOrKey)
+@tag("Account")
+@route("/me/auto-apply-settings")
+@get
+op getAutoApplySettings(): Data<AutoApplySettings> | Problem;
+
+/** Session cookie only: whether attempts are sent without a review is the person's call. */
+@tag("Account")
+@route("/me/auto-apply-settings")
+@put
+op setAutoApplySettings(@body body: AutoApplySettingsUpdate): Data<AutoApplySettings> | Problem;
 
 // With a session or an API key. Zeroes when the gateway cannot be read.
 /**

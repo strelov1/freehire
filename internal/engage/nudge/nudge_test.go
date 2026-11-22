@@ -24,6 +24,7 @@ type fakeStore struct {
 	autoApplySubmit []db.ListAutoApplySubmittedCandidatesRow
 	autoApplyBlock  []db.ListAutoApplyBlockedCandidatesRow
 	autoApplyFail   []db.ListAutoApplyFailedCandidatesRow
+	autoApplyReady  []db.ListAutoApplyReviewReadyCandidatesRow
 	recorded        []db.RecordNudgeParams
 
 	due []int64
@@ -58,6 +59,9 @@ func (s *fakeStore) ListAutoApplyBlockedCandidates(context.Context, int32) ([]db
 }
 func (s *fakeStore) ListAutoApplyFailedCandidates(context.Context, int32) ([]db.ListAutoApplyFailedCandidatesRow, error) {
 	return s.autoApplyFail, nil
+}
+func (s *fakeStore) ListAutoApplyReviewReadyCandidates(context.Context, int32) ([]db.ListAutoApplyReviewReadyCandidatesRow, error) {
+	return s.autoApplyReady, nil
 }
 func (s *fakeStore) RecordNudge(_ context.Context, arg db.RecordNudgeParams) (int64, error) {
 	for _, r := range s.recorded {

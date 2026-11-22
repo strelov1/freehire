@@ -692,6 +692,12 @@ type Handler interface {
 	//
 	// GET /me/auto-apply
 	GetAutoApplyList(ctx context.Context) (*GetAutoApplyListOK, error)
+	// GetAutoApplySettings implements getAutoApplySettings operation.
+	//
+	// Readable with a session or an API key.
+	//
+	// GET /me/auto-apply-settings
+	GetAutoApplySettings(ctx context.Context) (*GetAutoApplySettingsOK, error)
 	// GetAutofillProfile implements getAutofillProfile operation.
 	//
 	// Projected from your CV header, with the account email as a fallback — what the extension writes
@@ -2170,6 +2176,12 @@ type Handler interface {
 	//
 	// PUT /me/agent-permissions
 	SetAgentPermissions(ctx context.Context, req *AgentPermissionsUpdate) (*SetAgentPermissionsOK, error)
+	// SetAutoApplySettings implements setAutoApplySettings operation.
+	//
+	// Session cookie only: whether attempts are sent without a review is the person's call.
+	//
+	// PUT /me/auto-apply-settings
+	SetAutoApplySettings(ctx context.Context, req *AutoApplySettingsUpdate) (*SetAutoApplySettingsOK, error)
 	// SetCVAppearanceDefaults implements setCVAppearanceDefaults operation.
 	//
 	// PUT /me/cv-appearance-defaults

@@ -1450,6 +1450,19 @@ func encodeGetAutoApplyListResponse(response *GetAutoApplyListOK, w http.Respons
 	return nil
 }
 
+func encodeGetAutoApplySettingsResponse(response *GetAutoApplySettingsOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetAutofillProfileResponse(response *GetAutofillProfileOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -4369,6 +4382,19 @@ func encodeSendDirectApplyResponse(response *SendDirectApplyCreated, w http.Resp
 }
 
 func encodeSetAgentPermissionsResponse(response *SetAgentPermissionsOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeSetAutoApplySettingsResponse(response *SetAutoApplySettingsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 

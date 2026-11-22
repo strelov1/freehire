@@ -5513,6 +5513,55 @@
         ]
       }
     },
+    "/me/auto-apply-settings": {
+      "get": {
+        "operationId": "getAutoApplySettings",
+        "description": "Readable with a session or an API key.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutoApplySettings"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
     "/me/auto-apply/{queueId}/review": {
       "post": {
         "operationId": "postAutoApplyReview",
@@ -15659,6 +15708,18 @@
           "tailor_failed"
         ],
         "description": "The candidate-facing status of a live auto-apply attempt (autoapply.Status)."
+      },
+      "AutoApplySettings": {
+        "type": "object",
+        "required": [
+          "confirm_each"
+        ],
+        "properties": {
+          "confirm_each": {
+            "type": "boolean",
+            "description": "Wait for the account's approval on every auto-apply attempt, even one whose form asks nothing only the candidate can answer."
+          }
+        }
       },
       "AutoApplyUnmappedField": {
         "type": "object",
