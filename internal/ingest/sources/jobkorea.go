@@ -30,15 +30,15 @@ import (
 // schema.org JobPosting states title, employer, dates, employment type, address and, when the
 // poster gave one, a salary, but only a one-sentence summary as its description; and the frame
 // the page embeds the poster's own body in (/Recruit/GI_Read_Comt_Ifrm?Gno=<id>). The adapter
-// hydrates only postings the catalogue lacks, newest id first, and refreshes the rest by
-// identity. See providers/jobkorea.md.
+// hydrates only postings the catalogue lacks, favoring newer IDs while rotating through a
+// backlog, and refreshes the rest by identity. See providers/jobkorea.md.
 type jobkorea struct {
 	http         jobkoreaHTTP
 	limiter      waiter
 	maxNewPerRun int
 	// retryBackoff is the first pause before a refused page is asked again; it doubles.
 	retryBackoff time.Duration
-	// now is the clock the expiry check reads.
+	// now drives expiry checks and backlog selection.
 	now func() time.Time
 }
 
@@ -77,6 +77,7 @@ const (
 	// requests, 20 minutes at the pace above, inside the scheduler's default 2,400 s crawl budget
 	// beside the 21 sitemap files and the writes after the fetch.
 	jobkoreaMaxNewPerRun = 1200
+	jobkoreaBacklogLane  = 300
 )
 
 // jobkoreaZone is the time zone the site states its deadlines in, which carry no offset.
@@ -133,8 +134,8 @@ func (s jobkorea) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // FetchNew lists every posting the sitemaps name, refreshes the ones already stored, and reads
-// up to maxNewPerRun of the rest, newest id first. A posting whose page cannot be read is not
-// yielded; a later run tries again.
+// up to maxNewPerRun of the rest, including a rotating backlog window. A posting whose page
+// cannot be read is deferred to a later run.
 func (s jobkorea) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	postings, err := s.list(ctx)
 	if err != nil {
@@ -142,20 +143,19 @@ func (s jobkorea) FetchNew(ctx context.Context, _ CompanyEntry, seen func(extern
 	}
 	var jobs []Job
 	var unseen []jobkoreaPosting
-	deferred := 0
 	for _, p := range postings {
 		if seen(p.externalID()) {
 			jobs = append(jobs, Job{ExternalID: p.externalID(), URL: p.url, SeenRefresh: true})
 			continue
 		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
 		unseen = append(unseen, p)
 	}
+	// Expired and gone postings remain unseen. Reserve a moving window so a prefix of
+	// terminal or unreadable postings cannot take every slot on every run.
+	backlog := min(jobkoreaBacklogLane, s.maxNewPerRun)
+	picked := hydrationLanes(unseen, s.maxNewPerRun-backlog, backlog, s.now())
 	var answered atomic.Int64
-	read := fetchDetails(unseen, jobkoreaDetailWorkers, func(p jobkoreaPosting) (Job, bool) {
+	read := fetchDetails(picked, jobkoreaDetailWorkers, func(p jobkoreaPosting) (Job, bool) {
 		job, ok, err := s.detail(ctx, p)
 		if err != nil {
 			log.Printf("jobkorea: posting %d failed; deferring: %v", p.id, err)
@@ -166,10 +166,10 @@ func (s jobkorea) FetchNew(ctx context.Context, _ CompanyEntry, seen func(extern
 	})
 	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
 	// site reported gone or expired.
-	if len(unseen) > 0 && answered.Load() == 0 {
-		return nil, fmt.Errorf("jobkorea: requested %d posting pages and none answered", len(unseen))
+	if len(picked) > 0 && answered.Load() == 0 {
+		return nil, fmt.Errorf("jobkorea: requested %d posting pages and none answered", len(picked))
 	}
-	if deferred > 0 {
+	if deferred := len(unseen) - len(picked); deferred > 0 {
 		log.Printf("jobkorea: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
 	}
 	return append(jobs, read...), nil

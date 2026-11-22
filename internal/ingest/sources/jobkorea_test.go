@@ -223,6 +223,26 @@ func TestJobKoreaBoundsNewPostingsPerRun(t *testing.T) {
 	}
 }
 
+func TestJobKoreaBoundedRunsReachOlderPostingsBehindExpiredOnes(t *testing.T) {
+	f := &jobkoreaFake{}
+	s := newJobKoreaForTest(f)
+	s.maxNewPerRun = 1
+	now := time.Date(2026, 12, 5, 0, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+
+	jobs, err := s.Fetch(context.Background(), CompanyEntry{})
+	if err != nil || len(jobs) != 0 || len(f.gets) != 1 || f.gets[0] != "https://www.jobkorea.co.kr/Recruit/GI_Read/50398006" {
+		t.Fatalf("first run should read only the expired page: jobs=%+v requests=%v err=%v", jobs, f.gets, err)
+	}
+
+	f.gets = nil
+	now = now.Add(time.Hour)
+	jobs, err = s.Fetch(context.Background(), CompanyEntry{})
+	if err != nil || len(jobs) != 1 || jobs[0].ExternalID != "50342033" || len(f.gets) != 2 {
+		t.Fatalf("next run should hydrate only the older posting and its body: jobs=%+v requests=%v err=%v", jobs, f.gets, err)
+	}
+}
+
 func TestJobKoreaSkipsAnExpiredPosting(t *testing.T) {
 	s := newJobKoreaForTest(&jobkoreaFake{})
 	s.now = func() time.Time { return time.Date(2026, 12, 5, 0, 0, 0, 0, time.UTC) }
