@@ -45,6 +45,9 @@ func All(c HTTPClient) map[string]Source {
 			NewHRsmart(c),
 			ats.NewLever(c),
 			ats.NewAshby(c),
+			ats.NewCatchTalents(c),
+			ats.NewTalentglade(c),
+			ats.NewEmploymentHero(c),
 			// Rate-paced (pacedWorkableGetter): all boards share one metered widget host, and
 			// unpaced the run 429s. See pacer.go.
 			NewWorkable(pacedWorkableGetter(c)),

@@ -49,6 +49,16 @@ type pathPattern struct {
 var doverBoardPath = regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9-]*)/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?:/[A-Za-z0-9][A-Za-z0-9-]*)?$`)
 
 var pathPatternBoards = map[string]pathPattern{
+	"employmenthero.com": {
+		path:      regexp.MustCompile(`^/jobs/organisations/([a-z0-9]+(?:-[a-z0-9]+)*)/?$`),
+		listing:   "/jobs/organisations/%s/",
+		exactHost: true,
+	},
+	"jobboard.catch-talents.de": {
+		path:      regexp.MustCompile(`^/companies/([1-9][0-9]{0,17})(?:/jobs/[1-9][0-9]*(?:/.*)?|/(?:v2/)?apply)?/?$`),
+		listing:   "/companies/%s",
+		exactHost: true,
+	},
 	// Dover's public job-board host (see the host row above): the BOARD is the first segment
 	// alone — the company's Dover slug, the same spelling the app.dover.com apply and listing
 	// paths use — captured only when a UUID-shaped second segment proves the link names a

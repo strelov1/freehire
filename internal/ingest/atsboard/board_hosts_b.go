@@ -145,6 +145,9 @@ var atsBoardsB = []struct{ host, source, mode string }{
 	// posting link: its client is 1aeeba55-…). A bare /<Org> is a marketing shell served for ANY
 	// slug and stays declined (see pathPatternBoards).
 	{"jobs.dover.com", "dover", modePathPattern},
+	{"jobboard.catch-talents.de", "catchtalents", modePathPattern},
+	{"talentglade.com", "talentglade", modeSubdomain},
+	{"employmenthero.com", "employmenthero", modePathPattern},
 	// HigherMe: app.higherme.com is the whole product too (sign-in, the employer console, the
 	// candidate profile), and its posting URL /jobs/<id> names a POSTING, not a brand — the
 	// brand behind a posting is only in the posting's API record. Only the brand's career page,
