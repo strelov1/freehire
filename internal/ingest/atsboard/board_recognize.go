@@ -14,6 +14,9 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		return "", "", "", false
 	}
 	host := hostname(u)
+	if source, board, canonical, found := recognizeCustomCareerHost(u); found {
+		return source, board, canonical, true
+	}
 	if noBoardHosts[host] {
 		return "", "", "", false
 	}

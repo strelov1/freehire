@@ -2,8 +2,10 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -124,8 +126,29 @@ func TestSearchJobs_PaginationAtWindowBoundaryAllowed(t *testing.T) {
 	}
 }
 
+type deadlineSearcher struct {
+	deadline time.Time
+}
+
+func (s *deadlineSearcher) Search(ctx context.Context, _ search.SearchParams) (search.SearchResult, error) {
+	s.deadline, _ = ctx.Deadline()
+	return search.SearchResult{}, context.DeadlineExceeded
+}
+
+func TestSearchJobs_BoundsBackendWorkAndReportsTimeout(t *testing.T) {
+	fake := &deadlineSearcher{}
+	started := time.Now()
+	status, body := doGet(t, searchApp(fake), "/api/v1/jobs/search?q=go")
+	if status != fiber.StatusServiceUnavailable || body["error"] != "search temporarily unavailable" {
+		t.Fatalf("status = %d, body = %v, want a temporary search failure", status, body)
+	}
+	if fake.deadline.Before(started) || fake.deadline.After(time.Now().Add(8*time.Second)) {
+		t.Fatalf("search deadline = %v, want a deadline within eight seconds", fake.deadline)
+	}
+}
+
 func TestSearchJobs_BackendErrorMaps500(t *testing.T) {
-	fake := &fakeSearcher{err: context.DeadlineExceeded}
+	fake := &fakeSearcher{err: errors.New("search backend failed")}
 	app := searchApp(fake)
 	status, _ := doGet(t, app, "/api/v1/jobs/search?q=go")
 	if status != fiber.StatusInternalServerError {

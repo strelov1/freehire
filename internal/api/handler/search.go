@@ -155,11 +155,16 @@ func (h *searchHandlers) matchProfileFor(ctx context.Context, userID int64, vals
 	return skillvec.ProfileVector(profile.Skills), profile.Skills
 }
 
+const publicJobSearchTimeout = 8 * time.Second
+
 // SearchJobs runs a full-text/faceted keyword search over the jobs index. It is
 // public (unauthenticated) like the other job reads. Response: {"data": [job
 // view...], "meta": {total, limit, offset}} — results carry public_slug and never
 // the internal id.
 func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsParams) (*apigen.JobSearchPageHeaders, error) {
+	ctx, cancel := context.WithTimeout(ctx, publicJobSearchTimeout)
+	defer cancel()
+
 	vals := contractQuery(ctx)
 	userID, _ := auth.UserIDFromContext(ctx)
 	seen, seenIgnored := h.seenExclusionFor(ctx, userID, vals)
@@ -170,6 +175,9 @@ func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsPara
 		(userID != 0 && !seenIgnored && wantsParam(vals, hideSeenParam)) ||
 		(userID != 0 && !appliedIgnored && wantsParam(vals, hideAppliedCompaniesParam))
 	out, err := h.runJobSearch(ctx, vals, userID, seen, appliedFrag, match)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search temporarily unavailable")
+	}
 	if err != nil {
 		return nil, err
 	}

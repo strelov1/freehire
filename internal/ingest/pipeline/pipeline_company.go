@@ -98,12 +98,17 @@ func (r Runner) streamCompanyCanonical(ctx context.Context, e sources.CompanyEnt
 func distinctCompanySlugs(raw []sources.Job) []string {
 	names := make([]string, len(raw))
 	for i, j := range raw {
-		names[i] = j.Company
-		if j.CompanyKey != "" {
-			names[i] = j.CompanyKey
-		}
+		names[i] = companyScopeName(j)
 	}
 	return distinctSlugs(names)
+}
+
+// companyScopeName uses the employer key when a shared display name identifies several companies.
+func companyScopeName(j sources.Job) string {
+	if j.CompanyKey != "" {
+		return j.CompanyKey
+	}
+	return j.Company
 }
 
 // distinctSlugs normalizes company names and removes empty or repeated slugs.

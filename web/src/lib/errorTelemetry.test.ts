@@ -69,6 +69,53 @@ describe('error telemetry', () => {
   it('is inert without configuration', () => {
     expect(createErrorTelemetry({ service: 'freehire-web' })).toBeUndefined();
   });
+  it.each([
+    ['/jobs', '/jobs'],
+    ['/booking/example-credential', '/booking/[token]'],
+    ['/book%69ng/example-credential', '/booking/[token]'],
+  ])('tags browser events on %s with the sanitized page URL and user agent', async (path, expectedPath) => {
+    const exporter = new InMemoryLogRecordExporter();
+    const telemetry = createErrorTelemetry({
+      endpoint: 'http://localhost/v1/logs',
+      service: 'freehire-web',
+      exporter,
+    });
+    const page = new URL(`https://freehire.me${path}?q=secret&ref=token-private#fragment`);
+    vi.stubGlobal('window', {
+      location: page,
+      navigator: { userAgent: 'Mozilla/5.0 (test-agent) Chrome ExtensionBot/1.0' },
+    });
+    try {
+      const error = new Error(`appendChild defect at ${page.href}`);
+      telemetry?.capture(error);
+      await telemetry?.flush();
+      const [record] = exporter.getFinishedLogRecords();
+      if (!record) throw new Error('Expected one exported exception');
+      expect(record.attributes).toMatchObject({
+        url: `https://freehire.me${expectedPath}`,
+        user_agent: 'Mozilla/5.0 (test-agent) Chrome ExtensionBot/1.0',
+      });
+      expect(JSON.stringify(record.attributes)).not.toMatch(/example-credential|token-private|fragment/);
+    } finally {
+      vi.unstubAllGlobals();
+      await telemetry?.shutdown();
+    }
+  });
+  it('omits browser fields where no window exists (SSR)', async () => {
+    const exporter = new InMemoryLogRecordExporter();
+    const telemetry = createErrorTelemetry({
+      endpoint: 'http://localhost/v1/logs',
+      service: 'freehire-web-ssr',
+      exporter,
+    });
+    telemetry?.capture(new Error('ssr defect'));
+    await telemetry?.flush();
+    const [record] = exporter.getFinishedLogRecords();
+    if (!record) throw new Error('Expected one exported exception');
+    expect(record.attributes).not.toHaveProperty('url');
+    expect(record.attributes).not.toHaveProperty('user_agent');
+    await telemetry?.shutdown();
+  });
 });
 
 it.each(['absolute', 'same-origin'])('exports protobuf over HTTP to a %s receiver URL', async (endpointKind) => {
