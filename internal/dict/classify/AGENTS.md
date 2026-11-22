@@ -93,6 +93,14 @@ Read [Slovenian grades and fields](AGENT-REFERENCE-LANGUAGES.md#slovenian-grades
 
 Read [Turkish IT titles](AGENT-REFERENCE-LANGUAGES.md#turkish-it-titles) before work involving this topic.
 
+## Korean titles
+
+Read [Korean titles](AGENT-REFERENCE-LANGUAGES.md#korean-titles) before work involving this topic.
+
+## Vietnamese titles
+
+Read [Vietnamese titles](AGENT-REFERENCE-LANGUAGES.md#vietnamese-titles) before work involving this topic.
+
 ## Serving: dict-only
 
 Read [Serving: dict-only](AGENT-REFERENCE.md#serving-dict-only) before work involving this topic.

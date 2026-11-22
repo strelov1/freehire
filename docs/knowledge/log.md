@@ -119,3 +119,12 @@ Recorded the identity-only refresh for unreadable eFinancialCareers listings and
 shared ingest stream. Source coverage counts listed identities. The pipeline keeps their
 unreadable tally and refreshes existing open rows without rewriting posting content. When
 stream coverage is unproven it withholds every identified employer from the company sweep.
+
+## Korean and Vietnamese title dictionaries — 2026-11-22
+
+Recorded the title dictionary and role picker alias generator in the
+[catalogue concept](catalogue.md#title-classification).
+
+Vietnamese role categories now reach CV matching through rendered text. Scorer regressions
+cover exact titles, equivalent roles and multiple roles on one rendered line. Korean course
+and Vietnamese teaching and recruiting titles retain their exclusions from technical-job search.

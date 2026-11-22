@@ -4,8 +4,10 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-17T00:30:07+00:00
+  at: 2026-11-22T18:34:33+00:00
 sources:
+  - resource: ../../internal/dict/classify/AGENT-REFERENCE-LANGUAGES.md
+  - resource: ../../tools/gen-contracts/vocab.go
   - resource: ../../internal/job/job/upsert.go
   - resource: ../../internal/platform/db/queries/jobs_linkedin_identity.sql
   - resource: ../../cmd/harvest-linkedin/register.go
@@ -40,6 +42,12 @@ Postings are normalized and upserted with `(source, external_id)` as the dedup k
 Background enrichment uses `enrichment_outbox`; embedding uses `semantic_outbox`.
 Search indexing has its own drain and rebuild paths. PostgreSQL stores the
 catalogue, while Meilisearch serves search documents.
+
+## Title classification
+
+The [title dictionaries](../../internal/dict/classify/AGENT-REFERENCE-LANGUAGES.md)
+resolve role categories and seniority during ingestion. The [web contract generator](../../tools/gen-contracts/vocab.go)
+builds role picker search terms from the shared alias tables.
 
 ## Investigating a missing posting
 
