@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api-core.js';
 
 const meFeed = vi.fn();
+const markFeedSeen = vi.fn();
 const saveJob = vi.fn();
 const dismissJob = vi.fn();
 const unsaveJob = vi.fn();
@@ -12,6 +13,7 @@ const untrackApplication = vi.fn();
 vi.mock('#lib/api.js', () => ({
   api: {
     meFeed: (...a: unknown[]) => meFeed(...a),
+    markFeedSeen: (...a: unknown[]) => markFeedSeen(...a),
     saveJob: (...a: unknown[]) => saveJob(...a),
     dismissJob: (...a: unknown[]) => dismissJob(...a),
     unsaveJob: (...a: unknown[]) => unsaveJob(...a),
@@ -351,6 +353,65 @@ describe('MatchSwipe', () => {
       await fireEvent.keyDown(dlg, { key: 'ArrowLeft' });
       expect(saveJob).not.toHaveBeenCalled();
       expect(dismissJob).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('new first', () => {
+    const job = (slug: string, is_new: boolean) => ({
+      public_slug: slug,
+      title: slug.toUpperCase(),
+      company: 'Acme',
+      skills: [] as string[],
+      is_new,
+      match: { why: [], may_not_fit: [], unknown: [] },
+    });
+
+    it('badges new cards, pauses before the first rest card and posts seen once', async () => {
+      markFeedSeen.mockReset();
+      markFeedSeen.mockResolvedValue(undefined);
+      meFeed.mockResolvedValue({ data: [job('n1', true), job('r1', false)], meta: { seen_cursor: 's1' } });
+      dismissJob.mockResolvedValue(undefined);
+      render(MatchSwipe, { onClose: () => {} });
+      expect(await screen.findByText('New')).toBeTruthy();
+      expect(markFeedSeen).not.toHaveBeenCalled();
+
+      await fireEvent.click(screen.getByLabelText('Skip'));
+      expect(await screen.findByText("That's everything new")).toBeTruthy();
+      expect(screen.queryByText('R1')).toBeNull();
+      expect(markFeedSeen).toHaveBeenCalledTimes(1);
+      expect(markFeedSeen).toHaveBeenCalledWith('s1');
+
+      await fireEvent.click(screen.getByText('Show the rest'));
+      expect(await screen.findByText('R1')).toBeTruthy();
+      expect(screen.queryByText('New')).toBeNull();
+      expect(markFeedSeen).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores the card keys and hides the menu while the pause screen is up', async () => {
+      meFeed.mockResolvedValue({ data: [job('r1', false)], meta: { seen_cursor: 's1' } });
+      markFeedSeen.mockResolvedValue(undefined);
+      saveJob.mockClear();
+      dismissJob.mockClear();
+      meFeed.mockResolvedValue({ data: [job('n1', true), job('r1', false)], meta: { seen_cursor: 's1' } });
+      dismissJob.mockResolvedValue(undefined);
+      render(MatchSwipe, { onClose: () => {} });
+      await fireEvent.click(await screen.findByLabelText('Skip'));
+      await screen.findByText("That's everything new");
+      dismissJob.mockClear();
+      await fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowLeft' });
+      await fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowRight' });
+      expect(dismissJob).not.toHaveBeenCalled();
+      expect(saveJob).not.toHaveBeenCalled();
+      expect(screen.queryByLabelText(/More actions for/)).toBeNull();
+    });
+
+    it('goes straight to the cards when nothing is new', async () => {
+      markFeedSeen.mockReset();
+      meFeed.mockResolvedValue({ data: [job('r1', false)], meta: {} });
+      render(MatchSwipe, { onClose: () => {} });
+      expect(await screen.findByText('R1')).toBeTruthy();
+      expect(screen.queryByText("That's everything new")).toBeNull();
+      expect(markFeedSeen).not.toHaveBeenCalled();
     });
   });
 });

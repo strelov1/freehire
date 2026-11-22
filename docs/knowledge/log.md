@@ -107,3 +107,15 @@ The LinkedIn limiter's 2s spacing became `LINKEDIN_REQUEST_INTERVAL` (default un
 100ms..10s, invalid fails the crawl). Requests already leave through the rotating proxy with a
 new exit IP each, and 158 searches after the 429 retry met no refusal at 2s, so the per-process
 spacing, not LinkedIn, was the throughput bound. Ops lowers it in steps.
+
+## HelloWork liveness backstop — 2026-11-22
+
+Recorded the status-only backstop and its worker ownership in
+[operations](operations.md#application-evidence).
+
+## Streamed posting liveness — 2026-11-22
+
+Recorded the identity-only refresh for unreadable eFinancialCareers listings and the
+shared ingest stream. Source coverage counts listed identities. The pipeline keeps their
+unreadable tally and refreshes existing open rows without rewriting posting content. When
+stream coverage is unproven it withholds every identified employer from the company sweep.

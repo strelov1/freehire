@@ -38,6 +38,8 @@ export class FormPlan {
    *  (see `pickAttachableUpload`), not merely on this list being non-empty: an upload
    *  that exists only inside an embedded iframe is one this action can never reach. */
   uploads = $state<FramedUpload[]>([]);
+  /** A LinkedIn Easy Apply dialog is open: its resume step takes a file through its own picker. */
+  easyApply = $state(false);
 
   // Reads of the form are serialised rather than raced. A request id (the
   // `matchRequestId` pattern) was the first attempt and it deadlocked on a real
@@ -87,12 +89,14 @@ export class FormPlan {
       this.questionsSeen = 0;
       this.plan = null;
       this.uploads = [];
+      this.easyApply = false;
       this.formFields = [];
       return;
     }
     this.uploads = reply.uploads;
+    this.easyApply = reply.easyApply === true;
     this.questionsSeen = reply.fields.filter((f) => f.label.trim() !== '').length;
-    if (!showsApplicationForm(reply.fields, reply.uploads, { filled: this.formFilled })) {
+    if (!showsApplicationForm(reply.fields, reply.uploads, { filled: this.formFilled, easyApply: reply.easyApply })) {
       this.plan = null;
       this.formFields = [];
       return;

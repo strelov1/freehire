@@ -10,10 +10,11 @@ import type { LabelFill } from './protocol';
  * shows a job-alert signup meanwhile — on Roku that signup asks for a first
  * name, a last name and an email, all required, which no count of fields can
  * distinguish from a short application. The resume upload can: see
- * `extractUploads`.
+ * `extractUploads`. A LinkedIn Easy Apply dialog is the exception: LinkedIn keeps
+ * the CV itself, so the dialog is the evidence instead (see `easyApplyDialog`).
  */
-export function looksLikeApplication(uploads: { form: number }[]): boolean {
-  return uploads.length > 0;
+export function looksLikeApplication(uploads: { form: number }[], easyApply = false): boolean {
+  return easyApply || uploads.length > 0;
 }
 
 /**

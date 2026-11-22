@@ -21,7 +21,6 @@
 ![Last commit](https://img.shields.io/github/last-commit/strelov1/freehire)
 [![Stars](https://img.shields.io/github/stars/strelov1/freehire?style=social)](https://github.com/strelov1/freehire/stargazers)
 [![Contributors](https://img.shields.io/github/contributors-anon/strelov1/freehire)](https://github.com/strelov1/freehire/graphs/contributors)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/79cgB9RRfx)
 
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/ijfaechijopdlikalojadpojmpilplnj?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=4285F4)](https://chromewebstore.google.com/detail/freehire/ijfaechijopdlikalojadpojmpilplnj)
 [![Firefox Add-ons](https://img.shields.io/badge/Firefox%20Add--ons-install-FF7139?logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/firefox/addon/freehire/)
@@ -40,9 +39,13 @@
 </a>
 <a href="https://trendshift.io/repositories/55060?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-55060" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/55060" alt="strelov1%2Ffreehire | Trendshift" width="250" height="55"/></a>
 
-<!-- Datacircle's own badge, hotlinked so it always shows the current rank; scaled down
-     from 240x162 so it does not tower over the two badges beside it. -->
-<a href="https://datacircle.dev/best-full-job-posting-api"><img src="https://datacircle.dev/badge/best-full-job-posting-api/freehire.svg" alt="Datacircle's ranking of the best full job posting API providers" width="160" height="108"></a>
+<a href="https://datacircle.dev/best-full-job-posting-api"><img src="docs/assets/readme-datacircle.svg" alt="Freehire ranked #1 for job postings APIs by Datacircle in November 2026" width="250" height="54"></a>
+
+<br>
+
+<a href="https://www.linkedin.com/in/istrelov/"><img src="docs/assets/readme-linkedin.svg" alt="Follow Igor Strelov on LinkedIn" width="250" height="54"></a>
+<a href="https://x.com/strelov1"><img src="docs/assets/readme-x.svg" alt="Follow @strelov1 on X" width="250" height="54"></a>
+<a href="https://discord.gg/79cgB9RRfx"><img src="docs/assets/readme-discord.svg" alt="Join the Freehire Discord community" width="250" height="54"></a>
 
 <br>
 

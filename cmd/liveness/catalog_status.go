@@ -31,12 +31,23 @@ func catalogStatusPasses(client *http.Client) []pacedPass {
 		{"gradcracker", "www.gradcracker.com", "", regexp.MustCompile(`^/hub/[0-9]+/[a-z0-9-]+/(?:graduate-job|work-placement-internship|degree-apprenticeship)/([0-9]+)/[a-z0-9-]+/?$`), 10 * time.Second},
 		{"engage", "en-gage.net", "", regexp.MustCompile(`^/[A-Za-z0-9_-]+/work_([0-9]+)/$`), 3500 * time.Millisecond},
 		{"betterteam", "", "", regexp.MustCompile(`^/([^/]+)/?$`), 2 * time.Second},
+		{"hellowork", "www.hellowork.com", "", regexp.MustCompile(`^/fr-fr/emplois/([0-9]+)\.html$`), time.Second},
 	} {
+		probeClient := client
+		if site.source == "hellowork" && client != nil {
+			// HelloWork permits clean posting URLs. A redirect may introduce a forbidden query.
+			direct := *client
+			direct.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+			probeClient = &direct
+		}
 		passes = append(passes, pacedPass{
 			source: site.source, interval: site.interval, maxPerRun: 500,
 			check: func(ctx context.Context, c candidate) pacedVerdict {
 				u, err := url.Parse(c.url)
 				if err != nil || u.Scheme != "https" || u.User != nil || u.Fragment != "" {
+					return pacedVerdict{verdict: liveness.Uncertain}
+				}
+				if site.source == "hellowork" && (u.RawQuery != "" || u.ForceQuery) {
 					return pacedVerdict{verdict: liveness.Uncertain}
 				}
 				if site.source == "betterteam" {
@@ -58,7 +69,7 @@ func catalogStatusPasses(client *http.Client) []pacedPass {
 					return pacedVerdict{verdict: liveness.Uncertain}
 				}
 
-				return checkCatalogStatus(ctx, client, c)
+				return checkCatalogStatus(ctx, probeClient, c)
 			},
 		})
 	}
