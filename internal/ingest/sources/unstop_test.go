@@ -162,7 +162,13 @@ func TestUnstopFetchFailsOnPageError(t *testing.T) {
 func TestUnstopFetchAcceptsMeasuredListingCountGap(t *testing.T) {
 	fake := newUnstopFake(t)
 	rows := make([]unstopPosting, 640)
+	template := unstopPosting{
+		Title: "Engineer", Details: "<p>Job details</p>", SEOURL: "https://unstop.com/internships/example",
+		Status: "LIVE", Visibility: "public", RegnOpen: new(1), Subtype: "internships",
+	}
+	template.Organisation.Name = "Acme"
 	for i := range rows {
+		rows[i] = template
 		rows[i].ID = i + 1
 	}
 	var page unstopPage
@@ -176,6 +182,32 @@ func TestUnstopFetchAcceptsMeasuredListingCountGap(t *testing.T) {
 	fake.pages[unstopURL("internships", 1)] = string(body)
 	if _, err := NewUnstop(fake).Fetch(context.Background(), CompanyEntry{}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestUnstopFetchFailsWhenOneFeedIsUnreadable(t *testing.T) {
+	fake := newUnstopFake(t)
+	fake.pages[unstopURL("internships", 1)] = `{"data":{"total":1,"last_page":1,"data":[
+		{"id":21,"title":"Engineer","status":"LIVE","visibility":"public","regn_open":1}
+	]}}`
+	if _, err := NewUnstop(fake).Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Fatal("a readable jobs feed cannot justify sweeping an unreadable internship feed")
+	}
+}
+
+func TestUnstopPreservesAnUnreadablePostingIdentity(t *testing.T) {
+	fake := newUnstopFake(t)
+	fake.pages[unstopURL("internships", 1)] = `{"data":{"total":2,"last_page":1,"data":[
+		{"id":21,"title":"Engineer","status":"LIVE","visibility":"public","regn_open":1},
+		{"id":22,"title":"Engineer","details":"<p>Body</p>","seo_url":"https://unstop.com/internships/t-22",
+		 "status":"LIVE","visibility":"public","regn_open":1,"organisation":{"name":"Acme"}}
+	]}}`
+	jobs, err := NewUnstop(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job := unstopByID(t, jobs)["21"]; !job.Unreadable {
+		t.Fatalf("expected an unreadable marker for the listed internship, got %+v", job)
 	}
 }
 
@@ -199,7 +231,7 @@ func TestUnstopFetchFailsOnEmptyFeed(t *testing.T) {
 func TestUnstopSkipsPostingsItCannotStandBehind(t *testing.T) {
 	good := unstopPosting{
 		ID: 1, Title: "T", Details: "<p>Body</p>", SEOURL: "https://unstop.com/jobs/t-1",
-		Status: "LIVE", Visibility: "public", RegnOpen: 1,
+		Status: "LIVE", Visibility: "public", RegnOpen: new(1),
 	}
 	good.Organisation.Name = "Acme"
 	if _, ok := good.toJob(); !ok {
@@ -209,7 +241,7 @@ func TestUnstopSkipsPostingsItCannotStandBehind(t *testing.T) {
 		"no body":         func(p *unstopPosting) { p.Details = "" },
 		"no employer":     func(p *unstopPosting) { p.Organisation.Name = " " },
 		"not live":        func(p *unstopPosting) { p.Status = "DRAFT" },
-		"registration":    func(p *unstopPosting) { p.RegnOpen = 0 },
+		"registration":    func(p *unstopPosting) { p.RegnOpen = new(0) },
 		"not public":      func(p *unstopPosting) { p.Visibility = "private" },
 		"no posting link": func(p *unstopPosting) { p.SEOURL = "" },
 	} {

@@ -73,7 +73,7 @@ type unstopPosting struct {
 	SEOURL       string `json:"seo_url"`
 	Status       string `json:"status"`
 	Visibility   string `json:"visibility"`
-	RegnOpen     int    `json:"regn_open"`
+	RegnOpen     *int   `json:"regn_open"`
 	Subtype      string `json:"subtype"`
 	ApprovedDate string `json:"approved_date"`
 	EndDate      string `json:"end_date"`
@@ -117,6 +117,7 @@ func (u unstop) feed(ctx context.Context, feed string) ([]Job, error) {
 	var jobs []Job
 	seen := map[int]bool{}
 	var total int
+	unreadable := 0
 	for page := 1; ; page++ {
 		if page > unstopMaxPages {
 			return nil, fmt.Errorf("unstop: %s: no last page after %d pages", feed, unstopMaxPages)
@@ -134,6 +135,9 @@ func (u unstop) feed(ctx context.Context, feed string) ([]Job, error) {
 			seen[p.ID] = true
 			if job, ok := p.toJob(); ok {
 				jobs = append(jobs, job)
+			} else if !p.unavailable() {
+				unreadable++
+				jobs = append(jobs, unreadableDetail(strconv.Itoa(p.ID), p.SEOURL, p.Organisation.Name))
 			}
 		}
 		if page >= resp.Data.LastPage {
@@ -146,7 +150,14 @@ func (u unstop) feed(ctx context.Context, feed string) ([]Job, error) {
 	if missing := total - len(seen); missing*100 > total*unstopCountTolerance {
 		return nil, fmt.Errorf("unstop: %s: read %d of %d reported postings", feed, len(seen), total)
 	}
+	if unreadable > 0 && unreadable == len(jobs) {
+		return nil, fmt.Errorf("unstop: %s: none of %d listed open postings could be read", feed, unreadable)
+	}
 	return jobs, nil
+}
+
+func (p unstopPosting) unavailable() bool {
+	return (p.Status != "" && p.Status != "LIVE") || (p.RegnOpen != nil && *p.RegnOpen == 0) || p.Visibility == "private"
 }
 
 // unstopWorkModes maps the posting's own work-arrangement enum. on_field (sales visits and the
@@ -165,8 +176,9 @@ func (p unstopPosting) toJob() (Job, bool) {
 	title := strings.Join(strings.Fields(p.Title), " ")
 	company := strings.Join(strings.Fields(p.Organisation.Name), " ")
 	description := sanitizeHTML(p.Details)
-	if title == "" || company == "" || p.SEOURL == "" || p.Status != "LIVE" || p.RegnOpen != 1 ||
-		p.Visibility != "public" || strings.TrimSpace(textFromHTML(description)) == "" {
+	if p.ID == 0 || title == "" || company == "" || p.SEOURL == "" || p.Status != "LIVE" ||
+		p.RegnOpen == nil || *p.RegnOpen != 1 || (p.Visibility != "public" && p.Visibility != "both") ||
+		strings.TrimSpace(textFromHTML(description)) == "" {
 		return Job{}, false
 	}
 	job := Job{
