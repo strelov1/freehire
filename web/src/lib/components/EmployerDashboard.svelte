@@ -21,7 +21,6 @@
   import States from './States.svelte';
   import EmployerApplications from './EmployerApplications.svelte';
   import EmployerQuestionsEditor from './EmployerQuestionsEditor.svelte';
-  import EmployerActivity from './EmployerActivity.svelte';
   import EmployerTeam from './EmployerTeam.svelte';
   import EmployerVacancyRow from './EmployerVacancyRow.svelte';
   import TokenInput from './facets/TokenInput.svelte';
@@ -373,7 +372,6 @@
       </form>
     {/if}
     <EmployerTeam {onLeft} {recruiter} />
-    <EmployerActivity />
   {:else}
     <TabStrip {tabs} active={tab} label={s.vacancyTabsLabel} panelId={PANEL_ID} />
     <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)}>

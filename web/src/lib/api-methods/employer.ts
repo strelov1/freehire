@@ -109,19 +109,13 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
   async function listEmployerApplications(filter: {
     job?: string;
     stage?: EmployerApplicationStage;
-    search?: string;
     limit: number;
     offset: number;
   }): Promise<Slice<EmployerApplication> & { stageCounts: Record<string, number> }> {
     const q = new URLSearchParams({ limit: String(filter.limit), offset: String(filter.offset) });
     if (filter.job) q.set('job', filter.job);
     if (filter.stage) q.set('stage', filter.stage);
-    const page = filter.search
-      ? await request<EmployerApplicationsPage>(
-          `/api/v1/employer/applications/search?${q}`,
-          jsonBody('POST', { query: filter.search } satisfies components['schemas']['EmployerApplicationSearch']),
-        )
-      : await request<EmployerApplicationsPage>(`/api/v1/employer/applications?${q}`);
+    const page = await request<EmployerApplicationsPage>(`/api/v1/employer/applications?${q}`);
     return { ...toSlice(page, filter.offset), stageCounts: page.meta.stage_counts };
   }
 
@@ -142,18 +136,6 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
       `/api/v1/employer/applications/${id}/stage`,
       jsonBody('POST', { stage, message } satisfies components['schemas']['EmployerApplicationMove']),
     );
-  }
-
-  async function updateEmployerApplicationWorkspace(
-    id: number,
-    patch: components['schemas']['EmployerApplicationWorkspace'],
-  ): Promise<EmployerApplication> {
-    return requestData<EmployerApplication>(`/api/v1/employer/applications/${id}/workspace`, jsonBody('PATCH', patch));
-  }
-
-  async function listEmployerActivity(before?: number): Promise<components['schemas']['EmployerActivity'][]> {
-    const suffix = before ? `?before=${before}` : '';
-    return requestData<components['schemas']['EmployerActivity'][]>(`/api/v1/employer/activity${suffix}`);
   }
 
   // ── The company team ──────────────────────────────────────────────────────
@@ -229,8 +211,6 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     listEmployerApplications,
     employerApplicationCVUrl,
     moveEmployerApplication,
-    updateEmployerApplicationWorkspace,
-    listEmployerActivity,
     getEmployerTeam,
     inviteEmployerTeamMember,
     withdrawEmployerTeamInvitation,

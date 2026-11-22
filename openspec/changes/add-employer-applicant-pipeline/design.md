@@ -100,21 +100,3 @@ even after the request's context ends, and the connection is closed if releasing
   separate so list queries never read it.
 - **Mis-click emails.** A rejection sent by mistake has reached the candidate; the employer
   can move it back (their own stage), which corrects the tracking but not the letter.
-
-## Inbox search and private workspace
-
-Search compares case-insensitive literal text against the applicant email,
-candidate message, and stored form answers and labels. It applies before the
-page window. The page total matches all filters, and the counters continue to
-describe every stage for the selected vacancy. The search text travels in a
-POST body. Inbox and activity responses carry private, no-store caching.
-
-The viewed timestamp records the team's first explicit review and is independent
-of the hiring stage. The employer team shares one private note field per
-application. Updating that field does not change applicant tracking or send
-email. Stage changes retain the existing tracking and email behavior.
-
-Migration 0296 adds the fields and activity log. Existing delivered applications
-start with an empty note and no recorded review. Their stages and CV snapshots
-are preserved. Applications from before CV archiving remain readable and display
-that the original was available only by email.

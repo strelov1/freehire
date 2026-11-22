@@ -7,7 +7,7 @@
   import { formatDate } from '#lib/utils.js';
   import { messages } from './EmployerApplications.messages';
   import type { EmployerApplication, EmployerApplicationStage, Job } from '#lib/types.js';
-  import { Badge, Button, EmptyState, Input, LoadMore, cn } from '#lib/ui/index.js';
+  import { Badge, Button, EmptyState, LoadMore, cn } from '#lib/ui/index.js';
   import { Paginator } from '#lib/paginated.svelte.js';
   import { pillClass, pillCountClass } from './facets/pill';
   import States from './States.svelte';
@@ -33,8 +33,6 @@
   });
 
   let job = $state('');
-  let searchText = $state('');
-  let search = $state('');
   let stage = $state<EmployerApplicationStage | ''>('');
   let counts = $state<Record<string, number>>({});
 
@@ -44,9 +42,9 @@
   // under the vacancy filter, applied only while that filter is still the one shown.
   const pager = new Paginator<EmployerApplication>(
     async (limit, offset) => {
-      const filter = { job, stage: stage || undefined, search };
+      const filter = { job, stage: stage || undefined };
       const page = await api.listEmployerApplications({ ...filter, limit, offset });
-      if (filter.job === job && (filter.stage ?? '') === stage && filter.search === search) counts = page.stageCounts;
+      if (filter.job === job && (filter.stage ?? '') === stage) counts = page.stageCounts;
       return page;
     },
     { limit: PAGE, keyOf: (a) => a.id },
@@ -54,7 +52,6 @@
   $effect(() => {
     void job;
     void stage;
-    void search;
     pager.status = 'loading';
     void pager.start();
   });
@@ -66,9 +63,6 @@
   let openId = $state<number | null>(null);
   let target = $state<EmployerApplicationStage>('new');
   let message = $state('');
-  let notes = $state('');
-  let savingWorkspace = $state(false);
-  let workspaceFeedback = $state<{ text: string; error: boolean } | null>(null);
   let moving = $state(false);
   // The last move's outcome, shown above the list rather than inside the row: a row moved
   // out of the stage filter disappears, and the outcome (above all "the email failed") must
@@ -84,37 +78,13 @@
     openId = a.id;
     target = a.stage;
     message = '';
-    notes = a.employer_notes ?? '';
-    workspaceFeedback = null;
-  }
-
-  async function saveWorkspace(a: EmployerApplication, markViewed: boolean) {
-    if (savingWorkspace || moving) return;
-    savingWorkspace = true;
-    workspaceFeedback = null;
-    try {
-      const updated = await api.updateEmployerApplicationWorkspace(
-        a.id,
-        markViewed ? { mark_viewed: true } : { employer_notes: notes },
-      );
-      pager.items = pager.items.map((item) =>
-        item.id === a.id ? { ...item, employer_notes: updated.employer_notes, viewed_at: updated.viewed_at } : item,
-      );
-      if (openId === a.id && !markViewed) workspaceFeedback = { text: s.notesSaved, error: false };
-      announce(markViewed ? s.viewed : s.notesSaved);
-    } catch {
-      if (openId === a.id) workspaceFeedback = { text: s.workspaceError, error: true };
-      announce(s.workspaceError, 'assertive');
-    } finally {
-      savingWorkspace = false;
-    }
   }
 
   async function move(a: EmployerApplication) {
-    if (moving || savingWorkspace || target === a.stage) return;
+    if (moving || target === a.stage) return;
     moving = true;
     outcome = null;
-    const sent = { job, stage, search };
+    const sent = { job, stage };
     try {
       const moved = await api.moveEmployerApplication(
         a.id,
@@ -122,7 +92,7 @@
         NOTIFIES.has(target) ? message.trim() || undefined : undefined,
       );
       const next = moved.application;
-      const filtersUnchanged = sent.job === job && sent.stage === stage && sent.search === search;
+      const filtersUnchanged = sent.job === job && sent.stage === stage;
       if (filtersUnchanged && stage && next.stage !== stage) {
         // It left the list shown: reload it, so the counts are fresh and the next page's
         // offset still lines up (a hole in the loaded window would skip an applicant).
@@ -165,33 +135,6 @@
 <div class="flex flex-col gap-4">
   <p class="max-w-2xl text-sm text-muted-foreground">{s.intro}</p>
 
-  <form
-    class="flex max-w-xl items-end gap-2"
-    onsubmit={(event) => {
-      event.preventDefault();
-      search = searchText.trim();
-    }}
-  >
-    <label class="flex min-w-0 flex-1 flex-col gap-1">
-      <span class="text-sm font-medium">{s.searchLabel}</span>
-      <Input type="search" bind:value={searchText} maxlength={200} placeholder={s.searchPlaceholder} />
-    </label>
-    <Button type="submit" variant="outline" size="sm">{s.search}</Button>
-    {#if search}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onclick={() => {
-          searchText = '';
-          search = '';
-        }}
-      >
-        {s.clearSearch}
-      </Button>
-    {/if}
-  </form>
-
   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div class="flex flex-wrap gap-1.5" role="group" aria-label={s.stageLabel}>
       {#each [['', s.allStages, allCount], ...STAGES.map( (st) => [st, s.stages[st], counts[st] ?? 0] )] as [value, label, n] (value)}
@@ -230,7 +173,7 @@
   {:else if pager.status === 'error'}
     <States state="error" message={s.loadError} />
   {:else if pager.items.length === 0}
-    <EmptyState title={job || stage || search ? s.emptyFiltered : s.empty}>
+    <EmptyState title={job || stage ? s.emptyFiltered : s.empty}>
       {#snippet icon()}<Inbox class="size-6" />{/snippet}
     </EmptyState>
   {:else}
@@ -256,7 +199,6 @@
                 })}
               </span>
             </span>
-            {#if !a.viewed_at}<Badge variant="outline">{s.unviewed}</Badge>{/if}
             <Badge variant={a.stage === 'new' ? 'brand' : a.stage === 'rejected' ? 'outline' : 'secondary'}>
               {s.stages[a.stage]}
             </Badge>
@@ -305,52 +247,6 @@
                 {/if}
               </div>
 
-              <div class="flex flex-wrap items-center gap-2">
-                {#if a.viewed_at}
-                  <span class="text-xs text-muted-foreground">{s.viewed}</span>
-                {:else}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={savingWorkspace || moving}
-                    onclick={() => saveWorkspace(a, true)}
-                  >
-                    {s.markViewed}
-                  </Button>
-                {/if}
-              </div>
-
-              <form
-                class="flex max-w-xl flex-col gap-2"
-                onsubmit={(event) => {
-                  event.preventDefault();
-                  void saveWorkspace(a, false);
-                }}
-              >
-                <label class="flex flex-col gap-1">
-                  <span class="text-sm font-medium">{s.privateNotes}</span>
-                  <textarea
-                    bind:value={notes}
-                    rows="3"
-                    maxlength={4000}
-                    class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
-                  ></textarea>
-                </label>
-                <span class="text-xs text-muted-foreground">{s.privateNotesHint}</span>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  size="sm"
-                  class="w-fit"
-                  disabled={savingWorkspace || moving || notes === (a.employer_notes ?? '')}>{s.saveNotes}</Button
-                >
-              </form>
-              {#if workspaceFeedback}
-                <p class={cn('text-sm', workspaceFeedback.error ? 'text-destructive' : 'text-brand-strong')}>
-                  {workspaceFeedback.text}
-                </p>
-              {/if}
-
               <form
                 class="flex max-w-xl flex-col gap-3 rounded-lg border border-border p-3"
                 onsubmit={(e) => {
@@ -381,12 +277,7 @@
                     <span class="text-xs text-muted-foreground">{s.messageHint}</span>
                   </label>
                 {/if}
-                <Button
-                  type="submit"
-                  size="sm"
-                  class="w-fit"
-                  disabled={moving || savingWorkspace || target === a.stage}
-                >
+                <Button type="submit" size="sm" class="w-fit" disabled={moving || target === a.stage}>
                   {moving ? s.saving : s.save}
                 </Button>
               </form>
