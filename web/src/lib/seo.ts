@@ -3,6 +3,8 @@
 // crawlers and Google Jobs see structured data in the initial HTML.
 
 import { countryLabel } from './facets';
+import { filtersFromParams, filtersToParams } from './facetModel';
+import { parsePage } from './pagination';
 import type { Company, Job, JobCard } from './types';
 
 export const SITE = 'freehire';
@@ -152,6 +154,27 @@ export function companiesPageTitle(total: number | undefined): string {
  *  transient search failure must not be spelled the same way as an empty company. */
 export function listingRobots(total: number | undefined): string | undefined {
   return total === 0 ? 'noindex, follow' : undefined;
+}
+
+/** Canonical and robots for the /jobs feed at `url`.
+ *
+ *  A filtered feed is canonical to itself, because Chrome's Share button (and other
+ *  share sheets) hand out the canonical URL, not the address bar: pointing every
+ *  filtered view at `/jobs` made a shared search arrive with no filters. Facet
+ *  combinations stay out of the index through `noindex, follow` instead. The filters
+ *  are re-serialized, so tracking params (utm_*) neither count as a filter nor leak
+ *  into the shared link. */
+export function jobsFeedSeo(url: Pick<URL, 'origin' | 'search'>): { canonical: string; robots?: string } {
+  const raw = new URLSearchParams(url.search);
+  const params = filtersToParams(filtersFromParams(raw));
+  const filtered = params.size > 0;
+  const pageNumber = parsePage(raw);
+  if (pageNumber > 1) params.set('page', String(pageNumber));
+  const qs = params.toString();
+  return {
+    canonical: `${url.origin}/jobs${qs ? `?${qs}` : ''}`,
+    robots: filtered ? 'noindex, follow' : undefined,
+  };
 }
 
 /** "<total> <title> jobs" — a collection's heading with its live open-job

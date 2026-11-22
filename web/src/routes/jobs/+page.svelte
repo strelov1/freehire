@@ -2,7 +2,7 @@
   import { page } from '$app/state';
   import JobsView from '#lib/components/JobsView.svelte';
   import Seo from '#lib/components/Seo.svelte';
-  import { jsonLdScript, siteOrganizationJsonLd } from '#lib/seo.js';
+  import { jobsFeedSeo, jsonLdScript, siteOrganizationJsonLd } from '#lib/seo.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -10,8 +10,9 @@
   const origin = $derived(page.url.origin);
   // Each paginated page is canonical to itself: pointing them all at `/jobs` would
   // declare the deeper rows duplicates of the first twenty, which is how the rows
-  // the page links to stop being indexed.
-  const canonical = $derived(data.pageNumber > 1 ? `${origin}/jobs?page=${data.pageNumber}` : `${origin}/jobs`);
+  // the page links to stop being indexed. Filters too, see jobsFeedSeo. The feed
+  // rewrites its filters with replaceState, which moves page.shallow.url, not page.url.
+  const seo = $derived(jobsFeedSeo(page.shallow?.url ?? page.url));
   // Page 2 onward says so, or every page competes for one SERP entry under one title.
   const title = $derived(
     data.pageNumber > 1
@@ -28,7 +29,8 @@
 <Seo
   {title}
   description="Search 4.9M+ tech jobs indexed straight from company career boards — deduplicated and tagged by stack, seniority and location. Free, open source, no walls."
-  {canonical}
+  canonical={seo.canonical}
+  robots={seo.robots}
 />
 
 <svelte:head>
