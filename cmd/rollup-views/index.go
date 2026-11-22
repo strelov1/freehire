@@ -9,10 +9,10 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// viewCountChunk is how many documents one index task updates. Meilisearch copies the
-// task context (the whole counts map) for every document it edits, so a task's cost grows
-// with the square of its size; 2k keeps the fixed per-task cost small without that.
-const viewCountChunk = 2_000
+// viewCountChunk is how many documents one index task updates. Every task pays the same
+// ~40 s of index post-processing however small it is, so a day's ~1M counts go in ~20 large
+// tasks (~1.5 MB of JSON each) rather than hundreds of small ones.
+const viewCountChunk = 50_000
 
 // minIndexedViews and viewStepGrowth set the steps of viewStep: nothing below 5 views,
 // then a new step every 25% of growth (5, 7, 8, 10, 13, 16, 20, 24, 30, ...).

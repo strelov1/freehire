@@ -3,34 +3,26 @@ package search
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/meilisearch/meilisearch-go"
 )
 
-// setViewCount reads the figure from the task context by document id, so one task carries a
-// whole chunk. retireDescVectors goes first, as in markJobs.
-const setViewCount = retireDescVectors +
-	`let n = context.counts[doc.id.to_string()]; if n != () { doc.view_count = n; }`
-
 // SetViewCounts writes view_count into documents already in the index, leaving text, facets
 // and vectors alone. It bypasses search_outbox because rebuilding a whole document for one
-// counter floods the drain. As in markJobs, an unindexed id is skipped, not created.
+// counter floods the drain. A partial update with skipCreation skips an unindexed id instead
+// of creating a skeleton, like markJobs, but without edit-by-function: that engine copied the
+// whole counts map into every document it edited, so a task had to stay small, and each task
+// paid ~40 s of fixed index post-processing (2026-11-22: 542 tasks of 2k, 5.3 h a day).
 func (c *Client) SetViewCounts(ctx context.Context, counts map[int64]int64) error {
 	if len(counts) == 0 {
 		return nil
 	}
-	ids := make([]int64, 0, len(counts))
-	byID := make(map[string]any, len(counts))
+	docs := make([]map[string]any, 0, len(counts))
 	for id, n := range counts {
-		ids = append(ids, id)
-		byID[strconv.FormatInt(id, 10)] = n
+		docs = append(docs, map[string]any{primaryKey: id, "view_count": n})
 	}
-	task, err := c.facet.UpdateDocumentsByFunctionWithContext(ctx, &meilisearch.UpdateDocumentByFunctionRequest{
-		Filter:   In("id", ids),
-		Function: setViewCount,
-		Context:  map[string]any{"counts": byID},
-	})
+	pk := primaryKey
+	task, err := c.facet.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk, SkipCreation: true})
 	if err != nil {
 		return fmt.Errorf("search: update view counts: %w", err)
 	}
