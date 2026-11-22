@@ -402,6 +402,11 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// catalogue is the search's leading ~63 pages (closed projects follow it); each new
 		// posting's body is read from its page's schema.org JobPosting. Paced, see levtech.go.
 		NewLevtech(pacedHTMLGetter(c, levtechRequestInterval, levtechRequestBurst)),
+		// Authentic Jobs: a design and developer job board on WordPress / WP Job Manager,
+		// boardless. robots.txt bars query strings and sets a 3 s crawl delay, so the catalogue is
+		// read through the plugin's query-free listing endpoint and the REST item route, paced.
+		// See authenticjobs.go.
+		NewAuthenticJobs(c),
 		// EDJOIN: California's K-12 education board, multi-company aggregator enumerated by
 		// job type (board) over one central index, hydrating bodies from each posting page's
 		// schema.org block. The board is a job type and not a district on purpose — see
