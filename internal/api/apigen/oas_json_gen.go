@@ -19537,14 +19537,21 @@ func (s *CompanyInsight) encodeFields(e *jx.Encoder) {
 		e.FieldStart("growth_30d")
 		e.Int64(s.Growth30d)
 	}
+	{
+		if s.HiringStartedAt.Set {
+			e.FieldStart("hiring_started_at")
+			s.HiringStartedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
+		}
+	}
 }
 
-var jsonFieldsNameOfCompanyInsight = [5]string{
+var jsonFieldsNameOfCompanyInsight = [6]string{
 	0: "company_slug",
 	1: "company_name",
 	2: "open_now",
 	3: "open_prev_30d",
 	4: "growth_30d",
+	5: "hiring_started_at",
 }
 
 // Decode decodes CompanyInsight from json.
@@ -19615,6 +19622,16 @@ func (s *CompanyInsight) Decode(d *jx.Decoder) error {
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"growth_30d\"")
+			}
+		case "hiring_started_at":
+			if err := func() error {
+				s.HiringStartedAt.Reset()
+				if err := s.HiringStartedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"hiring_started_at\"")
 			}
 		default:
 			return d.Skip()

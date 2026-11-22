@@ -225,6 +225,9 @@ func (h *statsHandlers) InsightsCompanies(ctx context.Context, params apigen.Ins
 			OpenPrev30d: int64(r.OpenCountPrev),
 			Growth30d:   int64(r.Growth),
 		}
+		if r.HiringStartedAt.Valid {
+			data[i].HiringStartedAt = apigen.NewOptDateTime(r.HiringStartedAt.Time)
+		}
 	}
 	return &apigen.CompaniesAnswer{Data: data, Meta: apigen.CompaniesMeta{Sort: sort, MinOpen: int64(minOpen), Limit: int64(limit)}}, nil
 }

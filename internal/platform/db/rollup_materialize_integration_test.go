@@ -240,13 +240,13 @@ func materializeInsightsCompanyStats(q *Queries) func(context.Context) (int64, e
 
 func materializeInsightsCompanyGrowth(q *Queries) func(context.Context, pgtype.Timestamptz) (int64, error) {
 	return func(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
-		rows, err := q.ComputeInsightsCompanyGrowth(ctx, prevTs)
+		rows, err := q.ComputeInsightsCompanyGrowth(ctx, ComputeInsightsCompanyGrowthParams{PrevTs: prevTs, QuietTs: pgtype.Timestamptz{Time: prevTs.Time.AddDate(0, 0, -90), Valid: true}})
 		if err != nil {
 			return 0, err
 		}
 		values := make([]CopyInsightsCompanyGrowthParams, len(rows))
 		for i, row := range rows {
-			values[i] = CopyInsightsCompanyGrowthParams(row)
+			values[i] = CopyInsightsCompanyGrowthParams{CompanySlug: row.CompanySlug, OpenCount: row.OpenCount, OpenCountPrev: row.OpenCountPrev, HiringStartedAt: row.HiringStartedAt}
 		}
 		return q.CopyInsightsCompanyGrowth(ctx, values)
 	}
