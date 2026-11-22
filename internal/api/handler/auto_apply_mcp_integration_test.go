@@ -265,7 +265,7 @@ func TestJobAutoApplyRetryAndCancelRoutes(t *testing.T) {
 	api.Delete("/jobs/:slug/auto-apply", mw.cookie, newContract(contractHandlers{assistantHandlers: h}))
 	do := func(method, path string) int {
 		req := httptest.NewRequestWithContext(context.Background(), method, path, nil)
-		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		resp, err := app.Test(req)
 		if err != nil {
 			t.Fatal(err)
@@ -312,7 +312,7 @@ func TestAutoApplySettings_OnlyTheBrowserMaySetIt(t *testing.T) {
 			strings.NewReader(`{"confirm_each":true}`))
 		req.Header.Set("Content-Type", "application/json")
 		if withCookie {
-			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		}
 		if bearer != "" {
 			req.Header.Set("Authorization", "Bearer "+bearer)

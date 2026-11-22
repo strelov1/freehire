@@ -73,6 +73,8 @@
     } catch {
       settingError = s.confirmEach.saveError;
     } finally {
+      // Again on completion: a read started mid-save may have seen the pre-save value.
+      settingGeneration += 1;
       settingSaving = false;
     }
   }
