@@ -325,3 +325,20 @@ func TestApplicationMoves_RunTheMoveOnItsOwnTransaction(t *testing.T) {
 		t.Fatalf("stage after a successful run = %+v, %v; want interview", a.Stage, err)
 	}
 }
+
+func TestInboxRepository_PreservesStageWhenUpdatingWorkspace(t *testing.T) {
+	f := newInboxFixture(t)
+	ctx := context.Background()
+	id := f.apply(t, f.vacancy, f.candidate, "cv", true)
+	notes := "Discuss scheduling"
+	if err := f.repo.UpdateWorkspace(ctx, f.other, id, true, &notes); !errors.Is(err, directapply.ErrNotFound) {
+		t.Fatalf("other employer updated workspace: %v", err)
+	}
+	if err := f.repo.UpdateWorkspace(ctx, f.employer, id, true, &notes); err != nil {
+		t.Fatalf("UpdateWorkspace: %v", err)
+	}
+	app, err := f.repo.Get(ctx, f.employer, id)
+	if err != nil || app.ViewedAt == nil || app.EmployerNotes != notes || app.Stage != directapply.StageNew {
+		t.Fatalf("workspace = %+v, %v; want viewed and notes saved with the original stage", app, err)
+	}
+}
