@@ -46,6 +46,11 @@ const (
 // Probe Job", empty body, no countries), which sits in the sitemaps like any other.
 const dynamitejobsTestEmployer = "DJ Audit Probe"
 
+// dynamitejobsTestEmployerSlug is that probe's company slug in its URL. The listing drops it
+// before it counts as new: a run whose only new candidate was the probe read nothing and failed
+// as "listed 1 new postings, read none" (production, 2026-11-21, every run).
+const dynamitejobsTestEmployerSlug = "djauditprobe"
+
 // NewDynamiteJobs builds the Dynamite Jobs adapter: sitemap fetches the sitemaps, pages the
 // posting pages (rate-paced, see dynamitejobsRequestInterval).
 func NewDynamiteJobs(sitemap XMLGetter, pages HTMLGetter) Source {
@@ -79,6 +84,8 @@ func (d dynamitejobs) FetchNew(ctx context.Context, ce CompanyEntry, seen func(e
 	for _, u := range urls {
 		id := dynamitejobsJobID(u)
 		switch {
+		case strings.HasPrefix(id, dynamitejobsTestEmployerSlug+"/"):
+			continue
 		case seen(id):
 			jobs = append(jobs, Job{ExternalID: id, URL: u, Company: ce.Company, SeenRefresh: true})
 		case len(fresh) < budget:

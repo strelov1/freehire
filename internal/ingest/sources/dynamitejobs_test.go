@@ -202,6 +202,22 @@ func TestDynamiteJobsSkipsTheSitesOwnProbePosting(t *testing.T) {
 	}
 }
 
+func TestDynamiteJobsProbeAloneIsNotAFailedCrawl(t *testing.T) {
+	probe := dynamiteBase + "/company/djauditprobe/remote-job/pentest-probe-job"
+	fake := (&routedHTTP{}).
+		route("jobs-of-company.xml", dynamiteURLSet(dynamiteJobA, probe)).
+		route("/sitemap/index.xml", `<sitemapindex><sitemap><loc>`+dynamiteBase+`/sitemap/jobs-of-company.xml</loc></sitemap></sitemapindex>`).
+		route("/company/djauditprobe/", dynamiteDetailHTML("Pentest Probe Job, Remote Job", "DJ Audit Probe", `[]`, ""))
+	seen := func(id string) bool { return id == "acme/account-executive" }
+	jobs, err := NewDynamiteJobs(fake, fake).(dynamitejobs).FetchNew(context.Background(), CompanyEntry{Company: "Dynamite Jobs"}, seen)
+	if err != nil {
+		t.Fatalf("a run whose only new candidate is the site's probe must not fail: %v", err)
+	}
+	if len(jobs) != 1 || !jobs[0].SeenRefresh {
+		t.Fatalf("got %+v, want only the stored posting's liveness refresh", jobs)
+	}
+}
+
 func TestDynamiteJobsJobID(t *testing.T) {
 	for in, want := range map[string]string{
 		dynamiteJobA:                                 "acme/account-executive",
