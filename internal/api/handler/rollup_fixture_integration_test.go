@@ -42,13 +42,13 @@ func materializeInsightsRolePulse(q *db.Queries) func(context.Context, db.Comput
 
 func materializeInsightsCompanyGrowth(q *db.Queries) func(context.Context, pgtype.Timestamptz) (int64, error) {
 	return func(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
-		rows, err := q.ComputeInsightsCompanyGrowth(ctx, prevTs)
+		rows, err := q.ComputeInsightsCompanyGrowth(ctx, db.ComputeInsightsCompanyGrowthParams{PrevTs: prevTs, QuietTs: pgtype.Timestamptz{Time: prevTs.Time.AddDate(0, 0, -90), Valid: true}})
 		if err != nil {
 			return 0, err
 		}
 		values := make([]db.CopyInsightsCompanyGrowthParams, len(rows))
 		for i, row := range rows {
-			values[i] = db.CopyInsightsCompanyGrowthParams(row)
+			values[i] = db.CopyInsightsCompanyGrowthParams{CompanySlug: row.CompanySlug, OpenCount: row.OpenCount, OpenCountPrev: row.OpenCountPrev, HiringStartedAt: row.HiringStartedAt}
 		}
 		return q.CopyInsightsCompanyGrowth(ctx, values)
 	}

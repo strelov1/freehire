@@ -6131,7 +6131,7 @@ Companies ranked by hiring activity.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `sort` | string | no | Rank by openings or by growth. |
+| `sort` | string | no | Rank by openings (open), growth (growth, -growth) or list companies that just started hiring (new). |
 | `min_open` | string | no | Ignore companies below this many open roles. |
 | `limit` | string | no | How many rows. |
 

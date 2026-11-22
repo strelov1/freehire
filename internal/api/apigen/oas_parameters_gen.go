@@ -8738,7 +8738,7 @@ func decodeHideCompanyFeedbackParams(args [1]string, argsEscaped bool, r *http.R
 
 // InsightsCompaniesParams is parameters of insightsCompanies operation.
 type InsightsCompaniesParams struct {
-	// Rank by openings or by growth.
+	// Rank by openings (open), growth (growth, -growth) or list companies that just started hiring (new).
 	Sort OptString `json:",omitempty,omitzero"`
 	// Ignore companies below this many open roles.
 	MinOpen OptString `json:",omitempty,omitzero"`

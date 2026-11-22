@@ -41,8 +41,8 @@ INSERT INTO insights_velocity_daily (day, facet_kind, facet_value, added, remove
 VALUES (sqlc.arg('day'), sqlc.arg('facet_kind'), sqlc.arg('facet_value'), sqlc.arg('added'), sqlc.arg('removed'));
 
 -- name: CopyInsightsCompanyGrowth :copyfrom
-INSERT INTO insights_company_growth (company_slug, open_count, open_count_prev)
-VALUES (sqlc.arg('company_slug'), sqlc.arg('open_count'), sqlc.arg('open_count_prev'));
+INSERT INTO insights_company_growth (company_slug, open_count, open_count_prev, hiring_started_at)
+VALUES (sqlc.arg('company_slug'), sqlc.arg('open_count'), sqlc.arg('open_count_prev'), sqlc.arg('hiring_started_at'));
 
 -- name: CopyInsightsCompanyResponse :copyfrom
 INSERT INTO insights_company_response (company_slug, applications, answered, median_reply_days)
