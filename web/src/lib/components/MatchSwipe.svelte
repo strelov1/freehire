@@ -2,9 +2,11 @@
   import { onMount } from 'svelte';
   import { Heart, RotateCcw, X } from '@lucide/svelte';
   import { api } from '#lib/api.js';
-  import { isPlanRefusal } from '#lib/api-core.js';
+  import { ApiError, isPlanRefusal } from '#lib/api-core.js';
   import type { FeedCard } from '#lib/types.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
+  import { announce } from '#lib/announce.svelte.js';
+  import FeedToast from './FeedToast.svelte';
   import SwipeCard from './SwipeCard.svelte';
   import SwipeCardBody from './SwipeCardBody.svelte';
   import { FLY_MS, SwipeGesture } from './swipeGesture.svelte.js';
@@ -39,8 +41,20 @@
     }
   }
 
+  const toastCopy = {
+    save: "Didn't save — try again",
+    dismiss: "Didn't skip — try again",
+    undo: "Didn't undo — try again",
+  };
+  let toast = $state<{ message: string; id: number } | null>(null);
+  function fail(message: string) {
+    toast = { message, id: (toast?.id ?? 0) + 1 };
+    announce(message, 'assertive');
+  }
+  const describe = (c: FeedCard) => `${c.title} at ${c.company || 'unknown company'}`;
+
   // Fling the card off, drop it after the fly-off and write optimistically. A failed write
-  // puts the card back so nothing is lost silently.
+  // puts the card back so nothing is lost silently; a 404 (job gone) leaves it dropped.
   async function judge(action: 'save' | 'dismiss') {
     const card = current;
     if (!card || gesture.exiting) return;
@@ -49,50 +63,76 @@
     const write = action === 'save' ? api.saveJob(card.public_slug) : api.dismissJob(card.public_slug);
     // Settled either way so a rejection is handled below, not as an unhandled one here.
     const written = write.then(
-      () => true,
-      () => false,
+      () => 'ok' as const,
+      (e) => (e instanceof ApiError && e.status === 404 ? ('gone' as const) : ('failed' as const)),
     );
     await new Promise((r) => setTimeout(r, FLY_MS));
     cards = cards.filter((c) => c !== card);
     gesture.settle();
-    if (!(await written)) {
-      // Restore only if not since undone (undo clears `last`), or the card would be queued twice.
-      if (last?.card === card) {
-        cards = [card, ...cards];
-        last = null;
-      }
+    const outcome = await written;
+    if (outcome === 'failed') {
+      // Restore unless undo already put it back, or the card would be queued twice.
+      if (!cards.includes(card)) cards = [card, ...cards];
+      if (last?.card === card) last = null;
+      fail(toastCopy[action]);
       return;
     }
+    if (outcome === 'gone') {
+      if (last?.card === card) last = null; // undo must not bring a gone job back
+      if (cards.length === 0) await load();
+      return;
+    }
+    const verb = action === 'save' ? 'Saved' : 'Skipped';
+    announce(cards[0] ? `${verb}. Next: ${describe(cards[0])}` : `${verb}.`);
     if (cards.length === 0) await load();
   }
 
+  // The card returns at once; if the write fails it leaves again and Undo stays available.
   async function undo() {
     if (!last || gesture.exiting) return;
     const { card, action } = last;
     last = null;
-    await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
     cards = [card, ...cards];
+    try {
+      await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
+    } catch {
+      cards = cards.filter((c) => c !== card);
+      last = { card, action };
+      fail(toastCopy.undo);
+      return;
+    }
+    announce(`Undone. ${card.title} is back.`);
   }
 
-  // ← skip, → save, U undo, Esc back to the feed; never with a modifier.
+  // ← skip, → save, U undo, Esc back to the feed. Bound to the overlay root, so it only
+  // fires with focus inside it (or on body, when nothing is focused); fields, menus and
+  // nested dialogs keep their own keys.
   function onKey(e: KeyboardEvent) {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented) return;
+    const t = e.target as HTMLElement | null;
+    if (t?.closest('input,textarea,select,[contenteditable],[role=menu],[role^=menuitem]')) return;
+    const dialog = t?.closest('[role=dialog]');
+    if (dialog && dialog !== e.currentTarget) return;
     if (e.key === 'ArrowLeft') judge('dismiss');
     else if (e.key === 'ArrowRight') judge('save');
     else if (e.key.toLowerCase() === 'u') undo();
     else if (e.key === 'Escape') onClose();
+    else return;
+    if (e.key.startsWith('Arrow')) e.preventDefault();
   }
 
   onMount(load);
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={(e) => e.target === document.body && onKey(e)} />
 
 <div
   class="fixed inset-0 z-50 flex flex-col bg-background text-foreground"
   role="dialog"
   aria-modal="true"
   aria-labelledby="match-swipe-title"
+  tabindex="-1"
+  onkeydown={onKey}
   {@attach focusTrap()}
 >
   <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-safe">
@@ -127,6 +167,7 @@
       <button
         type="button"
         aria-label="Skip"
+        aria-keyshortcuts="ArrowLeft"
         class="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card text-destructive shadow-md transition hover:bg-accent active:scale-95"
         onclick={() => judge('dismiss')}
       >
@@ -135,6 +176,7 @@
       <button
         type="button"
         aria-label="Undo last"
+        aria-keyshortcuts="U"
         class="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-md transition hover:bg-accent active:scale-95 disabled:opacity-40"
         disabled={!last}
         onclick={undo}
@@ -144,12 +186,20 @@
       <button
         type="button"
         aria-label="Save"
+        aria-keyshortcuts="ArrowRight"
         class="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card text-brand shadow-md transition hover:bg-accent active:scale-95"
         onclick={() => judge('save')}
       >
         <Heart class="size-7" />
       </button>
     </footer>
+
+    <p class="hidden shrink-0 pb-3 text-center text-xs text-muted-foreground md:block">
+      <kbd class="rounded border border-border px-1">←</kbd> skip ·
+      <kbd class="rounded border border-border px-1">→</kbd> save ·
+      <kbd class="rounded border border-border px-1">U</kbd> undo ·
+      <kbd class="rounded border border-border px-1">Esc</kbd> close
+    </p>
   {:else if paywalled}
     <div class="flex flex-1 items-center justify-center"><MatchesUpgrade price={null} /></div>
   {:else if loading}
@@ -171,3 +221,9 @@
     </div>
   {/if}
 </div>
+
+{#if toast}
+  {#key toast.id}
+    <FeedToast class="mb-28" message={toast.message} onClose={() => (toast = null)} />
+  {/key}
+{/if}

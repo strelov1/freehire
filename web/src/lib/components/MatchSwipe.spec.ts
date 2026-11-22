@@ -1,12 +1,24 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api-core.js';
 
 const meFeed = vi.fn();
 const saveJob = vi.fn();
+const dismissJob = vi.fn();
+const unsaveJob = vi.fn();
+const undismissJob = vi.fn();
 vi.mock('#lib/api.js', () => ({
-  api: { meFeed: (...a: unknown[]) => meFeed(...a), saveJob: (...a: unknown[]) => saveJob(...a), plans: vi.fn() },
+  api: {
+    meFeed: (...a: unknown[]) => meFeed(...a),
+    saveJob: (...a: unknown[]) => saveJob(...a),
+    dismissJob: (...a: unknown[]) => dismissJob(...a),
+    unsaveJob: (...a: unknown[]) => unsaveJob(...a),
+    undismissJob: (...a: unknown[]) => undismissJob(...a),
+    plans: vi.fn(),
+  },
 }));
+const announce = vi.fn();
+vi.mock('#lib/announce.svelte.js', () => ({ announce: (...a: unknown[]) => announce(...a) }));
 vi.mock('./JobMatch.svelte', async () => {
   const stub = await import('../../../vitest-stubs/JobMatchMarker.svelte');
   return { default: stub.default };
@@ -62,5 +74,92 @@ describe('MatchSwipe', () => {
     await fireEvent(group, ev('pointermove', 120));
     await fireEvent(group, ev('pointerup', 120));
     expect(saveJob).toHaveBeenCalledWith('drag-job');
+  });
+
+  describe('actions and keys', () => {
+    const mk = (slug: string, title: string) => ({
+      public_slug: slug,
+      title,
+      company: 'Acme',
+      skills: [] as string[],
+      match: { why: ['Go'], may_not_fit: [], unknown: [] },
+    });
+    async function open() {
+      meFeed.mockResolvedValue({ data: [mk('a-job', 'A Job'), mk('b-job', 'B Job')] });
+      saveJob.mockResolvedValue(undefined);
+      dismissJob.mockResolvedValue(undefined);
+      unsaveJob.mockResolvedValue(undefined);
+      render(MatchSwipe, { onClose: () => {} });
+      await screen.findByLabelText('Job: A Job at Acme');
+      return screen.getByRole('dialog');
+    }
+    const shown = (t: string) => vi.waitFor(() => expect(screen.getByLabelText(`Job: ${t} at Acme`)).toBeTruthy());
+    const undoBtn = () => screen.getByLabelText('Undo last') as HTMLButtonElement;
+    beforeEach(() => {
+      announce.mockClear();
+      saveJob.mockReset();
+      dismissJob.mockReset();
+      unsaveJob.mockReset();
+    });
+
+    it('ArrowRight saves and announces the next card', async () => {
+      const dlg = await open();
+      await fireEvent.keyDown(dlg, { key: 'ArrowRight' });
+      expect(saveJob).toHaveBeenCalledWith('a-job');
+      await shown('B Job');
+      expect(announce).toHaveBeenCalledWith('Saved. Next: B Job at Acme');
+    });
+
+    it('a failed skip puts the card back with a toast and an assertive announce', async () => {
+      const dlg = await open();
+      dismissJob.mockRejectedValue(new ApiError(500, 'boom'));
+      await fireEvent.keyDown(dlg, { key: 'ArrowLeft' });
+      expect(await screen.findByText("Didn't skip — try again")).toBeTruthy();
+      await shown('A Job');
+      expect(announce).toHaveBeenCalledWith("Didn't skip — try again", 'assertive');
+    });
+
+    it('a 404 on save drops the card without a toast and disables Undo', async () => {
+      const dlg = await open();
+      saveJob.mockRejectedValue(new ApiError(404, 'gone'));
+      await fireEvent.keyDown(dlg, { key: 'ArrowRight' });
+      await shown('B Job');
+      await vi.waitFor(() => expect(undoBtn().disabled).toBe(true));
+      expect(screen.queryByText(/try again/)).toBeNull();
+    });
+
+    it('a failed undo takes the card away again, keeps Undo and toasts', async () => {
+      const dlg = await open();
+      await fireEvent.keyDown(dlg, { key: 'ArrowRight' });
+      await shown('B Job');
+      unsaveJob.mockRejectedValue(new ApiError(500, 'boom'));
+      await fireEvent.keyDown(dlg, { key: 'u' });
+      expect(await screen.findByText("Didn't undo — try again")).toBeTruthy();
+      await shown('B Job');
+      expect(undoBtn().disabled).toBe(false);
+    });
+
+    it('undo announces the card is back', async () => {
+      const dlg = await open();
+      await fireEvent.keyDown(dlg, { key: 'ArrowRight' });
+      await shown('B Job');
+      await fireEvent.keyDown(dlg, { key: 'U' });
+      await shown('A Job');
+      await vi.waitFor(() => expect(announce).toHaveBeenCalledWith('Undone. A Job is back.'));
+    });
+
+    it('ignores modifiers, repeats and fields', async () => {
+      const dlg = await open();
+      await fireEvent.keyDown(dlg, { key: 'ArrowRight', ctrlKey: true });
+      await fireEvent.keyDown(dlg, { key: 'ArrowRight', repeat: true });
+      const input = document.createElement('input');
+      dlg.appendChild(input);
+      await fireEvent.keyDown(input, { key: 'ArrowRight' });
+      const item = document.createElement('div');
+      item.setAttribute('role', 'menuitem');
+      dlg.appendChild(item);
+      await fireEvent.keyDown(item, { key: 'ArrowRight' });
+      expect(saveJob).not.toHaveBeenCalled();
+    });
   });
 });
