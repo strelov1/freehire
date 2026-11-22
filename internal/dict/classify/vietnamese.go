@@ -65,7 +65,7 @@ var vietnameseTechCategoryTable = []aliasEntry{
 	{"kien truc su phan mem", "architecture"},
 	{"thiet ke vi mach", "hardware"},
 	{"thiet ke mach", "hardware"},
-	{"ky su dien tu dong", "industrial_engineering"}, // automation, not electronics
+	{"ky su dien tu dong hoa", "industrial_engineering"}, // Require the full automation compound.
 	{"ky su dien tu", "hardware"},
 	{"ky su vien thong", "telecommunications_engineering"},
 	{"ha tang vien thong", "telecommunications_engineering"},

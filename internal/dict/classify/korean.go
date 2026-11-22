@@ -24,8 +24,8 @@ import (
 // koreanCategoryTable lists the Korean category aliases in precedence order: the technical block, then the other professions.
 var koreanCategoryTable = slices.Concat(koreanCategoryVetoes, koreanTechCategoryTable, koreanGeneralCategoryTable)
 
-// Contract employee contains the pharmacist alias, but describes the contract only.
-var koreanCategoryNoise = strings.NewReplacer("계약사원", " ")
+// Mask compounds that contain unrelated role aliases for pharmacists or nail services.
+var koreanCategoryNoise = strings.NewReplacer("계약사원", " ", "썸네일", " ")
 
 // Reject non-job listings before interpreting the subject they name.
 var koreanCategoryVetoes = []aliasEntry{

@@ -204,6 +204,21 @@ func TestVietnameseTablesLeaveOtherLanguagesAlone(t *testing.T) {
 	}
 }
 
+func TestVietnameseElectronicsAndAutomation(t *testing.T) {
+	for _, tc := range []struct{ title, want string }{
+		{"Kỹ Sư Điện Tử - Đồng Nai", "hardware"},
+		{"Ky Su Dien Tu - Dong Nai", "hardware"},
+		{"Kỹ Sư Điện Tự Động Hóa", "industrial_engineering"},
+	} {
+		if got := Parse(tc.title).Category; got != tc.want {
+			t.Errorf("Parse(%q).Category = %q, want %q", tc.title, got, tc.want)
+		}
+		if got := Categories(tc.title); !slices.Equal(got, []string{tc.want}) {
+			t.Errorf("Categories(%q) = %v, want [%s]", tc.title, got, tc.want)
+		}
+	}
+}
+
 func TestCategories_VietnameseRoleSpans(t *testing.T) {
 	for _, tc := range []struct {
 		text string

@@ -111,6 +111,25 @@ func TestCategories_KoreanContractEmployees(t *testing.T) {
 	}
 }
 
+func TestKoreanThumbnailAndNailServices(t *testing.T) {
+	for _, tc := range []struct{ title, want string }{
+		{"유튜브 썸네일 제작", ""},
+		{"웹디자이너 (썸네일 제작)", "design"},
+		{"썸네일 제작 / 네일아티스트", "personal_services"},
+	} {
+		if got := Parse(tc.title).Category; got != tc.want {
+			t.Errorf("Parse(%q).Category = %q, want %q", tc.title, got, tc.want)
+		}
+		var want []string
+		if tc.want != "" {
+			want = []string{tc.want}
+		}
+		if got := Categories(tc.title); !slices.Equal(got, want) {
+			t.Errorf("Categories(%q) = %v, want %v", tc.title, got, want)
+		}
+	}
+}
+
 func TestIsTech_Korean(t *testing.T) {
 	for _, title := range []string{
 		"[유닛블랙] 백엔드 개발자",
