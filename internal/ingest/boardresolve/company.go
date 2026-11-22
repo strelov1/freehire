@@ -24,20 +24,18 @@ func (r *Resolver) ResolveCompany(ctx context.Context, website string) (source, 
 	seen := map[string]bool{website: true}
 	for i := 0; i < len(queue) && i < 8; i++ {
 		p := queue[i]
+		if multiEmployerIndex(p.url) {
+			continue
+		}
 		base, err := url.Parse(p.url)
 		if err != nil || (base.Scheme != "https" && base.Scheme != "http") || base.Hostname() == "" || base.User != nil {
 			continue
 		}
-		var body string
-		final := p.url
-		if resolved, ok := r.http.(interface {
-			GetTextResolved(context.Context, string) (string, string, error)
-		}); ok {
-			body, final, err = resolved.GetTextResolved(ctx, p.url)
-		} else {
-			body, err = r.http.GetText(ctx, p.url)
-		}
+		body, final, err := r.fetchPage(ctx, p.url)
 		if err != nil {
+			continue
+		}
+		if final != p.url && multiEmployerIndex(final) {
 			continue
 		}
 		base, err = url.Parse(final)
