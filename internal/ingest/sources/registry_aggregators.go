@@ -313,6 +313,10 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// posting's page carries the rest. The site refuses a plain client, so production reaches
 		// it through the Scrapling tier (scraplingtier.go). See glints.go.
 		NewGlints(c),
+		// VietnamWorks: Vietnam's largest job board, listed from the search API its own frontend
+		// calls and hydrating each new posting's body from the flight stream its page inlines.
+		// Served over plain HTTP. See vietnamworks.go.
+		NewVietnamworks(c),
 		// XING Jobs: the DACH professional network's job board, enumerated from its gzip job
 		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
 		// See xing.go.

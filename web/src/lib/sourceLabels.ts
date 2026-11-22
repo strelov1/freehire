@@ -21,6 +21,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   jobstash: 'JobStash',
   globalpayments: 'Global Payments',
   usajobs: 'USAJobs',
+  vietnamworks: 'VietnamWorks',
   whatjobs: 'WhatJobs',
   ukgready: 'UKG Ready',
   devglobaljobs: 'Dev Global Jobs',

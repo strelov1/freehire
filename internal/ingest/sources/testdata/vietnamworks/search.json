@@ -1,0 +1,128 @@
+{
+ "meta": {
+  "code": 200,
+  "nbHits": 5,
+  "nbPages": 1,
+  "hitsPerPage": 100
+ },
+ "data": [
+  {
+   "jobId": 2125488,
+   "jobTitle": "Senior Data Engineer",
+   "jobUrl": "https://www.vietnamworks.com/senior-data-engineer-1793269107067400675-2125488-jv",
+   "companyName": "Home Credit Vietnam - Explore Your Dream Team",
+   "isAnonymous": false,
+   "approvedOn": "2026-10-29T17:18:27+07:00",
+   "expiredOn": "2026-11-28T23:59:59+07:00",
+   "workingLocations": [
+    {
+     "cityName": "Ho Chi Minh"
+    }
+   ],
+   "typeWorkingId": 1,
+   "groupJobFunctionsV3": {
+    "groupJobFunctionV3Id": 5
+   },
+   "isSalaryVisible": true,
+   "salaryMin": 1,
+   "salaryMax": 1,
+   "salaryCurrency": "USD",
+   "salaryPeriodId": 1
+  },
+  {
+   "jobId": 2126329,
+   "jobTitle": "Sales Engineer ",
+   "jobUrl": "https://www.vietnamworks.com/sales-engineer-1793359123824611749-2126329-jv",
+   "companyName": "CÔNG TY TNHH VERSIGENT VIỆT NAM",
+   "isAnonymous": false,
+   "approvedOn": "2026-10-30T18:18:43+07:00",
+   "expiredOn": "2026-11-29T23:59:59+07:00",
+   "workingLocations": [
+    {
+     "cityName": "Hung Yen"
+    },
+    {
+     "cityName": "Hai Duong"
+    }
+   ],
+   "typeWorkingId": 6,
+   "groupJobFunctionsV3": {
+    "groupJobFunctionV3Id": 21
+   },
+   "isSalaryVisible": false,
+   "salaryMin": 0,
+   "salaryMax": 0,
+   "salaryCurrency": "USD",
+   "salaryPeriodId": 1
+  },
+  {
+   "jobId": 2119084,
+   "jobTitle": "Head of E-commerce",
+   "jobUrl": "https://www.vietnamworks.com/head-of-e-commerce-2119084-jv",
+   "companyName": "Vietnamworks' Client",
+   "isAnonymous": true,
+   "approvedOn": "2026-11-19T16:14:21+07:00",
+   "expiredOn": "2026-12-19T23:59:59+07:00",
+   "workingLocations": [
+    {
+     "cityName": "Ho Chi Minh"
+    }
+   ],
+   "typeWorkingId": 1,
+   "groupJobFunctionsV3": {
+    "groupJobFunctionV3Id": 21
+   },
+   "isSalaryVisible": true,
+   "salaryMin": 2500,
+   "salaryMax": 3500,
+   "salaryCurrency": "USD",
+   "salaryPeriodId": 1
+  },
+  {
+   "jobId": 2133213,
+   "jobTitle": "財務會計總監",
+   "jobUrl": "",
+   "companyName": "CÔNG TY TNHH ALLIED CIRCUIT MEIKO VIỆT NAM",
+   "isAnonymous": false,
+   "approvedOn": "2026-11-19T17:20:29+07:00",
+   "expiredOn": "2026-12-19T23:59:59+07:00",
+   "workingLocations": [
+    {
+     "cityName": "Hoa Binh"
+    }
+   ],
+   "typeWorkingId": 1,
+   "groupJobFunctionsV3": {
+    "groupJobFunctionV3Id": 2
+   },
+   "isSalaryVisible": true,
+   "salaryMin": 55000000,
+   "salaryMax": 70000000,
+   "salaryCurrency": "VND",
+   "salaryPeriodId": 1
+  },
+  {
+   "jobId": 2125488,
+   "jobTitle": "Senior Data Engineer",
+   "jobUrl": "https://www.vietnamworks.com/senior-data-engineer-1793269107067400675-2125488-jv",
+   "companyName": "Home Credit Vietnam - Explore Your Dream Team",
+   "isAnonymous": false,
+   "approvedOn": "2026-10-29T17:18:27+07:00",
+   "expiredOn": "2026-11-28T23:59:59+07:00",
+   "workingLocations": [
+    {
+     "cityName": "Ho Chi Minh"
+    }
+   ],
+   "typeWorkingId": 1,
+   "groupJobFunctionsV3": {
+    "groupJobFunctionV3Id": 5
+   },
+   "isSalaryVisible": true,
+   "salaryMin": 1,
+   "salaryMax": 1,
+   "salaryCurrency": "USD",
+   "salaryPeriodId": 1
+  }
+ ]
+}
