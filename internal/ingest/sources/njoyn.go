@@ -76,6 +76,9 @@ const (
 	// cold board converges over runs (CGI's ~3,000 postings in six) instead of spending one run
 	// past its deadline on pages it then cannot save.
 	njoynMaxNewPerBoard = 500
+	// njoynListingMaxAttempts is how many times one listing page is asked for when the answer
+	// carries no results table (see njoynListingAttempts).
+	njoynListingMaxAttempts = 3
 )
 
 // njoynBoard is a parsed "<tenant>/<site>/<clid>" board.
@@ -232,6 +235,27 @@ func sortNjoynNewestFirst(rows []njoynRow) {
 	sort.SliceStable(rows, func(i, j int) bool { return njoynIDKey(rows[i].id) > njoynIDKey(rows[j].id) })
 }
 
+// njoynListingAttempts fetches one listing page, asking again — up to njoynListingMaxAttempts
+// times in all — when the answer is a page without the results table. Through the rotating
+// proxy every request leaves from a new address, and now and then one is served something other
+// than the listing (measured 2026-11-20..22: about every second run lost one of its 61 pages
+// that way, on a different page each time, and the same page read fine when asked again). Every
+// other failure, the site's refusal included, is returned at once: asking again does not change
+// a refusal, it extends it.
+func njoynListingAttempts(ctx context.Context, get HTMLGetter, link string) (rows []njoynRow, at, of int, err error) {
+	for attempt := 1; ; attempt++ {
+		root, err := get.GetHTML(ctx, link)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		rows, at, of, err = njoynListingPage(root)
+		if !errors.Is(err, errNjoynNoListing) || attempt == njoynListingMaxAttempts {
+			return rows, at, of, err
+		}
+		log.Printf("njoyn: %s served no results table (attempt %d of %d); asking again", link, attempt, njoynListingMaxAttempts)
+	}
+}
+
 // njoynList walks the listing to the last page its pager states. A page that fails, a page
 // that adds nothing before the last, the page count moving mid-walk, or the cap all fail the
 // crawl rather than returning part of the board.
@@ -240,11 +264,7 @@ func njoynList(ctx context.Context, get HTMLGetter, b njoynBoard) ([]njoynRow, e
 	listed := map[string]bool{}
 	last := -1
 	for page := 1; page <= njoynMaxPages; page++ {
-		root, err := get.GetHTML(ctx, b.listingURL(page))
-		if err != nil {
-			return nil, err
-		}
-		rows, at, of, err := njoynListingPage(root)
+		rows, at, of, err := njoynListingAttempts(ctx, get, b.listingURL(page))
 		if err != nil {
 			return nil, fmt.Errorf("page %d: %w", page, err)
 		}
@@ -288,7 +308,7 @@ func njoynListingPage(root *html.Node) (rows []njoynRow, at, of int, err error) 
 	}
 	table := firstByClass(root, "table-result-search")
 	if table == nil {
-		return nil, 0, 0, fmt.Errorf("no results table")
+		return nil, 0, 0, errNjoynNoListing
 	}
 	walk(table, func(n *html.Node) bool {
 		if n.Type != html.ElementNode || n.Data != "tr" {
@@ -426,6 +446,8 @@ func njoynPlaces(places schemaPlaces) (string, []string) {
 var (
 	// errNjoynRefused is the site's refusal of this client (see the type comment).
 	errNjoynRefused = errors.New("the site refused this client (XWP10022 or Radware's bot wall)")
+	// errNjoynNoListing is a listing page without the results table.
+	errNjoynNoListing = errors.New("no results table")
 	// errNjoynNoPosting is a posting page with no JobPosting or no body.
 	errNjoynNoPosting = errors.New("the page carries no posting")
 )

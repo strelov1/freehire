@@ -321,3 +321,50 @@ func TestNjoynClientsHostIsTheClientsOwnBoard(t *testing.T) {
 		t.Errorf("the client's own board failed validation: %v", err)
 	}
 }
+
+// flakyListing serves a page that is not the listing for the first bad answers to one URL,
+// then the real page: what the rotating proxy does now and then to one of a board's pages.
+type flakyListing struct {
+	*routedHTTP
+	match string
+	bad   int
+	asked int
+}
+
+func (f *flakyListing) GetHTML(ctx context.Context, url string) (*html.Node, error) {
+	if strings.Contains(url, f.match) {
+		f.asked++
+		if f.asked <= f.bad {
+			return html.Parse(strings.NewReader("<html><body><p>Something else</p></body></html>"))
+		}
+	}
+	return f.routedHTTP.GetHTML(ctx, url)
+}
+
+func TestNjoynListingAsksAgainForAPageWithoutTheResultsTable(t *testing.T) {
+	fake := &flakyListing{routedHTTP: cgiBoard(t), match: "pn=2", bad: 1}
+	jobs, err := testNjoyn(fake).FetchNew(context.Background(), cgiEntry, func(string) bool { return true })
+	if err != nil {
+		t.Fatalf("one bad answer failed the crawl: %v", err)
+	}
+	if len(jobs) != 5 || fake.asked != 2 {
+		t.Errorf("got %d jobs asking page 2 %d times, want the board's 5 after asking twice", len(jobs), fake.asked)
+	}
+}
+
+func TestNjoynListingFailsWhenEveryAttemptMissesTheTable(t *testing.T) {
+	fake := &flakyListing{routedHTTP: cgiBoard(t), match: "pn=2", bad: njoynListingMaxAttempts}
+	_, err := testNjoyn(fake).FetchNew(context.Background(), cgiEntry, func(string) bool { return true })
+	if !errors.Is(err, errNjoynNoListing) || fake.asked != njoynListingMaxAttempts {
+		t.Errorf("err = %v after %d attempts, want errNjoynNoListing after %d", err, fake.asked, njoynListingMaxAttempts)
+	}
+}
+
+func TestNjoynListingDoesNotAskAgainAfterARefusal(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("pn=1", njoynFixture(t, "cgi_listing_page1.html")).
+		route("pn=2", njoynFixture(t, "cgi_refused.html"))
+	if _, err := testNjoyn(fake).FetchNew(context.Background(), cgiEntry, func(string) bool { return true }); !errors.Is(err, errNjoynRefused) || fake.calls != 2 {
+		t.Errorf("err = %v after %d requests, want the refusal after 2", err, fake.calls)
+	}
+}
