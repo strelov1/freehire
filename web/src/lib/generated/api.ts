@@ -12890,6 +12890,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "query": "candidate@example.com"
+                 *     }
+                 */
                 "application/json": components["schemas"]["EmployerApplicationSearch"];
             };
         };
@@ -13023,6 +13028,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "mark_viewed": true
+                 *     }
+                 */
                 "application/json": components["schemas"]["EmployerApplicationWorkspace"];
             };
         };

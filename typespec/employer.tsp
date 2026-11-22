@@ -374,6 +374,7 @@ model EmployerApplicationSearch {
 /** Search delivered applications before pagination. An unknown stage returns 400. */
 @summary("Search applications sent to your vacancies.")
 @tag("Employer")
+@opExample(#{ parameters: #{ body: #{ query: "candidate@example.com" } } })
 @route("/employer/applications/search")
 @post
 op searchEmployerApplications(
@@ -399,6 +400,7 @@ model EmployerApplicationWorkspace {
 
 @summary("Mark an application reviewed or save private notes.")
 @tag("Employer")
+@opExample(#{ parameters: #{ id: "42", body: #{ mark_viewed: true } } })
 @route("/employer/applications/{id}/workspace")
 @patch
 op updateEmployerApplicationWorkspace(

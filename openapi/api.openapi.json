@@ -3357,6 +3357,9 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/EmployerApplicationSearch"
+              },
+              "example": {
+                "query": "candidate@example.com"
               }
             }
           }
@@ -3558,6 +3561,9 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/EmployerApplicationWorkspace"
+              },
+              "example": {
+                "mark_viewed": true
               }
             }
           }
