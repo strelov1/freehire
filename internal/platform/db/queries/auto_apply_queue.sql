@@ -340,6 +340,25 @@ WITH deleted AS (
 )
 SELECT id FROM deleted;
 
+-- name: CancelAutoApplyEntriesForClosedJobs :execrows
+-- Withdraws every undecided attempt whose job closed more than closed_seconds ago, the way
+-- CancelAutoApplyEntry does for one: delete, and record `cancelled` with the reason. Such an
+-- entry otherwise waits for a review nobody can act on and keeps counting as one. The grace
+-- period lets a closure that flaps back open keep its attempt. An approved entry stays: the
+-- candidate asked for it to be sent. An uncertain submission stays for CancelAutoApplyEntry's
+-- reason.
+WITH deleted AS (
+    DELETE FROM auto_apply_queue q
+    USING jobs j
+    WHERE j.id = q.job_id
+      AND j.closed_at < now() - make_interval(secs => sqlc.arg(closed_seconds)::bigint)
+      AND q.review_decision IS NULL
+      AND q.submit_uncertain_at IS NULL
+    RETURNING q.id, q.user_id, q.job_id
+)
+INSERT INTO auto_apply_events (user_id, job_id, queue_id, kind, detail)
+SELECT user_id, job_id, id, 'cancelled', '{"reason":"job_closed"}'::jsonb FROM deleted;
+
 -- name: ListAutoApplyEntries :many
 -- The caller's live attempts, newest first, with what a status derivation and a list row
 -- need. last_event_at is when anything last happened to the pair, which is what an agent
