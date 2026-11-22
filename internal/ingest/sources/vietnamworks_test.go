@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -218,27 +219,31 @@ func TestVietnamworksBudgetDefersTheRest(t *testing.T) {
 	}
 }
 
-func TestVietnamworksUnreadablePostingIsSkipped(t *testing.T) {
-	f := newVietnamworksFake(t)
-	f.errs = map[string]error{vwITURL: errors.New("timeout")}
-	jobs, err := newTestVietnamworks(f).Fetch(context.Background(), CompanyEntry{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := vwByID(jobs, vwITID); ok || len(jobs) != 1 {
-		t.Errorf("an unreadable page must be skipped alone: %+v", jobs)
-	}
-}
-
-func TestVietnamworksPageWithoutABodyIsSkipped(t *testing.T) {
-	f := newVietnamworksFake(t)
-	f.pages[vwITURL] = vietnamworksFixture(t, "detail_empty.html")
-	jobs, err := newTestVietnamworks(f).Fetch(context.Background(), CompanyEntry{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := vwByID(jobs, vwITID); ok {
-		t.Error("a posting with no body must not be stored")
+func TestVietnamworksUnreadableDetailKeepsListingIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"transport failure", errors.New("timeout")},
+		{"missing body", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newVietnamworksFake(t)
+			if tc.err != nil {
+				f.errs = map[string]error{vwITURL: tc.err}
+			} else {
+				f.pages[vwITURL] = vietnamworksFixture(t, "detail_empty.html")
+			}
+			jobs, err := newTestVietnamworks(f).Fetch(context.Background(), CompanyEntry{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			job, ok := vwByID(jobs, vwITID)
+			if !ok || !job.Unreadable || job.SeenRefresh || job.Description != "" ||
+				job.URL != vwITURL || job.Company != "Home Credit Vietnam - Explore Your Dream Team" {
+				t.Errorf("unreadable posting = %+v, want a marker with the listing identity", job)
+			}
+		})
 	}
 }
 
@@ -265,8 +270,17 @@ func TestVietnamworksDetailReadsOnlyItsRecord(t *testing.T) {
 				t.Fatal(err)
 			}
 			job, found := vwByID(jobs, vwITID)
-			if found != tc.wantBody || (found && (!strings.Contains(job.Description, "Target body") || strings.Contains(job.Description, "Unrelated"))) {
-				t.Errorf("found = %t, description = %q, want target body = %t", found, job.Description, tc.wantBody)
+			if !found {
+				t.Fatal("the listed posting was omitted")
+			}
+			if !tc.wantBody {
+				if !job.Unreadable || job.Description != "" {
+					t.Errorf("got %+v, want an unreadable marker with no body", job)
+				}
+				return
+			}
+			if job.Unreadable || !strings.Contains(job.Description, "Target body") || strings.Contains(job.Description, "Unrelated") {
+				t.Errorf("got %+v, want only the target body", job)
 			}
 		})
 	}
@@ -274,9 +288,21 @@ func TestVietnamworksDetailReadsOnlyItsRecord(t *testing.T) {
 
 func TestVietnamworksCrawlThatReadsNothingFails(t *testing.T) {
 	f := newVietnamworksFake(t)
-	f.pages = map[string]string{}
-	if _, err := newTestVietnamworks(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
-		t.Fatal("a crawl that listed new postings and read none must fail")
+	f.errs = map[string]error{vwITURL: errors.New("timeout")}
+	if _, err := newTestVietnamworks(f).FetchNew(context.Background(), CompanyEntry{}, func(id string) bool { return id == vwOtherID }); err == nil {
+		t.Fatal("a crawl whose every body request failed must fail even with a seen refresh")
+	}
+}
+
+func TestVietnamworksConfirmedGoneDetailsAreOmitted(t *testing.T) {
+	f := newVietnamworksFake(t)
+	f.errs = map[string]error{
+		vwITURL:    &StatusError{Code: http.StatusNotFound},
+		vwOtherURL: &StatusError{Code: http.StatusGone},
+	}
+	jobs, err := newTestVietnamworks(f).Fetch(context.Background(), CompanyEntry{})
+	if err != nil || len(jobs) != 0 {
+		t.Errorf("confirmed closures = %+v, %v; want no jobs and no error", jobs, err)
 	}
 }
 

@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -22,7 +23,7 @@ import (
 // page with an empty query so it returns the whole open catalogue, every profession. A row
 // carries every fact except the body, which the search truncates to a few hundred characters; the
 // full body is read from the posting's page, where Next.js inlines it in the RSC flight stream.
-// The adapter hydrates only postings the catalogue lacks and refreshes the rest by identity.
+// The adapter hydrates postings due for a body read and refreshes the rest by identity.
 //
 // Plain HTTP from the crawl host is served: no proxy and no Scrapling tier.
 type vietnamworks struct {
@@ -147,9 +148,9 @@ func (v vietnamworks) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) 
 	return v.FetchNew(ctx, e, func(string) bool { return false })
 }
 
-// FetchNew reads the whole listing and hydrates only what the catalogue lacks: a seen posting is
-// a liveness refresh with no request of its own, and new ones are hydrated up to the per-run
-// budget. A new posting past the budget is deferred rather than stored half-read.
+// FetchNew reads the whole listing and refreshes seen postings by identity. Postings that need
+// a body are hydrated up to the per-run budget. Failed reads preserve the listing's liveness
+// evidence while the body remains due for retry.
 func (v vietnamworks) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	rows, err := v.listing(ctx)
 	if err != nil {
@@ -178,18 +179,19 @@ func (v vietnamworks) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 	if deferred := len(fresh) - len(queue); deferred > 0 {
 		log.Printf("vietnamworks: hydrating %d of %d new postings; %d deferred to a later run", len(queue), len(fresh), deferred)
 	}
-	var wanted, read atomic.Int64
+	var answered atomic.Int64
 	hydrated := fetchDetails(queue, vietnamworksWorkers, func(r vietnamworksRow) (Job, bool) {
-		wanted.Add(1)
-		job, ok := v.detail(ctx, r)
-		if ok {
-			read.Add(1)
+		job, ok, err := v.detail(ctx, r)
+		if err != nil {
+			log.Printf("vietnamworks: posting %d failed; deferring: %v", r.JobID, err)
+			return unreadableDetail(strconv.FormatInt(r.JobID, 10), r.URL, r.Company), true
 		}
+		answered.Add(1)
 		return job, ok
 	})
-	// A crawl that listed new postings and read none of them is broken, not quiet.
-	if wanted.Load() > 0 && read.Load() == 0 {
-		return nil, fmt.Errorf("vietnamworks: listed %d new postings and read none of them", wanted.Load())
+	// A successful detail or a confirmed closure counts as an answer.
+	if len(queue) > 0 && answered.Load() == 0 {
+		return nil, fmt.Errorf("vietnamworks: attempted to read %d postings and none answered", len(queue))
 	}
 	return append(jobs, hydrated...), nil
 }
@@ -255,26 +257,24 @@ func (v vietnamworks) searchPage(ctx context.Context, page int) (vietnamworksRes
 	return vietnamworksResponse{}, fmt.Errorf("vietnamworks: search page %d: %w", page, err)
 }
 
-// detail fetches one posting page and maps it, with the listing row, to a Job, returning ok=false
-// when the page cannot be read or carries no body — so the caller skips just that posting and a
-// later run asks again.
-func (v vietnamworks) detail(ctx context.Context, r vietnamworksRow) (Job, bool) {
+// detail reads one posting's body and builds its Job. ok=false with a nil error is the site's
+// answer that the posting is gone (404/410). An unreadable posting yields an error.
+func (v vietnamworks) detail(ctx context.Context, r vietnamworksRow) (Job, bool, error) {
 	if err := v.limiter.Wait(ctx); err != nil {
-		return Job{}, false
+		return Job{}, false, err
 	}
 	flight, err := fetchFlight(ctx, v.http, r.URL)
 	if err != nil {
-		if detailUnreadable(err) {
-			log.Printf("vietnamworks: posting %d failed; deferring: %v", r.JobID, err)
+		if !detailUnreadable(err) {
+			return Job{}, false, nil
 		}
-		return Job{}, false
+		return Job{}, false, err
 	}
 	description := vietnamworksBody(flight, r.JobID)
 	if strings.TrimSpace(textFromHTML(description)) == "" {
-		log.Printf("vietnamworks: posting %d carries no body; deferring", r.JobID)
-		return Job{}, false
+		return Job{}, false, errors.New("page carries no posting body")
 	}
-	return r.job(description), true
+	return r.job(description), true, nil
 }
 
 // vietnamworksBody assembles the posting's description and requirements from the flight stream.
