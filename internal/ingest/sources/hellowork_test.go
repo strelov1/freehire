@@ -28,7 +28,7 @@ type helloworkFake struct {
 var helloworkFixtureFor = map[string]string{
 	helloworkHome: "home.html",
 	helloworkBase + "/fr-fr/emploi/domaine_informatique.html":                  "domaine_informatique.html",
-	helloworkBase + "/fr-fr/emploi/domaine_restauration.html":                  "domaine_restauration.html",
+	helloworkBase + "/fr-fr/emploi/domaine_restauration.html":                  "food_service.html",
 	helloworkBase + "/fr-fr/emploi/metier_devops.html":                         "metier_devops.html",
 	helloworkBase + "/fr-fr/emploi/domaine_informatique-ville_lyon-69000.html": "domaine_informatique-ville_lyon-69000.html",
 	fmt.Sprintf(helloworkPostingURL, 85769467):                                 "posting_85769467.html",
