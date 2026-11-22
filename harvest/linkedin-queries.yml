@@ -358,10 +358,15 @@ matrix:
   # the Easy Apply pass does the heavy lifting. The window was first 6h for the busiest slices,
   # but nearly every firehose card is a new detail read, so one rotation of the lane took ~13h
   # (7 searches in 45 min on 2026-11-22) and a 6h window would leave gaps. Every slice now takes
-  # 24h; Texas showed 140 Easy Apply postings in 6h, well under the cap at a day.
+  # 24h; Texas showed 140 Easy Apply postings in 6h, well under the cap at a day. The primary
+  # (unfiltered) pass is one page: its cards are mostly external postings that cannot publish
+  # under LinkedIn and only feed ATS discovery, which the roster lane already does; detail reads
+  # were 83% of LinkedIn requests, so those pages go to the Easy Apply pass instead.
   - keywords: ["*"]
     locations: [United States, "California, United States", "Texas, United States", "New York, United States", "Florida, United States", "Illinois, United States", "Washington, United States", "Massachusetts, United States", "Georgia, United States", "North Carolina, United States", "Virginia, United States", "New Jersey, United States", "Pennsylvania, United States", "Ohio, United States", "Colorado, United States", "Arizona, United States", India, "Bengaluru, Karnataka, India", "Hyderabad, Telangana, India", "Pune, Maharashtra, India", "Mumbai, Maharashtra, India", "Chennai, Tamil Nadu, India", "Delhi, India", "Gurugram, Haryana, India", "Noida, Uttar Pradesh, India", United Kingdom, Germany, France, Canada, Australia, Brazil, Netherlands, Spain, Italy, Mexico, Poland, Worldwide]
     jobage_hours: 24
+    pages: 1
   - keywords: ["*"]
     locations: [Austria, Belgium, Bulgaria, Croatia, Cyprus, Czechia, Denmark, Estonia, Finland, Greece, Hungary, Iceland, Ireland, Latvia, Lithuania, Luxembourg, Malta, Norway, Portugal, Romania, Serbia, Slovakia, Slovenia, Sweden, Switzerland, Ukraine, Turkey, Israel, Egypt, Saudi Arabia, United Arab Emirates, Qatar, Kuwait, Bahrain, Oman, Jordan, Lebanon, Morocco, Tunisia, Nigeria, Kenya, Ghana, South Africa, Rwanda, Ethiopia, Uganda, Tanzania, Mauritius, Japan, South Korea, Taiwan, Hong Kong, Singapore, Malaysia, Indonesia, Philippines, Vietnam, Thailand, Pakistan, Bangladesh, Sri Lanka, Nepal, Cambodia, China, New Zealand, Argentina, Chile, Colombia, Peru, Uruguay, Costa Rica, Ecuador, Panama, Guatemala, Dominican Republic, Bolivia, Paraguay, Puerto Rico, Georgia, Armenia, Kazakhstan, Uzbekistan, Azerbaijan, Moldova, Bosnia and Herzegovina, North Macedonia, Albania, Montenegro]
     jobage_hours: 24
+    pages: 1
