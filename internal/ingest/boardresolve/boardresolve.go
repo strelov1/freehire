@@ -46,11 +46,15 @@ type textFetcher interface {
 
 // Resolver fetches an unrecognized careers page and detects the embedded ATS board.
 type Resolver struct {
-	http textFetcher
+	http         textFetcher
+	appOnePortal func(context.Context, string) string
 }
 
 // New builds a Resolver over the default SSRF-guarded sources client.
-func New() *Resolver { return &Resolver{http: sources.NewClient()} }
+func New() *Resolver {
+	client := sources.NewClient()
+	return &Resolver{http: client, appOnePortal: sources.NewAppOnePortalResolver(client)}
+}
 
 // Resolve fetches rawURL and finds the ATS board it belongs to, returning the catalogue
 // (source, board) and a canonical URL to store. It looks two ways:
@@ -64,6 +68,9 @@ func New() *Resolver { return &Resolver{http: sources.NewClient()} }
 //
 // ok=false when the fetch fails or no board is found.
 func (r *Resolver) Resolve(ctx context.Context, rawURL string) (source, board, canonical string, ok bool) {
+	if s, b, canonical, found := r.resolveAppOne(ctx, rawURL); found {
+		return s, b, canonical, true
+	}
 	html, err := r.http.GetText(ctx, rawURL)
 	if err != nil {
 		return "", "", "", false

@@ -132,7 +132,7 @@ func TestQueryModeRowsAreConfigured(t *testing.T) {
 			}
 		case modePathPattern:
 			p, ok := pathPatternBoards[a.host]
-			if !ok || p.path == nil || p.path.NumSubexp() != 1 || p.listing == "" || (p.param != "") != (p.paramPattern != nil) {
+			if !ok || p.path == nil || p.path.NumSubexp() != 1 || (p.listing != "") == p.keepPostingPath || (p.param != "") != (p.paramPattern != nil) {
 				t.Errorf("atsBoards entry %q (%s) is %s mode but pathPatternBoards has no complete entry for it",
 					a.host, a.source, modePathPattern)
 			}
