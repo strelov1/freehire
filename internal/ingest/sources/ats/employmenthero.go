@@ -28,6 +28,10 @@ func (employmentHero) Provider() string { return "employmenthero" }
 
 func (employmentHero) FullBoardListing() {}
 
+// Unknown organisations return HTTP 404. Successful responses from known
+// employers with zero jobs have not been verified, so there is no
+// EmptyBoardListing marker.
+
 func (employmentHero) ValidateBoard(board string) error {
 	if !employmentHeroSlug.MatchString(board) {
 		return fmt.Errorf("employmenthero: invalid employer slug %q", board)

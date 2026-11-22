@@ -61,3 +61,17 @@ func TestResolveEmploymentHeroPositionThroughEmployerURL(t *testing.T) {
 		t.Fatalf("employment hero posting resolved to %s/%s/%v", source, board, ok)
 	}
 }
+
+type redirectedIndexFixture struct{ fakeFetcher }
+
+func (redirectedIndexFixture) GetTextResolved(context.Context, string) (string, string, error) {
+	return `<a href="https://jobboard.catch-talents.de/companies/259">Featured job</a>`,
+		"https://jobboard.catch-talents.de/", nil
+}
+
+func TestResolveRedirectedMultiEmployerIndex(t *testing.T) {
+	r := &Resolver{http: redirectedIndexFixture{}}
+	if source, board, _, ok := r.Resolve(context.Background(), "https://example.com/jobs"); ok {
+		t.Fatalf("redirected index resolved to %s/%s", source, board)
+	}
+}

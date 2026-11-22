@@ -82,9 +82,20 @@ func odooDescription(root *html.Node) string {
 		if itemType != "https://schema.org/JobPosting" && itemType != "http://schema.org/JobPosting" {
 			return true
 		}
+		var callsToAction []*html.Node
+		walk(n, func(node *html.Node) bool {
+			if Attr(node, "data-snippet") == "s_call_to_action" {
+				callsToAction = append(callsToAction, node)
+				return false
+			}
+			return true
+		})
+		for _, node := range callsToAction {
+			node.Parent.RemoveChild(node)
+		}
 		walk(n, func(section *html.Node) bool {
 			snippet := Attr(section, "data-snippet")
-			if section.Data == "section" && strings.HasPrefix(snippet, "s_") && snippet != "s_call_to_action" {
+			if section.Data == "section" && strings.HasPrefix(snippet, "s_") {
 				content.WriteString(innerHTML(section))
 				return false
 			}

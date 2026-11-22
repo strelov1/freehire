@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/ingest/sources/kit"
@@ -56,5 +57,40 @@ func TestCatchTalentsRejectsIncompleteListing(t *testing.T) {
 	}
 	if jobs, err := NewCatchTalents(http).Fetch(context.Background(), kit.CompanyEntry{Board: "259"}); err == nil || len(jobs) != 0 {
 		t.Fatalf("partial listing returned %v, %v", jobs, err)
+	}
+}
+
+type detailFailureFixture struct {
+	atsJSONFixtures
+	failures map[string]error
+}
+
+func (f detailFailureFixture) GetJSON(ctx context.Context, url string, dst any) error {
+	if err := f.failures[url]; err != nil {
+		return err
+	}
+	return f.atsJSONFixtures.GetJSON(ctx, url, dst)
+}
+
+func TestCatchTalentsDistinguishesUnreadableAndGone(t *testing.T) {
+	fixture := detailFailureFixture{
+		atsJSONFixtures: atsJSONFixtures{
+			catchTalentsAPI + "companies/259/jobs?offset=0&limit=25": `{"total":3,"results":[{"id":1,"companyID":259},{"id":2,"companyID":259},{"id":3,"companyID":259}]}`,
+			catchTalentsAPI + "jobs/1":                               `{"id":1,"companyID":259,"jobTitle":"Engineer","companyTitle":"Example","open":true,"description":"Build things"}`,
+		},
+		failures: map[string]error{
+			catchTalentsAPI + "jobs/2": context.DeadlineExceeded,
+			catchTalentsAPI + "jobs/3": &kit.StatusError{Code: 404},
+		},
+	}
+	source := NewCatchTalents(fixture)
+	entry := kit.CompanyEntry{Board: "259"}
+	jobs, err := source.Fetch(context.Background(), entry)
+	if err != nil || len(jobs) != 2 || !slices.ContainsFunc(jobs, func(j kit.Job) bool { return j.ExternalID == "2" && j.Unreadable }) {
+		t.Fatalf("expected one readable and one unreadable job, got %v, %v", jobs, err)
+	}
+	fixture.failures[catchTalentsAPI+"jobs/1"] = context.DeadlineExceeded
+	if jobs, err := source.Fetch(context.Background(), entry); err == nil || len(jobs) != 0 {
+		t.Fatalf("accepted all unreadable details: %v, %v", jobs, err)
 	}
 }

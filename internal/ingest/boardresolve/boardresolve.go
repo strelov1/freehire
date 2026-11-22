@@ -73,6 +73,9 @@ func (r *Resolver) Resolve(ctx context.Context, rawURL string) (source, board, c
 		return "", "", "", false
 	}
 	if final != rawURL {
+		if multiEmployerIndex(final) {
+			return "", "", "", false
+		}
 		if s, b, canonical, found := atsboard.Recognize(final); found {
 			return s, b, canonical, true
 		}

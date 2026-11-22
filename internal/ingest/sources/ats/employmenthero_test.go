@@ -2,6 +2,7 @@ package ats
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/ingest/sources/kit"
@@ -23,8 +24,19 @@ func TestEmploymentHeroReadsAllPagesWithDescriptions(t *testing.T) {
 		job.URL != employmentHeroJobURL+"acme-engineer/" {
 		t.Fatalf("unexpected posting %+v", job)
 	}
-	delete(fake, api+"page_index=2&item_per_page=50")
-	if jobs, err := NewEmploymentHero(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "acme"}); err == nil || len(jobs) != 0 {
-		t.Fatalf("incomplete listing returned %v, %v", jobs, err)
+	secondPage := fake[api+"page_index=2&item_per_page=50"]
+	for name, response := range map[string]string{
+		"missing page":   "",
+		"wrong employer": strings.Replace(secondPage, `"organisation_friendly_id":"acme"`, `"organisation_friendly_id":"another"`, 1),
+		"wrong page":     strings.Replace(secondPage, `"page_index":"2"`, `"page_index":"1"`, 1),
+		"changed total":  strings.Replace(secondPage, `"total_items":"2"`, `"total_items":"3"`, 1),
+		"duplicate job":  strings.Replace(secondPage, "id-2", "id-1", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake[api+"page_index=2&item_per_page=50"] = response
+			if jobs, err := NewEmploymentHero(fake).Fetch(context.Background(), kit.CompanyEntry{Board: "acme"}); err == nil || len(jobs) != 0 {
+				t.Fatalf("accepted incomplete listing: %v, %v", jobs, err)
+			}
+		})
 	}
 }
