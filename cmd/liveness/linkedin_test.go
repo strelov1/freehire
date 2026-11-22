@@ -43,7 +43,7 @@ func TestLinkedInProbeRequiresExplicitPostingEvidence(t *testing.T) {
 				}
 				return &http.Response{StatusCode: tc.status, Body: io.NopCloser(strings.NewReader(tc.body)), Header: make(http.Header), Request: r}, nil
 			})}
-			got := linkedInPass(client).check(context.Background(), candidate{url: "https://www.linkedin.com/jobs/view/123/"})
+			got := linkedInPass(client, false).check(context.Background(), candidate{url: "https://www.linkedin.com/jobs/view/123/"})
 			if got.verdict != tc.want || got.refused != tc.refused {
 				t.Fatalf("got %+v, want %v, refused %v", got, tc.want, tc.refused)
 			}
@@ -66,8 +66,24 @@ func TestLinkedInProbeCannotCloseAfterRedirectToAnotherJob(t *testing.T) {
 		}
 		return resp, nil
 	})}
-	got := linkedInPass(client).check(context.Background(), candidate{url: "https://www.linkedin.com/jobs/view/123/"})
+	got := linkedInPass(client, false).check(context.Background(), candidate{url: "https://www.linkedin.com/jobs/view/123/"})
 	if got.verdict != liveness.Uncertain {
 		t.Fatalf("redirect closed the wrong job: %+v", got)
+	}
+}
+
+// Through the rotating proxy a refusal names one exit IP, so it skips the posting instead of
+// ending the pass, and the pass gets the larger budget.
+func TestLinkedInProxiedProbeSkipsRefusal(t *testing.T) {
+	client := &http.Client{Transport: linkedInTransport(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusTooManyRequests, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header), Request: r}, nil
+	})}
+	pass := linkedInPass(client, true)
+	got := pass.check(context.Background(), candidate{url: "https://www.linkedin.com/jobs/view/123/"})
+	if got.verdict != liveness.Uncertain || got.refused {
+		t.Fatalf("proxied 429: %+v", got)
+	}
+	if pass.maxPerRun <= linkedInPass(client, false).maxPerRun {
+		t.Fatalf("proxied budget %d is not larger than direct", pass.maxPerRun)
 	}
 }

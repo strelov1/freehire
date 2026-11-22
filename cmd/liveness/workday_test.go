@@ -85,7 +85,7 @@ func TestRouteUnsignalledSendsJudgeableTelegramPostingsToTheirPass(t *testing.T)
 		t.Errorf("workday queue = %+v, want telegram 3", wd)
 	}
 	for pass := range paced {
-		if !slices.ContainsFunc(pacedPasses(nil), func(p pacedPass) bool { return p.source == pass }) {
+		if !slices.ContainsFunc(pacedPasses(nil, nil), func(p pacedPass) bool { return p.source == pass }) {
 			t.Errorf("no paced pass reads the %s queue", pass)
 		}
 	}

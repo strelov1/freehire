@@ -79,7 +79,7 @@ func TestApplyPacedPassesRoutesEachSourceToItsPass(t *testing.T) {
 // none would be logged and skipped every run — the silent omission this worker exists to
 // avoid — and one that reached two would be probed twice and struck twice in one run.
 func TestEveryProbedSourceHasExactlyOneEvidencePath(t *testing.T) {
-	paced := pacedPasses(nil)
+	paced := pacedPasses(nil, nil)
 	for _, src := range probeDespiteRegistered {
 		paths := 0
 		if slices.Contains(probeDespiteRegisteredGET, src) {

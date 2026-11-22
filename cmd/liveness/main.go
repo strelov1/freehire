@@ -20,11 +20,13 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -33,6 +35,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/safehttp"
+	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
@@ -119,7 +122,9 @@ var probeDespiteRegisteredGET = []string{"jobicy", "remoteok", "empregos"}
 // on the fan-out: each meters the host the crawl reads it from (see paced.go), and each reads
 // its own evidence — hh's archived flag, djinni's page through the shared Classify, 4dayweek's
 // per-posting API, torre's page state, arbeitnow's status, jobtech's per-ad API.
-func pacedPasses(client *http.Client) []pacedPass {
+//
+// linkedIn is the LinkedIn pass's client through the Scrapling proxy, or nil to read directly.
+func pacedPasses(client, linkedIn *http.Client) []pacedPass {
 	return append([]pacedPass{
 		hhPass(client, hhVacancyPage),
 		djinniPass(client),
@@ -127,7 +132,7 @@ func pacedPasses(client *http.Client) []pacedPass {
 		torrePass(client, torrePostPage),
 		arbeitnowPass(client),
 		jobtechPass(client, jobtechAdAPI),
-		linkedInPass(client),
+		linkedInPass(cmp.Or(linkedIn, client), linkedIn != nil),
 		workdayPass(client),
 	}, catalogStatusPasses(client)...)
 }
@@ -263,7 +268,12 @@ func run() int {
 	// Probes go out on safehttp: orphan-job URLs come from attacker-influenced sources
 	// (telegram posts), so the probe must refuse internal/metadata targets.
 	client := safehttp.NewClient(probeTimeout)
-	paced := pacedPasses(client)
+	linkedIn, err := linkedInProxyClient()
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	paced := pacedPasses(client, linkedIn)
 	var getProbeStale, himalayasStale, echojobsStale []candidate
 	pacedStale := make(map[string][]candidate)
 	candidates, unsignalledProbed := routeUnsignalled(selected, pacedStale)
@@ -394,4 +404,19 @@ func staleCandidate(r db.SelectStaleRegisteredCandidatesRow) candidate {
 		id: r.ID, publicSlug: r.PublicSlug, source: r.Source, url: r.URL,
 		externalID: r.ExternalID, strikes: r.LivenessStrikes,
 	}
+}
+
+// linkedInProxyClient reads LinkedIn through the Scrapling fetch service the crawl uses, or
+// returns nil without SCRAPLING_FETCH_URL (the pass then reads directly). The URL it fetches is
+// built from a numeric posting id on www.linkedin.com, so it needs no safehttp guard.
+func linkedInProxyClient() (*http.Client, error) {
+	raw := strings.TrimSpace(os.Getenv("SCRAPLING_FETCH_URL"))
+	if raw == "" {
+		return nil, nil
+	}
+	tr, err := scraplingfetch.New(scraplingfetch.Config{URL: raw, Token: strings.TrimSpace(os.Getenv("SCRAPLING_FETCH_TOKEN"))}, scraplingfetch.ModeHTTP, true, linkedInProxyTimeout)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Client{Transport: tr}, nil
 }
