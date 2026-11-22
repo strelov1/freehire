@@ -26,7 +26,6 @@ import (
 	"maps"
 	"slices"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -123,9 +122,9 @@ func run() int {
 		// enrichment's.
 		model = model.As("", nil, llm.Feature("company-names"))
 		placeholders["adp"] = postingTextResolver{q: queries, model: model, source: "adp"}
-		placeholders["paycor"] = newPaycorResolver(placeholders["paycor"], postingTextResolver{q: queries, model: model, source: "paycor", vendor: "Paycor"})
+		placeholders["paycor"] = newPaycorResolver(placeholders["paycor"], postingTextResolver{q: queries, model: model, source: "paycor", vendor: paycorVendor})
 	} else {
-		log.Printf("LLM_* not configured: %s placeholder boards are left for a run that has it", strings.Join(llmProviders, ", "))
+		log.Printf("LLM_* not configured: adp placeholder boards are left for a run that has it; paycor boards are named from their listing title only")
 	}
 	if *provider != "" {
 		r, ok := placeholders[*provider]

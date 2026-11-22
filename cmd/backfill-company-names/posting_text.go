@@ -93,23 +93,24 @@ func (r postingTextResolver) Name(ctx context.Context, board string) (string, er
 		return "", nil
 	}
 	name, ok := companyname.GroundedName(*out.Employer, texts)
-	if !ok || r.isVendor(name) || utf8.RuneCountInString(name) > maxEmployerNameRunes {
-		return "", nil
-	}
-	// Posting text is untrusted: no control character reaches a stored name.
-	if strings.IndexFunc(name, unicode.IsControl) >= 0 {
+	if !ok || !usableEmployerName(name, r.vendor) {
 		return "", nil
 	}
 	return name, nil
 }
 
-// isVendor reports whether name is, or contains as a whole word, the ATS vendor's name.
-func (r postingTextResolver) isVendor(name string) bool {
-	if r.vendor == "" {
+// usableEmployerName is the bound on any name read from an untrusted page or posting: not the
+// ATS vendor's own name (as a whole word, so "Paycor Holdings" too), not longer than
+// maxEmployerNameRunes, no control character.
+func usableEmployerName(name, vendor string) bool {
+	if utf8.RuneCountInString(name) > maxEmployerNameRunes || strings.IndexFunc(name, unicode.IsControl) >= 0 {
 		return false
 	}
-	_, found := companyname.GroundedName(r.vendor, []string{name})
-	return found
+	if vendor == "" {
+		return true
+	}
+	_, isVendor := companyname.GroundedName(vendor, []string{name})
+	return !isVendor
 }
 
 // capProvider keeps at most n of one provider's rows, taken from a window that starts at

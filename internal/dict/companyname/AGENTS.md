@@ -91,7 +91,9 @@ not a 32-hex clientId reaches neither a URL nor the model; the listing's logo al
 Logo") and its `homeUrl`/`descUrl` host are never used as a name, and no request goes to a host
 taken from page content. Prompt injection in a posting can at most name the tenant's own board,
 because the answer must appear verbatim in that board's postings. Without `LLM_*` the run logs
-that adp and paycor boards are left alone. Yield: not measured here (no production access in
+that adp boards are left alone and paycor boards are named from the listing title only. A title
+goes through the same checks as the postings, and a title that fails or errors falls through to
+the postings. Yield: not measured here (no production access in
 the implementing session); record the named/refused counts of the first `--provider=paycor
 --dry-run` here. Boards that stay unnamed keep the neutral label; hiding them is an owner decision.
 

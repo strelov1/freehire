@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"log"
 	"regexp"
-	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/companyname"
 )
+
+const paycorVendor = "Paycor"
 
 var paycorClientID = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
 
@@ -29,10 +31,11 @@ func (r paycorResolver) Name(ctx context.Context, board string) (string, error) 
 	if r.title != nil {
 		name, err := r.title.Name(ctx, board)
 		if err != nil {
-			return "", err
+			// A listing that is down says nothing about the postings already stored.
+			log.Printf("resolve paycor %s title: %v", board, err)
 		}
-		// A title that names only the vendor says nothing about the tenant.
-		if name != "" && !strings.EqualFold(name, "Paycor") {
+		// A title the later gate would refuse, or one that is the vendor's, falls through.
+		if name, ok := companyname.AcceptPlaceholder(board, name); ok && usableEmployerName(name, paycorVendor) {
 			return name, nil
 		}
 	}

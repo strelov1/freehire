@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -11,9 +12,9 @@ import (
 
 const paycorBoard = "0123456789abcdef0123456789abcdef"
 
-func paycorResolverFor(rows []string, reply string) (companyname.Resolver, *fakeModel) {
+func paycorPostings(rows []string, reply string) (postingTextResolver, *fakeModel) {
 	m := &fakeModel{reply: reply}
-	return newPaycorResolver(nil, postingTextResolver{q: &fakeDescriptions{rows: rows}, model: m, source: "paycor", vendor: "Paycor"}), m
+	return postingTextResolver{q: &fakeDescriptions{rows: rows}, model: m, source: "paycor", vendor: paycorVendor}, m
 }
 
 func TestPaycorResolverFromPostings(t *testing.T) {
@@ -34,8 +35,8 @@ func TestPaycorResolverFromPostings(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r, m := paycorResolverFor(c.rows, c.reply)
-			got, err := r.Name(context.Background(), paycorBoard)
+			p, m := paycorPostings(c.rows, c.reply)
+			got, err := newPaycorResolver(nil, p).Name(context.Background(), paycorBoard)
 			if err != nil || got != c.want {
 				t.Fatalf("Name = %q, %v; want %q", got, err, c.want)
 			}
@@ -47,26 +48,40 @@ func TestPaycorResolverFromPostings(t *testing.T) {
 }
 
 func TestPaycorResolverTitleFirst(t *testing.T) {
-	title := stubResolver{byBoard: map[string]string{paycorBoard: "Titled Corp"}}
-	m := &fakeModel{reply: `{"employer": "Other"}`}
-	r := newPaycorResolver(title, postingTextResolver{q: &fakeDescriptions{rows: []string{"Other is hiring"}}, model: m, source: "paycor", vendor: "Paycor"})
+	p, m := paycorPostings([]string{"Other is hiring"}, `{"employer": "Other"}`)
+	r := newPaycorResolver(stubResolver{byBoard: map[string]string{paycorBoard: "Titled Corp"}}, p)
 	if got, _ := r.Name(context.Background(), paycorBoard); got != "Titled Corp" || m.calls != 0 {
 		t.Errorf("Name = %q after %d model calls; want the title's name, no model call", got, m.calls)
 	}
+}
 
-	// A title naming only the vendor falls through to the postings.
-	title = stubResolver{byBoard: map[string]string{paycorBoard: "Paycor"}}
-	r = newPaycorResolver(title, postingTextResolver{q: &fakeDescriptions{rows: []string{"Other is hiring"}}, model: m, source: "paycor", vendor: "Paycor"})
-	if got, _ := r.Name(context.Background(), paycorBoard); got != "Other" {
-		t.Errorf("Name = %q, want Other from the postings", got)
+type errResolver struct{}
+
+func (errResolver) Name(context.Context, string) (string, error) {
+	return "", errors.New("listing down")
+}
+
+// A title that is the vendor's, junk, over-long, controlled, or failed to load falls through to
+// the postings instead of being stored or ending the board's chance.
+func TestPaycorResolverBadTitleFallsThrough(t *testing.T) {
+	titles := map[string]companyname.Resolver{}
+	for _, title := range []string{"Paycor", "Paycor Holdings", "Acme\u0007 Co", strings.Repeat("Acme ", 30), "Just a moment..."} {
+		titles[title] = stubResolver{byBoard: map[string]string{paycorBoard: title}}
+	}
+	titles["listing down"] = errResolver{}
+	for name, title := range titles {
+		p, _ := paycorPostings([]string{"Other is hiring"}, `{"employer": "Other"}`)
+		if got, err := newPaycorResolver(title, p).Name(context.Background(), paycorBoard); got != "Other" || err != nil {
+			t.Errorf("title %q: Name = %q, %v; want Other, nil", name, got, err)
+		}
 	}
 }
 
 // A board id that is not a 32-hex clientId reaches neither a URL nor the model.
 func TestPaycorResolverRejectsBadClientID(t *testing.T) {
 	for _, board := range []string{"", "abc", paycorBoard + "x", paycorBoard + "/../x", "evil.example.com#" + paycorBoard[:15]} {
-		r, m := paycorResolverFor([]string{"Acme is hiring"}, `{"employer": "Acme"}`)
-		if got, err := r.Name(context.Background(), board); got != "" || err != nil || m.calls != 0 {
+		p, m := paycorPostings([]string{"Acme is hiring"}, `{"employer": "Acme"}`)
+		if got, err := newPaycorResolver(nil, p).Name(context.Background(), board); got != "" || err != nil || m.calls != 0 {
 			t.Errorf("Name(%q) = %q, %v after %d calls; want empty", board, got, err, m.calls)
 		}
 	}
@@ -74,9 +89,9 @@ func TestPaycorResolverRejectsBadClientID(t *testing.T) {
 
 // The pass renames a Paycor board together with its postings and aliases the old slug.
 func TestPaycorPlaceholderPassRenamesBoardAndJobs(t *testing.T) {
-	r, _ := paycorResolverFor([]string{"Lakeside Dental Group is hiring"}, `{"employer": "Lakeside Dental Group"}`)
+	p, _ := paycorPostings([]string{"Lakeside Dental Group is hiring"}, `{"employer": "Lakeside Dental Group"}`)
 	rows := []db.ListPlaceholderCompanyBoardsRow{{Provider: "paycor", Board: paycorBoard, Company: paycorBoard}}
-	renames, unresolved := resolvePlaceholders(context.Background(), rows, companyname.Registry{"paycor": r})
+	renames, unresolved := resolvePlaceholders(context.Background(), rows, companyname.Registry{"paycor": newPaycorResolver(nil, p)})
 	if len(renames) != 1 || unresolved != 0 {
 		t.Fatalf("renames = %+v, unresolved = %d", renames, unresolved)
 	}
