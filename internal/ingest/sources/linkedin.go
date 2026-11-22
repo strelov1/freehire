@@ -202,6 +202,8 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 	if strings.TrimSpace(e.Board) == "" || strings.TrimSpace(e.Region) == "" {
 		return nil, fmt.Errorf("linkedin: board keyword and region location are required")
 	}
+	// A firehose search (keyword "*") lists the whole location.
+	firehose := strings.TrimSpace(e.Board) == LinkedInAnyKeyword
 	pageLimit, windowSeconds, easyPages, err := linkedInSearchOptions(e.Tenants)
 	if err != nil {
 		return nil, err
@@ -226,7 +228,7 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 		offset := 0
 		for page := 0; page < limit; page++ {
 			params := url.Values{"location": {e.Region}, "f_TPR": {"r" + strconv.Itoa(windowSeconds)}, "sortBy": {"DD"}, "start": {strconv.Itoa(offset)}}
-			if strings.TrimSpace(e.Board) != LinkedInAnyKeyword {
+			if !firehose {
 				params.Set("keywords", e.Board)
 			}
 			for k, v := range extra {
@@ -324,11 +326,15 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 	if listed > 0 && read+refreshed == 0 {
 		return jobs, fmt.Errorf("linkedin: none of %d listed postings could be read", listed)
 	}
-	recs, closedSeed := s.related(ctx, jobs, ids, seen)
-	if closedSeed != "" {
-		jobs = slices.DeleteFunc(jobs, func(j Job) bool { return j.SeenRefresh && j.ExternalID == closedSeed })
+	// A firehose search already lists the whole market newest first; one posting's
+	// recommendations would add older postings at up to 20 detail reads per search.
+	if !firehose {
+		recs, closedSeed := s.related(ctx, jobs, ids, seen)
+		if closedSeed != "" {
+			jobs = slices.DeleteFunc(jobs, func(j Job) bool { return j.SeenRefresh && j.ExternalID == closedSeed })
+		}
+		jobs = append(jobs, recs...)
 	}
-	jobs = append(jobs, recs...)
 	log.Printf("linkedin: search keyword=%q region=%q page_limit=%d window_hours=%d easyapply_pages=%d easyapply_listed=%d listed=%d read=%d refreshed=%d returned=%d", e.Board, e.Region, pageLimit, windowSeconds/3600, easyPages, easyListed, listed, read, refreshed, len(jobs))
 	return jobs, nil
 }

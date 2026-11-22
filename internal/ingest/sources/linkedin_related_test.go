@@ -260,3 +260,23 @@ func TestLinkedInRelatedDoesNotExpandAfterAnIncompletePrimarySearch(t *testing.T
 		t.Fatalf("incomplete search was expanded: jobs=%+v requests=%v", jobs, site.requests)
 	}
 }
+
+// A firehose search lists the whole market, newest first; one posting's recommendations add
+// older, unrelated postings and up to 20 detail reads per search, so it skips them.
+func TestLinkedInFirehoseSkipsRecommendations(t *testing.T) {
+	site := &linkedInRelatedSite{listings: map[string]string{"0": linkedInRelatedListing("123")}, companion: relatedTestPage(relatedTestCard("456", "https://www.linkedin.com/jobs/view/456/"))}
+	source := NewLinkedIn(site).(linkedIn)
+	source.pace, source.backoff = &recordingWaiter{}, 0
+	jobs, err := source.Fetch(context.Background(), CompanyEntry{Board: LinkedInAnyKeyword, Region: "Netherlands"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range site.requests {
+		if strings.Contains(raw, "/jobs/view/") || strings.Contains(raw, "jobPosting/456") {
+			t.Fatalf("firehose fetched recommendations: %v", site.requests)
+		}
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "123" {
+		t.Fatalf("firehose jobs=%+v", jobs)
+	}
+}
