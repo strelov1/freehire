@@ -129,7 +129,7 @@ func stripCurrencyAmounts(text string) string {
 		// The match must start a token, or "v8 PHP" reads the 8 as a price; checked
 		// against the whole text because the slice has lost what precedes it.
 		prev, _ := utf8.DecodeLastRuneInString(text[:m[0]])
-		startsToken := m[0] == 0 || !(unicode.IsLetter(prev) || unicode.IsDigit(prev))
+		startsToken := m[0] == 0 || (!unicode.IsLetter(prev) && !unicode.IsDigit(prev))
 		if !startsToken || !isMoneyAmount(amount, m[6] >= 0) {
 			_, size := utf8.DecodeRuneInString(text[m[0]:])
 			pos = m[0] + size
