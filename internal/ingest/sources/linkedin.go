@@ -84,7 +84,7 @@ var linkedInID = regexp.MustCompile(`(?:^|-)\d+$`)
 // isLinkedInURL reports an https LinkedIn host on the default port, refusing a lookalike host
 // such as linkedin.com.example.test.
 func isLinkedInURL(u *url.URL) bool {
-	host := u.Hostname()
+	host := strings.ToLower(u.Hostname())
 	return u.Scheme == "https" && u.Port() == "" && (host == "linkedin.com" || strings.HasSuffix(host, ".linkedin.com"))
 }
 

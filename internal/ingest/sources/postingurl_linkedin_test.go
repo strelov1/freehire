@@ -10,6 +10,7 @@ func TestCanonicalPostingURLLinkedInUsesNativeIdentity(t *testing.T) {
 		"https://www.linkedin.com/jobs/search/?currentJobId=4490679811&keywords=go&location=Berlin",
 		"https://www.linkedin.com/jobs/collections/recommended/?currentJobId=4490679811",
 		"https://de.linkedin.com/jobs/search-results/?currentJobId=4490679811",
+		"https://WWW.LinkedIn.com/jobs/search/?currentJobId=4490679811",
 	} {
 		if got := CanonicalPostingURL(raw); got != linkedinCanonicalURLForTest {
 			t.Errorf("canonical(%q)=%q, want %q", raw, got, linkedinCanonicalURLForTest)
