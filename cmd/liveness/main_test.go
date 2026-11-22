@@ -7,6 +7,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // probedButWithheld names the probed sources search still withholds after two weeks unseen,
@@ -35,6 +36,7 @@ var probedButWithheld = map[string]string{
 	"engage":         "the probe's backlog is days deep",
 	"betterteam":     "the probe's backlog is days deep",
 	"hellowork":      "a bounded probe must verify jobs omitted by partial landing pages",
+	"dice":           "keep the 31-day unseen window while the bounded probe samples the backlog",
 }
 
 // A source this worker probes is usually one whose crawl cannot re-list every live posting, so
@@ -78,14 +80,15 @@ func TestMatchingProvidersMatchesBareAndDashedMembers(t *testing.T) {
 // conversion that dropped it would probe echojobs.io/job/ for every candidate and read a
 // 404 — "this posting is gone" — for a catalogue that is entirely still live.
 func TestStaleCandidateCarriesEveryFieldAnEvidencePathReads(t *testing.T) {
+	cutoff := time.Date(2026, time.November, 20, 0, 0, 0, 0, time.UTC)
 	got := staleCandidate(db.SelectStaleRegisteredCandidatesRow{
 		ID: 42, PublicSlug: "acme-go-dev-42", Source: "echojobs",
 		URL: "https://boards.greenhouse.io/acme/jobs/1", ExternalID: ":acme-go-dev",
 		LivenessStrikes: 1,
-	})
+	}, cutoff)
 	want := candidate{
 		id: 42, publicSlug: "acme-go-dev-42", source: "echojobs",
-		url: "https://boards.greenhouse.io/acme/jobs/1", externalID: ":acme-go-dev", strikes: 1,
+		url: "https://boards.greenhouse.io/acme/jobs/1", externalID: ":acme-go-dev", strikes: 1, seenBefore: pgconv.Instant(cutoff),
 	}
 	if got != want {
 		t.Errorf("staleCandidate() = %+v, want %+v", got, want)
