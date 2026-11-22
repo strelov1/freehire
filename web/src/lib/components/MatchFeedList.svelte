@@ -5,6 +5,9 @@
   import { ApiError, isPlanRefusal } from '#lib/api-core.js';
   import type { FeedCard, FeedMeta } from '#lib/types.js';
   import { ensureDismissedLoaded, isDismissed } from '#lib/dismissedJobs.svelte.js';
+  import { Badge } from '#lib/ui/index.js';
+  import FeedNewEnd from './FeedNewEnd.svelte';
+  import InfiniteScroll from './InfiniteScroll.svelte';
   import JobRow from './JobRow.svelte';
   import MatchBlock from './MatchBlock.svelte';
   import HiddenToast from './HiddenToast.svelte';
@@ -29,7 +32,38 @@
   const hidden = new HiddenJobUndo();
   const visible = $derived(cards.filter((c) => !isDismissed(c.public_slug)));
 
+  // New cards come first. Once they run out the rest waits behind a pause screen. The
+  // server's seen_cursor is posted once, when the candidate scrolls past the last new card,
+  // never just because the list rendered: a list shows every new card at once.
+  let restShown = $state(false);
+  let seenCursor = $state<string | undefined>();
+  // The new phase has ended once the server has handed out a seen_cursor.
+  let newEnded = $state(false);
+  const newCards = $derived(visible.filter((c) => c.is_new));
+  const restCards = $derived(visible.filter((c) => !c.is_new));
+  const paused = $derived(newEnded && newCards.length > 0 && !restShown && (restCards.length > 0 || !!cursor));
+  // Where the last new card ends: before the pause screen, or the list's end when no rest follows.
+  const newEndInView = $derived(!!seenCursor && newCards.length > 0 && (paused || (!cursor && restCards.length === 0)));
+
+  function postSeen() {
+    const c = seenCursor;
+    seenCursor = undefined;
+    if (c) api.markFeedSeen(c).catch(() => {}); // the watermark only decides what is new next time
+  }
+
+  function showRest() {
+    postSeen();
+    restShown = true;
+    if (restCards.length === 0) void showMore();
+  }
+
   async function fetchPage(next?: string): Promise<void> {
+    if (!next) {
+      // A restart is a new session: nothing of the old one carries over.
+      restShown = false;
+      newEnded = false;
+      seenCursor = undefined;
+    }
     let res;
     try {
       res = await api.meFeed(PAGE, next);
@@ -42,6 +76,10 @@
     // which would show the empty-profile screen.
     if (next && res.meta.reason === 'source_changed') return fetchPage();
     meta = res.meta;
+    if (res.meta.seen_cursor) {
+      seenCursor = res.meta.seen_cursor;
+      newEnded = true;
+    }
     cursor = res.meta.next_cursor;
     const have = new Set(cards.map((c) => c.public_slug));
     cards = [...cards, ...res.data.filter((c) => !have.has(c.public_slug))];
@@ -104,17 +142,21 @@
   </div>
 {:else}
   <ul class="flex flex-col gap-3">
-    {#each visible as card (card.public_slug)}
+    {#each paused ? newCards : visible as card (card.public_slug)}
       <li>
         <JobRow job={card} onHide={hidden.onHide}>
           {#snippet footer()}
+            {#if card.is_new}<Badge variant="brand" class="mb-2">New</Badge>{/if}
             <MatchBlock match={card.match} />
           {/snippet}
         </JobRow>
       </li>
     {/each}
   </ul>
-  {#if cursor}
+  <InfiniteScroll enabled={newEndInView && !loading} onLoad={postSeen} />
+  {#if paused}
+    <FeedNewEnd onContinue={showRest} />
+  {:else if cursor}
     <button
       type="button"
       class="mx-auto rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-medium transition hover:bg-accent disabled:opacity-50"

@@ -10,7 +10,7 @@ import (
 func TestCursor_RoundTripTamperExpiry(t *testing.T) {
 	s := NewSigner([]byte("k"))
 	now := time.Unix(1_800_000_000, 0)
-	want := Cursor{UserID: 7, Source: "profile", Version: 42, SnapshotAt: now.Unix(), Offset: 20, ExpiresAt: now.Add(CursorTTL).Unix()}
+	want := Cursor{UserID: 7, Source: "profile", Version: 42, SnapshotAt: now.Unix(), Offset: 20, ExpiresAt: now.Add(CursorTTL).Unix(), Phase: PhaseRest, SeenAt: now.Unix() - 60}
 	tok := s.Sign(want)
 
 	if got, err := s.Verify(tok, now); err != nil || got != want {
