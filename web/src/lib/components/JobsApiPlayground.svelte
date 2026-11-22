@@ -258,7 +258,8 @@
       >
     {:else if result}
       <span
-        ><span class="text-foreground">200 OK</span> · {result.total.toLocaleString('en-US')} matches · {result.ms} ms</span
+        ><span class="text-foreground">200 OK</span> · {result.total.toLocaleString('en-US')}
+        {result.total === 1 ? 'match' : 'matches'} · {result.ms} ms</span
       >
     {:else}
       <span>Sample response — press Run for a live one, no key needed</span>
