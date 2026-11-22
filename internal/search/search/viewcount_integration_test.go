@@ -4,6 +4,7 @@ package search
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/meilisearch/meilisearch-go"
@@ -13,9 +14,6 @@ import (
 func TestIntegration_SetViewCountsUpdatesOnlyIndexedDocuments(t *testing.T) {
 	ctx := context.Background()
 	c := startMeili(t)
-	if _, err := c.manager.ExperimentalFeatures().SetEditDocumentsByFunction(true).UpdateWithContext(ctx); err != nil {
-		t.Fatal(err)
-	}
 	if err := c.EnsureIndex(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -27,10 +25,29 @@ func TestIntegration_SetViewCountsUpdatesOnlyIndexedDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// A document with a live skill vector and the leftover chunks of the retired desc
+	// embedder (14 x 768 floats, past the edit-by-function array cap).
+	skills := make([]float32, 1280)
+	skills[0] = 1
+	desc := make([][]float32, 14)
+	for i := range desc {
+		desc[i] = make([]float32, 768)
+	}
+	awaitOK(t, ctx, c, func() (*meilisearch.TaskInfo, error) {
+		return c.facet.AddDocumentsWithContext(ctx, []map[string]any{{
+			"id": 3, "title": "Vector engineer", "view_count": 1,
+			"_vectors": map[string]any{SkillEmbedder: skills, "desc": map[string]any{"embeddings": desc, "regenerate": false}},
+		}}, nil)
+	})
+	var before map[string]any
+	if err := c.facet.GetDocumentWithContext(ctx, "3", &meilisearch.DocumentQuery{RetrieveVectors: true}, &before); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := c.SetViewCounts(ctx, nil); err != nil {
 		t.Fatalf("empty counts: %v", err)
 	}
-	if err := c.SetViewCounts(ctx, map[int64]int64{1: 42, 999: 7}); err != nil {
+	if err := c.SetViewCounts(ctx, map[int64]int64{1: 42, 3: 9, 999: 7}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -46,6 +63,16 @@ func TestIntegration_SetViewCountsUpdatesOnlyIndexedDocuments(t *testing.T) {
 	}
 	if two["view_count"] != float64(5) {
 		t.Fatalf("doc 2 view_count = %v, want 5 untouched", two["view_count"])
+	}
+	var three map[string]any
+	if err := c.facet.GetDocumentWithContext(ctx, "3", &meilisearch.DocumentQuery{RetrieveVectors: true}, &three); err != nil {
+		t.Fatal(err)
+	}
+	if three["view_count"] != float64(9) || three["title"] != "Vector engineer" {
+		t.Fatalf("doc 3 = %v, want view_count 9 and its title kept", three["view_count"])
+	}
+	if !reflect.DeepEqual(three["_vectors"], before["_vectors"]) {
+		t.Fatal("doc 3 lost or changed its vectors")
 	}
 	var ghost map[string]any
 	err := c.facet.GetDocumentWithContext(ctx, "999", nil, &ghost)

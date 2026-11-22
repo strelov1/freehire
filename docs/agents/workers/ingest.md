@@ -13,6 +13,12 @@ Part of the [worker index](../workers.md): what each `cmd/<name>` worker does, w
   or zero flags keep the worklist values. `pages` and `jobage`
   are stored explicitly in each new board's provider options, and `--easyapply-pages=40`
   adds the optional `easyapply_pages` (omitted at 0; see providers/linkedin.md). Registration
+  `--jobage-hours=6` (1..720, 0 omits) stores the optional `jobage_hours`, which overrides
+  `jobage` on the adapter with an hour window. Like `--pages`/`--jobage`, a non-zero flag
+  overrides the worklist for every entry; omit it to let each entry's own `jobage_hours`
+  (accepted in `queries` and `matrix` entries) stand. A keyword of `*` registers a keyword-less
+  "firehose" search of the whole location (see providers/linkedin.md for the ~600-700 card
+  depth limit that makes short windows necessary). Registration
   never changes an existing board, so existing searches get it from the operator, once:
   `UPDATE boards SET tenants = tenants || '{"easyapply_pages":"40"}'::jsonb WHERE provider='linkedin' AND status IN ('pending','active');`
   (`boards.tenants` is jsonb of string values).

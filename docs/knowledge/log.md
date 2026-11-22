@@ -1,5 +1,15 @@
 # Knowledge update history
 
+## 2026-11-22
+
+Documented LinkedIn "firehose" searches: Board `*` omits the `keywords` parameter so one search
+per location lists the whole market, and `tenants.jobage_hours` (1..720, overrides `jobage`)
+sets sub-day windows. Evidence is a live guest-API measurement: keyword-less
+`location=Germany&f_TPR=r86400&f_AL=true` returns cards, and listing depth tops out around
+600-700 cards per query (start=700 empty for Germany, and once for the US, whose 24h Easy Apply
+flow exceeds it), so big markets need windows of a few hours. `harvest-linkedin` gained
+`--jobage-hours` and a per-entry `jobage_hours`. No production rollout is asserted.
+
 ## 2026-11-17
 
 Documented the optional LinkedIn Easy Apply listing pass (`tenants.easyapply_pages`). Evidence is a

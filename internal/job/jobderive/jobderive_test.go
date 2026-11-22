@@ -453,6 +453,42 @@ func TestDerive_StructuredGeographyShadow(t *testing.T) {
 		})
 	}
 }
+
+// A line that states only a worldwide scope is the posting's own reach; the adapter's
+// country beside it is the employer's office (Workday, jobboardly), and a stored row's
+// columns fed back by backfill-derive must not narrow it again. "Global" counts beside
+// "remote".
+func TestDerive_WorldwideLineBeatsStructuredCountry(t *testing.T) {
+	for _, tc := range []struct {
+		location           string
+		countries, regions []string
+	}{
+		{"Worldwide", []string{"de"}, nil},
+		{"Worldwide", []string{"de"}, []string{"eu"}},
+		{"Remote / Worldwide", []string{"us"}, []string{"north_america"}},
+		{"Remote, Worldwide", []string{"us"}, nil},
+		{"Global Remote", []string{"us"}, nil},
+		{"Remote - Global", []string{"sg"}, []string{"apac"}},
+		{"Remote (Global)", []string{"co"}, nil},
+	} {
+		t.Run(tc.location, func(t *testing.T) {
+			got := Derive(Input{Title: "Backend Engineer", Location: tc.location, Countries: tc.countries, Regions: tc.regions})
+			if !reflect.DeepEqual(got.Regions, []string{"global"}) || len(got.Countries) != 0 {
+				t.Fatalf("countries = %v, regions = %v, want none and [global]", got.Countries, got.Regions)
+			}
+		})
+	}
+}
+
+// A bare "Global" is also an employer's name or a headquarters label, so without "remote"
+// beside it the adapter's country still pins the posting.
+func TestDerive_BareGlobalLineYieldsToStructuredCountry(t *testing.T) {
+	got := Derive(Input{Title: "Backend Engineer", Location: "Global", Countries: []string{"us"}})
+	if !reflect.DeepEqual(got.Countries, []string{"us"}) || !reflect.DeepEqual(got.Regions, []string{"north_america"}) {
+		t.Fatalf("countries = %v, regions = %v, want [us] and [north_america]", got.Countries, got.Regions)
+	}
+}
+
 func TestDerive_NegativeStructuredExperience(t *testing.T) {
 	n := -1
 	got := Derive(Input{Title: "Backend Engineer", ExperienceYearsMin: &n})

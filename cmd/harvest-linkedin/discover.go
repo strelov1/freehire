@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -22,6 +23,7 @@ const (
 	defaultPages = 1
 	maxPages     = 100
 	maxJobAge    = 30
+	maxJobHours  = 720
 	// pageSize is the listing's fixed page size, which drives the `start` offset.
 	pageSize = 10
 )
@@ -35,6 +37,8 @@ type query struct {
 	Location string `yaml:"location"`
 	JobAge   int    `yaml:"jobage"`
 	Pages    int    `yaml:"pages"`
+	// JobAgeHours narrows the window to hours and overrides JobAge on the adapter side; 0 omits it.
+	JobAgeHours int `yaml:"jobage_hours"`
 	// EasyApplyPages is set by --easyapply-pages only, never by the worklist: 0 omits the option.
 	EasyApplyPages int `yaml:"-"`
 }
@@ -47,6 +51,7 @@ func (q *query) UnmarshalYAML(node *yaml.Node) error {
 		Location string    `yaml:"location"`
 		JobAge   yaml.Node `yaml:"jobage"`
 		Pages    yaml.Node `yaml:"pages"`
+		Hours    yaml.Node `yaml:"jobage_hours"`
 	}
 	if err := node.Decode(&raw); err != nil {
 		return err
@@ -59,7 +64,11 @@ func (q *query) UnmarshalYAML(node *yaml.Node) error {
 	if err != nil {
 		return err
 	}
-	*q = query{Keywords: raw.Keywords, Location: raw.Location, Pages: pages, JobAge: jobAge}
+	hours, err := queryLimit(&raw.Hours, "jobage_hours")
+	if err != nil {
+		return err
+	}
+	*q = query{Keywords: raw.Keywords, Location: raw.Location, Pages: pages, JobAge: jobAge, JobAgeHours: hours}
 	return nil
 }
 
@@ -81,10 +90,11 @@ func queryLimit(node *yaml.Node, field string) (int, error) {
 // shared budget. Explicit queries come first, so an explicit entry keeps its own budget when a
 // matrix repeats its keyword and market.
 type matrixEntry struct {
-	Keywords  []string
-	Locations []string
-	Pages     int
-	JobAge    int
+	Keywords    []string
+	Locations   []string
+	Pages       int
+	JobAge      int
+	JobAgeHours int
 }
 
 func (m *matrixEntry) UnmarshalYAML(node *yaml.Node) error {
@@ -93,6 +103,7 @@ func (m *matrixEntry) UnmarshalYAML(node *yaml.Node) error {
 		Locations []string  `yaml:"locations"`
 		JobAge    yaml.Node `yaml:"jobage"`
 		Pages     yaml.Node `yaml:"pages"`
+		Hours     yaml.Node `yaml:"jobage_hours"`
 	}
 	if err := node.Decode(&raw); err != nil {
 		return err
@@ -108,7 +119,11 @@ func (m *matrixEntry) UnmarshalYAML(node *yaml.Node) error {
 	if err != nil {
 		return err
 	}
-	*m = matrixEntry{Keywords: raw.Keywords, Locations: raw.Locations, Pages: pages, JobAge: jobAge}
+	hours, err := queryLimit(&raw.Hours, "jobage_hours")
+	if err != nil {
+		return err
+	}
+	*m = matrixEntry{Keywords: raw.Keywords, Locations: raw.Locations, Pages: pages, JobAge: jobAge, JobAgeHours: hours}
 	return nil
 }
 
@@ -117,7 +132,7 @@ func (m matrixEntry) queries() []query {
 	out := make([]query, 0, len(m.Keywords)*len(m.Locations))
 	for _, k := range m.Keywords {
 		for _, l := range m.Locations {
-			out = append(out, query{Keywords: k, Location: l, Pages: m.Pages, JobAge: m.JobAge})
+			out = append(out, query{Keywords: k, Location: l, Pages: m.Pages, JobAge: m.JobAge, JobAgeHours: m.JobAgeHours})
 		}
 	}
 	return out
@@ -161,8 +176,8 @@ func normalizeQueries(queries []query) ([]query, error) {
 		if q.Keywords == "" || q.Location == "" {
 			return nil, fmt.Errorf("query requires keywords and location")
 		}
-		if q.Pages < 0 || q.Pages > maxPages || q.JobAge < 0 || q.JobAge > maxJobAge {
-			return nil, fmt.Errorf("query %q/%q requires pages=1..%d and jobage=1..%d", q.Keywords, q.Location, maxPages, maxJobAge)
+		if q.Pages < 0 || q.Pages > maxPages || q.JobAge < 0 || q.JobAge > maxJobAge || q.JobAgeHours < 0 || q.JobAgeHours > maxJobHours {
+			return nil, fmt.Errorf("query %q/%q requires pages=1..%d, jobage=1..%d and jobage_hours=1..%d", q.Keywords, q.Location, maxPages, maxJobAge, maxJobHours)
 		}
 		if q.Pages == 0 {
 			q.Pages = defaultPages
@@ -182,9 +197,14 @@ func normalizeQueries(queries []query) ([]query, error) {
 // searchURL builds the listing URL for one page (1-indexed) of a query.
 func searchURL(q query, page int) string {
 	params := url.Values{}
-	params.Set("keywords", q.Keywords)
+	if q.Keywords != sources.LinkedInAnyKeyword {
+		params.Set("keywords", q.Keywords)
+	}
 	params.Set("location", q.Location)
-	if q.JobAge > 0 {
+	switch {
+	case q.JobAgeHours > 0:
+		params.Set("f_TPR", "r"+strconv.Itoa(q.JobAgeHours*3600))
+	case q.JobAge > 0:
 		params.Set("f_TPR", "r"+strconv.Itoa(q.JobAge*86400))
 	}
 	params.Set("start", strconv.Itoa((page-1)*pageSize))

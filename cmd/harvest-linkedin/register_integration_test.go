@@ -13,6 +13,29 @@ import (
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
+func TestRegisterSearchesStoresTheFirehoseSentinel(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	repo := boardcatalog.NewQueriesRepository(db.New(pool))
+	inputs, err := registrationPlan([]query{{Keywords: "*", Location: "Germany", Pages: 1, JobAge: 1, JobAgeHours: 6, EasyApplyPages: 40}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := registerSearches(ctx, boardcatalog.NewInserter(repo, sources.Taxonomy()), inputs)
+	if err != nil || st.Added != 1 {
+		t.Fatalf("registration=%+v, %v", st, err)
+	}
+	rows, err := repo.ListActiveForProvider(ctx, "linkedin")
+	want := map[string]string{"pages": "1", "jobage": "1", "jobage_hours": "6", "easyapply_pages": "40"}
+	if err != nil || len(rows) != 1 || rows[0].Board != "*" || !reflect.DeepEqual(rows[0].Tenants, want) {
+		t.Fatalf("rows=%+v, %v", rows, err)
+	}
+	st, err = registerSearches(ctx, boardcatalog.NewInserter(repo, sources.Taxonomy()), inputs)
+	if err != nil || st.AlreadyKnown != 1 {
+		t.Fatalf("repeat registration=%+v, %v", st, err)
+	}
+}
+
 func TestRegisterSearchesCreatesPendingSlicesAndPreservesExistingConfiguration(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()

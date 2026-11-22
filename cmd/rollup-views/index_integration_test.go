@@ -7,6 +7,7 @@ import (
 	"errors"
 	"maps"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
@@ -52,9 +53,9 @@ func TestPushViewCountsWritesOnlyNewSteps(t *testing.T) {
 	deltas := map[int64]int64{crossed: 1, jumped: 47, low: 1, sameStep: 1, closed: 1, dup: 1, crossed + 1_000_000: 3}
 
 	idx := &fakeIndex{}
-	n, err := pushViewCounts(ctx, q, idx, deltas)
-	if err != nil || n != 2 {
-		t.Fatalf("pushViewCounts = %d, %v; want 2, nil", n, err)
+	n, skipped, err := pushViewCounts(ctx, q, idx, deltas, time.Now().Add(time.Hour))
+	if err != nil || n != 2 || skipped != 0 {
+		t.Fatalf("pushViewCounts = %d, %d, %v; want 2, 0, nil", n, skipped, err)
 	}
 	want := map[int64]int64{crossed: 5, jumped: 50}
 	if len(idx.got) != 1 || !maps.Equal(idx.got[0], want) {
@@ -62,7 +63,7 @@ func TestPushViewCountsWritesOnlyNewSteps(t *testing.T) {
 	}
 
 	failing := &fakeIndex{err: errors.New("meili down")}
-	if n, err := pushViewCounts(ctx, q, failing, deltas); err == nil || n != 0 {
+	if n, _, err := pushViewCounts(ctx, q, failing, deltas, time.Now().Add(time.Hour)); err == nil || n != 0 {
 		t.Fatalf("failing index: pushViewCounts = %d, %v; want 0 and the error", n, err)
 	}
 }
