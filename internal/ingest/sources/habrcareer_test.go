@@ -233,6 +233,7 @@ func TestHabrCareerLaterPageErrorIsBoardError(t *testing.T) {
 // habrPagedFake serves a listing of n one-vacancy pages, each reporting totalPages, so a test can
 // model a catalogue longer than any fixed page budget without fixture files.
 func habrPagedFake(t *testing.T, n, totalPages int) *fakeHabrCareer {
+	t.Helper()
 	fake := newHabrFake(t)
 	fake.pages = map[int]string{}
 	for p := 1; p <= n; p++ {
