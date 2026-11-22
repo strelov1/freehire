@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/application/viewlog"
 	"github.com/strelov1/freehire/internal/ingest/catalogstats"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -208,14 +210,14 @@ func (h *statsHandlers) CatalogScale(ctx context.Context) (*apigen.CatalogScaleO
 	}}, nil
 }
 
-// engagementCacheKey and engagementCacheTTL hold the engagement row between requests:
-// the query sums the whole, ever-growing job_daily_views rollup and nobody reads the totals to the minute.
+// engagementCacheKey and engagementCacheTTL hold the engagement counters between requests: they read
+// small tables, and nobody reads the totals to the minute.
 const (
-	engagementCacheKey = "stats:engagement:v1"
+	engagementCacheKey = "stats:engagement:v2"
 	engagementCacheTTL = 10 * time.Minute
 )
 
-func (h *statsHandlers) engagementStats(ctx context.Context) (db.GetEngagementStatsRow, error) {
+func (h *statsHandlers) engagementCounts(ctx context.Context) (db.GetEngagementStatsRow, error) {
 	if h.cache != nil {
 		if s, found, err := cache.GetJSON[db.GetEngagementStatsRow](ctx, h.cache, engagementCacheKey); err == nil && found {
 			return s, nil
@@ -232,11 +234,37 @@ func (h *statsHandlers) engagementStats(ctx context.Context) (db.GetEngagementSt
 	return s, nil
 }
 
+// viewTotals reads the page-view totals cmd/rollup-stats publishes. Only with none published (no
+// Redis, a cold one before the worker's first run) does it sum the rollup itself: a full scan that
+// timed this endpoint out dozens of times a day while it ran on every cache miss (2026-11-21).
+func (h *statsHandlers) viewTotals(ctx context.Context) (viewlog.Totals, error) {
+	t, found, err := viewlog.LoadTotals(ctx, h.cache)
+	if err != nil {
+		log.Printf("stats: reading the published view totals: %v (summing the rollup instead)", err)
+	}
+	if found {
+		return t, nil
+	}
+	row, err := h.queries.GetPageViewTotals(ctx)
+	if err != nil {
+		return t, err
+	}
+	t = viewlog.Totals{Viewed: row.Viewed}
+	if row.ViewedSince.Valid {
+		t.ViewedSince = &row.ViewedSince.Time
+	}
+	return t, nil
+}
+
 // EngagementStats serves the engagement counts: user_jobs saved, applied and viewed, plus CVs
 // uploaded and tailored, alert subscribers, inboxes connected and saved searches. Integer
 // totals only; an empty database yields zeros.
 func (h *statsHandlers) EngagementStats(ctx context.Context) (*apigen.EngagementStatsOK, error) {
-	s, err := h.engagementStats(ctx)
+	s, err := h.engagementCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	views, err := h.viewTotals(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -245,14 +273,14 @@ func (h *statsHandlers) EngagementStats(ctx context.Context) (*apigen.Engagement
 	// site (no backfill exists). ViewedSince publishes that window so the figure does not
 	// read as all-time; null means nothing has been rolled up yet.
 	viewedSince := apigen.NilString{Null: true}
-	if s.ViewedSince.Valid {
-		viewedSince = apigen.NewNilString(s.ViewedSince.Time.Format(dateLayout))
+	if views.ViewedSince != nil {
+		viewedSince = apigen.NewNilString(views.ViewedSince.Format(dateLayout))
 	}
 
 	return &apigen.EngagementStatsOK{Data: apigen.Engagement{
 		Saved:            int64(s.Saved),
 		Applied:          int64(s.Applied),
-		Viewed:           int64(s.Viewed),
+		Viewed:           views.Viewed,
 		ViewedSince:      viewedSince,
 		CvsUploaded:      int64(s.CvsUploaded),
 		CvsTailored:      int64(s.CvsTailored),
