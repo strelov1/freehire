@@ -246,7 +246,10 @@ func (s cvonline) detail(ctx context.Context, site cvonlineSite, p cvonlinePosti
 		return Job{}, false, nil
 	}
 	job, ok := cvonlineJob(v, state.Props.PageProps.Locations, site, p)
-	return job, ok, nil
+	if !ok {
+		return Job{}, false, fmt.Errorf("published posting %d has no title or employer", p.id)
+	}
+	return job, true, nil
 }
 
 // cvonlineState is the part of the page's __NEXT_DATA__ the adapter reads.

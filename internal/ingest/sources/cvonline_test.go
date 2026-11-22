@@ -194,6 +194,20 @@ func TestCVOnlineGonePostingIsDroppedAndNoAnswerFailsBoard(t *testing.T) {
 	}
 }
 
+func TestCVOnlinePublishedPostingWithoutEmployerIsUnreadable(t *testing.T) {
+	const page = "https://www.cv.lv/lv/vacancy/1683926/rica-nams-sia/gramatvedis"
+	f := newCVOnlineFake(t)
+	f.pages[page] = "lv_1683926_missing_employer.html"
+	s := newTestCVOnline(f)
+	jobs, err := s.Fetch(context.Background(), CompanyEntry{Provider: "cvonline", Board: "lv"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j := cvonlineByID(jobs)["1683926"]; !j.Unreadable || j.URL != page {
+		t.Errorf("want the malformed published posting's unreadable marker, got %+v", j)
+	}
+}
+
 func TestCVOnlineBoundsNewReadsPerRun(t *testing.T) {
 	f := newCVOnlineFake(t)
 	s := newTestCVOnline(f)
