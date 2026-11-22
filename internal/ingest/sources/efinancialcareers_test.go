@@ -65,6 +65,7 @@ func TestEFinancialCareersWholeCatalogueUnderTheWindowWalkedAsOne(t *testing.T) 
 	if a.ExternalID != "25004048" || a.Title != "Principal DevOps/Platform Engineer" ||
 		a.URL != "https://www.efinancialcareers.com/jobs-United_States-CT-Stamford-Principal_DevOpsPlatform_Engineer.id25004048" ||
 		a.Company != "Fnality International" || a.Location != "Stamford, United States" || a.WorkMode != "hybrid" ||
+		a.EmploymentType != "full_time" ||
 		a.IsTechHint {
 		t.Errorf("job = %+v", a)
 	}

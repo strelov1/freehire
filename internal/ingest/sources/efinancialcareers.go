@@ -260,8 +260,13 @@ func (r efcRow) job() (Job, bool) {
 		EmploymentType: efcEmploymentTypes[r.PositionType],
 		WorkMode:       workplaceTypeMode(strings.NewReplacer("In-Office", "onsite").Replace(r.WorkType)),
 	}
-	if j.EmploymentType == "" && r.EmploymentType == "Part time" {
-		j.EmploymentType = "part_time"
+	if j.EmploymentType == "" {
+		switch r.EmploymentType {
+		case "Full time":
+			j.EmploymentType = "full_time"
+		case "Part time":
+			j.EmploymentType = "part_time"
+		}
 	}
 	j.Remote = j.WorkMode == "remote"
 	r.salary(&j)
