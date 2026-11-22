@@ -165,6 +165,11 @@ func CanonicalPostingURL(raw string) string {
 		return raw
 	}
 	host := strings.ToLower(u.Hostname())
+	// Search and collections pages show the selected posting (and its Easy Apply modal) beside
+	// the list, naming it only in ?currentJobId=; that is where candidates usually stand.
+	if id := u.Query().Get("currentJobId"); isLinkedInURL(u) && strings.HasPrefix(u.Path, "/jobs/") && isDigits(id) {
+		return LinkedInPostingURL(id)
+	}
 	suffix, known := applyFormSuffix[host]
 	if !known {
 		suffix, known = applyFormSuffixByApex(host)
