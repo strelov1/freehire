@@ -1469,6 +1469,22 @@ A failure to store or send never surfaces as an error.
 curl -X POST "https://freehire.me/api/v1/me/attribution" -b cookies.txt
 ```
 
+### `PUT /me/auto-apply-settings`
+
+**Auth:** Session only
+
+Session cookie only: whether attempts are sent without a review is the person's call.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `confirm_each` | boolean | no | Absent reads as false. |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/auto-apply-settings" -b cookies.txt
+```
+
 ### `POST /me/email`
 
 **Auth:** Session only

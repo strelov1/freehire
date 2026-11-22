@@ -3423,6 +3423,16 @@ Readable with a session or an API key.
 curl "https://freehire.me/api/v1/me/agent-permissions" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+### `GET /me/auto-apply-settings`
+
+**Auth:** Session or API key
+
+Readable with a session or an API key.
+
+```bash
+curl "https://freehire.me/api/v1/me/auto-apply-settings" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
 ### `GET /me/profile`
 
 **Auth:** Session or API key

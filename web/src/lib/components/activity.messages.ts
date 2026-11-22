@@ -26,7 +26,8 @@ export const messages = defineMessages(
       empty: 'No automatic applications yet. Start one from a job page.',
       confirmEach: {
         label: 'Confirm every application',
-        detail: "Off: an application is sent as soon as it's ready if the form asks nothing only you can answer. On: each one waits for your OK.",
+        detail:
+          "Off: an application is sent as soon as it's ready if the form asks nothing only you can answer. On: each one waits for your OK.",
         loadError: "Couldn't load this setting.",
         saveError: "Couldn't save this setting. Try again.",
       },
@@ -100,7 +101,8 @@ export const messages = defineMessages(
         empty: 'Автоподач пока нет. Запустите первую на странице вакансии.',
         confirmEach: {
           label: 'Подтверждать каждую заявку',
-          detail: 'Выключено: заявка уходит, как только готова, если в форме нет вопросов, на которые можете ответить только вы. Включено: каждая ждёт вашего подтверждения.',
+          detail:
+            'Выключено: заявка уходит, как только готова, если в форме нет вопросов, на которые можете ответить только вы. Включено: каждая ждёт вашего подтверждения.',
           loadError: 'Не удалось загрузить настройку.',
           saveError: 'Не удалось сохранить настройку. Попробуйте ещё раз.',
         },

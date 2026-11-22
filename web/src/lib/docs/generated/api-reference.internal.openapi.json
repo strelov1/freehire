@@ -3204,6 +3204,57 @@
         }
       }
     },
+    "/me/auto-apply-settings": {
+      "put": {
+        "operationId": "setAutoApplySettings",
+        "description": "Session cookie only: whether attempts are sent without a review is the person's call.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutoApplySettings"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoApplySettingsUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/autofill/run": {
       "post": {
         "operationId": "runAutofill",
@@ -11289,6 +11340,27 @@
         "properties": {
           "retried": {
             "type": "boolean"
+          }
+        }
+      },
+      "AutoApplySettings": {
+        "type": "object",
+        "required": [
+          "confirm_each"
+        ],
+        "properties": {
+          "confirm_each": {
+            "type": "boolean",
+            "description": "Wait for the account's approval on every auto-apply attempt, even one whose form asks nothing only the candidate can answer."
+          }
+        }
+      },
+      "AutoApplySettingsUpdate": {
+        "type": "object",
+        "properties": {
+          "confirm_each": {
+            "type": "boolean",
+            "description": "Absent reads as false."
           }
         }
       },
