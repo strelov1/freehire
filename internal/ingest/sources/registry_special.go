@@ -303,6 +303,9 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// Taleez: a French ATS with no per-customer listing, enumerated from its job sitemap, each
 	// new posting read from its page's schema.org JobPosting. See taleez.go.
 	registry["taleez"] = NewTaleez(c, c)
+	// karriere.at: Austria's largest general job board, enumerated from its jobs sitemap, each new
+	// posting read from its page's schema.org JobPosting over a plain client. See karriereat.go.
+	registry["karriereat"] = NewKarriereAt(c, c)
 	// Dualoo: a Swiss ATS for SMEs and municipalities, enumerated from its per-customer sitemaps,
 	// each new posting read from its page's schema.org JobPosting. See dualoo.go.
 	registry["dualoo"] = NewDualoo(c, c)
