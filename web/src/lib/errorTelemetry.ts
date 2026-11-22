@@ -21,7 +21,10 @@ function sanitize(value: string, limit: number): string {
     .replace(/(?:https?|file|chrome-extension|moz-extension):\/\/[^\s)"'<>]+/gi, (raw) => {
       try {
         const url = new URL(raw);
-        return `${url.protocol}//${url.host}${url.pathname}`;
+        const [, section = '', token] = url.pathname.split('/', 3);
+        // Booking paths contain the access token itself, including in stack frames.
+        const path = token && decodeURIComponent(section) === 'booking' ? '/booking/[token]' : url.pathname;
+        return `${url.protocol}//${url.host}${path}`;
       } catch {
         return '[url]';
       }

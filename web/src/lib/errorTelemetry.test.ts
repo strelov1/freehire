@@ -69,26 +69,33 @@ describe('error telemetry', () => {
   it('is inert without configuration', () => {
     expect(createErrorTelemetry({ service: 'freehire-web' })).toBeUndefined();
   });
-  it('tags browser events with the sanitized page URL and user agent', async () => {
+  it.each([
+    ['/jobs', '/jobs'],
+    ['/booking/example-credential', '/booking/[token]'],
+    ['/book%69ng/example-credential', '/booking/[token]'],
+  ])('tags browser events on %s with the sanitized page URL and user agent', async (path, expectedPath) => {
     const exporter = new InMemoryLogRecordExporter();
     const telemetry = createErrorTelemetry({
       endpoint: 'http://localhost/v1/logs',
       service: 'freehire-web',
       exporter,
     });
+    const page = new URL(`https://freehire.me${path}?q=secret&ref=token-private#fragment`);
     vi.stubGlobal('window', {
-      location: new URL('https://freehire.me/jobs?q=secret&ref=token-private#fragment'),
+      location: page,
       navigator: { userAgent: 'Mozilla/5.0 (test-agent) Chrome ExtensionBot/1.0' },
     });
     try {
-      telemetry?.capture(new Error('appendChild defect'));
+      const error = new Error(`appendChild defect at ${page.href}`);
+      telemetry?.capture(error);
       await telemetry?.flush();
       const [record] = exporter.getFinishedLogRecords();
       if (!record) throw new Error('Expected one exported exception');
       expect(record.attributes).toMatchObject({
-        url: 'https://freehire.me/jobs',
+        url: `https://freehire.me${expectedPath}`,
         user_agent: 'Mozilla/5.0 (test-agent) Chrome ExtensionBot/1.0',
       });
+      expect(JSON.stringify(record.attributes)).not.toMatch(/example-credential|token-private|fragment/);
     } finally {
       vi.unstubAllGlobals();
       await telemetry?.shutdown();

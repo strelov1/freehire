@@ -127,6 +127,7 @@ Normalized fields include `service`, `environment`, `version`, `origin`,
 `exception_type`, `message`, `stacktrace`, `error_source` and `event_name`.
 Go events can additionally carry a route template, method, worker and exit code.
 Web client events can carry `url` (the page origin and path) and `user_agent`.
+Booking URLs are recorded as `/booking/[token]`.
 Use `origin:server` for server alerts and `origin:client` for browser/extension
 alerts. Do not use an arbitrary user-controlled URL as a stream identity.
 
