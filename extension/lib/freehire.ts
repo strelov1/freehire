@@ -409,6 +409,17 @@ export async function getTailoredCVForJob(jobSlug: string, token: string): Promi
   return pickTailoredCVForJob(cvs, jobSlug);
 }
 
+/** What a tailoring run has written onto a CV so far: when it last changed, and its report. */
+export interface CVRunState {
+  updated_at: string;
+  autopilot_report?: unknown;
+}
+
+/** One CV's run state from `GET /me/cvs/:id` (the full record; only these fields are read). */
+export async function getCVRunState(id: string, token: string): Promise<CVRunState> {
+  return getData<CVRunState>(`/api/v1/me/cvs/${encodeURIComponent(id)}`, token);
+}
+
 /**
  * The rendered PDF bytes for a CV, straight off `GET /me/cvs/:id/pdf`. Not `unwrap`-shaped —
  * the response body IS the file, not a `{"data": ...}` envelope — so a failure is read as
