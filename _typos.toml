@@ -31,6 +31,7 @@ extend-exclude = [
 Activ = "Activ" # genU acquired the provider using this name.
 jobb = "jobb"   # Swedish careers hostname in the incident evidence.
 emply = "emply"
+nams = "nams"   # Latvian employer name in the CV-Online fixture.
 canva = "canva"
 mena = "mena"
 synopsys = "synopsys"
