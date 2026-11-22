@@ -2,17 +2,12 @@ package classify
 
 // Vietnamese titles beyond IT (the technical block is vietnamese.go and ranks ahead of this one). Every answer is the one the English twin of the title gets: "Nhân Viên Kế Toán" is an Accountant, "Kỹ Sư Cơ Khí" a Mechanical Engineer. Where the English twin resolves nothing the title stays unresolved too: a bare "Chuyên Viên" or "Nhân Viên" (specialist, staff), "Giám Đốc" (Director), "Trưởng Phòng" (Manager), "Quản Lý" (manager), "Kỹ Thuật" (technical), "Vận Hành" (operations of anything) and "Tư Vấn" (consultant) carry no category of their own: the field word beside them does.
 //
-// The table is ordered in bands, and table order is the precedence: the vetoes, the store and the sales desk, the role nouns that name a trade by themselves, the fields, and the engineers by discipline.
+// The table is ordered in bands, and table order is the precedence: the vetoes, the sales desk, the role nouns that name a trade by themselves, the fields, and the engineers by discipline.
 var vietnameseGeneralCategoryTable = []aliasEntry{
 	// Band 1. Vetoes: "bảo vệ thực vật" is plant protection and "bảo vệ môi trường" the environment, neither a guard; food safety is the quality desk's.
 	{"bao ve thuc vat", categoryNone},
 	{"bao ve moi truong", categoryNone},
 	{"an toan thuc pham", categoryNone},
-	// The store outranks the sale: a shop assistant is retail. A retail CHANNEL (siêu thị, bán lẻ) is not a store: "Tín Dụng Bán Lẻ" is retail banking.
-	{"cua hang truong", "retail"},
-	{"quan ly cua hang", "retail"},
-	{"nhan vien cua hang", "retail"},
-	{"thu ngan", "retail"},
 	{"trinh duoc vien", "sales"},
 	// The desks that talk to the customer.
 	{"cham soc khach hang", "support"},
@@ -131,7 +126,17 @@ var vietnameseGeneralCategoryTable = []aliasEntry{
 	{"cong no", "finance"},
 	{"nhan su", "hr"},
 	{"tien luong", "hr"},
-	{"tuyen dung", "recruiting"},
+	{"can bo tuyen dung", "recruiting"},
+	{"nhan vien tuyen dung", "recruiting"},
+	{"chuyen vien tuyen dung", "recruiting"},
+	{"chuyen vien cao cap tuyen dung", "recruiting"},
+	{"chuyen vien tu van tuyen dung", "recruiting"},
+	{"chuyen vien phu trach tuyen dung", "recruiting"},
+	{"truong nhom tuyen dung", "recruiting"},
+	{"truong phong tuyen dung", "recruiting"},
+	{"truong bo phan tuyen dung", "recruiting"},
+	{"giam doc tuyen dung", "recruiting"},
+	{"thuc tap sinh tuyen dung", "recruiting"},
 	{"hanh chinh", "administration"},
 	{"mua hang", "operations"},
 	{"thu mua", "operations"},

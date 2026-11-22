@@ -35,7 +35,9 @@ func TestParse_Korean(t *testing.T) {
 		{"[채용대행] 서울전선 본사 전산 개발 및 IT 경력사원 채용", "software_engineering", ""},
 		// Beyond IT.
 		{"스마트팩토리 기계설계", "engineering_design", ""},
+		{"스마트팩토리 생산관리 담당자", "manufacturing", ""},
 		{"마트 직원 모집", "retail", ""},
+		{"마트 판매 직원", "retail", ""},
 		{"[뷰티브랜드] 국내 영업 담당", "sales", ""},
 		{"(주)대현단자 납품영업직원 채용", "sales", ""},
 		{"[CHAI CRE.W] 광고기획 AE 모집(경력 13년 이상)", "marketing", ""},
@@ -63,6 +65,8 @@ func TestParse_Korean(t *testing.T) {
 		{"[헤이미니/Salté Library] 물류팀 직원 채용", "logistics", ""},
 		{"[글로벌기업/상여금180%]음료용 빨대 생산직 대규모채용", "manufacturing", ""},
 		{"cnc,mct 오퍼레이터 오래하실분", "manufacturing", ""},
+		{"CNC 프로그래머", "manufacturing", ""},
+		{"소프트웨어 프로그래머", "software_engineering", ""},
 		{"헬러코리아 연구소 기구설계 신입/경력 엔지니어 충원 채용", "engineering_design", ""},
 		{"지열공사현장 안전관리자 모집", "occupational_safety", ""},
 		{"[잠실 롯데 어드벤처] 주간근무 남.여 보안사원 채용", "public_safety", ""},
@@ -85,6 +89,7 @@ func TestIsTech_Korean(t *testing.T) {
 	for _, title := range []string{
 		"[유닛블랙] 백엔드 개발자",
 		"소프트웨어 개발자 채용",
+		"소프트웨어 프로그래머",
 		"정보보호 담당자",
 		"[알라딘] AI 데이터 엔지니어 (경력직)",
 		"임베디드 SW 기술지원",
@@ -97,6 +102,7 @@ func TestIsTech_Korean(t *testing.T) {
 	// Technical words that sit in a non-technical title are not a confident signal.
 	for _, title := range []string{
 		"전자광학 개발자 모집",
+		"CNC 프로그래머",
 		"[삼성/하이닉스 1차 협력사] 사무/관리 정규직 채용",
 		"[K-뉴딜] 어도비 AI 콘텐츠 마케팅 과정",
 		"보안사원 채용",

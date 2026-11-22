@@ -1,6 +1,7 @@
 package classify
 
 import (
+	"slices"
 	"strings"
 	"unicode"
 
@@ -16,9 +17,6 @@ import (
 // Each answer follows the English twin of the same title. Where the twin is doubtful the title stays unresolved: "Giám Đốc" and "Trưởng Phòng" (Director, Manager) state no grade and no craft, "Kỹ Sư Hệ Thống" (System Engineer) and "Kiến Trúc Sư" (the building and the software architect) resolve nothing, nor does a bare "Chuyên Viên" or "Nhân Viên" (specialist, staff). A language requirement ("tiếng Nhật", "tiếng Trung") is never a role. A title listing several roles is filed by the first alias in table order.
 //
 // Table order is the precedence: the vetoes and the lecturer, the technical disciplines, the heads that outrank a field word (a seller of software is a seller), then the generic software words. vietnameseGeneralCategoryTable (vietnamese_general.go) carries every other profession.
-
-// vietnameseCategoryTable lists the Vietnamese category aliases on the folded title, in precedence order.
-var vietnameseCategoryTable = append(append([]aliasEntry{}, vietnameseTechCategoryTable...), vietnameseGeneralCategoryTable...)
 
 var vietnameseTechCategoryTable = []aliasEntry{
 	// The lecturer teaches the subject: "Giảng Viên Công Nghệ Thông Tin" is a teacher.
@@ -62,9 +60,12 @@ var vietnameseTechCategoryTable = []aliasEntry{
 	{"quan tri he thong", "system_administration"},
 	{"quan tri vien he thong", "system_administration"},
 	{"quan tri ha tang", "system_administration"},
-	{"quan ly he thong", "system_administration"},
+	{"it quan ly he thong", "system_administration"},
+	{"quan ly he thong cntt", "system_administration"},
+	{"quan ly he thong cong nghe thong tin", "system_administration"},
 	{"he thong may chu", "system_administration"},
-	{"van hanh he thong", "system_administration"},
+	{"van hanh he thong cntt", "system_administration"},
+	{"van hanh he thong cong nghe thong tin", "system_administration"},
 	{"quan ly du an ha tang", "project_management"},
 	{"ha tang cntt", "system_administration"},
 	{"ha tang cong nghe thong tin", "system_administration"},
@@ -88,14 +89,18 @@ var vietnameseTechCategoryTable = []aliasEntry{
 	{"ky su cntt", "software_engineering"},
 	{"ky su it", "software_engineering"},
 	// The heads that outrank a software word: selling software is selling, running a software project is project management.
+	// Explicit store roles outrank generic selling. A retail channel is not a store.
+	{"cua hang truong", "retail"},
+	{"quan ly cua hang", "retail"},
+	{"nhan vien cua hang", "retail"},
+	{"thu ngan", "retail"},
 	{"chien luoc kinh doanh", categoryNone},
 	{"kinh doanh", "sales"},
 	{"ban hang", "sales"},
 	{"quan ly du an", "project_management"},
 	{"quan tri du an", "project_management"},
 	{"quan ly san pham", "product"},
-	// The generic software words: programming, the software engineer.
-	{"lap trinh", "software_engineering"},
+	// Generic software roles with a software qualifier.
 	{"ky su phan mem", "software_engineering"},
 	{"phat trien phan mem", "software_engineering"},
 	{"chuyen vien phan mem", "software_engineering"},
@@ -105,7 +110,6 @@ var vietnameseTechCategoryTable = []aliasEntry{
 
 // vietnameseTechTerms are the Vietnamese titles that are confidently technical whatever category they resolve, the counterpart of techTitleTerms and held to the same rule: anchored to the discipline. A bare "phan mem" is not a term: "Kinh Doanh Phần Mềm" is a software seller.
 var vietnameseTechTerms = []aliasEntry{
-	{"lap trinh", ""},
 	{"ky su phan mem", ""},
 	{"phat trien phan mem", ""},
 	{"kiem thu phan mem", ""},
@@ -197,9 +201,32 @@ func vietnameseWords(lower string) []string {
 	return words
 }
 
+// vietnameseProgrammingCategory resolves generic programming after more specific roles.
+// A CNC programmer works in manufacturing. PLC programming alone states no category.
+func vietnameseProgrammingCategory(words []string) string {
+	if _, ok := matchStems(words, []aliasEntry{{"lap trinh", ""}}); !ok {
+		return ""
+	}
+	switch {
+	case slices.Contains(words, "cnc"):
+		return "manufacturing"
+	case slices.Contains(words, "plc"):
+		return categoryNone
+	default:
+		return "software_engineering"
+	}
+}
+
 // matchVietnameseCategory resolves the category of a lowercased title the other tables left unresolved. A blind alias answers categoryNone.
 func matchVietnameseCategory(lower string) string {
-	c, _ := matchStems(vietnameseWords(lower), vietnameseCategoryTable)
+	words := vietnameseWords(lower)
+	if c, ok := matchStems(words, vietnameseTechCategoryTable); ok {
+		return c
+	}
+	if c := vietnameseProgrammingCategory(words); c != "" {
+		return c
+	}
+	c, _ := matchStems(words, vietnameseGeneralCategoryTable)
 	return c
 }
 
@@ -211,6 +238,7 @@ func matchVietnameseSeniority(lower string) string {
 
 // isVietnameseTech reports whether a lowercased title states a confidently technical role in Vietnamese.
 func isVietnameseTech(lower string) bool {
-	_, ok := matchStems(vietnameseWords(lower), vietnameseTechTerms)
-	return ok
+	words := vietnameseWords(lower)
+	_, ok := matchStems(words, vietnameseTechTerms)
+	return ok || vietnameseProgrammingCategory(words) == "software_engineering"
 }

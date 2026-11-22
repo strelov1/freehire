@@ -126,6 +126,9 @@ var koreanTechCategoryTable = []aliasEntry{
 	{"프로젝트매니저", "project_management"},
 	{"프로젝트 관리", "project_management"},
 	{"솔루션 컨설턴트", "solutions_engineering"},
+	// CNC programmers work on the production floor.
+	{"cnc 프로그래머", "manufacturing"},
+	{"cnc프로그래머", "manufacturing"},
 	// The generic software words: development, the software engineer, the programmer.
 	{"소프트웨어 개발", "software_engineering"},
 	{"소프트웨어개발", "software_engineering"},
@@ -158,7 +161,8 @@ var koreanTechCategoryTable = []aliasEntry{
 
 // koreanTechTerms are the Korean titles that are confidently technical whatever category they resolve, the counterpart of techTitleTerms and held to the same rule: anchored to the discipline, never a bare 개발자 or 시스템.
 var koreanTechTerms = []string{
-	"소프트웨어 개발", "소프트웨어개발", "소프트웨어 엔지니어", "웹 개발", "웹개발", "웹 프로그래머", "프로그래머",
+	"소프트웨어 개발", "소프트웨어개발", "소프트웨어 엔지니어", "웹 개발", "웹개발",
+	"웹 프로그래머", "웹프로그래머", "소프트웨어 프로그래머", "소프트웨어프로그래머",
 	"게임 개발", "게임개발", "sw 개발", "sw개발", "s/w 개발", "s/w 엔지니어",
 	"sw 엔지니어", "응용sw", "웹 개발자", "소프트웨어 개발자", "sw 개발자", "앱 개발자", "서버 개발자",
 	"프론트엔드", "프런트엔드", "백엔드", "풀스택", "안드로이드", "앱 개발", "앱개발", "임베디드", "펌웨어",
