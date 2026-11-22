@@ -6,6 +6,7 @@ import {
   companyPageTitle,
   companiesPageTitle,
   foreignContentLang,
+  jobsFeedSeo,
   listingRobots,
   metaDescription,
 } from './seo';
@@ -444,6 +445,28 @@ describe('listingRobots', () => {
   // dropping them would strand whatever they reach.
   it('keeps the page a link source', () => {
     expect(listingRobots(0)).toContain('follow');
+  });
+});
+
+describe('jobsFeedSeo', () => {
+  const at = (qs: string) => new URL(`${ORIGIN}/jobs${qs}`);
+
+  it('keeps the unfiltered feed canonical to /jobs and indexable', () => {
+    expect(jobsFeedSeo(at(''))).toEqual({ canonical: `${ORIGIN}/jobs`, robots: undefined });
+    expect(jobsFeedSeo(at('?page=3'))).toEqual({ canonical: `${ORIGIN}/jobs?page=3`, robots: undefined });
+  });
+
+  // Chrome's Share button copies the canonical URL: a filtered feed must name its filters.
+  it('makes a filtered feed self-canonical and noindex', () => {
+    expect(jobsFeedSeo(at('?regions=global&work_mode=remote'))).toEqual({
+      canonical: `${ORIGIN}/jobs?regions=global&work_mode=remote`,
+      robots: 'noindex, follow',
+    });
+    expect(jobsFeedSeo(at('?q=go&page=2')).canonical).toBe(`${ORIGIN}/jobs?q=go&page=2`);
+  });
+
+  it('drops params that are not filters', () => {
+    expect(jobsFeedSeo(at('?utm_source=x'))).toEqual({ canonical: `${ORIGIN}/jobs`, robots: undefined });
   });
 });
 
