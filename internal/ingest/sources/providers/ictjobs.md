@@ -8,3 +8,5 @@
 - **`IsTechHint` is set on every posting**: the board files each one under its own IT category.
 - **Language**: German bodies and titles mostly, English for multinationals (NVIDIA, Logitech). Titles are largely English IT terms with Swiss "(m/w/d)" and "80-100 %" suffixes, so category resolution is expected to be high; the German-only role names (Applikationsspezialist, Informationssicherheitsbeauftragter) are the likely unresolved tail, roughly 10-20% by eye, unmeasured.
 - **The run is bounded**: 2 s between requests, two workers, 300 new pages a run (a cold catalogue takes about six minutes). An unreadable page is deferred to a later run, and its identity is kept for the sweep when another detail answered. A crawl fails if every attempted detail is unreadable, even when the sitemap names stored postings that can be refreshed. HTTP 404/410 count as confirmed removals.
+
+- **Application deadline.** ICTJobs supplies local calendar timestamps such as `2026-12-19T23:59` in `validThrough`. The adapter stores the stated date for deadline-based closure.

@@ -35,9 +35,11 @@ type sitemapBoard struct {
 	// ignoreTelecommute drops the JobPosting's TELECOMMUTE flag, for a board that sets it
 	// without the posting offering remote work (ictjobs).
 	ignoreTelecommute bool
-	http              sitemapBoardHTTP
-	limiter           waiter
-	maxNew            int
+	// parseDeadline is set only for providers whose stated calendar deadline is mapped.
+	parseDeadline func(json.RawMessage) *time.Time
+	http          sitemapBoardHTTP
+	limiter       waiter
+	maxNew        int
 }
 
 type sitemapBoardHTTP interface {
@@ -149,6 +151,9 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool, error)
 		PostedAt:       NotFuture(parseRFC3339OrDate(p.DatePosted)),
 		IsTechHint:     b.techHint,
 	}
+	if b.parseDeadline != nil {
+		job.ApplicationDeadline = b.parseDeadline(p.ValidThrough)
+	}
 	// The board states each posting's own currency (dsml.kz mixes KZT, USD and RUB).
 	if salary := p.BaseSalary.amount; salary != nil {
 		if currency := strings.ToUpper(strings.TrimSpace(salary.Currency)); currency != "" {
@@ -166,6 +171,7 @@ type sitemapBoardPosting struct {
 	Title              string             `json:"title"`
 	Description        string             `json:"description"`
 	DatePosted         string             `json:"datePosted"`
+	ValidThrough       json.RawMessage    `json:"validThrough"`
 	EmploymentType     json.RawMessage    `json:"employmentType"`
 	JobLocationType    string             `json:"jobLocationType"`
 	JobLocation        sitemapBoardPlaces `json:"jobLocation"`

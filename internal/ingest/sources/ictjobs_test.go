@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The fixtures are trimmed from live ictjobs.ch responses fetched 2026-11-22: the posting
@@ -69,6 +70,9 @@ func TestICTJobsHydratesAPostingAndDropsAGonePage(t *testing.T) {
 	}
 	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2026-11-20" {
 		t.Errorf("posted at = %v", j.PostedAt)
+	}
+	if want := time.Date(2026, time.December, 19, 0, 0, 0, 0, time.UTC); j.ApplicationDeadline == nil || !j.ApplicationDeadline.Equal(want) {
+		t.Errorf("application deadline = %v, want %v", j.ApplicationDeadline, want)
 	}
 	if !strings.Contains(j.Description, "Fortinet") {
 		t.Errorf("description = %.80q", j.Description)

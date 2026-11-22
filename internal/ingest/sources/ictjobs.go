@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"encoding/json"
 	"net/url"
 	"strings"
 	"time"
@@ -47,7 +48,25 @@ func NewICTJobs(c sitemapBoardHTTP) Source {
 	b := newSitemapBoard(c, "ictjobs", ictjobsSitemapURL, "ch", ictjobsID, ictjobsRequestInterval, ictjobsMaxNewPerRun)
 	b.techHint = true
 	b.ignoreTelecommute = true
+	b.parseDeadline = ictjobsDeadline
 	return ictjobs{b}
+}
+
+// ictjobsDeadline stores the website's calendar day rather than shifting it across time zones.
+func ictjobsDeadline(value json.RawMessage) *time.Time {
+	var raw string
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return nil
+	}
+	raw = strings.TrimSpace(raw)
+	for _, layout := range []string{time.DateOnly, "2006-01-02T15:04", "2006-01-02T15:04:05", time.RFC3339Nano} {
+		if stamp, err := time.Parse(layout, raw); err == nil {
+			year, month, day := stamp.Date()
+			deadline := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+			return &deadline
+		}
+	}
+	return nil
 }
 
 // One board, no per-tenant id.
