@@ -67,12 +67,12 @@ func TestSanitizeAutopilotReportBoundsTextAndCount(t *testing.T) {
 
 	// A report is one entry per requirement of one vacancy. An unbounded list would be
 	// replayed into the model's context on every later turn of the session.
-	many := make([]AutopilotEntry, maxAutopilotEntries+1)
+	many := make([]AutopilotEntry, MaxAutopilotEntries+1)
 	for i := range many {
 		many[i] = AutopilotEntry{Requirement: "req", Status: AutopilotOpen}
 	}
 	if _, err := SanitizeAutopilotReport(many); err == nil {
-		t.Errorf("a report of %d entries was accepted; want it refused above %d", len(many), maxAutopilotEntries)
+		t.Errorf("a report of %d entries was accepted; want it refused above %d", len(many), MaxAutopilotEntries)
 	}
 }
 

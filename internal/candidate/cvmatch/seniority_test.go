@@ -71,3 +71,13 @@ func TestSeniorityCategoryReadsTheHighestGradeTheCVClaims(t *testing.T) {
 		t.Errorf("earned = %d, want full marks for the staff grade the CV reached", c.Earned)
 	}
 }
+
+// A senior with lead and C-level titles on the CV is not a misfit for a Senior role: the
+// strongest claim is above the grade asked, which must not score zero.
+func TestSeniorityCategoryCVAboveTheAskedGradeEarnsFullMarks(t *testing.T) {
+	c := seniorityCategory("Senior Full Stack Developer", "Senior Engineer 2012–2019\nTech Lead 2020–2022\nCTO 2023–2025")
+
+	if !c.Available || c.Earned != WeightSeniority {
+		t.Errorf("available=%v earned=%d, want full marks for a CV above the asked grade", c.Available, c.Earned)
+	}
+}
