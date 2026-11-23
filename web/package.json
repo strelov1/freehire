@@ -79,7 +79,7 @@
     "posthog-js": "^1.450.0",
     "satori": "^0.63.2",
     "satori-html": "^0.3.2",
-    "simple-icons": "^16.36.0",
+    "simple-icons": "^16.38.0",
     "svelte-dnd-action": "^0.9.80",
     "three": "^0.187.0"
   },
