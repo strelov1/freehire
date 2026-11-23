@@ -55,6 +55,7 @@ function firstAffirmedMatch(line: string, patterns: readonly RegExp[]) {
       if (!isNegated(line.slice(0, match.index))) return match;
     }
   }
+  return undefined;
 }
 
 function excerpt(line: string, index: number): string {
