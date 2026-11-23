@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api-core.js';
 
@@ -303,14 +304,17 @@ describe('MatchFeedList', () => {
   });
 
   describe('hide company', () => {
-    const open = async () => {
-      meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
-      render(MatchFeedList);
+    const openConfirmation = async () => {
       const trigger = await screen.findByRole('button', { name: 'More actions for Acme' });
       await fireEvent.click(trigger);
       await fireEvent.click(screen.getByRole('menuitem', { name: 'Hide company' }));
       await screen.findByText('Hide Acme from Matches?');
       return trigger;
+    };
+    const open = () => {
+      meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
+      render(MatchFeedList);
+      return openConfirmation();
     };
     beforeEach(() => {
       avoidCompany.mockReset();
@@ -345,6 +349,33 @@ describe('MatchFeedList', () => {
       expect(meFeed).toHaveBeenLastCalledWith(20, undefined);
       expect(screen.queryByText('a')).toBeNull();
       expect(screen.queryByText('Show more matches')).toBeNull();
+    });
+
+    it('lets the replacement feed paginate while the previous request is still pending', async () => {
+      const oldPage = Promise.withResolvers<ReturnType<typeof page>>();
+      const nextPage = Promise.withResolvers<ReturnType<typeof page>>();
+      meFeed
+        .mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }))
+        .mockReturnValueOnce(oldPage.promise)
+        .mockResolvedValueOnce(page(['b'], { next_cursor: 'c2' }))
+        .mockReturnValueOnce(nextPage.promise);
+      avoidCompany.mockResolvedValue({});
+      render(MatchFeedList);
+      await fireEvent.click(await screen.findByRole('button', { name: 'Show more matches' }));
+      expect(meFeed).toHaveBeenLastCalledWith(20, 'c1');
+      await openConfirmation();
+      await fireEvent.click(screen.getByRole('button', { name: 'Hide company' }));
+
+      await fireEvent.click(await screen.findByRole('button', { name: 'Show more matches' }));
+      expect(meFeed).toHaveBeenLastCalledWith(20, 'c2');
+      oldPage.resolve(page(['obsolete']));
+      await oldPage.promise;
+      await tick();
+      expect(screen.queryByText('obsolete')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Loading…' }).hasAttribute('disabled')).toBe(true);
+
+      nextPage.resolve(page(['fresh']));
+      expect(await screen.findByText('fresh')).toBeTruthy();
     });
 
     it('has no action for a card without a company slug', async () => {

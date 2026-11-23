@@ -105,7 +105,7 @@ export function profileApi({ call, request, requestData }: Http) {
         excluded_sources: excludedSources,
         location_preferences: location,
         job_languages: jobLanguages,
-      }),
+      } satisfies components['schemas']['ProfileUpdate']),
     );
   }
 
@@ -113,7 +113,10 @@ export function profileApi({ call, request, requestData }: Http) {
    *  avoid, safe to repeat. Creates a minimal profile when there is none. 409 when the list
    *  already holds 200 other companies, 400 for a blank slug. */
   async function excludeCompany(slug: string): Promise<UserProfile> {
-    return requestData<UserProfile>('/api/v1/me/profile/excluded-companies', jsonBody('POST', { company_slug: slug }));
+    return requestData<UserProfile>(
+      '/api/v1/me/profile/excluded-companies',
+      jsonBody('POST', { company_slug: slug } satisfies components['schemas']['ExcludeCompanyRequest']),
+    );
   }
 
   /** Take a company back off the list; null when the user has no profile. Safe to repeat. */

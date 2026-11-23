@@ -23197,6 +23197,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "company_slug": "acme"
+                 *     }
+                 */
                 "application/json": components["schemas"]["ExcludeCompanyRequest"];
             };
         };

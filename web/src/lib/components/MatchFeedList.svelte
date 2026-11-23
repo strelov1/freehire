@@ -122,6 +122,7 @@
 
   // A restart lands on page 1 again; cards already shown are skipped, not repeated.
   async function showMore() {
+    const mine = epoch;
     loadingMore = true;
     try {
       await fetchPage(cursor);
@@ -129,7 +130,7 @@
       if (isPlanRefusal(e)) paywalled = true;
       else failed = true;
     } finally {
-      loadingMore = false;
+      if (mine === epoch) loadingMore = false;
     }
   }
 
@@ -149,6 +150,7 @@
       return;
     }
     epoch++;
+    loadingMore = false;
     cards = [];
     cursor = undefined;
     failed = false;

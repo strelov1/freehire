@@ -237,6 +237,7 @@ op putProfile(@body body: ProfileUpdate): {
  */
 @summary("Hide a company from your matches.")
 @tag("Account")
+@opExample(#{ parameters: #{ body: #{ company_slug: "acme" } } })
 @route("/me/profile/excluded-companies")
 @post
 op excludeCompany(@body body: ExcludeCompanyRequest): Data<Profile> | Problem;

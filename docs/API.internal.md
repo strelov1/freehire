@@ -1900,7 +1900,7 @@ the list already holds 200 other companies. Cookie-only.
 | `company_slug` | string | yes | The company's slug. (e.g. `acme`) |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/me/profile/excluded-companies" -b cookies.txt
+curl -X POST "https://freehire.me/api/v1/me/profile/excluded-companies" -b cookies.txt -H 'Content-Type: application/json' -d '{"company_slug":"acme"}'
 ```
 
 ### `DELETE /me/profile/excluded-companies/{company_slug}`
