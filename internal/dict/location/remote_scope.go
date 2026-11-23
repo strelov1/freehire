@@ -150,7 +150,7 @@ var worldwideArrangement = regexp.MustCompile(
 		`|we (?:accommodate|offer|support) (?:fully |100% )?remote work *,? with (?:teammates|employees|colleagues) living (?:around the globe|around the world|worldwide))\b`)
 
 var worldwideConflict = regexp.MustCompile(
-	`\b(?:must (?:live|reside|be|be located|be based) in|open to [^.!?\n]{1,55} (?:applicants|candidates) only|` +
+	`\b(?:(?:must|(?:is|are) required to) (?:live|reside|be|be located|be based) in|open to [^.!?\n]{1,55} (?:applicants|candidates) only|` +
 		`(?:remote|hiring) only (?:in|within|from)|remote (?:in|within|from) [^.!?\n]{1,65} only|` +
 		`(?:on[- ]?site|in[- ]office) (?:only|required|role|position)|fully (?:on[- ]?site|in[- ]office)|` +
 		`must (?:be|work) (?:on[- ]?site|from (?:our|the) office)|work from (?:our|the) office|` +

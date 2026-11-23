@@ -536,6 +536,18 @@ func TestFromRow_DescriptionGeographySurvivesEnrichment(t *testing.T) {
 			t.Errorf("geography = %v / %v / %v, want [] / [global] / []", view.Countries, view.Regions, view.Cities)
 		}
 	})
+	t.Run("region-only fallback cannot restore global after an exclusion", func(t *testing.T) {
+		view, err := FromRow(db.Job{ID: 1, PublicSlug: "x-1", WorkMode: "remote",
+			Description: "This role is remote worldwide, except in Germany.",
+			Enrichment:  []byte(`{"regions":["global"]}`),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(view.Regions) != 0 {
+			t.Errorf("regions = %v, want none", view.Regions)
+		}
+	})
 	t.Run("fallback cannot reintroduce excluded countries", func(t *testing.T) {
 		view, err := FromRow(db.Job{ID: 1, PublicSlug: "x-1", WorkMode: "remote",
 			Description: "We cannot accept applications from candidates based in France or Germany for this role.",

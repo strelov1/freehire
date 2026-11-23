@@ -197,7 +197,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		if slices.Contains(f.Regions, "global") && f.WorkMode == "remote" &&
 			len(e.Countries)+len(e.Regions)+len(e.Cities) > 0 && location.WorldwideRemoteFromDescription(f.Description) {
 			e.Countries, e.Regions, e.Cities = nil, nil, nil
-		} else if len(e.Countries) > 0 {
+		} else if len(e.Countries) > 0 || len(e.Regions) > 0 {
 			if excluded := location.ExcludedCountriesFromDescription(f.Description); len(excluded) > 0 {
 				e.Countries, e.Regions = location.WithoutExcludedGeography(
 					normalizeSet(e.Countries), location.NormalizeRegions(e.Regions), excluded, f.Location)
