@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/engage/bookinglink"
+	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -29,6 +31,15 @@ func (p paidUsers) RequirePaid(_ context.Context, userID int64) (plan.Tier, erro
 		return "", plan.ErrPaymentRequired
 	}
 	return "", nil
+}
+
+type bookingCalendarStub struct {
+	busy []slots.Interval
+	err  error
+}
+
+func (c *bookingCalendarStub) Busy(context.Context, int64, time.Time, time.Time) ([]slots.Interval, error) {
+	return c.busy, c.err
 }
 
 // The whole booking-link path through the contract: turning it on (paid owner only), the
@@ -52,8 +63,9 @@ func TestBookingLinkContractFlow(t *testing.T) {
 	owner, ownerApp := seed("booking-owner@example.test")
 	free, freeApp := seed("booking-free@example.test")
 
+	calendar := &bookingCalendarStub{}
 	h := newBookingLinkHandlers(bookinglink.New(
-		bookinglink.NewQueriesRepository(db.New(pool), pool), paidUsers{owner: true}, []byte("k"),
+		bookinglink.NewQueriesRepository(db.New(pool), pool), paidUsers{owner: true}, []byte("k"), calendar,
 	), "https://freehire.test/")
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	cookies := map[int64]string{}
@@ -155,6 +167,23 @@ func TestBookingLinkContractFlow(t *testing.T) {
 	at, _ := time.Parse(time.RFC3339, first)
 	st, body = book(at.Add(7*time.Minute).Format(time.RFC3339), "Rec", "r@acme.com")
 	expect(st, 409, "off-grid start", body)
+
+	calendar.busy = []slots.Interval{{Start: at, End: at.Add(time.Minute)}}
+	st, body = book(first, "Rec", "r@acme.com")
+	expect(st, 409, "calendar event appeared after listing", body)
+	if body["code"] != "slot_unavailable" {
+		t.Fatalf("calendar conflict code = %v", body["code"])
+	}
+	calendar.busy = nil
+	calendar.err = errors.New("provider error with private details")
+	st, body = call(0, "GET", "/booking/"+token+"/slots", "")
+	expect(st, 503, "calendar unavailable on listing", body)
+	st, body = book(first, "Rec", "r@acme.com")
+	expect(st, 503, "calendar unavailable on booking", body)
+	if body["error"] != "Booking availability is temporarily unavailable" {
+		t.Fatalf("unexpected public calendar error: %v", body)
+	}
+	calendar.err = nil
 
 	st, body = book(first, "Rec", "r@acme.com")
 	expect(st, 201, "book", body)

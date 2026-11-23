@@ -12,29 +12,32 @@ import (
 )
 
 const claimInboxDigest = `-- name: ClaimInboxDigest :execrows
-INSERT INTO inbox_digest_deliveries(user_id, local_day, email_ids, claimed_at)
-SELECT ns.user_id, $1::date, $2::bigint[], $3::timestamptz
-FROM notification_settings ns JOIN users u ON u.id = ns.user_id
-WHERE ns.user_id = $4 AND ns.enabled AND ns.inbox_digest_enabled
- AND (coalesce(u.pro_until > greatest($3::timestamptz, now()), false) OR coalesce(u.ultra_until > greatest($3::timestamptz, now()), false))
- AND ns.channels @> ARRAY['email']::text[]
- AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) = $5::text
- AND $5::text <> ''
- AND inbox_digest_timezone(u.timezone) = $6::text
- AND ($3::timestamptz AT TIME ZONE inbox_digest_timezone(u.timezone))::date = $1::date
- AND ($3::timestamptz AT TIME ZONE inbox_digest_timezone(u.timezone))::time >= coalesce(ns.digest_time, '09:00'::time) AND cardinality($2::bigint[]) > 0
- AND ns.inbox_digest_enabled_at = $7::timestamptz
+INSERT INTO inbox_digest_deliveries(user_id, local_day, email_ids, scheduling_activity_ids, claimed_at)
+SELECT u.id, $1::date, coalesce($2::bigint[], '{}'), coalesce($3::bigint[], '{}'),
+       $4::timestamptz
+FROM users u LEFT JOIN notification_settings ns ON u.id = ns.user_id
+WHERE u.id = $5 AND coalesce(ns.enabled, true)
+ AND (coalesce(ns.inbox_digest_enabled, false) OR u.interview_scheduling_enabled_at IS NOT NULL)
+ AND (coalesce(u.pro_until > greatest($4::timestamptz, now()), false) OR coalesce(u.ultra_until > greatest($4::timestamptz, now()), false))
+ AND coalesce(ns.channels, ARRAY['email']::text[]) @> ARRAY['email']::text[]
+ AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) = $6::text
+ AND $6::text <> ''
+ AND inbox_digest_timezone(u.timezone) = $7::text
+ AND ($4::timestamptz AT TIME ZONE inbox_digest_timezone(u.timezone))::date = $1::date
+ AND ($4::timestamptz AT TIME ZONE inbox_digest_timezone(u.timezone))::time >= coalesce(ns.digest_time, '09:00'::time) AND (cardinality($2::bigint[]) > 0 OR cardinality($3::bigint[]) > 0)
+ AND coalesce(CASE WHEN ns.inbox_digest_enabled THEN ns.inbox_digest_enabled_at END, u.interview_scheduling_enabled_at) = $8::timestamptz
 ON CONFLICT (user_id, local_day) DO NOTHING
 `
 
 type ClaimInboxDigestParams struct {
-	LocalDay  pgtype.Date        `json:"local_day"`
-	EmailIds  []int64            `json:"email_ids"`
-	NowAt     pgtype.Timestamptz `json:"now_at"`
-	UserID    int64              `json:"user_id"`
-	Email     string             `json:"email"`
-	Timezone  string             `json:"timezone"`
-	EnabledAt pgtype.Timestamptz `json:"enabled_at"`
+	LocalDay              pgtype.Date        `json:"local_day"`
+	EmailIds              []int64            `json:"email_ids"`
+	SchedulingActivityIds []int64            `json:"scheduling_activity_ids"`
+	NowAt                 pgtype.Timestamptz `json:"now_at"`
+	UserID                int64              `json:"user_id"`
+	Email                 string             `json:"email"`
+	Timezone              string             `json:"timezone"`
+	EnabledAt             pgtype.Timestamptz `json:"enabled_at"`
 }
 
 // Recheck live consent and recipient eligibility immediately before reserving the day.
@@ -42,6 +45,7 @@ func (q *Queries) ClaimInboxDigest(ctx context.Context, arg ClaimInboxDigestPara
 	result, err := q.db.Exec(ctx, claimInboxDigest,
 		arg.LocalDay,
 		arg.EmailIds,
+		arg.SchedulingActivityIds,
 		arg.NowAt,
 		arg.UserID,
 		arg.Email,
@@ -69,6 +73,8 @@ WITH eligible AS MATERIALIZED (
      AND (newer.received_at, newer.id) > (e.received_at, e.id)
      AND EXISTS (SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = newer.user_id AND d.sent_at IS NOT NULL AND newer.id = ANY(d.email_ids))
    )
+  AND EXISTS (SELECT 1 FROM notification_settings ns WHERE ns.user_id = e.user_id AND ns.inbox_digest_enabled
+              AND e.received_at >= ns.inbox_digest_enabled_at)
   AND e.received_at >= greatest($3::timestamptz, $1::timestamptz - interval '7 days')
   AND e.received_at <= $1::timestamptz
   AND NOT EXISTS (SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = e.user_id AND d.sent_at IS NOT NULL AND e.id = ANY(d.email_ids))
@@ -77,10 +83,26 @@ WITH eligible AS MATERIALIZED (
  ORDER BY source, conversation, received_at DESC, id DESC
 ), shown AS (
  SELECT id, user_id, external_id, thread_id, from_addr, from_name, subject, body_text, body_html, received_at, created_at, source, s3_key, read_at, job_id, suggested_job_id, link_source, match_confidence, status_signal, classified_at, classification_model, deleted_at, application_id, ical_uid, direction, to_addrs, cc_addrs, conversation FROM conversations ORDER BY received_at DESC, id DESC LIMIT 10
+), activity AS MATERIALIZED (
+ SELECT a.id, a.kind, a.happened_at, s.anchor_email_id, e.subject
+ FROM interview_scheduling_activity a
+ JOIN interview_scheduling_threads s ON s.id = a.thread_id
+ JOIN emails e ON e.id = s.anchor_email_id
+ JOIN users u ON u.id = a.user_id
+ WHERE a.user_id = $2 AND u.interview_scheduling_enabled_at IS NOT NULL
+   AND a.happened_at >= greatest(u.interview_scheduling_enabled_at, $1::timestamptz - interval '7 days')
+   AND a.happened_at <= $1::timestamptz
+   AND NOT EXISTS (SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = a.user_id AND d.sent_at IS NOT NULL
+                   AND a.id = ANY(d.scheduling_activity_ids))
+), activity_shown AS (
+ SELECT id, kind, happened_at, anchor_email_id, subject FROM activity ORDER BY happened_at DESC, id DESC LIMIT 10
 )
 SELECT
  coalesce((SELECT array_agg(id ORDER BY id) FROM eligible), '{}')::bigint[] AS email_ids,
  (SELECT count(*) FROM conversations)::bigint AS total,
+ coalesce((SELECT array_agg(id ORDER BY id) FROM activity), '{}')::bigint[] AS scheduling_activity_ids,
+ coalesce((SELECT jsonb_agg(jsonb_build_object('id', anchor_email_id, 'subject', subject, 'kind', kind)
+                           ORDER BY happened_at DESC, id DESC) FROM activity_shown), '[]'::jsonb)::jsonb AS scheduling_activity,
  coalesce((SELECT jsonb_agg(jsonb_build_object(
   'id', s.id, 'subject', s.subject, 'sender', coalesce(nullif(s.from_name,''), s.from_addr),
   'snippet', left(regexp_replace(s.body_text, E'\\s+', ' ', 'g'), 240),
@@ -98,9 +120,11 @@ type GetInboxDigestSnapshotParams struct {
 }
 
 type GetInboxDigestSnapshotRow struct {
-	EmailIds []int64 `json:"email_ids"`
-	Total    int64   `json:"total"`
-	Messages []byte  `json:"messages"`
+	EmailIds              []int64 `json:"email_ids"`
+	Total                 int64   `json:"total"`
+	SchedulingActivityIds []int64 `json:"scheduling_activity_ids"`
+	SchedulingActivity    []byte  `json:"scheduling_activity"`
+	Messages              []byte  `json:"messages"`
 }
 
 // Retire the entire covered window on success, including overflow. Display only the newest
@@ -108,31 +132,43 @@ type GetInboxDigestSnapshotRow struct {
 func (q *Queries) GetInboxDigestSnapshot(ctx context.Context, arg GetInboxDigestSnapshotParams) (GetInboxDigestSnapshotRow, error) {
 	row := q.db.QueryRow(ctx, getInboxDigestSnapshot, arg.NowAt, arg.UserID, arg.EnabledAt)
 	var i GetInboxDigestSnapshotRow
-	err := row.Scan(&i.EmailIds, &i.Total, &i.Messages)
+	err := row.Scan(
+		&i.EmailIds,
+		&i.Total,
+		&i.SchedulingActivityIds,
+		&i.SchedulingActivity,
+		&i.Messages,
+	)
 	return i, err
 }
 
 const listInboxDigestCandidates = `-- name: ListInboxDigestCandidates :many
-SELECT ns.user_id,
+SELECT u.id AS user_id,
  mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS email,
  inbox_digest_timezone(u.timezone)::text AS timezone,
  coalesce(ns.digest_time, '09:00'::time)::time AS digest_time,
- ns.inbox_digest_enabled_at AS enabled_at
-FROM notification_settings ns
-JOIN users u ON u.id = ns.user_id
-WHERE ns.enabled AND ns.inbox_digest_enabled
+ coalesce(CASE WHEN ns.inbox_digest_enabled THEN ns.inbox_digest_enabled_at END, u.interview_scheduling_enabled_at)::timestamptz AS enabled_at
+FROM (
+ SELECT user_id FROM notification_settings WHERE enabled AND inbox_digest_enabled
+ UNION
+ SELECT id FROM users WHERE interview_scheduling_enabled_at IS NOT NULL
+) candidate
+JOIN users u ON u.id = candidate.user_id
+LEFT JOIN notification_settings ns ON u.id = ns.user_id
+WHERE coalesce(ns.enabled, true)
+ AND (coalesce(ns.inbox_digest_enabled, false) OR u.interview_scheduling_enabled_at IS NOT NULL)
  AND (coalesce(u.pro_until > greatest($1::timestamptz, now()), false) OR coalesce(u.ultra_until > greatest($1::timestamptz, now()), false))
- AND ns.channels @> ARRAY['email']::text[]
+ AND coalesce(ns.channels, ARRAY['email']::text[]) @> ARRAY['email']::text[]
  AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
  AND ($1::timestamptz AT TIME ZONE inbox_digest_timezone(u.timezone))::time >= coalesce(ns.digest_time, '09:00'::time)
  AND NOT EXISTS (
-  SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = ns.user_id
+  SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = u.id
    AND (d.local_day = ($1::timestamptz AT TIME ZONE inbox_digest_timezone(u.timezone))::date
     OR (d.sent_at AT TIME ZONE inbox_digest_timezone(u.timezone))::date >= ($1::timestamptz AT TIME ZONE inbox_digest_timezone(u.timezone))::date)
  )
- AND EXISTS (
+ AND (EXISTS (
   SELECT 1 FROM emails e
-  WHERE e.user_id = ns.user_id AND e.direction = 'incoming' AND e.deleted_at IS NULL
+  WHERE coalesce(ns.inbox_digest_enabled, false) AND e.user_id = u.id AND e.direction = 'incoming' AND e.deleted_at IS NULL
    AND e.classified_at IS NOT NULL AND e.status_signal <> 'other'
    -- A late classification must not revive a request superseded by a delivered reply.
    AND NOT EXISTS (
@@ -144,9 +180,16 @@ WHERE ns.enabled AND ns.inbox_digest_enabled
    )
    AND e.received_at >= greatest(ns.inbox_digest_enabled_at, $1::timestamptz - interval '7 days')
    AND e.received_at <= $1::timestamptz
-   AND NOT EXISTS (SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = ns.user_id AND d.sent_at IS NOT NULL AND e.id = ANY(d.email_ids))
- )
-ORDER BY ns.user_id
+   AND NOT EXISTS (SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = u.id AND d.sent_at IS NOT NULL AND e.id = ANY(d.email_ids))
+ ) OR EXISTS (
+  SELECT 1 FROM interview_scheduling_activity activity
+  WHERE activity.user_id = u.id AND u.interview_scheduling_enabled_at IS NOT NULL
+    AND activity.happened_at >= greatest(u.interview_scheduling_enabled_at, $1::timestamptz - interval '7 days')
+    AND activity.happened_at <= $1::timestamptz
+    AND NOT EXISTS (SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = u.id AND d.sent_at IS NOT NULL
+                    AND activity.id = ANY(d.scheduling_activity_ids))
+ ))
+ORDER BY u.id
 LIMIT $2
 `
 

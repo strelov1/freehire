@@ -51,7 +51,7 @@ func TestBookingTwiceIsRefusedAndTheWinnerShowsOnTheApplication(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	svc := bookinglink.New(bookinglink.NewQueriesRepository(db.New(pool), pool), paid{}, []byte("k"))
+	svc := bookinglink.New(bookinglink.NewQueriesRepository(db.New(pool), pool), paid{}, []byte("k"), nil)
 	tok, err := svc.Enable(ctx, user, app, "Europe/Berlin")
 	if err != nil {
 		t.Fatal(err)

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/application/appevent"
+	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -111,6 +112,7 @@ func (r *QueriesRepository) bookTx(ctx context.Context, b NewBooking) error {
 			LinkID: b.Link.ID, UserID: b.Link.UserID,
 			StartsAt: pgconv.Instant(b.StartsAt), EndsAt: pgconv.Instant(b.EndsAt),
 			RecruiterName: b.RecruiterName, RecruiterEmail: b.RecruiterEmail,
+			CalendarWriteScope: gmailsync.CalendarEventsScope,
 		})
 		if err != nil {
 			return err
