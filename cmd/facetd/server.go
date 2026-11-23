@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -45,6 +48,7 @@ type Server struct {
 
 	store   atomic.Pointer[facetidx.Store] // nil until a snapshot loaded or a rebuild committed
 	answers answerCache                    // encoded /facets answers of the current generation
+	slots   chan struct{}                  // one per /facets or /distinct computing; see acquire
 
 	mu         sync.Mutex // guards the rebuild state below and serialises /write with commit's swap
 	rebuilding bool       // begin..commit/abort; /write batches are recorded
@@ -65,7 +69,7 @@ type Server struct {
 
 // NewServer returns a not-ready server. snapshotPath "" disables snapshots.
 func NewServer(snapshotPath string) *Server {
-	s := &Server{snapshotPath: snapshotPath}
+	s := &Server{snapshotPath: snapshotPath, slots: make(chan struct{}, max(1, runtime.GOMAXPROCS(0)/2))}
 	if snapshotPath != "" {
 		s.walPath = snapshotPath + ".wal"
 	}
@@ -198,6 +202,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /rebuild/abort", s.instrument("rebuild_abort", maxQueryBody, s.rebuildAbort))
 	mux.HandleFunc("GET /ready", s.ready)
 	mux.Handle("GET /metrics", promhttp.HandlerFor(s.m.reg, promhttp.HandlerOpts{}))
+	// Profiles on the same localhost-only listener: `curl 127.0.0.1:8096/debug/pprof/profile`.
+	mux.HandleFunc("GET /debug/pprof/", pprof.Index)
+	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
 	return mux
 }
 
@@ -252,10 +259,28 @@ func (s *Server) ready(w http.ResponseWriter, _ *http.Request) {
 	reply(w, http.StatusOK, map[string]bool{"ready": true})
 }
 
+// acquire takes a counting slot, waiting while every slot is busy; false (and an answer
+// written) when the caller gave up first. Without it a burst of broad requests piles up:
+// the API stops waiting after FACETD_TIMEOUT and falls back to Meilisearch, but every
+// abandoned request kept counting, so each new one waited behind more of them, and on
+// 2026-11-22 their bitmaps together took the heap to 10 GB. Release with <-s.slots.
+func (s *Server) acquire(w http.ResponseWriter, r *http.Request) bool {
+	select {
+	case s.slots <- struct{}{}:
+		return true
+	case <-r.Context().Done():
+		s.queryErr(w, r.Context().Err())
+		return false
+	}
+}
+
 // queryErr maps an evaluator error to the wire contract: 422 for a filter or attribute the
-// index cannot answer, 500 for anything else.
+// index cannot answer, 503 when the caller is gone, 500 for anything else.
 func (s *Server) queryErr(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		s.m.refused.WithLabelValues("abandoned").Inc()
+		fail(w, http.StatusServiceUnavailable, "facetd: caller gave up: %v", err)
 	case errors.Is(err, facetidx.ErrUnsupportedFilter):
 		s.m.refused.WithLabelValues("unsupported").Inc()
 		fail(w, http.StatusUnprocessableEntity, "%v", err)
@@ -354,7 +379,11 @@ func (s *Server) facets(w http.ResponseWriter, r *http.Request) {
 		s.queryErr(w, err)
 		return
 	}
-	ans, err := ix.Facets(f, req.Facets)
+	if !s.acquire(w, r) {
+		return
+	}
+	defer func() { <-s.slots }()
+	ans, err := ix.FacetsContext(r.Context(), f, req.Facets)
 	if err != nil {
 		s.queryErr(w, err)
 		return
@@ -395,6 +424,10 @@ func (s *Server) distinct(w http.ResponseWriter, r *http.Request) {
 		s.queryErr(w, err)
 		return
 	}
+	if !s.acquire(w, r) {
+		return
+	}
+	defer func() { <-s.slots }()
 	n, err := st.Current().Distinct(f, req.Attr)
 	if err != nil {
 		s.queryErr(w, err)
@@ -589,7 +622,7 @@ func newMetrics(s *Server) *metrics {
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "facetd_requests_total", Help: "Requests by endpoint and HTTP status."}, []string{"endpoint", "status"}),
 		latency: prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "facetd_request_duration_seconds", Help: "Request latency by endpoint and HTTP status.",
 			Buckets: []float64{.001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 5, 30, 120}}, []string{"endpoint", "status"}),
-		refused:             prometheus.NewCounterVec(prometheus.CounterOpts{Name: "facetd_refused_total", Help: "Requests refused, by reason: unsupported, unknown_facet, not_ready."}, []string{"reason"}),
+		refused:             prometheus.NewCounterVec(prometheus.CounterOpts{Name: "facetd_refused_total", Help: "Requests refused, by reason: unsupported, unknown_facet, not_ready, abandoned (the caller gave up first)."}, []string{"reason"}),
 		snapshotSeconds:     prometheus.NewGauge(prometheus.GaugeOpts{Name: "facetd_snapshot_duration_seconds", Help: "Duration of the last successful snapshot."}),
 		snapshotBytes:       prometheus.NewGauge(prometheus.GaugeOpts{Name: "facetd_snapshot_bytes", Help: "Size of the last successful snapshot."}),
 		snapshotLastSuccess: prometheus.NewGauge(prometheus.GaugeOpts{Name: "facetd_snapshot_last_success_timestamp_seconds", Help: "Unix time of the last successful snapshot."}),

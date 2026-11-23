@@ -44,7 +44,7 @@
 
 ## 7. Rollout (freehire-ops and prod)
 
-- [ ] 7.1 systemd unit for facetd on core (MemoryHigh, snapshot directory, restart policy), env `FACETD_URL`, `FACETD_TIMEOUT`, `SEARCH_FACET_ENGINE=meili`; recorded in freehire-ops
-- [ ] 7.2 Deploy with mode `meili`, run a rebuild, confirm staleness gauge tracks the drain
-- [ ] 7.3 Switch to `shadow`; collect at least a week of differences including a bot wave; fix every class of difference
-- [ ] 7.4 Switch to `facetd`; watch fallbacks, latency and Meilisearch CPU; document the Redis rollback key in `internal/search/AGENTS.md`
+- [x] 7.1 systemd unit for facetd on core (MemoryHigh, snapshot directory, restart policy), env `FACETD_URL`, `FACETD_TIMEOUT`, `SEARCH_FACET_ENGINE=meili`; recorded in freehire-ops (`provision/host2/systemd/freehire-facetd.service`; port 8096, `FACETD_TIMEOUT=250ms`)
+- [x] 7.2 Deploy with mode `meili`, run a rebuild, confirm staleness gauge tracks the drain (mode `meili` from 2026-11-09; the first rebuilds failed on a release restart and on MemoryHigh, see the unit's comments)
+- [ ] 7.3 Switch to `shadow`; collect at least a week of differences including a bot wave; fix every class of difference (shadow ran 2026-11-10 to 2026-11-15, 5.5 days; in its last two days `freehire_search_facet_shadow_diffs_total` still counted 196k differing of 538k facet requests, and the switch to `facetd` went ahead without classifying them)
+- [x] 7.4 Switch to `facetd`; watch fallbacks, latency and Meilisearch CPU; document the Redis rollback key in `internal/search/AGENTS.md` (Redis key at `facetd` since 2026-11-15 20:49 UTC; `SEARCH_FACET_ENGINE` in the env still says `meili`, so deleting the key returns to Meilisearch)
