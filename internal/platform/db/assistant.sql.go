@@ -663,11 +663,11 @@ func (q *Queries) RepeatAssistantInterviewQuestion(ctx context.Context, arg Repe
 
 const saveAssistantInterviewReport = `-- name: SaveAssistantInterviewReport :execrows
 INSERT INTO assistant_interview_reports (session_id, through_seq, report)
-SELECT id, $1::int, $2::jsonb FROM assistant_sessions s
+SELECT id, $1::bigint, $2::jsonb FROM assistant_sessions s
 WHERE id = $3 AND user_id = $4 AND preset = 'interview'
 AND NOT EXISTS (
     SELECT 1 FROM assistant_messages m
-    WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > $1::int
+    WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > $1::bigint
 )
 ON CONFLICT ON CONSTRAINT assistant_interview_reports_pkey DO UPDATE
 SET through_seq = EXCLUDED.through_seq, report = EXCLUDED.report
@@ -675,7 +675,7 @@ WHERE assistant_interview_reports.through_seq < EXCLUDED.through_seq
 `
 
 type SaveAssistantInterviewReportParams struct {
-	ThroughSeq int32     `json:"through_seq"`
+	ThroughSeq int64     `json:"through_seq"`
 	Report     []byte    `json:"report"`
 	SessionID  uuid.UUID `json:"session_id"`
 	UserID     int64     `json:"user_id"`

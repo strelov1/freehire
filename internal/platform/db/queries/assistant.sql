@@ -201,11 +201,11 @@ AND NOT EXISTS (
 
 -- name: SaveAssistantInterviewReport :execrows
 INSERT INTO assistant_interview_reports (session_id, through_seq, report)
-SELECT id, sqlc.arg(through_seq)::int, sqlc.arg(report)::jsonb FROM assistant_sessions s
+SELECT id, sqlc.arg(through_seq)::bigint, sqlc.arg(report)::jsonb FROM assistant_sessions s
 WHERE id = sqlc.arg(session_id) AND user_id = sqlc.arg(user_id) AND preset = 'interview'
 AND NOT EXISTS (
     SELECT 1 FROM assistant_messages m
-    WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > sqlc.arg(through_seq)::int
+    WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > sqlc.arg(through_seq)::bigint
 )
 ON CONFLICT ON CONSTRAINT assistant_interview_reports_pkey DO UPDATE
 SET through_seq = EXCLUDED.through_seq, report = EXCLUDED.report
