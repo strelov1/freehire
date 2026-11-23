@@ -82,7 +82,8 @@ func (s compleo) FetchPosting(ctx context.Context, loc string) (Job, bool, error
 	}
 	var p compleoPosting
 	if !ldJobPosting(root, &p) || p.HiringOrganization.Name == "" {
-		return Job{}, false, nil
+		// A 200 without a JobPosting is an unreadable page, not proof the posting is gone.
+		return Job{}, false, fmt.Errorf("compleo: posting %s: no JobPosting in response", compleoJobID(loc))
 	}
 
 	location := p.JobLocation.Address.Location()

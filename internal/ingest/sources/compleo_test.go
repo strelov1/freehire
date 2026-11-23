@@ -111,6 +111,11 @@ func TestCompleoFetchFailsWhenNoListedPostingReadable(t *testing.T) {
 		t.Fatal("all detail reads 503: want error, got nil")
 	}
 
+	junk := (&routedHTTP{}).route("/jobdetail/", "<html><body>Oops</body></html>").route("/sitemap.xml", sitemap)
+	if _, err := NewCompleo(junk).Fetch(context.Background(), entry); err == nil {
+		t.Fatal("all detail pages 200 without JobPosting: want error, got nil")
+	}
+
 	some := (&routedHTTP{}).routeErr("HJ06277B", down).route("HJ06276A", compleoDetailHTML).route("/sitemap.xml", sitemap)
 	jobs, err := NewCompleo(some).Fetch(context.Background(), entry)
 	if err != nil || len(jobs) != 1 {
