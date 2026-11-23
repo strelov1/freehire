@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -11,21 +10,35 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/search/feed"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-func feedSourceApp(fake *fakeSearcher, st *feedStateFake) (*fiber.App, *auth.Issuer) {
-	return feedStateApp(fake, &feedExcludedAt{}, feedUpdated, st)
+func (f *feedStateFake) FeedSource(context.Context, int64) (int64, bool, error) {
+	return f.source, f.source != 0, nil
 }
 
-func feedPut(t *testing.T, app *fiber.App, iss *auth.Issuer, body string) int {
+func (f *feedStateFake) SetFeedSource(_ context.Context, _ int64, id *int64) error {
+	f.source = 0
+	if id != nil {
+		f.source = *id
+	}
+	return nil
+}
+
+func (f *feedStateFake) FeedSearch(_ context.Context, _, id int64) (feedSearch, bool, error) {
+	sr, ok := f.searches[id]
+	return sr, ok, nil
+}
+
+func putFeedSource(t *testing.T, app *fiber.App, iss *auth.Issuer, userID int64, body string) int {
 	t.Helper()
 	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPut, "/api/v1/me/feed/source", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	token, _ := iss.Issue(7, testTokenVersion)
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	token, _ := iss.Issue(userID, testTokenVersion)
+	req.Header.Set("Cookie", auth.CookieName+"="+token)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("request: %v", err)
@@ -34,130 +47,182 @@ func feedPut(t *testing.T, app *fiber.App, iss *auth.Issuer, body string) int {
 	return resp.StatusCode
 }
 
-func TestFeed_DefaultSourceIsProfile(t *testing.T) {
-	app, iss := feedSourceApp(&fakeSearcher{}, &feedStateFake{})
+func sourceApp(fake *fakeSearcher, st *feedStateFake) (*fiber.App, *auth.Issuer) {
+	return feedStateApp(fake, &feedExcludedAt{}, feedUpdated, st)
+}
+
+func feedMetaOf(body map[string]any) map[string]any { return body["meta"].(map[string]any) }
+
+func oneJob() *fakeSearcher {
+	return &fakeSearcher{res: search.SearchResult{Total: 1, Hits: []search.JobDocument{{ID: 1, Job: jobview.Job{PublicSlug: "a"}}}}}
+}
+
+func TestFeedSource_DefaultIsProfile(t *testing.T) {
+	app, iss := sourceApp(oneJob(), &feedStateFake{})
 	_, body := deckGet(t, app, iss, "/api/v1/me/feed")
-	meta := body["meta"].(map[string]any)
-	if meta["source"] != "profile" || meta["saved_search_id"] != nil {
-		t.Errorf("meta = %v", meta)
+	if m := feedMetaOf(body); m["source"] != "profile" || m["saved_search_id"] != nil {
+		t.Errorf("meta = %v", m)
 	}
 }
 
-func TestFeed_SavedSearchSourceUsesItsFilters(t *testing.T) {
-	fake := &fakeSearcher{}
-	st := &feedStateFake{searches: map[int64]feedSearch{2: {Query: "q=golang&seniority=senior", UpdatedAt: feedUpdated}}}
-	app, iss := feedSourceApp(fake, st)
-	if code := feedPut(t, app, iss, `{"source":"saved_search","saved_search_id":2}`); code != fiber.StatusNoContent {
-		t.Fatalf("put = %d", code)
+func TestFeedSource_PickSearchThenBackToProfile(t *testing.T) {
+	fake := oneJob()
+	st := &feedStateFake{searches: map[int64]feedSearch{2: {Query: "seniority=senior&q=golang&q_fields=title", UpdatedAt: time.Now()}}}
+	app, iss := sourceApp(fake, st)
+	if got := putFeedSource(t, app, iss, 7, `{"source":"saved_search","saved_search_id":2}`); got != fiber.StatusNoContent {
+		t.Fatalf("PUT = %d", got)
 	}
 	_, body := deckGet(t, app, iss, "/api/v1/me/feed")
-	meta := body["meta"].(map[string]any)
-	if meta["source"] != "saved_search" || meta["saved_search_id"] != float64(2) {
-		t.Errorf("meta = %v", meta)
+	m := feedMetaOf(body)
+	if m["source"] != "saved_search" || m["saved_search_id"] != float64(2) {
+		t.Errorf("meta = %v", m)
 	}
 	groups, _ := fake.got.Filter.([][]string)
-	if fake.got.Query != "golang" || !filterHas(groups, `enrichment.seniority = "senior"`) {
-		t.Errorf("saved-search query not applied: %#v", fake.got)
+	if !filterHas(groups, `enrichment.seniority = "senior"`) {
+		t.Errorf("search filter missing: %#v", fake.got.Filter)
 	}
-	if len(fake.got.Vector) != 0 {
-		t.Errorf("a vector makes the search semantic-only, which would drop q")
+	// Text keeps the saved search eligible by keyword: no pure-semantic vector request.
+	if fake.got.Query != "golang" || len(fake.got.QFields) != 1 || fake.got.Vector != nil {
+		t.Errorf("q must be retrieved by keyword with its fields: %#v", fake.got)
 	}
-	if len(st.sources) == 0 || st.sources[0] != "search:2" {
+	if st.sources[len(st.sources)-1] != "search:2" {
 		t.Errorf("watermark source = %v", st.sources)
 	}
-	// Back to profile.
-	if code := feedPut(t, app, iss, `{"source":"profile"}`); code != fiber.StatusNoContent || st.source != 0 {
-		t.Errorf("put profile = %d, stored %d", code, st.source)
+	if got := putFeedSource(t, app, iss, 7, `{"source":"profile"}`); got != fiber.StatusNoContent {
+		t.Fatalf("PUT profile = %d", got)
+	}
+	_, body = deckGet(t, app, iss, "/api/v1/me/feed")
+	if feedMetaOf(body)["source"] != "profile" {
+		t.Errorf("meta = %v", feedMetaOf(body))
 	}
 }
 
-func TestFeed_SavedSearchWithoutQRanksByProfileVector(t *testing.T) {
-	fake := &fakeSearcher{}
-	st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "seniority=senior", UpdatedAt: feedUpdated}}}
-	app, iss := feedSourceApp(fake, st)
+func TestFeedSource_SearchWithoutTextUsesTheMatchVector(t *testing.T) {
+	fake := oneJob()
+	st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "seniority=senior", UpdatedAt: time.Now()}}}
+	app, iss := sourceApp(fake, st)
 	deckGet(t, app, iss, "/api/v1/me/feed")
 	if len(fake.got.Vector) == 0 {
-		t.Errorf("profile skills should rank a saved search without q")
+		t.Errorf("profile skills should still rank a text-free search")
 	}
 }
 
-func TestFeed_DeletedSearchNeverFallsBackToProfile(t *testing.T) {
-	fake := &fakeSearcher{}
-	app, iss := feedSourceApp(fake, &feedStateFake{source: 2})
-	status, body := deckGet(t, app, iss, "/api/v1/me/feed")
-	meta := body["meta"].(map[string]any)
-	if status != 200 || meta["reason"] != feedReasonSearchDeleted || len(body["data"].([]any)) != 0 {
-		t.Errorf("status %d body %v", status, body)
+func TestFeedSource_DeletedSearchNeverFallsBack(t *testing.T) {
+	fake := oneJob()
+	app, iss := sourceApp(fake, &feedStateFake{source: 2})
+	_, body := deckGet(t, app, iss, "/api/v1/me/feed")
+	m := feedMetaOf(body)
+	if m["reason"] != "search_deleted" || len(body["data"].([]any)) != 0 || m["saved_search_id"] != float64(2) {
+		t.Errorf("meta = %v", m)
 	}
 	if fake.got.Limit != 0 {
-		t.Errorf("searched the index for a deleted search")
+		t.Errorf("searched anyway: %#v", fake.got)
 	}
 }
 
-func TestFeed_SavedSearchThatNarrowsNothing(t *testing.T) {
-	for _, q := range []string{"", "watchlist=true&q=go"} {
-		fake := &fakeSearcher{}
-		app, iss := feedSourceApp(fake, &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: q, UpdatedAt: feedUpdated}}})
-		_, body := deckGet(t, app, iss, "/api/v1/me/feed")
-		if got := body["meta"].(map[string]any)["reason"]; got != feed.ReasonNoUsableFields || fake.got.Limit != 0 {
-			t.Errorf("query %q: reason %v, searched %#v", q, got, fake.got)
-		}
-	}
-}
-
-func TestFeed_SavedSearchWithNoMatchesIsAnEmptyPageWithoutReason(t *testing.T) {
-	app, iss := feedSourceApp(&fakeSearcher{}, &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "q=golang", UpdatedAt: feedUpdated}}})
-	_, body := deckGet(t, app, iss, "/api/v1/me/feed")
-	meta := body["meta"].(map[string]any)
-	if _, has := meta["reason"]; has || len(body["data"].([]any)) != 0 {
-		t.Errorf("body = %v", body)
-	}
-}
-
-func TestFeed_PutSourceRejectsForeignDerivedAndBadBodies(t *testing.T) {
-	st := &feedStateFake{source: 0, searches: map[int64]feedSearch{3: {Query: "q=go", Derived: true}}}
-	app, iss := feedSourceApp(&fakeSearcher{}, st)
-	for body, want := range map[string]int{
-		`{"source":"saved_search","saved_search_id":9}`: fiber.StatusNotFound, // not the caller's
-		`{"source":"saved_search","saved_search_id":3}`: fiber.StatusNotFound, // profile-derived
-		`{"source":"saved_search"}`:                     fiber.StatusBadRequest,
-		`{"source":"nope"}`:                             fiber.StatusBadRequest,
-		`not json`:                                      fiber.StatusBadRequest,
+func TestFeedSource_UnenforceableSearchIsRefusedNotWidened(t *testing.T) {
+	for name, q := range map[string]string{
+		"narrows nothing": "",
+		"watchlist":       "watchlist=true&seniority=senior",
+		"unknown param":   "seniority=senior&sort=match&min_skill_match=70",
+		"bad q_fields":    "q=go&q_fields=nonsense",
+		"bad visa":        "visa_sponsorship=maybe&seniority=senior",
 	} {
-		if code := feedPut(t, app, iss, body); code != want {
-			t.Errorf("%s: %d, want %d", body, code, want)
-		}
+		t.Run(name, func(t *testing.T) {
+			fake := oneJob()
+			st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: q, UpdatedAt: time.Now()}}}
+			app, iss := sourceApp(fake, st)
+			_, body := deckGet(t, app, iss, "/api/v1/me/feed")
+			m := feedMetaOf(body)
+			if m["reason"] == nil || len(body["data"].([]any)) != 0 || fake.got.Limit != 0 {
+				t.Errorf("want an empty page with a reason and no search: meta=%v got=%#v", m, fake.got)
+			}
+			if name == "unknown param" && m["ignored"] == nil {
+				t.Errorf("ignored params not named: %v", m)
+			}
+		})
 	}
-	if st.source != 0 {
-		t.Errorf("stored source changed: %d", st.source)
+	// Narrows nothing is the documented reason.
+	st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "", UpdatedAt: time.Now()}}}
+	app, iss := sourceApp(oneJob(), st)
+	_, body := deckGet(t, app, iss, "/api/v1/me/feed")
+	if feedMetaOf(body)["reason"] != "no_usable_fields" {
+		t.Errorf("meta = %v", feedMetaOf(body))
 	}
 }
 
-func TestFeed_CursorFromAnotherSourceIs400(t *testing.T) {
+func TestFeedSource_ForeignOrBadPutIsRejectedAndKeepsTheSource(t *testing.T) {
+	st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "q=go", UpdatedAt: time.Now()}}}
+	app, iss := sourceApp(oneJob(), st)
+	for body, want := range map[string]int{
+		`{"source":"saved_search","saved_search_id":99}`: fiber.StatusNotFound,
+		`{"source":"saved_search"}`:                      fiber.StatusBadRequest,
+		`{"source":"nope"}`:                              fiber.StatusBadRequest,
+		`not json`:                                       fiber.StatusBadRequest,
+	} {
+		if got := putFeedSource(t, app, iss, 7, body); got != want {
+			t.Errorf("PUT %s = %d, want %d", body, got, want)
+		}
+	}
+	if st.source != 2 {
+		t.Errorf("stored source changed to %d", st.source)
+	}
+}
+
+func TestFeedSource_CursorFromAnotherSourceIs400(t *testing.T) {
 	fake := &fakeSearcher{res: search.SearchResult{Total: 5, Hits: []search.JobDocument{{ID: 1, Job: jobview.Job{PublicSlug: "a"}}}}}
-	st := &feedStateFake{searches: map[int64]feedSearch{2: {Query: "q=golang", UpdatedAt: feedUpdated}}}
-	app, iss := feedSourceApp(fake, st)
+	st := &feedStateFake{searches: map[int64]feedSearch{2: {Query: "q=go", UpdatedAt: time.Now()}}}
+	app, iss := sourceApp(fake, st)
 	_, body := deckGet(t, app, iss, "/api/v1/me/feed?limit=1")
 	cursor := nextCursorOf(body)
 	if cursor == "" {
-		t.Fatal("no cursor")
+		t.Fatal("no cursor from the profile page")
 	}
 	st.source = 2
-	if status, _ := deckGet(t, app, iss, "/api/v1/me/feed?cursor="+cursor); status != fiber.StatusBadRequest {
+	if status, _ := deckGet(t, app, iss, "/api/v1/me/feed?limit=1&cursor="+cursor); status != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", status)
 	}
 }
 
-func TestFeed_ProfileEditRestartsASavedSearchRankedByIt(t *testing.T) {
-	fake := &fakeSearcher{res: search.SearchResult{Total: 9, Hits: []search.JobDocument{{ID: 1, Job: jobview.Job{PublicSlug: "a"}}}}}
-	st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "seniority=senior", UpdatedAt: feedUpdated.Add(-time.Hour)}}}
-	app, iss := feedStateApp(fake, &feedExcludedAt{}, feedUpdated, st)
-	_, body := deckGet(t, app, iss, "/api/v1/me/feed?limit=1")
-	cur := nextCursorOf(body)
+func TestFeedSource_SearchWithoutVectorSortsByDateKeepingText(t *testing.T) {
+	fake := oneJob()
+	st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "q=golang&q_fields=title", UpdatedAt: time.Now()}}}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &feedHandlers{search: fake, profiles: feedProfile{p: userprofile.Profile{}}, excluded: &feedExcludedAt{}, plans: feedPlansFake{}, state: st, cursors: feed.NewSigner([]byte("cursor-key"))}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/me/feed", auth.RequireAuth(iss, testVersions), h.Feed)
+	_, body := deckGet(t, app, iss, "/api/v1/me/feed")
+	m := feedMetaOf(body)
+	if m["degraded"] != "no_match_vector" || m["ranking"] != "date" {
+		t.Errorf("meta = %v", m)
+	}
+	if len(fake.got.Sort) != 1 || fake.got.Sort[0] != "created_at:desc" || fake.got.Query != "golang" || fake.got.Vector != nil {
+		t.Errorf("want date sort with the keyword query: %#v", fake.got)
+	}
+}
 
-	edited, iss2 := feedStateApp(fake, &feedExcludedAt{}, feedUpdated.Add(time.Second), st)
-	_, body = deckGet(t, edited, iss2, "/api/v1/me/feed?cursor="+cur)
-	if body["meta"].(map[string]any)["reason"] != feedReasonSourceChanged {
-		t.Fatalf("meta = %v, want source_changed", body["meta"])
+func TestFeedSource_ZeroMatchesIsNotAReason(t *testing.T) {
+	st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "seniority=senior", UpdatedAt: time.Now()}}}
+	app, iss := sourceApp(&fakeSearcher{}, st)
+	_, body := deckGet(t, app, iss, "/api/v1/me/feed")
+	if m := feedMetaOf(body); m["reason"] != nil || len(body["data"].([]any)) != 0 || m["saved_search_id"] != float64(2) {
+		t.Errorf("meta = %v", m)
+	}
+}
+
+func TestFeedSource_ProfileEditRestartsSavedSearchPagination(t *testing.T) {
+	fake := &fakeSearcher{res: search.SearchResult{Total: 5, Hits: []search.JobDocument{{ID: 1, Job: jobview.Job{PublicSlug: "a"}}}}}
+	st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "seniority=senior", UpdatedAt: feedUpdated.Add(time.Hour)}}}
+	app, iss := sourceApp(fake, st)
+	_, body := deckGet(t, app, iss, "/api/v1/me/feed?limit=1")
+	cursor := nextCursorOf(body)
+	if cursor == "" {
+		t.Fatal("no cursor from the saved search")
+	}
+
+	edited, editedIssuer := feedStateApp(fake, &feedExcludedAt{}, feedUpdated.Add(time.Second), st)
+	status, body := deckGet(t, edited, editedIssuer, "/api/v1/me/feed?limit=1&cursor="+cursor)
+	if status != fiber.StatusOK || feedMetaOf(body)["reason"] != "source_changed" {
+		t.Fatalf("status = %d, body = %v; want source_changed", status, body)
 	}
 }

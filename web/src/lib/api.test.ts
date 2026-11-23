@@ -20,6 +20,15 @@ function okFetch(seen: { init?: RequestInit } = {}): typeof fetch {
   }) as unknown as typeof fetch;
 }
 
+it('accepts bodyless success responses for feed writes', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => new Response(null, { status: 204 }));
+  const client = createApi(fetcher);
+  await client.setFeedSource({ source: 'saved_search', saved_search_id: 7 });
+  await client.markFeedSeen('opaque');
+  expect(fetcher).toHaveBeenCalledWith('/api/v1/me/feed/source', expect.objectContaining({ method: 'PUT' }));
+  expect(fetcher).toHaveBeenCalledWith('/api/v1/me/feed/seen', expect.objectContaining({ method: 'POST' }));
+});
+
 describe('createApi request timeout', () => {
   // Without a bound timeout an unanswered call hangs forever, and on the server that
   // means the SvelteKit handler never finishes: nginx gives up at 60s and returns 504,

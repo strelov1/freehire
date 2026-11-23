@@ -41,22 +41,9 @@ type feedStateFake struct {
 	seen     *time.Time
 	hw       time.Time
 	advanced []time.Time
-	// source is the stored saved search id (0: profile); searches are the caller's own.
-	source   int64
+	source   int64 // 0 selects the profile
 	searches map[int64]feedSearch
-	sources  []string // the source key of each GetOrInitFeedSeen
-}
-
-func (f *feedStateFake) FeedSource(context.Context, int64) (int64, error) { return f.source, nil }
-
-func (f *feedStateFake) SetFeedSource(_ context.Context, _, id int64) error {
-	f.source = id
-	return nil
-}
-
-func (f *feedStateFake) FeedSearch(_ context.Context, _, id int64) (feedSearch, bool, error) {
-	s, ok := f.searches[id]
-	return s, ok, nil
+	sources  []string
 }
 
 func (f *feedStateFake) GetOrInitFeedSeen(_ context.Context, _ int64, source string, initAt time.Time) (time.Time, error) {
@@ -284,7 +271,7 @@ func feedPagingApp(s searcher, ex *feedExcludedAt, updated time.Time) (*fiber.Ap
 	return feedStateApp(s, ex, updated, &feedStateFake{})
 }
 
-func feedStateApp(s searcher, ex *feedExcludedAt, updated time.Time, st *feedStateFake) (*fiber.App, *auth.Issuer) {
+func feedStateApp(s searcher, ex *feedExcludedAt, updated time.Time, st feedState) (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	prof := feedProfile{p: userprofile.Profile{Skills: []string{"go"}, UpdatedAt: &updated}}
 	h := &feedHandlers{search: s, profiles: prof, excluded: ex, plans: feedPlansFake{}, state: st, cursors: feed.NewSigner([]byte("cursor-key"))}

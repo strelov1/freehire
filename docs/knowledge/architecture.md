@@ -10,6 +10,8 @@ sources:
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/internal/platform/AGENTS.md
   - resource: ../../internal/ai/assistant/AGENT-REFERENCE.md
   - resource: ../../internal/candidate/cv/AGENT-REFERENCE.md
+  - resource: ../../internal/api/handler/feed.go
+  - resource: ../../internal/platform/db/queries/feed_state.sql
 ---
 
 Freehire aggregates IT jobs through a Go API and workers, with PostgreSQL,
@@ -34,6 +36,11 @@ read the target block's `AGENTS.md` before changing dependencies. The layer
 mapping is enforced by depguard and `internal/platform/arch/layering`.
 
 For deployment ownership, follow [operations](operations.md).
+
+The Matches API resolves the caller's active source before querying the job index.
+PostgreSQL stores the active choice separately from the per-source New watermark.
+The API resolves saved searches by owner and leaves a deleted selection in place so
+Matches can offer a return to profile matching.
 
 Assistant merge consent is checked by the owner-scoped handler against the transcript;
 requirement report normalization belongs to the CV store. Follow the current

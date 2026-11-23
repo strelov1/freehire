@@ -21,12 +21,14 @@ var ErrBadCursor = errors.New("feed: invalid cursor")
 type Cursor struct {
 	UserID int64  `json:"u"`
 	Source string `json:"s"`
-	// Version is the source's filter version (the profile's UpdatedAt, in microseconds);
+	// Version is the source's UpdatedAt in microseconds;
 	// a different value means the filters changed mid-session.
-	Version    int64 `json:"v"`
-	SnapshotAt int64 `json:"t"` // unix seconds
-	Offset     int   `json:"o"`
-	ExpiresAt  int64 `json:"e"` // unix seconds
+	Version int64 `json:"v"`
+	// RankingVersion binds the profile used to rank a saved search.
+	RankingVersion int64 `json:"rv,omitempty"`
+	SnapshotAt     int64 `json:"t"` // unix seconds
+	Offset         int   `json:"o"`
+	ExpiresAt      int64 `json:"e"` // unix seconds
 	// Phase is the segment the offset counts in: PhaseNew, PhaseRest, or PhaseSeen for the
 	// cursor that only POST /me/feed/seen accepts. A cursor with no phase predates phases and
 	// is refused (400), so the client restarts from page 1.

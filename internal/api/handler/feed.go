@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -30,13 +31,18 @@ import (
 const (
 	feedReasonNoProfile     = "no_profile"
 	feedReasonSourceChanged = "source_changed"
+	// feedReasonSearchDeleted: the chosen saved search is gone, foreign or now profile-derived.
+	// The feed never falls back to the profile behind the user's back.
 	feedReasonSearchDeleted = "search_deleted"
+	// feedReasonIgnoredFilters: the saved search carries a param the feed cannot apply, and
+	// dropping it would widen the feed.
+	feedReasonIgnoredFilters = "ignored_filters"
 )
 
-// Feed sources: the profile, or one of the caller's saved searches.
+// Feed source kinds on the wire (PUT /me/feed/source, meta.source). Open enum.
 const (
-	feedSourceProfile     = "profile"
-	feedSourceSavedSearch = "saved_search"
+	feedSourceKindProfile = "profile"
+	feedSourceKindSearch  = "saved_search"
 )
 
 var feedDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
@@ -45,9 +51,10 @@ var feedDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets: prometheus.DefBuckets,
 }, []string{"outcome"})
 
-var feedFlags = promauto.NewCounterVec(prometheus.CounterOpts{
-	Name: "freehire_me_feed_flags_total",
-	Help: "GET /me/feed responses that carry a reason or a degraded flag, by kind and value.",
+// feedFlagged counts responses that carry a reason or a degraded flag, by what the flag says.
+var feedFlagged = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "freehire_me_feed_flagged_total",
+	Help: "GET /me/feed responses with a reason or a degraded flag, by kind (reason, degraded) and value.",
 }, []string{"kind", "value"})
 
 // excludedJobs is the tracking read the feed skips jobs by: those saved, dismissed or
@@ -65,20 +72,19 @@ type feedState interface {
 	AdvanceFeedSeen(ctx context.Context, userID int64, source string, at time.Time) error
 	// SearchDrainHighWater is the oldest recent open job not yet indexed; false when none.
 	SearchDrainHighWater(ctx context.Context) (time.Time, bool, error)
-	// FeedSource is the caller's chosen saved search id; 0 means the profile.
-	FeedSource(ctx context.Context, userID int64) (int64, error)
-	// SetFeedSource stores the choice; 0 means the profile.
-	SetFeedSource(ctx context.Context, userID, savedSearchID int64) error
-	// FeedSearch reads one of the caller's saved searches; false when it is gone or not theirs.
+	// FeedSource is the chosen saved search id; false means the profile (the default).
+	FeedSource(ctx context.Context, userID int64) (int64, bool, error)
+	// SetFeedSource stores the chosen source: a saved search id, or nil for the profile.
+	SetFeedSource(ctx context.Context, userID int64, savedSearchID *int64) error
+	// FeedSearch reads one of the user's own saved searches; false when it is missing, not
+	// theirs, or the profile-derived alert search (never a feed source).
 	FeedSearch(ctx context.Context, userID, id int64) (feedSearch, bool, error)
 }
 
-// feedSearch is the part of a saved search the feed reads.
+// feedSearch is a saved search as the feed reads it.
 type feedSearch struct {
 	Query     string
 	UpdatedAt time.Time
-	// Derived marks the profile-derived alert search: never a feed source (AD-2).
-	Derived bool
 }
 
 type feedStateDB struct{ q *db.Queries }
@@ -97,24 +103,31 @@ func (s feedStateDB) SearchDrainHighWater(ctx context.Context) (time.Time, bool,
 	return v.Time, v.Valid, err
 }
 
-func (s feedStateDB) FeedSource(ctx context.Context, userID int64) (int64, error) {
-	v, err := s.q.GetFeedSource(ctx, userID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, nil
+func (s feedStateDB) FeedSource(ctx context.Context, userID int64) (int64, bool, error) {
+	id, err := s.q.GetFeedSource(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !id.Valid) {
+		return 0, false, nil
 	}
-	return v.Int64, err
+	return id.Int64, err == nil, err
 }
 
-func (s feedStateDB) SetFeedSource(ctx context.Context, userID, savedSearchID int64) error {
-	return s.q.SetFeedSource(ctx, db.SetFeedSourceParams{UserID: userID, SavedSearchID: pgtype.Int8{Int64: savedSearchID, Valid: savedSearchID != 0}})
+func (s feedStateDB) SetFeedSource(ctx context.Context, userID int64, savedSearchID *int64) error {
+	arg := db.SetFeedSourceParams{UserID: userID}
+	if savedSearchID != nil {
+		arg.SavedSearchID = pgtype.Int8{Int64: *savedSearchID, Valid: true}
+	}
+	return s.q.SetFeedSource(ctx, arg)
 }
 
 func (s feedStateDB) FeedSearch(ctx context.Context, userID, id int64) (feedSearch, bool, error) {
-	v, err := s.q.GetSavedSearch(ctx, db.GetSavedSearchParams{ID: id, UserID: userID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	row, err := s.q.GetSavedSearch(ctx, db.GetSavedSearchParams{ID: id, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && row.DerivedFromProfile) {
 		return feedSearch{}, false, nil
 	}
-	return feedSearch{Query: v.Query, UpdatedAt: v.UpdatedAt.Time, Derived: v.DerivedFromProfile}, err == nil, err
+	if err != nil {
+		return feedSearch{}, false, err
+	}
+	return feedSearch{Query: row.Query, UpdatedAt: row.UpdatedAt.Time}, true, nil
 }
 
 // feedPlans is the plan check the feed is gated on. *plan.Store in production.
@@ -166,11 +179,13 @@ type feedCard struct {
 }
 
 type feedMeta struct {
-	// Source is profile or saved_search (open enum); SavedSearchID names the search.
-	Source        string `json:"source"`
-	SavedSearchID int64  `json:"saved_search_id,omitempty"`
+	Source string `json:"source"`
+	// SavedSearchID names the saved search when Source is saved_search.
+	SavedSearchID *int64 `json:"saved_search_id,omitempty"`
 	Total         int64  `json:"total"`
 	Reason        string `json:"reason,omitempty"`
+	// Ignored lists the saved-search params the feed could not apply (reason ignored_filters).
+	Ignored []search.UnknownParam `json:"ignored,omitempty"`
 	// Degraded is "no_match_vector" when the profile has no skills, so cards come in the
 	// search's default order rather than by match.
 	Degraded string `json:"degraded,omitempty"`
@@ -211,89 +226,75 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "Cannot verify your plan right now")
 	}
 	limit, _ := pageParamsBounded(c, defaultLimit, maxLimit) // paging is by cursor, never offset
-	// The stored source is resolved first: it names the watermark and the cursor's source.
-	searchID, err := h.state.FeedSource(c.Context(), userID)
+	src, err := h.resolveSource(c.Context(), userID)
 	if err != nil {
 		return err
 	}
-	src, srcKey := feedSourceProfile, feedSourceProfile
-	if searchID != 0 {
-		src, srcKey = feedSourceSavedSearch, "search:"+strconv.FormatInt(searchID, 10)
+	base := feedMeta{Source: feedSourceKindProfile}
+	if src.searchID != nil {
+		base.Source, base.SavedSearchID = feedSourceKindSearch, src.searchID
 	}
-	meta := feedMeta{Source: src, SavedSearchID: searchID}
-	empty := func(reason string) error {
+	empty := func(reason string, ignored []search.UnknownParam) error {
 		outcome = "empty"
-		feedFlags.WithLabelValues("reason", reason).Inc()
-		return c.JSON(fiber.Map{"data": []feedCard{}, "meta": feedMeta{Source: src, SavedSearchID: searchID, Reason: reason}})
+		feedFlagged.WithLabelValues("reason", reason).Inc()
+		m := base
+		m.Reason, m.Ignored = reason, ignored
+		return c.JSON(fiber.Map{"data": []feedCard{}, "meta": m})
 	}
-
-	var savedSearch feedSearch
-	if searchID != 0 {
-		var ok bool
-		if savedSearch, ok, err = h.state.FeedSearch(c.Context(), userID, searchID); err != nil {
-			return err
-		}
-		// Gone, foreign or now profile-derived: never a fall back to the profile.
-		if !ok || savedSearch.Derived {
-			return empty(feedReasonSearchDeleted)
-		}
+	if src.searchID != nil && src.search == nil {
+		return empty(feedReasonSearchDeleted, nil)
 	}
-	cur, err := h.pageCursor(c, userID, srcKey)
+	cur, err := h.pageCursor(c, userID, src.key)
 	if err != nil {
 		return err
 	}
 
 	profile, err := h.profiles.Get(c.Context(), userID)
-	// A saved search still takes the skill vector from the profile; without one it sorts by date.
-	if errors.Is(err, userprofile.ErrNotFound) && searchID == 0 {
-		return empty(feedReasonNoProfile)
+	if errors.Is(err, userprofile.ErrNotFound) && src.search == nil {
+		return empty(feedReasonNoProfile, nil)
 	}
 	if err != nil && !errors.Is(err, userprofile.ErrNotFound) {
 		return err
 	}
+	// A saved search without a profile still feeds: the profile only ranks and explains.
+	version := profileVersion(profile)
+	var rankingVersion int64
 	var (
-		version int64
-		vals    url.Values
-		qText   string
-		qFields []string
+		vals url.Values
+		q    string
+		qf   []string
 	)
-	if searchID == 0 {
-		version = profileVersion(profile)
+	if src.search != nil {
+		version = src.search.UpdatedAt.UnixMicro()
+		rankingVersion = profileVersion(profile)
+		var ignored []search.UnknownParam
+		var reason string
+		vals, reason, ignored = searchQuery(src.search.Query)
+		if reason != "" {
+			return empty(reason, ignored)
+		}
+		q = strings.TrimSpace(vals.Get("q"))
+		qf, _ = search.QFieldsFromValues(vals) // searchQuery already refused an invalid q_fields
+	} else {
 		var reason string
 		if vals, reason = feed.ProfileQuery(profile); reason != "" {
-			return empty(reason)
-		}
-	} else {
-		version = savedSearch.UpdatedAt.UnixMicro()
-		vals, _ = url.ParseQuery(savedSearch.Query)
-		if !search.Narrows(vals) || search.WantsWatchlist(vals) {
-			return empty(feed.ReasonNoUsableFields)
-		}
-		qText = vals.Get("q")
-		qFields, _ = search.QFieldsFromValues(vals)
-		if qText == "" {
-			// The profile's skills rank these hits, so a profile edit moves the order too.
-			// Both are UpdatedAt stamps: an edit to either one raises the max.
-			version = max(version, profileVersion(profile))
+			return empty(reason, nil)
 		}
 	}
-	if c.Query("cursor") != "" && cur.Version != version {
-		return empty(feedReasonSourceChanged)
+	if c.Query("cursor") != "" && (cur.Version != version || cur.RankingVersion != rankingVersion) {
+		return empty(feedReasonSourceChanged, nil)
 	}
 	excluded, err := h.excluded.FeedExcludedJobIDs(c.Context(), userID, time.Unix(cur.ActedBefore, 0))
 	if err != nil {
 		return err
 	}
 
+	meta := base
 	var vector []float32
-	switch {
-	case qText != "":
-		// No vector: a vector makes the search pure semantic, which ignores q and widens the
-		// saved search. Keyword hits stay strict and still get the Jev re-rank below.
-	case len(profile.Skills) > 0:
+	if len(profile.Skills) > 0 {
 		// ProfileVector, never JobVector: the ballast belongs to the stored side only.
 		vector = skillvec.ProfileVector(profile.Skills)
-	default:
+	} else {
 		meta.Degraded = "no_match_vector"
 	}
 	// Jobs indexed after the snapshot never shift a window; they appear after a restart.
@@ -305,7 +306,16 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 		} else {
 			f = withFilterGroup(f, search.Lte("created_ts", int(cur.SeenAt))) // pageCursor keeps SeenAt <= SnapshotAt)
 		}
-		return h.search.Search(c.Context(), search.SearchParams{Query: qText, QFields: qFields, Filter: f, Vector: vector, Limit: limit, Offset: offset})
+		// A search with text is eligible by keyword (the vector request is pure semantic and
+		// would ignore q), so it is retrieved by text and only re-ranked afterwards.
+		sp := search.SearchParams{Filter: f, Query: q, QFields: qf, Limit: limit, Offset: offset}
+		if q == "" {
+			sp.Vector = vector
+		}
+		if src.search != nil && vector == nil {
+			sp.Sort = []string{"created_at:desc"} // no match vector: newest first, still only the keyword hits
+		}
+		return h.search.Search(c.Context(), sp)
 	}
 	// segment ranks one phase's hits on their own: phases never mix inside a reorder.
 	segment := func(hits []search.JobDocument, isNew bool) ([]feedCard, string) {
@@ -316,7 +326,8 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 		if meta.Degraded != "" {
 			return cards, "date"
 		}
-		return h.rerankCards(c.Context(), userID, hits, cards)
+		ranked, how := h.rerankCards(c.Context(), userID, hits, cards)
+		return ranked, textRank(q, how)
 	}
 
 	phase := cur.Phase // pageCursor admits only new or rest
@@ -327,7 +338,7 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	cards, ranking := segment(res.Hits, phase == feed.PhaseNew)
 	meta.Ranking, meta.Total = ranking, res.Total
 	next := cur
-	next.Phase, next.Version = phase, version
+	next.Phase, next.Version, next.RankingVersion = phase, version, rankingVersion
 	if phase == feed.PhaseNew && (len(res.Hits) < limit || cur.Offset+len(res.Hits) >= int(res.Total)) {
 		// The new phase ends here: the rest of the page comes from the rest phase, offset 0.
 		fill := limit - len(res.Hits)
@@ -364,9 +375,118 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	}
 	outcome = "ok"
 	if meta.Degraded != "" {
-		feedFlags.WithLabelValues("degraded", meta.Degraded).Inc()
+		feedFlagged.WithLabelValues("degraded", meta.Degraded).Inc()
 	}
 	return c.JSON(fiber.Map{"data": cards, "meta": meta})
+}
+
+// textRank names a page's order: a search with text is retrieved by keyword, so when no Jev
+// re-rank applied it is in relevance order, not the vector or date order the label means.
+func textRank(q, how string) string {
+	if q != "" && (how == "date" || how == "skills") {
+		return "relevance"
+	}
+	return how
+}
+
+// feedSrc is the resolved feed source: key names its watermark and cursor.
+type feedSrc struct {
+	key      string
+	searchID *int64
+	search   *feedSearch
+}
+
+func (h *feedHandlers) resolveSource(ctx context.Context, userID int64) (feedSrc, error) {
+	id, ok, err := h.state.FeedSource(ctx, userID)
+	if err != nil {
+		return feedSrc{}, err
+	}
+	if !ok {
+		return feedSrc{key: feedSourceProfile}, nil
+	}
+	out := feedSrc{key: "search:" + strconv.FormatInt(id, 10), searchID: &id}
+	sr, found, err := h.state.FeedSearch(ctx, userID, id)
+	if err != nil {
+		return feedSrc{}, err
+	}
+	if found {
+		out.search = &sr
+	}
+	return out, nil
+}
+
+// feedOwnParams are the saved-search params that only order or phrase the browse, never
+// narrow: they do not make a search unenforceable.
+var feedOwnParams = []string{"q", "q_fields", "sort", "order", search.WatchlistParam}
+
+// searchQuery parses a stored saved-search query. A search that narrows nothing or wants the
+// watchlist has no usable fields; one with any criterion the feed cannot enforce is refused
+// with the ignored params named, because serving it would widen the saved search.
+func searchQuery(raw string) (url.Values, string, []search.UnknownParam) {
+	vals, err := url.ParseQuery(raw)
+	if err != nil {
+		return nil, feedReasonIgnoredFilters, nil
+	}
+	if search.WantsWatchlist(vals) || !search.Narrows(vals) {
+		return nil, feed.ReasonNoUsableFields, nil
+	}
+	ignored := search.UnknownParams(vals, feedOwnParams)
+	for param := range search.IgnoredValues(vals) {
+		ignored = append(ignored, search.UnknownParam{Param: param})
+	}
+	if _, bad := search.QFieldsFromValues(vals); len(bad) > 0 {
+		ignored = append(ignored, bad...)
+	}
+	if search.HasInvalidVisaSponsorship(vals) {
+		ignored = append(ignored, search.UnknownParam{Param: "visa_sponsorship"})
+	}
+	if len(ignored) > 0 {
+		return nil, feedReasonIgnoredFilters, search.SortAndCap(ignored)
+	}
+	return vals, "", nil
+}
+
+// SetSource stores the caller's chosen feed source. A search that is missing, not theirs or
+// profile-derived is a 404 and the stored source stays.
+func (h *feedHandlers) SetSource(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	if _, err := h.plans.RequirePaid(c.Context(), userID); errors.Is(err, plan.ErrPaymentRequired) {
+		return fiber.NewError(fiber.StatusPaymentRequired, "The match feed needs Pro or Ultra")
+	} else if err != nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "Cannot verify your plan right now")
+	}
+	var in struct {
+		Source        string `json:"source"`
+		SavedSearchID *int64 `json:"saved_search_id"`
+	}
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	}
+	var id *int64
+	switch in.Source {
+	case feedSourceKindProfile:
+	case feedSourceKindSearch:
+		if in.SavedSearchID == nil || *in.SavedSearchID <= 0 {
+			return fiber.NewError(fiber.StatusBadRequest, "saved_search_id is required")
+		}
+		_, found, err := h.state.FeedSearch(c.Context(), userID, *in.SavedSearchID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fiber.NewError(fiber.StatusNotFound, "saved search not found")
+		}
+		id = in.SavedSearchID
+	default:
+		return fiber.NewError(fiber.StatusBadRequest, "unknown source")
+	}
+	if err := h.state.SetFeedSource(c.Context(), userID, id); err != nil {
+		return err
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // Seen moves the source's watermark to the snapshot of the seen_cursor a feed page handed
@@ -387,54 +507,11 @@ func (h *feedHandlers) Seen(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	cur, err := h.verifyCursor(in.Cursor, userID)
+	cur, err := h.verifyCursor(in.Cursor, userID, "")
 	if err != nil || cur.Phase != feed.PhaseSeen {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 	}
 	if err := h.state.AdvanceFeedSeen(c.Context(), userID, cur.Source, time.Unix(cur.SnapshotAt, 0)); err != nil {
-		return err
-	}
-	return c.SendStatus(fiber.StatusNoContent)
-}
-
-// SetSource stores what the feed matches on: the profile, or one of the caller's own saved
-// searches (never the profile-derived one).
-func (h *feedHandlers) SetSource(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	if _, err := h.plans.RequirePaid(c.Context(), userID); errors.Is(err, plan.ErrPaymentRequired) {
-		return fiber.NewError(fiber.StatusPaymentRequired, "The match feed needs Pro or Ultra")
-	} else if err != nil {
-		return fiber.NewError(fiber.StatusServiceUnavailable, "Cannot verify your plan right now")
-	}
-	var in struct {
-		Source        string `json:"source"`
-		SavedSearchID int64  `json:"saved_search_id"`
-	}
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	var id int64
-	switch in.Source {
-	case feedSourceProfile:
-	case feedSourceSavedSearch:
-		if in.SavedSearchID <= 0 {
-			return fiber.NewError(fiber.StatusBadRequest, "saved_search_id is required")
-		}
-		ss, ok, err := h.state.FeedSearch(c.Context(), userID, in.SavedSearchID)
-		if err != nil {
-			return err
-		}
-		if !ok || ss.Derived {
-			return fiber.NewError(fiber.StatusNotFound, "saved search not found")
-		}
-		id = in.SavedSearchID
-	default:
-		return fiber.NewError(fiber.StatusBadRequest, "unknown source")
-	}
-	if err := h.state.SetFeedSource(c.Context(), userID, id); err != nil {
 		return err
 	}
 	return c.SendStatus(fiber.StatusNoContent)
