@@ -77,6 +77,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   lesta: 'Lesta Games',
   techinasia: 'Tech in Asia',
   civilservicejobs: 'Civil Service Jobs',
+  charityjob: 'CharityJob',
   empregos: 'Empregos.com.br',
   ibm: 'IBM',
   feishujobs: 'Feishu Jobs',

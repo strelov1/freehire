@@ -4,8 +4,10 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-22T18:34:33+00:00
+  at: 2026-11-23T01:23:23+00:00
 sources:
+  - resource: ../../internal/ingest/sources/providers/jobsacuk.md
+  - resource: ../../internal/ingest/sources/providers/charityjob.md
   - resource: ../../internal/dict/classify/AGENT-REFERENCE-LANGUAGES.md
   - resource: ../../tools/gen-contracts/vocab.go
   - resource: ../../internal/job/job/upsert.go
@@ -121,3 +123,11 @@ scheduler then owns those searches, using the existing oldest-run-first admissio
 run cannot reach every board. Worklist page/depth and age settings travel with each board; registration can explicitly
 override these budgets for new searches using `--pages` and `--jobage`. Repeated registration preserves existing live operator settings. See the
 [worker reference](../agents/workers/ingest.md).
+
+## Jobs.ac.uk and CharityJob catalogue identity
+
+[Jobs.ac.uk](../../internal/ingest/sources/providers/jobsacuk.md) uses the posting reference as
+its external ID and verifies coverage of the unfiltered listing before reading details.
+[CharityJob](../../internal/ingest/sources/providers/charityjob.md) uses its own job ID, verifies
+the page sequence and reads descriptions through the crawl-host browser. Both preserve the
+listed identity when a detail is temporarily unreadable.

@@ -34,6 +34,10 @@ type scraplingProvider struct {
 // It is applied after the proxy and fingerprint tiers and overrides them for these providers;
 // without SCRAPLING_FETCH_URL nothing here runs and each keeps the transport those tiers gave it.
 var scraplingProviders = map[string]scraplingProvider{
+	// The public CharityJob listing and posting paths are served to the crawl-host browser.
+	"charityjob": {scraplingRoute{mode: scraplingfetch.ModeBrowser}, func(f *Client) Source {
+		return pacedCharityJob(f)
+	}},
 	"jobbankca": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewJobBankCA(f)
 	}},

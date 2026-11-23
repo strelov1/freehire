@@ -2,6 +2,9 @@
 
 ## 2026-11-22
 
+Recorded Jobs.ac.uk and CharityJob source identity, listing coverage and detail hydration.
+The provider notes cite crawler observations and captured-response regression tests.
+
 Documented LinkedIn "firehose" searches: Board `*` omits the `keywords` parameter so one search
 per location lists the whole market, and `tenants.jobage_hours` (1..720, overrides `jobage`)
 sets sub-day windows. Evidence is a live guest-API measurement: keyword-less
