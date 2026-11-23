@@ -38,10 +38,10 @@ importers:
         version: 2.6.2
       '@scalar/api-reference':
         specifier: 1.79.0
-        version: 1.79.0(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(tailwindcss@4.3.3)(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(zod@4.6.7)
+        version: 1.79.0(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(tailwindcss@4.3.5)(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(zod@4.6.7)
       '@scalar/server-side-rendering':
         specifier: 0.1.70
-        version: 0.1.70(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(tailwindcss@4.3.3)(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(zod@4.6.7)
+        version: 0.1.70(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(tailwindcss@4.3.5)(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(zod@4.6.7)
       '@scalar/types':
         specifier: 0.29.0
         version: 0.29.0
@@ -105,7 +105,7 @@ importers:
         version: 7.3.1(svelte@5.57.3(@typescript-eslint/types@8.73.0))(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
       '@tailwindcss/typography':
         specifier: ^0.5.20
-        version: 0.5.20(tailwindcss@4.3.3)
+        version: 0.5.20(tailwindcss@4.3.5)
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
@@ -161,8 +161,8 @@ importers:
         specifier: ^1.8.0
         version: 1.8.0(svelte@5.57.3(@typescript-eslint/types@8.73.0))
       tailwindcss:
-        specifier: ^4.3.1
-        version: 4.3.3
+        specifier: ^4.3.5
+        version: 4.3.5
       tslib:
         specifier: ^2.9.1
         version: 2.9.1
@@ -3429,6 +3429,9 @@ packages:
   tailwindcss@4.3.3:
     resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
 
+  tailwindcss@4.3.5:
+    resolution: {integrity: sha512-FcQk9BuffmEHJP2G0XmB2SplU1aLTI7j07Kunk+U74Ny+XiWOtzXz9aujFZ/avntw1e2cOv/3PkgzflQ7gX2vQ==}
+
   tapable@2.3.3:
     resolution: {integrity: sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==}
     engines: {node: '>=6'}
@@ -4177,9 +4180,9 @@ snapshots:
       '@floating-ui/utils': 0.2.12
       vue: 3.5.45(typescript@6.0.3)
 
-  '@headlessui/tailwindcss@0.2.2(tailwindcss@4.3.3)':
+  '@headlessui/tailwindcss@0.2.2(tailwindcss@4.3.5)':
     dependencies:
-      tailwindcss: 4.3.3
+      tailwindcss: 4.3.5
 
   '@headlessui/vue@1.7.23(vue@3.5.45(typescript@6.0.3))':
     dependencies:
@@ -4735,11 +4738,11 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
 
-  '@scalar/agent-chat@0.12.53(tailwindcss@4.3.3)(typescript@6.0.3)(zod@4.6.7)':
+  '@scalar/agent-chat@0.12.53(tailwindcss@4.3.5)(typescript@6.0.3)(zod@4.6.7)':
     dependencies:
       '@ai-sdk/vue': 4.0.171(vue@3.5.45(typescript@6.0.3))(zod@4.6.7)
-      '@scalar/api-client': 3.26.0(tailwindcss@4.3.3)(typescript@6.0.3)
-      '@scalar/components': 0.35.0(tailwindcss@4.3.3)(typescript@6.0.3)
+      '@scalar/api-client': 3.26.0(tailwindcss@4.3.5)(typescript@6.0.3)
+      '@scalar/components': 0.35.0(tailwindcss@4.3.5)(typescript@6.0.3)
       '@scalar/helpers': 0.18.0
       '@scalar/icons': 0.7.9(typescript@6.0.3)
       '@scalar/json-magic': 0.20.0
@@ -4777,18 +4780,18 @@ snapshots:
       - universal-cookie
       - zod
 
-  '@scalar/api-client@3.26.0(tailwindcss@4.3.3)(typescript@6.0.3)':
+  '@scalar/api-client@3.26.0(tailwindcss@4.3.5)(typescript@6.0.3)':
     dependencies:
-      '@headlessui/tailwindcss': 0.2.2(tailwindcss@4.3.3)
+      '@headlessui/tailwindcss': 0.2.2(tailwindcss@4.3.5)
       '@headlessui/vue': 1.7.23(vue@3.5.45(typescript@6.0.3))
-      '@scalar/blocks': 0.7.2(tailwindcss@4.3.3)(typescript@6.0.3)
-      '@scalar/components': 0.35.0(tailwindcss@4.3.3)(typescript@6.0.3)
+      '@scalar/blocks': 0.7.2(tailwindcss@4.3.5)(typescript@6.0.3)
+      '@scalar/components': 0.35.0(tailwindcss@4.3.5)(typescript@6.0.3)
       '@scalar/helpers': 0.18.0
       '@scalar/icons': 0.7.9(typescript@6.0.3)
       '@scalar/localization': 0.2.12(typescript@6.0.3)
       '@scalar/oas-utils': 0.20.22(typescript@6.0.3)
       '@scalar/openapi-types': 0.9.9
-      '@scalar/sidebar': 0.12.10(tailwindcss@4.3.3)(typescript@6.0.3)
+      '@scalar/sidebar': 0.12.10(tailwindcss@4.3.5)(typescript@6.0.3)
       '@scalar/snippetz': 0.10.18
       '@scalar/themes': 0.20.1
       '@scalar/typebox': 0.1.3
@@ -4829,22 +4832,22 @@ snapshots:
       - typescript
       - universal-cookie
 
-  '@scalar/api-reference@1.79.0(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(tailwindcss@4.3.3)(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(zod@4.6.7)':
+  '@scalar/api-reference@1.79.0(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(tailwindcss@4.3.5)(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(zod@4.6.7)':
     dependencies:
       '@headlessui/vue': 1.7.23(vue@3.5.45(typescript@6.0.3))
-      '@scalar/agent-chat': 0.12.53(tailwindcss@4.3.3)(typescript@6.0.3)(zod@4.6.7)
-      '@scalar/api-client': 3.26.0(tailwindcss@4.3.3)(typescript@6.0.3)
+      '@scalar/agent-chat': 0.12.53(tailwindcss@4.3.5)(typescript@6.0.3)(zod@4.6.7)
+      '@scalar/api-client': 3.26.0(tailwindcss@4.3.5)(typescript@6.0.3)
       '@scalar/asyncapi-to-markdown': 0.2.9(typescript@6.0.3)
-      '@scalar/blocks': 0.7.2(tailwindcss@4.3.3)(typescript@6.0.3)
+      '@scalar/blocks': 0.7.2(tailwindcss@4.3.5)(typescript@6.0.3)
       '@scalar/code-highlight': 0.4.14
-      '@scalar/components': 0.35.0(tailwindcss@4.3.3)(typescript@6.0.3)
+      '@scalar/components': 0.35.0(tailwindcss@4.3.5)(typescript@6.0.3)
       '@scalar/helpers': 0.18.0
       '@scalar/icons': 0.7.9(typescript@6.0.3)
       '@scalar/localization': 0.2.12(typescript@6.0.3)
       '@scalar/oas-utils': 0.20.22(typescript@6.0.3)
       '@scalar/openapi-to-markdown': 1.7.7(typescript@6.0.3)
       '@scalar/schemas': 0.18.0
-      '@scalar/sidebar': 0.12.10(tailwindcss@4.3.3)(typescript@6.0.3)
+      '@scalar/sidebar': 0.12.10(tailwindcss@4.3.5)(typescript@6.0.3)
       '@scalar/snippetz': 0.10.18
       '@scalar/themes': 0.20.1
       '@scalar/types': 0.29.0
@@ -4915,9 +4918,9 @@ snapshots:
     dependencies:
       '@scalar/helpers': 0.18.0
 
-  '@scalar/blocks@0.7.2(tailwindcss@4.3.3)(typescript@6.0.3)':
+  '@scalar/blocks@0.7.2(tailwindcss@4.3.5)(typescript@6.0.3)':
     dependencies:
-      '@scalar/components': 0.35.0(tailwindcss@4.3.3)(typescript@6.0.3)
+      '@scalar/components': 0.35.0(tailwindcss@4.3.5)(typescript@6.0.3)
       '@scalar/helpers': 0.18.0
       '@scalar/icons': 0.7.9(typescript@6.0.3)
       '@scalar/localization': 0.2.12(typescript@6.0.3)
@@ -4959,11 +4962,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@scalar/components@0.35.0(tailwindcss@4.3.3)(typescript@6.0.3)':
+  '@scalar/components@0.35.0(tailwindcss@4.3.5)(typescript@6.0.3)':
     dependencies:
       '@floating-ui/utils': 0.2.12
       '@floating-ui/vue': 2.0.1(vue@3.5.45(typescript@6.0.3))
-      '@headlessui/tailwindcss': 0.2.2(tailwindcss@4.3.3)
+      '@headlessui/tailwindcss': 0.2.2(tailwindcss@4.3.5)
       '@headlessui/vue': 1.7.23(vue@3.5.45(typescript@6.0.3))
       '@scalar/code-highlight': 0.4.14
       '@scalar/helpers': 0.18.0
@@ -5058,9 +5061,9 @@ snapshots:
       '@scalar/types': 0.29.0
       '@scalar/validation': 0.6.8
 
-  '@scalar/server-side-rendering@0.1.70(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(tailwindcss@4.3.3)(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(zod@4.6.7)':
+  '@scalar/server-side-rendering@0.1.70(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(tailwindcss@4.3.5)(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(zod@4.6.7)':
     dependencies:
-      '@scalar/api-reference': 1.79.0(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(tailwindcss@4.3.3)(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(zod@4.6.7)
+      '@scalar/api-reference': 1.79.0(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(tailwindcss@4.3.5)(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(zod@4.6.7)
       '@scalar/helpers': 0.18.0
       '@scalar/types': 0.29.0
       '@unhead/vue': 3.4.3(@oxc-project/types@0.154.0)(lightningcss@1.33.0)(oxc-parser@0.152.0)(rolldown@1.2.14)(rollup@4.62.2)(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vue@3.5.45(typescript@6.0.3))
@@ -5101,9 +5104,9 @@ snapshots:
       - webpack
       - zod
 
-  '@scalar/sidebar@0.12.10(tailwindcss@4.3.3)(typescript@6.0.3)':
+  '@scalar/sidebar@0.12.10(tailwindcss@4.3.5)(typescript@6.0.3)':
     dependencies:
-      '@scalar/components': 0.35.0(tailwindcss@4.3.3)(typescript@6.0.3)
+      '@scalar/components': 0.35.0(tailwindcss@4.3.5)(typescript@6.0.3)
       '@scalar/helpers': 0.18.0
       '@scalar/icons': 0.7.9(typescript@6.0.3)
       '@scalar/themes': 0.20.1
@@ -5313,10 +5316,10 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
-  '@tailwindcss/typography@0.5.20(tailwindcss@4.3.3)':
+  '@tailwindcss/typography@0.5.20(tailwindcss@4.3.5)':
     dependencies:
       postcss-selector-parser: 7.1.6
-      tailwindcss: 4.3.3
+      tailwindcss: 4.3.5
 
   '@tailwindcss/vite@4.3.3(vite@8.3.4(@types/node@26.6.6)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))':
     dependencies:
@@ -7468,6 +7471,8 @@ snapshots:
   tailwind-merge@3.7.0: {}
 
   tailwindcss@4.3.3: {}
+
+  tailwindcss@4.3.5: {}
 
   tapable@2.3.3: {}
 
