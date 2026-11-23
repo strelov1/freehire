@@ -87,9 +87,8 @@ Both the web app and the `freehire-mobile` app SHALL show a bell icon carrying
 the caller's unread count, opening a list of notification cards (kind icon,
 title/body text, relative timestamp, unread visual state). Tapping a card
 whose kind carries a public slug SHALL navigate to that job (web and mobile),
-except `nudge_follow_up`/`nudge_interview_prep` on web, which SHALL navigate to
-the tracking board instead, matching the existing Telegram/email link target
-for those two kinds. A card with no slug (a multi-job subscription digest)
+except on web, where `nudge_follow_up` SHALL navigate to the tracking board
+and `nudge_interview_prep` SHALL open the application's tracking drawer. A card with no slug (a multi-job subscription digest)
 SHALL have no navigation target.
 
 #### Scenario: Unread badge reflects unread count
@@ -102,10 +101,15 @@ SHALL have no navigation target.
 - **WHEN** the user taps a `reminder`, `nudge_job_closed`, or single-job `subscription_digest` card
 - **THEN** the app navigates to that job's page
 
-#### Scenario: Tapping a follow-up/interview-prep card on web opens the tracking board
+#### Scenario: Tapping a follow-up card on web opens the tracking board
 
-- **WHEN** a web user taps a `nudge_follow_up` or `nudge_interview_prep` card
+- **WHEN** a web user taps a `nudge_follow_up` card
 - **THEN** the app navigates to `/my/tracking`
+
+#### Scenario: Tapping an interview-prep card on web opens the application
+
+- **WHEN** a web user taps a `nudge_interview_prep` card
+- **THEN** the app navigates to the matching drawer at `/my/tracking/{slug}`
 
 #### Scenario: Tapping a follow-up/interview-prep card on mobile opens the job
 

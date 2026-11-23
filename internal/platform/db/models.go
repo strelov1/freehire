@@ -166,6 +166,12 @@ type ApplyFormOutbox struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type AssistantInterviewReport struct {
+	SessionID  pgtype.UUID `json:"session_id"`
+	ThroughSeq int64       `json:"through_seq"`
+	Report     []byte      `json:"report"`
+}
+
 type AssistantMessage struct {
 	SessionID uuid.UUID          `json:"session_id"`
 	Seq       int32              `json:"seq"`

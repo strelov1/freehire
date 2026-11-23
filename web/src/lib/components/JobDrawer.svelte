@@ -15,6 +15,7 @@
   import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
   import { cardTagsFromCard } from '#lib/enrichment.js';
   import JobMatch from './JobMatch.svelte';
+  import { createInterviewSession } from '#lib/assistant/api.js';
   import { api } from '#lib/api.js';
   import JobDrawerMailRecall from './JobDrawerMailRecall.svelte';
   import JobDrawerEmailList from './JobDrawerEmailList.svelte';
@@ -347,6 +348,9 @@
         {tailorIsPrimary}
         {tailoring}
         onTailor={startTailoring}
+        jobSlug={item.job?.public_slug}
+        {createInterviewSession}
+        stage={item.stage}
         {offersFollowUp}
         followedUp={!!item.followed_up_at}
         onFollowUp={() => onfollowup(item)}

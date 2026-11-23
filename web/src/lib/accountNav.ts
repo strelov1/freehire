@@ -44,6 +44,7 @@ export const accountNav = [
   // Mail inbox: connect Gmail and/or claim a freehire mailbox to track application
   // replies. Open to every signed-in user.
   { href: '/my/inbox', label: 'Inbox', workspace: 'seeker', group: 'main' },
+  { href: '/my/interviews', label: 'Interviews', workspace: 'seeker', group: 'main' },
   // The companies the member follows, and the alert for their new postings. Open to every
   // signed-in user.
   { href: '/my/watchlist', label: 'Watchlist', workspace: 'seeker', group: 'main' },

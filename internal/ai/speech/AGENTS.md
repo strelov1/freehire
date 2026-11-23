@@ -2,9 +2,18 @@
 
 ## Scope
 
-`internal/ai/speech` — one method that turns recorded audio into text, and nothing else.
+`internal/ai/speech` supplies the assistant’s audio.
 Its HTTP surface is `internal/api/handler/speech.go`; the microphone that feeds it is
 `web/src/lib/assistant/VoiceInput.svelte`.
+
+## ElevenLabs for interview rehearsals
+
+Set `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` on the API server to offer ElevenLabs in
+job-bound rehearsal sessions. The browser uses the same interview chat and shows the
+transcribed recording as an editable draft. When enabled, playback synthesizes the latest
+stored interviewer reply. Both audio operations use cookie authentication and draw from the
+existing paid dictation allowance. The audio provider receives the recording or the reply text.
+The chat context and model calls stay on the assistant's existing path.
 
 ## Served again since 2026-10-23
 

@@ -4252,7 +4252,7 @@ The proof (an offer letter, badge, anything showing you work there) is stored pr
 | `proof` | string (binary) | yes | Evidence you work there. |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/me/referrals/offers" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X POST "https://freehire.me/api/v1/me/referrals/offers" -H "Authorization: Bearer $FREEHIRE_API_KEY" -F 'proof=@<proof>'
 ```
 
 ```json
@@ -6985,7 +6985,7 @@ Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, capped
 | `file` | string (binary) | yes |  |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/speech/transcriptions" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X POST "https://freehire.me/api/v1/speech/transcriptions" -H "Authorization: Bearer $FREEHIRE_API_KEY" -F 'file=@<file>'
 ```
 
 ```json

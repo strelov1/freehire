@@ -24,9 +24,8 @@ export const load: PageServerLoad = async ({ parent, params, url, fetch, request
   const autoApply = url.searchParams.get('tab') === 'auto_apply';
   let board = await loadBoard(fetch, cookie);
   let initialItem: MyJob | undefined;
-  if (autoApply && !board?.some((row) => row.id === params.id)) {
-    // A live attempt can outlast its board placement or fall outside the first page.
-    // Read this application directly rather than silently opening the bare board.
+  if (!board?.some((row) => row.id === params.id)) {
+    // An application linked from a notification can fall outside the first board page.
     let application: TrackedApplication;
     try {
       application = await serverApi(fetch, cookie).getTrackedApplication(params.id);

@@ -132,6 +132,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistant/sessions/{id}/interview-repeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Opens a fresh rehearsal with the question saved in the feedback. */
+        post: operations["postAssistantInterviewRepeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/sessions/{id}/interview-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Saves feedback about the candidate’s answers in one owned rehearsal. */
+        post: operations["postAssistantInterviewReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/sessions/{id}/interview-speech": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Speak the latest interviewer reply.
+         * @description Synthesizes the last completed interviewer reply in an owned interview rehearsal.
+         */
+        post: operations["postAssistantInterviewSpeech"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistant/sessions/{id}/voice-token": {
         parameters: {
             query?: never;
@@ -6542,6 +6596,15 @@ export interface components {
             unlimited: boolean;
             allowance: unknown;
         };
+        AssistantInterviewRepeat: {
+            session_id: string;
+        };
+        AssistantInterviewReport: {
+            strength: string;
+            improvement: string;
+            quote: string;
+            question: string;
+        };
         /** @description The 402 a spent or missing allowance answers with. */
         AssistantPlanRefusal: {
             error: string;
@@ -6563,6 +6626,9 @@ export interface components {
         AssistantSessionDetail: {
             session: components["schemas"]["AssistantSession"];
             messages: unknown;
+            /** @description Optional ElevenLabs recording and playback on an interview rehearsal. */
+            elevenlabs_voice?: boolean;
+            interview_report?: components["schemas"]["AssistantInterviewReport"];
         };
         AssistantSessionList: {
             data: components["schemas"]["AssistantSession"][];
@@ -11066,6 +11132,123 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Client error */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantPlanRefusal"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postAssistantInterviewRepeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AssistantInterviewRepeat"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postAssistantInterviewReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AssistantInterviewReport"];
+                    };
+                };
+            };
+            /** @description Client error */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantPlanRefusal"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postAssistantInterviewSpeech: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The session id. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/mpeg": unknown;
+                };
             };
             /** @description Client error */
             402: {

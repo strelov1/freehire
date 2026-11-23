@@ -134,6 +134,10 @@ type Settings struct {
 	// minute. Empty makes the mint endpoint answer 501 and hides voice mode.
 	RealtimeModel string
 
+	ElevenLabsAPIKey     string
+	ElevenLabsVoiceID    string
+	ElevenLabsViaBifrost bool
+
 	// S3 backs CV storage (internal/platform/blobstore); any S3-compatible endpoint works. All four
 	// must be set to enable it; any empty field disables it (upload then only extracts skills
 	// in-request). Enforced at the cmd/server call site.
@@ -346,6 +350,10 @@ func Load() Settings {
 		STTModel: os.Getenv("STT_MODEL"),
 
 		RealtimeModel: os.Getenv("REALTIME_MODEL"),
+
+		ElevenLabsAPIKey:     os.Getenv("ELEVENLABS_API_KEY"),
+		ElevenLabsVoiceID:    os.Getenv("ELEVENLABS_VOICE_ID"),
+		ElevenLabsViaBifrost: os.Getenv("ELEVENLABS_VIA_BIFROST") == "true",
 
 		S3Endpoint:  os.Getenv("S3_ENDPOINT"),
 		S3Bucket:    os.Getenv("S3_BUCKET"),

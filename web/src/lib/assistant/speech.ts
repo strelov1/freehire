@@ -18,11 +18,23 @@ export class TranscriptionUnavailable extends Error {
  *
  *  An empty string is a normal answer — it is what silence transcribes to — so callers
  *  must treat it as "nothing was said" rather than as a failure. */
-export async function transcribe(audio: Blob, filename: string): Promise<string> {
+export function transcribe(audio: Blob, filename: string): Promise<string> {
+  return uploadRecording('/api/v1/speech/transcriptions', audio, filename);
+}
+
+export function transcribeInterviewAudio(sessionId: string, audio: Blob, filename: string): Promise<string> {
+  return uploadRecording(
+    `/api/v1/assistant/sessions/${encodeURIComponent(sessionId)}/interview-transcriptions`,
+    audio,
+    filename,
+  );
+}
+
+async function uploadRecording(path: string, audio: Blob, filename: string): Promise<string> {
   const form = new FormData();
   form.append('file', audio, filename);
 
-  const res = await fetch('/api/v1/speech/transcriptions', {
+  const res = await fetch(path, {
     method: 'POST',
     credentials: 'include',
     body: form,
