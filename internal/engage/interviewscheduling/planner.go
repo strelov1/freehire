@@ -111,6 +111,7 @@ func selectedTime(body string, decision Decision, offers []time.Time, zone *time
 var refusalEvidence = regexp.MustCompile(`(?i)(\b(?:no|not|can't|cannot|unable|doesn't|doesn’t|won't|won’t)\b|não|не подходит)`)
 
 func affirmativeChoice(body, evidence string, selected int) bool {
+	evidence = strings.TrimRight(evidence, ".!? \t\r\n")
 	for _, sentence := range strings.FieldsFunc(body, func(r rune) bool { return r == '.' || r == '!' || r == '?' || r == '\n' }) {
 		if !strings.Contains(sentence, evidence) || !acceptanceEvidence.MatchString(sentence) || refusalEvidence.MatchString(sentence) {
 			continue

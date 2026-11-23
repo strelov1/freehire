@@ -84,7 +84,7 @@ const invalidGrant = "invalid_grant"
 // Two carriers:
 //
 //   - the API refusing an access token with 401 or 403, except a 403 whose reason is a rate
-//     limit or quota (Gmail sends that for a burst of reads);
+//     limit, quota, or disabled project API;
 //   - the token endpoint refusing the refresh token with `invalid_grant`, where a real
 //     revocation lands before any API call. It arrives as a *url.Error wrapping
 //     *oauth2.RetrieveError, hence the unwrapping.
@@ -94,7 +94,8 @@ func RevokedGrant(err error) bool {
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
 		return apiErr.StatusCode == http.StatusUnauthorized ||
-			(apiErr.StatusCode == http.StatusForbidden && !limitReason(apiErr.Reason))
+			(apiErr.StatusCode == http.StatusForbidden && !limitReason(apiErr.Reason) &&
+				!strings.EqualFold(apiErr.Reason, "accessNotConfigured"))
 	}
 	var retrieve *oauth2.RetrieveError
 	if errors.As(err, &retrieve) {
