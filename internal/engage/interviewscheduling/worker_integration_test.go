@@ -54,6 +54,20 @@ func TestInterviewIsNegotiatedAndConfirmedInTheOriginalEmailThread(t *testing.T)
 			now() - interval '30 minutes','incoming','interview_invitation',now(),'auto')`, userID, appID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, `INSERT INTO emails(user_id,application_id,source,external_id,thread_id,from_addr,
+		subject,body_text,received_at,direction,status_signal,classified_at,link_source)
+		VALUES ($1,$2,'gmail','other-1','other-thread','other@example.test','Interview with Acme','Can we schedule?',
+			now() - interval '30 minutes','incoming','interview_invitation',now(),'auto'),
+		       ($1,$2,'gmail','other-2','other-pending','other@example.test','Interview with Acme','Can we schedule?',
+			now() - interval '30 minutes','incoming','interview_invitation',now(),'auto')`, userID, appID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO interview_scheduling_threads
+		(user_id,application_id,anchor_email_id,gmail_thread_id,recruiter_email)
+		SELECT user_id,application_id,id,thread_id,from_addr FROM emails
+		WHERE user_id=$1 AND external_id='other-1'`, userID); err != nil {
+		t.Fatal(err)
+	}
 	cipher, err := tokencrypt.New(make([]byte, 32))
 	if err != nil {
 		t.Fatal(err)
@@ -114,7 +128,7 @@ func TestInterviewIsNegotiatedAndConfirmedInTheOriginalEmailThread(t *testing.T)
 	plans := plan.NewStore(q, pool, plan.DefaultConfig())
 	bookings := bookinglink.New(bookinglink.NewQueriesRepository(q, pool), plans, []byte("test-booking-key"), nil)
 	worker := NewWorker(q, bookings, plans, nil, nil, cipher, gmailsync.NewConnector("test", "test", "https://freehire.test"),
-		"https://freehire.test", []int64{userID})
+		"https://freehire.test", []int64{userID}, "recruiter@example.test")
 	worker.client = func(context.Context, string) *http.Client { return client }
 	worker.planner = func(_ context.Context, _ jsonGenerator, input plannerInput) (Decision, error) {
 		switch input.Body {
@@ -136,6 +150,11 @@ func TestInterviewIsNegotiatedAndConfirmedInTheOriginalEmailThread(t *testing.T)
 		}
 	}
 	run()
+	var otherThreads int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM interview_scheduling_threads
+		WHERE user_id=$1 AND recruiter_email='other@example.test'`, userID).Scan(&otherThreads); err != nil || otherThreads != 1 {
+		t.Fatalf("pilot seeded another recruiter: %d, %v", otherThreads, err)
+	}
 	if len(sent) != 1 || !strings.Contains(sent[0], "3. ") || !strings.Contains(sent[0], "/booking/") {
 		t.Fatalf("expected three times and a link, got %v", sent)
 	}
@@ -145,7 +164,7 @@ func TestInterviewIsNegotiatedAndConfirmedInTheOriginalEmailThread(t *testing.T)
 	if len(sent) != 1 {
 		t.Fatal("agent confirmed before the calendar invitation")
 	}
-	if err := bookinglink.RunInvitations(ctx, bookinglink.NewInvitationQueries(q, 0), calendarStub{}, 5); err != nil {
+	if err := bookinglink.RunInvitations(ctx, bookinglink.NewInvitationQueries(q, 0, ""), calendarStub{}, 5); err != nil {
 		t.Fatal(err)
 	}
 	run()
@@ -163,6 +182,9 @@ func TestInterviewIsNegotiatedAndConfirmedInTheOriginalEmailThread(t *testing.T)
 		t.Fatal("another pass duplicated the confirmation")
 	}
 
+	if _, err := pool.Exec(ctx, `DELETE FROM emails WHERE user_id=$1 AND external_id IN ('other-1','other-2')`, userID); err != nil {
+		t.Fatal(err)
+	}
 	digest := inboxdigest.NewDBStore(q)
 	digestAt := time.Now().UTC().Truncate(24 * time.Hour).Add(36 * time.Hour)
 	candidates, err := digest.Candidates(ctx, digestAt, 10)

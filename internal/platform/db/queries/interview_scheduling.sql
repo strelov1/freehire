@@ -33,6 +33,7 @@ WHERE e.source = 'gmail' AND e.direction = 'incoming' AND e.deleted_at IS NULL
   AND gc.status = 'connected' AND gc.email <> '' AND lower(gc.email) <> lower(e.from_addr)
   AND sqlc.arg(required_scopes)::text[] <@ gc.scopes
   AND (cardinality(sqlc.arg(allow_users)::bigint[]) = 0 OR e.user_id = ANY(sqlc.arg(allow_users)::bigint[]))
+  AND (sqlc.arg(pilot_recruiter)::text = '' OR lower(e.from_addr) = lower(sqlc.arg(pilot_recruiter)::text))
   AND s.id IS NULL
 ORDER BY e.user_id, e.thread_id, e.received_at DESC, e.id DESC
 LIMIT 200
@@ -56,6 +57,7 @@ WITH due AS (
       AND coalesce(a.stage, 'applied') NOT IN ('accepted', 'rejected', 'withdrawn')
       AND gc.status = 'connected' AND gc.email <> '' AND sqlc.arg(required_scopes)::text[] <@ gc.scopes
       AND (cardinality(sqlc.arg(allow_users)::bigint[]) = 0 OR s.user_id = ANY(sqlc.arg(allow_users)::bigint[]))
+      AND (sqlc.arg(pilot_recruiter)::text = '' OR lower(s.recruiter_email) = lower(sqlc.arg(pilot_recruiter)::text))
     ORDER BY s.next_at, s.id
     LIMIT 1
     FOR UPDATE OF s SKIP LOCKED

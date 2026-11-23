@@ -24,6 +24,7 @@ WITH due AS (
       AND gc.status = 'connected'
       AND $1::text = ANY (gc.scopes)
       AND ($2::bigint = 0 OR b.user_id = $2::bigint)
+      AND ($3::text = '' OR lower(b.recruiter_email) = lower($3::text))
     ORDER BY b.calendar_invitation_next_at, b.id
     LIMIT 1
     FOR UPDATE OF b SKIP LOCKED
@@ -39,6 +40,7 @@ RETURNING b.id, b.calendar_event_key, b.starts_at, b.ends_at, b.recruiter_email,
 type ClaimBookingCalendarInvitationParams struct {
 	CalendarWriteScope string `json:"calendar_write_scope"`
 	PilotUserID        int64  `json:"pilot_user_id"`
+	PilotRecruiter     string `json:"pilot_recruiter"`
 }
 
 type ClaimBookingCalendarInvitationRow struct {
@@ -53,7 +55,7 @@ type ClaimBookingCalendarInvitationRow struct {
 // Claim one at a time so the lease covers the Google call rather than a whole batch.
 // A claimed row remains due for retry until the invitation is recorded.
 func (q *Queries) ClaimBookingCalendarInvitation(ctx context.Context, arg ClaimBookingCalendarInvitationParams) (ClaimBookingCalendarInvitationRow, error) {
-	row := q.db.QueryRow(ctx, claimBookingCalendarInvitation, arg.CalendarWriteScope, arg.PilotUserID)
+	row := q.db.QueryRow(ctx, claimBookingCalendarInvitation, arg.CalendarWriteScope, arg.PilotUserID, arg.PilotRecruiter)
 	var i ClaimBookingCalendarInvitationRow
 	err := row.Scan(
 		&i.ID,
