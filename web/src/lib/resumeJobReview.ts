@@ -25,11 +25,14 @@ function isNegated(prefix: string): boolean {
   if (tail === undefined) return false;
   if (!tail) return true;
   if (!listJoin.test(tail) || /\b(?:but|then|while)\b/i.test(tail)) return false;
-  // A new action or explicit use starts a positive clause after the list.
+  // An explicit action with a subject or a usage phrase starts a new clause.
   return !tail
     .split(/,|\band\b/i)
     .slice(1)
-    .some((part) => action.test(part.trimStart()) || /^(?:using|with)\b/i.test(part.trimStart()));
+    .some((part) => {
+      const clause = part.trimStart();
+      return /^(?:using|with)\b/i.test(clause) || (/^I\s/i.test(clause) && action.test(clause));
+    });
 }
 
 function escapePattern(value: string): string {
@@ -43,7 +46,15 @@ function skillPatterns(skill: string): RegExp[] {
     const suffix = skill === 'c' && word === 'C' ? '+#' : '';
     return `(?<![\\p{L}\\p{N}_])${escapePattern(word)}(?![\\p{L}\\p{N}_${suffix}])`;
   };
-  return [...words].map((word) => new RegExp(whole(word), /^[a-z]{1,2}$/i.test(word) ? 'u' : 'iu'));
+  return [...words].map((word) => new RegExp(whole(word), /^[a-z]{1,2}$/i.test(word) ? 'gu' : 'giu'));
+}
+
+function firstAffirmedMatch(line: string, patterns: readonly RegExp[]) {
+  for (const pattern of patterns) {
+    for (const match of line.matchAll(pattern)) {
+      if (!isNegated(line.slice(0, match.index))) return match;
+    }
+  }
 }
 
 function excerpt(line: string, index: number): string {
@@ -70,13 +81,11 @@ export function reviewResume(
   ];
   const findings = [...new Set(skills)].map((skill): Finding => {
     const patterns = skillPatterns(skill);
-    const requirement = orderedRequirements.find(({ text }) => patterns.some((pattern) => pattern.test(text)));
+    const requirement = orderedRequirements.find(({ text }) => patterns.some((pattern) => text.search(pattern) !== -1));
     const context = requirement ? { requirement: requirement.text, priority: requirement.priority } : {};
     let mention: string | undefined;
     for (const line of lines) {
-      const match = patterns
-        .map((pattern) => pattern.exec(line))
-        .find((candidate) => candidate && !isNegated(line.slice(0, candidate.index)));
+      const match = firstAffirmedMatch(line, patterns);
       if (!match) continue;
       const snippet = excerpt(line, match.index);
       if (action.test(line)) return { skill, kind: 'example', snippet, ...context };
