@@ -100,7 +100,7 @@ func (w *Worker) handle(ctx context.Context, row db.ClaimInterviewSchedulingThre
 		return w.end(ctx, row, "review")
 	}
 	latest := thread[len(thread)-1]
-	if latest.Sent && latest.ID != row.LastSentID {
+	if automationInterrupted(thread, row) {
 		return w.end(ctx, row, "closed")
 	}
 	if row.Status == "calendar" {
@@ -246,4 +246,15 @@ func findMessage(thread []gmailsync.ThreadMessage, id string) (gmailsync.ThreadM
 		return gmailsync.ThreadMessage{}, false
 	}
 	return thread[index], true
+}
+
+// Stop when the candidate has sent anything after the last agent reply. A missing
+// checkpoint also makes it impossible to verify the thread's intervening history.
+func automationInterrupted(thread []gmailsync.ThreadMessage, row db.ClaimInterviewSchedulingThreadRow) bool {
+	checkpoint := row.LastSentID
+	if checkpoint == "" {
+		checkpoint = row.AnchorProviderID
+	}
+	index := slices.IndexFunc(thread, func(message gmailsync.ThreadMessage) bool { return message.ID == checkpoint })
+	return index < 0 || slices.ContainsFunc(thread[index+1:], func(message gmailsync.ThreadMessage) bool { return message.Sent })
 }

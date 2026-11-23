@@ -25,7 +25,7 @@ WHERE coalesce(ns.enabled, true)
  )
  AND (EXISTS (
   SELECT 1 FROM emails e
-  WHERE coalesce(ns.inbox_digest_enabled, false) AND e.user_id = u.id AND e.direction = 'incoming' AND e.deleted_at IS NULL
+  WHERE e.user_id = u.id AND e.direction = 'incoming' AND e.deleted_at IS NULL
    AND e.classified_at IS NOT NULL AND e.status_signal <> 'other'
    -- A late classification must not revive a request superseded by a delivered reply.
    AND NOT EXISTS (
@@ -35,7 +35,16 @@ WHERE coalesce(ns.enabled, true)
      AND (newer.received_at, newer.id) > (e.received_at, e.id)
      AND EXISTS (SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = newer.user_id AND d.sent_at IS NOT NULL AND newer.id = ANY(d.email_ids))
    )
-   AND e.received_at >= greatest(ns.inbox_digest_enabled_at, sqlc.arg(now_at)::timestamptz - interval '7 days')
+   AND (
+    (coalesce(ns.inbox_digest_enabled, false) AND e.received_at >= ns.inbox_digest_enabled_at)
+    OR (
+     u.interview_scheduling_enabled_at IS NOT NULL AND e.received_at >= u.interview_scheduling_enabled_at
+     AND e.source = 'gmail' AND e.status_signal = 'interview_invitation'
+     AND NOT EXISTS (SELECT 1 FROM interview_scheduling_threads thread
+                     WHERE thread.user_id = e.user_id AND thread.gmail_thread_id = e.thread_id)
+    )
+   )
+   AND e.received_at >= sqlc.arg(now_at)::timestamptz - interval '7 days'
    AND e.received_at <= sqlc.arg(now_at)::timestamptz
    AND NOT EXISTS (SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = u.id AND d.sent_at IS NOT NULL AND e.id = ANY(d.email_ids))
  ) OR EXISTS (
@@ -66,9 +75,19 @@ WITH eligible AS MATERIALIZED (
      AND (newer.received_at, newer.id) > (e.received_at, e.id)
      AND EXISTS (SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = newer.user_id AND d.sent_at IS NOT NULL AND newer.id = ANY(d.email_ids))
    )
-  AND EXISTS (SELECT 1 FROM notification_settings ns WHERE ns.user_id = e.user_id AND ns.inbox_digest_enabled
-              AND e.received_at >= ns.inbox_digest_enabled_at)
-  AND e.received_at >= greatest(sqlc.arg(enabled_at)::timestamptz, sqlc.arg(now_at)::timestamptz - interval '7 days')
+  AND (
+   (e.received_at >= sqlc.arg(enabled_at)::timestamptz AND EXISTS (
+    SELECT 1 FROM notification_settings ns WHERE ns.user_id = e.user_id AND ns.inbox_digest_enabled
+     AND e.received_at >= ns.inbox_digest_enabled_at
+   ))
+   OR (
+    e.source = 'gmail' AND e.status_signal = 'interview_invitation'
+    AND EXISTS (SELECT 1 FROM users u WHERE u.id = e.user_id AND e.received_at >= u.interview_scheduling_enabled_at)
+    AND NOT EXISTS (SELECT 1 FROM interview_scheduling_threads thread
+                    WHERE thread.user_id = e.user_id AND thread.gmail_thread_id = e.thread_id)
+   )
+  )
+  AND e.received_at >= sqlc.arg(now_at)::timestamptz - interval '7 days'
   AND e.received_at <= sqlc.arg(now_at)::timestamptz
   AND NOT EXISTS (SELECT 1 FROM inbox_digest_deliveries d WHERE d.user_id = e.user_id AND d.sent_at IS NOT NULL AND e.id = ANY(d.email_ids))
 ), conversations AS (
@@ -93,7 +112,7 @@ WITH eligible AS MATERIALIZED (
 SELECT
  coalesce((SELECT array_agg(id ORDER BY id) FROM eligible), '{}')::bigint[] AS email_ids,
  (SELECT count(*) FROM conversations)::bigint AS total,
- coalesce((SELECT array_agg(id ORDER BY id) FROM activity), '{}')::bigint[] AS scheduling_activity_ids,
+ coalesce((SELECT array_agg(id ORDER BY id) FROM activity_shown), '{}')::bigint[] AS scheduling_activity_ids,
  coalesce((SELECT jsonb_agg(jsonb_build_object('id', anchor_email_id, 'subject', subject, 'kind', kind)
                            ORDER BY happened_at DESC, id DESC) FROM activity_shown), '[]'::jsonb)::jsonb AS scheduling_activity,
  coalesce((SELECT jsonb_agg(jsonb_build_object(

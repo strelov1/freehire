@@ -174,6 +174,35 @@ func TestInterviewIsNegotiatedAndConfirmedInTheOriginalEmailThread(t *testing.T)
 		snapshot.Activity[0].Kind != "booking" || snapshot.Activity[1].Kind != "reply" {
 		t.Fatalf("digest missed the reply or booking: %+v, %v", snapshot, err)
 	}
+
+	if _, err := pool.Exec(ctx, `INSERT INTO emails (user_id,source,external_id,thread_id,subject,body_text,
+		received_at,direction,status_signal,classified_at)
+		VALUES($1,'gmail','m-unlinked','unlinked','A different interview invitation','Can we arrange a time?',
+		now(),'incoming','interview_invitation',now())`, userID); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := pool.Exec(ctx, `INSERT INTO interview_scheduling_activity (user_id, thread_id, kind)
+		SELECT s.user_id, s.id, 'review' FROM interview_scheduling_threads s
+		CROSS JOIN generate_series(1, 11) WHERE s.user_id = $1`, userID); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = digest.Snapshot(ctx, candidates[0], digestAt)
+	if err != nil || len(snapshot.Activity) != 10 || len(snapshot.ActivityIDs) != 10 ||
+		len(snapshot.Items) != 1 || snapshot.Items[0].Subject != "A different interview invitation" {
+		t.Fatalf("digest must include the unlinked invitation and claim only displayed activities: %+v, %v", snapshot, err)
+	}
+	claimed, err := digest.Claim(ctx, candidates[0], snapshot, digestAt)
+	if err != nil || !claimed {
+		t.Fatalf("claim: %v, %v", claimed, err)
+	}
+	if err := digest.MarkSent(ctx, candidates[0], digestAt); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = digest.Snapshot(ctx, candidates[0], digestAt.Add(24*time.Hour))
+	if err != nil || len(snapshot.Activity) != 3 || snapshot.Activity[0].Kind != "review" {
+		t.Fatalf("the next digest missed an undisplayed review: %+v, %v", snapshot, err)
+	}
 }
 
 func gmailMessage(id, rfcID, from string, sent bool) map[string]any {

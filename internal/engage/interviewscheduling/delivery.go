@@ -35,6 +35,9 @@ func (w *Worker) deliver(ctx context.Context, row db.ClaimInterviewSchedulingThr
 	if len(thread) == 0 {
 		return w.end(ctx, row, "review")
 	}
+	if automationInterrupted(thread, row) {
+		return w.end(ctx, row, "closed")
+	}
 	latest := thread[len(thread)-1]
 	expectedLatest := row.PendingParentID
 	if row.PendingKind == "followup" {
