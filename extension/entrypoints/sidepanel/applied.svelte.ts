@@ -103,14 +103,16 @@ export class AppliedTracker {
     this.autoApplied.add(job.public_slug);
     try {
       await markApplied(job.public_slug, token);
+      // The account that started this may have signed out: its news is not the next one's.
+      if (generation !== this.#generation) return;
       track('mark_applied', { source: 'linkedin_confirmation' });
       this.notify(`✓ LinkedIn confirmed it — ${job.title} is marked as applied.`);
-      // Only this job's tracking, and only this account's: another may have started meanwhile.
-      if (generation !== this.#generation) return;
+      // Only this job's tracking: another application may have started meanwhile.
       if (this.startedJob?.public_slug === job.public_slug) this.startedJob = null;
       if (this.candidate?.public_slug === job.public_slug) this.candidate = null;
     } catch (err) {
-      if (generation === this.#generation) this.autoApplied.delete(job.public_slug);
+      if (generation !== this.#generation) return;
+      this.autoApplied.delete(job.public_slug);
       this.notify(`Could not mark as applied: ${err instanceof Error ? err.message : 'error'}`);
     }
   }
