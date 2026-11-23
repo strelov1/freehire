@@ -28,3 +28,18 @@ func TestAdjacentVia_FirstListedNeighbourWins(t *testing.T) {
 		t.Errorf("AdjacentVia(aws) = (%q, %v), want (azure, true)", via, ok)
 	}
 }
+
+func TestIncludedVia_SpecificToGenericOnly(t *testing.T) {
+	if via, ok := IncludedVia("sql", map[string]bool{"mysql": true}); !ok || via != "mysql" {
+		t.Errorf("IncludedVia(sql) = (%q, %v), want (mysql, true)", via, ok)
+	}
+	if _, ok := IncludedVia("sql-server", map[string]bool{"sql": true}); ok {
+		t.Error("sql must not satisfy sql-server")
+	}
+	if via, ok := IncludedVia("version-control", map[string]bool{"github": true}); !ok || via != "github" {
+		t.Errorf("IncludedVia(version-control) = (%q, %v), want (github, true)", via, ok)
+	}
+	if _, ok := IncludedVia("github", map[string]bool{"git": true}); ok {
+		t.Error("git must not satisfy github")
+	}
+}

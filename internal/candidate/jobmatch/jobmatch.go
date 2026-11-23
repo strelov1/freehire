@@ -32,7 +32,8 @@ type JobMatch struct {
 }
 
 // Compute classifies each of jobSkills against profileSkills. Both are canonical
-// skilltag slugs. An exact hold takes precedence over an adjacency.
+// skilltag slugs. An exact hold, or a held skill that contains the job skill (postgresql
+// for sql, skilladjacency.IncludedVia), takes precedence over an adjacency.
 func Compute(jobSkills, profileSkills []string) JobMatch {
 	held := make(map[string]bool, len(profileSkills))
 	for _, s := range profileSkills {
@@ -48,7 +49,7 @@ func Compute(jobSkills, profileSkills []string) JobMatch {
 	}
 
 	for _, skill := range jobSkills {
-		if held[skill] {
+		if _, included := skilladjacency.IncludedVia(skill, held); held[skill] || included {
 			r.Matched = append(r.Matched, skill)
 		} else if via, ok := skilladjacency.AdjacentVia(skill, held); ok {
 			r.Adjacent = append(r.Adjacent, AdjacentSkill{Name: skill, Via: via})

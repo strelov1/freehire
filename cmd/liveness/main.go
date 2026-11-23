@@ -129,7 +129,7 @@ func pacedPasses(client *http.Client) []pacedPass {
 		torrePass(client, torrePostPage),
 		arbeitnowPass(client),
 		jobtechPass(client, jobtechAdAPI),
-		linkedInPass(client),
+		linkedInPass(linkedInClient(client)),
 		dicePass(client),
 		workdayPass(client),
 	}, catalogStatusPasses(client)...)

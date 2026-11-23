@@ -97,3 +97,18 @@ func TestCompute_EmptyListsMarshalAsArrays(t *testing.T) {
 		t.Errorf("json = %s, want missing [rust]", s)
 	}
 }
+
+// A specific SQL database satisfies a generic "sql" requirement; the generic skill never
+// satisfies a specific database (the foursys case: profile postgresql, job sql/sql-server/sybase).
+func TestCompute_SpecificDatabaseSatisfiesGenericSQL(t *testing.T) {
+	got := Compute([]string{"python", "sql", "sql-server", "sybase"}, []string{"postgresql", "python", "react", "nodejs"})
+	if !reflect.DeepEqual(got.Matched, []string{"python", "sql"}) {
+		t.Errorf("Matched = %v, want [python sql]", got.Matched)
+	}
+	if !reflect.DeepEqual(got.Missing, []string{"sql-server", "sybase"}) {
+		t.Errorf("Missing = %v, want [sql-server sybase]", got.Missing)
+	}
+	if got := Compute([]string{"sql-server"}, []string{"sql"}); len(got.Matched) != 0 {
+		t.Errorf("sql satisfied sql-server: %+v", got)
+	}
+}
