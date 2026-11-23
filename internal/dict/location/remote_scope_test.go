@@ -118,6 +118,11 @@ func TestWithoutExcludedPlaces(t *testing.T) {
 		!slices.Equal(gotMetros, []string{"Toronto (CA)"}) {
 		t.Errorf("places = %v / %v, want Toronto and the unresolved city", gotCities, gotMetros)
 	}
+	qualifiedCities := []string{"Berlin, Germany", "Paris, Île-de-France, France", "Berlin, United States"}
+	gotCities, _ = WithoutExcludedPlaces(qualifiedCities, nil, nil, []string{"de", "fr"})
+	if !slices.Equal(gotCities, []string{"Berlin, United States"}) {
+		t.Errorf("qualified cities = %v, want [Berlin, United States]", gotCities)
+	}
 	gotCities, gotMetros = WithoutExcludedPlaces(cities, metros, nil, nil)
 	if !slices.Equal(gotCities, []string{"Berlin", "Toronto", "Uncatalogued Place"}) ||
 		!slices.Equal(gotMetros, []string{"Berlin (DE)", "Toronto (CA)"}) {

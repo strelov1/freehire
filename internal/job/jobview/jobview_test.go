@@ -552,7 +552,7 @@ func TestFromRow_DescriptionGeographySurvivesEnrichment(t *testing.T) {
 		view, err := FromRow(db.Job{ID: 1, PublicSlug: "x-1", WorkMode: "remote",
 			Countries: []string{"ca"}, Regions: []string{"north_america"},
 			Description: "This role is remote worldwide, except in Germany.",
-			Enrichment:  []byte(`{"countries":["de","ca"],"cities":["Berlin","Toronto"]}`),
+			Enrichment:  []byte(`{"cities":["Berlin, Germany","Toronto, Canada"]}`),
 		})
 		if err != nil {
 			t.Fatal(err)

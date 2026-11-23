@@ -13,7 +13,12 @@ func WithoutExcludedPlaces(cities, metros, sourceCountries, excluded []string) (
 		return cities, metros
 	}
 	cities = slices.DeleteFunc(slices.Clone(cities), func(city string) bool {
-		name := strings.ToLower(strings.TrimSpace(city))
+		name, qualifier, _ := strings.Cut(strings.ToLower(city), ",")
+		qualifier = strings.TrimSpace(qualifier[strings.LastIndexByte(qualifier, ',')+1:])
+		if country := namedCountry(qualifier); country != "" {
+			return slices.Contains(excluded, country)
+		}
+		name = strings.TrimSpace(name)
 		if entry, ok := cityDict[name]; ok && !entry.Contested {
 			return slices.Contains(excluded, entry.Country)
 		}
