@@ -271,6 +271,11 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 		}
 		qText = vals.Get("q")
 		qFields, _ = search.QFieldsFromValues(vals)
+		if qText == "" {
+			// The profile's skills rank these hits, so a profile edit moves the order too.
+			// Both are UpdatedAt stamps: an edit to either one raises the max.
+			version = max(version, profileVersion(profile))
+		}
 	}
 	if c.Query("cursor") != "" && cur.Version != version {
 		return empty(feedReasonSourceChanged)

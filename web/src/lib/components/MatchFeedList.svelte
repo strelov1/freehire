@@ -63,6 +63,7 @@
   }
 
   async function fetchPage(next?: string): Promise<void> {
+    const version = feedSource.version; // a reply that outlives a source pick must not undo it
     if (!next) {
       // A restart is a new session: nothing of the old one carries over.
       restShown = false;
@@ -80,8 +81,10 @@
     // The profile changed under the cursor: start over too. Never put this reason in `meta`,
     // which would show the empty-profile screen.
     if (next && res.meta.reason === 'source_changed') return fetchPage();
+    // Another tab switched the source: the old cards belong to its filters, not this one's.
+    if (meta && (meta.source !== res.meta.source || meta.saved_search_id !== res.meta.saved_search_id)) cards = [];
     meta = res.meta;
-    feedSource.sync(res.meta);
+    if (version === feedSource.version) feedSource.sync(res.meta);
     if (!next) firstEmpty = res.data.length === 0 && cards.length === 0; // a restart under shown cards is not "no matches"
     if (res.meta.seen_cursor) {
       seenCursor = res.meta.seen_cursor;

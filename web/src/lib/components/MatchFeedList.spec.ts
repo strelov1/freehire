@@ -117,6 +117,16 @@ describe('MatchFeedList', () => {
     expect(await screen.findByText('Show more matches')).toBeTruthy();
   });
 
+  it('drops the old cards when another tab switched the source', async () => {
+    meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
+    meFeed.mockRejectedValueOnce(new ApiError(400, 'invalid cursor'));
+    meFeed.mockResolvedValueOnce(page(['s'], { source: 'saved_search', saved_search_id: 2 }));
+    render(MatchFeedList);
+    await fireEvent.click(await screen.findByText('Show more matches'));
+    expect(await screen.findByText('s')).toBeTruthy();
+    expect(screen.queryByText('a')).toBeNull();
+  });
+
   it('badges new cards, pauses before the rest, and posts seen once', async () => {
     meFeed.mockResolvedValueOnce(page(['n1', 'r1'], { seen_cursor: 's1', next_cursor: 'c1' }, ['n1']));
     render(MatchFeedList);

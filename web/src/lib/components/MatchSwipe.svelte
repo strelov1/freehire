@@ -71,11 +71,12 @@
   async function load() {
     loading = true;
     failed = false;
+    const version = feedSource.version; // a reply that outlives a source pick must not undo it
     try {
       const res = await api.meFeed(PAGE);
       const data = res.data;
       meta = res.meta;
-      feedSource.sync(res.meta);
+      if (version === feedSource.version) feedSource.sync(res.meta);
       if (data.length > 0) shownAny = true;
       if (data.some((c) => c.is_new)) hadNew = true;
       seenCursor = res.meta?.seen_cursor ?? seenCursor;

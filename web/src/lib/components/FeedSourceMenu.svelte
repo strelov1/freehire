@@ -70,7 +70,7 @@
       role="menu"
       aria-label="Match source"
       tabindex="-1"
-      class="absolute left-0 top-full z-20 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-background py-1 shadow-lg"
+      class="absolute left-0 top-full z-20 mt-2 w-64 rounded-md border border-border bg-background py-1 shadow-lg"
       onkeydown={(e) => e.key === 'Escape' && ((open = false), e.stopPropagation())}
       {@attach menuNav({ onclose: () => (open = false) })}
     >
