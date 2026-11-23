@@ -298,7 +298,7 @@ func TestOracleFetchNewSkipsDetailForStoredRequisitions(t *testing.T) {
 // above the offset cap is skipped: its own listing would be cut short the same way.
 func TestOracleCompletesShortListingFromFacetSlices(t *testing.T) {
 	fake := (&routedHTTP{}).
-		route("selectedTitlesFacet=Stores%20-%20Retail", oracleListPage(2, "3", "4")).
+		route("selectedTitlesFacet=%22Stores%20-%20Retail%22", oracleListPage(2, "3", "4")).
 		route("LOCATIONS,limit=100,offset=0,", `{"items": [{"TotalJobsCount": 4,
 			"requisitionList": [{"Id": "1"}, {"Id": "2"}, {"Id": "2"}],
 			"categoriesFacet": [{"Id": 300000001250514, "TotalCount": 20000}],
@@ -362,8 +362,9 @@ func TestOracleFailsWhenNoListedDetailIsRead(t *testing.T) {
 
 func TestOracleFacetParamDecodesStringIDs(t *testing.T) {
 	for raw, want := range map[string]string{
-		`"Sales \u0026 Marketing"`: "Sales%20%26%20Marketing",
-		`"C++ Dev"`:                "C%2B%2B%20Dev",
+		`"Sales \u0026 Marketing"`: "%22Sales%20%26%20Marketing%22",
+		`"C++ Dev"`:                "%22C%2B%2B%20Dev%22",
+		`"Sales, \"Ops\""`:         "%22Sales%2C%20%5C%22Ops%5C%22%22",
 		`300000001250514`:          "300000001250514",
 	} {
 		if got := oracleFacetParam(json.RawMessage(raw)); got != want {

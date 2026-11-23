@@ -164,14 +164,15 @@ func (s oracle) listRequisitions(ctx context.Context, b oracleBoard) ([]oracleRe
 	return reqs, nil
 }
 
-// oracleFacetParam encodes a facet Id as a finder value: a string Id is JSON-decoded (it may
-// carry escapes such as \u0026), a numeric one is used as written. QueryEscape covers the
-// characters that would end the value ("&", ",", ";"); its "+" for a space becomes %20.
+// oracleFacetParam encodes a facet Id as a finder value. A string Id is JSON-decoded (it may
+// carry escapes such as \u0026) and quoted like the ById finder, so a comma inside it stays in
+// the one value; a numeric Id is used as written. QueryEscape covers the characters that would
+// end the query value ("&", ";"); its "+" for a space becomes %20.
 func oracleFacetParam(raw json.RawMessage) string {
 	id := string(raw)
 	var str string
 	if json.Unmarshal(raw, &str) == nil {
-		id = str
+		id = `"` + strings.ReplaceAll(str, `"`, `\"`) + `"`
 	}
 	return strings.ReplaceAll(url.QueryEscape(id), "+", "%20")
 }
