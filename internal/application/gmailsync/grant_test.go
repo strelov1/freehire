@@ -134,7 +134,7 @@ func TestLimitHit(t *testing.T) {
 // would be read as revoked and disconnected.
 func TestDisabledAPIResponseIsNotARevokedGrant(t *testing.T) {
 	body := `{"error":{"code":403,"errors":[{"reason":"accessNotConfigured"}]}}`
-	resp := &http.Response{StatusCode: 403, Status: "403 Forbidden", Body: io.NopCloser(strings.NewReader(body))}
+	resp := &http.Response{StatusCode: http.StatusForbidden, Status: "403 Forbidden", Body: io.NopCloser(strings.NewReader(body))}
 	if err := NewAPIError("calendar: list", resp); RevokedGrant(err) {
 		t.Errorf("RevokedGrant(%+v) = true, want false", err)
 	}
