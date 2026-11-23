@@ -28,6 +28,8 @@ export class AppliedTracker {
   private appliedTabId: number | null = null;
   /** Jobs already recorded from LinkedIn's own confirmation, so a re-read does not post twice. */
   private readonly autoApplied = new SvelteSet<string>();
+  /** Bumped by reset(): a recordSent() begun for the account that left must not touch the set. */
+  #generation = 0;
 
   constructor(
     private readonly form: FormPlan,
@@ -39,6 +41,7 @@ export class AppliedTracker {
   /** Forgets everything about the account that signed out, so the next one's applications,
    *  even to the same jobs, are followed and recorded afresh. */
   reset() {
+    this.#generation++;
     this.candidate = null;
     this.startedJob = null;
     this.startedTabId = null;
@@ -93,18 +96,21 @@ export class AppliedTracker {
   /** LinkedIn said the application was sent: record it for the job this tab shows. */
   private async recordSent() {
     const job = this.pageMatch.status === 'ready' ? this.pageMatch.job : null;
+    const generation = this.#generation;
     const token = await getToken();
+    if (generation !== this.#generation) return;
     if (!job?.public_slug || !token || this.autoApplied.has(job.public_slug)) return;
     this.autoApplied.add(job.public_slug);
     try {
       await markApplied(job.public_slug, token);
       track('mark_applied', { source: 'linkedin_confirmation' });
       this.notify(`✓ LinkedIn confirmed it — ${job.title} is marked as applied.`);
-      // Only this job's tracking: another application may have started meanwhile.
+      // Only this job's tracking, and only this account's: another may have started meanwhile.
+      if (generation !== this.#generation) return;
       if (this.startedJob?.public_slug === job.public_slug) this.startedJob = null;
       if (this.candidate?.public_slug === job.public_slug) this.candidate = null;
     } catch (err) {
-      this.autoApplied.delete(job.public_slug);
+      if (generation === this.#generation) this.autoApplied.delete(job.public_slug);
       this.notify(`Could not mark as applied: ${err instanceof Error ? err.message : 'error'}`);
     }
   }
