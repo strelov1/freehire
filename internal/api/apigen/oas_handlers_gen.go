@@ -14910,7 +14910,7 @@ func (s *Server) handleGetResumeRequest(args [0]string, argsEscaped bool, w http
 
 // handleGetResumeReviewPostingRequest handles getResumeReviewPosting operation.
 //
-// Open posting skills and requirements for a resume review performed in the browser.
+// Open posting skills and requirements for a CV review performed in the browser.
 //
 // GET /jobs/{slug}/skill-fit
 func (s *Server) handleGetResumeReviewPostingRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -14943,7 +14943,7 @@ func (s *Server) handleGetResumeReviewPostingRequest(args [1]string, argsEscaped
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetResumeReviewPostingOperation,
-			OperationSummary: "Get an open posting for resume review.",
+			OperationSummary: "Get an open posting for CV review.",
 			OperationID:      "getResumeReviewPosting",
 			Body:             nil,
 			RawBody:          rawBody,

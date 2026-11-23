@@ -14968,7 +14968,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetResumeReviewPostingOperation
-										r.summary = "Get an open posting for resume review."
+										r.summary = "Get an open posting for CV review."
 										r.operationID = "getResumeReviewPosting"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/skill-fit"

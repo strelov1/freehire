@@ -3573,6 +3573,29 @@ func (s *GetEmployerTeamOK) Validate() error {
 	return nil
 }
 
+func (s *GetInterviewPrepOK) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if err := s.Data.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "data",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
 func (s *GetInterviewsOK) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
@@ -3843,6 +3866,29 @@ func (s *GetProfileOK) Validate() error {
 			}(); err != nil {
 				return err
 			}
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "data",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s *GetResumeReviewPostingOK) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if err := s.Data.Validate(); err != nil {
+			return err
 		}
 		return nil
 	}(); err != nil {
@@ -4276,6 +4322,29 @@ func (s *IngestStatusOK) Validate() error {
 	}(); err != nil {
 		failures = append(failures, validate.FieldError{
 			Name:  "data",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s *InterviewPrepSheet) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if s.Questions == nil {
+			return errors.New("nil is invalid value")
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "questions",
 			Error: err,
 		})
 	}
@@ -7804,6 +7873,29 @@ func (s *ResumeCoverageRequest) Validate() error {
 			}(); err != nil {
 				return err
 			}
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "skills",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s *ResumeReviewPosting) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if s.Skills == nil {
+			return errors.New("nil is invalid value")
 		}
 		return nil
 	}(); err != nil {

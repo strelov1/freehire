@@ -19,9 +19,9 @@ test('a guest can review a resume against a selected posting without sending its
 
   await page.goto(`/tools/job-fit?job=${job.public_slug}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: job.title })).toBeVisible();
-  const input = page.getByRole('textbox', { name: 'Resume text' });
+  const input = page.getByRole('textbox', { name: 'CV text' });
   await input.fill(resume);
-  await page.getByRole('button', { name: 'Review resume', exact: true }).click();
+  await page.getByRole('button', { name: 'Review CV', exact: true }).click();
   const results = page.getByRole('region', { name: 'What to change before you apply' });
   await expect(results).toContainText('Built payment APIs in Go and cut response times by 30%.');
   await expect(results).toContainText('Move this bullet up');

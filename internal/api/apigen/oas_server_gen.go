@@ -1030,7 +1030,7 @@ type Handler interface {
 	GetResume(ctx context.Context) (*GetResumeOK, error)
 	// GetResumeReviewPosting implements getResumeReviewPosting operation.
 	//
-	// Open posting skills and requirements for a resume review performed in the browser.
+	// Open posting skills and requirements for a CV review performed in the browser.
 	//
 	// GET /jobs/{slug}/skill-fit
 	GetResumeReviewPosting(ctx context.Context, params GetResumeReviewPostingParams) (*GetResumeReviewPostingOK, error)

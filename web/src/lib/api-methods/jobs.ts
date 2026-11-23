@@ -25,24 +25,9 @@ import type { JobCopy, Page, RecruiterContact, Slice } from '../api-types';
 import type { components } from '#lib/generated/api.js';
 import { ApiError, jsonBody, query, toSlice } from '../api-core';
 
-export interface ToolJob {
-  public_slug: string;
-  title: string;
-  company: string;
-  location?: string;
-}
-
-export interface ResumeReviewPosting extends ToolJob {
-  skills: string[];
-  requirements?: { text: string; priority: string }[];
-}
-
-export interface InterviewPrepSheet {
-  job: ToolJob;
-  questions: { prompt: string; topic?: string }[];
-  examples?: { claim: string; context?: string; metrics?: string[]; place?: string }[];
-  examples_unavailable?: boolean;
-}
+export type ToolJob = components['schemas']['ToolJob'];
+export type ResumeReviewPosting = components['schemas']['ResumeReviewPosting'];
+export type InterviewPrepSheet = components['schemas']['InterviewPrepSheet'];
 
 export function jobsApi({ call, request, requestData, baseUrl }: Http) {
   async function listJobs(limit: number, offset: number): Promise<Slice<Job>> {

@@ -2089,8 +2089,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get an open posting for resume review.
-         * @description Open posting skills and requirements for a resume review performed in the browser.
+         * Get an open posting for CV review.
+         * @description Open posting skills and requirements for a CV review performed in the browser.
          */
         get: operations["getResumeReviewPosting"];
         put?: never;
@@ -8655,6 +8655,23 @@ export interface components {
             stage: string | null;
             notes: string | null;
         };
+        InterviewPracticeExample: {
+            claim: string;
+            context?: string;
+            metrics?: string[];
+            place?: string;
+        };
+        InterviewPracticeQuestion: {
+            prompt: string;
+            topic?: string;
+        };
+        InterviewPrepSheet: {
+            job: components["schemas"]["ToolJob"];
+            questions: components["schemas"]["InterviewPracticeQuestion"][];
+            /** @description Confirmed examples from the caller's Experience Bank. Omitted for guests. */
+            examples?: components["schemas"]["InterviewPracticeExample"][];
+            examples_unavailable?: boolean;
+        };
         Invite: {
             link: string;
             /** Format: int64 */
@@ -9999,6 +10016,14 @@ export interface components {
             /** @description Required and at most 100 once blanks are dropped; anything else is a 400. */
             skills?: string[] | null;
         };
+        ResumeReviewPosting: {
+            skills: string[];
+            requirements?: components["schemas"]["ResumeReviewRequirement"][];
+        } & components["schemas"]["ToolJob"];
+        ResumeReviewRequirement: {
+            text: string;
+            priority: string;
+        };
         RoleCountriesAnswer: {
             data: components["schemas"]["RoleCountryCell"][];
             meta: components["schemas"]["RoleCountriesMeta"];
@@ -10678,6 +10703,12 @@ export interface components {
             to: string;
             /** Format: int64 */
             count: number;
+        };
+        ToolJob: {
+            public_slug: string;
+            title: string;
+            company: string;
+            location?: string;
         };
         /** @description A company and how many of the matching postings it holds. */
         TopCompany: {
@@ -15783,7 +15814,7 @@ export interface operations {
                      *     }
                      */
                     "application/json": {
-                        data: unknown;
+                        data: components["schemas"]["InterviewPrepSheet"];
                     };
                 };
             };
@@ -16265,7 +16296,7 @@ export interface operations {
                      *     }
                      */
                     "application/json": {
-                        data: unknown;
+                        data: components["schemas"]["ResumeReviewPosting"];
                     };
                 };
             };

@@ -13,6 +13,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -122,14 +123,12 @@ func TestPublicJobTools(t *testing.T) {
 		return get(slug, "/interview-prep?user_id=1", token, want)
 	}
 	guest := request("prep-open", "", 200)
-	var payload struct {
-		Data interviewPrepSheet
-	}
+	var payload apigen.GetInterviewPrepOK
 	if err := json.Unmarshal([]byte(guest), &payload); err != nil {
 		t.Fatal(err)
 	}
 	if len(payload.Data.Questions) < 3 || len(payload.Data.Questions) > 5 ||
-		payload.Data.Questions[0].Topic != "Operate Kubernetes in production" ||
+		payload.Data.Questions[0].Topic.Value != "Operate Kubernetes in production" ||
 		payload.Data.Questions[0].Prompt == "" || payload.Data.Examples != nil {
 		t.Fatalf("unexpected guest sheet: %s", guest)
 	}

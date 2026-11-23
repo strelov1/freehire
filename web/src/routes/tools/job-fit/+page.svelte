@@ -14,7 +14,7 @@
   import { signinUrl } from '#lib/signin.js';
   import { Button } from '#lib/ui/index.js';
 
-  const title = 'Review your resume for a job';
+  const title = 'Review your CV for a job';
   const description = 'See which lines to highlight and where to add an example before you apply.';
   const sampleResume =
     'Backend Engineer\nBuilt payment APIs in Go and cut response times by 30%.\nSkills: Go, PostgreSQL, Docker';
@@ -121,9 +121,9 @@
   {#if job && job.skills?.length}
     <form class="ph-no-capture mt-6" onsubmit={review}>
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <label for="resume-text" class="text-sm font-semibold">Resume text</label>
+        <label for="resume-text" class="text-sm font-semibold">CV text</label>
         {#if !resume.trim()}
-          <Button variant="ghost" size="sm" onclick={useSample}>Try a sample resume</Button>
+          <Button variant="ghost" size="sm" onclick={useSample}>Try a sample CV</Button>
         {/if}
       </div>
       <textarea
@@ -137,9 +137,9 @@
         rows={8}
         maxlength={24000}
         class="mt-2 block w-full resize-y rounded-lg border border-input bg-background p-3 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        placeholder="Paste your experience and skills from your resume"></textarea>
-      <p id="resume-hint" class="mt-2 text-sm text-muted-foreground">Your resume text stays in this browser tab.</p>
-      <Button class="mt-4" type="submit" variant="primary" disabled={!resume.trim()}>Review resume</Button>
+        placeholder="Paste your experience and skills from your CV"></textarea>
+      <p id="resume-hint" class="mt-2 text-sm text-muted-foreground">Your CV text stays in this browser tab.</p>
+      <Button class="mt-4" type="submit" variant="primary" disabled={!resume.trim()}>Review CV</Button>
     </form>
   {:else if job}
     <p class="mt-6 text-sm text-muted-foreground">

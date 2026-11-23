@@ -7315,7 +7315,9 @@
                     "data"
                   ],
                   "properties": {
-                    "data": {}
+                    "data": {
+                      "$ref": "#/components/schemas/InterviewPrepSheet"
+                    }
                   },
                   "description": "A single item: `{\"data\": ...}`."
                 },
@@ -7979,8 +7981,8 @@
     "/jobs/{slug}/skill-fit": {
       "get": {
         "operationId": "getResumeReviewPosting",
-        "summary": "Get an open posting for resume review.",
-        "description": "Open posting skills and requirements for a resume review performed in the browser.",
+        "summary": "Get an open posting for CV review.",
+        "description": "Open posting skills and requirements for a CV review performed in the browser.",
         "parameters": [
           {
             "name": "slug",
@@ -8003,7 +8005,9 @@
                     "data"
                   ],
                   "properties": {
-                    "data": {}
+                    "data": {
+                      "$ref": "#/components/schemas/ResumeReviewPosting"
+                    }
                   },
                   "description": "A single item: `{\"data\": ...}`."
                 },
@@ -31376,6 +31380,71 @@
         },
         "description": "The caller's interaction with one job. Every timestamp, the stage and the notes are null\nuntil the job is viewed, saved, applied to, dismissed or tracked."
       },
+      "InterviewPracticeExample": {
+        "type": "object",
+        "required": [
+          "claim"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "place": {
+            "type": "string"
+          }
+        }
+      },
+      "InterviewPracticeQuestion": {
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          }
+        }
+      },
+      "InterviewPrepSheet": {
+        "type": "object",
+        "required": [
+          "job",
+          "questions"
+        ],
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/ToolJob"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterviewPracticeQuestion"
+            }
+          },
+          "examples": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterviewPracticeExample"
+            },
+            "description": "Confirmed examples from the caller's Experience Bank. Omitted for guests."
+          },
+          "examples_unavailable": {
+            "type": "boolean"
+          }
+        }
+      },
       "Invite": {
         "type": "object",
         "required": [
@@ -35547,6 +35616,46 @@
         },
         "description": "The skill list a coverage reading scores against the market."
       },
+      "ResumeReviewPosting": {
+        "type": "object",
+        "required": [
+          "skills"
+        ],
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResumeReviewRequirement"
+            }
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ToolJob"
+          }
+        ]
+      },
+      "ResumeReviewRequirement": {
+        "type": "object",
+        "required": [
+          "text",
+          "priority"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          }
+        }
+      },
       "RoleCountriesAnswer": {
         "type": "object",
         "required": [
@@ -37876,6 +37985,28 @@
           "count": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "ToolJob": {
+        "type": "object",
+        "required": [
+          "public_slug",
+          "title",
+          "company"
+        ],
+        "properties": {
+          "public_slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
           }
         }
       },

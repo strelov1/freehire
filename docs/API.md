@@ -788,9 +788,9 @@ curl -X POST "https://freehire.me/api/v1/jobs/<slug>/recruiter-contacts" -H "Aut
 
 **Auth:** Public
 
-Get an open posting for resume review.
+Get an open posting for CV review.
 
-Open posting skills and requirements for a resume review performed in the browser.
+Open posting skills and requirements for a CV review performed in the browser.
 
 **Path parameters**
 

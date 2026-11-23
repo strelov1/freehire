@@ -1,7 +1,8 @@
+import type { components } from '#lib/generated/api.js';
 import { SKILL_LABELS } from '#lib/generated/contracts.js';
 import { SKILL_ALIASES } from '#lib/generated/skillAliases.js';
 
-type PostingRequirement = { text: string; priority: string };
+type PostingRequirement = components['schemas']['ResumeReviewRequirement'];
 type Finding = {
   skill: string;
   kind: 'example' | 'mention' | 'missing';

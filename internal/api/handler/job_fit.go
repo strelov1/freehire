@@ -2,37 +2,12 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/job/jobview"
-	"github.com/strelov1/freehire/internal/platform/db"
 )
-
-type toolJobListing struct {
-	PublicSlug string `json:"public_slug"`
-	Title      string `json:"title"`
-	Company    string `json:"company"`
-	Location   string `json:"location"`
-}
-
-func toolListing(job db.Job) toolJobListing {
-	return toolJobListing{
-		PublicSlug: job.PublicSlug,
-		Title:      job.Title,
-		Company:    job.Company,
-		Location:   job.Location,
-	}
-}
-
-type resumeReviewPosting struct {
-	toolJobListing
-	Skills       []string             `json:"skills"`
-	Requirements []enrich.Requirement `json:"requirements,omitempty"`
-}
 
 func (h *jobsHandlers) GetResumeReviewPosting(ctx context.Context, params apigen.GetResumeReviewPostingParams) (*apigen.GetResumeReviewPostingOK, error) {
 	posting, err := jobBySlugOrCode(ctx, h.queries, params.Slug)
@@ -46,13 +21,12 @@ func (h *jobsHandlers) GetResumeReviewPosting(ctx context.Context, params apigen
 	if err != nil {
 		return nil, err
 	}
-	data, err := json.Marshal(resumeReviewPosting{
-		toolJobListing: toolListing(posting),
-		Skills:         job.Skills,
-		Requirements:   job.Enrichment.Requirements,
-	})
-	if err != nil {
-		return nil, err
+	requirements := make([]apigen.ResumeReviewRequirement, 0, len(job.Enrichment.Requirements))
+	for _, requirement := range job.Enrichment.Requirements {
+		requirements = append(requirements, apigen.ResumeReviewRequirement(requirement))
 	}
-	return &apigen.GetResumeReviewPostingOK{Data: data}, nil
+	return &apigen.GetResumeReviewPostingOK{Data: apigen.ResumeReviewPosting{
+		PublicSlug: posting.PublicSlug, Title: posting.Title, Company: posting.Company, Location: optString(posting.Location),
+		Skills: job.Skills, Requirements: requirements,
+	}}, nil
 }

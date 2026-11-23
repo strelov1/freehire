@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 
@@ -22,25 +21,6 @@ import (
 type interviewPrepHandlers struct {
 	jobs *jobsHandlers
 	bank *experience.Store
-}
-
-type interviewQuestion struct {
-	Prompt string `json:"prompt"`
-	Topic  string `json:"topic,omitempty"`
-}
-
-type interviewExample struct {
-	Claim   string   `json:"claim"`
-	Context string   `json:"context,omitempty"`
-	Metrics []string `json:"metrics,omitempty"`
-	Place   string   `json:"place,omitempty"`
-}
-
-type interviewPrepSheet struct {
-	Job                 toolJobListing      `json:"job"`
-	Questions           []interviewQuestion `json:"questions"`
-	Examples            *[]interviewExample `json:"examples,omitempty"`
-	ExamplesUnavailable bool                `json:"examples_unavailable,omitempty"`
 }
 
 func registerInterviewPrep(api fiber.Router, mw middleware, contract fiber.Handler) {
@@ -79,29 +59,29 @@ func (h *interviewPrepHandlers) GetInterviewPrep(ctx context.Context, params api
 		return nil, err
 	}
 	questions, evidenceQuery := interviewQuestions(job)
-	sheet := interviewPrepSheet{Job: toolListing(posting), Questions: questions}
+	sheet := apigen.InterviewPrepSheet{
+		Job: apigen.ToolJob{
+			PublicSlug: posting.PublicSlug, Title: posting.Title, Company: posting.Company, Location: optString(posting.Location),
+		},
+		Questions: questions,
+	}
 	if signedIn {
 		// Retrieve also ranks unconfirmed inferences for the assistant. Filter those
 		// before applying the limit so they cannot crowd out confirmed examples.
 		matches, err := h.bank.Retrieve(ctx, userID, evidenceQuery, 0)
 		if err != nil {
 			observability.CaptureError(ctx, err)
-			sheet.ExamplesUnavailable = true
+			sheet.ExamplesUnavailable = apigen.NewOptBool(true)
 		} else {
-			examples := interviewExamples(matches)
-			sheet.Examples = &examples
+			sheet.Examples = interviewExamples(matches)
 		}
 	}
-	data, err := json.Marshal(sheet)
-	if err != nil {
-		return nil, err
-	}
-	return &apigen.GetInterviewPrepOK{Data: data}, nil
+	return &apigen.GetInterviewPrepOK{Data: sheet}, nil
 }
 
-func interviewQuestions(job jobview.Job) ([]interviewQuestion, experience.Query) {
+func interviewQuestions(job jobview.Job) ([]apigen.InterviewPracticeQuestion, experience.Query) {
 	const maxTopics = 3
-	questions := make([]interviewQuestion, 0, maxTopics+1)
+	questions := make([]apigen.InterviewPracticeQuestion, 0, maxTopics+1)
 	query := experience.Query{Skills: job.Skills}
 
 	topics := make(map[string]bool)
@@ -113,8 +93,8 @@ func interviewQuestions(job jobview.Job) ([]interviewQuestion, experience.Query)
 			continue
 		}
 		topics[key] = true
-		questions = append(questions, interviewQuestion{
-			Topic:  topic,
+		questions = append(questions, apigen.InterviewPracticeQuestion{
+			Topic:  apigen.NewOptString(topic),
 			Prompt: "What example would best show how you meet this requirement? What did you personally contribute?",
 		})
 		query.Text = strings.TrimSpace(query.Text + " " + topic)
@@ -132,41 +112,41 @@ func interviewQuestions(job jobview.Job) ([]interviewQuestion, experience.Query)
 		if coveredSkills[skill] {
 			continue
 		}
-		questions = append(questions, interviewQuestion{
-			Topic:  skilltag.Label(skill),
+		questions = append(questions, apigen.InterviewPracticeQuestion{
+			Topic:  apigen.NewOptString(skilltag.Label(skill)),
 			Prompt: "If you’ve used this skill, describe a specific problem you solved with it. How did you know your approach worked?",
 		})
 	}
 	if query.Text == "" && len(query.Skills) == 0 {
 		query.Text = job.Title
 	}
-	questions = append(questions, interviewQuestion{
+	questions = append(questions, apigen.InterviewPracticeQuestion{
 		Prompt: "Which project best prepares you for the " + job.Title + " role, and what was your contribution?",
 	})
 	if len(questions) < 3 {
-		questions = append(questions, interviewQuestion{
+		questions = append(questions, apigen.InterviewPracticeQuestion{
 			Prompt: "What would you ask the team to understand what success looks like in this role?",
 		})
 	}
 	if len(questions) < 3 {
-		questions = append(questions, interviewQuestion{
+		questions = append(questions, apigen.InterviewPracticeQuestion{
 			Prompt: "Tell me about a trade-off you faced on a project relevant to this role. What did you choose, and why?",
 		})
 	}
 	return questions, query
 }
 
-func interviewExamples(matches []experience.Match) []interviewExample {
+func interviewExamples(matches []experience.Match) []apigen.InterviewPracticeExample {
 	const maxExamples = 3
-	examples := make([]interviewExample, 0, maxExamples)
+	examples := make([]apigen.InterviewPracticeExample, 0, maxExamples)
 	for _, match := range matches {
 		atom := match.Atom
 		if !atom.Provenance.Publishable() {
 			continue
 		}
-		example := interviewExample{Claim: atom.Claim, Context: atom.Context, Metrics: atom.Metrics}
+		example := apigen.InterviewPracticeExample{Claim: atom.Claim, Context: optString(atom.Context), Metrics: atom.Metrics}
 		if place := match.Employment; place != nil {
-			example.Place = strings.Trim(strings.Join([]string{place.Role, place.Company}, " · "), " ·")
+			example.Place = optString(strings.Trim(strings.Join([]string{place.Role, place.Company}, " · "), " ·"))
 		}
 		examples = append(examples, example)
 		if len(examples) == maxExamples {
