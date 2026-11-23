@@ -44,7 +44,7 @@
   {#if data.paid}
     <FeedSourceMenu />
     {#key feedSource.version}
-      <MatchFeedList />
+      <MatchFeedList active={!swipe} />
     {/key}
   {:else}
     <MatchesUpgrade price={data.price} />

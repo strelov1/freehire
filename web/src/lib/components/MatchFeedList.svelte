@@ -17,6 +17,8 @@
   import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
 
+  let { active = true }: { active?: boolean } = $props();
+
   // The match feed as a list: every card with its explanation, save and hide in the corner.
   // "Show more" rather than scroll-to-load, like /jobs: an auto-growing page puts the
   // footer out of reach.
@@ -130,7 +132,7 @@
       loading = false;
       if (!stale() && feedSource.takeCardFocus(rev, 'list')) {
         await tick();
-        const heading = list?.querySelector('h3');
+        const heading = active && list?.querySelector('h3');
         if (heading) {
           heading.tabIndex = -1;
           heading.focus();
@@ -154,11 +156,11 @@
 {:else if failed && cards.length === 0}
   <States state="error" message="Failed to load your matches." />
 {:else if meta?.reason === 'search_deleted'}
-  <FeedSourceEmpty kind="deleted" />
+  <FeedSourceEmpty kind="deleted" focus={active} />
 {:else if meta?.source === 'saved_search' && meta.reason}
-  <FeedSourceEmpty kind="unusable" />
+  <FeedSourceEmpty kind="unusable" focus={active} />
 {:else if meta?.source === 'saved_search' && firstEmpty}
-  <FeedSourceEmpty kind="no_matches" />
+  <FeedSourceEmpty kind="no_matches" focus={active} />
 {:else if meta?.reason}
   <div class="flex flex-col items-center gap-3 py-16 text-center">
     <p class="text-lg font-semibold">Tell us what you are looking for</p>

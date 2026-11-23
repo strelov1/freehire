@@ -227,6 +227,20 @@ describe('MatchFeedList', () => {
       expect(screen.queryByText("You're all caught up")).toBeNull();
     });
 
+    it('keeps focus on the swipe controls when the background list loads its empty state', async () => {
+      const swipeControl = document.createElement('button');
+      document.body.append(swipeControl);
+      swipeControl.focus();
+      try {
+        meFeed.mockResolvedValueOnce(page([], { source: 'saved_search', saved_search_id: 2 }));
+        render(MatchFeedList, { props: { active: false } });
+        await screen.findByRole('heading', { name: 'No matches for this search' });
+        expect(document.activeElement).toBe(swipeControl);
+      } finally {
+        swipeControl.remove();
+      }
+    });
+
     it('says an unusable search cannot be applied, not that it has no matches', async () => {
       meFeed.mockResolvedValueOnce({
         data: [],

@@ -7,7 +7,11 @@
 
   // The saved-search screens that replace the card: it matches nothing, it cannot be applied
   // in full, or it is gone. Filters are never relaxed to fill the feed.
-  let { kind, mode = 'list' }: { kind: 'no_matches' | 'unusable' | 'deleted'; mode?: 'list' | 'swipe' } = $props();
+  let {
+    kind,
+    mode = 'list',
+    focus = true,
+  }: { kind: 'no_matches' | 'unusable' | 'deleted'; mode?: 'list' | 'swipe'; focus?: boolean } = $props();
   let heading = $state<HTMLElement | null>(null);
   let failed = $state(false);
   const titles = {
@@ -18,6 +22,7 @@
   const title = $derived(titles[kind]);
 
   onMount(() => {
+    if (!focus) return;
     heading?.focus();
     announce(title);
   });
