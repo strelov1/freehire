@@ -1189,6 +1189,14 @@ type Handler interface {
 	//
 	// GET /insights/role-countries
 	InsightsRoleCountries(ctx context.Context, params InsightsRoleCountriesParams) (*RoleCountriesAnswer, error)
+	// InsightsRoleDemand implements insightsRoleDemand operation.
+	//
+	// Counts unique public vacancies, including closed vacancies, by publication date. If the source
+	// supplied no date, the count uses the vacancy's first catalogue appearance. The data array is empty
+	// until the first snapshot is published.
+	//
+	// GET /insights/role-demand
+	InsightsRoleDemand(ctx context.Context) (*RoleDemandAnswer, error)
 	// InsightsRolePulse implements insightsRolePulse operation.
 	//
 	// The category is required.

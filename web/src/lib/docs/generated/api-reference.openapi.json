@@ -2079,6 +2079,51 @@
         ]
       }
     },
+    "/insights/role-demand": {
+      "get": {
+        "operationId": "insightsRoleDemand",
+        "summary": "New public vacancies by specialty for the last 12 completed UTC weeks.",
+        "description": "Counts unique public vacancies, including closed vacancies, by publication date.\nIf the source supplied no date, the count uses the vacancy's first catalogue appearance.\nThe data array is empty until the first snapshot is published.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleDemandAnswer"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "category": "backend",
+                      "week": "2026-11-16",
+                      "new_jobs": 42
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Insights"
+        ],
+        "security": [
+          {}
+        ]
+      }
+    },
     "/insights/role-pulse": {
       "get": {
         "operationId": "insightsRolePulse",
@@ -21621,6 +21666,41 @@
             "format": "int64"
           },
           "open_count_prev": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "RoleDemandAnswer": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleDemandPoint"
+            }
+          }
+        }
+      },
+      "RoleDemandPoint": {
+        "type": "object",
+        "required": [
+          "category",
+          "week",
+          "new_jobs"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "week": {
+            "type": "string",
+            "description": "Monday of the publication week in UTC (YYYY-MM-DD)."
+          },
+          "new_jobs": {
             "type": "integer",
             "format": "int64"
           }

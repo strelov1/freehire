@@ -189,6 +189,7 @@ const (
 	IngestStatusOperation                       OperationName = "IngestStatus"
 	InsightsCompaniesOperation                  OperationName = "InsightsCompanies"
 	InsightsRoleCountriesOperation              OperationName = "InsightsRoleCountries"
+	InsightsRoleDemandOperation                 OperationName = "InsightsRoleDemand"
 	InsightsRolePulseOperation                  OperationName = "InsightsRolePulse"
 	InsightsRolesOperation                      OperationName = "InsightsRoles"
 	InsightsSalaryOperation                     OperationName = "InsightsSalary"

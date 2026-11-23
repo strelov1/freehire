@@ -406,6 +406,19 @@ func (h *statsHandlers) InsightsVelocity(ctx context.Context, params apigen.Insi
 	}, nil
 }
 
+// InsightsRoleDemand returns the weekly publication counts for all specialties.
+func (h *statsHandlers) InsightsRoleDemand(ctx context.Context) (*apigen.RoleDemandAnswer, error) {
+	rows, err := h.queries.ListInsightsRoleDemand(ctx)
+	if err != nil {
+		return nil, err
+	}
+	points := make([]apigen.RoleDemandPoint, len(rows))
+	for i, row := range rows {
+		points[i] = apigen.RoleDemandPoint{Category: row.Category, Week: row.Week.Time.Format(dateLayout), NewJobs: row.NewJobs}
+	}
+	return &apigen.RoleDemandAnswer{Data: points}, nil
+}
+
 // InsightsSalaryHistory serves GET /api/v1/insights/salary/history: one role × grade ×
 // country scope's monthly salary percentiles per (currency, period), from
 // insights_salary_monthly. An absent part means every value, as on /insights/salary.

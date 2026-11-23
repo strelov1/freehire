@@ -72,6 +72,7 @@ func (h *statsHandlers) register(api fiber.Router, optionalAuth fiber.Handler, c
 	api.Get("/insights/companies", contract)
 	api.Get("/insights/role-countries", contract)
 	api.Get("/insights/role-pulse", contract)
+	api.Get("/insights/role-demand", contract)
 
 	// Per-provider health rollup over board_health, sanitized (no error text or board identifiers).
 	api.Get("/status", contract)

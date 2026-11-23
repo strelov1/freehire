@@ -1403,6 +1403,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/insights/role-demand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * New public vacancies by specialty for the last 12 completed UTC weeks.
+         * @description Counts unique public vacancies, including closed vacancies, by publication date.
+         *     If the source supplied no date, the count uses the vacancy's first catalogue appearance.
+         *     The data array is empty until the first snapshot is published.
+         */
+        get: operations["insightsRoleDemand"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/insights/role-pulse": {
         parameters: {
             query?: never;
@@ -10041,6 +10063,16 @@ export interface components {
             /** Format: int64 */
             open_count_prev: number;
         };
+        RoleDemandAnswer: {
+            data: components["schemas"]["RoleDemandPoint"][];
+        };
+        RoleDemandPoint: {
+            category: string;
+            /** @description Monday of the publication week in UTC (YYYY-MM-DD). */
+            week: string;
+            /** Format: int64 */
+            new_jobs: number;
+        };
         RoleInsight: {
             category: string;
             seniority: string;
@@ -14206,6 +14238,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleCountriesAnswer"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    insightsRoleDemand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "category": "backend",
+                     *           "week": "2026-11-16",
+                     *           "new_jobs": 42
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RoleDemandAnswer"];
                 };
             };
             /** @description An unexpected error response. */
