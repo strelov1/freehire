@@ -12,8 +12,11 @@
   import { Paginator } from '#lib/paginated.svelte.js';
   import { pillClass, pillCountClass } from './facets/pill';
   import States from './States.svelte';
+  import EmployerApplicationConversation from './EmployerApplicationConversation.svelte';
+  import { messages as conversationMessages } from './EmployerApplicationConversation.messages';
 
   const s = $derived(t(messages, locale()));
+  const conversation = $derived(t(conversationMessages, locale()));
 
   // The pipeline in order; the server's EmployerApplicationStage enum names the same six.
   const STAGES: EmployerApplicationStage[] = ['new', 'reviewing', 'interview', 'offer', 'hired', 'rejected'];
@@ -260,6 +263,7 @@
                 })}
               </span>
             </span>
+            {#if a.has_unread_reply}<Badge variant="brand">{conversation.newReply}</Badge>{/if}
             {#if !a.viewed_at}<Badge variant="outline">{s.unviewed}</Badge>{/if}
             <Badge variant={a.stage === 'new' ? 'brand' : a.stage === 'rejected' ? 'outline' : 'secondary'}>
               {s.stages[a.stage]}
@@ -308,6 +312,15 @@
                   <span class="text-xs text-muted-foreground">{s.cvEmailOnly}</span>
                 {/if}
               </div>
+
+              <EmployerApplicationConversation
+                id={a.id}
+                onread={(unread) => {
+                  pager.items = pager.items.map((item) =>
+                    item.id === a.id ? { ...item, has_unread_reply: unread } : item,
+                  );
+                }}
+              />
 
               <div class="flex flex-wrap items-center gap-2">
                 {#if a.viewed_at}

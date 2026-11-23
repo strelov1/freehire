@@ -3,13 +3,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmployerApplication } from '#lib/types.js';
 import EmployerApplications from './EmployerApplications.svelte';
 
-const { listEmployerApplications, listEmployerVacancies, moveEmployerApplication, updateEmployerApplicationWorkspace } =
-  vi.hoisted(() => ({
-    listEmployerApplications: vi.fn(),
-    listEmployerVacancies: vi.fn(),
-    moveEmployerApplication: vi.fn(),
-    updateEmployerApplicationWorkspace: vi.fn(),
-  }));
+const {
+  listEmployerApplications,
+  listEmployerVacancies,
+  moveEmployerApplication,
+  updateEmployerApplicationWorkspace,
+  getEmployerApplicationConversation,
+  sendEmployerApplicationMessage,
+  markEmployerApplicationRepliesRead,
+} = vi.hoisted(() => ({
+  listEmployerApplications: vi.fn(),
+  listEmployerVacancies: vi.fn(),
+  moveEmployerApplication: vi.fn(),
+  updateEmployerApplicationWorkspace: vi.fn(),
+  getEmployerApplicationConversation: vi.fn(),
+  sendEmployerApplicationMessage: vi.fn(),
+  markEmployerApplicationRepliesRead: vi.fn(),
+}));
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('$app/state', () => ({ page: { data: { locale: 'en' }, url: new URL('http://localhost/') } }));
@@ -19,6 +29,9 @@ vi.mock('#lib/api.js', () => ({
     listEmployerVacancies,
     moveEmployerApplication,
     updateEmployerApplicationWorkspace,
+    getEmployerApplicationConversation,
+    sendEmployerApplicationMessage,
+    markEmployerApplicationRepliesRead,
     employerApplicationCVUrl: (id: number) => `/api/v1/employer/applications/${id}/cv`,
   },
   ApiError: class extends Error {},
@@ -58,6 +71,49 @@ describe('EmployerApplications', () => {
     const stages = screen.getByRole('group', { name: 'Stage' });
     expect(within(stages).getByRole('button', { name: /All\s*3/ })).toBeTruthy();
     expect(within(stages).getByRole('button', { name: /Rejected\s*2/ })).toBeTruthy();
+  });
+
+  it('shows a candidate reply and clears the unread badge when acknowledged', async () => {
+    listEmployerApplications.mockResolvedValue(page([application({ has_unread_reply: true })], { new: 1 }));
+    getEmployerApplicationConversation.mockResolvedValue({
+      can_send: true,
+      has_more: false,
+      messages: [{ id: 4, status: 'received', body: 'Tuesday works for me.', created_at: '2026-11-20T14:00:00Z' }],
+    });
+    markEmployerApplicationRepliesRead.mockResolvedValue({ has_unread_reply: false });
+    render(EmployerApplications);
+
+    expect(await screen.findByText('New reply')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: /c@example\.test/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Conversation' }));
+    expect(await screen.findByText('Tuesday works for me.')).toBeTruthy();
+    expect(markEmployerApplicationRepliesRead).toHaveBeenCalledWith(1, 4);
+    await waitFor(() => expect(screen.queryByText('New reply')).toBeNull());
+  });
+
+  it('keeps a failed candidate email in the conversation so the team can retry it', async () => {
+    listEmployerApplications.mockResolvedValue(page([application()], { new: 1 }));
+    getEmployerApplicationConversation.mockResolvedValue({ can_send: true, has_more: false, messages: [] });
+    sendEmployerApplicationMessage.mockImplementation(async (_id: number, body: string, key: string) => ({
+      id: 7,
+      status: sendEmployerApplicationMessage.mock.calls.length === 1 ? 'failed' : 'sent',
+      body,
+      request_key: key,
+      created_at: '2026-11-20T14:00:00Z',
+    }));
+    render(EmployerApplications);
+
+    await fireEvent.click(await screen.findByRole('button', { name: /c@example\.test/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Conversation' }));
+    await fireEvent.input(await screen.findByLabelText('Write to candidate'), {
+      target: { value: 'How about Tuesday?' },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Send email' }));
+    expect(await screen.findByText('Send could not be confirmed')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry send' }));
+    expect(await screen.findByText('Sent')).toBeTruthy();
+    expect(sendEmployerApplicationMessage.mock.calls[1]).toEqual(sendEmployerApplicationMessage.mock.calls[0]);
+    expect(moveEmployerApplication).not.toHaveBeenCalled();
   });
 
   it('opens an application with its answers and CV, and asks for a message only where a letter goes', async () => {
