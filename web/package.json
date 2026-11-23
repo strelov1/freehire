@@ -44,7 +44,7 @@
     "@vitest/coverage-v8": "^4.1.12",
     "eslint": "^10.8.0",
     "eslint-plugin-oxlint": "^1.93.0",
-    "eslint-plugin-svelte": "^3.23.1",
+    "eslint-plugin-svelte": "^3.24.1",
     "globals": "^17.8.0",
     "jsdom": "^30.0.1",
     "mdsvex": "^0.12.8",
