@@ -1919,6 +1919,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/{slug}/interview-prep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a posting-based interview preparation sheet.
+         * @description Practice questions from a public posting. A signed-in caller can also see examples from their own Experience Bank.
+         *     For a closed posting, a session cookie and an application in the interview stage are required. Otherwise the endpoint returns 404.
+         */
+        get: operations["getInterviewPrep"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{slug}/match": {
         parameters: {
             query?: never;
@@ -2053,6 +2074,26 @@ export interface paths {
          *     empty list when location or specialization is unknown or no visible matches remain.
          */
         get: operations["similarJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{slug}/skill-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an open posting for CV review.
+         * @description Open posting skills and requirements for a CV review performed in the browser.
+         */
+        get: operations["getResumeReviewPosting"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8615,6 +8656,23 @@ export interface components {
             stage: string | null;
             notes: string | null;
         };
+        InterviewPracticeExample: {
+            claim: string;
+            context?: string;
+            metrics?: string[];
+            place?: string;
+        };
+        InterviewPracticeQuestion: {
+            prompt: string;
+            topic?: string;
+        };
+        InterviewPrepSheet: {
+            job: components["schemas"]["ToolJob"];
+            questions: components["schemas"]["InterviewPracticeQuestion"][];
+            /** @description Confirmed examples from the caller's Experience Bank. Omitted for guests. */
+            examples?: components["schemas"]["InterviewPracticeExample"][];
+            examples_unavailable?: boolean;
+        };
         Invite: {
             link: string;
             /** Format: int64 */
@@ -9959,6 +10017,14 @@ export interface components {
             /** @description Required and at most 100 once blanks are dropped; anything else is a 400. */
             skills?: string[] | null;
         };
+        ResumeReviewPosting: {
+            skills: string[];
+            requirements?: components["schemas"]["ResumeReviewRequirement"][];
+        } & components["schemas"]["ToolJob"];
+        ResumeReviewRequirement: {
+            text: string;
+            priority: string;
+        };
         RoleCountriesAnswer: {
             data: components["schemas"]["RoleCountryCell"][];
             meta: components["schemas"]["RoleCountriesMeta"];
@@ -10638,6 +10704,12 @@ export interface components {
             to: string;
             /** Format: int64 */
             count: number;
+        };
+        ToolJob: {
+            public_slug: string;
+            title: string;
+            company: string;
+            location?: string;
         };
         /** @description A company and how many of the matching postings it holds. */
         TopCompany: {
@@ -15707,6 +15779,57 @@ export interface operations {
             };
         };
     };
+    getInterviewPrep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The public posting slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job": {
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme",
+                     *           "location": "Remote"
+                     *         },
+                     *         "questions": [
+                     *           {
+                     *             "prompt": "Which project best prepares you for this role?"
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["InterviewPrepSheet"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getJobMatch: {
         parameters: {
             query?: never;
@@ -16128,6 +16251,53 @@ export interface operations {
                      */
                     "application/json": {
                         data: unknown[];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getResumeReviewPosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The public posting slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "public_slug": "senior-go-engineer-acme-1a2b",
+                     *         "title": "Senior Go Engineer",
+                     *         "company": "Acme",
+                     *         "location": "Remote",
+                     *         "skills": [
+                     *           "go"
+                     *         ]
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["ResumeReviewPosting"];
                     };
                 };
             };

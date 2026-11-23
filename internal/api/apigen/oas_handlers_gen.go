@@ -12854,6 +12854,103 @@ func (s *Server) handleGetInboxRequest(args [0]string, argsEscaped bool, w http.
 	}
 }
 
+// handleGetInterviewPrepRequest handles getInterviewPrep operation.
+//
+// Practice questions from a public posting. A signed-in caller can also see examples from their own
+// Experience Bank. For a closed posting, a session cookie and an application in the interview stage
+// are required. Otherwise the endpoint returns 404.
+//
+// GET /jobs/{slug}/interview-prep
+func (s *Server) handleGetInterviewPrepRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetInterviewPrepOperation,
+			ID:   "getInterviewPrep",
+		}
+	)
+	params, err := decodeGetInterviewPrepParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetInterviewPrepOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetInterviewPrepOperation,
+			OperationSummary: "Get a posting-based interview preparation sheet.",
+			OperationID:      "getInterviewPrep",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetInterviewPrepParams
+			Response = *GetInterviewPrepOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetInterviewPrepParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetInterviewPrep(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetInterviewPrep(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetInterviewPrepResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetInterviewsRequest handles getInterviews operation.
 //
 // The calendar’s second layer beside `/me/timeline`: a meeting is arranged and can move or be
@@ -14804,6 +14901,101 @@ func (s *Server) handleGetResumeRequest(args [0]string, argsEscaped bool, w http
 	}
 
 	if err := encodeGetResumeResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleGetResumeReviewPostingRequest handles getResumeReviewPosting operation.
+//
+// Open posting skills and requirements for a CV review performed in the browser.
+//
+// GET /jobs/{slug}/skill-fit
+func (s *Server) handleGetResumeReviewPostingRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetResumeReviewPostingOperation,
+			ID:   "getResumeReviewPosting",
+		}
+	)
+	params, err := decodeGetResumeReviewPostingParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetResumeReviewPostingOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetResumeReviewPostingOperation,
+			OperationSummary: "Get an open posting for CV review.",
+			OperationID:      "getResumeReviewPosting",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetResumeReviewPostingParams
+			Response = *GetResumeReviewPostingOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetResumeReviewPostingParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetResumeReviewPosting(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetResumeReviewPosting(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetResumeReviewPostingResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

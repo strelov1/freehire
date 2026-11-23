@@ -317,6 +317,13 @@ describe('JobDrawer interview actions', () => {
     expect(goto).not.toHaveBeenCalled();
   });
 
+  it('links to a prep sheet for the posting at the interview stage', () => {
+    render(JobDrawer, props({ stage: 'interview' }));
+    expect(screen.getByRole('link', { name: 'Вопросы к собеседованию' }).getAttribute('href')).toBe(
+      `/tools/interview-prep?job=${job.public_slug}`,
+    );
+  });
+
   it('omits interview actions before an interview stage or after the posting is gone', () => {
     const view = render(JobDrawer, props());
     expect(screen.queryByRole('button', { name: 'Подготовиться к собеседованию' })).toBeNull();

@@ -23,7 +23,7 @@
   "tags": [
     {
       "name": "Jobs",
-      "description": "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint."
+      "description": "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from open lists and search. The detail endpoint keeps serving them. Interview prep can serve a closed posting to the account tracking it at the interview stage."
     },
     {
       "name": "Companies",

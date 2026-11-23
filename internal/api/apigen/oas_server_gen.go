@@ -860,6 +860,14 @@ type Handler interface {
 	//
 	// GET /me/inbox
 	GetInbox(ctx context.Context, params GetInboxParams) (*InboxPage, error)
+	// GetInterviewPrep implements getInterviewPrep operation.
+	//
+	// Practice questions from a public posting. A signed-in caller can also see examples from their own
+	// Experience Bank. For a closed posting, a session cookie and an application in the interview stage
+	// are required. Otherwise the endpoint returns 404.
+	//
+	// GET /jobs/{slug}/interview-prep
+	GetInterviewPrep(ctx context.Context, params GetInterviewPrepParams) (*GetInterviewPrepOK, error)
 	// GetInterviews implements getInterviews operation.
 	//
 	// The calendar’s second layer beside `/me/timeline`: a meeting is arranged and can move or be
@@ -1021,6 +1029,12 @@ type Handler interface {
 	//
 	// GET /me/resume
 	GetResume(ctx context.Context) (*GetResumeOK, error)
+	// GetResumeReviewPosting implements getResumeReviewPosting operation.
+	//
+	// Open posting skills and requirements for a CV review performed in the browser.
+	//
+	// GET /jobs/{slug}/skill-fit
+	GetResumeReviewPosting(ctx context.Context, params GetResumeReviewPostingParams) (*GetResumeReviewPostingOK, error)
 	// GetResumeVerdict implements getResumeVerdict operation.
 	//
 	// How many of your selected role’s open vacancies your skills reach, and which missing skill unlocks

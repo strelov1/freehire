@@ -332,6 +332,7 @@ func Register(app *fiber.App, cfg Config) {
 	userModerationH := newUserModerationHandlers(queries)
 	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
 	handlers := contractHandlers{conversationHandlers: conversationH,
+		interviewPrepHandlers:        &interviewPrepHandlers{queries: queries, bank: bank},
 		authHandlers:                 authH,
 		resumeHandlers:               resumeH,
 		matchHandlers:                matchH,

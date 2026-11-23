@@ -13185,6 +13185,21 @@ func (s *GetEmployerVacancyAnalyticsOK) SetData(val EmployerVacancyAnalytics) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type GetInterviewPrepOK struct {
+	Data InterviewPrepSheet `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetInterviewPrepOK) GetData() InterviewPrepSheet {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetInterviewPrepOK) SetData(val InterviewPrepSheet) {
+	s.Data = val
+}
+
 type GetInterviewsOK struct {
 	Data []ScheduledInterview `json:"data"`
 	Meta TimelineMeta         `json:"meta"`
@@ -13471,6 +13486,21 @@ func (s *GetResumeOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *GetResumeOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetResumeReviewPostingOK struct {
+	Data ResumeReviewPosting `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetResumeReviewPostingOK) GetData() ResumeReviewPosting {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetResumeReviewPostingOK) SetData(val ResumeReviewPosting) {
 	s.Data = val
 }
 
@@ -15243,6 +15273,129 @@ func (s *InterpretSearchOK) GetData() jx.Raw {
 // SetData sets the value of Data.
 func (s *InterpretSearchOK) SetData(val jx.Raw) {
 	s.Data = val
+}
+
+// Ref: #/components/schemas/InterviewPracticeExample
+type InterviewPracticeExample struct {
+	Claim   string    `json:"claim"`
+	Context OptString `json:"context"`
+	Metrics []string  `json:"metrics"`
+	Place   OptString `json:"place"`
+}
+
+// GetClaim returns the value of Claim.
+func (s *InterviewPracticeExample) GetClaim() string {
+	return s.Claim
+}
+
+// GetContext returns the value of Context.
+func (s *InterviewPracticeExample) GetContext() OptString {
+	return s.Context
+}
+
+// GetMetrics returns the value of Metrics.
+func (s *InterviewPracticeExample) GetMetrics() []string {
+	return s.Metrics
+}
+
+// GetPlace returns the value of Place.
+func (s *InterviewPracticeExample) GetPlace() OptString {
+	return s.Place
+}
+
+// SetClaim sets the value of Claim.
+func (s *InterviewPracticeExample) SetClaim(val string) {
+	s.Claim = val
+}
+
+// SetContext sets the value of Context.
+func (s *InterviewPracticeExample) SetContext(val OptString) {
+	s.Context = val
+}
+
+// SetMetrics sets the value of Metrics.
+func (s *InterviewPracticeExample) SetMetrics(val []string) {
+	s.Metrics = val
+}
+
+// SetPlace sets the value of Place.
+func (s *InterviewPracticeExample) SetPlace(val OptString) {
+	s.Place = val
+}
+
+// Ref: #/components/schemas/InterviewPracticeQuestion
+type InterviewPracticeQuestion struct {
+	Prompt string    `json:"prompt"`
+	Topic  OptString `json:"topic"`
+}
+
+// GetPrompt returns the value of Prompt.
+func (s *InterviewPracticeQuestion) GetPrompt() string {
+	return s.Prompt
+}
+
+// GetTopic returns the value of Topic.
+func (s *InterviewPracticeQuestion) GetTopic() OptString {
+	return s.Topic
+}
+
+// SetPrompt sets the value of Prompt.
+func (s *InterviewPracticeQuestion) SetPrompt(val string) {
+	s.Prompt = val
+}
+
+// SetTopic sets the value of Topic.
+func (s *InterviewPracticeQuestion) SetTopic(val OptString) {
+	s.Topic = val
+}
+
+// Ref: #/components/schemas/InterviewPrepSheet
+type InterviewPrepSheet struct {
+	Job       ToolJob                     `json:"job"`
+	Questions []InterviewPracticeQuestion `json:"questions"`
+	// Confirmed examples from the caller's Experience Bank. Omitted for guests.
+	Examples            []InterviewPracticeExample `json:"examples"`
+	ExamplesUnavailable OptBool                    `json:"examples_unavailable"`
+}
+
+// GetJob returns the value of Job.
+func (s *InterviewPrepSheet) GetJob() ToolJob {
+	return s.Job
+}
+
+// GetQuestions returns the value of Questions.
+func (s *InterviewPrepSheet) GetQuestions() []InterviewPracticeQuestion {
+	return s.Questions
+}
+
+// GetExamples returns the value of Examples.
+func (s *InterviewPrepSheet) GetExamples() []InterviewPracticeExample {
+	return s.Examples
+}
+
+// GetExamplesUnavailable returns the value of ExamplesUnavailable.
+func (s *InterviewPrepSheet) GetExamplesUnavailable() OptBool {
+	return s.ExamplesUnavailable
+}
+
+// SetJob sets the value of Job.
+func (s *InterviewPrepSheet) SetJob(val ToolJob) {
+	s.Job = val
+}
+
+// SetQuestions sets the value of Questions.
+func (s *InterviewPrepSheet) SetQuestions(val []InterviewPracticeQuestion) {
+	s.Questions = val
+}
+
+// SetExamples sets the value of Examples.
+func (s *InterviewPrepSheet) SetExamples(val []InterviewPracticeExample) {
+	s.Examples = val
+}
+
+// SetExamplesUnavailable sets the value of ExamplesUnavailable.
+func (s *InterviewPrepSheet) SetExamplesUnavailable(val OptBool) {
+	s.ExamplesUnavailable = val
 }
 
 // Ref: #/components/schemas/Invite
@@ -26283,6 +26436,103 @@ func (s *ResumeCoverageRequest) SetSkills(val OptNilStringArray) {
 	s.Skills = val
 }
 
+// Merged schema.
+// Ref: #/components/schemas/ResumeReviewPosting
+type ResumeReviewPosting struct {
+	PublicSlug   string                    `json:"public_slug"`
+	Title        string                    `json:"title"`
+	Company      string                    `json:"company"`
+	Location     OptString                 `json:"location"`
+	Skills       []string                  `json:"skills"`
+	Requirements []ResumeReviewRequirement `json:"requirements"`
+}
+
+// GetPublicSlug returns the value of PublicSlug.
+func (s *ResumeReviewPosting) GetPublicSlug() string {
+	return s.PublicSlug
+}
+
+// GetTitle returns the value of Title.
+func (s *ResumeReviewPosting) GetTitle() string {
+	return s.Title
+}
+
+// GetCompany returns the value of Company.
+func (s *ResumeReviewPosting) GetCompany() string {
+	return s.Company
+}
+
+// GetLocation returns the value of Location.
+func (s *ResumeReviewPosting) GetLocation() OptString {
+	return s.Location
+}
+
+// GetSkills returns the value of Skills.
+func (s *ResumeReviewPosting) GetSkills() []string {
+	return s.Skills
+}
+
+// GetRequirements returns the value of Requirements.
+func (s *ResumeReviewPosting) GetRequirements() []ResumeReviewRequirement {
+	return s.Requirements
+}
+
+// SetPublicSlug sets the value of PublicSlug.
+func (s *ResumeReviewPosting) SetPublicSlug(val string) {
+	s.PublicSlug = val
+}
+
+// SetTitle sets the value of Title.
+func (s *ResumeReviewPosting) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetCompany sets the value of Company.
+func (s *ResumeReviewPosting) SetCompany(val string) {
+	s.Company = val
+}
+
+// SetLocation sets the value of Location.
+func (s *ResumeReviewPosting) SetLocation(val OptString) {
+	s.Location = val
+}
+
+// SetSkills sets the value of Skills.
+func (s *ResumeReviewPosting) SetSkills(val []string) {
+	s.Skills = val
+}
+
+// SetRequirements sets the value of Requirements.
+func (s *ResumeReviewPosting) SetRequirements(val []ResumeReviewRequirement) {
+	s.Requirements = val
+}
+
+// Ref: #/components/schemas/ResumeReviewRequirement
+type ResumeReviewRequirement struct {
+	Text     string `json:"text"`
+	Priority string `json:"priority"`
+}
+
+// GetText returns the value of Text.
+func (s *ResumeReviewRequirement) GetText() string {
+	return s.Text
+}
+
+// GetPriority returns the value of Priority.
+func (s *ResumeReviewRequirement) GetPriority() string {
+	return s.Priority
+}
+
+// SetText sets the value of Text.
+func (s *ResumeReviewRequirement) SetText(val string) {
+	s.Text = val
+}
+
+// SetPriority sets the value of Priority.
+func (s *ResumeReviewRequirement) SetPriority(val string) {
+	s.Priority = val
+}
+
 // RetractGhostReportNoContent is response for RetractGhostReport operation.
 type RetractGhostReportNoContent struct{}
 
@@ -30924,6 +31174,54 @@ func (s *TimelineMeta) SetTo(val time.Time) {
 // SetCount sets the value of Count.
 func (s *TimelineMeta) SetCount(val int64) {
 	s.Count = val
+}
+
+// Ref: #/components/schemas/ToolJob
+type ToolJob struct {
+	PublicSlug string    `json:"public_slug"`
+	Title      string    `json:"title"`
+	Company    string    `json:"company"`
+	Location   OptString `json:"location"`
+}
+
+// GetPublicSlug returns the value of PublicSlug.
+func (s *ToolJob) GetPublicSlug() string {
+	return s.PublicSlug
+}
+
+// GetTitle returns the value of Title.
+func (s *ToolJob) GetTitle() string {
+	return s.Title
+}
+
+// GetCompany returns the value of Company.
+func (s *ToolJob) GetCompany() string {
+	return s.Company
+}
+
+// GetLocation returns the value of Location.
+func (s *ToolJob) GetLocation() OptString {
+	return s.Location
+}
+
+// SetPublicSlug sets the value of PublicSlug.
+func (s *ToolJob) SetPublicSlug(val string) {
+	s.PublicSlug = val
+}
+
+// SetTitle sets the value of Title.
+func (s *ToolJob) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetCompany sets the value of Company.
+func (s *ToolJob) SetCompany(val string) {
+	s.Company = val
+}
+
+// SetLocation sets the value of Location.
+func (s *ToolJob) SetLocation(val OptString) {
+	s.Location = val
 }
 
 // A single item: `{"data": ...}`.

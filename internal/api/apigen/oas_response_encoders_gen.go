@@ -1807,6 +1807,19 @@ func encodeGetInboxResponse(response *InboxPage, w http.ResponseWriter) error {
 	return nil
 }
 
+func encodeGetInterviewPrepResponse(response *GetInterviewPrepOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetInterviewsResponse(response *GetInterviewsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -2094,6 +2107,19 @@ func encodeGetProfileResponse(response *GetProfileOK, w http.ResponseWriter) err
 }
 
 func encodeGetResumeResponse(response *GetResumeOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetResumeReviewPostingResponse(response *GetResumeReviewPostingOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 

@@ -104,6 +104,9 @@ export const STATIC_PATHS = [
   // not a second copy of the homepage but the URL every filtered and paginated feed
   // link resolves to, and the one page here that carries the catalogue itself.
   '/jobs',
+  '/tools',
+  '/tools/job-fit',
+  '/tools/interview-prep',
   '/about',
   '/companies',
   '/collections',
@@ -152,8 +155,6 @@ export const STATIC_PATHS = [
   // How to add the hosted MCP connectors to Claude, ChatGPT and the coding agents.
   '/mcp',
   '/chatgpt',
-  // The public CV roast: an account-free landing page nothing in the feed links to,
-  // built to be found by search rather than clicked to from elsewhere on the site.
   '/roast',
   '/contribute',
   // The contributor showcase. The per-person profiles are NOT here — they come from

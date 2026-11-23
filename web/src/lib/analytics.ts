@@ -203,6 +203,7 @@ function initGoogleAnalytics(): void {
  *  under /my; the buddies space holds private conversations). Session replay is
  *  stopped for their duration. */
 export function isPrivateRoute(path: string): boolean {
+  if (path === '/tools/interview-prep' || path === '/tools/job-fit') return true;
   return path === '/my' || path.startsWith('/my/') || isBuddiesSpace(path);
 }
 

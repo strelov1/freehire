@@ -19,6 +19,7 @@ export const messages = defineMessages(
     tailorCv: 'Tailor CV',
     interview: {
       rehearse: 'Prepare for interview',
+      prepSheet: 'Interview prep sheet',
       debrief: 'Debrief interview',
       startFailed: 'Could not open the interview chat. Try again.',
     },
@@ -166,6 +167,7 @@ export const messages = defineMessages(
       tailorCv: 'Адаптировать CV',
       interview: {
         rehearse: 'Подготовиться к собеседованию',
+        prepSheet: 'Вопросы к собеседованию',
         debrief: 'Разобрать собеседование',
         startFailed: 'Не удалось открыть чат собеседования. Попробуйте ещё раз.',
       },

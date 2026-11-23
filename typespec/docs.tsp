@@ -67,7 +67,7 @@ Postings closed before the reason was recorded carry an empty `closed_reason`. A
 
 How often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.
 
-Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.
+Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`. Interview prep also serves a closed public posting when the caller has a signed-in session and an application at the interview stage.
 
 ### Finding companies by domain
 
@@ -187,5 +187,5 @@ Most of this API is also a CLI. If you are writing an agent rather than an integ
 @tagMetadata("Search", #{ description: "Full-text job search with the shared filter vocabulary, facet counts, similar jobs and the reference data behind search." })
 @tagMetadata("Companies", #{ description: "Public reads. A company detail also returns a page of its open jobs." })
 @tagMetadata("Fit", #{ description: "Personalized signals computed against the caller’s profile or stored CV. All accept the session cookie or an API key. The skill-match endpoint is deterministic (no LLM); the match-analysis endpoints run the LLM chain and draw on your daily allowance. All take the same facet filter params as search where they narrow a market or candidate set." })
-@tagMetadata("Jobs", #{ description: "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint." })
+@tagMetadata("Jobs", #{ description: "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from open lists and search. The detail endpoint keeps serving them. Interview prep can serve a closed posting to the account tracking it at the interview stage." })
 namespace Freehire;

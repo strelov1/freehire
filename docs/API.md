@@ -112,7 +112,7 @@ Postings closed before the reason was recorded carry an empty `closed_reason`. A
 
 How often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.
 
-Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.
+Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`. Interview prep also serves a closed public posting when the caller has a signed-in session and an application at the interview stage.
 
 ### Finding companies by domain
 
@@ -417,7 +417,7 @@ curl "https://freehire.me/api/v1/booking/<token>/slots"
 
 ## Jobs
 
-Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint.
+Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from open lists and search. The detail endpoint keeps serving them. Interview prep can serve a closed posting to the account tracking it at the interview stage.
 
 ### `GET /jobs`
 
@@ -712,6 +712,43 @@ curl "https://freehire.me/api/v1/jobs/<slug>/copies"
 }
 ```
 
+### `GET /jobs/{slug}/interview-prep`
+
+**Auth:** Public
+
+Get a posting-based interview preparation sheet.
+
+Practice questions from a public posting. A signed-in caller can also see examples from their own Experience Bank.
+For a closed posting, a session cookie and an application in the interview stage are required. Otherwise the endpoint returns 404.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The public posting slug. |
+
+```bash
+curl "https://freehire.me/api/v1/jobs/<slug>/interview-prep"
+```
+
+```json
+{
+  "data": {
+    "job": {
+      "public_slug": "senior-go-engineer-acme-1a2b",
+      "title": "Senior Go Engineer",
+      "company": "Acme",
+      "location": "Remote"
+    },
+    "questions": [
+      {
+        "prompt": "Which project best prepares you for this role?"
+      }
+    ]
+  }
+}
+```
+
 ### `POST /jobs/{slug}/recruiter-contacts`
 
 **Auth:** Session or API key
@@ -745,6 +782,38 @@ curl -X POST "https://freehire.me/api/v1/jobs/<slug>/recruiter-contacts" -H "Aut
       "confidence": "high"
     }
   ]
+}
+```
+
+### `GET /jobs/{slug}/skill-fit`
+
+**Auth:** Public
+
+Get an open posting for CV review.
+
+Open posting skills and requirements for a CV review performed in the browser.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The public posting slug. |
+
+```bash
+curl "https://freehire.me/api/v1/jobs/<slug>/skill-fit"
+```
+
+```json
+{
+  "data": {
+    "public_slug": "senior-go-engineer-acme-1a2b",
+    "title": "Senior Go Engineer",
+    "company": "Acme",
+    "location": "Remote",
+    "skills": [
+      "go"
+    ]
+  }
 }
 ```
 
