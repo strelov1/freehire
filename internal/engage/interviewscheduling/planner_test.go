@@ -1,8 +1,12 @@
 package interviewscheduling
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
+
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 func TestSelectedTimeMustBeSupportedByRecruiterEvidence(t *testing.T) {
@@ -31,5 +35,38 @@ func TestSelectedTimeMustBeSupportedByRecruiterEvidence(t *testing.T) {
 		if got := selectedTime(tc.body, tc.decision, offers, time.UTC); !got.Equal(tc.want) {
 			t.Errorf("%q: selected %v, want %v", tc.body, got, tc.want)
 		}
+	}
+}
+
+type decisionGenerator func(context.Context, string, string, ...llm.GenOption) (string, error)
+
+func (f decisionGenerator) GenerateJSON(ctx context.Context, system, user string, opts ...llm.GenOption) (string, error) {
+	return f(ctx, system, user, opts...)
+}
+
+func TestPlannerChecksModelEvidenceAgainstLatestEmail(t *testing.T) {
+	input := plannerInput{Subject: "Interview invitation", Body: "Can we schedule an interview?"}
+	for _, tc := range []struct {
+		name     string
+		response string
+		modelErr error
+		want     Action
+		wantErr  bool
+	}{
+		{name: "verbatim evidence", response: `{"action":"offer","evidence":"schedule an interview","language":"en"}`, want: Offer},
+		{name: "unsupported evidence", response: `{"action":"offer","evidence":"Monday morning"}`, want: Review},
+		{name: "missing evidence", response: `{"action":"offer"}`, want: Review},
+		{name: "invalid output", response: `{"action":`, wantErr: true},
+		{name: "model unavailable", modelErr: errors.New("unavailable"), wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			model := decisionGenerator(func(context.Context, string, string, ...llm.GenOption) (string, error) {
+				return tc.response, tc.modelErr
+			})
+			got, err := readDecision(t.Context(), model, input)
+			if got.Action != tc.want || (err != nil) != tc.wantErr {
+				t.Fatalf("decision = %v, err = %v, want action %q and error %t", got, err, tc.want, tc.wantErr)
+			}
+		})
 	}
 }
