@@ -21,6 +21,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -90,10 +92,24 @@ func runAdd(provider, board, region, company string, hub bool, tenantsFlag strin
 	}
 	in := boardcatalog.InsertInput{Provider: provider, Board: board, Region: region, Company: company, Hub: hub, Tenants: tenants}
 
+	// Every known provider (Taxonomy), overlaid with the client-bearing adapters so a provider
+	// that checks the board against its platform (Oracle's site list) can: All alone drops a
+	// credential-gated provider whose key this host lacks, which would refuse a valid board.
 	registry := sources.Taxonomy()
+	maps.Copy(registry, sources.All(sources.NewClient()))
 	if err := boardcatalog.Validate(in, registry); err != nil {
 		log.Printf("add-board: invalid: %v", err)
 		return 1
+	}
+	// The platform check Insert runs, previewed on a dry run so it states what --apply would store.
+	// Under --apply Insert runs it itself and keeps a refusal as a rejected row.
+	if c, ok := registry[provider].(sources.BoardCanonicalizer); ok && !apply {
+		canon, err := c.CanonicalBoard(context.Background(), strings.TrimSpace(board))
+		if err != nil {
+			log.Printf("add-board: refused: %v", err)
+			return 1
+		}
+		board = canon
 	}
 	log.Printf("add-board: would add provider=%s board=%s region=%q company=%q status=active",
 		provider, board, region, company)
@@ -113,6 +129,11 @@ func addBoard(ctx context.Context, pool *pgxpool.Pool, in boardcatalog.InsertInp
 			return 1
 		}
 		log.Printf("add-board: insert: %v", err)
+		return 1
+	}
+	// A platform refusal (Oracle: a site the tenant does not list) is stored, not returned as an error.
+	if b.Status == boardcatalog.StatusRejected {
+		log.Printf("add-board: rejected id=%d provider=%s board=%s: %s", b.ID, b.Provider, b.Board, b.RejectedReason)
 		return 1
 	}
 	log.Printf("add-board: added id=%d provider=%s board=%s status=%s", b.ID, b.Provider, b.Board, b.Status)
