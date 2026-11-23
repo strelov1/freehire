@@ -2,6 +2,11 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -248,5 +253,122 @@ func TestOraclePaginatesByTotal(t *testing.T) {
 	}
 	if len(jobs) != 3 {
 		t.Fatalf("len(jobs) = %d, want 3 across two pages", len(jobs))
+	}
+}
+
+func oracleListPage(total int, ids ...string) string {
+	var items []string
+	for _, id := range ids {
+		items = append(items, `{"Id": "`+id+`", "Title": "Role `+id+`", "PrimaryLocation": "Remote"}`)
+	}
+	return `{"items": [{"TotalJobsCount": ` + strconv.Itoa(total) + `, "requisitionList": [` + strings.Join(items, ",") + `]}]}`
+}
+
+// TestOracleFetchNewSkipsDetailForStoredRequisitions: a stored requisition is re-emitted as a
+// liveness refresh without its detail request; only the new one is hydrated.
+func TestOracleFetchNewSkipsDetailForStoredRequisitions(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("findReqs", oracleListPage(2, "old", "new")).
+		route("%22new%22", `{"items": [{"ExternalDescriptionStr": "<p>fresh</p>"}]}`)
+
+	jobs, err := NewOracle(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "oracle", Board: "fa-test.fa.ocs.oraclecloud.com/CX_1",
+	}, func(id string) bool { return id == "old" })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	if !byID["old"].SeenRefresh || byID["old"].URL == "" {
+		t.Errorf("old = %+v, want a SeenRefresh carrying its URL", byID["old"])
+	}
+	if byID["new"].SeenRefresh || !strings.Contains(byID["new"].Description, "fresh") {
+		t.Errorf("new = %+v, want a hydrated posting", byID["new"])
+	}
+	if fake.calls != 2 {
+		t.Errorf("requests = %d, want 2 (one list page, one detail)", fake.calls)
+	}
+}
+
+// TestOracleCompletesShortListingFromFacetSlices: the plain listing repeated a requisition and
+// missed one (posting-date ties shift between pages; past offset 10000 nothing is served), so the
+// adapter reads facet slices until it holds TotalJobsCount distinct requisitions. A facet value
+// above the offset cap is skipped: its own listing would be cut short the same way.
+func TestOracleCompletesShortListingFromFacetSlices(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("selectedTitlesFacet=%22Stores%20-%20Retail%22", oracleListPage(2, "3", "4")).
+		route("LOCATIONS,limit=100,offset=0,", `{"items": [{"TotalJobsCount": 4,
+			"requisitionList": [{"Id": "1"}, {"Id": "2"}, {"Id": "2"}],
+			"categoriesFacet": [{"Id": 300000001250514, "TotalCount": 20000}],
+			"titlesFacet": [{"Id": "Stores - Retail", "TotalCount": 2}, {"Id": "Never Read", "TotalCount": 1}]}]}`).
+		route(",offset=3,sortBy", oracleListPage(4))
+
+	jobs, err := NewOracle(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "oracle", Board: "fa-test.fa.ocs.oraclecloud.com/CX_1",
+	}, func(string) bool { return true })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	var ids []string
+	for _, j := range jobs {
+		ids = append(ids, j.ExternalID)
+	}
+	slices.Sort(ids)
+	if got := strings.Join(ids, ","); got != "1,2,3,4" {
+		t.Fatalf("ids = %s, want 1,2,3,4 (deduplicated, completed from the title slice)", got)
+	}
+}
+
+// TestOracleFailedDetailIsUnreadableNotDropped: a detail request that fails says nothing about
+// the requisition, so it is yielded as an Unreadable marker; a 404 is a removal and is dropped.
+func TestOracleFailedDetailIsUnreadableNotDropped(t *testing.T) {
+	fake := (&routedHTTP{}).
+		routeErr("%22timeout%22", errors.New("context deadline exceeded")).
+		routeErr("%22gone%22", &StatusError{Code: http.StatusNotFound}).
+		route("%22ok%22", `{"items": [{"ExternalDescriptionStr": "<p>ok</p>"}]}`).
+		route("findReqs", oracleListPage(3, "timeout", "gone", "ok"))
+
+	jobs, err := NewOracle(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "oracle", Board: "fa-test.fa.ocs.oraclecloud.com/CX_1",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	if len(jobs) != 2 || !byID["timeout"].Unreadable || byID["ok"].Unreadable {
+		t.Fatalf("jobs = %+v, want an Unreadable marker for the timed-out requisition and the readable one", jobs)
+	}
+}
+
+// TestOracleFailsWhenNoListedDetailIsRead: a board whose every new requisition failed its detail
+// read nothing, so it must fail rather than be recorded healthy on markers alone.
+func TestOracleFailsWhenNoListedDetailIsRead(t *testing.T) {
+	fake := (&routedHTTP{}).
+		routeErr("ById", errors.New("context deadline exceeded")).
+		route("findReqs", oracleListPage(2, "a", "b"))
+
+	_, err := NewOracle(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "oracle", Board: "fa-test.fa.ocs.oraclecloud.com/CX_1",
+	})
+	if err == nil {
+		t.Fatal("Fetch succeeded, want an error when every detail request failed")
+	}
+}
+
+func TestOracleFacetParamDecodesStringIDs(t *testing.T) {
+	for raw, want := range map[string]string{
+		`"Sales \u0026 Marketing"`: "%22Sales%20%26%20Marketing%22",
+		`"C++ Dev"`:                "%22C%2B%2B%20Dev%22",
+		`"Sales, \"Ops\""`:         "%22Sales%2C%20%5C%22Ops%5C%22%22",
+		`300000001250514`:          "300000001250514",
+	} {
+		if got := oracleFacetParam(json.RawMessage(raw)); got != want {
+			t.Errorf("oracleFacetParam(%s) = %q, want %q", raw, got, want)
+		}
 	}
 }
