@@ -13,11 +13,13 @@
   // and making sure every one of them is released on every way out.
   let {
     disabled = false,
+    transcribeAudio = transcribe,
     onTranscript,
     onError,
     onUnavailable,
   }: {
     disabled?: boolean;
+    transcribeAudio?: typeof transcribe;
     /** The words. Appended to the draft by the host; never sent. */
     onTranscript: (text: string) => void;
     /** Something the caller can act on: a denied permission, a failed upload. */
@@ -32,6 +34,8 @@
 
   let phase = $state<Phase>('idle');
   let elapsedMs = $state(0);
+  let requesting = $state(false);
+  let disposed = false;
 
   // Device handles and timers. Deliberately NOT $state: nothing renders from them, and
   // making a MediaStream deeply reactive would proxy an object the browser owns.
@@ -91,18 +95,25 @@
   }
 
   async function start() {
-    if (disabled || phase !== 'idle') return;
+    if (disabled || requesting || phase !== 'idle') return;
     const container = pickContainer((type) => MediaRecorder.isTypeSupported(type));
     if (!container) {
       onError('This browser cannot record audio in a format we can transcribe.');
       return;
     }
+    requesting = true;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch {
-      onError('The microphone is unavailable — check this site’s permission for it.');
+      if (!disposed) onError('The microphone is unavailable — check this site’s permission for it.');
+      return;
+    } finally {
+      requesting = false;
+    }
+    if (disposed) {
+      release();
       return;
     }
 
@@ -155,11 +166,12 @@
   async function send(captured: Blob[], container: { mimeType: string; filename: string }) {
     phase = 'transcribing';
     try {
-      const text = await transcribe(new Blob(captured, { type: container.mimeType }), container.filename);
+      const text = await transcribeAudio(new Blob(captured, { type: container.mimeType }), container.filename);
       // Silence transcribes to an empty string. Handing it on is harmless — the host
       // appends nothing — and reporting it as a failure would be a lie.
-      onTranscript(text);
+      if (!disposed) onTranscript(text);
     } catch (err) {
+      if (disposed) return;
       if (err instanceof TranscriptionUnavailable) onUnavailable();
       else onError(err instanceof Error ? err.message : 'Could not transcribe the recording.');
     } finally {
@@ -168,6 +180,7 @@
   }
 
   onDestroy(() => {
+    disposed = true;
     // Cancel rather than confirm: a component going away is not a decision to send.
     keeping = false;
     recorder?.stop();
@@ -224,7 +237,7 @@
     <button
       type="button"
       onclick={start}
-      disabled={disabled || phase === 'transcribing'}
+      disabled={disabled || requesting || phase === 'transcribing'}
       aria-label={phase === 'transcribing' ? 'Transcribing' : 'Dictate a message'}
       aria-busy={phase === 'transcribing'}
       title="Dictate a message"

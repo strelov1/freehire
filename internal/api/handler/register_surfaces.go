@@ -124,6 +124,9 @@ func newEmployerSurfaces(cfg Config, queries *db.Queries, accountsSvc *accounts.
 // only when present: a nil value in an interface field is non-nil, so "no voice mode" or
 // "no support mail" would become a panic on first use.
 func (h *assistantHandlers) wireOptional(cfg Config, store *assistant.Store, answerBank *answerbank.Store, reportsH *reportHandlers, mailClient *emailnotify.Client) {
+	if cfg.InterviewAudio != nil {
+		h.interviewAudio = cfg.InterviewAudio
+	}
 	if cfg.Realtime != nil {
 		h.realtime = cfg.Realtime
 	}

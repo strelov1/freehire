@@ -1762,6 +1762,24 @@ type Handler interface {
 	//
 	// POST /assistant/sessions/{id}/extend
 	PostAssistantExtend(ctx context.Context, params PostAssistantExtendParams) (PostAssistantExtendRes, error)
+	// PostAssistantInterviewRepeat implements postAssistantInterviewRepeat operation.
+	//
+	// Opens a fresh rehearsal with the question saved in the feedback.
+	//
+	// POST /assistant/sessions/{id}/interview-repeat
+	PostAssistantInterviewRepeat(ctx context.Context, params PostAssistantInterviewRepeatParams) (*PostAssistantInterviewRepeatOK, error)
+	// PostAssistantInterviewReport implements postAssistantInterviewReport operation.
+	//
+	// Saves feedback about the candidate’s answers in one owned rehearsal.
+	//
+	// POST /assistant/sessions/{id}/interview-report
+	PostAssistantInterviewReport(ctx context.Context, params PostAssistantInterviewReportParams) (PostAssistantInterviewReportRes, error)
+	// PostAssistantInterviewSpeech implements postAssistantInterviewSpeech operation.
+	//
+	// Synthesizes the last completed interviewer reply in an owned interview rehearsal.
+	//
+	// POST /assistant/sessions/{id}/interview-speech
+	PostAssistantInterviewSpeech(ctx context.Context, params PostAssistantInterviewSpeechParams) (PostAssistantInterviewSpeechRes, error)
 	// PostAssistantVoiceToken implements postAssistantVoiceToken operation.
 	//
 	// Only on an `interview` session; `409` otherwise. The audio itself never reaches this server: take

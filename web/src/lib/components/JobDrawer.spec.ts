@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { goto } from '$app/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyJob } from '#lib/types.js';
 import JobDrawer from './JobDrawer.svelte';
@@ -10,7 +11,11 @@ vi.mock('$app/state', () => ({
 vi.mock('./MatchAnalysisFull.svelte', () => {
   throw new Error('chunk unavailable');
 });
-vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
+vi.mock('$app/paths', () => ({
+  resolve: (p: string, params?: { id: string }) => (params ? p.replace('[[id]]', params.id) : p),
+  base: '',
+  assets: '',
+}));
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), pushState: vi.fn(), replaceState: vi.fn() }));
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true, currentUser: () => ({ id: 'u1' }) }));
 vi.mock('easymde', () => ({
@@ -23,13 +28,15 @@ vi.mock('easymde', () => ({
   },
 }));
 
-const { getTrackedApplication, openApplyChat } = vi.hoisted(() => ({
+const { getTrackedApplication, openApplyChat, createInterviewSession } = vi.hoisted(() => ({
   getTrackedApplication: vi.fn(),
   openApplyChat: vi.fn(),
+  createInterviewSession: vi.fn(),
 }));
 vi.mock('#lib/assistant/api.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('#lib/assistant/api.js')>()),
   openApplyChat,
+  createInterviewSession,
 }));
 vi.mock('#lib/api.js', () => ({ api: { getTrackedApplication }, isPlanRefusal: () => false }));
 
@@ -73,6 +80,8 @@ const props = (over: Partial<MyJob> = {}) => ({
 });
 
 beforeEach(() => {
+  vi.mocked(goto).mockClear();
+  createInterviewSession.mockReset();
   openApplyChat.mockReset().mockRejectedValue(new Error('chat unavailable'));
   getTrackedApplication.mockReset().mockResolvedValue({
     job,
@@ -280,4 +289,42 @@ it('keeps the drawer usable when the analysis chunk fails', async () => {
   expect((await screen.findByRole('alert')).textContent).toContain('Не удалось загрузить анализ.');
   await fireEvent.click(screen.getByRole('button', { name: 'Вернуться к описанию вакансии' }));
   expect(document.getElementById('jobdrawer-tab-description')?.getAttribute('aria-selected')).toBe('true');
+});
+
+describe('JobDrawer interview actions', () => {
+  it.each([
+    ['screening', 'Подготовиться к собеседованию', 'interview'],
+    ['interview', 'Разобрать собеседование', 'debrief'],
+  ])('opens the requested interview session from %s', async (stage, label, preset) => {
+    createInterviewSession.mockResolvedValue({ id: 'new-session' });
+    render(JobDrawer, props({ stage }));
+
+    await fireEvent.click(screen.getByRole('button', { name: label }));
+
+    expect(createInterviewSession).toHaveBeenCalledExactlyOnceWith(preset, job.public_slug);
+    expect(goto).toHaveBeenCalledExactlyOnceWith('/my/assistant/new-session');
+  });
+
+  it('keeps the application open and lets the candidate retry a failed launch', async () => {
+    createInterviewSession.mockRejectedValueOnce(new Error('unavailable'));
+    render(JobDrawer, props({ stage: 'interview' }));
+    const rehearse = screen.getByRole('button', { name: 'Подготовиться к собеседованию' });
+
+    await fireEvent.click(rehearse);
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Не удалось открыть чат собеседования');
+    expect(rehearse.hasAttribute('disabled')).toBe(false);
+    expect(goto).not.toHaveBeenCalled();
+  });
+
+  it('omits interview actions before an interview stage or after the posting is gone', () => {
+    const view = render(JobDrawer, props());
+    expect(screen.queryByRole('button', { name: 'Подготовиться к собеседованию' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Разобрать собеседование' })).toBeNull();
+
+    view.unmount();
+    render(JobDrawer, props({ stage: 'interview', job: null }));
+    expect(screen.queryByRole('button', { name: 'Подготовиться к собеседованию' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Разобрать собеседование' })).toBeNull();
+  });
 });
