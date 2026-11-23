@@ -18,13 +18,11 @@ const action =
 
 const negativeClause =
   /^.*\b(?:without|never (?:used|worked with)|no (?:hands-on )?experience (?:with|in)|haven['’]t (?:used|worked with)|not familiar with)\s*(?:using\s+)?((?:[^.!?;:\n]|\.(?!\s))*)$/i;
-const listJoin = /(?:[,/]|\b(?:and|or)\b)$/i;
 
 function isNegated(prefix: string): boolean {
   const tail = negativeClause.exec(prefix)?.[1]?.trim();
   if (tail === undefined) return false;
-  if (!tail) return true;
-  if (!listJoin.test(tail) || /\b(?:but|then|while)\b/i.test(tail)) return false;
+  if (/\b(?:but|then|while)\b/i.test(tail)) return false;
   // An explicit action with a subject or a usage phrase starts a new clause.
   return !tail
     .split(/,|\band\b/i)
