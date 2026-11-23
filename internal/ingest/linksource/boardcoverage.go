@@ -2,6 +2,7 @@ package linksource
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"net/url"
 	"regexp"
@@ -123,15 +124,23 @@ func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, catalog 
 		return sources.Job{}, false, nil
 	}
 
-	entry := sources.CompanyEntry{Provider: source, Board: board}
+	entry := sources.CompanyEntry{Provider: source, Board: board, Region: atsboard.Region(raw)}
+	postingID, moka := mokaHRPostingRef(raw)
+	if source == "mokahr" && moka && postingID == "" {
+		return sources.Job{}, false, nil
+	}
 	if catalog != nil {
-		stored, found, err := catalog.Entry(ctx, source, board)
+		stored, found, err := boardCoverageEntry(ctx, catalog, entry, entry.Region != "" || (source == "mokahr" && moka))
 		if err != nil {
 			return sources.Job{}, false, err
 		}
 		if found {
 			entry = stored
 		}
+	}
+
+	if source == "mokahr" && strings.TrimSpace(entry.Company) == "" {
+		return sources.Job{}, false, fmt.Errorf("mokahr: catalogue has no employer for board %q in region %q", board, entry.Region)
 	}
 
 	jobs, err := fetchForResolve(ctx, adapter, entry, raw)
@@ -149,6 +158,20 @@ func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, catalog 
 	return job, true, nil
 }
 
+// An explicitly regional posting must use the corresponding board entry even
+// when the same tenant slug exists in another region.
+func boardCoverageEntry(ctx context.Context, catalog BoardCatalog, e sources.CompanyEntry, exactRegion bool) (sources.CompanyEntry, bool, error) {
+	if exactRegion {
+		if regional, ok := catalog.(interface {
+			EntryForRegion(context.Context, string, string, string) (sources.CompanyEntry, bool, error)
+		}); ok {
+			return regional.EntryForRegion(ctx, e.Provider, e.Board, e.Region)
+		}
+	}
+	stored, found, err := catalog.Entry(ctx, e.Provider, e.Board)
+	return stored, found && (!exactRegion || stored.Region == e.Region), err
+}
+
 // fetchForResolve fetches a board through the adapter, preferring a HydratingSource's FetchNew
 // over Fetch: for such an adapter Fetch hydrates every posting (e.g. workday.Fetch), so resolving
 // one pasted link would otherwise trigger a full multi-thousand-posting hydration crawl. FetchNew
@@ -158,6 +181,19 @@ func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, catalog 
 // target's external id is guessed from raw's path segments and query values (postingRefs), the
 // same heuristic pickPosting's id fallback uses to identify a posting once the board is in hand.
 func fetchForResolve(ctx context.Context, adapter sources.Source, e sources.CompanyEntry, raw string) ([]sources.Job, error) {
+	if direct, ok := adapter.(interface {
+		FetchPosting(context.Context, string) (sources.Job, bool, error)
+	}); ok {
+		// A recognized URL on this tenant can be fetched directly without reading its sitemap.
+		provider, board, canonical, recognized := atsboard.Recognize(raw)
+		if recognized && provider == e.Provider && board == e.Board {
+			job, found, err := direct.FetchPosting(ctx, canonical)
+			if err != nil || !found {
+				return nil, err
+			}
+			return []sources.Job{job}, nil
+		}
+	}
 	hs, hydrating := adapter.(sources.HydratingSource)
 	if !hydrating {
 		return adapter.Fetch(ctx, e)
@@ -210,6 +246,14 @@ func sameRef(a, b string) bool {
 // no title, which job.New rejects as an invalid draft, which reaches the reader as a 500 on a
 // URL whose honest answer is "we could not read a vacancy from that url".
 func pickPosting(jobs []sources.Job, raw string) (sources.Job, bool) {
+	if id, moka := mokaHRPostingRef(raw); moka {
+		for _, job := range jobs {
+			if id != "" && !job.Unreadable && !job.SeenRefresh && sameRef(id, job.ExternalID) {
+				return job, true
+			}
+		}
+		return sources.Job{}, false
+	}
 	for _, j := range jobs {
 		if j.Unreadable {
 			continue
@@ -312,6 +356,12 @@ func normalizeURL(raw string) string {
 // name it only in the query (eRecruiter's oid), and a query value that names no posting on the
 // board matches nothing.
 func postingRefs(raw string) []string {
+	if id, moka := mokaHRPostingRef(raw); moka {
+		if id == "" {
+			return nil
+		}
+		return []string{id}
+	}
 	refs := pathSegmentsFromEnd(raw)
 	u, err := url.Parse(raw)
 	if err != nil {

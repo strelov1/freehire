@@ -22,6 +22,7 @@ import (
 // list and reading pane need.
 type Parsed struct {
 	SystemNotification bool
+	AutoSubmitted      string
 	MessageID          string
 	FromAddr           string
 	FromName           string
@@ -47,6 +48,7 @@ func Parse(raw []byte) (Parsed, error) {
 	p := Parsed{
 		MessageID:          trimAngles(env.GetHeader("Message-ID")),
 		SystemNotification: mailmeta.IsDigest(env.GetHeader(mailmeta.NotificationHeader), env.GetHeader("Auto-Submitted")),
+		AutoSubmitted:      env.GetHeader("Auto-Submitted"),
 		Subject:            env.GetHeader("Subject"),
 		TextBody:           env.Text,
 		HTMLBody:           env.HTML,

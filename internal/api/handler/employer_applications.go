@@ -55,6 +55,7 @@ func employerApplicationOut(a directapply.InboxApplication) apigen.EmployerAppli
 		out.Answers[i] = apigen.EmployerApplicationAnswer{ID: ans.ID, Label: ans.Label, Type: string(ans.Type), Answer: ans.Answer}
 	}
 	out.EmployerNotes = apigen.NewOptString(a.EmployerNotes)
+	out.HasUnreadReply = apigen.NewOptBool(a.HasUnreadReply)
 	if a.ViewedAt != nil {
 		out.ViewedAt = apigen.NewOptDateTime(*a.ViewedAt)
 	}

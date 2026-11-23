@@ -10179,6 +10179,8 @@ type EmployerApplication struct {
 	ViewedAt OptDateTime `json:"viewed_at"`
 	// Private notes shared within the employer team.
 	EmployerNotes OptString `json:"employer_notes"`
+	// A candidate reply in this conversation has not yet been read by the team.
+	HasUnreadReply OptBool `json:"has_unread_reply"`
 	// When the application reached you.
 	SentAt time.Time `json:"sent_at"`
 }
@@ -10241,6 +10243,11 @@ func (s *EmployerApplication) GetViewedAt() OptDateTime {
 // GetEmployerNotes returns the value of EmployerNotes.
 func (s *EmployerApplication) GetEmployerNotes() OptString {
 	return s.EmployerNotes
+}
+
+// GetHasUnreadReply returns the value of HasUnreadReply.
+func (s *EmployerApplication) GetHasUnreadReply() OptBool {
+	return s.HasUnreadReply
 }
 
 // GetSentAt returns the value of SentAt.
@@ -10308,6 +10315,11 @@ func (s *EmployerApplication) SetEmployerNotes(val OptString) {
 	s.EmployerNotes = val
 }
 
+// SetHasUnreadReply sets the value of HasUnreadReply.
+func (s *EmployerApplication) SetHasUnreadReply(val OptBool) {
+	s.HasUnreadReply = val
+}
+
 // SetSentAt sets the value of SentAt.
 func (s *EmployerApplication) SetSentAt(val time.Time) {
 	s.SentAt = val
@@ -10366,6 +10378,192 @@ func (s *EmployerApplicationAnswer) SetAnswer(val string) {
 	s.Answer = val
 }
 
+// Ref: #/components/schemas/EmployerApplicationConversation
+type EmployerApplicationConversation struct {
+	// Most recent first.
+	Messages []EmployerApplicationMessage `json:"messages"`
+	// Fetch older messages with the ID of the last message as before.
+	HasMore bool `json:"has_more"`
+	// The candidate has a confirmed address and the mail transport is configured.
+	CanSend bool `json:"can_send"`
+}
+
+// GetMessages returns the value of Messages.
+func (s *EmployerApplicationConversation) GetMessages() []EmployerApplicationMessage {
+	return s.Messages
+}
+
+// GetHasMore returns the value of HasMore.
+func (s *EmployerApplicationConversation) GetHasMore() bool {
+	return s.HasMore
+}
+
+// GetCanSend returns the value of CanSend.
+func (s *EmployerApplicationConversation) GetCanSend() bool {
+	return s.CanSend
+}
+
+// SetMessages sets the value of Messages.
+func (s *EmployerApplicationConversation) SetMessages(val []EmployerApplicationMessage) {
+	s.Messages = val
+}
+
+// SetHasMore sets the value of HasMore.
+func (s *EmployerApplicationConversation) SetHasMore(val bool) {
+	s.HasMore = val
+}
+
+// SetCanSend sets the value of CanSend.
+func (s *EmployerApplicationConversation) SetCanSend(val bool) {
+	s.CanSend = val
+}
+
+// One email in a delivered application's conversation.
+// Ref: #/components/schemas/EmployerApplicationMessage
+type EmployerApplicationMessage struct {
+	ID     int64                            `json:"id"`
+	Body   string                           `json:"body"`
+	Status EmployerApplicationMessageStatus `json:"status"`
+	// When this message first entered the conversation.
+	CreatedAt time.Time `json:"created_at"`
+	// Outgoing only. Use the same key and body to retry the same send.
+	RequestKey OptString `json:"request_key"`
+}
+
+// GetID returns the value of ID.
+func (s *EmployerApplicationMessage) GetID() int64 {
+	return s.ID
+}
+
+// GetBody returns the value of Body.
+func (s *EmployerApplicationMessage) GetBody() string {
+	return s.Body
+}
+
+// GetStatus returns the value of Status.
+func (s *EmployerApplicationMessage) GetStatus() EmployerApplicationMessageStatus {
+	return s.Status
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *EmployerApplicationMessage) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetRequestKey returns the value of RequestKey.
+func (s *EmployerApplicationMessage) GetRequestKey() OptString {
+	return s.RequestKey
+}
+
+// SetID sets the value of ID.
+func (s *EmployerApplicationMessage) SetID(val int64) {
+	s.ID = val
+}
+
+// SetBody sets the value of Body.
+func (s *EmployerApplicationMessage) SetBody(val string) {
+	s.Body = val
+}
+
+// SetStatus sets the value of Status.
+func (s *EmployerApplicationMessage) SetStatus(val EmployerApplicationMessageStatus) {
+	s.Status = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *EmployerApplicationMessage) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetRequestKey sets the value of RequestKey.
+func (s *EmployerApplicationMessage) SetRequestKey(val OptString) {
+	s.RequestKey = val
+}
+
+// Ref: #/components/schemas/EmployerApplicationMessageSend
+type EmployerApplicationMessageSend struct {
+	// The plain-text email to the candidate.
+	Body string `json:"body"`
+	// A UUID generated once per outgoing message. Reuse it on retry.
+	RequestKey string `json:"request_key"`
+}
+
+// GetBody returns the value of Body.
+func (s *EmployerApplicationMessageSend) GetBody() string {
+	return s.Body
+}
+
+// GetRequestKey returns the value of RequestKey.
+func (s *EmployerApplicationMessageSend) GetRequestKey() string {
+	return s.RequestKey
+}
+
+// SetBody sets the value of Body.
+func (s *EmployerApplicationMessageSend) SetBody(val string) {
+	s.Body = val
+}
+
+// SetRequestKey sets the value of RequestKey.
+func (s *EmployerApplicationMessageSend) SetRequestKey(val string) {
+	s.RequestKey = val
+}
+
+// Ref: #/components/schemas/EmployerApplicationMessageStatus
+type EmployerApplicationMessageStatus string
+
+const (
+	EmployerApplicationMessageStatusSending  EmployerApplicationMessageStatus = "sending"
+	EmployerApplicationMessageStatusSent     EmployerApplicationMessageStatus = "sent"
+	EmployerApplicationMessageStatusFailed   EmployerApplicationMessageStatus = "failed"
+	EmployerApplicationMessageStatusReceived EmployerApplicationMessageStatus = "received"
+)
+
+// AllValues returns all EmployerApplicationMessageStatus values.
+func (EmployerApplicationMessageStatus) AllValues() []EmployerApplicationMessageStatus {
+	return []EmployerApplicationMessageStatus{
+		EmployerApplicationMessageStatusSending,
+		EmployerApplicationMessageStatusSent,
+		EmployerApplicationMessageStatusFailed,
+		EmployerApplicationMessageStatusReceived,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s EmployerApplicationMessageStatus) MarshalText() ([]byte, error) {
+	switch s {
+	case EmployerApplicationMessageStatusSending:
+		return []byte(s), nil
+	case EmployerApplicationMessageStatusSent:
+		return []byte(s), nil
+	case EmployerApplicationMessageStatusFailed:
+		return []byte(s), nil
+	case EmployerApplicationMessageStatusReceived:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *EmployerApplicationMessageStatus) UnmarshalText(data []byte) error {
+	switch EmployerApplicationMessageStatus(data) {
+	case EmployerApplicationMessageStatusSending:
+		*s = EmployerApplicationMessageStatusSending
+		return nil
+	case EmployerApplicationMessageStatusSent:
+		*s = EmployerApplicationMessageStatusSent
+		return nil
+	case EmployerApplicationMessageStatusFailed:
+		*s = EmployerApplicationMessageStatusFailed
+		return nil
+	case EmployerApplicationMessageStatusReceived:
+		*s = EmployerApplicationMessageStatusReceived
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 // Ref: #/components/schemas/EmployerApplicationMove
 type EmployerApplicationMove struct {
 	// The stage to move to: new, reviewing, interview, offer, hired or rejected. (e.g. `interview`).
@@ -10421,6 +10619,38 @@ func (s *EmployerApplicationMoved) SetApplication(val EmployerApplication) {
 // SetCandidateNotified sets the value of CandidateNotified.
 func (s *EmployerApplicationMoved) SetCandidateNotified(val bool) {
 	s.CandidateNotified = val
+}
+
+// Ref: #/components/schemas/EmployerApplicationRepliesRead
+type EmployerApplicationRepliesRead struct {
+	// The newest message ID the team has seen in this application.
+	ThroughID int64 `json:"through_id"`
+}
+
+// GetThroughID returns the value of ThroughID.
+func (s *EmployerApplicationRepliesRead) GetThroughID() int64 {
+	return s.ThroughID
+}
+
+// SetThroughID sets the value of ThroughID.
+func (s *EmployerApplicationRepliesRead) SetThroughID(val int64) {
+	s.ThroughID = val
+}
+
+// Ref: #/components/schemas/EmployerApplicationReplyReadState
+type EmployerApplicationReplyReadState struct {
+	// True when a newer reply arrived after the messages the team has seen.
+	HasUnreadReply bool `json:"has_unread_reply"`
+}
+
+// GetHasUnreadReply returns the value of HasUnreadReply.
+func (s *EmployerApplicationReplyReadState) GetHasUnreadReply() bool {
+	return s.HasUnreadReply
+}
+
+// SetHasUnreadReply sets the value of HasUnreadReply.
+func (s *EmployerApplicationReplyReadState) SetHasUnreadReply(val bool) {
+	s.HasUnreadReply = val
 }
 
 // Ref: #/components/schemas/EmployerApplicationSearch
@@ -13170,6 +13400,21 @@ func (s *GetEmployerApplicationCVOKHeaders) SetContentType(val string) {
 // SetResponse sets the value of Response.
 func (s *GetEmployerApplicationCVOKHeaders) SetResponse(val GetEmployerApplicationCVOK) {
 	s.Response = val
+}
+
+// A single item: `{"data": ...}`.
+type GetEmployerApplicationConversationOK struct {
+	Data EmployerApplicationConversation `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetEmployerApplicationConversationOK) GetData() EmployerApplicationConversation {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetEmployerApplicationConversationOK) SetData(val EmployerApplicationConversation) {
+	s.Data = val
 }
 
 // A single item: `{"data": ...}`.
@@ -17799,6 +18044,21 @@ func (s *MarkAppliedOK) SetData(val AppliedInteraction) {
 
 // MarkConversationReadNoContent is response for MarkConversationRead operation.
 type MarkConversationReadNoContent struct{}
+
+// A single item: `{"data": ...}`.
+type MarkEmployerApplicationRepliesReadOK struct {
+	Data EmployerApplicationReplyReadState `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *MarkEmployerApplicationRepliesReadOK) GetData() EmployerApplicationReplyReadState {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *MarkEmployerApplicationRepliesReadOK) SetData(val EmployerApplicationReplyReadState) {
+	s.Data = val
+}
 
 // MarkNotificationReadNoContent is response for MarkNotificationRead operation.
 type MarkNotificationReadNoContent struct{}
@@ -28140,6 +28400,21 @@ func (s *SendDirectApplyCreated) GetData() DirectApplySent {
 
 // SetData sets the value of Data.
 func (s *SendDirectApplyCreated) SetData(val DirectApplySent) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type SendEmployerApplicationMessageOK struct {
+	Data EmployerApplicationMessage `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SendEmployerApplicationMessageOK) GetData() EmployerApplicationMessage {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SendEmployerApplicationMessageOK) SetData(val EmployerApplicationMessage) {
 	s.Data = val
 }
 

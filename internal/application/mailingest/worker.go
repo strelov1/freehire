@@ -6,6 +6,10 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/strelov1/freehire/internal/application/mailbox"
 )
 
 // pollInterval is how long Run waits after an empty receive before polling again.
@@ -40,6 +44,7 @@ type Store interface {
 	MailboxByAddress(ctx context.Context, address string) (userID int64, ok bool, err error)
 	// InsertMessage stores a hosted message, idempotent by (user, external id).
 	InsertMessage(ctx context.Context, m HostedMessage) error
+	InsertApplicationReply(ctx context.Context, token uuid.UUID, externalID, sender, body string) error
 }
 
 // Worker drains an InboundSource: for each message it parses the MIME, resolves
@@ -119,6 +124,16 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 		return nil
 	}
 
+	externalID := parsed.MessageID
+	if externalID == "" {
+		// No Message-ID: dedup on the stable object key instead.
+		externalID = "s3:" + in.S3Key
+	}
+
+	if token, isReply := mailbox.ApplicationReplyToken(recipient); isReply {
+		return w.handleApplicationReply(ctx, token, externalID, in, parsed)
+	}
+
 	userID, ok, err := w.store.MailboxByAddress(ctx, recipient)
 	if err != nil {
 		return err
@@ -129,11 +144,6 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 		return nil
 	}
 
-	externalID := parsed.MessageID
-	if externalID == "" {
-		// No Message-ID: dedup on the stable object key instead.
-		externalID = "s3:" + in.S3Key
-	}
 	receivedAt := parsed.ReceivedAt
 	if receivedAt.IsZero() {
 		receivedAt = time.Now()
@@ -151,6 +161,36 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 		ReceivedAt:  receivedAt,
 		CalendarUID: parsed.CalendarUID,
 	})
+}
+
+// handleApplicationReply keeps employer conversations out of the candidate mailbox and
+// its automated stage classifier. Use the transport's verdict and the parsed From address.
+func (w *Worker) handleApplicationReply(ctx context.Context, token uuid.UUID, externalID string, in Inbound, parsed Parsed) error {
+	autoSubmitted := strings.TrimSpace(strings.SplitN(parsed.AutoSubmitted, ";", 2)[0])
+	if !in.AuthenticatedReply || (autoSubmitted != "" && !strings.EqualFold(autoSubmitted, "no")) {
+		return nil
+	}
+	body := strings.TrimSpace(strings.ReplaceAll(parsed.TextBody, "\x00", ""))
+	if body == "" || strings.ContainsRune(parsed.FromAddr, 0) {
+		return nil
+	}
+	if len(externalID) > 512 || strings.ContainsRune(externalID, 0) {
+		externalID = "s3:" + in.S3Key
+	}
+	if externalID == "s3:" {
+		return nil
+	}
+	// Bound stored plain text (including quoted history) as the DB CHECK does.
+	const maxReplyRunes = 12000
+	n := 0
+	for i := range body {
+		if n == maxReplyRunes {
+			body = body[:i]
+			break
+		}
+		n++
+	}
+	return w.store.InsertApplicationReply(ctx, token, externalID, parsed.FromAddr, body)
 }
 
 // pickDomainRecipient returns the first recipient on our mail domain, lowercased.

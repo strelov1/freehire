@@ -282,7 +282,8 @@ describe('Tooltip', () => {
         const tooltip = must(queryByRole('tooltip'));
         // Centered, the mocked box's right edge (480) sits 88px past the 392px boundary
         // (innerWidth 400 minus the 8px edge padding) — the shift must cancel exactly that.
-        expect(tooltip.style.transform).toContain('-88px');
+        // jsdom 31 serializes this as 'translate(calc(-50% - 88px))'
+        expect(tooltip.style.transform).toMatch(/-\s?88px/);
       } finally {
         Element.prototype.getBoundingClientRect = originalRect;
         Object.defineProperty(window, 'innerWidth', { value: originalWidth, configurable: true });

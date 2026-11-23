@@ -5,7 +5,9 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -54,5 +56,11 @@ func (s *DBStore) InsertMessage(ctx context.Context, m HostedMessage) error {
 		BodyHtml:   m.BodyHTML,
 		ReceivedAt: pgconv.Instant(m.ReceivedAt),
 		IcalUid:    m.CalendarUID,
+	})
+}
+
+func (s *DBStore) InsertApplicationReply(ctx context.Context, token uuid.UUID, externalID, sender, body string) error {
+	return s.q.InsertEmployerApplicationReply(ctx, db.InsertEmployerApplicationReplyParams{
+		ReplyToken: pgtype.UUID{Bytes: token, Valid: true}, ExternalID: externalID, Sender: sender, Body: body,
 	})
 }

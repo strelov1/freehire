@@ -154,6 +154,7 @@ func inboxApplication(row db.ListEmployerApplicationsRow) (InboxApplication, err
 		SentAt:         row.SentAt.Time,
 		ViewedAt:       pgconv.TimePtr(row.ViewedAt),
 		EmployerNotes:  row.EmployerNotes,
+		HasUnreadReply: row.HasUnreadReply,
 	}, nil
 }
 

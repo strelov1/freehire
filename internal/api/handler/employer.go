@@ -31,7 +31,8 @@ type employerHandlers struct {
 	// inbox is the applicant inbox over applications sent on freehire; nil when the
 	// deployment has no mail transport, since moving an application may email the
 	// candidate. Its routes then answer 501 (employer_applications.go).
-	inbox *directapply.Inbox
+	inbox    *directapply.Inbox
+	messages *directapply.ApplicationMessages
 	// adminOnly lives here, not in the shared middleware: revoke is the only admin-gated route.
 	adminOnly fiber.Handler
 }
@@ -40,6 +41,7 @@ func newEmployerHandlers(queries *db.Queries, svc *employer.Service) *employerHa
 	return &employerHandlers{
 		queries:   queries,
 		employer:  svc,
+		messages:  directapply.NewApplicationMessages(queries, nil, ""),
 		adminOnly: auth.RequireRole(queries, "admin"),
 	}
 }
@@ -68,6 +70,9 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fi
 	api.Get("/employer/applications", mw.cookie, employerNoStore, contract)
 	api.Post("/employer/applications/search", mw.cookie, employerNoStore, contract)
 	api.Patch("/employer/applications/:id/workspace", mw.cookie, employerNoStore, contract)
+	api.Get("/employer/applications/:id/messages", mw.cookie, employerNoStore, contract)
+	api.Post("/employer/applications/:id/messages", mw.cookie, employerNoStore, contract)
+	api.Post("/employer/applications/:id/messages/read", mw.cookie, employerNoStore, contract)
 	api.Get("/employer/activity", mw.cookie, employerNoStore, contract)
 	api.Get("/employer/applications/:id/cv", mw.cookie, contract)
 	api.Post("/employer/applications/:id/stage", mw.cookie, employerNoStore, contract)

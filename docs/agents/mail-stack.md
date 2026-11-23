@@ -212,3 +212,19 @@ every other worker in this repo.
   `other` (misses, `learned_ats_domains.other_hits`, migration 0185): a promoted domain's
   whole mailstream joins every user's query, and a count alone had admitted google.com and
   linkedin.com. There is no decay; a demoted domain's misses stay.
+
+## Replies to employer application messages
+
+The hosted receipt rule also accepts Reply-To aliases for delivered on-site
+applications. `mailingest` recognizes the canonical alias from
+`receipt.recipients`, then requires the SES DMARC, spam and virus verdicts to
+pass. It ignores automatic replies and stores plain text only. The insert matches
+the alias to the original recipient and the candidate's current verified address.
+Mail that fails these checks stays out of both the employer conversation and
+the candidate mailbox. Provider redelivery is deduplicated per application.
+
+The API can send through the existing outbound mail transport when
+`MAILBOX_DOMAIN` is configured. In deployments with an inbound daemon, apply
+migration 0306 and update that daemon before enabling the new API sender.
+The [application inbox contract](../../internal/ingest/directapply/AGENTS.md#candidate-conversations)
+documents send retries and team read state.

@@ -11,7 +11,7 @@ import (
 // recognizePathPattern reads a URL on a host whose entry uses modePathPattern.
 func recognizePathPattern(u *url.URL, host, src, mode, apex string) (source, board, canonical string, ok bool) {
 	p, configured := pathPatternBoards[apex]
-	if !configured || p.path == nil || p.listing == "" {
+	if !configured || p.path == nil || (p.listing == "" && !p.keepPostingPath) {
 		return "", "", "", false
 	}
 	if p.exactHost && !strings.EqualFold(u.Hostname(), apex) {
@@ -44,7 +44,11 @@ func recognizePathPattern(u *url.URL, host, src, mode, apex string) (source, boa
 		return "", "", "", false
 	}
 	u.RawQuery, u.Fragment = "", ""
-	u.Path = fmt.Sprintf(p.listing, board)
+	if p.keepPostingPath {
+		u.Scheme, u.User = "https", nil
+	} else {
+		u.Path = fmt.Sprintf(p.listing, board)
+	}
 	switch {
 	case p.hostBoard:
 		board = apex + "/" + board

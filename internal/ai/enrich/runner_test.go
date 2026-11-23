@@ -51,6 +51,10 @@ type fakeStore struct {
 	// only once it is closed.
 	enqueueN     int64
 	enqueueBlock chan struct{}
+	// reapN is what Reap reports deleting; when reapBlock is set, Reap returns only once it
+	// is closed.
+	reapN     int64
+	reapBlock chan struct{}
 
 	mu        sync.Mutex
 	reapCalls int
@@ -58,10 +62,13 @@ type fakeStore struct {
 	completed []int64
 	failed    []int64
 	failMax   []int
+	// reapedFirst records whether Reap had run when Enqueue started.
+	reapedFirst bool
 }
 
 func (s *fakeStore) Enqueue(_ context.Context, _ int) (int64, error) {
 	s.enqueued = true
+	s.reapedFirst = s.reapCalls > 0
 	if s.enqueueBlock != nil {
 		<-s.enqueueBlock
 	}
@@ -91,11 +98,13 @@ func (s *fakeStore) Complete(_ context.Context, entry Claimed, _ json.RawMessage
 	return nil
 }
 
-// Reap records the call so a test can assert the runner reaps before it enqueues; the
-// fake has nothing ineligible to delete.
+// Reap records the call so a test can assert the runner reaps before it enqueues.
 func (s *fakeStore) Reap(context.Context, int) (int64, error) {
 	s.reapCalls++
-	return 0, nil
+	if s.reapBlock != nil {
+		<-s.reapBlock
+	}
+	return s.reapN, nil
 }
 
 func (s *fakeStore) Fail(_ context.Context, outboxID int64, _ string, policy FailurePolicy) (bool, error) {
@@ -393,5 +402,37 @@ func TestRun_drainsWhileTheEnqueueIsStillRunning(t *testing.T) {
 	}
 	if stats != (Stats{Enriched: 1}) {
 		t.Errorf("stats = %+v, want {Enriched:1}", stats)
+	}
+}
+
+// The reap also runs alongside the drain: on a large queue its scan outlasted the gap
+// between deploys, so a drain that waited for it never started. Here Reap returns only once
+// an already-queued entry has been written, so a runner that reaps first never returns. The
+// reap must still precede the enqueue, and its count must reach the stats.
+func TestRun_drainsWhileTheReapIsStillRunning(t *testing.T) {
+	defer func(d time.Duration) { enqueuePoll = d }(enqueuePoll)
+	enqueuePoll = time.Millisecond
+
+	block := make(chan struct{})
+	store := &fakeStore{
+		claims:    [][]Claimed{{{OutboxID: 1, JobID: 100, TargetVersion: Version}}},
+		jobs:      map[int64]JobInput{100: {Title: "Go dev"}},
+		reapN:     3,
+		reapBlock: block,
+	}
+	prov := &funcProvider{fn: func(JobInput) (Enrichment, error) {
+		defer close(block)
+		return Enrichment{Seniority: "senior", WorkMode: "remote"}, nil
+	}}
+
+	stats, err := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats != (Stats{Enriched: 1, Reaped: 3}) {
+		t.Errorf("stats = %+v, want {Enriched:1 Reaped:3}", stats)
+	}
+	if store.reapCalls != 1 || !store.reapedFirst {
+		t.Errorf("reapCalls = %d, reapedFirst = %v; want one reap before the enqueue", store.reapCalls, store.reapedFirst)
 	}
 }
