@@ -18,6 +18,10 @@ func TestSelectedTimeMustBeSupportedByRecruiterEvidence(t *testing.T) {
 		decision Decision
 		want     time.Time
 	}{
+		{"Thanks. The first option works for me. Please confirm the interview.",
+			Decision{Action: Accept, Choice: 1, Evidence: "The first option works for me."}, first},
+		{"Option 1 works for me.", Decision{Action: Accept, Choice: 1, Evidence: "Option 1 works for me."}, first},
+		{"Option 1 does not work for me!", Decision{Action: Accept, Choice: 1, Evidence: "Option 1 does not work for me!"}, time.Time{}},
 		{"The second option works for me.", Decision{Action: Accept, Choice: 2, Evidence: "second option"}, second},
 		{"The second option does not work for me. The first option works.", Decision{Action: Accept, Choice: 2, Evidence: "second option"}, time.Time{}},
 		{"The first option works for me.", Decision{Action: Accept, Choice: 2, Evidence: "first option"}, time.Time{}},
