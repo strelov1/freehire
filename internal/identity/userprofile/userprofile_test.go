@@ -22,7 +22,6 @@ type upsertArgs struct {
 	ExcludedSkills      []string
 	ExcludedSources     []string
 	JobLanguages        []string
-	ExcludedCompanies   []string
 	LocationPreferences json.RawMessage
 }
 
@@ -54,6 +53,11 @@ type fakeRepo struct {
 	getRet    userprofile.Profile
 	getErr    error
 
+	excluded    string
+	excludedMax int32
+	excludeRet  userprofile.Profile
+	excludeErr  error
+
 	delUserID int64
 	delCalled bool
 	delErr    error
@@ -65,19 +69,19 @@ func (f *fakeRepo) Get(_ context.Context, userID int64) (userprofile.Profile, er
 	return f.getRet, f.getErr
 }
 
-func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
-	f.upserted = upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, JobLanguages: jobLanguages, LocationPreferences: locationPreferences}
+func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, jobLanguages []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	f.upserted = upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, JobLanguages: jobLanguages, LocationPreferences: locationPreferences}
 	f.upsertCalled = true
 	return f.upsertRet, f.upsertErr
 }
 
-func (f *fakeRepo) CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
-	return f.Upsert(ctx, userID, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages, locationPreferences)
+func (f *fakeRepo) CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, jobLanguages []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	return f.Upsert(ctx, userID, specializations, skills, seniorities, excludedSkills, excludedSources, jobLanguages, locationPreferences)
 }
 
-func (f *fakeRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (userprofile.Profile, error) {
+func (f *fakeRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (userprofile.Profile, error) {
 	f.guardedUpserted = guardedUpsertArgs{
-		upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, JobLanguages: jobLanguages, LocationPreferences: locationPreferences},
+		upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, JobLanguages: jobLanguages, LocationPreferences: locationPreferences},
 		expectedUpdatedAt,
 	}
 	idx := f.guardedUpsertCalls
@@ -86,6 +90,16 @@ func (f *fakeRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializa
 		return userprofile.Profile{}, f.guardedUpsertErrs[idx]
 	}
 	return f.guardedUpsertRet, nil
+}
+
+func (f *fakeRepo) ExcludeCompany(_ context.Context, userID int64, slug string, max int32) (userprofile.Profile, error) {
+	f.excluded, f.excludedMax = slug, max
+	return f.excludeRet, f.excludeErr
+}
+
+func (f *fakeRepo) UnexcludeCompany(_ context.Context, userID int64, slug string) (userprofile.Profile, error) {
+	f.excluded = slug
+	return f.excludeRet, f.excludeErr
 }
 
 func (f *fakeRepo) Delete(_ context.Context, userID int64) error {
@@ -98,7 +112,7 @@ func TestSave_UpsertsWithOwnerNormalizedSpecializationsAndSkills(t *testing.T) {
 	svc := userprofile.New(repo)
 
 	_, err := svc.Save(context.Background(), 7,
-		[]string{" backend ", "devops", "backend"}, []string{"Go", " PostgreSQL ", "go"}, nil, nil, nil, nil, nil)
+		[]string{" backend ", "devops", "backend"}, []string{"Go", " PostgreSQL ", "go"}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -123,7 +137,7 @@ func TestSave_UpsertsWithOwnerNormalizedSpecializationsAndSkills(t *testing.T) {
 // until they removed a value the picker no longer shows. It is dropped instead.
 func TestSave_DropsTheRetiredManagementCategory(t *testing.T) {
 	repo := &fakeRepo{}
-	_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend", "management", "sales"}, []string{"go"}, nil, nil, nil, nil, nil)
+	_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend", "management", "sales"}, []string{"go"}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -134,7 +148,7 @@ func TestSave_DropsTheRetiredManagementCategory(t *testing.T) {
 
 func TestSave_RejectsUnknownSpecialization(t *testing.T) {
 	repo := &fakeRepo{}
-	_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend", "wizardry"}, []string{"go"}, nil, nil, nil, nil, nil)
+	_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend", "wizardry"}, []string{"go"}, nil, nil, nil, nil)
 	if !errors.Is(err, userprofile.ErrInvalidSpecialization) {
 		t.Errorf("err = %v, want ErrInvalidSpecialization", err)
 	}
@@ -158,7 +172,7 @@ func TestSave_AcceptsEmptySpecializations(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := userprofile.New(repo).Save(context.Background(), 7, tc.in, []string{"go"}, nil, nil, nil, nil, nil)
+			_, err := userprofile.New(repo).Save(context.Background(), 7, tc.in, []string{"go"}, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatalf("Save incomplete profile: %v", err)
 			}
@@ -175,7 +189,7 @@ func TestSave_RejectsTooManySpecializations(t *testing.T) {
 	if len(tooMany) != userprofile.MaxSpecializations+1 {
 		t.Fatalf("test fixture holds %d specializations, want MaxSpecializations + 1 = %d", len(tooMany), userprofile.MaxSpecializations+1)
 	}
-	_, err := userprofile.New(repo).Save(context.Background(), 7, tooMany, []string{"go"}, nil, nil, nil, nil, nil)
+	_, err := userprofile.New(repo).Save(context.Background(), 7, tooMany, []string{"go"}, nil, nil, nil, nil)
 	if !errors.Is(err, userprofile.ErrTooManySpecializations) {
 		t.Errorf("err = %v, want ErrTooManySpecializations", err)
 	}
@@ -192,7 +206,7 @@ func TestSave_AcceptsSpecializationsUpToTheCap(t *testing.T) {
 	if len(specs) != userprofile.MaxSpecializations {
 		t.Fatalf("test fixture holds %d specializations, want MaxSpecializations = %d", len(specs), userprofile.MaxSpecializations)
 	}
-	if _, err := userprofile.New(repo).Save(context.Background(), 7, specs, []string{"go"}, nil, nil, nil, nil, nil); err != nil {
+	if _, err := userprofile.New(repo).Save(context.Background(), 7, specs, []string{"go"}, nil, nil, nil, nil); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if !repo.upsertCalled {
@@ -212,7 +226,7 @@ func TestSave_AcceptsEmptySkills(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, tc.in, nil, nil, nil, nil, nil)
+			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, tc.in, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatalf("Save incomplete profile: %v", err)
 			}
@@ -238,7 +252,7 @@ func manySkills(n int) []string {
 func TestSave_RejectsTooManySkills(t *testing.T) {
 	repo := &fakeRepo{}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, manySkills(201), nil, nil, nil, nil, nil)
+		[]string{"backend"}, manySkills(201), nil, nil, nil, nil)
 	if !errors.Is(err, userprofile.ErrTooManySkills) {
 		t.Errorf("err = %v, want ErrTooManySkills", err)
 	}
@@ -250,7 +264,7 @@ func TestSave_RejectsTooManySkills(t *testing.T) {
 func TestSave_AcceptsSkillsAtTheCap(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, manySkills(200), nil, nil, nil, nil, nil)
+		[]string{"backend"}, manySkills(200), nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save at the cap: %v", err)
 	}
@@ -262,7 +276,7 @@ func TestSave_AcceptsSkillsAtTheCap(t *testing.T) {
 func TestSave_RejectsTooManyExcludedSkills(t *testing.T) {
 	repo := &fakeRepo{}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, manySkills(201), nil, nil, nil)
+		[]string{"backend"}, []string{"go"}, nil, manySkills(201), nil, nil)
 	if !errors.Is(err, userprofile.ErrTooManySkills) {
 		t.Errorf("err = %v, want ErrTooManySkills", err)
 	}
@@ -276,7 +290,7 @@ func TestSave_RejectsTooManyExcludedSkills(t *testing.T) {
 func TestSave_DropsOverlongSkills(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go", strings.Repeat("x", 200)}, nil, nil, nil, nil, nil)
+		[]string{"backend"}, []string{"go", strings.Repeat("x", 200)}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -289,7 +303,7 @@ func TestSave_DropsOverlongSkills(t *testing.T) {
 func TestSave_NormalizesExcludedSkills(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, []string{" PHP ", "php", "WordPress"}, nil, nil, nil)
+		[]string{"backend"}, []string{"go"}, nil, []string{" PHP ", "php", "WordPress"}, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -302,7 +316,7 @@ func TestSave_NormalizesExcludedSkills(t *testing.T) {
 func TestSave_DropsExcludedSkillAlsoInSkills(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"Go", "php"}, nil, []string{"go", "wordpress"}, nil, nil, nil)
+		[]string{"backend"}, []string{"Go", "php"}, nil, []string{"go", "wordpress"}, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -316,7 +330,7 @@ func TestSave_DropsExcludedSkillAlsoInSkills(t *testing.T) {
 func TestSave_EmptyExcludedSkillsStoresEmptySet(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, nil, nil, nil, nil)
+		[]string{"backend"}, []string{"go"}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -331,7 +345,7 @@ func TestSave_EmptyExcludedSkillsStoresEmptySet(t *testing.T) {
 func TestSave_NormalizesExcludedSources(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, nil, []string{" Greenhouse ", "greenhouse", "Workday"}, nil, nil)
+		[]string{"backend"}, []string{"go"}, nil, nil, []string{" Greenhouse ", "greenhouse", "Workday"}, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -341,23 +355,10 @@ func TestSave_NormalizesExcludedSources(t *testing.T) {
 	}
 }
 
-func TestSave_NormalizesExcludedCompanies(t *testing.T) {
-	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
-	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, nil, nil, []string{" Acme ", "acme", "Umbrella"}, nil)
-	if err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-	want := []string{"acme", "umbrella"}
-	if strings.Join(repo.upserted.ExcludedCompanies, ",") != strings.Join(want, ",") {
-		t.Errorf("ExcludedCompanies = %v, want lowercased/trimmed/deduped %v", repo.upserted.ExcludedCompanies, want)
-	}
-}
-
 func TestSave_EmptyExcludedSourcesAndCompaniesStoresEmptySet(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, nil, nil, nil, nil)
+		[]string{"backend"}, []string{"go"}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -367,35 +368,17 @@ func TestSave_EmptyExcludedSourcesAndCompaniesStoresEmptySet(t *testing.T) {
 	if len(repo.upserted.ExcludedSources) != 0 {
 		t.Errorf("ExcludedSources = %v, want empty", repo.upserted.ExcludedSources)
 	}
-	if repo.upserted.ExcludedCompanies == nil {
-		t.Error("ExcludedCompanies = nil, want non-nil empty set (persists as '{}', not NULL)")
-	}
-	if len(repo.upserted.ExcludedCompanies) != 0 {
-		t.Errorf("ExcludedCompanies = %v, want empty", repo.upserted.ExcludedCompanies)
-	}
 }
 
 func TestSave_RejectsTooManyExcludedSources(t *testing.T) {
 	repo := &fakeRepo{}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, nil, manySkills(201), nil, nil)
+		[]string{"backend"}, []string{"go"}, nil, nil, manySkills(201), nil)
 	if !errors.Is(err, userprofile.ErrTooManySources) {
 		t.Errorf("err = %v, want ErrTooManySources", err)
 	}
 	if repo.upsertCalled {
 		t.Error("repo.Upsert should not be called past the excluded-sources cap")
-	}
-}
-
-func TestSave_RejectsTooManyExcludedCompanies(t *testing.T) {
-	repo := &fakeRepo{}
-	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, nil, nil, manySkills(201), nil)
-	if !errors.Is(err, userprofile.ErrTooManyCompanies) {
-		t.Errorf("err = %v, want ErrTooManyCompanies", err)
-	}
-	if repo.upsertCalled {
-		t.Error("repo.Upsert should not be called past the excluded-companies cap")
 	}
 }
 
@@ -406,23 +389,19 @@ func TestSave_DropsOverlongExcludedSourceAndCompany(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
 		[]string{"backend"}, []string{"go"}, nil, nil,
-		[]string{"greenhouse", strings.Repeat("x", 200)},
-		[]string{"acme", strings.Repeat("y", 200)}, nil)
+		[]string{"greenhouse", strings.Repeat("x", 200)}, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if strings.Join(repo.upserted.ExcludedSources, ",") != "greenhouse" {
 		t.Errorf("ExcludedSources = %v, want the overlong value dropped [greenhouse]", repo.upserted.ExcludedSources)
 	}
-	if strings.Join(repo.upserted.ExcludedCompanies, ",") != "acme" {
-		t.Errorf("ExcludedCompanies = %v, want the overlong value dropped [acme]", repo.upserted.ExcludedCompanies)
-	}
 }
 
 func TestSave_AcceptsExcludedSourcesAtTheCap(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, nil, manySkills(200), nil, nil)
+		[]string{"backend"}, []string{"go"}, nil, nil, manySkills(200), nil)
 	if err != nil {
 		t.Fatalf("Save at the cap: %v", err)
 	}
@@ -434,7 +413,7 @@ func TestSave_AcceptsExcludedSourcesAtTheCap(t *testing.T) {
 func TestSave_RejectsUnknownSeniority(t *testing.T) {
 	repo := &fakeRepo{}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, []string{"senior", "wizard"}, nil, nil, nil, nil)
+		[]string{"backend"}, []string{"go"}, []string{"senior", "wizard"}, nil, nil, nil)
 	if !errors.Is(err, userprofile.ErrInvalidSeniority) {
 		t.Errorf("err = %v, want ErrInvalidSeniority", err)
 	}
@@ -446,7 +425,7 @@ func TestSave_RejectsUnknownSeniority(t *testing.T) {
 func TestSave_SenioritiesAreDeduplicated(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, []string{"senior", "middle", "senior"}, nil, nil, nil, nil)
+		[]string{"backend"}, []string{"go"}, []string{"senior", "middle", "senior"}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -459,7 +438,7 @@ func TestSave_SenioritiesAreDeduplicated(t *testing.T) {
 func TestSave_SenioritiesMayBeEmpty(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, nil, nil, nil, nil, nil)
+		[]string{"backend"}, []string{"go"}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -474,7 +453,7 @@ func TestSave_SenioritiesMayBeEmpty(t *testing.T) {
 func TestSave_AcceptsMultipleSeniorities(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, []string{"middle", "senior"}, nil, nil, nil, nil)
+		[]string{"backend"}, []string{"go"}, []string{"middle", "senior"}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -513,5 +492,28 @@ func TestDelete_IsIdempotentAndScopedToOwner(t *testing.T) {
 	}
 	if !repo.delCalled || repo.delUserID != 7 {
 		t.Errorf("delete scope = user %d (called=%v), want user 7", repo.delUserID, repo.delCalled)
+	}
+}
+
+func TestExcludeCompany_NormalizesSlugAndPassesTheCap(t *testing.T) {
+	repo := &fakeRepo{}
+	if _, err := userprofile.New(repo).ExcludeCompany(context.Background(), 7, " ACME "); err != nil {
+		t.Fatalf("ExcludeCompany: %v", err)
+	}
+	if repo.excluded != "acme" || repo.excludedMax != 200 {
+		t.Errorf("repo got slug %q max %d, want acme/200", repo.excluded, repo.excludedMax)
+	}
+}
+
+func TestExcludeCompany_RejectsBlankAndOverlongSlugs(t *testing.T) {
+	for _, slug := range []string{"", "   ", strings.Repeat("x", 101)} {
+		repo := &fakeRepo{}
+		_, err := userprofile.New(repo).ExcludeCompany(context.Background(), 7, slug)
+		if !errors.Is(err, userprofile.ErrInvalidCompany) || repo.excluded != "" {
+			t.Errorf("slug %q: err=%v wrote=%q, want ErrInvalidCompany without a write", slug, err, repo.excluded)
+		}
+		if _, err := userprofile.New(repo).UnexcludeCompany(context.Background(), 7, slug); !errors.Is(err, userprofile.ErrInvalidCompany) {
+			t.Errorf("slug %q: restore err=%v, want ErrInvalidCompany", slug, err)
+		}
 	}
 }

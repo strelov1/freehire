@@ -26,9 +26,8 @@ type naukrigulfFake struct {
 	// goneIDs answer 404 on their detail.
 	goneIDs map[string]bool
 
-	mu       sync.Mutex
-	urls     []string
-	versions []string
+	mu   sync.Mutex
+	urls []string
 }
 
 func naukrigulfFixture(name string) []byte {
@@ -40,9 +39,11 @@ func naukrigulfFixture(name string) []byte {
 }
 
 func (f *naukrigulfFake) GetJSONWithHeaders(_ context.Context, u string, headers map[string]string, v any) error {
+	if headers["version"] != "v1" || headers["appid"] != "205" || headers["systemid"] != "2323" {
+		return errors.New("Naukrigulf request lacks the public frontend headers")
+	}
 	f.mu.Lock()
 	f.urls = append(f.urls, u)
-	f.versions = append(f.versions, headers["version"])
 	f.mu.Unlock()
 	switch {
 	case strings.Contains(u, "/jobapi/search?"):
@@ -115,12 +116,6 @@ func TestNaukrigulfHydratesNewPostingsAndSkipsAnonymousOnes(t *testing.T) {
 	if got := f.detailRequests(); got != 2 {
 		t.Errorf("detail requests = %d, want 2 (none is bought for the anonymous posting)", got)
 	}
-	for i, v := range f.versions {
-		if v != "v1" {
-			t.Errorf("request %d (%s) carried version %q, want v1", i, f.urls[i], v)
-		}
-	}
-
 	j := byID[naukrigulfFinanceID]
 	if j.Title != "Finance Manager" || j.Company != "INNOVATION DIRECT EMPLOYMENT SERVICES L.L.C" {
 		t.Errorf("title/company = %q / %q", j.Title, j.Company)

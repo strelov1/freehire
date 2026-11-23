@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
 // codeCrossSiteRefusal is the code on the gate's refusals ({"error", "code"} envelope); the
@@ -37,14 +39,39 @@ func (h *authHandlers) requireSameOrigin() func(*fiber.Ctx) error {
 // checkSameOrigin is the gate's verdict alone, for a handler that must apply it to
 // one branch of its own (the consent screens' "switch account").
 func (h *authHandlers) checkSameOrigin(c *fiber.Ctx) error {
+	return sameOriginVerdict(c, h.browserOrigins)
+}
+
+// refuseCrossOriginCookieWrites applies the same verdict to every state-changing request
+// that carries the session cookie, whatever its route. SameSite=Lax keeps the cookie off
+// cross-site POSTs, but a sibling origin under the cookie domain (.freehire.me) is same-site
+// and gets it; only the Origin allowlist tells such a sibling from the site itself.
+// Requests without the cookie (API keys, the extension's Bearer, webhooks) are not affected.
+func refuseCrossOriginCookieWrites(browserOrigins []string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		switch c.Method() {
+		case fiber.MethodGet, fiber.MethodHead, fiber.MethodOptions:
+			return c.Next()
+		}
+		if c.Cookies(auth.CookieName) == "" {
+			return c.Next()
+		}
+		if err := sameOriginVerdict(c, browserOrigins); err != nil {
+			return err
+		}
+		return c.Next()
+	}
+}
+
+func sameOriginVerdict(c *fiber.Ctx, browserOrigins []string) error {
 	if origin := strings.TrimSpace(c.Get(fiber.HeaderOrigin)); origin != "" {
-		if originAllowed(origin, h.browserOrigins) {
+		if originAllowed(origin, browserOrigins) {
 			return nil
 		}
 		return authError(fiber.StatusForbidden, codeCrossSiteRefusal, "cross-site request refused")
 	}
 	if referer := strings.TrimSpace(c.Get(fiber.HeaderReferer)); referer != "" {
-		if refererAllowed(referer, h.browserOrigins) {
+		if refererAllowed(referer, browserOrigins) {
 			return nil
 		}
 		return authError(fiber.StatusForbidden, codeCrossSiteRefusal, "cross-site request refused")

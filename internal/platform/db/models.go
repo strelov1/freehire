@@ -1061,6 +1061,12 @@ type InsightsRoleCountryStat struct {
 	OpenCountPrev int32  `json:"open_count_prev"`
 }
 
+type InsightsRoleDemandWeekly struct {
+	Category string      `json:"category"`
+	Week     pgtype.Date `json:"week"`
+	NewJobs  int64       `json:"new_jobs"`
+}
+
 type InsightsRolePulse struct {
 	Category            string        `json:"category"`
 	ViewsThrough        pgtype.Date   `json:"views_through"`

@@ -18,13 +18,14 @@
   import FeedNewEnd from './FeedNewEnd.svelte';
   import FeedSourceEmpty from './FeedSourceEmpty.svelte';
   import FeedSourceMenu from './FeedSourceMenu.svelte';
+  import HideCompanyConfirm from './HideCompanyConfirm.svelte';
   import MatchBlock from './MatchBlock.svelte';
   import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
 
   // The match feed one card at a time, full screen like the swipe deck. Skip and Save write
   // the same tracking records; the server excludes them, so an empty page just refetches.
-  let { onClose }: { onClose: () => void } = $props();
+  let { onClose, onCompanyHidden }: { onClose: () => void; onCompanyHidden?: () => void } = $props();
 
   const PAGE = 20;
   // The source revision this instance was mounted for: a response that lands after a pick
@@ -52,6 +53,11 @@
   let applying = $state(false);
   let menuOpen = $state(false);
   let menuRoot = $state<HTMLElement | null>(null);
+  let menuTrigger = $state<HTMLButtonElement | null>(null);
+  // The company being hidden, while its confirmation is open.
+  let hideTarget = $state<{ slug: string; name: string } | null>(null);
+  // Numbers every load: a reply that lands after a hide-company reload belongs to the old list.
+  let loadEpoch = 0;
   // An Undo in flight: a new judgment now could land before its inverse and be erased by it.
   let undoing = $state(false);
   const current = $derived(cards[0]);
@@ -76,11 +82,12 @@
   const gesture = new SwipeGesture();
 
   async function load() {
+    const epoch = ++loadEpoch;
     loading = true;
     failed = false;
     try {
       const res = await api.meFeed(PAGE);
-      if (stale()) return;
+      if (stale() || epoch !== loadEpoch) return;
       const data = res.data;
       if (res.meta) {
         if (meta && (meta.source !== res.meta.source || meta.saved_search_id !== res.meta.saved_search_id)) {
@@ -104,11 +111,11 @@
       const have = new Set(cards.map((c) => c.public_slug));
       cards = [...cards, ...data.filter((c) => !have.has(c.public_slug))];
     } catch (e) {
-      if (stale()) return;
+      if (stale() || epoch !== loadEpoch) return;
       if (isPlanRefusal(e)) paywalled = true;
       else failed = true;
     } finally {
-      if (!stale()) {
+      if (!stale() && epoch === loadEpoch) {
         loading = false;
         if (feedSource.takeCardFocus(rev, 'swipe')) {
           await tick();
@@ -203,6 +210,38 @@
     if (cards.length === 0) await load();
   }
 
+  const askHideCompany = () => {
+    menuOpen = false;
+    if (current?.company_slug && !busy()) hideTarget = { slug: current.company_slug, name: current.company };
+  };
+  // Cancelled: back to the menu button that opened it. Hidden: the cards, the Undo and any
+  // reply still in flight belong to the old exclusion list, so the feed starts over.
+  async function onHideClosed(result: 'hidden' | 'cancelled') {
+    hideTarget = null;
+    await tick();
+    if (result === 'cancelled') {
+      menuTrigger?.focus();
+      return;
+    }
+    onCompanyHidden?.();
+    sourceRevision++;
+    cards = [];
+    last = null;
+    toast = null;
+    hadLoaded = false;
+    hadNew = false;
+    restShown = false;
+    seenCursor = undefined;
+    await load();
+    await tick();
+    const heading = current && overlay?.querySelector('h2');
+    const target = heading || overlay;
+    if (target) {
+      target.tabIndex = -1;
+      target.focus();
+    }
+  }
+
   const markApplied = () => {
     menuOpen = false;
     return judge('apply');
@@ -263,7 +302,7 @@
   // fires with focus inside it (or on body, when nothing is focused); fields, menus and
   // nested dialogs keep their own keys.
   function onKey(e: KeyboardEvent) {
-    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented || menuOpen) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented || menuOpen || hideTarget) return;
     const t = e.target as HTMLElement | null;
     if (t?.closest('input,textarea,select,[contenteditable],[role=menu],[role^=menuitem]')) return;
     if (e.key !== 'Escape' && t?.closest('[aria-haspopup=menu]')) return;
@@ -306,6 +345,7 @@
         <div class="relative" bind:this={menuRoot}>
           <button
             type="button"
+            bind:this={menuTrigger}
             aria-label={`More actions for ${current.company || 'unknown company'}`}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
@@ -331,6 +371,16 @@
               >
                 Already applied
               </button>
+              {#if current.company_slug}
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="flex min-h-11 w-full items-center px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                  onclick={askHideCompany}
+                >
+                  Hide company
+                </button>
+              {/if}
             </div>
           {/if}
         </div>
@@ -474,3 +524,7 @@
     {/key}
   {/if}
 </div>
+
+{#if hideTarget}
+  <HideCompanyConfirm slug={hideTarget.slug} name={hideTarget.name} onclose={onHideClosed} />
+{/if}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -39,7 +40,7 @@ func (r *QueriesRepository) Get(ctx context.Context, userID int64) (Profile, err
 }
 
 // Upsert creates or replaces the user's profile.
-func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error) {
+func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error) {
 	row, err := r.q.UpsertUserProfile(ctx, db.UpsertUserProfileParams{
 		UserID:              userID,
 		Specializations:     specializations,
@@ -47,7 +48,6 @@ func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializa
 		Seniorities:         seniorities,
 		ExcludedSkills:      excludedSkills,
 		ExcludedSources:     excludedSources,
-		ExcludedCompanies:   excludedCompanies,
 		JobLanguages:        jobLanguages,
 		LocationPreferences: locationPreferences,
 	})
@@ -58,7 +58,7 @@ func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializa
 }
 
 // CreateIfAbsent maps a concurrent profile creation to ErrConflict without replacing it.
-func (r *QueriesRepository) CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error) {
+func (r *QueriesRepository) CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error) {
 	row, err := r.q.CreateUserProfileIfAbsent(ctx, db.CreateUserProfileIfAbsentParams{
 		UserID:              userID,
 		Specializations:     specializations,
@@ -66,7 +66,6 @@ func (r *QueriesRepository) CreateIfAbsent(ctx context.Context, userID int64, sp
 		Seniorities:         seniorities,
 		ExcludedSkills:      excludedSkills,
 		ExcludedSources:     excludedSources,
-		ExcludedCompanies:   excludedCompanies,
 		JobLanguages:        jobLanguages,
 		LocationPreferences: locationPreferences,
 	})
@@ -81,7 +80,7 @@ func (r *QueriesRepository) CreateIfAbsent(ctx context.Context, userID int64, sp
 
 // UpsertIfUnchanged behaves like Upsert but only writes when the row's updated_at still
 // matches expectedUpdatedAt, mapping no matching row to ErrConflict.
-func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error) {
+func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error) {
 	row, err := r.q.UpsertUserProfileIfUnchanged(ctx, db.UpsertUserProfileIfUnchangedParams{
 		UserID:              userID,
 		Specializations:     specializations,
@@ -89,13 +88,54 @@ func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64,
 		Seniorities:         seniorities,
 		ExcludedSkills:      excludedSkills,
 		ExcludedSources:     excludedSources,
-		ExcludedCompanies:   excludedCompanies,
 		JobLanguages:        jobLanguages,
 		LocationPreferences: locationPreferences,
 		UpdatedAt:           pgconv.Instant(expectedUpdatedAt),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Profile{}, ErrConflict
+	}
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileFromRow(row), nil
+}
+
+// ExcludeCompany runs the atomic append. No returned row means the slug is listed already
+// (success) or the list is full; the profile read tells which. A concurrent restore can move
+// that answer, so it retries a few times before settling.
+func (r *QueriesRepository) ExcludeCompany(ctx context.Context, userID int64, slug string, max int32) (Profile, error) {
+	for range 3 {
+		row, err := r.q.ExcludeCompany(ctx, db.ExcludeCompanyParams{UserID: userID, CompanySlug: slug, MaxCount: max})
+		if err == nil {
+			return profileFromRow(row), nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return Profile{}, err
+		}
+		p, err := r.Get(ctx, userID)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return Profile{}, err
+		}
+		if slices.Contains(p.ExcludedCompanies, slug) {
+			return p, nil
+		}
+		if len(p.ExcludedCompanies) >= int(max) {
+			return Profile{}, ErrCompaniesFull
+		}
+	}
+	return Profile{}, ErrConflict
+}
+
+// UnexcludeCompany removes the slug; no returned row means nothing to change, so it returns
+// the current profile (ErrNotFound when there is none).
+func (r *QueriesRepository) UnexcludeCompany(ctx context.Context, userID int64, slug string) (Profile, error) {
+	row, err := r.q.UnexcludeCompany(ctx, db.UnexcludeCompanyParams{UserID: userID, CompanySlug: slug})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return r.Get(ctx, userID)
 	}
 	if err != nil {
 		return Profile{}, err

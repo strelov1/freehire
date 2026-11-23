@@ -80,8 +80,7 @@ const (
 	naukrigulfMaxNewPerRun = 1500
 )
 
-// NewNaukrigulf builds the Naukrigulf adapter over the given client. The API answers only a
-// request that carries the web app's own version header.
+// NewNaukrigulf builds the Naukrigulf adapter over the given client.
 func NewNaukrigulf(c HeaderJSONGetter) Source {
 	return naukrigulf{
 		http:         c,
@@ -102,9 +101,12 @@ func (naukrigulf) Aggregator() {}
 
 func (naukrigulf) SweepGrace() time.Duration { return naukrigulfSweepGrace }
 
-// naukrigulfHeaders is what the API wants: the web app's version tag. Without it the search
-// answers its first page whatever Offset says.
-var naukrigulfHeaders = map[string]string{"version": "v1"}
+// The public web app identifies its API requests with these headers. The version also enables pagination.
+var naukrigulfHeaders = map[string]string{
+	"version":  "v1",
+	"appid":    "205",
+	"systemid": "2323",
+}
 
 // naukrigulfRow is one listed posting, reduced to what the adapter reads. The listing's numbers
 // are strings ("LatestPostedDate": "1795366168").

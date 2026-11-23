@@ -232,3 +232,100 @@ func TestFeedSource_ProfileEditRestartsSavedSearchPagination(t *testing.T) {
 		t.Fatalf("status = %d, body = %v; want source_changed", status, body)
 	}
 }
+
+// hiddenFeedApp serves a feed whose profile hides every slug in hidden.
+func hiddenFeedApp(s searcher, hidden []string, updated time.Time, st *feedStateFake) (*fiber.App, *auth.Issuer) {
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	prof := feedProfile{p: userprofile.Profile{Skills: []string{"go"}, ExcludedCompanies: hidden, UpdatedAt: &updated}}
+	h := &feedHandlers{search: s, profiles: prof, excluded: &feedExcludedAt{}, plans: feedPlansFake{}, state: st, cursors: feed.NewSigner([]byte("cursor-key"))}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/me/feed", auth.RequireAuth(iss, testVersions), h.Feed)
+	return app, iss
+}
+
+// longSlugs is well past the profile query's 400-character company budget.
+func longSlugs() []string {
+	out := make([]string, 30)
+	for i := range out {
+		out[i] = strings.Repeat("c", 20) + string(rune('a'+i%26)) + string(rune('a'+i/26))
+	}
+	return out
+}
+
+func TestFeed_HiddenCompaniesBindEverySourceAndPhase(t *testing.T) {
+	hidden := longSlugs()
+	want := search.NotInStrings("company_slug", hidden)
+	seen := time.Now().Add(-time.Hour).Truncate(time.Second)
+	for name, st := range map[string]*feedStateFake{
+		"profile": {seen: &seen},
+		"search":  {seen: &seen, source: 2, searches: map[int64]feedSearch{2: {Query: "seniority=senior", UpdatedAt: feedUpdated}}},
+	} {
+		fake := &scriptedSearcher{newHits: docs("n1"), restHits: docs("r1", "r2")}
+		app, iss := hiddenFeedApp(fake, hidden, feedUpdated, st)
+		deckGet(t, app, iss, "/api/v1/me/feed?limit=5")
+		if len(fake.calls) != 2 {
+			t.Fatalf("%s: calls = %d, want the new and the rest phase", name, len(fake.calls))
+		}
+		for i, call := range fake.calls {
+			if !filterHas(call.Filter.([][]string), want) {
+				t.Errorf("%s call %d lacks the full hidden-company exclusion: %#v", name, i, call.Filter)
+			}
+		}
+	}
+}
+
+func TestFeed_HiddenCompanyChangeInvalidatesCursorAndRestoreDropsTheFilter(t *testing.T) {
+	for name, st := range map[string]func() *feedStateFake{
+		"profile": func() *feedStateFake { return &feedStateFake{} },
+		// The saved search stays unchanged: only the profile version moves.
+		"search": func() *feedStateFake {
+			return &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "seniority=senior", UpdatedAt: feedUpdated}}}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := &fakeSearcher{res: search.SearchResult{Total: 5, Hits: []search.JobDocument{{ID: 1, Job: jobview.Job{PublicSlug: "a"}}}}}
+			state := st()
+			app, iss := hiddenFeedApp(fake, []string{"acme"}, feedUpdated, state)
+			_, body := deckGet(t, app, iss, "/api/v1/me/feed?limit=1")
+			cursor := nextCursorOf(body)
+			if cursor == "" {
+				t.Fatal("no cursor")
+			}
+			if !filterHas(fake.got.Filter.([][]string), search.NotInStrings("company_slug", []string{"acme"})) {
+				t.Errorf("hidden company missing from the filter: %#v", fake.got.Filter)
+			}
+
+			// Restoring the company advances the profile version: the old cursor is refused.
+			restored, restoredIssuer := hiddenFeedApp(fake, nil, feedUpdated.Add(time.Second), state)
+			_, body = deckGet(t, restored, restoredIssuer, "/api/v1/me/feed?limit=1&cursor="+cursor)
+			if feedMetaOf(body)["reason"] != "source_changed" {
+				t.Fatalf("stale cursor reason = %v, want source_changed", feedMetaOf(body)["reason"])
+			}
+			deckGet(t, restored, restoredIssuer, "/api/v1/me/feed?limit=1")
+			for _, g := range fake.got.Filter.([][]string) {
+				for _, e := range g {
+					if strings.HasPrefix(e, "company_slug") {
+						t.Errorf("restored company still filtered: %q", e)
+					}
+				}
+			}
+		})
+	}
+}
+
+// A profile that only hides companies states nothing the feed can match on: no catalogue dump.
+func TestFeed_OnlyHiddenCompaniesIsNoUsableFieldsAndNeverSearches(t *testing.T) {
+	fake := &fakeSearcher{}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	prof := feedProfile{p: userprofile.Profile{ExcludedCompanies: []string{"acme"}, UpdatedAt: &feedUpdated}}
+	h := &feedHandlers{search: fake, profiles: prof, excluded: &feedExcludedAt{}, plans: feedPlansFake{}, state: &feedStateFake{}, cursors: feed.NewSigner([]byte("cursor-key"))}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/me/feed", auth.RequireAuth(iss, testVersions), h.Feed)
+	_, body := deckGet(t, app, iss, "/api/v1/me/feed")
+	if got := feedMetaOf(body)["reason"]; got != feed.ReasonNoUsableFields {
+		t.Errorf("reason = %v, want %s", got, feed.ReasonNoUsableFields)
+	}
+	if fake.got.Limit != 0 {
+		t.Errorf("searched the index: %#v", fake.got)
+	}
+}

@@ -309,10 +309,10 @@ func (h *assistantHandlers) savePreferencesOnce(ctx context.Context, userID int6
 	if cur.UpdatedAt == nil {
 		// Another writer may have created the profile since our missing-row read.
 		saved, err = h.profile.userProfile.CreateIfAbsent(ctx, userID, specs, skills, levels,
-			excluded, cur.ExcludedSources, cur.ExcludedCompanies, loc, languages...)
+			excluded, cur.ExcludedSources, loc, languages...)
 	} else {
 		saved, err = h.profile.userProfile.SaveIfUnchanged(ctx, userID, *cur.UpdatedAt, specs, skills, levels,
-			excluded, cur.ExcludedSources, cur.ExcludedCompanies, loc, languages...)
+			excluded, cur.ExcludedSources, loc, languages...)
 	}
 	if errors.Is(err, userprofile.ErrConflict) {
 		return userprofile.Profile{}, nil, err

@@ -63,8 +63,21 @@
   </p>
 
   <a
-    href={resolve('/insights/companies')}
+    href={resolve('/insights/compare')}
     class="mt-6 flex items-center justify-between rounded-lg border border-border p-4 hover:bg-accent"
+  >
+    <span>
+      <span class="text-lg font-semibold text-foreground">Compare hiring demand</span>
+      <span class="mt-0.5 block text-sm text-muted-foreground"
+        >See how new job postings changed for two specialties</span
+      >
+    </span>
+    <span aria-hidden="true" class="text-muted-foreground">→</span>
+  </a>
+
+  <a
+    href={resolve('/insights/companies')}
+    class="mt-3 flex items-center justify-between rounded-lg border border-border p-4 hover:bg-accent"
   >
     <span>
       <span class="text-lg font-semibold text-foreground">Company hiring signal</span>

@@ -26,8 +26,10 @@ var (
 	ErrTooManySkills = errors.New("userprofile: too many skills")
 	// ErrTooManySources is an excluded-sources set past maxExcludedCount (mapped to 400).
 	ErrTooManySources = errors.New("userprofile: too many excluded sources")
-	// ErrTooManyCompanies is an excluded-companies set past maxExcludedCount (mapped to 400).
-	ErrTooManyCompanies = errors.New("userprofile: too many excluded companies")
+	// ErrInvalidCompany is a company slug that is blank or longer than maxExcludedLen (400).
+	ErrInvalidCompany = errors.New("userprofile: invalid company slug")
+	// ErrCompaniesFull is a new company past maxExcludedCount excluded ones (mapped to 409).
+	ErrCompaniesFull = errors.New("userprofile: excluded companies list is full")
 	// ErrInvalidSeniority is a seniority outside the seniority vocabulary (mapped to 400).
 	ErrInvalidSeniority = errors.New("userprofile: seniority is not a known level")
 	// ErrNotFound is the caller having no profile yet (mapped to a null payload on GET,
@@ -90,14 +92,19 @@ type Profile struct {
 // a missing row to ErrNotFound; Delete is idempotent.
 type Repository interface {
 	Get(ctx context.Context, userID int64) (Profile, error)
-	Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error)
+	Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error)
 	// CreateIfAbsent inserts only when no profile exists, or returns ErrConflict.
-	CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error)
+	CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error)
 	// UpsertIfUnchanged is Upsert guarded on updated_at still equalling expectedUpdatedAt, so a
 	// write built from a stale snapshot cannot overwrite a concurrent Save. No matching row
 	// (updated_at moved, or profile deleted) maps to ErrConflict.
-	UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error)
+	UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error)
 	Delete(ctx context.Context, userID int64) error
+	// ExcludeCompany appends slug atomically, creating a minimal profile when none exists.
+	// ErrCompaniesFull when the list holds max entries without it; a listed slug is a no-op.
+	ExcludeCompany(ctx context.Context, userID int64, slug string, max int32) (Profile, error)
+	// UnexcludeCompany removes slug atomically; ErrNotFound when there is no profile.
+	UnexcludeCompany(ctx context.Context, userID int64, slug string) (Profile, error)
 }
 
 // Service implements the user-profile use cases.
@@ -118,42 +125,62 @@ func (s *Service) Get(ctx context.Context, userID int64) (Profile, error) {
 // Save validates and upserts the user's profile: the first save inserts, later saves
 // overwrite. Every list is normalized and may be empty. Excluded skills that also appear in
 // skills are dropped (the wanted set wins). The location block is stored NULL when nil or empty.
-func (s *Service) Save(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, loc *LocationPreferences, jobLanguages ...string) (Profile, error) {
-	n, err := normalizeProfile(specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, loc, jobLanguages)
+func (s *Service) Save(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources []string, loc *LocationPreferences, jobLanguages ...string) (Profile, error) {
+	n, err := normalizeProfile(specializations, skills, seniorities, excludedSkills, excludedSources, loc, jobLanguages)
 	if err != nil {
 		return Profile{}, err
 	}
-	return s.repo.Upsert(ctx, userID, n.specs, n.skills, n.levels, n.excluded, n.sources, n.companies, n.languages, n.loc)
+	return s.repo.Upsert(ctx, userID, n.specs, n.skills, n.levels, n.excluded, n.sources, n.languages, n.loc)
 }
 
 // CreateIfAbsent normalizes a first partial update and inserts it only if the profile
 // is still absent. ErrConflict asks a read-modify-write caller to reload and merge.
-func (s *Service) CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, loc *LocationPreferences, jobLanguages ...string) (Profile, error) {
-	n, err := normalizeProfile(specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, loc, jobLanguages)
+func (s *Service) CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources []string, loc *LocationPreferences, jobLanguages ...string) (Profile, error) {
+	n, err := normalizeProfile(specializations, skills, seniorities, excludedSkills, excludedSources, loc, jobLanguages)
 	if err != nil {
 		return Profile{}, err
 	}
-	return s.repo.CreateIfAbsent(ctx, userID, n.specs, n.skills, n.levels, n.excluded, n.sources, n.companies, n.languages, n.loc)
+	return s.repo.CreateIfAbsent(ctx, userID, n.specs, n.skills, n.levels, n.excluded, n.sources, n.languages, n.loc)
 }
 
 // SaveIfUnchanged is Save for a caller that computed the profile from a prior Get: it writes
 // only when updated_at still equals expected, else ErrConflict so the caller can re-read.
 // Use CreateIfAbsent for a missing-row snapshot.
-func (s *Service) SaveIfUnchanged(ctx context.Context, userID int64, expected time.Time, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, loc *LocationPreferences, jobLanguages ...string) (Profile, error) {
-	n, err := normalizeProfile(specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, loc, jobLanguages)
+func (s *Service) SaveIfUnchanged(ctx context.Context, userID int64, expected time.Time, specializations, skills, seniorities, excludedSkills, excludedSources []string, loc *LocationPreferences, jobLanguages ...string) (Profile, error) {
+	n, err := normalizeProfile(specializations, skills, seniorities, excludedSkills, excludedSources, loc, jobLanguages)
 	if err != nil {
 		return Profile{}, err
 	}
-	return s.repo.UpsertIfUnchanged(ctx, userID, n.specs, n.skills, n.levels, n.excluded, n.sources, n.companies, n.languages, n.loc, expected)
+	return s.repo.UpsertIfUnchanged(ctx, userID, n.specs, n.skills, n.levels, n.excluded, n.sources, n.languages, n.loc, expected)
+}
+
+// ExcludeCompany hides one company from the caller's feeds. Safe to repeat: a slug already
+// listed returns the profile unchanged, without advancing its version.
+func (s *Service) ExcludeCompany(ctx context.Context, userID int64, slug string) (Profile, error) {
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	if slug == "" || len(slug) > maxExcludedLen {
+		return Profile{}, ErrInvalidCompany
+	}
+	return s.repo.ExcludeCompany(ctx, userID, slug, maxExcludedCount)
+}
+
+// UnexcludeCompany restores one company. ErrNotFound when the caller has no profile; an
+// unlisted slug returns the profile unchanged.
+func (s *Service) UnexcludeCompany(ctx context.Context, userID int64, slug string) (Profile, error) {
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	if slug == "" || len(slug) > maxExcludedLen {
+		return Profile{}, ErrInvalidCompany
+	}
+	return s.repo.UnexcludeCompany(ctx, userID, slug)
 }
 
 // normalizedProfile is a profile after validation, ready for the repository.
 type normalizedProfile struct {
-	specs, skills, levels, excluded, sources, companies, languages []string
-	loc                                                            json.RawMessage
+	specs, skills, levels, excluded, sources, languages []string
+	loc                                                 json.RawMessage
 }
 
-func normalizeProfile(specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, loc *LocationPreferences, jobLanguages []string) (normalizedProfile, error) {
+func normalizeProfile(specializations, skills, seniorities, excludedSkills, excludedSources []string, loc *LocationPreferences, jobLanguages []string) (normalizedProfile, error) {
 	var n normalizedProfile
 	var err error
 	if n.specs, err = normalizeSpecializations(specializations); err != nil {
@@ -171,9 +198,6 @@ func normalizeProfile(specializations, skills, seniorities, excludedSkills, excl
 	}
 	n.excluded = subtractSkills(avoided, n.skills)
 	if n.sources, err = normalizeExcludedSet(excludedSources, maxExcludedLen, maxExcludedCount, ErrTooManySources); err != nil {
-		return n, err
-	}
-	if n.companies, err = normalizeExcludedSet(excludedCompanies, maxExcludedLen, maxExcludedCount, ErrTooManyCompanies); err != nil {
 		return n, err
 	}
 	if n.languages, err = normalizeJobLanguages(jobLanguages); err != nil {
@@ -223,10 +247,10 @@ func (s *Service) mergeSkillsOnce(ctx context.Context, userID int64, skills []st
 	if profile.UpdatedAt == nil {
 		// No version to guard on, so write unconditionally. The real Repository always sets
 		// UpdatedAt (NOT NULL); only fakes leave it nil.
-		_, err = s.repo.Upsert(ctx, userID, profile.Specializations, merged, profile.Seniorities, profile.ExcludedSkills, profile.ExcludedSources, profile.ExcludedCompanies, profile.JobLanguages, profile.LocationPreferences)
+		_, err = s.repo.Upsert(ctx, userID, profile.Specializations, merged, profile.Seniorities, profile.ExcludedSkills, profile.ExcludedSources, profile.JobLanguages, profile.LocationPreferences)
 		return err
 	}
-	_, err = s.repo.UpsertIfUnchanged(ctx, userID, profile.Specializations, merged, profile.Seniorities, profile.ExcludedSkills, profile.ExcludedSources, profile.ExcludedCompanies, profile.JobLanguages, profile.LocationPreferences, *profile.UpdatedAt)
+	_, err = s.repo.UpsertIfUnchanged(ctx, userID, profile.Specializations, merged, profile.Seniorities, profile.ExcludedSkills, profile.ExcludedSources, profile.JobLanguages, profile.LocationPreferences, *profile.UpdatedAt)
 	return err
 }
 

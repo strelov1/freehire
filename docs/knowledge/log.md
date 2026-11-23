@@ -161,3 +161,7 @@ The report uses the existing page-view rollup and stores only aggregate Apply cl
 
 Recorded the [team-scoped conversation](architecture.md#employer-application-conversations)
 and the hosted mail reply path.
+
+## Weekly hiring-demand comparison — 2026-11-23
+
+Recorded the [publication-date rollup and comparison window](../agents/public-figures.md#weekly-hiring-demand).

@@ -12168,6 +12168,38 @@ func (s *EngagementStatsOK) SetData(val Engagement) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type ExcludeCompanyOK struct {
+	Data Profile `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ExcludeCompanyOK) GetData() Profile {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ExcludeCompanyOK) SetData(val Profile) {
+	s.Data = val
+}
+
+// The company to hide from the match feeds.
+// Ref: #/components/schemas/ExcludeCompanyRequest
+type ExcludeCompanyRequest struct {
+	// The company's slug. (e.g. `acme`).
+	CompanySlug string `json:"company_slug"`
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *ExcludeCompanyRequest) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *ExcludeCompanyRequest) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
 // One piece of evidence, at the grain of a CV bullet. The three flags below are computed at read time.
 // Ref: #/components/schemas/ExperienceAtom
 type ExperienceAtom struct {
@@ -14337,6 +14369,22 @@ func (s *HealthStatus) UnmarshalText(data []byte) error {
 
 // HideCompanyFeedbackNoContent is response for HideCompanyFeedback operation.
 type HideCompanyFeedbackNoContent struct{}
+
+// The meta of a save: the body fields that were read and not applied.
+// Ref: #/components/schemas/IgnoredFieldsMeta
+type IgnoredFieldsMeta struct {
+	IgnoredFields []string `json:"ignored_fields"`
+}
+
+// GetIgnoredFields returns the value of IgnoredFields.
+func (s *IgnoredFieldsMeta) GetIgnoredFields() []string {
+	return s.IgnoredFields
+}
+
+// SetIgnoredFields sets the value of IgnoredFields.
+func (s *IgnoredFieldsMeta) SetIgnoredFields(val []string) {
+	s.IgnoredFields = val
+}
 
 // The meta of a single-item answer, sent only to carry a warning.
 // Ref: #/components/schemas/IgnoredMeta
@@ -22012,6 +22060,52 @@ func (o OptDismissJobReportRequest) Or(d DismissJobReportRequest) DismissJobRepo
 	return d
 }
 
+// NewOptIgnoredFieldsMeta returns new OptIgnoredFieldsMeta with value set to v.
+func NewOptIgnoredFieldsMeta(v IgnoredFieldsMeta) OptIgnoredFieldsMeta {
+	return OptIgnoredFieldsMeta{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptIgnoredFieldsMeta is optional IgnoredFieldsMeta.
+type OptIgnoredFieldsMeta struct {
+	Value IgnoredFieldsMeta
+	Set   bool
+}
+
+// IsSet returns true if OptIgnoredFieldsMeta was set.
+func (o OptIgnoredFieldsMeta) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptIgnoredFieldsMeta) Reset() {
+	var v IgnoredFieldsMeta
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptIgnoredFieldsMeta) SetTo(v IgnoredFieldsMeta) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptIgnoredFieldsMeta) Get() (v IgnoredFieldsMeta, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptIgnoredFieldsMeta) Or(d IgnoredFieldsMeta) IgnoredFieldsMeta {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptIgnoredMeta returns new OptIgnoredMeta with value set to v.
 func NewOptIgnoredMeta(v IgnoredMeta) OptIgnoredMeta {
 	return OptIgnoredMeta{
@@ -24513,7 +24607,10 @@ type ProfileUpdate struct {
 	ExcludedSources OptNilStringArray `json:"excluded_sources"`
 	// Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language.
 	// (e.g. `["en","ru"]`).
-	JobLanguages      OptNilStringArray `json:"job_languages"`
+	JobLanguages OptNilStringArray `json:"job_languages"`
+	// Deprecated and ignored: the list changes only through `/me/profile/excluded-companies`, so a save
+	// from a stale page cannot erase a hidden company. Still accepted, and named in `meta.ignored_fields`
+	// when sent.
 	ExcludedCompanies OptNilStringArray `json:"excluded_companies"`
 	// Shaped like LocationPreferences; null or absent keeps none.
 	LocationPreferences jx.Raw `json:"location_preferences"`
@@ -24971,9 +25068,9 @@ func (s *PushTokenTestResult) SetFailed(val int64) {
 	s.Failed = val
 }
 
-// A single item: `{"data": ...}`.
 type PutProfileOK struct {
-	Data Profile `json:"data"`
+	Data Profile              `json:"data"`
+	Meta OptIgnoredFieldsMeta `json:"meta"`
 }
 
 // GetData returns the value of Data.
@@ -24981,9 +25078,19 @@ func (s *PutProfileOK) GetData() Profile {
 	return s.Data
 }
 
+// GetMeta returns the value of Meta.
+func (s *PutProfileOK) GetMeta() OptIgnoredFieldsMeta {
+	return s.Meta
+}
+
 // SetData sets the value of Data.
 func (s *PutProfileOK) SetData(val Profile) {
 	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *PutProfileOK) SetMeta(val OptIgnoredFieldsMeta) {
+	s.Meta = val
 }
 
 // A single item: `{"data": ...}`.
@@ -26676,6 +26783,20 @@ func (s *ResolvedJobStatus) UnmarshalText(data []byte) error {
 	}
 }
 
+type RestoreCompanyOK struct {
+	Data NilProfile `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RestoreCompanyOK) GetData() NilProfile {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RestoreCompanyOK) SetData(val NilProfile) {
+	s.Data = val
+}
+
 // RestoreEmailNoContent is response for RestoreEmail operation.
 type RestoreEmailNoContent struct{}
 
@@ -26938,6 +27059,59 @@ func (s *RoleCountryCell) SetOpenCount(val int64) {
 // SetOpenCountPrev sets the value of OpenCountPrev.
 func (s *RoleCountryCell) SetOpenCountPrev(val int64) {
 	s.OpenCountPrev = val
+}
+
+// Ref: #/components/schemas/RoleDemandAnswer
+type RoleDemandAnswer struct {
+	Data []RoleDemandPoint `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RoleDemandAnswer) GetData() []RoleDemandPoint {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RoleDemandAnswer) SetData(val []RoleDemandPoint) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/RoleDemandPoint
+type RoleDemandPoint struct {
+	Category string `json:"category"`
+	// Monday of the publication week in UTC (YYYY-MM-DD).
+	Week    string `json:"week"`
+	NewJobs int64  `json:"new_jobs"`
+}
+
+// GetCategory returns the value of Category.
+func (s *RoleDemandPoint) GetCategory() string {
+	return s.Category
+}
+
+// GetWeek returns the value of Week.
+func (s *RoleDemandPoint) GetWeek() string {
+	return s.Week
+}
+
+// GetNewJobs returns the value of NewJobs.
+func (s *RoleDemandPoint) GetNewJobs() int64 {
+	return s.NewJobs
+}
+
+// SetCategory sets the value of Category.
+func (s *RoleDemandPoint) SetCategory(val string) {
+	s.Category = val
+}
+
+// SetWeek sets the value of Week.
+func (s *RoleDemandPoint) SetWeek(val string) {
+	s.Week = val
+}
+
+// SetNewJobs sets the value of NewJobs.
+func (s *RoleDemandPoint) SetNewJobs(val int64) {
+	s.NewJobs = val
 }
 
 // Ref: #/components/schemas/RoleInsight

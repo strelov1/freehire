@@ -605,6 +605,14 @@ type Handler interface {
 	//
 	// GET /stats/engagement
 	EngagementStats(ctx context.Context) (*EngagementStatsOK, error)
+	// ExcludeCompany implements excludeCompany operation.
+	//
+	// Adds the company to `excluded_companies`, creating a minimal profile when there is none. Repeating
+	// it is safe and changes nothing. `400` for a blank or over-long slug, `409` when the list already
+	// holds 200 other companies. Cookie-only.
+	//
+	// POST /me/profile/excluded-companies
+	ExcludeCompany(ctx context.Context, req *ExcludeCompanyRequest) (*ExcludeCompanyOK, error)
 	// FileProcessReport implements fileProcessReport operation.
 	//
 	// 409 when the caller already reported this kind.
@@ -1195,6 +1203,14 @@ type Handler interface {
 	//
 	// GET /insights/role-countries
 	InsightsRoleCountries(ctx context.Context, params InsightsRoleCountriesParams) (*RoleCountriesAnswer, error)
+	// InsightsRoleDemand implements insightsRoleDemand operation.
+	//
+	// Counts unique public vacancies, including closed vacancies, by publication date. If the source
+	// supplied no date, the count uses the vacancy's first catalogue appearance. The data array is empty
+	// until the first snapshot is published.
+	//
+	// GET /insights/role-demand
+	InsightsRoleDemand(ctx context.Context) (*RoleDemandAnswer, error)
 	// InsightsRolePulse implements insightsRolePulse operation.
 	//
 	// The category is required.
@@ -2115,6 +2131,13 @@ type Handler interface {
 	//
 	// POST /me/referrals/incoming/{id}/resolve
 	ResolveReferralRequest(ctx context.Context, req *ReferralResolve, params ResolveReferralRequestParams) (*ResolveReferralRequestOK, error)
+	// RestoreCompany implements restoreCompany operation.
+	//
+	// Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller has no
+	// profile. Cookie-only.
+	//
+	// DELETE /me/profile/excluded-companies/{company_slug}
+	RestoreCompany(ctx context.Context, params RestoreCompanyParams) (*RestoreCompanyOK, error)
 	// RestoreEmail implements restoreEmail operation.
 	//
 	// Undo a soft-delete. Answers 204.

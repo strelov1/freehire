@@ -27,6 +27,17 @@ jobs list's `meta.total`, the `/about` and `/open` strips — reads ONE snapshot
   it then keeps the PREVIOUSLY published value (zero on a first publication), and the snapshot
   still says `exact: true` — so the figure can be stale while marked exact.
 
+## Weekly hiring demand
+
+`/insights/compare` reads a shared [weekly snapshot](../../internal/platform/db/queries/insights_role_demand.sql).
+The rollup counts public canonical postings, including closed ones, by publication date.
+When the source gives no date, it uses the posting's first appearance in the catalogue.
+It computes on the analytics reader and publishes 12 completed Monday-to-Sunday UTC weeks
+atomically on the primary before the longer statistics rebuilds. The snapshot stores
+zero-count weeks explicitly. An empty snapshot means the rollup has not run. The
+comparison uses the last four weeks and the four before them. A zero baseline leaves
+the percentage change undefined.
+
 ## Per-source figures
 
 `GET /api/v1/sources` and the public `/sources` page read ONE snapshot, `source_stats`,

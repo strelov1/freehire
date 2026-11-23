@@ -1447,6 +1447,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/insights/role-demand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * New public vacancies by specialty for the last 12 completed UTC weeks.
+         * @description Counts unique public vacancies, including closed vacancies, by publication date.
+         *     If the source supplied no date, the count uses the vacancy's first catalogue appearance.
+         *     The data array is empty until the first snapshot is published.
+         */
+        get: operations["insightsRoleDemand"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/insights/role-pulse": {
         parameters: {
             query?: never;
@@ -4698,6 +4720,49 @@ export interface paths {
          */
         post: operations["postAtsReport"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/profile/excluded-companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hide a company from your matches.
+         * @description Adds the company to `excluded_companies`, creating a minimal profile when there is none.
+         *     Repeating it is safe and changes nothing. `400` for a blank or over-long slug, `409` when
+         *     the list already holds 200 other companies. Cookie-only.
+         */
+        post: operations["excludeCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/profile/excluded-companies/{company_slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Restore a hidden company.
+         * @description Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller
+         *     has no profile. Cookie-only.
+         */
+        delete: operations["restoreCompany"];
         options?: never;
         head?: never;
         patch?: never;
@@ -8373,6 +8438,11 @@ export interface components {
             /** Format: int64 */
             saved_searches: number;
         };
+        /** @description The company to hide from the match feeds. */
+        ExcludeCompanyRequest: {
+            /** @description The company's slug. (e.g. `acme`) */
+            company_slug: string;
+        };
         /** @description One piece of evidence, at the grain of a CV bullet. The three flags below are computed at read time. */
         ExperienceAtom: {
             id: string;
@@ -8556,6 +8626,10 @@ export interface components {
          * @enum {string}
          */
         HealthStatus: "operational" | "degraded" | "down";
+        /** @description The meta of a save: the body fields that were read and not applied. */
+        IgnoredFieldsMeta: {
+            ignored_fields?: string[];
+        };
         /** @description The meta of a single-item answer, sent only to carry a warning. */
         IgnoredMeta: {
             ignored_params?: components["schemas"]["IgnoredParam"][];
@@ -9842,6 +9916,11 @@ export interface components {
              *     language. (e.g. `["en","ru"]`)
              */
             job_languages?: string[] | null;
+            /**
+             * @description Deprecated and ignored: the list changes only through `/me/profile/excluded-companies`,
+             *     so a save from a stale page cannot erase a hidden company. Still accepted, and named in
+             *     `meta.ignored_fields` when sent.
+             */
             excluded_companies?: string[] | null;
             /** @description Shaped like LocationPreferences; null or absent keeps none. */
             location_preferences?: unknown;
@@ -10127,6 +10206,16 @@ export interface components {
             open_count: number;
             /** Format: int64 */
             open_count_prev: number;
+        };
+        RoleDemandAnswer: {
+            data: components["schemas"]["RoleDemandPoint"][];
+        };
+        RoleDemandPoint: {
+            category: string;
+            /** @description Monday of the publication week in UTC (YYYY-MM-DD). */
+            week: string;
+            /** Format: int64 */
+            new_jobs: number;
         };
         RoleInsight: {
             category: string;
@@ -14417,6 +14506,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleCountriesAnswer"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    insightsRoleDemand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "category": "backend",
+                     *           "week": "2026-11-16",
+                     *           "new_jobs": 42
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RoleDemandAnswer"];
                 };
             };
             /** @description An unexpected error response. */
@@ -23122,6 +23251,7 @@ export interface operations {
                      */
                     "application/json": {
                         data: components["schemas"]["Profile"];
+                        meta?: components["schemas"]["IgnoredFieldsMeta"];
                     };
                 };
             };
@@ -23255,6 +23385,79 @@ export interface operations {
                      */
                     "application/json": {
                         data: unknown;
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    excludeCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "company_slug": "acme"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ExcludeCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Profile"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    restoreCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Profile"] | null;
                     };
                 };
             };
