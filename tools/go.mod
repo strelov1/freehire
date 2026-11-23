@@ -24,7 +24,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bogdanfinn/fhttp v0.7.3 // indirect
 	github.com/bogdanfinn/quic-go-utls v1.0.13-utls // indirect
-	github.com/bogdanfinn/tls-client v1.18.0 // indirect
+	github.com/bogdanfinn/tls-client v1.18.1 // indirect
 	github.com/bogdanfinn/utls v1.8.2-barnius // indirect
 	github.com/bogdanfinn/websocket v1.5.9-barnius // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
