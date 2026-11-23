@@ -49,7 +49,7 @@ func run() int {
 	connector := gmailsync.NewConnector(g.ClientID, g.ClientSecret, cfg.FrontendOrigin)
 	calendar := bookinglink.NewGoogleCalendar(q, connector, cipher)
 	failed := 0
-	if err := bookinglink.RunInvitations(ctx, bookinglink.NewInvitationQueries(q, cfg.InterviewSchedulingPilotUserID), calendar, 30); err != nil {
+	if err := bookinglink.RunInvitations(ctx, bookinglink.NewInvitationQueries(q, cfg.InterviewSchedulingPilotUserID, cfg.InterviewSchedulingRecruiter), calendar, 30); err != nil {
 		log.Printf("interview-schedule: calendar: %v", err)
 		failed++
 	}
@@ -74,7 +74,7 @@ func run() int {
 	if cfg.InterviewSchedulingPilotUserID > 0 {
 		allow = []int64{cfg.InterviewSchedulingPilotUserID}
 	}
-	agent := interviewscheduling.NewWorker(q, bookings, plans, model, keys, cipher, connector, cfg.FrontendOrigin, allow)
+	agent := interviewscheduling.NewWorker(q, bookings, plans, model, keys, cipher, connector, cfg.FrontendOrigin, allow, cfg.InterviewSchedulingRecruiter)
 	if err := agent.Run(ctx, 30); err != nil {
 		log.Printf("interview-schedule: gmail: %v", err)
 		failed++

@@ -55,6 +55,7 @@ WITH due AS (
       AND coalesce(a.stage, 'applied') NOT IN ('accepted', 'rejected', 'withdrawn')
       AND gc.status = 'connected' AND gc.email <> '' AND $1::text[] <@ gc.scopes
       AND (cardinality($2::bigint[]) = 0 OR s.user_id = ANY($2::bigint[]))
+      AND ($3::text = '' OR lower(s.recruiter_email) = lower($3::text))
     ORDER BY s.next_at, s.id
     LIMIT 1
     FOR UPDATE OF s SKIP LOCKED
@@ -69,6 +70,7 @@ RETURNING s.id, s.user_id, s.application_id, s.anchor_email_id, s.gmail_thread_i
 type ClaimInterviewSchedulingThreadParams struct {
 	RequiredScopes []string `json:"required_scopes"`
 	AllowUsers     []int64  `json:"allow_users"`
+	PilotRecruiter string   `json:"pilot_recruiter"`
 }
 
 type ClaimInterviewSchedulingThreadRow struct {
@@ -100,7 +102,7 @@ type ClaimInterviewSchedulingThreadRow struct {
 }
 
 func (q *Queries) ClaimInterviewSchedulingThread(ctx context.Context, arg ClaimInterviewSchedulingThreadParams) (ClaimInterviewSchedulingThreadRow, error) {
-	row := q.db.QueryRow(ctx, claimInterviewSchedulingThread, arg.RequiredScopes, arg.AllowUsers)
+	row := q.db.QueryRow(ctx, claimInterviewSchedulingThread, arg.RequiredScopes, arg.AllowUsers, arg.PilotRecruiter)
 	var i ClaimInterviewSchedulingThreadRow
 	err := row.Scan(
 		&i.ID,
@@ -350,6 +352,7 @@ WHERE e.source = 'gmail' AND e.direction = 'incoming' AND e.deleted_at IS NULL
   AND gc.status = 'connected' AND gc.email <> '' AND lower(gc.email) <> lower(e.from_addr)
   AND $1::text[] <@ gc.scopes
   AND (cardinality($2::bigint[]) = 0 OR e.user_id = ANY($2::bigint[]))
+  AND ($3::text = '' OR lower(e.from_addr) = lower($3::text))
   AND s.id IS NULL
 ORDER BY e.user_id, e.thread_id, e.received_at DESC, e.id DESC
 LIMIT 200
@@ -359,10 +362,11 @@ ON CONFLICT (user_id, gmail_thread_id) DO NOTHING
 type SeedInterviewSchedulingThreadsParams struct {
 	RequiredScopes []string `json:"required_scopes"`
 	AllowUsers     []int64  `json:"allow_users"`
+	PilotRecruiter string   `json:"pilot_recruiter"`
 }
 
 func (q *Queries) SeedInterviewSchedulingThreads(ctx context.Context, arg SeedInterviewSchedulingThreadsParams) error {
-	_, err := q.db.Exec(ctx, seedInterviewSchedulingThreads, arg.RequiredScopes, arg.AllowUsers)
+	_, err := q.db.Exec(ctx, seedInterviewSchedulingThreads, arg.RequiredScopes, arg.AllowUsers, arg.PilotRecruiter)
 	return err
 }
 

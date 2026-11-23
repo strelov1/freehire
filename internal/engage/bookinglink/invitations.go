@@ -56,17 +56,18 @@ func RunInvitations(ctx context.Context, store InvitationStore, sender Invitatio
 }
 
 type InvitationQueries struct {
-	q           *db.Queries
-	pilotUserID int64
+	q              *db.Queries
+	pilotUserID    int64
+	pilotRecruiter string
 }
 
-func NewInvitationQueries(q *db.Queries, pilotUserID int64) *InvitationQueries {
-	return &InvitationQueries{q: q, pilotUserID: pilotUserID}
+func NewInvitationQueries(q *db.Queries, pilotUserID int64, pilotRecruiter string) *InvitationQueries {
+	return &InvitationQueries{q: q, pilotUserID: pilotUserID, pilotRecruiter: pilotRecruiter}
 }
 
 func (s *InvitationQueries) Claim(ctx context.Context) (Invitation, bool, error) {
 	row, err := s.q.ClaimBookingCalendarInvitation(ctx, db.ClaimBookingCalendarInvitationParams{
-		CalendarWriteScope: gmailsync.CalendarEventsScope, PilotUserID: s.pilotUserID,
+		CalendarWriteScope: gmailsync.CalendarEventsScope, PilotUserID: s.pilotUserID, PilotRecruiter: s.pilotRecruiter,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Invitation{}, false, nil

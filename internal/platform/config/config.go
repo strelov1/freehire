@@ -61,6 +61,7 @@ type Settings struct {
 	GmailTokenKey                  []byte
 	InterviewSchedulingEnabled     bool
 	InterviewSchedulingPilotUserID int64
+	InterviewSchedulingRecruiter   string
 
 	// MailboxDomain is the receiving domain hosted mailboxes live on (<handle>@MailboxDomain).
 	// Empty turns the hosted-mailbox option off. Not named MAIL_DOMAIN: that reads like the SES
@@ -324,6 +325,7 @@ func Load() Settings {
 		GmailTokenKey:                  decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
 		InterviewSchedulingEnabled:     envBool("INTERVIEW_SCHEDULING_ENABLED", false),
 		InterviewSchedulingPilotUserID: interviewSchedulingPilotUserID(),
+		InterviewSchedulingRecruiter:   strings.TrimSpace(os.Getenv("INTERVIEW_SCHEDULING_PILOT_RECRUITER_EMAIL")),
 		MailboxDomain:                  os.Getenv("MAILBOX_DOMAIN"),
 		TypesafeAPIKey:                 os.Getenv("TYPESAFE_API_KEY"),
 		MeiliURL:                       env("MEILI_URL", "http://localhost:7700"),

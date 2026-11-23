@@ -84,6 +84,7 @@ WITH due AS (
       AND gc.status = 'connected'
       AND sqlc.arg(calendar_write_scope)::text = ANY (gc.scopes)
       AND (sqlc.arg(pilot_user_id)::bigint = 0 OR b.user_id = sqlc.arg(pilot_user_id)::bigint)
+      AND (sqlc.arg(pilot_recruiter)::text = '' OR lower(b.recruiter_email) = lower(sqlc.arg(pilot_recruiter)::text))
     ORDER BY b.calendar_invitation_next_at, b.id
     LIMIT 1
     FOR UPDATE OF b SKIP LOCKED

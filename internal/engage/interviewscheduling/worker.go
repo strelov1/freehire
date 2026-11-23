@@ -40,26 +40,28 @@ type Worker struct {
 	client  func(context.Context, string) *http.Client
 	origin  string
 	allow   []int64
+
+	pilotRecruiter string
 }
 
 func NewWorker(q *db.Queries, booking *bookinglink.Service, plans *plan.Store, model *llm.Client,
-	keys *llmkey.Resolver, cipher *tokencrypt.Cipher, connector *gmailsync.Connector, origin string, allow []int64,
+	keys *llmkey.Resolver, cipher *tokencrypt.Cipher, connector *gmailsync.Connector, origin string, allow []int64, pilotRecruiter string,
 ) *Worker {
 	return &Worker{planner: readDecision, q: q, booking: booking, plans: plans, model: model, keys: keys,
 		cipher: cipher, client: connector.HTTPClient, origin: strings.TrimRight(origin, "/"),
-		allow: append([]int64{}, allow...)}
+		allow: append([]int64{}, allow...), pilotRecruiter: pilotRecruiter}
 }
 
 func (w *Worker) Run(ctx context.Context, limit int) error {
 	if err := w.q.SeedInterviewSchedulingThreads(ctx, db.SeedInterviewSchedulingThreadsParams{
-		RequiredScopes: RequiredScopes(), AllowUsers: w.allow,
+		RequiredScopes: RequiredScopes(), AllowUsers: w.allow, PilotRecruiter: w.pilotRecruiter,
 	}); err != nil {
 		return err
 	}
 	var failures error
 	for range limit {
 		row, err := w.q.ClaimInterviewSchedulingThread(ctx, db.ClaimInterviewSchedulingThreadParams{
-			RequiredScopes: RequiredScopes(), AllowUsers: w.allow,
+			RequiredScopes: RequiredScopes(), AllowUsers: w.allow, PilotRecruiter: w.pilotRecruiter,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			break

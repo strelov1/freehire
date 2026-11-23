@@ -36,7 +36,7 @@ func TestBookingsQueueAnInvitationOnlyAfterCalendarOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := bookinglink.NewInvitationQueries(q, 0)
+	store := bookinglink.NewInvitationQueries(q, 0, "")
 	in := bookinglink.BookInput{
 		Token: token, StartsAt: nextWeekday10(t), Name: "Jane", Email: "jane@example.test",
 	}
@@ -54,6 +54,11 @@ func TestBookingsQueueAnInvitationOnlyAfterCalendarOptIn(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	outsidePilot := bookinglink.NewInvitationQueries(q, userID, "other@example.test")
+	if _, found, err := outsidePilot.Claim(ctx); err != nil || found {
+		t.Fatalf("pilot claimed a booking for another recruiter: found = %v, err = %v", found, err)
+	}
+	store = bookinglink.NewInvitationQueries(q, userID, "JANE@example.test")
 	invite, found, err := store.Claim(ctx)
 	if err != nil || !found || invite.Event.Attendee != in.Email || !invite.Event.StartsAt.Equal(in.StartsAt) {
 		t.Fatalf("invitation = %+v, found = %v, err = %v", invite.Event, found, err)
