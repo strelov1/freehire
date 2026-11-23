@@ -862,8 +862,9 @@ type Handler interface {
 	GetInbox(ctx context.Context, params GetInboxParams) (*InboxPage, error)
 	// GetInterviewPrep implements getInterviewPrep operation.
 	//
-	// Practice questions from the posting. A signed-in caller can also see examples from their own
-	// experience bank.
+	// Practice questions from a public posting. A signed-in caller can also see examples from their own
+	// Experience Bank. For a closed posting, a session cookie and an application in the interview stage
+	// are required. Otherwise the endpoint returns 404.
 	//
 	// GET /jobs/{slug}/interview-prep
 	GetInterviewPrep(ctx context.Context, params GetInterviewPrepParams) (*GetInterviewPrepOK, error)

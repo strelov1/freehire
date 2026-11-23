@@ -353,7 +353,10 @@ model InterviewPrepSheet {
 @get
 op getResumeReviewPosting(/** The public posting slug. */ @path slug: string): Data<ResumeReviewPosting> | Problem;
 
-/** Practice questions from the posting. A signed-in caller can also see examples from their own experience bank. */
+/**
+ * Practice questions from a public posting. A signed-in caller can also see examples from their own Experience Bank.
+ * For a closed posting, a session cookie and an application in the interview stage are required. Otherwise the endpoint returns 404.
+ */
 @summary("Get a posting-based interview preparation sheet.")
 @useAuth(NoAuth)
 @opExample(#{ returnType: #{ data: #{

@@ -17,7 +17,7 @@ const action =
   /^(?:I\s+)?(?:automated|built|configured|created|debugged|delivered|deployed|designed|developed|implemented|improved|integrated|led|maintained|managed|migrated|operated|optimized|owned|reduced|shipped|supported|tested|used|wrote)\b/i;
 
 const negation =
-  /\b(?:without|never (?:used|worked with)|no (?:hands-on )?experience (?:with|in)|haven['’]t (?:used|worked with)|not familiar with)\s*$/i;
+  /\b(?:without|never (?:used|worked with)|no (?:hands-on )?experience (?:with|in)|haven['’]t (?:used|worked with)|not familiar with)\s*(?:[^.!?;:\n]*?(?:,|\/|\b(?:and|or)\b)\s*)?$/i;
 
 function escapePattern(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

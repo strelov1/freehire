@@ -1928,7 +1928,8 @@ export interface paths {
         };
         /**
          * Get a posting-based interview preparation sheet.
-         * @description Practice questions from the posting. A signed-in caller can also see examples from their own experience bank.
+         * @description Practice questions from a public posting. A signed-in caller can also see examples from their own Experience Bank.
+         *     For a closed posting, a session cookie and an application in the interview stage are required. Otherwise the endpoint returns 404.
          */
         get: operations["getInterviewPrep"];
         put?: never;

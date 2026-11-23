@@ -36,4 +36,12 @@ describe('reviewResume', () => {
       ['cpp', 'example'],
     ]);
   });
+  it.each([
+    ['Built services without AWS or Azure.', ['missing', 'missing']],
+    ['Built services without AWS, Azure, or Go.', ['missing', 'missing']],
+    ['Built services with AWS and Azure.', ['example', 'example']],
+    ['Built services without AWS, then deployed to Azure.', ['missing', 'example']],
+  ])('interprets listed skills in %s', (line, kinds) => {
+    expect(reviewResume(line, ['aws', 'azure'], []).map(({ kind }) => kind)).toEqual(kinds);
+  });
 });
