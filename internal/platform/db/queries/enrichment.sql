@@ -129,12 +129,19 @@ RETURNING o.id, o.job_id, o.target_version;
 -- ingest on the hottest table in the schema to prevent an hour's delay on a job that is not
 -- yet enriched anyway. DeleteIneligibleSearchOutbox carries the identical race for the identical
 -- reason.
-DELETE FROM enrichment_outbox
-WHERE id IN (
+-- A live claim is never reaped. The reap runs beside the drain, so a job that became
+-- eligible mid-scan can be claimed (claimed_at set) before this DELETE reaches its row;
+-- deleting it then would make Complete a silent no-op and the re-enqueue a second paid call.
+-- The claimed_at test is repeated on the outer table so it is re-checked against the
+-- committed row version when the DELETE waited on that claim. An hour covers any lease.
+DELETE FROM enrichment_outbox e
+WHERE (e.claimed_at IS NULL OR e.claimed_at < now() - interval '1 hour')
+  AND e.id IN (
     SELECT o.id
     FROM enrichment_outbox o
     LEFT JOIN jobs j ON j.id = o.job_id
     WHERE o.failed_at IS NULL
+      AND (o.claimed_at IS NULL OR o.claimed_at < now() - interval '1 hour')
       AND (j.id IS NULL OR j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL)
     LIMIT sqlc.arg(max_rows)
 );

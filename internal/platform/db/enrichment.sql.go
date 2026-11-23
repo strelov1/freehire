@@ -84,12 +84,14 @@ func (q *Queries) DeleteEnrichmentEntry(ctx context.Context, id int64) error {
 }
 
 const deleteIneligibleEnrichmentOutbox = `-- name: DeleteIneligibleEnrichmentOutbox :execrows
-DELETE FROM enrichment_outbox
-WHERE id IN (
+DELETE FROM enrichment_outbox e
+WHERE (e.claimed_at IS NULL OR e.claimed_at < now() - interval '1 hour')
+  AND e.id IN (
     SELECT o.id
     FROM enrichment_outbox o
     LEFT JOIN jobs j ON j.id = o.job_id
     WHERE o.failed_at IS NULL
+      AND (o.claimed_at IS NULL OR o.claimed_at < now() - interval '1 hour')
       AND (j.id IS NULL OR j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL)
     LIMIT $1
 )
@@ -131,6 +133,11 @@ WHERE id IN (
 // ingest on the hottest table in the schema to prevent an hour's delay on a job that is not
 // yet enriched anyway. DeleteIneligibleSearchOutbox carries the identical race for the identical
 // reason.
+// A live claim is never reaped. The reap runs beside the drain, so a job that became
+// eligible mid-scan can be claimed (claimed_at set) before this DELETE reaches its row;
+// deleting it then would make Complete a silent no-op and the re-enqueue a second paid call.
+// The claimed_at test is repeated on the outer table so it is re-checked against the
+// committed row version when the DELETE waited on that claim. An hour covers any lease.
 func (q *Queries) DeleteIneligibleEnrichmentOutbox(ctx context.Context, maxRows int32) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteIneligibleEnrichmentOutbox, maxRows)
 	if err != nil {
