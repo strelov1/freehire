@@ -8,9 +8,7 @@ const job = {
 };
 
 test('a guest can choose a posting and open its practice sheet', async ({ page }) => {
-  await page.route('**/api/v1/jobs/search?*', (route) =>
-    route.fulfill({ json: { data: [job], meta: { total: 1 } } }),
-  );
+  await page.route('**/api/v1/jobs/search?*', (route) => route.fulfill({ json: { data: [job], meta: { total: 1 } } }));
   await page.route(`**/api/v1/jobs/${job.public_slug}/interview-prep`, (route) =>
     route.fulfill({
       json: {

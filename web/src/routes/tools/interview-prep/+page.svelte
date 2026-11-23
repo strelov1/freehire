@@ -2,7 +2,6 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ArrowLeft } from '@lucide/svelte';
   import { tick } from 'svelte';
   import { api, ApiError } from '#lib/api.js';
   import type { InterviewPrepSheet, ToolJob } from '#lib/api-methods/jobs.js';
@@ -13,7 +12,8 @@
   import { Button } from '#lib/ui/index.js';
 
   const title = 'Interview prep';
-  const description = 'Pick a Freehire job to practice questions based on its posting and find examples you can use in your answers.';
+  const description =
+    'Pick a Freehire job to practice questions based on its posting and find examples you can use in your answers.';
   const slug = $derived(page.url.searchParams.get('job'));
   const userID = $derived(currentUser()?.id);
   type SheetResult =
@@ -44,11 +44,6 @@
       const data = await api.getInterviewPrep(selected, signal);
       if (signal.aborted) return;
       outcome = { slug: selected, userID: viewer, result: { kind: 'loaded', sheet: data } };
-      if (focusForSlug === selected) {
-        focusForSlug = undefined;
-        await tick();
-        if (!signal.aborted) questionsHeading?.focus();
-      }
     } catch (e) {
       if (signal.aborted) return;
       const retryable = !(e instanceof ApiError && e.status === 404);
@@ -56,12 +51,11 @@
         ? 'We couldn’t load your prep sheet.'
         : 'This job is no longer available. Choose another job below.';
       outcome = { slug: selected, userID: viewer, result: { kind: 'error', message, retryable } };
-      if (focusForSlug === selected) {
-        focusForSlug = undefined;
-        await tick();
-        if (!signal.aborted) picker?.querySelector('input')?.focus();
-      }
     }
+    if (focusForSlug !== selected) return;
+    focusForSlug = undefined;
+    await tick();
+    if (!signal.aborted) (questionsHeading ?? picker?.querySelector('input'))?.focus();
   }
 
   async function selectJob(job: ToolJob) {
@@ -84,10 +78,7 @@
 <Seo title={title + ' · Freehire'} {description} canonical={page.url.origin + resolve('/tools/interview-prep')} />
 
 <div class="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-  <a href={resolve('/tools')} class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-    <ArrowLeft class="size-4" aria-hidden="true" />
-    Job search tools
-  </a>
+  <a href={resolve('/tools')} class="text-sm text-muted-foreground hover:underline">Job search tools</a>
   <h1 class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
   <p class="mt-3 max-w-xl text-muted-foreground">{description}</p>
 
@@ -96,13 +87,13 @@
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="min-w-0">
           <h2 class="wrap-break-word font-semibold">
-            <a href={resolve('/jobs/[slug]', { slug: sheet.job.public_slug })} class="hover:underline">{sheet.job.title}</a>
+            <a href={resolve('/jobs/[slug]', { slug: sheet.job.public_slug })} class="hover:underline"
+              >{sheet.job.title}</a
+            >
           </h2>
-          {#if sheet.job.company || sheet.job.location}
-            <p class="wrap-break-word text-sm text-muted-foreground">
-              {[sheet.job.company, sheet.job.location].filter(Boolean).join(' · ')}
-            </p>
-          {/if}
+          <p class="wrap-break-word text-sm text-muted-foreground">
+            {[sheet.job.company, sheet.job.location].filter(Boolean).join(' · ')}
+          </p>
         </div>
         <Button variant="outline" size="sm" onclick={changeJob}>Change job</Button>
       </div>
@@ -125,8 +116,9 @@
 
   {#if sheet}
     <section class="mt-7" aria-labelledby="prep-questions">
-      <h2 id="prep-questions" class="text-xl font-semibold" tabindex="-1" bind:this={questionsHeading}>Practice questions</h2>
-      <p class="mt-1 text-sm text-muted-foreground">Use these posting-based prompts to practice before your interview.</p>
+      <h2 id="prep-questions" class="text-xl font-semibold" tabindex="-1" bind:this={questionsHeading}>
+        Practice questions
+      </h2>
       <ol class="mt-4 list-decimal space-y-4 pl-5 marker:text-muted-foreground">
         {#each sheet.questions as { topic, prompt }, i (i)}
           <li class="wrap-break-word pl-1">
@@ -144,8 +136,11 @@
         <Button
           class="mt-3"
           variant="outline"
-          href={signinUrl({ returnTo: `${resolve('/tools/interview-prep')}?job=${encodeURIComponent(sheet.job.public_slug)}`, mode: 'login' })}
-        >Sign in to find examples</Button>
+          href={signinUrl({
+            returnTo: `${resolve('/tools/interview-prep')}?job=${encodeURIComponent(sheet.job.public_slug)}`,
+            mode: 'login',
+          })}>Sign in to find examples</Button
+        >
       {:else if sheet.examples_unavailable}
         <p role="alert" class="mt-2 text-sm text-destructive">We couldn’t load examples from your Experience Bank.</p>
         <Button class="mt-3" variant="outline" onclick={() => attempt++}>Try again</Button>
@@ -156,10 +151,8 @@
         <ul class="ph-no-capture mt-4 divide-y divide-border border-y border-border">
           {#each sheet.examples as example, i (i)}
             <li class="space-y-3 wrap-break-word py-4">
-              <div>
-                <h3 class="font-medium">{example.claim}</h3>
-                {#if example.place}<p class="text-sm text-muted-foreground">{example.place}</p>{/if}
-              </div>
+              <h3 class="font-medium">{example.claim}</h3>
+              {#if example.place}<p class="text-sm text-muted-foreground">{example.place}</p>{/if}
               <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
                 {@render starDetail('Situation', 'What was happening, and why did it matter?', example.context)}
                 {@render starDetail('Task', 'What were you responsible for?')}
@@ -171,7 +164,7 @@
         </ul>
       {:else}
         <p class="mt-2 text-sm text-muted-foreground">
-          We found no confirmed examples for this posting. Add an achievement or import your CV, then come back to this sheet.
+          Add an achievement or upload a CV to find examples for this posting.
         </p>
         <div class="mt-3 flex flex-wrap gap-2">
           <Button variant="outline" href={resolve('/my/profile/experience')}>Open Experience Bank</Button>

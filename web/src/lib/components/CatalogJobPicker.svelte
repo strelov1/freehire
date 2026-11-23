@@ -8,18 +8,13 @@
 
   const inputId = $props.id();
   let query = $state('');
-  let jobs = $state.raw<ToolJob[]>([]);
-  let searching = $state(false);
-  let searchError = $state(false);
+  let result = $state.raw<ToolJob[] | 'searching' | 'error'>([]);
   let searchAttempt = $state(0);
 
   $effect(() => {
     const q = query.trim();
-    jobs = [];
-    searchError = false;
-    searching = false;
+    result = q ? 'searching' : [];
     if (!q) return;
-    searching = true;
 
     // Retry the same query when the visitor asks, and cancel superseded searches.
     void searchAttempt;
@@ -34,22 +29,19 @@
   async function runSearch(q: string, signal: AbortSignal) {
     try {
       const { items } = await api.searchJobs(new URLSearchParams({ q, q_fields: 'title,company' }), 8, 0, signal);
-      if (!signal.aborted) jobs = items;
+      if (!signal.aborted) result = items;
     } catch {
-      if (!signal.aborted) searchError = true;
-    } finally {
-      if (!signal.aborted) searching = false;
+      if (!signal.aborted) result = 'error';
     }
-  }
-
-  function jobContext({ company, location }: ToolJob): string {
-    return [company, location].filter(Boolean).join(' · ');
   }
 </script>
 
 <label for={inputId} class="text-sm font-medium">Find a job</label>
 <div class="relative mt-2">
-  <Search class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+  <Search
+    class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+    aria-hidden="true"
+  />
   <Input
     id={inputId}
     bind:value={query}
@@ -61,16 +53,16 @@
   />
 </div>
 <div aria-live="polite">
-  {#if searching}
+  {#if result === 'searching'}
     <p class="mt-2 text-sm text-muted-foreground">Searching jobs…</p>
-  {:else if searchError}
+  {:else if result === 'error'}
     <div class="mt-2 flex flex-wrap items-center gap-2">
       <p class="text-sm text-destructive">We couldn’t search jobs.</p>
       <Button size="sm" variant="outline" onclick={() => searchAttempt++}>Try again</Button>
     </div>
-  {:else if jobs.length > 0}
+  {:else if result.length > 0}
     <ul class="mt-2 divide-y divide-border rounded-lg border border-border">
-      {#each jobs as option (option.public_slug)}
+      {#each result as option (option.public_slug)}
         <li>
           <button
             type="button"
@@ -80,7 +72,9 @@
             <span class="min-w-0 wrap-break-word">
               <span class="block text-sm font-medium">{option.title}</span>
               {#if option.company || option.location}
-                <span class="block text-sm text-muted-foreground">{jobContext(option)}</span>
+                <span class="block text-sm text-muted-foreground"
+                  >{[option.company, option.location].filter(Boolean).join(' · ')}</span
+                >
               {/if}
             </span>
             <ArrowRight class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />

@@ -11,9 +11,7 @@ const job = {
 const resume = 'Built payment APIs in Go and cut response times by 30%.\nSkills: PostgreSQL';
 
 test('a guest can review a resume against a selected posting without sending its text', async ({ page }) => {
-  await page.route(`**/api/v1/jobs/${job.public_slug}/skill-fit`, (route) =>
-    route.fulfill({ json: { data: job } }),
-  );
+  await page.route(`**/api/v1/jobs/${job.public_slug}/skill-fit`, (route) => route.fulfill({ json: { data: job } }));
   const requestsWithResume: string[] = [];
   page.on('request', (request) => {
     if (request.postData()?.includes('Built payment APIs')) requestsWithResume.push(request.url());
@@ -27,7 +25,7 @@ test('a guest can review a resume against a selected posting without sending its
   const results = page.getByRole('region', { name: 'What to change before you apply' });
   await expect(results).toContainText('Built payment APIs in Go and cut response times by 30%.');
   await expect(results).toContainText('Move this bullet up');
-  await expect(results).toContainText('If you used PostgreSQL on a project, add a bullet');
+  await expect(results).toContainText('If you used PostgreSQL on a project, say what you did');
   await expect(results).toContainText('Production experience with AWS');
   await expect(results).toContainText('If you’ve used AWS, add a real example.');
   expect(requestsWithResume).toEqual([]);

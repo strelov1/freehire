@@ -89,7 +89,7 @@ func TestPublicJobTools(t *testing.T) {
 		t.Helper()
 		req := httptest.NewRequestWithContext(ctx, "GET", "/api/v1/jobs/"+slug+path, nil)
 		if token != "" {
-			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		}
 		res, err := app.Test(req)
 		if err != nil {
@@ -123,10 +123,7 @@ func TestPublicJobTools(t *testing.T) {
 	}
 	guest := request("prep-open", "", 200)
 	var payload struct {
-		Data struct {
-			Questions []struct{ Prompt, Topic string }
-			Examples  json.RawMessage
-		}
+		Data interviewPrepSheet
 	}
 	if err := json.Unmarshal([]byte(guest), &payload); err != nil {
 		t.Fatal(err)

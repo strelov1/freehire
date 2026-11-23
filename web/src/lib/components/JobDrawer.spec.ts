@@ -319,8 +319,9 @@ describe('JobDrawer interview actions', () => {
 
   it('links to a prep sheet for the posting at the interview stage', () => {
     render(JobDrawer, props({ stage: 'interview' }));
-    expect(screen.getByRole('link', { name: 'Вопросы к собеседованию' }).getAttribute('href'))
-      .toBe(`/tools/interview-prep?job=${job.public_slug}`);
+    expect(screen.getByRole('link', { name: 'Вопросы к собеседованию' }).getAttribute('href')).toBe(
+      `/tools/interview-prep?job=${job.public_slug}`,
+    );
   });
 
   it('omits interview actions before an interview stage or after the posting is gone', () => {

@@ -15,7 +15,7 @@ vi.mock('$app/paths', () => ({ resolve: (path: string) => path, assets: '' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('#lib/auth.svelte.js', () => ({ currentUser }));
 vi.mock('#lib/api.js', async (importOriginal) => ({
-  ...await importOriginal<typeof import('#lib/api.js')>(),
+  ...(await importOriginal<typeof import('#lib/api.js')>()),
   api: { getInterviewPrep },
 }));
 
@@ -50,13 +50,18 @@ it('keeps practice questions available alongside links to add or import evidence
   render(PrepPage);
 
   expect(await screen.findByText('What trade-off did you make?')).toBeTruthy();
-  expect(screen.getByRole('link', { name: 'Open Experience Bank' }).getAttribute('href')).toBe('/my/profile/experience');
+  expect(screen.getByRole('link', { name: 'Open Experience Bank' }).getAttribute('href')).toBe(
+    '/my/profile/experience',
+  );
   expect(screen.getByRole('link', { name: 'Upload a CV' }).getAttribute('href')).toBe('/my/profile');
 });
 
 it('keeps private evidence out of a guest sheet', async () => {
   currentUser.mockReturnValue(null);
-  getInterviewPrep.mockResolvedValue({ ...posting, examples: [{ claim: 'Private example' }] } satisfies InterviewPrepSheet);
+  getInterviewPrep.mockResolvedValue({
+    ...posting,
+    examples: [{ claim: 'Private example' }],
+  } satisfies InterviewPrepSheet);
   render(PrepPage);
 
   expect(await screen.findByText('What trade-off did you make?')).toBeTruthy();

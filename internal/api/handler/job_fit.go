@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"

@@ -327,7 +327,7 @@ func Register(app *fiber.App, cfg Config) {
 	mountSignedInDoor(app, mw.key)
 
 	// The email preference centre. Its three public routes are unauthenticated on purpose: a
-	// person holding one of our mails must be able to turn it off without an account, so the
+	// recipient can opt out without an account, so the
 	// signed token stands in for a session. The two /me routes are the same switches for a
 	// cookie-authenticated caller.
 	emailPrefsH := newEmailPrefsHandlers(mail.prefs)

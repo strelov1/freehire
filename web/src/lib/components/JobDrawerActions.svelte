@@ -90,8 +90,8 @@
           variant="outline"
           size="sm"
           href={`${resolve('/tools/interview-prep')}?job=${encodeURIComponent(jobSlug)}`}
-          class={actionClass}
-        >{s.interview.prepSheet}</Button>
+          class={actionClass}>{s.interview.prepSheet}</Button
+        >
       {/if}
       {#if canDebrief}
         <Button

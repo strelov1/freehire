@@ -55,8 +55,8 @@
               variant="ghost"
               size="sm"
               href={`${resolve('/tools/job-fit')}?job=${encodeURIComponent(job.public_slug)}`}
-              aria-label="Review your resume for {job.title}"
-            >Review resume</Button>
+              aria-label="Review your resume for {job.title}">Review resume</Button
+            >
           {/if}
         {/snippet}
       </JobRow>

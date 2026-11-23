@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ArrowLeft, ArrowRight } from '@lucide/svelte';
+  import { ArrowRight } from '@lucide/svelte';
   import { tick } from 'svelte';
   import { api, ApiError } from '#lib/api.js';
   import type { ResumeReviewPosting, ToolJob } from '#lib/api-methods/jobs.js';
@@ -16,7 +16,8 @@
 
   const title = 'Review your resume for a job';
   const description = 'See which lines to highlight and where to add an example before you apply.';
-  const sampleResume = 'Backend Engineer\nBuilt payment APIs in Go and cut response times by 30%.\nSkills: Go, PostgreSQL, Docker';
+  const sampleResume =
+    'Backend Engineer\nBuilt payment APIs in Go and cut response times by 30%.\nSkills: Go, PostgreSQL, Docker';
   const slug = $derived(page.url.searchParams.get('job'));
 
   type LoadResult = { job: ResumeReviewPosting; error?: never } | { job?: never; error: string };
@@ -29,9 +30,7 @@
   let picker = $state<HTMLDivElement>();
   let resumeInput = $state<HTMLTextAreaElement>();
   let resultsHeading = $state<HTMLHeadingElement>();
-  const findings = $derived(reviewed && job
-    ? reviewResume(resume, job.skills ?? [], job.requirements ?? [])
-    : []);
+  const findings = $derived(reviewed && job ? reviewResume(resume, job.skills ?? [], job.requirements ?? []) : []);
   const tailorPath = $derived(job ? resolve('/tailor/[slug]', { slug: job.public_slug }) : '');
 
   $effect(() => {
@@ -50,9 +49,10 @@
       if (!signal.aborted) loaded = { slug: selected, result: { job: posting } };
     } catch (error) {
       if (!signal.aborted) {
-        const message = error instanceof ApiError && error.status === 404
-          ? 'This job is no longer available. Choose another job below.'
-          : 'We couldn’t load this job. Search for it below.';
+        const message =
+          error instanceof ApiError && error.status === 404
+            ? 'This job is no longer available. Choose another job below.'
+            : 'We couldn’t load this job. Search for it below.';
         loaded = { slug: selected, result: { error: message } };
       }
     }
@@ -93,10 +93,7 @@
 <Seo title={title + ' · Freehire'} {description} canonical={page.url.origin + resolve('/tools/job-fit')} />
 
 <div class="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-  <a href={resolve('/tools')} class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-    <ArrowLeft class="size-4" aria-hidden="true" />
-    Job search tools
-  </a>
+  <a href={resolve('/tools')} class="text-sm text-muted-foreground hover:underline">Job search tools</a>
   <h1 class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
   <p class="mt-3 max-w-xl text-muted-foreground">{description}</p>
 
@@ -105,9 +102,9 @@
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="min-w-0">
           <h2 class="wrap-break-word font-semibold">{job.title}</h2>
-          {#if job.company || job.location}
-            <p class="wrap-break-word text-sm text-muted-foreground">{[job.company, job.location].filter(Boolean).join(' · ')}</p>
-          {/if}
+          <p class="wrap-break-word text-sm text-muted-foreground">
+            {[job.company, job.location].filter(Boolean).join(' · ')}
+          </p>
         </div>
         <Button variant="outline" size="sm" onclick={changeJob}>Change job</Button>
       </div>
@@ -133,25 +130,28 @@
         id="resume-text"
         bind:this={resumeInput}
         bind:value={resume}
-        oninput={() => { reviewed = false; }}
+        oninput={() => {
+          reviewed = false;
+        }}
         aria-describedby="resume-hint"
         rows={8}
         maxlength={24000}
         class="mt-2 block w-full resize-y rounded-lg border border-input bg-background p-3 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        placeholder="Paste your experience and skills from your resume"
-      ></textarea>
+        placeholder="Paste your experience and skills from your resume"></textarea>
       <p id="resume-hint" class="mt-2 text-sm text-muted-foreground">Your resume text stays in this browser tab.</p>
       <Button class="mt-4" type="submit" variant="primary" disabled={!resume.trim()}>Review resume</Button>
     </form>
   {:else if job}
-    <p class="mt-6 text-sm text-muted-foreground">Freehire found no named skills to check for this posting. Open it in Tailor for a review based on the full description.</p>
+    <p class="mt-6 text-sm text-muted-foreground">
+      This posting has no named skills. In Tailor, you can review the full description.
+    </p>
   {/if}
 
   {#if reviewed && job}
     <section aria-labelledby="review-results" class="ph-no-capture mt-8 border-t border-border pt-6">
-      <h2 id="review-results" class="text-xl font-semibold" tabindex="-1" bind:this={resultsHeading}>What to change before you apply</h2>
-      <p class="mt-2 text-sm text-muted-foreground">These suggestions are based on the skills named in the posting and the lines you pasted.</p>
-
+      <h2 id="review-results" class="text-xl font-semibold" tabindex="-1" bind:this={resultsHeading}>
+        What to change before you apply
+      </h2>
       {@render findingGroup('Highlight this experience', 'example')}
       {@render findingGroup('Back it up with an example', 'mention')}
       {@render findingGroup('Check before you apply', 'missing')}
@@ -163,11 +163,13 @@
       <p class="text-sm text-muted-foreground">Review the full posting and edit your CV in Tailor.</p>
       <Button
         variant="outline"
-        href={isAuthenticated() ? tailorPath : signinUrl({
-          returnTo: tailorPath,
-          cancelTo: `${resolve('/tools/job-fit')}?job=${encodeURIComponent(job.public_slug)}`,
-          mode: 'login',
-        })}
+        href={isAuthenticated()
+          ? tailorPath
+          : signinUrl({
+              returnTo: tailorPath,
+              cancelTo: `${resolve('/tools/job-fit')}?job=${encodeURIComponent(job.public_slug)}`,
+              mode: 'login',
+            })}
       >
         {isAuthenticated() ? 'Open in Tailor' : 'Sign in to open Tailor'}
         <ArrowRight class="size-4" aria-hidden="true" />
@@ -184,7 +186,9 @@
       <ul class="mt-2 divide-y divide-border border-y border-border">
         {#each group as finding (finding.skill)}
           <li class="space-y-2 wrap-break-word py-3 text-sm">
-            <p class="font-semibold">{skillLabel(finding.skill)}{finding.priority === 'required' ? ' · Required' : ''}</p>
+            <p class="font-semibold">
+              {skillLabel(finding.skill)}{finding.priority === 'required' ? ' · Required' : ''}
+            </p>
             {#if finding.requirement}
               <p class="text-muted-foreground">The posting asks for “{finding.requirement}”</p>
             {/if}
@@ -194,9 +198,9 @@
             {#if kind === 'example'}
               <p>Move this bullet up under the relevant role so it’s easy to find.</p>
             {:else if kind === 'mention'}
-              <p>If you used {skillLabel(finding.skill)} on a project, add a bullet saying what you did and what changed.</p>
+              <p>If you used {skillLabel(finding.skill)} on a project, say what you did and what changed.</p>
             {:else}
-              <p>If you’ve used {skillLabel(finding.skill)}, add a real example. If you haven’t, check how central it is to the role.</p>
+              <p>If you’ve used {skillLabel(finding.skill)}, add a real example. Otherwise, check if it’s essential.</p>
             {/if}
           </li>
         {/each}

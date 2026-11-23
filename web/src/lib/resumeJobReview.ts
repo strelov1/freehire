@@ -12,18 +12,18 @@ type Finding = {
 
 const aliases: Readonly<Record<string, readonly string[]>> = SKILL_ALIASES;
 const labels: Readonly<Record<string, string>> = SKILL_LABELS;
-const action = /^(?:I\s+)?(?:automated|built|configured|created|debugged|delivered|deployed|designed|developed|implemented|improved|integrated|led|maintained|managed|migrated|operated|optimized|owned|reduced|shipped|supported|tested|used|wrote)\b/i;
+const action =
+  /^(?:I\s+)?(?:automated|built|configured|created|debugged|delivered|deployed|designed|developed|implemented|improved|integrated|led|maintained|managed|migrated|operated|optimized|owned|reduced|shipped|supported|tested|used|wrote)\b/i;
 
-const negation = /\b(?:without|never (?:used|worked with)|no (?:hands-on )?experience (?:with|in)|haven['’]t (?:used|worked with)|not familiar with)\s*$/i;
+const negation =
+  /\b(?:without|never (?:used|worked with)|no (?:hands-on )?experience (?:with|in)|haven['’]t (?:used|worked with)|not familiar with)\s*$/i;
 
 function escapePattern(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function skillPatterns(skill: string): RegExp[] {
-  const words = new Set(
-    [labels[skill], ...(aliases[skill] ?? [])].filter((word): word is string => Boolean(word)),
-  );
+  const words = new Set([labels[skill], ...(aliases[skill] ?? [])].filter((word): word is string => Boolean(word)));
   if (!words.size) words.add(skill.replaceAll('-', ' '));
   const whole = (word: string) => {
     const suffix = skill === 'c' && word === 'C' ? '+#' : '';
@@ -46,7 +46,10 @@ export function reviewResume(
   skills: readonly string[],
   requirements: readonly PostingRequirement[],
 ): Finding[] {
-  const lines = resume.split(/\r?\n/).map((line) => line.trim().replace(/^[•●▪*-]\s+/, '')).filter(Boolean);
+  const lines = resume
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^[•●▪*-]\s+/, ''))
+    .filter(Boolean);
   const orderedRequirements = [
     ...requirements.filter(({ priority }) => priority === 'required'),
     ...requirements.filter(({ priority }) => priority !== 'required'),
