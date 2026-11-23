@@ -302,7 +302,7 @@
   // fires with focus inside it (or on body, when nothing is focused); fields, menus and
   // nested dialogs keep their own keys.
   function onKey(e: KeyboardEvent) {
-    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented || menuOpen) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented || menuOpen || hideTarget) return;
     const t = e.target as HTMLElement | null;
     if (t?.closest('input,textarea,select,[contenteditable],[role=menu],[role^=menuitem]')) return;
     if (e.key !== 'Escape' && t?.closest('[aria-haspopup=menu]')) return;
@@ -518,12 +518,13 @@
       </button>
     </div>
   {/if}
-  {#if hideTarget}
-    <HideCompanyConfirm slug={hideTarget.slug} name={hideTarget.name} onclose={onHideClosed} />
-  {/if}
   {#if toast}
     {#key toast.id}
       <FeedToast class="mb-28" message={toast.message} action={toast.action} onClose={() => (toast = null)} />
     {/key}
   {/if}
 </div>
+
+{#if hideTarget}
+  <HideCompanyConfirm slug={hideTarget.slug} name={hideTarget.name} onclose={onHideClosed} />
+{/if}

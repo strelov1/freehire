@@ -4,12 +4,14 @@ import { ApiError } from '#lib/api-core.js';
 
 const meFeed = vi.fn();
 const saveJob = vi.fn();
+const dismissJob = vi.fn();
 const avoidCompany = vi.fn();
 vi.mock('#lib/profile.svelte.js', () => ({ profileStore: { avoidCompany } }));
 vi.mock('#lib/api.js', () => ({
   api: {
     meFeed: (...args: unknown[]) => meFeed(...args),
     saveJob: (...args: unknown[]) => saveJob(...args),
+    dismissJob: (...args: unknown[]) => dismissJob(...args),
     listSavedSearches: vi.fn().mockResolvedValue([]),
     markFeedSeen: vi.fn(),
   },
@@ -43,6 +45,7 @@ describe('MatchSwipe hide company', () => {
     avoidCompany.mockReset();
     meFeed.mockReset();
     saveJob.mockReset().mockResolvedValue(undefined);
+    dismissJob.mockReset().mockResolvedValue(undefined);
   });
 
   it('cancel keeps the card and returns focus to the menu button', async () => {
@@ -54,6 +57,28 @@ describe('MatchSwipe hide company', () => {
     expect(avoidCompany).not.toHaveBeenCalled();
     expect(meFeed).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('Job: A-JOB at Acme')).toBeTruthy();
+  });
+
+  it('keeps arrow and Escape keys from controlling the swipe while confirming a hide', async () => {
+    const onClose = vi.fn();
+    const request = Promise.withResolvers<undefined>();
+    meFeed.mockResolvedValue({ data: [job('a-job')] });
+    avoidCompany.mockReturnValue(request.promise);
+    render(MatchSwipe, { onClose });
+    await openDialog();
+
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    await fireEvent.keyDown(cancel, { key: 'ArrowRight' });
+    await fireEvent.keyDown(cancel, { key: 'ArrowLeft' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Hide company' }));
+    const busy = await screen.findByRole('button', { name: 'Hide company…' });
+    await fireEvent.keyDown(busy, { key: 'Escape' });
+
+    expect(saveJob).not.toHaveBeenCalled();
+    expect(dismissJob).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    request.resolve(undefined);
+    await vi.waitFor(() => expect(screen.queryByText('Hide Acme from Matches?')).toBeNull());
   });
 
   it('explains a full list (409) and retains the card', async () => {
