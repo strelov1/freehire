@@ -1840,7 +1840,7 @@ category), empty skills, or an out-of-vocabulary location value is a `400`.
 | `excluded_skills` | string[] \| null | no |  |
 | `excluded_sources` | string[] \| null | no |  |
 | `job_languages` | string[] \| null | no | Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language. (e.g. `["en","ru"]`) |
-| `excluded_companies` | string[] \| null | no |  |
+| `excluded_companies` | string[] \| null | no | Deprecated and ignored: the list changes only through `/me/profile/excluded-companies`, so a save from a stale page cannot erase a hidden company. Still accepted, and named in `meta.ignored_fields` when sent. |
 | `location_preferences` | any | no | Shaped like LocationPreferences; null or absent keeps none. |
 
 ```bash
@@ -1881,6 +1881,45 @@ Returns `204 No Content`.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/me/profile" -b cookies.txt
+```
+
+### `POST /me/profile/excluded-companies`
+
+**Auth:** Session only
+
+Hide a company from your matches.
+
+Adds the company to `excluded_companies`, creating a minimal profile when there is none.
+Repeating it is safe and changes nothing. `400` for a blank or over-long slug, `409` when
+the list already holds 200 other companies. Cookie-only.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `company_slug` | string | yes | The company's slug. (e.g. `acme`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/profile/excluded-companies" -b cookies.txt
+```
+
+### `DELETE /me/profile/excluded-companies/{company_slug}`
+
+**Auth:** Session only
+
+Restore a hidden company.
+
+Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller
+has no profile. Cookie-only.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `company_slug` | string | yes |  |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/profile/excluded-companies/<company_slug>" -b cookies.txt
 ```
 
 ### `GET /me/push-tokens`

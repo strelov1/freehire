@@ -4681,6 +4681,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/profile/excluded-companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hide a company from your matches.
+         * @description Adds the company to `excluded_companies`, creating a minimal profile when there is none.
+         *     Repeating it is safe and changes nothing. `400` for a blank or over-long slug, `409` when
+         *     the list already holds 200 other companies. Cookie-only.
+         */
+        post: operations["excludeCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/profile/excluded-companies/{company_slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Restore a hidden company.
+         * @description Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller
+         *     has no profile. Cookie-only.
+         */
+        delete: operations["restoreCompany"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/profile/verdict": {
         parameters: {
             query?: never;
@@ -8308,6 +8351,11 @@ export interface components {
             /** Format: int64 */
             saved_searches: number;
         };
+        /** @description The company to hide from the match feeds. */
+        ExcludeCompanyRequest: {
+            /** @description The company's slug. (e.g. `acme`) */
+            company_slug: string;
+        };
         /** @description One piece of evidence, at the grain of a CV bullet. The three flags below are computed at read time. */
         ExperienceAtom: {
             id: string;
@@ -8491,6 +8539,10 @@ export interface components {
          * @enum {string}
          */
         HealthStatus: "operational" | "degraded" | "down";
+        /** @description The meta of a save: the body fields that were read and not applied. */
+        IgnoredFieldsMeta: {
+            ignored_fields?: string[];
+        };
         /** @description The meta of a single-item answer, sent only to carry a warning. */
         IgnoredMeta: {
             ignored_params?: components["schemas"]["IgnoredParam"][];
@@ -9777,6 +9829,11 @@ export interface components {
              *     language. (e.g. `["en","ru"]`)
              */
             job_languages?: string[] | null;
+            /**
+             * @description Deprecated and ignored: the list changes only through `/me/profile/excluded-companies`,
+             *     so a save from a stale page cannot erase a hidden company. Still accepted, and named in
+             *     `meta.ignored_fields` when sent.
+             */
             excluded_companies?: string[] | null;
             /** @description Shaped like LocationPreferences; null or absent keeps none. */
             location_preferences?: unknown;
@@ -22983,6 +23040,7 @@ export interface operations {
                      */
                     "application/json": {
                         data: components["schemas"]["Profile"];
+                        meta?: components["schemas"]["IgnoredFieldsMeta"];
                     };
                 };
             };
@@ -23116,6 +23174,74 @@ export interface operations {
                      */
                     "application/json": {
                         data: unknown;
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    excludeCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExcludeCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Profile"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    restoreCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Profile"] | null;
                     };
                 };
             };

@@ -54,9 +54,25 @@ model ProfileUpdate {
    * language. (e.g. `["en","ru"]`)
    */
   job_languages?: string[] | null;
+  /**
+   * Deprecated and ignored: the list changes only through `/me/profile/excluded-companies`,
+   * so a save from a stale page cannot erase a hidden company. Still accepted, and named in
+   * `meta.ignored_fields` when sent.
+   */
   excluded_companies?: string[] | null;
   /** Shaped like LocationPreferences; null or absent keeps none. */
   location_preferences?: unknown;
+}
+
+/** The company to hide from the match feeds. */
+model ExcludeCompanyRequest {
+  /** The company's slug. (e.g. `acme`) */
+  company_slug: string;
+}
+
+/** The meta of a save: the body fields that were read and not applied. */
+model IgnoredFieldsMeta {
+  ignored_fields?: string[];
 }
 
 /** One work-history entry of the contact-free CV. */
@@ -209,7 +225,33 @@ op getProfile(): {
 })
 @route("/me/profile")
 @put
-op putProfile(@body body: ProfileUpdate): Data<Profile> | Problem;
+op putProfile(@body body: ProfileUpdate): {
+  data: Profile;
+  meta?: IgnoredFieldsMeta;
+} | Problem;
+
+/**
+ * Adds the company to `excluded_companies`, creating a minimal profile when there is none.
+ * Repeating it is safe and changes nothing. `400` for a blank or over-long slug, `409` when
+ * the list already holds 200 other companies. Cookie-only.
+ */
+@summary("Hide a company from your matches.")
+@tag("Account")
+@route("/me/profile/excluded-companies")
+@post
+op excludeCompany(@body body: ExcludeCompanyRequest): Data<Profile> | Problem;
+
+/**
+ * Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller
+ * has no profile. Cookie-only.
+ */
+@summary("Restore a hidden company.")
+@tag("Account")
+@route("/me/profile/excluded-companies/{company_slug}")
+@delete
+op restoreCompany(@path company_slug: string): {
+  data: Profile | null;
+} | Problem;
 
 // Clears the profile. Idempotent: deleting when none exists is still a 204.
 /** Returns `204 No Content`. */

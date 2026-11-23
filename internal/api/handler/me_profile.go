@@ -57,6 +57,9 @@ func (h *profileHandlers) register(api fiber.Router, mw middleware, contract fib
 	api.Get("/me/profile", mw.key, contract)
 	api.Put("/me/profile", mw.cookie, contract)
 	api.Delete("/me/profile", mw.cookie, contract)
+	// The excluded-companies list has its own writer: PUT /me/profile never touches it.
+	api.Post("/me/profile/excluded-companies", mw.cookie, contract)
+	api.Delete("/me/profile/excluded-companies/:company_slug", mw.cookie, contract)
 }
 
 // derivedLocation is where the caller's CV says they ARE, as resolved by the location
@@ -170,8 +173,10 @@ func profileError(err error) error {
 		return fiber.NewError(fiber.StatusBadRequest, "too many skills (max 200)")
 	case errors.Is(err, userprofile.ErrTooManySources):
 		return fiber.NewError(fiber.StatusBadRequest, "too many excluded sources (max 200)")
-	case errors.Is(err, userprofile.ErrTooManyCompanies):
-		return fiber.NewError(fiber.StatusBadRequest, "too many excluded companies (max 200)")
+	case errors.Is(err, userprofile.ErrInvalidCompany):
+		return fiber.NewError(fiber.StatusBadRequest, "company_slug must be 1-100 characters")
+	case errors.Is(err, userprofile.ErrCompaniesFull):
+		return fiber.NewError(fiber.StatusConflict, "the companies-to-avoid list is full (max 200)")
 	case errors.Is(err, userprofile.ErrInvalidJobLanguage):
 		return fiber.NewError(fiber.StatusBadRequest, "job languages must be two-letter language codes (max 200)")
 	case errors.Is(err, userprofile.ErrInvalidSeniority):
@@ -237,7 +242,7 @@ func (h *profileHandlers) PutProfile(ctx context.Context, req *apigen.ProfileUpd
 		}
 	}
 
-	profile, err := h.userProfile.Save(ctx, userID, req.Specializations.Value, req.Skills.Value, req.Seniorities.Value, req.ExcludedSkills.Value, req.ExcludedSources.Value, req.ExcludedCompanies.Value, loc, req.JobLanguages.Value...)
+	profile, err := h.userProfile.Save(ctx, userID, req.Specializations.Value, req.Skills.Value, req.Seniorities.Value, req.ExcludedSkills.Value, req.ExcludedSources.Value, loc, req.JobLanguages.Value...)
 	if err != nil {
 		return nil, profileError(err)
 	}
@@ -246,7 +251,55 @@ func (h *profileHandlers) PutProfile(ctx context.Context, req *apigen.ProfileUpd
 	if err != nil {
 		return nil, err
 	}
-	return &apigen.PutProfileOK{Data: out}, nil
+	resp := &apigen.PutProfileOK{Data: out}
+	// Old clients still send the list; it is read and not applied (see ExcludeCompany).
+	if req.ExcludedCompanies.Set {
+		resp.Meta = apigen.NewOptIgnoredFieldsMeta(apigen.IgnoredFieldsMeta{IgnoredFields: []string{"excluded_companies"}})
+	}
+	return resp, nil
+}
+
+// ExcludeCompany hides one company from the caller's match feeds. Idempotent; 409 only for a
+// new company when the list is full. Cookie-only.
+func (h *profileHandlers) ExcludeCompany(ctx context.Context, req *apigen.ExcludeCompanyRequest) (*apigen.ExcludeCompanyOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	profile, err := h.userProfile.ExcludeCompany(ctx, userID, req.CompanySlug)
+	if errors.Is(err, userprofile.ErrConflict) {
+		// Retryable, and not the 409 that means a full list.
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "profile busy, retry")
+	}
+	if err != nil {
+		return nil, profileError(err)
+	}
+	out, err := profileOut(profile, h.structuredCV(ctx, userID), h.derivedLocation(ctx, userID))
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.ExcludeCompanyOK{Data: out}, nil
+}
+
+// RestoreCompany removes one company from the caller's list. Idempotent; data is null when
+// the caller has no profile. Cookie-only.
+func (h *profileHandlers) RestoreCompany(ctx context.Context, params apigen.RestoreCompanyParams) (*apigen.RestoreCompanyOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	profile, err := h.userProfile.UnexcludeCompany(ctx, userID, params.CompanySlug)
+	if errors.Is(err, userprofile.ErrNotFound) {
+		return &apigen.RestoreCompanyOK{Data: apigen.NilProfile{Null: true}}, nil
+	}
+	if err != nil {
+		return nil, profileError(err)
+	}
+	out, err := profileOut(profile, h.structuredCV(ctx, userID), h.derivedLocation(ctx, userID))
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.RestoreCompanyOK{Data: apigen.NewNilProfile(out)}, nil
 }
 
 // DeleteProfile clears the authenticated user's profile. Idempotent: deleting when none

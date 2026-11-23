@@ -42,7 +42,7 @@ func TestUpdateProfile_OmittedFieldsStayAsTheyWere(t *testing.T) {
 	}
 	if !slices.Equal(got.Specializations, []string{"backend"}) || !slices.Equal(got.Seniorities, []string{"senior"}) ||
 		!slices.Equal(got.ExcludedSkills, []string{"php"}) || !slices.Equal(got.JobLanguages, []string{"en"}) ||
-		!slices.Equal(got.ExcludedSources, []string{"hh"}) || !slices.Equal(got.ExcludedCompanies, []string{"acme"}) {
+		!slices.Equal(got.ExcludedSources, []string{"hh"}) {
 		t.Errorf("untouched fields changed: %+v", got)
 	}
 	if !strings.Contains(string(got.LocationPreferences), `"remote"`) {
@@ -128,7 +128,6 @@ func TestUpdateProfile_ConcurrentInitialSavePreservesOmittedFields(t *testing.T)
 		!slices.Equal(got.Seniorities, concurrent.Seniorities) ||
 		!slices.Equal(got.ExcludedSkills, concurrent.ExcludedSkills) ||
 		!slices.Equal(got.ExcludedSources, concurrent.ExcludedSources) ||
-		!slices.Equal(got.ExcludedCompanies, concurrent.ExcludedCompanies) ||
 		!slices.Equal(got.JobLanguages, concurrent.JobLanguages) ||
 		!strings.Contains(string(got.LocationPreferences), `"remote"`) {
 		t.Errorf("concurrent preferences were lost: %+v", got)

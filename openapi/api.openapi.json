@@ -17537,15 +17537,17 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "data"
-                  ],
                   "properties": {
                     "data": {
                       "$ref": "#/components/schemas/Profile"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/IgnoredFieldsMeta"
                     }
                   },
-                  "description": "A single item: `{\"data\": ...}`."
+                  "required": [
+                    "data"
+                  ]
                 },
                 "example": {
                   "data": {
@@ -17736,6 +17738,115 @@
         },
         "tags": [
           "Résumé"
+        ]
+      }
+    },
+    "/me/profile/excluded-companies": {
+      "post": {
+        "operationId": "excludeCompany",
+        "summary": "Hide a company from your matches.",
+        "description": "Adds the company to `excluded_companies`, creating a minimal profile when there is none.\nRepeating it is safe and changes nothing. `400` for a blank or over-long slug, `409` when\nthe list already holds 200 other companies. Cookie-only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Profile"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExcludeCompanyRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/profile/excluded-companies/{company_slug}": {
+      "delete": {
+        "operationId": "restoreCompany",
+        "summary": "Restore a hidden company.",
+        "description": "Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller\nhas no profile. Cookie-only.",
+        "parameters": [
+          {
+            "name": "company_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/Profile"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
         ]
       }
     },
@@ -30264,6 +30375,19 @@
           }
         }
       },
+      "ExcludeCompanyRequest": {
+        "type": "object",
+        "required": [
+          "company_slug"
+        ],
+        "properties": {
+          "company_slug": {
+            "type": "string",
+            "description": "The company's slug. (e.g. `acme`)"
+          }
+        },
+        "description": "The company to hide from the match feeds."
+      },
       "ExperienceAtom": {
         "type": "object",
         "required": [
@@ -30780,6 +30904,18 @@
           "down"
         ],
         "description": "The derived health verdict for a provider, the fleet or the site."
+      },
+      "IgnoredFieldsMeta": {
+        "type": "object",
+        "properties": {
+          "ignored_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "The meta of a save: the body fields that were read and not applied."
       },
       "IgnoredMeta": {
         "type": "object",
@@ -34790,7 +34926,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Deprecated and ignored: the list changes only through `/me/profile/excluded-companies`,\nso a save from a stale page cannot erase a hidden company. Still accepted, and named in\n`meta.ignored_fields` when sent."
           },
           "location_preferences": {
             "description": "Shaped like LocationPreferences; null or absent keeps none."

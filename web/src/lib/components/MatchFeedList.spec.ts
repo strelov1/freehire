@@ -6,6 +6,8 @@ const meFeed = vi.fn();
 const markFeedSeen = vi.fn();
 const listSavedSearches = vi.fn();
 const setFeedSource = vi.fn();
+const avoidCompany = vi.fn();
+vi.mock('#lib/profile.svelte.js', () => ({ profileStore: { avoidCompany } }));
 vi.mock('#lib/api.js', () => ({
   api: {
     meFeed: (...a: unknown[]) => meFeed(...a),
@@ -44,6 +46,7 @@ const card = (slug: string, is_new = false) => ({
   public_slug: slug,
   title: slug,
   company: 'Acme',
+  company_slug: 'acme',
   skills: [] as string[],
   match: { why: [], may_not_fit: [], unknown: [] },
 });
@@ -137,6 +140,16 @@ describe('MatchFeedList', () => {
     expect(await screen.findByText('r1')).toBeTruthy();
     expect(screen.queryByText("That's everything new")).toBeNull();
     expect(markFeedSeen).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not post seen from a list that is not on screen, even for an already-queued observer callback', async () => {
+    meFeed.mockResolvedValueOnce(page(['n1', 'r1'], { seen_cursor: 's1', next_cursor: 'c1' }, ['n1']));
+    const { rerender } = render(MatchFeedList, { active: true });
+    await screen.findByText("That's everything new");
+    const queued = reveal;
+    await rerender({ active: false });
+    queued();
+    expect(markFeedSeen).not.toHaveBeenCalled();
   });
 
   it('posts seen when Show the rest is pressed before the scroll registers', async () => {
@@ -287,5 +300,61 @@ describe('MatchFeedList', () => {
     await fireEvent.click(await screen.findByText('Show more matches'));
     expect(await screen.findByText('s')).toBeTruthy();
     expect(screen.queryByText('a')).toBeNull();
+  });
+
+  describe('hide company', () => {
+    const open = async () => {
+      meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
+      render(MatchFeedList);
+      const trigger = await screen.findByRole('button', { name: 'More actions for Acme' });
+      await fireEvent.click(trigger);
+      await fireEvent.click(screen.getByRole('menuitem', { name: 'Hide company' }));
+      await screen.findByText('Hide Acme from Matches?');
+      return trigger;
+    };
+    beforeEach(() => {
+      avoidCompany.mockReset();
+    });
+
+    it('cancel keeps the cards, writes nothing and returns focus to the trigger', async () => {
+      const trigger = await open();
+      await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await vi.waitFor(() => expect(screen.queryByText('Hide Acme from Matches?')).toBeNull());
+      expect(avoidCompany).not.toHaveBeenCalled();
+      expect(meFeed).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('a')).toBeTruthy();
+      await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+    });
+
+    it('explains a full list (409) in the dialog and keeps the card', async () => {
+      avoidCompany.mockRejectedValue(new ApiError(409, 'full'));
+      await open();
+      await fireEvent.click(screen.getByRole('button', { name: 'Hide company' }));
+      expect((await screen.findByRole('alert')).textContent).toContain('list is full');
+      expect(screen.getByText('a')).toBeTruthy();
+      expect(meFeed).toHaveBeenCalledTimes(1);
+    });
+
+    it('reloads page 1 on the same source after a successful hide, dropping stale cards and cursor', async () => {
+      avoidCompany.mockResolvedValue({});
+      await open();
+      meFeed.mockResolvedValueOnce(page(['b']));
+      await fireEvent.click(screen.getByRole('button', { name: 'Hide company' }));
+      expect(await screen.findByText('b')).toBeTruthy();
+      expect(avoidCompany).toHaveBeenCalledWith('acme');
+      expect(meFeed).toHaveBeenLastCalledWith(20, undefined);
+      expect(screen.queryByText('a')).toBeNull();
+      expect(screen.queryByText('Show more matches')).toBeNull();
+    });
+
+    it('has no action for a card without a company slug', async () => {
+      meFeed.mockResolvedValueOnce({
+        data: [{ ...card('x'), company_slug: '' }],
+        meta: { source: 'profile', total: 1 },
+      });
+      render(MatchFeedList);
+      await screen.findByText('x');
+      expect(screen.queryByRole('button', { name: /More actions for/ })).toBeNull();
+    });
   });
 });

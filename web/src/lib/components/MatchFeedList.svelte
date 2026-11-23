@@ -13,6 +13,8 @@
   import JobRow from './JobRow.svelte';
   import MatchBlock from './MatchBlock.svelte';
   import HiddenToast from './HiddenToast.svelte';
+  import HideCompanyConfirm from './HideCompanyConfirm.svelte';
+  import FeedCompanyMenu from './FeedCompanyMenu.svelte';
   import { HiddenJobUndo } from './hiddenJobUndo.svelte';
   import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
@@ -42,6 +44,12 @@
   // The signed cursor for the next page; absent on the last one.
   let cursor = $state<string | undefined>();
   const hidden = new HiddenJobUndo();
+  // The company being hidden, its confirmation, and the button to give focus back to on cancel.
+  let hideTarget = $state<{ slug: string; name: string } | null>(null);
+  let hideTrigger: HTMLElement | null = null;
+  let caughtUp = $state<HTMLElement | null>(null);
+  // Numbers every page-1 restart: a reply from before a hide-company reload belongs to the old list.
+  let epoch = 0;
   const visible = $derived(cards.filter((c) => !isDismissed(c.public_slug)));
 
   // New cards come first. Once they run out the rest waits behind a pause screen. The
@@ -58,6 +66,8 @@
   const newEndInView = $derived(!!seenCursor && newCards.length > 0 && (paused || (!cursor && restCards.length === 0)));
 
   function postSeen() {
+    // A list behind the swipe view has not been looked at: it must not move the watermark.
+    if (!active) return;
     const c = seenCursor;
     seenCursor = undefined;
     if (c) api.markFeedSeen(c).catch(() => {}); // the watermark only decides what is new next time
@@ -70,6 +80,8 @@
   }
 
   async function fetchPage(next?: string): Promise<void> {
+    const mine = epoch;
+    const outdated = () => stale() || mine !== epoch;
     if (!next) {
       // A restart is a new session: nothing of the old one carries over.
       restShown = false;
@@ -80,15 +92,15 @@
     try {
       res = await api.meFeed(PAGE, next);
     } catch (e) {
-      if (stale()) return;
+      if (outdated()) return;
       // An expired or rejected cursor (or a source switched in another tab): start over.
       if (next && e instanceof ApiError && e.status === 400) return fetchPage();
       throw e;
     }
-    if (stale()) return;
+    if (outdated()) return;
     if (next && res.meta.reason === 'source_changed') {
-      // An edited saved search may no longer match the cards already shown.
-      if (meta?.source === 'saved_search') cards = [];
+      // A changed profile or search can invalidate cards we already loaded.
+      cards = [];
       return fetchPage();
     }
     // A restart that lands on another source (switched in another tab): the old cards are not its cards.
@@ -118,6 +130,42 @@
       else failed = true;
     } finally {
       loadingMore = false;
+    }
+  }
+
+  function askHideCompany(card: FeedCard, trigger: HTMLButtonElement) {
+    if (!card.company_slug) return;
+    hideTrigger = trigger;
+    hideTarget = { slug: card.company_slug, name: card.company };
+  }
+
+  // Cancelled: focus returns to the button. Hidden: the exclusion list changed, so every card and
+  // cursor held is from the old one; start over on the same source and fence replies still in flight.
+  async function onHideClosed(result: 'hidden' | 'cancelled') {
+    hideTarget = null;
+    await tick();
+    if (result === 'cancelled') {
+      if (active) hideTrigger?.focus();
+      return;
+    }
+    epoch++;
+    cards = [];
+    cursor = undefined;
+    failed = false;
+    loading = true;
+    try {
+      await fetchPage();
+    } catch (e) {
+      if (isPlanRefusal(e)) paywalled = true;
+      else failed = true;
+    } finally {
+      if (!stale()) loading = false;
+    }
+    await tick();
+    const target = active && (list?.querySelector<HTMLElement>('h3') || caughtUp);
+    if (target) {
+      target.tabIndex = -1;
+      target.focus();
     }
   }
 
@@ -173,7 +221,7 @@
     >
   </div>
 {:else if visible.length === 0 && !cursor}
-  <div class="flex flex-col items-center gap-3 py-16 text-center">
+  <div class="flex flex-col items-center gap-3 py-16 text-center" bind:this={caughtUp}>
     <p class="text-lg font-semibold">You're all caught up</p>
     <p class="text-sm text-muted-foreground">No more jobs match your profile right now.</p>
   </div>
@@ -185,12 +233,18 @@
           {#snippet footer()}
             {#if card.is_new}<Badge variant="brand" class="mb-2">New</Badge>{/if}
             <MatchBlock match={card.match} />
+            {#if card.company_slug}
+              <FeedCompanyMenu
+                company={card.company || card.company_slug}
+                onHide={(trigger) => askHideCompany(card, trigger)}
+              />
+            {/if}
           {/snippet}
         </JobRow>
       </li>
     {/each}
   </ul>
-  <InfiniteScroll enabled={newEndInView && !loading} onLoad={postSeen} />
+  <InfiniteScroll enabled={newEndInView && !loading && active} onLoad={postSeen} />
   {#if paused}
     <FeedNewEnd onContinue={showRest} focus={false} />
   {:else if cursor}
@@ -203,6 +257,10 @@
       {loadingMore ? 'Loading…' : 'Show more matches'}
     </button>
   {/if}
+{/if}
+
+{#if hideTarget}
+  <HideCompanyConfirm slug={hideTarget.slug} name={hideTarget.name} onclose={onHideClosed} />
 {/if}
 
 {#if hidden.pending}

@@ -9625,6 +9625,103 @@ func (s *Server) handleEngagementStatsRequest(args [0]string, argsEscaped bool, 
 	}
 }
 
+// handleExcludeCompanyRequest handles excludeCompany operation.
+//
+// Adds the company to `excluded_companies`, creating a minimal profile when there is none. Repeating
+// it is safe and changes nothing. `400` for a blank or over-long slug, `409` when the list already
+// holds 200 other companies. Cookie-only.
+//
+// POST /me/profile/excluded-companies
+func (s *Server) handleExcludeCompanyRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ExcludeCompanyOperation,
+			ID:   "excludeCompany",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeExcludeCompanyRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *ExcludeCompanyOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ExcludeCompanyOperation,
+			OperationSummary: "Hide a company from your matches.",
+			OperationID:      "excludeCompany",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *ExcludeCompanyRequest
+			Params   = struct{}
+			Response = *ExcludeCompanyOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ExcludeCompany(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ExcludeCompany(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeExcludeCompanyResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleFileProcessReportRequest handles fileProcessReport operation.
 //
 // 409 when the caller already reported this kind.
@@ -29497,6 +29594,102 @@ func (s *Server) handleResolveReferralRequestRequest(args [1]string, argsEscaped
 	}
 
 	if err := encodeResolveReferralRequestResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleRestoreCompanyRequest handles restoreCompany operation.
+//
+// Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller has no
+// profile. Cookie-only.
+//
+// DELETE /me/profile/excluded-companies/{company_slug}
+func (s *Server) handleRestoreCompanyRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: RestoreCompanyOperation,
+			ID:   "restoreCompany",
+		}
+	)
+	params, err := decodeRestoreCompanyParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *RestoreCompanyOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    RestoreCompanyOperation,
+			OperationSummary: "Restore a hidden company.",
+			OperationID:      "restoreCompany",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "company_slug",
+					In:   "path",
+				}: params.CompanySlug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = RestoreCompanyParams
+			Response = *RestoreCompanyOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackRestoreCompanyParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.RestoreCompany(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.RestoreCompany(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeRestoreCompanyResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
