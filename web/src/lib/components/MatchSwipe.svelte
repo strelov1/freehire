@@ -31,6 +31,8 @@
   // belongs to the old source and must not touch the shared source state.
   const rev = feedSource.version;
   const stale = () => rev !== feedSource.version;
+  let sourceRevision = 0;
+  const sourceChanged = (revision: number) => stale() || revision !== sourceRevision;
   let overlay = $state<HTMLDivElement | null>(null);
   let cards = $state<FeedCard[]>([]);
   let loading = $state(true);
@@ -82,6 +84,7 @@
       const data = res.data;
       if (res.meta) {
         if (meta && (meta.source !== res.meta.source || meta.saved_search_id !== res.meta.saved_search_id)) {
+          sourceRevision++;
           cards = [];
           last = null;
           toast = null;
@@ -145,6 +148,7 @@
   async function judge(action: Action, opts: { openedTab?: boolean } = {}) {
     const card = current;
     if (!card || busy()) return;
+    const revision = sourceRevision;
     dropToastAction();
     const ref: Last['ref'] = {};
     let write: Promise<unknown>;
@@ -168,6 +172,7 @@
     if (action === 'apply') applying = false;
     else gesture.settle();
     const outcome = await written;
+    if (sourceChanged(revision)) return;
     if (outcome === 'failed') {
       // Restore unless undo already put it back, or the card would be queued twice.
       if (!cards.includes(card)) cards = [card, ...cards];
@@ -217,6 +222,7 @@
   async function undo() {
     // An apply card is still in `cards` for its FLY_MS; restoring it now would duplicate it.
     if (!last || gesture.exiting || applying) return;
+    const revision = sourceRevision;
     const { card, action, written, ref } = last;
     dropToastAction();
     last = null;
@@ -226,6 +232,7 @@
       // judge() handles a failed or gone write first (it awaited earlier): the card stays back
       // with its toast, or leaves for good.
       const outcome = await written;
+      if (sourceChanged(revision)) return;
       if (outcome === 'gone') {
         cards = cards.filter((c) => c !== card);
         if (cards.length === 0) await load();
@@ -241,6 +248,7 @@
         await api.untrackApplication(ref.id);
       } else await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
     } catch {
+      if (sourceChanged(revision)) return;
       cards = cards.filter((c) => c !== card);
       last = { card, action, written, ref };
       fail(toastCopy.undo);
@@ -248,7 +256,7 @@
     } finally {
       undoing = false;
     }
-    announce(`Undone. ${card.title} is back.`);
+    if (!sourceChanged(revision)) announce(`Undone. ${card.title} is back.`);
   }
 
   // ← skip, → save, U undo, Esc back to the feed. Bound to the overlay root, so it only

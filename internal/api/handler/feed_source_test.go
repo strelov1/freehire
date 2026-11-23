@@ -121,33 +121,39 @@ func TestFeedSource_DeletedSearchNeverFallsBack(t *testing.T) {
 }
 
 func TestFeedSource_UnenforceableSearchIsRefusedNotWidened(t *testing.T) {
-	for name, q := range map[string]string{
-		"narrows nothing": "",
-		"watchlist":       "watchlist=true&seniority=senior",
-		"unknown param":   "seniority=senior&sort=match&min_skill_match=70",
-		"bad q_fields":    "q=go&q_fields=nonsense",
-		"bad visa":        "visa_sponsorship=maybe&seniority=senior",
+	for name, tc := range map[string]struct {
+		query, ignored string
+	}{
+		"narrows nothing": {},
+		"watchlist":       {query: "watchlist=true&seniority=senior"},
+		"unknown param":   {"seniority=senior&sort=match&min_skill_match=70", "min_skill_match"},
+		"only unknown":    {"min_skill_match=70", "min_skill_match"},
+		"bad q_fields":    {"q=go&q_fields=nonsense", "q_fields"},
+		"bad visa":        {"visa_sponsorship=maybe&seniority=senior", "visa_sponsorship"},
+		"bad salary":      {"q=go&salary_min=oops", "salary_min"},
+		"bad experience":  {"q=go&experience_years_max=-1", "experience_years_max"},
+		"bad age":         {"q=go&posted_within_days=0", "posted_within_days"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			fake := oneJob()
-			st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: q, UpdatedAt: time.Now()}}}
+			st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: tc.query, UpdatedAt: time.Now()}}}
 			app, iss := sourceApp(fake, st)
 			_, body := deckGet(t, app, iss, "/api/v1/me/feed")
 			m := feedMetaOf(body)
-			if m["reason"] == nil || len(body["data"].([]any)) != 0 || fake.got.Limit != 0 {
+			if len(body["data"].([]any)) != 0 || fake.got.Limit != 0 {
 				t.Errorf("want an empty page with a reason and no search: meta=%v got=%#v", m, fake.got)
 			}
-			if name == "unknown param" && m["ignored"] == nil {
-				t.Errorf("ignored params not named: %v", m)
+			if tc.ignored == "" {
+				if m["reason"] != feed.ReasonNoUsableFields || m["ignored"] != nil {
+					t.Errorf("meta = %v, want no usable fields", m)
+				}
+				return
+			}
+			ignored, _ := m["ignored"].([]any)
+			if m["reason"] != feedReasonIgnoredFilters || len(ignored) != 1 || ignored[0].(map[string]any)["param"] != tc.ignored {
+				t.Errorf("meta = %v, want ignored %s", m, tc.ignored)
 			}
 		})
-	}
-	// Narrows nothing is the documented reason.
-	st := &feedStateFake{source: 2, searches: map[int64]feedSearch{2: {Query: "", UpdatedAt: time.Now()}}}
-	app, iss := sourceApp(oneJob(), st)
-	_, body := deckGet(t, app, iss, "/api/v1/me/feed")
-	if feedMetaOf(body)["reason"] != "no_usable_fields" {
-		t.Errorf("meta = %v", feedMetaOf(body))
 	}
 }
 

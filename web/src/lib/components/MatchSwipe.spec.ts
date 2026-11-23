@@ -148,6 +148,34 @@ describe('MatchSwipe', () => {
       expect(screen.queryByLabelText('Job: A Job at Acme')).toBeNull();
     });
 
+    it('does not revive a previous source card when its pending Undo fails', async () => {
+      const refill = Promise.withResolvers<{
+        data: [];
+        meta: { source: string; saved_search_id: number; total: number };
+      }>();
+      const undoWrite = Promise.withResolvers<undefined>();
+      meFeed
+        .mockReset()
+        .mockResolvedValueOnce({ data: [mk('a-job', 'A Job')], meta: { source: 'profile', total: 1 } })
+        .mockReturnValueOnce(refill.promise);
+      saveJob.mockResolvedValue(undefined);
+      unsaveJob.mockReturnValue(undoWrite.promise);
+      render(MatchSwipe, { onClose: () => {} });
+      await screen.findByLabelText('Job: A Job at Acme');
+      await fireEvent.click(screen.getByLabelText('Save'));
+      await vi.waitFor(() => expect(meFeed).toHaveBeenCalledTimes(2));
+      const dialog = screen.getByRole('dialog');
+      await fireEvent.keyDown(dialog, { key: 'u' });
+      expect(unsaveJob).toHaveBeenCalledTimes(1);
+      refill.resolve({ data: [], meta: { source: 'saved_search', saved_search_id: 2, total: 0 } });
+      await screen.findByText('No matches for this search');
+      undoWrite.reject(new ApiError(500, 'boom'));
+      await Promise.resolve();
+      await fireEvent.keyDown(dialog, { key: 'u' });
+      expect(unsaveJob).toHaveBeenCalledTimes(1);
+      expect(screen.queryByLabelText('Job: A Job at Acme')).toBeNull();
+    });
+
     it('a failed skip puts the card back with a toast and an assertive announce', async () => {
       const dlg = await open();
       dismissJob.mockRejectedValue(new ApiError(500, 'boom'));

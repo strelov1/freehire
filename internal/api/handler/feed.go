@@ -427,21 +427,19 @@ func searchQuery(raw string) (url.Values, string, []search.UnknownParam) {
 	if err != nil {
 		return nil, feedReasonIgnoredFilters, nil
 	}
-	if search.WantsWatchlist(vals) || !search.Narrows(vals) {
-		return nil, feed.ReasonNoUsableFields, nil
-	}
 	ignored := search.UnknownParams(vals, feedOwnParams)
+	ignored = append(ignored, search.IgnoredNumericBounds(vals)...)
 	for param := range search.IgnoredValues(vals) {
 		ignored = append(ignored, search.UnknownParam{Param: param})
 	}
 	if _, bad := search.QFieldsFromValues(vals); len(bad) > 0 {
 		ignored = append(ignored, bad...)
 	}
-	if search.HasInvalidVisaSponsorship(vals) {
-		ignored = append(ignored, search.UnknownParam{Param: "visa_sponsorship"})
-	}
 	if len(ignored) > 0 {
 		return nil, feedReasonIgnoredFilters, search.SortAndCap(ignored)
+	}
+	if search.WantsWatchlist(vals) || !search.Narrows(vals) {
+		return nil, feed.ReasonNoUsableFields, nil
 	}
 	return vals, "", nil
 }
