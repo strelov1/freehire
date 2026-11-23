@@ -329,6 +329,7 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		NewWerkenVoorNederland(c),
 		NewGemeentebanen(c),
 		NewAcademicTransfer(c),
+		NewJobsACUK(c),
 		// CHECK-IN (mein-check-in.de): a German applicant portal of savings banks, cooperative
 		// banks and councils; a board is the tenant slug and each new position is hydrated from
 		// its page's microdata. See meincheckin.go.

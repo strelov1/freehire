@@ -152,6 +152,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   werkenvoornederland: 'Werken voor Nederland',
   gemeentebanen: 'Gemeentebanen',
   academictransfer: 'AcademicTransfer',
+  jobsacuk: 'Jobs.ac.uk',
   meincheckin: 'CHECK-IN',
   instahyre: 'Instahyre',
   hirist: 'Hirist',
