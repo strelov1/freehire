@@ -106,6 +106,26 @@ func TestICIMSVanityDomainSitemapIndexAndCareersHomeDetail(t *testing.T) {
 	}
 }
 
+// A board stored as a full *.icims.com host still runs the classic product: its sitemap
+// locs are /jobs/<id>/<slug>/job and the fragment is <loc>?in_iframe=1. The careers-home
+// path 404s there, so the fragment URL must follow the loc's form, not the dot in the board.
+func TestICIMSFullHostBoardWithClassicLocs(t *testing.T) {
+	loc := "https://cantonoaks-careers-fundltc.icims.com/jobs/8104/dietary-aide/job"
+	fake := (&routedHTTP{}).
+		route("/sitemap.xml", icimsSitemapXML(loc)).
+		route("/jobs/8104/dietary-aide/job?in_iframe=1", icimsDetailHTML)
+
+	jobs, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Canton Oaks", Provider: "icims", Board: "cantonoaks-careers-fundltc.icims.com",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].Title != "Mobile Medical Assistant" {
+		t.Fatalf("got %+v, want the posting read from the classic fragment", jobs)
+	}
+}
+
 // A JobPosting whose jobLocation is a single object (not an array) must still parse and
 // yield the location — iCIMS single-location jobs use the object form, and dropping them
 // silently loses most of a careers-home board.

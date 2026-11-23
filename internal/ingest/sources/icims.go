@@ -43,16 +43,15 @@ func (s icims) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 
 	// Each job's posting comes from its own iframe-fragment fetch, fanned out under a
-	// bounded pool. vanity boards (careers-home) build the fragment URL differently.
-	vanity := icimsVanity(e.Board)
+	// bounded pool.
 	return fetchDetails(locs, defaultDetailWorkers, func(loc string) (Job, bool) {
-		return s.detail(ctx, e, host, vanity, loc)
+		return s.detail(ctx, e, host, loc)
 	}), nil
 }
 
-// icimsVanity reports whether the board is a full vanity host (contains a dot) rather than a
-// bare iCIMS slug. A vanity site (e.g. careers.docusign.com) runs the newer "careers-home"
-// product: its sitemap is an index and its job detail lives at /careers-home/jobs/<id>.
+// icimsVanity reports whether the board is a full host (contains a dot) rather than a bare
+// iCIMS slug: an own domain (careers.docusign.com) or a full *.icims.com host. It decides
+// only the host; which product the site runs is read from its sitemap locs (see detail).
 func icimsVanity(board string) bool { return strings.Contains(board, ".") }
 
 // icimsHost resolves the board to the host the endpoints use: a vanity board is itself the
@@ -97,12 +96,13 @@ func (s icims) jobLocs(ctx context.Context, host, board string) ([]string, error
 // A fragment the platform reports gone is dropped (ok=false); one this crawl merely could not
 // read comes back as an unreadableDetail marker, since the fragment is this adapter's only
 // source for the posting and a dropped one is indistinguishable from a posting taken down.
-func (s icims) detail(ctx context.Context, e CompanyEntry, host string, vanity bool, loc string) (Job, bool) {
+func (s icims) detail(ctx context.Context, e CompanyEntry, host, loc string) (Job, bool) {
 	id := icimsJobID(loc)
-	// Classic hosts serve the fragment at <loc>?in_iframe=1. Vanity/careers-home locs are
-	// /jobs/<id>?lang=… (a query already), so their fragment lives at a distinct path.
+	// The loc's form names the product, not the board: classic locs (/jobs/<id>/<slug>/job)
+	// serve the fragment at <loc>?in_iframe=1 — also on boards stored as a full *.icims.com
+	// host — while careers-home locs (/jobs/<id>?lang=…) serve it at a distinct path.
 	frag := loc + "?in_iframe=1"
-	if vanity {
+	if !strings.HasSuffix(loc, "/job") {
 		frag = fmt.Sprintf("https://%s/careers-home/jobs/%s?in_iframe=1", host, id)
 	}
 	root, err := s.http.GetHTML(ctx, frag)
