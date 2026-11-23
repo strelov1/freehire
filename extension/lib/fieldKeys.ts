@@ -72,6 +72,7 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
     'pretension salarial',
     'aspiración salarial',
     'qual é a sua pretensão salarial',
+    'qual a sua pretensão salarial',
     'pretensão salarial',
     'gehaltsvorstellung',
     'gehaltsvorstellungen',
@@ -86,6 +87,7 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
     'how much notice',
     'kündigungsfrist',
     'ihre kündigungsfrist',
+    'wie ist ihre kündigungsfrist',
   ],
   willingToRelocate: [
     'are you willing to relocate',
@@ -134,22 +136,43 @@ export function normalizeLabel(label: string): string {
 /**
  * Maps a control's label to a canonical profile key, or null when unknown.
  *
- * The synonym has to *open* the label, not merely appear in it. A real form asks
+ * A synonym normally has to *open* the label, not merely appear in it. A real form asks
  * "Are you authorized to lawfully work for Roku in the country to which you are
  * applying?" — a substring match hands that Yes/No question the `country` key,
  * and the profile's country goes into a radio group. Anchoring at the front
  * still reads every label the live ATS forms produce, decorations and all
  * ("First Name (required) e85441b6"), because those trail the question rather
  * than lead it.
+ *
+ * The exception is a question behind a preamble ("Para contratação na modalidade Contractor
+ * (PJ), informe: Qual a sua pretensão salarial?"): a long synonym may open a later clause.
+ * Only the opening counts, so "explain how your salary expectations change" is not one.
  */
 export function matchFieldKey(label: string): string | null {
   const normalized = normalizeLabel(label);
   if (!normalized) return null;
-  for (const [key, synonyms] of Object.entries(FIELD_SYNONYMS)) {
+  const entries = Object.entries(FIELD_SYNONYMS);
+  for (const [key, synonyms] of entries) {
     if (synonyms.some((s) => opensWith(normalized, s))) return key;
+  }
+  // The question a preamble leads up to opens its own clause ("..., informe: Qual a sua ...").
+  const clauses = normalized
+    .split(/[:;?!.]|,\s/)
+    .slice(1)
+    .map((c) => c.trim());
+  for (const [key, synonyms] of entries) {
+    if (!ANYWHERE_KEYS.has(key)) continue;
+    if (synonyms.some((s) => s.length >= ANYWHERE_MIN_LEN && clauses.some((c) => opensWith(c, s)))) return key;
   }
   return null;
 }
+
+/** The keys a preamble pushes mid-label (contract terms before the salary question). Not `city`:
+ *  "How long have you lived at your current location?" asks a duration, not the city. */
+const ANYWHERE_KEYS = new Set(['desiredSalary', 'noticePeriod']);
+
+/** The shortest synonym trusted at the start of a later clause rather than only of the label. */
+const ANYWHERE_MIN_LEN = 15;
 
 /** True when the label opens with this synonym and ends it at a word boundary. */
 function opensWith(label: string, synonym: string): boolean {

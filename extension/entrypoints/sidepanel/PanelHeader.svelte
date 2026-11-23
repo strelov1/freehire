@@ -7,6 +7,7 @@
   // signed-in account with its sign-in and sign-out controls.
   let {
     user,
+    authReady,
     sending,
     authBusy,
     authError,
@@ -14,6 +15,7 @@
     onSignOut,
   }: {
     user: HireUser | null;
+    authReady: boolean;
     sending: boolean;
     authBusy: boolean;
     authError: string;
@@ -33,11 +35,13 @@
       <span class="build">v{browser.runtime.getManifest().version}</span>
     </span>
     <Badge variant={sending ? 'brand' : 'outline'}>
-      {sending ? 'working…' : user ? 'ready' : 'offline'}
+      {sending ? 'working…' : !authReady ? '…' : user ? 'ready' : 'offline'}
     </Badge>
   </div>
   <div class="auth">
-    {#if user}
+    {#if !authReady}
+      <!-- neutral until the stored session is checked -->
+    {:else if user}
       <span class="who">Signed in as <b>{user.email}</b></span>
       <button class="link" onclick={onSignOut}>Sign out</button>
     {:else}

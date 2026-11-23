@@ -8,6 +8,7 @@
     plan,
     planError,
     questionsSeen,
+    quiet = false,
     fillingLabel,
     autofilling,
     onReveal,
@@ -19,6 +20,9 @@
     plan: ApplyPlan | null;
     planError: string;
     questionsSeen: number;
+    /** On a page whose job card is showing, the stray-fields note is noise (an Easy Apply
+     *  dialog mid-step reads that way for a moment). */
+    quiet?: boolean;
     fillingLabel: string | null;
     autofilling: boolean;
     onReveal: (item: PlanItem) => void;
@@ -35,7 +39,7 @@
      there. -->
 {#if !plan && planError}
   <p class="no-plan">Could not read this page's form: {planError}</p>
-{:else if !plan && questionsSeen > 0}
+{:else if !plan && questionsSeen > 0 && !quiet}
   <!-- The page asks questions but they did not add up to an
        application. Saying so beats an empty space the user has to
        guess about. -->

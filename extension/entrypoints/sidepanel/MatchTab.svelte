@@ -17,6 +17,7 @@
   // the action notices, and the pinned Autofill button. App.svelte owns the state.
   let {
     user,
+    authReady,
     pageMatch,
     form,
     notices,
@@ -35,6 +36,7 @@
     onAutofill,
   }: {
     user: HireUser | null;
+    authReady: boolean;
     pageMatch: PageMatch;
     form: FormPlan;
     notices: string[];
@@ -64,7 +66,9 @@
         status={pageMatch.status}
         job={pageMatch.job}
         match={pageMatch.match}
-        hasUploadField={form.easyApply || form.uploads.some((u) => u.frame === TOP_FRAME)}
+        hasUploadField={form.resumeStep || form.uploads.some((u) => u.frame === TOP_FRAME)}
+        closed={form.closed}
+        closedUnknown={!form.read}
         error={pageMatch.error}
         onRetry={pageMatch.load}
         canAddJob={pageMatch.canAddJob}
@@ -76,6 +80,7 @@
         plan={form.plan}
         planError={form.planError}
         questionsSeen={form.questionsSeen}
+        quiet={pageMatch.status === 'ready'}
         fillingLabel={form.fillingLabel}
         {autofilling}
         {onReveal}
@@ -96,7 +101,7 @@
           <button class="link" onclick={onOverrideFill} disabled={autofilling}>Fill it anyway</button>
         </div>
       {/if}
-    {:else}
+    {:else if authReady}
       <p class="empty">Sign in to see your match for this page.</p>
     {/if}
   </div>

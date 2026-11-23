@@ -64,14 +64,16 @@ describe.each([
       'Nachname *': 'lastName',
       'E-Mail *': 'email',
       'Telefon *': 'phone',
+      'Wie ist Ihre Kündigungsfrist? *': 'noticePeriod',
     } as Record<string, string>,
     ids: {
+      'Wie ist Ihre Kündigungsfrist? *': 'id13',
       'Vorname *': 'id3',
       'Nachname *': 'id4',
       'E-Mail *': 'id6',
       'Telefon *': 'id9',
     } as Record<string, string>,
-    untouched: ['id1', 'idb', 'id13', 'id14'],
+    untouched: ['id1', 'idb', 'id14'],
   },
 ])('$name fixture', ({ file, labels, matched, ids, untouched }) => {
   beforeEach(() => load(file));
@@ -111,10 +113,11 @@ describe.each([
 describe('softgarden question-shaped labels', () => {
   beforeEach(() => load('softgarden-de.html'));
 
-  // The synonym has to open the label, so a full question never matches. These are
+  // A short synonym has to open the label, so a full question around it never matches
+  // ('gehaltswunsch') unless the whole question is a synonym too ('wie ist ihre kündigungsfrist'). The short case is
   // left to the agent path; this test documents the boundary rather than hiding it.
-  it('stay unmatched by the deterministic filler', () => {
-    expect(matchFieldKey('Wie ist Ihre Kündigungsfrist? *')).toBeNull();
+  it('match only on a long synonym', () => {
+    expect(matchFieldKey('Wie ist Ihre Kündigungsfrist? *')).toBe('noticePeriod');
     expect(matchFieldKey('Bitte geben Sie Ihren Gehaltswunsch an *')).toBeNull();
   });
 });

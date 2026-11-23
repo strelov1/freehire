@@ -81,3 +81,42 @@ describe('formatAuthorizedCountries', () => {
     expect(formatAuthorizedCountries('')).toBe('');
   });
 });
+
+describe('matchFieldKey with a preamble', () => {
+  it('finds a long synonym anywhere in the label', () => {
+    expect(
+      matchFieldKey('Para contratação na modalidade Contractor (PJ), informe: Qual a sua pretensão salarial mensal?'),
+    ).toBe('desiredSalary');
+    expect(matchFieldKey('Please tell us: what is your notice period?')).toBe('noticePeriod');
+  });
+
+  it('does not read a currency question as the salary', () => {
+    expect(matchFieldKey('In which currency are your salary expectations?')).toBeNull();
+  });
+
+  it('keeps a salary question that names the currency to answer in', () => {
+    expect(matchFieldKey('For this position, what are your salary expectations in your local currency?')).toBe(
+      'desiredSalary',
+    );
+  });
+
+  it('does not read a question that only mentions the salary as asking for it', () => {
+    expect(
+      matchFieldKey('For this position, explain how your salary expectations change with the local currency'),
+    ).toBeNull();
+  });
+
+  it('does not take a short synonym from the middle of a question', () => {
+    expect(matchFieldKey('Which city would you prefer to work from?')).toBeNull();
+    expect(matchFieldKey('Do you have a LinkedIn contact at our company?')).toBeNull();
+  });
+
+  it('keeps a long city synonym to the label start: a duration question is not the city', () => {
+    expect(matchFieldKey('How long have you lived at your current location?')).toBeNull();
+    expect(matchFieldKey('Current location')).toBe('city');
+  });
+
+  it('keeps word boundaries for long synonyms', () => {
+    expect(matchFieldKey('Is the notice periodicity of our reviews fine?')).toBeNull();
+  });
+});

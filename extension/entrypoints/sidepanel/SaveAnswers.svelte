@@ -51,7 +51,7 @@
             <input type="checkbox" checked={!skipped.has(offer.key)} onchange={() => toggle(offer.key)} />
             <span class="text">
               <span class="question">{offer.question}</span>
-              <span class="answer">{offer.answer}</span>
+              <span class="answer">{offer.answer}{offer.prefilled ? ' · prefilled by the page' : ''}</span>
             </span>
           </label>
         </li>
