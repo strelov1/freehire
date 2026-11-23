@@ -100,6 +100,15 @@ func runAdd(provider, board, region, company string, hub bool, tenantsFlag strin
 		log.Printf("add-board: invalid: %v", err)
 		return 1
 	}
+	// The platform check Insert runs, previewed here so a dry run states what --apply would store.
+	if c, ok := registry[provider].(sources.BoardCanonicalizer); ok {
+		canon, err := c.CanonicalBoard(context.Background(), board)
+		if err != nil {
+			log.Printf("add-board: refused: %v", err)
+			return 1
+		}
+		board = canon
+	}
 	log.Printf("add-board: would add provider=%s board=%s region=%q company=%q status=active",
 		provider, board, region, company)
 	if !apply {
@@ -118,6 +127,11 @@ func addBoard(ctx context.Context, pool *pgxpool.Pool, in boardcatalog.InsertInp
 			return 1
 		}
 		log.Printf("add-board: insert: %v", err)
+		return 1
+	}
+	// A platform refusal (Oracle: a site the tenant does not list) is stored, not returned as an error.
+	if b.Status == boardcatalog.StatusRejected {
+		log.Printf("add-board: rejected id=%d provider=%s board=%s: %s", b.ID, b.Provider, b.Board, b.RejectedReason)
 		return 1
 	}
 	log.Printf("add-board: added id=%d provider=%s board=%s status=%s", b.ID, b.Provider, b.Board, b.Status)
