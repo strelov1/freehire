@@ -1,5 +1,10 @@
 # Knowledge update history
 
+## 2026-11-23
+
+Documented unresolved LinkedIn ATS journal events and the provenance of their
+destination and career hostnames. Evidence is the ingest worker and resolver tests.
+
 ## 2026-11-22
 
 Recorded Jobs.ac.uk and CharityJob source identity, listing coverage and detail hydration.
