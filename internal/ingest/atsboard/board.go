@@ -101,6 +101,10 @@ const (
 	// board-only host a parameter is a weak signal, and inventing a board is the expensive
 	// direction.
 	modeQueryPair = "querypair"
+	// BrassRing identifies a tenant by its host and numeric partner and site IDs.
+	modeBrassring = "brassring"
+	modeBullhorn  = "bullhorn"
+	modeByteDance = "bytedance"
 	// allowedfirstsegment: board = the segment right AFTER one of a small ALLOWED set of leading
 	// path segments (see allowedFirstSegments) — the inverse of reservedSegments' deny list. It
 	// exists for a host that is a platform's WHOLE product surface rather than a dedicated boards

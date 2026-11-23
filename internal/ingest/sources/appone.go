@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -35,6 +36,26 @@ type appone struct {
 
 // NewAppOne builds the AppOne adapter over the given HTTP client.
 func NewAppOne(c JSONGetter) Source { return appone{http: c, retryDelay: apponeRetryDelay} }
+
+// NewAppOnePortalResolver looks up the portal attached to an AppOne posting.
+func NewAppOnePortalResolver(c JSONGetter) func(context.Context, string) string {
+	a := appone{http: pacedAppOneGetter(c), retryDelay: apponeRetryDelay}
+	return func(ctx context.Context, id string) string {
+		if !apponePostingID.MatchString(id) {
+			return ""
+		}
+		var detail struct {
+			ID     string `json:"jobPostId"`
+			Portal string `json:"jobPortalUrl"`
+		}
+		if err := a.getJSON(ctx, apponePostingURL+id, &detail); err != nil || detail.ID != id {
+			return ""
+		}
+		return detail.Portal
+	}
+}
+
+var apponePostingID = regexp.MustCompile(`^[0-9a-f]{24}$`)
 
 func (appone) Provider() string { return "appone" }
 

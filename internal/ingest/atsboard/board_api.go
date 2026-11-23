@@ -48,6 +48,9 @@ var apiBoards = []struct{ host, source, prefix string }{
 // link to the board itself. A pasted vanity or grnh.se link therefore resolved to the board
 // "assets" instead of the employer (this cost lionhires, 27 postings, one rejected row).
 var noBoardHosts = map[string]bool{
+	"cdn.talentlyft.com":           true,
+	"cp.static.catsone.com":        true,
+	"static.dvinci-easy.com":       true,
 	"job-boards.cdn.greenhouse.io": true,
 }
 

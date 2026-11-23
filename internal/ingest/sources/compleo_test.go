@@ -96,3 +96,34 @@ func TestCompleoJobID(t *testing.T) {
 		}
 	}
 }
+
+// A board whose listed postings all fail to read must fail the crawl, not look empty; a partial
+// read stays a success.
+func TestCompleoFetchFailsWhenNoListedPostingReadable(t *testing.T) {
+	a := "https://jobs.compleo.app/wafx/jobdetail/HJ06276A"
+	b := "https://jobs.compleo.app/wafx/jobdetail/HJ06277B"
+	down := &StatusError{Method: "GET", Code: 503, URL: b}
+	entry := CompanyEntry{Company: "WA FENIX", Provider: "compleo", Board: "wafx"}
+	sitemap := compleoSitemapXML(a, b)
+
+	all := (&routedHTTP{}).routeErr("/jobdetail/", down).route("/sitemap.xml", sitemap)
+	if _, err := NewCompleo(all).Fetch(context.Background(), entry); err == nil {
+		t.Fatal("all detail reads 503: want error, got nil")
+	}
+
+	junk := (&routedHTTP{}).route("/jobdetail/", "<html><body>Oops</body></html>").route("/sitemap.xml", sitemap)
+	if _, err := NewCompleo(junk).Fetch(context.Background(), entry); err == nil {
+		t.Fatal("all detail pages 200 without JobPosting: want error, got nil")
+	}
+
+	some := (&routedHTTP{}).routeErr("HJ06277B", down).route("HJ06276A", compleoDetailHTML).route("/sitemap.xml", sitemap)
+	jobs, err := NewCompleo(some).Fetch(context.Background(), entry)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("partial read: jobs=%d err=%v, want 1 job and nil", len(jobs), err)
+	}
+
+	empty := (&routedHTTP{}).route("/sitemap.xml", compleoSitemapXML())
+	if jobs, err := NewCompleo(empty).Fetch(context.Background(), entry); err != nil || len(jobs) != 0 {
+		t.Fatalf("empty sitemap: jobs=%d err=%v, want success", len(jobs), err)
+	}
+}

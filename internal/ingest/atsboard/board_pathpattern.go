@@ -19,6 +19,8 @@ type pathPattern struct {
 	// foo.jobs.dover.com is not Dover's board host, and recognizing it would mint a board out
 	// of a hostname this platform never serves.
 	exactHost bool
+	// Some providers expose posting URLs but no public listing for a tenant.
+	keepPostingPath bool
 }
 
 // pathPatternBoards holds, per modePathPattern host entry, the path pattern whose one capture
@@ -48,7 +50,29 @@ type pathPattern struct {
 // capture is the SLUG alone (see the host row and the jobs.dover.com entry below).
 var doverBoardPath = regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9-]*)/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?:/[A-Za-z0-9][A-Za-z0-9-]*)?$`)
 
+var mokahrSitePath = regexp.MustCompile(`^/social-recruitment/([A-Za-z0-9_-]+/[1-9][0-9]*)/?$`)
+
 var pathPatternBoards = map[string]pathPattern{
+	"vouch.careers": {
+		path:      regexp.MustCompile(`^/companies/(c[a-z0-9]{24})(?:/c[a-z0-9]{24})?/?$`),
+		listing:   "/companies/%s",
+		exactHost: true,
+	},
+	"jobs.compleo.app": {
+		path:            regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9_-]*)/jobdetail/[A-Za-z0-9]+/?$`),
+		keepPostingPath: true,
+		exactHost:       true,
+	},
+	"app.mokahr.com": {
+		path:      mokahrSitePath,
+		listing:   "/social-recruitment/%s",
+		exactHost: true,
+	},
+	"hire-r1.mokahr.com": {
+		path:      mokahrSitePath,
+		listing:   "/social-recruitment/%s",
+		exactHost: true,
+	},
 	"employmenthero.com": {
 		path:      regexp.MustCompile(`^/jobs/organisations/([a-z0-9]+(?:-[a-z0-9]+)*)/?$`),
 		listing:   "/jobs/organisations/%s/",
@@ -176,7 +200,7 @@ var pathPatternBoards = map[string]pathPattern{
 	// A section is named freely ("2", "ex", ".nexcom_ext_prof_cs", "rstrcs1.1"); reject names the
 	// platform's own trees beside them (/careersection/rest/…, /careersection/iam/…). A Taleo career site on the employer's own domain stays underivable.
 	"taleo.net": {
-		path:       regexp.MustCompile(`^/careersection/([A-Za-z0-9_.-]+)(?:/|$)`),
+		path:       regexp.MustCompile(`^/careersection/([A-Za-z0-9_.+-]+)(?:/|$)`),
 		reject:     regexp.MustCompile(`^(?:(?i:rest|iam)|\.+)$`),
 		listing:    "/careersection/%s/jobsearch.ftl",
 		tenantHost: true,
