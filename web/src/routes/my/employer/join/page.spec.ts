@@ -44,4 +44,17 @@ describe('team invitation page', () => {
     expect(await screen.findByText(/invalid or has expired/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
+  it('explains how to accept when the signed-in email does not match', async () => {
+    previewEmployerTeamInvitation.mockResolvedValue({
+      company_name: 'Acme',
+      email: 'dev@acme.test',
+      role: 'recruiter',
+    });
+    joinEmployerTeam.mockRejectedValue(new ApiError(403, 'confirm and use the invited email to join'));
+    render(Page);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Join the team' }));
+    expect(
+      await screen.findByText('Sign in with the invited work email and confirm that address to accept.'),
+    ).toBeTruthy();
+  });
 });
