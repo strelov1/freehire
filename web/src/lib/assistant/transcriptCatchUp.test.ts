@@ -26,15 +26,16 @@ it('clears feedback when the refreshed rehearsal has a newer answer', async () =
   });
 
   await transcript.reload('rehearsal');
-  expect(show).toHaveBeenLastCalledWith(expect.anything(), report);
+  expect(show).toHaveBeenLastCalledWith(expect.anything(), report, true);
   await transcript.reload('rehearsal');
   expect(show).toHaveBeenLastCalledWith(
     expect.objectContaining({ messages: [expect.objectContaining({ text: 'p95 fell' })] }),
     undefined,
+    true,
   );
 });
 
-it('ignores a refresh that started before the report finished', async () => {
+it('refreshes the transcript without replacing a report that finished later', async () => {
   const { promise, resolve } = Promise.withResolvers<Response>();
   vi.stubGlobal('fetch', vi.fn().mockReturnValue(promise));
   const show = vi.fn();
@@ -46,8 +47,8 @@ it('ignores a refresh that started before the report finished', async () => {
   });
 
   const reload = transcript.reload('rehearsal');
-  transcript.invalidate();
+  transcript.invalidateReport();
   resolve(Response.json({ data: { messages: [] } }));
   await reload;
-  expect(show).not.toHaveBeenCalled();
+  expect(show).toHaveBeenCalledWith(expect.anything(), undefined, false);
 });

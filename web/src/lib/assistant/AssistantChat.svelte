@@ -529,9 +529,9 @@
     isSupport,
     activeId: () => activeId,
     streaming: () => turns.active,
-    show: (next, report) => {
+    show: (next, report, current) => {
       chat = next;
-      interviewReport = report;
+      if (current) interviewReport = report;
     },
   });
 
@@ -629,7 +629,7 @@
               report={interviewReport}
               onReport={(report) => {
                 if (activeId !== id) return;
-                catchUp.invalidate();
+                catchUp.invalidateReport();
                 interviewReport = report;
               }}
               transcript={chat.messages}
