@@ -102,9 +102,9 @@ describe('MatchFeedList', () => {
   });
 
   it.each([
-    ['source_changed', () => meFeed.mockResolvedValueOnce(page([], { reason: 'source_changed' }))],
-    ['a rejected cursor (400)', () => meFeed.mockRejectedValueOnce(new ApiError(400, 'invalid cursor'))],
-  ])('restarts from page 1 silently on %s', async (_, next) => {
+    { on: 'source_changed', next: () => meFeed.mockResolvedValueOnce(page([], { reason: 'source_changed' })) },
+    { on: 'a rejected cursor (400)', next: () => meFeed.mockRejectedValueOnce(new ApiError(400, 'invalid cursor')) },
+  ])('restarts from page 1 silently on $on', async ({ next }) => {
     meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
     next();
     meFeed.mockResolvedValueOnce(page(['a', 'c'], { next_cursor: 'c2' }));
