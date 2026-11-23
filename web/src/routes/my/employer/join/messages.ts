@@ -5,6 +5,8 @@ export const messages = defineMessages(
     headTitle: 'Join a company team — freehire',
     title: 'Join {company} on freehire',
     body: 'You were invited at {email}. You will act for {company} under that address: see and move the applications to its vacancies, and publish vacancies of your own.',
+    recruiterBody: 'You were invited to recruit for {company}. Sign in with the verified address {email} to accept.',
+    verifiedEmail: 'Sign in with the invited work email and confirm that address to accept.',
     join: 'Join the team',
     joining: 'Joining…',
     dead: 'This invitation link is invalid or has expired. Ask your colleague to send a new one.',
@@ -19,6 +21,9 @@ export const messages = defineMessages(
       headTitle: 'Вступить в команду компании — freehire',
       title: 'Вступить в команду {company} на freehire',
       body: 'Вас пригласили на адрес {email}. Вы будете действовать от имени {company} под этим адресом: видеть отклики на её вакансии, вести их по стадиям и публиковать свои вакансии.',
+      recruiterBody:
+        'Вас пригласили работать с откликами компании {company}. Чтобы вступить, войдите с подтверждённым адресом {email}.',
+      verifiedEmail: 'Войдите с рабочим адресом из приглашения и подтвердите его, чтобы вступить в команду.',
       join: 'Вступить в команду',
       joining: 'Вступаем…',
       dead: 'Ссылка-приглашение недействительна или устарела. Попросите коллегу прислать новую.',

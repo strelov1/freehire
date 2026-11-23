@@ -128,7 +128,8 @@ func TestEmployerTeamEndToEnd(t *testing.T) {
 	}
 
 	// A mismatched or unverified account cannot consume the token.
-	if status, body := do(t, fiber.MethodPost, "/api/v1/employer/team/join", candidate, tokenBody); status != fiber.StatusForbidden {
+	if status, body := do(t, fiber.MethodPost, "/api/v1/employer/team/join", candidate, tokenBody); status != fiber.StatusForbidden ||
+		!strings.Contains(string(body), "confirm and use the invited email to join") {
 		t.Fatalf("joining with another email = %d %s", status, body)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE users SET email_verified = false WHERE id = $1", colleagueID); err != nil {
