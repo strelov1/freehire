@@ -22,7 +22,7 @@ func TestApplicationReplyTokenRejectsNonCanonical(t *testing.T) {
 		"ats-reply-not-a-uuid@mail.example.test",
 		"ats-reply-" + uuid.Nil.String() + "@mail.example.test",
 		"ats-reply-" + token.String(), // no domain
-		"ats-reply-" + uuid.UUID(token).URN() + "@mail.example.test",
+		"ats-reply-" + token.URN() + "@mail.example.test",
 	} {
 		if _, ok := ApplicationReplyToken(addr); ok {
 			t.Errorf("ApplicationReplyToken(%q) accepted", addr)
