@@ -18,7 +18,11 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-const linkedInGuestPosting = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/"
+const (
+	linkedInGuestPosting = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/"
+	// linkedInProxyTimeout is the proxied client's own timeout (linkedInClient).
+	linkedInProxyTimeout = 60 * time.Second
+)
 
 // linkedInClient routes the LinkedIn pass through the Scrapling tier's rotating proxy, the way
 // the crawl reaches LinkedIn (sources.scraplingProviders): a direct request from the crawl host
@@ -31,7 +35,7 @@ func linkedInClient(direct *http.Client) (*http.Client, bool) {
 		return direct, false
 	}
 	tr, err := scraplingfetch.New(scraplingfetch.Config{URL: raw, Token: strings.TrimSpace(os.Getenv("SCRAPLING_FETCH_TOKEN"))},
-		scraplingfetch.ModeHTTP, true, 60*time.Second)
+		scraplingfetch.ModeHTTP, true, linkedInProxyTimeout)
 	if err != nil {
 		log.Printf("liveness: linkedin stays direct: %v", err)
 		return direct, false
@@ -46,9 +50,11 @@ func linkedInClient(direct *http.Client) (*http.Client, bool) {
 // and is retried; only a refusal on every attempt stops the pass.
 func linkedInPass(client *http.Client, proxied bool) pacedPass {
 	p := pacedPass{source: "linkedin", interval: 2 * time.Second, maxPerRun: 300}
-	attempts := 1
+	attempts, timeout := 1, probeTimeout
 	if proxied {
-		p.interval, attempts = time.Second, 3
+		// The fetch tier retries a stalled exit itself (up to ~40 s each); a shorter deadline here
+		// would cancel that recovery and turn it into an uncertain verdict.
+		p.interval, attempts, timeout = time.Second, 3, linkedInProxyTimeout
 		p.maxPerRun = int(worker.EnvInt32OrDefault("LINKEDIN_LIVENESS_MAX_PER_RUN", 6000))
 	}
 	p.check = func(ctx context.Context, c candidate) pacedVerdict {
@@ -58,7 +64,7 @@ func linkedInPass(client *http.Client, proxied bool) pacedPass {
 		}
 		var v pacedVerdict
 		for range attempts {
-			if v = linkedInProbe(ctx, client, id); !v.refused {
+			if v = linkedInProbe(ctx, client, id, timeout); !v.refused {
 				break
 			}
 		}
@@ -67,9 +73,9 @@ func linkedInPass(client *http.Client, proxied bool) pacedPass {
 	return p
 }
 
-func linkedInProbe(ctx context.Context, client *http.Client, id string) pacedVerdict {
+func linkedInProbe(ctx context.Context, client *http.Client, id string, timeout time.Duration) pacedVerdict {
 	unknown := pacedVerdict{verdict: liveness.Uncertain}
-	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, linkedInGuestPosting+id, nil)
 	if err != nil {
