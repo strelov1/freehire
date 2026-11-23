@@ -64,7 +64,7 @@
       if (err instanceof ApiError && err.status === 409) error = s.alreadyMember;
       else if (err instanceof ApiError && err.status === 404) status = 'dead';
       else if (err instanceof ApiError && err.status === 403) {
-        error = preview?.role === 'recruiter' ? s.verifiedEmail : err.message;
+        error = err.message === 'confirm and use the invited email to join' ? s.verifiedEmail : err.message;
       } else error = s.error;
     } finally {
       joining = false;

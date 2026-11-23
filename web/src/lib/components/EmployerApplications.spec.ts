@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmployerApplication } from '#lib/types.js';
 import EmployerApplications from './EmployerApplications.svelte';
@@ -176,8 +176,35 @@ describe('EmployerApplications', () => {
     const reopened = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Private team notes' });
     expect(reopened.value).toBe('Current draft');
     await fireEvent.input(reopened, { target: { value: 'Later edit' } });
+    await fireEvent.click(screen.getByRole('button', { name: /d@example\.test/ }));
+    await fireEvent.click(first);
     resolveSave(application({ employer_notes: 'Current draft' }));
     expect(await screen.findByText('Notes saved.')).toBeTruthy();
-    expect(reopened.value).toBe('Later edit');
+    expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Private team notes' }).value).toBe('Later edit');
+  });
+  it('keeps an unsaved note when its request fails while another application is open', async () => {
+    let rejectSave!: (error: Error) => void;
+    listEmployerApplications.mockResolvedValue(
+      page([application(), application({ id: 2, candidate_email: 'd@example.test' })], { new: 2 }),
+    );
+    updateEmployerApplicationWorkspace.mockImplementation(() => new Promise((_, reject) => (rejectSave = reject)));
+    render(EmployerApplications);
+
+    const first = await screen.findByRole('button', { name: /c@example\.test/ });
+    await fireEvent.click(first);
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Private team notes' }), {
+      target: { value: 'Retry me' },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save notes' }));
+    await fireEvent.click(screen.getByRole('button', { name: /d@example\.test/ }));
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Private team notes' }), {
+      target: { value: 'Notes for B' },
+    });
+    rejectSave(new Error('Network error'));
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Save notes' }).disabled).toBe(false),
+    );
+    await fireEvent.click(first);
+    expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Private team notes' }).value).toBe('Retry me');
   });
 });

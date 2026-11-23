@@ -67,7 +67,7 @@
   let target = $state<EmployerApplicationStage>('new');
   let message = $state('');
   let notes = $state('');
-  let pendingNotes: { id: number; text: string } | null = null;
+  const noteDrafts = new Map<number, string>();
   let savingWorkspace = $state(false);
   let workspaceFeedback = $state<{ text: string; error: boolean } | null>(null);
   let moving = $state(false);
@@ -85,30 +85,30 @@
     openId = a.id;
     target = a.stage;
     message = '';
-    notes = pendingNotes?.id === a.id ? pendingNotes.text : (a.employer_notes ?? '');
+    notes = noteDrafts.get(a.id) ?? a.employer_notes ?? '';
     workspaceFeedback = null;
   }
 
   async function saveWorkspace(a: EmployerApplication, markViewed: boolean) {
     if (savingWorkspace || moving) return;
     savingWorkspace = true;
-    if (!markViewed) pendingNotes = { id: a.id, text: notes };
+    const submittedNotes = markViewed ? null : notes;
     workspaceFeedback = null;
     try {
       const updated = await api.updateEmployerApplicationWorkspace(
         a.id,
-        markViewed ? { mark_viewed: true } : { employer_notes: notes },
+        submittedNotes === null ? { mark_viewed: true } : { employer_notes: submittedNotes },
       );
       pager.items = pager.items.map((item) =>
         item.id === a.id ? { ...item, employer_notes: updated.employer_notes, viewed_at: updated.viewed_at } : item,
       );
+      if (submittedNotes !== null && noteDrafts.get(a.id) === submittedNotes) noteDrafts.delete(a.id);
       if (openId === a.id && !markViewed) workspaceFeedback = { text: s.notesSaved, error: false };
       announce(markViewed ? s.viewed : s.notesSaved);
     } catch {
       if (openId === a.id) workspaceFeedback = { text: s.workspaceError, error: true };
       announce(s.workspaceError, 'assertive');
     } finally {
-      pendingNotes = null;
       savingWorkspace = false;
     }
   }
@@ -334,6 +334,7 @@
                   <span class="text-sm font-medium">{s.privateNotes}</span>
                   <textarea
                     bind:value={notes}
+                    oninput={(event) => noteDrafts.set(a.id, event.currentTarget.value)}
                     rows="3"
                     maxlength={4000}
                     class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
