@@ -181,6 +181,70 @@ func (q *Queries) DeleteSearchOutboxEntries(ctx context.Context, ids []int64) er
 	return err
 }
 
+const enqueueSearchAgeCrossings = `-- name: EnqueueSearchAgeCrossings :execrows
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT c.id, c.posted_at
+FROM (
+    SELECT j.id, COALESCE(j.posted_at, j.created_at) AS posted_at
+    FROM unnest($1::int[]) AS d(days)
+    JOIN jobs j
+      ON j.closed_at IS NULL
+     AND j.created_at >  $2::timestamptz - make_interval(days => d.days)
+     AND j.created_at <= $3::timestamptz - make_interval(days => d.days)
+    WHERE j.duplicate_of IS NULL AND NOT j.is_private
+    UNION
+    SELECT j.id, COALESCE(j.posted_at, j.created_at)
+    FROM unnest($4::int[]) AS d(days)
+    JOIN jobs j
+      ON j.closed_at IS NULL
+     AND j.posted_at IS NOT NULL
+     AND COALESCE(j.posted_at, j.created_at) >  $2::timestamptz - make_interval(days => d.days)
+     AND COALESCE(j.posted_at, j.created_at) <= $3::timestamptz - make_interval(days => d.days)
+    WHERE j.duplicate_of IS NULL AND NOT j.is_private
+) c
+ORDER BY c.id
+ON CONFLICT (job_id) DO NOTHING
+`
+
+type EnqueueSearchAgeCrossingsParams struct {
+	AgeDays       []int32            `json:"age_days"`
+	Since         pgtype.Timestamptz `json:"since"`
+	Until         pgtype.Timestamptz `json:"until"`
+	PostedAgeDays []int32            `json:"posted_age_days"`
+}
+
+// Queue the open canonical postings whose search document changed in the window (since, until]
+// through their age alone, with no write to the row: their created_at age crossed one of
+// age_days — the reality class turns at fixed ages (jobreality.AgeCrossingDays) — or their
+// posted_at age crossed one of posted_age_days, where the fake-freshness flag turns
+// (jobreality.PostedAgeCrossingDays). Nothing else would ever queue them, so without this pass
+// they waited for a full rebuild. EnqueueSearchUnseenCrossings is the other half of the pass.
+//
+// Each band is a range scan: created_at on jobs_open_created_idx, posted_at on
+// jobs_open_enrich_freshness_idx (COALESCE(posted_at, created_at) is posted_at whenever
+// posted_at is set). One OR over the three conditions read the whole jobs heap, 41 minutes on
+// average on prod (2026-11-22), and a bare posted_at range made the planner skip-scan
+// jobs_company_slug_idx instead.
+//
+// DO NOTHING and id order, unlike the per-row writers' re-stamp: this one statement upserts
+// thousands of entries while every ingest transaction upserts its own, and the re-stamp's row
+// locks taken in scan order deadlocked against them on its first prod run (2026-11-05). An
+// entry already queued is pushed from the row as it stands when claimed. A wave already in
+// flight at the crossing misses it and deletes its entry; the caller's next run re-covers the
+// last hour of this window for exactly that case (cmd/reindex timeCrossingsOverlap).
+func (q *Queries) EnqueueSearchAgeCrossings(ctx context.Context, arg EnqueueSearchAgeCrossingsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, enqueueSearchAgeCrossings,
+		arg.AgeDays,
+		arg.Since,
+		arg.Until,
+		arg.PostedAgeDays,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const enqueueSearchOutbox = `-- name: EnqueueSearchOutbox :exec
 INSERT INTO search_outbox (job_id, job_posted_at)
 SELECT $1::bigint, COALESCE(posted_at, created_at)
@@ -202,76 +266,81 @@ func (q *Queries) EnqueueSearchOutbox(ctx context.Context, jobID int64) error {
 	return err
 }
 
-const enqueueSearchTimeCrossings = `-- name: EnqueueSearchTimeCrossings :execrows
-INSERT INTO search_outbox (job_id, job_posted_at)
-SELECT j.id, COALESCE(j.posted_at, j.created_at)
-FROM jobs j
-LEFT JOIN job_activity a ON a.job_id = j.id
-CROSS JOIN LATERAL (
-    SELECT ($1::bigint[])[array_position($2::text[], j.source)] AS secs
-) w
-WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
-  AND (
-    EXISTS (
-        SELECT 1 FROM unnest($3::int[]) AS d(days)
-        WHERE j.created_at >  $4::timestamptz - make_interval(days => d.days)
-          AND j.created_at <= $5::timestamptz - make_interval(days => d.days)
-    )
-    OR EXISTS (
-        SELECT 1 FROM unnest($6::int[]) AS d(days)
-        WHERE j.posted_at >  $4::timestamptz - make_interval(days => d.days)
-          AND j.posted_at <= $5::timestamptz - make_interval(days => d.days)
-    )
-    OR (w.secs IS NOT NULL
-        AND a.last_seen_at >  $4::timestamptz - make_interval(secs => w.secs)
-        AND a.last_seen_at <= $5::timestamptz - make_interval(secs => w.secs))
-  )
-ORDER BY j.id
-ON CONFLICT (job_id) DO NOTHING
+const enqueueSearchUnseenCrossings = `-- name: EnqueueSearchUnseenCrossings :one
+WITH bands AS MATERIALIZED (
+    SELECT DISTINCT
+        $1::timestamptz - make_interval(secs => s.secs) AS lo,
+        $2::timestamptz - make_interval(secs => s.secs) AS hi
+    FROM unnest($3::bigint[]) AS s(secs)
+), chunk AS MATERIALIZED (
+    SELECT a.job_id, a.last_seen_at
+    FROM job_activity a
+    WHERE a.job_id > $4::bigint
+    ORDER BY a.job_id
+    LIMIT $5::int
+), candidates AS MATERIALIZED (
+    SELECT c.job_id, c.last_seen_at
+    FROM chunk c
+    WHERE EXISTS (SELECT 1 FROM bands b WHERE c.last_seen_at > b.lo AND c.last_seen_at <= b.hi)
+), ins AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT j.id, COALESCE(j.posted_at, j.created_at)
+    FROM candidates c
+    JOIN jobs j ON j.id = c.job_id
+    CROSS JOIN LATERAL (
+        SELECT ($3::bigint[])[array_position($6::text[], j.source)] AS secs
+    ) w
+    WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
+      AND w.secs IS NOT NULL
+      AND c.last_seen_at >  $1::timestamptz - make_interval(secs => w.secs)
+      AND c.last_seen_at <= $2::timestamptz - make_interval(secs => w.secs)
+    ORDER BY j.id
+    ON CONFLICT (job_id) DO NOTHING
+    RETURNING 1
+)
+SELECT COALESCE((SELECT max(job_id) FROM chunk), 0)::bigint AS last_id,
+       (SELECT count(*) FROM ins)::bigint AS enqueued
 `
 
-type EnqueueSearchTimeCrossingsParams struct {
-	UnseenSeconds []int64            `json:"unseen_seconds"`
-	Sources       []string           `json:"sources"`
-	AgeDays       []int32            `json:"age_days"`
+type EnqueueSearchUnseenCrossingsParams struct {
 	Since         pgtype.Timestamptz `json:"since"`
 	Until         pgtype.Timestamptz `json:"until"`
-	PostedAgeDays []int32            `json:"posted_age_days"`
+	UnseenSeconds []int64            `json:"unseen_seconds"`
+	AfterID       int64              `json:"after_id"`
+	ChunkSize     int32              `json:"chunk_size"`
+	Sources       []string           `json:"sources"`
 }
 
-// Queue the open canonical postings whose search document changed in the window
-// (since, until] through the passage of time alone, with no write to the row:
-//   - their age crossed one of age_days — the reality class turns at fixed ages
-//     (jobreality.AgeCrossingDays) — or their posted_at age crossed one of posted_age_days,
-//     where the fake-freshness flag turns (jobreality.PostedAgeCrossingDays);
-//   - their source's unseen window ran out (search.Withheld), so the drain must take the
-//     document out. sources/unseen_seconds is that per-source map; a source absent from it
-//     is never withheld on this ground.
+type EnqueueSearchUnseenCrossingsRow struct {
+	LastID   int64 `json:"last_id"`
+	Enqueued int64 `json:"enqueued"`
+}
+
+// Queue the open canonical postings whose source's unseen window ran out in (since, until]
+// (search.Withheld), so the drain takes the document out. sources/unseen_seconds is that
+// per-source map; a source absent from it is never withheld on this ground. A posting crosses
+// at last_seen_at + window.
 //
-// Nothing else would ever queue them, so without this pass they waited for a full rebuild.
-// A posting crosses at created_at + age (or last_seen_at + window), hence the bands below.
-// One sequential pass over the open rows: last_seen_at (job_activity's, joined by primary key) is
-// deliberately in no index (the liveness touch must stay heap-only), so the caller runs this a
-// few times a day.
-// DO NOTHING and id order, unlike the per-row writers' re-stamp: this one statement upserts
-// thousands of entries while every ingest transaction upserts its own, and the re-stamp's row
-// locks taken in scan order deadlocked against them on its first prod run (2026-11-05). An
-// entry already queued is pushed from the row as it stands when claimed. A wave already in
-// flight at the crossing misses it and deletes its entry; the caller's next run re-covers the
-// last hour of this window for exactly that case (cmd/reindex timeCrossingsOverlap).
-func (q *Queries) EnqueueSearchTimeCrossings(ctx context.Context, arg EnqueueSearchTimeCrossingsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, enqueueSearchTimeCrossings,
-		arg.UnseenSeconds,
-		arg.Sources,
-		arg.AgeDays,
+// last_seen_at (job_activity's) is deliberately in no index — the liveness touch must stay
+// heap-only — so this walks job_activity in primary-key order, chunk_size rows after after_id
+// per call, and returns the last job_id it read as the next cursor (0 once nothing is left).
+// Each call is a short statement of its own, so no snapshot is held across the whole table.
+// A chunk is first cut to the rows inside one of the distinct windows' bands (a handful of
+// windows, not one per source), and only those reach the jobs lookup.
+//
+// DO NOTHING and id order for the same reasons as EnqueueSearchAgeCrossings.
+func (q *Queries) EnqueueSearchUnseenCrossings(ctx context.Context, arg EnqueueSearchUnseenCrossingsParams) (EnqueueSearchUnseenCrossingsRow, error) {
+	row := q.db.QueryRow(ctx, enqueueSearchUnseenCrossings,
 		arg.Since,
 		arg.Until,
-		arg.PostedAgeDays,
+		arg.UnseenSeconds,
+		arg.AfterID,
+		arg.ChunkSize,
+		arg.Sources,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	var i EnqueueSearchUnseenCrossingsRow
+	err := row.Scan(&i.LastID, &i.Enqueued)
+	return i, err
 }
 
 const recordSearchOutboxFailure = `-- name: RecordSearchOutboxFailure :one

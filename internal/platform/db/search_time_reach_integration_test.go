@@ -26,6 +26,33 @@ func searchOutboxCount(t *testing.T, pool *pgxpool.Pool, jobID int64) int {
 	return n
 }
 
+// enqueueTimeCrossings runs both halves of the time-crossings pass the way cmd/reindex does,
+// walking job_activity one row per call so every chunk boundary is crossed.
+func enqueueTimeCrossings(t *testing.T, q *Queries, since, until pgtype.Timestamptz) int64 {
+	t.Helper()
+	ctx := context.Background()
+	n, err := q.EnqueueSearchAgeCrossings(ctx, EnqueueSearchAgeCrossingsParams{
+		AgeDays: []int32{15, 90}, PostedAgeDays: []int32{15}, Since: since, Until: until,
+	})
+	if err != nil {
+		t.Fatalf("enqueue age crossings: %v", err)
+	}
+	for after := int64(0); ; {
+		r, err := q.EnqueueSearchUnseenCrossings(ctx, EnqueueSearchUnseenCrossingsParams{
+			Sources: []string{"test"}, UnseenSeconds: []int64{14 * 24 * 3600},
+			Since: since, Until: until, AfterID: after, ChunkSize: 1,
+		})
+		if err != nil {
+			t.Fatalf("enqueue unseen crossings after %d: %v", after, err)
+		}
+		n += r.Enqueued
+		if r.LastID == 0 {
+			return n
+		}
+		after = r.LastID
+	}
+}
+
 func TestSearchReachWithoutRebuild(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
@@ -173,20 +200,22 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(-14*24*time.Hour-time.Hour), otherSource)
 		exec(t, "UPDATE jobs SET created_at = $1, posted_at = $2 WHERE id = $3",
 			ts(-100*24*time.Hour), ts(-15*24*time.Hour-time.Hour), repostedFresh)
+		// Crossed, but not listable: a closed posting on the age half, a repost on the unseen half.
+		closedAged := insertChunkTestJob(t, pool, "closed-aged", "acme")
+		exec(t, "UPDATE jobs SET created_at = $1, closed_at = now() WHERE id = $2", ts(-15*24*time.Hour-time.Hour), closedAged)
+		dupUnseen := insertChunkTestJob(t, pool, "dup-unseen", "acme")
+		exec(t, "UPDATE jobs SET duplicate_of_role = $1 WHERE id = $2", wentUnseen, dupUnseen)
+		exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(-14*24*time.Hour-time.Hour), dupUnseen)
+		// An age crossing needs no job_activity row: the unseen half walks that table, the age half does not.
+		exec(t, "DELETE FROM job_activity WHERE job_id = $1", crossedAge)
 		clearOutbox(t, pool)
 
-		n, err := q.EnqueueSearchTimeCrossings(ctx, EnqueueSearchTimeCrossingsParams{
-			Sources: []string{"test"}, UnseenSeconds: []int64{14 * 24 * 3600},
-			AgeDays: []int32{15, 90}, PostedAgeDays: []int32{15},
-			Since: ts(-2 * time.Hour), Until: ts(0),
-		})
-		if err != nil {
-			t.Fatalf("enqueue: %v", err)
-		}
-		if n != 3 {
+		if n := enqueueTimeCrossings(t, q, ts(-2*time.Hour), ts(0)); n != 3 {
 			t.Errorf("queued %d postings, want 3", n)
 		}
-		for id, want := range map[int64]int{crossedAge: 1, young: 0, wentUnseen: 1, otherSource: 0, repostedFresh: 1} {
+		for id, want := range map[int64]int{
+			crossedAge: 1, young: 0, wentUnseen: 1, otherSource: 0, repostedFresh: 1, closedAged: 0, dupUnseen: 0,
+		} {
 			if got := searchOutboxCount(t, pool, id); got != want {
 				t.Errorf("job %d queued %d, want %d", id, got, want)
 			}
@@ -207,13 +236,7 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		}
 		run := func(since, until time.Duration) {
 			t.Helper()
-			if _, err := q.EnqueueSearchTimeCrossings(ctx, EnqueueSearchTimeCrossingsParams{
-				Sources: []string{"test"}, UnseenSeconds: []int64{14 * 24 * 3600},
-				AgeDays: []int32{15, 90}, PostedAgeDays: []int32{15},
-				Since: ts(since), Until: ts(until),
-			}); err != nil {
-				t.Fatalf("enqueue: %v", err)
-			}
+			enqueueTimeCrossings(t, q, ts(since), ts(until))
 		}
 		run(-time.Hour, -time.Minute) // covers the crossing, meets the held entry
 		if err := q.DeleteSearchOutboxEntries(ctx, []int64{held}); err != nil {
