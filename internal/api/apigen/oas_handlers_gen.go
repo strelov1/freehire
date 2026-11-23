@@ -16917,7 +16917,9 @@ func (s *Server) handleInsightsRoleCountriesRequest(args [0]string, argsEscaped 
 
 // handleInsightsRoleDemandRequest handles insightsRoleDemand operation.
 //
-// New public vacancies by specialty for the last 12 completed UTC weeks.
+// Counts unique public vacancies, including closed vacancies, by publication date. If the source
+// supplied no date, the count uses the vacancy's first catalogue appearance. The data array is empty
+// until the first snapshot is published.
 //
 // GET /insights/role-demand
 func (s *Server) handleInsightsRoleDemandRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {

@@ -4974,6 +4974,7 @@
       "get": {
         "operationId": "insightsRoleDemand",
         "summary": "New public vacancies by specialty for the last 12 completed UTC weeks.",
+        "description": "Counts unique public vacancies, including closed vacancies, by publication date.\nIf the source supplied no date, the count uses the vacancy's first catalogue appearance.\nThe data array is empty until the first snapshot is published.",
         "parameters": [],
         "responses": {
           "200": {
@@ -4982,6 +4983,15 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RoleDemandAnswer"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "category": "backend",
+                      "week": "2026-11-16",
+                      "new_jobs": 42
+                    }
+                  ]
                 }
               }
             }

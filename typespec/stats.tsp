@@ -781,9 +781,15 @@ op insightsRoleCountries(@query countries?: string): RoleCountriesAnswer | Probl
 @get
 op insightsRolePulse(@query category?: string): RolePulseAnswer | Problem;
 
+/**
+ * Counts unique public vacancies, including closed vacancies, by publication date.
+ * If the source supplied no date, the count uses the vacancy's first catalogue appearance.
+ * The data array is empty until the first snapshot is published.
+ */
 @summary("New public vacancies by specialty for the last 12 completed UTC weeks.")
 @useAuth(NoAuth)
 @tag("Insights")
+@opExample(#{ returnType: #{ data: #[#{ category: "backend", week: "2026-11-16", new_jobs: 42 }] } })
 @route("/insights/role-demand")
 @get
 op insightsRoleDemand(): RoleDemandAnswer | Problem;

@@ -1410,7 +1410,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** New public vacancies by specialty for the last 12 completed UTC weeks. */
+        /**
+         * New public vacancies by specialty for the last 12 completed UTC weeks.
+         * @description Counts unique public vacancies, including closed vacancies, by publication date.
+         *     If the source supplied no date, the count uses the vacancy's first catalogue appearance.
+         *     The data array is empty until the first snapshot is published.
+         */
         get: operations["insightsRoleDemand"];
         put?: never;
         post?: never;
@@ -14261,6 +14266,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "category": "backend",
+                     *           "week": "2026-11-16",
+                     *           "new_jobs": 42
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": components["schemas"]["RoleDemandAnswer"];
                 };
             };

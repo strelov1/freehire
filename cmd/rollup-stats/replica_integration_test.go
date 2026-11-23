@@ -51,11 +51,13 @@ func TestRollupReadsAnalyticsAndPublishesToPrimary(t *testing.T) {
 	if count != 0 {
 		t.Fatal("analytics database was written")
 	}
-	if err := primary.QueryRow(ctx, `SELECT sum(new_jobs) FROM insights_role_demand_weekly`).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 1 {
-		t.Fatalf("published role demand count=%d, want 1 from analytics", count)
+	for category, want := range map[string]int{"backend": 1, "design": 0} {
+		if err := primary.QueryRow(ctx, `SELECT sum(new_jobs) FROM insights_role_demand_weekly WHERE category = $1`, category).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != want {
+			t.Fatalf("published role demand for %s = %d, want %d from analytics", category, count, want)
+		}
 	}
 }
 

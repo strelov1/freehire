@@ -6249,8 +6249,24 @@ curl "https://freehire.me/api/v1/insights/role-countries"
 
 New public vacancies by specialty for the last 12 completed UTC weeks.
 
+Counts unique public vacancies, including closed vacancies, by publication date.
+If the source supplied no date, the count uses the vacancy's first catalogue appearance.
+The data array is empty until the first snapshot is published.
+
 ```bash
 curl "https://freehire.me/api/v1/insights/role-demand"
+```
+
+```json
+{
+  "data": [
+    {
+      "category": "backend",
+      "week": "2026-11-16",
+      "new_jobs": 42
+    }
+  ]
+}
 ```
 
 ### `GET /insights/role-pulse`
