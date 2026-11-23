@@ -148,6 +148,26 @@ func TestDerive_ExcludedCountriesAreNotPositiveGeography(t *testing.T) {
 			t.Errorf("geography = %v / %v, want [] / [eu]", got.Countries, got.Regions)
 		}
 	})
+	t.Run("a macro-region from a description label survives a country exclusion", func(t *testing.T) {
+		got := Derive(Input{Location: "Remote", Description: "Locations: France - Remote, EMEA - Remote\n" +
+			"We cannot accept applications from candidates based in France."})
+		if len(got.Countries) != 0 || !slices.Equal(got.Regions, []string{"africa", "eu", "mena", "uk"}) {
+			t.Errorf("geography = %v / %v, want [] / [africa eu mena uk]", got.Countries, got.Regions)
+		}
+	})
+	t.Run("structured city in the excluded country is removed", func(t *testing.T) {
+		got := Derive(Input{Location: "Remote / Worldwide", Countries: []string{"de"}, Cities: []string{"Berlin"},
+			Description: "This role is remote worldwide, except in Germany."})
+		if len(got.Cities)+len(got.Metros) != 0 {
+			t.Errorf("places = %v / %v, want none", got.Cities, got.Metros)
+		}
+	})
+	t.Run("parsed city in the excluded country is removed", func(t *testing.T) {
+		got := Derive(Input{Location: "Remote / Berlin, Germany / Toronto, Canada", Description: exclusion + "."})
+		if !slices.Equal(got.Cities, []string{"Toronto"}) {
+			t.Errorf("cities = %v, want [Toronto]", got.Cities)
+		}
+	})
 	t.Run("optional restriction is still a denial", func(t *testing.T) {
 		got := Derive(Input{Location: "Remote / Worldwide",
 			Description: "Applications are open worldwide. Candidates are not required to be based in France."})

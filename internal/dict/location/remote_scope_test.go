@@ -38,6 +38,8 @@ func TestExcludedCountriesFromDescription(t *testing.T) {
 		{"applicant refusal", "<p>We are unable to consider applications from candidates based in France, Italy, or Germany for this role.</p>", []string{"de", "fr", "it"}},
 		{"worldwide exception", "This role is remote worldwide, except in Germany.", []string{"de"}},
 		{"contracted wording", "We can’t consider candidates located in the UK.", []string{"gb"}},
+		{"unrelated earlier denial", "We do not sponsor visas; we cannot accept applications from candidates based in Germany; see the location details.", []string{"de"}},
+		{"negated refusal", "It is not true that we cannot accept applications from candidates based in Germany.", nil},
 		{"city and country", "We cannot accept applicants based in Berlin, Germany.", nil},
 		{"no residence requirement", "Applicants are not required to be based in France.", nil},
 		{"ordinary hiring location", "We're hiring in France or Germany.", nil},
@@ -60,6 +62,10 @@ func TestRegionScopeFromDescription_RemoteLocationLabels(t *testing.T) {
 		if !slices.Equal(countries, []string{"us"}) || !slices.Equal(regions, []string{"africa", "eu", "mena", "north_america", "uk"}) {
 			t.Errorf("RegionScopeFromDescription(%q) = %v / %v, want US and EMEA", desc, countries, regions)
 		}
+	}
+	countries, regions := RegionScopeFromDescription("<p>Location: United States - Remote</p><p>Location: Canada - Remote</p>")
+	if !slices.Equal(countries, []string{"ca", "us"}) || !slices.Equal(regions, []string{"north_america"}) {
+		t.Errorf("two location labels = %v / %v, want US and Canada", countries, regions)
 	}
 	if countries, regions := RegionScopeFromDescription("Headquarters: United States - Remote"); len(countries)+len(regions) != 0 {
 		t.Errorf("single headquarters = %v / %v, want no role scope", countries, regions)
@@ -96,10 +102,25 @@ func TestWithoutExcludedGeography(t *testing.T) {
 		{"Remote / Europe / Canada / Germany", []string{"eu", "north_america"}},
 	} {
 		t.Run(tt.line, func(t *testing.T) {
-			gotCountries, gotRegions := WithoutExcludedGeography(countries, regions, []string{"de"}, tt.line)
+			gotCountries, gotRegions := WithoutExcludedGeography(countries, regions, []string{"de"}, tt.line, "")
 			if !slices.Equal(gotCountries, wantCountries) || !slices.Equal(gotRegions, tt.want) {
 				t.Errorf("WithoutExcludedGeography() = %v / %v, want %v / %v", gotCountries, gotRegions, wantCountries, tt.want)
 			}
 		})
+	}
+}
+
+func TestWithoutExcludedPlaces(t *testing.T) {
+	cities := []string{"Berlin", "Toronto", "Uncatalogued Place"}
+	metros := []string{"Berlin (DE)", "Toronto (CA)"}
+	gotCities, gotMetros := WithoutExcludedPlaces(cities, metros, []string{"de", "ca"}, []string{"de"})
+	if !slices.Equal(gotCities, []string{"Toronto", "Uncatalogued Place"}) ||
+		!slices.Equal(gotMetros, []string{"Toronto (CA)"}) {
+		t.Errorf("places = %v / %v, want Toronto and the unresolved city", gotCities, gotMetros)
+	}
+	gotCities, gotMetros = WithoutExcludedPlaces(cities, metros, nil, nil)
+	if !slices.Equal(gotCities, []string{"Berlin", "Toronto", "Uncatalogued Place"}) ||
+		!slices.Equal(gotMetros, []string{"Berlin (DE)", "Toronto (CA)"}) {
+		t.Errorf("without exclusions, places changed to %v / %v", gotCities, gotMetros)
 	}
 }

@@ -53,7 +53,8 @@ func RegionScopeFromDescription(desc string) (countries, regions []string) {
 	if len(countries)+len(regions) > 0 || !strings.Contains(desc, " - ") {
 		return countries, regions
 	}
-	return remoteScopeFromLabels(descriptionScopeText(desc))
+	countries, regions, _ = remoteScopeFromLabels(descriptionScopeText(desc))
+	return countries, regions
 }
 
 func regionScopeFromProse(desc string) (countries, regions []string) {

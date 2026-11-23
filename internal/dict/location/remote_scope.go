@@ -23,21 +23,26 @@ func descriptionScopeText(desc string) string {
 	return scopeSpace.ReplaceAllString(strings.ToLower(html.UnescapeString(stripTags(desc))), " ")
 }
 
-func remoteScopeFromLabels(text string) (countries, regions []string) {
+func remoteScopeFromLabels(text string) (countries, regions, statedRegions []string) {
 	for line := range strings.SplitSeq(text, "\n") {
-		if strings.Contains(line, " - remote") {
-			if c, r := remoteScopeLabel(line); len(r) > 0 {
-				return c, r
-			}
+		if !strings.Contains(line, " - remote") {
+			continue
 		}
+		c, r, stated := remoteScopeLabel(line)
+		countries = append(countries, c...)
+		regions = append(regions, r...)
+		statedRegions = append(statedRegions, stated...)
 	}
-	return nil, nil
+	slices.Sort(countries)
+	slices.Sort(regions)
+	slices.Sort(statedRegions)
+	return slices.Compact(countries), slices.Compact(regions), slices.Compact(statedRegions)
 }
 
 // remoteScopeLabel reads a complete location label, including lists such as
 // "United States - Remote, EMEA - Remote". Treat the entire line as a label
 // only when every entry is a known country or region followed by the remote marker.
-func remoteScopeLabel(line string) (countries, regions []string) {
+func remoteScopeLabel(line string) (countries, regions, statedRegions []string) {
 	fields, _, _ := strings.Cut(line, " please note that ")
 	label, value, hasLabel := strings.Cut(fields, ":")
 	if hasLabel {
@@ -46,33 +51,39 @@ func remoteScopeLabel(line string) (countries, regions []string) {
 			// Some boards put remote locations under this heading. Require
 			// a list of explicitly remote entries before using it as scope.
 			if !strings.Contains(value, ",") {
-				return nil, nil
+				return nil, nil, nil
 			}
 		case "location", "locations":
 		default:
-			return nil, nil
+			return nil, nil, nil
 		}
 		fields = strings.TrimLeft(value, " *")
 	}
 	countrySet := map[string]struct{}{}
 	regionSet := map[string]struct{}{}
+	statedSet := map[string]struct{}{}
 	for _, field := range strings.Split(fields, ",") {
 		place, ok := strings.CutSuffix(strings.TrimSpace(field), " - remote")
 		if !ok {
-			return nil, nil
+			return nil, nil, nil
 		}
 		rs := normalizeRegion(place)
 		if len(rs) == 0 || slices.Contains(rs, globalRegion) {
-			return nil, nil
+			return nil, nil, nil
 		}
 		if c := NormalizeCountry(place); c != "" {
 			countrySet[c] = struct{}{}
+		}
+		if nameToRegion[place] != "" || len(regionAliases[place]) > 0 {
+			for _, r := range rs {
+				statedSet[r] = struct{}{}
+			}
 		}
 		for _, r := range rs {
 			regionSet[r] = struct{}{}
 		}
 	}
-	return stringset.Sorted(countrySet), stringset.Sorted(regionSet)
+	return stringset.Sorted(countrySet), stringset.Sorted(regionSet), stringset.Sorted(statedSet)
 }
 
 var countryExclusion = regexp.MustCompile(
@@ -100,12 +111,15 @@ func excludedCountries(text string) []string {
 	var countries []string
 	for _, match := range countryExclusion.FindAllStringIndex(text, -1) {
 		start, end := match[0], match[1]
-		if negatedSentence(sentenceAround(text[:start], start, start)) {
+		prefix := sentenceAround(text[:start], start, start)
+		prefix = prefix[strings.LastIndexByte(prefix, ';')+1:]
+		if negatedSentence(prefix) {
 			continue
 		}
 		var list []string
 		valid := true
-		clause := strings.TrimSuffix(strings.TrimSpace(clauseAfterPhrase(text, end)), " for this role")
+		clause, _, _ := strings.Cut(clauseAfterPhrase(text, end), ";")
+		clause = strings.TrimSuffix(strings.TrimSpace(clause), " for this role")
 		for tok := range strings.SplitSeq(placeListJoin.Replace(clause), ",") {
 			tok = strings.TrimPrefix(strings.TrimSpace(tok), "the ")
 			if tok == "" {
@@ -205,8 +219,8 @@ func IsRemoteOfficeList(line string, cities []string) bool {
 
 // WithoutExcludedGeography removes excluded countries and the regions supported
 // only by those countries. A macro-region named separately in the location
-// line remains a valid scope even when it contains an excluded country.
-func WithoutExcludedGeography(countries, regions, excluded []string, line string) ([]string, []string) {
+// line or in a description's remote location labels remains a valid scope.
+func WithoutExcludedGeography(countries, regions, excluded []string, line, description string) ([]string, []string) {
 	if len(excluded) == 0 {
 		return countries, regions
 	}
@@ -218,11 +232,15 @@ func WithoutExcludedGeography(countries, regions, excluded []string, line string
 		removedRegions = append(removedRegions, countryToRegion[c])
 		return true
 	})
+	var statedRegions []string
+	if len(removedRegions) > 0 && strings.Contains(description, " - ") {
+		_, _, statedRegions = remoteScopeFromLabels(descriptionScopeText(description))
+	}
 	regions = slices.DeleteFunc(slices.Clone(regions), func(r string) bool {
 		if r == globalRegion {
 			return true
 		}
-		if !slices.Contains(removedRegions, r) ||
+		if !slices.Contains(removedRegions, r) || slices.Contains(statedRegions, r) ||
 			slices.ContainsFunc(kept, func(c string) bool { return countryToRegion[c] == r }) {
 			return false
 		}

@@ -138,7 +138,7 @@ func deriveGeography(in Input, title string, geo location.Geo, workMode string) 
 	// work-mode fallback below uses.
 	structuredRegions := location.NormalizeRegions(in.Regions)
 	excluded := location.ExcludedCountriesFromDescription(in.Description)
-	countries, regions := location.WithoutExcludedGeography(geo.Countries, geo.Regions, excluded, in.Location)
+	countries, regions := location.WithoutExcludedGeography(geo.Countries, geo.Regions, excluded, in.Location, "")
 	if geoUnpinned(countries, regions) {
 		// A title-embedded restriction marker ("[Remote-US]", "(Location - Australia
 		// or New Zealand)") is a more literal, ATS-authored signal than prose, so it
@@ -209,7 +209,7 @@ func deriveGeography(in Input, title string, geo location.Geo, workMode string) 
 		}
 	}
 	// An explicit exclusion also applies to source-provided geography.
-	countries, regions = location.WithoutExcludedGeography(countries, regions, excluded, in.Location)
+	countries, regions = location.WithoutExcludedGeography(countries, regions, excluded, in.Location, in.Description)
 	// Parse already drops a global the location line contradicts; this applies the same
 	// rule to the final answer, whose countries and regions may come from a structured
 	// signal instead — an adapter's own country beside an "Anywhere" line, or a stored
@@ -221,6 +221,11 @@ func deriveGeography(in Input, title string, geo location.Geo, workMode string) 
 		cities = in.Cities
 	}
 	metros := metrosForOverride(geo.Metros, in.Cities, in.Countries, countries)
+	cityCountries := geo.Countries
+	if len(in.Cities) > 0 && len(in.Countries) > 0 {
+		cityCountries = in.Countries
+	}
+	cities, metros = location.WithoutExcludedPlaces(cities, metros, cityCountries, excluded)
 	return countries, regions, cities, metros
 }
 
