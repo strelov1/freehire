@@ -49,4 +49,8 @@ describe('reviewResume', () => {
   ])('interprets listed skills in %s', (line, kinds) => {
     expect(reviewResume(line, ['aws', 'azure'], []).map(({ kind }) => kind)).toEqual(kinds);
   });
+  it('recognizes an uppercase acronym without interpreting ordinary words as skills', () => {
+    const review = reviewResume('Built services in TS. I helped the team go faster.', ['typescript', 'go'], []);
+    expect(review.map(({ kind }) => kind)).toEqual(['example', 'missing']);
+  });
 });

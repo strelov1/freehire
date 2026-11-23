@@ -46,7 +46,8 @@ function skillPatterns(skill: string): RegExp[] {
     const suffix = skill === 'c' && word === 'C' ? '+#' : '';
     return `(?<![\\p{L}\\p{N}_])${escapePattern(word)}(?![\\p{L}\\p{N}_${suffix}])`;
   };
-  return [...words].map((word) => new RegExp(whole(word), /^[a-z]{1,2}$/i.test(word) ? 'gu' : 'giu'));
+  // Case distinguishes Go from the verb and one-letter skills from prose.
+  return [...words].map((word) => new RegExp(whole(word), word.length === 1 || word === 'Go' ? 'gu' : 'giu'));
 }
 
 function firstAffirmedMatch(line: string, patterns: readonly RegExp[]) {
