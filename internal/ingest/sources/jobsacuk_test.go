@@ -103,6 +103,26 @@ func TestJobsACUKUsesSecondSortOnlyToFillListingGap(t *testing.T) {
 	}
 }
 
+func TestJobsACUKRecoversFromListingCountDrift(t *testing.T) {
+	first := jobsACUKFixture(t, "search-first.html")
+	last := jobsACUKFixture(t, "search-last.html")
+	f := (&routedHTTP{}).
+		route("sortOrder=1&pageSize=25&startIndex=1", first).
+		route("sortOrder=1&pageSize=25&startIndex=26", strings.Replace(last, ">26<", ">27<", 1)).
+		route("sortOrder=2&pageSize=25&startIndex=1", first).
+		route("sortOrder=2&pageSize=25&startIndex=26", last).
+		route(jobsACUKFixtureURL, jobsACUKFixture(t, "commercial-manager.html"))
+	jobs, err := newTestJobsACUK(f).FetchNew(context.Background(), CompanyEntry{}, func(id string) bool {
+		return id != "DTS558"
+	})
+	if err != nil || len(jobs) != 26 || f.calls != 5 {
+		t.Fatalf("got %d jobs, %d requests, error %v; want a complete walk in the other order", len(jobs), f.calls, err)
+	}
+	if j := jobs[25]; j.ExternalID != "DTS558" || j.Unreadable || j.SeenRefresh {
+		t.Fatalf("wrong recovered posting: %+v", j)
+	}
+}
+
 func TestJobsACUKFailsIncompleteOrInconsistentListings(t *testing.T) {
 	for _, tc := range []struct {
 		name, line string
@@ -110,8 +130,8 @@ func TestJobsACUKFailsIncompleteOrInconsistentListings(t *testing.T) {
 	}{
 		{"interstitial across both sorts", "<html><body>Unexpected page</body></html>", 4},
 		{"missing last result", `<strong class="job-count">26</strong><div id="job-listings"></div>`, 4},
-		{"duplicate last result", `<strong class="job-count">26</strong><div id="job-listings"><a href="/job/TST001/example-1">Example</a></div>`, 2},
-		{"changed total", `<strong class="job-count">27</strong><div id="job-listings"><a href="/job/DTS558/commercial-manager">Commercial Manager</a></div>`, 2},
+		{"duplicate last result", `<strong class="job-count">26</strong><div id="job-listings"><a href="/job/TST001/example-1">Example</a></div>`, 4},
+		{"changed total", `<strong class="job-count">27</strong><div id="job-listings"><a href="/job/DTS558/commercial-manager">Commercial Manager</a></div>`, 4},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := jobsACUKTwoPageListing(t, tc.line)

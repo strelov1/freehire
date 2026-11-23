@@ -37,6 +37,8 @@ const (
 	jobsACUKDeadlineMargin = 3 * time.Minute
 )
 
+var errJobsACUKListingDrift = errors.New("jobsacuk: listing shifted during pagination")
+
 var jobsACUKPostingPath = regexp.MustCompile(`^/job/([A-Z]{3}[0-9]{3})/[^/?#]+$`)
 
 // NewJobsACUK builds the adapter over the shared HTTP client.
@@ -96,15 +98,23 @@ func (s jobsACUK) get(ctx context.Context, u string) (*html.Node, error) {
 	return s.http.GetHTML(ctx, u)
 }
 
-// list accepts the complete unfiltered Date Placed search, or uses the same site's Closing Date
-// sort to fill a gap. Every readable page must agree on the total and contain the expected page
-// size. A total change or duplicate within one order is evidence that offsets shifted.
 func (s jobsACUK) list(ctx context.Context) ([]listedPosting, error) {
+	postings, err := s.listSnapshot(ctx, 1)
+	if !errors.Is(err, errJobsACUKListingDrift) {
+		return postings, err
+	}
+	log.Printf("%v; retrying from the Closing Date order", err)
+	return s.listSnapshot(ctx, 2)
+}
+
+// listSnapshot verifies one complete order or fills unreadable pages from the other order.
+// A changing total or a duplicate within one order invalidates the whole snapshot.
+func (s jobsACUK) listSnapshot(ctx context.Context, firstOrder int) ([]listedPosting, error) {
 	var postings []listedPosting
 	distinct := make(map[string]bool)
 	total := -1
 	var firstGap error
-	for _, order := range []int{1, 2} {
+	for _, order := range []int{firstOrder, 3 - firstOrder} {
 		withinOrder := make(map[string]bool)
 		for offset := 1; total < 0 || offset <= max(1, total); offset += jobsACUKPageSize {
 			count, page, err := s.searchPage(ctx, order, offset)
@@ -115,7 +125,7 @@ func (s jobsACUK) list(ctx context.Context) ([]listedPosting, error) {
 				case total < 0:
 					total = count
 				case count != total:
-					return nil, fmt.Errorf("jobsacuk: search total changed from %d to %d at sort %d offset %d", total, count, order, offset)
+					return nil, fmt.Errorf("%w: search total changed from %d to %d at sort %d offset %d", errJobsACUKListingDrift, total, count, order, offset)
 				}
 			}
 			if err != nil {
@@ -135,7 +145,7 @@ func (s jobsACUK) list(ctx context.Context) ([]listedPosting, error) {
 			}
 			for _, p := range page {
 				if withinOrder[p.id] {
-					return nil, fmt.Errorf("jobsacuk: sort %d offset %d repeats posting %s", order, offset, p.id)
+					return nil, fmt.Errorf("%w: sort %d offset %d repeats posting %s", errJobsACUKListingDrift, order, offset, p.id)
 				}
 				withinOrder[p.id] = true
 				if !distinct[p.id] {
