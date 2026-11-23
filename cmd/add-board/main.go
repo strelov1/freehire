@@ -90,7 +90,8 @@ func runAdd(provider, board, region, company string, hub bool, tenantsFlag strin
 	}
 	in := boardcatalog.InsertInput{Provider: provider, Board: board, Region: region, Company: company, Hub: hub, Tenants: tenants}
 
-	registry := sources.Taxonomy()
+	// A client-bearing registry, not Taxonomy: some providers check the board against the platform.
+	registry := sources.All(sources.NewClient())
 	if err := boardcatalog.Validate(in, registry); err != nil {
 		log.Printf("add-board: invalid: %v", err)
 		return 1
