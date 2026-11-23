@@ -61,6 +61,8 @@ export class FormPlan {
   // if anything arrived meanwhile, cannot starve and cannot land stale.
   #reading = false;
   #stale = false;
+  /** Advances on each page reset, so a read begun before it cannot land afterwards. */
+  #generation = 0;
   readonly #afterRead: () => void;
 
   /** `afterRead` runs after every read that landed, to follow the application. */
@@ -79,9 +81,15 @@ export class FormPlan {
     try {
       do {
         this.#stale = false;
+        const generation = this.#generation;
         const reply = (await browser.runtime.sendMessage({
           kind: 'GET_FRAMED_FORM',
         } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
+        // The page changed while this read was in flight: its reply describes the old page.
+        if (generation !== this.#generation) {
+          this.#stale = true;
+          continue;
+        }
         this.#applyRead(reply);
         this.#afterRead();
       } while (this.#stale);
@@ -138,7 +146,9 @@ export class FormPlan {
 
   /** Forgets what was learned about the previous page's questions. */
   resetPage() {
+    this.#generation++;
     this.read = false;
+    this.sent = false;
     this.formFilled = false;
     this.autofilled.clear();
     this.prefilled.clear();

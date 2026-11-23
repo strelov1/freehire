@@ -439,6 +439,13 @@ describe('LinkedIn-style radios named after their question', () => {
     expect(fields).toHaveLength(1);
     expect(fields[0]).toMatchObject({ label: q, options: ['Yes', 'No'], required: true });
   });
+
+  it('does not group radios whose aria-labels name their own options', () => {
+    document.body.innerHTML = `<fieldset role="radiogroup">
+      <input type="radio" name="g" aria-label="Yes"><input type="radio" name="g" aria-label="No"></fieldset>`;
+    expect(extractForm(document).map((f) => f.label)).not.toContain('Yes, No');
+    expect(extractForm(document).some((f) => f.label === 'Yes' && f.options?.includes('No'))).toBe(false);
+  });
 });
 
 describe('control naming', () => {

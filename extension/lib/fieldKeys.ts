@@ -154,10 +154,15 @@ export function matchFieldKey(label: string): string | null {
     if (synonyms.some((s) => opensWith(normalized, s))) return key;
   }
   for (const [key, synonyms] of entries) {
+    if (!ANYWHERE_KEYS.has(key)) continue;
     if (synonyms.some((s) => s.length >= ANYWHERE_MIN_LEN && containsWord(normalized, s))) return key;
   }
   return null;
 }
+
+/** The keys a preamble pushes mid-label (contract terms before the salary question). Not `city`:
+ *  "How long have you lived at your current location?" asks a duration, not the city. */
+const ANYWHERE_KEYS = new Set(['desiredSalary', 'noticePeriod']);
 
 /** The shortest synonym trusted anywhere in a label rather than only at its start. */
 const ANYWHERE_MIN_LEN = 15;

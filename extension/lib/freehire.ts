@@ -12,8 +12,11 @@ const JOB_HOSTS = new Set(['freehire.me', 'www.freehire.me', 'freehire.dev', 'lo
  *  settings and profile forms are not an application to read, fill or ask "did you submit" about. */
 export function isFreehireOrigin(origin: string): boolean {
   try {
-    const { hostname } = new URL(origin);
-    return ['freehire.me', 'www.freehire.me', 'freehire.dev'].includes(hostname) || origin === HIRE_ORIGIN;
+    const url = new URL(origin);
+    return (
+      ['freehire.me', 'www.freehire.me', 'freehire.dev'].includes(url.hostname) ||
+      url.origin === new URL(HIRE_ORIGIN).origin
+    );
   } catch {
     return false;
   }

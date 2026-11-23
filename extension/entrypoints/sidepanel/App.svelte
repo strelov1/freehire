@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { browser } from 'wxt/browser';
   import { type RuntimeMessage } from '../../lib/protocol';
   import { createSession, getSession, SessionNotFound } from '../../lib/assistant/api';
@@ -406,6 +406,10 @@
     (text) => notices.push(text),
   );
   let asksApplied = $derived(applied.asks(autofilling));
+  // LinkedIn's "sent" screen read before this page's match resolved is recorded once it does.
+  $effect(() => {
+    if (pageMatch.status === 'ready' && form.sent) untrack(() => applied.note());
+  });
   let answerOffers = $derived(autofilling ? [] : answersToOffer(form.formFields, form.autofilled, form.prefilled));
 
   /** Reads the page's form and rebuilds the plan (signed in only). */

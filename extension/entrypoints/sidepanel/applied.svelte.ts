@@ -90,7 +90,9 @@ export class AppliedTracker {
       await markApplied(job.public_slug, token);
       track('mark_applied', { source: 'linkedin_confirmation' });
       this.notify(`✓ LinkedIn confirmed it — ${job.title} is marked as applied.`);
-      this.startedJob = this.candidate = null;
+      // Only this job's tracking: another application may have started meanwhile.
+      if (this.startedJob?.public_slug === job.public_slug) this.startedJob = null;
+      if (this.candidate?.public_slug === job.public_slug) this.candidate = null;
     } catch (err) {
       this.autoApplied.delete(job.public_slug);
       this.notify(`Could not mark as applied: ${err instanceof Error ? err.message : 'error'}`);

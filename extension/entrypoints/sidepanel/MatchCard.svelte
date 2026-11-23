@@ -176,7 +176,13 @@
   // Firefox has no chrome.debugger, the only way background can place a file into
   // an upload field — so the action is not offered there at all.
   let showAttach = $derived(
-    !import.meta.env.FIREFOX && isCatalogJob && hasUploadField && tailoredCV !== null && !run.running && !closed,
+    !import.meta.env.FIREFOX &&
+      isCatalogJob &&
+      hasUploadField &&
+      tailoredCV !== null &&
+      !run.running &&
+      !closed &&
+      !closedUnknown,
   );
   // While a run goes, or once its CV exists, the card links to it rather than start another.
   let canTailor = $derived(!closed && !closedUnknown && !run.running && !tailoredCV);

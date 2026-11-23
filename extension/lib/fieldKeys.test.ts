@@ -95,6 +95,11 @@ describe('matchFieldKey with a preamble', () => {
     expect(matchFieldKey('Do you have a LinkedIn contact at our company?')).toBeNull();
   });
 
+  it('keeps a long city synonym to the label start: a duration question is not the city', () => {
+    expect(matchFieldKey('How long have you lived at your current location?')).toBeNull();
+    expect(matchFieldKey('Current location')).toBe('city');
+  });
+
   it('keeps word boundaries for long synonyms', () => {
     expect(matchFieldKey('Is the notice periodicity of our reviews fine?')).toBeNull();
   });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   freehireSlugFromUrl,
+  isFreehireOrigin,
   resolveNotice,
   apiErrorMessage,
   partitionBlockers,
@@ -219,5 +220,20 @@ describe('match analysis allowance', () => {
     expect(allowanceRemaining(a({ used: 7 }))).toBe(0);
     expect(allowanceRemaining(a({ used: 2 }))).toBe(3);
     expect(allowanceRemaining(a({ unlimited: true }))).toBeNull();
+  });
+});
+
+describe('isFreehireOrigin', () => {
+  it('classifies a bare origin and a full page URL on it alike', () => {
+    expect(isFreehireOrigin('https://freehire.me')).toBe(true);
+    expect(isFreehireOrigin('https://freehire.me/my/profile')).toBe(true);
+    expect(isFreehireOrigin('http://localhost:5173')).toBe(true);
+    expect(isFreehireOrigin('http://localhost:5173/my/profile')).toBe(true);
+  });
+
+  it('leaves other sites and look-alike hosts out', () => {
+    expect(isFreehireOrigin('https://www.linkedin.com/jobs/view/1')).toBe(false);
+    expect(isFreehireOrigin('https://freehire.me.evil.com/')).toBe(false);
+    expect(isFreehireOrigin('not a url')).toBe(false);
   });
 });

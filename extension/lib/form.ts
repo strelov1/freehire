@@ -126,7 +126,14 @@ function groupOf(el: Fillable): { container: Element; question: string; key: str
 function namedByControls(el: HTMLInputElement): { container: Element; question: string } | null {
   const container = el.closest('fieldset, [role="radiogroup"]');
   const question = collapse(el.getAttribute('aria-label'));
-  return container && el.type === 'radio' && question ? { container, question } : null;
+  if (!container || el.type !== 'radio' || !question) return null;
+  // Radios labelled "Yes" and "No" name their options, not a shared question.
+  const group = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]')).filter(
+    (radio) => radio.name === el.name,
+  );
+  return group.every((radio) => collapse(radio.getAttribute('aria-label')) === question)
+    ? { container, question }
+    : null;
 }
 
 /** The nearest container that states the question its controls answer. */

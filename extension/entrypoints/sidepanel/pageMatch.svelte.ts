@@ -1,3 +1,4 @@
+import { pageIdentity } from '../../lib/assistant/pageIdentity';
 import { browser } from 'wxt/browser';
 import { getToken } from '../../lib/auth';
 import { type FreehireJob, type JobMatch } from '../../lib/freehire';
@@ -28,6 +29,8 @@ export class PageMatch {
   // earlier in-flight load (e.g. a slow ad-hoc text match) can never clobber a
   // newer one's result after the user has already tabbed or navigated again.
   #requestId = 0;
+  /** The page the ready card belongs to: only that page may keep it through a reload. */
+  #cardPage = '';
 
   /** `notify` adds a line to the panel's action notices. */
   constructor(private readonly notify: (notice: string) => void) {}
@@ -47,7 +50,8 @@ export class PageMatch {
     if (requestId !== this.#requestId) return;
     const url = tab?.url ?? '';
 
-    if (!(this.keepCard && this.status === 'ready')) this.status = 'loading';
+    const page = pageIdentity(url);
+    if (!(this.keepCard && this.status === 'ready' && this.#cardPage === page)) this.status = 'loading';
     this.error = '';
     try {
       const result = await matchPage(url, token, () => requestId !== this.#requestId);
@@ -55,6 +59,7 @@ export class PageMatch {
       if (result.status === 'ready') {
         this.job = result.job;
         this.match = result.match;
+        this.#cardPage = page;
       } else {
         this.canAddJob = result.canAddJob;
       }
