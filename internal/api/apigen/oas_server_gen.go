@@ -845,6 +845,12 @@ type Handler interface {
 	//
 	// GET /employer/team
 	GetEmployerTeam(ctx context.Context) (*GetEmployerTeamOK, error)
+	// GetEmployerVacancyAnalytics implements getEmployerVacancyAnalytics operation.
+	//
+	// Analytics for an active company team's own vacancy, including closed vacancies.
+	//
+	// GET /employer/jobs/{slug}/analytics
+	GetEmployerVacancyAnalytics(ctx context.Context, params GetEmployerVacancyAnalyticsParams) (*GetEmployerVacancyAnalyticsOK, error)
 	// GetInbox implements getInbox operation.
 	//
 	// `?body=1` returns each message's readable text inline and marks nothing read — that is the agent
@@ -1895,6 +1901,12 @@ type Handler interface {
 	//
 	// POST /dictionary/gaps
 	RecordDictionaryGap(ctx context.Context, req *DictionaryGap) (*RecordDictionaryGapOK, error)
+	// RecordEmployerVacancyApplyClick implements recordEmployerVacancyApplyClick operation.
+	//
+	// Records an Apply button click on an open, public employer vacancy.
+	//
+	// POST /jobs/{slug}/apply-click
+	RecordEmployerVacancyApplyClick(ctx context.Context, params RecordEmployerVacancyApplyClickParams) error
 	// RecordView implements recordView operation.
 	//
 	// Record that you viewed the job.

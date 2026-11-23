@@ -27,15 +27,23 @@ vi.mock('#lib/auth.svelte.js', () => ({
 }));
 vi.mock('#lib/analytics.js', () => ({ track() {} }));
 
-const { markJobApplied, listAppliedCompanySlugs, listSavedSlugs, getProfile, getDirectApplyForm, getCompany } =
-  vi.hoisted(() => ({
-    getCompany: vi.fn(async () => ({ company: null as unknown })),
-    markJobApplied: vi.fn(),
-    listAppliedCompanySlugs: vi.fn(),
-    listSavedSlugs: vi.fn(),
-    getProfile: vi.fn(),
-    getDirectApplyForm: vi.fn(),
-  }));
+const {
+  markJobApplied,
+  listAppliedCompanySlugs,
+  listSavedSlugs,
+  getProfile,
+  getDirectApplyForm,
+  getCompany,
+  recordEmployerVacancyApplyClick,
+} = vi.hoisted(() => ({
+  getCompany: vi.fn(async () => ({ company: null as unknown })),
+  markJobApplied: vi.fn(),
+  listAppliedCompanySlugs: vi.fn(),
+  listSavedSlugs: vi.fn(),
+  getProfile: vi.fn(),
+  getDirectApplyForm: vi.fn(),
+  recordEmployerVacancyApplyClick: vi.fn(async (_slug: string) => {}),
+}));
 vi.mock('#lib/api.js', () => ({
   ApiError: class extends Error {},
   RESUME_MAX_MB: 10,
@@ -45,6 +53,7 @@ vi.mock('#lib/api.js', () => ({
     listSavedSlugs,
     getProfile,
     getDirectApplyForm,
+    recordEmployerVacancyApplyClick,
     countThreads: async () => 0,
     myPlan: async () => null,
     recordJobView: async () => null,
@@ -93,6 +102,7 @@ beforeEach(() => {
   );
   resetUserStores();
   markJobApplied.mockReset();
+  recordEmployerVacancyApplyClick.mockClear();
   listAppliedCompanySlugs.mockReset().mockResolvedValue([]);
   listSavedSlugs.mockReset().mockResolvedValue([]);
   getProfile.mockReset().mockResolvedValue(null);
@@ -148,6 +158,16 @@ describe('JobView deferred user data', () => {
     },
     20_000,
   );
+});
+
+it.each([true, false])('records an anonymous employer vacancy Apply click (direct: %s)', async (directApply) => {
+  session.userID = null;
+  render(JobView, { job: { ...job, source: 'employer', direct_apply: directApply } });
+  await tick();
+  const [apply] = screen.getAllByRole(directApply ? 'button' : 'link', { name: /^Apply/ });
+  if (!apply) throw new Error('Missing Apply control');
+  await fireEvent.click(apply);
+  expect(recordEmployerVacancyApplyClick).toHaveBeenCalledExactlyOnceWith('acme-job');
 });
 
 describe('JobView application completion', () => {

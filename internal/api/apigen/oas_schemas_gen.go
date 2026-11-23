@@ -11478,6 +11478,47 @@ func (s *EmployerTeamToken) SetToken(val OptString) {
 	s.Token = val
 }
 
+// Counts for the last 30 completed UTC days. Apply clicks begin at rollout.
+// Ref: #/components/schemas/EmployerVacancyAnalytics
+type EmployerVacancyAnalytics struct {
+	// Daily unique visitors from the page-view rollup, summed across the window.
+	Views int64 `json:"views"`
+	// Apply button clicks on the vacancy page.
+	ApplyClicks int64 `json:"apply_clicks"`
+	// Applications delivered through Freehire.
+	Applications int64 `json:"applications"`
+}
+
+// GetViews returns the value of Views.
+func (s *EmployerVacancyAnalytics) GetViews() int64 {
+	return s.Views
+}
+
+// GetApplyClicks returns the value of ApplyClicks.
+func (s *EmployerVacancyAnalytics) GetApplyClicks() int64 {
+	return s.ApplyClicks
+}
+
+// GetApplications returns the value of Applications.
+func (s *EmployerVacancyAnalytics) GetApplications() int64 {
+	return s.Applications
+}
+
+// SetViews sets the value of Views.
+func (s *EmployerVacancyAnalytics) SetViews(val int64) {
+	s.Views = val
+}
+
+// SetApplyClicks sets the value of ApplyClicks.
+func (s *EmployerVacancyAnalytics) SetApplyClicks(val int64) {
+	s.ApplyClicks = val
+}
+
+// SetApplications sets the value of Applications.
+func (s *EmployerVacancyAnalytics) SetApplications(val int64) {
+	s.Applications = val
+}
+
 // `title` is required, and `url` too unless `apply_mode` is "freehire".
 // Ref: #/components/schemas/EmployerVacancyCreate
 type EmployerVacancyCreate struct {
@@ -13126,6 +13167,21 @@ func (s *GetEmployerTeamOK) GetData() EmployerTeam {
 
 // SetData sets the value of Data.
 func (s *GetEmployerTeamOK) SetData(val EmployerTeam) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetEmployerVacancyAnalyticsOK struct {
+	Data EmployerVacancyAnalytics `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetEmployerVacancyAnalyticsOK) GetData() EmployerVacancyAnalytics {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetEmployerVacancyAnalyticsOK) SetData(val EmployerVacancyAnalytics) {
 	s.Data = val
 }
 
@@ -24734,6 +24790,9 @@ func (s *RecordDictionaryGapOK) GetData() DictionaryGapRecorded {
 func (s *RecordDictionaryGapOK) SetData(val DictionaryGapRecorded) {
 	s.Data = val
 }
+
+// RecordEmployerVacancyApplyClickNoContent is response for RecordEmployerVacancyApplyClick operation.
+type RecordEmployerVacancyApplyClickNoContent struct{}
 
 // A single item: `{"data": ...}`.
 type RecordViewOK struct {

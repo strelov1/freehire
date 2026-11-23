@@ -4725,6 +4725,34 @@ curl -X POST "https://freehire.me/api/v1/employer/jobs" -b cookies.txt
 curl -X PATCH "https://freehire.me/api/v1/employer/jobs/<slug>" -b cookies.txt
 ```
 
+### `GET /employer/jobs/{slug}/analytics`
+
+**Auth:** Session only
+
+Read a vacancy's last 30 completed days of engagement.
+
+Analytics for an active company team's own vacancy, including closed vacancies.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The employer-authored vacancy's public slug. |
+
+```bash
+curl "https://freehire.me/api/v1/employer/jobs/<slug>/analytics" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "views": 40,
+    "apply_clicks": 10,
+    "applications": 3
+  }
+}
+```
+
 ### `POST /employer/jobs/{slug}/close`
 
 **Auth:** Session only
