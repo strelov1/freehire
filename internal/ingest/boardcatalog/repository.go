@@ -38,10 +38,6 @@ type Repository interface {
 	// closes the open postings it leaves behind. On a board that is already retired it
 	// closes whatever that earlier retirement left open; see Retirement.
 	Retire(ctx context.Context, provider, board, region string) (Retirement, error)
-	// Rename corrects a live board's company name — for a crowdsourced row seeded with
-	// PlaceholderCompany, once a curator knows the real one. found=false when no such
-	// live board exists.
-	Rename(ctx context.Context, provider, board, region, company string) (found bool, err error)
 	// ListActiveForProvider returns the boards cmd/ingest crawls for one provider:
 	// pending and active.
 	ListActiveForProvider(ctx context.Context, provider string) ([]Board, error)
@@ -252,16 +248,6 @@ func (r *QueriesRepository) Retire(ctx context.Context, provider, board, region 
 		Region:       region,
 	})
 	return out, err
-}
-
-func (r *QueriesRepository) Rename(ctx context.Context, provider, board, region, company string) (bool, error) {
-	n, err := r.q.UpdateBoardCompany(ctx, db.UpdateBoardCompanyParams{
-		Provider: provider, Board: board, Region: region, Company: company,
-	})
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
 }
 
 func (r *QueriesRepository) ListActiveForProvider(ctx context.Context, provider string) ([]Board, error) {

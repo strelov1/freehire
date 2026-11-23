@@ -19,8 +19,10 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
@@ -133,7 +135,7 @@ func runRetire(provider, board, region string, apply bool) int {
 // runRename mirrors runAdd/runRetire's split: it reports, then under apply delegates to
 // renameBoard over a real database connection.
 func runRename(provider, board, region, company string, apply bool) int {
-	log.Printf("add-board: would rename provider=%s board=%s region=%q to company=%q", provider, board, region, company)
+	log.Printf("add-board: would rename provider=%s board=%s region=%q to company=%q and move its stored jobs (open and closed) off the board's current company name", provider, board, region, company)
 	if !apply {
 		log.Print("add-board: dry run, nothing written. Re-run with --apply to rename.")
 		return 0
@@ -143,19 +145,66 @@ func runRename(provider, board, region, company string, apply bool) int {
 	})
 }
 
+// errAmbiguousRegion refuses a rename whose board name is live in another region as well.
+var errAmbiguousRegion = errors.New("board live in another region")
+
+// renameBoard renames the live board AND moves its stored jobs (open and closed) off the old
+// company in one transaction, as cmd/backfill-company-names does for a placeholder: a crawl
+// only rewrites a posting that changed, so the board row alone would leave them on the old
+// name. The companies catalogue is reconciled for the touched slugs in the same transaction.
 func renameBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, region, company string) int {
-	repo := boardcatalog.NewQueriesRepository(db.New(pool))
-	found, err := repo.Rename(ctx, provider, board, region, company)
-	if err != nil {
-		log.Printf("add-board: rename: %v", err)
+	queries := db.New(pool)
+	var (
+		slug     string
+		oldSlugs []string
+		oldName  string
+	)
+	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		q := queries.WithTx(tx)
+		row, err := q.GetLiveBoardCompany(ctx, db.GetLiveBoardCompanyParams{Provider: provider, Board: board, Region: region})
+		if err != nil {
+			return err
+		}
+		if row.SiblingRegions > 0 {
+			return errAmbiguousRegion
+		}
+		oldName = row.Company
+		slug, oldSlugs, err = boardcatalog.RenameBoardJobs(ctx, q,
+			// No alias for the old slug: a curator correction cannot prove the old name was a
+			// placeholder rather than a real employer, whose postings an alias would re-key.
+			boardcatalog.BoardRename{Provider: provider, Board: row.Board, OldName: row.Company, Name: company},
+			func(ctx context.Context) (int64, error) {
+				return q.UpdateBoardCompany(ctx, db.UpdateBoardCompanyParams{Provider: provider, Board: board, Region: region, Company: company})
+			})
+		if err != nil || len(oldSlugs) == 0 {
+			return err
+		}
+		// Reconciled inside the transaction: after a commit a retry would read the NEW name as
+		// the old one and never find the slugs these jobs left, stranding their companies rows.
+		if _, err := q.SyncCompaniesForSlugs(ctx, []string{slug}); err != nil {
+			return fmt.Errorf("sync companies: %w", err)
+		}
+		if _, err := q.DeleteOrphanCompaniesForSlugs(ctx, oldSlugs); err != nil {
+			return fmt.Errorf("delete orphan companies: %w", err)
+		}
+		return nil
+	})
+	if errors.Is(err, errAmbiguousRegion) {
+		log.Printf("add-board: provider=%s board=%s is live in another region too; its postings cannot be told apart by region, so nothing was renamed",
+			provider, board)
 		return 1
 	}
-	if !found {
+	if errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("add-board: no live (pending/active) board matches provider=%s board=%s region=%q — nothing renamed",
 			provider, board, region)
 		return 1
 	}
-	log.Printf("add-board: renamed provider=%s board=%s region=%q to company=%q", provider, board, region, company)
+	if err != nil {
+		log.Printf("add-board: rename: %v", err)
+		return 1
+	}
+	log.Printf("add-board: renamed provider=%s board=%s region=%q from company=%q to %q, moved jobs off %d old slug(s)",
+		provider, board, region, oldName, company, len(oldSlugs))
 	return 0
 }
 
