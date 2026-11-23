@@ -153,7 +153,7 @@
         <p class="mt-2 text-sm text-muted-foreground">
           Review these examples from your Experience Bank and fill in the details for a STAR answer.
         </p>
-        <ul class="mt-4 divide-y divide-border border-y border-border">
+        <ul class="ph-no-capture mt-4 divide-y divide-border border-y border-border">
           {#each sheet.examples as example, i (i)}
             <li class="space-y-3 wrap-break-word py-4">
               <div>
