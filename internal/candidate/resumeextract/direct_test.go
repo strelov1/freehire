@@ -71,14 +71,38 @@ func TestExtract_MissingContactsStayEmpty(t *testing.T) {
 	}
 }
 
-func TestExtract_BoundsOriginalCV(t *testing.T) {
-	m := &recordingModel{resp: `{}`}
-	cv := strings.Repeat("Ж", maxCVRunes) + "TRAILING_TEXT_OUTSIDE_LIMIT"
-	if _, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cv); err != nil {
+func TestExtract_PreservesWorkHistoryInLongCV(t *testing.T) {
+	const earlyRole = "Engineer, Initech, 2005–2010"
+	cv := "Lead Engineer, Acme, 2016–2025\n" +
+		strings.Repeat("Led the migration of a customer-facing system.\n", 2000) + earlyRole
+	m := &recordingModel{resp: `{"experience":[
+		{"company":"Acme","start":{"year":2016},"end":{"year":2025}},
+		{"company":"Initech","start":{"year":2005},"end":{"year":2010}}
+	]}`}
+
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cv)
+	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
-	if strings.Contains(m.prompt, "TRAILING_TEXT_OUTSIDE_LIMIT") || !strings.Contains(m.prompt, strings.Repeat("Ж", maxCVRunes)) {
-		t.Fatal("CV must be bounded by Unicode characters before the model call")
+	if !strings.Contains(m.prompt, cv) {
+		t.Fatal("model did not receive the complete résumé, including earlier roles")
+	}
+	if len(got.Experience) != 2 || got.Experience[1].Start == nil || got.Experience[1].Start.Year != 2005 {
+		t.Fatalf("earlier role or its dates were lost: %+v", got.Experience)
+	}
+	if m.calls != 1 {
+		t.Fatalf("model calls = %d, want 1", m.calls)
+	}
+}
+
+func TestExtract_RejectsOversizedCVBeforeCallingModel(t *testing.T) {
+	m := &recordingModel{resp: `{}`}
+	cv := strings.Repeat("Ж", 128*1024) + "a"
+	if _, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cv); err == nil {
+		t.Fatal("oversized résumé should return an error")
+	}
+	if m.calls != 0 {
+		t.Fatalf("model calls = %d, want 0", m.calls)
 	}
 }
 
