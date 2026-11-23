@@ -55,7 +55,7 @@
     "tailwindcss": "^4.3.5",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.2",
-    "vite": "^8.3.5",
+    "vite": "^8.3.8",
     "vitest": "^5.1.0"
   },
   "peerDependencies": {
