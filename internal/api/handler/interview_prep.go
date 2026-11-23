@@ -19,8 +19,8 @@ import (
 )
 
 type interviewPrepHandlers struct {
-	jobs *jobsHandlers
-	bank *experience.Store
+	queries *db.Queries
+	bank    *experience.Store
 }
 
 func registerInterviewPrep(api fiber.Router, mw middleware, contract fiber.Handler) {
@@ -33,7 +33,7 @@ func registerInterviewPrep(api fiber.Router, mw middleware, contract fiber.Handl
 
 func (h *interviewPrepHandlers) GetInterviewPrep(ctx context.Context, params apigen.GetInterviewPrepParams) (*apigen.GetInterviewPrepOK, error) {
 	userID, signedIn := auth.UserIDFromContext(ctx)
-	posting, err := jobBySlugOrCode(ctx, h.jobs.queries, params.Slug)
+	posting, err := jobBySlugOrCode(ctx, h.queries, params.Slug)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (h *interviewPrepHandlers) GetInterviewPrep(ctx context.Context, params api
 	// A posting may close before an interview. Only the account interviewing for
 	// that posting can prepare from it once it leaves the open catalogue.
 	if posting.ClosedAt.Valid {
-		stage, err := h.jobs.queries.GetApplicationStage(ctx, db.GetApplicationStageParams{
+		stage, err := h.queries.GetApplicationStage(ctx, db.GetApplicationStageParams{
 			UserID: userID,
 			JobID:  pgtype.Int8{Int64: posting.ID, Valid: true},
 		})
@@ -144,7 +144,7 @@ func interviewExamples(matches []experience.Match) []apigen.InterviewPracticeExa
 		if !atom.Provenance.Publishable() {
 			continue
 		}
-		example := apigen.InterviewPracticeExample{Claim: atom.Claim, Context: optString(atom.Context), Metrics: atom.Metrics}
+		example := apigen.InterviewPracticeExample{Claim: atom.Claim, Context: optString(atom.Context), Metrics: nilIfEmpty(atom.Metrics)}
 		if place := match.Employment; place != nil {
 			example.Place = optString(strings.Trim(strings.Join([]string{place.Role, place.Company}, " · "), " ·"))
 		}

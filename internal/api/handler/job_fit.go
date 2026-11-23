@@ -27,6 +27,6 @@ func (h *jobsHandlers) GetResumeReviewPosting(ctx context.Context, params apigen
 	}
 	return &apigen.GetResumeReviewPostingOK{Data: apigen.ResumeReviewPosting{
 		PublicSlug: posting.PublicSlug, Title: posting.Title, Company: posting.Company, Location: optString(posting.Location),
-		Skills: job.Skills, Requirements: requirements,
+		Skills: job.Skills, Requirements: nilIfEmpty(requirements),
 	}}, nil
 }

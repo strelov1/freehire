@@ -81,8 +81,8 @@ func TestPublicJobTools(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	// Register the same routes as the server, with real signed cookies and owner-scoped DB reads.
-	prep := &interviewPrepHandlers{jobs: &jobsHandlers{queries: queries}, bank: bank}
-	contract := newContract(contractHandlers{jobsHandlers: prep.jobs, interviewPrepHandlers: prep})
+	prep := &interviewPrepHandlers{queries: queries, bank: bank}
+	contract := newContract(contractHandlers{jobsHandlers: &jobsHandlers{queries: queries}, interviewPrepHandlers: prep})
 	app.Get("/api/v1/jobs/:slug/skill-fit", contract)
 	registerInterviewPrep(app.Group("/api/v1"), middleware{optionalCookie: auth.OptionalCookieAuth(issuer, queries)}, contract)
 
