@@ -1,4 +1,4 @@
-import { getSession } from '#lib/assistant/api.js';
+import { getSession, type InterviewReport } from '#lib/assistant/api.js';
 import { chatFromTranscript, type ChatState } from '#lib/assistant/chat.js';
 
 /**
@@ -12,7 +12,7 @@ export class TranscriptCatchUp {
       activeId: () => string | null;
       /** A turn is streaming: that stream is already the newer truth. */
       streaming: () => boolean;
-      show: (chat: ChatState) => void;
+      show: (chat: ChatState, report?: InterviewReport) => void;
     },
   ) {}
 
@@ -20,9 +20,9 @@ export class TranscriptCatchUp {
   reload = async (id: string) => {
     if (this.o.isSupport || id !== this.o.activeId()) return;
     try {
-      const { messages } = await getSession(id);
+      const { messages, interview_report } = await getSession(id);
       const next = chatFromTranscript(messages);
-      if (id === this.o.activeId()) this.o.show(next);
+      if (id === this.o.activeId()) this.o.show(next, interview_report);
     } catch {
       /* the transcript stays as it is; the next visit will catch up */
     }
