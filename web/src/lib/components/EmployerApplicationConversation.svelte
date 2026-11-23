@@ -1,3 +1,7 @@
+<script module lang="ts">
+  export type ConversationDraft = { text: string; key?: string };
+</script>
+
 <script lang="ts">
   import { MessageSquare } from '@lucide/svelte';
   import { onDestroy, tick } from 'svelte';
@@ -11,20 +15,25 @@
 
   type Message = components['schemas']['EmployerApplicationMessage'];
 
-  const { id, onread }: { id: number; onread: (unread: boolean) => void } = $props();
+  const {
+    id,
+    drafts,
+    onread,
+  }: { id: number; drafts: Map<number, ConversationDraft>; onread: (unread: boolean) => void } = $props();
   const s = $derived(t(messages, locale()));
 
   let open = $state(false);
   let destroyed = false;
-  onDestroy(() => (destroyed = true));
+  onDestroy(() => {
+    destroyed = true;
+  });
   let loaded = $state(false);
   let loading = $state(false);
   let busy = $state(false);
   let canSend = $state(false);
   let hasMore = $state(false);
   let thread = $state<Message[]>([]);
-  let draft = $state('');
-  let draftAttempt: { body: string; key: string } | undefined;
+  const draft = $derived(drafts.get(id)?.text ?? '');
   let error = $state<'loadError' | 'sendError' | 'readError' | null>(null);
 
   async function load(before?: number) {
@@ -43,7 +52,7 @@
         if (!open || destroyed) return;
         try {
           const state = await api.markEmployerApplicationRepliesRead(id, newestReply.id);
-          onread(state.has_unread_reply);
+          if (!destroyed) onread(state.has_unread_reply);
         } catch {
           error = 'readError';
         }
@@ -60,19 +69,17 @@
     if (open) void load();
   }
 
-  async function send(attempt: { body: string; key: string }, fromDraft = false) {
+  async function send(attempt: { body: string; key: string }, submitted?: ConversationDraft) {
     if (busy || loading || !canSend) return;
     busy = true;
     error = null;
     try {
       const result = await api.sendEmployerApplicationMessage(id, attempt.body, attempt.key);
+      if (submitted && drafts.get(id) === submitted) drafts.delete(id);
+      if (destroyed) return;
       const previous = thread.findIndex((message) => message.id === result.id);
       thread =
         previous < 0 ? [result, ...thread] : thread.map((message) => (message.id === result.id ? result : message));
-      if (fromDraft) {
-        draft = '';
-        draftAttempt = undefined;
-      }
     } catch {
       error = 'sendError';
     } finally {
@@ -80,12 +87,22 @@
     }
   }
 
+  function changeDraft(text: string) {
+    const previous = drafts.get(id);
+    const key = previous?.text.trim() === text.trim() ? previous.key : undefined;
+    if (text) drafts.set(id, { text, key });
+    else drafts.delete(id);
+  }
+
   function submitDraft(event: SubmitEvent) {
     event.preventDefault();
-    const body = draft.trim();
-    if (!body || busy || loading || !canSend) return;
-    if (draftAttempt?.body !== body) draftAttempt = { body, key: crypto.randomUUID() };
-    void send(draftAttempt, true);
+    const current = drafts.get(id);
+    const body = current?.text.trim();
+    if (!current || !body || busy || loading || !canSend) return;
+    const key = current.key ?? crypto.randomUUID();
+    const submitted = { text: current.text, key };
+    drafts.set(id, submitted);
+    void send({ body, key }, submitted);
   }
 </script>
 
@@ -145,7 +162,8 @@
             <label class="flex flex-col gap-1">
               <span class="text-sm font-medium">{s.draft}</span>
               <textarea
-                bind:value={draft}
+                value={draft}
+                oninput={(event) => changeDraft(event.currentTarget.value)}
                 rows="3"
                 maxlength="2000"
                 disabled={busy}

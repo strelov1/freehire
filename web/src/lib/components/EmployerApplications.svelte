@@ -12,7 +12,7 @@
   import { Paginator } from '#lib/paginated.svelte.js';
   import { pillClass, pillCountClass } from './facets/pill';
   import States from './States.svelte';
-  import EmployerApplicationConversation from './EmployerApplicationConversation.svelte';
+  import EmployerApplicationConversation, { type ConversationDraft } from './EmployerApplicationConversation.svelte';
   import { messages as conversationMessages } from './EmployerApplicationConversation.messages';
 
   const s = $derived(t(messages, locale()));
@@ -72,6 +72,7 @@
   let message = $state('');
   let notes = $state('');
   const noteDrafts = new SvelteMap<number, string>();
+  const conversationDrafts = new SvelteMap<number, ConversationDraft>();
   let savingWorkspace = $state(false);
   let workspaceFeedback = $state<{ text: string; error: boolean } | null>(null);
   let moving = $state(false);
@@ -315,6 +316,7 @@
 
               <EmployerApplicationConversation
                 id={a.id}
+                drafts={conversationDrafts}
                 onread={(unread) => {
                   pager.items = pager.items.map((item) =>
                     item.id === a.id ? { ...item, has_unread_reply: unread } : item,

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmployerApplication } from '#lib/types.js';
 import EmployerApplications from './EmployerApplications.svelte';
@@ -114,6 +114,63 @@ describe('EmployerApplications', () => {
     expect(await screen.findByText('Sent')).toBeTruthy();
     expect(sendEmployerApplicationMessage.mock.calls[1]).toEqual(sendEmployerApplicationMessage.mock.calls[0]);
     expect(moveEmployerApplication).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft and request key when switching applications after a network error', async () => {
+    listEmployerApplications.mockResolvedValue(
+      page([application(), application({ id: 2, candidate_email: 'other@example.test' })], { new: 2 }),
+    );
+    getEmployerApplicationConversation.mockResolvedValue({ can_send: true, has_more: false, messages: [] });
+    sendEmployerApplicationMessage.mockRejectedValueOnce(new Error('Network error')).mockResolvedValueOnce({
+      id: 7,
+      status: 'sent',
+      body: 'How about Tuesday?',
+      created_at: '2026-11-20T14:00:00Z',
+    });
+    render(EmployerApplications);
+
+    const first = await screen.findByRole('button', { name: /c@example\.test/ });
+    const second = screen.getByRole('button', { name: /other@example\.test/ });
+    const open = async (row: HTMLElement) => {
+      await fireEvent.click(row);
+      await fireEvent.click(screen.getByRole('button', { name: 'Conversation' }));
+      return (await screen.findByLabelText('Write to candidate')) as HTMLTextAreaElement;
+    };
+
+    await fireEvent.input(await open(first), { target: { value: 'How about Tuesday?' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Send email' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not confirm the send.');
+    expect((await open(second)).value).toBe('');
+    expect((await open(first)).value).toBe('How about Tuesday?');
+    await fireEvent.click(screen.getByRole('button', { name: 'Send email' }));
+    expect(await screen.findByText('Sent')).toBeTruthy();
+    expect(sendEmployerApplicationMessage.mock.calls[1]).toEqual(sendEmployerApplicationMessage.mock.calls[0]);
+  });
+
+  it('ignores an acknowledgement from a previously closed application panel', async () => {
+    listEmployerApplications.mockResolvedValue(page([application({ has_unread_reply: true })], { new: 1 }));
+    getEmployerApplicationConversation.mockResolvedValue({
+      can_send: true,
+      has_more: false,
+      messages: [{ id: 4, status: 'received', body: 'Tuesday works.', created_at: '2026-11-20T14:00:00Z' }],
+    });
+    const oldAck = Promise.withResolvers<{ has_unread_reply: boolean }>();
+    markEmployerApplicationRepliesRead
+      .mockReturnValueOnce(oldAck.promise)
+      .mockResolvedValueOnce({ has_unread_reply: false });
+    render(EmployerApplications);
+
+    const row = await screen.findByRole('button', { name: /c@example\.test/ });
+    await fireEvent.click(row);
+    await fireEvent.click(screen.getByRole('button', { name: 'Conversation' }));
+    await waitFor(() => expect(markEmployerApplicationRepliesRead).toHaveBeenCalledTimes(1));
+    await fireEvent.click(row);
+    await fireEvent.click(row);
+    await fireEvent.click(screen.getByRole('button', { name: 'Conversation' }));
+    await waitFor(() => expect(screen.queryByText('New reply')).toBeNull());
+
+    await act(() => oldAck.resolve({ has_unread_reply: true }));
+    expect(screen.queryByText('New reply')).toBeNull();
   });
 
   it('opens an application with its answers and CV, and asks for a message only where a letter goes', async () => {
