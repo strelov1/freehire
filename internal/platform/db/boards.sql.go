@@ -74,12 +74,16 @@ func (q *Queries) GetBoardForResolve(ctx context.Context, arg GetBoardForResolve
 }
 
 const getLiveBoardCompany = `-- name: GetLiveBoardCompany :one
-SELECT board, company FROM boards
-WHERE provider = $1 AND lower(board) = lower($2)
-  AND region = $3 AND status IN ('pending', 'active')
-ORDER BY id DESC
+SELECT b.board, b.company,
+    (SELECT count(*) FROM boards o
+     WHERE o.provider = b.provider AND lower(o.board) = lower(b.board)
+       AND o.region <> b.region AND o.status IN ('pending', 'active'))::bigint AS sibling_regions
+FROM boards b
+WHERE b.provider = $1 AND lower(b.board) = lower($2)
+  AND b.region = $3 AND b.status IN ('pending', 'active')
+ORDER BY b.id DESC
 LIMIT 1
-FOR UPDATE
+FOR UPDATE OF b
 `
 
 type GetLiveBoardCompanyParams struct {
@@ -89,16 +93,20 @@ type GetLiveBoardCompanyParams struct {
 }
 
 type GetLiveBoardCompanyRow struct {
-	Board   string `json:"board"`
-	Company string `json:"company"`
+	Board          string `json:"board"`
+	Company        string `json:"company"`
+	SiblingRegions int64  `json:"sibling_regions"`
 }
 
 // The stored spelling and company of the live board UpdateBoardCompany would rename, so
-// cmd/add-board --rename can move that board's jobs off the old name too.
+// cmd/add-board --rename can move that board's jobs off the old name too. sibling_regions
+// counts the same board name live in ANOTHER region: external_id carries no region, so while
+// one is live the two regions' postings cannot be told apart and the jobs move is refused,
+// as CloseRetiredBoardJobs refuses its close.
 func (q *Queries) GetLiveBoardCompany(ctx context.Context, arg GetLiveBoardCompanyParams) (GetLiveBoardCompanyRow, error) {
 	row := q.db.QueryRow(ctx, getLiveBoardCompany, arg.Provider, arg.Board, arg.Region)
 	var i GetLiveBoardCompanyRow
-	err := row.Scan(&i.Board, &i.Company)
+	err := row.Scan(&i.Board, &i.Company, &i.SiblingRegions)
 	return i, err
 }
 

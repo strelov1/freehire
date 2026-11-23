@@ -20,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"log"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -145,6 +144,9 @@ func runRename(provider, board, region, company string, apply bool) int {
 	})
 }
 
+// errAmbiguousRegion refuses a rename whose board name is live in another region as well.
+var errAmbiguousRegion = errors.New("board live in another region")
+
 // renameBoard renames the live board AND moves its stored jobs (open and closed) off the old
 // company in one transaction, as cmd/backfill-company-names does for a placeholder: a crawl
 // only rewrites a posting that changed, so the board row alone would leave them on the old
@@ -162,15 +164,24 @@ func renameBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, regio
 		if err != nil {
 			return err
 		}
+		if row.SiblingRegions > 0 {
+			return errAmbiguousRegion
+		}
 		oldName = row.Company
 		slug, oldSlugs, err = boardcatalog.RenameBoardJobs(ctx, q,
-			boardcatalog.BoardRename{Provider: provider, Board: row.Board, OldName: row.Company, Name: company,
-				AliasOldSlug: isPlaceholderName(row.Board, row.Company)},
+			// No alias for the old slug: a curator correction cannot prove the old name was a
+			// placeholder rather than a real employer, whose postings an alias would re-key.
+			boardcatalog.BoardRename{Provider: provider, Board: row.Board, OldName: row.Company, Name: company},
 			func(ctx context.Context) (int64, error) {
 				return q.UpdateBoardCompany(ctx, db.UpdateBoardCompanyParams{Provider: provider, Board: board, Region: region, Company: company})
 			})
 		return err
 	})
+	if errors.Is(err, errAmbiguousRegion) {
+		log.Printf("add-board: provider=%s board=%s is live in another region too; its postings cannot be told apart by region, so nothing was renamed",
+			provider, board)
+		return 1
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("add-board: no live (pending/active) board matches provider=%s board=%s region=%q — nothing renamed",
 			provider, board, region)
@@ -215,11 +226,4 @@ func retireBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, regio
 		return 1
 	}
 	return 0
-}
-
-// isPlaceholderName reports whether a board's company is still the name a harvest or crowdsourced
-// add seeded it with (the board id, or boardcatalog.PlaceholderCompany of it) rather than a real
-// employer a curator is now correcting.
-func isPlaceholderName(board, company string) bool {
-	return strings.EqualFold(company, board) || company == boardcatalog.PlaceholderCompany(board)
 }

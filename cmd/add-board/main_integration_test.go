@@ -163,6 +163,37 @@ count(*) FILTER (WHERE company = 'Texas Instruments') FROM jobs`).Scan(&moved, &
 	}
 }
 
+// A board name live in two regions shares one external_id namespace, so its postings cannot
+// be told apart by region: the rename is refused and nothing moves.
+func TestRenameBoardRefusesABoardLiveInAnotherRegion(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Pool(t)
+	for _, region := range []string{"", "eu"} {
+		in := boardcatalog.InsertInput{Provider: "greenhouse", Board: "acme", Region: region, Company: "Acme"}
+		if code := addBoard(ctx, pool, in, sources.Taxonomy()); code != 0 {
+			t.Fatalf("seed addBoard region %q: exit = %d", region, code)
+		}
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug, company_slug_folded)
+VALUES ('greenhouse', 'acme:1', 'http://x.test', 'Job', 'job-acme-1', 'Acme', 'acme', 'acme')`); err != nil {
+		t.Fatalf("seed job: %v", err)
+	}
+
+	if code := renameBoard(ctx, pool, "greenhouse", "acme", "", "Other"); code != 1 {
+		t.Fatalf("renameBoard exit = %d, want 1", code)
+	}
+	var company, boardCompany string
+	if err := pool.QueryRow(ctx, `SELECT company FROM jobs WHERE external_id = 'acme:1'`).Scan(&company); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT company FROM boards WHERE provider = 'greenhouse' AND board = 'acme' AND region = ''`).Scan(&boardCompany); err != nil {
+		t.Fatal(err)
+	}
+	if company != "Acme" || boardCompany != "Acme" {
+		t.Fatalf("job company %q, board company %q; want both left as Acme", company, boardCompany)
+	}
+}
+
 func TestRenameBoardReportsNotFound(t *testing.T) {
 	pool := testdb.Pool(t)
 
