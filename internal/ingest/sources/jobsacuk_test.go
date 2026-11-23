@@ -2,9 +2,9 @@ package sources
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -26,11 +26,14 @@ func TestJobsACUKRegistry(t *testing.T) {
 	}
 }
 
+//go:embed testdata/jobsacuk
+var jobsACUKFixtures embed.FS
+
 const jobsACUKFixtureURL = "https://www.jobs.ac.uk/job/DTS558/commercial-manager"
 
 func jobsACUKFixture(t *testing.T, name string) string {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/jobsacuk/" + name)
+	raw, err := jobsACUKFixtures.ReadFile("testdata/jobsacuk/" + name)
 	if err != nil {
 		t.Fatal(err)
 	}
