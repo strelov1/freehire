@@ -111,9 +111,28 @@ func selectedTime(body string, decision Decision, offers []time.Time, zone *time
 var refusalEvidence = regexp.MustCompile(`(?i)(\b(?:no|not|can't|cannot|unable|doesn't|doesn’t|won't|won’t)\b|não|не подходит)`)
 
 func affirmativeChoice(body, evidence string, selected int) bool {
-	evidence = strings.TrimRight(evidence, ".!? \t\r\n")
-	for _, sentence := range strings.FieldsFunc(body, func(r rune) bool { return r == '.' || r == '!' || r == '?' || r == '\n' }) {
-		if !strings.Contains(sentence, evidence) || !acceptanceEvidence.MatchString(sentence) || refusalEvidence.MatchString(sentence) {
+	if strings.HasSuffix(strings.TrimRight(evidence, " \t\r\n"), "?") {
+		return false
+	}
+	isEnd := func(r rune) bool { return r == '.' || r == '!' || r == '?' || r == '\n' }
+	// Each occurrence is widened to its sentence without splitting inside the
+	// evidence, so "11 a.m." stays whole and trailing punctuation cannot move
+	// the check to an earlier sentence.
+	for from := 0; ; {
+		at := strings.Index(body[from:], evidence)
+		if at < 0 {
+			return false
+		}
+		start, end := from+at, from+at+len(evidence)
+		from = start + 1
+		begin := strings.LastIndexFunc(body[:start], isEnd) + 1
+		if stop := strings.IndexFunc(body[end:], isEnd); stop >= 0 {
+			end += stop
+		} else {
+			end = len(body)
+		}
+		sentence := body[begin:end]
+		if !acceptanceEvidence.MatchString(sentence) || refusalEvidence.MatchString(sentence) {
 			continue
 		}
 		for index, pattern := range offerEvidence {
@@ -123,7 +142,6 @@ func affirmativeChoice(body, evidence string, selected int) bool {
 		}
 		return true
 	}
-	return false
 }
 
 func decidedTimes(body string, decision Decision, offers []time.Time, zone *time.Location) []time.Time {
