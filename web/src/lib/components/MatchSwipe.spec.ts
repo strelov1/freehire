@@ -45,6 +45,22 @@ describe('MatchSwipe', () => {
     expect(screen.queryByText('Failed to load your matches.')).toBeNull();
   });
 
+  it('shows the deleted-search screen when the stored search is gone', async () => {
+    meFeed.mockResolvedValue({
+      data: [],
+      meta: { source: 'saved_search', saved_search_id: 2, total: 0, reason: 'search_deleted' },
+    });
+    render(MatchSwipe, { onClose: () => {} });
+    expect(await screen.findByText('This search was deleted')).toBeTruthy();
+    expect(screen.getByText('Back to matching by profile')).toBeTruthy();
+  });
+
+  it('shows no matches for a saved search that never had a card', async () => {
+    meFeed.mockResolvedValue({ data: [], meta: { source: 'saved_search', saved_search_id: 2, total: 0 } });
+    render(MatchSwipe, { onClose: () => {} });
+    expect(await screen.findByText('No matches for this search')).toBeTruthy();
+  });
+
   it('puts the match block on the card in place of JobMatch, and Save still saves', async () => {
     const card = {
       public_slug: 'a-job',

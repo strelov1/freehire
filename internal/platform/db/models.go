@@ -920,6 +920,11 @@ type FacetdOutbox struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type FeedSource struct {
+	UserID        int64       `json:"user_id"`
+	SavedSearchID pgtype.Int8 `json:"saved_search_id"`
+}
+
 type FeedState struct {
 	UserID int64              `json:"user_id"`
 	Source string             `json:"source"`

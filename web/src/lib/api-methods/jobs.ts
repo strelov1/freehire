@@ -213,7 +213,15 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
   /** Moves the feed's "seen" watermark to the snapshot of a page's `meta.seen_cursor`. Call
    *  once the candidate has passed the last new card; the server never moves it back. */
   async function markFeedSeen(cursor: string): Promise<void> {
-    await request<unknown>('/api/v1/me/feed/seen', jsonBody('POST', { cursor }));
+    await call('/api/v1/me/feed/seen', jsonBody('POST', { cursor }));
+  }
+
+  /** Chooses what the feed matches on: the profile or one of the caller's saved searches.
+   *  An unknown, foreign or profile-derived search is a 404. */
+  async function setFeedSource(
+    body: { source: 'profile' } | { source: 'saved_search'; saved_search_id: number },
+  ): Promise<void> {
+    await call('/api/v1/me/feed/source', jsonBody('PUT', body));
   }
 
   /** Facet-distribution counts for the analytics page. `params` carries the same
@@ -347,6 +355,7 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     swipeDeck,
     meFeed,
     markFeedSeen,
+    setFeedSource,
     facetCounts,
     jobsActivity,
     userGrowth,

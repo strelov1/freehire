@@ -28,6 +28,18 @@ func (q *Queries) AdvanceFeedSeen(ctx context.Context, arg AdvanceFeedSeenParams
 	return err
 }
 
+const getFeedSource = `-- name: GetFeedSource :one
+SELECT saved_search_id FROM feed_source WHERE user_id = $1
+`
+
+// The user's chosen feed source: a saved search id, or NULL for the profile. No row = profile.
+func (q *Queries) GetFeedSource(ctx context.Context, userID int64) (pgtype.Int8, error) {
+	row := q.db.QueryRow(ctx, getFeedSource, userID)
+	var saved_search_id pgtype.Int8
+	err := row.Scan(&saved_search_id)
+	return saved_search_id, err
+}
+
 const getOrInitFeedSeen = `-- name: GetOrInitFeedSeen :one
 INSERT INTO feed_state (user_id, source, seen_at)
 VALUES ($1, $2, $3::timestamptz)
@@ -68,4 +80,21 @@ func (q *Queries) SearchDrainHighWater(ctx context.Context) (pgtype.Timestamptz,
 	var high_water pgtype.Timestamptz
 	err := row.Scan(&high_water)
 	return high_water, err
+}
+
+const setFeedSource = `-- name: SetFeedSource :exec
+INSERT INTO feed_source (user_id, saved_search_id)
+VALUES ($1, $2)
+ON CONFLICT (user_id) DO UPDATE SET saved_search_id = EXCLUDED.saved_search_id
+`
+
+type SetFeedSourceParams struct {
+	UserID        int64       `json:"user_id"`
+	SavedSearchID pgtype.Int8 `json:"saved_search_id"`
+}
+
+// Store the chosen source; a NULL saved_search_id means the profile.
+func (q *Queries) SetFeedSource(ctx context.Context, arg SetFeedSourceParams) error {
+	_, err := q.db.Exec(ctx, setFeedSource, arg.UserID, arg.SavedSearchID)
+	return err
 }

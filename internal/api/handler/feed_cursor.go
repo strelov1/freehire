@@ -9,8 +9,6 @@ import (
 	"github.com/strelov1/freehire/internal/search/feed"
 )
 
-const feedSourceProfile = "profile"
-
 // profileVersion is the filter version a cursor binds: the profile's UpdatedAt, which
 // also moves when excluded_companies does.
 func profileVersion(p userprofile.Profile) int64 {
@@ -22,9 +20,10 @@ func profileVersion(p userprofile.Profile) int64 {
 
 // pageCursor reads ?cursor=. Without one it starts a session: it reads (or creates) the
 // source's watermark, fixes the snapshot below the drain high-water, and begins in the new
-// phase when anything can be new. A bad, expired or foreign cursor is a 400 and the client
+// phase when anything can be new. source is the resolved source key: profile or search:<id>.
+// A bad, expired or foreign cursor, or one for another source, is a 400 and the client
 // restarts from page 1.
-func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64) (feed.Cursor, error) {
+func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64, source string) (feed.Cursor, error) {
 	raw := c.Query("cursor")
 	if raw == "" {
 		now := time.Now()
@@ -43,7 +42,7 @@ func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64) (feed.Cursor, erro
 		if ok && hw.Unix()-1 < snap {
 			snap = hw.Unix() - 1
 		}
-		seen, err := h.state.GetOrInitFeedSeen(c.Context(), userID, feedSourceProfile, time.Unix(snap, 0))
+		seen, err := h.state.GetOrInitFeedSeen(c.Context(), userID, source, time.Unix(snap, 0))
 		if err != nil {
 			return feed.Cursor{}, err
 		}
@@ -52,10 +51,11 @@ func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64) (feed.Cursor, erro
 		if seenAt < snap {
 			phase = feed.PhaseNew
 		}
-		return feed.Cursor{UserID: userID, Source: feedSourceProfile, SnapshotAt: snap, SeenAt: seenAt, ActedBefore: acted, Phase: phase, ExpiresAt: now.Add(feed.CursorTTL).Unix()}, nil
+		return feed.Cursor{UserID: userID, Source: source, SnapshotAt: snap, SeenAt: seenAt, ActedBefore: acted, Phase: phase, ExpiresAt: now.Add(feed.CursorTTL).Unix()}, nil
 	}
 	cur, err := h.verifyCursor(raw, userID)
-	if err != nil || (cur.Phase != feed.PhaseNew && cur.Phase != feed.PhaseRest) {
+	// A cursor for another source (the choice changed) restarts the client.
+	if err != nil || cur.Source != source || (cur.Phase != feed.PhaseNew && cur.Phase != feed.PhaseRest) {
 		return feed.Cursor{}, fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 	}
 	return cur, nil
@@ -63,7 +63,7 @@ func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64) (feed.Cursor, erro
 
 func (h *feedHandlers) verifyCursor(raw string, userID int64) (feed.Cursor, error) {
 	cur, err := h.cursors.Verify(raw, time.Now())
-	if err != nil || cur.UserID != userID || cur.Source != feedSourceProfile {
+	if err != nil || cur.UserID != userID {
 		return feed.Cursor{}, fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 	}
 	return cur, nil

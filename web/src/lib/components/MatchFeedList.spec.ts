@@ -71,6 +71,21 @@ describe('MatchFeedList', () => {
     expect(screen.queryByText('Failed to load your matches.')).toBeNull();
   });
 
+  it('shows the deleted-search screen, and Back to matching by profile switches to the profile', async () => {
+    meFeed.mockResolvedValueOnce(page([], { source: 'saved_search', saved_search_id: 2, reason: 'search_deleted' }));
+    render(MatchFeedList);
+    expect(await screen.findByText('This search was deleted')).toBeTruthy();
+    expect(screen.queryByText('Tell us what you are looking for')).toBeNull();
+  });
+
+  it('shows no matches, never widened, for an empty saved-search page', async () => {
+    meFeed.mockResolvedValueOnce(page([], { source: 'saved_search', saved_search_id: 2 }));
+    render(MatchFeedList);
+    expect(await screen.findByText('No matches for this search')).toBeTruthy();
+    expect(screen.getByText("We don't widen your search to fill the feed.")).toBeTruthy();
+    expect(screen.getByText('Edit search').getAttribute('href')).toBe('/my/notifications/searches');
+  });
+
   it('shows the error state for any other failure', async () => {
     meFeed.mockRejectedValue(new ApiError(500, 'boom'));
     render(MatchFeedList);
