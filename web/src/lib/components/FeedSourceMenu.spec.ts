@@ -13,6 +13,7 @@ vi.mock('#lib/announce.svelte.js', () => ({ announce: vi.fn() }));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 
 const { default: FeedSourceMenu } = await import('./FeedSourceMenu.svelte');
+const { default: FeedCaughtUp } = await import('./FeedCaughtUp.svelte');
 const { feedSource } = await import('#lib/feedSource.svelte.js');
 const { resetUserStores } = await import('#lib/userResource.svelte.js');
 
@@ -135,5 +136,44 @@ describe('FeedSourceMenu', () => {
     expect(screen.getByRole('menu')).toBeTruthy();
     await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  describe('with a host that owns the menu by ref', () => {
+    it('opens from the caught-up button, and the click that opened it does not close it', async () => {
+      listSavedSearches.mockResolvedValue([search(1, 'Go remote')]);
+      const { component } = render(FeedSourceMenu);
+      render(FeedCaughtUp, { focus: false, onChooseSource: () => component.openMenu() });
+      const choose = screen.getByRole('button', { name: 'Choose another search' });
+      choose.focus();
+      await fireEvent.click(choose);
+      expect(await screen.findByRole('menu')).toBeTruthy();
+      await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+      expect(screen.queryByRole('menu')).toBeNull();
+      await waitFor(() => expect(document.activeElement).toBe(choose));
+    });
+
+    it('hands focus to the host after a pick instead of its own pill', async () => {
+      listSavedSearches.mockResolvedValue([search(1, 'Go remote')]);
+      const onpicked = vi.fn();
+      render(FeedSourceMenu, { onpicked });
+      await fireEvent.click(screen.getByRole('button', { name: /Match source/ }));
+      await fireEvent.click(await screen.findByText('Go remote'));
+      await waitFor(() => expect(onpicked).toHaveBeenCalledTimes(1));
+    });
+
+    it('does not pull focus back when the menu is gone before the server answers', async () => {
+      listSavedSearches.mockResolvedValue([search(1, 'Go remote')]);
+      let release = () => {};
+      setFeedSource.mockImplementation(() => new Promise<void>((r) => (release = r)));
+      const { unmount } = render(FeedSourceMenu);
+      const elsewhere = document.body.appendChild(document.createElement('button'));
+      await fireEvent.click(screen.getByRole('button', { name: /Match source/ }));
+      await fireEvent.click(await screen.findByText('Go remote'));
+      unmount(); // left the feed, or switched mode
+      elsewhere.focus();
+      release();
+      await waitFor(() => expect(feedSource.version).toBe(1));
+      expect(document.activeElement).toBe(elsewhere);
+    });
   });
 });

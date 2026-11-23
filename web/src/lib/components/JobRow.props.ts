@@ -50,6 +50,8 @@ export interface JobRowProps {
   flat?: boolean;
   footer?: Snippet;
   onHide?: (slug: string) => void;
+  /** Called when save or hide hears the session is gone (401); Matches turns it into a sign-in. */
+  onUnauthorized?: () => void;
   /** Allows a saved list to serialize removal with pagination. */
   unsave?: (slug: string) => Promise<unknown>;
 }

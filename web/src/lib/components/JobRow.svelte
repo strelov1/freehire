@@ -61,6 +61,7 @@
     flat = false,
     footer,
     onHide,
+    onUnauthorized,
     unsave = api.unsaveJob,
     clientMatch,
   }: JobRowProps = $props();
@@ -185,6 +186,7 @@
     () => job.public_slug,
     () => unsave,
     () => onHide,
+    () => onUnauthorized,
   );
 
   // Only the title is inside the link. Its name starts with the visible title;

@@ -1,4 +1,5 @@
 import { api } from '#lib/api.js';
+import { isUnauthorized } from '#lib/api-core.js';
 import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
 import { markDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
 import { ensureSavedLoaded, isSaved, markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
@@ -23,6 +24,8 @@ export class JobCardActions {
     private readonly slug: () => string,
     private readonly unsave: () => (slug: string) => Promise<unknown>,
     private readonly onHide: () => ((slug: string) => void) | undefined,
+    // Opt-in: a surface that wants to hear the session ending (Matches); others keep the silent rollback.
+    private readonly onUnauthorized: () => (() => void) | undefined = () => undefined,
   ) {}
 
   /** Toggle the save mark: flip the shared set first so the bookmark fills instantly,
@@ -54,11 +57,12 @@ export class JobCardActions {
         await api.saveJob(slug);
         this.justSaved = true;
       }
-    } catch {
+    } catch (e) {
       if (changed && currentUser()?.id === userID) {
         if (wasSaved) markSaved(slug);
         else markUnsaved(slug);
       }
+      if (isUnauthorized(e)) this.onUnauthorized()?.();
     } finally {
       this.saving = false;
     }
@@ -78,8 +82,9 @@ export class JobCardActions {
     try {
       await api.dismissJob(slug);
       this.onHide()?.(slug);
-    } catch {
+    } catch (e) {
       markUndismissed(slug);
+      if (isUnauthorized(e)) this.onUnauthorized()?.();
     } finally {
       this.hiding = false;
     }

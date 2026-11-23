@@ -5,6 +5,7 @@
   // and Hide again is the retry.
   import { untrack } from 'svelte';
   import { ApiError } from '#lib/api-core.js';
+  import { feedSession } from '#lib/feedSession.svelte.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { ConfirmDialog } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -30,6 +31,7 @@
     try {
       await profileStore.avoidCompany(slug);
     } catch (e) {
+      feedSession.lost(e); // the feed swaps to the sign-in screen; the dialog below is dropped with it
       throw new Error(e instanceof ApiError && e.status === 409 ? s.full : s.failed, { cause: e });
     }
     hidden = true;
