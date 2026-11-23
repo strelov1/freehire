@@ -221,7 +221,7 @@ func (s jobkorea) sitemap(ctx context.Context, loc string) (sitemapDoc, error) {
 		return sitemapDoc{}, err
 	}
 	var doc sitemapDoc
-	err := s.http.GetStream(ctx, loc, "application/xml", func(r io.Reader) error {
+	err := s.http.GetStream(ctx, loc, "application/xml, text/xml", func(r io.Reader) error {
 		body, err := io.ReadAll(io.LimitReader(r, jobkoreaMaxSitemapBytes+1))
 		if err != nil {
 			return err

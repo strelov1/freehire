@@ -425,6 +425,7 @@ func TestJobsCzQuery(t *testing.T) {
 		{"", "", 2, "https://www.jobs.cz/prace/?page=2"},
 		{"", "200900011", 1, "https://www.jobs.cz/prace/?field[0]=200900011&page=1"},
 		{"praha", "200900026", 3, "https://www.jobs.cz/prace/praha/?field[0]=200900026&locality[radius]=0&page=3"},
+		{"zahranici", "200900001", 1, "https://www.jobs.cz/prace/zahranici/?field[0]=200900001&page=1"},
 	} {
 		if got := jobsczQuery(c.region, c.field, c.page); got != c.want {
 			t.Errorf("jobsczQuery(%q, %q, %d) = %s, want %s", c.region, c.field, c.page, got, c.want)
