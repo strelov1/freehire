@@ -3,6 +3,7 @@
   import {
     type FilterStore,
     savedSearchQuery,
+    unsavableFilter,
     displayQuery,
     appliesWorkModeRemoteAnywhere,
     workModeRemoteLabel,
@@ -39,6 +40,7 @@
   // The current filters as the saved-search / alert target. The ordering is view-only
   // and savedSearchQuery drops it, so reordering the feed never marks this dirty.
   const current = $derived(savedSearchQuery(store.value));
+  const unsavable = $derived(unsavableFilter(store.value));
 
   function valueLabel(param: string, value: string): string {
     const def = FACETS.find((d) => d.param === param);
@@ -259,8 +261,8 @@
 
 <FilterSummaryShell {groups} active={store.active} onReset={() => store.clear()} {onOpen} {description}>
   {#snippet afterButton()}
-    {#if canSave && store.value.formerEmployers}
-      <p class="text-sm text-muted-foreground">Turn off Hiring again to save this search or set up alerts.</p>
+    {#if canSave && unsavable}
+      <p class="text-sm text-muted-foreground">Turn off {unsavable} to save this search or set up alerts.</p>
     {:else if canSave && store.active > 0}
       <!-- Only once a filter is set: on the bare feed the button saved nothing and was the
            heaviest control in an otherwise empty panel. Any active filter counts, a minimum

@@ -4084,7 +4084,7 @@
       "job.new_hiring": {
         "name": "new_hiring",
         "in": "query",
-        "description": "Just started hiring: companies that began hiring this month: true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the same set as `/insights/companies?sort=new`); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it.",
+        "description": "Just started hiring: companies that began hiring this month: true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the companies `/insights/companies?sort=new` lists, without its `min_open` floor); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it.",
         "schema": {
           "type": "boolean"
         }

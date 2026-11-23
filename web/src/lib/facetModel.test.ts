@@ -10,7 +10,7 @@ import {
   type FacetState,
   type JobFilters,
 } from './facetModel';
-import { canonicalQuery, savedSearchQuery, queryNarrows } from './savedSearchQuery';
+import { canonicalQuery, savedSearchQuery, queryNarrows, unsavableFilter } from './savedSearchQuery';
 import { signOf, facetSetSign, facetCycle, facetPick, facetToggleSign, facetAdd, facetRemove } from './facetSign';
 import { withQuery, withSkills } from './facetModelTestUtils';
 import { must } from './utils';
@@ -391,6 +391,12 @@ describe('newHiring ("Just started hiring")', () => {
     const q = savedSearchQuery({ ...emptyFilters(), q: 'go', newHiring: true });
     expect(new URLSearchParams(q).has('new_hiring')).toBe(false);
     expect(queryNarrows('new_hiring=true')).toBe(false);
+  });
+
+  it('blocks saving, like Hiring again', () => {
+    expect(unsavableFilter(emptyFilters())).toBeNull();
+    expect(unsavableFilter({ ...emptyFilters(), newHiring: true })).toBe('Just started hiring');
+    expect(unsavableFilter({ ...emptyFilters(), formerEmployers: true, newHiring: true })).toBe('Hiring again');
   });
 });
 

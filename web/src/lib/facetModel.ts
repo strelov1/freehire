@@ -312,6 +312,15 @@ function readLegacyClearance(p: URLSearchParams, facets: Record<string, FacetSta
       : { ...st, exclude: [...st.exclude, CLEARANCE_UNSPECIFIED] };
 }
 
+/** The company-set filter that is on (Hiring again, the watchlist, Just started hiring),
+ *  or null. Only the search applies these sets; facet counts and the map do not. */
+export function activeCompanySet(f: JobFilters): 'formerEmployers' | 'watchlist' | 'newHiring' | null {
+  if (f.formerEmployers) return 'formerEmployers';
+  if (f.watchlist) return 'watchlist';
+  if (f.newHiring) return 'newHiring';
+  return null;
+}
+
 /** Total selected facet values (plus visa/salary/freshness) — drives the mobile badge. */
 export function activeFilterCount(f: JobFilters): number {
   let n = 0;

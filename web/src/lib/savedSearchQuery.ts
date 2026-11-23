@@ -38,6 +38,15 @@ export function savedSearchQuery(f: JobFilters): string {
   return filtersToParams({ ...f, sort: null, hideSeen: false, formerEmployers: false, newHiring: false }).toString();
 }
 
+/** The on filter a saved search would silently drop, named as the UI labels it, or null.
+ *  Saving is blocked while one is on: the stored query, and any alert on it, would be
+ *  wider than the list on screen. */
+export function unsavableFilter(f: JobFilters): string | null {
+  if (f.formerEmployers) return 'Hiring again';
+  if (f.newHiring) return 'Just started hiring';
+  return null;
+}
+
 /** Whether a saved query can carry alerts: mirrors the server's search.Narrows, which
  *  refuses a subscription to a query that selects the whole catalogue. Only what the
  *  digest matcher's search reads counts, so a minimum skill match alone does not: the

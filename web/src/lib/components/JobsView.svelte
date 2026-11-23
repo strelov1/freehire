@@ -23,6 +23,7 @@
     matchSortNeedsSkills,
     selectedSortFor,
     activeFilterCount,
+    activeCompanySet,
     displayQuery,
   } from '#lib/filters.js';
   import JobListControls from './JobListControls.svelte';
@@ -61,9 +62,11 @@
   // the embedded company list must not clobber the shared key. Persistence is
   // fixed for the store's life, so the initial `standalone` and `initialParams`
   // are captured once.
-  const seedParams = untrack(() =>
-    initialParams != null ? new URLSearchParams(initialParams) : new URLSearchParams(page.url.search),
-  );
+  const seedParams = untrack(() => {
+    const p = initialParams != null ? new URLSearchParams(initialParams) : new URLSearchParams(page.url.search);
+    // A scoped list never sends it (see scopedParams), so it must not show as applied either.
+    return standalone ? p : new URLSearchParams([...p].filter(([k]) => k !== 'new_hiring'));
+  });
   const filters = new FilterStore(
     seedParams,
     untrack(() => standalone),
@@ -122,17 +125,8 @@
 
   // The live facet distribution (see FeedCounts).
   const feedCounts = new FeedCounts(scopedParams);
-  // The company-set filter on, if any. /jobs/facets and the map ignore these sets, so their
-  // counts and pins would describe a wider set than the list.
-  const companySetFilter = $derived(
-    filters.value.formerEmployers
-      ? 'formerEmployers'
-      : filters.value.watchlist
-        ? 'watchlist'
-        : filters.value.newHiring
-          ? 'newHiring'
-          : null,
-  );
+  // /jobs/facets and the map ignore the company sets, so their counts and pins would be wider.
+  const companySetFilter = $derived(activeCompanySet(filters.value));
   const counts = $derived(companySetFilter ? null : feedCounts.catalog);
   // The map dialog reads and writes `filters` itself, so a click on the map narrows the
   // list behind it. Its module (the land outline among it) loads on the first open only.

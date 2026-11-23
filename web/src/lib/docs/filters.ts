@@ -131,7 +131,7 @@ export const FILTER_EXTRAS: FilterRow[] = [
     type: 'boolean',
     label: 'Just started hiring: companies that began hiring this month',
     values:
-      'true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the same set as `/insights/companies?sort=new`); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it',
+      'true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the companies `/insights/companies?sort=new` lists, without its `min_open` floor); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it',
   },
   {
     param: 'salary_min',

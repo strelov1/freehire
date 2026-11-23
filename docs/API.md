@@ -292,7 +292,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 | `watchlist` | Your watchlist: companies you follow | true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it |
 
-| `new_hiring` | Just started hiring: companies that began hiring this month | true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the same set as `/insights/companies?sort=new`); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it |
+| `new_hiring` | Just started hiring: companies that began hiring this month | true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the companies `/insights/companies?sort=new` lists, without its `min_open` floor); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it |
 
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 
