@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 
 	"github.com/jackc/pgx/v5"
@@ -150,7 +151,7 @@ var errAmbiguousRegion = errors.New("board live in another region")
 // renameBoard renames the live board AND moves its stored jobs (open and closed) off the old
 // company in one transaction, as cmd/backfill-company-names does for a placeholder: a crawl
 // only rewrites a posting that changed, so the board row alone would leave them on the old
-// name. The companies catalogue is reconciled for the touched slugs afterwards.
+// name. The companies catalogue is reconciled for the touched slugs in the same transaction.
 func renameBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, region, company string) int {
 	queries := db.New(pool)
 	var (
@@ -175,7 +176,18 @@ func renameBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, regio
 			func(ctx context.Context) (int64, error) {
 				return q.UpdateBoardCompany(ctx, db.UpdateBoardCompanyParams{Provider: provider, Board: board, Region: region, Company: company})
 			})
-		return err
+		if err != nil || len(oldSlugs) == 0 {
+			return err
+		}
+		// Reconciled inside the transaction: after a commit a retry would read the NEW name as
+		// the old one and never find the slugs these jobs left, stranding their companies rows.
+		if _, err := q.SyncCompaniesForSlugs(ctx, []string{slug}); err != nil {
+			return fmt.Errorf("sync companies: %w", err)
+		}
+		if _, err := q.DeleteOrphanCompaniesForSlugs(ctx, oldSlugs); err != nil {
+			return fmt.Errorf("delete orphan companies: %w", err)
+		}
+		return nil
 	})
 	if errors.Is(err, errAmbiguousRegion) {
 		log.Printf("add-board: provider=%s board=%s is live in another region too; its postings cannot be told apart by region, so nothing was renamed",
@@ -190,16 +202,6 @@ func renameBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, regio
 	if err != nil {
 		log.Printf("add-board: rename: %v", err)
 		return 1
-	}
-	if len(oldSlugs) > 0 {
-		if _, err := queries.SyncCompaniesForSlugs(ctx, []string{slug}); err != nil {
-			log.Printf("add-board: sync companies: %v", err)
-			return 1
-		}
-		if _, err := queries.DeleteOrphanCompaniesForSlugs(ctx, oldSlugs); err != nil {
-			log.Printf("add-board: delete orphan companies: %v", err)
-			return 1
-		}
 	}
 	log.Printf("add-board: renamed provider=%s board=%s region=%q from company=%q to %q, moved jobs off %d old slug(s)",
 		provider, board, region, oldName, company, len(oldSlugs))
