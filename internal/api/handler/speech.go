@@ -18,7 +18,7 @@ type transcriber interface {
 	Transcribe(ctx context.Context, audio []byte, filename string) (string, error)
 }
 
-// speechHandlers serve dictation: one recording in, its text out. There is no
+// speechHandlers serve dictation and interview transcription. There is no
 // storage and no state — the audio is read, forwarded, and dropped.
 type speechHandlers struct {
 	// stt is nil where no speech gateway is configured, and every request then
@@ -40,6 +40,7 @@ func (h *speechHandlers) register(api fiber.Router, mw middleware) {
 	// composer that posts messages, so a client allowed to send one may transcribe for it (a
 	// narrower rule would leave the control dead in the extension's side panel).
 	api.Post("/speech/transcriptions", mw.key, mw.paidAI(plan.FeatureDictation), h.PostTranscription)
+	api.Post("/me/interviews/transcriptions", mw.key, mw.paidAI(unmeteredAI), interviewTranscriptionLimit(), h.postInterviewTranscription)
 }
 
 // maxAudioUpload bounds one recording: around eight minutes at the ~32 kbit/s the

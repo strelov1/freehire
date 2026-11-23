@@ -45,7 +45,7 @@ const jobSitemapFilter = `reality.class != "likely-evergreen" AND ` + openJobsFi
 // It pages the search indexes, not Postgres, because they already hold exactly the sets worth
 // giving a crawler: jobs that are open, non-duplicate, non-private and categorized
 // (splitJobs); companies with a role passing that same test (cmd/reindex-companies, gated on
-// companies.job_count). "Same test" is load-bearing: RefreshCompanyFacets applies splitJobs'
+// companies.job_count). "Same test" is load-bearing: the facet recount in company_facets.sql applies splitJobs'
 // extra predicates, so if either side gains one, both must move, or a company URL renders
 // "0 open jobs". The engine addresses an offset directly, unlike the Postgres row_number()
 // walk this replaced, which timed out the SSR render.

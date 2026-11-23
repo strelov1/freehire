@@ -80,5 +80,6 @@ token bridge, at the cost of per-token revocation.
 ## Limitations
 - No refresh tokens (a session is re-minted on sign-in). Revocation exists: `POST /auth/logout-all` bumps `users.token_version`. The cost is one primary-key lookup per authenticated request; `auth.TokenVersionLoader` is the seam a cache would drop into.
 - No CSRF token — only `SameSite=Lax` + same-origin defense; a CSRF token is needed only if a future need forces `SameSite=None`.
+- `SameSite=Lax` does not stop a sibling subdomain of the cookie domain (it is same-site). The API refuses every cookie-carrying POST/PUT/PATCH/DELETE whose Origin (or Referer) is not in `BrowserOrigins` (`refuseCrossOriginCookieWrites`, internal/api/handler/request_origin.go). A subdomain whose pages call the API with the cookie (employer.freehire.me) must be listed in `SERVED_HOSTS`.
 - Identity unlinking/management UI.
 - Magic-link sign-in.

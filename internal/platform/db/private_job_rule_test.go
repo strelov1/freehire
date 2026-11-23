@@ -50,6 +50,7 @@ var privatePredicateExemptions = map[string]string{
 	"EnqueuePendingJobs":               "queues a row for enrichment; the model's answer is written back to that same row",
 	"EnqueueEnrichmentForCompanySlugs": "the same queue, scoped to named company slugs",
 	"ClaimEnrichmentBatch":             "leases enrichment entries; the jobs join only orders them by freshness and skips closed rows",
+	"DeleteIneligibleEnrichmentOutbox": "the same queue's reaper; the open-and-canonical probe only decides whether a row's own entry is deleted, and the claim takes private rows too",
 	"EnqueuePendingSemanticJobs":       "queues embeddings for a row; index writers exclude private jobs before publishing vectors",
 	"SelectOrphanLivenessCandidates":   "the liveness probe's candidate set; a strike or a close changes what the creator sees, not what anyone else does",
 	"SelectStaleRegisteredCandidates":  "the same probe's registered-source candidate set",

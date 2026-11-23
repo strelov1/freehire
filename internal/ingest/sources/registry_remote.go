@@ -10,6 +10,9 @@ func remoteBoardSources(c HTTPClient) []Source {
 		NewNoDesk(c),
 		NewJobspresso(c),
 		NewJustRemote(c),
+		// Jobgether: remote board re-listing employers' own ATS postings; sitemap + posting-page
+		// JobPosting, paced and bounded per run. See jobgether.go.
+		NewJobgether(c),
 		// SkipTheDrive: WordPress remote board; listing = category pages, hydrating (body, location
 		// and the employer's apply link are on the posting page). See skipthedrive.go.
 		NewSkipTheDrive(pacedSkipTheDrive(c)),

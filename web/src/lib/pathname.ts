@@ -1,4 +1,5 @@
-import type { Path } from '$app/types';
+import { resolve } from '$app/paths';
+import type { Path, ResolvedPathname } from '$app/types';
 
 /** A navigation pathname, spelled the way `page.url.pathname` spells it: leading slash
  *  included. Checked against the app's real routes, so a link to a page that does not
@@ -14,4 +15,10 @@ export type Pathname = `/${Path}`;
  *  only while it is small, and the whole `Path` union is not. */
 export function toPath<P extends Path>(pathname: `/${P}`): P {
   return pathname.slice(1) as P;
+}
+
+/** Resolve a validated pathname even when it comes from a large union of static links. */
+export function resolvePathname(pathname: Pathname): ResolvedPathname {
+  const resolveConcretePath = resolve as (path: Path) => ResolvedPathname;
+  return resolveConcretePath(pathname.slice(1) as Path);
 }

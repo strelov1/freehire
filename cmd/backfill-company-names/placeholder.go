@@ -2,16 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"slices"
 	"sync"
 
 	"github.com/strelov1/freehire/internal/dict/companyname"
-	"github.com/strelov1/freehire/internal/dict/normalize"
-	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/externalid"
 )
 
 // placeholderRename is one board whose company was its own board id, with the name its ATS
@@ -72,59 +68,16 @@ type placeholderWriter interface {
 }
 
 // writePlaceholderRename applies one resolved name to the board's stored jobs and to the
-// board, reporting the slug the jobs moved onto and the distinct slugs they moved away from
-// (none when no job changed). The caller runs it in ONE transaction: this pass finds its work
-// by the BOARD, so a board renamed without its jobs is never listed again and its postings
-// keep the placeholder, while jobs renamed without the board are put back by the next crawl.
-//
-// The slug is the one the pipeline writes for the same name (CompanySlug, then the merge
-// worker's alias registry), so the next crawl lands on the company this rename created. The
-// OLD slug is recorded as an alias so its already-announced /companies page 301s instead of
-// 404ing.
+// board (boardcatalog.RenameBoardJobs; the caller runs it in ONE transaction). This pass finds
+// its work by the BOARD, so a board renamed without its jobs is never listed again.
+// RenameSlugBoardCompany is guarded on the old name, so a board a curator named meanwhile
+// fails the rename instead of being overwritten.
 func writePlaceholderRename(ctx context.Context, q placeholderWriter, r placeholderRename) (string, []string, error) {
-	slug := normalize.CompanySlug(r.name)
-	aliases, err := q.ResolveCompanySlugAliases(ctx, []string{normalize.FoldSlug(slug)})
-	if err != nil {
-		return "", nil, fmt.Errorf("aliases: %w", err)
-	}
-	if len(aliases) > 0 {
-		slug = aliases[0].CanonicalSlug
-	}
-	oldSlugs, err := q.RenamePlaceholderBoardJobs(ctx, db.RenamePlaceholderBoardJobsParams{
-		Name:         r.name,
-		NewSlug:      slug,
-		Source:       r.provider,
-		BoardPattern: externalid.BoardPattern(r.board),
-		OldName:      r.oldName,
-		LabelName:    sources.PlaceholderLabel(r.provider, r.oldName),
-	})
-	if err != nil {
-		return "", nil, fmt.Errorf("jobs: %w", err)
-	}
-	boardRows, err := q.RenameSlugBoardCompany(ctx, db.RenameSlugBoardCompanyParams{
-		Name:     r.name,
-		Provider: r.provider,
-		Board:    r.board,
-		OldName:  r.oldName,
-	})
-	if err != nil {
-		return "", nil, fmt.Errorf("board: %w", err)
-	}
-	// The board changed since it was listed (a curator named it meanwhile). Failing rolls the
-	// jobs half back, which would otherwise carry this name under a board stating another.
-	if boardRows == 0 {
-		return "", nil, fmt.Errorf("board: %s %s no longer carries %q", r.provider, r.board, r.oldName)
-	}
-	if oldSlug := normalize.CompanySlug(r.oldName); oldSlug != "" && oldSlug != slug {
-		if _, err := q.InsertCompanySlugAlias(ctx, db.InsertCompanySlugAliasParams{
-			AliasSlug:     oldSlug,
-			CanonicalSlug: slug,
-			FoldedKey:     normalize.FoldSlug(oldSlug),
-			Reason:        "board_name",
-		}); err != nil {
-			return "", nil, fmt.Errorf("alias: %w", err)
-		}
-	}
-	slices.Sort(oldSlugs)
-	return slug, slices.Compact(oldSlugs), nil
+	return boardcatalog.RenameBoardJobs(ctx, q,
+		boardcatalog.BoardRename{Provider: r.provider, Board: r.board, OldName: r.oldName, Name: r.name, AliasOldSlug: true},
+		func(ctx context.Context) (int64, error) {
+			return q.RenameSlugBoardCompany(ctx, db.RenameSlugBoardCompanyParams{
+				Name: r.name, Provider: r.provider, Board: r.board, OldName: r.oldName,
+			})
+		})
 }

@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { ExternalLink, Heart, MoreHorizontal, RotateCcw, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { ApiError, isPlanRefusal } from '#lib/api-core.js';
-  import type { FeedCard } from '#lib/types.js';
+  import type { FeedCard, FeedMeta } from '#lib/types.js';
+  import { feedSource } from '#lib/feedSource.svelte.js';
+  import { Badge } from '#lib/ui/index.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import { menuNav } from '#lib/actions/menuNav.js';
   import { track } from '#lib/analytics.js';
@@ -13,18 +15,32 @@
   import SwipeCard from './SwipeCard.svelte';
   import SwipeCardBody from './SwipeCardBody.svelte';
   import { FLY_MS, SwipeGesture } from './swipeGesture.svelte.js';
+  import FeedNewEnd from './FeedNewEnd.svelte';
+  import FeedSourceEmpty from './FeedSourceEmpty.svelte';
+  import FeedSourceMenu from './FeedSourceMenu.svelte';
+  import HideCompanyConfirm from './HideCompanyConfirm.svelte';
   import MatchBlock from './MatchBlock.svelte';
   import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
 
   // The match feed one card at a time, full screen like the swipe deck. Skip and Save write
   // the same tracking records; the server excludes them, so an empty page just refetches.
-  let { onClose }: { onClose: () => void } = $props();
+  let { onClose, onCompanyHidden }: { onClose: () => void; onCompanyHidden?: () => void } = $props();
 
   const PAGE = 20;
+  // The source revision this instance was mounted for: a response that lands after a pick
+  // belongs to the old source and must not touch the shared source state.
+  const rev = feedSource.version;
+  const stale = () => rev !== feedSource.version;
+  let sourceRevision = 0;
+  const sourceChanged = (revision: number) => stale() || revision !== sourceRevision;
+  let overlay = $state<HTMLDivElement | null>(null);
   let cards = $state<FeedCard[]>([]);
   let loading = $state(true);
   let failed = $state(false);
+  let meta = $state<FeedMeta | null>(null);
+  // The session's first page had no card: a saved search that matches nothing, not a spent feed.
+  let firstEmpty = $state(false);
   // The plan lapsed while swipe was open: the API refuses with 402.
   let paywalled = $state(false);
   type Outcome = 'ok' | 'gone' | 'failed';
@@ -37,9 +53,28 @@
   let applying = $state(false);
   let menuOpen = $state(false);
   let menuRoot = $state<HTMLElement | null>(null);
+  let menuTrigger = $state<HTMLButtonElement | null>(null);
+  // The company being hidden, while its confirmation is open.
+  let hideTarget = $state<{ slug: string; name: string } | null>(null);
+  // Numbers every load: a reply that lands after a hide-company reload belongs to the old list.
+  let loadEpoch = 0;
   // An Undo in flight: a new judgment now could land before its inverse and be erased by it.
   let undoing = $state(false);
   const current = $derived(cards[0]);
+  // New cards come first; between the last one and the first rest card there is a pause screen.
+  // The server's seen_cursor is posted once, when the candidate gets past the last new card.
+  let hadNew = $state(false);
+  let hadLoaded = false;
+  let restShown = $state(false);
+  let seenCursor = $state<string | undefined>();
+  const paused = $derived(!!current && !current.is_new && hadNew && !restShown);
+  $effect(() => {
+    if (seenCursor && !loading && (paused || (!current && hadNew))) {
+      const c = seenCursor;
+      seenCursor = undefined;
+      api.markFeedSeen(c).catch(() => {}); // the watermark only decides what is new next time
+    }
+  });
   // A judgment now would race the fly-off, the apply dwell or an Undo's write.
   const busy = () => gesture.exiting || undoing || applying;
   const applyClass =
@@ -47,18 +82,50 @@
   const gesture = new SwipeGesture();
 
   async function load() {
+    const epoch = ++loadEpoch;
     loading = true;
     failed = false;
     try {
-      const data = (await api.meFeed(PAGE)).data;
+      const res = await api.meFeed(PAGE);
+      if (stale() || epoch !== loadEpoch) return;
+      const data = res.data;
+      if (res.meta) {
+        if (meta && (meta.source !== res.meta.source || meta.saved_search_id !== res.meta.saved_search_id)) {
+          sourceRevision++;
+          cards = [];
+          last = null;
+          toast = null;
+          hadLoaded = false;
+          hadNew = false;
+          restShown = false;
+          seenCursor = undefined;
+        }
+        meta = res.meta;
+        feedSource.fromMeta(res.meta);
+        if (!hadLoaded) firstEmpty = data.length === 0 && !res.meta.next_cursor;
+      }
+      hadLoaded = true;
+      if (data.some((c) => c.is_new)) hadNew = true;
+      seenCursor = res.meta?.seen_cursor ?? seenCursor;
       // Append, not replace: an Undo during the request may have put a card back.
       const have = new Set(cards.map((c) => c.public_slug));
       cards = [...cards, ...data.filter((c) => !have.has(c.public_slug))];
     } catch (e) {
+      if (stale() || epoch !== loadEpoch) return;
       if (isPlanRefusal(e)) paywalled = true;
       else failed = true;
     } finally {
-      loading = false;
+      if (!stale() && epoch === loadEpoch) {
+        loading = false;
+        if (feedSource.takeCardFocus(rev, 'swipe')) {
+          await tick();
+          const heading = current && overlay?.querySelector('h2');
+          if (heading) {
+            heading.tabIndex = -1;
+            heading.focus();
+          }
+        }
+      }
     }
   }
 
@@ -80,7 +147,7 @@
     showToast(message);
     announce(message, 'assertive');
   }
-  const describe = (c: FeedCard) => `${c.title} at ${c.company || 'unknown company'}`;
+  const describe = (c: FeedCard) => `${c.title} at ${c.company || 'unknown company'}${c.is_new ? ', new' : ''}`;
 
   // Fling the card off, drop it after the fly-off and write optimistically. A failed write
   // puts the card back so nothing is lost silently; a 404 (job gone) leaves it dropped.
@@ -88,6 +155,7 @@
   async function judge(action: Action, opts: { openedTab?: boolean } = {}) {
     const card = current;
     if (!card || busy()) return;
+    const revision = sourceRevision;
     dropToastAction();
     const ref: Last['ref'] = {};
     let write: Promise<unknown>;
@@ -111,6 +179,7 @@
     if (action === 'apply') applying = false;
     else gesture.settle();
     const outcome = await written;
+    if (sourceChanged(revision)) return;
     if (outcome === 'failed') {
       // Restore unless undo already put it back, or the card would be queued twice.
       if (!cards.includes(card)) cards = [card, ...cards];
@@ -141,6 +210,38 @@
     if (cards.length === 0) await load();
   }
 
+  const askHideCompany = () => {
+    menuOpen = false;
+    if (current?.company_slug && !busy()) hideTarget = { slug: current.company_slug, name: current.company };
+  };
+  // Cancelled: back to the menu button that opened it. Hidden: the cards, the Undo and any
+  // reply still in flight belong to the old exclusion list, so the feed starts over.
+  async function onHideClosed(result: 'hidden' | 'cancelled') {
+    hideTarget = null;
+    await tick();
+    if (result === 'cancelled') {
+      menuTrigger?.focus();
+      return;
+    }
+    onCompanyHidden?.();
+    sourceRevision++;
+    cards = [];
+    last = null;
+    toast = null;
+    hadLoaded = false;
+    hadNew = false;
+    restShown = false;
+    seenCursor = undefined;
+    await load();
+    await tick();
+    const heading = current && overlay?.querySelector('h2');
+    const target = heading || overlay;
+    if (target) {
+      target.tabIndex = -1;
+      target.focus();
+    }
+  }
+
   const markApplied = () => {
     menuOpen = false;
     return judge('apply');
@@ -160,6 +261,7 @@
   async function undo() {
     // An apply card is still in `cards` for its FLY_MS; restoring it now would duplicate it.
     if (!last || gesture.exiting || applying) return;
+    const revision = sourceRevision;
     const { card, action, written, ref } = last;
     dropToastAction();
     last = null;
@@ -169,6 +271,7 @@
       // judge() handles a failed or gone write first (it awaited earlier): the card stays back
       // with its toast, or leaves for good.
       const outcome = await written;
+      if (sourceChanged(revision)) return;
       if (outcome === 'gone') {
         cards = cards.filter((c) => c !== card);
         if (cards.length === 0) await load();
@@ -184,6 +287,7 @@
         await api.untrackApplication(ref.id);
       } else await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
     } catch {
+      if (sourceChanged(revision)) return;
       cards = cards.filter((c) => c !== card);
       last = { card, action, written, ref };
       fail(toastCopy.undo);
@@ -191,18 +295,20 @@
     } finally {
       undoing = false;
     }
-    announce(`Undone. ${card.title} is back.`);
+    if (!sourceChanged(revision)) announce(`Undone. ${card.title} is back.`);
   }
 
   // ← skip, → save, U undo, Esc back to the feed. Bound to the overlay root, so it only
   // fires with focus inside it (or on body, when nothing is focused); fields, menus and
   // nested dialogs keep their own keys.
   function onKey(e: KeyboardEvent) {
-    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented || menuOpen) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented || menuOpen || hideTarget) return;
     const t = e.target as HTMLElement | null;
     if (t?.closest('input,textarea,select,[contenteditable],[role=menu],[role^=menuitem]')) return;
+    if (e.key !== 'Escape' && t?.closest('[aria-haspopup=menu]')) return;
     const dialog = t?.closest('[role=dialog]');
     if (dialog && dialog !== e.currentTarget) return;
+    if (paused && e.key !== 'Escape') return; // the first rest card is hidden behind the pause screen
     if (e.key === 'ArrowLeft') judge('dismiss');
     else if (e.key === 'ArrowRight') judge('save');
     else if (e.key.toLowerCase() === 'u') undo();
@@ -225,16 +331,21 @@
   aria-modal="true"
   aria-labelledby="match-swipe-title"
   tabindex="-1"
+  bind:this={overlay}
   onkeydown={onKey}
   {@attach focusTrap()}
 >
   <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-safe">
-    <h1 id="match-swipe-title" class="text-sm font-medium text-muted-foreground">Matches · by my profile</h1>
+    <div class="flex min-w-0 items-center gap-3">
+      <h1 id="match-swipe-title" class="text-sm font-medium text-muted-foreground">Matches</h1>
+      <FeedSourceMenu />
+    </div>
     <div class="ml-auto flex items-center gap-2">
-      {#if current}
+      {#if current && !paused}
         <div class="relative" bind:this={menuRoot}>
           <button
             type="button"
+            bind:this={menuTrigger}
             aria-label={`More actions for ${current.company || 'unknown company'}`}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
@@ -260,6 +371,16 @@
               >
                 Already applied
               </button>
+              {#if current.company_slug}
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="flex min-h-11 w-full items-center px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                  onclick={askHideCompany}
+                >
+                  Hide company
+                </button>
+              {/if}
             </div>
           {/if}
         </div>
@@ -275,7 +396,9 @@
     </div>
   </header>
 
-  {#if current}
+  {#if current && paused}
+    <FeedNewEnd onContinue={() => (restShown = true)} />
+  {:else if current}
     {#key current.public_slug}
       <SwipeCard
         {gesture}
@@ -284,6 +407,9 @@
         onCommit={judge}
       >
         <SwipeCardBody job={current}>
+          {#snippet badge()}
+            {#if current.is_new}<Badge variant="brand" class="ml-auto shrink-0">New</Badge>{/if}
+          {/snippet}
           {#snippet match()}
             <MatchBlock match={current.match} />
           {/snippet}
@@ -365,6 +491,12 @@
     <div class="flex flex-1 items-center justify-center">
       <States state="error" message="Failed to load your matches." />
     </div>
+  {:else if meta?.reason === 'search_deleted'}
+    <FeedSourceEmpty kind="deleted" mode="swipe" />
+  {:else if meta?.source === 'saved_search' && meta.reason}
+    <FeedSourceEmpty kind="unusable" mode="swipe" />
+  {:else if meta?.source === 'saved_search' && firstEmpty}
+    <FeedSourceEmpty kind="no_matches" mode="swipe" />
   {:else}
     <div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
       <p class="text-lg font-semibold">You're all caught up</p>
@@ -392,3 +524,7 @@
     {/key}
   {/if}
 </div>
+
+{#if hideTarget}
+  <HideCompanyConfirm slug={hideTarget.slug} name={hideTarget.name} onclose={onHideClosed} />
+{/if}

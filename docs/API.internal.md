@@ -111,7 +111,7 @@ Postings closed before the reason was recorded carry an empty `closed_reason`. A
 
 How often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.
 
-Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.
+Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`. Interview prep also serves a closed public posting when the caller has a signed-in session and an application at the interview stage.
 
 ### Finding companies by domain
 
@@ -291,6 +291,8 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 | `watchlist` | Your watchlist: companies you follow | true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it |
 
+| `new_hiring` | Just started hiring: companies that began hiring this month | true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the companies `/insights/companies?sort=new` lists, without its `min_open` floor); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it |
+
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |
@@ -367,7 +369,7 @@ curl -X POST "https://freehire.me/api/v1/me/applications/<id>/booking-link" -b c
 
 ## Jobs
 
-Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint.
+Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from open lists and search. The detail endpoint keeps serving them. Interview prep can serve a closed posting to the account tracking it at the interview stage.
 
 ### `POST /jobs`
 
@@ -835,6 +837,56 @@ curl -X PUT "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
 
 The same agent the web app and browser extension chat with, over HTTP: create a conversation, then post messages to it. All routes accept the session cookie or an API key (`autopilot` is cookie-only — see below) and act on a session you own; someone else’s session id answers `404`, same as one that never existed. Turns run one at a time per session — a message sent while one is already running queues rather than running alongside it. `preset` selects which conversation this is: `chat` (default), `profile` (the experience interviewer), `browse` (a browsing session held from the extension’s side panel), `interview` (a mock-interview rehearsal), `debrief` (after a real one) or `apply` (the conversation about one automatic application) — the last three must name the vacancy via `?job=<slug>`, an application you already hold. An application holds one `apply` conversation: asking again returns it with `200` instead of creating a second. A `tailor` session cannot be created here; it is minted by the CV tailoring bootstrap, which knows the CV and vacancy to bind it to.
 
+### `POST /assistant/sessions/{id}/interview-repeat`
+
+**Auth:** Session only
+
+Opens a fresh rehearsal with the question saved in the feedback.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/interview-repeat" -b cookies.txt
+```
+
+### `POST /assistant/sessions/{id}/interview-report`
+
+**Auth:** Session only
+
+Saves feedback about the candidate’s answers in one owned rehearsal.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/interview-report" -b cookies.txt
+```
+
+### `POST /assistant/sessions/{id}/interview-speech`
+
+**Auth:** Session only
+
+Speak the latest interviewer reply.
+
+Synthesizes the last completed interviewer reply in an owned interview rehearsal.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | The session id. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/interview-speech" -b cookies.txt
+```
+
 ### `POST /assistant/sessions/{id}/autopilot`
 
 **Auth:** Session only
@@ -851,6 +903,38 @@ Session-only, not API-key — an unattended run edits a CV, and the browser is t
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/autopilot" -b cookies.txt
+```
+
+### `POST /assistant/sessions/{id}/interview-transcriptions`
+
+**Auth:** Session only
+
+Transcribe an interview practice answer with ElevenLabs.
+
+Only for a job-bound rehearsal owned by the caller. Uses one dictation allowance for a usable transcription. The recording and the transcript are never appended to the chat by this request. Returns 501 when ElevenLabs is unconfigured.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The rehearsal session id. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `file` | string (binary) | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/interview-transcriptions" -b cookies.txt -F 'file=@<file>'
+```
+
+```json
+{
+  "data": {
+    "text": "I measured error rates."
+  }
+}
 ```
 
 ## Submissions
@@ -1290,7 +1374,7 @@ Accepts a PDF (multipart `file`) or JSON `{ "text": ... }`. Returns the résumé
 | `text` | string | no | Résumé plain text (JSON path); or send a PDF as multipart field `file`. |
 
 ```bash
-curl -X PUT "https://freehire.me/api/v1/me/resume" -b cookies.txt
+curl -X PUT "https://freehire.me/api/v1/me/resume" -b cookies.txt -F 'file=@<file>'
 ```
 
 ```json
@@ -1390,7 +1474,7 @@ Accepts a PDF (`multipart/form-data` field `file`) or plain text (`application/j
 | `text` | string | no | Résumé plain text (JSON path); or send a PDF as multipart field `file`. |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/me/resume/extract" -b cookies.txt
+curl -X POST "https://freehire.me/api/v1/me/resume/extract" -b cookies.txt -F 'file=@<file>'
 ```
 
 ```json
@@ -1467,6 +1551,22 @@ A failure to store or send never surfaces as an error.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/attribution" -b cookies.txt
+```
+
+### `PUT /me/auto-apply-settings`
+
+**Auth:** Session only
+
+Session cookie only: whether attempts are sent without a review is the person's call.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `confirm_each` | boolean | no | Absent reads as false. |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/auto-apply-settings" -b cookies.txt
 ```
 
 ### `POST /me/email`
@@ -1740,7 +1840,7 @@ category), empty skills, or an out-of-vocabulary location value is a `400`.
 | `excluded_skills` | string[] \| null | no |  |
 | `excluded_sources` | string[] \| null | no |  |
 | `job_languages` | string[] \| null | no | Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language. (e.g. `["en","ru"]`) |
-| `excluded_companies` | string[] \| null | no |  |
+| `excluded_companies` | string[] \| null | no | Deprecated and ignored: the list changes only through `/me/profile/excluded-companies`, so a save from a stale page cannot erase a hidden company. Still accepted, and named in `meta.ignored_fields` when sent. |
 | `location_preferences` | any | no | Shaped like LocationPreferences; null or absent keeps none. |
 
 ```bash
@@ -1781,6 +1881,45 @@ Returns `204 No Content`.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/me/profile" -b cookies.txt
+```
+
+### `POST /me/profile/excluded-companies`
+
+**Auth:** Session only
+
+Hide a company from your matches.
+
+Adds the company to `excluded_companies`, creating a minimal profile when there is none.
+Repeating it is safe and changes nothing. `400` for a blank or over-long slug, `409` when
+the list already holds 200 other companies. Cookie-only.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `company_slug` | string | yes | The company's slug. (e.g. `acme`) |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/profile/excluded-companies" -b cookies.txt -H 'Content-Type: application/json' -d '{"company_slug":"acme"}'
+```
+
+### `DELETE /me/profile/excluded-companies/{company_slug}`
+
+**Auth:** Session only
+
+Restore a hidden company.
+
+Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller
+has no profile. Cookie-only.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `company_slug` | string | yes |  |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/profile/excluded-companies/<company_slug>" -b cookies.txt
 ```
 
 ### `GET /me/push-tokens`
@@ -4234,6 +4373,22 @@ curl -X PATCH "https://freehire.me/api/v1/me/email-groups" -b cookies.txt
 
 ## Employer
 
+### `GET /employer/activity`
+
+**Auth:** Session only
+
+Up to 30 company audit events, newest first. Recruiters see application activity.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `before` | string | no | Fetch older events by passing the last event id from the previous page. |
+
+```bash
+curl "https://freehire.me/api/v1/employer/activity" -b cookies.txt
+```
+
 ### `GET /employer/applications`
 
 **Auth:** Session only
@@ -4290,6 +4445,33 @@ curl "https://freehire.me/api/v1/employer/applications" -b cookies.txt
     }
   }
 }
+```
+
+### `POST /employer/applications/search`
+
+**Auth:** Session only
+
+Search applications sent to your vacancies.
+
+Search delivered applications before pagination. An unknown stage returns 400.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job` | string | no | Only applications for this vacancy slug. |
+| `stage` | string | no | Only applications at this stage. |
+| `limit` | string | no | Maximum applications to return. |
+| `offset` | string | no | Number of matching applications to skip. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `query` | string | yes | A literal search in candidate email, message and answers. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/applications/search" -b cookies.txt -H 'Content-Type: application/json' -d '{"query":"candidate@example.com"}'
 ```
 
 ### `GET /employer/applications/{id}/cv`
@@ -4356,6 +4538,29 @@ curl -X POST "https://freehire.me/api/v1/employer/applications/<id>/stage" -b co
     "candidate_notified": true
   }
 }
+```
+
+### `PATCH /employer/applications/{id}/workspace`
+
+**Auth:** Session only
+
+Mark an application reviewed or save private notes.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `mark_viewed` | boolean | no | Record that a teammate reviewed this application. |
+| `employer_notes` | string | no | Replace the private team notes. The empty string clears them. |
+
+```bash
+curl -X PATCH "https://freehire.me/api/v1/employer/applications/<id>/workspace" -b cookies.txt -H 'Content-Type: application/json' -d '{"mark_viewed":true}'
 ```
 
 ### `POST /employer/claim`
@@ -4559,6 +4764,34 @@ curl -X POST "https://freehire.me/api/v1/employer/jobs" -b cookies.txt
 curl -X PATCH "https://freehire.me/api/v1/employer/jobs/<slug>" -b cookies.txt
 ```
 
+### `GET /employer/jobs/{slug}/analytics`
+
+**Auth:** Session only
+
+Read a vacancy's last 30 completed days of engagement.
+
+Analytics for an active company team's own vacancy, including closed vacancies.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The employer-authored vacancy's public slug. |
+
+```bash
+curl "https://freehire.me/api/v1/employer/jobs/<slug>/analytics" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "views": 40,
+    "apply_clicks": 10,
+    "applications": 3
+  }
+}
+```
+
 ### `POST /employer/jobs/{slug}/close`
 
 **Auth:** Session only
@@ -4591,7 +4824,7 @@ curl -X POST "https://freehire.me/api/v1/employer/jobs/<slug>/reopen" -b cookies
 
 **Auth:** Session only
 
-Everyone who acts for the caller's company, and the invitations still open.
+The company team and open invitations. A recruiter sees their own membership.
 
 ```bash
 curl "https://freehire.me/api/v1/employer/team" -b cookies.txt
@@ -4617,7 +4850,7 @@ curl -X POST "https://freehire.me/api/v1/employer/team/invitation-preview" -b co
 
 **Auth:** Session only
 
-Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations.
+Mails a colleague a single-use recruiter invitation, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations.
 
 **Body**
 
@@ -4649,7 +4882,7 @@ curl -X DELETE "https://freehire.me/api/v1/employer/team/invitations/<id>" -b co
 
 **Auth:** Session only
 
-Joins the team an invitation link invites to. 409 when the caller already acts for a company.
+Joins the team. A recruiter must sign in with the matching verified email. 409 when the caller already acts for a company.
 
 **Body**
 
@@ -5010,7 +5243,7 @@ Multipart upload of the `file` part — JPEG, PNG, or WebP, capped at 8 MB and r
 | `file` | string (binary) | yes |  |
 
 ```bash
-curl -X PUT "https://freehire.me/api/v1/me/photo" -b cookies.txt
+curl -X PUT "https://freehire.me/api/v1/me/photo" -b cookies.txt -F 'file=@<file>'
 ```
 
 ```json

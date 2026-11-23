@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -107,4 +108,23 @@ func (c *Client) SignUp(ctx context.Context, clientID, sessionID, method string)
 		return fmt.Errorf("ga4mp: collect answered %d", resp.StatusCode)
 	}
 	return nil
+}
+
+var (
+	clientCookiePattern  = regexp.MustCompile(`^GA\d+\.\d+\.(\d+\.\d+)$`)
+	sessionCookiePattern = regexp.MustCompile(`^GS\d\.\d\.s?(\d+)`)
+)
+
+// IDsFromCookies reads the client and session ids from the visitor's own `_ga` and
+// `_ga_<container>` cookies, the way the browser does (web/src/lib/attribution.ts), for
+// a request that never reaches the SPA. Missing or malformed cookies give "": the cookies
+// exist only after consent, so an absent id means nothing may be sent.
+func IDsFromCookies(cookie func(name string) string, measurementID string) (clientID, sessionID string) {
+	if m := clientCookiePattern.FindStringSubmatch(cookie("_ga")); m != nil {
+		clientID = m[1]
+	}
+	if m := sessionCookiePattern.FindStringSubmatch(cookie("_ga_" + strings.TrimPrefix(measurementID, "G-"))); m != nil {
+		sessionID = m[1]
+	}
+	return clientID, sessionID
 }

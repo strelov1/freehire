@@ -605,6 +605,14 @@ type Handler interface {
 	//
 	// GET /stats/engagement
 	EngagementStats(ctx context.Context) (*EngagementStatsOK, error)
+	// ExcludeCompany implements excludeCompany operation.
+	//
+	// Adds the company to `excluded_companies`, creating a minimal profile when there is none. Repeating
+	// it is safe and changes nothing. `400` for a blank or over-long slug, `409` when the list already
+	// holds 200 other companies. Cookie-only.
+	//
+	// POST /me/profile/excluded-companies
+	ExcludeCompany(ctx context.Context, req *ExcludeCompanyRequest) (*ExcludeCompanyOK, error)
 	// FileProcessReport implements fileProcessReport operation.
 	//
 	// 409 when the caller already reported this kind.
@@ -692,6 +700,12 @@ type Handler interface {
 	//
 	// GET /me/auto-apply
 	GetAutoApplyList(ctx context.Context) (*GetAutoApplyListOK, error)
+	// GetAutoApplySettings implements getAutoApplySettings operation.
+	//
+	// Readable with a session or an API key.
+	//
+	// GET /me/auto-apply-settings
+	GetAutoApplySettings(ctx context.Context) (*GetAutoApplySettingsOK, error)
 	// GetAutofillProfile implements getAutofillProfile operation.
 	//
 	// Projected from your CV header, with the account email as a fallback — what the extension writes
@@ -835,10 +849,16 @@ type Handler interface {
 	GetEmployerCompany(ctx context.Context) (*GetEmployerCompanyOK, error)
 	// GetEmployerTeam implements getEmployerTeam operation.
 	//
-	// Everyone who acts for the caller's company, and the invitations still open.
+	// The company team and open invitations. A recruiter sees their own membership.
 	//
 	// GET /employer/team
 	GetEmployerTeam(ctx context.Context) (*GetEmployerTeamOK, error)
+	// GetEmployerVacancyAnalytics implements getEmployerVacancyAnalytics operation.
+	//
+	// Analytics for an active company team's own vacancy, including closed vacancies.
+	//
+	// GET /employer/jobs/{slug}/analytics
+	GetEmployerVacancyAnalytics(ctx context.Context, params GetEmployerVacancyAnalyticsParams) (*GetEmployerVacancyAnalyticsOK, error)
 	// GetInbox implements getInbox operation.
 	//
 	// `?body=1` returns each message's readable text inline and marks nothing read — that is the agent
@@ -848,6 +868,14 @@ type Handler interface {
 	//
 	// GET /me/inbox
 	GetInbox(ctx context.Context, params GetInboxParams) (*InboxPage, error)
+	// GetInterviewPrep implements getInterviewPrep operation.
+	//
+	// Practice questions from a public posting. A signed-in caller can also see examples from their own
+	// Experience Bank. For a closed posting, a session cookie and an application in the interview stage
+	// are required. Otherwise the endpoint returns 404.
+	//
+	// GET /jobs/{slug}/interview-prep
+	GetInterviewPrep(ctx context.Context, params GetInterviewPrepParams) (*GetInterviewPrepOK, error)
 	// GetInterviews implements getInterviews operation.
 	//
 	// The calendar’s second layer beside `/me/timeline`: a meeting is arranged and can move or be
@@ -1009,6 +1037,12 @@ type Handler interface {
 	//
 	// GET /me/resume
 	GetResume(ctx context.Context) (*GetResumeOK, error)
+	// GetResumeReviewPosting implements getResumeReviewPosting operation.
+	//
+	// Open posting skills and requirements for a CV review performed in the browser.
+	//
+	// GET /jobs/{slug}/skill-fit
+	GetResumeReviewPosting(ctx context.Context, params GetResumeReviewPostingParams) (*GetResumeReviewPostingOK, error)
 	// GetResumeVerdict implements getResumeVerdict operation.
 	//
 	// How many of your selected role’s open vacancies your skills reach, and which missing skill unlocks
@@ -1163,6 +1197,14 @@ type Handler interface {
 	//
 	// GET /insights/role-countries
 	InsightsRoleCountries(ctx context.Context, params InsightsRoleCountriesParams) (*RoleCountriesAnswer, error)
+	// InsightsRoleDemand implements insightsRoleDemand operation.
+	//
+	// Counts unique public vacancies, including closed vacancies, by publication date. If the source
+	// supplied no date, the count uses the vacancy's first catalogue appearance. The data array is empty
+	// until the first snapshot is published.
+	//
+	// GET /insights/role-demand
+	InsightsRoleDemand(ctx context.Context) (*RoleDemandAnswer, error)
 	// InsightsRolePulse implements insightsRolePulse operation.
 	//
 	// The category is required.
@@ -1210,7 +1252,7 @@ type Handler interface {
 	InterpretSearch(ctx context.Context, req *SearchIntentRequest) (*InterpretSearchOK, error)
 	// InviteEmployerTeamMember implements inviteEmployerTeamMember operation.
 	//
-	// Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again
+	// Mails a colleague a single-use recruiter invitation, valid seven days. Inviting an address again
 	// replaces its link. 429 past twenty open invitations.
 	//
 	// POST /employer/team/invitations
@@ -1250,7 +1292,8 @@ type Handler interface {
 	JobsActivity(ctx context.Context, params JobsActivityParams) (*JobsActivity, error)
 	// JoinEmployerTeam implements joinEmployerTeam operation.
 	//
-	// Joins the team an invitation link invites to. 409 when the caller already acts for a company.
+	// Joins the team. A recruiter must sign in with the matching verified email. 409 when the caller
+	// already acts for a company.
 	//
 	// POST /employer/team/join
 	JoinEmployerTeam(ctx context.Context, req *EmployerTeamToken) (*JoinEmployerTeamOK, error)
@@ -1391,6 +1434,12 @@ type Handler interface {
 	//
 	// GET /me/tracking/dismissed
 	ListDismissedSlugs(ctx context.Context) (*ListDismissedSlugsOK, error)
+	// ListEmployerActivity implements listEmployerActivity operation.
+	//
+	// Up to 30 company audit events, newest first. Recruiters see application activity.
+	//
+	// GET /employer/activity
+	ListEmployerActivity(ctx context.Context, params ListEmployerActivityParams) (*ListEmployerActivityOK, error)
 	// ListEmployerApplications implements listEmployerApplications operation.
 	//
 	// The delivered applications to the caller's vacancies, newest first. An unknown `stage` is a 400
@@ -1749,6 +1798,24 @@ type Handler interface {
 	//
 	// POST /assistant/sessions/{id}/extend
 	PostAssistantExtend(ctx context.Context, params PostAssistantExtendParams) (PostAssistantExtendRes, error)
+	// PostAssistantInterviewRepeat implements postAssistantInterviewRepeat operation.
+	//
+	// Opens a fresh rehearsal with the question saved in the feedback.
+	//
+	// POST /assistant/sessions/{id}/interview-repeat
+	PostAssistantInterviewRepeat(ctx context.Context, params PostAssistantInterviewRepeatParams) (*PostAssistantInterviewRepeatOK, error)
+	// PostAssistantInterviewReport implements postAssistantInterviewReport operation.
+	//
+	// Saves feedback about the candidate’s answers in one owned rehearsal.
+	//
+	// POST /assistant/sessions/{id}/interview-report
+	PostAssistantInterviewReport(ctx context.Context, params PostAssistantInterviewReportParams) (PostAssistantInterviewReportRes, error)
+	// PostAssistantInterviewSpeech implements postAssistantInterviewSpeech operation.
+	//
+	// Synthesizes the last completed interviewer reply in an owned interview rehearsal.
+	//
+	// POST /assistant/sessions/{id}/interview-speech
+	PostAssistantInterviewSpeech(ctx context.Context, params PostAssistantInterviewSpeechParams) (PostAssistantInterviewSpeechRes, error)
 	// PostAssistantVoiceToken implements postAssistantVoiceToken operation.
 	//
 	// Only on an `interview` session; `409` otherwise. The audio itself never reaches this server: take
@@ -1864,6 +1931,12 @@ type Handler interface {
 	//
 	// POST /dictionary/gaps
 	RecordDictionaryGap(ctx context.Context, req *DictionaryGap) (*RecordDictionaryGapOK, error)
+	// RecordEmployerVacancyApplyClick implements recordEmployerVacancyApplyClick operation.
+	//
+	// Records an Apply button click on an open, public employer vacancy.
+	//
+	// POST /jobs/{slug}/apply-click
+	RecordEmployerVacancyApplyClick(ctx context.Context, params RecordEmployerVacancyApplyClickParams) error
 	// RecordView implements recordView operation.
 	//
 	// Record that you viewed the job.
@@ -2046,6 +2119,13 @@ type Handler interface {
 	//
 	// POST /me/referrals/incoming/{id}/resolve
 	ResolveReferralRequest(ctx context.Context, req *ReferralResolve, params ResolveReferralRequestParams) (*ResolveReferralRequestOK, error)
+	// RestoreCompany implements restoreCompany operation.
+	//
+	// Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller has no
+	// profile. Cookie-only.
+	//
+	// DELETE /me/profile/excluded-companies/{company_slug}
+	RestoreCompany(ctx context.Context, params RestoreCompanyParams) (*RestoreCompanyOK, error)
 	// RestoreEmail implements restoreEmail operation.
 	//
 	// Undo a soft-delete. Answers 204.
@@ -2141,6 +2221,12 @@ type Handler interface {
 	//
 	// GET /geo/cities
 	SearchCities(ctx context.Context, params SearchCitiesParams) (*SearchCitiesOK, error)
+	// SearchEmployerApplications implements searchEmployerApplications operation.
+	//
+	// Search delivered applications before pagination. An unknown stage returns 400.
+	//
+	// POST /employer/applications/search
+	SearchEmployerApplications(ctx context.Context, req *EmployerApplicationSearch, params SearchEmployerApplicationsParams) (*EmployerApplicationsPage, error)
 	// SearchJobs implements searchJobs operation.
 	//
 	// Free-text `q` plus any filter (the "Filtering jobs" section). Repeated values OR; `<param>_mode=and`
@@ -2170,6 +2256,12 @@ type Handler interface {
 	//
 	// PUT /me/agent-permissions
 	SetAgentPermissions(ctx context.Context, req *AgentPermissionsUpdate) (*SetAgentPermissionsOK, error)
+	// SetAutoApplySettings implements setAutoApplySettings operation.
+	//
+	// Session cookie only: whether attempts are sent without a review is the person's call.
+	//
+	// PUT /me/auto-apply-settings
+	SetAutoApplySettings(ctx context.Context, req *AutoApplySettingsUpdate) (*SetAutoApplySettingsOK, error)
 	// SetCVAppearanceDefaults implements setCVAppearanceDefaults operation.
 	//
 	// PUT /me/cv-appearance-defaults
@@ -2407,6 +2499,12 @@ type Handler interface {
 	//
 	// PATCH /email-prefs
 	UpdateEmailPrefs(ctx context.Context, req *EmailPrefsTokenUpdate) (*UpdateEmailPrefsOK, error)
+	// UpdateEmployerApplicationWorkspace implements updateEmployerApplicationWorkspace operation.
+	//
+	// Mark an application reviewed or save private notes.
+	//
+	// PATCH /employer/applications/{id}/workspace
+	UpdateEmployerApplicationWorkspace(ctx context.Context, req *EmployerApplicationWorkspace, params UpdateEmployerApplicationWorkspaceParams) (*UpdateEmployerApplicationWorkspaceOK, error)
 	// UpdateEmployerCompany implements updateEmployerCompany operation.
 	//
 	// PATCH /employer/company

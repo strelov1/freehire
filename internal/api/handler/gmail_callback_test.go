@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -116,12 +118,19 @@ const testGmailSecret = "test-secret-that-is-long-enough-0001"
 // callback is actually served behind is what these tests exercise.
 func newGmailCallbackApp(t *testing.T) (*fiber.App, string) {
 	t.Helper()
+	return newGmailCallbackAppWithScheduling(t, schedulingAccess{})
+}
+
+func newGmailCallbackAppWithScheduling(t *testing.T, access schedulingAccess) (*fiber.App, string) {
+	t.Helper()
 	cipher, err := tokencrypt.New([]byte(strings.Repeat("k", 32)))
 	if err != nil {
 		t.Fatalf("cipher: %v", err)
 	}
 	const frontend = "https://freehire.me"
 	h := newInboxHandlers(nil, nil, gmailsync.NewConnector("id", "secret", frontend), cipher, frontend, true, "")
+
+	h.scheduling = access
 
 	iss := auth.NewIssuer(testGmailSecret, time.Hour)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
@@ -235,5 +244,44 @@ func TestOAuthCallbackReportsAPartialGrant(t *testing.T) {
 	defer resp.Body.Close()
 	if got, want := resp.Header.Get("Location"), frontend+"/my/integrations?calendar_error=partial"; got != want {
 		t.Errorf("Location = %q, want %q", got, want)
+	}
+}
+
+func TestInterviewSchedulingIsUnavailableOutsideThePilot(t *testing.T) {
+	app, _ := newGmailCallbackAppWithScheduling(t, schedulingAccess{enabled: true, pilotUserID: 2})
+	token, err := auth.NewIssuer(testGmailSecret, time.Hour).Issue(1, testTokenVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	get := func(path string) *http.Response {
+		t.Helper()
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/me/interview-scheduling"+path, nil)
+		req.Header.Set("Cookie", auth.CookieName+"="+token)
+		resp, err := app.Test(req, -1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	status := get("")
+	defer status.Body.Close()
+	var body struct{ Data map[string]bool }
+	if status.StatusCode != fiber.StatusOK || status.Header.Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("status response = %d, cache policy = %q", status.StatusCode, status.Header.Get("Cache-Control"))
+	}
+	if err := json.NewDecoder(status.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"available", "enabled", "connected"} {
+		if value, ok := body.Data[key]; !ok || value {
+			t.Errorf("expected %s=false outside the pilot, got %v", key, body.Data)
+		}
+	}
+	connect := get("/connect")
+	defer connect.Body.Close()
+	if connect.StatusCode != fiber.StatusNotFound || connect.Header.Get("Location") != "" {
+		t.Fatalf("candidate outside the pilot got status %d with redirect %q", connect.StatusCode, connect.Header.Get("Location"))
 	}
 }

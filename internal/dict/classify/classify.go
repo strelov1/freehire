@@ -1,4 +1,4 @@
-// Package classify derives a job's seniority and role category deterministically from its title. It is a curated dictionary, not a model: it resolves known English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Croatian and Serbian, Slovenian, Turkish, Japanese and Chinese title terms and emits nothing for what it cannot resolve. Canonical values come from the vocabularies the enrichment contract defines (vocab.SeniorityValues / vocab.CategoryValues), so the parser, the enrichment payload and the search facet share one set of values.
+// Package classify derives a job's seniority and role category deterministically from its title. It is a curated dictionary, not a model: it resolves known English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Croatian and Serbian, Slovenian, Turkish, Vietnamese, Korean, Japanese and Chinese title terms and emits nothing for what it cannot resolve. Canonical values come from the vocabularies the enrichment contract defines (vocab.SeniorityValues / vocab.CategoryValues), so the parser, the enrichment payload and the search facet share one set of values.
 package classify
 
 import (
@@ -21,7 +21,7 @@ type Classification struct {
 func Parse(title string) Classification {
 	lower := strings.ToLower(title)
 	return Classification{
-		// The grade is read with the grade-blind role names cut out, so a grade word owned by a role name ("Member of Technical Staff") is not mistaken for the grade. The category reads the untouched title.
+		// The grade is read with the grade-blind role names cut out, so a grade word owned by a role name ("Member of Technical Staff") is not mistaken for the grade. The category uses its own alias masks.
 		Seniority: matchSeniority(lower),
 		Category:  matchCategory(lower),
 	}
@@ -32,9 +32,9 @@ func Parse(title string) Classification {
 // The Brazilian-Portuguese gender parentheticals are folded first, as IsNonTech folds them: "Operador(a) de Caixa" must not be recognised as non-technical yet filed nowhere.
 func matchCategory(lower string) string {
 	lower = unchefFrench(ptGenderSuffix.Replace(lower))
-	c := matchOrdered(cutBackEndShifts(lower), categoryTable)
+	c := matchOrdered(koreanCategoryNoise.Replace(cutBackEndShifts(lower)), categoryTable)
 	if c == "" {
-		// Nothing in the main table: try the German (german.go), Dutch, Danish, Spanish, Portuguese (unless the Spanish table vetoed the title), French, Polish, Croatian/Serbian (bcs.go) and Turkish (turkish.go) heads in that order.
+		// Nothing in the main table: try the German (german.go), Dutch, Danish, Spanish, Portuguese (unless the Spanish table vetoed the title), French, Polish, Croatian/Serbian (bcs.go), Turkish (turkish.go) and Vietnamese (vietnamese.go) heads in that order.
 		if c := matchHeads(lower, germanCategoryTable); c != "" {
 			return c
 		}
@@ -59,6 +59,9 @@ func matchCategory(lower string) string {
 		}
 		if c == "" {
 			c = matchTurkishCategory(lower)
+		}
+		if c == "" {
+			c = matchVietnameseCategory(lower)
 		}
 	}
 	if c == categoryNone {
@@ -104,6 +107,9 @@ func matchSeniority(lower string) string {
 	if s := matchOrdered(lower, chineseSeniorityTable); s != "" {
 		return s
 	}
+	if s := matchKoreanSeniority(lower); s != "" {
+		return s
+	}
 	// Nothing in the main table: try the Indian rungs and entry-hire words (india.go), then the German, Dutch, Danish, Spanish, Portuguese, French, Polish and Croatian/Serbian grade words in that order.
 	if s := matchOrdered(lower, indianSeniorityTable); s != "" {
 		return s
@@ -132,7 +138,10 @@ func matchSeniority(lower string) string {
 	if s := matchBCSSeniority(lower); s != "" {
 		return s
 	}
-	return matchTurkishSeniority(lower)
+	if s := matchTurkishSeniority(lower); s != "" {
+		return s
+	}
+	return matchVietnameseSeniority(lower)
 }
 
 // semiSenior is Latin America's spelled-out middle grade — "Semi Senior",
@@ -157,28 +166,32 @@ var (
 //
 // A blind alias contributes nothing: categoryNone is not a category.
 func Categories(text string) []string {
-	out := matchAllOrdered(cutBackEndShifts(strings.ToLower(text)), categoryTable)
-	return slices.DeleteFunc(out, func(c string) bool { return c == categoryNone })
+	lower := strings.ToLower(text)
+	out := matchAllOrdered(koreanCategoryNoise.Replace(cutBackEndShifts(lower)), categoryTable)
+	out = slices.DeleteFunc(out, func(c string) bool { return c == categoryNone })
+	return appendVietnameseCategories(out, lower)
 }
 
 // matchAllOrdered returns the distinct canonical values of every alias, in priority order, that occurs as a whole word in title. Aliases sharing a canonical ("backend"/"back-end") are deduplicated, first seen wins.
 //
 // An occurrence wholly inside the span an EARLIER alias already matched does not count: the table's precedence applied per occurrence. "Front End Cashier" was read by the retail alias declared above the frontend one, and "Information Security Officer" must not pick up the guard category of the "security officer" it contains. A shorter alias that also occurs OUTSIDE every claimed span still counts: "Security Officer, Information Security" names both.
-func matchAllOrdered(title string, table []aliasEntry) []string {
+func matchAllOrdered(title string, tables ...[]aliasEntry) []string {
 	var out []string
 	seen := map[string]bool{}
 	var claimed [][2]int
-	for _, e := range table {
-		hit := false
-		for _, span := range occurrences(title, e.alias) {
-			if !within(span, claimed) {
-				hit = true
+	for _, table := range tables {
+		for _, e := range table {
+			hit := false
+			for _, span := range occurrences(title, e.alias) {
+				if !within(span, claimed) {
+					hit = true
+				}
+				claimed = append(claimed, span)
 			}
-			claimed = append(claimed, span)
-		}
-		if hit && !seen[e.canonical] {
-			seen[e.canonical] = true
-			out = append(out, e.canonical)
+			if hit && !seen[e.canonical] {
+				seen[e.canonical] = true
+				out = append(out, e.canonical)
+			}
 		}
 	}
 	return out

@@ -136,7 +136,7 @@ func (s icims) detail(ctx context.Context, e CompanyEntry, host string, vanity b
 		ExternalID:  id,
 		URL:         loc,
 		Title:       p.Title,
-		Company:     firstNonEmpty(p.HiringOrganization.Name, e.Company),
+		Company:     firstNonEmpty(icimsAvailable(p.HiringOrganization.Name), e.Company),
 		Location:    location,
 		Description: sanitizeHTML(html.UnescapeString(p.Description)),
 		Remote:      remote || isRemote(location),

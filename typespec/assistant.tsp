@@ -29,6 +29,10 @@ model AssistantSessionRequest {
 model AssistantSessionDetail {
   session: AssistantSession;
   messages: unknown;
+
+  /** Optional ElevenLabs recording and playback on an interview rehearsal. */
+  elevenlabs_voice?: boolean;
+  interview_report?: AssistantInterviewReport;
 }
 
 model AssistantSessionListMeta {
@@ -307,6 +311,46 @@ op postAssistantVoiceToken(/** The session id. */ @path id: string): Data<Assist
 op postAssistantVoiceTurn(/** The session id. */ @path id: string, @body body: AssistantVoiceTurn): {
   @statusCode _: 204;
 } | Problem;
+
+/** Synthesizes the last completed interviewer reply in an owned interview rehearsal. */
+@summary("Speak the latest interviewer reply.")
+@tag("Assistant")
+@route("/assistant/sessions/{id}/interview-speech")
+@post
+op postAssistantInterviewSpeech(/** The session id. */ @path id: string): {
+  @header contentType: "audio/mpeg";
+  @header("Cache-Control") cacheControl: string;
+  @body audio: bytes;
+} | {
+  @statusCode _: 402;
+  @body body: AssistantPlanRefusal;
+} | Problem;
+
+model AssistantInterviewReport {
+  strength: string;
+  improvement: string;
+  quote: string;
+  question: string;
+}
+
+/** Saves feedback about the candidate’s answers in one owned rehearsal. */
+@tag("Assistant")
+@route("/assistant/sessions/{id}/interview-report")
+@post
+op postAssistantInterviewReport(@path id: string): Data<AssistantInterviewReport> | {
+  @statusCode _: 402;
+  @body body: AssistantPlanRefusal;
+} | Problem;
+
+model AssistantInterviewRepeat {
+  session_id: string;
+}
+
+/** Opens a fresh rehearsal with the question saved in the feedback. */
+@tag("Assistant")
+@route("/assistant/sessions/{id}/interview-repeat")
+@post
+op postAssistantInterviewRepeat(@path id: string): Data<AssistantInterviewRepeat> | Problem;
 
 model AutoApplyQueued {
   status: string;

@@ -22,6 +22,18 @@ import { ApiError, jsonBody, toSlice } from '../api-core';
 export function employerApi({ call, request, requestData, baseUrl }: Http) {
   // ── Verified employer accounts ────────────────────────────────────────────
 
+  async function getEmployerVacancyAnalytics(slug: string): Promise<components['schemas']['EmployerVacancyAnalytics']> {
+    return requestData(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/analytics`);
+  }
+
+  async function recordEmployerVacancyApplyClick(slug: string): Promise<void> {
+    await call(`/api/v1/jobs/${encodeURIComponent(slug)}/apply-click`, {
+      method: 'POST',
+      credentials: 'omit',
+      keepalive: true,
+    });
+  }
+
   /** Claim a company: resolves the name to a slug, refuses a public-webmail work email,
    *  reserves the slug, and mails a verification code. Returns the pending account. */
   async function claimCompany(companyName: string, workEmail: string): Promise<EmployerAccount> {
@@ -109,13 +121,19 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
   async function listEmployerApplications(filter: {
     job?: string;
     stage?: EmployerApplicationStage;
+    search?: string;
     limit: number;
     offset: number;
   }): Promise<Slice<EmployerApplication> & { stageCounts: Record<string, number> }> {
     const q = new URLSearchParams({ limit: String(filter.limit), offset: String(filter.offset) });
     if (filter.job) q.set('job', filter.job);
     if (filter.stage) q.set('stage', filter.stage);
-    const page = await request<EmployerApplicationsPage>(`/api/v1/employer/applications?${q}`);
+    const page = filter.search
+      ? await request<EmployerApplicationsPage>(
+          `/api/v1/employer/applications/search?${q}`,
+          jsonBody('POST', { query: filter.search } satisfies components['schemas']['EmployerApplicationSearch']),
+        )
+      : await request<EmployerApplicationsPage>(`/api/v1/employer/applications?${q}`);
     return { ...toSlice(page, filter.offset), stageCounts: page.meta.stage_counts };
   }
 
@@ -136,6 +154,18 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
       `/api/v1/employer/applications/${id}/stage`,
       jsonBody('POST', { stage, message } satisfies components['schemas']['EmployerApplicationMove']),
     );
+  }
+
+  async function updateEmployerApplicationWorkspace(
+    id: number,
+    patch: components['schemas']['EmployerApplicationWorkspace'],
+  ): Promise<EmployerApplication> {
+    return requestData<EmployerApplication>(`/api/v1/employer/applications/${id}/workspace`, jsonBody('PATCH', patch));
+  }
+
+  async function listEmployerActivity(before?: number): Promise<components['schemas']['EmployerActivity'][]> {
+    const suffix = before ? `?before=${before}` : '';
+    return requestData<components['schemas']['EmployerActivity'][]>(`/api/v1/employer/activity${suffix}`);
   }
 
   // ── The company team ──────────────────────────────────────────────────────
@@ -198,6 +228,8 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
   }
 
   return {
+    getEmployerVacancyAnalytics,
+    recordEmployerVacancyApplyClick,
     claimCompany,
     confirmEmployerClaim,
     resendEmployerClaimCode,
@@ -211,6 +243,8 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     listEmployerApplications,
     employerApplicationCVUrl,
     moveEmployerApplication,
+    updateEmployerApplicationWorkspace,
+    listEmployerActivity,
     getEmployerTeam,
     inviteEmployerTeamMember,
     withdrawEmployerTeamInvitation,

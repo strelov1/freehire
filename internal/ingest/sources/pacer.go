@@ -357,6 +357,14 @@ func pacedDoverGetter(c JSONGetter) JSONGetter {
 	}
 }
 
+// pacedUnstopGetter holds every Unstop request to one limiter at the site's Crawl-delay.
+func pacedUnstopGetter(c JSONGetter) JSONGetter {
+	return rateLimitedJSONGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(unstopRequestInterval), 1),
+	}
+}
+
 // pacedJumpitGetter holds every Jumpit request, listing and detail fan-out, to one limiter (see
 // jumpitRequestInterval).
 func pacedJumpitGetter(c JSONGetter) JSONGetter {

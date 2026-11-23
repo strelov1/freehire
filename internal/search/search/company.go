@@ -30,7 +30,7 @@ type CompanyDocument struct {
 	Name       string   `json:"name"`
 	Tagline    string   `json:"tagline"`
 	Industries []string `json:"industries"`
-	// IndustriesDerived is RefreshCompanyFacets' translation of the company's own domains into
+	// IndustriesDerived is the facet recount's translation of the company's own domains into
 	// industries; already empty for a company with curated Industries or more than two domains.
 	// CompanyFilterFromValues ORs it into the Industries group; queried only, never served.
 	IndustriesDerived []string `json:"industries_derived"`

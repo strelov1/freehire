@@ -225,6 +225,9 @@ func (h *statsHandlers) InsightsCompanies(ctx context.Context, params apigen.Ins
 			OpenPrev30d: int64(r.OpenCountPrev),
 			Growth30d:   int64(r.Growth),
 		}
+		if r.HiringStartedAt.Valid {
+			data[i].HiringStartedAt = apigen.NewOptDateTime(r.HiringStartedAt.Time)
+		}
 	}
 	return &apigen.CompaniesAnswer{Data: data, Meta: apigen.CompaniesMeta{Sort: sort, MinOpen: int64(minOpen), Limit: int64(limit)}}, nil
 }
@@ -401,6 +404,19 @@ func (h *statsHandlers) InsightsVelocity(ctx context.Context, params apigen.Insi
 			FacetValue:  facetValue,
 		},
 	}, nil
+}
+
+// InsightsRoleDemand returns the weekly publication counts for all specialties.
+func (h *statsHandlers) InsightsRoleDemand(ctx context.Context) (*apigen.RoleDemandAnswer, error) {
+	rows, err := h.queries.ListInsightsRoleDemand(ctx)
+	if err != nil {
+		return nil, err
+	}
+	points := make([]apigen.RoleDemandPoint, len(rows))
+	for i, row := range rows {
+		points[i] = apigen.RoleDemandPoint{Category: row.Category, Week: row.Week.Time.Format(dateLayout), NewJobs: row.NewJobs}
+	}
+	return &apigen.RoleDemandAnswer{Data: points}, nil
 }
 
 // InsightsSalaryHistory serves GET /api/v1/insights/salary/history: one role × grade ×

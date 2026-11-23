@@ -54,6 +54,12 @@
     return employment.role && employment.company ? employment.company : '';
   });
 
+  const metaLine = $derived(
+    [placeSecondary, employment.location, formatPeriodRange(employment.start, employment.end, employment.current)]
+      .filter(Boolean)
+      .join(' · '),
+  );
+
   let expanded = $state(false);
 
   // Reads `scrollToAtomId` too, not just `forceExpanded`: re-clicking the unconfirmed
@@ -134,8 +140,8 @@
   }
 </script>
 
-<div bind:this={cardEl} data-employment-id={employment.id} class="flex flex-col gap-2">
-  <section class="flex gap-3">
+<div bind:this={cardEl} data-employment-id={employment.id}>
+  <section class="flex items-start gap-3">
     {#if employment.kind === 'job' && !isEditing}
       <EntityLogo
         name={employment.company || placeLabel || 'Unknown company'}
@@ -146,7 +152,7 @@
       />
     {/if}
     <div class="flex min-w-0 flex-1 flex-col gap-2">
-      <header class="flex flex-wrap items-baseline gap-x-2">
+      <header class="flex items-start gap-2">
         {#if isEditing}
           <div class="flex w-full flex-col gap-2">
             {#if employment.kind === 'job'}
@@ -215,10 +221,19 @@
             </div>
           </div>
         {:else}
-          <h3 data-row-heading tabindex="-1" class="w-full text-base font-semibold text-foreground focus:outline-none">
-            {placeLabel}
-          </h3>
-          <div class="ml-auto flex gap-1">
+          <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <h3
+              data-row-heading
+              tabindex="-1"
+              class="text-base font-semibold leading-snug text-foreground focus:outline-none"
+            >
+              {placeLabel}
+            </h3>
+            {#if metaLine}
+              <p class="text-sm text-muted-foreground">{metaLine}</p>
+            {/if}
+          </div>
+          <div class="-my-1 flex shrink-0 gap-1">
             <Button size="sm" variant="ghost" data-row-action="edit" onclick={startEdit}>
               <Pencil class="size-3.5" />
               Edit
@@ -236,19 +251,7 @@
         {/if}
       </header>
 
-      {#if !isEditing && (placeSecondary || employment.location || employment.start || employment.end || employment.current)}
-        <p class="-mt-1 text-sm text-muted-foreground">
-          {#if placeSecondary}{placeSecondary}{/if}
-          {#if employment.location}· {employment.location}{/if}
-          {#if employment.start || employment.end || employment.current}
-            <span class="text-xs">
-              · {formatPeriodRange(employment.start, employment.end, employment.current)}
-            </span>
-          {/if}
-        </p>
-      {/if}
-
-      {#if employment.summary}
+      {#if employment.summary && employment.summary !== placeLabel}
         <p class="text-sm text-foreground">{employment.summary}</p>
       {/if}
       {#if employment.stack?.length}
@@ -260,44 +263,43 @@
           {/each}
         </div>
       {/if}
+      {#if employment.atoms.length === 0}
+        <p class="text-sm text-muted-foreground">
+          {#if employment.kind === 'project'}
+            Nothing recorded for this project yet — the assistant can help you fill it in.
+          {:else}
+            Nothing recorded for this role yet — the assistant can help you fill it in.
+          {/if}
+        </p>
+      {:else}
+        <button
+          type="button"
+          class="-ml-0.5 flex items-center gap-1 self-start text-sm text-muted-foreground transition-colors hover:text-foreground"
+          onclick={() => (expanded = !expanded)}
+          aria-expanded={expanded}
+        >
+          <ChevronRight class="size-3.5 transition-transform {expanded ? 'rotate-90' : ''}" />
+          {employment.atoms.length} achievement{employment.atoms.length === 1 ? '' : 's'}
+        </button>
+        {#if expanded}
+          <ul class="flex flex-col gap-1.5">
+            {#each sortNeedsAttentionFirst(employment.atoms) as atom (atom.id)}
+              <ExperienceAchievementRow
+                {atom}
+                selected={selectedIds.includes(atom.id)}
+                {busy}
+                {turnActive}
+                {scrollToAtomId}
+                {onToggleSelect}
+                onConfirm={onConfirmAtom}
+                onSaveEdit={onSaveAtomEdit}
+                {onSavePromote}
+                onRemove={onRemoveAtom}
+              />
+            {/each}
+          </ul>
+        {/if}
+      {/if}
     </div>
   </section>
-
-  {#if employment.atoms.length === 0}
-    <p class="text-sm text-muted-foreground">
-      {#if employment.kind === 'project'}
-        Nothing recorded for this project yet — the assistant can help you fill it in.
-      {:else}
-        Nothing recorded for this role yet — the assistant can help you fill it in.
-      {/if}
-    </p>
-  {:else}
-    <button
-      type="button"
-      class="flex items-center gap-1 self-start text-sm text-muted-foreground transition-colors hover:text-foreground"
-      onclick={() => (expanded = !expanded)}
-      aria-expanded={expanded}
-    >
-      <ChevronRight class="size-3.5 transition-transform {expanded ? 'rotate-90' : ''}" />
-      {employment.atoms.length} achievement{employment.atoms.length === 1 ? '' : 's'}
-    </button>
-    {#if expanded}
-      <ul class="flex flex-col gap-1.5">
-        {#each sortNeedsAttentionFirst(employment.atoms) as atom (atom.id)}
-          <ExperienceAchievementRow
-            {atom}
-            selected={selectedIds.includes(atom.id)}
-            {busy}
-            {turnActive}
-            {scrollToAtomId}
-            {onToggleSelect}
-            onConfirm={onConfirmAtom}
-            onSaveEdit={onSaveAtomEdit}
-            {onSavePromote}
-            onRemove={onRemoveAtom}
-          />
-        {/each}
-      </ul>
-    {/if}
-  {/if}
 </div>

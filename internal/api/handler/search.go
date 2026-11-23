@@ -64,6 +64,9 @@ type searchHandlers struct {
 	// watchlist reads a signed-in caller's company watchlist, which `watchlist=true`
 	// narrows to. Nil leaves the param unread, and reported in meta.ignored_params.
 	watchlist watchlistLookup
+	// newHiring reads the companies that just started hiring, which `new_hiring=true`
+	// narrows to. Nil leaves the param unread, and reported in meta.ignored_params.
+	newHiring newHiringLookup
 	// seen reads the jobs a signed-in caller has already opened, for /jobs/search's
 	// hide_seen. Nil leaves the param unhonoured, and reported as such.
 	seen seenJobs
@@ -89,6 +92,7 @@ func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries
 		h.companyNames = queries
 		h.formerEmployers = formeremployer.NewStore(queries)
 		h.watchlist = companywatch.New(queries)
+		h.newHiring = queries
 	}
 	return h
 }
@@ -245,6 +249,8 @@ type jobSearchOutcome struct {
 	formerEmployers bool
 	// watchlist is the same for `watchlist=true`.
 	watchlist bool
+	// newHiring is the same for `new_hiring=true`.
+	newHiring bool
 	// private is set by runJobSearch when either of those was applied: the answer is
 	// one person's own.
 	private bool
@@ -261,6 +267,9 @@ func (o jobSearchOutcome) own(base []string) []string {
 	}
 	if o.watchlist {
 		out = append(out, search.WatchlistParam)
+	}
+	if o.newHiring {
+		out = append(out, newHiringParam)
 	}
 	return out
 }
@@ -323,11 +332,17 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 	limit, offset := in.limit, in.offset
 	vector, exclude, personal, strict := in.vector, in.exclude, in.personal, in.strict
 
+	newHiring, hasNewHiring, err := h.newHiringSlugsFor(ctx, vals)
+	if err != nil {
+		return jobSearchOutcome{}, err
+	}
 	companies, companiesApplied := personalCompanies(in.former, in.hasFormer, in.watch, in.hasWatch)
+	// The same intersection: a posting must be at a company in every set asked for.
+	companies, companiesApplied = personalCompanies(companies, companiesApplied, newHiring, hasNewHiring)
 	if companiesApplied && len(companies) == 0 {
 		// Narrow to nothing rather than drop the filter: the set the caller asked for is
 		// empty, and searching without it would answer with strangers.
-		return jobSearchOutcome{limit: limit, offset: offset, formerEmployers: in.hasFormer, watchlist: in.hasWatch}, nil
+		return jobSearchOutcome{limit: limit, offset: offset, formerEmployers: in.hasFormer, watchlist: in.hasWatch, newHiring: hasNewHiring}, nil
 	}
 
 	sort := searchSortValues(vals, vector != nil)
@@ -354,10 +369,7 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		return jobSearchOutcome{}, fmt.Errorf("search fields cannot be enforced")
 	}
 	dropped := qFieldsIgnored
-	var (
-		res search.SearchResult
-		err error
-	)
+	var res search.SearchResult
 	if in.match != nil {
 		res, err = in.match.scan(ctx, h.search, params)
 	} else {
@@ -395,6 +407,7 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		res: res, limit: limit, offset: offset, dropped: dropped,
 		formerEmployers: in.hasFormer,
 		watchlist:       in.hasWatch,
+		newHiring:       hasNewHiring,
 	}, nil
 }
 

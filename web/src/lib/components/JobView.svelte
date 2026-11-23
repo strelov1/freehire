@@ -134,6 +134,13 @@
     tracking.record(slug);
   });
 
+  function trackApplyClick() {
+    track('job_apply', { slug: job.public_slug, source: job.source });
+    if (job.source === 'employer' && !closed) {
+      void api.recordEmployerVacancyApplyClick(job.public_slug).catch(() => {});
+    }
+  }
+
   // The Apply link opens the external posting; once the user has gone to apply,
   // offer the "Did you apply?" choice (only when signed in and not already applied).
   // Signed-out visitors are gated first: the click is intercepted (the link does
@@ -141,7 +148,7 @@
   // "View without signing in" below.
   function onApplyClick(event: MouseEvent) {
     // Apply-intent — fired regardless of auth (the CTA click is the funnel step).
-    track('job_apply', { slug: job.public_slug, source: job.source });
+    trackApplyClick();
     if (!isAuthenticated()) {
       event.preventDefault();
       showSignInPrompt = true;
@@ -154,7 +161,7 @@
   // of a link, and the "did you apply?" prompt has nothing to ask — sending the form IS
   // the application, and the server records it in the tracker.
   async function onDirectApplyClick() {
-    track('job_apply', { slug: job.public_slug, source: job.source });
+    trackApplyClick();
     if (!isAuthenticated()) {
       showSignInPrompt = true;
       return;

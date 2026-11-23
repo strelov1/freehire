@@ -38,10 +38,6 @@ type Repository interface {
 	// closes the open postings it leaves behind. On a board that is already retired it
 	// closes whatever that earlier retirement left open; see Retirement.
 	Retire(ctx context.Context, provider, board, region string) (Retirement, error)
-	// Rename corrects a live board's company name — for a crowdsourced row seeded with
-	// PlaceholderCompany, once a curator knows the real one. found=false when no such
-	// live board exists.
-	Rename(ctx context.Context, provider, board, region, company string) (found bool, err error)
 	// ListActiveForProvider returns the boards cmd/ingest crawls for one provider:
 	// pending and active.
 	ListActiveForProvider(ctx context.Context, provider string) ([]Board, error)
@@ -92,6 +88,18 @@ func (i *Inserter) Insert(ctx context.Context, in InsertInput, wantStatus Status
 	// collide with the same board already listed.
 	in.Board = strings.TrimSpace(in.Board)
 
+	// A platform that can vouch for a board id (Oracle: the site must be one the tenant lists)
+	// canonicalises it first, so the spelling compared below is the one a crawl will store. A
+	// refusal is kept for after the duplicate check, like a Validate failure.
+	var refused error
+	if c, ok := i.registry[in.Provider].(sources.BoardCanonicalizer); ok && in.Board != "" {
+		if canon, err := c.CanonicalBoard(ctx, in.Board); err != nil {
+			refused = err
+		} else {
+			in.Board = canon
+		}
+	}
+
 	// The duplicate check runs BEFORE validation: a spelling that is only valid as another
 	// board's second name (Njoyn's generic clients host) is a duplicate when that board is
 	// live, and rejected only when it is not.
@@ -107,6 +115,9 @@ func (i *Inserter) Insert(ctx context.Context, in InsertInput, wantStatus Status
 		if live[key] {
 			return Board{}, ErrDuplicateBoard
 		}
+	}
+	if refused != nil {
+		return i.repo.InsertRow(ctx, in, StatusRejected, refused.Error())
 	}
 	if err := Validate(in, i.registry); err != nil {
 		return i.repo.InsertRow(ctx, in, StatusRejected, err.Error())
@@ -252,16 +263,6 @@ func (r *QueriesRepository) Retire(ctx context.Context, provider, board, region 
 		Region:       region,
 	})
 	return out, err
-}
-
-func (r *QueriesRepository) Rename(ctx context.Context, provider, board, region, company string) (bool, error) {
-	n, err := r.q.UpdateBoardCompany(ctx, db.UpdateBoardCompanyParams{
-		Provider: provider, Board: board, Region: region, Company: company,
-	})
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
 }
 
 func (r *QueriesRepository) ListActiveForProvider(ctx context.Context, provider string) ([]Board, error) {

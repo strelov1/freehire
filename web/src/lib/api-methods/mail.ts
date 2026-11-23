@@ -11,6 +11,27 @@ export function mailApi({ call, request, requestData }: Http) {
     return requestData<GmailStatus>('/api/v1/me/gmail');
   }
 
+  async function interviewSchedulingStatus() {
+    const data = await requestData<unknown>('/api/v1/me/interview-scheduling');
+    if (
+      typeof data !== 'object' ||
+      data === null ||
+      !('available' in data) ||
+      typeof data.available !== 'boolean' ||
+      !('enabled' in data) ||
+      typeof data.enabled !== 'boolean' ||
+      !('connected' in data) ||
+      typeof data.connected !== 'boolean'
+    ) {
+      throw new Error('Invalid interview scheduling status.');
+    }
+    return { available: data.available, enabled: data.enabled, connected: data.connected };
+  }
+
+  async function disableInterviewScheduling(): Promise<void> {
+    await call('/api/v1/me/interview-scheduling', { method: 'DELETE' });
+  }
+
   /** Disconnect Gmail: revoke the grant and purge synced mail. */
   async function disconnectGmail(): Promise<void> {
     await requestData<unknown>('/api/v1/me/gmail', { method: 'DELETE' });
@@ -164,6 +185,8 @@ export function mailApi({ call, request, requestData }: Http) {
 
   return {
     gmailStatus,
+    interviewSchedulingStatus,
+    disableInterviewScheduling,
     disconnectGmail,
     syncGmail,
     getInbox,

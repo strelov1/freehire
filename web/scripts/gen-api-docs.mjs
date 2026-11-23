@@ -242,6 +242,11 @@ function curlFor(method, path, op, access, base) {
   if (body?.type === 'application/json') {
     parts.push(`-H 'Content-Type: application/json' -d '${JSON.stringify(body.example)}'`);
   }
+  const multipart = op.requestBody?.content?.['multipart/form-data']?.schema;
+  for (const [name, property] of Object.entries(multipart?.properties ?? {})) {
+    if (property.format === 'binary') parts.push(`-F '${name}=@<${name}>'`);
+    else if (multipart.required?.includes(name)) parts.push(`-F '${name}=<${name}>'`);
+  }
   return parts.join(' ');
 }
 

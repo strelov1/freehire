@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Bookmark, Check, FileText, Paperclip, SquarePen, TriangleAlert } from '@lucide/svelte';
-  import { Button, Card, ConfirmDialog, CountryFlag } from 'freehire-design-system';
+  import { Button, Card, CountryFlag } from 'freehire-design-system';
   import { browser } from 'wxt/browser';
   import type { RuntimeMessage } from '../../lib/protocol';
   import { getToken, HIRE_ORIGIN } from '../../lib/auth';
@@ -10,7 +10,6 @@
     companyLogoUrl,
     getMatchAnalysis,
     getTailoredCVForJob,
-    partitionBlockers,
     saveJob,
     unsaveJob,
     type FreehireJob,
@@ -19,9 +18,25 @@
     type TailoredCV,
   } from '../../lib/freehire';
   import { categoryLabel, countryLabel, regionLabel, workModeLabel } from '../../lib/labels';
+  import { tailorRunFor } from './tailorRun.svelte';
+  import TailorProgress from './TailorProgress.svelte';
+  import TailorConfirm from './TailorConfirm.svelte';
   import { ensureSavedLoaded, isSaved, markSaved, markUnsaved } from '../../lib/savedJobs';
 
-  let { job, match, hasUploadField }: { job: FreehireJob; match: JobMatch; hasUploadField: boolean } = $props();
+  // `closed`: a LinkedIn job no longer taking applications; `closedUnknown`: this page not read yet.
+  let {
+    job,
+    match,
+    hasUploadField,
+    closed = false,
+    closedUnknown = false,
+  }: {
+    job: FreehireJob;
+    match: JobMatch;
+    hasUploadField: boolean;
+    closed?: boolean;
+    closedUnknown?: boolean;
+  } = $props();
 
   function scoreTone(score: number): 'good' | 'warn' | 'bad' {
     if (score >= 70) return 'good';
@@ -125,14 +140,8 @@
   let analysesLeft = $derived(allowanceRemaining(allowance));
   let analysisTone = $derived(analysis ? scoreTone(analysis.overall_score) : 'good');
 
-  // Pre-flight confirmation before spending one of today's analyses: the deterministic
-  // (no-LLM) skill/requirement check the card already has data for, shown one
-  // more time as an explicit "are you sure" — see AGENTS.md for why this
-  // gate exists. Always shown, even for a full match, just with different copy.
+  // Pre-flight confirmation before a tailoring run (see TailorConfirm.svelte).
   let confirmOpen = $state(false);
-  let blockers = $derived(partitionBlockers(match.blockers));
-  let hasGaps = $derived(match.missing.length > 0 || blockers.unmet.length > 0);
-  let tailorConfirmLabel = $derived(hasGaps ? 'Tailor anyway' : 'Tailor my CV');
 
   // The "Attach tailored CV" action — shown only when both a tailored CV already exists
   // for this job and the page has a file upload field to place it into (see
@@ -143,25 +152,59 @@
   let attaching = $state(false);
   let attachError = $state('');
   let attached = $state(false);
+  let slug = $derived(job.public_slug);
+  let run = $derived(tailorRunFor(slug));
   $effect(() => {
-    const slug = job.public_slug;
+    const current = slug;
     tailoredCV = null;
     // A stale "Attached ✓" (or error) from the PREVIOUS job must not survive the
     // navigation — this effect already reruns on every slug change, so it is the one
     // place both resets are guaranteed to run before the new job's own attempt.
     attached = false;
     attachError = '';
-    if (slug === '') return;
+    if (current === '') return;
     getToken()
-      .then((token) => (token ? getTailoredCVForJob(slug, token) : null))
+      .then((token) => (token ? getTailoredCVForJob(current, token) : null))
       .then((cv) => {
-        if (job.public_slug === slug) tailoredCV = cv;
+        if (slug !== current) return;
+        tailoredCV = cv;
+        // A run started before the panel last loaded may still be going: follow it.
+        if (cv && !run.running && !run.finished) run.start();
       })
       .catch(() => {});
   });
   // Firefox has no chrome.debugger, the only way background can place a file into
   // an upload field — so the action is not offered there at all.
-  let showAttach = $derived(!import.meta.env.FIREFOX && isCatalogJob && hasUploadField && tailoredCV !== null);
+  let showAttach = $derived(
+    !import.meta.env.FIREFOX &&
+      isCatalogJob &&
+      hasUploadField &&
+      tailoredCV !== null &&
+      !run.running &&
+      !closed &&
+      !closedUnknown,
+  );
+  // While a run goes, or once its CV exists, the card links to it rather than start another.
+  let canTailor = $derived(!closed && !closedUnknown && !run.running && !tailoredCV);
+  // A posting that closes (or a run that starts) while the confirmation is open takes it away.
+  $effect(() => {
+    if (!canTailor) confirmOpen = false;
+  });
+
+  // A tailoring run started from here runs in the freehire tab it opens (the server starts
+  // one only for a signed-in browser, where it can be watched and undone); the panel follows
+  // its progress on the CV and offers the attach once it is over.
+  $effect(() => {
+    if (run.finished && run.cv) tailoredCV = run.cv;
+  });
+  let runCv = $derived(run.cv ?? tailoredCV);
+  let watchUrl = $derived(runCv ? `${tailorUrl}?cv=${encodeURIComponent(runCv.id)}` : tailorUrl);
+
+  function startTailoring() {
+    if (!canTailor) return;
+    void browser.tabs.create({ url: tailorUrl, active: false });
+    run.start();
+  }
 
   async function attachTailoredCV() {
     if (attaching || !tailoredCV) return;
@@ -232,6 +275,11 @@
   {#if isCatalogJob}
     <div class="analyze">
       <div class="label">Analyze match</div>
+      {#if closed}
+        <p class="hint attach-err">
+          <TriangleAlert class="icon-sm" /> LinkedIn is no longer accepting applications for this job.
+        </p>
+      {/if}
 
       {#if analysisData && !analysisData.has_cv}
         <div class="upload-row">
@@ -258,17 +306,32 @@
         </p>
       {:else}
         <p class="hint">How your CV reads against this role — fit, gaps, and ATS flags.</p>
-        <Button class="tailor" variant="primary" size="sm" onclick={() => (confirmOpen = true)}>
-          Tailor my CV
-          <SquarePen class="icon-sm" />
-        </Button>
+        {#if canTailor}
+          <Button class="tailor" variant="primary" size="sm" onclick={() => (confirmOpen = true)}>
+            Tailor my CV
+            <SquarePen class="icon-sm" />
+          </Button>
+        {/if}
         <!-- Nothing left and no refusal is the shadow run — the analysis still goes, so it
              says nothing rather than "0 left" beside a button that works. -->
-        {#if analysesLeft}
+        {#if analysesLeft && canTailor}
           <p class="hint allowance">{analysesLeft} of today's job analyses left</p>
         {/if}
       {/if}
     </div>
+
+    {#if run.running}
+      <TailorProgress {run} {watchUrl} />
+    {:else if run.error}
+      <p class="hint attach-err"><TriangleAlert class="icon-sm" /> Tailoring: {run.error}</p>
+    {:else if tailoredCV}
+      <a class="analysis-link" href={watchUrl} target="_blank" rel="noreferrer">Open your tailored CV →</a>
+    {:else if analysis && canTailor}
+      <Button class="tailor" variant="primary" size="sm" onclick={() => (confirmOpen = true)}>
+        Tailor my CV
+        <SquarePen class="icon-sm" />
+      </Button>
+    {/if}
 
     {#if showAttach}
       <div class="attach">
@@ -310,43 +373,15 @@
   {/if}
 </Card>
 
-<ConfirmDialog
+<TailorConfirm
   bind:open={confirmOpen}
-  title={`Tailor your CV for ${job.title}?`}
-  confirmLabel={tailorConfirmLabel}
-  onConfirm={() => {
-    window.open(tailorUrl, '_blank', 'noopener,noreferrer');
-  }}
->
-  <div class="confirm-body">
-    <div class="confirm-section">
-      <div class="confirm-label">Skills coverage</div>
-      <div class="confirm-row">
-        <span class="confirm-count">{match.matched.length} of {match.total} required skills</span>
-        <span class="confirm-pct {tone}">{pct}%</span>
-      </div>
-      <div class="bar"><div class="fill {tone}" style="width:{pct}%"></div></div>
-      <div class="chips">
-        {#each match.matched as s (s)}<span class="chip good" aria-label="{s} — you have this skill">{s}</span>{/each}
-        {#each match.missing as s (s)}<span class="chip miss" aria-label="{s} — missing">{s}</span>{/each}
-      </div>
-    </div>
-
-    {#if blockers.unmet.length > 0 || blockers.met.length > 0}
-      <div class="confirm-section">
-        <div class="confirm-label">Requirements</div>
-        <ul class="confirm-checklist">
-          {#each blockers.unmet as b (b.category + b.reason)}
-            <li class="confirm-check warn"><TriangleAlert class="icon-sm" /><span>{b.reason}</span></li>
-          {/each}
-          {#each blockers.met as b (b.category + b.reason)}
-            <li class="confirm-check good"><Check class="icon-sm" /><span>{b.reason}</span></li>
-          {/each}
-        </ul>
-      </div>
-    {/if}
-  </div>
-</ConfirmDialog>
+  {job}
+  {match}
+  {tone}
+  {pct}
+  allowance={analysisData?.tailor_allowance ?? null}
+  onConfirm={startTailoring}
+/>
 
 <style>
   /* No margin here: the card's outer inset comes from the sidepanel's own
@@ -658,68 +693,5 @@
   }
   :global(.flag) {
     font-size: 16px;
-  }
-  .confirm-body {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .confirm-section {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .confirm-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted-foreground);
-    font-weight: 600;
-  }
-  .confirm-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-  }
-  .confirm-count {
-    font-size: 12px;
-    color: var(--muted-foreground);
-  }
-  .confirm-pct {
-    font-weight: 700;
-    font-size: 14px;
-  }
-  .confirm-pct.good {
-    color: var(--brand-strong);
-  }
-  .confirm-pct.warn {
-    color: var(--warning-strong);
-  }
-  .confirm-pct.bad {
-    color: var(--destructive);
-  }
-  .confirm-checklist {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .confirm-check {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    font-size: 12.5px;
-    line-height: 1.4;
-  }
-  .confirm-check.warn {
-    color: var(--warning-strong);
-  }
-  .confirm-check.good {
-    color: var(--muted-foreground);
-  }
-  .confirm-check.good :global(.icon-sm) {
-    color: var(--brand-strong);
   }
 </style>

@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"log"
+	"slices"
 	"sync"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
@@ -25,17 +26,20 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 		listed []string // every posting the stream named, for the listing fingerprint
 	)
 	// The buffered path resolves a whole board's companies in one batched call because it
-	// already has every posting in hand; a streaming source (jobtech is the one aggregator on
-	// this path today) never does, so this resolves — and memoizes — one company at a time as
+	// already has every posting in hand. A streaming source resolves and memoizes one company at a time as
 	// postings arrive. cache is read/written only from within emit, which already serializes
 	// access via mu, so it needs no locking of its own.
 	canon := r.streamCompanyCanonical(ctx, e)
+	listedCompanies := make(map[string]struct{})
 	emit := func(j sources.Job) {
 		mu.Lock()
 		defer mu.Unlock()
 		total++
 		if !j.Removed {
 			listed = append(listed, j.ExternalID)
+			if slug := normalize.CompanySlug(companyScopeName(j)); slug != "" {
+				listedCompanies[slug] = struct{}{}
+			}
 		}
 		// A self-closing source emits removed postings: close by identity instead of
 		// upserting. The Store must implement Closer (the ingest dbStore does); a Store
@@ -56,12 +60,24 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			// A close is not counted as ingested — Stats.Ingested is saved jobs only.
 			return
 		}
+		if j.Unreadable {
+			t.recordUnreadable(e, j)
+			return
+		}
 		r.saveOne(ctx, e, j, canon, &t)
 	}
 
 	err := ss.FetchStream(ctx, e, emit)
 	st := t.st
-	st.Refreshed, st.RefreshFailed, _ = r.refreshCovered(ctx, e, t.refreshIDs)
+	var refreshedCompanies []string
+	st.Refreshed, st.RefreshFailed, refreshedCompanies = r.refreshCovered(ctx, e, t.refreshIDs)
+	if !boardReadWhatItListed(st) {
+		for slug := range listedCompanies {
+			refreshedCompanies = append(refreshedCompanies, canonicalOf(canon, slug))
+		}
+		slices.Sort(refreshedCompanies)
+		st.UnprovenCompanies = slices.Compact(refreshedCompanies)
+	}
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, st.Skipped, total, t.firstErr)

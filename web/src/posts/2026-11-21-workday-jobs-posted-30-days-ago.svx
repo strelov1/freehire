@@ -7,7 +7,7 @@ tags:
   - ats
   - data
   - job-search
-draft: true
+draft: false
 ---
 
 If you have looked for a job at a large company, you have probably filled in a Workday
@@ -82,7 +82,7 @@ employers leave them empty.
 | Pennsylvania | 20.9% |
 | Florida | 20.6% |
 
-The first four require a pay range in job postings; the last four do not. Even under the
+The first four require a pay range in job postings; the last four have no statewide law. Even under the
 law, half the postings show no dollar figure. Some state the range in another form, and
 some fall outside a law that covers only employers above a certain size; we cannot tell
 those apart from the ones that simply leave pay out.

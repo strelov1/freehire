@@ -5,6 +5,7 @@
 
 import type { SessionSummary, StoredMessage } from './wire';
 import type { ChatPreset } from './presets';
+import type { components } from '#lib/generated/api.js';
 
 const BASE = '/api/v1/assistant';
 
@@ -15,6 +16,18 @@ export const SUPPORT_BASE = '/api/v1/support';
 export interface SessionTranscript {
   session: SessionSummary;
   messages: StoredMessage[];
+  elevenlabs_voice?: boolean;
+  interview_report?: InterviewReport;
+}
+
+export type InterviewReport = components['schemas']['AssistantInterviewReport'];
+
+export function finishInterview(id: string): Promise<InterviewReport> {
+  return request(`/sessions/${encodeURIComponent(id)}/interview-report`, { method: 'POST' });
+}
+
+export function repeatInterviewQuestion(id: string): Promise<{ session_id: string }> {
+  return request(`/sessions/${encodeURIComponent(id)}/interview-repeat`, { method: 'POST' });
 }
 
 /** Thrown when a conversation is not the caller's to open: deleted, or someone
@@ -77,6 +90,11 @@ export function openApplyChat(slug: string): Promise<SessionSummary> {
   });
 }
 
+export function createInterviewSession(preset: 'interview' | 'debrief', slug: string): Promise<SessionSummary> {
+  const query = new URLSearchParams({ preset, job: slug });
+  return request<SessionSummary>(`/sessions?${query}`, { method: 'POST', body: '{}' });
+}
+
 /** The caller's conversations, most recently active first. */
 export function listSessions(): Promise<SessionSummary[]> {
   return request<SessionSummary[]>('/sessions');
@@ -128,6 +146,16 @@ export async function mintVoiceToken(sessionId: string): Promise<VoiceToken> {
   if (!res.ok) throw new Error(`Could not start voice mode (${res.status}).`);
   const body = (await res.json()) as { data: VoiceToken };
   return body.data;
+}
+
+export async function interviewSpeech(sessionId: string, signal: AbortSignal): Promise<Blob> {
+  const res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/interview-speech`, {
+    method: 'POST',
+    credentials: 'include',
+    signal,
+  });
+  if (!res.ok) throw new Error(`Could not read the interviewer reply (${res.status}).`);
+  return res.blob();
 }
 
 /** Append one completed voice-mode turn to a session's transcript, so it reads the

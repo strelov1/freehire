@@ -17,6 +17,12 @@ export const messages = defineMessages(
     followUp: 'Follow up',
     preparing: 'Preparing…',
     tailorCv: 'Tailor CV',
+    interview: {
+      rehearse: 'Prepare for interview',
+      prepSheet: 'Interview prep sheet',
+      debrief: 'Debrief interview',
+      startFailed: 'Could not open the interview chat. Try again.',
+    },
     tabsAria: 'Job details view',
     tabs: {
       application: 'Application',
@@ -159,6 +165,12 @@ export const messages = defineMessages(
       followUp: 'Напомнить о себе',
       preparing: 'Готовим…',
       tailorCv: 'Адаптировать CV',
+      interview: {
+        rehearse: 'Подготовиться к собеседованию',
+        prepSheet: 'Вопросы к собеседованию',
+        debrief: 'Разобрать собеседование',
+        startFailed: 'Не удалось открыть чат собеседования. Попробуйте ещё раз.',
+      },
       tabsAria: 'Вид информации о вакансии',
       tabs: {
         application: 'Заявка',

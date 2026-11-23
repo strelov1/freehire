@@ -22,7 +22,10 @@ package skilltag
 
 import (
 	"regexp"
+	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
 	"github.com/strelov1/freehire/internal/platform/stringset"
@@ -57,12 +60,133 @@ var sepRE = regexp.MustCompile(`[-_\s]+`)
 // HTML tags, so hrefs inside <a …> are already gone and only visible link text remains).
 var urlRE = regexp.MustCompile(`(?i)\b(?:https?://|www\.)\S+`)
 
-// stripMarkup drops HTML tags and URLs from raw description text, replacing each
-// with a space (not empty) to preserve word boundaries so "<b>Go</b>Engineer"
-// cannot fuse and a URL's segments cannot tokenize into skill aliases. Used by
-// both the case-preserved acronym pass and normalize.
+// stripMarkup drops HTML tags, URLs, and currency amounts from raw description text,
+// replacing each with a space (not empty) to preserve word boundaries so
+// "<b>Go</b>Engineer" cannot fuse and a URL's segments cannot tokenize into skill
+// aliases. Used by both the case-preserved acronym pass and normalize.
 func stripMarkup(text string) string {
-	return urlRE.ReplaceAllString(htmlTagRE.ReplaceAllString(text, " "), " ")
+	return stripCurrencyAmounts(urlRE.ReplaceAllString(htmlTagRE.ReplaceAllString(text, " "), " "))
+}
+
+// currencyCodes are the ISO 4217 codes a skill alias also spells: PHP is the
+// Philippine peso, CAD the Canadian dollar. A posting quoting pay as
+// "PHP 42,600-54,200/month" names money, not the language (freehire#4980), and a
+// false php/cad also corroborates the gated broad tags (crm), so a support posting
+// read as technical. Only colliding codes are listed — stripping any other code
+// changes nothing — and TestCurrencyCodesCoverEveryAliasCollision fails when a new
+// alias collides with one that is missing.
+var currencyCodes = []string{"cad", "php"}
+
+// currencyAmountRE finds a currency code written next to a number, either way round,
+// with an optional pay period after it. Whether the number is MONEY is decided by
+// isMoneyAmount, because "PHP 8" and "Laravel 10 PHP 8.2" are the same shape as
+// "PHP 42,600" and name the language.
+var currencyAmountRE = func() *regexp.Regexp {
+	const (
+		bound  = `[$₱€£]?\d[\d.,]*(?:\s?k\b)?`
+		amount = bound + `(?:` + amountRangeSep + bound + `)?`
+		period = `(?:\s?/\s?|\s(?:per|an?|each)\s)(?:hour|hr|h|month|mo|year|yr|annum|week|wk|day)\b` +
+			`|\s(?:hourly|monthly|yearly|annually|weekly|daily)\b`
+	)
+	code := `(?:` + strings.Join(currencyCodes, "|") + `)`
+	return regexp.MustCompile(`(?i)(?:\b` + code + `\s?(` + amount + `)|(` + amount + `)\s?` + code + `\b)(` + period + `)?`)
+}()
+
+// amountRangeSep joins the two bounds of a range: "42,600-54,200", "20 to 25".
+const amountRangeSep = `\s?(?:-|–|—|to)\s?`
+
+// amountRangeRE splits an amount into its bounds.
+var amountRangeRE = regexp.MustCompile(`(?i)` + amountRangeSep)
+
+// stripCurrencyAmounts blanks every currency code that sits beside a money amount,
+// together with the amount. A candidate that is not money ("10 PHP" in
+// "Laravel 10 PHP 42,600/month") resumes the search one rune later rather than past
+// itself, so it cannot swallow the price that follows it.
+func stripCurrencyAmounts(text string) string {
+	// Most descriptions never write a colliding code, and looking for the bare code
+	// is far cheaper than the full pattern.
+	lower := strings.ToLower(text)
+	if !slices.ContainsFunc(currencyCodes, func(code string) bool { return strings.Contains(lower, code) }) {
+		return text
+	}
+	var b strings.Builder
+	last, pos := 0, 0
+	for pos < len(text) {
+		m := currencyAmountRE.FindStringSubmatchIndex(text[pos:])
+		if m == nil {
+			break
+		}
+		for i := range m {
+			if m[i] >= 0 {
+				m[i] += pos
+			}
+		}
+		at := 4 // the amount-first alternative
+		if m[2] >= 0 {
+			at = 2
+		}
+		amount := text[m[at]:m[at+1]]
+		// The match must start a token, or "v8 PHP" reads the 8 as a price; checked
+		// against the whole text because the slice has lost what precedes it.
+		prev, _ := utf8.DecodeLastRuneInString(text[:m[0]])
+		startsToken := m[0] == 0 || (!unicode.IsLetter(prev) && !unicode.IsDigit(prev))
+		if !startsToken || !isMoneyAmount(amount, m[6] >= 0) {
+			_, size := utf8.DecodeRuneInString(text[m[0]:])
+			pos = m[0] + size
+			continue
+		}
+		b.WriteString(text[last:m[0]])
+		b.WriteByte(' ')
+		last, pos = m[1], m[1]
+	}
+	if last == 0 {
+		return text
+	}
+	b.WriteString(text[last:])
+	return b.String()
+}
+
+// isMoneyAmount reports whether an amount written beside a currency code is a price
+// rather than a version number. A pay period settles it outright; otherwise one bound
+// must look like money (moneyBound), or a range must span a two-digit number — a
+// version range is "7.4-8.3", a pay range "20-25" or "5.50-7.00".
+func isMoneyAmount(amount string, hasPeriod bool) bool {
+	if hasPeriod {
+		return true
+	}
+	bounds := amountRangeRE.Split(amount, -1)
+	for _, bound := range bounds {
+		intDigits, money := moneyBound(bound)
+		if money || (len(bounds) > 1 && intDigits >= 2) {
+			return true
+		}
+	}
+	return false
+}
+
+// moneyBound reads one bound of an amount and reports how many integer digits it has
+// and whether it reads as money on its own: a currency sign, a "k" suffix, four or
+// more integer digits ("42,600", "1.234"), or exactly two decimals ("5.50"). A
+// separator followed by three digits groups thousands; any other one starts the
+// fraction, so "8.2" is a one-digit number with one decimal, i.e. a version. A bare
+// year ("SolidWorks 2024 CAD") is four digits too, so 19xx/20xx written without a
+// separator is not money on its own.
+func moneyBound(bound string) (intDigits int, money bool) {
+	bound = strings.TrimRight(bound, ".,")
+	if strings.ContainsAny(bound, "$₱€£") || strings.HasSuffix(strings.ToLower(bound), "k") {
+		return 0, true
+	}
+	intPart, frac := bound, ""
+	if i := strings.LastIndexAny(bound, ".,"); i >= 0 && len(bound)-i-1 != 3 {
+		intPart, frac = bound[:i], bound[i+1:]
+	}
+	for _, r := range intPart {
+		if unicode.IsDigit(r) {
+			intDigits++
+		}
+	}
+	year := len(bound) == 4 && (strings.HasPrefix(bound, "19") || strings.HasPrefix(bound, "20"))
+	return intDigits, (intDigits >= 4 && !year) || len(frac) == 2
 }
 
 // normalize strips markup (see stripMarkup), lowercases the text, and trims.

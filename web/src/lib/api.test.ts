@@ -20,6 +20,28 @@ function okFetch(seen: { init?: RequestInit } = {}): typeof fetch {
   }) as unknown as typeof fetch;
 }
 
+it('accepts bodyless success responses for feed writes', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => new Response(null, { status: 204 }));
+  const client = createApi(fetcher);
+  await client.setFeedSource({ source: 'saved_search', saved_search_id: 7 });
+  await client.markFeedSeen('opaque');
+  expect(fetcher).toHaveBeenCalledWith('/api/v1/me/feed/source', expect.objectContaining({ method: 'PUT' }));
+  expect(fetcher).toHaveBeenCalledWith('/api/v1/me/feed/seen', expect.objectContaining({ method: 'POST' }));
+});
+
+it('sends employer vacancy Apply clicks without credentials and keeps it alive during navigation', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+  await createApi(fetcher).recordEmployerVacancyApplyClick('a/b');
+  expect(fetcher).toHaveBeenCalledWith(
+    '/api/v1/jobs/a%2Fb/apply-click',
+    expect.objectContaining({
+      credentials: 'omit',
+      keepalive: true,
+      method: 'POST',
+    }),
+  );
+});
+
 describe('createApi request timeout', () => {
   // Without a bound timeout an unanswered call hangs forever, and on the server that
   // means the SvelteKit handler never finishes: nginx gives up at 60s and returns 504,

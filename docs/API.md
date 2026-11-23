@@ -112,7 +112,7 @@ Postings closed before the reason was recorded carry an empty `closed_reason`. A
 
 How often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.
 
-Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.
+Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`. Interview prep also serves a closed public posting when the caller has a signed-in session and an application at the interview stage.
 
 ### Finding companies by domain
 
@@ -292,6 +292,8 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 | `watchlist` | Your watchlist: companies you follow | true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it |
 
+| `new_hiring` | Just started hiring: companies that began hiring this month | true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the companies `/insights/companies?sort=new` lists, without its `min_open` floor); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it |
+
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |
@@ -415,7 +417,7 @@ curl "https://freehire.me/api/v1/booking/<token>/slots"
 
 ## Jobs
 
-Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint.
+Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from open lists and search. The detail endpoint keeps serving them. Interview prep can serve a closed posting to the account tracking it at the interview stage.
 
 ### `GET /jobs`
 
@@ -710,6 +712,43 @@ curl "https://freehire.me/api/v1/jobs/<slug>/copies"
 }
 ```
 
+### `GET /jobs/{slug}/interview-prep`
+
+**Auth:** Public
+
+Get a posting-based interview preparation sheet.
+
+Practice questions from a public posting. A signed-in caller can also see examples from their own Experience Bank.
+For a closed posting, a session cookie and an application in the interview stage are required. Otherwise the endpoint returns 404.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The public posting slug. |
+
+```bash
+curl "https://freehire.me/api/v1/jobs/<slug>/interview-prep"
+```
+
+```json
+{
+  "data": {
+    "job": {
+      "public_slug": "senior-go-engineer-acme-1a2b",
+      "title": "Senior Go Engineer",
+      "company": "Acme",
+      "location": "Remote"
+    },
+    "questions": [
+      {
+        "prompt": "Which project best prepares you for this role?"
+      }
+    ]
+  }
+}
+```
+
 ### `POST /jobs/{slug}/recruiter-contacts`
 
 **Auth:** Session or API key
@@ -743,6 +782,38 @@ curl -X POST "https://freehire.me/api/v1/jobs/<slug>/recruiter-contacts" -H "Aut
       "confidence": "high"
     }
   ]
+}
+```
+
+### `GET /jobs/{slug}/skill-fit`
+
+**Auth:** Public
+
+Get an open posting for CV review.
+
+Open posting skills and requirements for a CV review performed in the browser.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The public posting slug. |
+
+```bash
+curl "https://freehire.me/api/v1/jobs/<slug>/skill-fit"
+```
+
+```json
+{
+  "data": {
+    "public_slug": "senior-go-engineer-acme-1a2b",
+    "title": "Senior Go Engineer",
+    "company": "Acme",
+    "location": "Remote",
+    "skills": [
+      "go"
+    ]
+  }
 }
 ```
 
@@ -3423,6 +3494,16 @@ Readable with a session or an API key.
 curl "https://freehire.me/api/v1/me/agent-permissions" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+### `GET /me/auto-apply-settings`
+
+**Auth:** Session or API key
+
+Readable with a session or an API key.
+
+```bash
+curl "https://freehire.me/api/v1/me/auto-apply-settings" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
 ### `GET /me/profile`
 
 **Auth:** Session or API key
@@ -4242,7 +4323,7 @@ The proof (an offer letter, badge, anything showing you work there) is stored pr
 | `proof` | string (binary) | yes | Evidence you work there. |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/me/referrals/offers" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X POST "https://freehire.me/api/v1/me/referrals/offers" -H "Authorization: Bearer $FREEHIRE_API_KEY" -F 'company_slug=<company_slug>' -F 'proof=@<proof>'
 ```
 
 ```json
@@ -6121,7 +6202,7 @@ Companies ranked by hiring activity.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `sort` | string | no | Rank by openings or by growth. |
+| `sort` | string | no | Rank by openings (open), growth (growth, -growth) or list companies that just started hiring (new). |
 | `min_open` | string | no | Ignore companies below this many open roles. |
 | `limit` | string | no | How many rows. |
 
@@ -6160,6 +6241,32 @@ curl "https://freehire.me/api/v1/insights/companies"
 
 ```bash
 curl "https://freehire.me/api/v1/insights/role-countries"
+```
+
+### `GET /insights/role-demand`
+
+**Auth:** Public
+
+New public vacancies by specialty for the last 12 completed UTC weeks.
+
+Counts unique public vacancies, including closed vacancies, by publication date.
+If the source supplied no date, the count uses the vacancy's first catalogue appearance.
+The data array is empty until the first snapshot is published.
+
+```bash
+curl "https://freehire.me/api/v1/insights/role-demand"
+```
+
+```json
+{
+  "data": [
+    {
+      "category": "backend",
+      "week": "2026-11-16",
+      "new_jobs": 42
+    }
+  ]
+}
 ```
 
 ### `GET /insights/role-pulse`
@@ -6975,7 +7082,7 @@ Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, capped
 | `file` | string (binary) | yes |  |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/speech/transcriptions" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X POST "https://freehire.me/api/v1/speech/transcriptions" -H "Authorization: Bearer $FREEHIRE_API_KEY" -F 'file=@<file>'
 ```
 
 ```json

@@ -4,7 +4,7 @@
   import { ApiError } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { signinUrl } from '#lib/signin.js';
-  import { canonicalQuery, savedSearchQuery } from '#lib/filters.js';
+  import { canonicalQuery, savedSearchQuery, unsavableFilter } from '#lib/filters.js';
   import type { StagedFilters } from '#lib/stagedFilters.svelte.js';
   import { savedSearches } from '#lib/savedSearches.svelte.js';
   import type { SavedSearch } from '#lib/types.js';
@@ -35,6 +35,7 @@
   // The current (staged) filters as a canonical query string, and the saved set — if
   // any — that exactly matches it.
   const current = $derived(savedSearchQuery(store.value));
+  const unsavable = $derived(unsavableFilter(store.value));
   const items = $derived(savedSearches.items);
   const activeId = $derived(items.find((s) => canonicalQuery(s.query) === current)?.id ?? null);
   const base = $derived(items.find((s) => s.id === baseId) ?? null);
@@ -97,7 +98,7 @@
 
   // Overwrite the applied set's query with the current filters (the "Update <name>").
   async function update() {
-    if (!base || busy || store.value.formerEmployers) return;
+    if (!base || busy || unsavable) return;
     busy = true;
     error = null;
     try {
@@ -151,13 +152,13 @@
       <span class="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Bell class="size-3.5 shrink-0" aria-hidden="true" /> Notify me when a new job matches these filters
       </span>
-      {#if store.value.formerEmployers}
-        <p class="text-sm text-muted-foreground">Turn off Hiring again to save this search or set up alerts.</p>
+      {#if unsavable}
+        <p class="text-sm text-muted-foreground">Turn off {unsavable} to save this search or set up alerts.</p>
       {:else}
         <SaveSearchAlert query={current} variant="full" alertsLabel={false} />
       {/if}
 
-      {#if dirty && !store.value.formerEmployers}
+      {#if dirty && !unsavable}
         <Button variant="secondary" size="sm" onclick={update} disabled={busy} class="self-start">
           Update “{base?.name}”
         </Button>

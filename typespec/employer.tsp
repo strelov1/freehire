@@ -32,6 +32,9 @@ model EmployerAccount {
   /** True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
   member: boolean;
 
+  /** The exact values are owner for the claimant, manager for an existing manager, and recruiter. */
+  role?: string;
+
   created_at: utcDateTime;
 }
 
@@ -282,6 +285,12 @@ model EmployerApplication {
   /** When you last moved it; absent while it has never been moved. */
   stage_changed_at?: utcDateTime;
 
+  /** First review by a teammate, independent of the hiring stage. */
+  viewed_at?: utcDateTime;
+
+  /** Private notes shared within the employer team. */
+  employer_notes?: string;
+
   /** When the application reached you. */
   sent_at: utcDateTime;
 }
@@ -356,6 +365,49 @@ op listEmployerApplications(
   @query offset?: string,
 ): EmployerApplicationsPage | Problem;
 
+model EmployerApplicationSearch {
+  /** A literal search in candidate email, message and answers. */
+  @maxLength(200)
+  query: string;
+}
+
+/** Search delivered applications before pagination. An unknown stage returns 400. */
+@summary("Search applications sent to your vacancies.")
+@tag("Employer")
+@opExample(#{ parameters: #{ body: #{ query: "candidate@example.com" } } })
+@route("/employer/applications/search")
+@post
+op searchEmployerApplications(
+  /** Only applications for this vacancy slug. */
+  @query job?: string,
+  /** Only applications at this stage. */
+  @query stage?: string,
+  /** Maximum applications to return. */
+  @query limit?: string,
+  /** Number of matching applications to skip. */
+  @query offset?: string,
+  @body body: EmployerApplicationSearch,
+): EmployerApplicationsPage | Problem;
+
+model EmployerApplicationWorkspace {
+  /** Record that a teammate reviewed this application. */
+  mark_viewed?: boolean;
+
+  /** Replace the private team notes. The empty string clears them. */
+  @maxLength(4000)
+  employer_notes?: string;
+}
+
+@summary("Mark an application reviewed or save private notes.")
+@tag("Employer")
+@opExample(#{ parameters: #{ id: "42", body: #{ mark_viewed: true } } })
+@route("/employer/applications/{id}/workspace")
+@patch
+op updateEmployerApplicationWorkspace(
+  @path id: string,
+  @body body: EmployerApplicationWorkspace,
+): Data<EmployerApplication> | Problem;
+
 /** The CV file the application sent, exactly as it was emailed to you: a PDF, or the text the candidate pasted. 404 when none was kept. */
 @summary("Open the CV an application sent.")
 @tag("Employer")
@@ -409,9 +461,8 @@ op moveEmployerApplication(
 ): Data<EmployerApplicationMoved> | Problem;
 
 // ── The company team ────────────────────────────────────────────────────────────────
-// Colleagues act for the company exactly as its claimant does: they see and move the
-// applications, and publish, edit and close vacancies, all of which belong to the team.
-// They join by a single-use link mailed to their work address.
+// Colleagues join by a single-use invitation. New invitations grant recruiter access.
+// The company owns its vacancies and applications.
 
 /** Someone who acts for the company. `holder` is the claimant, who cannot be removed. */
 model EmployerTeamMember {
@@ -419,6 +470,7 @@ model EmployerTeamMember {
   work_email: string;
   joined_at: utcDateTime;
   holder: boolean;
+  role?: string;
 }
 
 /** An invitation whose link still works. */
@@ -447,19 +499,20 @@ model EmployerTeamToken {
 model EmployerTeamInvitationPreview {
   company_name: string;
   email: string;
+  role?: string;
 }
 
 model EmployerRemoved {
   removed: boolean;
 }
 
-/** Everyone who acts for the caller's company, and the invitations still open. */
+/** The company team and open invitations. A recruiter sees their own membership. */
 @tag("Employer")
 @route("/employer/team")
 @get
 op getEmployerTeam(): Data<EmployerTeam> | Problem;
 
-/** Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations. */
+/** Mails a colleague a single-use recruiter invitation, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations. */
 @tag("Employer")
 @route("/employer/team/invitations")
 @post
@@ -486,8 +539,66 @@ op removeEmployerTeamMember(@path user_id: string): Data<EmployerRemoved> | Prob
 @post
 op previewEmployerTeamInvitation(@body body: EmployerTeamToken): Data<EmployerTeamInvitationPreview> | Problem;
 
-/** Joins the team an invitation link invites to. 409 when the caller already acts for a company. */
+/** Joins the team. A recruiter must sign in with the matching verified email. 409 when the caller already acts for a company. */
 @tag("Employer")
 @route("/employer/team/join")
 @post
 op joinEmployerTeam(@body body: EmployerTeamToken): Data<EmployerAccount> | Problem;
+
+
+model EmployerActivity {
+  id: int64;
+  action: string;
+  actor_email?: string;
+  application_id?: int64;
+  previous_stage?: string;
+  stage?: string;
+  subject_email?: string;
+  occurred_at: utcDateTime;
+}
+
+/** Up to 30 company audit events, newest first. Recruiters see application activity. */
+@tag("Employer")
+@route("/employer/activity")
+@get
+op listEmployerActivity(
+  /** Fetch older events by passing the last event id from the previous page. */
+  @query before?: string,
+): Data<EmployerActivity[]> | Problem;
+
+/** Counts for the last 30 completed UTC days. Apply clicks begin at rollout. */
+model EmployerVacancyAnalytics {
+  /** Daily unique visitors from the page-view rollup, summed across the window. */
+  views: int64;
+  /** Apply button clicks on the vacancy page. */
+  apply_clicks: int64;
+  /** Applications delivered through Freehire. */
+  applications: int64;
+}
+
+/** Analytics for an active company team's own vacancy, including closed vacancies. */
+@summary("Read a vacancy's last 30 completed days of engagement.")
+@opExample(#{
+  parameters: #{ slug: "platform-engineer-acme-9f3c" },
+  returnType: #{ data: #{ views: 40, apply_clicks: 10, applications: 3 } },
+})
+@tag("Employer")
+@route("/employer/jobs/{slug}/analytics")
+@get
+op getEmployerVacancyAnalytics(
+  /** The employer-authored vacancy's public slug. */
+  @path slug: string,
+): Data<EmployerVacancyAnalytics> | Problem;
+
+/** Records an Apply button click on an open, public employer vacancy. */
+@summary("Record a vacancy Apply click.")
+@opExample(#{ parameters: #{ slug: "platform-engineer-acme-9f3c" } })
+@useAuth(NoAuth)
+@extension("x-audience", "hidden")
+@tag("Employer")
+@route("/jobs/{slug}/apply-click")
+@post
+op recordEmployerVacancyApplyClick(
+  /** The employer-authored vacancy's public slug. */
+  @path slug: string,
+): NoContentResponse | Problem;

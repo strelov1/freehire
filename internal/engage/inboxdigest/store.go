@@ -32,14 +32,17 @@ func (s *DBStore) Snapshot(ctx context.Context, c Candidate, now time.Time) (Sna
 	if err != nil {
 		return Snapshot{}, err
 	}
-	snapshot := Snapshot{IDs: row.EmailIds, Total: row.Total}
+	snapshot := Snapshot{IDs: row.EmailIds, Total: row.Total, ActivityIDs: row.SchedulingActivityIds}
 	if err := json.Unmarshal(row.Messages, &snapshot.Items); err != nil {
 		return Snapshot{}, fmt.Errorf("decode inbox snapshot: %w", err)
+	}
+	if err := json.Unmarshal(row.SchedulingActivity, &snapshot.Activity); err != nil {
+		return Snapshot{}, fmt.Errorf("decode scheduling activity: %w", err)
 	}
 	return snapshot, nil
 }
 func (s *DBStore) Claim(ctx context.Context, c Candidate, snapshot Snapshot, now time.Time) (bool, error) {
-	n, err := s.q.ClaimInboxDigest(ctx, db.ClaimInboxDigestParams{UserID: c.UserID, Email: c.Email, Timezone: c.Timezone, EnabledAt: pgconv.Instant(c.EnabledAt), EmailIds: snapshot.IDs, NowAt: pgconv.Instant(now), LocalDay: localDay(c, now)})
+	n, err := s.q.ClaimInboxDigest(ctx, db.ClaimInboxDigestParams{UserID: c.UserID, Email: c.Email, Timezone: c.Timezone, EnabledAt: pgconv.Instant(c.EnabledAt), EmailIds: snapshot.IDs, SchedulingActivityIds: snapshot.ActivityIDs, NowAt: pgconv.Instant(now), LocalDay: localDay(c, now)})
 	return n == 1, err
 }
 func (s *DBStore) MarkSent(ctx context.Context, c Candidate, now time.Time) error {

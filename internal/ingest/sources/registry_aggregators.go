@@ -314,6 +314,9 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// both job sitemaps plus the newest date-sorted search pages, each new posting's body read
 		// from its page's server-rendered state. See jobsch.go.
 		NewJobsCh(c),
+		NewClearanceJobs(c),
+		NewCVOnline(c),
+		pacedCVbankas(c),
 		// onapply: a German ATS whose vendor-wide job board exposes one keyless search index
 		// over every tenant, each hit carrying the whole posting. See onapply.go.
 		NewOnapply(c),
@@ -326,6 +329,8 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		NewWerkenVoorNederland(c),
 		NewGemeentebanen(c),
 		NewAcademicTransfer(c),
+		NewJobsACUK(c),
+		pacedCharityJob(c),
 		// CHECK-IN (mein-check-in.de): a German applicant portal of savings banks, cooperative
 		// banks and councils; a board is the tenant slug and each new position is hydrated from
 		// its page's microdata. See meincheckin.go.

@@ -27,6 +27,17 @@ jobs list's `meta.total`, the `/about` and `/open` strips — reads ONE snapshot
   it then keeps the PREVIOUSLY published value (zero on a first publication), and the snapshot
   still says `exact: true` — so the figure can be stale while marked exact.
 
+## Weekly hiring demand
+
+`/insights/compare` reads a shared [weekly snapshot](../../internal/platform/db/queries/insights_role_demand.sql).
+The rollup counts public canonical postings, including closed ones, by publication date.
+When the source gives no date, it uses the posting's first appearance in the catalogue.
+It computes on the analytics reader and publishes 12 completed Monday-to-Sunday UTC weeks
+atomically on the primary before the longer statistics rebuilds. The snapshot stores
+zero-count weeks explicitly. An empty snapshot means the rollup has not run. The
+comparison uses the last four weeks and the four before them. A zero baseline leaves
+the percentage change undefined.
+
 ## Per-source figures
 
 `GET /api/v1/sources` and the public `/sources` page read ONE snapshot, `source_stats`,
@@ -101,7 +112,13 @@ The same call sends the GA4 `sign_up` from the server through the Measurement Pr
 and answers `{"data":{"ga4_sent":bool}}`; the browser sends `sign_up` itself ONLY when that
 is false, because GA4 has no event-level dedup and both sending would count the account
 twice. Never send a client id the visitor did not give: it exists only after they accepted
-analytics.
+analytics, and refusing consent expires the `_ga` cookies (`web/src/lib/consent.ts`).
+
+An account created inside an OAuth client's sign-in (Claude, ChatGPT, Cursor over MCP) never
+loads the SPA, so the browser report never comes. Approving the consent screen
+(`OAuthAuthorizeSubmit`) records it instead, with `utm_medium = 'oauth_app'` and the client's
+https redirect host as `referrer_host`, and sends the GA4 `sign_up` from the visitor's own
+`_ga` cookies when they are present.
 
 Source report — a LEFT JOIN, since accounts from before 0228, from mobile, or whose browser
 could not report have no row:

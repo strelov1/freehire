@@ -29,6 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -101,14 +103,14 @@ const expiryWindow = 45 * 24 * time.Hour
 // whose postings age out of it never re-enters CloseUnseenJobs' crawled-slug scope and
 // its last posting stays open forever. They stay in atsProviders (the sweep still owns
 // their normal closes) and are only added back as liveness candidates, restricted to jobs
-// past the sweep's own staleness window (staleCutoff).
+// past the default staleness window (staleCutoff).
 //
 // Per-source leaks: empregos reads only postings that name a state and cannot prove it
 // read the rest; djinni lists only the last month, arbeitnow the last week; 4dayweek
 // drops an employer's company from the sweep scope when it leaves the feed; torre's
 // sitemap still names some closed postings; jobtech is never swept, it closes from its
 // change feed, and a removal missed inside the feed's 72h window is never resent.
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed", "arbeitsagentur", "xing", "gradcracker", "engage", "betterteam", "linkedin"}
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed", "arbeitsagentur", "xing", "gradcracker", "engage", "betterteam", "linkedin", "hellowork", "dice"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the plain
 // GET-then-Classify probe. Every other member needs its own evidence path, decided case by
@@ -127,15 +129,14 @@ func pacedPasses(client *http.Client) []pacedPass {
 		torrePass(client, torrePostPage),
 		arbeitnowPass(client),
 		jobtechPass(client, jobtechAdAPI),
-		linkedInPass(client),
+		linkedInPass(linkedInClient(client)),
+		dicePass(client),
 		workdayPass(client),
 	}, catalogStatusPasses(client)...)
 }
 
-// staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window) via the
-// shared sources.DefaultSweepGrace symbol: a probeDespiteRegistered job only becomes a
-// liveness candidate once the sweep would already have closed it were the company_slug
-// scope not in the way.
+// staleCutoff uses ingest's default unseen window to decide when a posting
+// becomes eligible for a probe. A source can have a longer sweep grace, as Dice does.
 const staleCutoff = sources.DefaultSweepGrace
 
 // expireDespiteRegisteredPrefixes lists registered-provider FAMILIES with the same
@@ -254,8 +255,29 @@ func run() int {
 
 	// unsignalledSources come back as orphans and are split off below: only those
 	// unsignalledPass can judge are probed (see unsignalledSources).
-	selected, staleCandidates, err := selectProbeCandidates(ctx, queries,
-		probeScope{source: *sourceFilter, jobIDs: jobIDs}, atsProviders, probeDespiteRegistered, time.Now().Add(-staleCutoff))
+	cutoff := time.Now().Add(-staleCutoff)
+	// The candidate scan walks every open job, so it reads the analytics replica; probes and
+	// every write below go to the primary, whose queries re-check the job is still open. A
+	// -job-ids run is a handful of primary-key reads (of jobs_read, which the replica role
+	// cannot read), so it stays on the primary.
+	var cq candidateQueries = queries
+	if len(jobIDs) == 0 {
+		analytics, err := worker.AnalyticsPool(ctx, pool)
+		if err != nil {
+			log.Printf("analytics database: %v", err)
+			return 1
+		}
+		defer analytics.Close()
+		cq = db.New(analytics)
+	}
+	var selected []db.SelectOrphanLivenessCandidatesRow
+	var staleCandidates []db.SelectStaleRegisteredCandidatesRow
+	_, err = worker.RetryStandbyConflict(ctx, "select candidates", func() (struct{}, error) {
+		var err error
+		selected, staleCandidates, err = selectProbeCandidates(ctx, cq,
+			probeScope{source: *sourceFilter, jobIDs: jobIDs}, atsProviders, probeDespiteRegistered, cutoff)
+		return struct{}{}, err
+	})
 	if err != nil {
 		log.Printf("select candidates: %v", err)
 		return 1
@@ -268,23 +290,24 @@ func run() int {
 	pacedStale := make(map[string][]candidate)
 	candidates, unsignalledProbed := routeUnsignalled(selected, pacedStale)
 	orphanCount := len(candidates)
-	for _, c := range staleCandidates {
+	for _, row := range staleCandidates {
+		c := staleCandidate(row, cutoff)
 		switch {
-		case slices.Contains(probeDespiteRegisteredGET, c.Source):
-			getProbeStale = append(getProbeStale, staleCandidate(c))
-		case c.Source == "himalayas":
-			himalayasStale = append(himalayasStale, staleCandidate(c))
-		case c.Source == "echojobs":
-			echojobsStale = append(echojobsStale, staleCandidate(c))
-		case slices.ContainsFunc(paced, func(p pacedPass) bool { return p.source == c.Source }):
-			pacedStale[c.Source] = append(pacedStale[c.Source], staleCandidate(c))
+		case slices.Contains(probeDespiteRegisteredGET, c.source):
+			getProbeStale = append(getProbeStale, c)
+		case c.source == "himalayas":
+			himalayasStale = append(himalayasStale, c)
+		case c.source == "echojobs":
+			echojobsStale = append(echojobsStale, c)
+		case slices.ContainsFunc(paced, func(p pacedPass) bool { return p.source == c.source }):
+			pacedStale[c.source] = append(pacedStale[c.source], c)
 		default:
 			// Unreachable in practice — every probeDespiteRegistered member is one of
 			// the branches above — but a candidate silently going unverified
 			// (rather than erroring loudly) is exactly the class of bug this worker
 			// exists to avoid, so a future member added to probeDespiteRegistered
 			// without wiring its evidence path here fails visibly instead.
-			log.Printf("liveness: %s has no wired evidence path for probeDespiteRegistered — skipping %s", c.Source, c.PublicSlug)
+			log.Printf("liveness: %s has no wired evidence path for probeDespiteRegistered — skipping %s", c.source, c.publicSlug)
 		}
 	}
 	pacedCounts := make([]string, 0, len(paced))
@@ -375,6 +398,7 @@ type candidate struct {
 	url        string
 	externalID string
 	strikes    int32
+	seenBefore pgtype.Timestamptz
 }
 
 func orphanCandidates(rows []db.SelectOrphanLivenessCandidatesRow) []candidate {
@@ -389,9 +413,9 @@ func orphanCandidate(r db.SelectOrphanLivenessCandidatesRow) candidate {
 	return candidate{id: r.ID, publicSlug: r.PublicSlug, source: r.Source, url: r.URL, strikes: r.LivenessStrikes}
 }
 
-func staleCandidate(r db.SelectStaleRegisteredCandidatesRow) candidate {
+func staleCandidate(r db.SelectStaleRegisteredCandidatesRow, cutoff time.Time) candidate {
 	return candidate{
 		id: r.ID, publicSlug: r.PublicSlug, source: r.Source, url: r.URL,
-		externalID: r.ExternalID, strikes: r.LivenessStrikes,
+		externalID: r.ExternalID, strikes: r.LivenessStrikes, seenBefore: pgconv.Instant(cutoff),
 	}
 }

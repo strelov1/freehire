@@ -37,6 +37,8 @@ func paywallHitFor(r gatedRoute) wantPaywallHit {
 		feature, job = "mail_recall", plan.PaywallJob{Slug: "some-job"}
 	case r.path == "/api/v1/me/autofill/run":
 		feature = "autofill"
+	case r.path == "/api/v1/me/interviews/transcriptions":
+		feature = "interview_transcription"
 	case strings.Contains(r.path, "/assistant/sessions/"):
 		job = plan.PaywallJob{SessionID: cvUUID}
 	case strings.Contains(r.path, "/me/cvs/"+testUUID):

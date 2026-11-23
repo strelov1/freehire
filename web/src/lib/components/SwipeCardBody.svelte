@@ -9,8 +9,9 @@
 
   // What a swipe card shows, inside its frame: the employer, title, salary, tags, synopsis,
   // match, description and the link out. SwipeCard owns the drag and the frame.
-  // `match`, when given, renders under the title in place of the JobMatch coverage bar.
-  let { job, match }: { job: Job; match?: Snippet } = $props();
+  // `match`, when given, renders under the title in place of the JobMatch coverage bar;
+  // `badge` renders at the end of the company row.
+  let { job, match, badge }: { job: Job; match?: Snippet; badge?: Snippet } = $props();
 
   const salary = $derived(job.enrichment ? formatSalary(job.enrichment) : null);
   const tags = $derived(cardTags(job));
@@ -38,6 +39,7 @@
         <div class="truncate text-sm text-muted-foreground">{job.location}</div>
       {/if}
     </div>
+    {@render badge?.()}
   </div>
 
   <!-- The wrapper is load-bearing. line-clamp sets display:-webkit-box, and a

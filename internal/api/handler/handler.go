@@ -27,7 +27,6 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/candidate/survey"
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
-	"github.com/strelov1/freehire/internal/engage/bookinglink"
 	"github.com/strelov1/freehire/internal/engage/changehook"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/problemreport"
@@ -211,7 +210,7 @@ func Register(app *fiber.App, cfg Config) {
 	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	referralMessageH := newReferralMessageHandlers(queries, bank, resumeStore, fitSvc, letterDeps.chain, llmBinding{client: cfg.LLM, keys: llmKeys}, plans)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
-	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
+	inboxH := newConfiguredInboxHandlers(cfg, queries, plans)
 	// The pull direction is wired only where there is a model to ask; left nil, its endpoint
 	// reports the feature off.
 	if cfg.LLM != nil {
@@ -253,7 +252,7 @@ func Register(app *fiber.App, cfg Config) {
 	// A closed posting stays in the index until the drain removes it; the page hides it meanwhile.
 	searchH.removals = queries
 	timelineH := newTimelineHandlers(queries)
-	feedH := newFeedHandlers(cfg.MeFeedEnabled, jobSearch, profileSvc, tracking, plans, cvStore, cfg.TypesafeAPIKey, cfg.Cache, []byte(cfg.JWTSecret))
+	feedH := newFeedHandlers(cfg.MeFeedEnabled, jobSearch, profileSvc, tracking, plans, cvStore, feedStateDB{q: queries}, cfg.TypesafeAPIKey, cfg.Cache, []byte(cfg.JWTSecret))
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)
 	// Same nil-interface trap as jobSearch: assign only when non-nil, or the handler's "no
@@ -311,12 +310,10 @@ func Register(app *fiber.App, cfg Config) {
 	assistantH.buddies = buddyH
 
 	mentorshipH, mentorSuggestionsH := newMentorshipSurfaces(cfg, queries, mailClient, photoStore, resumeStore, profileSvc, bank)
-	// The candidate's booking link. The token key is the server secret, so a database dump
-	// alone cannot rebuild a link's URL.
-	bookingLinks := bookinglink.New(bookinglink.NewQueriesRepository(queries, cfg.Pool), plans, []byte(cfg.JWTSecret))
-	bookingLinkH := newBookingLinkHandlers(bookingLinks, cfg.FrontendOrigin)
+	bookingLinkH := newBookingLinkSurface(cfg, queries, plans)
 	inboxH.bookingLinks = bookingLinkH
 
+	app.Use(refuseCrossOriginCookieWrites(authH.browserOrigins))
 	a.mountAppRoutes(app, cfg, queries)
 
 	api := app.Group("/api/v1")
@@ -332,9 +329,11 @@ func Register(app *fiber.App, cfg Config) {
 	// cookie-authenticated caller.
 	emailPrefsH := newEmailPrefsHandlers(mail.prefs)
 	agentPermissionsH := &agentPermissionHandlers{queries: queries}
+	autoApplySettingsH := &autoApplySettingsHandlers{queries: queries}
 	userModerationH := newUserModerationHandlers(queries)
 	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
 	handlers := contractHandlers{conversationHandlers: conversationH,
+		interviewPrepHandlers:        &interviewPrepHandlers{queries: queries, bank: bank},
 		authHandlers:                 authH,
 		resumeHandlers:               resumeH,
 		matchHandlers:                matchH,
@@ -353,6 +352,7 @@ func Register(app *fiber.App, cfg Config) {
 		GeoHandlers:                  geoH,
 		suggestHandlers:              suggestH,
 		agentPermissionHandlers:      agentPermissionsH,
+		autoApplySettingsHandlers:    autoApplySettingsH,
 		usageHandlers:                usageH,
 		plansHandlers:                plansH,
 		dictionaryHandlers:           dictionaryH,

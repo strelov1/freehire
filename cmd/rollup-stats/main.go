@@ -78,6 +78,13 @@ func run() int {
 	// A failed rollup still fails the run, but does not take the snapshots below with
 	// it: they read other data, and skipping them lets the public figures expire.
 	exit := 0
+	done = worker.Stage("role demand")
+	if err := publishRoleDemand(ctx, db.New(analytics), pool); err != nil {
+		log.Printf("publish role demand: %v", err)
+		exit = 1
+	}
+	done()
+
 	if err := rebuildRollups(ctx, analytics, pool); err != nil {
 		log.Printf("rebuild rollups: %v", err)
 		exit = 1

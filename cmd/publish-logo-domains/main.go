@@ -57,9 +57,18 @@ func run() int {
 	}
 	log.Printf("publish-logo-domains: %d companies carry a website", len(websites))
 
-	// A sequential scan of jobs; see the query's comment for why narrowing it is slower.
+	// A sequential scan of jobs (see the query's comment for why narrowing it is slower), so
+	// it reads the analytics replica.
+	analytics, err := worker.AnalyticsPool(ctx, pool)
+	if err != nil {
+		log.Printf("analytics database: %v", err)
+		return 1
+	}
+	defer analytics.Close()
 	started := time.Now()
-	spellingRows, err := q.ListOpenJobCompanySpellings(ctx)
+	spellingRows, err := worker.RetryStandbyConflict(ctx, "ListOpenJobCompanySpellings", func() ([]db.ListOpenJobCompanySpellingsRow, error) {
+		return db.New(analytics).ListOpenJobCompanySpellings(ctx)
+	})
 	if err != nil {
 		log.Printf("publish-logo-domains: spellings: %v", err)
 		return 1

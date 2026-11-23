@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -30,5 +31,18 @@ func TestIsBadRequest(t *testing.T) {
 				t.Errorf("isBadRequest = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// A full search queue answers 503: queryErr must tag it ErrBusy (503 + Retry-After, not
+// reported) and leave other engine failures untagged faults.
+func TestQueryErrTagsAFullSearchQueueAsBusy(t *testing.T) {
+	ctx := context.Background()
+	busy := &meilisearch.Error{StatusCode: http.StatusServiceUnavailable}
+	if err := queryErr(ctx, "search: query", busy); !errors.Is(err, ErrBusy) || errors.Is(err, ErrBadQuery) {
+		t.Errorf("503: err = %v, want ErrBusy only", err)
+	}
+	if err := queryErr(ctx, "search: query", &meilisearch.Error{StatusCode: http.StatusInternalServerError}); errors.Is(err, ErrBusy) {
+		t.Errorf("500: err = %v, want no ErrBusy", err)
 	}
 }

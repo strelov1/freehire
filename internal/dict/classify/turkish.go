@@ -202,9 +202,10 @@ func looksTurkish(words []string) bool {
 	return false
 }
 
-// matchTurkish returns the canonical of the first alias, in table order, that occurs in the
-// words, or "". An alias opening with "^" matches only at the start of the title.
-func matchTurkish(words []string, table []aliasEntry) (string, bool) {
+// matchStems returns the canonical of the first alias, in table order, that occurs in the
+// words, or "". An alias opening with "^" matches only at the start of the title. The Turkish
+// and Vietnamese tables share it: both split a folded title into words and match phrases of them.
+func matchStems(words []string, table []aliasEntry) (string, bool) {
 	for _, e := range table {
 		alias, anchored := strings.CutPrefix(e.alias, "^")
 		toks := strings.Fields(alias)
@@ -220,16 +221,16 @@ func matchTurkish(words []string, table []aliasEntry) (string, bool) {
 	return "", false
 }
 
-// turkishSplit splits a folded title into its words. A hyphen separates ("Mersin-Bilgi İşlem"):
-// no Turkish alias is hyphenated.
-func turkishSplit(folded string) []string {
+// splitWords splits a folded title into its words. A hyphen separates ("Mersin-Bilgi İşlem"):
+// no Turkish or Vietnamese alias is hyphenated.
+func splitWords(folded string) []string {
 	return strings.FieldsFunc(folded, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 }
 
 // turkishWords folds a lowercased title and splits it into words, reporting "" words when the
 // title is not Turkish at all.
 func turkishWords(lower string) []string {
-	words := turkishSplit(foldTurkish(lower))
+	words := splitWords(foldTurkish(lower))
 	if !looksTurkish(words) {
 		return nil
 	}
@@ -240,21 +241,21 @@ func turkishWords(lower string) []string {
 // unresolved. A blind alias answers categoryNone.
 func matchTurkishCategory(lower string) string {
 	words := turkishWords(lower)
-	if c, ok := matchTurkish(words, turkishCategoryTable); ok {
+	if c, ok := matchStems(words, turkishCategoryTable); ok {
 		return c
 	}
-	c, _ := matchTurkish(words, turkishGeneralCategoryTable)
+	c, _ := matchStems(words, turkishGeneralCategoryTable)
 	return c
 }
 
 // matchTurkishSeniority resolves the grade of a lowercased title the other tables left unresolved.
 func matchTurkishSeniority(lower string) string {
-	s, _ := matchTurkish(turkishWords(lower), turkishSeniorityTable)
+	s, _ := matchStems(turkishWords(lower), turkishSeniorityTable)
 	return s
 }
 
 // isTurkishTech reports whether a lowercased title states a confidently technical role in Turkish.
 func isTurkishTech(lower string) bool {
-	_, ok := matchTurkish(turkishSplit(foldTurkish(lower)), turkishTechTerms)
+	_, ok := matchStems(splitWords(foldTurkish(lower)), turkishTechTerms)
 	return ok
 }

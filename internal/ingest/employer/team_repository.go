@@ -3,8 +3,10 @@ package employer
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -21,7 +23,7 @@ func (r *QueriesRepository) Members(ctx context.Context, companySlug string) ([]
 	}
 	out := make([]Member, len(rows))
 	for i, row := range rows {
-		out[i] = Member{UserID: row.UserID, WorkEmail: row.WorkEmail, JoinedAt: row.JoinedAt.Time, Holder: row.Holder}
+		out[i] = Member{UserID: row.UserID, WorkEmail: row.WorkEmail, JoinedAt: row.JoinedAt.Time, Holder: row.Holder, Role: row.Role}
 	}
 	return out, nil
 }
@@ -45,7 +47,7 @@ func (r *QueriesRepository) Invitations(ctx context.Context, companySlug string)
 // ErrNotFound when the inviter no longer acts for it.
 func (r *QueriesRepository) Invite(ctx context.Context, inv NewInvitation, maxLive int64) (Invitation, error) {
 	var out Invitation
-	err := r.asCompanyActor(ctx, inv.CompanySlug, inv.InvitedBy, func(q *db.Queries) error {
+	err := r.asCompanyActor(ctx, inv.CompanySlug, inv.InvitedBy, true, func(q *db.Queries) error {
 		row, err := q.UpsertCompanyInvitation(ctx, db.UpsertCompanyInvitationParams{
 			CompanySlug: inv.CompanySlug,
 			Email:       inv.Email,
@@ -69,8 +71,7 @@ func (r *QueriesRepository) Invite(ctx context.Context, inv NewInvitation, maxLi
 // WithdrawToken deletes the invitation only while it still carries tokenHash; a resend that
 // replaced the token meanwhile is left alone.
 func (r *QueriesRepository) WithdrawToken(ctx context.Context, companySlug string, tokenHash []byte) error {
-	_, err := r.q.DeleteCompanyInvitationByToken(ctx, db.DeleteCompanyInvitationByTokenParams{CompanySlug: companySlug, TokenHash: tokenHash})
-	return err
+	return r.q.DeleteCompanyInvitationByToken(ctx, db.DeleteCompanyInvitationByTokenParams{CompanySlug: companySlug, TokenHash: tokenHash})
 }
 
 // asCompany runs fn in a transaction holding the company's team lock (LockEmployerCompany).
@@ -93,9 +94,9 @@ func (r *QueriesRepository) asCompany(ctx context.Context, companySlug string, f
 // asCompanyActor is asCompany for a change made by actorID: under the lock it first checks
 // that actorID still acts for the company (ErrNotFound otherwise), so a removal that
 // committed first is seen.
-func (r *QueriesRepository) asCompanyActor(ctx context.Context, companySlug string, actorID int64, fn func(q *db.Queries) error) error {
+func (r *QueriesRepository) asCompanyActor(ctx context.Context, companySlug string, actorID int64, requireManager bool, fn func(q *db.Queries) error) error {
 	return r.asCompany(ctx, companySlug, func(q *db.Queries) error {
-		acts, err := q.IsCompanyActor(ctx, db.IsCompanyActorParams{CompanySlug: companySlug, UserID: actorID})
+		acts, err := q.CanActForCompany(ctx, db.CanActForCompanyParams{CompanySlug: companySlug, UserID: actorID, RequireManager: requireManager})
 		if err != nil {
 			return err
 		}
@@ -109,8 +110,8 @@ func (r *QueriesRepository) asCompanyActor(ctx context.Context, companySlug stri
 // Withdraw deletes one of a company's invitations, under the company's lock and only while
 // actorID still acts for it.
 func (r *QueriesRepository) Withdraw(ctx context.Context, companySlug string, actorID, id int64) error {
-	return r.asCompanyActor(ctx, companySlug, actorID, func(q *db.Queries) error {
-		n, err := q.DeleteCompanyInvitation(ctx, db.DeleteCompanyInvitationParams{ID: id, CompanySlug: companySlug})
+	return r.asCompanyActor(ctx, companySlug, actorID, true, func(q *db.Queries) error {
+		n, err := q.DeleteCompanyInvitation(ctx, db.DeleteCompanyInvitationParams{ID: id, CompanySlug: companySlug, ActorID: actorID})
 		if err != nil {
 			return err
 		}
@@ -130,7 +131,7 @@ func (r *QueriesRepository) Preview(ctx context.Context, tokenHash []byte) (Invi
 	if err != nil {
 		return InvitationPreview{}, "", err
 	}
-	return InvitationPreview{CompanyName: row.CompanyName, Email: row.Email}, row.Status, nil
+	return InvitationPreview{CompanyName: row.CompanyName, Email: row.Email, Role: row.Role}, row.Status, nil
 }
 
 // Accept consumes the invitation and adds the member, in one statement, under the same
@@ -142,8 +143,20 @@ func (r *QueriesRepository) Accept(ctx context.Context, userID int64, tokenHash 
 		if err != nil {
 			return err
 		}
+		if inv.Status != StatusActive {
+			return ErrInvitationInvalid
+		}
 		if err := q.LockEmployerCompany(ctx, inv.CompanySlug); err != nil {
 			return err
+		}
+		if inv.Role == RoleRecruiter {
+			user, err := q.GetUserByID(ctx, userID)
+			if err != nil {
+				return err
+			}
+			if !user.EmailVerified || !strings.EqualFold(user.Email, inv.Email) {
+				return ErrInvitationEmail
+			}
 		}
 		_, err = q.AcceptCompanyInvitation(ctx, db.AcceptCompanyInvitationParams{UserID: userID, TokenHash: tokenHash})
 		return err
@@ -162,7 +175,7 @@ func (r *QueriesRepository) Accept(ctx context.Context, userID int64, tokenHash 
 // acts for the company — a removal of actorID that committed first leaves their queued
 // requests changing nothing.
 func (r *QueriesRepository) Remove(ctx context.Context, companySlug string, actorID, memberID int64) error {
-	return r.asCompanyActor(ctx, companySlug, actorID, func(q *db.Queries) error {
+	return r.asCompanyActor(ctx, companySlug, actorID, actorID != memberID, func(q *db.Queries) error {
 		// The row lock first, in its own statement (see LockCompanyMemberForRemoval), so the
 		// hand-over sees a vacancy the member published while the removal waited.
 		_, err := q.LockCompanyMemberForRemoval(ctx, db.LockCompanyMemberForRemovalParams{MemberID: memberID, CompanySlug: companySlug})
@@ -172,7 +185,7 @@ func (r *QueriesRepository) Remove(ctx context.Context, companySlug string, acto
 		if err != nil {
 			return err
 		}
-		n, err := q.RemoveCompanyMember(ctx, db.RemoveCompanyMemberParams{MemberID: memberID, CompanySlug: companySlug})
+		n, err := q.RemoveCompanyMember(ctx, db.RemoveCompanyMemberParams{MemberID: memberID, CompanySlug: companySlug, ActorID: actorID})
 		if err != nil {
 			return err
 		}
@@ -181,4 +194,26 @@ func (r *QueriesRepository) Remove(ctx context.Context, companySlug string, acto
 		}
 		return nil
 	})
+}
+
+// Activity reads company audit events visible to the current actor.
+func (r *QueriesRepository) Activity(ctx context.Context, companySlug string, actorID, beforeID int64) ([]Activity, error) {
+	rows, err := r.q.ListEmployerActivity(ctx, db.ListEmployerActivityParams{
+		CompanySlug: companySlug,
+		ActorID:     actorID,
+		BeforeID:    pgtype.Int8{Int64: beforeID, Valid: beforeID > 0},
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Activity, 0, len(rows))
+	for _, row := range rows {
+		a := Activity{ID: row.ID, Action: row.Action, ActorEmail: row.ActorEmail, PreviousStage: row.PreviousStage.String,
+			Stage: row.Stage.String, SubjectEmail: row.SubjectEmail.String, OccurredAt: row.OccurredAt.Time}
+		if row.ApplicationID.Valid {
+			a.ApplicationID = &row.ApplicationID.Int64
+		}
+		out = append(out, a)
+	}
+	return out, nil
 }

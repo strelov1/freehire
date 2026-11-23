@@ -90,6 +90,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
 	h.answerBankHandlers.register(api, mw, contract)
 	h.agentPermissionHandlers.register(api, mw, contract)
+	h.autoApplySettingsHandlers.register(api, mw, contract)
 	// The browser-tool wire between a harness and the caller's extension. Both ends authenticate
 	// with the session JWT (Bearer for the harness, the subprotocol for the extension, which can
 	// set no headers); the relay stays within one user's channel. See internal/ai/browsertools.

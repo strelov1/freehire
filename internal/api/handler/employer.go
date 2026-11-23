@@ -44,7 +44,14 @@ func newEmployerHandlers(queries *db.Queries, svc *employer.Service) *employerHa
 	}
 }
 
+func employerNoStore(c *fiber.Ctx) error {
+	c.Set(fiber.HeaderCacheControl, "private, no-store")
+	return c.Next()
+}
+
 func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Post("/jobs/:slug/apply-click", employerApplyClickLimit(), employerApplyClickRequest, contract)
+
 	// Cookie-only: employer actions are not open to API keys. Every route below requires
 	// ActiveAccount except the claim/confirm/resend trio, which is how an account BECOMES active.
 	api.Post("/employer/claim", mw.cookie, contract)
@@ -53,13 +60,17 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fi
 	api.Get("/employer/company", mw.cookie, contract)
 	api.Patch("/employer/company", mw.cookie, contract)
 	api.Get("/employer/jobs", mw.cookie, contract)
+	api.Get("/employer/jobs/:slug/analytics", mw.cookie, employerNoStore, contract)
 	api.Post("/employer/jobs", mw.cookie, contract)
 	api.Patch("/employer/jobs/:slug", mw.cookie, contract)
 	api.Post("/employer/jobs/:slug/close", mw.cookie, contract)
 	api.Post("/employer/jobs/:slug/reopen", mw.cookie, contract)
-	api.Get("/employer/applications", mw.cookie, contract)
+	api.Get("/employer/applications", mw.cookie, employerNoStore, contract)
+	api.Post("/employer/applications/search", mw.cookie, employerNoStore, contract)
+	api.Patch("/employer/applications/:id/workspace", mw.cookie, employerNoStore, contract)
+	api.Get("/employer/activity", mw.cookie, employerNoStore, contract)
 	api.Get("/employer/applications/:id/cv", mw.cookie, contract)
-	api.Post("/employer/applications/:id/stage", mw.cookie, contract)
+	api.Post("/employer/applications/:id/stage", mw.cookie, employerNoStore, contract)
 	api.Get("/employer/team", mw.cookie, contract)
 	api.Post("/employer/team/invitations", mw.cookie, contract)
 	api.Delete("/employer/team/invitations/:id", mw.cookie, contract)
@@ -85,6 +96,10 @@ func employerError(err error) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	case errors.Is(err, employer.ErrPublicWebmailDomain):
 		return fiber.NewError(fiber.StatusForbidden, "work email must be at a company domain, not a public email provider")
+	case errors.Is(err, employer.ErrManagementRequired):
+		return fiber.NewError(fiber.StatusForbidden, "company management access required")
+	case errors.Is(err, employer.ErrInvitationEmail):
+		return fiber.NewError(fiber.StatusForbidden, "confirm and use the invited email to join")
 	case errors.Is(err, employer.ErrNotActive):
 		return fiber.NewError(fiber.StatusForbidden, "employer account is not active")
 	case errors.Is(err, employer.ErrNotFound):
@@ -135,6 +150,7 @@ func employerAccountOut(a employer.Account) apigen.EmployerAccount {
 		EmailConfirmed: a.EmailConfirmed(),
 		CreatedAt:      a.CreatedAt,
 		Member:         a.Member,
+		Role:           apigen.NewOptString(a.AccessRole()),
 	}
 	if a.VerifiedAt != nil {
 		out.VerifiedAt = apigen.NewOptDateTime(*a.VerifiedAt)
@@ -155,6 +171,7 @@ func employerPendingClaimsOut(rows []employer.PendingClaim) []apigen.EmployerPen
 			VerifiedAt:     a.VerifiedAt,
 			EmailConfirmed: a.EmailConfirmed,
 			Member:         a.Member,
+			Role:           a.Role,
 			CreatedAt:      a.CreatedAt,
 			Website:        r.Website,
 			ReviewReason:   apigen.EmployerClaimReviewReason(r.ReviewReason),
@@ -234,7 +251,7 @@ func employerCompanyOut(acc employer.Account, company db.Company, found bool) ap
 	out := apigen.EmployerCompany{
 		UserID: a.UserID, CompanySlug: a.CompanySlug, CompanyName: a.CompanyName, WorkEmail: a.WorkEmail,
 		Status: a.Status, VerifiedAt: a.VerifiedAt, EmailConfirmed: a.EmailConfirmed, CreatedAt: a.CreatedAt,
-		Member: a.Member,
+		Member: a.Member, Role: a.Role,
 	}
 	if !found {
 		return out

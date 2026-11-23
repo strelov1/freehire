@@ -48,6 +48,7 @@
   let userLine = $state('');
   let agentLine = $state('');
   let endingSoon = $state(false);
+  let needsPlayback = $state(false);
 
   let pc: RTCPeerConnection | null = null;
   let dc: RTCDataChannel | null = null;
@@ -59,6 +60,8 @@
   // Guards against a stray event reaching the UI after the call has already been torn
   // down — onDestroy can race a still-in-flight connect().
   let live = true;
+  let pendingTurns = Promise.resolve();
+  let closing = false;
 
   async function connect() {
     let token: VoiceToken;
@@ -87,8 +90,10 @@
 
     try {
       pc = new RTCPeerConnection();
-      pc.ontrack = (e) => {
-        if (remoteAudioEl) remoteAudioEl.srcObject = e.streams[0] ?? null;
+      pc.ontrack = ({ streams, track }) => {
+        if (!remoteAudioEl) return;
+        remoteAudioEl.srcObject = streams[0] ?? new MediaStream([track]);
+        void playInterviewer();
       };
       // A connection that dies mid-call (network drop, ICE failure, the ephemeral
       // secret's TTL expiring) must not leave the UI stuck on "active" with the mic
@@ -102,9 +107,15 @@
       for (const track of micStream.getTracks()) pc.addTrack(track, micStream);
 
       dc = pc.createDataChannel('oai-events');
-      dc.addEventListener('open', () => {
-        if (live) phase = 'active';
-      });
+      dc.addEventListener(
+        'open',
+        () => {
+          if (!live || !dc) return;
+          dc.send(JSON.stringify({ type: 'response.create' }));
+          phase = 'active';
+        },
+        { once: true },
+      );
       dc.addEventListener('close', () => fail(s.disconnected));
       dc.addEventListener('message', (e) => handleServerEvent(e.data));
 
@@ -138,6 +149,17 @@
     ceiling = setTimeout(() => end(), MAX_CALL_MS);
   }
 
+  async function playInterviewer() {
+    const audio = remoteAudioEl;
+    if (!audio) return;
+    try {
+      await audio.play();
+      if (live) needsPlayback = false;
+    } catch {
+      if (live) needsPlayback = true;
+    }
+  }
+
   function handleServerEvent(raw: string) {
     if (!live) return;
     let event: RealtimeServerEvent;
@@ -151,7 +173,8 @@
     userLine = callState.userText;
     agentLine = callState.agentText;
     if (result.completedTurn) {
-      void persistTurn(result.completedTurn.role, result.completedTurn.content);
+      const { role, content } = result.completedTurn;
+      pendingTurns = pendingTurns.then(() => persistTurn(role, content));
     }
   }
 
@@ -185,9 +208,12 @@
     teardown();
   }
 
-  function end() {
+  async function end() {
+    if (closing) return;
+    closing = true;
     teardown();
-    onClose();
+    await pendingTurns;
+    if (live) onClose();
   }
 
   function teardown() {
@@ -231,6 +257,15 @@
       {s.close}
     </button>
   {:else}
+    {#if needsPlayback}
+      <button
+        type="button"
+        onclick={playInterviewer}
+        class="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+      >
+        {s.playAudio}
+      </button>
+    {/if}
     {#if endingSoon}
       <p class="text-xs font-medium text-warning-strong">
         {s.endingSoon}

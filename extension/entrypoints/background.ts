@@ -13,12 +13,14 @@ import {
 import { mergeComboboxReplies, mergeFrameOutcomes } from '../lib/tools/executor';
 import { fillsForFrame } from '../lib/fillPlan';
 import { getToken } from '../lib/auth';
-import { getTailoredCVForJob, getCVPdfBytes } from '../lib/freehire';
+import { getTailoredCVForJob, getCVPdfBytes, getAutofillProfile } from '../lib/freehire';
 import {
   uploadInputExpression,
+  easyApplyUploadButtonExpression,
   pdfDataUrl,
   resolveDownloadedPath,
   pickAttachableUpload,
+  cvFileName,
   classifyAttachError,
   type DownloadsAPI,
 } from '../lib/tools/attachCv';
@@ -118,12 +120,20 @@ async function readTopFrameJobPostingMarkup(): Promise<RuntimeMessage> {
 async function readFramedForm(): Promise<RuntimeMessage> {
   const fields: FramedField[] = [];
   const uploads: FramedUpload[] = [];
+  let easyApply = false;
+  let resumeStep = false;
+  let sent = false;
+  let closed = false;
   await eachFrame({ kind: 'GET_FRAMED_FORM' }, (reply, frame) => {
     if (reply?.kind !== 'FORM') return;
     for (const field of reply.fields) fields.push({ ...field, frame });
     for (const upload of reply.uploads) uploads.push({ ...upload, frame });
+    easyApply ||= reply.easyApply === true;
+    resumeStep ||= reply.resumeStep === true;
+    sent ||= reply.sent === true;
+    closed ||= reply.closed === true;
   });
-  return { kind: 'FRAMED_FORM', fields, uploads };
+  return { kind: 'FRAMED_FORM', fields, uploads, easyApply, resumeStep, sent, closed };
 }
 
 /**
@@ -248,12 +258,78 @@ function errorMessage(err: unknown): string {
 
 const attachFailed = (error: string): RuntimeMessage => ({ kind: 'ATTACH_TAILORED_CV_RESULT', ok: false, error });
 
+/** How long a trusted click on "Upload resume" may take to open the file picker. */
+const PICKER_TIMEOUT_MS = 5000;
+
+/**
+ * Places `filePath` through the page's own file picker: intercept the picker, click the
+ * Easy Apply "Upload resume" button with a trusted mouse event (a scripted click opens no
+ * picker), then hand the file to the input the picker was opened for. Returns an error
+ * message, or null on success.
+ */
+async function uploadThroughPicker(debuggee: { tabId: number }, filePath: string): Promise<string | null> {
+  const where = (await browser.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
+    expression: easyApplyUploadButtonExpression(),
+    returnByValue: true,
+  })) as { result?: { value?: { x: number; y: number } | null } } | undefined;
+  const point = where?.result?.value;
+  if (!point) return 'open the resume step of Easy Apply first, then attach';
+
+  await browser.debugger.sendCommand(debuggee, 'Page.enable');
+  await browser.debugger.sendCommand(debuggee, 'Page.setInterceptFileChooserDialog', { enabled: true });
+  try {
+    const opened = new Promise<number | null>((resolve) => {
+      const timer = setTimeout(() => finish(null), PICKER_TIMEOUT_MS);
+      function finish(id: number | null) {
+        clearTimeout(timer);
+        browser.debugger.onEvent.removeListener(listener);
+        resolve(id);
+      }
+      function listener(source: { tabId?: number }, method: string, params?: object) {
+        if (source.tabId !== debuggee.tabId || method !== 'Page.fileChooserOpened') return;
+        finish((params as { backendNodeId?: number } | undefined)?.backendNodeId ?? null);
+      }
+      browser.debugger.onEvent.addListener(listener);
+    });
+    for (const type of ['mousePressed', 'mouseReleased'] as const) {
+      await browser.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+        type,
+        x: point.x,
+        y: point.y,
+        button: 'left',
+        clickCount: 1,
+      });
+    }
+    const backendNodeId = await opened;
+    if (backendNodeId == null) return '"Upload resume" did not open a file picker';
+    await browser.debugger.sendCommand(debuggee, 'DOM.setFileInputFiles', { backendNodeId, files: [filePath] });
+    return null;
+  } finally {
+    await browser.debugger
+      .sendCommand(debuggee, 'Page.setInterceptFileChooserDialog', { enabled: false })
+      .catch(() => {});
+  }
+}
+
 /**
  * Attaches the caller's tailored CV for `jobSlug` to the current page's upload field.
  * See lib/tools/attachCv.ts and openspec/changes/extension-attach-tailored-cv/design.md
  * for why this needs the debugging protocol at all.
  */
 async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
+  // A second request while one is running would upload the CV twice.
+  if (attachInFlight) return attachFailed('already attaching — wait for it to finish');
+  attachInFlight = true;
+  try {
+    return await attachTailoredCVOnce(jobSlug);
+  } finally {
+    attachInFlight = false;
+  }
+}
+
+let attachInFlight = false;
+
+async function attachTailoredCVOnce(jobSlug: string): Promise<RuntimeMessage> {
   const token = await getToken();
   if (!token) return attachFailed('not signed in');
 
@@ -262,27 +338,35 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
 
   // Independent of each other — reading the page's frames and fetching the tailored CV
   // metadata share nothing, so there is no reason to pay their latency one after another.
-  const [formReply, cv] = await Promise.all([readFramedForm(), getTailoredCVForJob(jobSlug, token)]);
+  const [formReply, cv, profile] = await Promise.all([
+    readFramedForm(),
+    getTailoredCVForJob(jobSlug, token),
+    getAutofillProfile(token).catch(() => null),
+  ]);
   if (formReply.kind !== 'FRAMED_FORM') return attachFailed('could not read this page to find the upload field');
 
   const pick = pickAttachableUpload(formReply.uploads);
-  switch (pick.kind) {
-    case 'none':
-      return attachFailed('no file upload field found on this page');
-    case 'unreachable':
-      return attachFailed("can't reach this embedded form yet — it's inside a frame this action cannot address");
-    case 'ambiguous':
-      return attachFailed(
-        `found ${pick.count} file fields on this page and cannot tell which one to use — attach it by hand`,
-      );
-  }
-  const upload = pick.upload;
-
+  // LinkedIn Easy Apply has no file field until "Upload resume" opens the picker.
+  const viaPicker = pick.kind === 'none' && formReply.easyApply === true;
+  if (viaPicker && !formReply.resumeStep) return attachFailed('open the resume step of Easy Apply first, then attach');
+  if (!viaPicker)
+    switch (pick.kind) {
+      case 'none':
+        return attachFailed('no file upload field found on this page');
+      case 'unreachable':
+        return attachFailed("can't reach this embedded form yet — it's inside a frame this action cannot address");
+      case 'ambiguous':
+        return attachFailed(
+          `found ${pick.count} file fields on this page and cannot tell which one to use — attach it by hand`,
+        );
+    }
   if (!cv) return attachFailed('no tailored CV found for this job');
 
   const pdfBytes = await getCVPdfBytes(cv.id, token);
   const dataUrl = pdfDataUrl(pdfBytes);
-  const filename = `freehire-tailored-cv/${cv.job_slug}.pdf`;
+  // The employer sees the file name, so it is the candidate's, not the job's. The job's own
+  // folder keeps names from clashing (a clash would add " (1)" to what the employer sees).
+  const filename = `freehire-tailored-cv/${cv.job_slug}/${(profile && cvFileName(profile)) ?? `${cv.job_slug}.pdf`}`;
 
   let filePath: string;
   try {
@@ -298,8 +382,13 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
     return attachFailed(classifyAttachError(errorMessage(err)));
   }
   try {
+    if (viaPicker) {
+      const error = await uploadThroughPicker(debuggee, filePath);
+      return error ? attachFailed(error) : { kind: 'ATTACH_TAILORED_CV_RESULT', ok: true };
+    }
+    if (pick.kind !== 'found') return attachFailed('no file upload field found on this page');
     const evalResult = (await browser.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
-      expression: uploadInputExpression(upload.form),
+      expression: uploadInputExpression(pick.upload.form),
     })) as { result?: { objectId?: string } } | undefined;
     const objectId = evalResult?.result?.objectId;
     if (!objectId) return attachFailed('could not find the upload field on the page any more');

@@ -5,10 +5,12 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/candidate/resume"
+	"github.com/strelov1/freehire/internal/engage/bookinglink"
 	"github.com/strelov1/freehire/internal/engage/buddy"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
@@ -124,6 +126,9 @@ func newEmployerSurfaces(cfg Config, queries *db.Queries, accountsSvc *accounts.
 // only when present: a nil value in an interface field is non-nil, so "no voice mode" or
 // "no support mail" would become a panic on first use.
 func (h *assistantHandlers) wireOptional(cfg Config, store *assistant.Store, answerBank *answerbank.Store, reportsH *reportHandlers, mailClient *emailnotify.Client) {
+	if cfg.InterviewAudio != nil {
+		h.interviewAudio = cfg.InterviewAudio
+	}
 	if cfg.Realtime != nil {
 		h.realtime = cfg.Realtime
 	}
@@ -141,4 +146,24 @@ func (h *assistantHandlers) wireOptional(cfg Config, store *assistant.Store, ans
 	if mailClient != nil && cfg.SupportReplyTo != "" {
 		h.support.mail = supportMail{sender: mailClient, from: emailnotify.From("freehire", cfg.NotifyEmailFrom), to: cfg.SupportReplyTo}
 	}
+}
+
+func newConfiguredInboxHandlers(cfg Config, q *db.Queries, plans *plan.Store) *inboxHandlers {
+	h := newInboxHandlers(q, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
+	h.scheduling = schedulingAccess{
+		enabled:     cfg.InterviewSchedulingEnabled && cfg.LLM != nil,
+		pilotUserID: cfg.InterviewSchedulingPilotUserID,
+		plans:       plans,
+	}
+	return h
+}
+
+func newBookingLinkSurface(cfg Config, q *db.Queries, plans *plan.Store) *bookingLinkHandlers {
+	var calendar bookinglink.Calendar
+	if cfg.GmailConnector != nil && cfg.GmailCipher != nil {
+		calendar = bookinglink.NewGoogleCalendar(q, cfg.GmailConnector, cfg.GmailCipher)
+	}
+	// A database dump alone cannot rebuild a link's URL.
+	service := bookinglink.New(bookinglink.NewQueriesRepository(q, cfg.Pool), plans, []byte(cfg.JWTSecret), calendar)
+	return newBookingLinkHandlers(service, cfg.FrontendOrigin)
 }

@@ -49,7 +49,7 @@ func TestEmployerTeamEndToEnd(t *testing.T) {
 		}
 		return id
 	}
-	holderID, colleagueID, candidateID := seed("hr@acme.test"), seed("dev.personal@gmail.com"), seed("c@example.test")
+	holderID, colleagueID, candidateID := seed("hr@acme.test"), seed("dev@acme.test"), seed("c@example.test")
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO company_accounts (user_id, company_slug, company_name, work_email, status, verified_at, email_confirmed_at)
 		VALUES ($1, 'acme', 'Acme', 'hr@acme.test', 'active', now(), now())`, holderID); err != nil {
@@ -86,6 +86,7 @@ func TestEmployerTeamEndToEnd(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	holder, _ := iss.Issue(holderID, testTokenVersion)
 	colleague, _ := iss.Issue(colleagueID, testTokenVersion)
+	candidate, _ := iss.Issue(candidateID, testTokenVersion)
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)}, newContract(contractHandlers{employerHandlers: h}))
@@ -126,9 +127,22 @@ func TestEmployerTeamEndToEnd(t *testing.T) {
 		t.Errorf("preview of a dead link = %d, want 404", status)
 	}
 
-	// The colleague joins under the invited address, whatever their sign-in address.
+	// A mismatched or unverified account cannot consume the token.
+	if status, body := do(t, fiber.MethodPost, "/api/v1/employer/team/join", candidate, tokenBody); status != fiber.StatusForbidden ||
+		!strings.Contains(string(body), "confirm and use the invited email to join") {
+		t.Fatalf("joining with another email = %d %s", status, body)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE users SET email_verified = false WHERE id = $1", colleagueID); err != nil {
+		t.Fatal(err)
+	}
+	if status, body := do(t, fiber.MethodPost, "/api/v1/employer/team/join", colleague, tokenBody); status != fiber.StatusForbidden {
+		t.Fatalf("joining with unverified address = %d %s", status, body)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE users SET email_verified = true WHERE id = $1", colleagueID); err != nil {
+		t.Fatal(err)
+	}
 	status, body = do(t, fiber.MethodPost, "/api/v1/employer/team/join", colleague, tokenBody)
-	if status != fiber.StatusOK || !strings.Contains(string(body), `"member":true`) || !strings.Contains(string(body), `"work_email":"dev@acme.test"`) {
+	if status != fiber.StatusOK || !strings.Contains(string(body), `"member":true`) || !strings.Contains(string(body), `"role":"recruiter"`) || !strings.Contains(string(body), `"work_email":"dev@acme.test"`) {
 		t.Fatalf("join = %d %s", status, body)
 	}
 	if status, _ := do(t, fiber.MethodPost, "/api/v1/employer/team/join", colleague, tokenBody); status != fiber.StatusConflict {
@@ -156,8 +170,26 @@ func TestEmployerTeamEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(body, &team); err != nil || status != fiber.StatusOK || len(team.Data.Members) != 2 {
 		t.Fatalf("team = %d %s (%v)", status, body, err)
 	}
-	if status, _ := do(t, fiber.MethodDelete, "/api/v1/employer/team/members/"+strconv.FormatInt(holderID, 10), colleague, ""); status != fiber.StatusBadRequest {
-		t.Errorf("removing the holder = %d, want 400", status)
+	for _, check := range []struct{ method, path, body string }{
+		{fiber.MethodDelete, "/api/v1/employer/team/members/" + strconv.FormatInt(holderID, 10), ""},
+		{fiber.MethodPost, "/api/v1/employer/team/invitations", `{"email":"third@acme.test"}`},
+		{fiber.MethodPatch, "/api/v1/employer/company", `{"tagline":"restricted"}`},
+		{fiber.MethodPost, "/api/v1/employer/jobs/acme-platform/close", ""},
+	} {
+		if status, body := do(t, check.method, check.path, colleague, check.body); status != fiber.StatusForbidden {
+			t.Errorf("recruiter %s %s = %d %s", check.method, check.path, status, body)
+		}
+	}
+	appPath := "/api/v1/employer/applications/" + strconv.FormatInt(appID, 10)
+	if status, body := do(t, fiber.MethodPatch, appPath+"/workspace", colleague, `{"employer_notes":"private recruiter note","mark_viewed":true}`); status != fiber.StatusOK || !strings.Contains(string(body), "private recruiter note") {
+		t.Errorf("recruiter saves workspace = %d %s", status, body)
+	}
+	if status, body := do(t, fiber.MethodGet, appPath+"/cv", colleague, ""); status != fiber.StatusOK || string(body) != "%PDF" {
+		t.Errorf("recruiter reads original CV = %d %s", status, body)
+	}
+	if status, body := do(t, fiber.MethodGet, "/api/v1/employer/activity", colleague, ""); status != fiber.StatusOK ||
+		!strings.Contains(string(body), "notes_changed") || strings.Contains(string(body), "member_joined") {
+		t.Errorf("recruiter audit = %d %s", status, body)
 	}
 
 	// Removed, the colleague no longer reaches the company.
@@ -175,4 +207,10 @@ func TestEmployerTeamEndToEnd(t *testing.T) {
 	if status, _ := do(t, fiber.MethodGet, "/api/v1/employer/applications", colleague, ""); status != fiber.StatusNotFound {
 		t.Errorf("applications after the refused rejoin = %d, want 404", status)
 	}
+	if status, body := do(t, fiber.MethodGet, "/api/v1/employer/activity", holder, ""); status != fiber.StatusOK ||
+		!strings.Contains(string(body), "member_removed") || !strings.Contains(string(body), "member_joined") ||
+		!strings.Contains(string(body), "invited") || strings.Contains(string(body), "private recruiter note") {
+		t.Errorf("holder audit = %d %s", status, body)
+	}
+
 }

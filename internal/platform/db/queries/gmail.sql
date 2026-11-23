@@ -16,11 +16,9 @@ SELECT refresh_token_enc, status, sync_cursor
 FROM gmail_connections
 WHERE user_id = $1;
 
--- name: GetGoogleGrantForWrite :one
--- What a write caller (mentor-google-meet-link's CreateMeetEvent) needs in one round
--- trip: the encrypted refresh token to reach the API, and the scopes to decide the
--- grant actually covers what this caller wants to do with it. `status` is read too so a
--- row already marked needs_reconsent can be treated as unusable without a second query.
+-- name: GetGoogleGrant :one
+-- Keep the refresh token and its scopes in the same read. A concurrent reconnect can
+-- replace both, and the status says whether the grant can still be used.
 SELECT refresh_token_enc, scopes, status
 FROM gmail_connections
 WHERE user_id = $1;

@@ -155,48 +155,93 @@ WHERE j.id = sqlc.arg(job_id) AND j.closed_at IS NULL AND NOT j.is_private
 ON CONFLICT (job_id) DO UPDATE
     SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;
 
--- name: EnqueueSearchTimeCrossings :execrows
--- Queue the open canonical postings whose search document changed in the window
--- (since, until] through the passage of time alone, with no write to the row:
---   * their age crossed one of age_days — the reality class turns at fixed ages
---     (jobreality.AgeCrossingDays) — or their posted_at age crossed one of posted_age_days,
---     where the fake-freshness flag turns (jobreality.PostedAgeCrossingDays);
---   * their source's unseen window ran out (search.Withheld), so the drain must take the
---     document out. sources/unseen_seconds is that per-source map; a source absent from it
---     is never withheld on this ground.
--- Nothing else would ever queue them, so without this pass they waited for a full rebuild.
--- A posting crosses at created_at + age (or last_seen_at + window), hence the bands below.
--- One sequential pass over the open rows: last_seen_at (job_activity's, joined by primary key) is
--- deliberately in no index (the liveness touch must stay heap-only), so the caller runs this a
--- few times a day.
-INSERT INTO search_outbox (job_id, job_posted_at)
-SELECT j.id, COALESCE(j.posted_at, j.created_at)
-FROM jobs j
-LEFT JOIN job_activity a ON a.job_id = j.id
-CROSS JOIN LATERAL (
-    SELECT (sqlc.arg(unseen_seconds)::bigint[])[array_position(sqlc.arg(sources)::text[], j.source)] AS secs
-) w
-WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
-  AND (
-    EXISTS (
-        SELECT 1 FROM unnest(sqlc.arg(age_days)::int[]) AS d(days)
-        WHERE j.created_at >  sqlc.arg(since)::timestamptz - make_interval(days => d.days)
-          AND j.created_at <= sqlc.arg(until)::timestamptz - make_interval(days => d.days)
-    )
-    OR EXISTS (
-        SELECT 1 FROM unnest(sqlc.arg(posted_age_days)::int[]) AS d(days)
-        WHERE j.posted_at >  sqlc.arg(since)::timestamptz - make_interval(days => d.days)
-          AND j.posted_at <= sqlc.arg(until)::timestamptz - make_interval(days => d.days)
-    )
-    OR (w.secs IS NOT NULL
-        AND a.last_seen_at >  sqlc.arg(since)::timestamptz - make_interval(secs => w.secs)
-        AND a.last_seen_at <= sqlc.arg(until)::timestamptz - make_interval(secs => w.secs))
-  )
+-- name: EnqueueSearchAgeCrossings :execrows
+-- Queue the open canonical postings whose search document changed in the window (since, until]
+-- through their age alone, with no write to the row: their created_at age crossed one of
+-- age_days — the reality class turns at fixed ages (jobreality.AgeCrossingDays) — or their
+-- posted_at age crossed one of posted_age_days, where the fake-freshness flag turns
+-- (jobreality.PostedAgeCrossingDays). Nothing else would ever queue them, so without this pass
+-- they waited for a full rebuild. EnqueueSearchUnseenCrossings is the other half of the pass.
+--
+-- Each band is a range scan: created_at on jobs_open_created_idx, posted_at on
+-- jobs_open_enrich_freshness_idx (COALESCE(posted_at, created_at) is posted_at whenever
+-- posted_at is set). One OR over the three conditions read the whole jobs heap, 41 minutes on
+-- average on prod (2026-11-22), and a bare posted_at range made the planner skip-scan
+-- jobs_company_slug_idx instead.
+--
 -- DO NOTHING and id order, unlike the per-row writers' re-stamp: this one statement upserts
 -- thousands of entries while every ingest transaction upserts its own, and the re-stamp's row
 -- locks taken in scan order deadlocked against them on its first prod run (2026-11-05). An
 -- entry already queued is pushed from the row as it stands when claimed. A wave already in
 -- flight at the crossing misses it and deletes its entry; the caller's next run re-covers the
 -- last hour of this window for exactly that case (cmd/reindex timeCrossingsOverlap).
-ORDER BY j.id
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT c.id, c.posted_at
+FROM (
+    SELECT j.id, COALESCE(j.posted_at, j.created_at) AS posted_at
+    FROM unnest(sqlc.arg(age_days)::int[]) AS d(days)
+    JOIN jobs j
+      ON j.closed_at IS NULL
+     AND j.created_at >  sqlc.arg(since)::timestamptz - make_interval(days => d.days)
+     AND j.created_at <= sqlc.arg(until)::timestamptz - make_interval(days => d.days)
+    WHERE j.duplicate_of IS NULL AND NOT j.is_private
+    UNION
+    SELECT j.id, COALESCE(j.posted_at, j.created_at)
+    FROM unnest(sqlc.arg(posted_age_days)::int[]) AS d(days)
+    JOIN jobs j
+      ON j.closed_at IS NULL
+     AND j.posted_at IS NOT NULL
+     AND COALESCE(j.posted_at, j.created_at) >  sqlc.arg(since)::timestamptz - make_interval(days => d.days)
+     AND COALESCE(j.posted_at, j.created_at) <= sqlc.arg(until)::timestamptz - make_interval(days => d.days)
+    WHERE j.duplicate_of IS NULL AND NOT j.is_private
+) c
+ORDER BY c.id
 ON CONFLICT (job_id) DO NOTHING;
+
+-- name: EnqueueSearchUnseenCrossings :one
+-- Queue the open canonical postings whose source's unseen window ran out in (since, until]
+-- (search.Withheld), so the drain takes the document out. sources/unseen_seconds is that
+-- per-source map; a source absent from it is never withheld on this ground. A posting crosses
+-- at last_seen_at + window.
+--
+-- last_seen_at (job_activity's) is deliberately in no index — the liveness touch must stay
+-- heap-only — so this walks job_activity in primary-key order, chunk_size rows after after_id
+-- per call, and returns the last job_id it read as the next cursor (0 once nothing is left).
+-- Each call is a short statement of its own, so no snapshot is held across the whole table.
+-- A chunk is first cut to the rows inside one of the distinct windows' bands (a handful of
+-- windows, not one per source), and only those reach the jobs lookup.
+--
+-- DO NOTHING and id order for the same reasons as EnqueueSearchAgeCrossings.
+WITH bands AS MATERIALIZED (
+    SELECT DISTINCT
+        sqlc.arg(since)::timestamptz - make_interval(secs => s.secs) AS lo,
+        sqlc.arg(until)::timestamptz - make_interval(secs => s.secs) AS hi
+    FROM unnest(sqlc.arg(unseen_seconds)::bigint[]) AS s(secs)
+), chunk AS MATERIALIZED (
+    SELECT a.job_id, a.last_seen_at
+    FROM job_activity a
+    WHERE a.job_id > sqlc.arg(after_id)::bigint
+    ORDER BY a.job_id
+    LIMIT sqlc.arg(chunk_size)::int
+), candidates AS MATERIALIZED (
+    SELECT c.job_id, c.last_seen_at
+    FROM chunk c
+    WHERE EXISTS (SELECT 1 FROM bands b WHERE c.last_seen_at > b.lo AND c.last_seen_at <= b.hi)
+), ins AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT j.id, COALESCE(j.posted_at, j.created_at)
+    FROM candidates c
+    JOIN jobs j ON j.id = c.job_id
+    CROSS JOIN LATERAL (
+        SELECT (sqlc.arg(unseen_seconds)::bigint[])[array_position(sqlc.arg(sources)::text[], j.source)] AS secs
+    ) w
+    WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
+      AND w.secs IS NOT NULL
+      AND c.last_seen_at >  sqlc.arg(since)::timestamptz - make_interval(secs => w.secs)
+      AND c.last_seen_at <= sqlc.arg(until)::timestamptz - make_interval(secs => w.secs)
+    ORDER BY j.id
+    ON CONFLICT (job_id) DO NOTHING
+    RETURNING 1
+)
+SELECT COALESCE((SELECT max(job_id) FROM chunk), 0)::bigint AS last_id,
+       (SELECT count(*) FROM ins)::bigint AS enqueued;

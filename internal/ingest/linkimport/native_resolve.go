@@ -19,6 +19,8 @@ import (
 // It preserves its identity so a verified ATS transfer can reopen the same posting.
 const NativeSourcePendingReason = "native_source_pending"
 
+var ErrNativeATSUnrecognized = errors.New("destination is not a recognized, crawlable ATS board")
+
 type NativeDestination struct {
 	Entry           sources.CompanyEntry
 	Job             sources.Job
@@ -72,7 +74,7 @@ func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw, employer
 		source, board, canonical, ok = im.boards.Resolve(ctx, raw)
 	}
 	if !ok || registry[source] == nil || sources.ProviderKind(registry, source) != "ats" {
-		return NativeDestination{}, fmt.Errorf("destination is not a recognized, crawlable ATS board")
+		return NativeDestination{}, ErrNativeATSUnrecognized
 	}
 	if im.q != nil {
 		cfg, err := im.q.GetIngestSchedule(ctx, source)

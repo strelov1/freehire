@@ -8,6 +8,20 @@ import { planRefusedFrom } from './planRefused';
  * recognises what a tab might show, so it must outlive the canonical domain. */
 const JOB_HOSTS = new Set(['freehire.me', 'www.freehire.me', 'freehire.dev', 'localhost']);
 
+/** Whether a page's origin is freehire's own (the sites and the app's configured origin): its
+ *  settings and profile forms are not an application to read, fill or ask "did you submit" about. */
+export function isFreehireOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return (
+      ['freehire.me', 'www.freehire.me', 'freehire.dev'].includes(url.hostname) ||
+      url.origin === new URL(HIRE_ORIGIN).origin
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Returns the freehire job slug for a page URL, or null if the URL is not a
  * freehire job posting. Pure over its input.
@@ -235,6 +249,8 @@ export interface MatchAnalysisResponse {
   has_cv: boolean;
   analysis: MatchAnalysisSummary | null;
   allowance: MatchAnalysisAllowance | null;
+  /** Today's tailoring sessions, metered apart from the analyses; same shape. */
+  tailor_allowance?: MatchAnalysisAllowance | null;
 }
 
 /** Whether the server would actually refuse a fresh analysis right now. An unlimited
@@ -407,6 +423,17 @@ export function pickTailoredCVForJob(cvs: TailoredCV[], jobSlug: string): Tailor
 export async function getTailoredCVForJob(jobSlug: string, token: string): Promise<TailoredCV | null> {
   const cvs = await getData<TailoredCV[]>('/api/v1/me/cvs', token);
   return pickTailoredCVForJob(cvs, jobSlug);
+}
+
+/** What a tailoring run has written onto a CV so far: when it last changed, and its report. */
+export interface CVRunState {
+  updated_at: string;
+  autopilot_report?: unknown;
+}
+
+/** One CV's run state from `GET /me/cvs/:id` (the full record; only these fields are read). */
+export async function getCVRunState(id: string, token: string): Promise<CVRunState> {
+  return getData<CVRunState>(`/api/v1/me/cvs/${encodeURIComponent(id)}`, token);
 }
 
 /**

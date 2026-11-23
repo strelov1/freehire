@@ -25,6 +25,8 @@ export type FilterModalProps = {
   formerEmployersAvailable?: boolean;
   /** Personal watchlist filter: enabled by the same feeds as the former-employers one. */
   watchlistAvailable?: boolean;
+  /** "Just started hiring" company filter: enabled by the feeds that serve /jobs/search. */
+  newHiringAvailable?: boolean;
   hideSeenAvailable?: boolean;
   title?: string;
   applyLabel?: string;

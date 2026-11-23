@@ -41,17 +41,18 @@ func parseInsightsLimit(s string) (int32, error) {
 
 // parseCompaniesSort resolves the leaderboard order: "growth" (default) ranks by the
 // window delta descending (ramping first), "-growth" ascending (freezing first),
-// "open" by raw open-count. Anything else is a 400.
+// "open" by raw open-count, "new" lists only companies that just started hiring, most
+// recent first. Anything else is a 400.
 func parseCompaniesSort(s string) (string, error) {
 	switch s {
 	case "", "growth":
 		return "growth", nil
 	case "-growth":
 		return "-growth", nil
-	case "open":
-		return "open", nil
+	case "open", "new":
+		return s, nil
 	default:
-		return "", fmt.Errorf("unknown sort %q (want growth, -growth or open)", s)
+		return "", fmt.Errorf("unknown sort %q (want growth, -growth, open or new)", s)
 	}
 }
 

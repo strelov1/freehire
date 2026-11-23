@@ -45,6 +45,10 @@ const (
 	KindAutoApplySubmitted = "auto_apply_submitted"
 	KindAutoApplyBlocked   = "auto_apply_blocked"
 	KindAutoApplyFailed    = "auto_apply_failed"
+	// KindAutoApplyReviewReady reminds the candidate that a tailored entry waits for their
+	// approval. Actionable only while the job is open; it skips the in-app record because
+	// cmd/auto-apply already wrote one per entry when the preview landed.
+	KindAutoApplyReviewReady = "auto_apply_review_ready"
 )
 
 // Message is the display shape of one nudge, rendered by a Notifier into a
@@ -107,6 +111,7 @@ type Store interface {
 	ListAutoApplySubmittedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplySubmittedCandidatesRow, error)
 	ListAutoApplyBlockedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplyBlockedCandidatesRow, error)
 	ListAutoApplyFailedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplyFailedCandidatesRow, error)
+	ListAutoApplyReviewReadyCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplyReviewReadyCandidatesRow, error)
 	RecordNudge(ctx context.Context, arg db.RecordNudgeParams) (int64, error)
 	ClaimDueNudges(ctx context.Context, arg db.ClaimDueNudgesParams) ([]int64, error)
 	GetNudgeForDelivery(ctx context.Context, id int64) (db.GetNudgeForDeliveryRow, error)
@@ -136,6 +141,8 @@ type Config struct {
 	// AutoApplyOutcomeWindowDays is the same bound shared by all three
 	// ListAutoApply*Candidates queries (occurred_at/blocked_at/failed_at).
 	AutoApplyOutcomeWindowDays int32
+	// AutoApplyReviewWindowDays bounds ListAutoApplyReviewReadyCandidates' created_at.
+	AutoApplyReviewWindowDays int32
 	// LeaseSeconds is the delivery lease: a claimed-but-unfinished nudge is
 	// reclaimable after this, which doubles as the crash reaper.
 	LeaseSeconds int32
@@ -158,6 +165,7 @@ func DefaultConfig() Config {
 		InterviewPrepWindowDays:    7,
 		JobClosedWindowDays:        7,
 		AutoApplyOutcomeWindowDays: 7,
+		AutoApplyReviewWindowDays:  30,
 		LeaseSeconds:               600,
 		ClaimBatch:                 500,
 		MaxAttempts:                5,
@@ -280,54 +288,7 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	}
 	stats.Matched += int(closed)
 
-	submitted, err := r.store.ListAutoApplySubmittedCandidates(ctx, r.cfg.AutoApplyOutcomeWindowDays)
-	if err != nil {
-		return fmt.Errorf("list auto-apply-submitted candidates: %w", err)
-	}
-	for _, s := range submitted {
-		if !s.JobID.Valid || !s.OccurredAt.Valid {
-			continue // defensive: the query's WHERE clause already guarantees both are set
-		}
-		affected, err := r.store.RecordNudge(ctx, db.RecordNudgeParams{
-			UserID: s.UserID, JobID: s.JobID.Int64, Kind: KindAutoApplySubmitted,
-			EpisodeKey: s.OccurredAt,
-		})
-		if err != nil {
-			return fmt.Errorf("record auto-apply-submitted nudge: %w", err)
-		}
-		stats.Matched += int(affected)
-	}
-
-	blocked, err := r.store.ListAutoApplyBlockedCandidates(ctx, r.cfg.AutoApplyOutcomeWindowDays)
-	if err != nil {
-		return fmt.Errorf("list auto-apply-blocked candidates: %w", err)
-	}
-	for _, b := range blocked {
-		affected, err := r.store.RecordNudge(ctx, db.RecordNudgeParams{
-			UserID: b.UserID, JobID: b.JobID, Kind: KindAutoApplyBlocked,
-			EpisodeKey: b.BlockedAt,
-		})
-		if err != nil {
-			return fmt.Errorf("record auto-apply-blocked nudge: %w", err)
-		}
-		stats.Matched += int(affected)
-	}
-
-	failed, err := r.store.ListAutoApplyFailedCandidates(ctx, r.cfg.AutoApplyOutcomeWindowDays)
-	if err != nil {
-		return fmt.Errorf("list auto-apply-failed candidates: %w", err)
-	}
-	for _, f := range failed {
-		affected, err := r.store.RecordNudge(ctx, db.RecordNudgeParams{
-			UserID: f.UserID, JobID: f.JobID, Kind: KindAutoApplyFailed,
-			EpisodeKey: f.FailedAt,
-		})
-		if err != nil {
-			return fmt.Errorf("record auto-apply-failed nudge: %w", err)
-		}
-		stats.Matched += int(affected)
-	}
-	return nil
+	return r.matchAutoApply(ctx, stats)
 }
 
 // deliver leases due nudges and fires each.
@@ -492,6 +453,8 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 	case KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed:
 		// Permanent once matched; nothing to re-derive.
 		return true
+	case KindAutoApplyReviewReady:
+		return info.JobOpen && info.AutoApplyReviewPending
 	default:
 		return false
 	}
@@ -573,6 +536,9 @@ func recipient(channel string, info db.GetNudgeForDeliveryRow) (string, bool) {
 // A failure here must not fail the delivery: the batch was already sent and marked
 // delivered.
 func (r *Runner) recordNotification(ctx context.Context, b *batch) {
+	if b.info.Kind == KindAutoApplyReviewReady {
+		return // cmd/auto-apply recorded each entry's own notification already
+	}
 	title, body := renderNudgeBatch(b.info.Kind, b.msgs)
 	arg := db.RecordNotificationParams{
 		UserID: b.info.UserID,

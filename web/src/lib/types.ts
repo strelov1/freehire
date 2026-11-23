@@ -94,17 +94,32 @@ export type * from './wire-types/onboarding';
  *  client renders these lists as given and never recomputes them. */
 export type FeedCard = ContractJob & {
   match: { why: string[]; may_not_fit: string[]; unknown: string[] };
+  /** Arrived since the user last paged through this source's new cards. */
+  is_new?: boolean;
 };
 
-/** reason: why the feed is empty without searching (no_profile, no_usable_fields).
- *  degraded: no_match_vector when the profile has no skills to rank by. */
+/** reason: why the feed is empty without searching (no_profile, no_usable_fields,
+ *  search_deleted, ignored_filters). degraded: no_match_vector when the profile has no
+ *  skills to rank by. */
 export interface FeedMeta {
-  source: 'profile';
+  /** What the feed matches on: the profile or one saved search. Open enum. */
+  source: 'profile' | 'saved_search' | string;
+  saved_search_id?: number;
+  /** Saved-search params the feed could not apply (reason ignored_filters). */
+  ignored?: { param: string }[];
   total: number;
   reason?: string;
   degraded?: string;
   /** How the page is ordered: fit (Jev), skills (vector), date (no vector). */
-  ranking?: 'fit' | 'skills' | 'date' | string;
+  ranking?: 'fit' | 'skills' | 'date' | 'relevance' | string;
   /** Opaque, signed; send as ?cursor= for the next page. Absent on the last page. */
   next_cursor?: string;
+  /** Phase of the page's first card: new or rest. Open enum. */
+  phase?: 'new' | 'rest' | string;
+  /** On the page where the new phase ends: post it with markFeedSeen once the candidate
+   *  passes the last new card. */
+  seen_cursor?: string;
 }
+
+/** The body of PUT /me/feed/source. */
+export type FeedSourceChoice = { source: 'profile' } | { source: 'saved_search'; saved_search_id: number };

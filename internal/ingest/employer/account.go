@@ -207,7 +207,7 @@ func (s *Service) RevokeAccount(ctx context.Context, userID int64) (Account, err
 // company's curated profile. Gated by ActiveAccount like every other employer-facing
 // capability.
 func (s *Service) UpdateCompanyProfile(ctx context.Context, userID int64, patch CompanyProfilePatch) (Account, error) {
-	acc, err := s.ActiveAccount(ctx, userID)
+	acc, err := s.managementAccount(ctx, userID)
 	if err != nil {
 		return Account{}, err
 	}
@@ -239,6 +239,14 @@ func (s *Service) ActiveAccount(ctx context.Context, userID int64) (Account, err
 		return Account{}, ErrNotActive
 	}
 	return acc, nil
+}
+
+func (s *Service) managementAccount(ctx context.Context, userID int64) (Account, error) {
+	acc, err := s.ActiveAccount(ctx, userID)
+	if err == nil && acc.Role == RoleRecruiter {
+		return Account{}, ErrManagementRequired
+	}
+	return acc, err
 }
 
 // MyAccount returns the caller's own account in whatever status it is in — pending, active,

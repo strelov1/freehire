@@ -9,7 +9,156 @@ import (
 	"context"
 )
 
-const refreshCompanyFacets = `-- name: RefreshCompanyFacets :execrows
+const applyCompanyFacets = `-- name: ApplyCompanyFacets :execrows
+WITH f AS (
+    SELECT e->>'company_slug' AS company_slug,
+           (e->>'job_count')::bigint AS cnt,
+           (e->>'is_gov')::boolean AS is_gov,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'regions') AS v ORDER BY v) AS regions,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'remote_regions') AS v ORDER BY v) AS remote_regions,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'countries') AS v ORDER BY v) AS countries,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'domains') AS v ORDER BY v) AS domains,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'company_types') AS v ORDER BY v) AS company_types,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'company_sizes') AS v ORDER BY v) AS company_sizes
+    FROM jsonb_array_elements($1::jsonb) AS e
+),
+counts AS (SELECT company_slug, cnt FROM f),
+reg AS (SELECT company_slug, regions AS arr FROM f WHERE cardinality(regions) > 0),
+remote_reg AS (SELECT company_slug, remote_regions AS arr FROM f WHERE cardinality(remote_regions) > 0),
+cty AS (SELECT company_slug, countries AS arr FROM f WHERE cardinality(countries) > 0),
+dom AS (SELECT company_slug, domains AS arr FROM f WHERE cardinality(domains) > 0),
+ctype AS (SELECT company_slug, company_types AS arr FROM f WHERE cardinality(company_types) > 0),
+csize AS (SELECT company_slug, company_sizes AS arr FROM f WHERE cardinality(company_sizes) > 0),
+gov AS (SELECT company_slug, is_gov FROM f),
+mat AS (
+    SELECT co.slug AS company_slug,
+           CASE
+               WHEN COALESCE(g.is_gov, false) OR co.organization_type = 'Government' THEN 'government'
+               -- enterprise beats startup: a grown company is enterprise regardless of a
+               -- historical YC badge (YC alumni go Public/Acquired and scale to thousands).
+               WHEN co.employee_count >= 1000 THEN 'enterprise'
+               -- startup only for a still-ACTIVE YC company (not Public/Acquired/Inactive),
+               -- or an independently small-and-recent company.
+               WHEN co.yc_status && ARRAY['Active']
+                    OR (co.year_founded >= extract(year FROM now())::int - 7 AND co.employee_count <= 50) THEN 'startup'
+               WHEN co.employee_count BETWEEN 51 AND 999 THEN 'scaleup'
+               ELSE NULL
+           END AS val
+    FROM companies co
+    LEFT JOIN gov g ON g.company_slug = co.slug
+),
+csize_final AS (
+    SELECT co.slug AS company_slug,
+           CASE
+               WHEN co.employee_count IS NULL   THEN COALESCE(cs.arr, '{}')
+               WHEN co.employee_count <= 10     THEN ARRAY['1-10']
+               WHEN co.employee_count <= 50     THEN ARRAY['11-50']
+               WHEN co.employee_count <= 200    THEN ARRAY['51-200']
+               WHEN co.employee_count <= 500    THEN ARRAY['201-500']
+               WHEN co.employee_count <= 1000   THEN ARRAY['501-1000']
+               ELSE ARRAY['1000+']
+           END AS arr
+    FROM companies co
+    LEFT JOIN csize cs ON cs.company_slug = co.slug
+),
+derived_eligible AS (
+    SELECT co.slug AS company_slug, COALESCE(dom.arr, '{}') AS domains
+    FROM companies co
+    LEFT JOIN dom ON dom.company_slug = co.slug
+    WHERE cardinality(co.industries) = 0
+      AND cardinality(COALESCE(dom.arr, '{}')) <= 2
+),
+domain_industry_map AS (
+    SELECT d.domain, i.industry
+    FROM unnest($2::text[]) WITH ORDINALITY AS d(domain, ord)
+    JOIN unnest($3::text[]) WITH ORDINALITY AS i(industry, ord)
+      ON i.ord = d.ord
+),
+derived_ind AS (
+    SELECT de.company_slug,
+           array_agg(DISTINCT map.industry ORDER BY map.industry) AS arr
+    FROM derived_eligible de
+    CROSS JOIN LATERAL unnest(de.domains) AS d(domain)
+    JOIN domain_industry_map map ON map.domain = d.domain
+    GROUP BY de.company_slug
+)
+UPDATE companies c
+SET job_count          = COALESCE(counts.cnt, 0),
+    regions            = COALESCE(reg.arr, '{}'),
+    remote_regions     = COALESCE(remote_reg.arr, '{}'),
+    countries          = COALESCE(cty.arr, '{}'),
+    domains            = COALESCE(dom.arr, '{}'),
+    company_types      = COALESCE(ctype.arr, '{}'),
+    company_sizes      = csize_final.arr,
+    maturity           = mat.val,
+    industries_derived = COALESCE(derived_ind.arr, '{}')
+FROM companies c2
+LEFT JOIN counts      ON counts.company_slug     = c2.slug
+LEFT JOIN reg         ON reg.company_slug        = c2.slug
+LEFT JOIN remote_reg  ON remote_reg.company_slug = c2.slug
+LEFT JOIN cty         ON cty.company_slug        = c2.slug
+LEFT JOIN dom         ON dom.company_slug        = c2.slug
+LEFT JOIN ctype       ON ctype.company_slug      = c2.slug
+LEFT JOIN csize_final ON csize_final.company_slug = c2.slug
+LEFT JOIN mat         ON mat.company_slug        = c2.slug
+LEFT JOIN derived_ind ON derived_ind.company_slug = c2.slug
+WHERE c.slug = c2.slug
+  AND (c.job_count          IS DISTINCT FROM COALESCE(counts.cnt, 0)
+    OR c.regions            IS DISTINCT FROM COALESCE(reg.arr, '{}')
+    OR c.remote_regions     IS DISTINCT FROM COALESCE(remote_reg.arr, '{}')
+    OR c.countries          IS DISTINCT FROM COALESCE(cty.arr, '{}')
+    OR c.domains            IS DISTINCT FROM COALESCE(dom.arr, '{}')
+    OR c.company_types      IS DISTINCT FROM COALESCE(ctype.arr, '{}')
+    OR c.company_sizes      IS DISTINCT FROM csize_final.arr
+    OR c.maturity           IS DISTINCT FROM mat.val
+    OR c.industries_derived IS DISTINCT FROM COALESCE(derived_ind.arr, '{}'))
+`
+
+type ApplyCompanyFacetsParams struct {
+	Facets            []byte   `json:"facets"`
+	MappingDomains    []string `json:"mapping_domains"`
+	MappingIndustries []string `json:"mapping_industries"`
+}
+
+// The write half of the recount (see ComputeCompanyJobFacets above for the contract).
+// `facets` is ComputeCompanyJobFacets' rows as a JSON array of objects keyed by its
+// column names; a company absent from it has no open jobs and is zeroed/emptied. The
+// rest reads only `companies`, so it stays cheap on the primary.
+// Each array is re-sorted by value, the order ComputeCompanyJobFacets aggregated it in, so
+// the IS DISTINCT FROM guard compares like with like and an unchanged row is not rewritten.
+// mat is the deterministic single-valued maturity, computed per company from its own
+// signals plus the gov-source marker, in precedence order (government beats size).
+// NULL = unknown (an honest abstain when no signal fits). Computed once here so both
+// the SET and the IS DISTINCT FROM guard reference the same value.
+// csize_final is the employee_count-authoritative company_sizes hybrid: the company's
+// own recorded headcount (bucketed into the company_size vocabulary) is a single, more
+// accurate value than the LLM's per-posting guess, so it wins when present; otherwise
+// fall back to the distinct union of enrichment.company_size over open jobs (the csize
+// CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
+// derived_eligible is the set of companies the industries_derived arm may speak for
+// at all: no curated industry of their own (co.industries empty — precedence, unless
+// from #2082) AND at most two distinct domains (the #2088 threshold — above that, the
+// domains union describes hiring range rather than business, see the change design).
+// A company outside this set gets industries_derived = '{}' by simply not appearing
+// in derived_ind below.
+// Zips the two parallel parameter arrays back into (domain, industry) rows by
+// position (WITH ORDINALITY), since this analyzer's catalog does not resolve the
+// two-array form of unnest(text[], text[]) the way a live Postgres does. The pairs
+// themselves are internal/dict/industrytag.DomainIndustryPairs(), passed in rather
+// than duplicated as a second copy of the table in SQL.
+// Translates each eligible company's domains to industries via the mapping above. A
+// company whose domains all fail to join (none of them map to an industry, e.g.
+// {other} or a retired vocabulary value) simply produces no rows here and reads as
+// '{}' below, with no special case.
+func (q *Queries) ApplyCompanyFacets(ctx context.Context, arg ApplyCompanyFacetsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, applyCompanyFacets, arg.Facets, arg.MappingDomains, arg.MappingIndustries)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const computeCompanyJobFacets = `-- name: ComputeCompanyJobFacets :many
 WITH unseen_window AS (
     -- Zipped by position for the same analyzer reason as domain_industry_map below.
     SELECT s.source, w.seconds
@@ -82,96 +231,41 @@ gov AS (
     SELECT company_slug, bool_or(source IN ('usajobs', 'neogov')) AS is_gov
     FROM oj
     GROUP BY company_slug
-),
-mat AS (
-    SELECT co.slug AS company_slug,
-           CASE
-               WHEN COALESCE(g.is_gov, false) OR co.organization_type = 'Government' THEN 'government'
-               -- enterprise beats startup: a grown company is enterprise regardless of a
-               -- historical YC badge (YC alumni go Public/Acquired and scale to thousands).
-               WHEN co.employee_count >= 1000 THEN 'enterprise'
-               -- startup only for a still-ACTIVE YC company (not Public/Acquired/Inactive),
-               -- or an independently small-and-recent company.
-               WHEN co.yc_status && ARRAY['Active']
-                    OR (co.year_founded >= extract(year FROM now())::int - 7 AND co.employee_count <= 50) THEN 'startup'
-               WHEN co.employee_count BETWEEN 51 AND 999 THEN 'scaleup'
-               ELSE NULL
-           END AS val
-    FROM companies co
-    LEFT JOIN gov g ON g.company_slug = co.slug
-),
-csize_final AS (
-    SELECT co.slug AS company_slug,
-           CASE
-               WHEN co.employee_count IS NULL   THEN COALESCE(cs.arr, '{}')
-               WHEN co.employee_count <= 10     THEN ARRAY['1-10']
-               WHEN co.employee_count <= 50     THEN ARRAY['11-50']
-               WHEN co.employee_count <= 200    THEN ARRAY['51-200']
-               WHEN co.employee_count <= 500    THEN ARRAY['201-500']
-               WHEN co.employee_count <= 1000   THEN ARRAY['501-1000']
-               ELSE ARRAY['1000+']
-           END AS arr
-    FROM companies co
-    LEFT JOIN csize cs ON cs.company_slug = co.slug
-),
-derived_eligible AS (
-    SELECT co.slug AS company_slug, COALESCE(dom.arr, '{}') AS domains
-    FROM companies co
-    LEFT JOIN dom ON dom.company_slug = co.slug
-    WHERE cardinality(co.industries) = 0
-      AND cardinality(COALESCE(dom.arr, '{}')) <= 2
-),
-domain_industry_map AS (
-    SELECT d.domain, i.industry
-    FROM unnest($3::text[]) WITH ORDINALITY AS d(domain, ord)
-    JOIN unnest($4::text[]) WITH ORDINALITY AS i(industry, ord)
-      ON i.ord = d.ord
-),
-derived_ind AS (
-    SELECT de.company_slug,
-           array_agg(DISTINCT map.industry ORDER BY map.industry) AS arr
-    FROM derived_eligible de
-    CROSS JOIN LATERAL unnest(de.domains) AS d(domain)
-    JOIN domain_industry_map map ON map.domain = d.domain
-    GROUP BY de.company_slug
 )
-UPDATE companies c
-SET job_count          = COALESCE(counts.cnt, 0),
-    regions            = COALESCE(reg.arr, '{}'),
-    remote_regions     = COALESCE(remote_reg.arr, '{}'),
-    countries          = COALESCE(cty.arr, '{}'),
-    domains            = COALESCE(dom.arr, '{}'),
-    company_types      = COALESCE(ctype.arr, '{}'),
-    company_sizes      = csize_final.arr,
-    maturity           = mat.val,
-    industries_derived = COALESCE(derived_ind.arr, '{}')
-FROM companies c2
-LEFT JOIN counts      ON counts.company_slug     = c2.slug
-LEFT JOIN reg         ON reg.company_slug        = c2.slug
-LEFT JOIN remote_reg  ON remote_reg.company_slug = c2.slug
-LEFT JOIN cty         ON cty.company_slug        = c2.slug
-LEFT JOIN dom         ON dom.company_slug        = c2.slug
-LEFT JOIN ctype       ON ctype.company_slug      = c2.slug
-LEFT JOIN csize_final ON csize_final.company_slug = c2.slug
-LEFT JOIN mat         ON mat.company_slug        = c2.slug
-LEFT JOIN derived_ind ON derived_ind.company_slug = c2.slug
-WHERE c.slug = c2.slug
-  AND (c.job_count          IS DISTINCT FROM COALESCE(counts.cnt, 0)
-    OR c.regions            IS DISTINCT FROM COALESCE(reg.arr, '{}')
-    OR c.remote_regions     IS DISTINCT FROM COALESCE(remote_reg.arr, '{}')
-    OR c.countries          IS DISTINCT FROM COALESCE(cty.arr, '{}')
-    OR c.domains            IS DISTINCT FROM COALESCE(dom.arr, '{}')
-    OR c.company_types      IS DISTINCT FROM COALESCE(ctype.arr, '{}')
-    OR c.company_sizes      IS DISTINCT FROM csize_final.arr
-    OR c.maturity           IS DISTINCT FROM mat.val
-    OR c.industries_derived IS DISTINCT FROM COALESCE(derived_ind.arr, '{}'))
+SELECT counts.company_slug,
+       counts.cnt::bigint                  AS job_count,
+       gov.is_gov::boolean                 AS is_gov,
+       COALESCE(reg.arr, '{}')::text[]        AS regions,
+       COALESCE(remote_reg.arr, '{}')::text[] AS remote_regions,
+       COALESCE(cty.arr, '{}')::text[]        AS countries,
+       COALESCE(dom.arr, '{}')::text[]        AS domains,
+       COALESCE(ctype.arr, '{}')::text[]      AS company_types,
+       COALESCE(csize.arr, '{}')::text[]      AS company_sizes
+FROM counts
+JOIN gov             ON gov.company_slug        = counts.company_slug
+LEFT JOIN reg        ON reg.company_slug        = counts.company_slug
+LEFT JOIN remote_reg ON remote_reg.company_slug = counts.company_slug
+LEFT JOIN cty        ON cty.company_slug        = counts.company_slug
+LEFT JOIN dom        ON dom.company_slug        = counts.company_slug
+LEFT JOIN ctype      ON ctype.company_slug      = counts.company_slug
+LEFT JOIN csize      ON csize.company_slug      = counts.company_slug
 `
 
-type RefreshCompanyFacetsParams struct {
-	UnseenSources     []string `json:"unseen_sources"`
-	UnseenSeconds     []int64  `json:"unseen_seconds"`
-	MappingDomains    []string `json:"mapping_domains"`
-	MappingIndustries []string `json:"mapping_industries"`
+type ComputeCompanyJobFacetsParams struct {
+	UnseenSources []string `json:"unseen_sources"`
+	UnseenSeconds []int64  `json:"unseen_seconds"`
+}
+
+type ComputeCompanyJobFacetsRow struct {
+	CompanySlug   string   `json:"company_slug"`
+	JobCount      int64    `json:"job_count"`
+	IsGov         bool     `json:"is_gov"`
+	Regions       []string `json:"regions"`
+	RemoteRegions []string `json:"remote_regions"`
+	Countries     []string `json:"countries"`
+	Domains       []string `json:"domains"`
+	CompanyTypes  []string `json:"company_types"`
+	CompanySizes  []string `json:"company_sizes"`
 }
 
 // Recompute every company's denormalized state in one set-based pass: the open-job
@@ -184,7 +278,13 @@ type RefreshCompanyFacetsParams struct {
 // jobs) is zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips
 // rows already current, so re-running rewrites nothing and the affected-rows count
 // reports real churn. This is cmd/recount-companies' whole job; run periodically
-// (eventual consistency). The facet aggregates are each their own non-correlated
+// (eventual consistency).
+//
+// It is two statements so the jobs scan can run on the analytics replica: this one reads
+// jobs/job_activity only and returns one row per company with open jobs (counts, the
+// jobs-derived facet arrays and the gov-source marker); ApplyCompanyFacets below takes
+// those rows as JSON on the primary and does everything that reads `companies`. Before
+// the split the single UPDATE wrote ~1.5 GB of temp files per run on the primary. The facet aggregates are each their own non-correlated
 // GROUP BY so the row-multiplying unnest of one array never distorts another's count.
 // oj is referenced by all eight aggregates, so it is pinned MATERIALIZED: without the
 // keyword the planner is free to inline it and re-scan the open-jobs set per aggregate.
@@ -216,39 +316,33 @@ type RefreshCompanyFacetsParams struct {
 // gov marks a company whose open jobs come from an exclusively-government source
 // (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
 // greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.
-// mat is the deterministic single-valued maturity, computed per company from its own
-// signals plus the gov-source marker, in precedence order (government beats size).
-// NULL = unknown (an honest abstain when no signal fits). Computed once here so both
-// the SET and the IS DISTINCT FROM guard reference the same value.
-// csize_final is the employee_count-authoritative company_sizes hybrid: the company's
-// own recorded headcount (bucketed into the company_size vocabulary) is a single, more
-// accurate value than the LLM's per-posting guess, so it wins when present; otherwise
-// fall back to the distinct union of enrichment.company_size over open jobs (the csize
-// CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
-// derived_eligible is the set of companies the industries_derived arm may speak for
-// at all: no curated industry of their own (co.industries empty — precedence, unless
-// from #2082) AND at most two distinct domains (the #2088 threshold — above that, the
-// domains union describes hiring range rather than business, see the change design).
-// A company outside this set gets industries_derived = '{}' by simply not appearing
-// in derived_ind below.
-// Zips the two parallel parameter arrays back into (domain, industry) rows by
-// position (WITH ORDINALITY), since this analyzer's catalog does not resolve the
-// two-array form of unnest(text[], text[]) the way a live Postgres does. The pairs
-// themselves are internal/dict/industrytag.DomainIndustryPairs(), passed in rather
-// than duplicated as a second copy of the table in SQL.
-// Translates each eligible company's domains to industries via the mapping above. A
-// company whose domains all fail to join (none of them map to an industry, e.g.
-// {other} or a retired vocabulary value) simply produces no rows here and reads as
-// '{}' below, with no special case.
-func (q *Queries) RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFacetsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, refreshCompanyFacets,
-		arg.UnseenSources,
-		arg.UnseenSeconds,
-		arg.MappingDomains,
-		arg.MappingIndustries,
-	)
+// Every company in oj has a counts row, so counts drives; the arrays are never NULL.
+func (q *Queries) ComputeCompanyJobFacets(ctx context.Context, arg ComputeCompanyJobFacetsParams) ([]ComputeCompanyJobFacetsRow, error) {
+	rows, err := q.db.Query(ctx, computeCompanyJobFacets, arg.UnseenSources, arg.UnseenSeconds)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	items := []ComputeCompanyJobFacetsRow{}
+	for rows.Next() {
+		var i ComputeCompanyJobFacetsRow
+		if err := rows.Scan(
+			&i.CompanySlug,
+			&i.JobCount,
+			&i.IsGov,
+			&i.Regions,
+			&i.RemoteRegions,
+			&i.Countries,
+			&i.Domains,
+			&i.CompanyTypes,
+			&i.CompanySizes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

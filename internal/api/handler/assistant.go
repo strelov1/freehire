@@ -101,7 +101,8 @@ type assistantHandlers struct {
 	// realtime mints voice-mode's short-lived OpenAI Realtime credentials. Nil without a Realtime
 	// gateway (internal/ai/speech's convention): the mint endpoint answers 501 and the interview
 	// view offers no voice mode.
-	realtime realtimeMinter
+	realtime       realtimeMinter
+	interviewAudio interviewAudioProvider
 
 	// events best-effort publishes auto-apply/review.decided so a paused cmd/auto-apply-orchestrate
 	// run resumes. Nil publishes nothing.
@@ -214,6 +215,15 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware, contract f
 	// as it finishes. The audio itself never transits here — see PostAssistantVoiceToken.
 	api.Post("/assistant/sessions/:id/voice-token", mw.key, mw.paidAI(plan.FeatureAssistant), contract)
 	api.Post("/assistant/sessions/:id/voice-turns", mw.key, contract)
+	api.Post("/assistant/sessions/:id/interview-report", mw.cookie, mw.paidAI(plan.FeatureAssistant), contract)
+	api.Post("/assistant/sessions/:id/interview-repeat", mw.cookie, contract)
+	api.Post("/assistant/sessions/:id/interview-speech", mw.cookie, mw.paidAI(plan.FeatureDictation), contract)
+	api.Post(
+		"/assistant/sessions/:id/interview-transcriptions",
+		mw.cookie,
+		mw.paidAI(plan.FeatureDictation),
+		h.PostInterviewTranscription,
+	)
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.
 	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, mw.paidAI(plan.FeatureTailor), h.PostAssistantAutopilot)

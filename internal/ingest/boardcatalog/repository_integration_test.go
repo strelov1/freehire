@@ -248,52 +248,6 @@ func TestRetireDeletesTheBoardsHealthRow(t *testing.T) {
 	}
 }
 
-func TestRenameCorrectsAPlaceholderCompany(t *testing.T) {
-	repo := newRepo(t)
-	ctx := context.Background()
-	in := InsertInput{Provider: "greenhouse", Board: "acme-corp", Company: PlaceholderCompany("acme-corp")}
-	b, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, in, StatusPending)
-	if err != nil {
-		t.Fatalf("Insert: %v", err)
-	}
-	if b.Company != "Acme Corp" {
-		t.Fatalf("seeded placeholder company = %q, want %q", b.Company, "Acme Corp")
-	}
-
-	found, err := repo.Rename(ctx, b.Provider, b.Board, b.Region, "Acme Corporation Inc.")
-	if err != nil || !found {
-		t.Fatalf("Rename = %v,%v, want found", found, err)
-	}
-
-	rows, err := repo.ListActiveForProvider(ctx, b.Provider)
-	if err != nil {
-		t.Fatalf("ListActiveForProvider: %v", err)
-	}
-	if len(rows) != 1 || rows[0].Company != "Acme Corporation Inc." {
-		t.Fatalf("rows = %+v, want the renamed company", rows)
-	}
-}
-
-func TestRenameReportsNotFoundForARetiredBoard(t *testing.T) {
-	repo := newRepo(t)
-	ctx := context.Background()
-	b, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, InsertInput{Provider: "greenhouse", Board: "gone", Company: "Gone"}, StatusActive)
-	if err != nil {
-		t.Fatalf("Insert: %v", err)
-	}
-	if _, err := repo.Retire(ctx, b.Provider, b.Board, b.Region); err != nil {
-		t.Fatalf("Retire: %v", err)
-	}
-
-	found, err := repo.Rename(ctx, b.Provider, b.Board, b.Region, "New Name")
-	if err != nil {
-		t.Fatalf("Rename: %v", err)
-	}
-	if found {
-		t.Error("Rename on a retired board reported found=true, want false")
-	}
-}
-
 func TestActivateTransitionsPendingToActive(t *testing.T) {
 	repo := newRepo(t)
 	ctx := context.Background()

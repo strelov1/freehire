@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/externalid"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
@@ -53,10 +52,9 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 		}
 		return set, nil
 	}
-	// The pattern is escaped by externalid.BoardPattern: board names may contain LIKE syntax (workday names carry underscores).
 	rows, err := s.q.ExistingExternalIDsByBoard(ctx, db.ExistingExternalIDsByBoardParams{
 		Source:              source,
-		Pattern:             externalid.BoardPattern(board),
+		Board:               board,
 		HydrationCutoff:     cutoff,
 		BodyRefreshCutoff:   bodyCutoff,
 		BodyRefreshSlices:   s.seen.bodies.Slices,

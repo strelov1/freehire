@@ -21,13 +21,32 @@ var ErrBadCursor = errors.New("feed: invalid cursor")
 type Cursor struct {
 	UserID int64  `json:"u"`
 	Source string `json:"s"`
-	// Version is the source's filter version (the profile's UpdatedAt, in microseconds);
+	// Version is the source's UpdatedAt in microseconds;
 	// a different value means the filters changed mid-session.
-	Version    int64 `json:"v"`
-	SnapshotAt int64 `json:"t"` // unix seconds
-	Offset     int   `json:"o"`
-	ExpiresAt  int64 `json:"e"` // unix seconds
+	Version int64 `json:"v"`
+	// RankingVersion binds the profile used to rank a saved search.
+	RankingVersion int64 `json:"rv,omitempty"`
+	SnapshotAt     int64 `json:"t"` // unix seconds
+	Offset         int   `json:"o"`
+	ExpiresAt      int64 `json:"e"` // unix seconds
+	// Phase is the segment the offset counts in: PhaseNew, PhaseRest, or PhaseSeen for the
+	// cursor that only POST /me/feed/seen accepts. A cursor with no phase predates phases and
+	// is refused (400), so the client restarts from page 1.
+	Phase string `json:"p,omitempty"`
+	// SeenAt is the feed watermark the session started from (unix seconds): new cards are
+	// created after it, so it stays fixed for the whole session.
+	SeenAt int64 `json:"w,omitempty"`
+	// ActedBefore is the session start, rounded up to the next second (unix seconds): saves,
+	// dismissals and applications before it leave the feed. Kept apart from SnapshotAt, which
+	// can sit well in the past while the search index catches up.
+	ActedBefore int64 `json:"a,omitempty"`
 }
+
+const (
+	PhaseNew  = "n"
+	PhaseRest = "r"
+	PhaseSeen = "s"
+)
 
 // Signer signs and verifies cursors with a server secret.
 type Signer struct{ key []byte }

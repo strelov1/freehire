@@ -147,6 +147,9 @@ model CompanyInsight {
   open_now: int64;
   open_prev_30d: int64;
   growth_30d: int64;
+
+  /** When a company that had not been hiring started again; set only for those (sort=new). */
+  hiring_started_at?: utcDateTime;
 }
 
 model CompaniesMeta {
@@ -242,6 +245,17 @@ model VelocityMeta {
 model VelocityAnswer {
   data: ActivityPoint[];
   meta: VelocityMeta;
+}
+
+model RoleDemandPoint {
+  category: string;
+  /** Monday of the publication week in UTC (YYYY-MM-DD). */
+  week: string;
+  new_jobs: int64;
+}
+
+model RoleDemandAnswer {
+  data: RoleDemandPoint[];
 }
 
 model SalaryMonth {
@@ -746,7 +760,7 @@ op insightsSalaryHistory(
 @route("/insights/companies")
 @get
 op insightsCompanies(
-  /** Rank by openings or by growth. */
+  /** Rank by openings (open), growth (growth, -growth) or list companies that just started hiring (new). */
   @query sort?: string,
   /** Ignore companies below this many open roles. */
   @query min_open?: string,
@@ -766,6 +780,19 @@ op insightsRoleCountries(@query countries?: string): RoleCountriesAnswer | Probl
 @route("/insights/role-pulse")
 @get
 op insightsRolePulse(@query category?: string): RolePulseAnswer | Problem;
+
+/**
+ * Counts unique public vacancies, including closed vacancies, by publication date.
+ * If the source supplied no date, the count uses the vacancy's first catalogue appearance.
+ * The data array is empty until the first snapshot is published.
+ */
+@summary("New public vacancies by specialty for the last 12 completed UTC weeks.")
+@useAuth(NoAuth)
+@tag("Insights")
+@opExample(#{ returnType: #{ data: #[#{ category: "backend", week: "2026-11-16", new_jobs: 42 }] } })
+@route("/insights/role-demand")
+@get
+op insightsRoleDemand(): RoleDemandAnswer | Problem;
 
 // The site's own live status plus a sanitized per-provider rollup of the ingest fleet.
 /**

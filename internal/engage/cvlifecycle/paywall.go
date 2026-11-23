@@ -10,21 +10,22 @@ type attempt struct {
 }
 
 // attempts is keyed by the label the paid-AI gate records: a plan feature for a metered
-// route, a fixed name for the three that draw on no allowance (see handler.paid_ai.go). A
+// route, a fixed name for routes that draw on no allowance (see handler.paid_ai.go). A
 // label missing here still gets a letter, with fallbackAttempt, so a route added to the gate
 // before its words are written here is never a silent hole.
 var attempts = map[string]attempt{
-	"tailor":            {"tailor your CV", "tailor your CV for %s"},
-	"match":             {"see how well you fit a posting", "see how well you fit %s"},
-	"assistant":         {"talk to the AI assistant", "talk through %s with the AI assistant"},
-	"dictation":         {"dictate to the AI assistant", ""},
-	"cover-letter":      {"draft a cover letter", "draft a cover letter for %s"},
-	"auto-apply":        {"apply with auto-apply", "apply to %s with auto-apply"},
-	"mail-reply":        {"draft a reply to a recruiter's email", ""},
-	"recruiter-contact": {"see who recruits at a company", "see who recruits for %s"},
-	"ats_review":        {"get the AI review of your CV", ""},
-	"mail_recall":       {"pull the emails about an application into your tracker", "pull the emails about %s into your tracker"},
-	"autofill":          {"have the agent fill in an application form", "have the agent fill in the application for %s"},
+	"tailor":                  {"tailor your CV", "tailor your CV for %s"},
+	"match":                   {"see how well you fit a posting", "see how well you fit %s"},
+	"assistant":               {"talk to the AI assistant", "talk through %s with the AI assistant"},
+	"dictation":               {"dictate to the AI assistant", ""},
+	"cover-letter":            {"draft a cover letter", "draft a cover letter for %s"},
+	"auto-apply":              {"apply with auto-apply", "apply to %s with auto-apply"},
+	"mail-reply":              {"draft a reply to a recruiter's email", ""},
+	"recruiter-contact":       {"see who recruits at a company", "see who recruits for %s"},
+	"ats_review":              {"get the AI review of your CV", ""},
+	"mail_recall":             {"pull the emails about an application into your tracker", "pull the emails about %s into your tracker"},
+	"autofill":                {"have the agent fill in an application form", "have the agent fill in the application for %s"},
+	"interview_transcription": {"transcribe an interview recording", ""},
 }
 
 var fallbackAttempt = attempt{generic: "use one of the AI features"}

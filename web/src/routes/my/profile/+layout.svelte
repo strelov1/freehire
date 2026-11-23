@@ -91,7 +91,7 @@
         return;
       }
       if (profileStore.profile === null) {
-        await profileStore.save([], [], [], [], [], [], null);
+        await profileStore.save([], [], [], [], [], null);
       }
       status = 'ready';
     } catch {

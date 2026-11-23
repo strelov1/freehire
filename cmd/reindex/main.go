@@ -41,8 +41,8 @@ const progressInterval = 60 * time.Second
 // drainHoldTTL is how long the drain stays paused if this process dies without lifting it.
 const drainHoldTTL = 30 * time.Minute
 
-// lookupWorkMem is the sort and hash budget for the whole-catalogue lookups, as in the rollups:
-// at the default both spill to disk for hours.
+// lookupWorkMem is the sort and hash budget for the closure geo lookup on the primary, as in the
+// rollups: at the default it spills to disk for hours.
 const lookupWorkMem = "256MB"
 
 func main() {
@@ -153,17 +153,27 @@ func run() int {
 
 	// Only the open, canonical, public rows: splitJobs would drop every other row anyway (see ListIndexableJobsByIDAfter).
 	reader := worker.NewIndexableScanReader(q)
+	// The reality lookup reads the analytics replica (it spilled ~2.7 GB of temp files per run on the
+	// primary). Opened only now, after the marker passes above: the pool waits for the replica to
+	// replay the primary's current WAL, so it sees the markers just written.
+	analytics, err := worker.AnalyticsPool(ctx, pool)
+	if err != nil {
+		log.Printf("reindex: analytics database: %v", err)
+		return 1
+	}
+	defer analytics.Close()
 	done := worker.Stage("reality lookup")
-	var lookup realityLookup
-	err = withLookupMemory(ctx, pool, func(q *db.Queries) (err error) {
-		lookup, err = buildRealityLookup(ctx, q)
-		return err
+	lookup, err := worker.RetryStandbyConflict(ctx, "RoleClusterCountsAll", func() (realityLookup, error) {
+		return buildRealityLookup(ctx, db.New(analytics))
 	})
 	if err != nil {
 		log.Printf("reindex: build reality lookup: %v", err)
 		return 1
 	}
 	done()
+	analytics.Close() // nothing below reads the replica; do not hold its connections through the scan
+	// The closure geo lookup stays on the primary: measured 2026-11-23 it ran 72 min on the standby,
+	// past the reader's 30-minute statement_timeout, with the volume's reads as the bottleneck.
 	done = worker.Stage("closure geo lookup")
 	var geo closureGeoLookup
 	err = withLookupMemory(ctx, pool, func(q *db.Queries) (err error) {

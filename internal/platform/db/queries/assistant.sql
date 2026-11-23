@@ -189,3 +189,44 @@ UPDATE assistant_sessions
 SET helpful = $3
 WHERE id = $1 AND user_id = $2 AND preset = 'support'
   AND EXISTS (SELECT 1 FROM assistant_messages m WHERE m.session_id = $1 AND m.role = 'assistant');
+
+-- name: GetAssistantInterviewReport :one
+SELECT r.report
+FROM assistant_interview_reports r JOIN assistant_sessions s ON s.id = r.session_id
+WHERE s.id = $1 AND s.user_id = $2
+AND NOT EXISTS (
+    SELECT 1 FROM assistant_messages m
+    WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > r.through_seq
+);
+
+-- name: SaveAssistantInterviewReport :execrows
+INSERT INTO assistant_interview_reports (session_id, through_seq, report)
+SELECT id, sqlc.arg(through_seq)::bigint, sqlc.arg(report)::jsonb FROM assistant_sessions s
+WHERE id = sqlc.arg(session_id) AND user_id = sqlc.arg(user_id) AND preset = 'interview'
+AND NOT EXISTS (
+    SELECT 1 FROM assistant_messages m
+    WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > sqlc.arg(through_seq)::bigint
+)
+ON CONFLICT ON CONSTRAINT assistant_interview_reports_pkey DO UPDATE
+SET through_seq = EXCLUDED.through_seq, report = EXCLUDED.report
+WHERE assistant_interview_reports.through_seq < EXCLUDED.through_seq;
+
+-- name: RepeatAssistantInterviewQuestion :one
+WITH rehearsal AS (
+    SELECT s.user_id, s.preset, s.job_id, s.label, r.report->>'question' AS question
+    FROM assistant_sessions s JOIN assistant_interview_reports r ON r.session_id = s.id
+    JOIN user_jobs u ON u.user_id = s.user_id AND u.job_id = s.job_id
+    WHERE s.id = $1 AND s.user_id = $2 AND s.preset = 'interview'
+    AND NOT EXISTS (
+        SELECT 1 FROM assistant_messages m
+        WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > r.through_seq
+    )
+), new_session AS (
+    INSERT INTO assistant_sessions (user_id, preset, job_id, label)
+    SELECT user_id, preset, job_id, label FROM rehearsal
+    RETURNING id
+)
+INSERT INTO assistant_messages (session_id, seq, role, content)
+SELECT new_session.id, 1, 'assistant', jsonb_build_object('text', rehearsal.question)
+FROM new_session CROSS JOIN rehearsal
+RETURNING session_id;

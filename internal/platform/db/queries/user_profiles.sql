@@ -7,27 +7,27 @@ WHERE user_id = $1;
 -- name: CreateUserProfileIfAbsent :one
 -- A partial update based on a missing-row snapshot must not replace a profile that
 -- another writer created meanwhile. No returned row means the caller must reload.
-INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies, location_preferences, job_languages)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE(sqlc.arg(job_languages)::text[], '{}'::text[]))
+INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, location_preferences, job_languages)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE(sqlc.arg(job_languages)::text[], '{}'::text[]))
 ON CONFLICT (user_id) DO NOTHING
 RETURNING *;
 
 -- name: UpsertUserProfile :one
 -- Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
 -- idempotent upsert: first save inserts, later saves overwrite specializations/skills/
--- seniorities/excluded_skills/excluded_sources/excluded_companies/location_preferences and
--- bump updated_at. All fields are already normalized by the service; seniorities,
--- excluded_skills, excluded_sources and excluded_companies may be empty;
--- location_preferences is a validated JSONB block or NULL (no preferences).
-INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies, location_preferences, job_languages)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE(sqlc.arg(job_languages)::text[], '{}'::text[]))
+-- seniorities/excluded_skills/excluded_sources/location_preferences and bump updated_at.
+-- All fields are already normalized by the service; seniorities, excluded_skills and
+-- excluded_sources may be empty; location_preferences is a validated JSONB block or NULL.
+-- excluded_companies is never assigned here: ExcludeCompany/UnexcludeCompany own it, so a
+-- stale autosave cannot erase a hidden company.
+INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, location_preferences, job_languages)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE(sqlc.arg(job_languages)::text[], '{}'::text[]))
 ON CONFLICT (user_id) DO UPDATE
 SET specializations      = EXCLUDED.specializations,
     skills               = EXCLUDED.skills,
     seniorities          = EXCLUDED.seniorities,
     excluded_skills      = EXCLUDED.excluded_skills,
     excluded_sources     = EXCLUDED.excluded_sources,
-    excluded_companies   = EXCLUDED.excluded_companies,
     location_preferences = EXCLUDED.location_preferences,
     job_languages        = EXCLUDED.job_languages,
     updated_at           = now()
@@ -46,11 +46,34 @@ SET specializations      = $2,
     seniorities          = $4,
     excluded_skills      = $5,
     excluded_sources     = $6,
-    excluded_companies   = $7,
-    location_preferences = $8,
-    job_languages        = $10,
+    location_preferences = $7,
+    job_languages        = $9,
     updated_at           = now()
-WHERE user_id = $1 AND updated_at = $9
+WHERE user_id = $1 AND updated_at = $8
+RETURNING *;
+
+-- name: ExcludeCompany :one
+-- Hide one company: append its slug to excluded_companies, creating a minimal profile when
+-- the caller has none. ON CONFLICT DO UPDATE takes the row lock, so it serializes with the
+-- autosave upserts and with concurrent additions, and the bound is checked under that lock.
+-- No returned row means the slug is already listed or the list is full; the caller reads the
+-- profile to tell which. An actual change advances updated_at (the feed's filter version).
+INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies)
+VALUES (sqlc.arg(user_id), '{}', '{}', '{}', '{}', '{}', ARRAY[sqlc.arg(company_slug)::text])
+ON CONFLICT (user_id) DO UPDATE
+SET excluded_companies = array_append(user_profiles.excluded_companies, sqlc.arg(company_slug)::text),
+    updated_at         = now()
+WHERE NOT (sqlc.arg(company_slug)::text = ANY(user_profiles.excluded_companies))
+  AND cardinality(user_profiles.excluded_companies) < sqlc.arg(max_count)::int
+RETURNING *;
+
+-- name: UnexcludeCompany :one
+-- Restore one company. No returned row means there is no profile or the slug was not listed:
+-- the handler treats both as success without touching updated_at.
+UPDATE user_profiles
+SET excluded_companies = array_remove(excluded_companies, sqlc.arg(company_slug)::text),
+    updated_at         = now()
+WHERE user_id = sqlc.arg(user_id) AND sqlc.arg(company_slug)::text = ANY(excluded_companies)
 RETURNING *;
 
 -- name: DeleteUserProfile :execrows

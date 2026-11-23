@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Phone } from '@lucide/svelte';
+  import { AudioLines, Phone } from '@lucide/svelte';
   import { VOICE_CALL_ENABLED } from './audioAvailability';
   import { canUseVoiceCall } from './voiceCall';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import type { Attachment } from './client';
+  import type { ChatMessage } from './chat';
   import Composer from './Composer.svelte';
+  import InterviewPlayback from './InterviewPlayback.svelte';
+  import { transcribeInterviewAudio } from './speech';
   import { messages } from './AssistantChat.messages';
 
   // AssistantChat's input area: the composer, or a hands-free voice call in its place while
@@ -21,6 +24,8 @@
     support,
     disabled,
     interview,
+    elevenLabsVoice,
+    transcript,
     onSubmit,
     onRemoveQueued,
     onCancel,
@@ -35,6 +40,8 @@
     support: boolean;
     disabled: boolean;
     interview: boolean;
+    elevenLabsVoice: boolean;
+    transcript: ChatMessage[];
     onSubmit: (text: string, docs: Attachment[]) => void;
     onRemoveQueued: (id: string) => void;
     onCancel: () => void;
@@ -50,6 +57,21 @@
   // decided after mount, the same reasoning VoiceInput.svelte's `supported` gives:
   // reading navigator during SSR would disagree with the client on the first paint.
   // It also carries VOICE_CALL_ENABLED — see audioAvailability.ts.
+  let elevenLabsSession = $state<string | null>(null);
+  const elevenLabsSelected = $derived(Boolean(sessionId) && sessionId === elevenLabsSession && elevenLabsVoice);
+  const voiceTranscriber = $derived.by(() => {
+    const id = sessionId;
+    if (!id || !elevenLabsSelected) return undefined;
+    return (audio: Blob, filename: string) => transcribeInterviewAudio(id, audio, filename);
+  });
+
+  const interviewReplyKey = $derived.by(() => {
+    const reply = transcript.at(-1);
+    return reply?.role === 'assistant' && reply.text.trim() && !reply.streaming && !reply.errored
+      ? transcript.length
+      : 0;
+  });
+
   let voiceModeOff = $state(false);
   let voiceSupported = $state(false);
   const canCall = $derived(interview && voiceSupported && !voiceModeOff);
@@ -89,6 +111,11 @@
     </div>
   {/key}
 {:else}
+  {#if elevenLabsSelected && sessionId}
+    {#key sessionId}
+      <InterviewPlayback {sessionId} replyKey={interviewReplyKey} />
+    {/key}
+  {/if}
   <Composer
     bind:draft
     bind:attachments
@@ -96,22 +123,40 @@
     {turnActive}
     attachable={!support}
     dictatable={!support}
+    {voiceTranscriber}
     {disabled}
     {onSubmit}
     {onRemoveQueued}
     {onCancel}
   />
-  {#if canCall && sessionId}
-    <div class="flex justify-center border-t border-border/60 py-2">
-      <button
-        type="button"
-        onclick={() => (voiceCallOpen = true)}
-        disabled={disabled || turnActive}
-        class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <Phone class="size-3.5" />
-        {s.voiceModeButton}
-      </button>
+  {#if (canCall || elevenLabsVoice) && sessionId}
+    <div class="flex flex-wrap justify-center gap-2 border-t border-border/60 py-2">
+      {#if elevenLabsVoice}
+        <button
+          type="button"
+          aria-pressed={elevenLabsSelected}
+          disabled={disabled || turnActive}
+          onclick={() => (elevenLabsSession = elevenLabsSelected ? null : sessionId)}
+          class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground aria-pressed:bg-accent aria-pressed:text-brand-strong disabled:opacity-50"
+        >
+          <AudioLines class="size-3.5" aria-hidden="true" />
+          {s.elevenLabsVoice}
+        </button>
+      {/if}
+      {#if canCall}
+        <button
+          type="button"
+          onclick={() => {
+            elevenLabsSession = null;
+            voiceCallOpen = true;
+          }}
+          disabled={disabled || turnActive}
+          class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Phone class="size-3.5" />
+          {s.voiceModeButton}
+        </button>
+      {/if}
     </div>
   {/if}
 {/if}

@@ -1,0 +1,140 @@
+{
+ "TotalJobsCount": "41499",
+ "Jobs": [
+  {
+   "Job": {
+    "Designation": "Finance Manager",
+    "Location": "Dubai - United Arab Emirates (UAE)",
+    "jobInfo": "Oversee financial operations, manage tax compliance, optimize costs, prepare financial reports, and ensure adherence to UAE regulations with strong analytical skills.",
+    "jobHighlights": [
+     "Manage tax filings and VAT returns",
+     "Oversee restaurant financial operations",
+     "Control costs through stock and inventory management",
+     "Oversee payroll and labor law compliance"
+    ],
+    "Experience": {
+     "Min": "10",
+     "Max": "15"
+    },
+    "Company": {
+     "Name": "INNOVATION DIRECT EMPLOYMENT SERVICES L.L.C ",
+     "Id": "22384"
+    },
+    "JobId": "221126000090",
+    "JdURL": "https://www.naukrigulf.com/finance-manager-jobs-in-dubai-uae-in-innovation-direct-employment-services-10-to-15-years-m-cd-22384-jid-221126000090",
+    "LatestPostedDate": "1795366168",
+    "Vacancies": "1",
+    "IsTopEmployer": "false",
+    "IsFeaturedEmployer": "false",
+    "IsPremium": "false",
+    "IsWebJob": "false",
+    "IsQuickWebJob": "false",
+    "LogoUrl": "https://static.naukimg.com/ni/nipjp/22384/22384_srp.gif",
+    "TELogoUrl": "https://static.naukimg.com/ni/nipjp/22384/22384.gif",
+    "IsApplied": "false",
+    "IsTopEmployerLite": "false",
+    "Whitelistedkeywords": "financial analysis,financial reporting,cash flow management,forecasting,strategic planning,compliance",
+    "keywords": "Financial Analysis,Financial Reporting,Cash Flow Management,Forecasting,Strategic Planning,Compliance",
+    "Email": "",
+    "IsFormBasedApply": "false",
+    "jobRedirection": "false",
+    "shortlisted": false,
+    "expiringSoon": false,
+    "isArchived": false,
+    "recruiterActive": true,
+    "isRecruiterActive": true,
+    "isSponsoredJob": false
+   }
+  },
+  {
+   "Job": {
+    "Designation": "Senior Risk Engineer",
+    "Location": "Riyadh - Saudi Arabia",
+    "jobInfo": "Develop and implement risk management frameworks, conduct risk assessments, and monitor key risk indicators, requiring a degree in Engineering or Finance and relevant certifications.",
+    "jobHighlights": [
+     "Develop risk management frameworks and strategies",
+     "Conduct risk assessments for new projects, systems, and processes",
+     "Design and oversee risk control measures",
+     "Monitor key risk indicators and performance metrics"
+    ],
+    "Experience": {
+     "Min": "8",
+     "Max": "15"
+    },
+    "Company": {
+     "Name": "Confidential Company",
+     "Id": "94540"
+    },
+    "JobId": "221126000078",
+    "JdURL": "https://www.naukrigulf.com/senior-risk-engineer-jobs-in-riyadh-saudi-arabia-in-confidential-8-to-15-years-n-jid-221126000078",
+    "LatestPostedDate": "1795360547",
+    "Vacancies": "1",
+    "IsTopEmployer": "false",
+    "IsFeaturedEmployer": "false",
+    "IsPremium": "true",
+    "IsWebJob": "false",
+    "IsQuickWebJob": "false",
+    "LogoUrl": "",
+    "TELogoUrl": "",
+    "IsApplied": "false",
+    "IsTopEmployerLite": "false",
+    "Whitelistedkeywords": "risk assessment,compliance,information security,senior risk analyst",
+    "keywords": "Risk Control Specialist,Risk Assessment,Compliance,Threat Modeling,Information Security,Lead Risk Engineer,Senior Risk Analyst,Quantitative Risk Manager",
+    "Email": "",
+    "IsFormBasedApply": "false",
+    "jobRedirection": "false",
+    "shortlisted": false,
+    "expiringSoon": false,
+    "isArchived": false,
+    "recruiterActive": true,
+    "isRecruiterActive": true,
+    "isSponsoredJob": false
+   }
+  },
+  {
+   "Job": {
+    "Designation": "MEP Procurement Engineer",
+    "Location": "Dubai - United Arab Emirates (UAE)",
+    "jobInfo": "Develop procurement strategies for MEP systems, conduct market analysis, negotiate contracts, and require a Bachelor's degree in engineering with procurement experience.",
+    "jobHighlights": [
+     "Develop procurement strategies for MEP systems",
+     "Conduct market analysis to evaluate suppliers",
+     "Prepare and issue RFQs with technical specifications",
+     "Negotiate supplier contracts and delivery timelines"
+    ],
+    "Experience": {
+     "Min": "3",
+     "Max": "8"
+    },
+    "Company": {
+     "Name": "PME Elctor-Mechanical Works ",
+     "Id": "381710"
+    },
+    "JobId": "221126000060",
+    "JdURL": "https://www.naukrigulf.com/mep-procurement-engineer-jobs-in-dubai-uae-in-pme-elctor-mechanical-works-3-to-8-years-n-cd-381710-jid-221126000060",
+    "LatestPostedDate": "1795353167",
+    "Vacancies": "1",
+    "IsTopEmployer": "false",
+    "IsFeaturedEmployer": "false",
+    "IsPremium": "false",
+    "IsWebJob": "false",
+    "IsQuickWebJob": "false",
+    "LogoUrl": null,
+    "TELogoUrl": null,
+    "IsApplied": "false",
+    "IsTopEmployerLite": "false",
+    "Whitelistedkeywords": "risk assessment,procurement manager,purchasing engineer,vendor management,purchasing manager,contract administration",
+    "keywords": "Risk Assessment,Procurement Manager,MEP Buyer,Purchasing Engineer,Vendor Management,Purchasing Manager,Contract Administration,Supply Chain Engineer",
+    "Email": "",
+    "IsFormBasedApply": "false",
+    "jobRedirection": "false",
+    "shortlisted": false,
+    "expiringSoon": false,
+    "isArchived": false,
+    "recruiterActive": true,
+    "isRecruiterActive": true,
+    "isSponsoredJob": false
+   }
+  }
+ ]
+}

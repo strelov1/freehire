@@ -62,3 +62,27 @@ export function writeConsent(choice: ConsentChoice): void {
     // Storage unavailable or full (SSR, private mode) — consent simply won't persist.
   }
 }
+
+/** `document.cookie` assignments that expire Google Analytics' `_ga` and `_ga_<container>`
+ *  cookies. gtag sets them on the widest domain it may (`.freehire.me`), so each is expired
+ *  for every parent domain of the host as well as host-only; a domain the browser refuses
+ *  (a public suffix) is ignored by it. Withdrawing consent must remove them: the server
+ *  reads the client id from them to send the GA4 sign-up. */
+export function gaCookieExpiries(cookie: string, hostname: string): string[] {
+  const names = cookie
+    .split(';')
+    .map((part) => (part.split('=')[0] ?? '').trim())
+    .filter((name) => name === '_ga' || name.startsWith('_ga_'));
+  const labels = hostname.split('.');
+  const domains = labels.slice(0, -1).map((_, i) => `; domain=${labels.slice(i).join('.')}`);
+  return names.flatMap((name) => ['', ...domains].map((domain) => `${name}=; Max-Age=0; path=/${domain}`));
+}
+
+/** Expire the GA cookies in this browser. A no-op without a document (SSR). Never throws. */
+export function clearGaCookies(): void {
+  try {
+    for (const expiry of gaCookieExpiries(document.cookie, location.hostname)) document.cookie = expiry;
+  } catch {
+    // No document (SSR) — nothing to clear.
+  }
+}

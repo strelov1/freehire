@@ -3,13 +3,16 @@
   import { Button } from '#lib/ui/index.js';
 
   // The feed toolbar's leading buttons: the map, and swipe mode on desktop. The map is
-  // off while a personal filter it cannot draw (Hiring again, the watchlist) is on.
+  // off while a personal filter it cannot draw (Hiring again, the watchlist, Just started hiring) is on.
   let {
     blockedBy,
     onMap,
     onSwipe,
-  }: { blockedBy: 'formerEmployers' | 'watchlist' | null; onMap: () => void; onSwipe: (() => void) | undefined } =
-    $props();
+  }: {
+    blockedBy: 'formerEmployers' | 'watchlist' | 'newHiring' | null;
+    onMap: () => void;
+    onSwipe: (() => void) | undefined;
+  } = $props();
 </script>
 
 <Button
@@ -20,7 +23,9 @@
     ? 'Turn off Hiring again to explore the map'
     : blockedBy === 'watchlist'
       ? 'Turn off Your watchlist to explore the map'
-      : undefined}
+      : blockedBy === 'newHiring'
+        ? 'Turn off Just started hiring to explore the map'
+        : undefined}
   aria-label="Map"
   onclick={onMap}
 >

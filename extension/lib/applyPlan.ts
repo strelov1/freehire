@@ -94,10 +94,11 @@ export function showsApplicationForm(
   fields: FramedField[],
   uploads: unknown[],
   /** `filled` says the panel has just written into this form. Whatever its markup
-   *  claims, a page that accepted an autofill is asking an application. */
-  evidence: { filled?: boolean } = {},
+   *  claims, a page that accepted an autofill is asking an application. `easyApply`
+   *  says a LinkedIn Easy Apply dialog is open, whose one-question steps are short. */
+  evidence: { filled?: boolean; easyApply?: boolean } = {},
 ): boolean {
-  if (uploads.length > 0 || evidence.filled) return true;
+  if (uploads.length > 0 || evidence.filled || evidence.easyApply) return true;
   return fields.filter((f) => f.label.trim() !== '').length >= QUESTIONNAIRE_SIZE;
 }
 
@@ -125,7 +126,8 @@ export function buildPlan(fields: FramedField[]): ApplyPlan {
       key: `${f.frame}:${f.index}`,
       label: f.label,
       required: f.required,
-      answered: f.value.trim() !== '',
+      // A value the page itself rejected is not an answer yet: it blocks the next step.
+      answered: f.value.trim() !== '' && !f.invalid,
       frame: f.frame,
       form: f.form,
     }));

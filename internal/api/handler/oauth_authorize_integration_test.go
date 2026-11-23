@@ -268,3 +268,80 @@ func TestOAuthAuthorizeSubmit_SwitchAccountSignsOutAndRestartsSignIn(t *testing.
 		t.Error("session cookie was not cleared")
 	}
 }
+
+// An account created to connect an OAuth client never loads the SPA, so approving the
+// consent is where its sign-up is attributed: to the client's https host, and only while
+// the account is fresh.
+func TestOAuthAuthorizeSubmit_AttributesFreshSignupToClient(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	seedOAuthTestClient(t, queries, "client-attr", []string{"https://claude.ai/api/mcp/auth_callback"})
+	fresh := seedOAuthUser(t, pool, "authorize-attr-fresh@example.test")
+	old := seedOAuthUser(t, pool, "authorize-attr-old@example.test")
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE users SET created_at = now() - interval '1 hour' WHERE id = $1`, old); err != nil {
+		t.Fatalf("age user: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	t.Setenv("GA4_MEASUREMENT_ID", "G-TEST")
+	ga := &fakeGA4{}
+	app := oauthAuthorizeApp(&authHandlers{queries: queries, issuer: iss, ga4: ga}, iss)
+	approve := func(userID int64) {
+		t.Helper()
+		cookie, _ := iss.Issue(userID, testTokenVersion)
+		form := url.Values{
+			"decision":              {"allow"},
+			"client_id":             {"client-attr"},
+			"redirect_uri":          {"https://claude.ai/api/mcp/auth_callback"},
+			"state":                 {"xyz"},
+			"code_challenge":        {"abc"},
+			"code_challenge_method": {"S256"},
+		}
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/oauth/authorize",
+			strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})            //nolint:gosec // a request cookie: the Set-Cookie attributes do not apply
+		req.AddCookie(&http.Cookie{Name: "_ga", Value: "GA1.1.111.222"})             //nolint:gosec // a request cookie: the Set-Cookie attributes do not apply
+		req.AddCookie(&http.Cookie{Name: "_ga_TEST", Value: "GS2.1.s1700000000$o1"}) //nolint:gosec // a request cookie: the Set-Cookie attributes do not apply
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != fiber.StatusFound {
+			t.Fatalf("status = %d, want 302", resp.StatusCode)
+		}
+	}
+	approve(fresh)
+	approve(old)
+	approve(fresh) // a second approval must not count the sign-up again
+
+	signUpSends.Wait() // the GA4 send runs off the request
+	gaCalls := func() [][3]string {
+		ga.mu.Lock()
+		defer ga.mu.Unlock()
+		return append([][3]string(nil), ga.calls...)
+	}
+	if got := gaCalls(); len(got) != 1 || got[0] != [3]string{"111.222", "1700000000", "oauth"} {
+		t.Errorf("GA4 sign_up calls = %v, want exactly one [111.222 1700000000 oauth]", got)
+	}
+
+	var host, medium, landing string
+	if err := pool.QueryRow(context.Background(),
+		`SELECT referrer_host, utm_medium, landing_path FROM user_signup_attribution WHERE user_id = $1`, fresh,
+	).Scan(&host, &medium, &landing); err != nil {
+		t.Fatalf("read attribution of the fresh account: %v", err)
+	}
+	if host != "claude.ai" || medium != oauthAppMedium || landing != "/api/v1/oauth/authorize" {
+		t.Errorf("attribution = (%q, %q, %q), want (claude.ai, %s, /api/v1/oauth/authorize)", host, medium, landing, oauthAppMedium)
+	}
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM user_signup_attribution WHERE user_id = $1`, old).Scan(&n); err != nil {
+		t.Fatalf("count attribution of the old account: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("an account older than ten minutes got %d attribution rows, want 0", n)
+	}
+}

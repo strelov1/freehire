@@ -15,6 +15,9 @@ import (
 // it finds, so run over a whole CV it yields the strongest grade the document claims —
 // which is the right reading for a CV listing a career's worth of titles.
 //
+// A CV at or above the grade asked earns full marks: a career that passed through "Tech Lead"
+// or "CTO" still fits a Senior vacancy, and "strongest grade" would otherwise score it 0.
+//
 // Either side resolving to nothing makes the category unavailable rather than a mismatch.
 // A title that states no grade is not a junior one, and this is the lightest-weighted
 // category precisely because it barely moves under tailoring: the candidate should not be
@@ -37,12 +40,15 @@ func seniorityCategory(jobTitle, cvText string) ScoredCategory {
 	asked := humanizeGrade(vocab.SeniorityValues[want])
 	reads := humanizeGrade(vocab.SeniorityValues[got])
 	item := LineItem{Points: WeightSeniority}
-	switch rungsApart(want, got) {
-	case 0:
+	switch {
+	case got >= want:
 		c.Earned = WeightSeniority
 		item.Text = fmt.Sprintf("Your CV reads at the %s grade this vacancy asks for", asked)
+		if got > want {
+			item.Text = fmt.Sprintf("Your CV reads at %s, at or above the %s this vacancy asks for", reads, asked)
+		}
 		item.Status = StatusPass
-	case 1:
+	case want-got == 1:
 		c.Earned = WeightSeniority / 2
 		item.Points = WeightSeniority / 2
 		item.Text = fmt.Sprintf("Your CV reads at %s, one rung from the %s this vacancy asks for", reads, asked)
@@ -53,13 +59,6 @@ func seniorityCategory(jobTitle, cvText string) ScoredCategory {
 	}
 	c.Items = []LineItem{item}
 	return c
-}
-
-func rungsApart(a, b int) int {
-	if a < b {
-		return b - a
-	}
-	return a - b
 }
 
 // gradeRank is a grade's rung on the seniority ladder, or -1 when the dictionaries

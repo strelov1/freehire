@@ -1,3 +1,4 @@
+import { pageIdentity } from '../../lib/assistant/pageIdentity';
 import { browser } from 'wxt/browser';
 import { getToken } from '../../lib/auth';
 import { type FreehireJob, type JobMatch } from '../../lib/freehire';
@@ -19,15 +20,30 @@ export class PageMatch {
   // vacancy (lib/addJob.ts), decided alongside the miss that put the panel there.
   canAddJob = $state(false);
   contributing = $state(false);
+  /** While true (an Easy Apply dialog is open), a re-read keeps the card on screen instead of
+   *  swapping it for the loading skeleton — LinkedIn fires page events as the dialog opens. */
+  keepCard = false;
 
   // Bumped at the start of every load() call; a stale call checks its own
   // captured id against the current one before writing shared state, so an
   // earlier in-flight load (e.g. a slow ad-hoc text match) can never clobber a
   // newer one's result after the user has already tabbed or navigated again.
   #requestId = 0;
+  /** The page the ready card belongs to: only that page may keep it through a reload. */
+  #cardPage = '';
 
   /** `notify` adds a line to the panel's action notices. */
   constructor(private readonly notify: (notice: string) => void) {}
+
+  /** Forgets the card: on sign-out it belongs to the account that left, and an in-flight
+   *  load for that account must not write it back. */
+  reset() {
+    this.#requestId++;
+    this.#cardPage = '';
+    this.status = 'idle';
+    this.job = null;
+    this.match = null;
+  }
 
   load = async () => {
     const requestId = ++this.#requestId;
@@ -44,7 +60,8 @@ export class PageMatch {
     if (requestId !== this.#requestId) return;
     const url = tab?.url ?? '';
 
-    this.status = 'loading';
+    const page = cardPage(url);
+    if (!(this.keepCard && this.status === 'ready' && this.#cardPage === page)) this.status = 'loading';
     this.error = '';
     try {
       const result = await matchPage(url, token, () => requestId !== this.#requestId);
@@ -52,6 +69,7 @@ export class PageMatch {
       if (result.status === 'ready') {
         this.job = result.job;
         this.match = result.match;
+        this.#cardPage = page;
       } else {
         this.canAddJob = result.canAddJob;
       }
@@ -94,4 +112,11 @@ export class PageMatch {
       this.contributing = false;
     }
   };
+}
+
+/** The page a card belongs to. LinkedIn's search view picks the job by `currentJobId`, which
+ *  `pageIdentity` drops, so a dialog open on job A must not keep A's card on job B. */
+function cardPage(url: string): string {
+  const jobId = URL.canParse(url) ? new URL(url).searchParams.get('currentJobId') : null;
+  return jobId ? `${pageIdentity(url)}?currentJobId=${jobId}` : pageIdentity(url);
 }

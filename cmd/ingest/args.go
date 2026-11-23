@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -83,15 +84,24 @@ func argsExitCode(err error) int {
 }
 
 // runExitCode is the crawl run's exit code: broken when it reached nothing (crawlReachedNothing),
-// was cut by its deadline, or a sweep close failed.
-func runExitCode(total pipeline.Stats, truncated bool, sweepFailed int) int {
+// a sweep close failed, or the crawl stopped short for any reason but its own time budget.
+//
+// A crawl its budget cut short (crawlErr wraps context.DeadlineExceeded, which a limiter's
+// out-of-run refusal does too) is the normal shape of a provider bigger than its window: it
+// persisted what it read, the sweep narrowed itself to the finished boards, and oldest-first
+// ordering hands the next run the boards this one missed. It exits 0 and reports itself
+// through worker.ReportPartial instead of leaving a permanently red unit. A cut that wrote
+// nothing at all is still a failure: no next run will do better on the same board.
+func runExitCode(total pipeline.Stats, crawlErr error, sweepFailed int) int {
 	failed := sweepFailed
 	if crawlReachedNothing(total) {
 		failed++
 	}
-	// A truncated run did not crawl what it was asked to: degraded however cleanly it stopped.
-	if truncated {
-		failed++
+	if crawlErr != nil {
+		budgetStop := errors.Is(crawlErr, context.DeadlineExceeded)
+		if !budgetStop || total.Ingested+total.Refreshed == 0 {
+			failed++
+		}
 	}
 	return worker.ExitCode(failed, 0)
 }

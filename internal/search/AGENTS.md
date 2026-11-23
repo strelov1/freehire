@@ -25,7 +25,7 @@ Beyond closed, duplicate and private rows, an open posting stays out of the inde
 has no resolved category, no body, or a source that has not shown it for longer than its
 window (`search.UnseenWindow`, 14 days; per source from `sources.UnseenWindows`, passed in
 by the caller because this block may not import `ingest`). `Withheld` is the ONE predicate
-`cmd/reindex`, `cmd/search-drain` and `linkimport` ask; `RefreshCompanyFacets` mirrors it in
+`cmd/reindex`, `cmd/search-drain` and `linkimport` ask; the facet recount in `company_facets.sql` mirrors it in
 SQL and the similar-jobs list applies the unseen half. The unseen rule is evaluated when a
 document is written, never at query time: ordinary unchanged liveness refreshes do not
 update its indexed `last_seen_at`, so a query-time filter on that value would freeze and
