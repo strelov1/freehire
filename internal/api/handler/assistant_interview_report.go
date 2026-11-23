@@ -135,7 +135,7 @@ func (h *assistantHandlers) PostAssistantInterviewReport(
 		return nil, err
 	}
 	count, err := h.queries.SaveAssistantInterviewReport(ctx, db.SaveAssistantInterviewReportParams{
-		SessionID: sess.ID, UserID: sess.UserID, Report: raw,
+		SessionID: sess.ID, UserID: sess.UserID, ThroughSeq: messages[len(messages)-1].Seq, Report: raw,
 	})
 	if err != nil {
 		return nil, err
@@ -146,7 +146,7 @@ func (h *assistantHandlers) PostAssistantInterviewReport(
 			return nil, err
 		}
 		if !found {
-			return nil, errSessionNotFound
+			return nil, fiber.NewError(fiber.StatusConflict, "the interview changed during review; try again")
 		}
 		return &apigen.PostAssistantInterviewReportOK{Data: winner}, nil
 	}

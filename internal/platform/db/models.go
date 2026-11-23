@@ -167,8 +167,9 @@ type ApplyFormOutbox struct {
 }
 
 type AssistantInterviewReport struct {
-	SessionID pgtype.UUID `json:"session_id"`
-	Report    []byte      `json:"report"`
+	SessionID  pgtype.UUID `json:"session_id"`
+	ThroughSeq int32       `json:"through_seq"`
+	Report     []byte      `json:"report"`
 }
 
 type AssistantMessage struct {

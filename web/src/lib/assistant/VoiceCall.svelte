@@ -59,6 +59,8 @@
   // Guards against a stray event reaching the UI after the call has already been torn
   // down — onDestroy can race a still-in-flight connect().
   let live = true;
+  let pendingTurns = Promise.resolve();
+  let closing = false;
 
   async function connect() {
     let token: VoiceToken;
@@ -151,7 +153,8 @@
     userLine = callState.userText;
     agentLine = callState.agentText;
     if (result.completedTurn) {
-      void persistTurn(result.completedTurn.role, result.completedTurn.content);
+      const { role, content } = result.completedTurn;
+      pendingTurns = pendingTurns.then(() => persistTurn(role, content));
     }
   }
 
@@ -185,9 +188,12 @@
     teardown();
   }
 
-  function end() {
+  async function end() {
+    if (closing) return;
+    closing = true;
     teardown();
-    onClose();
+    await pendingTurns;
+    if (live) onClose();
   }
 
   function teardown() {

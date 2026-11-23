@@ -239,6 +239,10 @@ const getAssistantInterviewReport = `-- name: GetAssistantInterviewReport :one
 SELECT r.report
 FROM assistant_interview_reports r JOIN assistant_sessions s ON s.id = r.session_id
 WHERE s.id = $1 AND s.user_id = $2
+AND NOT EXISTS (
+    SELECT 1 FROM assistant_messages m
+    WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > r.through_seq
+)
 `
 
 type GetAssistantInterviewReportParams struct {
@@ -630,6 +634,10 @@ WITH rehearsal AS (
     FROM assistant_sessions s JOIN assistant_interview_reports r ON r.session_id = s.id
     JOIN user_jobs u ON u.user_id = s.user_id AND u.job_id = s.job_id
     WHERE s.id = $1 AND s.user_id = $2 AND s.preset = 'interview'
+    AND NOT EXISTS (
+        SELECT 1 FROM assistant_messages m
+        WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > r.through_seq
+    )
 ), new_session AS (
     INSERT INTO assistant_sessions (user_id, preset, job_id, label)
     SELECT user_id, preset, job_id, label FROM rehearsal
@@ -654,20 +662,32 @@ func (q *Queries) RepeatAssistantInterviewQuestion(ctx context.Context, arg Repe
 }
 
 const saveAssistantInterviewReport = `-- name: SaveAssistantInterviewReport :execrows
-INSERT INTO assistant_interview_reports (session_id, report)
-SELECT id, $1::jsonb FROM assistant_sessions
-WHERE id = $2 AND user_id = $3 AND preset = 'interview'
-ON CONFLICT (session_id) DO NOTHING
+INSERT INTO assistant_interview_reports (session_id, through_seq, report)
+SELECT id, $1::int, $2::jsonb FROM assistant_sessions s
+WHERE id = $3 AND user_id = $4 AND preset = 'interview'
+AND NOT EXISTS (
+    SELECT 1 FROM assistant_messages m
+    WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > $1::int
+)
+ON CONFLICT ON CONSTRAINT assistant_interview_reports_pkey DO UPDATE
+SET through_seq = EXCLUDED.through_seq, report = EXCLUDED.report
+WHERE assistant_interview_reports.through_seq < EXCLUDED.through_seq
 `
 
 type SaveAssistantInterviewReportParams struct {
-	Report    []byte    `json:"report"`
-	SessionID uuid.UUID `json:"session_id"`
-	UserID    int64     `json:"user_id"`
+	ThroughSeq int32     `json:"through_seq"`
+	Report     []byte    `json:"report"`
+	SessionID  uuid.UUID `json:"session_id"`
+	UserID     int64     `json:"user_id"`
 }
 
 func (q *Queries) SaveAssistantInterviewReport(ctx context.Context, arg SaveAssistantInterviewReportParams) (int64, error) {
-	result, err := q.db.Exec(ctx, saveAssistantInterviewReport, arg.Report, arg.SessionID, arg.UserID)
+	result, err := q.db.Exec(ctx, saveAssistantInterviewReport,
+		arg.ThroughSeq,
+		arg.Report,
+		arg.SessionID,
+		arg.UserID,
+	)
 	if err != nil {
 		return 0, err
 	}

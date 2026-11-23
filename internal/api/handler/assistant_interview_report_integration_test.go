@@ -113,6 +113,19 @@ func TestInterviewReportPersistsAndRepeatsOriginalQuestion(t *testing.T) {
 	if err != nil || transcript[0].Role != assistant.RoleAssistant || repeated.Parts[0] != (llms.TextContent{Text: question}) {
 		t.Fatalf("repeat changed the question: %s (%v)", transcript[0].Content, err)
 	}
+
+	const nextAnswer = "I would compare the week before and after."
+	appendMessage(assistant.EncodeUser(nextAnswer))
+	detail = decodeReportResponse[apigen.GetAssistantSessionOK](t, request(http.MethodGet, base, cookie, http.StatusOK))
+	if detail.Data.InterviewReport.IsSet() {
+		t.Fatal("a late answer left the earlier report active")
+	}
+	request(http.MethodPost, base+"/interview-repeat", cookie, http.StatusNotFound)
+	refreshed := decodeReportResponse[apigen.PostAssistantInterviewReportOK](t, request(http.MethodPost, base+"/interview-report", cookie, http.StatusOK))
+	if refreshed.Data.Quote != nextAnswer || model.calls != 2 {
+		t.Fatalf("refresh did not use the new answer: %+v, %d model calls", refreshed.Data, model.calls)
+	}
+
 }
 
 func decodeReportResponse[T any](t *testing.T, body []byte) T {

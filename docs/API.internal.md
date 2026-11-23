@@ -924,7 +924,7 @@ Only for a job-bound rehearsal owned by the caller. Uses one dictation allowance
 | `file` | string (binary) | yes |  |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/interview-transcriptions" -b cookies.txt
+curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/interview-transcriptions" -b cookies.txt -F 'file=@<file>'
 ```
 
 ```json
@@ -1372,7 +1372,7 @@ Accepts a PDF (multipart `file`) or JSON `{ "text": ... }`. Returns the résumé
 | `text` | string | no | Résumé plain text (JSON path); or send a PDF as multipart field `file`. |
 
 ```bash
-curl -X PUT "https://freehire.me/api/v1/me/resume" -b cookies.txt
+curl -X PUT "https://freehire.me/api/v1/me/resume" -b cookies.txt -F 'file=@<file>'
 ```
 
 ```json
@@ -1472,7 +1472,7 @@ Accepts a PDF (`multipart/form-data` field `file`) or plain text (`application/j
 | `text` | string | no | Résumé plain text (JSON path); or send a PDF as multipart field `file`. |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/me/resume/extract" -b cookies.txt
+curl -X POST "https://freehire.me/api/v1/me/resume/extract" -b cookies.txt -F 'file=@<file>'
 ```
 
 ```json
@@ -5174,7 +5174,7 @@ Multipart upload of the `file` part — JPEG, PNG, or WebP, capped at 8 MB and r
 | `file` | string (binary) | yes |  |
 
 ```bash
-curl -X PUT "https://freehire.me/api/v1/me/photo" -b cookies.txt
+curl -X PUT "https://freehire.me/api/v1/me/photo" -b cookies.txt -F 'file=@<file>'
 ```
 
 ```json

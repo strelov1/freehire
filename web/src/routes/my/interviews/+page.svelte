@@ -66,11 +66,15 @@
     }
   }
 
+  let live = true;
   onMount(() => {
     void loadMeetings();
     void loadSessions();
     const timer = setInterval(() => (now = Date.now()), 60_000);
-    return () => clearInterval(timer);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
   });
 
   async function startSession(meeting: ScheduledInterview, preset: 'interview' | 'debrief') {
@@ -79,7 +83,7 @@
     startErrorId = null;
     try {
       const session = await createInterviewSession(preset, meeting.job_slug);
-      await goto(resolve('/my/assistant/[[id]]', { id: session.id }));
+      if (live) await goto(resolve('/my/assistant/[[id]]', { id: session.id }));
     } catch {
       startErrorId = meeting.id;
     } finally {
