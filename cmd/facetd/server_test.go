@@ -347,28 +347,36 @@ func TestAnswerCacheBoundsAndDuplicates(t *testing.T) {
 	}
 }
 
-// A request whose caller is gone while every counting slot is busy is answered 503 and never
-// counted, and one already counting stops at the next attribute.
+// A request whose caller is gone is answered 503 and never counted, whether it waited for a
+// slot or found one free, and one already counting stops at the next attribute.
 func TestAbandonedQueryIsNotCounted(t *testing.T) {
 	s, h := loaded(t, "", doc(1, "a"), doc(2, "b"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	abandon := func(slots string) {
+		t.Helper()
+		for _, p := range []string{"/facets", "/distinct"} {
+			req := httptest.NewRequestWithContext(ctx, "POST", p, strings.NewReader(`{"filter":"source = a","facets":["source"],"attr":"source"}`))
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != 503 {
+				t.Errorf("%s with %s slots and the caller gone = %d %s, want 503", p, slots, rec.Code, rec.Body)
+			}
+		}
+	}
 	for range cap(s.slots) {
 		s.slots <- struct{}{}
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	for _, p := range []string{"/facets", "/distinct"} {
-		req := httptest.NewRequestWithContext(ctx, "POST", p, strings.NewReader(`{"filter":"source = a","facets":["source"],"attr":"source"}`))
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		if rec.Code != 503 {
-			t.Errorf("%s with every slot busy and the caller gone = %d %s, want 503", p, rec.Code, rec.Body)
-		}
-	}
-	if n := testutil.ToFloat64(s.m.refused.WithLabelValues("abandoned")); n != 2 {
-		t.Errorf("refused{abandoned} = %v, want 2", n)
-	}
+	abandon("busy")
 	for range cap(s.slots) {
 		<-s.slots
+	}
+	abandon("free")
+	if n := testutil.ToFloat64(s.m.refused.WithLabelValues("abandoned")); n != 4 {
+		t.Errorf("refused{abandoned} = %v, want 4", n)
+	}
+	if len(s.slots) != 0 {
+		t.Errorf("%d slots still held after abandoned requests", len(s.slots))
 	}
 	if _, err := s.store.Load().Current().FacetsContext(ctx, nil, []string{"source"}); err == nil {
 		t.Error("FacetsContext with a done context answered")
