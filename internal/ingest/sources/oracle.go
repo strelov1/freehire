@@ -7,6 +7,7 @@ import (
 	"html"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -96,12 +97,18 @@ func (s oracle) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 		return nil, err
 	}
 
-	return fetchDetails(reqs, defaultDetailWorkers, func(r oracleRequisition) (Job, bool) {
+	jobs := fetchDetails(reqs, defaultDetailWorkers, func(r oracleRequisition) (Job, bool) {
 		if seen(r.ID) {
 			return Job{ExternalID: r.ID, URL: oracleJobURL(b, r.ID), Company: e.Company, SeenRefresh: true}, true
 		}
 		return s.detail(ctx, e, b, r)
-	}), nil
+	})
+	// A board that listed requisitions and read none of them did not read the board; returning
+	// only markers would record it healthy (AGENT-REFERENCE.md, "A crawl that reads nothing").
+	if len(jobs) > 0 && !slices.ContainsFunc(jobs, func(j Job) bool { return !j.Unreadable }) {
+		return nil, fmt.Errorf("oracle: board %q: all %d detail requests failed", e.Board, len(jobs))
+	}
+	return jobs, nil
 }
 
 func oracleJobURL(b oracleBoard, id string) string {
@@ -147,8 +154,7 @@ func (s oracle) listRequisitions(ctx context.Context, b oracleBoard) ([]oracleRe
 			if v.TotalCount > oracleOffsetCap {
 				continue
 			}
-			id := strings.Trim(string(v.ID), `"`)
-			_, slice, err := s.listSlice(ctx, b, ","+f.param+"="+url.PathEscape(id))
+			_, slice, err := s.listSlice(ctx, b, ","+f.param+"="+oracleFacetParam(v.ID))
 			if err != nil {
 				return nil, err
 			}
@@ -156,6 +162,18 @@ func (s oracle) listRequisitions(ctx context.Context, b oracleBoard) ([]oracleRe
 		}
 	}
 	return reqs, nil
+}
+
+// oracleFacetParam encodes a facet Id as a finder value: a string Id is JSON-decoded (it may
+// carry escapes such as \u0026), a numeric one is used as written. QueryEscape covers the
+// characters that would end the value ("&", ",", ";"); its "+" for a space becomes %20.
+func oracleFacetParam(raw json.RawMessage) string {
+	id := string(raw)
+	var str string
+	if json.Unmarshal(raw, &str) == nil {
+		id = str
+	}
+	return strings.ReplaceAll(url.QueryEscape(id), "+", "%20")
 }
 
 // listSlice pages one listing (the whole board, or the facet filter appended to the finder)

@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -326,7 +327,8 @@ func TestOracleFailedDetailIsUnreadableNotDropped(t *testing.T) {
 	fake := (&routedHTTP{}).
 		routeErr("%22timeout%22", errors.New("context deadline exceeded")).
 		routeErr("%22gone%22", &StatusError{Code: http.StatusNotFound}).
-		route("findReqs", oracleListPage(2, "timeout", "gone"))
+		route("%22ok%22", `{"items": [{"ExternalDescriptionStr": "<p>ok</p>"}]}`).
+		route("findReqs", oracleListPage(3, "timeout", "gone", "ok"))
 
 	jobs, err := NewOracle(fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Acme", Provider: "oracle", Board: "fa-test.fa.ocs.oraclecloud.com/CX_1",
@@ -334,7 +336,38 @@ func TestOracleFailedDetailIsUnreadableNotDropped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 1 || jobs[0].ExternalID != "timeout" || !jobs[0].Unreadable {
-		t.Fatalf("jobs = %+v, want only an Unreadable marker for the timed-out requisition", jobs)
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	if len(jobs) != 2 || !byID["timeout"].Unreadable || byID["ok"].Unreadable {
+		t.Fatalf("jobs = %+v, want an Unreadable marker for the timed-out requisition and the readable one", jobs)
+	}
+}
+
+// TestOracleFailsWhenNoListedDetailIsRead: a board whose every new requisition failed its detail
+// read nothing, so it must fail rather than be recorded healthy on markers alone.
+func TestOracleFailsWhenNoListedDetailIsRead(t *testing.T) {
+	fake := (&routedHTTP{}).
+		routeErr("ById", errors.New("context deadline exceeded")).
+		route("findReqs", oracleListPage(2, "a", "b"))
+
+	_, err := NewOracle(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "oracle", Board: "fa-test.fa.ocs.oraclecloud.com/CX_1",
+	})
+	if err == nil {
+		t.Fatal("Fetch succeeded, want an error when every detail request failed")
+	}
+}
+
+func TestOracleFacetParamDecodesStringIDs(t *testing.T) {
+	for raw, want := range map[string]string{
+		`"Sales \u0026 Marketing"`: "Sales%20%26%20Marketing",
+		`"C++ Dev"`:                "C%2B%2B%20Dev",
+		`300000001250514`:          "300000001250514",
+	} {
+		if got := oracleFacetParam(json.RawMessage(raw)); got != want {
+			t.Errorf("oracleFacetParam(%s) = %q, want %q", raw, got, want)
+		}
 	}
 }
