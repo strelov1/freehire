@@ -71,7 +71,7 @@ describe('profile layout gate', () => {
     profileStore.save.mockReturnValue(save.promise);
     render(ProfileLayout, { props: { children } });
     await settle();
-    expect(profileStore.save).toHaveBeenCalledWith([], [], [], [], [], [], null);
+    expect(profileStore.save).toHaveBeenCalledWith([], [], [], [], [], null);
     expect(screen.queryByText('section content')).toBeNull();
     save.resolve();
     await settle();
