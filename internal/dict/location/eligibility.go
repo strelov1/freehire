@@ -147,7 +147,7 @@ var sponsorshipTail = regexp.MustCompile(
 // whole words (or, for "n't"/"non-", as a suffix/prefix of one) against the sentence the
 // phrase sits in, not the phrase itself ("does not require US citizenship").
 var negationWords = map[string]bool{
-	"not": true, "no": true, "cannot": true, "never": true,
+	"not": true, "no": true, "cannot": true, "never": true, "unable": true,
 	"without": true, "except": true, "unless": true, "excluding": true,
 }
 
@@ -222,7 +222,7 @@ func negatedSentence(sentence string) bool {
 	sentence = sponsorshipTail.ReplaceAllString(sentence, " ")
 	for _, word := range strings.Fields(sentence) {
 		word = strings.Trim(word, ".,;:!?()\"'")
-		if negationWords[word] || strings.HasSuffix(word, "n't") || strings.HasPrefix(word, "non-") {
+		if negationWords[word] || strings.HasSuffix(word, "n't") || strings.HasSuffix(word, "n’t") || strings.HasPrefix(word, "non-") {
 			return true
 		}
 	}

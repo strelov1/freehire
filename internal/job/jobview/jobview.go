@@ -191,6 +191,19 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	// below (dict wins).
 	e := f.Enrichment
 
+	// Search indexing uses this same projection. Do not let stale model
+	// geography replace an explicit worldwide arrangement or revive exclusions.
+	if !geoPinned(f.Countries, f.Regions) {
+		if slices.Contains(f.Regions, "global") && f.WorkMode == "remote" &&
+			len(e.Countries)+len(e.Regions)+len(e.Cities) > 0 && location.WorldwideRemoteFromDescription(f.Description) {
+			e.Countries, e.Regions, e.Cities = nil, nil, nil
+		} else if len(e.Countries) > 0 {
+			if excluded := location.ExcludedCountriesFromDescription(f.Description); len(excluded) > 0 {
+				e.Countries, e.Regions = location.WithoutExcludedGeography(
+					normalizeSet(e.Countries), location.NormalizeRegions(e.Regions), excluded, f.Location)
+			}
+		}
+	}
 	countries, regions := geoFacet(f.Countries, f.Regions, e.Countries, e.Regions)
 	workMode := f.WorkMode
 	// Seniority and the synthetic facets are always the dictionary column value, kept nested
