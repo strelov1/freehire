@@ -301,6 +301,33 @@ op findJob(/** The posting's URL in the wild. (e.g. `https://boards.greenhouse.i
 @get
 op getJob(/** The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) */ @path slug: string): Data<unknown> | Problem;
 
+/** Open posting skills and requirements for a resume review performed in the browser. */
+@summary("Get an open posting for resume review.")
+@useAuth(NoAuth)
+@opExample(#{ returnType: #{ data: #{
+  public_slug: "senior-go-engineer-acme-1a2b",
+  title: "Senior Go Engineer",
+  company: "Acme",
+  location: "Remote",
+  skills: #["go"],
+} } })
+@tag("Jobs")
+@route("/jobs/{slug}/skill-fit")
+@get
+op getResumeReviewPosting(/** The public posting slug. */ @path slug: string): Data<unknown> | Problem;
+
+/** Practice questions from the posting. A signed-in caller can also see examples from their own experience bank. */
+@summary("Get a posting-based interview preparation sheet.")
+@useAuth(NoAuth)
+@opExample(#{ returnType: #{ data: #{
+  job: #{ public_slug: "senior-go-engineer-acme-1a2b", title: "Senior Go Engineer", company: "Acme", location: "Remote" },
+  questions: #[#{ prompt: "Which project best prepares you for this role?" }],
+} } })
+@tag("Jobs")
+@route("/jobs/{slug}/interview-prep")
+@get
+op getInterviewPrep(/** The public posting slug. */ @path slug: string): Data<unknown> | Problem;
+
 // The open postings a collapsed job stands for, one per city.
 /**
  * The per-city openings folded under one canonical card by content-dedup — each keeps its

@@ -710,6 +710,42 @@ curl "https://freehire.me/api/v1/jobs/<slug>/copies"
 }
 ```
 
+### `GET /jobs/{slug}/interview-prep`
+
+**Auth:** Public
+
+Get a posting-based interview preparation sheet.
+
+Practice questions from the posting. A signed-in caller can also see examples from their own experience bank.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The public posting slug. |
+
+```bash
+curl "https://freehire.me/api/v1/jobs/<slug>/interview-prep"
+```
+
+```json
+{
+  "data": {
+    "job": {
+      "public_slug": "senior-go-engineer-acme-1a2b",
+      "title": "Senior Go Engineer",
+      "company": "Acme",
+      "location": "Remote"
+    },
+    "questions": [
+      {
+        "prompt": "Which project best prepares you for this role?"
+      }
+    ]
+  }
+}
+```
+
 ### `POST /jobs/{slug}/recruiter-contacts`
 
 **Auth:** Session or API key
@@ -743,6 +779,38 @@ curl -X POST "https://freehire.me/api/v1/jobs/<slug>/recruiter-contacts" -H "Aut
       "confidence": "high"
     }
   ]
+}
+```
+
+### `GET /jobs/{slug}/skill-fit`
+
+**Auth:** Public
+
+Get an open posting for resume review.
+
+Open posting skills and requirements for a resume review performed in the browser.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The public posting slug. |
+
+```bash
+curl "https://freehire.me/api/v1/jobs/<slug>/skill-fit"
+```
+
+```json
+{
+  "data": {
+    "public_slug": "senior-go-engineer-acme-1a2b",
+    "title": "Senior Go Engineer",
+    "company": "Acme",
+    "location": "Remote",
+    "skills": [
+      "go"
+    ]
+  }
 }
 ```
 

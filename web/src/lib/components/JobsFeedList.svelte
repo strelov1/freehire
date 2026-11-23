@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import { Button } from '#lib/ui/index.js';
   import States from './States.svelte';
   import type { Job } from '#lib/types.js';
   import JobRow from './JobRow.svelte';
@@ -46,7 +48,18 @@
     aria-busy={holdingOver}
   >
     {#each jobs as job (job.public_slug)}
-      <JobRow {job} clientMatch={clientMatches.get(job.public_slug)} {onHide} {hideCompany} flat />
+      <JobRow {job} clientMatch={clientMatches.get(job.public_slug)} {onHide} {hideCompany} flat>
+        {#snippet footer()}
+          {#if !job.closed_at}
+            <Button
+              variant="ghost"
+              size="sm"
+              href={`${resolve('/tools/job-fit')}?job=${encodeURIComponent(job.public_slug)}`}
+              aria-label="Review your resume for {job.title}"
+            >Review resume</Button>
+          {/if}
+        {/snippet}
+      </JobRow>
     {/each}
   </div>
 {/if}

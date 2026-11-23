@@ -25,6 +25,25 @@ import type { JobCopy, Page, RecruiterContact, Slice } from '../api-types';
 import type { components } from '#lib/generated/api.js';
 import { ApiError, jsonBody, query, toSlice } from '../api-core';
 
+export interface ToolJob {
+  public_slug: string;
+  title: string;
+  company: string;
+  location?: string;
+}
+
+export interface ResumeReviewPosting extends ToolJob {
+  skills: string[];
+  requirements?: { text: string; priority: string }[];
+}
+
+export interface InterviewPrepSheet {
+  job: ToolJob;
+  questions: { prompt: string; topic?: string }[];
+  examples?: { claim: string; context?: string; metrics?: string[]; place?: string }[];
+  examples_unavailable?: boolean;
+}
+
 export function jobsApi({ call, request, requestData, baseUrl }: Http) {
   async function listJobs(limit: number, offset: number): Promise<Slice<Job>> {
     return toSlice(await request<Page<Job>>(`/api/v1/jobs${query(limit, offset)}`), offset);
@@ -333,8 +352,18 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     return requestData<SourceEntry[]>(`/api/v1/sources`);
   }
 
+  async function getInterviewPrep(slug: string, signal: AbortSignal): Promise<InterviewPrepSheet> {
+    return requestData<InterviewPrepSheet>(`/api/v1/jobs/${encodeURIComponent(slug)}/interview-prep`, { signal });
+  }
+
+  async function getResumeReviewPosting(slug: string, signal: AbortSignal): Promise<ResumeReviewPosting> {
+    return requestData<ResumeReviewPosting>(`/api/v1/jobs/${encodeURIComponent(slug)}/skill-fit`, { signal });
+  }
+
   return {
     listJobs,
+    getInterviewPrep,
+    getResumeReviewPosting,
     getJob,
     getSimilarJobs,
     findRecruiterContacts,

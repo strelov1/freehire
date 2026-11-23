@@ -19,6 +19,7 @@ import {
   Compass,
   Info,
   Layers,
+  ListChecks,
   MessagesSquare,
   Radar,
   TrendingUp,
@@ -54,6 +55,7 @@ export const NAV = {
   open: { href: '/open', label: 'Open', icon: Unlock },
 
   // What the product does beyond listing jobs.
+  tools: { href: '/tools', label: 'Job search tools', icon: ListChecks },
   cvTailoring: { href: '/features/tailor', label: 'CV tailoring', icon: Wand },
   jobNotifications: { href: '/features/notifications', label: 'Job notifications', icon: Bell },
 

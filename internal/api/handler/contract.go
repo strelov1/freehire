@@ -33,6 +33,7 @@ import (
 // contractHandlers is the one value the generated server calls. Each migrated group
 // embeds its handlers here, so a group that misses an operation does not compile.
 type contractHandlers struct {
+	*interviewPrepHandlers
 	*emailPrefsHandlers
 	*talentCatalogHandlers
 	*companyWatchHandlers

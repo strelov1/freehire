@@ -13129,6 +13129,21 @@ func (s *GetEmployerTeamOK) SetData(val EmployerTeam) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type GetInterviewPrepOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetInterviewPrepOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetInterviewPrepOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
 type GetInterviewsOK struct {
 	Data []ScheduledInterview `json:"data"`
 	Meta TimelineMeta         `json:"meta"`
@@ -13415,6 +13430,21 @@ func (s *GetResumeOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *GetResumeOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetResumeReviewPostingOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetResumeReviewPostingOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetResumeReviewPostingOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
