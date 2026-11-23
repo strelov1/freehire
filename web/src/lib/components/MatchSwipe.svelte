@@ -4,7 +4,8 @@
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { ApiError, isPlanRefusal } from '#lib/api-core.js';
-  import type { FeedCard } from '#lib/types.js';
+  import type { FeedCard, FeedMeta } from '#lib/types.js';
+  import { feedSource } from '#lib/feedSource.svelte.js';
   import { Badge } from '#lib/ui/index.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import { menuNav } from '#lib/actions/menuNav.js';
@@ -15,6 +16,8 @@
   import SwipeCardBody from './SwipeCardBody.svelte';
   import { FLY_MS, SwipeGesture } from './swipeGesture.svelte.js';
   import FeedNewEnd from './FeedNewEnd.svelte';
+  import FeedSourceEmpty from './FeedSourceEmpty.svelte';
+  import FeedSourceMenu from './FeedSourceMenu.svelte';
   import MatchBlock from './MatchBlock.svelte';
   import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
@@ -26,6 +29,10 @@
   const PAGE = 20;
   let cards = $state<FeedCard[]>([]);
   let loading = $state(true);
+  // The latest page's meta, and whether this session ever showed a card: a saved search that
+  // never did has no matches.
+  let meta = $state<FeedMeta | null>(null);
+  let shownAny = $state(false);
   let failed = $state(false);
   // The plan lapsed while swipe was open: the API refuses with 402.
   let paywalled = $state(false);
@@ -64,9 +71,13 @@
   async function load() {
     loading = true;
     failed = false;
+    const version = feedSource.version; // a reply that outlives a source pick must not undo it
     try {
       const res = await api.meFeed(PAGE);
       const data = res.data;
+      meta = res.meta;
+      if (version === feedSource.version) feedSource.sync(res.meta);
+      if (data.length > 0) shownAny = true;
       if (data.some((c) => c.is_new)) hadNew = true;
       seenCursor = res.meta?.seen_cursor ?? seenCursor;
       // Append, not replace: an Undo during the request may have put a card back.
@@ -248,7 +259,10 @@
   {@attach focusTrap()}
 >
   <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-safe">
-    <h1 id="match-swipe-title" class="text-sm font-medium text-muted-foreground">Matches · by my profile</h1>
+    <div class="flex min-w-0 items-center gap-3">
+      <h1 id="match-swipe-title" class="text-sm font-medium text-muted-foreground">Matches</h1>
+      <FeedSourceMenu />
+    </div>
     <div class="ml-auto flex items-center gap-2">
       {#if current && !paused}
         <div class="relative" bind:this={menuRoot}>
@@ -389,6 +403,10 @@
     <div class="flex flex-1 items-center justify-center">
       <States state="error" message="Failed to load your matches." />
     </div>
+  {:else if meta?.reason === 'search_deleted'}
+    <FeedSourceEmpty kind="deleted" />
+  {:else if meta?.source === 'saved_search' && (meta.reason === 'no_usable_fields' || !shownAny)}
+    <FeedSourceEmpty kind="no_matches" />
   {:else}
     <div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
       <p class="text-lg font-semibold">You're all caught up</p>

@@ -98,10 +98,12 @@ export type FeedCard = ContractJob & {
   is_new?: boolean;
 };
 
-/** reason: why the feed is empty without searching (no_profile, no_usable_fields).
+/** reason: why the feed is empty without searching (no_profile, no_usable_fields, search_deleted).
  *  degraded: no_match_vector when the profile has no skills to rank by. */
 export interface FeedMeta {
-  source: 'profile';
+  /** What the feed matches on. Open enum. */
+  source: 'profile' | 'saved_search' | string;
+  saved_search_id?: number;
   total: number;
   reason?: string;
   degraded?: string;

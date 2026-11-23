@@ -71,6 +71,21 @@ describe('MatchFeedList', () => {
     expect(screen.queryByText('Failed to load your matches.')).toBeNull();
   });
 
+  it('shows the deleted-search screen, and Back to matching by profile switches to the profile', async () => {
+    meFeed.mockResolvedValueOnce(page([], { source: 'saved_search', saved_search_id: 2, reason: 'search_deleted' }));
+    render(MatchFeedList);
+    expect(await screen.findByText('This search was deleted')).toBeTruthy();
+    expect(screen.queryByText('Tell us what you are looking for')).toBeNull();
+  });
+
+  it('shows no matches, never widened, for an empty saved-search page', async () => {
+    meFeed.mockResolvedValueOnce(page([], { source: 'saved_search', saved_search_id: 2 }));
+    render(MatchFeedList);
+    expect(await screen.findByText('No matches for this search')).toBeTruthy();
+    expect(screen.getByText("We don't widen your search to fill the feed.")).toBeTruthy();
+    expect(screen.getByText('Edit search').getAttribute('href')).toBe('/my/notifications/searches');
+  });
+
   it('shows the error state for any other failure', async () => {
     meFeed.mockRejectedValue(new ApiError(500, 'boom'));
     render(MatchFeedList);
@@ -87,9 +102,9 @@ describe('MatchFeedList', () => {
   });
 
   it.each([
-    ['source_changed', () => meFeed.mockResolvedValueOnce(page([], { reason: 'source_changed' }))],
-    ['a rejected cursor (400)', () => meFeed.mockRejectedValueOnce(new ApiError(400, 'invalid cursor'))],
-  ])('restarts from page 1 silently on %s', async (_, next) => {
+    { on: 'source_changed', next: () => meFeed.mockResolvedValueOnce(page([], { reason: 'source_changed' })) },
+    { on: 'a rejected cursor (400)', next: () => meFeed.mockRejectedValueOnce(new ApiError(400, 'invalid cursor')) },
+  ])('restarts from page 1 silently on $on', async ({ next }) => {
     meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
     next();
     meFeed.mockResolvedValueOnce(page(['a', 'c'], { next_cursor: 'c2' }));
@@ -100,6 +115,16 @@ describe('MatchFeedList', () => {
     expect(screen.getAllByText('a')).toHaveLength(1);
     expect(screen.queryByText('Fill in my profile')).toBeNull();
     expect(await screen.findByText('Show more matches')).toBeTruthy();
+  });
+
+  it('drops the old cards when another tab switched the source', async () => {
+    meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
+    meFeed.mockRejectedValueOnce(new ApiError(400, 'invalid cursor'));
+    meFeed.mockResolvedValueOnce(page(['s'], { source: 'saved_search', saved_search_id: 2 }));
+    render(MatchFeedList);
+    await fireEvent.click(await screen.findByText('Show more matches'));
+    expect(await screen.findByText('s')).toBeTruthy();
+    expect(screen.queryByText('a')).toBeNull();
   });
 
   it('badges new cards, pauses before the rest, and posts seen once', async () => {

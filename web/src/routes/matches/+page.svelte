@@ -4,6 +4,8 @@
   import { resolve } from '$app/paths';
   import { Layers } from '@lucide/svelte';
   import type { PageData } from './$types';
+  import { feedSource } from '#lib/feedSource.svelte.js';
+  import FeedSourceMenu from '#lib/components/FeedSourceMenu.svelte';
   import MatchFeedList from '#lib/components/MatchFeedList.svelte';
   import MatchesUpgrade from '#lib/components/MatchesUpgrade.svelte';
   import MatchSwipe from '#lib/components/MatchSwipe.svelte';
@@ -26,7 +28,7 @@
   <header class="flex items-center justify-between gap-3">
     <div class="min-w-0">
       <h1 class="text-2xl font-semibold">Matches</h1>
-      <p class="text-sm text-muted-foreground">Jobs that fit your profile, best first</p>
+      <p class="text-sm text-muted-foreground">Jobs that fit you, best first</p>
     </div>
     {#if data.paid}
       <button
@@ -41,12 +43,19 @@
   </header>
 
   {#if data.paid}
-    <MatchFeedList />
+    {#if !swipe}
+      <FeedSourceMenu /><!-- swipe mounts its own in its header -->
+    {/if}
+    {#key feedSource.version}
+      <MatchFeedList />
+    {/key}
   {:else}
     <MatchesUpgrade price={data.price} />
   {/if}
 </div>
 
 {#if swipe && data.paid}
-  <MatchSwipe onClose={() => setMode('feed')} />
+  {#key feedSource.version}
+    <MatchSwipe onClose={() => setMode('feed')} />
+  {/key}
 {/if}

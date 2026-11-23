@@ -75,3 +75,31 @@ func TestFeedState(t *testing.T) {
 		t.Fatalf("high-water = %+v, %v; want the oldest recent pending job %v", hw, err, recent)
 	}
 }
+
+func TestFeedSource(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Pool(t)
+	q := db.New(pool)
+
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('fsrc@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.GetFeedSource(ctx, userID); err == nil {
+		t.Fatal("no stored source must read as no row (the profile)")
+	}
+	set := func(id int64) {
+		t.Helper()
+		if err := q.SetFeedSource(ctx, db.SetFeedSourceParams{UserID: userID, SavedSearchID: pgtype.Int8{Int64: id, Valid: id != 0}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set(42) // no saved_searches row: a deleted search must stay readable as a stored choice
+	if got, err := q.GetFeedSource(ctx, userID); err != nil || got.Int64 != 42 || !got.Valid {
+		t.Fatalf("source = %+v, %v; want 42", got, err)
+	}
+	set(0)
+	if got, err := q.GetFeedSource(ctx, userID); err != nil || got.Valid {
+		t.Fatalf("source = %+v, %v; want NULL (profile)", got, err)
+	}
+}

@@ -6,7 +6,9 @@
   import type { FeedCard, FeedMeta } from '#lib/types.js';
   import { ensureDismissedLoaded, isDismissed } from '#lib/dismissedJobs.svelte.js';
   import { Badge } from '#lib/ui/index.js';
+  import { feedSource } from '#lib/feedSource.svelte.js';
   import FeedNewEnd from './FeedNewEnd.svelte';
+  import FeedSourceEmpty from './FeedSourceEmpty.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
   import JobRow from './JobRow.svelte';
   import MatchBlock from './MatchBlock.svelte';
@@ -29,6 +31,9 @@
   let paywalled = $state(false);
   // The signed cursor for the next page; absent on the last one.
   let cursor = $state<string | undefined>();
+  // The first page of this session had no card: a saved search with no matches.
+  let firstEmpty = $state(false);
+  const onSearch = $derived(meta?.source === 'saved_search');
   const hidden = new HiddenJobUndo();
   const visible = $derived(cards.filter((c) => !isDismissed(c.public_slug)));
 
@@ -58,6 +63,7 @@
   }
 
   async function fetchPage(next?: string): Promise<void> {
+    const version = feedSource.version; // a reply that outlives a source pick must not undo it
     if (!next) {
       // A restart is a new session: nothing of the old one carries over.
       restShown = false;
@@ -75,7 +81,11 @@
     // The profile changed under the cursor: start over too. Never put this reason in `meta`,
     // which would show the empty-profile screen.
     if (next && res.meta.reason === 'source_changed') return fetchPage();
+    // Another tab switched the source: the old cards belong to its filters, not this one's.
+    if (meta && (meta.source !== res.meta.source || meta.saved_search_id !== res.meta.saved_search_id)) cards = [];
     meta = res.meta;
+    if (version === feedSource.version) feedSource.sync(res.meta);
+    if (!next) firstEmpty = res.data.length === 0 && cards.length === 0; // a restart under shown cards is not "no matches"
     if (res.meta.seen_cursor) {
       seenCursor = res.meta.seen_cursor;
       newEnded = true;
@@ -127,6 +137,10 @@
   <States state="loading" />
 {:else if failed && cards.length === 0}
   <States state="error" message="Failed to load your matches." />
+{:else if meta?.reason === 'search_deleted'}
+  <FeedSourceEmpty kind="deleted" focus={false} />
+{:else if onSearch && (meta?.reason === 'no_usable_fields' || (firstEmpty && !cursor))}
+  <FeedSourceEmpty kind="no_matches" focus={false} />
 {:else if meta?.reason}
   <div class="flex flex-col items-center gap-3 py-16 text-center">
     <p class="text-lg font-semibold">Tell us what you are looking for</p>
