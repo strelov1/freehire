@@ -2,6 +2,7 @@ package facetidx
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 
 	"github.com/RoaringBitmap/roaring/v2"
@@ -28,6 +29,12 @@ type Answer struct {
 // Facets counts the open documents matching filter (nil for all) and, for every requested
 // attribute, the distribution of its values among them.
 func (ix *Index) Facets(filter any, facets []string) (Answer, error) {
+	return ix.FacetsContext(context.Background(), filter, facets)
+}
+
+// FacetsContext is Facets that gives up between attributes once ctx is done: a caller that
+// timed out (the API falls back to Meilisearch) must not keep a core busy counting.
+func (ix *Index) FacetsContext(ctx context.Context, filter any, facets []string) (Answer, error) {
 	f, err := ix.match(filter)
 	if err != nil {
 		return Answer{}, err
@@ -38,6 +45,9 @@ func (ix *Index) Facets(filter any, facets []string) (Answer, error) {
 		Stats:        map[string]Stat{},
 	}
 	for _, name := range facets {
+		if err := ctx.Err(); err != nil {
+			return Answer{}, err
+		}
 		fld, ok := ix.fields[name]
 		if !ok || rangeOnly[name] {
 			return Answer{}, fmt.Errorf("%w: %q", ErrUnknownFacet, name)
