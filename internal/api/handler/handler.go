@@ -313,6 +313,7 @@ func Register(app *fiber.App, cfg Config) {
 	bookingLinkH := newBookingLinkSurface(cfg, queries, plans)
 	inboxH.bookingLinks = bookingLinkH
 
+	app.Use(refuseCrossOriginCookieWrites(authH.browserOrigins))
 	a.mountAppRoutes(app, cfg, queries)
 
 	api := app.Group("/api/v1")
