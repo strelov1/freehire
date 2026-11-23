@@ -30,6 +30,10 @@ export class FormPlan {
    *  saved. Neither is offered for saving again. Reset by a page change, with
    *  `formFilled`. */
   readonly autofilled = new SvelteSet<string>();
+  /** Questions that already held a value the first time this page showed them, by normalised
+   *  label: LinkedIn's own prefill, not the candidate's typing. Reset with `autofilled`. */
+  readonly prefilled = new SvelteSet<string>();
+  readonly #seen = new SvelteSet<string>();
   /** The last read's questions, scoped as the plan is — with their values, which the
    *  plan does not carry. What the "save my answers" offer is computed from. */
   formFields = $state<FramedField[]>([]);
@@ -40,6 +44,10 @@ export class FormPlan {
   uploads = $state<FramedUpload[]>([]);
   /** A LinkedIn Easy Apply dialog is open: its resume step takes a file through its own picker. */
   easyApply = $state(false);
+  /** ... and it is on the step with the resume upload, the one step "Attach" can act on. */
+  resumeStep = $state(false);
+  /** LinkedIn shows "Your application was sent". */
+  sent = $state(false);
   /** The page is a LinkedIn job that no longer takes applications. */
   closed = $state(false);
 
@@ -92,13 +100,25 @@ export class FormPlan {
       this.plan = null;
       this.uploads = [];
       this.easyApply = false;
+      this.resumeStep = false;
+      this.sent = false;
       this.closed = false;
       this.formFields = [];
       return;
     }
     this.uploads = reply.uploads;
     this.easyApply = reply.easyApply === true;
+    this.resumeStep = reply.resumeStep === true;
+    this.sent = reply.sent === true;
     this.closed = reply.closed === true;
+    if (reply.easyApply) {
+      for (const f of reply.fields) {
+        const label = normalizeLabel(f.label);
+        if (!label || this.#seen.has(label)) continue;
+        this.#seen.add(label);
+        if (f.value.trim() && !this.autofilled.has(label)) this.prefilled.add(label);
+      }
+    }
     this.questionsSeen = reply.fields.filter((f) => f.label.trim() !== '').length;
     if (!showsApplicationForm(reply.fields, reply.uploads, { filled: this.formFilled, easyApply: reply.easyApply })) {
       this.plan = null;
@@ -111,6 +131,14 @@ export class FormPlan {
     // questions ARE the form.
     this.formFields = reply.uploads.length > 0 ? scopeToApplication(reply.fields, reply.uploads) : reply.fields;
     this.plan = buildPlan(this.formFields);
+  }
+
+  /** Forgets what was learned about the previous page's questions. */
+  resetPage() {
+    this.formFilled = false;
+    this.autofilled.clear();
+    this.prefilled.clear();
+    this.#seen.clear();
   }
 
   /** Ticks one question off the plan, narrowed by whatever address the caller

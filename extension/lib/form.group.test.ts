@@ -45,7 +45,8 @@ describe('extractForm grouping', () => {
       label: 'Which countries do you anticipate working in? *',
       options: ['Germany', 'Poland', 'Spain'],
       type: 'checkbox',
-      required: false,
+      // The trailing asterisk is the form's required marker.
+      required: true,
     });
   });
 

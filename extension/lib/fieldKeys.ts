@@ -134,22 +134,33 @@ export function normalizeLabel(label: string): string {
 /**
  * Maps a control's label to a canonical profile key, or null when unknown.
  *
- * The synonym has to *open* the label, not merely appear in it. A real form asks
+ * A synonym normally has to *open* the label, not merely appear in it. A real form asks
  * "Are you authorized to lawfully work for Roku in the country to which you are
  * applying?" — a substring match hands that Yes/No question the `country` key,
  * and the profile's country goes into a radio group. Anchoring at the front
  * still reads every label the live ATS forms produce, decorations and all
  * ("First Name (required) e85441b6"), because those trail the question rather
  * than lead it.
+ *
+ * The exception is a long synonym: a question with a preamble ("Para contratação na
+ * modalidade Contractor ... qual a sua pretensão salarial?") is still asking it, and a phrase
+ * of this length does not turn up inside an unrelated question. Openers win over these.
  */
 export function matchFieldKey(label: string): string | null {
   const normalized = normalizeLabel(label);
   if (!normalized) return null;
-  for (const [key, synonyms] of Object.entries(FIELD_SYNONYMS)) {
+  const entries = Object.entries(FIELD_SYNONYMS);
+  for (const [key, synonyms] of entries) {
     if (synonyms.some((s) => opensWith(normalized, s))) return key;
+  }
+  for (const [key, synonyms] of entries) {
+    if (synonyms.some((s) => s.length >= ANYWHERE_MIN_LEN && containsWord(normalized, s))) return key;
   }
   return null;
 }
+
+/** The shortest synonym trusted anywhere in a label rather than only at its start. */
+const ANYWHERE_MIN_LEN = 15;
 
 /** True when the label opens with this synonym and ends it at a word boundary. */
 function opensWith(label: string, synonym: string): boolean {
@@ -157,4 +168,13 @@ function opensWith(label: string, synonym: string): boolean {
   // "Citywide preference" is not a `city` question. äöüß count as letters too, so
   // German "Ort" does not claim "Ortsteil" nor "Land" claim "Landkreis".
   return !/[a-z0-9äöüß]/.test(label.charAt(synonym.length));
+}
+
+/** True when the synonym occurs in the label between word boundaries. */
+function containsWord(label: string, synonym: string): boolean {
+  for (let at = label.indexOf(synonym); at >= 0; at = label.indexOf(synonym, at + 1)) {
+    if (!/[a-z0-9äöüß]/.test(label.charAt(at - 1)) && !/[a-z0-9äöüß]/.test(label.charAt(at + synonym.length)))
+      return true;
+  }
+  return false;
 }

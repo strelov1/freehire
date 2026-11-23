@@ -34,7 +34,9 @@
   } = $props();
 
   let blockers = $derived(partitionBlockers(match.blockers));
-  let hasGaps = $derived(match.missing.length > 0 || blockers.unmet.length > 0);
+  // "Anyway" only when something argues against it: coverage below the good band, or a
+  // requirement the candidate does not meet. A few missing chips on a strong match are not a warning.
+  let hasGaps = $derived(tone !== 'good' || blockers.unmet.length > 0);
   // Nothing left without a refusal is the shadow run: no count rather than "0 left".
   let tailorsLeft = $derived(allowanceRemaining(allowance));
 </script>

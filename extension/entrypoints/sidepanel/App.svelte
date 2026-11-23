@@ -12,15 +12,15 @@
   import { pageIdentity, readStablePageKey } from '../../lib/assistant/pageIdentity';
   import { track } from '../../lib/analytics';
   import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
-  import { type FreehireJob } from '../../lib/freehire';
   import { normalizeLabel } from '../../lib/fieldKeys';
-  import { leftAnApplication, type PlanItem } from '../../lib/applyPlan';
+  import type { PlanItem } from '../../lib/applyPlan';
   import type { WalkHooks } from '../../lib/formWalk';
   import { agentAutofill, saveChosenAnswers, type FillPanel } from '../../lib/formFill';
   import { ToolChannel } from '../../lib/tools/client';
   import { activeTabPage } from '../../lib/tools/page';
   import { FormPlan } from './formPlan.svelte';
   import { PageMatch } from './pageMatch.svelte';
+  import { AppliedTracker, type CurrentTab } from './applied.svelte';
   import { answersToOffer, type AnswerOffer } from '../../lib/answerOffer';
   import ChatPanel from './ChatPanel.svelte';
   import MatchTab from './MatchTab.svelte';
@@ -54,6 +54,9 @@
   let chatPageKey: string | null = null;
 
   let user = $state<HireUser | null>(null);
+  /** False until the first stored-session check resolves: the header must not say
+   *  "offline / Sign in" for a user who is signed in and merely not loaded yet. */
+  let authReady = $state(false);
   let authBusy = $state(false);
   let authError = $state('');
   let authGeneration = 0;
@@ -91,6 +94,10 @@
   });
 
   const pageMatch = new PageMatch((notice) => notices.push(notice));
+  // Declared further down; read inside the effect, after both exist.
+  $effect(() => {
+    pageMatch.keepCard = form.easyApply;
+  });
 
   // "Match" carries the current page's job info and its page-scoped actions
   // (Autofill, Add to freehire); "Chat" carries the conversation. Split into tabs
@@ -103,7 +110,7 @@
     track('panel_open');
     // The conversation is created lazily on the first message, so an idle panel
     // starts nothing; a conversation held earlier is repainted here.
-    void restoreSession();
+    void restoreSession().finally(() => (authReady = true));
 
     // Re-run the match when the user switches tabs or a page finishes loading,
     // so the card tracks whatever job page is in front — like the reference.
@@ -173,8 +180,7 @@
     const auth = authGeneration;
     const key = await currentPageKey();
     if (requestId !== pageRequestId || auth !== authGeneration || !user) return;
-    form.formFilled = false;
-    form.autofilled.clear();
+    form.resetPage();
     if (chatPageKey !== null && key !== chatPageKey) {
       resetChat();
       chatPageKey = key;
@@ -388,41 +394,26 @@
   let autofilling = $state(false);
 
   // The application-form plan (see FormPlan). Every read is followed by
-  // noteApplication, which tracks the started application across reads.
-  const form = new FormPlan(() => noteApplication());
+  // applied.note, which tracks the started application across reads.
+  const form = new FormPlan(() => applied.note());
 
   let savingAnswers = $state(false);
-  /** The catalog job whose application form is in front of the user, started. */
-  let startedJob: FreehireJob | null = null;
-  /** The catalog job whose started application gave way to a page with no form — the one
-   *  the "did you submit?" prompt names. Kept until answered. */
-  let appliedCandidate = $state<FreehireJob | null>(null);
-  /** Asked only once the page in front of the user shows no form: the next step of a
-   *  multi-step application is still the application, not its end. */
-  let asksApplied = $derived(appliedCandidate !== null && !form.plan && !autofilling);
-  let answerOffers = $derived(autofilling ? [] : answersToOffer(form.formFields, form.autofilled));
+  let currentTab = $state<CurrentTab>({ id: null, url: '' });
+  const applied = new AppliedTracker(
+    form,
+    pageMatch,
+    () => currentTab,
+    (text) => notices.push(text),
+  );
+  let asksApplied = $derived(applied.asks(autofilling));
+  let answerOffers = $derived(autofilling ? [] : answersToOffer(form.formFields, form.autofilled, form.prefilled));
 
   /** Reads the page's form and rebuilds the plan (signed in only). */
   async function refreshPlan() {
     if (!user) return;
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    currentTab = { id: tab?.id ?? null, url: tab?.url ?? '' };
     await form.refresh();
-  }
-
-  /**
-   * Follows the application through form reads rather than page events: a full navigation
-   * and a single-page ATS replacing its form with a thank-you both end the same way — a
-   * read that finds no form after one that found a started application. Page events
-   * cannot see the second, and race the page's own change notice on the first.
-   */
-  function noteApplication() {
-    if (leftAnApplication(form.plan)) {
-      if (pageMatch.job?.public_slug) startedJob = pageMatch.job;
-      return;
-    }
-    if (!form.plan && startedJob) {
-      appliedCandidate = startedJob;
-      startedJob = null;
-    }
   }
 
   /** Sends the user to one question: the page scrolls there and takes the cursor. */
@@ -504,7 +495,7 @@
 </script>
 
 <div class="app">
-  <PanelHeader {user} {sending} {authBusy} {authError} onSignIn={handleSignIn} onSignOut={handleSignOut} />
+  <PanelHeader {user} {authReady} {sending} {authBusy} {authError} onSignIn={handleSignIn} onSignOut={handleSignOut} />
 
   <TabStrip
     class="tab-strip"
@@ -528,11 +519,12 @@
     {#if activeTab === 'match'}
       <MatchTab
         {user}
+        {authReady}
         {pageMatch}
         {form}
         {notices}
         {asksApplied}
-        bind:appliedCandidate
+        bind:appliedCandidate={applied.candidate}
         {autofilling}
         bind:walkStop
         {answerOffers}

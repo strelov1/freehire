@@ -81,3 +81,21 @@ describe('formatAuthorizedCountries', () => {
     expect(formatAuthorizedCountries('')).toBe('');
   });
 });
+
+describe('matchFieldKey with a preamble', () => {
+  it('finds a long synonym anywhere in the label', () => {
+    expect(
+      matchFieldKey('Para contratação na modalidade Contractor (PJ), informe: Qual a sua pretensão salarial mensal?'),
+    ).toBe('desiredSalary');
+    expect(matchFieldKey('Please tell us: what is your notice period?')).toBe('noticePeriod');
+  });
+
+  it('does not take a short synonym from the middle of a question', () => {
+    expect(matchFieldKey('Which city would you prefer to work from?')).toBeNull();
+    expect(matchFieldKey('Do you have a LinkedIn contact at our company?')).toBeNull();
+  });
+
+  it('keeps word boundaries for long synonyms', () => {
+    expect(matchFieldKey('Is the notice periodicity of our reviews fine?')).toBeNull();
+  });
+});

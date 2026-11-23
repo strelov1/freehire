@@ -8,6 +8,17 @@ import { planRefusedFrom } from './planRefused';
  * recognises what a tab might show, so it must outlive the canonical domain. */
 const JOB_HOSTS = new Set(['freehire.me', 'www.freehire.me', 'freehire.dev', 'localhost']);
 
+/** Whether a page's origin is freehire's own (the sites and the app's configured origin): its
+ *  settings and profile forms are not an application to read, fill or ask "did you submit" about. */
+export function isFreehireOrigin(origin: string): boolean {
+  try {
+    const { hostname } = new URL(origin);
+    return ['freehire.me', 'www.freehire.me', 'freehire.dev'].includes(hostname) || origin === HIRE_ORIGIN;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Returns the freehire job slug for a page URL, or null if the URL is not a
  * freehire job posting. Pure over its input.

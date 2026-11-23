@@ -427,3 +427,30 @@ describe('revealField, revealed twice', () => {
     expect(el.getAttribute('style')).toBe('color: rebeccapurple');
   });
 });
+
+describe('LinkedIn-style radios named after their question', () => {
+  const q = 'Will you now or in the future require sponsorship?*';
+  const radio = (id: string, option: string) =>
+    `<div><div><input id="${id}" type="radio" name="g" aria-label="${q}"><label for="${id}"></label></div><p>${option}</p></div>`;
+
+  it('lists the question once, with the visible option text as options, and reads the * as required', () => {
+    document.body.innerHTML = `<fieldset role="radiogroup">${radio('a', 'Yes')}${radio('b', 'No')}</fieldset>`;
+    const fields = extractForm(document);
+    expect(fields).toHaveLength(1);
+    expect(fields[0]).toMatchObject({ label: q, options: ['Yes', 'No'], required: true });
+  });
+});
+
+describe('control naming', () => {
+  it('prefers the visible label over the placeholder', () => {
+    document.body.innerHTML =
+      '<div><label>Location (city)*</label><input type="text" placeholder="Enter city or location"></div>';
+    expect(extractForm(document)[0]?.label).toBe('Location (city)*');
+  });
+
+  it('prefers the visible label over an aria-label that repeats the placeholder', () => {
+    document.body.innerHTML =
+      '<div><label>Location (city)*</label><input type="text" aria-label="Enter city" placeholder="Enter city"></div>';
+    expect(extractForm(document)[0]?.label).toBe('Location (city)*');
+  });
+});

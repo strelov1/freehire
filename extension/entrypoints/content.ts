@@ -2,7 +2,8 @@ import { startErrorTelemetry } from '../lib/telemetry';
 import { extractSnapshot, hasJobPostingMarkup } from '../lib/scraper';
 import { extractForm, extractUploads, fillByLabel } from '../lib/form';
 import { revealField } from '../lib/revealField';
-import { easyApplyDialog, linkedInPostingClosed } from '../lib/easyApply';
+import { easyApplyDialog, easyApplyOnResumeStep, easyApplySent, linkedInPostingClosed } from '../lib/easyApply';
+import { isFreehireOrigin } from '../lib/freehire';
 import { runStep } from '../lib/combobox';
 import { debounce } from '../lib/debounce';
 import type { RuntimeMessage } from '../lib/protocol';
@@ -57,6 +58,10 @@ export default defineContentScript({
             present: hasJobPostingMarkup(document),
           });
         case 'GET_FRAMED_FORM':
+          // freehire's own pages (profile, tailor) are not an application to read.
+          if (isFreehireOrigin(location.origin)) {
+            return Promise.resolve<RuntimeMessage>({ kind: 'FORM', fields: [], uploads: [] });
+          }
           // The frame tag is stamped by the background relay, which is the only
           // side that knows this frame's id. The uploads travel alongside the
           // questions: they are not fillable, they say whether this is an
@@ -66,6 +71,8 @@ export default defineContentScript({
             fields: extractForm(document),
             uploads: extractUploads(document),
             easyApply: easyApplyDialog(document) !== null,
+            resumeStep: easyApplyOnResumeStep(document),
+            sent: easyApplySent(document),
             // Rides the form read: it already runs on every page change, and the panel
             // must know before it offers to tailor a CV for this job.
             closed: location.hostname.endsWith('linkedin.com') && linkedInPostingClosed(document),

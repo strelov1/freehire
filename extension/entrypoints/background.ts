@@ -13,13 +13,14 @@ import {
 import { mergeComboboxReplies, mergeFrameOutcomes } from '../lib/tools/executor';
 import { fillsForFrame } from '../lib/fillPlan';
 import { getToken } from '../lib/auth';
-import { getTailoredCVForJob, getCVPdfBytes } from '../lib/freehire';
+import { getTailoredCVForJob, getCVPdfBytes, getAutofillProfile } from '../lib/freehire';
 import {
   uploadInputExpression,
   easyApplyUploadButtonExpression,
   pdfDataUrl,
   resolveDownloadedPath,
   pickAttachableUpload,
+  cvFileName,
   classifyAttachError,
   type DownloadsAPI,
 } from '../lib/tools/attachCv';
@@ -120,15 +121,19 @@ async function readFramedForm(): Promise<RuntimeMessage> {
   const fields: FramedField[] = [];
   const uploads: FramedUpload[] = [];
   let easyApply = false;
+  let resumeStep = false;
+  let sent = false;
   let closed = false;
   await eachFrame({ kind: 'GET_FRAMED_FORM' }, (reply, frame) => {
     if (reply?.kind !== 'FORM') return;
     for (const field of reply.fields) fields.push({ ...field, frame });
     for (const upload of reply.uploads) uploads.push({ ...upload, frame });
     easyApply ||= reply.easyApply === true;
+    resumeStep ||= reply.resumeStep === true;
+    sent ||= reply.sent === true;
     closed ||= reply.closed === true;
   });
-  return { kind: 'FRAMED_FORM', fields, uploads, easyApply, closed };
+  return { kind: 'FRAMED_FORM', fields, uploads, easyApply, resumeStep, sent, closed };
 }
 
 /**
@@ -312,6 +317,19 @@ async function uploadThroughPicker(debuggee: { tabId: number }, filePath: string
  * for why this needs the debugging protocol at all.
  */
 async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
+  // A second request while one is running would upload the CV twice.
+  if (attachInFlight) return attachFailed('already attaching — wait for it to finish');
+  attachInFlight = true;
+  try {
+    return await attachTailoredCVOnce(jobSlug);
+  } finally {
+    attachInFlight = false;
+  }
+}
+
+let attachInFlight = false;
+
+async function attachTailoredCVOnce(jobSlug: string): Promise<RuntimeMessage> {
   const token = await getToken();
   if (!token) return attachFailed('not signed in');
 
@@ -320,12 +338,17 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
 
   // Independent of each other — reading the page's frames and fetching the tailored CV
   // metadata share nothing, so there is no reason to pay their latency one after another.
-  const [formReply, cv] = await Promise.all([readFramedForm(), getTailoredCVForJob(jobSlug, token)]);
+  const [formReply, cv, profile] = await Promise.all([
+    readFramedForm(),
+    getTailoredCVForJob(jobSlug, token),
+    getAutofillProfile(token).catch(() => null),
+  ]);
   if (formReply.kind !== 'FRAMED_FORM') return attachFailed('could not read this page to find the upload field');
 
   const pick = pickAttachableUpload(formReply.uploads);
   // LinkedIn Easy Apply has no file field until "Upload resume" opens the picker.
   const viaPicker = pick.kind === 'none' && formReply.easyApply === true;
+  if (viaPicker && !formReply.resumeStep) return attachFailed('open the resume step of Easy Apply first, then attach');
   if (!viaPicker)
     switch (pick.kind) {
       case 'none':
@@ -341,7 +364,9 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
 
   const pdfBytes = await getCVPdfBytes(cv.id, token);
   const dataUrl = pdfDataUrl(pdfBytes);
-  const filename = `freehire-tailored-cv/${cv.job_slug}.pdf`;
+  // The employer sees the file name, so it is the candidate's, not the job's. The job's own
+  // folder keeps names from clashing (a clash would add " (1)" to what the employer sees).
+  const filename = `freehire-tailored-cv/${cv.job_slug}/${(profile && cvFileName(profile)) ?? `${cv.job_slug}.pdf`}`;
 
   let filePath: string;
   try {

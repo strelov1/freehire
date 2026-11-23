@@ -71,3 +71,23 @@ export function linkedInPostingClosed(doc: Document): boolean {
   if (doc.querySelector('.jobs-details-top-card__apply-error')) return true;
   return /no longer accepting applications/i.test((doc.querySelector('main') ?? doc.body)?.textContent ?? '');
 }
+
+/**
+ * Whether the open Easy Apply dialog is on the resume step: the stored-resume radiogroup with
+ * the "Upload resume" button right after it. The one step "Attach tailored CV" can act on.
+ * Mirrors `easyApplyUploadButtonExpression` (a page script that cannot import this).
+ */
+export function easyApplyOnResumeStep(doc: Document): boolean {
+  const holder = easyApplyDialog(doc)?.querySelector('fieldset[role="radiogroup"]')?.nextElementSibling;
+  return !!holder && (holder.matches('button') || holder.querySelector('button') !== null);
+}
+
+/**
+ * Whether LinkedIn is showing its "application was sent" confirmation. Text, because the
+ * screen carries no stable hook; scoped to open dialogs so a job description that says it does
+ * not count.
+ */
+export function easyApplySent(doc: Document): boolean {
+  const SENT = /application was sent|candidatura foi enviada|solicitud (fue|ha sido) enviada|bewerbung wurde gesendet/i;
+  return Array.from(doc.querySelectorAll('dialog[open]')).some((d) => SENT.test(d.textContent ?? ''));
+}

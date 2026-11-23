@@ -210,8 +210,25 @@ export function easyApplyUploadButtonExpression(): string {
     const holder = group && group.nextElementSibling;
     const button = holder && (holder.matches('button') ? holder : holder.querySelector('button'));
     if (!button) return null;
-    button.scrollIntoView({ block: 'center' });
+    // Instant, not the page's smooth scrolling: the centre is measured on the next line.
+    button.scrollIntoView({ block: 'center', behavior: 'instant' });
     const r = button.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   })()`;
+}
+
+/**
+ * The name the employer sees on the uploaded CV: `<First>-<Last>-CV.pdf`, never the job's
+ * slug. Null when the profile names no one, and the caller keeps its own name then.
+ */
+export function cvFileName(profile: { first_name?: string; last_name?: string }): string | null {
+  const parts = [profile.first_name, profile.last_name]
+    .map((p) =>
+      (p ?? '')
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, '')
+        .replace(/\s+/g, '-'),
+    )
+    .filter(Boolean);
+  return parts.length ? `${parts.join('-')}-CV.pdf` : null;
 }

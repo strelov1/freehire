@@ -13,6 +13,7 @@ import { collapse, comboOptions, displayedValues, isComboWidget } from './comboW
 import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, Upload } from './protocol';
 import type { AutofillProfile } from './freehire';
 import { easyApplyDialog, easyApplyFieldError, isStoredResumeChoice } from './easyApply';
+import { extractLabel, textFromIds } from './formLabel';
 import { formatAuthorizedCountries, matchFieldKey, normalizeLabel } from './fieldKeys';
 
 export type Fillable = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -114,8 +115,18 @@ function groupOf(el: Fillable): { container: Element; question: string; key: str
   // nothing distinguishes one question in a container from two. A long report is
   // the safer failure, so such controls stay ungrouped.
   if (!el.name) return null;
-  const labelled = labelledContainer(el);
+  const labelled = labelledContainer(el) ?? namedByControls(el);
   return labelled ? { ...labelled, key: `${el.type} ${el.name}` } : null;
+}
+
+/**
+ * A radio group whose own container states no question, but whose radios are each named after
+ * it (LinkedIn Easy Apply's Yes/No: the aria-label is the question, the option text sits beside).
+ */
+function namedByControls(el: HTMLInputElement): { container: Element; question: string } | null {
+  const container = el.closest('fieldset, [role="radiogroup"]');
+  const question = collapse(el.getAttribute('aria-label'));
+  return container && el.type === 'radio' && question ? { container, question } : null;
 }
 
 /** The nearest container that states the question its controls answer. */
@@ -211,7 +222,9 @@ function describeQuestion({ label, controls }: Question, index: number, forms: H
     name: el.getAttribute('name') ?? '',
     // A React-rendered ATS form typically validates in JS and marks the
     // requirement with ARIA rather than the native attribute.
-    required: controls.some((c) => c.required || c.getAttribute('aria-required') === 'true'),
+    // Plenty of forms (LinkedIn Easy Apply's radio groups) mark it only as a trailing
+    // asterisk in the question's text.
+    required: controls.some((c) => c.required || c.getAttribute('aria-required') === 'true') || /\*\s*$/.test(label),
     value: el.value ?? '',
     combo: isComboWidget(el),
   };
@@ -243,32 +256,6 @@ function describeQuestion({ label, controls }: Question, index: number, forms: H
     if (!field.value) field.value = displayedValues(el).join(', ');
   }
   return field;
-}
-
-/** Best-effort human label for a control, in decreasing reliability. */
-function extractLabel(el: Fillable): string {
-  const fromLabels = Array.from(el.labels ?? [])
-    .map((l) => l.textContent?.trim() ?? '')
-    .filter(Boolean)
-    .join(' ');
-  if (fromLabels) return fromLabels;
-
-  return (
-    textFromIds(el.ownerDocument, el.getAttribute('aria-labelledby')) ||
-    collapse(el.getAttribute('aria-label')) ||
-    collapse(el.getAttribute('placeholder')) ||
-    collapse(el.getAttribute('name'))
-  );
-}
-
-/** The joined text of the elements an `aria-labelledby`-style id list names. */
-function textFromIds(doc: Document, ids: string | null): string {
-  if (!ids) return '';
-  return ids
-    .split(/\s+/)
-    .map((id) => collapse(doc.getElementById(id)?.textContent))
-    .filter(Boolean)
-    .join(' ');
 }
 
 export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {

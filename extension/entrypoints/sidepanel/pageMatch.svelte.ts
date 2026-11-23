@@ -19,6 +19,9 @@ export class PageMatch {
   // vacancy (lib/addJob.ts), decided alongside the miss that put the panel there.
   canAddJob = $state(false);
   contributing = $state(false);
+  /** While true (an Easy Apply dialog is open), a re-read keeps the card on screen instead of
+   *  swapping it for the loading skeleton — LinkedIn fires page events as the dialog opens. */
+  keepCard = false;
 
   // Bumped at the start of every load() call; a stale call checks its own
   // captured id against the current one before writing shared state, so an
@@ -44,7 +47,7 @@ export class PageMatch {
     if (requestId !== this.#requestId) return;
     const url = tab?.url ?? '';
 
-    this.status = 'loading';
+    if (!(this.keepCard && this.status === 'ready')) this.status = 'loading';
     this.error = '';
     try {
       const result = await matchPage(url, token, () => requestId !== this.#requestId);

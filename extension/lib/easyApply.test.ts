@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { easyApplyAction, easyApplyDialog, linkedInPostingClosed } from './easyApply';
+import {
+  easyApplyAction,
+  easyApplyDialog,
+  easyApplyOnResumeStep,
+  easyApplySent,
+  linkedInPostingClosed,
+} from './easyApply';
 import { extractForm, extractUploads, fillByLabel, numericAnswer } from './form';
 import { buildPlan } from './applyPlan';
 import { looksLikeApplication } from './fillPlan';
@@ -160,5 +166,27 @@ describe('linkedInPostingClosed', () => {
       '<button id="jobs-apply-button-id" class="jobs-apply-button" aria-label="Easy Apply to this job">Easy Apply</button>',
     );
     expect(linkedInPostingClosed(document)).toBe(false);
+  });
+});
+
+describe('easyApplyOnResumeStep', () => {
+  it.each([
+    ['step1-contact', false],
+    ['step2-resume', true],
+    ['step3-questions', false],
+  ])('%s -> %s', (step, expected) => {
+    load(step);
+    expect(easyApplyOnResumeStep(document)).toBe(expected);
+  });
+});
+
+describe('easyApplySent', () => {
+  it('reads the confirmation inside an open dialog, not the page behind it', () => {
+    document.body.innerHTML = '<p>Your application was sent in the posting text</p>';
+    expect(easyApplySent(document)).toBe(false);
+    document.body.innerHTML = '<dialog open><h2>Your application was sent to Acme</h2></dialog>';
+    expect(easyApplySent(document)).toBe(true);
+    load('step1-contact');
+    expect(easyApplySent(document)).toBe(false);
   });
 });
