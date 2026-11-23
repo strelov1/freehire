@@ -87,9 +87,16 @@ func (im *Importer) PrepareLinkedIn(ctx context.Context, raw string) (LinkedInRe
 		out.Board = Board{Source: native.Entry.Provider, Board: native.Entry.Board}
 		return out, nil
 	}
-	board, canonical, err := im.LinkedInEmployerBoard(ctx, normalize.CompanySlug(j.Company), j)
+	board, canonical, _, err := im.LinkedInEmployerBoard(ctx, normalize.CompanySlug(j.Company), j)
 	out.Board, out.BoardURL = board, canonical
 	return out, err
+}
+
+// LinkedInEmployerEvidence records hostnames and a detected provider for diagnosis.
+type LinkedInEmployerEvidence struct {
+	WebsiteHost string
+	CareerHosts []string
+	Provider    string
 }
 
 // LinkedInEmployerBoard discovers observed employer career links without inventing
@@ -97,12 +104,13 @@ func (im *Importer) PrepareLinkedIn(ctx context.Context, raw string) (LinkedInRe
 // and on-demand intake; provider pause checks remain in the ordinary write path.
 // companySlug is the catalogue slug to read a stored website under: discovery passes the
 // existing job's slug, which may differ from the LinkedIn spelling of the name.
-func (im *Importer) LinkedInEmployerBoard(ctx context.Context, companySlug string, j sources.Job) (Board, string, error) {
+func (im *Importer) LinkedInEmployerBoard(ctx context.Context, companySlug string, j sources.Job) (Board, string, LinkedInEmployerEvidence, error) {
+	var evidence LinkedInEmployerEvidence
 	website := j.CompanyWebsite
 	if website == "" && im.q != nil {
 		company, err := im.q.GetCompany(ctx, companySlug)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return Board{}, "", err
+			return Board{}, "", evidence, err
 		}
 		if err == nil {
 			var info struct {
@@ -132,14 +140,29 @@ func (im *Importer) LinkedInEmployerBoard(ctx context.Context, companySlug strin
 	resolver, ok := im.boards.(interface {
 		ResolveCompany(context.Context, string) (string, string, string, bool)
 	})
+	if u, err := url.Parse(website); err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.User == nil {
+		evidence.WebsiteHost = strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	}
 	if website == "" || !ok {
-		return Board{}, "", nil
+		return Board{}, "", evidence, nil
 	}
-	source, board, canonical, found := resolver.ResolveCompany(ctx, website)
-	if !found || im.ingest[source] == nil || sources.ProviderKind(im.ingest, source) != "ats" {
-		return Board{}, "", nil
+	var source, board, canonical string
+	var found bool
+	if observed, ok := resolver.(interface {
+		ResolveCompanyWithCareerHosts(context.Context, string) (string, string, string, []string, bool)
+	}); ok {
+		source, board, canonical, evidence.CareerHosts, found = observed.ResolveCompanyWithCareerHosts(ctx, website)
+	} else {
+		source, board, canonical, found = resolver.ResolveCompany(ctx, website)
 	}
-	return Board{Source: source, Board: board}, canonical, nil
+	if !found {
+		return Board{}, "", evidence, nil
+	}
+	evidence.Provider = source
+	if im.ingest[source] == nil || sources.ProviderKind(im.ingest, source) != "ats" {
+		return Board{}, "", evidence, nil
+	}
+	return Board{Source: source, Board: board}, canonical, evidence, nil
 }
 
 func (im *Importer) WriteLinkedIn(ctx context.Context, prepared LinkedInResolution) (Result, bool, error) {
