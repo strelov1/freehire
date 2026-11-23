@@ -718,6 +718,32 @@ func (q *Queries) ListInsightsCompanies(ctx context.Context, arg ListInsightsCom
 	return items, nil
 }
 
+const listNewHiringCompanySlugs = `-- name: ListNewHiringCompanySlugs :many
+SELECT company_slug FROM insights_company_growth WHERE hiring_started_at IS NOT NULL
+`
+
+// The companies rollup-company marked as having just started hiring, which
+// /jobs/search?new_hiring=true narrows to. Served by insights_company_growth_hiring_started_idx.
+func (q *Queries) ListNewHiringCompanySlugs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listNewHiringCompanySlugs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var company_slug string
+		if err := rows.Scan(&company_slug); err != nil {
+			return nil, err
+		}
+		items = append(items, company_slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const sharedCompanyBoards = `-- name: SharedCompanyBoards :many
 SELECT (c.company_slug)::text AS company_slug
 FROM (

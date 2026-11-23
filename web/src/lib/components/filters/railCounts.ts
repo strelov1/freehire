@@ -9,6 +9,7 @@ export type RailToggles = {
   matchAvailable: boolean;
   showFormerEmployers: boolean;
   showWatchlist: boolean;
+  showNewHiring?: boolean;
 };
 
 const jobCollectionValues = JOB_COLLECTION.map((o) => o.value);
@@ -27,7 +28,7 @@ export function selCount(f: JobFilters, param: string, values?: string[]): numbe
 }
 
 export function railEntryCount(e: RailEntry, f: JobFilters, show: RailToggles): number {
-  const { showHideSeen, matchAvailable, showFormerEmployers, showWatchlist } = show;
+  const { showHideSeen, matchAvailable, showFormerEmployers, showWatchlist, showNewHiring } = show;
   if (e.kind === 'category') return selCount(f, 'category') + selCount(f, 'ai_archetype');
   if (e.kind === 'experience')
     return selCount(f, 'seniority') + selCount(f, 'role_type') + (f.experienceYearsMax != null ? 1 : 0);
@@ -65,7 +66,8 @@ export function railEntryCount(e: RailEntry, f: JobFilters, show: RailToggles): 
     return (
       selCount(f, 'company_slug') +
       (showFormerEmployers && f.formerEmployers ? 1 : 0) +
-      (showWatchlist && f.watchlist ? 1 : 0)
+      (showWatchlist && f.watchlist ? 1 : 0) +
+      (showNewHiring && f.newHiring ? 1 : 0)
     );
   if (e.key === 'source') return selCount(f, 'source_type') + selCount(f, 'source');
   return selCount(f, e.facetParam ?? e.key);

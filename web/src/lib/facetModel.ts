@@ -66,6 +66,7 @@ export function emptyFilters(): JobFilters {
     autoApplyAvailable: false,
     formerEmployers: false,
     watchlist: false,
+    newHiring: false,
     applyQuestionsMax: null,
     minSkillMatch: null,
     salaryMin: null,
@@ -105,6 +106,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.autoApplyAvailable) p.set('auto_apply_available', 'true');
   if (f.formerEmployers) p.set('former_employers', 'true');
   if (f.watchlist) p.set('watchlist', 'true');
+  if (f.newHiring) p.set('new_hiring', 'true');
   if (f.applyQuestionsMax != null) p.set('apply_questions_max', String(f.applyQuestionsMax));
   if (f.minSkillMatch != null) p.set('min_skill_match', String(f.minSkillMatch));
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
@@ -208,6 +210,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.autoApplyAvailable = p.get('auto_apply_available') === 'true';
   f.formerEmployers = p.get('former_employers') === 'true';
   f.watchlist = p.get('watchlist') === 'true';
+  f.newHiring = p.get('new_hiring') === 'true';
   f.applyQuestionsMax = nonNegativeInt(p.get('apply_questions_max'));
   const minSkillMatch = nonNegativeInt(p.get('min_skill_match'));
   f.minSkillMatch = minSkillMatch != null && minSkillMatch > 0 && minSkillMatch <= 100 ? minSkillMatch : null;
@@ -309,6 +312,15 @@ function readLegacyClearance(p: URLSearchParams, facets: Record<string, FacetSta
       : { ...st, exclude: [...st.exclude, CLEARANCE_UNSPECIFIED] };
 }
 
+/** The company-set filter that is on (Hiring again, the watchlist, Just started hiring),
+ *  or null. Only the search applies these sets; facet counts and the map do not. */
+export function activeCompanySet(f: JobFilters): 'formerEmployers' | 'watchlist' | 'newHiring' | null {
+  if (f.formerEmployers) return 'formerEmployers';
+  if (f.watchlist) return 'watchlist';
+  if (f.newHiring) return 'newHiring';
+  return null;
+}
+
 /** Total selected facet values (plus visa/salary/freshness) — drives the mobile badge. */
 export function activeFilterCount(f: JobFilters): number {
   let n = 0;
@@ -321,6 +333,7 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.autoApplyAvailable) n += 1;
   if (f.formerEmployers) n += 1;
   if (f.watchlist) n += 1;
+  if (f.newHiring) n += 1;
   if (f.applyQuestionsMax != null) n += 1;
   if (f.minSkillMatch != null) n += 1;
   // One control and one summary chip, so one count whichever ends are set.

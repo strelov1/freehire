@@ -373,3 +373,8 @@ HAVING sum(v.page_uniques) > 0;
 -- name: GetCompanyViews :one
 -- One company's posting views. No row means none in either window; the caller serves zeros.
 SELECT views, views_prev FROM insights_company_views WHERE company_slug = $1;
+
+-- name: ListNewHiringCompanySlugs :many
+-- The companies rollup-company marked as having just started hiring, which
+-- /jobs/search?new_hiring=true narrows to. Served by insights_company_growth_hiring_started_idx.
+SELECT company_slug FROM insights_company_growth WHERE hiring_started_at IS NOT NULL;

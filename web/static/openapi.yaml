@@ -415,6 +415,9 @@
             "$ref": "#/components/parameters/job.watchlist"
           },
           {
+            "$ref": "#/components/parameters/job.new_hiring"
+          },
+          {
             "$ref": "#/components/parameters/job.salary_min"
           },
           {
@@ -897,6 +900,9 @@
           },
           {
             "$ref": "#/components/parameters/job.watchlist"
+          },
+          {
+            "$ref": "#/components/parameters/job.new_hiring"
           },
           {
             "$ref": "#/components/parameters/job.salary_min"
@@ -1705,6 +1711,9 @@
           },
           {
             "$ref": "#/components/parameters/job.watchlist"
+          },
+          {
+            "$ref": "#/components/parameters/job.new_hiring"
           },
           {
             "$ref": "#/components/parameters/job.salary_min"
@@ -4068,6 +4077,14 @@
         "name": "watchlist",
         "in": "query",
         "description": "Your watchlist: companies you follow: true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it.",
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "job.new_hiring": {
+        "name": "new_hiring",
+        "in": "query",
+        "description": "Just started hiring: companies that began hiring this month: true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the companies `/insights/companies?sort=new` lists, without its `min_open` floor); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it.",
         "schema": {
           "type": "boolean"
         }
