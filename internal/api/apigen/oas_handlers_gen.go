@@ -12625,6 +12625,101 @@ func (s *Server) handleGetEmployerTeamRequest(args [0]string, argsEscaped bool, 
 	}
 }
 
+// handleGetEmployerVacancyAnalyticsRequest handles getEmployerVacancyAnalytics operation.
+//
+// Analytics for an active company team's own vacancy, including closed vacancies.
+//
+// GET /employer/jobs/{slug}/analytics
+func (s *Server) handleGetEmployerVacancyAnalyticsRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetEmployerVacancyAnalyticsOperation,
+			ID:   "getEmployerVacancyAnalytics",
+		}
+	)
+	params, err := decodeGetEmployerVacancyAnalyticsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetEmployerVacancyAnalyticsOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetEmployerVacancyAnalyticsOperation,
+			OperationSummary: "Read a vacancy's last 30 completed days of engagement.",
+			OperationID:      "getEmployerVacancyAnalytics",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetEmployerVacancyAnalyticsParams
+			Response = *GetEmployerVacancyAnalyticsOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetEmployerVacancyAnalyticsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetEmployerVacancyAnalytics(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetEmployerVacancyAnalytics(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetEmployerVacancyAnalyticsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetInboxRequest handles getInbox operation.
 //
 // `?body=1` returns each message's readable text inline and marks nothing read — that is the agent
@@ -26472,6 +26567,101 @@ func (s *Server) handleRecordDictionaryGapRequest(args [0]string, argsEscaped bo
 	}
 
 	if err := encodeRecordDictionaryGapResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleRecordEmployerVacancyApplyClickRequest handles recordEmployerVacancyApplyClick operation.
+//
+// Records an Apply button click on an open, public employer vacancy.
+//
+// POST /jobs/{slug}/apply-click
+func (s *Server) handleRecordEmployerVacancyApplyClickRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: RecordEmployerVacancyApplyClickOperation,
+			ID:   "recordEmployerVacancyApplyClick",
+		}
+	)
+	params, err := decodeRecordEmployerVacancyApplyClickParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *RecordEmployerVacancyApplyClickNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    RecordEmployerVacancyApplyClickOperation,
+			OperationSummary: "Record a vacancy Apply click.",
+			OperationID:      "recordEmployerVacancyApplyClick",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = RecordEmployerVacancyApplyClickParams
+			Response = *RecordEmployerVacancyApplyClickNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackRecordEmployerVacancyApplyClickParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.RecordEmployerVacancyApplyClick(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.RecordEmployerVacancyApplyClick(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeRecordEmployerVacancyApplyClickResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

@@ -50,6 +50,8 @@ func employerNoStore(c *fiber.Ctx) error {
 }
 
 func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Post("/jobs/:slug/apply-click", employerApplyClickLimit(), employerApplyClickRequest, contract)
+
 	// Cookie-only: employer actions are not open to API keys. Every route below requires
 	// ActiveAccount except the claim/confirm/resend trio, which is how an account BECOMES active.
 	api.Post("/employer/claim", mw.cookie, contract)
@@ -58,6 +60,7 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fi
 	api.Get("/employer/company", mw.cookie, contract)
 	api.Patch("/employer/company", mw.cookie, contract)
 	api.Get("/employer/jobs", mw.cookie, contract)
+	api.Get("/employer/jobs/:slug/analytics", mw.cookie, employerNoStore, contract)
 	api.Post("/employer/jobs", mw.cookie, contract)
 	api.Patch("/employer/jobs/:slug", mw.cookie, contract)
 	api.Post("/employer/jobs/:slug/close", mw.cookie, contract)

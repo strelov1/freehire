@@ -866,6 +866,12 @@ type EmployerActivity struct {
 	OccurredAt    pgtype.Timestamptz `json:"occurred_at"`
 }
 
+type EmployerVacancyApplyClick struct {
+	JobID  int64       `json:"job_id"`
+	Day    pgtype.Date `json:"day"`
+	Clicks int64       `json:"clicks"`
+}
+
 type EnrichmentOutbox struct {
 	ID            int64              `json:"id"`
 	JobID         int64              `json:"job_id"`

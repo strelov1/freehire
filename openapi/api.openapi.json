@@ -4316,6 +4316,65 @@
         }
       }
     },
+    "/employer/jobs/{slug}/analytics": {
+      "get": {
+        "operationId": "getEmployerVacancyAnalytics",
+        "summary": "Read a vacancy's last 30 completed days of engagement.",
+        "description": "Analytics for an active company team's own vacancy, including closed vacancies.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The employer-authored vacancy's public slug.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerVacancyAnalytics"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "views": 40,
+                    "apply_clicks": 10,
+                    "applications": 3
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      }
+    },
     "/employer/jobs/{slug}/close": {
       "post": {
         "operationId": "closeEmployerVacancy",
@@ -6356,6 +6415,46 @@
             "PersonalApiKey": []
           }
         ]
+      }
+    },
+    "/jobs/{slug}/apply-click": {
+      "post": {
+        "operationId": "recordEmployerVacancyApplyClick",
+        "summary": "Record a vacancy Apply click.",
+        "description": "Records an Apply button click on an open, public employer vacancy.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The employer-authored vacancy's public slug.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "security": [
+          {}
+        ],
+        "x-audience": "hidden"
       }
     },
     "/jobs/{slug}/apply-form": {
@@ -29720,6 +29819,32 @@
           }
         },
         "description": "The token from the invitation link."
+      },
+      "EmployerVacancyAnalytics": {
+        "type": "object",
+        "required": [
+          "views",
+          "apply_clicks",
+          "applications"
+        ],
+        "properties": {
+          "views": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Daily unique visitors from the page-view rollup, summed across the window."
+          },
+          "apply_clicks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Apply button clicks on the vacancy page."
+          },
+          "applications": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Applications delivered through Freehire."
+          }
+        },
+        "description": "Counts for the last 30 completed UTC days. Apply clicks begin at rollout."
       },
       "EmployerVacancyCreate": {
         "type": "object",

@@ -22,6 +22,18 @@ import { ApiError, jsonBody, toSlice } from '../api-core';
 export function employerApi({ call, request, requestData, baseUrl }: Http) {
   // ── Verified employer accounts ────────────────────────────────────────────
 
+  async function getEmployerVacancyAnalytics(slug: string): Promise<components['schemas']['EmployerVacancyAnalytics']> {
+    return requestData(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/analytics`);
+  }
+
+  async function recordEmployerVacancyApplyClick(slug: string): Promise<void> {
+    await call(`/api/v1/jobs/${encodeURIComponent(slug)}/apply-click`, {
+      method: 'POST',
+      credentials: 'omit',
+      keepalive: true,
+    });
+  }
+
   /** Claim a company: resolves the name to a slug, refuses a public-webmail work email,
    *  reserves the slug, and mails a verification code. Returns the pending account. */
   async function claimCompany(companyName: string, workEmail: string): Promise<EmployerAccount> {
@@ -216,6 +228,8 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
   }
 
   return {
+    getEmployerVacancyAnalytics,
+    recordEmployerVacancyApplyClick,
     claimCompany,
     confirmEmployerClaim,
     resendEmployerClaimCode,

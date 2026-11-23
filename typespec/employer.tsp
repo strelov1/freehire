@@ -565,3 +565,40 @@ op listEmployerActivity(
   /** Fetch older events by passing the last event id from the previous page. */
   @query before?: string,
 ): Data<EmployerActivity[]> | Problem;
+
+/** Counts for the last 30 completed UTC days. Apply clicks begin at rollout. */
+model EmployerVacancyAnalytics {
+  /** Daily unique visitors from the page-view rollup, summed across the window. */
+  views: int64;
+  /** Apply button clicks on the vacancy page. */
+  apply_clicks: int64;
+  /** Applications delivered through Freehire. */
+  applications: int64;
+}
+
+/** Analytics for an active company team's own vacancy, including closed vacancies. */
+@summary("Read a vacancy's last 30 completed days of engagement.")
+@opExample(#{
+  parameters: #{ slug: "platform-engineer-acme-9f3c" },
+  returnType: #{ data: #{ views: 40, apply_clicks: 10, applications: 3 } },
+})
+@tag("Employer")
+@route("/employer/jobs/{slug}/analytics")
+@get
+op getEmployerVacancyAnalytics(
+  /** The employer-authored vacancy's public slug. */
+  @path slug: string,
+): Data<EmployerVacancyAnalytics> | Problem;
+
+/** Records an Apply button click on an open, public employer vacancy. */
+@summary("Record a vacancy Apply click.")
+@opExample(#{ parameters: #{ slug: "platform-engineer-acme-9f3c" } })
+@useAuth(NoAuth)
+@extension("x-audience", "hidden")
+@tag("Employer")
+@route("/jobs/{slug}/apply-click")
+@post
+op recordEmployerVacancyApplyClick(
+  /** The employer-authored vacancy's public slug. */
+  @path slug: string,
+): NoContentResponse | Problem;
