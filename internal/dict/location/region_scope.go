@@ -49,6 +49,15 @@ const clauseWindow = 200
 // tokens the dictionaries resolve contribute, so "nearby time zones" is skipped. A phrase in a
 // sentence that denies it ("not restricted to the US") is not a match.
 func RegionScopeFromDescription(desc string) (countries, regions []string) {
+	countries, regions = regionScopeFromProse(desc)
+	if len(countries)+len(regions) > 0 || !strings.Contains(desc, " - ") {
+		return countries, regions
+	}
+	countries, regions, _ = remoteScopeFromLabels(descriptionScopeText(desc))
+	return countries, regions
+}
+
+func regionScopeFromProse(desc string) (countries, regions []string) {
 	lower := strings.ToLower(htmltext.ToTextFull(joinWrappedRegionLists(desc)))
 	lower = strings.NewReplacer("u.s.a.", "usa", "u.s.", "us", "u.k.", "uk").Replace(lower)
 	// Keep phrase priority, but let an unresolved clause yield to a later anchor.

@@ -38,107 +38,8 @@ func Derive(in Input) Derived {
 	// structured country is final (it replaces the countries below); a fallback one is
 	// read only once it is what the posting ends up placed in, below.
 	geo := location.ParseIn(in.Location, in.Countries)
-	// Geography precedence: the location dictionary → a title-embedded restriction
-	// marker → an eligibility signal in the description → an explicit region-scoping
-	// statement in the description → the caller's FallbackCountries. When the location left the geography unpinned (no
-	// country, and either no region or only an explicit open-anywhere marker's global
-	// bucket), each lower source is tried in turn and only fills what every higher
-	// source left blank — a resolved place, from the location or from a higher
-	// source in this chain, is never overridden. This is the same shape the
-	// work-mode fallback below uses.
-	countries, regions := geo.Countries, geo.Regions
-	if geoUnpinned(countries, regions) {
-		// A title-embedded restriction marker ("[Remote-US]", "(Location - Australia
-		// or New Zealand)") is a more literal, ATS-authored signal than prose, so it
-		// is tried before the description-based rescues below.
-		if c, r := location.RestrictionFromTitle(title); len(r) > 0 {
-			countries, regions = c, r
-		}
-	}
-	if geoUnpinned(countries, regions) {
-		if c, r := location.EligibilityFromDescription(in.Description); len(r) > 0 {
-			countries, regions = c, r
-		}
-	}
-	if geoUnpinned(countries, regions) {
-		// An explicit "based/located/hiring in <place list>" restriction statement,
-		// additive to (and checked after) the citizenship-phrase rescue above — see
-		// location.RegionScopeFromDescription.
-		if c, r := location.RegionScopeFromDescription(in.Description); len(r) > 0 {
-			countries, regions = c, r
-		}
-	}
-	// The fallback country fills only a posting that stated NO geography — not even an
-	// explicit open-anywhere marker, which geoUnpinned counts as unpinned but which a
-	// headquarters office must not narrow to one country.
-	if len(countries) == 0 && len(regions) == 0 && len(in.FallbackCountries) > 0 {
-		countries = in.FallbackCountries
-		regions = regionsForCountries(in.FallbackCountries)
-		if len(in.Countries) == 0 {
-			geo = location.ParseIn(in.Location, in.FallbackCountries)
-		}
-	}
-	// An explicit country signal is authoritative: it fully replaces the derived/US-override
-	// countries, the same way a stated work mode replaces the hint — and pulls its region
-	// along with it (the same pairing Parse itself does for a country it resolves), so a
-	// structured country with no separate region statement still lands under the right
-	// region facet instead of falling back to whatever the free-text location parsed.
-	// The exception is a location line whose own scope is at least as broad: then the
-	// adapter's country is an office address (Ashby's postalAddress US beside "Remote |
-	// North America or Europe"), and replacing the line with it narrowed a Europe-open
-	// role to one country.
-	worldwide := worldwideLine(geo, in.Location)
-	lineWins := len(in.Countries) > 0 && (worldwide || lineOutranksCountries(geo, in.Countries))
-	if len(in.Countries) > 0 && !lineWins {
-		countries = in.Countries
-		regions = regionsForCountries(in.Countries)
-	}
-	// An explicit region signal is authoritative: it fully replaces the derived regions
-	// (and the country-derived regions above), the same way a stated work mode replaces
-	// the hint. It is folded into the region vocabulary first: a source (or a stored
-	// row fed back by backfill-derive) stating a country, a subdivision or a free
-	// phrase as a "region" must not reach the facet, and one that folds to nothing
-	// is no signal at all.
-	if r := location.NormalizeRegions(in.Regions); len(r) > 0 && !worldwide {
-		if lineWins {
-			// rederive feeds a stored row's regions back beside its country; a line that
-			// outranks the country must not be narrowed back by them.
-			regions = unionSorted(regions, r)
-		} else {
-			regions = r
-		}
-	}
-	// Parse already drops a global the location line contradicts; this applies the same
-	// rule to the final answer, whose countries and regions may come from a structured
-	// signal instead — an adapter's own country beside an "Anywhere" line, or a stored
-	// row's columns fed back by backfill-derive.
-	regions = location.WithoutShadowedGlobal(countries, regions, in.Location)
-	// An explicit city signal likewise replaces the dictionary's cities outright.
-	cities := geo.Cities
-	if len(in.Cities) > 0 {
-		cities = in.Cities
-	}
-	metros := metrosForOverride(geo.Metros, in.Cities, in.Countries, countries)
-	// Work-mode precedence: structured (ATS) → location marker → description phrase.
-	// Each lower source only fills a value the higher ones left empty.
-	workMode := in.WorkMode
-	if workMode == "" {
-		workMode = geo.WorkMode
-	}
-	if workMode == "" {
-		workMode = location.WorkModeFromDescription(in.Description)
-	}
-	// Explicit arrangement prose fills a gap or contradicts a remote location bucket or ATS flag.
-	// Hybrid is checked before a remote denial: "not remote" alone does not distinguish
-	// an office-only role from one split between office and home.
-	if workMode == "remote" || workMode == "" {
-		switch {
-		case location.HybridArrangementStated(in.Description):
-			workMode = "hybrid"
-		case workMode == "remote" && location.RemoteContradicted(in.Description):
-			workMode = "onsite"
-		}
-	}
+	workMode := resolveWorkMode(in, geo.WorkMode)
+	countries, regions, cities, metros := deriveGeography(in, title, geo, workMode)
 	class := classify.Parse(title)
 	// Seniority precedence: structured source signal → title dictionary → description
 	// phrase. Each lower source only fills a grade the higher ones left empty.
@@ -224,6 +125,132 @@ func Derive(in Input) Derived {
 		SalaryCurrency:     in.SalaryCurrency,
 		SalaryPeriod:       in.SalaryPeriod,
 	}
+}
+
+func deriveGeography(in Input, title string, geo location.Geo, workMode string) ([]string, []string, []string, []string) {
+	// Geography precedence: the location dictionary → a title-embedded restriction
+	// marker → an eligibility signal in the description → an explicit region-scoping
+	// statement in the description → the caller's FallbackCountries. When the location left the geography unpinned (no
+	// country, and either no region or only an explicit open-anywhere marker's global
+	// bucket), each lower source is tried in turn and only fills what every higher
+	// source left blank — a resolved place, from the location or from a higher
+	// source in this chain, is never overridden. This is the same shape the
+	// work-mode fallback below uses.
+	structuredRegions := location.NormalizeRegions(in.Regions)
+	excluded := location.ExcludedCountriesFromDescription(in.Description)
+	countries, regions := location.WithoutExcludedGeography(geo.Countries, geo.Regions, excluded, in.Location, "")
+	if geoUnpinned(countries, regions) {
+		// A title-embedded restriction marker ("[Remote-US]", "(Location - Australia
+		// or New Zealand)") is a more literal, ATS-authored signal than prose, so it
+		// is tried before the description-based rescues below.
+		if c, r := location.RestrictionFromTitle(title); len(r) > 0 {
+			countries, regions = c, r
+		}
+	}
+	if geoUnpinned(countries, regions) {
+		if c, r := location.EligibilityFromDescription(in.Description); len(r) > 0 {
+			countries, regions = c, r
+		}
+	}
+	if geoUnpinned(countries, regions) {
+		// An explicit "based/located/hiring in <place list>" restriction statement,
+		// additive to (and checked after) the citizenship-phrase rescue above — see
+		// location.RegionScopeFromDescription.
+		if c, r := location.RegionScopeFromDescription(in.Description); len(r) > 0 {
+			countries, regions = c, r
+		}
+	}
+	// A clearly stated worldwide arrangement can outweigh a list of offices.
+	if workMode == "remote" && len(in.Countries) == 0 && len(structuredRegions) == 0 &&
+		(geoUnpinned(countries, regions) || location.IsRemoteOfficeList(in.Location, geo.Cities)) &&
+		location.WorldwideRemoteFromDescription(in.Description) {
+		if c, r := location.RestrictionFromTitle(title); geoUnpinned(c, r) {
+			return nil, []string{"global"}, in.Cities, nil
+		}
+	}
+	// The fallback country fills only a posting that stated NO geography — not even an
+	// explicit open-anywhere marker, which geoUnpinned counts as unpinned but which a
+	// headquarters office must not narrow to one country.
+	if len(countries) == 0 && len(regions) == 0 && len(excluded) == 0 && len(in.FallbackCountries) > 0 {
+		countries = in.FallbackCountries
+		regions = regionsForCountries(in.FallbackCountries)
+		if len(in.Countries) == 0 {
+			geo = location.ParseIn(in.Location, in.FallbackCountries)
+		}
+	}
+	// An explicit country signal is authoritative: it fully replaces the derived/US-override
+	// countries, the same way a stated work mode replaces the hint — and pulls its region
+	// along with it (the same pairing Parse itself does for a country it resolves), so a
+	// structured country with no separate region statement still lands under the right
+	// region facet instead of falling back to whatever the free-text location parsed.
+	// The exception is a location line whose own scope is at least as broad: then the
+	// adapter's country is an office address (Ashby's postalAddress US beside "Remote |
+	// North America or Europe"), and replacing the line with it narrowed a Europe-open
+	// role to one country.
+	worldwide := len(excluded) == 0 && worldwideLine(geo, in.Location)
+	lineWins := len(in.Countries) > 0 && (worldwide || lineOutranksCountries(geo, in.Countries))
+	if len(in.Countries) > 0 && !lineWins {
+		countries = in.Countries
+		regions = regionsForCountries(in.Countries)
+	}
+	// An explicit region signal is authoritative: it fully replaces the derived regions
+	// (and the country-derived regions above), the same way a stated work mode replaces
+	// the hint. It is folded into the region vocabulary first: a source (or a stored
+	// row fed back by backfill-derive) stating a country, a subdivision or a free
+	// phrase as a "region" must not reach the facet, and one that folds to nothing
+	// is no signal at all.
+	if len(structuredRegions) > 0 && !worldwide {
+		if lineWins {
+			// rederive feeds a stored row's regions back beside its country; a line that
+			// outranks the country must not be narrowed back by them.
+			regions = unionSorted(regions, structuredRegions)
+		} else {
+			regions = structuredRegions
+		}
+	}
+	// An explicit exclusion also applies to source-provided geography.
+	countries, regions = location.WithoutExcludedGeography(countries, regions, excluded, in.Location, in.Description)
+	// Parse already drops a global the location line contradicts; this applies the same
+	// rule to the final answer, whose countries and regions may come from a structured
+	// signal instead — an adapter's own country beside an "Anywhere" line, or a stored
+	// row's columns fed back by backfill-derive.
+	regions = location.WithoutShadowedGlobal(countries, regions, in.Location)
+	// An explicit city signal likewise replaces the dictionary's cities outright.
+	cities := geo.Cities
+	if len(in.Cities) > 0 {
+		cities = in.Cities
+	}
+	metros := metrosForOverride(geo.Metros, in.Cities, in.Countries, countries)
+	cityCountries := geo.Countries
+	if len(in.Cities) > 0 && len(in.Countries) > 0 {
+		cityCountries = in.Countries
+	}
+	cities, metros = location.WithoutExcludedPlaces(cities, metros, cityCountries, excluded)
+	return countries, regions, cities, metros
+}
+
+func resolveWorkMode(in Input, hint string) string {
+	// Work-mode precedence: structured (ATS) → location marker → description phrase.
+	// Each lower source only fills a value the higher ones left empty.
+	workMode := in.WorkMode
+	if workMode == "" {
+		workMode = hint
+	}
+	if workMode == "" {
+		workMode = location.WorkModeFromDescription(in.Description)
+	}
+	// Explicit arrangement prose fills a gap or contradicts a remote location bucket or ATS flag.
+	// Hybrid is checked before a remote denial: "not remote" alone does not distinguish
+	// an office-only role from one split between office and home.
+	if workMode == "remote" || workMode == "" {
+		switch {
+		case location.HybridArrangementStated(in.Description):
+			workMode = "hybrid"
+		case workMode == "remote" && location.RemoteContradicted(in.Description):
+			workMode = "onsite"
+		}
+	}
+	return workMode
 }
 
 func RetainEmploymentType(stored, title, description string) string {
