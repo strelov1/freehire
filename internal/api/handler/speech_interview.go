@@ -68,7 +68,7 @@ func validInterviewAudio(audio []byte) bool {
 		return false
 	}
 	return bytes.Equal(audio[:4], []byte("RIFF")) &&
-		binary.LittleEndian.Uint32(audio[4:]) == uint32(len(audio)-8) &&
+		int64(binary.LittleEndian.Uint32(audio[4:])) == int64(len(audio)-8) &&
 		bytes.Equal(audio[8:16], []byte("WAVEfmt ")) &&
 		binary.LittleEndian.Uint32(audio[16:]) == 16 &&
 		binary.LittleEndian.Uint16(audio[20:]) == 1 &&
@@ -78,5 +78,5 @@ func validInterviewAudio(audio []byte) bool {
 		binary.LittleEndian.Uint16(audio[32:]) == bytesPerSample &&
 		binary.LittleEndian.Uint16(audio[34:]) == 8*bytesPerSample &&
 		bytes.Equal(audio[36:40], []byte("data")) &&
-		binary.LittleEndian.Uint32(audio[40:]) == uint32(size)
+		int64(binary.LittleEndian.Uint32(audio[40:])) == int64(size)
 }

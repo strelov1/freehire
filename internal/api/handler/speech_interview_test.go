@@ -14,12 +14,15 @@ import (
 )
 
 func TestInterviewTranscription(t *testing.T) {
-	const apiKey = "fhk_test-key"
+	apiKey, hash, _, err := auth.GenerateAPIKey()
+	if err != nil {
+		t.Fatal(err)
+	}
 	issuer := auth.NewIssuer("test-secret", time.Hour)
 	gateway := &fakeTranscriber{text: "the interview transcript"}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	newSpeechHandlers(gateway, nil).register(app.Group("/api/v1"), middleware{
-		key:    auth.RequireAuthOrKey(issuer, testVersions, stubValidKey{hash: auth.HashAPIKey(apiKey), userID: 7}),
+		key:    auth.RequireAuthOrKey(issuer, testVersions, stubValidKey{hash: hash, userID: 7}),
 		paidAI: markPaidAI,
 	})
 
@@ -36,7 +39,7 @@ func TestInterviewTranscription(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			body, contentType := audioUpload(t, tt.audio, "interview.wav")
-			req := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/interviews/transcriptions", body)
+			req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/api/v1/me/interviews/transcriptions", body)
 			req.Header.Set(fiber.HeaderContentType, contentType)
 			if tt.key {
 				req.Header.Set(fiber.HeaderAuthorization, "Bearer "+apiKey)
@@ -74,10 +77,10 @@ func TestInterviewTranscription(t *testing.T) {
 	}
 }
 
-func interviewTestWAV(sampleBytes int) []byte {
+func interviewTestWAV(sampleBytes uint32) []byte {
 	audio := make([]byte, 44+sampleBytes)
 	copy(audio, "RIFF")
-	binary.LittleEndian.PutUint32(audio[4:], uint32(len(audio)-8))
+	binary.LittleEndian.PutUint32(audio[4:], sampleBytes+36)
 	copy(audio[8:], "WAVEfmt ")
 	binary.LittleEndian.PutUint32(audio[16:], 16)
 	binary.LittleEndian.PutUint16(audio[20:], 1)
@@ -87,6 +90,6 @@ func interviewTestWAV(sampleBytes int) []byte {
 	binary.LittleEndian.PutUint16(audio[32:], 2)
 	binary.LittleEndian.PutUint16(audio[34:], 16)
 	copy(audio[36:], "data")
-	binary.LittleEndian.PutUint32(audio[40:], uint32(sampleBytes))
+	binary.LittleEndian.PutUint32(audio[40:], sampleBytes)
 	return audio
 }
