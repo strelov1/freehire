@@ -27,7 +27,7 @@ func (h *employerHandlers) GetEmployerTeam(ctx context.Context) (*apigen.GetEmpl
 		Invitations: make([]apigen.EmployerTeamInvitation, len(team.Invitations)),
 	}
 	for i, m := range team.Members {
-		out.Members[i] = apigen.EmployerTeamMember{UserID: m.UserID, WorkEmail: m.WorkEmail, JoinedAt: m.JoinedAt, Holder: m.Holder}
+		out.Members[i] = apigen.EmployerTeamMember{UserID: m.UserID, WorkEmail: m.WorkEmail, JoinedAt: m.JoinedAt, Holder: m.Holder, Role: optString(m.Role)}
 	}
 	for i, inv := range team.Invitations {
 		out.Invitations[i] = employerInvitationOut(inv)
@@ -94,7 +94,7 @@ func (h *employerHandlers) PreviewEmployerTeamInvitation(ctx context.Context, re
 	if err != nil {
 		return nil, employerError(err)
 	}
-	return &apigen.PreviewEmployerTeamInvitationOK{Data: apigen.EmployerTeamInvitationPreview{CompanyName: p.CompanyName, Email: p.Email}}, nil
+	return &apigen.PreviewEmployerTeamInvitationOK{Data: apigen.EmployerTeamInvitationPreview{CompanyName: p.CompanyName, Email: p.Email, Role: optString(p.Role)}}, nil
 }
 
 // JoinEmployerTeam makes the caller a member of the team the link invites to.
@@ -108,6 +108,38 @@ func (h *employerHandlers) JoinEmployerTeam(ctx context.Context, req *apigen.Emp
 		return nil, employerError(err)
 	}
 	return &apigen.JoinEmployerTeamOK{Data: employerAccountOut(acc)}, nil
+}
+
+// ListEmployerActivity reads the company audit visible to the current user.
+func (h *employerHandlers) ListEmployerActivity(ctx context.Context, params apigen.ListEmployerActivityParams) (*apigen.ListEmployerActivityOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var before int64
+	if params.Before.Set {
+		before, err = contractPathID(params.Before.Value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	events, err := h.employer.Activity(ctx, userID, before)
+	if err != nil {
+		return nil, employerError(err)
+	}
+	out := make([]apigen.EmployerActivity, 0, len(events))
+	for _, event := range events {
+		entry := apigen.EmployerActivity{
+			ID: event.ID, Action: event.Action, ActorEmail: optString(event.ActorEmail),
+			PreviousStage: optString(event.PreviousStage), Stage: optString(event.Stage),
+			SubjectEmail: optString(event.SubjectEmail), OccurredAt: event.OccurredAt,
+		}
+		if event.ApplicationID != nil {
+			entry.ApplicationID = apigen.NewOptInt64(*event.ApplicationID)
+		}
+		out = append(out, entry)
+	}
+	return &apigen.ListEmployerActivityOK{Data: out}, nil
 }
 
 // teamInviteMailer translates employer's invitation into emailnotify's: the two packages

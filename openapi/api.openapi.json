@@ -3118,6 +3118,61 @@
         ]
       }
     },
+    "/employer/activity": {
+      "get": {
+        "operationId": "listEmployerActivity",
+        "description": "Up to 30 company audit events, newest first. Recruiters see application activity.",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Fetch older events by passing the last event id from the previous page.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/EmployerActivity"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      }
+    },
     "/employer/applications": {
       "get": {
         "operationId": "listEmployerApplications",
@@ -3222,6 +3277,93 @@
         "tags": [
           "Employer"
         ]
+      }
+    },
+    "/employer/applications/search": {
+      "post": {
+        "operationId": "searchEmployerApplications",
+        "summary": "Search applications sent to your vacancies.",
+        "description": "Search delivered applications before pagination. An unknown stage returns 400.",
+        "parameters": [
+          {
+            "name": "job",
+            "in": "query",
+            "required": false,
+            "description": "Only applications for this vacancy slug.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "stage",
+            "in": "query",
+            "required": false,
+            "description": "Only applications at this stage.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum applications to return.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Number of matching applications to skip.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployerApplicationsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployerApplicationSearch"
+              },
+              "example": {
+                "query": "candidate@example.com"
+              }
+            }
+          }
+        }
       }
     },
     "/employer/applications/{id}/cv": {
@@ -3359,6 +3501,69 @@
               "example": {
                 "stage": "interview",
                 "message": "Are you free on Tuesday?"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employer/applications/{id}/workspace": {
+      "patch": {
+        "operationId": "updateEmployerApplicationWorkspace",
+        "summary": "Mark an application reviewed or save private notes.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerApplication"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployerApplicationWorkspace"
+              },
+              "example": {
+                "mark_viewed": true
               }
             }
           }
@@ -4041,7 +4246,7 @@
     "/employer/team": {
       "get": {
         "operationId": "getEmployerTeam",
-        "description": "Everyone who acts for the caller's company, and the invitations still open.",
+        "description": "The company team and open invitations. A recruiter sees their own membership.",
         "parameters": [],
         "responses": {
           "200": {
@@ -4133,7 +4338,7 @@
     "/employer/team/invitations": {
       "post": {
         "operationId": "inviteEmployerTeamMember",
-        "description": "Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations.",
+        "description": "Mails a colleague a single-use recruiter invitation, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations.",
         "parameters": [],
         "responses": {
           "201": {
@@ -4234,7 +4439,7 @@
     "/employer/team/join": {
       "post": {
         "operationId": "joinEmployerTeam",
-        "description": "Joins the team an invitation link invites to. 409 when the caller already acts for a company.",
+        "description": "Joins the team. A recruiter must sign in with the matching verified email. 409 when the caller already acts for a company.",
         "parameters": [],
         "responses": {
           "200": {
@@ -28582,6 +28787,10 @@
             "type": "boolean",
             "description": "True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own."
           },
+          "role": {
+            "type": "string",
+            "description": "The exact values are owner for the claimant, manager for an existing manager, and recruiter."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -28597,6 +28806,44 @@
           "active",
           "revoked"
         ]
+      },
+      "EmployerActivity": {
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "occurred_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "action": {
+            "type": "string"
+          },
+          "actor_email": {
+            "type": "string"
+          },
+          "application_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "previous_stage": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "subject_email": {
+            "type": "string"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        }
       },
       "EmployerApplication": {
         "type": "object",
@@ -28654,6 +28901,16 @@
             "format": "date-time",
             "description": "When you last moved it; absent while it has never been moved.",
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "viewed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "First review by a teammate, independent of the hiring stage.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "employer_notes": {
+            "type": "string",
+            "description": "Private notes shared within the employer team."
           },
           "sent_at": {
             "type": "string",
@@ -28721,6 +28978,19 @@
           }
         }
       },
+      "EmployerApplicationSearch": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "A literal search in candidate email, message and answers."
+          }
+        }
+      },
       "EmployerApplicationStage": {
         "type": "string",
         "enum": [
@@ -28732,6 +29002,20 @@
           "rejected"
         ],
         "description": "A stage of the employer's hiring pipeline. Every delivered application starts at `new`."
+      },
+      "EmployerApplicationWorkspace": {
+        "type": "object",
+        "properties": {
+          "mark_viewed": {
+            "type": "boolean",
+            "description": "Record that a teammate reviewed this application."
+          },
+          "employer_notes": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Replace the private team notes. The empty string clears them."
+          }
+        }
       },
       "EmployerApplicationsMeta": {
         "type": "object",
@@ -28861,6 +29145,10 @@
           "member": {
             "type": "boolean",
             "description": "True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own."
+          },
+          "role": {
+            "type": "string",
+            "description": "The exact values are owner for the claimant, manager for an existing manager, and recruiter."
           },
           "created_at": {
             "type": "string",
@@ -29042,6 +29330,10 @@
             "type": "boolean",
             "description": "True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own."
           },
+          "role": {
+            "type": "string",
+            "description": "The exact values are owner for the claimant, manager for an existing manager, and recruiter."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -29163,6 +29455,9 @@
           },
           "email": {
             "type": "string"
+          },
+          "role": {
+            "type": "string"
           }
         },
         "description": "What an invitation link offers before it is accepted."
@@ -29198,6 +29493,9 @@
           },
           "holder": {
             "type": "boolean"
+          },
+          "role": {
+            "type": "string"
           }
         },
         "description": "Someone who acts for the company. `holder` is the claimant, who cannot be removed."

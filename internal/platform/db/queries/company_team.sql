@@ -9,12 +9,12 @@
 -- lookups rather than one OR across a join, which neither key could serve; a user is in at
 -- most one of the two (the writes keep it so), so at most one row comes back.
 SELECT ca.user_id, ca.company_slug, ca.company_name, ca.status, ca.verified_at,
-       ca.email_confirmed_at, ca.created_at, ca.work_email AS acting_email, false AS member
+       ca.email_confirmed_at, ca.created_at, ca.work_email AS acting_email, false AS member, 'owner'::text AS role
 FROM company_accounts ca
 WHERE ca.user_id = sqlc.arg(user_id)
 UNION ALL
 SELECT ca.user_id, ca.company_slug, ca.company_name, ca.status, ca.verified_at,
-       ca.email_confirmed_at, ca.created_at, m.work_email AS acting_email, true AS member
+       ca.email_confirmed_at, ca.created_at, m.work_email AS acting_email, true AS member, m.role
 FROM company_account_members m
 JOIN company_accounts ca ON ca.company_slug = m.company_slug
 WHERE m.user_id = sqlc.arg(user_id);
@@ -59,13 +59,13 @@ SELECT id FROM users WHERE id = sqlc.arg(user_id) FOR KEY SHARE;
 -- name: ListCompanyTeam :many
 -- Everyone who acts for a company: the claimant first (holder), then members by when they
 -- joined. The claimant joined when the account was verified.
-SELECT t.user_id, t.work_email, t.joined_at, t.holder
+SELECT t.user_id, t.work_email, t.joined_at, t.holder, t.role
 FROM (
-    SELECT ca.user_id, ca.work_email, COALESCE(ca.verified_at, ca.created_at) AS joined_at, true AS holder
+    SELECT ca.user_id, ca.work_email, COALESCE(ca.verified_at, ca.created_at) AS joined_at, true AS holder, 'owner'::text AS role
     FROM company_accounts ca
     WHERE ca.company_slug = sqlc.arg(company_slug)
     UNION ALL
-    SELECT m.user_id, m.work_email, m.joined_at, false AS holder
+    SELECT m.user_id, m.work_email, m.joined_at, false AS holder, m.role
     FROM company_account_members m
     WHERE m.company_slug = sqlc.arg(company_slug)
 ) t
@@ -85,8 +85,9 @@ ORDER BY created_at DESC;
 -- unless it renews one that is itself still live; reviving an expired one needs a free slot.
 -- The cap bounds how much mail one account can make freehire send. Callers hold the
 -- company's lock (LockEmployerCompany), so two invitations cannot both pass the count.
-INSERT INTO company_account_invitations (company_slug, email, token_hash, invited_by, expires_at)
-SELECT sqlc.arg(company_slug), sqlc.arg(email), sqlc.arg(token_hash), sqlc.arg(invited_by), sqlc.arg(expires_at)
+WITH invitation AS (
+INSERT INTO company_account_invitations (company_slug, email, token_hash, invited_by, expires_at, role)
+SELECT sqlc.arg(company_slug), sqlc.arg(email), sqlc.arg(token_hash), sqlc.arg(invited_by), sqlc.arg(expires_at), 'recruiter'
 WHERE EXISTS (
         SELECT 1 FROM company_account_invitations
         WHERE company_slug = sqlc.arg(company_slug) AND lower(email) = lower(sqlc.arg(email))
@@ -98,19 +99,31 @@ WHERE EXISTS (
     ) < sqlc.arg(max_live)::bigint
 ON CONFLICT (company_slug, lower(email)) DO UPDATE
 SET email = EXCLUDED.email, token_hash = EXCLUDED.token_hash, invited_by = EXCLUDED.invited_by,
-    created_at = now(), expires_at = EXCLUDED.expires_at
-RETURNING id, email, created_at, expires_at;
+    created_at = now(), expires_at = EXCLUDED.expires_at, role = EXCLUDED.role
+RETURNING id, email, created_at, expires_at, company_slug, invited_by
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, action, subject_email)
+    SELECT company_slug, invited_by, 'invited', email FROM invitation
+)
+SELECT id, email, created_at, expires_at FROM invitation;
 
--- name: DeleteCompanyInvitation :execrows
+-- name: DeleteCompanyInvitation :one
 -- Withdraws one of a company's invitations; its link stops working at once.
-DELETE FROM company_account_invitations
-WHERE id = sqlc.arg(id) AND company_slug = sqlc.arg(company_slug);
+WITH withdrawn AS (
+    DELETE FROM company_account_invitations i
+    WHERE i.id = sqlc.arg(id) AND i.company_slug = sqlc.arg(company_slug)
+    RETURNING i.company_slug, i.email
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, action, subject_email)
+    SELECT company_slug, sqlc.arg(actor_id)::bigint, 'invitation_withdrawn', email FROM withdrawn
+)
+SELECT count(*)::bigint FROM withdrawn;
 
 -- name: GetCompanyInvitationByToken :one
 -- The live invitation a link names, with the company and the status of the account it
 -- invites to. No row: no such token (never issued, already accepted, withdrawn or replaced by
 -- a resend), or it has expired.
-SELECT i.email, i.company_slug, ca.company_name, ca.status
+SELECT i.email, i.company_slug, ca.company_name, ca.status, i.role
 FROM company_account_invitations i
 JOIN company_accounts ca ON ca.company_slug = i.company_slug
 WHERE i.token_hash = sqlc.arg(token_hash) AND i.expires_at > now();
@@ -129,11 +142,20 @@ WITH inv AS (
       AND ca.company_slug = i.company_slug
       AND ca.status = 'active'
       AND NOT EXISTS (SELECT 1 FROM company_accounts own WHERE own.user_id = sqlc.arg(user_id))
-    RETURNING i.company_slug, i.email, i.invited_by
+          AND (i.role = 'manager' OR EXISTS (
+          SELECT 1 FROM users u WHERE u.id = sqlc.arg(user_id)
+          AND u.email_verified AND lower(u.email) = lower(i.email)
+      ))
+    RETURNING i.company_slug, i.email, i.invited_by, i.role
+), accepted AS (
+    INSERT INTO company_account_members (user_id, company_slug, work_email, invited_by, role)
+    SELECT sqlc.arg(user_id), inv.company_slug, inv.email, inv.invited_by, inv.role FROM inv
+    RETURNING company_slug, user_id, work_email
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, action, subject_email)
+    SELECT company_slug, user_id, 'member_joined', work_email FROM accepted
 )
-INSERT INTO company_account_members (user_id, company_slug, work_email, invited_by)
-SELECT sqlc.arg(user_id), inv.company_slug, inv.email, inv.invited_by FROM inv
-RETURNING company_slug;
+SELECT company_slug FROM accepted;
 
 -- name: LockCompanyMemberForRemoval :one
 -- Locks a member row FOR UPDATE ahead of RemoveCompanyMember, in its own statement: it waits
@@ -155,7 +177,7 @@ FOR UPDATE;
 WITH removed AS (
     DELETE FROM company_account_members m
     WHERE m.user_id = sqlc.arg(member_id) AND m.company_slug = sqlc.arg(company_slug)
-    RETURNING m.user_id AS removed_id
+    RETURNING m.user_id AS removed_id, m.company_slug, m.work_email
 ), handed AS (
     UPDATE jobs
     SET created_by = (SELECT ca.user_id FROM company_accounts ca WHERE ca.company_slug = sqlc.arg(company_slug))
@@ -165,6 +187,12 @@ WITH removed AS (
     DELETE FROM company_account_invitations i
     WHERE i.invited_by IN (SELECT removed.removed_id FROM removed)
       AND i.company_slug = sqlc.arg(company_slug)
+    RETURNING i.company_slug, i.email
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, action, subject_email)
+    SELECT company_slug, sqlc.arg(actor_id)::bigint, 'member_removed', work_email FROM removed
+    UNION ALL
+    SELECT company_slug, sqlc.arg(actor_id)::bigint, 'invitation_withdrawn', email FROM withdrawn
 )
 SELECT count(*)::bigint AS removed FROM removed;
 
@@ -174,17 +202,41 @@ SELECT count(*)::bigint AS removed FROM removed;
 -- inserted after the removal withdrew the others. Transaction-scoped.
 SELECT pg_advisory_xact_lock(hashtextextended('employer_company:' || sqlc.arg(company_slug)::text, 0));
 
--- name: IsCompanyActor :one
--- Whether the user acts for the company — as its claimant or a member — right now. Read
--- under LockEmployerCompany, so a removal that committed first is seen.
+-- name: CanActForCompany :one
+-- Team mutations check current status and role under the company lock.
 SELECT EXISTS (
-    SELECT 1 FROM company_accounts ca WHERE ca.company_slug = sqlc.arg(company_slug) AND ca.user_id = sqlc.arg(user_id)
-    UNION ALL
-    SELECT 1 FROM company_account_members m WHERE m.company_slug = sqlc.arg(company_slug) AND m.user_id = sqlc.arg(user_id)
-)::boolean AS acts;
+    SELECT 1 FROM company_accounts ca
+    WHERE ca.company_slug = sqlc.arg(company_slug) AND ca.status = 'active'
+      AND (ca.user_id = sqlc.arg(user_id) OR EXISTS (
+          SELECT 1 FROM company_account_members m
+          WHERE m.company_slug = ca.company_slug AND m.user_id = sqlc.arg(user_id)
+            AND (NOT sqlc.arg(require_manager)::boolean OR m.role = 'manager')
+      ))
+)::boolean AS allowed;
 
--- name: DeleteCompanyInvitationByToken :execrows
+-- name: ListEmployerActivity :many
+SELECT a.id, a.action, a.application_id, a.previous_stage, a.stage, a.subject_email, a.occurred_at,
+       COALESCE(CASE WHEN ca.user_id = a.actor_id THEN ca.work_email ELSE m.work_email END, '')::text AS actor_email
+FROM employer_activity a
+JOIN company_accounts ca ON ca.company_slug = a.company_slug AND ca.status = 'active'
+LEFT JOIN company_account_members m ON m.user_id = a.actor_id AND m.company_slug = a.company_slug
+WHERE ca.company_slug = sqlc.arg(company_slug)
+  AND (ca.user_id = sqlc.arg(actor_id) OR EXISTS (
+      SELECT 1 FROM company_account_members reader
+      WHERE reader.user_id = sqlc.arg(actor_id) AND reader.company_slug = ca.company_slug
+        AND (reader.role = 'manager' OR a.application_id IS NOT NULL)
+  ))
+  AND (sqlc.narg(before_id)::bigint IS NULL OR a.id < sqlc.narg(before_id)::bigint)
+ORDER BY a.id DESC
+LIMIT 30;
+
+-- name: DeleteCompanyInvitationByToken :exec
 -- Withdraws the invitation a failed letter carried — only while it still holds that token:
 -- a resend that replaced the token in the meantime mailed a link that must keep working.
-DELETE FROM company_account_invitations
-WHERE company_slug = sqlc.arg(company_slug) AND token_hash = sqlc.arg(token_hash);
+WITH withdrawn AS (
+    DELETE FROM company_account_invitations i
+    WHERE i.company_slug = sqlc.arg(company_slug) AND i.token_hash = sqlc.arg(token_hash)
+    RETURNING i.company_slug, i.invited_by, i.email
+)
+INSERT INTO employer_activity (company_slug, actor_id, action, subject_email)
+SELECT company_slug, invited_by, 'invitation_withdrawn', email FROM withdrawn;

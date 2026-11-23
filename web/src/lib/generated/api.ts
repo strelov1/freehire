@@ -853,6 +853,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employer/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Up to 30 company audit events, newest first. Recruiters see application activity. */
+        get: operations["listEmployerActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employer/applications": {
         parameters: {
             query?: never;
@@ -869,6 +886,26 @@ export interface paths {
         get: operations["listEmployerApplications"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employer/applications/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search applications sent to your vacancies.
+         * @description Search delivered applications before pagination. An unknown stage returns 400.
+         */
+        post: operations["searchEmployerApplications"];
         delete?: never;
         options?: never;
         head?: never;
@@ -915,6 +952,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/employer/applications/{id}/workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark an application reviewed or save private notes. */
+        patch: operations["updateEmployerApplicationWorkspace"];
         trace?: never;
     };
     "/employer/claim": {
@@ -1126,7 +1180,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Everyone who acts for the caller's company, and the invitations still open. */
+        /** @description The company team and open invitations. A recruiter sees their own membership. */
         get: operations["getEmployerTeam"];
         put?: never;
         post?: never;
@@ -1162,7 +1216,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations. */
+        /** @description Mails a colleague a single-use recruiter invitation, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations. */
         post: operations["inviteEmployerTeamMember"];
         delete?: never;
         options?: never;
@@ -1196,7 +1250,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Joins the team an invitation link invites to. 409 when the caller already acts for a company. */
+        /** @description Joins the team. A recruiter must sign in with the matching verified email. 409 when the caller already acts for a company. */
         post: operations["joinEmployerTeam"];
         delete?: never;
         options?: never;
@@ -7781,11 +7835,26 @@ export interface components {
             email_confirmed: boolean;
             /** @description True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
             member: boolean;
+            /** @description The exact values are owner for the claimant, manager for an existing manager, and recruiter. */
+            role?: string;
             /** Format: date-time */
             created_at: string;
         };
         /** @enum {string} */
         EmployerAccountStatus: "pending" | "active" | "revoked";
+        EmployerActivity: {
+            /** Format: int64 */
+            id: number;
+            action: string;
+            actor_email?: string;
+            /** Format: int64 */
+            application_id?: number;
+            previous_stage?: string;
+            stage?: string;
+            subject_email?: string;
+            /** Format: date-time */
+            occurred_at: string;
+        };
         /** @description One application sent on freehire to one of the caller's vacancies. */
         EmployerApplication: {
             /** Format: int64 */
@@ -7808,6 +7877,13 @@ export interface components {
              * @description When you last moved it; absent while it has never been moved.
              */
             stage_changed_at?: string;
+            /**
+             * Format: date-time
+             * @description First review by a teammate, independent of the hiring stage.
+             */
+            viewed_at?: string;
+            /** @description Private notes shared within the employer team. */
+            employer_notes?: string;
             /**
              * Format: date-time
              * @description When the application reached you.
@@ -7836,11 +7912,21 @@ export interface components {
             /** @description Whether the candidate was emailed about this move. False when the stage sends no letter, nothing changed, or the letter failed. */
             candidate_notified: boolean;
         };
+        EmployerApplicationSearch: {
+            /** @description A literal search in candidate email, message and answers. */
+            query: string;
+        };
         /**
          * @description A stage of the employer's hiring pipeline. Every delivered application starts at `new`.
          * @enum {string}
          */
         EmployerApplicationStage: "new" | "reviewing" | "interview" | "offer" | "hired" | "rejected";
+        EmployerApplicationWorkspace: {
+            /** @description Record that a teammate reviewed this application. */
+            mark_viewed?: boolean;
+            /** @description Replace the private team notes. The empty string clears them. */
+            employer_notes?: string;
+        };
         EmployerApplicationsMeta: {
             /** Format: int64 */
             total: number;
@@ -7882,6 +7968,8 @@ export interface components {
             email_confirmed: boolean;
             /** @description True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
             member: boolean;
+            /** @description The exact values are owner for the claimant, manager for an existing manager, and recruiter. */
+            role?: string;
             /** Format: date-time */
             created_at: string;
             tagline?: string;
@@ -7923,6 +8011,8 @@ export interface components {
             email_confirmed: boolean;
             /** @description True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
             member: boolean;
+            /** @description The exact values are owner for the claimant, manager for an existing manager, and recruiter. */
+            role?: string;
             /** Format: date-time */
             created_at: string;
             /** @description The catalogue's current website, empty when unknown. */
@@ -7961,6 +8051,7 @@ export interface components {
         EmployerTeamInvitationPreview: {
             company_name: string;
             email: string;
+            role?: string;
         };
         EmployerTeamInvite: {
             email?: string;
@@ -7973,6 +8064,7 @@ export interface components {
             /** Format: date-time */
             joined_at: string;
             holder: boolean;
+            role?: string;
         };
         /** @description The token from the invitation link. */
         EmployerTeamToken: {
@@ -12679,6 +12771,40 @@ export interface operations {
             };
         };
     };
+    listEmployerActivity: {
+        parameters: {
+            query?: {
+                /** @description Fetch older events by passing the last event id from the previous page. */
+                before?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerActivity"][];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listEmployerApplications: {
         parameters: {
             query?: {
@@ -12737,6 +12863,53 @@ export interface operations {
                      *       }
                      *     }
                      */
+                    "application/json": components["schemas"]["EmployerApplicationsPage"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    searchEmployerApplications: {
+        parameters: {
+            query?: {
+                /** @description Only applications for this vacancy slug. */
+                job?: string;
+                /** @description Only applications at this stage. */
+                stage?: string;
+                /** @description Maximum applications to return. */
+                limit?: string;
+                /** @description Number of matching applications to skip. */
+                offset?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "query": "candidate@example.com"
+                 *     }
+                 */
+                "application/json": components["schemas"]["EmployerApplicationSearch"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["EmployerApplicationsPage"];
                 };
             };
@@ -12835,6 +13008,48 @@ export interface operations {
                      */
                     "application/json": {
                         data: components["schemas"]["EmployerApplicationMoved"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateEmployerApplicationWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "mark_viewed": true
+                 *     }
+                 */
+                "application/json": components["schemas"]["EmployerApplicationWorkspace"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerApplication"];
                     };
                 };
             };

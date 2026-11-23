@@ -2883,6 +2883,19 @@ func encodeListDismissedSlugsResponse(response *ListDismissedSlugsOK, w http.Res
 	return nil
 }
 
+func encodeListEmployerActivityResponse(response *ListEmployerActivityOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeListEmployerApplicationsResponse(response *EmployerApplicationsPage, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -4323,6 +4336,19 @@ func encodeSearchCitiesResponse(response *SearchCitiesOK, w http.ResponseWriter)
 	return nil
 }
 
+func encodeSearchEmployerApplicationsResponse(response *EmployerApplicationsPage, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeSearchJobsResponse(response *JobSearchPageHeaders, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	// Encoding response headers.
@@ -4827,6 +4853,19 @@ func encodeUpdateCVResponse(response *UpdateCVOK, w http.ResponseWriter) error {
 }
 
 func encodeUpdateEmailPrefsResponse(response *UpdateEmailPrefsOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeUpdateEmployerApplicationWorkspaceResponse(response *UpdateEmployerApplicationWorkspaceOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 

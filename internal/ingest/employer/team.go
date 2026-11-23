@@ -13,14 +13,13 @@ import (
 	"time"
 )
 
-// A company account's team (migration 0271): the people besides the claimant who act for
-// the company. Every member acts exactly as the claimant does — vacancies, applications,
-// the profile, the team itself — because ownership is the team's (employer_team), not the
-// author's. Members join only by an invitation mailed to their work address; following
-// the link is the proof they read it, the role the claim's code plays for the claimant.
+// Membership grants access to the company inbox. Legacy members also manage the
+// company, while new invitations grant the recruiter role.
 
 // Team sentinels, mapped to HTTP statuses by the handler.
 var (
+	ErrManagementRequired = errors.New("employer: company management access required")
+	ErrInvitationEmail    = errors.New("employer: confirm and use the invited email to join")
 	// ErrInvitationInvalid is a link that names no live invitation: never issued, already
 	// accepted, withdrawn, replaced by a resend, or expired. One error for all of them — the
 	// holder of a dead link can do nothing different about any one.
@@ -48,6 +47,19 @@ type Member struct {
 	WorkEmail string
 	JoinedAt  time.Time
 	Holder    bool
+	Role      string
+}
+
+// Activity is a company audit event. It contains no candidate content.
+type Activity struct {
+	ID            int64
+	Action        string
+	ActorEmail    string
+	ApplicationID *int64
+	PreviousStage string
+	Stage         string
+	SubjectEmail  string
+	OccurredAt    time.Time
 }
 
 // Invitation is an invitation that can still be accepted.
@@ -68,6 +80,7 @@ type Team struct {
 type InvitationPreview struct {
 	CompanyName string
 	Email       string
+	Role        string
 }
 
 // NewInvitation is an invitation to store: the token's hash, never the token.
@@ -81,6 +94,7 @@ type NewInvitation struct {
 
 // TeamRepository is the persistence of a company's team.
 type TeamRepository interface {
+	Activity(ctx context.Context, companySlug string, actorID, beforeID int64) ([]Activity, error)
 	Members(ctx context.Context, companySlug string) ([]Member, error)
 	Invitations(ctx context.Context, companySlug string) ([]Invitation, error)
 	// Invite stores an invitation, replacing one already sent to the same address. It
@@ -138,6 +152,14 @@ func (s *Service) Team(ctx context.Context, userID int64) (Team, error) {
 	if err != nil {
 		return Team{}, err
 	}
+	if acc.Role == RoleRecruiter {
+		for _, member := range members {
+			if member.UserID == userID {
+				return Team{Members: []Member{member}}, nil
+			}
+		}
+		return Team{}, ErrNotFound
+	}
 	invitations, err := s.team.Invitations(ctx, acc.CompanySlug)
 	if err != nil {
 		return Team{}, err
@@ -145,11 +167,20 @@ func (s *Service) Team(ctx context.Context, userID int64) (Team, error) {
 	return Team{Members: members, Invitations: invitations}, nil
 }
 
+// Activity returns the newest company events before the optional cursor.
+func (s *Service) Activity(ctx context.Context, userID, beforeID int64) ([]Activity, error) {
+	acc, err := s.ActiveAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.team.Activity(ctx, acc.CompanySlug, userID, beforeID)
+}
+
 // Invite mails a colleague a link that adds them to the caller's company team. The address
 // must be a work address, as for a claim, and not one somebody in the team already acts
 // under. Inviting an address again replaces its link and restarts its expiry.
 func (s *Service) Invite(ctx context.Context, userID int64, email string) (Invitation, error) {
-	acc, err := s.ActiveAccount(ctx, userID)
+	acc, err := s.managementAccount(ctx, userID)
 	if err != nil {
 		return Invitation{}, err
 	}
@@ -205,7 +236,7 @@ func (s *Service) Invite(ctx context.Context, userID int64, email string) (Invit
 
 // WithdrawInvitation cancels one of the caller's company's invitations.
 func (s *Service) WithdrawInvitation(ctx context.Context, userID, id int64) error {
-	acc, err := s.ActiveAccount(ctx, userID)
+	acc, err := s.managementAccount(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -225,11 +256,8 @@ func (s *Service) PreviewInvitation(ctx context.Context, token string) (Invitati
 	return p, nil
 }
 
-// AcceptInvitation makes userID a member of the company the link invites to. Whoever holds
-// the link may accept it under any freehire account: the link reached the invited address,
-// which is the proof, and the member acts under that address (Account.WorkEmail), whatever
-// their sign-in address is. A user who already acts for a company is refused — one company
-// per user, as for claims.
+// AcceptInvitation makes a user a member of the company named by the link. New
+// recruiter invitations require the matching verified sign-in address.
 func (s *Service) AcceptInvitation(ctx context.Context, userID int64, token string) (Account, error) {
 	if _, err := s.repo.GetByUserID(ctx, userID); err == nil {
 		return Account{}, ErrAlreadyHasAccount
@@ -252,6 +280,9 @@ func (s *Service) RemoveMember(ctx context.Context, userID, memberID int64) erro
 	acc, err := s.ActiveAccount(ctx, userID)
 	if err != nil {
 		return err
+	}
+	if acc.Role == RoleRecruiter && memberID != userID {
+		return ErrManagementRequired
 	}
 	if memberID == acc.UserID {
 		return fmt.Errorf("%w: the account holder cannot be removed from the team", ErrInvalid)
