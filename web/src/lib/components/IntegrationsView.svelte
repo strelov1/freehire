@@ -48,6 +48,35 @@
     }
   }
 
+  let scheduling = $state<Awaited<ReturnType<typeof api.interviewSchedulingStatus>> | null>(null);
+  let schedulingBusy = $state(false);
+  let schedulingError = $state('');
+
+  async function loadScheduling() {
+    try {
+      scheduling = await api.interviewSchedulingStatus();
+    } catch {
+      scheduling = null;
+    }
+  }
+
+  function connectScheduling() {
+    window.location.href = '/api/v1/me/interview-scheduling/connect';
+  }
+
+  async function disableScheduling() {
+    schedulingBusy = true;
+    schedulingError = '';
+    try {
+      await api.disableInterviewScheduling();
+      await loadScheduling();
+    } catch (e) {
+      schedulingError = errorMessage(e, 'Could not turn off interview scheduling.');
+    } finally {
+      schedulingBusy = false;
+    }
+  }
+
   function connectGmail() {
     window.location.href = '/api/v1/me/gmail/connect';
   }
@@ -106,7 +135,18 @@
     const params = page.url.searchParams;
     const gmailFailed = params.get('gmail_error');
     const calendarFailed = params.get('calendar_error');
-    if (gmailFailed) {
+    const schedulingFailed = params.get('scheduling_error');
+    if (schedulingFailed) {
+      googleNotice = {
+        ok: false,
+        text:
+          schedulingFailed === 'partial'
+            ? 'Google did not grant all the permissions needed to send replies and create meetings. Try connecting again.'
+            : 'Could not connect the interview scheduler. Try again.',
+      };
+    } else if (params.get('scheduling') === 'connected') {
+      googleNotice = { ok: true, text: 'Interview scheduling is on.' };
+    } else if (gmailFailed) {
       googleNotice = { ok: false, text: GMAIL_CONNECT_ERRORS[gmailFailed] ?? 'Connecting Gmail failed. Try again.' };
     } else if (calendarFailed) {
       googleNotice = {
@@ -193,6 +233,7 @@
 
   onMount(() => {
     void loadGmail();
+    void loadScheduling();
     void notifications.ensureLoaded();
   });
 
@@ -304,6 +345,38 @@
       <p class="mt-2 text-xs text-destructive">{gmailError}</p>
     {/if}
   </div>
+
+  {#if scheduling?.available}
+    <div class="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+          <h3 class="flex items-center gap-2 text-sm font-medium">
+            Interview scheduling
+            {#if scheduling.enabled && scheduling.connected}
+              <Badge variant="outline" class={CONNECTED_BADGE_CLASS}>On</Badge>
+            {/if}
+          </h3>
+          <p class="mt-1 text-xs text-muted-foreground">
+            Let Freehire offer times and reply to recruiters from your Gmail. It can book Google Meet interviews and
+            invite recruiters from your Calendar. See what happened in one daily email. Pro and Ultra only.
+          </p>
+        </div>
+        <div class="flex shrink-0 flex-wrap gap-2">
+          {#if !scheduling.enabled || !scheduling.connected}
+            <Button variant="primary" size="sm" onclick={connectScheduling}>
+              {scheduling.enabled ? 'Reconnect Google' : 'Turn on with Google'}
+            </Button>
+          {/if}
+          {#if scheduling.enabled}
+            <Button variant="outline" size="sm" disabled={schedulingBusy} onclick={disableScheduling}>Turn off</Button>
+          {/if}
+        </div>
+      </div>
+      {#if schedulingError}
+        <p class="text-xs text-destructive" role="alert">{schedulingError}</p>
+      {/if}
+    </div>
+  {/if}
 
   <!-- Telegram -->
   {#if tg.enabled}

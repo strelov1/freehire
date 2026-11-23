@@ -29,10 +29,18 @@ type Item struct {
 	Replied    bool      `json:"replied"`
 }
 
+type SchedulingActivity struct {
+	ID      int64  `json:"id"`
+	Subject string `json:"subject"`
+	Kind    string `json:"kind"`
+}
+
 type Snapshot struct {
-	IDs   []int64
-	Total int64
-	Items []Item
+	IDs         []int64
+	Total       int64
+	Items       []Item
+	ActivityIDs []int64
+	Activity    []SchedulingActivity
 }
 
 type Store interface {
@@ -72,7 +80,7 @@ func (r *Runner) Run(ctx context.Context, now time.Time) (Stats, error) {
 		}
 		// Claim against the instant after the snapshot, so a run crossing local midnight books the new day.
 		at = now.Add(time.Since(started))
-		if len(snapshot.IDs) == 0 || len(snapshot.Items) == 0 {
+		if len(snapshot.Items) == 0 && len(snapshot.Activity) == 0 {
 			continue
 		}
 		message, err := r.mailer.Render(c, snapshot)

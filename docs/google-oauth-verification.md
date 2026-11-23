@@ -16,6 +16,7 @@ Scopes come in three tiers, and the tier — not the feature — decides the bur
 | `gmail.readonly` | **restricted** | Verification **plus an annual third-party security assessment (CASA)** |
 | `calendar.readonly` | sensitive | Verification only |
 | `calendar.events` | sensitive | Verification only |
+| `gmail.send` | sensitive | Verification only |
 | sign-in (`email`, `profile`) | basic | Nothing |
 
 So the whole cost of this exercise is one scope. If Gmail sync is ever retired in favour
@@ -106,7 +107,7 @@ rejection.
 > line does not distinguish a rejection from an interview invitation — both commonly read
 > "Your application to <Company>". We must read the message body to classify the stage
 > correctly, and body access is only available through a restricted read scope. We do not
-> request `gmail.modify`, `gmail.send`, or full mailbox access: we never write, label,
+> request `gmail.modify` or full mailbox access. Reading the hiring inbox never writes, labels,
 > delete, or send anything, and read-only is the least privilege that delivers the
 > feature.
 >
@@ -124,16 +125,25 @@ rejection.
 
 > Candidates using the Inbox feature see their interviews on the same timeline as their
 > applications, so a scheduled round is visible next to the application it belongs to. We
-> read free/busy and event times to place them on that timeline. We never create, modify,
-> or delete an event with this scope.
+> read event times to place them on that timeline. When a candidate enables a booking link,
+> we use free/busy from their primary calendar so recruiters can only select times that
+> do not overlap a busy event. Recruiters see offered times only. We never create,
+> modify, or delete an event with this scope.
 
 ### `https://www.googleapis.com/auth/calendar.events`
 
-> Requested only from a mentor who offers paid mentorship sessions on freehire, and only
-> at the moment they opt in to taking bookings — never from a candidate. When someone
-> books a session, we create that one calendar event on the mentor's calendar and attach
-> a Google Meet link, which is what the two parties join. We create nothing else and
-> delete nothing. Google offers no narrower scope for creating a single event.
+> In mentorship, we create a scheduled session with Google Meet on the mentor's calendar.
+> When a paid candidate separately opts in to interview scheduling, we create the agreed
+> interview in their primary calendar, wait for its Meet link, and invite the recruiter.
+> We use a durable event ID to avoid duplicates and update only the event we created.
+
+### `https://www.googleapis.com/auth/gmail.send`
+
+> We request this scope only from an eligible candidate who turns on interview scheduling.
+> Freehire replies to a scheduling-only message linked to one of the candidate's
+> applications, in the original Gmail thread, with verified availability or a booking
+> confirmation. The candidate can turn scheduling off at any time. The daily inbox
+> digest lists replies, bookings and requests the candidate needs to handle.
 
 ## Demo video script
 

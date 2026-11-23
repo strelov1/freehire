@@ -13,6 +13,12 @@ page `web/src/routes/booking/[token]`, the candidate's switch in the job drawer'
   10:00-18:00 in the zone stored on the link, 30 minutes, 12 h notice, 14-day horizon) minus
   the owner's confirmed bookings across all their links and their other confirmed
   application interviews (no end = 30 minutes; `booking_link` ones counted once).
+- A candidate with a connected Google Calendar grant also gets live primary-calendar
+  free/busy checked on the list and again for the exact interval immediately before the
+  booking write. Google returns only interval bounds. They filter whole slots, so a busy
+  interval that ends off-grid does not move the grid. Without a calendar grant the local
+  schedule still works. An unusable calendar grant or failed read returns 503, so a
+  recruiter cannot book a time whose calendar availability is unknown.
 - **A booking re-derives its slot** server-side and takes it only on an exact `Start.Equal`
   match. The EXCLUDE `booking_link_bookings_no_overlap` is what wins a race; its 23P01 (and
   the 40P01 retry that meets it) becomes `ErrSlotUnavailable`. Off-grid, taken, inside the
@@ -30,9 +36,13 @@ page `web/src/routes/booking/[token]`, the candidate's switch in the job drawer'
   transaction: `ical_uid = 'booking:<id>'`, `source = 'booking_link'`, `confirmed`, and its
   `interview_scheduled` ledger event with source `system` (an anonymous booker is not the
   employer's pipeline, so it is not trusted for day math).
+- A candidate who opted in to calendar invitations and holds a write grant gets an
+  invitation queued inside the booking transaction. The worker claims one booking at a
+  time, reuses its provider event ID across retries, waits for Meet, then invites the
+  recruiter. The application's interview records the provider ID and Meet URL.
 - The anonymous pair is throttled per IP at the gateway (`freehire-ops`, `/api/v1/booking/*`),
   and `POST .../bookings` refuses an encoded body before reading it (`refuseEncodedBody`).
 
 ## Not here yet
-Google free/busy (#4916), calendar event or Meet (#4917), a schedule editor (#4918), cancel
+A schedule editor (#4918), cancel
 (#4919), revoking by stage (#4920), turning a link off.

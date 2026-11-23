@@ -320,7 +320,7 @@ func bookingFromRow(row db.MentorBooking) Booking {
 // GetMentorCalendarGrant reads a mentor's Google grant for the calendar write. Any status
 // other than 'connected' (needs_reconsent included) answers not-found: skip the event.
 func (r *QueriesRepository) GetMentorCalendarGrant(ctx context.Context, userID int64) (string, []string, bool, error) {
-	row, err := r.q.GetGoogleGrantForWrite(ctx, userID)
+	row, err := r.q.GetGoogleGrant(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil, false, nil
 	}

@@ -181,7 +181,7 @@ var blocks = map[string][]string{
 		// mentorship/busysync is named in full, per the auth/oauth convention; its sync worker
 		// reaches into application (gmailsync) as mentorship does for calendar-write consent.
 		"mentorship/busysync",
-		"applicationdigest", "inboxdigest", "notify", "nudge", "onboarding", "problemreport",
+		"applicationdigest", "inboxdigest", "interviewscheduling", "notify", "nudge", "onboarding", "problemreport",
 		// ga4mp sends one sign-up event to Google Analytics, imports only the standard library,
 		// and is called by the auth handlers; a growth measurement, so engage.
 		"ga4mp",
