@@ -24,8 +24,8 @@ github.com/bogdanfinn/fhttp v0.7.3 h1:DLiZfU9dKD+JCFDUZk8XUgbwm32DuvPLp9x2mucNPv
 github.com/bogdanfinn/fhttp v0.7.3/go.mod h1:Pco5Ml+HnzrBRAu+6BORirlCAF9JqKmAvC0vI3JSjss=
 github.com/bogdanfinn/quic-go-utls v1.0.13-utls h1:csafI+9mkfwRqwM8dXdcmC6mgwxTAj+d+PhcqLHnUWg=
 github.com/bogdanfinn/quic-go-utls v1.0.13-utls/go.mod h1:w92OqFJYP900bLkAjvnnvV4M43XikIvhvsY39AxXQfM=
-github.com/bogdanfinn/tls-client v1.18.0 h1:CNh+8Mq0lU+iAxn3TkxhHQrucIOpPacAl7cio8HVo1c=
-github.com/bogdanfinn/tls-client v1.18.0/go.mod h1:T7hIrZnYRex0YFc/CWkEvxRV28RXUQlROb2b5FgM4BU=
+github.com/bogdanfinn/tls-client v1.18.1 h1:940xCSoipJG13GaGcvOMnF/f+pOCJ+3pKDwemC7Vnt8=
+github.com/bogdanfinn/tls-client v1.18.1/go.mod h1:T7hIrZnYRex0YFc/CWkEvxRV28RXUQlROb2b5FgM4BU=
 github.com/bogdanfinn/utls v1.8.2-barnius h1:ypYWUe4gklEgdBYP+cZAfoG/hhVUMG6ot/pmqgbc/Es=
 github.com/bogdanfinn/utls v1.8.2-barnius/go.mod h1:piJQqN3RvYCC1Bvh5kqhaAhJ+DC1i7PRJDfPKiZsiF8=
 github.com/bogdanfinn/websocket v1.5.9-barnius h1:KY6PMx2I3WspLKJ++wPF5TNhd/fxqu5IpYU+lfH5DbM=
@@ -104,8 +104,8 @@ github.com/jackc/puddle/v2 v2.2.3 h1:f8HoREISb3l5eO9coPgK7U3hKLhWGokOFVcThl5jrao
 github.com/jackc/puddle/v2 v2.2.3/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
 github.com/jaytaylor/html2text v0.0.0-20230321000545-74c2419ad056 h1:iCHtR9CQyktQ5+f3dMVZfwD2KWJUgm7M0gdL9NGr8KA=
 github.com/jaytaylor/html2text v0.0.0-20230321000545-74c2419ad056/go.mod h1:CVKlgaMiht+LXvHG173ujK6JUhZXKb2u/BQtjPDIvyk=
-github.com/klauspost/compress v1.20.3 h1:zWNoFqq/lSuYQRim3dUXlXeA0IqwuZGicdG5ZTfY5j4=
-github.com/klauspost/compress v1.20.3/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
+github.com/klauspost/compress v1.20.4 h1:dD0v/bvxtjCBqQu6sx1TNWkalEY5lNTIe+HY9w8TeNI=
+github.com/klauspost/compress v1.20.4/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
 github.com/klauspost/cpuid/v2 v2.0.1/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
 github.com/klauspost/cpuid/v2 v2.4.0 h1:S6Hrbc7+ywsr0r+RLapfGBHfyefhCTwEh3A0tV913Dw=
 github.com/klauspost/cpuid/v2 v2.4.0/go.mod h1:19jmZ9mjzoF//ddRSUsv0zfBTJWh3QJh9FNxZTMrGxU=
@@ -237,8 +237,8 @@ github.com/tmc/langchaingo v0.1.15 h1:zbRfW3RiX8SSX9ck0P1y3Q7FV6VRwusRSKFykaZOh/
 github.com/tmc/langchaingo v0.1.15/go.mod h1:aKKYXYoqhIDEv7WKdpnnCLRaqXic69cX9MnDUk72378=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
-github.com/valyala/fasthttp v1.78.0 h1:tKfLdx7cD8HZOTP1wc2OpbQMbgO1HP12J0y/XMdyW6Q=
-github.com/valyala/fasthttp v1.78.0/go.mod h1:8NXUY/ZXyjqEWN5cbfIdAAv+ES+5yfcl2EGNo872KzQ=
+github.com/valyala/fasthttp v1.79.0 h1:32ur91W4kWG+1s6x3oDlP8/KNmjlZZlUzSSC4p9LSWE=
+github.com/valyala/fasthttp v1.79.0/go.mod h1:NQN+PlgP93+JRPnCiApN5XwnI24oMQf8kuzrxtsTy9A=
 github.com/xuri/efp v0.0.3-0.20260924042702-217b81952dec h1:sZZokRLgr8nyrzkDDCQcvEYBsTrZr6eqXa/R9qALoQA=
 github.com/xuri/efp v0.0.3-0.20260924042702-217b81952dec/go.mod h1:ybY/Jr0T0GTCnYjKqmdwxyxn2BQf2RcQIIvex5QldPI=
 github.com/xuri/excelize/v2 v2.11.1 h1:tm/FVufArvfUiJXJtGv8jna/zZS1t9Uji2ImsnS9iBo=

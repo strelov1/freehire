@@ -125,7 +125,9 @@ const listEmployerApplications = `-- name: ListEmployerApplications :many
 
 SELECT da.id, j.public_slug AS job_slug, j.title AS job_title, u.email AS candidate_email,
        da.cv_kind, da.note, da.answers, da.stage, da.stage_changed_at, da.sent_at, da.viewed_at, da.employer_notes,
-       EXISTS (SELECT 1 FROM direct_application_cvs c WHERE c.application_id = da.id) AS has_cv
+       EXISTS (SELECT 1 FROM direct_application_cvs c WHERE c.application_id = da.id) AS has_cv,
+       EXISTS (SELECT 1 FROM public.direct_application_messages m
+               WHERE m.application_id = da.id AND m.status = 'received' AND m.read_at IS NULL) AS has_unread_reply
 FROM direct_applications da
 JOIN jobs j ON j.id = da.job_id
 JOIN users u ON u.id = da.user_id
@@ -164,6 +166,7 @@ type ListEmployerApplicationsRow struct {
 	ViewedAt       pgtype.Timestamptz `json:"viewed_at"`
 	EmployerNotes  string             `json:"employer_notes"`
 	HasCv          bool               `json:"has_cv"`
+	HasUnreadReply bool               `json:"has_unread_reply"`
 }
 
 // The employer's inbox. Every statement below reaches an application only through the
@@ -208,6 +211,7 @@ func (q *Queries) ListEmployerApplications(ctx context.Context, arg ListEmployer
 			&i.ViewedAt,
 			&i.EmployerNotes,
 			&i.HasCv,
+			&i.HasUnreadReply,
 		); err != nil {
 			return nil, err
 		}

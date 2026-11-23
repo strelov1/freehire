@@ -88,3 +88,23 @@ and [openspec/changes/add-employer-applicant-pipeline](../../../openspec/changes
 - **Built when mail is configured, not Typst.** The inbox serves the kept CV and renders
   nothing, but a move may email the candidate, so without a mail transport its routes answer
   501 — wired in `handler.Register` beside `Service`.
+
+## Candidate conversations
+
+- A delivered application has one conversation visible to its active employer team.
+  Unread replies are shared within the team and acknowledged through a message ID.
+  A reply received above that ID stays unread. Stage notices keep their existing
+  delivery and tracking path.
+- Send only to the candidate's current verified address. The client generates a
+  request UUID once per draft and reuses it for a retry. A database claim prevents
+  duplicate concurrent sends for the same key. The row survives a transport failure.
+  An unconfirmed attempt becomes retryable after two minutes if the process stopped
+  before saving its outcome. SES can accept a message before the caller observes a
+  timeout, so a manual retry of an unconfirmed send can send a second email.
+- Each outgoing email has a separate opaque Reply-To alias on the hosted mailbox
+  domain. The incoming worker validates the trusted SES receipt verdict and the
+  candidate address before recording the reply. It uses the original recipient
+  and the candidate's current verified address, and stores plain text only.
+- Apply migration 0306 before deploying the API and the inbound worker. Sending
+  needs the normal outbound mail transport and `MAILBOX_DOMAIN`. The existing SES
+  receipt rule for that domain and `cmd/mail-ingest` handle replies.

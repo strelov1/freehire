@@ -141,29 +141,32 @@ func sleepCtx(ctx context.Context, d time.Duration) {
 // Run enqueues pending jobs and drains the queue until no claimable entries remain.
 // A failure on a single entry is recorded and never aborts the run.
 //
-// The enqueue runs alongside the drain, not before it: a whole-catalogue pass takes longer
-// than the gap between deploys, and every deploy restarts the run, so a drain that waited
-// for it never started. While the enqueue runs, an idle drain retries each enqueuePoll.
+// The reap and the enqueue run alongside the drain, not before it: a whole-catalogue pass
+// takes longer than the gap between deploys, and on a large queue so does the reap's scan,
+// and every deploy restarts the run, so a drain that waited for either never started.
+// While they run, an idle drain retries each enqueuePoll.
 func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
-	// Reap first so the reported depth is work, not residue. Best-effort: housekeeping must
-	// never stop enrichment.
-	reaped, err := r.Store.Reap(ctx, reapLimit)
-	if err != nil {
-		log.Printf("enrich: reap ineligible entries (continuing): %v", err)
-	} else if reaped > 0 {
-		log.Printf("enrich: reaped %d entries whose job closed or became a repost", reaped)
-	}
-
 	enqCtx, stopEnqueue := context.WithCancel(ctx)
 	defer stopEnqueue()
 	type enqueueResult struct {
-		n   int64
-		err error
+		n      int64
+		reaped int64
+		err    error
 	}
 	enq := make(chan enqueueResult, 1)
 	go func() {
+		// Reap before the enqueue, so EnqueuePendingJobs re-adds anything the reap raced
+		// with (see DeleteIneligibleEnrichmentOutbox). Best-effort: housekeeping must never
+		// stop enrichment.
+		reaped, err := r.Store.Reap(enqCtx, reapLimit)
+		if err != nil {
+			log.Printf("enrich: reap ineligible entries (continuing): %v", err)
+			reaped = 0
+		} else if reaped > 0 {
+			log.Printf("enrich: reaped %d entries whose job closed or became a repost", reaped)
+		}
 		n, err := r.Store.Enqueue(enqCtx, opt.TargetVersion)
-		enq <- enqueueResult{n, err}
+		enq <- enqueueResult{n, reaped, err}
 	}()
 	log.Printf("enrich: draining (concurrency=%d) while pending jobs are enqueued", opt.Concurrency)
 
@@ -172,7 +175,7 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 	if wait == nil {
 		wait = sleepCtx
 	}
-	stats := Stats{Reaped: int(reaped)}
+	var stats Stats
 	// One backoff for the whole run, fed run-wide counts, so an outage keeps growing the
 	// pause across the drain passes below.
 	var backoff upstreamBackoff
@@ -218,6 +221,7 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 		select {
 		case res := <-enq:
 			enqueueDone = true
+			stats.Reaped = int(res.reaped)
 			if res.err != nil {
 				return stats, fmt.Errorf("enqueue: %w", res.err)
 			}

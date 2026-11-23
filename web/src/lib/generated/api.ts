@@ -986,6 +986,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employer/applications/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read an application conversation
+         * @description Read the private email conversation for a delivered application in your company.
+         */
+        get: operations["getEmployerApplicationConversation"];
+        put?: never;
+        /**
+         * Email a candidate
+         * @description Send a plain-text email to the candidate without changing their application stage.
+         */
+        post: operations["sendEmployerApplicationMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employer/applications/{id}/messages/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark candidate replies as read
+         * @description Acknowledge the candidate replies the company team has seen up through this message.
+         */
+        post: operations["markEmployerApplicationRepliesRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employer/applications/{id}/stage": {
         parameters: {
             query?: never;
@@ -8096,6 +8140,8 @@ export interface components {
             viewed_at?: string;
             /** @description Private notes shared within the employer team. */
             employer_notes?: string;
+            /** @description A candidate reply in this conversation has not yet been read by the team. */
+            has_unread_reply?: boolean;
             /**
              * Format: date-time
              * @description When the application reached you.
@@ -8113,6 +8159,36 @@ export interface components {
             /** @description The candidate's answer. */
             answer: string;
         };
+        EmployerApplicationConversation: {
+            /** @description Most recent first. */
+            messages: components["schemas"]["EmployerApplicationMessage"][];
+            /** @description Fetch older messages with the ID of the last message as before. */
+            has_more: boolean;
+            /** @description The candidate has a confirmed address and the mail transport is configured. */
+            can_send: boolean;
+        };
+        /** @description One email in a delivered application's conversation. */
+        EmployerApplicationMessage: {
+            /** Format: int64 */
+            id: number;
+            body: string;
+            status: components["schemas"]["EmployerApplicationMessageStatus"];
+            /**
+             * Format: date-time
+             * @description When this message first entered the conversation.
+             */
+            created_at: string;
+            /** @description Outgoing only. Use the same key and body to retry the same send. */
+            request_key?: string;
+        };
+        EmployerApplicationMessageSend: {
+            /** @description The plain-text email to the candidate. */
+            body: string;
+            /** @description A UUID generated once per outgoing message. Reuse it on retry. */
+            request_key: string;
+        };
+        /** @enum {string} */
+        EmployerApplicationMessageStatus: "sending" | "sent" | "failed" | "received";
         EmployerApplicationMove: {
             /** @description The stage to move to: new, reviewing, interview, offer, hired or rejected. (e.g. `interview`) */
             stage?: string;
@@ -8123,6 +8199,17 @@ export interface components {
             application: components["schemas"]["EmployerApplication"];
             /** @description Whether the candidate was emailed about this move. False when the stage sends no letter, nothing changed, or the letter failed. */
             candidate_notified: boolean;
+        };
+        EmployerApplicationRepliesRead: {
+            /**
+             * Format: int64
+             * @description The newest message ID the team has seen in this application.
+             */
+            through_id: number;
+        };
+        EmployerApplicationReplyReadState: {
+            /** @description True when a newer reply arrived after the messages the team has seen. */
+            has_unread_reply: boolean;
         };
         EmployerApplicationSearch: {
             /** @description A literal search in candidate email, message and answers. */
@@ -13347,6 +13434,130 @@ export interface operations {
                 };
                 content: {
                     "*/*": unknown;
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEmployerApplicationConversation: {
+        parameters: {
+            query?: {
+                /** @description Fetch messages older than this message ID. */
+                before?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The application's ID. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerApplicationConversation"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    sendEmployerApplicationMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The application's ID. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "body": "Are you available next Tuesday?",
+                 *       "request_key": "00000000-0000-4000-8000-000000000001"
+                 *     }
+                 */
+                "application/json": components["schemas"]["EmployerApplicationMessageSend"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerApplicationMessage"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    markEmployerApplicationRepliesRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The application's ID. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "through_id": 17
+                 *     }
+                 */
+                "application/json": components["schemas"]["EmployerApplicationRepliesRead"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerApplicationReplyReadState"];
+                    };
                 };
             };
             /** @description An unexpected error response. */
