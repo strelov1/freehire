@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -90,8 +91,11 @@ func runAdd(provider, board, region, company string, hub bool, tenantsFlag strin
 	}
 	in := boardcatalog.InsertInput{Provider: provider, Board: board, Region: region, Company: company, Hub: hub, Tenants: tenants}
 
-	// A client-bearing registry, not Taxonomy: some providers check the board against the platform.
-	registry := sources.All(sources.NewClient())
+	// Every known provider (Taxonomy), overlaid with the client-bearing adapters so a provider
+	// that checks the board against its platform (Oracle's site list) can: All alone drops a
+	// credential-gated provider whose key this host lacks, which would refuse a valid board.
+	registry := sources.Taxonomy()
+	maps.Copy(registry, sources.All(sources.NewClient()))
 	if err := boardcatalog.Validate(in, registry); err != nil {
 		log.Printf("add-board: invalid: %v", err)
 		return 1
