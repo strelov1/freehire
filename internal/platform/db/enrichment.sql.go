@@ -104,11 +104,13 @@ WITH chunk AS MATERIALIZED (
       AND o.job_id > $1::bigint
       AND o.job_id <= (SELECT max(job_id) FROM chunk)
       AND o.failed_at IS NULL
+      AND (o.claimed_at IS NULL OR o.claimed_at < now() - interval '1 hour')
     LIMIT $3::int
 ), del AS (
     DELETE FROM enrichment_outbox o
     USING doomed d
     WHERE o.id = d.id
+      AND (o.claimed_at IS NULL OR o.claimed_at < now() - interval '1 hour')
     RETURNING 1
 )
 SELECT COALESCE((SELECT max(job_id) FROM chunk), 0)::bigint AS last_job_id,
@@ -172,6 +174,11 @@ type DeleteIneligibleEnrichmentOutboxRow struct {
 // ingest on the hottest table in the schema to prevent an hour's delay on a job that is not
 // yet enriched anyway. DeleteIneligibleSearchOutbox carries the identical race for the identical
 // reason.
+// A live claim is never reaped. The reap runs beside the drain, so a job that became
+// eligible mid-scan can be claimed (claimed_at set) before this DELETE reaches its row;
+// deleting it then would make Complete a silent no-op and the re-enqueue a second paid call.
+// The claimed_at test is repeated on the DELETE itself so it is re-checked against the
+// committed row version when the DELETE waited on that claim. An hour covers any lease.
 func (q *Queries) DeleteIneligibleEnrichmentOutbox(ctx context.Context, arg DeleteIneligibleEnrichmentOutboxParams) (DeleteIneligibleEnrichmentOutboxRow, error) {
 	row := q.db.QueryRow(ctx, deleteIneligibleEnrichmentOutbox, arg.AfterJobID, arg.ChunkSize, arg.MaxRows)
 	var i DeleteIneligibleEnrichmentOutboxRow
