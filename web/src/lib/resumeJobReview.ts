@@ -16,8 +16,21 @@ const labels: Readonly<Record<string, string>> = SKILL_LABELS;
 const action =
   /^(?:I\s+)?(?:automated|built|configured|created|debugged|delivered|deployed|designed|developed|implemented|improved|integrated|led|maintained|managed|migrated|operated|optimized|owned|reduced|shipped|supported|tested|used|wrote)\b/i;
 
-const negation =
-  /\b(?:without|never (?:used|worked with)|no (?:hands-on )?experience (?:with|in)|haven['’]t (?:used|worked with)|not familiar with)\s*(?:[^.!?;:\n]*?(?:,|\/|\b(?:and|or)\b)\s*)?$/i;
+const negativeClause =
+  /^.*\b(?:without|never (?:used|worked with)|no (?:hands-on )?experience (?:with|in)|haven['’]t (?:used|worked with)|not familiar with)\s*(?:using\s+)?((?:[^.!?;:\n]|\.(?!\s))*)$/i;
+const listJoin = /(?:[,/]|\b(?:and|or)\b)$/i;
+
+function isNegated(prefix: string): boolean {
+  const tail = negativeClause.exec(prefix)?.[1]?.trim();
+  if (tail === undefined) return false;
+  if (!tail) return true;
+  if (!listJoin.test(tail) || /\b(?:but|then|while)\b/i.test(tail)) return false;
+  // A new action or explicit use starts a positive clause after the list.
+  return !tail
+    .split(/,|\band\b/i)
+    .slice(1)
+    .some((part) => action.test(part.trimStart()) || /^(?:using|with)\b/i.test(part.trimStart()));
+}
 
 function escapePattern(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -63,7 +76,7 @@ export function reviewResume(
     for (const line of lines) {
       const match = patterns
         .map((pattern) => pattern.exec(line))
-        .find((candidate) => candidate && !negation.test(line.slice(0, candidate.index)));
+        .find((candidate) => candidate && !isNegated(line.slice(0, candidate.index)));
       if (!match) continue;
       const snippet = excerpt(line, match.index);
       if (action.test(line)) return { skill, kind: 'example', snippet, ...context };

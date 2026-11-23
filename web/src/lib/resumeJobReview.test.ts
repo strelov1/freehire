@@ -41,6 +41,9 @@ describe('reviewResume', () => {
     ['Built services without AWS, Azure, or Go.', ['missing', 'missing']],
     ['Built services with AWS and Azure.', ['example', 'example']],
     ['Built services without AWS, then deployed to Azure.', ['missing', 'example']],
+    ['Built services without downtime, using AWS and Azure.', ['example', 'example']],
+    ['Built services without using AWS or Azure.', ['missing', 'missing']],
+    ['Built services without .NET or Azure.', ['missing', 'missing']],
   ])('interprets listed skills in %s', (line, kinds) => {
     expect(reviewResume(line, ['aws', 'azure'], []).map(({ kind }) => kind)).toEqual(kinds);
   });
