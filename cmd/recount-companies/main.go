@@ -57,6 +57,12 @@ func run() int {
 		log.Printf("recount-companies: compute: %v", err)
 		return 1
 	}
+	// An empty result is a failed measurement (a misconfigured reader, say), not an empty catalogue:
+	// applying it would zero every company's job_count and empty the sitemap.
+	if len(rows) == 0 {
+		log.Print("recount-companies: no company has open jobs; refusing to apply")
+		return 1
+	}
 	facets, err := json.Marshal(rows)
 	if err != nil {
 		log.Printf("recount-companies: encode: %v", err)
