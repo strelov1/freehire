@@ -114,7 +114,7 @@ describe('softgarden question-shaped labels', () => {
   beforeEach(() => load('softgarden-de.html'));
 
   // A short synonym has to open the label, so a full question around it never matches
-  // ('gehaltswunsch'); a long one ('kündigungsfrist') is found anywhere. The short case is
+  // ('gehaltswunsch') unless the whole question is a synonym too ('wie ist ihre kündigungsfrist'). The short case is
   // left to the agent path; this test documents the boundary rather than hiding it.
   it('match only on a long synonym', () => {
     expect(matchFieldKey('Wie ist Ihre Kündigungsfrist? *')).toBe('noticePeriod');

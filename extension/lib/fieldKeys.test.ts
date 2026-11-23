@@ -100,6 +100,12 @@ describe('matchFieldKey with a preamble', () => {
     );
   });
 
+  it('does not read a question that only mentions the salary as asking for it', () => {
+    expect(
+      matchFieldKey('For this position, explain how your salary expectations change with the local currency'),
+    ).toBeNull();
+  });
+
   it('does not take a short synonym from the middle of a question', () => {
     expect(matchFieldKey('Which city would you prefer to work from?')).toBeNull();
     expect(matchFieldKey('Do you have a LinkedIn contact at our company?')).toBeNull();

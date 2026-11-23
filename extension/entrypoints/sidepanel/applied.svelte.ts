@@ -36,6 +36,16 @@ export class AppliedTracker {
     private readonly notify: (text: string) => void,
   ) {}
 
+  /** Forgets everything about the account that signed out, so the next one's applications,
+   *  even to the same jobs, are followed and recorded afresh. */
+  reset() {
+    this.candidate = null;
+    this.startedJob = null;
+    this.startedTabId = null;
+    this.appliedTabId = null;
+    this.autoApplied.clear();
+  }
+
   /** Asked only once the page in front of the user shows no form: the next step of a
    *  multi-step application is still the application, not its end. */
   asks(autofilling: boolean): boolean {

@@ -72,6 +72,7 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
     'pretension salarial',
     'aspiración salarial',
     'qual é a sua pretensão salarial',
+    'qual a sua pretensão salarial',
     'pretensão salarial',
     'gehaltsvorstellung',
     'gehaltsvorstellungen',
@@ -86,6 +87,7 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
     'how much notice',
     'kündigungsfrist',
     'ihre kündigungsfrist',
+    'wie ist ihre kündigungsfrist',
   ],
   willingToRelocate: [
     'are you willing to relocate',
@@ -142,9 +144,9 @@ export function normalizeLabel(label: string): string {
  * ("First Name (required) e85441b6"), because those trail the question rather
  * than lead it.
  *
- * The exception is a long synonym: a question with a preamble ("Para contratação na
- * modalidade Contractor ... qual a sua pretensão salarial?") is still asking it, and a phrase
- * of this length does not turn up inside an unrelated question. Openers win over these.
+ * The exception is a question behind a preamble ("Para contratação na modalidade Contractor
+ * (PJ), informe: Qual a sua pretensão salarial?"): a long synonym may open a later clause.
+ * Only the opening counts, so "explain how your salary expectations change" is not one.
  */
 export function matchFieldKey(label: string): string | null {
   const normalized = normalizeLabel(label);
@@ -153,10 +155,14 @@ export function matchFieldKey(label: string): string | null {
   for (const [key, synonyms] of entries) {
     if (synonyms.some((s) => opensWith(normalized, s))) return key;
   }
-  if (ASKS_CURRENCY.test(normalized)) return null;
+  // The question a preamble leads up to opens its own clause ("..., informe: Qual a sua ...").
+  const clauses = normalized
+    .split(/[:;?!.]|,\s/)
+    .slice(1)
+    .map((c) => c.trim());
   for (const [key, synonyms] of entries) {
     if (!ANYWHERE_KEYS.has(key)) continue;
-    if (synonyms.some((s) => s.length >= ANYWHERE_MIN_LEN && containsWord(normalized, s))) return key;
+    if (synonyms.some((s) => s.length >= ANYWHERE_MIN_LEN && clauses.some((c) => opensWith(c, s)))) return key;
   }
   return null;
 }
@@ -165,12 +171,7 @@ export function matchFieldKey(label: string): string | null {
  *  "How long have you lived at your current location?" asks a duration, not the city. */
 const ANYWHERE_KEYS = new Set(['desiredSalary', 'noticePeriod']);
 
-/** "In which currency are your salary expectations?" names the salary but asks a currency;
- *  "...salary expectations in your local currency?" still asks the amount. */
-const ASKS_CURRENCY =
-  /\b(which|what) currency\b|\b(qual|que) moeda\b|\b(qué|que|cuál) moneda\b|\bwelche[rnms]? währung\b/;
-
-/** The shortest synonym trusted anywhere in a label rather than only at its start. */
+/** The shortest synonym trusted at the start of a later clause rather than only of the label. */
 const ANYWHERE_MIN_LEN = 15;
 
 /** True when the label opens with this synonym and ends it at a word boundary. */
@@ -179,13 +180,4 @@ function opensWith(label: string, synonym: string): boolean {
   // "Citywide preference" is not a `city` question. äöüß count as letters too, so
   // German "Ort" does not claim "Ortsteil" nor "Land" claim "Landkreis".
   return !/[a-z0-9äöüß]/.test(label.charAt(synonym.length));
-}
-
-/** True when the synonym occurs in the label between word boundaries. */
-function containsWord(label: string, synonym: string): boolean {
-  for (let at = label.indexOf(synonym); at >= 0; at = label.indexOf(synonym, at + 1)) {
-    if (!/[a-z0-9äöüß]/.test(label.charAt(at - 1)) && !/[a-z0-9äöüß]/.test(label.charAt(at + synonym.length)))
-      return true;
-  }
-  return false;
 }
