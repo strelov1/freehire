@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -20,11 +21,7 @@ func TestInterviewTranscription(t *testing.T) {
 	}
 	issuer := auth.NewIssuer("test-secret", time.Hour)
 	gateway := &fakeTranscriber{text: "the interview transcript"}
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	newSpeechHandlers(gateway, nil).register(app.Group("/api/v1"), middleware{
-		key:    auth.RequireAuthOrKey(issuer, testVersions, stubValidKey{hash: hash, userID: 7}),
-		paidAI: markPaidAI,
-	})
+	app := interviewTranscriptionApp(issuer, stubValidKey{hash: hash, userID: 7}, gateway)
 
 	for _, tt := range []struct {
 		name  string
@@ -33,22 +30,21 @@ func TestInterviewTranscription(t *testing.T) {
 		want  int
 	}{
 		{"anonymous", interviewTestWAV(32000), false, fiber.StatusUnauthorized},
-		{"malformed", []byte("not a WAV"), true, fiber.StatusBadRequest},
+		{"short header", []byte("not a WAV"), true, fiber.StatusBadRequest},
+		{"non-PCM format", corruptInterviewWAV(20), true, fiber.StatusBadRequest},
+		{"channel count", corruptInterviewWAV(22), true, fiber.StatusBadRequest},
+		{"sample rate", corruptInterviewWAV(24), true, fiber.StatusBadRequest},
+		{"declared data length", corruptInterviewWAV(40), true, fiber.StatusBadRequest},
 		{"over 60 seconds", interviewTestWAV(60*32000 + 2), true, fiber.StatusBadRequest},
 		{"60 seconds", interviewTestWAV(60 * 32000), true, fiber.StatusOK},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			body, contentType := audioUpload(t, tt.audio, "interview.wav")
-			req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/api/v1/me/interviews/transcriptions", body)
-			req.Header.Set(fiber.HeaderContentType, contentType)
+			credential := ""
 			if tt.key {
-				req.Header.Set(fiber.HeaderAuthorization, "Bearer "+apiKey)
+				credential = apiKey
 			}
 			before := gateway.calls
-			res, err := app.Test(req, 5000)
-			if err != nil {
-				t.Fatal(err)
-			}
+			res := sendInterviewAudio(t, app, tt.audio, credential)
 			defer res.Body.Close()
 			if res.StatusCode != tt.want {
 				t.Fatalf("status = %d, want %d", res.StatusCode, tt.want)
@@ -75,6 +71,73 @@ func TestInterviewTranscription(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInterviewTranscriptionLimit(t *testing.T) {
+	key, hash, _, err := auth.GenerateAPIKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const account = 7
+	issuer := auth.NewIssuer("test-secret", time.Hour)
+	sameAccount, err := issuer.Issue(account, testTokenVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	anotherAccount, err := issuer.Issue(account+1, testTokenVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gateway := &fakeTranscriber{text: "transcript"}
+	app := interviewTranscriptionApp(issuer, stubValidKey{hash: hash, userID: account}, gateway)
+	audio := interviewTestWAV(2)
+	status := func(credential string) int {
+		res := sendInterviewAudio(t, app, audio, credential)
+		defer res.Body.Close()
+		return res.StatusCode
+	}
+	for i := range 120 {
+		if got := status(key); got != fiber.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200", i+1, got)
+		}
+	}
+	if got := status(sameAccount); got != fiber.StatusTooManyRequests || gateway.calls != 120 {
+		t.Fatalf("second credential for the same account: status = %d, gateway calls = %d", got, gateway.calls)
+	}
+	if got := status(anotherAccount); got != fiber.StatusOK || gateway.calls != 121 {
+		t.Fatalf("different account: status = %d, gateway calls = %d", got, gateway.calls)
+	}
+}
+
+func interviewTranscriptionApp(issuer *auth.Issuer, keys auth.APIKeyAuthenticator, gateway transcriber) *fiber.App {
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	newSpeechHandlers(gateway, nil).register(app.Group("/api/v1"), middleware{
+		key:    auth.RequireAuthOrKey(issuer, testVersions, keys),
+		paidAI: markPaidAI,
+	})
+	return app
+}
+
+func sendInterviewAudio(t *testing.T, app *fiber.App, audio []byte, credential string) *http.Response {
+	t.Helper()
+	body, contentType := audioUpload(t, audio, "interview.wav")
+	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/api/v1/me/interviews/transcriptions", body)
+	req.Header.Set(fiber.HeaderContentType, contentType)
+	if credential != "" {
+		req.Header.Set(fiber.HeaderAuthorization, "Bearer "+credential)
+	}
+	res, err := app.Test(req, 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func corruptInterviewWAV(offset int) []byte {
+	audio := interviewTestWAV(32000)
+	audio[offset] ^= 1
+	return audio
 }
 
 func interviewTestWAV(sampleBytes uint32) []byte {
