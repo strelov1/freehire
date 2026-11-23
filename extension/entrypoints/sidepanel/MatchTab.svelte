@@ -65,6 +65,7 @@
         job={pageMatch.job}
         match={pageMatch.match}
         hasUploadField={form.easyApply || form.uploads.some((u) => u.frame === TOP_FRAME)}
+        closed={form.closed}
         error={pageMatch.error}
         onRetry={pageMatch.load}
         canAddJob={pageMatch.canAddJob}

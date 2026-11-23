@@ -40,6 +40,8 @@ export class FormPlan {
   uploads = $state<FramedUpload[]>([]);
   /** A LinkedIn Easy Apply dialog is open: its resume step takes a file through its own picker. */
   easyApply = $state(false);
+  /** The page is a LinkedIn job that no longer takes applications. */
+  closed = $state(false);
 
   // Reads of the form are serialised rather than raced. A request id (the
   // `matchRequestId` pattern) was the first attempt and it deadlocked on a real
@@ -90,11 +92,13 @@ export class FormPlan {
       this.plan = null;
       this.uploads = [];
       this.easyApply = false;
+      this.closed = false;
       this.formFields = [];
       return;
     }
     this.uploads = reply.uploads;
     this.easyApply = reply.easyApply === true;
+    this.closed = reply.closed === true;
     this.questionsSeen = reply.fields.filter((f) => f.label.trim() !== '').length;
     if (!showsApplicationForm(reply.fields, reply.uploads, { filled: this.formFilled, easyApply: reply.easyApply })) {
       this.plan = null;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { easyApplyAction, easyApplyDialog } from './easyApply';
+import { easyApplyAction, easyApplyDialog, linkedInPostingClosed } from './easyApply';
 import { extractForm, extractUploads, fillByLabel, numericAnswer } from './form';
 import { buildPlan } from './applyPlan';
 import { looksLikeApplication } from './fillPlan';
@@ -132,5 +132,33 @@ describe('the Easy Apply upload button expression', () => {
   it('finds nothing on a step without the resume picker', () => {
     load('step3-questions');
     expect((0, eval)(easyApplyUploadButtonExpression())).toBeNull();
+  });
+});
+
+// Minimal fixture after the job view seen live on a closed posting (2026-11-22): the
+// top card's red notice and the apply button rendered disabled. Not a captured page.
+describe('linkedInPostingClosed', () => {
+  const topCard = (button: string, notice = '') =>
+    (document.body.innerHTML = `<main><div class="job-details-jobs-unified-top-card__container--two-pane">
+      <h1>Senior Engineer</h1>${notice}
+      <div class="jobs-apply-button--top-card">${button}</div></div></main>`);
+
+  it('reads a disabled apply button as closed', () => {
+    topCard(
+      '<button id="jobs-apply-button-id" class="jobs-apply-button" aria-label="Easy Apply to this job" disabled>Easy Apply</button>',
+    );
+    expect(linkedInPostingClosed(document)).toBe(true);
+  });
+
+  it('falls back to the notice text when the button is gone', () => {
+    topCard('', '<div class="artdeco-inline-feedback--error"><span>No longer accepting applications</span></div>');
+    expect(linkedInPostingClosed(document)).toBe(true);
+  });
+
+  it('leaves an open posting open', () => {
+    topCard(
+      '<button id="jobs-apply-button-id" class="jobs-apply-button" aria-label="Easy Apply to this job">Easy Apply</button>',
+    );
+    expect(linkedInPostingClosed(document)).toBe(false);
   });
 });

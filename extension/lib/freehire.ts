@@ -235,6 +235,8 @@ export interface MatchAnalysisResponse {
   has_cv: boolean;
   analysis: MatchAnalysisSummary | null;
   allowance: MatchAnalysisAllowance | null;
+  /** Today's tailoring sessions, metered apart from the analyses; same shape. */
+  tailor_allowance?: MatchAnalysisAllowance | null;
 }
 
 /** Whether the server would actually refuse a fresh analysis right now. An unlimited

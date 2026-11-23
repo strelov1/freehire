@@ -58,3 +58,16 @@ export function easyApplyAction(dialog: Element): { button: HTMLButtonElement; k
   else if (/^(next|continue|review)$/i.test(text)) kind = 'advance';
   return { button, kind };
 }
+
+/**
+ * Whether the LinkedIn job on screen no longer takes applications. Structural first: the
+ * job's own apply button rendered disabled, or the top card's closed notice. The English
+ * notice text is only the fallback, for a redesign that renames those hooks.
+ * Tailoring a CV for a closed job spends a daily session for nothing, hence the check.
+ */
+export function linkedInPostingClosed(doc: Document): boolean {
+  const apply = doc.querySelector('#jobs-apply-button-id, .jobs-apply-button');
+  if (apply && (apply.matches(':disabled') || apply.getAttribute('aria-disabled') === 'true')) return true;
+  if (doc.querySelector('.jobs-details-top-card__apply-error')) return true;
+  return /no longer accepting applications/i.test((doc.querySelector('main') ?? doc.body)?.textContent ?? '');
+}

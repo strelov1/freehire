@@ -196,14 +196,15 @@ export type RuntimeMessage =
   | { kind: 'GET_JOB_POSTING_MARKUP' }
   | { kind: 'JOB_POSTING_MARKUP'; present: boolean }
   // `easyApply`: the frame is showing a LinkedIn Easy Apply dialog, an application
-  // that offers no file field because LinkedIn keeps the CV itself.
-  | { kind: 'FORM'; fields: FormField[]; uploads: Upload[]; easyApply?: boolean }
+  // that offers no file field because LinkedIn keeps the CV itself. `closed`: the frame is
+  // a LinkedIn job that no longer takes applications (see `linkedInPostingClosed`).
+  | { kind: 'FORM'; fields: FormField[]; uploads: Upload[]; easyApply?: boolean; closed?: boolean }
   // Reading a form and filling it both fan out across the tab's frames in the
   // background relay: an apply form is routinely served from an ATS iframe, and
   // a page carrying any other iframe (a map, an ad) would otherwise be answered
   // by whichever frame replied first — in practice the empty one.
   | { kind: 'GET_FRAMED_FORM' }
-  | { kind: 'FRAMED_FORM'; fields: FramedField[]; uploads: FramedUpload[]; easyApply?: boolean }
+  | { kind: 'FRAMED_FORM'; fields: FramedField[]; uploads: FramedUpload[]; easyApply?: boolean; closed?: boolean }
   // `reveal` makes a fill visible: the page scrolls to the question and outlines
   // it as the value lands, which is how the panel's walk is watched. Absent for
   // the agent's own tool-driven fills, which must stay silent.

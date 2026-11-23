@@ -120,13 +120,15 @@ async function readFramedForm(): Promise<RuntimeMessage> {
   const fields: FramedField[] = [];
   const uploads: FramedUpload[] = [];
   let easyApply = false;
+  let closed = false;
   await eachFrame({ kind: 'GET_FRAMED_FORM' }, (reply, frame) => {
     if (reply?.kind !== 'FORM') return;
     for (const field of reply.fields) fields.push({ ...field, frame });
     for (const upload of reply.uploads) uploads.push({ ...upload, frame });
     easyApply ||= reply.easyApply === true;
+    closed ||= reply.closed === true;
   });
-  return { kind: 'FRAMED_FORM', fields, uploads, easyApply };
+  return { kind: 'FRAMED_FORM', fields, uploads, easyApply, closed };
 }
 
 /**

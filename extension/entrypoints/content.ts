@@ -2,7 +2,7 @@ import { startErrorTelemetry } from '../lib/telemetry';
 import { extractSnapshot, hasJobPostingMarkup } from '../lib/scraper';
 import { extractForm, extractUploads, fillByLabel } from '../lib/form';
 import { revealField } from '../lib/revealField';
-import { easyApplyDialog } from '../lib/easyApply';
+import { easyApplyDialog, linkedInPostingClosed } from '../lib/easyApply';
 import { runStep } from '../lib/combobox';
 import { debounce } from '../lib/debounce';
 import type { RuntimeMessage } from '../lib/protocol';
@@ -66,6 +66,9 @@ export default defineContentScript({
             fields: extractForm(document),
             uploads: extractUploads(document),
             easyApply: easyApplyDialog(document) !== null,
+            // Rides the form read: it already runs on every page change, and the panel
+            // must know before it offers to tailor a CV for this job.
+            closed: location.hostname.endsWith('linkedin.com') && linkedInPostingClosed(document),
           });
         case 'FILL_BY_LABEL':
           // A revealed fill scrolls to each question and outlines it as the value
