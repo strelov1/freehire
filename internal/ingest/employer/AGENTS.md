@@ -92,7 +92,7 @@ for the full design record.
   `year_founded`/`employee_count`/`hq_country`/`subindustry` additionally needed a guard in
   `cmd/import-yc` that `tagline`/`company_info`/`industries` did not.
 - **`company_types`/`company_sizes` are never employer-editable.** They are job-derived
-  (`RefreshCompanyFacets`, from the company's own postings' enrichment) — an employer's own
+  (the facet recount in `company_facets.sql`, from the company's own postings' enrichment) — an employer's own
   vacancies feed them automatically once published and enriched. `CompanyProfilePatch`
   deliberately has no field for either.
 

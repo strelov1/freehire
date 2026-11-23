@@ -961,7 +961,7 @@ type ListJobsByCompanyParams struct {
 // list — full pasted text, and first, since this orders by created_at DESC. The route is
 // anonymous (GET /api/v1/companies/:slug/jobs, mounted under mw.optional), so the leak
 // needs no account at all, and the same query backs the assistant's company-jobs tool.
-// RefreshCompanyFacets already excludes private rows from companies.job_count, so before
+// the facet recount in company_facets.sql already excludes private rows from companies.job_count, so before
 // this clause the page contradicted its own counter.
 func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyParams) ([]Job, error) {
 	rows, err := q.db.Query(ctx, listJobsByCompany, arg.CompanySlug, arg.Limit, arg.Offset)

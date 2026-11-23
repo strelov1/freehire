@@ -5,7 +5,7 @@ import "slices"
 // domainIndustry translates the job-derived domain vocabulary (vocab.DomainValues)
 // into this package's industry vocabulary, so one companies filter reaches a company
 // through either companies.industries or companies.industries_derived
-// (RefreshCompanyFacets materializes this translation; see DomainIndustryPairs).
+// (the facet recount in company_facets.sql materializes this translation; see DomainIndustryPairs).
 //
 // Written domain→industry because a domain names at most one industry, while an
 // industry may be reachable through several domains. "other" maps to nothing (the
@@ -43,7 +43,7 @@ var domainIndustry = map[string]string{
 
 // DomainIndustryPairs returns the domain→industry mapping as two parallel slices
 // sorted by domain, for passing as two text[] query parameters. It is the one place
-// this table crosses into SQL, so RefreshCompanyFacets cannot drift from it.
+// this table crosses into SQL, so the facet recount in company_facets.sql cannot drift from it.
 func DomainIndustryPairs() (domains, industries []string) {
 	domains = make([]string, 0, len(domainIndustry))
 	for domain := range domainIndustry {

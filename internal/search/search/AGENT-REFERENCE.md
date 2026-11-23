@@ -38,7 +38,7 @@ HNSW index were dropped by `0228_drop_precomputed_similar_jobs.sql` and
   bucket (labelled "Unclassified" on the web). A resolved category is never overwritten. Role
   landings and insights keep excluding `other`. The gate it replaced (`CategoryUnresolved`)
   withheld ~2.2M open postings, 10-18% of each national board. The company count in
-  `RefreshCompanyFacets`, the Google/Bing ping query and the ingest pipeline (which no longer
+  the facet recount in `company_facets.sql`, the Google/Bing ping query and the ingest pipeline (which no longer
   refuses unfileable non-tech titles) follow the same rule.
 - **`category=management` is translated, not dropped.** The category is retired
   (`vocab.RetiredCategoryManagement`), but saved searches, alerts and shared links carry

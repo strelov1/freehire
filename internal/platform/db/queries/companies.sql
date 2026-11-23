@@ -8,7 +8,7 @@
 -- name). Each facet param is a text[] filtered by array overlap (&&): an empty
 -- array short-circuits to no constraint, non-empty values are OR-ed within the
 -- facet, and the facets AND together (and with the name search). `remote_regions`
--- is the job-derived facet scoped to remote jobs (see RefreshCompanyFacets), a
+-- is the job-derived facet scoped to remote jobs (see the facet recount in company_facets.sql), a
 -- subset of `regions`. The name search also matches the slug, so a hyphenated slug
 -- query ("ge-vernova") finds the company even though its name has a space ("GE
 -- Vernova"). CountCompanies MUST keep an identical WHERE so the filtered total
@@ -16,7 +16,7 @@
 -- actually hiring, excluding the ~92k job-less reference rows imported by the YC
 -- and company-info backfills; it also lets both reads ride companies_hiring_job_count_idx
 -- (partial index) instead of scanning the full 2.3 GB heap. job_count counts the
--- postings the JOB SEARCH INDEX holds (see RefreshCompanyFacets), so the number here
+-- postings the JOB SEARCH INDEX holds (see the facet recount in company_facets.sql), so the number here
 -- is the number the company's own page shows — the two used to disagree, listing
 -- Stripe at 570 against 444 on its page.
 SELECT slug, name, job_count, tagline, industries, hq_country, collections,
@@ -29,7 +29,7 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
   AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
   -- industries answers from EITHER source: `industries` is what an importer wrote,
-  -- `industries_derived` is RefreshCompanyFacets' materialized translation of the
+  -- `industries_derived` is the facet recount's materialized translation of the
   -- company's own domains — already empty for a company with a curated industry, or
   -- with more than two domains (a domains union that wide describes hiring range, not
   -- business; see the change design). Precedence and the domain-count threshold are
@@ -79,7 +79,7 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
   AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
   -- industries answers from EITHER source: `industries` is what an importer wrote,
-  -- `industries_derived` is RefreshCompanyFacets' materialized translation of the
+  -- `industries_derived` is the facet recount's materialized translation of the
   -- company's own domains — already empty for a company with a curated industry, or
   -- with more than two domains (a domains union that wide describes hiring range, not
   -- business; see the change design). Precedence and the domain-count threshold are
@@ -149,7 +149,7 @@ WHERE slug = $1;
 -- countries and hq_country ride along for the credential gates: a register entry is
 -- only granted to a company demonstrably present in that register's country, and a
 -- single-token name additionally needs its headquarters there. Both are already
--- maintained (countries by RefreshCompanyFacets, hq_country by cmd/import-yc), so
+-- maintained (countries by the facet recount in company_facets.sql, hq_country by cmd/import-yc), so
 -- this widens the read rather than adding a source of truth.
 --
 -- website rides along for the same reason: a portfolio that publishes its members'
