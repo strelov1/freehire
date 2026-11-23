@@ -165,8 +165,10 @@ export function matchFieldKey(label: string): string | null {
  *  "How long have you lived at your current location?" asks a duration, not the city. */
 const ANYWHERE_KEYS = new Set(['desiredSalary', 'noticePeriod']);
 
-/** "In which currency are your salary expectations?" names the salary but asks a currency. */
-const ASKS_CURRENCY = /\b(currency|moeda|moneda|währung)\b/;
+/** "In which currency are your salary expectations?" names the salary but asks a currency;
+ *  "...salary expectations in your local currency?" still asks the amount. */
+const ASKS_CURRENCY =
+  /\b(which|what) currency\b|\b(qual|que) moeda\b|\b(qué|que|cuál) moneda\b|\bwelche[rnms]? währung\b/;
 
 /** The shortest synonym trusted anywhere in a label rather than only at its start. */
 const ANYWHERE_MIN_LEN = 15;

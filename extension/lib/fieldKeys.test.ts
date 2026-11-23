@@ -94,6 +94,12 @@ describe('matchFieldKey with a preamble', () => {
     expect(matchFieldKey('In which currency are your salary expectations?')).toBeNull();
   });
 
+  it('keeps a salary question that names the currency to answer in', () => {
+    expect(matchFieldKey('For this position, what are your salary expectations in your local currency?')).toBe(
+      'desiredSalary',
+    );
+  });
+
   it('does not take a short synonym from the middle of a question', () => {
     expect(matchFieldKey('Which city would you prefer to work from?')).toBeNull();
     expect(matchFieldKey('Do you have a LinkedIn contact at our company?')).toBeNull();

@@ -35,6 +35,16 @@ export class PageMatch {
   /** `notify` adds a line to the panel's action notices. */
   constructor(private readonly notify: (notice: string) => void) {}
 
+  /** Forgets the card: on sign-out it belongs to the account that left, and an in-flight
+   *  load for that account must not write it back. */
+  reset() {
+    this.#requestId++;
+    this.#cardPage = '';
+    this.status = 'idle';
+    this.job = null;
+    this.match = null;
+  }
+
   load = async () => {
     const requestId = ++this.#requestId;
     const token = await getToken();

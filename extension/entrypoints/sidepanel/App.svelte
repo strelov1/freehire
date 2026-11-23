@@ -271,6 +271,7 @@
     const auth = ++authGeneration;
     pageRequestId++;
     resetChat();
+    pageMatch.reset();
     user = null;
     authBusy = true;
     // Detach the wire too: it is authenticated as the user who just left.
