@@ -73,12 +73,15 @@ type InboxApplication struct {
 	Stage          Stage
 	StageChangedAt *time.Time
 	SentAt         time.Time
+	ViewedAt       *time.Time
+	EmployerNotes  string
 }
 
 // InboxFilter narrows the inbox. Empty JobSlug and Stage mean every vacancy and stage.
 type InboxFilter struct {
 	JobSlug string
 	Stage   Stage
+	Search  string
 	Limit   int32
 	Offset  int32
 }
@@ -108,7 +111,8 @@ type StageMove struct {
 // ErrNotFound for anything else.
 type InboxRepository interface {
 	List(ctx context.Context, employerID int64, f InboxFilter) ([]InboxApplication, error)
-	Counts(ctx context.Context, employerID int64, jobSlug string) (map[Stage]int64, error)
+	Counts(ctx context.Context, employerID int64, f InboxFilter) (map[Stage]int64, int64, error)
+	UpdateWorkspace(ctx context.Context, employerID, id int64, markViewed bool, notes *string) error
 	Get(ctx context.Context, employerID, id int64) (InboxApplication, error)
 	// CV is the file the application sent. ErrNotFound also when no copy was kept.
 	CV(ctx context.Context, employerID, id int64) (Attachment, error)
@@ -191,7 +195,11 @@ func (in *Inbox) List(ctx context.Context, employerID int64, f InboxFilter) (Inb
 	}
 	f.Offset = max(f.Offset, 0)
 
-	counts, err := in.repo.Counts(ctx, employerID, f.JobSlug)
+	f.Search = strings.TrimSpace(f.Search)
+	if utf8.RuneCountInString(f.Search) > 200 || strings.ContainsRune(f.Search, 0) {
+		return InboxPage{}, fmt.Errorf("%w: invalid search text", ErrInvalid)
+	}
+	counts, total, err := in.repo.Counts(ctx, employerID, f)
 	if err != nil {
 		return InboxPage{}, err
 	}
@@ -199,15 +207,23 @@ func (in *Inbox) List(ctx context.Context, employerID int64, f InboxFilter) (Inb
 	if err != nil {
 		return InboxPage{}, err
 	}
-	page := InboxPage{Applications: apps, Counts: counts}
-	if f.Stage != "" {
-		page.Total = counts[f.Stage]
-	} else {
-		for _, n := range counts {
-			page.Total += n
+	return InboxPage{Applications: apps, Counts: counts, Total: total}, nil
+}
+
+// UpdateWorkspace saves private, team-wide application metadata.
+func (in *Inbox) UpdateWorkspace(ctx context.Context, employerID, id int64, markViewed bool, notes *string) (InboxApplication, error) {
+	if _, err := in.employers.ActiveAccount(ctx, employerID); err != nil {
+		return InboxApplication{}, err
+	}
+	if notes != nil && (utf8.RuneCountInString(*notes) > 4000 || strings.ContainsRune(*notes, 0)) {
+		return InboxApplication{}, fmt.Errorf("%w: invalid notes", ErrInvalid)
+	}
+	if markViewed || notes != nil {
+		if err := in.repo.UpdateWorkspace(ctx, employerID, id, markViewed, notes); err != nil {
+			return InboxApplication{}, err
 		}
 	}
-	return page, nil
+	return in.repo.Get(ctx, employerID, id)
 }
 
 // CV is the CV file an application sent, exactly as the employer received it.

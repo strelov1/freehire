@@ -9909,7 +9909,9 @@ type EmployerAccount struct {
 	EmailConfirmed bool `json:"email_confirmed"`
 	// True when the caller acts for the company as a member of its team rather than as its claimant;
 	// `work_email` is then the caller's own.
-	Member    bool      `json:"member"`
+	Member bool `json:"member"`
+	// The exact values are owner for the claimant, manager for an existing manager, and recruiter.
+	Role      OptString `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -9951,6 +9953,11 @@ func (s *EmployerAccount) GetEmailConfirmed() bool {
 // GetMember returns the value of Member.
 func (s *EmployerAccount) GetMember() bool {
 	return s.Member
+}
+
+// GetRole returns the value of Role.
+func (s *EmployerAccount) GetRole() OptString {
+	return s.Role
 }
 
 // GetCreatedAt returns the value of CreatedAt.
@@ -9996,6 +10003,11 @@ func (s *EmployerAccount) SetEmailConfirmed(val bool) {
 // SetMember sets the value of Member.
 func (s *EmployerAccount) SetMember(val bool) {
 	s.Member = val
+}
+
+// SetRole sets the value of Role.
+func (s *EmployerAccount) SetRole(val OptString) {
+	s.Role = val
 }
 
 // SetCreatedAt sets the value of CreatedAt.
@@ -10052,6 +10064,98 @@ func (s *EmployerAccountStatus) UnmarshalText(data []byte) error {
 	}
 }
 
+// Ref: #/components/schemas/EmployerActivity
+type EmployerActivity struct {
+	ID            int64     `json:"id"`
+	Action        string    `json:"action"`
+	ActorEmail    OptString `json:"actor_email"`
+	ApplicationID OptInt64  `json:"application_id"`
+	PreviousStage OptString `json:"previous_stage"`
+	Stage         OptString `json:"stage"`
+	SubjectEmail  OptString `json:"subject_email"`
+	OccurredAt    time.Time `json:"occurred_at"`
+}
+
+// GetID returns the value of ID.
+func (s *EmployerActivity) GetID() int64 {
+	return s.ID
+}
+
+// GetAction returns the value of Action.
+func (s *EmployerActivity) GetAction() string {
+	return s.Action
+}
+
+// GetActorEmail returns the value of ActorEmail.
+func (s *EmployerActivity) GetActorEmail() OptString {
+	return s.ActorEmail
+}
+
+// GetApplicationID returns the value of ApplicationID.
+func (s *EmployerActivity) GetApplicationID() OptInt64 {
+	return s.ApplicationID
+}
+
+// GetPreviousStage returns the value of PreviousStage.
+func (s *EmployerActivity) GetPreviousStage() OptString {
+	return s.PreviousStage
+}
+
+// GetStage returns the value of Stage.
+func (s *EmployerActivity) GetStage() OptString {
+	return s.Stage
+}
+
+// GetSubjectEmail returns the value of SubjectEmail.
+func (s *EmployerActivity) GetSubjectEmail() OptString {
+	return s.SubjectEmail
+}
+
+// GetOccurredAt returns the value of OccurredAt.
+func (s *EmployerActivity) GetOccurredAt() time.Time {
+	return s.OccurredAt
+}
+
+// SetID sets the value of ID.
+func (s *EmployerActivity) SetID(val int64) {
+	s.ID = val
+}
+
+// SetAction sets the value of Action.
+func (s *EmployerActivity) SetAction(val string) {
+	s.Action = val
+}
+
+// SetActorEmail sets the value of ActorEmail.
+func (s *EmployerActivity) SetActorEmail(val OptString) {
+	s.ActorEmail = val
+}
+
+// SetApplicationID sets the value of ApplicationID.
+func (s *EmployerActivity) SetApplicationID(val OptInt64) {
+	s.ApplicationID = val
+}
+
+// SetPreviousStage sets the value of PreviousStage.
+func (s *EmployerActivity) SetPreviousStage(val OptString) {
+	s.PreviousStage = val
+}
+
+// SetStage sets the value of Stage.
+func (s *EmployerActivity) SetStage(val OptString) {
+	s.Stage = val
+}
+
+// SetSubjectEmail sets the value of SubjectEmail.
+func (s *EmployerActivity) SetSubjectEmail(val OptString) {
+	s.SubjectEmail = val
+}
+
+// SetOccurredAt sets the value of OccurredAt.
+func (s *EmployerActivity) SetOccurredAt(val time.Time) {
+	s.OccurredAt = val
+}
+
 // One application sent on freehire to one of the caller's vacancies.
 // Ref: #/components/schemas/EmployerApplication
 type EmployerApplication struct {
@@ -10071,6 +10175,10 @@ type EmployerApplication struct {
 	Stage   EmployerApplicationStage    `json:"stage"`
 	// When you last moved it; absent while it has never been moved.
 	StageChangedAt OptDateTime `json:"stage_changed_at"`
+	// First review by a teammate, independent of the hiring stage.
+	ViewedAt OptDateTime `json:"viewed_at"`
+	// Private notes shared within the employer team.
+	EmployerNotes OptString `json:"employer_notes"`
 	// When the application reached you.
 	SentAt time.Time `json:"sent_at"`
 }
@@ -10123,6 +10231,16 @@ func (s *EmployerApplication) GetStage() EmployerApplicationStage {
 // GetStageChangedAt returns the value of StageChangedAt.
 func (s *EmployerApplication) GetStageChangedAt() OptDateTime {
 	return s.StageChangedAt
+}
+
+// GetViewedAt returns the value of ViewedAt.
+func (s *EmployerApplication) GetViewedAt() OptDateTime {
+	return s.ViewedAt
+}
+
+// GetEmployerNotes returns the value of EmployerNotes.
+func (s *EmployerApplication) GetEmployerNotes() OptString {
+	return s.EmployerNotes
 }
 
 // GetSentAt returns the value of SentAt.
@@ -10178,6 +10296,16 @@ func (s *EmployerApplication) SetStage(val EmployerApplicationStage) {
 // SetStageChangedAt sets the value of StageChangedAt.
 func (s *EmployerApplication) SetStageChangedAt(val OptDateTime) {
 	s.StageChangedAt = val
+}
+
+// SetViewedAt sets the value of ViewedAt.
+func (s *EmployerApplication) SetViewedAt(val OptDateTime) {
+	s.ViewedAt = val
+}
+
+// SetEmployerNotes sets the value of EmployerNotes.
+func (s *EmployerApplication) SetEmployerNotes(val OptString) {
+	s.EmployerNotes = val
 }
 
 // SetSentAt sets the value of SentAt.
@@ -10295,6 +10423,22 @@ func (s *EmployerApplicationMoved) SetCandidateNotified(val bool) {
 	s.CandidateNotified = val
 }
 
+// Ref: #/components/schemas/EmployerApplicationSearch
+type EmployerApplicationSearch struct {
+	// A literal search in candidate email, message and answers.
+	Query string `json:"query"`
+}
+
+// GetQuery returns the value of Query.
+func (s *EmployerApplicationSearch) GetQuery() string {
+	return s.Query
+}
+
+// SetQuery sets the value of Query.
+func (s *EmployerApplicationSearch) SetQuery(val string) {
+	s.Query = val
+}
+
 // A stage of the employer's hiring pipeline. Every delivered application starts at `new`.
 // Ref: #/components/schemas/EmployerApplicationStage
 type EmployerApplicationStage string
@@ -10364,6 +10508,34 @@ func (s *EmployerApplicationStage) UnmarshalText(data []byte) error {
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
+}
+
+// Ref: #/components/schemas/EmployerApplicationWorkspace
+type EmployerApplicationWorkspace struct {
+	// Record that a teammate reviewed this application.
+	MarkViewed OptBool `json:"mark_viewed"`
+	// Replace the private team notes. The empty string clears them.
+	EmployerNotes OptString `json:"employer_notes"`
+}
+
+// GetMarkViewed returns the value of MarkViewed.
+func (s *EmployerApplicationWorkspace) GetMarkViewed() OptBool {
+	return s.MarkViewed
+}
+
+// GetEmployerNotes returns the value of EmployerNotes.
+func (s *EmployerApplicationWorkspace) GetEmployerNotes() OptString {
+	return s.EmployerNotes
+}
+
+// SetMarkViewed sets the value of MarkViewed.
+func (s *EmployerApplicationWorkspace) SetMarkViewed(val OptBool) {
+	s.MarkViewed = val
+}
+
+// SetEmployerNotes sets the value of EmployerNotes.
+func (s *EmployerApplicationWorkspace) SetEmployerNotes(val OptString) {
+	s.EmployerNotes = val
 }
 
 // Ref: #/components/schemas/EmployerApplicationsMeta
@@ -10578,7 +10750,9 @@ type EmployerCompany struct {
 	EmailConfirmed bool `json:"email_confirmed"`
 	// True when the caller acts for the company as a member of its team rather than as its claimant;
 	// `work_email` is then the caller's own.
-	Member        bool      `json:"member"`
+	Member bool `json:"member"`
+	// The exact values are owner for the claimant, manager for an existing manager, and recruiter.
+	Role          OptString `json:"role"`
 	CreatedAt     time.Time `json:"created_at"`
 	Tagline       OptString `json:"tagline"`
 	Description   OptString `json:"description"`
@@ -10628,6 +10802,11 @@ func (s *EmployerCompany) GetEmailConfirmed() bool {
 // GetMember returns the value of Member.
 func (s *EmployerCompany) GetMember() bool {
 	return s.Member
+}
+
+// GetRole returns the value of Role.
+func (s *EmployerCompany) GetRole() OptString {
+	return s.Role
 }
 
 // GetCreatedAt returns the value of CreatedAt.
@@ -10713,6 +10892,11 @@ func (s *EmployerCompany) SetEmailConfirmed(val bool) {
 // SetMember sets the value of Member.
 func (s *EmployerCompany) SetMember(val bool) {
 	s.Member = val
+}
+
+// SetRole sets the value of Role.
+func (s *EmployerCompany) SetRole(val OptString) {
+	s.Role = val
 }
 
 // SetCreatedAt sets the value of CreatedAt.
@@ -10881,7 +11065,9 @@ type EmployerPendingClaim struct {
 	EmailConfirmed bool `json:"email_confirmed"`
 	// True when the caller acts for the company as a member of its team rather than as its claimant;
 	// `work_email` is then the caller's own.
-	Member    bool      `json:"member"`
+	Member bool `json:"member"`
+	// The exact values are owner for the claimant, manager for an existing manager, and recruiter.
+	Role      OptString `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 	// The catalogue's current website, empty when unknown.
 	Website string `json:"website"`
@@ -10927,6 +11113,11 @@ func (s *EmployerPendingClaim) GetEmailConfirmed() bool {
 // GetMember returns the value of Member.
 func (s *EmployerPendingClaim) GetMember() bool {
 	return s.Member
+}
+
+// GetRole returns the value of Role.
+func (s *EmployerPendingClaim) GetRole() OptString {
+	return s.Role
 }
 
 // GetCreatedAt returns the value of CreatedAt.
@@ -10982,6 +11173,11 @@ func (s *EmployerPendingClaim) SetEmailConfirmed(val bool) {
 // SetMember sets the value of Member.
 func (s *EmployerPendingClaim) SetMember(val bool) {
 	s.Member = val
+}
+
+// SetRole sets the value of Role.
+func (s *EmployerPendingClaim) SetRole(val OptString) {
+	s.Role = val
 }
 
 // SetCreatedAt sets the value of CreatedAt.
@@ -11156,8 +11352,9 @@ func (s *EmployerTeamInvitation) SetExpiresAt(val time.Time) {
 // What an invitation link offers before it is accepted.
 // Ref: #/components/schemas/EmployerTeamInvitationPreview
 type EmployerTeamInvitationPreview struct {
-	CompanyName string `json:"company_name"`
-	Email       string `json:"email"`
+	CompanyName string    `json:"company_name"`
+	Email       string    `json:"email"`
+	Role        OptString `json:"role"`
 }
 
 // GetCompanyName returns the value of CompanyName.
@@ -11170,6 +11367,11 @@ func (s *EmployerTeamInvitationPreview) GetEmail() string {
 	return s.Email
 }
 
+// GetRole returns the value of Role.
+func (s *EmployerTeamInvitationPreview) GetRole() OptString {
+	return s.Role
+}
+
 // SetCompanyName sets the value of CompanyName.
 func (s *EmployerTeamInvitationPreview) SetCompanyName(val string) {
 	s.CompanyName = val
@@ -11178,6 +11380,11 @@ func (s *EmployerTeamInvitationPreview) SetCompanyName(val string) {
 // SetEmail sets the value of Email.
 func (s *EmployerTeamInvitationPreview) SetEmail(val string) {
 	s.Email = val
+}
+
+// SetRole sets the value of Role.
+func (s *EmployerTeamInvitationPreview) SetRole(val OptString) {
+	s.Role = val
 }
 
 // Ref: #/components/schemas/EmployerTeamInvite
@@ -11202,6 +11409,7 @@ type EmployerTeamMember struct {
 	WorkEmail string    `json:"work_email"`
 	JoinedAt  time.Time `json:"joined_at"`
 	Holder    bool      `json:"holder"`
+	Role      OptString `json:"role"`
 }
 
 // GetUserID returns the value of UserID.
@@ -11224,6 +11432,11 @@ func (s *EmployerTeamMember) GetHolder() bool {
 	return s.Holder
 }
 
+// GetRole returns the value of Role.
+func (s *EmployerTeamMember) GetRole() OptString {
+	return s.Role
+}
+
 // SetUserID sets the value of UserID.
 func (s *EmployerTeamMember) SetUserID(val int64) {
 	s.UserID = val
@@ -11242,6 +11455,11 @@ func (s *EmployerTeamMember) SetJoinedAt(val time.Time) {
 // SetHolder sets the value of Holder.
 func (s *EmployerTeamMember) SetHolder(val bool) {
 	s.Holder = val
+}
+
+// SetRole sets the value of Role.
+func (s *EmployerTeamMember) SetRole(val OptString) {
+	s.Role = val
 }
 
 // The token from the invitation link.
@@ -16516,6 +16734,21 @@ func (s *ListDismissedSlugsOK) GetData() []string {
 
 // SetData sets the value of Data.
 func (s *ListDismissedSlugsOK) SetData(val []string) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListEmployerActivityOK struct {
+	Data []EmployerActivity `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListEmployerActivityOK) GetData() []EmployerActivity {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListEmployerActivityOK) SetData(val []EmployerActivity) {
 	s.Data = val
 }
 
@@ -31302,6 +31535,21 @@ func (s *UpdateEmailPrefsOK) GetData() EmailPrefs {
 
 // SetData sets the value of Data.
 func (s *UpdateEmailPrefsOK) SetData(val EmailPrefs) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateEmployerApplicationWorkspaceOK struct {
+	Data EmployerApplication `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateEmployerApplicationWorkspaceOK) GetData() EmployerApplication {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateEmployerApplicationWorkspaceOK) SetData(val EmployerApplication) {
 	s.Data = val
 }
 

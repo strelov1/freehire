@@ -115,9 +115,9 @@ func TestInterviewAudioUsesOwnedRehearsal(t *testing.T) {
 	if err := form.Close(); err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(fiber.MethodPost, base+"/interview-transcriptions", &upload)
+	request := httptest.NewRequestWithContext(ctx, fiber.MethodPost, base+"/interview-transcriptions", &upload)
 	request.Header.Set("Content-Type", form.FormDataContentType())
-	request.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	request.Header.Set("Cookie", auth.CookieName+"="+cookie)
 	response, err := app.Test(request)
 	if err != nil {
 		t.Fatal(err)

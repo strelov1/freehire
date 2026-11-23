@@ -43,6 +43,7 @@
   } = $props();
 
   const s = $derived(t(messages, locale()));
+  const recruiter = $derived(company.role === 'recruiter');
 
   const PANEL_ID = 'employer-vacancies-panel';
   const tabs = $derived([
@@ -294,77 +295,83 @@
   </header>
 
   {#if tab === 'profile'}
-    <form onsubmit={saveProfile} class="flex max-w-xl flex-col gap-4">
-      <label class="flex flex-col gap-1">
-        <span class="text-sm font-medium">{s.profileTaglineLabel}</span>
-        <Input bind:value={tagline} placeholder={s.profileTaglinePlaceholder} class="w-full" />
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="text-sm font-medium">{s.profileDescriptionLabel}</span>
-        <textarea
-          bind:value={description}
-          rows="4"
-          class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
-        ></textarea>
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="flex items-center gap-1.5 text-sm font-medium">
-          <Globe class="size-3.5 text-muted-foreground" />
-          {s.profileWebsiteLabel}
-        </span>
-        <Input bind:value={website} placeholder="acme.com" class="w-full" />
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="text-sm font-medium">{s.profileIndustriesLabel}</span>
-        <TokenInput
-          label={s.profileIndustriesLabel}
-          tokens={industries}
-          onAdd={(v) => (industries = [...industries, v])}
-          onRemove={(v) => (industries = industries.filter((x) => x !== v))}
-        />
-      </label>
-      <div class="flex flex-col gap-4 sm:flex-row">
-        <label class="flex flex-1 flex-col gap-1">
-          <span class="text-sm font-medium">{s.profileYearFoundedLabel}</span>
-          <Input
-            type="number"
-            value={yearFounded != null ? String(yearFounded) : ''}
-            oninput={(e) => (yearFounded = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
-            class="w-full"
-          />
-        </label>
-        <label class="flex flex-1 flex-col gap-1">
-          <span class="text-sm font-medium">{s.profileEmployeeCountLabel}</span>
-          <Input
-            type="number"
-            value={employeeCount != null ? String(employeeCount) : ''}
-            oninput={(e) => (employeeCount = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
-            class="w-full"
-          />
-        </label>
-      </div>
-      <div class="flex flex-col gap-4 sm:flex-row">
-        <label class="flex flex-1 flex-col gap-1">
-          <span class="text-sm font-medium">{s.profileHqCountryLabel}</span>
-          <Input bind:value={hqCountry} placeholder="US" maxlength={2} class="w-full" />
-        </label>
-        <label class="flex flex-1 flex-col gap-1">
-          <span class="text-sm font-medium">{s.profileSubindustryLabel}</span>
-          <Input bind:value={subindustry} class="w-full" />
-        </label>
-      </div>
-      {#if profileError}
-        <p class="text-sm text-destructive">{profileError}</p>
-      {:else if profileSavedAt}
-        {#key profileSavedAt}
-          <p class="text-sm text-brand-strong">{s.profileSaved}</p>
-        {/key}
-      {/if}
-      <Button type="submit" disabled={savingProfile} class="w-fit">
-        {savingProfile ? s.profileSaving : s.profileSave}
+    {#if recruiter}
+      <Button variant="outline" class="w-fit" href={resolve('/my/employer/vacancies/applications')}>
+        {s.tabApplications}
       </Button>
-    </form>
-    <EmployerTeam {onLeft} />
+    {:else}
+      <form onsubmit={saveProfile} class="flex max-w-xl flex-col gap-4">
+        <label class="flex flex-col gap-1">
+          <span class="text-sm font-medium">{s.profileTaglineLabel}</span>
+          <Input bind:value={tagline} placeholder={s.profileTaglinePlaceholder} class="w-full" />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-sm font-medium">{s.profileDescriptionLabel}</span>
+          <textarea
+            bind:value={description}
+            rows="4"
+            class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
+          ></textarea>
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="flex items-center gap-1.5 text-sm font-medium">
+            <Globe class="size-3.5 text-muted-foreground" />
+            {s.profileWebsiteLabel}
+          </span>
+          <Input bind:value={website} placeholder="acme.com" class="w-full" />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-sm font-medium">{s.profileIndustriesLabel}</span>
+          <TokenInput
+            label={s.profileIndustriesLabel}
+            tokens={industries}
+            onAdd={(v) => (industries = [...industries, v])}
+            onRemove={(v) => (industries = industries.filter((x) => x !== v))}
+          />
+        </label>
+        <div class="flex flex-col gap-4 sm:flex-row">
+          <label class="flex flex-1 flex-col gap-1">
+            <span class="text-sm font-medium">{s.profileYearFoundedLabel}</span>
+            <Input
+              type="number"
+              value={yearFounded != null ? String(yearFounded) : ''}
+              oninput={(e) => (yearFounded = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+              class="w-full"
+            />
+          </label>
+          <label class="flex flex-1 flex-col gap-1">
+            <span class="text-sm font-medium">{s.profileEmployeeCountLabel}</span>
+            <Input
+              type="number"
+              value={employeeCount != null ? String(employeeCount) : ''}
+              oninput={(e) => (employeeCount = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+              class="w-full"
+            />
+          </label>
+        </div>
+        <div class="flex flex-col gap-4 sm:flex-row">
+          <label class="flex flex-1 flex-col gap-1">
+            <span class="text-sm font-medium">{s.profileHqCountryLabel}</span>
+            <Input bind:value={hqCountry} placeholder="US" maxlength={2} class="w-full" />
+          </label>
+          <label class="flex flex-1 flex-col gap-1">
+            <span class="text-sm font-medium">{s.profileSubindustryLabel}</span>
+            <Input bind:value={subindustry} class="w-full" />
+          </label>
+        </div>
+        {#if profileError}
+          <p class="text-sm text-destructive">{profileError}</p>
+        {:else if profileSavedAt}
+          {#key profileSavedAt}
+            <p class="text-sm text-brand-strong">{s.profileSaved}</p>
+          {/key}
+        {/if}
+        <Button type="submit" disabled={savingProfile} class="w-fit">
+          {savingProfile ? s.profileSaving : s.profileSave}
+        </Button>
+      </form>
+    {/if}
+    <EmployerTeam {onLeft} {recruiter} />
   {:else}
     <TabStrip {tabs} active={tab} label={s.vacancyTabsLabel} panelId={PANEL_ID} />
     <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)}>
@@ -372,14 +379,14 @@
         <EmployerApplications />
       {:else}
         <div class="flex flex-col gap-4">
-          {#if !formOpen}
+          {#if !recruiter && !formOpen}
             <Button size="sm" class="w-fit gap-1.5" onclick={openCreate}>
               <Plus class="size-3.5" />
               {s.newVacancy}
             </Button>
           {/if}
 
-          {#if formOpen}
+          {#if !recruiter && formOpen}
             <form onsubmit={submitForm} class="flex flex-col gap-4 rounded-lg border border-border p-4">
               <h2 class="text-sm font-semibold">{editingSlug ? s.formTitleEdit : s.formTitleNew}</h2>
               {#if !editingSlug}
@@ -510,6 +517,7 @@
               {#each vacanciesData.value as job (job.public_slug)}
                 <EmployerVacancyRow
                   {job}
+                  canManage={!recruiter}
                   closing={closingSlug === job.public_slug}
                   reopening={reopeningSlug === job.public_slug}
                   reopenError={reopenError?.slug === job.public_slug ? reopenError.message : null}

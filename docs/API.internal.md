@@ -4332,6 +4332,22 @@ curl -X PATCH "https://freehire.me/api/v1/me/email-groups" -b cookies.txt
 
 ## Employer
 
+### `GET /employer/activity`
+
+**Auth:** Session only
+
+Up to 30 company audit events, newest first. Recruiters see application activity.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `before` | string | no | Fetch older events by passing the last event id from the previous page. |
+
+```bash
+curl "https://freehire.me/api/v1/employer/activity" -b cookies.txt
+```
+
 ### `GET /employer/applications`
 
 **Auth:** Session only
@@ -4388,6 +4404,33 @@ curl "https://freehire.me/api/v1/employer/applications" -b cookies.txt
     }
   }
 }
+```
+
+### `POST /employer/applications/search`
+
+**Auth:** Session only
+
+Search applications sent to your vacancies.
+
+Search delivered applications before pagination. An unknown stage returns 400.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job` | string | no | Only applications for this vacancy slug. |
+| `stage` | string | no | Only applications at this stage. |
+| `limit` | string | no | Maximum applications to return. |
+| `offset` | string | no | Number of matching applications to skip. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `query` | string | yes | A literal search in candidate email, message and answers. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/applications/search" -b cookies.txt -H 'Content-Type: application/json' -d '{"query":"candidate@example.com"}'
 ```
 
 ### `GET /employer/applications/{id}/cv`
@@ -4454,6 +4497,29 @@ curl -X POST "https://freehire.me/api/v1/employer/applications/<id>/stage" -b co
     "candidate_notified": true
   }
 }
+```
+
+### `PATCH /employer/applications/{id}/workspace`
+
+**Auth:** Session only
+
+Mark an application reviewed or save private notes.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `mark_viewed` | boolean | no | Record that a teammate reviewed this application. |
+| `employer_notes` | string | no | Replace the private team notes. The empty string clears them. |
+
+```bash
+curl -X PATCH "https://freehire.me/api/v1/employer/applications/<id>/workspace" -b cookies.txt -H 'Content-Type: application/json' -d '{"mark_viewed":true}'
 ```
 
 ### `POST /employer/claim`
@@ -4689,7 +4755,7 @@ curl -X POST "https://freehire.me/api/v1/employer/jobs/<slug>/reopen" -b cookies
 
 **Auth:** Session only
 
-Everyone who acts for the caller's company, and the invitations still open.
+The company team and open invitations. A recruiter sees their own membership.
 
 ```bash
 curl "https://freehire.me/api/v1/employer/team" -b cookies.txt
@@ -4715,7 +4781,7 @@ curl -X POST "https://freehire.me/api/v1/employer/team/invitation-preview" -b co
 
 **Auth:** Session only
 
-Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations.
+Mails a colleague a single-use recruiter invitation, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations.
 
 **Body**
 
@@ -4747,7 +4813,7 @@ curl -X DELETE "https://freehire.me/api/v1/employer/team/invitations/<id>" -b co
 
 **Auth:** Session only
 
-Joins the team an invitation link invites to. 409 when the caller already acts for a company.
+Joins the team. A recruiter must sign in with the matching verified email. 409 when the caller already acts for a company.
 
 **Body**
 

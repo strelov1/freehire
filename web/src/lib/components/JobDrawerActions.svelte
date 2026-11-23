@@ -2,7 +2,6 @@
   import { onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { createInterviewSession } from '#lib/assistant/api.js';
   import { MessageSquare, Mic, Send, SquarePen } from '@lucide/svelte';
   import { Button, cn } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -16,6 +15,7 @@
     tailoring,
     onTailor,
     jobSlug,
+    createInterviewSession,
     stage,
     offersFollowUp,
     followedUp,
@@ -27,6 +27,7 @@
     tailoring: boolean;
     onTailor: () => void;
     jobSlug?: string | null;
+    createInterviewSession: (preset: 'interview' | 'debrief', slug: string) => Promise<{ id: string }>;
     stage: string | null;
     offersFollowUp: boolean;
     followedUp: boolean;

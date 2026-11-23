@@ -10,6 +10,7 @@
   // close and reopen actions. EmployerDashboard owns the state the actions change.
   let {
     job,
+    canManage = true,
     closing,
     reopening,
     reopenError,
@@ -18,6 +19,7 @@
     onReopen,
   }: {
     job: Job;
+    canManage?: boolean;
     closing: boolean;
     reopening: boolean;
     /** The reopen failure for this vacancy, if its last reopen failed. */
@@ -53,18 +55,20 @@
       {job.location}{job.work_mode === 'remote' ? ` · ${s.fieldRemote}` : ''}
     </span>
   </div>
-  <div class="flex shrink-0 gap-2">
-    <Button variant="ghost" size="sm" onclick={onEdit}>{s.editVacancy}</Button>
-    {#if !job.closed_at}
-      <Button variant="ghost" size="sm" disabled={closing} onclick={onClose}>
-        {closing ? s.closing : s.closeVacancy}
-      </Button>
-    {:else}
-      <Button variant="ghost" size="sm" disabled={reopening} onclick={onReopen}>
-        {reopening ? s.reopening : s.reopenVacancy}
-      </Button>
-    {/if}
-  </div>
+  {#if canManage}
+    <div class="flex shrink-0 gap-2">
+      <Button variant="ghost" size="sm" onclick={onEdit}>{s.editVacancy}</Button>
+      {#if !job.closed_at}
+        <Button variant="ghost" size="sm" disabled={closing} onclick={onClose}>
+          {closing ? s.closing : s.closeVacancy}
+        </Button>
+      {:else}
+        <Button variant="ghost" size="sm" disabled={reopening} onclick={onReopen}>
+          {reopening ? s.reopening : s.reopenVacancy}
+        </Button>
+      {/if}
+    </div>
+  {/if}
   {#if reopenError}
     <p class="text-sm text-destructive">{reopenError}</p>
   {/if}

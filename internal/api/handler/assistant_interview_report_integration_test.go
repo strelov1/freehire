@@ -5,6 +5,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -65,14 +66,18 @@ func TestInterviewReportPersistsAndRepeatsOriginalQuestion(t *testing.T) {
 	appendMessage(assistant.EncodeUser("Start the rehearsal."))
 	appendMessage(assistant.EncodeAssistant(question, nil))
 
-	request := func(method, path, token string, status int) *http.Response {
+	request := func(method, path, token string, status int) []byte {
 		t.Helper()
 		response := assistantRequest(t, app, method, path, token, nil)
-		t.Cleanup(func() { response.Body.Close() })
+		defer response.Body.Close()
 		if response.StatusCode != status {
 			t.Fatalf("%s %s: got %d, want %d", method, path, response.StatusCode, status)
 		}
-		return response
+		body, err := io.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return body
 	}
 	request(http.MethodPost, base+"/interview-report", stranger, http.StatusNotFound)
 	request(http.MethodPost, base+"/interview-report", cookie, http.StatusConflict)
@@ -110,10 +115,10 @@ func TestInterviewReportPersistsAndRepeatsOriginalQuestion(t *testing.T) {
 	}
 }
 
-func decodeReportResponse[T any](t *testing.T, response *http.Response) T {
+func decodeReportResponse[T any](t *testing.T, body []byte) T {
 	t.Helper()
 	var result T
-	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		t.Fatal(err)
 	}
 	return result

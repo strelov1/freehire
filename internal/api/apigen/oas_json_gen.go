@@ -31382,12 +31382,18 @@ func (s *EmployerAccount) encodeFields(e *jx.Encoder) {
 		e.Bool(s.Member)
 	}
 	{
+		if s.Role.Set {
+			e.FieldStart("role")
+			s.Role.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("created_at")
 		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
-var jsonFieldsNameOfEmployerAccount = [9]string{
+var jsonFieldsNameOfEmployerAccount = [10]string{
 	0: "user_id",
 	1: "company_slug",
 	2: "company_name",
@@ -31396,7 +31402,8 @@ var jsonFieldsNameOfEmployerAccount = [9]string{
 	5: "verified_at",
 	6: "email_confirmed",
 	7: "member",
-	8: "created_at",
+	8: "role",
+	9: "created_at",
 }
 
 // Decode decodes EmployerAccount from json.
@@ -31500,8 +31507,18 @@ func (s *EmployerAccount) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"member\"")
 			}
+		case "role":
+			if err := func() error {
+				s.Role.Reset()
+				if err := s.Role.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"role\"")
+			}
 		case "created_at":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
 				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
@@ -31523,7 +31540,7 @@ func (s *EmployerAccount) Decode(d *jx.Decoder) error {
 	var failures []validate.FieldError
 	for i, mask := range [2]uint8{
 		0b11011111,
-		0b00000001,
+		0b00000010,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -31612,6 +31629,221 @@ func (s *EmployerAccountStatus) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
+func (s *EmployerActivity) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *EmployerActivity) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("id")
+		e.Int64(s.ID)
+	}
+	{
+		e.FieldStart("action")
+		e.Str(s.Action)
+	}
+	{
+		if s.ActorEmail.Set {
+			e.FieldStart("actor_email")
+			s.ActorEmail.Encode(e)
+		}
+	}
+	{
+		if s.ApplicationID.Set {
+			e.FieldStart("application_id")
+			s.ApplicationID.Encode(e)
+		}
+	}
+	{
+		if s.PreviousStage.Set {
+			e.FieldStart("previous_stage")
+			s.PreviousStage.Encode(e)
+		}
+	}
+	{
+		if s.Stage.Set {
+			e.FieldStart("stage")
+			s.Stage.Encode(e)
+		}
+	}
+	{
+		if s.SubjectEmail.Set {
+			e.FieldStart("subject_email")
+			s.SubjectEmail.Encode(e)
+		}
+	}
+	{
+		e.FieldStart("occurred_at")
+		json.EncodeTimeFormat(e, s.OccurredAt, "2006-01-02T15:04:05.999999999Z07:00")
+	}
+}
+
+var jsonFieldsNameOfEmployerActivity = [8]string{
+	0: "id",
+	1: "action",
+	2: "actor_email",
+	3: "application_id",
+	4: "previous_stage",
+	5: "stage",
+	6: "subject_email",
+	7: "occurred_at",
+}
+
+// Decode decodes EmployerActivity from json.
+func (s *EmployerActivity) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode EmployerActivity to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "id":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Int64()
+				s.ID = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"id\"")
+			}
+		case "action":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Str()
+				s.Action = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"action\"")
+			}
+		case "actor_email":
+			if err := func() error {
+				s.ActorEmail.Reset()
+				if err := s.ActorEmail.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"actor_email\"")
+			}
+		case "application_id":
+			if err := func() error {
+				s.ApplicationID.Reset()
+				if err := s.ApplicationID.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"application_id\"")
+			}
+		case "previous_stage":
+			if err := func() error {
+				s.PreviousStage.Reset()
+				if err := s.PreviousStage.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"previous_stage\"")
+			}
+		case "stage":
+			if err := func() error {
+				s.Stage.Reset()
+				if err := s.Stage.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"stage\"")
+			}
+		case "subject_email":
+			if err := func() error {
+				s.SubjectEmail.Reset()
+				if err := s.SubjectEmail.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"subject_email\"")
+			}
+		case "occurred_at":
+			requiredBitSet[0] |= 1 << 7
+			if err := func() error {
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
+				s.OccurredAt = v
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"occurred_at\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode EmployerActivity")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b10000011,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfEmployerActivity) {
+					name = jsonFieldsNameOfEmployerActivity[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *EmployerActivity) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *EmployerActivity) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
 func (s *EmployerApplication) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
@@ -31667,12 +31899,24 @@ func (s *EmployerApplication) encodeFields(e *jx.Encoder) {
 		}
 	}
 	{
+		if s.ViewedAt.Set {
+			e.FieldStart("viewed_at")
+			s.ViewedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
+		}
+	}
+	{
+		if s.EmployerNotes.Set {
+			e.FieldStart("employer_notes")
+			s.EmployerNotes.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("sent_at")
 		json.EncodeTimeFormat(e, s.SentAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
-var jsonFieldsNameOfEmployerApplication = [11]string{
+var jsonFieldsNameOfEmployerApplication = [13]string{
 	0:  "id",
 	1:  "job_slug",
 	2:  "job_title",
@@ -31683,7 +31927,9 @@ var jsonFieldsNameOfEmployerApplication = [11]string{
 	7:  "answers",
 	8:  "stage",
 	9:  "stage_changed_at",
-	10: "sent_at",
+	10: "viewed_at",
+	11: "employer_notes",
+	12: "sent_at",
 }
 
 // Decode decodes EmployerApplication from json.
@@ -31817,8 +32063,28 @@ func (s *EmployerApplication) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"stage_changed_at\"")
 			}
+		case "viewed_at":
+			if err := func() error {
+				s.ViewedAt.Reset()
+				if err := s.ViewedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"viewed_at\"")
+			}
+		case "employer_notes":
+			if err := func() error {
+				s.EmployerNotes.Reset()
+				if err := s.EmployerNotes.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"employer_notes\"")
+			}
 		case "sent_at":
-			requiredBitSet[1] |= 1 << 2
+			requiredBitSet[1] |= 1 << 4
 			if err := func() error {
 				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.SentAt = v
@@ -31840,7 +32106,7 @@ func (s *EmployerApplication) Decode(d *jx.Decoder) error {
 	var failures []validate.FieldError
 	for i, mask := range [2]uint8{
 		0b11111111,
-		0b00000101,
+		0b00010001,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -32224,6 +32490,102 @@ func (s *EmployerApplicationMoved) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
+// Encode implements json.Marshaler.
+func (s *EmployerApplicationSearch) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *EmployerApplicationSearch) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("query")
+		e.Str(s.Query)
+	}
+}
+
+var jsonFieldsNameOfEmployerApplicationSearch = [1]string{
+	0: "query",
+}
+
+// Decode decodes EmployerApplicationSearch from json.
+func (s *EmployerApplicationSearch) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode EmployerApplicationSearch to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "query":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.Query = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"query\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode EmployerApplicationSearch")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00000001,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfEmployerApplicationSearch) {
+					name = jsonFieldsNameOfEmployerApplicationSearch[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *EmployerApplicationSearch) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *EmployerApplicationSearch) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
 // Encode encodes EmployerApplicationStage as json.
 func (s EmployerApplicationStage) Encode(e *jx.Encoder) {
 	e.Str(string(s))
@@ -32268,6 +32630,86 @@ func (s EmployerApplicationStage) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *EmployerApplicationStage) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s *EmployerApplicationWorkspace) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *EmployerApplicationWorkspace) encodeFields(e *jx.Encoder) {
+	{
+		if s.MarkViewed.Set {
+			e.FieldStart("mark_viewed")
+			s.MarkViewed.Encode(e)
+		}
+	}
+	{
+		if s.EmployerNotes.Set {
+			e.FieldStart("employer_notes")
+			s.EmployerNotes.Encode(e)
+		}
+	}
+}
+
+var jsonFieldsNameOfEmployerApplicationWorkspace = [2]string{
+	0: "mark_viewed",
+	1: "employer_notes",
+}
+
+// Decode decodes EmployerApplicationWorkspace from json.
+func (s *EmployerApplicationWorkspace) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode EmployerApplicationWorkspace to nil")
+	}
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "mark_viewed":
+			if err := func() error {
+				s.MarkViewed.Reset()
+				if err := s.MarkViewed.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"mark_viewed\"")
+			}
+		case "employer_notes":
+			if err := func() error {
+				s.EmployerNotes.Reset()
+				if err := s.EmployerNotes.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"employer_notes\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode EmployerApplicationWorkspace")
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *EmployerApplicationWorkspace) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *EmployerApplicationWorkspace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -32886,6 +33328,12 @@ func (s *EmployerCompany) encodeFields(e *jx.Encoder) {
 		e.Bool(s.Member)
 	}
 	{
+		if s.Role.Set {
+			e.FieldStart("role")
+			s.Role.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("created_at")
 		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
@@ -32943,7 +33391,7 @@ func (s *EmployerCompany) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfEmployerCompany = [17]string{
+var jsonFieldsNameOfEmployerCompany = [18]string{
 	0:  "user_id",
 	1:  "company_slug",
 	2:  "company_name",
@@ -32952,15 +33400,16 @@ var jsonFieldsNameOfEmployerCompany = [17]string{
 	5:  "verified_at",
 	6:  "email_confirmed",
 	7:  "member",
-	8:  "created_at",
-	9:  "tagline",
-	10: "description",
-	11: "website",
-	12: "industries",
-	13: "year_founded",
-	14: "employee_count",
-	15: "hq_country",
-	16: "subindustry",
+	8:  "role",
+	9:  "created_at",
+	10: "tagline",
+	11: "description",
+	12: "website",
+	13: "industries",
+	14: "year_founded",
+	15: "employee_count",
+	16: "hq_country",
+	17: "subindustry",
 }
 
 // Decode decodes EmployerCompany from json.
@@ -33064,8 +33513,18 @@ func (s *EmployerCompany) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"member\"")
 			}
+		case "role":
+			if err := func() error {
+				s.Role.Reset()
+				if err := s.Role.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"role\"")
+			}
 		case "created_at":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
 				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
@@ -33176,7 +33635,7 @@ func (s *EmployerCompany) Decode(d *jx.Decoder) error {
 	var failures []validate.FieldError
 	for i, mask := range [3]uint8{
 		0b11011111,
-		0b00000001,
+		0b00000010,
 		0b00000000,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
@@ -33512,6 +33971,12 @@ func (s *EmployerPendingClaim) encodeFields(e *jx.Encoder) {
 		e.Bool(s.Member)
 	}
 	{
+		if s.Role.Set {
+			e.FieldStart("role")
+			s.Role.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("created_at")
 		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
@@ -33525,7 +33990,7 @@ func (s *EmployerPendingClaim) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfEmployerPendingClaim = [11]string{
+var jsonFieldsNameOfEmployerPendingClaim = [12]string{
 	0:  "user_id",
 	1:  "company_slug",
 	2:  "company_name",
@@ -33534,9 +33999,10 @@ var jsonFieldsNameOfEmployerPendingClaim = [11]string{
 	5:  "verified_at",
 	6:  "email_confirmed",
 	7:  "member",
-	8:  "created_at",
-	9:  "website",
-	10: "review_reason",
+	8:  "role",
+	9:  "created_at",
+	10: "website",
+	11: "review_reason",
 }
 
 // Decode decodes EmployerPendingClaim from json.
@@ -33640,8 +34106,18 @@ func (s *EmployerPendingClaim) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"member\"")
 			}
+		case "role":
+			if err := func() error {
+				s.Role.Reset()
+				if err := s.Role.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"role\"")
+			}
 		case "created_at":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
 				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
@@ -33653,7 +34129,7 @@ func (s *EmployerPendingClaim) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"created_at\"")
 			}
 		case "website":
-			requiredBitSet[1] |= 1 << 1
+			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
 				v, err := d.Str()
 				s.Website = string(v)
@@ -33665,7 +34141,7 @@ func (s *EmployerPendingClaim) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"website\"")
 			}
 		case "review_reason":
-			requiredBitSet[1] |= 1 << 2
+			requiredBitSet[1] |= 1 << 3
 			if err := func() error {
 				if err := s.ReviewReason.Decode(d); err != nil {
 					return err
@@ -33685,7 +34161,7 @@ func (s *EmployerPendingClaim) Decode(d *jx.Decoder) error {
 	var failures []validate.FieldError
 	for i, mask := range [2]uint8{
 		0b11011111,
-		0b00000111,
+		0b00001110,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -34347,11 +34823,18 @@ func (s *EmployerTeamInvitationPreview) encodeFields(e *jx.Encoder) {
 		e.FieldStart("email")
 		e.Str(s.Email)
 	}
+	{
+		if s.Role.Set {
+			e.FieldStart("role")
+			s.Role.Encode(e)
+		}
+	}
 }
 
-var jsonFieldsNameOfEmployerTeamInvitationPreview = [2]string{
+var jsonFieldsNameOfEmployerTeamInvitationPreview = [3]string{
 	0: "company_name",
 	1: "email",
+	2: "role",
 }
 
 // Decode decodes EmployerTeamInvitationPreview from json.
@@ -34386,6 +34869,16 @@ func (s *EmployerTeamInvitationPreview) Decode(d *jx.Decoder) error {
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"email\"")
+			}
+		case "role":
+			if err := func() error {
+				s.Role.Reset()
+				if err := s.Role.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"role\"")
 			}
 		default:
 			return d.Skip()
@@ -34531,13 +35024,20 @@ func (s *EmployerTeamMember) encodeFields(e *jx.Encoder) {
 		e.FieldStart("holder")
 		e.Bool(s.Holder)
 	}
+	{
+		if s.Role.Set {
+			e.FieldStart("role")
+			s.Role.Encode(e)
+		}
+	}
 }
 
-var jsonFieldsNameOfEmployerTeamMember = [4]string{
+var jsonFieldsNameOfEmployerTeamMember = [5]string{
 	0: "user_id",
 	1: "work_email",
 	2: "joined_at",
 	3: "holder",
+	4: "role",
 }
 
 // Decode decodes EmployerTeamMember from json.
@@ -34596,6 +35096,16 @@ func (s *EmployerTeamMember) Decode(d *jx.Decoder) error {
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"holder\"")
+			}
+		case "role":
+			if err := func() error {
+				s.Role.Reset()
+				if err := s.Role.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"role\"")
 			}
 		default:
 			return d.Skip()
@@ -52314,6 +52824,112 @@ func (s *ListDismissedSlugsOK) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *ListDismissedSlugsOK) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s *ListEmployerActivityOK) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *ListEmployerActivityOK) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("data")
+		e.ArrStart()
+		for _, elem := range s.Data {
+			elem.Encode(e)
+		}
+		e.ArrEnd()
+	}
+}
+
+var jsonFieldsNameOfListEmployerActivityOK = [1]string{
+	0: "data",
+}
+
+// Decode decodes ListEmployerActivityOK from json.
+func (s *ListEmployerActivityOK) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode ListEmployerActivityOK to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "data":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				s.Data = make([]EmployerActivity, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem EmployerActivity
+					if err := elem.Decode(d); err != nil {
+						return err
+					}
+					s.Data = append(s.Data, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"data\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode ListEmployerActivityOK")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00000001,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfListEmployerActivityOK) {
+					name = jsonFieldsNameOfListEmployerActivityOK[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *ListEmployerActivityOK) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *ListEmployerActivityOK) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -91755,6 +92371,100 @@ func (s *UpdateEmailPrefsOK) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *UpdateEmailPrefsOK) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s *UpdateEmployerApplicationWorkspaceOK) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *UpdateEmployerApplicationWorkspaceOK) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("data")
+		s.Data.Encode(e)
+	}
+}
+
+var jsonFieldsNameOfUpdateEmployerApplicationWorkspaceOK = [1]string{
+	0: "data",
+}
+
+// Decode decodes UpdateEmployerApplicationWorkspaceOK from json.
+func (s *UpdateEmployerApplicationWorkspaceOK) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode UpdateEmployerApplicationWorkspaceOK to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "data":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				if err := s.Data.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"data\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode UpdateEmployerApplicationWorkspaceOK")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00000001,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfUpdateEmployerApplicationWorkspaceOK) {
+					name = jsonFieldsNameOfUpdateEmployerApplicationWorkspaceOK[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *UpdateEmployerApplicationWorkspaceOK) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *UpdateEmployerApplicationWorkspaceOK) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }

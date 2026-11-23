@@ -67,7 +67,7 @@
 </script>
 
 {#if report}
-  <section class="max-h-[45vh] shrink-0 overflow-y-auto border-t border-border px-4 py-3">
+  <section class="max-h-80 shrink-0 overflow-y-auto border-t border-border px-4 py-3">
     <div class="mx-auto grid max-w-3xl gap-2">
       <h2 class="text-base font-semibold">{s.interviewReport}</h2>
       <dl class="grid gap-2 text-sm">

@@ -95,13 +95,13 @@
     <ul class="divide-y divide-border border-y border-border">
       {#each items as meeting (meeting.id)}
         {@const boardRef = boardRefFor(meeting)}
-        <li class="grid gap-x-6 gap-y-2 py-4 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">
-          <time datetime={meeting.starts_at} class="text-sm tabular-nums text-muted-foreground">
+        <li class="flex flex-col gap-x-6 gap-y-2 py-4 sm:flex-row sm:items-center">
+          <time datetime={meeting.starts_at} class="text-sm tabular-nums text-muted-foreground sm:w-40 sm:shrink-0">
             {meeting.ends_at
               ? dateTime.format(new Date(meeting.starts_at))
               : dateOnly.format(new Date(meeting.starts_at))}
           </time>
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <p class="break-words text-sm font-medium">{meeting.role_title || meeting.title || s.interview}</p>
             <p class="break-words text-sm text-muted-foreground">
               {meeting.company_slug}{#if meeting.role_title && meeting.title}

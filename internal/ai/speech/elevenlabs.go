@@ -100,7 +100,7 @@ func (c *ElevenLabs) Transcribe(ctx context.Context, audio []byte, filename stri
 		Text string `json:"text"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, elevenLabsAudioLimit)).Decode(&result); err != nil {
-		return "", fmt.Errorf("%w: decode ElevenLabs transcript: %v", ErrUpstream, err)
+		return "", fmt.Errorf("%w: decode ElevenLabs transcript: %w", ErrUpstream, err)
 	}
 	return strings.TrimSpace(result.Text), nil
 }
@@ -131,7 +131,7 @@ func (c *ElevenLabs) Speak(ctx context.Context, text string) ([]byte, error) {
 	}
 	audio, err := io.ReadAll(io.LimitReader(response.Body, elevenLabsAudioLimit+1))
 	if err != nil {
-		return nil, fmt.Errorf("%w: read ElevenLabs audio: %v", ErrUpstream, err)
+		return nil, fmt.Errorf("%w: read ElevenLabs audio: %w", ErrUpstream, err)
 	}
 	if len(audio) == 0 || len(audio) > elevenLabsAudioLimit {
 		return nil, fmt.Errorf("%w: unexpected ElevenLabs audio size", ErrUpstream)
@@ -173,16 +173,16 @@ func (c *ElevenLabs) post(
 		body,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("%w: build ElevenLabs request: %v", ErrUpstream, err)
+		return nil, fmt.Errorf("%w: build ElevenLabs request: %w", ErrUpstream, err)
 	}
 	request.Header.Set("xi-api-key", c.apiKey)
 	request.Header.Set("Content-Type", contentType)
 	response, err := c.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("%w: send ElevenLabs request: %v", ErrUpstream, err)
+		return nil, fmt.Errorf("%w: send ElevenLabs request: %w", ErrUpstream, err)
 	}
 	if response.StatusCode != http.StatusOK {
-		response.Body.Close()
+		_ = response.Body.Close()
 		return nil, fmt.Errorf("%w: ElevenLabs returned HTTP %d", ErrUpstream, response.StatusCode)
 	}
 	return response, nil

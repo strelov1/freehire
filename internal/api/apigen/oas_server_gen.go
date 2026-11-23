@@ -841,7 +841,7 @@ type Handler interface {
 	GetEmployerCompany(ctx context.Context) (*GetEmployerCompanyOK, error)
 	// GetEmployerTeam implements getEmployerTeam operation.
 	//
-	// Everyone who acts for the caller's company, and the invitations still open.
+	// The company team and open invitations. A recruiter sees their own membership.
 	//
 	// GET /employer/team
 	GetEmployerTeam(ctx context.Context) (*GetEmployerTeamOK, error)
@@ -1216,7 +1216,7 @@ type Handler interface {
 	InterpretSearch(ctx context.Context, req *SearchIntentRequest) (*InterpretSearchOK, error)
 	// InviteEmployerTeamMember implements inviteEmployerTeamMember operation.
 	//
-	// Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again
+	// Mails a colleague a single-use recruiter invitation, valid seven days. Inviting an address again
 	// replaces its link. 429 past twenty open invitations.
 	//
 	// POST /employer/team/invitations
@@ -1256,7 +1256,8 @@ type Handler interface {
 	JobsActivity(ctx context.Context, params JobsActivityParams) (*JobsActivity, error)
 	// JoinEmployerTeam implements joinEmployerTeam operation.
 	//
-	// Joins the team an invitation link invites to. 409 when the caller already acts for a company.
+	// Joins the team. A recruiter must sign in with the matching verified email. 409 when the caller
+	// already acts for a company.
 	//
 	// POST /employer/team/join
 	JoinEmployerTeam(ctx context.Context, req *EmployerTeamToken) (*JoinEmployerTeamOK, error)
@@ -1397,6 +1398,12 @@ type Handler interface {
 	//
 	// GET /me/tracking/dismissed
 	ListDismissedSlugs(ctx context.Context) (*ListDismissedSlugsOK, error)
+	// ListEmployerActivity implements listEmployerActivity operation.
+	//
+	// Up to 30 company audit events, newest first. Recruiters see application activity.
+	//
+	// GET /employer/activity
+	ListEmployerActivity(ctx context.Context, params ListEmployerActivityParams) (*ListEmployerActivityOK, error)
 	// ListEmployerApplications implements listEmployerApplications operation.
 	//
 	// The delivered applications to the caller's vacancies, newest first. An unknown `stage` is a 400
@@ -2165,6 +2172,12 @@ type Handler interface {
 	//
 	// GET /geo/cities
 	SearchCities(ctx context.Context, params SearchCitiesParams) (*SearchCitiesOK, error)
+	// SearchEmployerApplications implements searchEmployerApplications operation.
+	//
+	// Search delivered applications before pagination. An unknown stage returns 400.
+	//
+	// POST /employer/applications/search
+	SearchEmployerApplications(ctx context.Context, req *EmployerApplicationSearch, params SearchEmployerApplicationsParams) (*EmployerApplicationsPage, error)
 	// SearchJobs implements searchJobs operation.
 	//
 	// Free-text `q` plus any filter (the "Filtering jobs" section). Repeated values OR; `<param>_mode=and`
@@ -2437,6 +2450,12 @@ type Handler interface {
 	//
 	// PATCH /email-prefs
 	UpdateEmailPrefs(ctx context.Context, req *EmailPrefsTokenUpdate) (*UpdateEmailPrefsOK, error)
+	// UpdateEmployerApplicationWorkspace implements updateEmployerApplicationWorkspace operation.
+	//
+	// Mark an application reviewed or save private notes.
+	//
+	// PATCH /employer/applications/{id}/workspace
+	UpdateEmployerApplicationWorkspace(ctx context.Context, req *EmployerApplicationWorkspace, params UpdateEmployerApplicationWorkspaceParams) (*UpdateEmployerApplicationWorkspaceOK, error)
 	// UpdateEmployerCompany implements updateEmployerCompany operation.
 	//
 	// PATCH /employer/company
