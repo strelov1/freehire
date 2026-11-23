@@ -38,7 +38,10 @@ func jobkoreaFixture(name string) []byte {
 	return raw
 }
 
-func (f *jobkoreaFake) GetStream(_ context.Context, u string, _ string, fn func(io.Reader) error) error {
+func (f *jobkoreaFake) GetStream(_ context.Context, u string, accept string, fn func(io.Reader) error) error {
+	if !strings.Contains(accept, "text/xml") {
+		return fmt.Errorf("JobKorea sitemap requires accepting text/xml, got %q", accept)
+	}
 	names := map[string]string{
 		jobkoreaSitemapIndex: "index.xml",
 		jobkoreaBase + "/content/sitemapindex/agi/agi_0001.xml": "agi1.xml",

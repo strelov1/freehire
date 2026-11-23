@@ -238,9 +238,9 @@ func (s cvonline) detail(ctx context.Context, site cvonlineSite, p cvonlinePosti
 	if err != nil {
 		return Job{}, false, err
 	}
-	v, ok := state.vacancy(p.id)
-	if !ok {
-		return Job{}, false, fmt.Errorf("page carries no posting %d", p.id)
+	v, err := state.vacancy(p.id)
+	if err != nil {
+		return Job{}, false, err
 	}
 	if v.Status != "PUBLISHED" {
 		return Job{}, false, nil
@@ -258,15 +258,23 @@ type cvonlineState struct {
 		PageProps struct {
 			Locations cvonlineLocations `json:"locations"`
 			State     struct {
-				Public map[string]cvonlineVacancy `json:"publicVacancies"`
+				Public map[string]json.RawMessage `json:"publicVacancies"`
 			} `json:"initialReduxState"`
 		} `json:"pageProps"`
 	} `json:"props"`
 }
 
-func (st cvonlineState) vacancy(id int64) (cvonlineVacancy, bool) {
-	v, ok := st.Props.PageProps.State.Public[strconv.FormatInt(id, 10)]
-	return v, ok
+func (st cvonlineState) vacancy(id int64) (cvonlineVacancy, error) {
+	var v cvonlineVacancy
+	// The Redux slice also contains metadata such as isLoading and error.
+	raw := st.Props.PageProps.State.Public[strconv.FormatInt(id, 10)]
+	if len(raw) == 0 || string(raw) == "null" {
+		return v, fmt.Errorf("page carries no posting %d", id)
+	}
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return v, fmt.Errorf("decode posting %d: %w", id, err)
+	}
+	return v, nil
 }
 
 // cvonlineLocations is the page's place dictionary for its own country; towns and counties are
