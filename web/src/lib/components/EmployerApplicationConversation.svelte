@@ -69,8 +69,10 @@
     if (open) void load();
   }
 
-  async function send(attempt: { body: string; key: string }, submitted?: ConversationDraft) {
+  async function send(attempt: { body: string; key: string }) {
     if (busy || loading || !canSend) return;
+    const current = drafts.get(id);
+    const submitted = current?.key === attempt.key && current.text.trim() === attempt.body ? current : undefined;
     busy = true;
     error = null;
     try {
@@ -100,9 +102,8 @@
     const body = current?.text.trim();
     if (!current || !body || busy || loading || !canSend) return;
     const key = current.key ?? crypto.randomUUID();
-    const submitted = { text: current.text, key };
-    drafts.set(id, submitted);
-    void send({ body, key }, submitted);
+    drafts.set(id, { text: current.text, key });
+    void send({ body, key });
   }
 </script>
 

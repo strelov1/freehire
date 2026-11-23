@@ -147,6 +147,50 @@ describe('EmployerApplications', () => {
     expect(sendEmployerApplicationMessage.mock.calls[1]).toEqual(sendEmployerApplicationMessage.mock.calls[0]);
   });
 
+  it.each([false, true])('reconciles a failed message retry with a newer draft present: %s', async (hasNewDraft) => {
+    listEmployerApplications.mockResolvedValue(page([application()], { new: 1 }));
+    getEmployerApplicationConversation.mockResolvedValueOnce({ can_send: true, has_more: false, messages: [] });
+    sendEmployerApplicationMessage.mockRejectedValueOnce(new Error('Network error'));
+    render(EmployerApplications);
+
+    const row = await screen.findByRole('button', { name: /c@example\.test/ });
+    await fireEvent.click(row);
+    await fireEvent.click(screen.getByRole('button', { name: 'Conversation' }));
+    const body = 'How about Tuesday?';
+    await fireEvent.input(await screen.findByLabelText('Write to candidate'), { target: { value: body } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Send email' }));
+    await screen.findByRole('alert');
+
+    const requestKey = sendEmployerApplicationMessage.mock.lastCall?.[2];
+    expect(requestKey).toEqual(expect.any(String));
+    const failed = {
+      id: 7,
+      status: 'failed',
+      body,
+      request_key: requestKey,
+      created_at: '2026-11-20T14:00:00Z',
+    };
+    getEmployerApplicationConversation.mockResolvedValue({ can_send: true, has_more: false, messages: [failed] });
+    const retry = Promise.withResolvers<typeof failed>();
+    sendEmployerApplicationMessage.mockReturnValueOnce(retry.promise);
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh conversation' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Retry send' }));
+
+    const newerDraft = 'Can we talk on Wednesday?';
+    if (hasNewDraft) {
+      await fireEvent.click(row);
+      await fireEvent.click(row);
+      await fireEvent.click(screen.getByRole('button', { name: 'Conversation' }));
+      await fireEvent.input(await screen.findByLabelText('Write to candidate'), { target: { value: newerDraft } });
+    }
+    await act(() => retry.resolve({ ...failed, status: 'sent' }));
+
+    expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Write to candidate' }).value).toBe(
+      hasNewDraft ? newerDraft : '',
+    );
+    expect(sendEmployerApplicationMessage.mock.calls[1]).toEqual(sendEmployerApplicationMessage.mock.calls[0]);
+  });
+
   it('ignores an acknowledgement from a previously closed application panel', async () => {
     listEmployerApplications.mockResolvedValue(page([application({ has_unread_reply: true })], { new: 1 }));
     getEmployerApplicationConversation.mockResolvedValue({
