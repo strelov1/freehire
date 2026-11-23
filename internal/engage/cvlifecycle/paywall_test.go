@@ -44,7 +44,7 @@ func TestPaywallLetter_WithoutAPostingNamesOnlyTheFeature(t *testing.T) {
 }
 
 func TestPaywallLetter_EveryGateLabelHasWordsAndAnUnknownOneStillGetsALetter(t *testing.T) {
-	labels := []string{"tailor", "match", "assistant", "dictation", "cover-letter", "auto-apply", "ats_review", "mail_recall", "autofill"}
+	labels := []string{"tailor", "match", "assistant", "dictation", "cover-letter", "auto-apply", "ats_review", "mail_recall", "autofill", "interview_transcription"}
 	seen := map[string]bool{}
 	for _, label := range labels {
 		if _, ok := attempts[label]; !ok {
