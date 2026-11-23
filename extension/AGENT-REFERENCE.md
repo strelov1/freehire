@@ -179,8 +179,8 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
 - **Test the logic, not the transport.** `scraper`, `form`, `protocol`, the
   assistant's reducers and its API clients are tested (vitest); the chrome message
   plumbing, the live socket and `storage.local` helpers are thin glue.
-- **TypeScript stays on 5.x** — svelte-check does not yet support the native
-  `typescript@7` (tsgo).
+- **TypeScript 6.x is fine; stay below 7** — svelte-check does not yet support
+  the native `typescript@7` (tsgo).
 - **Styling comes from `freehire-design-system`** via a `file:../design-system`
   dependency (npm's local-symlink protocol — pnpm's `link:` has no npm
   equivalent by that name). Components not covered by an existing primitive keep
