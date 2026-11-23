@@ -49,6 +49,10 @@ updates:
     directory: /extension
     schedule:
       interval: weekly
+    ignore:
+      # svelte-check does not support typescript@7 (tsgo) yet
+      - dependency-name: typescript
+        versions: [">=7"]
     cooldown:
       default-days: 7
     commit-message:
