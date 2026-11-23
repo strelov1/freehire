@@ -6243,6 +6243,16 @@ curl "https://freehire.me/api/v1/insights/companies"
 curl "https://freehire.me/api/v1/insights/role-countries"
 ```
 
+### `GET /insights/role-demand`
+
+**Auth:** Public
+
+New public vacancies by specialty for the last 12 completed UTC weeks.
+
+```bash
+curl "https://freehire.me/api/v1/insights/role-demand"
+```
+
 ### `GET /insights/role-pulse`
 
 **Auth:** Public

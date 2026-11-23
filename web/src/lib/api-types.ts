@@ -75,6 +75,7 @@ export interface InsightRoleCountries {
  *  last 30 days and, for competition and time to close, the 30 before. `web/src/lib/rolePulse.ts` turns them into the
  *  page's figures and decides which are too thin to show. */
 export type InsightRolePulse = components['schemas']['RolePulse'];
+export type InsightRoleDemandPoint = components['schemas']['RoleDemandPoint'];
 
 export type InsightRole = Omit<components['schemas']['RoleInsight'], 'coverage'> & {
   /** Present only for a signed-in caller. Zeroed rather than absent when they hold no

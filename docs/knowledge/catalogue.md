@@ -4,8 +4,10 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-23T10:42:40+00:00
+  at: 2026-11-23T13:46:18Z
 sources:
+  - resource: ../../docs/agents/public-figures.md
+  - resource: ../../internal/platform/db/queries/insights_role_demand.sql
   - resource: ../../internal/ingest/sources/providers/jobsacuk.md
   - resource: ../../internal/ingest/sources/providers/charityjob.md
   - resource: ../../internal/dict/classify/AGENT-REFERENCE-LANGUAGES.md
@@ -46,6 +48,9 @@ Postings are normalized and upserted with `(source, external_id)` as the dedup k
 Background enrichment uses `enrichment_outbox`; embedding uses `semantic_outbox`.
 Search indexing has its own drain and rebuild paths. PostgreSQL stores the
 catalogue, while Meilisearch serves search documents.
+
+The [weekly hiring-demand figures](../agents/public-figures.md#weekly-hiring-demand)
+use a PostgreSQL snapshot of publication counts by specialty.
 
 ## Title classification
 

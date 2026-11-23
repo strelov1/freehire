@@ -9,27 +9,31 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
 func TestRollupReadsAnalyticsAndPublishesToPrimary(t *testing.T) {
 	ctx := context.Background()
 	analytics, primary := testdb.Pool(t), testdb.Pool(t)
-	if _, err := analytics.Exec(ctx, `INSERT INTO jobs (public_slug,source,external_id,title,url,company,company_slug,category,seniority,skills,countries,created_at) VALUES ('test-analytics','test','analytics','Engineer','https://example.com/job','Example','example','engineering','senior',ARRAY['go'],ARRAY['us'],now()-interval '60 days')`); err != nil {
+	if _, err := analytics.Exec(ctx, `INSERT INTO jobs (public_slug,source,external_id,title,url,company,company_slug,category,seniority,skills,countries,created_at) VALUES ('test-analytics','test','analytics','Engineer','https://example.com/job','Example','example','backend','senior',ARRAY['go'],ARRAY['us'],now()-interval '60 days')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := primary.Exec(ctx, `INSERT INTO jobs (public_slug,source,external_id,title,url,company,company_slug,category,seniority,created_at) VALUES ('test-primary','test','primary','Other','https://example.com/other','Other','other','design','junior',now())`); err != nil {
+	if _, err := primary.Exec(ctx, `INSERT INTO jobs (public_slug,source,external_id,title,url,company,company_slug,category,seniority,created_at) VALUES ('test-primary','test','primary','Other','https://example.com/other','Other','other','design','junior',now()-interval '60 days')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := analytics.Exec(ctx, `ALTER DATABASE "`+analytics.Config().ConnConfig.Database+`" SET default_transaction_read_only = on`); err != nil {
 		t.Fatal(err)
 	}
 	analytics.Reset()
+	if err := publishRoleDemand(ctx, db.New(analytics), primary); err != nil {
+		t.Fatal(err)
+	}
 	if err := rebuildRollups(ctx, analytics, primary); err != nil {
 		t.Fatal(err)
 	}
 	var count int
-	if err := primary.QueryRow(ctx, `SELECT open_count FROM insights_role_stats WHERE category='engineering' AND seniority='senior' AND country=''`).Scan(&count); err != nil {
+	if err := primary.QueryRow(ctx, `SELECT open_count FROM insights_role_stats WHERE category='backend' AND seniority='senior' AND country=''`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -46,6 +50,12 @@ func TestRollupReadsAnalyticsAndPublishesToPrimary(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatal("analytics database was written")
+	}
+	if err := primary.QueryRow(ctx, `SELECT sum(new_jobs) FROM insights_role_demand_weekly`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("published role demand count=%d, want 1 from analytics", count)
 	}
 }
 

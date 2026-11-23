@@ -156,3 +156,7 @@ skip it; keyword searches keep it.
 
 Recorded the [report sources and company scope](architecture.md#employer-vacancy-analytics).
 The report uses the existing page-view rollup and stores only aggregate Apply clicks.
+
+## Weekly hiring-demand comparison — 2026-11-23
+
+Recorded the [publication-date rollup and comparison window](../agents/public-figures.md#weekly-hiring-demand).

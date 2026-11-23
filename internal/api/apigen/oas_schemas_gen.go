@@ -26680,6 +26680,59 @@ func (s *RoleCountryCell) SetOpenCountPrev(val int64) {
 	s.OpenCountPrev = val
 }
 
+// Ref: #/components/schemas/RoleDemandAnswer
+type RoleDemandAnswer struct {
+	Data []RoleDemandPoint `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RoleDemandAnswer) GetData() []RoleDemandPoint {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RoleDemandAnswer) SetData(val []RoleDemandPoint) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/RoleDemandPoint
+type RoleDemandPoint struct {
+	Category string `json:"category"`
+	// Monday of the publication week in UTC (YYYY-MM-DD).
+	Week    string `json:"week"`
+	NewJobs int64  `json:"new_jobs"`
+}
+
+// GetCategory returns the value of Category.
+func (s *RoleDemandPoint) GetCategory() string {
+	return s.Category
+}
+
+// GetWeek returns the value of Week.
+func (s *RoleDemandPoint) GetWeek() string {
+	return s.Week
+}
+
+// GetNewJobs returns the value of NewJobs.
+func (s *RoleDemandPoint) GetNewJobs() int64 {
+	return s.NewJobs
+}
+
+// SetCategory sets the value of Category.
+func (s *RoleDemandPoint) SetCategory(val string) {
+	s.Category = val
+}
+
+// SetWeek sets the value of Week.
+func (s *RoleDemandPoint) SetWeek(val string) {
+	s.Week = val
+}
+
+// SetNewJobs sets the value of NewJobs.
+func (s *RoleDemandPoint) SetNewJobs(val int64) {
+	s.NewJobs = val
+}
+
 // Ref: #/components/schemas/RoleInsight
 type RoleInsight struct {
 	Category  string `json:"category"`

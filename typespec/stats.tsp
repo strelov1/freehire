@@ -247,6 +247,17 @@ model VelocityAnswer {
   meta: VelocityMeta;
 }
 
+model RoleDemandPoint {
+  category: string;
+  /** Monday of the publication week in UTC (YYYY-MM-DD). */
+  week: string;
+  new_jobs: int64;
+}
+
+model RoleDemandAnswer {
+  data: RoleDemandPoint[];
+}
+
 model SalaryMonth {
   currency: string;
   period: string;
@@ -769,6 +780,13 @@ op insightsRoleCountries(@query countries?: string): RoleCountriesAnswer | Probl
 @route("/insights/role-pulse")
 @get
 op insightsRolePulse(@query category?: string): RolePulseAnswer | Problem;
+
+@summary("New public vacancies by specialty for the last 12 completed UTC weeks.")
+@useAuth(NoAuth)
+@tag("Insights")
+@route("/insights/role-demand")
+@get
+op insightsRoleDemand(): RoleDemandAnswer | Problem;
 
 // The site's own live status plus a sanitized per-provider rollup of the ingest fleet.
 /**

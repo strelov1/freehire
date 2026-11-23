@@ -1189,6 +1189,12 @@ type Handler interface {
 	//
 	// GET /insights/role-countries
 	InsightsRoleCountries(ctx context.Context, params InsightsRoleCountriesParams) (*RoleCountriesAnswer, error)
+	// InsightsRoleDemand implements insightsRoleDemand operation.
+	//
+	// New public vacancies by specialty for the last 12 completed UTC weeks.
+	//
+	// GET /insights/role-demand
+	InsightsRoleDemand(ctx context.Context) (*RoleDemandAnswer, error)
 	// InsightsRolePulse implements insightsRolePulse operation.
 	//
 	// The category is required.
