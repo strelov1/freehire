@@ -12,6 +12,27 @@ import (
 	"testing"
 )
 
+// reapEnrichment runs DeleteIneligibleEnrichmentOutbox over the whole queue the way cmd/enrich
+// does, chunk entries at a time, deleting at most maxRows.
+func reapEnrichment(t *testing.T, q *Queries, chunk, maxRows int32) int64 {
+	t.Helper()
+	var reaped int64
+	for after := int64(0); reaped < int64(maxRows); {
+		r, err := q.DeleteIneligibleEnrichmentOutbox(context.Background(), DeleteIneligibleEnrichmentOutboxParams{
+			AfterJobID: after, ChunkSize: chunk, MaxRows: maxRows - int32(reaped),
+		})
+		if err != nil {
+			t.Fatalf("DeleteIneligibleEnrichmentOutbox after job %d: %v", after, err)
+		}
+		reaped += r.Deleted
+		if r.LastJobID == 0 {
+			break
+		}
+		after = r.LastJobID
+	}
+	return reaped
+}
+
 // TestDeleteIneligibleEnrichmentOutboxReapsWhatClaimCanNeverTake pins the reaper's
 // boundary: it deletes exactly what the claim skips forever, and nothing the claim would
 // still take.
@@ -49,12 +70,15 @@ func TestDeleteIneligibleEnrichmentOutboxReapsWhatClaimCanNeverTake(t *testing.T
 		t.Fatalf("dead-letter entry: %v", err)
 	}
 
-	reaped, err := q.DeleteIneligibleEnrichmentOutbox(ctx, 100)
-	if err != nil {
-		t.Fatalf("DeleteIneligibleEnrichmentOutbox: %v", err)
+	// The closed job also has an entry at a second version, so with one entry per chunk its
+	// two entries straddle a chunk edge: both must go all the same.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO enrichment_outbox (job_id, target_version) VALUES ($1, $2)`, closedJob, targetVersion+1); err != nil {
+		t.Fatalf("second version: %v", err)
 	}
-	if reaped != 2 {
-		t.Errorf("reaped %d entries, want 2 (the closed job's and the repost's)", reaped)
+
+	if reaped := reapEnrichment(t, q, 1, 100); reaped != 3 {
+		t.Errorf("reaped %d entries, want 3 (the closed job's two and the repost's)", reaped)
 	}
 
 	remaining := map[int64]bool{}
@@ -103,25 +127,13 @@ func TestDeleteIneligibleEnrichmentOutboxRespectsItsBound(t *testing.T) {
 		}
 	}
 
-	first, err := q.DeleteIneligibleEnrichmentOutbox(ctx, 2)
-	if err != nil {
-		t.Fatalf("first reap: %v", err)
-	}
-	if first != 2 {
+	if first := reapEnrichment(t, q, 100, 2); first != 2 {
 		t.Fatalf("first reap removed %d, want exactly the bound of 2", first)
 	}
-	second, err := q.DeleteIneligibleEnrichmentOutbox(ctx, 2)
-	if err != nil {
-		t.Fatalf("second reap: %v", err)
-	}
-	if second != 1 {
+	if second := reapEnrichment(t, q, 100, 2); second != 1 {
 		t.Errorf("second reap removed %d, want the remaining 1", second)
 	}
-	third, err := q.DeleteIneligibleEnrichmentOutbox(ctx, 2)
-	if err != nil {
-		t.Fatalf("third reap: %v", err)
-	}
-	if third != 0 {
+	if third := reapEnrichment(t, q, 100, 2); third != 0 {
 		t.Errorf("third reap removed %d, want 0 — the backlog is drained", third)
 	}
 }

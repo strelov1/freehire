@@ -74,8 +74,29 @@ func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]enrich.
 	return out, nil
 }
 
+// reapChunk is how many queue entries one DeleteIneligibleEnrichmentOutbox call reads, so each
+// statement stays short however long the queue grows.
+const reapChunk = 100_000
+
+// Reap walks the queue in job_id chunks until it has deleted maxRows entries or read them all.
 func (s *dbStore) Reap(ctx context.Context, maxRows int) (int64, error) {
-	return s.q.DeleteIneligibleEnrichmentOutbox(ctx, int32(maxRows))
+	var reaped int64
+	for after := int64(0); reaped < int64(maxRows); {
+		r, err := s.q.DeleteIneligibleEnrichmentOutbox(ctx, db.DeleteIneligibleEnrichmentOutboxParams{
+			AfterJobID: after,
+			ChunkSize:  reapChunk,
+			MaxRows:    int32(int64(maxRows) - reaped), //nolint:gosec // bounded by maxRows, an int32-sized limit
+		})
+		if err != nil {
+			return reaped, err
+		}
+		reaped += r.Deleted
+		if r.LastJobID == 0 {
+			break
+		}
+		after = r.LastJobID
+	}
+	return reaped, nil
 }
 
 func (s *dbStore) Job(ctx context.Context, id int64) (enrich.JobInput, error) {
