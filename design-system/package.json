@@ -39,7 +39,7 @@
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.5",
     "@testing-library/svelte": "^5.4.2",
-    "eslint": "^10.14.0",
+    "eslint": "^10.15.0",
     "eslint-plugin-oxlint": "^1.93.0",
     "eslint-plugin-svelte": "^3.24.1",
     "flag-icons": "^7.6.0",
