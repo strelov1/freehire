@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"strconv"
@@ -244,6 +245,6 @@ func run() int {
 	logChronicBoards(sweepCtx, queries)
 
 	// The exit code says whether the RUN is broken, not whether a board is: see crawlReachedNothing.
-	worker.ReportPartial(truncated)
+	worker.ReportPartial(errors.Is(crawlErr, context.DeadlineExceeded))
 	return runExitCode(total, crawlErr, sweepFailed)
 }
