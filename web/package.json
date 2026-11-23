@@ -30,7 +30,7 @@
     "@axe-core/playwright": "4.14.0",
     "@eslint/js": "^10.0.1",
     "@lucide/svelte": "^1.72.0",
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@size-limit/file": "^14.3.0",
     "@sveltejs/adapter-node": "^6.0.1",
     "@sveltejs/kit": "^3.2.0",
