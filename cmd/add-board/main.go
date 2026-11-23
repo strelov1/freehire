@@ -100,8 +100,9 @@ func runAdd(provider, board, region, company string, hub bool, tenantsFlag strin
 		log.Printf("add-board: invalid: %v", err)
 		return 1
 	}
-	// The platform check Insert runs, previewed here so a dry run states what --apply would store.
-	if c, ok := registry[provider].(sources.BoardCanonicalizer); ok {
+	// The platform check Insert runs, previewed on a dry run so it states what --apply would store.
+	// Under --apply Insert runs it itself and keeps a refusal as a rejected row.
+	if c, ok := registry[provider].(sources.BoardCanonicalizer); ok && !apply {
 		canon, err := c.CanonicalBoard(context.Background(), board)
 		if err != nil {
 			log.Printf("add-board: refused: %v", err)
