@@ -1270,6 +1270,19 @@ func encodeEngagementStatsResponse(response *EngagementStatsOK, w http.ResponseW
 	return nil
 }
 
+func encodeExcludeCompanyResponse(response *ExcludeCompanyOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeFileProcessReportResponse(response *FileProcessReportCreated, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(201)
@@ -4279,6 +4292,19 @@ func encodeResolveJobReportResponse(response *ResolveJobReportOK, w http.Respons
 }
 
 func encodeResolveReferralRequestResponse(response *ResolveReferralRequestOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeRestoreCompanyResponse(response *RestoreCompanyOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 

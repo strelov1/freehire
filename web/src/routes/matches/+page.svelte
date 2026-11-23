@@ -15,6 +15,13 @@
   // The feed is the page; swipe is a full-screen mode over it, kept in the URL so a reload
   // or a shared link reopens it.
   const swipe = $derived(page.url.searchParams.get('mode') === 'swipe');
+  let listRevision = $state(0);
+  let listStale = $state(false);
+  $effect.pre(() => {
+    if (swipe || !listStale) return;
+    listStale = false;
+    listRevision++;
+  });
   const setMode = (m: 'feed' | 'swipe') =>
     goto(resolve(m === 'swipe' ? '/matches?mode=swipe' : '/matches'), { replace: true });
 </script>
@@ -44,7 +51,9 @@
   {#if data.paid}
     <FeedSourceMenu />
     {#key feedSource.version}
-      <MatchFeedList active={!swipe} />
+      {#key listRevision}
+        <MatchFeedList active={!swipe} />
+      {/key}
     {/key}
   {:else}
     <MatchesUpgrade price={data.price} />
@@ -53,6 +62,6 @@
 
 {#if swipe && data.paid}
   {#key feedSource.version}
-    <MatchSwipe onClose={() => setMode('feed')} />
+    <MatchSwipe onClose={() => setMode('feed')} onCompanyHidden={() => (listStale = true)} />
   {/key}
 {/if}

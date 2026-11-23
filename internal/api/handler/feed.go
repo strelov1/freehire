@@ -277,7 +277,11 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 		qf, _ = search.QFieldsFromValues(vals) // searchQuery already refused an invalid q_fields
 	} else {
 		var reason string
-		if vals, reason = feed.ProfileQuery(profile); reason != "" {
+		// Hidden companies alone are no criterion (they would return the whole catalogue minus one
+		// company); the full list is applied below on every source.
+		bare := profile
+		bare.ExcludedCompanies = nil
+		if vals, reason = feed.ProfileQuery(bare); reason != "" {
 			return empty(reason, nil)
 		}
 	}
@@ -301,6 +305,11 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	// New is (seen, snapshot], rest is everything at or before seen: the two never overlap.
 	query := func(phase string, limit, offset int) (search.SearchResult, error) {
 		f := withExcludedIDs(search.FilterFromValues(vals), excluded)
+		// Hidden companies bind both sources and both phases, outside the character budget the
+		// profile query keeps for its facet parity.
+		if len(profile.ExcludedCompanies) > 0 {
+			f = withFilterGroup(f, search.NotInStrings("company_slug", profile.ExcludedCompanies))
+		}
 		if phase == feed.PhaseNew {
 			f = withFilterGroup(withFilterGroup(f, search.Gte("created_ts", int(cur.SeenAt)+1)), search.Lte("created_ts", int(cur.SnapshotAt)))
 		} else {

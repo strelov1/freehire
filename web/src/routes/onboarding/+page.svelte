@@ -310,7 +310,6 @@
         d.seniorities,
         current?.excluded_skills ?? [],
         current?.excluded_sources ?? [],
-        current?.excluded_companies ?? [],
         d.location,
       );
       await syncProfileAlert();

@@ -14,6 +14,9 @@ sources:
   - resource: ../../internal/platform/db/queries/feed_state.sql
   - resource: ../../internal/platform/db/queries/employer_analytics.sql
   - resource: ../../internal/application/viewlog/AGENTS.md
+  - resource: ../../internal/platform/db/queries/user_profiles.sql
+  - resource: ../../internal/identity/userprofile/userprofile.go
+  - resource: ../../internal/api/handler/me_profile.go
 ---
 
 Freehire aggregates IT jobs through a Go API and workers, with PostgreSQL,
@@ -43,6 +46,16 @@ The Matches API resolves the caller's active source before querying the job inde
 PostgreSQL stores the active choice separately from the per-source New watermark.
 The API resolves saved searches by owner and leaves a deleted selection in place so
 Matches can offer a return to profile matching.
+
+The profile's companies to avoid have one writer: the owner-scoped
+`POST /me/profile/excluded-companies` and `DELETE /me/profile/excluded-companies/:company_slug`
+(`userprofile.Service.ExcludeCompany`/`UnexcludeCompany`). No profile save assigns the column,
+so `PUT /me/profile` reports a legacy `excluded_companies` field as ignored and a stale
+autosave cannot erase a hidden company. The append runs as one guarded upsert that holds the
+row lock, checks the 200-entry bound and creates a minimal profile when none exists; a real
+change advances `updated_at`, the filter version Matches cursors bind. The feed adds the full
+list as a `company_slug NOT IN` group for both sources and both phases, outside the character
+budget of the shared profile query.
 
 Assistant merge consent is checked by the owner-scoped handler against the transcript;
 requirement report normalization belongs to the CV store. Follow the current
