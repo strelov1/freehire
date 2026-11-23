@@ -152,6 +152,15 @@
           remove: () => store.setFormerEmployers(false),
         },
       ]);
+    if (f.newHiring)
+      push('Just started hiring', [
+        {
+          key: 'new_hiring',
+          text: 'Just started hiring',
+          exclude: false,
+          remove: () => store.setNewHiring(false),
+        },
+      ]);
     if (f.watchlist && isAuthenticated())
       push('Watchlist', [
         { key: 'watchlist', text: 'Your watchlist', exclude: false, remove: () => store.setWatchlist(false) },

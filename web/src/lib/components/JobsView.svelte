@@ -78,6 +78,7 @@
       p.delete('hide_seen');
       p.delete('former_employers');
       p.delete('watchlist');
+      p.delete('new_hiring');
     }
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return p;
@@ -121,8 +122,18 @@
 
   // The live facet distribution (see FeedCounts).
   const feedCounts = new FeedCounts(scopedParams);
-  // Facet counts cannot apply the former-employer constraint.
-  const counts = $derived(filters.value.formerEmployers || filters.value.watchlist ? null : feedCounts.catalog);
+  // The company-set filter on, if any. /jobs/facets and the map ignore these sets, so their
+  // counts and pins would describe a wider set than the list.
+  const companySetFilter = $derived(
+    filters.value.formerEmployers
+      ? 'formerEmployers'
+      : filters.value.watchlist
+        ? 'watchlist'
+        : filters.value.newHiring
+          ? 'newHiring'
+          : null,
+  );
+  const counts = $derived(companySetFilter ? null : feedCounts.catalog);
   // The map dialog reads and writes `filters` itself, so a click on the map narrows the
   // list behind it. Its module (the land outline among it) loads on the first open only.
   let mapOpen = $state(false);
@@ -398,7 +409,7 @@
 <!-- Opens the current search on a world map, over the list rather than instead of it. -->
 {#snippet mapButton()}
   <JobsMapButtons
-    blockedBy={filters.value.formerEmployers ? 'formerEmployers' : filters.value.watchlist ? 'watchlist' : null}
+    blockedBy={companySetFilter}
     onMap={() => {
       mapLoaded = true;
       mapOpen = true;
@@ -482,7 +493,7 @@
   </div>
 </div>
 
-{#if standalone && mapLoaded && !filters.value.formerEmployers && !filters.value.watchlist}
+{#if standalone && mapLoaded && !companySetFilter}
   {#await import('./map/JobsMapDialog.svelte') then { default: JobsMapDialog }}
     <JobsMapDialog bind:open={mapOpen} store={filters} />
   {/await}
@@ -504,6 +515,7 @@
   savedSearches={standalone}
   formerEmployersAvailable={standalone}
   watchlistAvailable={standalone}
+  newHiringAvailable={standalone}
   hideSeenAvailable={standalone}
   open={modalOpen}
   onClose={() => (modalOpen = false)}

@@ -127,6 +127,13 @@ export const FILTER_EXTRAS: FilterRow[] = [
       'true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it',
   },
   {
+    param: 'new_hiring',
+    type: 'boolean',
+    label: 'Just started hiring: companies that began hiring this month',
+    values:
+      'true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the same set as `/insights/companies?sort=new`); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it',
+  },
+  {
     param: 'salary_min',
     type: 'integer',
     label: 'Minimum salary',
