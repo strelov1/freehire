@@ -107,6 +107,6 @@ other location selection the visitor made independently untouched.
 #### Scenario: Turning off does not disturb an unrelated manual selection
 
 - **WHEN** the visitor has separately selected a country pill by hand, then turns
-  the "Eligible for me" filter on and back off
+  the "Use my location" toggle on and back off
 - **THEN** their manually-selected country pill remains staged, and only the
   filter's own values are removed

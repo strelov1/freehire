@@ -244,28 +244,29 @@ deselectable) in the pane even when its current count is zero.
 - **WHEN** the Location pane opens before the facet counts have loaded
 - **THEN** the macro-regions are still shown so a location can be selected
 
-### Requirement: The Location pane offers an "Eligible for me" pill
+### Requirement: The Location pane offers a "Use my location" toggle
 
-The Location pane SHALL show an "Eligible for me" pill alongside the existing
-`Global` / `Not specified` flat pills, above the region → country tree. The pill
-SHALL be a single toggle (on/off, not a cycling include/exclude/off chip like the
-region and country chips) reflecting whether the filter described by the
+The Location pane SHALL show a "Use my location" toggle above the existing
+`Global` / `Not specified` flat pills. Its help text SHALL name the resolved
+location and explain that worldwide jobs and jobs with an unknown location
+are included. The control SHALL be a single on/off toggle reflecting whether the filter described by the
 `eligible-for-me-filter` capability is currently staged. When the underlying
 geography source is unavailable, the pill SHALL render in a disabled state rather
 than being hidden, so a visitor understands the option exists but has nothing to
 turn it on with.
 
-#### Scenario: The pill sits with the other flat pills
+#### Scenario: The toggle explains which locations it selects
 
 - **WHEN** the Location pane is shown and a geography source is available
-- **THEN** the "Eligible for me" pill is shown alongside `Global` and
-  `Not specified`, interactable as one on/off toggle
+- **THEN** the "Use my location" toggle is available and its help text lists
+  the location it uses, worldwide jobs, and jobs with an unknown location
 
 #### Scenario: The pill is disabled when no geography source is available
 
 - **WHEN** the Location pane is shown and neither the profile country nor the
   edge-derived region resolves to a value
-- **THEN** the "Eligible for me" pill is shown disabled
+- **THEN** the "Use my location" toggle is disabled and its help text points
+  visitors to the manual country and region filters
 
 #### Scenario: Turning the pill on reflects in the selected-location chips
 
