@@ -140,3 +140,38 @@ func TestReapDeletesIneligibleEntriesUpToItsBound(t *testing.T) {
 		t.Fatalf("entries left = %d, %v; want the live job's 1", left, err)
 	}
 }
+
+// A live claim survives the reap: the reap runs beside the drain, so it can reach a row the
+// drain has just claimed for a job that became eligible again. Unclaimed and long-stale
+// claims of an ineligible job are still reaped.
+func TestReapSkipsLiveClaims(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	var ids []int64
+	// claim is the claim's age in seconds; -1 means unclaimed.
+	for i, claim := range []int{-1, 0, 7200} {
+		slug := "claim-" + string(rune('a'+i))
+		j, err := q.UpsertJob(ctx, db.UpsertJobParams{Source: "test", ExternalID: slug, URL: "https://example.com/" + slug, Title: "Go Engineer", Company: "Acme", PublicSlug: slug, CompanySlug: "acme", Description: "Build.", IsTech: pgtype.Bool{Bool: true, Valid: true}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := q.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{JobID: j.ID, TargetVersion: int32(enrich.Version)}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, "UPDATE enrichment_outbox SET claimed_at = CASE WHEN $2::int < 0 THEN NULL ELSE now() - make_interval(secs => $2::int) END WHERE job_id=$1", j.ID, claim); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id=$1", j.ID); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, j.ID)
+	}
+	if n, err := newDBStore(pool, false).Reap(ctx, 100); err != nil || n != 2 {
+		t.Fatalf("reaped %d, %v; want 2", n, err)
+	}
+	var left int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM enrichment_outbox WHERE job_id=$1", ids[1]).Scan(&left); err != nil || left != 1 {
+		t.Fatalf("live claim reaped: %d, %v", left, err)
+	}
+}
