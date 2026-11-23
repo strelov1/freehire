@@ -75,6 +75,7 @@ type InboxApplication struct {
 	SentAt         time.Time
 	ViewedAt       *time.Time
 	EmployerNotes  string
+	HasUnreadReply bool
 }
 
 // InboxFilter narrows the inbox. Empty JobSlug and Stage mean every vacancy and stage.

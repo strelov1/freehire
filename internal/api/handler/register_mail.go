@@ -75,6 +75,7 @@ func newDirectApplySurface(cfg Config, queries *db.Queries, mailClient *emailnot
 	var applicationMailer *emailnotify.ApplicationMailer
 	if mailClient != nil {
 		applicationMailer = emailnotify.NewApplicationMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
+		employerH.messages = directapply.NewApplicationMessages(queries, applicationMailer, cfg.MailboxDomain)
 		// The inbox needs no CV renderer — it serves the CV each application kept — but it
 		// does need mail: moving an application may email the candidate.
 		employerH.inbox = directapply.NewInbox(

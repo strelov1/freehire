@@ -833,6 +833,12 @@ type Handler interface {
 	//
 	// GET /employer/applications/{id}/cv
 	GetEmployerApplicationCV(ctx context.Context, params GetEmployerApplicationCVParams) (*GetEmployerApplicationCVOKHeaders, error)
+	// GetEmployerApplicationConversation implements getEmployerApplicationConversation operation.
+	//
+	// Read the private email conversation for a delivered application in your company.
+	//
+	// GET /employer/applications/{id}/messages
+	GetEmployerApplicationConversation(ctx context.Context, params GetEmployerApplicationConversationParams) (*GetEmployerApplicationConversationOK, error)
 	// GetEmployerCompany implements getEmployerCompany operation.
 	//
 	// The caller's own account in any status, with the company profile.
@@ -1690,6 +1696,12 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/read
 	MarkConversationRead(ctx context.Context, req *ConversationReadRequest, params MarkConversationReadParams) error
+	// MarkEmployerApplicationRepliesRead implements markEmployerApplicationRepliesRead operation.
+	//
+	// Acknowledge the candidate replies the company team has seen up through this message.
+	//
+	// POST /employer/applications/{id}/messages/read
+	MarkEmployerApplicationRepliesRead(ctx context.Context, req *EmployerApplicationRepliesRead, params MarkEmployerApplicationRepliesReadParams) (*MarkEmployerApplicationRepliesReadOK, error)
 	// MarkNotificationRead implements markNotificationRead operation.
 	//
 	// Returns `204 No Content`.
@@ -2227,6 +2239,12 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/direct-apply
 	SendDirectApply(ctx context.Context, req *DirectApplyRequest, params SendDirectApplyParams) (*SendDirectApplyCreated, error)
+	// SendEmployerApplicationMessage implements sendEmployerApplicationMessage operation.
+	//
+	// Send a plain-text email to the candidate without changing their application stage.
+	//
+	// POST /employer/applications/{id}/messages
+	SendEmployerApplicationMessage(ctx context.Context, req *EmployerApplicationMessageSend, params SendEmployerApplicationMessageParams) (*SendEmployerApplicationMessageOK, error)
 	// SetAgentPermissions implements setAgentPermissions operation.
 	//
 	// Session cookie only: an agent must not grant itself the right to apply.

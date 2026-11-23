@@ -57,3 +57,12 @@ the [page-view rollup](../../internal/application/viewlog/AGENTS.md), Apply butt
 clicks from the public vacancy page, and delivered Freehire applications over
 the same 30 completed UTC days. The [SQL queries](../../internal/platform/db/queries/employer_analytics.sql)
 read daily unique page views and store only aggregate click counts.
+
+## Employer application conversations
+
+An active company team can mail the candidate and read replies in the
+[application inbox](../../internal/ingest/directapply/AGENTS.md#candidate-conversations).
+The shared [hosted mail worker](../agents/mail-stack.md#replies-to-employer-application-messages)
+routes authenticated replies from the current candidate address to the delivered
+application through an opaque Reply-To alias. PostgreSQL stores the conversation
+and unread state independently of the hiring stage.

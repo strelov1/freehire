@@ -101,3 +101,34 @@ func TestReadBoundedPropagatesAReadFailure(t *testing.T) {
 type errReader struct{}
 
 func (errReader) Read([]byte) (int, error) { return 0, errors.New("connection reset") }
+
+func TestApplicationReplyRequiresTrustedSESAuthenticationAndScan(t *testing.T) {
+	const notification = `{"notificationType":"Received","receipt":{
+		"recipients":["ats-reply-0fd7aab6-5f1d-488e-a84a-7da1592e4628@mail.example.test"],
+		"action":{"type":"S3","objectKey":"inbound/id"},
+		"dmarcVerdict":{"status":"PASS"},"spamVerdict":{"status":"PASS"},"virusVerdict":{"status":"PASS"}
+	}}`
+	for _, tt := range []struct {
+		name        string
+		payload     string
+		wantAllowed bool
+	}{
+		{"authenticated", notification, true},
+		{"unauthenticated", strings.Replace(notification, `"dmarcVerdict":{"status":"PASS"}`, `"dmarcVerdict":{"status":"FAIL"}`, 1), false},
+		{"unscanned", strings.Replace(notification, `"virusVerdict":{"status":"PASS"}`, `"virusVerdict":{}`, 1), false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			body, err := json.Marshal(snsEnvelope{Message: tt.payload})
+			if err != nil {
+				t.Fatal(err)
+			}
+			note, err := decodeNotification(string(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if note.authenticatedReply() != tt.wantAllowed {
+				t.Fatalf("reply authentication = %v, want %v", note.authenticatedReply(), tt.wantAllowed)
+			}
+		})
+	}
+}

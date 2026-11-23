@@ -6410,6 +6410,125 @@ func decodeGetEmployerApplicationCVParams(args [1]string, argsEscaped bool, r *h
 	return params, nil
 }
 
+// GetEmployerApplicationConversationParams is parameters of getEmployerApplicationConversation operation.
+type GetEmployerApplicationConversationParams struct {
+	// The application's ID.
+	ID string
+	// Fetch messages older than this message ID.
+	Before OptInt64 `json:",omitempty,omitzero"`
+}
+
+func unpackGetEmployerApplicationConversationParams(packed middleware.Parameters) (params GetEmployerApplicationConversationParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "before",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Before = v.(OptInt64)
+		}
+	}
+	return params
+}
+
+func decodeGetEmployerApplicationConversationParams(args [1]string, argsEscaped bool, r *http.Request) (params GetEmployerApplicationConversationParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	// Decode query: before.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "before",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotBeforeVal int64
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToInt64(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotBeforeVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Before.SetTo(paramsDotBeforeVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "before",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // GetEmployerVacancyAnalyticsParams is parameters of getEmployerVacancyAnalytics operation.
 type GetEmployerVacancyAnalyticsParams struct {
 	// The employer-authored vacancy's public slug.
@@ -14854,6 +14973,72 @@ func decodeMarkConversationReadParams(args [1]string, argsEscaped bool, r *http.
 	return params, nil
 }
 
+// MarkEmployerApplicationRepliesReadParams is parameters of markEmployerApplicationRepliesRead operation.
+type MarkEmployerApplicationRepliesReadParams struct {
+	// The application's ID.
+	ID string
+}
+
+func unpackMarkEmployerApplicationRepliesReadParams(packed middleware.Parameters) (params MarkEmployerApplicationRepliesReadParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeMarkEmployerApplicationRepliesReadParams(args [1]string, argsEscaped bool, r *http.Request) (params MarkEmployerApplicationRepliesReadParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // MarkNotificationReadParams is parameters of markNotificationRead operation.
 type MarkNotificationReadParams struct {
 	// The notification id. (e.g. `5`).
@@ -18871,6 +19056,72 @@ func decodeSendDirectApplyParams(args [1]string, argsEscaped bool, r *http.Reque
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// SendEmployerApplicationMessageParams is parameters of sendEmployerApplicationMessage operation.
+type SendEmployerApplicationMessageParams struct {
+	// The application's ID.
+	ID string
+}
+
+func unpackSendEmployerApplicationMessageParams(packed middleware.Parameters) (params SendEmployerApplicationMessageParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeSendEmployerApplicationMessageParams(args [1]string, argsEscaped bool, r *http.Request) (params SendEmployerApplicationMessageParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
 			In:   "path",
 			Err:  err,
 		}

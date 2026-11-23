@@ -1755,6 +1755,19 @@ func encodeGetEmployerApplicationCVResponse(response *GetEmployerApplicationCVOK
 	return nil
 }
 
+func encodeGetEmployerApplicationConversationResponse(response *GetEmployerApplicationConversationOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetEmployerCompanyResponse(response *GetEmployerCompanyOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -3464,6 +3477,19 @@ func encodeMarkConversationReadResponse(response *MarkConversationReadNoContent,
 	return nil
 }
 
+func encodeMarkEmployerApplicationRepliesReadResponse(response *MarkEmployerApplicationRepliesReadOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeMarkNotificationReadResponse(response *MarkNotificationReadNoContent, w http.ResponseWriter) error {
 	w.WriteHeader(204)
 
@@ -4535,6 +4561,19 @@ func encodeSendConversationMessageResponse(response *SendConversationMessageCrea
 func encodeSendDirectApplyResponse(response *SendDirectApplyCreated, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeSendEmployerApplicationMessageResponse(response *SendEmployerApplicationMessageOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
 
 	e := new(jx.Encoder)
 	response.Encode(e)

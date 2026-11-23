@@ -1835,6 +1835,198 @@
         ]
       }
     },
+    "/employer/applications/{id}/messages": {
+      "get": {
+        "operationId": "getEmployerApplicationConversation",
+        "summary": "Read an application conversation",
+        "description": "Read the private email conversation for a delivered application in your company.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The application's ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Fetch messages older than this message ID.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerApplicationConversation"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      },
+      "post": {
+        "operationId": "sendEmployerApplicationMessage",
+        "summary": "Email a candidate",
+        "description": "Send a plain-text email to the candidate without changing their application stage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The application's ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerApplicationMessage"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployerApplicationMessageSend"
+              },
+              "example": {
+                "body": "Are you available next Tuesday?",
+                "request_key": "00000000-0000-4000-8000-000000000001"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employer/applications/{id}/messages/read": {
+      "post": {
+        "operationId": "markEmployerApplicationRepliesRead",
+        "summary": "Mark candidate replies as read",
+        "description": "Acknowledge the candidate replies the company team has seen up through this message.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The application's ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerApplicationReplyReadState"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployerApplicationRepliesRead"
+              },
+              "example": {
+                "through_id": 17
+              }
+            }
+          }
+        }
+      }
+    },
     "/employer/applications/{id}/stage": {
       "post": {
         "operationId": "moveEmployerApplication",
@@ -14187,6 +14379,10 @@
             "type": "string",
             "description": "Private notes shared within the employer team."
           },
+          "has_unread_reply": {
+            "type": "boolean",
+            "description": "A candidate reply in this conversation has not yet been read by the team."
+          },
           "sent_at": {
             "type": "string",
             "format": "date-time",
@@ -14224,6 +14420,93 @@
         },
         "description": "One answered question, as asked when the candidate applied."
       },
+      "EmployerApplicationConversation": {
+        "type": "object",
+        "required": [
+          "messages",
+          "has_more",
+          "can_send"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployerApplicationMessage"
+            },
+            "description": "Most recent first."
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Fetch older messages with the ID of the last message as before."
+          },
+          "can_send": {
+            "type": "boolean",
+            "description": "The candidate has a confirmed address and the mail transport is configured."
+          }
+        }
+      },
+      "EmployerApplicationMessage": {
+        "type": "object",
+        "required": [
+          "id",
+          "body",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "body": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EmployerApplicationMessageStatus"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this message first entered the conversation.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "request_key": {
+            "type": "string",
+            "description": "Outgoing only. Use the same key and body to retry the same send."
+          }
+        },
+        "description": "One email in a delivered application's conversation."
+      },
+      "EmployerApplicationMessageSend": {
+        "type": "object",
+        "required": [
+          "body",
+          "request_key"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "The plain-text email to the candidate."
+          },
+          "request_key": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36,
+            "description": "A UUID generated once per outgoing message. Reuse it on retry."
+          }
+        }
+      },
+      "EmployerApplicationMessageStatus": {
+        "type": "string",
+        "enum": [
+          "sending",
+          "sent",
+          "failed",
+          "received"
+        ]
+      },
       "EmployerApplicationMove": {
         "type": "object",
         "properties": {
@@ -14250,6 +14533,31 @@
           "candidate_notified": {
             "type": "boolean",
             "description": "Whether the candidate was emailed about this move. False when the stage sends no letter, nothing changed, or the letter failed."
+          }
+        }
+      },
+      "EmployerApplicationRepliesRead": {
+        "type": "object",
+        "required": [
+          "through_id"
+        ],
+        "properties": {
+          "through_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The newest message ID the team has seen in this application."
+          }
+        }
+      },
+      "EmployerApplicationReplyReadState": {
+        "type": "object",
+        "required": [
+          "has_unread_reply"
+        ],
+        "properties": {
+          "has_unread_reply": {
+            "type": "boolean",
+            "description": "True when a newer reply arrived after the messages the team has seen."
           }
         }
       },

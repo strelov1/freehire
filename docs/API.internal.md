@@ -4453,6 +4453,79 @@ The CV file the application sent, exactly as it was emailed to you: a PDF, or th
 curl "https://freehire.me/api/v1/employer/applications/<id>/cv" -b cookies.txt
 ```
 
+### `GET /employer/applications/{id}/messages`
+
+**Auth:** Session only
+
+Read an application conversation
+
+Read the private email conversation for a delivered application in your company.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | The application's ID. |
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `before` | integer (int64) | no | Fetch messages older than this message ID. |
+
+```bash
+curl "https://freehire.me/api/v1/employer/applications/<id>/messages" -b cookies.txt
+```
+
+### `POST /employer/applications/{id}/messages`
+
+**Auth:** Session only
+
+Email a candidate
+
+Send a plain-text email to the candidate without changing their application stage.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | The application's ID. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `body` | string | yes | The plain-text email to the candidate. |
+| `request_key` | string | yes | A UUID generated once per outgoing message. Reuse it on retry. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/applications/<id>/messages" -b cookies.txt -H 'Content-Type: application/json' -d '{"body":"Are you available next Tuesday?","request_key":"00000000-0000-4000-8000-000000000001"}'
+```
+
+### `POST /employer/applications/{id}/messages/read`
+
+**Auth:** Session only
+
+Mark candidate replies as read
+
+Acknowledge the candidate replies the company team has seen up through this message.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | The application's ID. |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `through_id` | integer (int64) | yes | The newest message ID the team has seen in this application. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/applications/<id>/messages/read" -b cookies.txt -H 'Content-Type: application/json' -d '{"through_id":17}'
+```
+
 ### `POST /employer/applications/{id}/stage`
 
 **Auth:** Session only

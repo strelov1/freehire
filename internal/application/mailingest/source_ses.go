@@ -56,13 +56,24 @@ type snsEnvelope struct {
 // back by mistake.
 type sesNotification struct {
 	Receipt struct {
-		Recipients []string `json:"recipients"`
+		Recipients []string   `json:"recipients"`
+		DMARC      sesVerdict `json:"dmarcVerdict"`
+		Spam       sesVerdict `json:"spamVerdict"`
+		Virus      sesVerdict `json:"virusVerdict"`
 		Action     struct {
 			Type       string `json:"type"`
 			BucketName string `json:"bucketName"`
 			ObjectKey  string `json:"objectKey"`
 		} `json:"action"`
 	} `json:"receipt"`
+}
+
+type sesVerdict struct {
+	Status string `json:"status"`
+}
+
+func (n sesNotification) authenticatedReply() bool {
+	return n.Receipt.DMARC.Status == "PASS" && n.Receipt.Spam.Status == "PASS" && n.Receipt.Virus.Status == "PASS"
 }
 
 // Receive long-polls SQS and turns each notification into an Inbound by fetching
@@ -105,10 +116,11 @@ func (s *SESSource) Receive(ctx context.Context) ([]Inbound, error) {
 			continue
 		}
 		batch = append(batch, Inbound{
-			Raw:        raw,
-			Recipients: note.Receipt.Recipients,
-			S3Key:      note.Receipt.Action.ObjectKey,
-			AckHandle:  *m.ReceiptHandle,
+			Raw:                raw,
+			Recipients:         note.Receipt.Recipients,
+			S3Key:              note.Receipt.Action.ObjectKey,
+			AckHandle:          *m.ReceiptHandle,
+			AuthenticatedReply: note.authenticatedReply(),
 		})
 	}
 	return batch, nil
