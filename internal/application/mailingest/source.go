@@ -11,6 +11,8 @@ type Inbound struct {
 	Recipients []string
 	S3Key      string
 	AckHandle  string
+	// AuthenticatedReply comes from the trusted receiving service, never a MIME header.
+	AuthenticatedReply bool
 }
 
 // InboundSource is the transport abstraction the worker consumes. Receive returns

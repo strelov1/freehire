@@ -94,6 +94,8 @@ func TestEmployerApplicationsEndToEnd(t *testing.T) {
 	notifier := &recordingStatusMailer{}
 	h := newEmployerHandlers(queries, employerSvc)
 	h.inbox = directapply.NewInbox(repo, employerSvc, notifier, directapply.NewApplicationMoves(queries, pool))
+	candidateMail := &candidateMessageTransport{}
+	h.messages = directapply.NewApplicationMessages(queries, candidateMail, "mail.example.test")
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	employerCookie, _ := iss.Issue(employerID, testTokenVersion)
@@ -125,6 +127,13 @@ func TestEmployerApplicationsEndToEnd(t *testing.T) {
 		return reply{StatusCode: resp.StatusCode, Header: resp.Header}, b
 	}
 	idPath := "/api/v1/employer/applications/" + strconv.FormatInt(appID, 10)
+
+	testEmployerApplicationMessages(t, ctx, queries, candidateMail, idPath, employerCookie, otherCookie,
+		func(t *testing.T, method, path, cookie, body string) (int, []byte) {
+			t.Helper()
+			resp, data := do(t, method, path, cookie, body)
+			return resp.StatusCode, data
+		})
 
 	t.Run("the employer lists the delivered application with stage counts", func(t *testing.T) {
 		resp, body := do(t, fiber.MethodGet, "/api/v1/employer/applications?job=acme-platform", employerCookie, "")
