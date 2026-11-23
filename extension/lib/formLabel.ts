@@ -25,7 +25,7 @@ export function extractLabel(el: Fillable): string {
   );
 }
 
-export function isChoice(el: Fillable): boolean {
+function isChoice(el: Fillable): boolean {
   return el instanceof HTMLInputElement && (el.type === 'radio' || el.type === 'checkbox');
 }
 
@@ -35,7 +35,7 @@ export function isChoice(el: Fillable): boolean {
  * descendant matching that selector; without it the ancestor's whole text counts, capped so a
  * container full of prose is not mistaken for an option.
  */
-export function visibleTextBeside(el: Fillable, only?: string): string {
+function visibleTextBeside(el: Fillable, only?: string): string {
   let box = el.parentElement;
   for (let depth = 0; box && depth < 3; depth++, box = box.parentElement) {
     if (box.querySelectorAll('input, select, textarea').length > 1) return '';
