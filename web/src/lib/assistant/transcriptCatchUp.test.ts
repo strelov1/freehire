@@ -33,3 +33,21 @@ it('clears feedback when the refreshed rehearsal has a newer answer', async () =
     undefined,
   );
 });
+
+it('ignores a refresh that started before the report finished', async () => {
+  const { promise, resolve } = Promise.withResolvers<Response>();
+  vi.stubGlobal('fetch', vi.fn().mockReturnValue(promise));
+  const show = vi.fn();
+  const transcript = new TranscriptCatchUp({
+    isSupport: false,
+    activeId: () => 'rehearsal',
+    streaming: () => false,
+    show,
+  });
+
+  const reload = transcript.reload('rehearsal');
+  transcript.invalidate();
+  resolve(Response.json({ data: { messages: [] } }));
+  await reload;
+  expect(show).not.toHaveBeenCalled();
+});
