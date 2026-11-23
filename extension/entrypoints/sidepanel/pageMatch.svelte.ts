@@ -50,7 +50,7 @@ export class PageMatch {
     if (requestId !== this.#requestId) return;
     const url = tab?.url ?? '';
 
-    const page = pageIdentity(url);
+    const page = cardPage(url);
     if (!(this.keepCard && this.status === 'ready' && this.#cardPage === page)) this.status = 'loading';
     this.error = '';
     try {
@@ -102,4 +102,11 @@ export class PageMatch {
       this.contributing = false;
     }
   };
+}
+
+/** The page a card belongs to. LinkedIn's search view picks the job by `currentJobId`, which
+ *  `pageIdentity` drops, so a dialog open on job A must not keep A's card on job B. */
+function cardPage(url: string): string {
+  const jobId = URL.canParse(url) ? new URL(url).searchParams.get('currentJobId') : null;
+  return jobId ? `${pageIdentity(url)}?currentJobId=${jobId}` : pageIdentity(url);
 }

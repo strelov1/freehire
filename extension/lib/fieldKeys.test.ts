@@ -90,6 +90,10 @@ describe('matchFieldKey with a preamble', () => {
     expect(matchFieldKey('Please tell us: what is your notice period?')).toBe('noticePeriod');
   });
 
+  it('does not read a currency question as the salary', () => {
+    expect(matchFieldKey('In which currency are your salary expectations?')).toBeNull();
+  });
+
   it('does not take a short synonym from the middle of a question', () => {
     expect(matchFieldKey('Which city would you prefer to work from?')).toBeNull();
     expect(matchFieldKey('Do you have a LinkedIn contact at our company?')).toBeNull();

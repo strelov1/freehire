@@ -153,6 +153,7 @@ export function matchFieldKey(label: string): string | null {
   for (const [key, synonyms] of entries) {
     if (synonyms.some((s) => opensWith(normalized, s))) return key;
   }
+  if (ASKS_CURRENCY.test(normalized)) return null;
   for (const [key, synonyms] of entries) {
     if (!ANYWHERE_KEYS.has(key)) continue;
     if (synonyms.some((s) => s.length >= ANYWHERE_MIN_LEN && containsWord(normalized, s))) return key;
@@ -163,6 +164,9 @@ export function matchFieldKey(label: string): string | null {
 /** The keys a preamble pushes mid-label (contract terms before the salary question). Not `city`:
  *  "How long have you lived at your current location?" asks a duration, not the city. */
 const ANYWHERE_KEYS = new Set(['desiredSalary', 'noticePeriod']);
+
+/** "In which currency are your salary expectations?" names the salary but asks a currency. */
+const ASKS_CURRENCY = /\b(currency|moeda|moneda|währung)\b/;
 
 /** The shortest synonym trusted anywhere in a label rather than only at its start. */
 const ANYWHERE_MIN_LEN = 15;
