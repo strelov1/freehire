@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync/atomic"
 
 	"golang.org/x/net/html"
 )
@@ -52,10 +53,20 @@ func (s compleo) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 	}
 
-	return fetchDetails(mine, defaultDetailWorkers, func(loc string) (Job, bool) {
-		job, found, _ := s.FetchPosting(ctx, loc)
+	var failed atomic.Pointer[error]
+	jobs := fetchDetails(mine, defaultDetailWorkers, func(loc string) (Job, bool) {
+		job, found, err := s.FetchPosting(ctx, loc)
+		if err != nil {
+			failed.CompareAndSwap(nil, &err)
+		}
 		return job, found
-	}), nil
+	})
+	// Partial reads stay a success; a board whose listed postings all failed to read must not
+	// look like an empty crawl. A listed posting that is merely gone (404/410) is not a failure.
+	if len(jobs) == 0 && failed.Load() != nil {
+		return nil, *failed.Load()
+	}
+	return jobs, nil
 }
 
 // FetchPosting reads a Compleo detail URL from the sitemap or the board recognizer.
