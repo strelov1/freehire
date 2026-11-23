@@ -525,12 +525,14 @@
     return appSync.watch(activeId);
   });
 
-  // Re-reading the stored transcript, and on returning to the tab (see TranscriptCatchUp).
   const catchUp: TranscriptCatchUp = new TranscriptCatchUp({
     isSupport,
     activeId: () => activeId,
     streaming: () => turns.active,
-    show: (next) => (chat = next),
+    show: (next, report) => {
+      chat = next;
+      interviewReport = report;
+    },
   });
 
   onMount(() => {
@@ -624,7 +626,10 @@
           {#key id}
             <RehearsalInput
               id={activeId}
-              initialReport={interviewReport}
+              report={interviewReport}
+              onReport={(report) => {
+                if (activeId === id) interviewReport = report;
+              }}
               transcript={chat.messages}
               callOpen={voiceCallOpen}
               ready={canStartTurn() && queue.length === 0}

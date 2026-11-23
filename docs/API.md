@@ -4252,7 +4252,7 @@ The proof (an offer letter, badge, anything showing you work there) is stored pr
 | `proof` | string (binary) | yes | Evidence you work there. |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/me/referrals/offers" -H "Authorization: Bearer $FREEHIRE_API_KEY" -F 'proof=@<proof>'
+curl -X POST "https://freehire.me/api/v1/me/referrals/offers" -H "Authorization: Bearer $FREEHIRE_API_KEY" -F 'company_slug=<company_slug>' -F 'proof=@<proof>'
 ```
 
 ```json

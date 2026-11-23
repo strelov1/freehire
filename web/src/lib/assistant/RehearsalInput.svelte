@@ -8,7 +8,8 @@
 
   let {
     id,
-    initialReport,
+    report,
+    onReport,
     transcript,
     callOpen,
     ready,
@@ -16,7 +17,8 @@
     children,
   }: {
     id: string;
-    initialReport?: InterviewReport;
+    report?: InterviewReport;
+    onReport: (report: InterviewReport) => void;
     transcript: ChatMessage[];
     callOpen: boolean;
     ready: boolean;
@@ -25,8 +27,6 @@
   } = $props();
 
   const s = $derived(t(messages, locale()));
-  let completedReport = $state<InterviewReport>();
-  const report = $derived(completedReport ?? initialReport);
   let busy = $state(false);
   let error = $state('');
   const hasAnswer = $derived.by(() => {
@@ -42,7 +42,7 @@
     busy = true;
     error = '';
     try {
-      completedReport = await finishInterview(id);
+      onReport(await finishInterview(id));
     } catch {
       error = s.interviewReportError;
     } finally {
