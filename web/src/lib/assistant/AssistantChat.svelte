@@ -628,7 +628,9 @@
               id={activeId}
               report={interviewReport}
               onReport={(report) => {
-                if (activeId === id) interviewReport = report;
+                if (activeId !== id) return;
+                catchUp.invalidate();
+                interviewReport = report;
               }}
               transcript={chat.messages}
               callOpen={voiceCallOpen}
