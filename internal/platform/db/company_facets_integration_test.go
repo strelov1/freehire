@@ -77,7 +77,7 @@ func TestRefreshCompanyFacets(t *testing.T) {
 		[]string{"north_america"}, []string{"us"}, `{}`)
 
 	t.Run("unions derived from open jobs only", func(t *testing.T) {
-		if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
+		if _, err := q.refreshCompanyFacets(ctx, refreshCompanyFacetsParams{}); err != nil {
 			t.Fatalf("refresh: %v", err)
 		}
 		if got := companyTextArray(t, pool, "acme", "regions"); !slices.Equal(got, []string{"asia", "europe"}) {
@@ -110,7 +110,7 @@ func TestRefreshCompanyFacets(t *testing.T) {
 	})
 
 	t.Run("re-running rewrites nothing", func(t *testing.T) {
-		rows, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{})
+		rows, err := q.refreshCompanyFacets(ctx, refreshCompanyFacetsParams{})
 		if err != nil {
 			t.Fatalf("refresh: %v", err)
 		}
@@ -122,7 +122,7 @@ func TestRefreshCompanyFacets(t *testing.T) {
 	t.Run("closing all jobs empties the facet arrays", func(t *testing.T) {
 		closeJobByExtID(t, pool, "acme:1")
 		closeJobByExtID(t, pool, "acme:2")
-		if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
+		if _, err := q.refreshCompanyFacets(ctx, refreshCompanyFacetsParams{}); err != nil {
 			t.Fatalf("refresh: %v", err)
 		}
 		for _, col := range []string{"regions", "countries", "domains", "company_types", "company_sizes"} {
@@ -154,7 +154,7 @@ func TestRefreshCompanyFacetsCountsConfirmedTechnicalJobs(t *testing.T) {
 		t.Fatalf("insert job: %v", err)
 	}
 
-	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{}); err != nil {
+	if _, err := q.refreshCompanyFacets(ctx, refreshCompanyFacetsParams{}); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
 	if got := companyTextArray(t, pool, "itonly", "regions"); !slices.Equal(got, []string{"europe"}) {
@@ -204,7 +204,7 @@ func TestRefreshCompanyFacetsSkipsUnseenPostings(t *testing.T) {
 		t.Fatalf("stamp last_seen_at: %v", err)
 	}
 
-	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{
+	if _, err := q.refreshCompanyFacets(ctx, refreshCompanyFacetsParams{
 		UnseenSources: []string{"greenhouse"},
 		UnseenSeconds: []int64{14 * 24 * 3600},
 	}); err != nil {
@@ -238,7 +238,7 @@ func TestRefreshCompanyFacetsIndustriesDerived(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 
-	mapping := RefreshCompanyFacetsParams{
+	mapping := refreshCompanyFacetsParams{
 		MappingDomains:    []string{"devtools", "fintech", "healthcare"},
 		MappingIndustries: []string{"developer-tools", "fintech", "healthcare"},
 	}
@@ -258,7 +258,7 @@ func TestRefreshCompanyFacetsIndustriesDerived(t *testing.T) {
 	insertJobWithFacets(t, pool, "wide:1", "wide",
 		[]string{"europe"}, []string{"de"}, `{"domains":["devtools","fintech","healthcare"]}`)
 
-	if _, err := q.RefreshCompanyFacets(ctx, mapping); err != nil {
+	if _, err := q.refreshCompanyFacets(ctx, mapping); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
 
@@ -281,7 +281,7 @@ func TestRefreshCompanyFacetsIndustriesDerived(t *testing.T) {
 	})
 
 	t.Run("re-running rewrites nothing", func(t *testing.T) {
-		rows, err := q.RefreshCompanyFacets(ctx, mapping)
+		rows, err := q.refreshCompanyFacets(ctx, mapping)
 		if err != nil {
 			t.Fatalf("refresh: %v", err)
 		}

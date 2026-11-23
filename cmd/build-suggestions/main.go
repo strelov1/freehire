@@ -66,10 +66,17 @@ func run() int {
 	}
 	defer releaseLock()
 
+	analytics, err := worker.AnalyticsPool(ctx, pool)
+	if err != nil {
+		log.Printf("analytics database: %v", err)
+		return 1
+	}
+	defer analytics.Close()
+
 	q := db.New(pool)
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 
-	in, err := gather(ctx, q, client, floors)
+	in, err := gather(ctx, q, db.New(analytics), client, floors)
 	if err != nil {
 		log.Printf("gather: %v", err)
 		return 1
@@ -113,9 +120,12 @@ func pruneDemand(ctx context.Context, q *db.Queries) {
 
 // gather collects everything the dictionary is built from. Titles and companies come from
 // Postgres; facet counts come from the live search index, the source the filters read, so a
-// suggestion's figure and its filter cannot disagree.
-func gather(ctx context.Context, q *db.Queries, client *search.Client, floors config.Suggest) (suggest.Input, error) {
-	titles, err := q.MineJobTitles(ctx)
+// suggestion's figure and its filter cannot disagree. The title scan is a whole-catalogue
+// GROUP BY, so it reads the analytics replica; the rest are small reads of the primary.
+func gather(ctx context.Context, q, analytics *db.Queries, client *search.Client, floors config.Suggest) (suggest.Input, error) {
+	titles, err := worker.RetryStandbyConflict(ctx, "MineJobTitles", func() ([]db.MineJobTitlesRow, error) {
+		return analytics.MineJobTitles(ctx)
+	})
 	if err != nil {
 		return suggest.Input{}, err
 	}

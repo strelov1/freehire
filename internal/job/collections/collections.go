@@ -132,7 +132,7 @@ type Collection struct {
 
 // Company is the subset of a catalogue company a Gate may consult: its canonical
 // slug, the countries it has open jobs in (job-derived, maintained by
-// RefreshCompanyFacets), and its headquarters country. Deliberately narrow: a gate is a pure
+// the facet recount in company_facets.sql), and its headquarters country. Deliberately narrow: a gate is a pure
 // decision over already-loaded facts, with no database access.
 type Company struct {
 	Slug      string

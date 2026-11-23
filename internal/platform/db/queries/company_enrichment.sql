@@ -15,7 +15,7 @@ LIMIT sqlc.arg(page_limit);
 -- affected-row count real churn, so a second run reports zero.
 --
 -- Setting a non-empty industries here immediately zeroes industries_derived rather
--- than waiting for the next RefreshCompanyFacets: that column answers only where
+-- than waiting for the next facet recount: that column answers only where
 -- industries is empty, and leaving a stale non-empty value in place would let a
 -- company just curated by cmd/import-company-industries keep matching through
 -- domains it no longer speaks for — the #2082 bug, reopened for the gap between
