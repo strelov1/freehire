@@ -168,7 +168,6 @@ func deriveGeography(in Input, title string, geo location.Geo, workMode string) 
 			return nil, []string{"global"}, in.Cities, nil
 		}
 	}
-	countries, regions = location.WithoutExcludedGeography(countries, regions, excluded, in.Location)
 	// The fallback country fills only a posting that stated NO geography — not even an
 	// explicit open-anywhere marker, which geoUnpinned counts as unpinned but which a
 	// headquarters office must not narrow to one country.
@@ -209,6 +208,8 @@ func deriveGeography(in Input, title string, geo location.Geo, workMode string) 
 			regions = structuredRegions
 		}
 	}
+	// An explicit exclusion also applies to source-provided geography.
+	countries, regions = location.WithoutExcludedGeography(countries, regions, excluded, in.Location)
 	// Parse already drops a global the location line contradicts; this applies the same
 	// rule to the final answer, whose countries and regions may come from a structured
 	// signal instead — an adapter's own country beside an "Anywhere" line, or a stored
