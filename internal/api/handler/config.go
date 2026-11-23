@@ -127,8 +127,10 @@ type Config struct {
 	TelegramWebhookSecret string
 	// GmailConnector + GmailCipher enable the Connect-Gmail inbox. Both nil = the
 	// feature is off (connect routes unregistered, inbox empty).
-	GmailConnector *gmailsync.Connector
-	GmailCipher    *tokencrypt.Cipher
+	GmailConnector                 *gmailsync.Connector
+	GmailCipher                    *tokencrypt.Cipher
+	InterviewSchedulingEnabled     bool
+	InterviewSchedulingPilotUserID int64
 	// OJCPSigner signs the OJCP manifest. Nil = the manifest is unsigned and no key set is
 	// published.
 	OJCPSigner *ojcp.Signer

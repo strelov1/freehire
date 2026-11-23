@@ -299,15 +299,18 @@ type BookingLink struct {
 }
 
 type BookingLinkBooking struct {
-	ID             int64              `json:"id"`
-	LinkID         int64              `json:"link_id"`
-	UserID         int64              `json:"user_id"`
-	StartsAt       pgtype.Timestamptz `json:"starts_at"`
-	EndsAt         pgtype.Timestamptz `json:"ends_at"`
-	RecruiterName  string             `json:"recruiter_name"`
-	RecruiterEmail string             `json:"recruiter_email"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ID                       int64              `json:"id"`
+	LinkID                   int64              `json:"link_id"`
+	UserID                   int64              `json:"user_id"`
+	StartsAt                 pgtype.Timestamptz `json:"starts_at"`
+	EndsAt                   pgtype.Timestamptz `json:"ends_at"`
+	RecruiterName            string             `json:"recruiter_name"`
+	RecruiterEmail           string             `json:"recruiter_email"`
+	Status                   string             `json:"status"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	CalendarEventKey         pgtype.UUID        `json:"calendar_event_key"`
+	CalendarInvitationNextAt pgtype.Timestamptz `json:"calendar_invitation_next_at"`
+	CalendarInvitedAt        pgtype.Timestamptz `json:"calendar_invited_at"`
 }
 
 // Send ledger for one-off campaigns. PK (user_id, campaign) = one send per pair, ever.
@@ -863,6 +866,12 @@ type EmployerActivity struct {
 	OccurredAt    pgtype.Timestamptz `json:"occurred_at"`
 }
 
+type EmployerVacancyApplyClick struct {
+	JobID  int64       `json:"job_id"`
+	Day    pgtype.Date `json:"day"`
+	Clicks int64       `json:"clicks"`
+}
+
 type EnrichmentOutbox struct {
 	ID            int64              `json:"id"`
 	JobID         int64              `json:"job_id"`
@@ -955,11 +964,12 @@ type GmailConnection struct {
 }
 
 type InboxDigestDelivery struct {
-	UserID    int64              `json:"user_id"`
-	LocalDay  pgtype.Date        `json:"local_day"`
-	EmailIds  []int64            `json:"email_ids"`
-	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
-	SentAt    pgtype.Timestamptz `json:"sent_at"`
+	UserID                int64              `json:"user_id"`
+	LocalDay              pgtype.Date        `json:"local_day"`
+	EmailIds              []int64            `json:"email_ids"`
+	ClaimedAt             pgtype.Timestamptz `json:"claimed_at"`
+	SentAt                pgtype.Timestamptz `json:"sent_at"`
+	SchedulingActivityIds []int64            `json:"scheduling_activity_ids"`
 }
 
 // Per (provider, shard) scheduling state: when the run is next due, whether a tick has claimed it, and how the last run ended. Machine-owned; curator settings live in ingest_schedule.
@@ -1124,6 +1134,38 @@ type InsightsVelocityDaily struct {
 	FacetValue string      `json:"facet_value"`
 	Added      int32       `json:"added"`
 	Removed    int32       `json:"removed"`
+}
+
+type InterviewSchedulingActivity struct {
+	ID         int64              `json:"id"`
+	UserID     int64              `json:"user_id"`
+	ThreadID   int64              `json:"thread_id"`
+	Kind       string             `json:"kind"`
+	HappenedAt pgtype.Timestamptz `json:"happened_at"`
+}
+
+type InterviewSchedulingThread struct {
+	ID               int64                `json:"id"`
+	UserID           int64                `json:"user_id"`
+	ApplicationID    int64                `json:"application_id"`
+	AnchorEmailID    int64                `json:"anchor_email_id"`
+	GmailThreadID    string               `json:"gmail_thread_id"`
+	RecruiterEmail   string               `json:"recruiter_email"`
+	Status           string               `json:"status"`
+	LastProcessedID  string               `json:"last_processed_id"`
+	LastSentID       string               `json:"last_sent_id"`
+	OfferedStarts    []pgtype.Timestamptz `json:"offered_starts"`
+	OfferZone        string               `json:"offer_zone"`
+	Language         string               `json:"language"`
+	Followups        int64                `json:"followups"`
+	FollowupAt       pgtype.Timestamptz   `json:"followup_at"`
+	SelectedStart    pgtype.Timestamptz   `json:"selected_start"`
+	NextAt           pgtype.Timestamptz   `json:"next_at"`
+	PendingBody      string               `json:"pending_body"`
+	PendingParentID  string               `json:"pending_parent_id"`
+	PendingMessageID string               `json:"pending_message_id"`
+	PendingKind      string               `json:"pending_kind"`
+	AttemptedAt      pgtype.Timestamptz   `json:"attempted_at"`
 }
 
 // One invite code per account, minted from crypto/rand the first time the account asks for its link, and never rotated. Uniqueness is the constraint here rather than a read-then-write, because a read-then-write is a race.
@@ -2068,15 +2110,17 @@ type User struct {
 	// When the one-time welcome email for this account's first paying tier was sent. NULL until sent; never cleared once set, so a later renewal or resubscription is not re-welcomed.
 	ProWelcomeSentAt pgtype.Timestamptz `json:"pro_welcome_sent_at"`
 	// When the one-time "you ran into today's limit" nudge was sent. NULL until sent; never cleared once set.
-	LimitNudgeSentAt     pgtype.Timestamptz `json:"limit_nudge_sent_at"`
-	ApiUntilStripe       pgtype.Timestamptz `json:"api_until_stripe"`
-	ApiDataUntilStripe   pgtype.Timestamptz `json:"api_data_until_stripe"`
-	AgentsMayApply       bool               `json:"agents_may_apply"`
-	LastActiveAt         pgtype.Timestamptz `json:"last_active_at"`
-	BannedAt             pgtype.Timestamptz `json:"banned_at"`
-	BanReason            pgtype.Text        `json:"ban_reason"`
-	BannedBy             pgtype.Int8        `json:"banned_by"`
-	AutoApplyConfirmEach bool               `json:"auto_apply_confirm_each"`
+	LimitNudgeSentAt                pgtype.Timestamptz `json:"limit_nudge_sent_at"`
+	ApiUntilStripe                  pgtype.Timestamptz `json:"api_until_stripe"`
+	ApiDataUntilStripe              pgtype.Timestamptz `json:"api_data_until_stripe"`
+	AgentsMayApply                  bool               `json:"agents_may_apply"`
+	LastActiveAt                    pgtype.Timestamptz `json:"last_active_at"`
+	BannedAt                        pgtype.Timestamptz `json:"banned_at"`
+	BanReason                       pgtype.Text        `json:"ban_reason"`
+	BannedBy                        pgtype.Int8        `json:"banned_by"`
+	AutoApplyConfirmEach            bool               `json:"auto_apply_confirm_each"`
+	InterviewCalendarInvitesEnabled bool               `json:"interview_calendar_invites_enabled"`
+	InterviewSchedulingEnabledAt    pgtype.Timestamptz `json:"interview_scheduling_enabled_at"`
 }
 
 type UserBlock struct {

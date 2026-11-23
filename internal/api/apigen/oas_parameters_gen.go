@@ -6410,6 +6410,72 @@ func decodeGetEmployerApplicationCVParams(args [1]string, argsEscaped bool, r *h
 	return params, nil
 }
 
+// GetEmployerVacancyAnalyticsParams is parameters of getEmployerVacancyAnalytics operation.
+type GetEmployerVacancyAnalyticsParams struct {
+	// The employer-authored vacancy's public slug.
+	Slug string
+}
+
+func unpackGetEmployerVacancyAnalyticsParams(packed middleware.Parameters) (params GetEmployerVacancyAnalyticsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeGetEmployerVacancyAnalyticsParams(args [1]string, argsEscaped bool, r *http.Request) (params GetEmployerVacancyAnalyticsParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // GetInboxParams is parameters of getInbox operation.
 type GetInboxParams struct {
 	// One account: `gmail`, `hosted`, or `external`.
@@ -15984,6 +16050,72 @@ func unpackRecordApplicationFollowUpParams(packed middleware.Parameters) (params
 }
 
 func decodeRecordApplicationFollowUpParams(args [1]string, argsEscaped bool, r *http.Request) (params RecordApplicationFollowUpParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// RecordEmployerVacancyApplyClickParams is parameters of recordEmployerVacancyApplyClick operation.
+type RecordEmployerVacancyApplyClickParams struct {
+	// The employer-authored vacancy's public slug.
+	Slug string
+}
+
+func unpackRecordEmployerVacancyApplyClickParams(packed middleware.Parameters) (params RecordEmployerVacancyApplyClickParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeRecordEmployerVacancyApplyClickParams(args [1]string, argsEscaped bool, r *http.Request) (params RecordEmployerVacancyApplyClickParams, _ error) {
 	// Decode path: slug.
 	if err := func() error {
 		param := args[0]

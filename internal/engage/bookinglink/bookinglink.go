@@ -69,6 +69,8 @@ var (
 	ErrInvalidBooking = errors.New("bookinglink: invalid booking")
 	// ErrInvalidZone → 400: turning a link on with a zone that is not an IANA place.
 	ErrInvalidZone = errors.New("bookinglink: invalid timezone")
+	// ErrCalendarUnavailable → 503 when live availability cannot be verified.
+	ErrCalendarUnavailable = errors.New("bookinglink: calendar availability unavailable")
 )
 
 // Link is one stored link. TokenSeed and TokenHash never go on the wire.
@@ -109,10 +111,16 @@ type Entitlement interface {
 	RequirePaid(ctx context.Context, userID int64) (aiplan.Tier, error)
 }
 
+// Calendar reads live busy intervals for the candidate.
+type Calendar interface {
+	Busy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error)
+}
+
 // Service turns links on and serves the public slot list and booking.
 type Service struct {
-	repo  Repository
-	plans Entitlement
+	repo     Repository
+	plans    Entitlement
+	calendar Calendar
 	// key derives a link's token from its seed, so the candidate can be shown the same URL
 	// again while the database holds only the seed and the token's hash.
 	key []byte
@@ -120,8 +128,8 @@ type Service struct {
 }
 
 // New builds the service. key must be a server secret.
-func New(repo Repository, plans Entitlement, key []byte) *Service {
-	return &Service{repo: repo, plans: plans, key: key, now: time.Now}
+func New(repo Repository, plans Entitlement, key []byte, calendar Calendar) *Service {
+	return &Service{repo: repo, plans: plans, key: key, calendar: calendar, now: time.Now}
 }
 
 func (s *Service) token(seed []byte) string {
@@ -227,7 +235,31 @@ func (s *Service) Slots(ctx context.Context, token, viewerZone string) (slots.Sl
 		return slots.SlotResult{}, err
 	}
 	now := s.now()
-	return s.slotsFor(ctx, l, zone, now, now.Add(Horizon+SlotDuration), viewerZone)
+	end := now.Add(Horizon + SlotDuration)
+	result, err := s.slotsFor(ctx, l, zone, now, end, viewerZone)
+	if err != nil || len(result.Slots) == 0 {
+		return result, err
+	}
+	busy, err := s.calendarBusy(ctx, l.UserID, now, end)
+	if err != nil {
+		return slots.SlotResult{}, err
+	}
+	// Filter complete slots so Google's arbitrary event boundaries cannot shift the grid.
+	result.Slots = slices.DeleteFunc(result.Slots, func(slot slots.Interval) bool {
+		return slices.ContainsFunc(busy, slot.Overlaps)
+	})
+	return result, nil
+}
+
+func (s *Service) calendarBusy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error) {
+	if s.calendar == nil {
+		return nil, nil
+	}
+	busy, err := s.calendar.Busy(ctx, userID, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrCalendarUnavailable, err)
+	}
+	return busy, nil
 }
 
 // BookInput is a recruiter's request for one slot.
@@ -262,6 +294,14 @@ func (s *Service) Book(ctx context.Context, in BookInput) (NewBooking, error) {
 	b := NewBooking{
 		Link: l, StartsAt: in.StartsAt.UTC(), EndsAt: in.StartsAt.UTC().Add(SlotDuration),
 		RecruiterName: name, RecruiterEmail: email,
+	}
+	busy, err := s.calendarBusy(ctx, l.UserID, b.StartsAt, b.EndsAt)
+	if err != nil {
+		return NewBooking{}, err
+	}
+	slot := slots.Interval{Start: b.StartsAt, End: b.EndsAt}
+	if slices.ContainsFunc(busy, slot.Overlaps) {
+		return NewBooking{}, ErrSlotUnavailable
 	}
 	if err := s.repo.Book(ctx, b); err != nil {
 		return NewBooking{}, err

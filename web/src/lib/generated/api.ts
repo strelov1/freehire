@@ -1195,6 +1195,26 @@ export interface paths {
         patch: operations["updateEmployerVacancy"];
         trace?: never;
     };
+    "/employer/jobs/{slug}/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a vacancy's last 30 completed days of engagement.
+         * @description Analytics for an active company team's own vacancy, including closed vacancies.
+         */
+        get: operations["getEmployerVacancyAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employer/jobs/{slug}/close": {
         parameters: {
             query?: never;
@@ -1694,6 +1714,26 @@ export interface paths {
          *     before.
          */
         post: operations["markApplied"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{slug}/apply-click": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a vacancy Apply click.
+         * @description Records an Apply button click on an open, public employer vacancy.
+         */
+        post: operations["recordEmployerVacancyApplyClick"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8176,6 +8216,24 @@ export interface components {
         EmployerTeamToken: {
             token?: string;
         };
+        /** @description Counts for the last 30 completed UTC days. Apply clicks begin at rollout. */
+        EmployerVacancyAnalytics: {
+            /**
+             * Format: int64
+             * @description Daily unique visitors from the page-view rollup, summed across the window.
+             */
+            views: number;
+            /**
+             * Format: int64
+             * @description Apply button clicks on the vacancy page.
+             */
+            apply_clicks: number;
+            /**
+             * Format: int64
+             * @description Applications delivered through Freehire.
+             */
+            applications: number;
+        };
         /** @description `title` is required, and `url` too unless `apply_mode` is "freehire". */
         EmployerVacancyCreate: {
             apply_mode?: string;
@@ -13687,6 +13745,49 @@ export interface operations {
             };
         };
     };
+    getEmployerVacancyAnalytics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The employer-authored vacancy's public slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "views": 40,
+                     *         "apply_clicks": 10,
+                     *         "applications": 3
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["EmployerVacancyAnalytics"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     closeEmployerVacancy: {
         parameters: {
             query?: never;
@@ -15026,6 +15127,36 @@ export interface operations {
                         data: components["schemas"]["AppliedInteraction"];
                     };
                 };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    recordEmployerVacancyApplyClick: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The employer-authored vacancy's public slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description There is no content to send for this request, but the headers may be useful. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description An unexpected error response. */
             default: {

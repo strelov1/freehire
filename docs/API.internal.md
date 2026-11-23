@@ -291,6 +291,8 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 | `watchlist` | Your watchlist: companies you follow | true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it |
 
+| `new_hiring` | Just started hiring: companies that began hiring this month | true — companies with nothing open for the 90 days before the last 30 that then posted, recomputed daily (the companies `/insights/companies?sort=new` lists, without its `min_open` floor); empty until the first daily run. Not applied by alerts or by `/jobs/facets`, so its counts ignore it |
+
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |
@@ -4721,6 +4723,34 @@ curl -X POST "https://freehire.me/api/v1/employer/jobs" -b cookies.txt
 
 ```bash
 curl -X PATCH "https://freehire.me/api/v1/employer/jobs/<slug>" -b cookies.txt
+```
+
+### `GET /employer/jobs/{slug}/analytics`
+
+**Auth:** Session only
+
+Read a vacancy's last 30 completed days of engagement.
+
+Analytics for an active company team's own vacancy, including closed vacancies.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The employer-authored vacancy's public slug. |
+
+```bash
+curl "https://freehire.me/api/v1/employer/jobs/<slug>/analytics" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "views": 40,
+    "apply_clicks": 10,
+    "applications": 3
+  }
+}
 ```
 
 ### `POST /employer/jobs/{slug}/close`

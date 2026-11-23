@@ -4,7 +4,7 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-23T01:23:23+00:00
+  at: 2026-11-23T10:42:40+00:00
 sources:
   - resource: ../../internal/ingest/sources/providers/jobsacuk.md
   - resource: ../../internal/ingest/sources/providers/charityjob.md
@@ -31,6 +31,8 @@ sources:
   - resource: ../../internal/ingest/sources/linkedin_related.go
   - resource: ../../internal/ingest/sources/scraplingtier.go
   - resource: ../../cmd/ingest/native_discovery_company.go
+  - resource: ../../cmd/ingest/native_discovery.go
+  - resource: ../../internal/ingest/boardresolve/company.go
   - resource: ../../cmd/reindex/summary.go
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/AGENTS.md
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/internal/ingest/AGENTS.md
@@ -79,6 +81,12 @@ public slug. Employer website discovery onboards native boards for the existing 
 so the ATS adapter owns subsequent updates and closure. See the
 [LinkedIn provider reference](../../internal/ingest/sources/providers/linkedin.md) and
 [ownership curator](../agents/workers/ops.md#promote-job-source).
+
+Search the ingest journal for `linkedin_ats_unresolved` to investigate missing ATS
+coverage. The reason distinguishes an unresolved Apply destination, an unresolved career
+site, a missing employer website, and a detected provider without a usable adapter.
+The event includes the LinkedIn posting ID and stores only the hostnames from URLs.
+Use observed career hosts as leads when checking coverage.
 
 The shared link intake accepts LinkedIn job URLs. Configured Scrapling transport is applied
 only to its LinkedIn adapter; other URL resolvers keep their guarded client. It verifies

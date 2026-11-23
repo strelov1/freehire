@@ -3,8 +3,8 @@ type: Reference
 title: Application architecture
 description: Find the module that owns a Freehire change.
 generated:
-  by: codex/gpt-6.1-sol
-  at: 2026-11-16T17:00:33-03:00
+  by: codex
+  at: 2026-11-23T11:11:34+00:00
 sources:
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/AGENTS.md
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/internal/platform/AGENTS.md
@@ -12,6 +12,8 @@ sources:
   - resource: ../../internal/candidate/cv/AGENT-REFERENCE.md
   - resource: ../../internal/api/handler/feed.go
   - resource: ../../internal/platform/db/queries/feed_state.sql
+  - resource: ../../internal/platform/db/queries/employer_analytics.sql
+  - resource: ../../internal/application/viewlog/AGENTS.md
 ---
 
 Freehire aggregates IT jobs through a Go API and workers, with PostgreSQL,
@@ -47,3 +49,11 @@ requirement report normalization belongs to the CV store. Follow the current
 [assistant contract](../../internal/ai/assistant/AGENT-REFERENCE.md) and
 [CV report contract](../../internal/candidate/cv/AGENT-REFERENCE.md). These relative sources
 describe the working checkout; they do not assert production deployment.
+
+## Employer vacancy analytics
+
+The private vacancy report scopes reads to the active company team. It combines
+the [page-view rollup](../../internal/application/viewlog/AGENTS.md), Apply button
+clicks from the public vacancy page, and delivered Freehire applications over
+the same 30 completed UTC days. The [SQL queries](../../internal/platform/db/queries/employer_analytics.sql)
+read daily unique page views and store only aggregate click counts.

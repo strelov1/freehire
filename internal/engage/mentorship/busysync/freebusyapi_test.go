@@ -180,3 +180,21 @@ func TestListBusyWrapsAFailingResponse(t *testing.T) {
 		t.Error("a 403 must be classified as a revoked grant")
 	}
 }
+
+func TestListBusyStrictRejectsIncompleteAvailability(t *testing.T) {
+	for _, body := range []string{
+		`{"calendars":{}}`,
+		`{"calendars":{"primary":null}}`,
+		`{"calendars":{"primary":{}}}`,
+		`{"calendars":{"primary":{"busy":[{"start":"not-a-time","end":"2026-08-13T10:00:00Z"}]}}}`,
+		`{"calendars":{"primary":{"busy":[{"start":"2026-08-13T11:00:00Z","end":"2026-08-13T10:00:00Z"}]}}}`,
+	} {
+		reader, _ := readerAgainst(t, func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(body))
+		})
+		from := time.Date(2026, 8, 13, 0, 0, 0, 0, time.UTC)
+		if _, err := reader.ListBusyStrict(context.Background(), from, from.Add(24*time.Hour)); err == nil {
+			t.Errorf("incomplete calendar answer accepted: %s", body)
+		}
+	}
+}

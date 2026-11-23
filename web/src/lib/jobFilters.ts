@@ -46,6 +46,12 @@ export interface JobFilters {
    *  `watchlist=true` is the alert, and the digest matcher resolves it against its
    *  owner's list. Signed out, the server ignores it and says so in `meta.ignored_params`. */
   watchlist: boolean;
+  /** "Just started hiring": keep only postings at companies that had nothing open for 90
+   *  days and started hiring in the last 30, resolved by the server from the company
+   *  rollup. Serialized as `new_hiring=true`, true-or-absent. The same for every reader,
+   *  but the digest matcher cannot resolve it, so it never reaches a saved search (see
+   *  savedSearchQuery). */
+  newHiring: boolean;
   /** Keep only postings whose captured application form requires at most this many
    *  questions beyond the CV and contact details (null = no bound). The filter modal's
    *  "Short application" toggle writes SHORT_APPLICATION_MAX; any other bound arrives

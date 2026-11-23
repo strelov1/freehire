@@ -118,6 +118,17 @@ func (c *Connector) Exchange(ctx context.Context, code string) (refreshToken, em
 	return tok.RefreshToken, email, GrantedScopes(tok), nil
 }
 
+// SchedulingAuthCodeURL requests explicit Gmail sending and Calendar writing consent.
+// It reuses the already registered Gmail redirect, with a separate CSRF state.
+func (c *Connector) SchedulingAuthCodeURL(state string) string {
+	cfg := *c.cfg
+	cfg.Scopes = []string{GmailReadonlyScope, GmailSendScope, CalendarScope, CalendarEventsScope}
+	return cfg.AuthCodeURL(state, oauth2.AccessTypeOffline,
+		oauth2.SetAuthURLParam("prompt", "consent"),
+		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
+	)
+}
+
 // GrantedScopes reads what Google says the grant actually covers.
 //
 // Authoritative, so recorded as-is rather than unioned with what we held: a union only grows,

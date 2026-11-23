@@ -3,7 +3,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"log"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
@@ -11,6 +14,56 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
+
+type unrecognizedLinkedInBoard struct{}
+
+func (unrecognizedLinkedInBoard) Resolve(context.Context, string) (string, string, string, bool) {
+	return "", "", "", false
+}
+
+func (unrecognizedLinkedInBoard) ResolveCompany(context.Context, string) (string, string, string, bool) {
+	return "", "", "", false
+}
+
+func (unrecognizedLinkedInBoard) ResolveCompanyWithCareerHosts(context.Context, string) (string, string, string, []string, bool) {
+	return "", "", "", []string{"apply.vendor.example"}, false
+}
+
+func TestLinkedInUnresolvedATSLogsObservedHost(t *testing.T) {
+	pool := testdb.Pool(t)
+	resolver := newNativeDiscovery(pool, sources.Taxonomy(), nil)
+	resolver.importer = linkimport.New(pool, resolver.q, nil, nil, resolver.registry, unrecognizedLinkedInBoard{})
+	var logs bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(previous) })
+
+	entry := sources.CompanyEntry{Provider: "linkedin", Board: "engineer"}
+	for _, tc := range []struct {
+		id, company, apply, website, want string
+		wantError                         bool
+	}{
+		{"100001", "Direct", "https://apply.vendor.example/opening?token=private-fixture-value", "", `reason=apply_destination_unresolved apply_host="apply.vendor.example"`, true},
+		{"100002", "Careers", "", "https://employer.example/careers?token=private-fixture-value", `reason=career_site_unresolved employer_host="employer.example" career_hosts="apply.vendor.example"`, false},
+		{"100003", "Missing", "", "", `reason=no_employer_website`, false},
+	} {
+		t.Run(tc.company, func(t *testing.T) {
+			logs.Reset()
+			err := resolver.Resolve(context.Background(), entry, sources.Job{
+				ExternalID: tc.id, URL: sources.LinkedInPostingURL(tc.id), Company: tc.company,
+				ApplyMethod: sources.ApplyExternal, ExternalApplyURL: tc.apply, CompanyWebsite: tc.website,
+			})
+			if (err != nil) != tc.wantError {
+				t.Fatalf("Resolve error = %v, want error %t", err, tc.wantError)
+			}
+			got := logs.String()
+			if !strings.Contains(got, `linkedin_ats_unresolved posting_id="`+tc.id+`"`) ||
+				!strings.Contains(got, tc.want) || strings.Contains(got, "private-fixture-value") {
+				t.Fatalf("unexpected ATS log: %q", got)
+			}
+		})
+	}
+}
 
 type companyBoardFixture struct{}
 

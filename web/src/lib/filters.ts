@@ -139,6 +139,10 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, watchlist: on });
   }
 
+  setNewHiring(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, newHiring: on });
+  }
+
   setApplyQuestionsMax(n: number | null) {
     this.#url.setNow({ ...this.#url.value, applyQuestionsMax: n });
   }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -53,14 +54,24 @@ func (d *nativeDiscovery) resolveCompany(ctx context.Context, discovered sources
 }
 
 func (d *nativeDiscovery) discoverCompanyBoard(ctx context.Context, slug string, discovered sources.Job) (bool, error) {
-	destination, canonical, err := d.importer.LinkedInEmployerBoard(ctx, slug, discovered)
+	destination, canonical, evidence, err := d.importer.LinkedInEmployerBoard(ctx, slug, discovered)
 	if err != nil {
 		return false, err
 	}
 	source, board := destination.Source, destination.Board
 	found := source != "" && board != ""
 	if !found || d.registry[source] == nil || sources.ProviderKind(d.registry, source) != "ats" {
-		log.Printf("ingest: no native ATS discovered for %s; not publishing as LinkedIn", discovered.ExternalID)
+		if ctx.Err() == nil {
+			reason := "career_site_unresolved"
+			switch {
+			case evidence.Provider != "":
+				reason = "ats_adapter_unavailable"
+			case evidence.WebsiteHost == "":
+				reason = "no_employer_website"
+			}
+			log.Printf("ingest: linkedin_ats_unresolved posting_id=%q company=%q apply_method=%q reason=%s employer_host=%q career_hosts=%q detected_provider=%q",
+				discovered.ExternalID, discovered.Company, discovered.ApplyMethod, reason, evidence.WebsiteHost, strings.Join(evidence.CareerHosts, ","), evidence.Provider)
+		}
 		return false, nil
 	}
 	tx, err := d.pool.Begin(ctx)

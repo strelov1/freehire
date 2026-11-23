@@ -58,7 +58,9 @@ type Settings struct {
 
 	// GmailTokenKey is the 32-byte AES key (GMAIL_TOKEN_KEY, base64) that encrypts stored
 	// Gmail refresh tokens. Empty or invalid disables the Connect-Gmail feature.
-	GmailTokenKey []byte
+	GmailTokenKey                  []byte
+	InterviewSchedulingEnabled     bool
+	InterviewSchedulingPilotUserID int64
 
 	// MailboxDomain is the receiving domain hosted mailboxes live on (<handle>@MailboxDomain).
 	// Empty turns the hosted-mailbox option off. Not named MAIL_DOMAIN: that reads like the SES
@@ -298,33 +300,35 @@ const defaultAssistantMaxPrompt = 8000
 // Load reads configuration from the environment, falling back to sensible defaults.
 func Load() Settings {
 	s := Settings{
-		Env:                     env("ENV", "development"),
-		LLM:                     LoadLLM(),
-		Port:                    env("PORT", "8080"),
-		MetricsPort:             os.Getenv("METRICS_PORT"),
-		AgentViewLogDir:         os.Getenv("AGENT_VIEW_LOG_DIR"),
-		DatabaseURL:             env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
-		FrontendOrigin:          env("FRONTEND_ORIGIN", "http://localhost:5173"),
-		AuthIntrospectionSecret: strings.TrimSpace(os.Getenv("AUTH_INTROSPECTION_SECRET")),
-		JWTSecret:               os.Getenv("JWT_SECRET"),
-		JWTTTL:                  envDuration("JWT_TTL", 30*24*time.Hour),
-		CookieSecure:            envBool("COOKIE_SECURE", false),
-		CookieDomains:           splitDomains(os.Getenv("COOKIE_DOMAIN")),
-		OAuth:                   loadOAuth(),
-		AuthV2Enabled:           envBool("AUTH_V2_ENABLED", false),
-		MeFeedEnabled:           envBool("ME_FEED_ENABLED", false),
-		MobileAuthCallbacks:     parseNamedValues(os.Getenv("MOBILE_AUTH_CALLBACKS")),
-		AppleNativeClientID:     strings.TrimSpace(os.Getenv("APPLE_NATIVE_CLIENT_ID")),
-		OJCPSigningKeyFile:      strings.TrimSpace(os.Getenv("OJCP_SIGNING_KEY_FILE")),
-		AppleGrantActiveKeyID:   strings.TrimSpace(os.Getenv("APPLE_GRANT_ACTIVE_KEY_ID")),
-		AppleGrantKeys:          parseKeyRing(os.Getenv("APPLE_GRANT_KEYS")),
-		RecentAuthTTL:           envDuration("RECENT_AUTH_TTL", 10*time.Minute),
-		GmailTokenKey:           decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
-		MailboxDomain:           os.Getenv("MAILBOX_DOMAIN"),
-		TypesafeAPIKey:          os.Getenv("TYPESAFE_API_KEY"),
-		MeiliURL:                env("MEILI_URL", "http://localhost:7700"),
-		MeiliKey:                os.Getenv("MEILI_MASTER_KEY"),
-		RedisURL:                env("REDIS_URL", "redis://localhost:6379/0"),
+		Env:                            env("ENV", "development"),
+		LLM:                            LoadLLM(),
+		Port:                           env("PORT", "8080"),
+		MetricsPort:                    os.Getenv("METRICS_PORT"),
+		AgentViewLogDir:                os.Getenv("AGENT_VIEW_LOG_DIR"),
+		DatabaseURL:                    env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
+		FrontendOrigin:                 env("FRONTEND_ORIGIN", "http://localhost:5173"),
+		AuthIntrospectionSecret:        strings.TrimSpace(os.Getenv("AUTH_INTROSPECTION_SECRET")),
+		JWTSecret:                      os.Getenv("JWT_SECRET"),
+		JWTTTL:                         envDuration("JWT_TTL", 30*24*time.Hour),
+		CookieSecure:                   envBool("COOKIE_SECURE", false),
+		CookieDomains:                  splitDomains(os.Getenv("COOKIE_DOMAIN")),
+		OAuth:                          loadOAuth(),
+		AuthV2Enabled:                  envBool("AUTH_V2_ENABLED", false),
+		MeFeedEnabled:                  envBool("ME_FEED_ENABLED", false),
+		MobileAuthCallbacks:            parseNamedValues(os.Getenv("MOBILE_AUTH_CALLBACKS")),
+		AppleNativeClientID:            strings.TrimSpace(os.Getenv("APPLE_NATIVE_CLIENT_ID")),
+		OJCPSigningKeyFile:             strings.TrimSpace(os.Getenv("OJCP_SIGNING_KEY_FILE")),
+		AppleGrantActiveKeyID:          strings.TrimSpace(os.Getenv("APPLE_GRANT_ACTIVE_KEY_ID")),
+		AppleGrantKeys:                 parseKeyRing(os.Getenv("APPLE_GRANT_KEYS")),
+		RecentAuthTTL:                  envDuration("RECENT_AUTH_TTL", 10*time.Minute),
+		GmailTokenKey:                  decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
+		InterviewSchedulingEnabled:     envBool("INTERVIEW_SCHEDULING_ENABLED", false),
+		InterviewSchedulingPilotUserID: interviewSchedulingPilotUserID(),
+		MailboxDomain:                  os.Getenv("MAILBOX_DOMAIN"),
+		TypesafeAPIKey:                 os.Getenv("TYPESAFE_API_KEY"),
+		MeiliURL:                       env("MEILI_URL", "http://localhost:7700"),
+		MeiliKey:                       os.Getenv("MEILI_MASTER_KEY"),
+		RedisURL:                       env("REDIS_URL", "redis://localhost:6379/0"),
 
 		AutoApplyOrchestratorSecret: os.Getenv("AUTO_APPLY_ORCHESTRATOR_SECRET"),
 		InngestEventAPIURL:          os.Getenv("INNGEST_EVENT_API_URL"),
@@ -427,4 +431,11 @@ func loadOAuth() map[string]OAuthCredentials {
 		}
 	}
 	return creds
+}
+
+func interviewSchedulingPilotUserID() int64 {
+	if strings.TrimSpace(os.Getenv("INTERVIEW_SCHEDULING_PILOT_USER_ID")) == "" {
+		return 0
+	}
+	return int64(envInt("INTERVIEW_SCHEDULING_PILOT_USER_ID", -1))
 }

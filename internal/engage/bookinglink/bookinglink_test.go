@@ -78,7 +78,7 @@ const owner = 7
 var now = time.Date(2026, 11, 16, 6, 0, 0, 0, time.UTC)
 
 func newTestService(repo *fakeRepo, paid bool) *Service {
-	s := New(repo, fakePlans{owner: paid}, []byte("test-key"))
+	s := New(repo, fakePlans{owner: paid}, []byte("test-key"), nil)
 	s.now = func() time.Time { return now }
 	return s
 }
@@ -226,7 +226,7 @@ func TestBookRefusesBadInputBeforeReadingTheLink(t *testing.T) {
 
 func TestTokenForHealsAHashAfterTheKeyChanged(t *testing.T) {
 	_, repo, old := enabled(t)
-	s := New(repo, fakePlans{owner: true}, []byte("rotated-key"))
+	s := New(repo, fakePlans{owner: true}, []byte("rotated-key"), nil)
 	tok, ok, err := s.TokenFor(context.Background(), owner, 42)
 	if err != nil || !ok || tok == old {
 		t.Fatalf("TokenFor = %q, %v, %v", tok, ok, err)

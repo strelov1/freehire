@@ -31,10 +31,20 @@ export function canonicalQuery(query: string): string {
  *  reader's experience bank, and the digest matcher replays a stored query with no reader
  *  to resolve it for — an alert carrying it would mail the whole catalogue. The watchlist
  *  is the opposite case and stays: the matcher resolves it against the list of the
- *  search's owner. */
+ *  search's owner. "Just started hiring" is dropped like "Hiring again": the matcher does
+ *  not resolve it either. */
 export function savedSearchQuery(f: JobFilters): string {
   // Neither feed preference can be replayed by a digest.
-  return filtersToParams({ ...f, sort: null, hideSeen: false, formerEmployers: false }).toString();
+  return filtersToParams({ ...f, sort: null, hideSeen: false, formerEmployers: false, newHiring: false }).toString();
+}
+
+/** The on filter a saved search would silently drop, named as the UI labels it, or null.
+ *  Saving is blocked while one is on: the stored query, and any alert on it, would be
+ *  wider than the list on screen. */
+export function unsavableFilter(f: JobFilters): string | null {
+  if (f.formerEmployers) return 'Hiring again';
+  if (f.newHiring) return 'Just started hiring';
+  return null;
 }
 
 /** Whether a saved query can carry alerts: mirrors the server's search.Narrows, which
@@ -44,7 +54,9 @@ export function savedSearchQuery(f: JobFilters): string {
 export function queryNarrows(query: string): boolean {
   const f = filtersFromParams(new URLSearchParams(query));
   if (f.q.trim() !== '') return true;
-  return activeFilterCount({ ...f, minSkillMatch: null, hideSeen: false, formerEmployers: false }) > 0;
+  return (
+    activeFilterCount({ ...f, minSkillMatch: null, hideSeen: false, formerEmployers: false, newHiring: false }) > 0
+  );
 }
 
 // ---- per-value sign transitions (pure: FacetState -> FacetState) ----
