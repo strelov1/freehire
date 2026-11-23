@@ -65,6 +65,23 @@ SET company = sqlc.arg(company)
 WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board))
   AND region = sqlc.arg(region) AND status IN ('pending', 'active');
 
+-- name: GetLiveBoardCompany :one
+-- The stored spelling and company of the live board UpdateBoardCompany would rename, so
+-- cmd/add-board --rename can move that board's jobs off the old name too. sibling_regions
+-- counts the same board name live in ANOTHER region: external_id carries no region, so while
+-- one is live the two regions' postings cannot be told apart and the jobs move is refused,
+-- as CloseRetiredBoardJobs refuses its close.
+SELECT b.board, b.company,
+    (SELECT count(*) FROM boards o
+     WHERE o.provider = b.provider AND lower(o.board) = lower(b.board)
+       AND o.region <> b.region AND o.status IN ('pending', 'active'))::bigint AS sibling_regions
+FROM boards b
+WHERE b.provider = sqlc.arg(provider) AND lower(b.board) = lower(sqlc.arg(board))
+  AND b.region = sqlc.arg(region) AND b.status IN ('pending', 'active')
+ORDER BY b.id DESC
+LIMIT 1
+FOR UPDATE OF b;
+
 -- name: RenameSlugBoardCompany :execrows
 -- Carry a display name cmd/backfill-company-names resolved back to the board it came
 -- from. An adapter copies boards.company onto every posting and the job upsert writes

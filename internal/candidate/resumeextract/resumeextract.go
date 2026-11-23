@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -93,15 +94,16 @@ func (e *Extractor) generate(ctx context.Context, modelText string, schema llmsc
 	return s, nil
 }
 
-// Extract sends the bounded CV text to the model in JSON mode and returns the sanitized
-// structure. It returns ErrDisabled when unconfigured; a transport or parse failure is
-// returned as an error.
+// Extract sends the complete CV text to the model in JSON mode and returns the sanitized
+// structure. It rejects oversized input before calling the model.
 func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, error) {
 	if !e.Enabled() {
 		return Structured{}, ErrDisabled
 	}
-	// Bound once, before extraction and date validation, so both see the same evidence.
-	cvText = llm.TrimTruncateRunes(cvText, maxCVRunes)
+	cvText = strings.TrimSpace(cvText)
+	if len(cvText) > maxCVTextBytes {
+		return Structured{}, fmt.Errorf("resumeextract: CV text exceeds %d bytes", maxCVTextBytes)
+	}
 	schema, err := requestSchema()
 	if err != nil {
 		return Structured{}, err
@@ -132,8 +134,8 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	return s, nil
 }
 
-// maxCVRunes bounds the CV text sent to the model and keeps the call responsive.
-const maxCVRunes = 12000
+// Bound the model input independently of the PDF text extraction limit.
+const maxCVTextBytes = 256 * 1024
 
 // systemPrompt pairs with the request schema (schema.go): the schema fixes the shape,
 // this the meaning. Every field is required, so "cannot fill" must be null, not an absent
@@ -151,6 +153,8 @@ Rules:
   total_years (years of professional experience as a plain number written as a string, e.g. "6";
     best estimate; "0" if unclear),
   experience (array of {title, company, location, start, end, current, summary, highlights, stack};
+    include distinct roles throughout the CV, including earlier positions. Prioritize listing
+    those positions over repeating detailed achievements;
     start/end are objects {"year": <integer>, "month": <integer 1-12, omit if the CV gives no month>} —
     interpret whatever the CV prints ("2021-03" -> {"year":2021,"month":3}, "2021" -> {"year":2021},
     "March 2021" -> {"year":2021,"month":3}); for a role that has not ended ("Present", "Current", or no
@@ -174,5 +178,5 @@ Rules:
 - Return null for any field you cannot fill from the CV, and null for every field if the text is not a résumé.`
 
 func userPrompt(cvText string) string {
-	return "CV text:\n" + llm.TrimTruncateRunes(cvText, maxCVRunes)
+	return "CV text:\n" + cvText
 }

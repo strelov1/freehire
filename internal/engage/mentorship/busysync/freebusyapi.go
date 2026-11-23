@@ -63,6 +63,15 @@ type freeBusyResponse struct {
 // ListBusy returns the mentor's busy periods over a window from the primary calendar's
 // free/busy state: no title, attendee or identifier.
 func (r *APIReader) ListBusy(ctx context.Context, from, to time.Time) ([]BusyPeriod, error) {
+	return r.listBusy(ctx, from, to, false)
+}
+
+// ListBusyStrict requires a complete primary-calendar answer for live bookings.
+func (r *APIReader) ListBusyStrict(ctx context.Context, from, to time.Time) ([]BusyPeriod, error) {
+	return r.listBusy(ctx, from, to, true)
+}
+
+func (r *APIReader) listBusy(ctx context.Context, from, to time.Time, strict bool) ([]BusyPeriod, error) {
 	reqBody, err := json.Marshal(freeBusyRequest{
 		TimeMin: from.Format(time.RFC3339),
 		TimeMax: to.Format(time.RFC3339),
@@ -97,18 +106,24 @@ func (r *APIReader) ListBusy(ctx context.Context, from, to time.Time) ([]BusyPer
 		// gmailsync.APIError, so it is an ordinary sync failure, not a revocation.
 		return nil, fmt.Errorf("calendar: freeBusy could not read the primary calendar: %s", primary.Errors[0].Reason)
 	}
+	if strict && primary.Busy == nil {
+		return nil, fmt.Errorf("calendar: free/busy response omitted the primary calendar's busy periods")
+	}
 	out := make([]BusyPeriod, 0, len(primary.Busy))
 	for _, p := range primary.Busy {
-		start, err := time.Parse(time.RFC3339, p.Start)
-		if err != nil {
+		start, startErr := time.Parse(time.RFC3339, p.Start)
+		end, endErr := time.Parse(time.RFC3339, p.End)
+		if strict && (startErr != nil || endErr != nil || !end.After(start)) {
+			return nil, fmt.Errorf("calendar: invalid free/busy period")
+		}
+		if startErr != nil {
 			// Busy periods are always timed instants, never date-only. One that fails to parse
 			// is dropped, not fatal (it must not cost the mentor every other period), but
 			// logged: a dropped period is a silently un-blocked slot.
 			log.Printf("mentor-busy-sync: dropping a busy period with an unparseable start %q", p.Start)
 			continue
 		}
-		end, err := time.Parse(time.RFC3339, p.End)
-		if err != nil {
+		if endErr != nil {
 			log.Printf("mentor-busy-sync: dropping a busy period with an unparseable end %q", p.End)
 			continue
 		}

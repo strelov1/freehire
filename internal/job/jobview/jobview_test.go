@@ -521,3 +521,56 @@ func TestFromRow_CarriesClosedAt(t *testing.T) {
 		t.Fatalf("open job ClosedAt = %v, want nil", *open.ClosedAt)
 	}
 }
+
+func TestFromRow_DescriptionGeographySurvivesEnrichment(t *testing.T) {
+	t.Run("worldwide arrangement survives stale office enrichment", func(t *testing.T) {
+		view, err := FromRow(db.Job{ID: 1, PublicSlug: "x-1", WorkMode: "remote",
+			Regions: []string{"global"}, Location: "Remote / Boston / San Francisco",
+			Description: "We accommodate 100% remote work, with teammates living around the globe and paid in their local currency.",
+			Enrichment:  []byte(`{"countries":["us"],"regions":["north_america"],"cities":["Boston"]}`),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(view.Countries) != 0 || !slices.Equal(view.Regions, []string{"global"}) || len(view.Cities) != 0 {
+			t.Errorf("geography = %v / %v / %v, want [] / [global] / []", view.Countries, view.Regions, view.Cities)
+		}
+	})
+	t.Run("region-only fallback cannot restore global after an exclusion", func(t *testing.T) {
+		view, err := FromRow(db.Job{ID: 1, PublicSlug: "x-1", WorkMode: "remote",
+			Description: "This role is remote worldwide, except in Germany.",
+			Enrichment:  []byte(`{"regions":["global"]}`),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(view.Regions) != 0 {
+			t.Errorf("regions = %v, want none", view.Regions)
+		}
+	})
+	t.Run("city fallback cannot restore an excluded place on pinned geography", func(t *testing.T) {
+		view, err := FromRow(db.Job{ID: 1, PublicSlug: "x-1", WorkMode: "remote",
+			Countries: []string{"ca"}, Regions: []string{"north_america"},
+			Description: "This role is remote worldwide, except in Germany.",
+			Enrichment:  []byte(`{"cities":["Berlin, Germany","Toronto, Canada"]}`),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(view.Cities, []string{"Toronto"}) {
+			t.Errorf("cities = %v, want [Toronto]", view.Cities)
+		}
+	})
+	t.Run("fallback cannot reintroduce excluded countries", func(t *testing.T) {
+		view, err := FromRow(db.Job{ID: 1, PublicSlug: "x-1", WorkMode: "remote",
+			Description: "We cannot accept applications from candidates based in France or Germany for this role.",
+			Enrichment:  []byte(`{"countries":["fr","de","ca"],"regions":["eu","north_america"]}`),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(view.Countries, []string{"ca"}) {
+			t.Errorf("countries = %v, want [ca]", view.Countries)
+		}
+	})
+}

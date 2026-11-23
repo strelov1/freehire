@@ -23,6 +23,7 @@
     matchSortNeedsSkills,
     selectedSortFor,
     activeFilterCount,
+    activeCompanySet,
     displayQuery,
   } from '#lib/filters.js';
   import JobListControls from './JobListControls.svelte';
@@ -61,9 +62,11 @@
   // the embedded company list must not clobber the shared key. Persistence is
   // fixed for the store's life, so the initial `standalone` and `initialParams`
   // are captured once.
-  const seedParams = untrack(() =>
-    initialParams != null ? new URLSearchParams(initialParams) : new URLSearchParams(page.url.search),
-  );
+  const seedParams = untrack(() => {
+    const p = initialParams != null ? new URLSearchParams(initialParams) : new URLSearchParams(page.url.search);
+    // A scoped list never sends it (see scopedParams), so it must not show as applied either.
+    return standalone ? p : new URLSearchParams([...p].filter(([k]) => k !== 'new_hiring'));
+  });
   const filters = new FilterStore(
     seedParams,
     untrack(() => standalone),
@@ -78,6 +81,7 @@
       p.delete('hide_seen');
       p.delete('former_employers');
       p.delete('watchlist');
+      p.delete('new_hiring');
     }
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return p;
@@ -121,8 +125,9 @@
 
   // The live facet distribution (see FeedCounts).
   const feedCounts = new FeedCounts(scopedParams);
-  // Facet counts cannot apply the former-employer constraint.
-  const counts = $derived(filters.value.formerEmployers || filters.value.watchlist ? null : feedCounts.catalog);
+  // /jobs/facets and the map ignore the company sets, so their counts and pins would be wider.
+  const companySetFilter = $derived(activeCompanySet(filters.value));
+  const counts = $derived(companySetFilter ? null : feedCounts.catalog);
   // The map dialog reads and writes `filters` itself, so a click on the map narrows the
   // list behind it. Its module (the land outline among it) loads on the first open only.
   let mapOpen = $state(false);
@@ -398,7 +403,7 @@
 <!-- Opens the current search on a world map, over the list rather than instead of it. -->
 {#snippet mapButton()}
   <JobsMapButtons
-    blockedBy={filters.value.formerEmployers ? 'formerEmployers' : filters.value.watchlist ? 'watchlist' : null}
+    blockedBy={companySetFilter}
     onMap={() => {
       mapLoaded = true;
       mapOpen = true;
@@ -482,7 +487,7 @@
   </div>
 </div>
 
-{#if standalone && mapLoaded && !filters.value.formerEmployers && !filters.value.watchlist}
+{#if standalone && mapLoaded && !companySetFilter}
   {#await import('./map/JobsMapDialog.svelte') then { default: JobsMapDialog }}
     <JobsMapDialog bind:open={mapOpen} store={filters} />
   {/await}
@@ -504,6 +509,7 @@
   savedSearches={standalone}
   formerEmployersAvailable={standalone}
   watchlistAvailable={standalone}
+  newHiringAvailable={standalone}
   hideSeenAvailable={standalone}
   open={modalOpen}
   onClose={() => (modalOpen = false)}

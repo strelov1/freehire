@@ -12,17 +12,22 @@ import (
 )
 
 const countEmployerApplicationsByStage = `-- name: CountEmployerApplicationsByStage :many
-SELECT da.stage, count(*)::bigint AS applications
+SELECT da.stage, count(*)::bigint AS applications,
+       count(*) FILTER (
+           WHERE employer_application_matches(COALESCE($1::text, ''), u.email, da.note, da.answers)
+       )::bigint AS matches
 FROM direct_applications da
 JOIN jobs j ON j.id = da.job_id
-WHERE j.created_by = ANY(ARRAY(SELECT employer_team($1::bigint)))
+JOIN users u ON u.id = da.user_id
+WHERE j.created_by = ANY(ARRAY(SELECT active_employer_team($2::bigint)))
   AND j.source = 'employer'
   AND da.sent_at IS NOT NULL
-  AND ($2::text IS NULL OR j.public_slug = $2::text)
+  AND ($3::text IS NULL OR j.public_slug = $3::text)
 GROUP BY da.stage
 `
 
 type CountEmployerApplicationsByStageParams struct {
+	Search     pgtype.Text `json:"search"`
 	EmployerID int64       `json:"employer_id"`
 	JobSlug    pgtype.Text `json:"job_slug"`
 }
@@ -30,13 +35,14 @@ type CountEmployerApplicationsByStageParams struct {
 type CountEmployerApplicationsByStageRow struct {
 	Stage        string `json:"stage"`
 	Applications int64  `json:"applications"`
+	Matches      int64  `json:"matches"`
 }
 
 // How many delivered applications sit at each stage, under the same vacancy narrowing as
 // ListEmployerApplications but never its stage one: the inbox shows every stage's count
 // beside the stage it is filtered to. A stage with no application is absent.
 func (q *Queries) CountEmployerApplicationsByStage(ctx context.Context, arg CountEmployerApplicationsByStageParams) ([]CountEmployerApplicationsByStageRow, error) {
-	rows, err := q.db.Query(ctx, countEmployerApplicationsByStage, arg.EmployerID, arg.JobSlug)
+	rows, err := q.db.Query(ctx, countEmployerApplicationsByStage, arg.Search, arg.EmployerID, arg.JobSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +50,7 @@ func (q *Queries) CountEmployerApplicationsByStage(ctx context.Context, arg Coun
 	items := []CountEmployerApplicationsByStageRow{}
 	for rows.Next() {
 		var i CountEmployerApplicationsByStageRow
-		if err := rows.Scan(&i.Stage, &i.Applications); err != nil {
+		if err := rows.Scan(&i.Stage, &i.Applications, &i.Matches); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -90,7 +96,7 @@ FROM direct_application_cvs c
 JOIN direct_applications da ON da.id = c.application_id
 JOIN jobs j ON j.id = da.job_id
 WHERE c.application_id = $1
-  AND j.created_by = ANY(ARRAY(SELECT employer_team($2::bigint)))
+  AND j.created_by = ANY(ARRAY(SELECT active_employer_team($2::bigint)))
   AND j.source = 'employer'
   AND da.sent_at IS NOT NULL
 `
@@ -118,19 +124,20 @@ func (q *Queries) GetEmployerApplicationCV(ctx context.Context, arg GetEmployerA
 const listEmployerApplications = `-- name: ListEmployerApplications :many
 
 SELECT da.id, j.public_slug AS job_slug, j.title AS job_title, u.email AS candidate_email,
-       da.cv_kind, da.note, da.answers, da.stage, da.stage_changed_at, da.sent_at,
+       da.cv_kind, da.note, da.answers, da.stage, da.stage_changed_at, da.sent_at, da.viewed_at, da.employer_notes,
        EXISTS (SELECT 1 FROM direct_application_cvs c WHERE c.application_id = da.id) AS has_cv
 FROM direct_applications da
 JOIN jobs j ON j.id = da.job_id
 JOIN users u ON u.id = da.user_id
-WHERE j.created_by = ANY(ARRAY(SELECT employer_team($1::bigint)))
+WHERE j.created_by = ANY(ARRAY(SELECT active_employer_team($1::bigint)))
   AND j.source = 'employer'
   AND da.sent_at IS NOT NULL
   AND ($2::text IS NULL OR j.public_slug = $2::text)
   AND ($3::text IS NULL OR da.stage = $3::text)
   AND ($4::bigint IS NULL OR da.id = $4::bigint)
+  AND employer_application_matches(COALESCE($5::text, ''), u.email, da.note, da.answers)
 ORDER BY da.sent_at DESC, da.id DESC
-LIMIT $6::int OFFSET $5::int
+LIMIT $7::int OFFSET $6::int
 `
 
 type ListEmployerApplicationsParams struct {
@@ -138,6 +145,7 @@ type ListEmployerApplicationsParams struct {
 	JobSlug    pgtype.Text `json:"job_slug"`
 	Stage      pgtype.Text `json:"stage"`
 	ID         pgtype.Int8 `json:"id"`
+	Search     pgtype.Text `json:"search"`
 	RowOffset  int32       `json:"row_offset"`
 	RowLimit   int32       `json:"row_limit"`
 }
@@ -153,6 +161,8 @@ type ListEmployerApplicationsRow struct {
 	Stage          string             `json:"stage"`
 	StageChangedAt pgtype.Timestamptz `json:"stage_changed_at"`
 	SentAt         pgtype.Timestamptz `json:"sent_at"`
+	ViewedAt       pgtype.Timestamptz `json:"viewed_at"`
+	EmployerNotes  string             `json:"employer_notes"`
 	HasCv          bool               `json:"has_cv"`
 }
 
@@ -173,6 +183,7 @@ func (q *Queries) ListEmployerApplications(ctx context.Context, arg ListEmployer
 		arg.JobSlug,
 		arg.Stage,
 		arg.ID,
+		arg.Search,
 		arg.RowOffset,
 		arg.RowLimit,
 	)
@@ -194,6 +205,8 @@ func (q *Queries) ListEmployerApplications(ctx context.Context, arg ListEmployer
 			&i.Stage,
 			&i.StageChangedAt,
 			&i.SentAt,
+			&i.ViewedAt,
+			&i.EmployerNotes,
 			&i.HasCv,
 		); err != nil {
 			return nil, err
@@ -246,17 +259,31 @@ func (q *Queries) ReleaseDirectApplication(ctx context.Context, id int64) error 
 }
 
 const setDirectApplicationStage = `-- name: SetDirectApplicationStage :one
-WITH moved AS (
-    UPDATE direct_applications da
-    SET stage = $1::text,
-        stage_changed_at = CASE WHEN da.stage = $1::text THEN da.stage_changed_at ELSE now() END
-    FROM jobs j
-    WHERE da.id = $2
-      AND j.id = da.job_id
-      AND j.created_by = ANY(ARRAY(SELECT employer_team($3::bigint)))
+WITH target AS MATERIALIZED (
+    SELECT da.id, da.stage, j.created_by AS author_id
+    FROM direct_applications da
+    JOIN jobs j ON j.id = da.job_id
+    WHERE da.id = $1
+      AND j.created_by = ANY(ARRAY(SELECT active_employer_team($2::bigint)))
       AND j.source = 'employer'
       AND da.sent_at IS NOT NULL
-    RETURNING da.user_id, da.job_id, (da.stage_changed_at IS NOT DISTINCT FROM now())::boolean AS changed
+    FOR UPDATE OF da
+), moved AS (
+    UPDATE direct_applications da
+    SET stage = $3::text,
+        stage_changed_at = CASE WHEN target.stage = $3::text THEN da.stage_changed_at ELSE now() END
+    FROM target
+    WHERE da.id = target.id
+    RETURNING da.id, da.user_id, da.job_id, target.author_id, target.stage AS previous_stage,
+              (target.stage <> da.stage)::boolean AS changed
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, application_id, action, previous_stage, stage)
+    SELECT ca.company_slug, $2::bigint, m.id, 'stage_changed', m.previous_stage, $3::text
+    FROM moved m
+    JOIN company_accounts ca ON ca.user_id = m.author_id OR ca.company_slug = (
+        SELECT company_slug FROM company_account_members WHERE user_id = m.author_id
+    )
+    WHERE m.changed
 )
 SELECT m.changed, m.user_id AS candidate_id, u.email AS candidate_email,
        m.job_id, j.public_slug AS job_slug, j.title AS job_title, j.company
@@ -266,9 +293,9 @@ JOIN users u ON u.id = m.user_id
 `
 
 type SetDirectApplicationStageParams struct {
-	Stage      string `json:"stage"`
 	ID         int64  `json:"id"`
 	EmployerID int64  `json:"employer_id"`
+	Stage      string `json:"stage"`
 }
 
 type SetDirectApplicationStageRow struct {
@@ -281,16 +308,10 @@ type SetDirectApplicationStageRow struct {
 	Company        string `json:"company"`
 }
 
-// Moves a delivered application to a stage in the employer's pipeline and reports what the
-// move needs downstream: whether it changed anything (`changed` is false when it already
-// stood there, so a repeated click notifies nobody twice), and who the candidate is and
-// what they applied to. One UPDATE, so the comparison with the current stage is made on the
-// row as it is when the update reaches it — a concurrent move that committed first is seen,
-// not an older snapshot of it. stage_changed_at moves only with the stage, which is how the
-// RETURNING tells a change from a no-op. No row: not the employer's. Callers serialise the
-// whole move per application (LockDirectApplication).
+// Stage moves are serialised per application by LockDirectApplication. Capture the
+// previous stage for the audit in the same statement as the write.
 func (q *Queries) SetDirectApplicationStage(ctx context.Context, arg SetDirectApplicationStageParams) (SetDirectApplicationStageRow, error) {
-	row := q.db.QueryRow(ctx, setDirectApplicationStage, arg.Stage, arg.ID, arg.EmployerID)
+	row := q.db.QueryRow(ctx, setDirectApplicationStage, arg.ID, arg.EmployerID, arg.Stage)
 	var i SetDirectApplicationStageRow
 	err := row.Scan(
 		&i.Changed,
@@ -314,6 +335,54 @@ func (q *Queries) UnlockDirectApplication(ctx context.Context, id int64) (bool, 
 	var released bool
 	err := row.Scan(&released)
 	return released, err
+}
+
+const updateEmployerApplicationWorkspace = `-- name: UpdateEmployerApplicationWorkspace :one
+WITH target AS MATERIALIZED (
+    SELECT da.id, da.employer_notes, j.created_by AS author_id
+    FROM direct_applications da
+    JOIN jobs j ON j.id = da.job_id
+    WHERE da.id = $1
+      AND j.created_by = ANY(ARRAY(SELECT active_employer_team($2::bigint)))
+      AND j.source = 'employer'
+      AND da.sent_at IS NOT NULL
+    FOR UPDATE OF da
+), updated AS (
+    UPDATE direct_applications da
+    SET employer_notes = COALESCE($3::text, target.employer_notes),
+        viewed_at = CASE WHEN $4::boolean THEN COALESCE(da.viewed_at, now()) ELSE da.viewed_at END
+    FROM target
+    WHERE da.id = target.id
+    RETURNING da.id, target.author_id, (target.employer_notes <> da.employer_notes) AS notes_changed
+), audited AS (
+    INSERT INTO employer_activity (company_slug, actor_id, application_id, action)
+    SELECT ca.company_slug, $2::bigint, updated.id, 'notes_changed'
+    FROM updated
+    JOIN company_accounts ca ON ca.user_id = updated.author_id OR ca.company_slug = (
+        SELECT company_slug FROM company_account_members WHERE user_id = updated.author_id
+    )
+    WHERE updated.notes_changed
+)
+SELECT id FROM updated
+`
+
+type UpdateEmployerApplicationWorkspaceParams struct {
+	ID            int64       `json:"id"`
+	EmployerID    int64       `json:"employer_id"`
+	EmployerNotes pgtype.Text `json:"employer_notes"`
+	MarkViewed    bool        `json:"mark_viewed"`
+}
+
+func (q *Queries) UpdateEmployerApplicationWorkspace(ctx context.Context, arg UpdateEmployerApplicationWorkspaceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, updateEmployerApplicationWorkspace,
+		arg.ID,
+		arg.EmployerID,
+		arg.EmployerNotes,
+		arg.MarkViewed,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const upsertDirectApplication = `-- name: UpsertDirectApplication :one

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AutoApplyList from './AutoApplyList.svelte';
 
@@ -11,10 +11,18 @@ vi.mock('@lucide/svelte', async () => ({
   RefreshCw: (await import('@lucide/svelte/icons/refresh-cw')).default,
 }));
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
-const { listAutoApply } = vi.hoisted(() => ({ listAutoApply: vi.fn() }));
-vi.mock('#lib/api.js', () => ({ api: { listAutoApply } }));
+const { listAutoApply, getAutoApplySettings, setAutoApplySettings } = vi.hoisted(() => ({
+  listAutoApply: vi.fn(),
+  getAutoApplySettings: vi.fn(),
+  setAutoApplySettings: vi.fn(),
+}));
+vi.mock('#lib/api.js', () => ({ api: { listAutoApply, getAutoApplySettings, setAutoApplySettings } }));
 
-beforeEach(() => listAutoApply.mockReset());
+beforeEach(() => {
+  listAutoApply.mockReset();
+  getAutoApplySettings.mockReset().mockResolvedValue({ confirm_each: false });
+  setAutoApplySettings.mockReset();
+});
 
 describe('Activity auto-apply list', () => {
   it('explains the empty state and the submission history window', async () => {
@@ -58,5 +66,30 @@ describe('Activity auto-apply list', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('No automatic applications yet. Start one from a job page.')).toBeTruthy();
     expect(listAutoApply).toHaveBeenCalledTimes(2);
+  });
+
+  it('turns on confirming every application', async () => {
+    listAutoApply.mockResolvedValue({ attempts: [] });
+    setAutoApplySettings.mockResolvedValue({ confirm_each: true });
+    render(AutoApplyList);
+    const toggle = await screen.findByRole('switch', { name: 'Confirm every application' });
+    await waitFor(() => expect(toggle.hasAttribute('disabled')).toBe(false));
+    await fireEvent.click(toggle);
+    expect(setAutoApplySettings).toHaveBeenCalledWith({ confirm_each: true });
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+  });
+
+  it('reads the setting again on refresh after a failed first read', async () => {
+    listAutoApply.mockResolvedValue({ attempts: [] });
+    getAutoApplySettings
+      .mockReset()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ confirm_each: true });
+    render(AutoApplyList);
+    expect(await screen.findByText("Couldn't load this setting.")).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+    const toggle = screen.getByRole('switch', { name: 'Confirm every application' });
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    expect(screen.queryByText("Couldn't load this setting.")).toBeNull();
   });
 });

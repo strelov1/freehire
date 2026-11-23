@@ -48,6 +48,7 @@
     savedSearches = false,
     formerEmployersAvailable = false,
     watchlistAvailable = false,
+    newHiringAvailable = false,
     hideSeenAvailable = false,
     open = false,
     onClose,
@@ -69,10 +70,14 @@
   // count or a facet distribution fetched with any staged would describe a wider set
   // than "Show results" returns.
   const personalStaged = $derived(
-    staged.value.formerEmployers || staged.value.watchlist || (showHideSeen && staged.value.hideSeen),
+    staged.value.formerEmployers ||
+      staged.value.watchlist ||
+      staged.value.newHiring ||
+      (showHideSeen && staged.value.hideSeen),
   );
   const showFormerEmployers = $derived(formerEmployersAvailable && !plain && isAuthenticated());
   const showWatchlist = $derived(watchlistAvailable && !plain && isAuthenticated());
+  const showNewHiring = $derived(newHiringAvailable && !plain);
 
   // Warm the Telegram feature flag and the user's profile when the modal opens for a
   // signed-in user on the full job modal: the footer "save for TG alerts" nudge gates on
@@ -119,7 +124,13 @@
   ]);
 
   function entryCount(e: RailEntry): number {
-    return railEntryCount(e, staged.value, { showHideSeen, matchAvailable, showFormerEmployers, showWatchlist });
+    return railEntryCount(e, staged.value, {
+      showHideSeen,
+      matchAvailable,
+      showFormerEmployers,
+      showWatchlist,
+      showNewHiring,
+    });
   }
 
   const englishDef = FACETS.find((d) => d.param === 'english_level');
@@ -445,6 +456,22 @@
           <span>Hiring again</span>
         </label>
         <p class="mt-1 text-xs text-muted-foreground">Only jobs at companies you have worked at and left.</p>
+      </div>
+    {/if}
+    {#if entry.key === 'company_slug' && showNewHiring}
+      <div class="mb-6">
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            class="size-4 rounded border-border"
+            checked={staged.value.newHiring}
+            onchange={(e) => staged.setNewHiring(e.currentTarget.checked)}
+          />
+          <span>Just started hiring</span>
+        </label>
+        <p class="mt-1 text-xs text-muted-foreground">
+          Only jobs at companies that had nothing open for 90 days and began hiring this month.
+        </p>
       </div>
     {/if}
     {#if entry.key === 'company_slug' && showWatchlist}

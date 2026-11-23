@@ -104,6 +104,7 @@ var gatedRoutes = []gatedRoute{
 	{fiber.MethodPost, "/api/v1/me/cvs/00000000-0000-0000-0000-000000000001/cover-letter", plan.FeatureCoverLetter},
 	{fiber.MethodPost, "/api/v1/me/cvs/00000000-0000-0000-0000-000000000001/cover-letter/stream", plan.FeatureCoverLetter},
 	{fiber.MethodPost, "/api/v1/speech/transcriptions", plan.FeatureDictation},
+	{fiber.MethodPost, "/api/v1/me/interviews/transcriptions", unmeteredAI},
 	{fiber.MethodPost, "/api/v1/me/profile/ats-report", unmeteredAI},
 	{fiber.MethodPost, "/api/v1/me/tracking/some-job/mail-recall", unmeteredAI},
 	{fiber.MethodPost, "/api/v1/me/emails/4821/reply-draft", plan.FeatureMailReply},

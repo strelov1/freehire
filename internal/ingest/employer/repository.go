@@ -82,6 +82,7 @@ func (r *QueriesRepository) GetByUserID(ctx context.Context, userID int64) (Acco
 		CompanyName:      row.CompanyName,
 		WorkEmail:        row.ActingEmail,
 		Member:           row.Member,
+		Role:             row.Role,
 		Status:           row.Status,
 		VerifiedAt:       pgconv.TimePtr(row.VerifiedAt),
 		EmailConfirmedAt: pgconv.TimePtr(row.EmailConfirmedAt),

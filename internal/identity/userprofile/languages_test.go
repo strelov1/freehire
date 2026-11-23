@@ -23,7 +23,7 @@ func TestSaveJobLanguages(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{}, []string{}, nil, nil, nil, nil, nil, tc.input...)
+			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{}, []string{}, nil, nil, nil, nil, tc.input...)
 			if tc.invalid {
 				if !errors.Is(err, userprofile.ErrInvalidJobLanguage) || repo.upsertCalled {
 					t.Fatalf("invalid input persisted: %v", err)

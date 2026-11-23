@@ -94,7 +94,7 @@ describe('AvoidCard', () => {
     expect(onProfileChanged).toHaveBeenCalledTimes(1);
   });
 
-  it('notifies onProfileChanged after un-avoiding a company succeeds', async () => {
+  it('restores a company through the store, which syncs the alert itself', async () => {
     const onProfileChanged = vi.fn();
     render(AvoidCard, { props: { onProfileChanged } });
 
@@ -102,7 +102,7 @@ describe('AvoidCard', () => {
     await fireEvent.click(screen.getByTitle('Acme', { exact: true }));
 
     expect(unavoidCompany).toHaveBeenCalledWith('acme');
-    expect(onProfileChanged).toHaveBeenCalledTimes(1);
+    expect(onProfileChanged).not.toHaveBeenCalled();
   });
 
   it('does not notify onProfileChanged when the save fails', async () => {

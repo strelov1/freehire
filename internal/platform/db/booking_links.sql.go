@@ -11,6 +11,63 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimBookingCalendarInvitation = `-- name: ClaimBookingCalendarInvitation :one
+WITH due AS (
+    SELECT b.id, gc.refresh_token_enc
+    FROM booking_link_bookings b
+    JOIN users u ON u.id = b.user_id
+    JOIN gmail_connections gc ON gc.user_id = b.user_id
+    WHERE b.status = 'confirmed'
+      AND b.starts_at > now()
+      AND b.calendar_invitation_next_at <= now()
+      AND u.banned_at IS NULL AND u.interview_calendar_invites_enabled
+      AND gc.status = 'connected'
+      AND $1::text = ANY (gc.scopes)
+      AND ($2::bigint = 0 OR b.user_id = $2::bigint)
+      AND ($3::text = '' OR lower(b.recruiter_email) = lower($3::text))
+    ORDER BY b.calendar_invitation_next_at, b.id
+    LIMIT 1
+    FOR UPDATE OF b SKIP LOCKED
+)
+UPDATE booking_link_bookings b
+SET calendar_invitation_next_at = now() + interval '2 minutes'
+FROM due
+WHERE b.id = due.id
+RETURNING b.id, b.calendar_event_key, b.starts_at, b.ends_at, b.recruiter_email,
+          due.refresh_token_enc
+`
+
+type ClaimBookingCalendarInvitationParams struct {
+	CalendarWriteScope string `json:"calendar_write_scope"`
+	PilotUserID        int64  `json:"pilot_user_id"`
+	PilotRecruiter     string `json:"pilot_recruiter"`
+}
+
+type ClaimBookingCalendarInvitationRow struct {
+	ID               int64              `json:"id"`
+	CalendarEventKey pgtype.UUID        `json:"calendar_event_key"`
+	StartsAt         pgtype.Timestamptz `json:"starts_at"`
+	EndsAt           pgtype.Timestamptz `json:"ends_at"`
+	RecruiterEmail   string             `json:"recruiter_email"`
+	RefreshTokenEnc  string             `json:"refresh_token_enc"`
+}
+
+// Claim one at a time so the lease covers the Google call rather than a whole batch.
+// A claimed row remains due for retry until the invitation is recorded.
+func (q *Queries) ClaimBookingCalendarInvitation(ctx context.Context, arg ClaimBookingCalendarInvitationParams) (ClaimBookingCalendarInvitationRow, error) {
+	row := q.db.QueryRow(ctx, claimBookingCalendarInvitation, arg.CalendarWriteScope, arg.PilotUserID, arg.PilotRecruiter)
+	var i ClaimBookingCalendarInvitationRow
+	err := row.Scan(
+		&i.ID,
+		&i.CalendarEventKey,
+		&i.StartsAt,
+		&i.EndsAt,
+		&i.RecruiterEmail,
+		&i.RefreshTokenEnc,
+	)
+	return i, err
+}
+
 const getBookingLinkByHash = `-- name: GetBookingLinkByHash :one
 SELECT id, user_id, application_id, token_seed, token_hash, zone
   FROM booking_links
@@ -75,19 +132,37 @@ func (q *Queries) GetBookingLinkForApplication(ctx context.Context, arg GetBooki
 }
 
 const insertBookingLinkBooking = `-- name: InsertBookingLinkBooking :one
-INSERT INTO booking_link_bookings (link_id, user_id, starts_at, ends_at, recruiter_name, recruiter_email)
-VALUES ($1, $2, $3, $4,
-        $5, $6)
+WITH invitation AS (
+    SELECT EXISTS (
+        SELECT 1
+        FROM users u
+        JOIN gmail_connections gc ON gc.user_id = u.id
+        WHERE u.id = $2
+          AND u.banned_at IS NULL AND u.interview_calendar_invites_enabled
+          AND gc.status = 'connected'
+          AND $7::text = ANY (gc.scopes)
+    ) AS enabled
+)
+INSERT INTO booking_link_bookings (
+    link_id, user_id, starts_at, ends_at, recruiter_name, recruiter_email,
+    calendar_event_key, calendar_invitation_next_at
+)
+SELECT $1, $2, $3, $4,
+       $5, $6,
+       CASE WHEN enabled THEN gen_random_uuid() END,
+       CASE WHEN enabled THEN now() END
+FROM invitation
 RETURNING id
 `
 
 type InsertBookingLinkBookingParams struct {
-	LinkID         int64              `json:"link_id"`
-	UserID         int64              `json:"user_id"`
-	StartsAt       pgtype.Timestamptz `json:"starts_at"`
-	EndsAt         pgtype.Timestamptz `json:"ends_at"`
-	RecruiterName  string             `json:"recruiter_name"`
-	RecruiterEmail string             `json:"recruiter_email"`
+	LinkID             int64              `json:"link_id"`
+	UserID             int64              `json:"user_id"`
+	StartsAt           pgtype.Timestamptz `json:"starts_at"`
+	EndsAt             pgtype.Timestamptz `json:"ends_at"`
+	RecruiterName      string             `json:"recruiter_name"`
+	RecruiterEmail     string             `json:"recruiter_email"`
+	CalendarWriteScope string             `json:"calendar_write_scope"`
 }
 
 // The EXCLUDE booking_link_bookings_no_overlap is what refuses a taken slot.
@@ -99,6 +174,7 @@ func (q *Queries) InsertBookingLinkBooking(ctx context.Context, arg InsertBookin
 		arg.EndsAt,
 		arg.RecruiterName,
 		arg.RecruiterEmail,
+		arg.CalendarWriteScope,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -156,6 +232,42 @@ func (q *Queries) ListBookingLinkBusy(ctx context.Context, arg ListBookingLinkBu
 		return nil, err
 	}
 	return items, nil
+}
+
+const recordBookingCalendarInvitation = `-- name: RecordBookingCalendarInvitation :execrows
+WITH interview AS (
+    UPDATE application_interviews i
+    SET provider_event_id = $1,
+        join_url = $2,
+        updated_at = now()
+    FROM booking_link_bookings b
+    WHERE b.id = $3
+      AND b.status = 'confirmed'
+      AND b.calendar_invitation_next_at IS NOT NULL
+      AND i.user_id = b.user_id
+      AND i.ical_uid = 'booking:' || b.id::text
+    RETURNING b.id
+)
+UPDATE booking_link_bookings b
+SET calendar_invited_at = now(), calendar_invitation_next_at = NULL
+FROM interview
+WHERE b.id = interview.id
+`
+
+type RecordBookingCalendarInvitationParams struct {
+	ProviderEventID string `json:"provider_event_id"`
+	JoinUrl         string `json:"join_url"`
+	BookingID       int64  `json:"booking_id"`
+}
+
+// Retain the local interview identity and record the Google event and the Meet URL
+// together. A cancellation can subsequently resolve through provider_event_id.
+func (q *Queries) RecordBookingCalendarInvitation(ctx context.Context, arg RecordBookingCalendarInvitationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, recordBookingCalendarInvitation, arg.ProviderEventID, arg.JoinUrl, arg.BookingID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setBookingLinkTokenHash = `-- name: SetBookingLinkTokenHash :exec

@@ -92,7 +92,7 @@ for the full design record.
   `year_founded`/`employee_count`/`hq_country`/`subindustry` additionally needed a guard in
   `cmd/import-yc` that `tagline`/`company_info`/`industries` did not.
 - **`company_types`/`company_sizes` are never employer-editable.** They are job-derived
-  (`RefreshCompanyFacets`, from the company's own postings' enrichment) — an employer's own
+  (the facet recount in `company_facets.sql`, from the company's own postings' enrichment) — an employer's own
   vacancies feed them automatically once published and enriched. `CompanyProfilePatch`
   deliberately has no field for either.
 
@@ -130,8 +130,9 @@ for the full design record.
 - **A vacancy belongs to the company team, not to its author.** `employer_team(actor)` (a SQL
   function in 0271) is everyone who acts for the actor's company — the claimant and the
   members — and it is the ONE ownership rule: every actor-scoped vacancy query
-  (`jobs_manual.sql`) and every inbox query (`direct_applications.sql`) reads
-  `created_by = ANY(ARRAY(SELECT employer_team(...)))`, and the Go-side checks (`BySlug`,
+  (`jobs_manual.sql`) scopes by `employer_team`. Inbox queries in
+  `direct_applications.sql` use `active_employer_team` for the same ownership scope
+  with an active-account check at the database boundary, and the Go-side checks (`BySlug`,
   directapply's own-company refusal) ask `EmployerTeamIncludes`; a re-created vacancy is
   guarded inside the upsert (see `CreateVacancy` above). A new employer capability
   scoped to "the caller's vacancies" uses it too, never `created_by = actor`.
@@ -141,9 +142,10 @@ for the full design record.
   with `Member` set and `WorkEmail` the member's OWN address — where their vacancies'
   applications go and what candidates reply to. `UserID` stays the claimant's: it is the
   account's address in the moderator/admin routes.
-- **No roles.** Every member does everything the claimant does, including inviting and
-  removing; the one exception is structural — the claimant is not a member row, so cannot be
-  removed. Removing a member (or leaving) hands their vacancies to the claimant in the same
+- **Membership roles.** The claimant owns the account. Existing managers keep their team,
+  vacancy and company-profile permissions. New invitations grant the recruiter role with
+  access to vacancies and applications, including stage changes and private notes. Recruiters
+  can leave the team. The claimant cannot be removed. Removing a member (or leaving) hands their vacancies to the claimant in the same
   statement (`RemoveCompanyMember`), because a vacancy created by somebody outside the team
   would stop taking applications and vanish from every dashboard.
 - **One company per user, across both tables.** `company_account_members.user_id` is the
@@ -159,8 +161,9 @@ for the full design record.
   token, so a resend never leaves two working links; open invitations are capped at 20 per
   company because each is a letter freehire sends to an address the account typed. A letter
   that fails withdraws its invitation, so the list never shows somebody as invited who was
-  never told. The joiner may accept under any freehire account — their sign-in address does
-  not matter, the invited one is what they act under.
+  never told. A new recruiter invitation also requires a confirmed Freehire account email
+  matching the invited address. Manager invitations issued before migration 0298 keep
+  their previous link-based acceptance until they are used, replaced or expire.
 - **Every change to a team runs under the company's lock** (`LockEmployerCompany`, a
   transaction advisory lock): an invitation, a withdrawal and a removal (each rechecking,
   under the lock, that its actor still acts for the company — `asCompanyActor` — so a request

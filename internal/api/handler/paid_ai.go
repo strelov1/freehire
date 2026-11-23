@@ -140,6 +140,7 @@ var unmeteredFeatureNames = map[string]string{
 	"/api/v1/me/profile/ats-report":         "ats_review",
 	"/api/v1/me/tracking/:slug/mail-recall": "mail_recall",
 	"/api/v1/me/autofill/run":               "autofill",
+	"/api/v1/me/interviews/transcriptions":  "interview_transcription",
 }
 
 // unknownPaywallFeature labels a refusal on an unmetered route missing from the table above.

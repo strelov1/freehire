@@ -92,7 +92,7 @@ FROM claimable c
 WHERE o.id = c.id
 RETURNING o.id, o.job_id, o.target_version;
 
--- name: DeleteIneligibleEnrichmentOutbox :execrows
+-- name: DeleteIneligibleEnrichmentOutbox :one
 -- Reap live entries ClaimEnrichmentBatch can never take: their job has closed, become a
 -- non-canonical repost, or gone. That query's inner join plus its closed/duplicate filter
 -- correctly skips them — a dead or hidden posting should not spend LLM budget — but until
@@ -115,6 +115,16 @@ RETURNING o.id, o.job_id, o.target_version;
 -- Bounded by max_rows so one enrich run cannot turn into an unbounded delete on the first
 -- pass over a long-accumulated backlog; the next run takes the next slice.
 --
+-- One call reads one chunk: chunk_size entries above after_job_id in job_id order (index-only on
+-- enrichment_outbox_job_id_target_version_key), checks their jobs against jobs_sitemap_idx — the
+-- open-and-canonical partial index, so the probe is the claim's own filter — and returns the last
+-- job_id it read as the next cursor (0 once nothing is left). Ineligibility belongs to the job, so
+-- every live entry of a doomed job goes, even a version past the chunk's edge. A single statement
+-- over the whole queue ran 6 minutes on average and up to 102 on prod (2026-11-22), holding its
+-- snapshot all along; a chunk is a short statement of its own. cmd/enrich walks the chunks and
+-- passes what is left of its bound as max_rows; a call that hits max_rows has not finished its
+-- chunk, so its cursor is only good for stopping.
+--
 -- There is a race here, and it is left unserialized deliberately. A job can become eligible
 -- again (reopened, or released from duplicate_of) while this statement runs: the enqueue that
 -- follows that lifecycle write hits ON CONFLICT DO NOTHING because this row still exists, and
@@ -132,19 +142,39 @@ RETURNING o.id, o.job_id, o.target_version;
 -- A live claim is never reaped. The reap runs beside the drain, so a job that became
 -- eligible mid-scan can be claimed (claimed_at set) before this DELETE reaches its row;
 -- deleting it then would make Complete a silent no-op and the re-enqueue a second paid call.
--- The claimed_at test is repeated on the outer table so it is re-checked against the
+-- The claimed_at test is repeated on the DELETE itself so it is re-checked against the
 -- committed row version when the DELETE waited on that claim. An hour covers any lease.
-DELETE FROM enrichment_outbox e
-WHERE (e.claimed_at IS NULL OR e.claimed_at < now() - interval '1 hour')
-  AND e.id IN (
+WITH chunk AS MATERIALIZED (
+    SELECT o.job_id
+    FROM enrichment_outbox o
+    WHERE o.job_id > sqlc.arg(after_job_id)::bigint
+    ORDER BY o.job_id
+    LIMIT sqlc.arg(chunk_size)::int
+), doomed AS MATERIALIZED (
     SELECT o.id
     FROM enrichment_outbox o
-    LEFT JOIN jobs j ON j.id = o.job_id
-    WHERE o.failed_at IS NULL
+    WHERE o.job_id IN (
+        SELECT c.job_id FROM chunk c
+        WHERE NOT EXISTS (
+            SELECT 1 FROM jobs j
+            WHERE j.id = c.job_id AND j.closed_at IS NULL AND j.duplicate_of IS NULL
+        )
+    )
+      -- Redundant bounds that keep the lookup on the job_id index instead of a full scan.
+      AND o.job_id > sqlc.arg(after_job_id)::bigint
+      AND o.job_id <= (SELECT max(job_id) FROM chunk)
+      AND o.failed_at IS NULL
       AND (o.claimed_at IS NULL OR o.claimed_at < now() - interval '1 hour')
-      AND (j.id IS NULL OR j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL)
-    LIMIT sqlc.arg(max_rows)
-);
+    LIMIT sqlc.arg(max_rows)::int
+), del AS (
+    DELETE FROM enrichment_outbox o
+    USING doomed d
+    WHERE o.id = d.id
+      AND (o.claimed_at IS NULL OR o.claimed_at < now() - interval '1 hour')
+    RETURNING 1
+)
+SELECT COALESCE((SELECT max(job_id) FROM chunk), 0)::bigint AS last_job_id,
+       (SELECT count(*) FROM del)::bigint AS deleted;
 
 -- name: DeleteEnrichmentEntry :exec
 DELETE FROM enrichment_outbox

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/strelov1/freehire/internal/dict/companyname"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -42,7 +44,13 @@ type postingTextResolver struct {
 	q      descriptionLister
 	model  jsonModel
 	source string
+	// vendor is the ATS's own name, refused as an employer: postings often say "apply
+	// through Paycor", and that is the vendor, not the tenant.
+	vendor string
 }
+
+// maxEmployerNameRunes bounds a stored name; a longer match is a sentence, not an employer.
+const maxEmployerNameRunes = 100
 
 const postingTextSystem = `You read job postings and report which employer is hiring.
 Reply with JSON only: {"employer": "<name>"} or {"employer": null}.
@@ -85,10 +93,24 @@ func (r postingTextResolver) Name(ctx context.Context, board string) (string, er
 		return "", nil
 	}
 	name, ok := companyname.GroundedName(*out.Employer, texts)
-	if !ok {
+	if !ok || !usableEmployerName(name, r.vendor) {
 		return "", nil
 	}
 	return name, nil
+}
+
+// usableEmployerName is the bound on any name read from an untrusted page or posting: not the
+// ATS vendor's own name (as a whole word, so "Paycor Holdings" too), not longer than
+// maxEmployerNameRunes, no control character.
+func usableEmployerName(name, vendor string) bool {
+	if utf8.RuneCountInString(name) > maxEmployerNameRunes || strings.IndexFunc(name, unicode.IsControl) >= 0 {
+		return false
+	}
+	if vendor == "" {
+		return true
+	}
+	_, isVendor := companyname.GroundedName(vendor, []string{name})
+	return !isVendor
 }
 
 // capProvider keeps at most n of one provider's rows, taken from a window that starts at

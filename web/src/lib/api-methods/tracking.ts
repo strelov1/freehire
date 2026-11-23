@@ -1,6 +1,7 @@
 import type { Http } from '../api-core';
 import type {
   AgentPermissions,
+  AutoApplySettings,
   AppliedJob,
   Allowance,
   AutoApplyList,
@@ -139,6 +140,15 @@ export function trackingApi({ call, request, requestData }: Http) {
   /** Cookie-only on the server: no credential an agent holds may grant itself this. */
   function setAgentPermissions(p: AgentPermissions): Promise<AgentPermissions> {
     return requestData<AgentPermissions>('/api/v1/me/agent-permissions', jsonBody('PUT', p));
+  }
+
+  function getAutoApplySettings(): Promise<AutoApplySettings> {
+    return requestData<AutoApplySettings>('/api/v1/me/auto-apply-settings');
+  }
+
+  /** Cookie-only on the server: whether attempts go out unreviewed is the person's call. */
+  function setAutoApplySettings(p: AutoApplySettings): Promise<AutoApplySettings> {
+    return requestData<AutoApplySettings>('/api/v1/me/auto-apply-settings', jsonBody('PUT', p));
   }
 
   /** Save the candidate's answer to one screening question into their answer bank, so it
@@ -307,6 +317,8 @@ export function trackingApi({ call, request, requestData }: Http) {
     cancelAutoApply,
     getAgentPermissions,
     setAgentPermissions,
+    getAutoApplySettings,
+    setAutoApplySettings,
     saveBankedAnswer,
     listBankedAnswers,
     deleteBankedAnswer,

@@ -10,7 +10,7 @@ import {
   type FacetState,
   type JobFilters,
 } from './facetModel';
-import { canonicalQuery, savedSearchQuery, queryNarrows } from './savedSearchQuery';
+import { canonicalQuery, savedSearchQuery, queryNarrows, unsavableFilter } from './savedSearchQuery';
 import { signOf, facetSetSign, facetCycle, facetPick, facetToggleSign, facetAdd, facetRemove } from './facetSign';
 import { withQuery, withSkills } from './facetModelTestUtils';
 import { must } from './utils';
@@ -373,6 +373,30 @@ describe('formerEmployers ("Hiring again")', () => {
     const q = savedSearchQuery({ ...emptyFilters(), q: 'go', formerEmployers: true });
     expect(new URLSearchParams(q).has('former_employers')).toBe(false);
     expect(new URLSearchParams(q).get('q')).toBe('go');
+  });
+});
+
+describe('newHiring ("Just started hiring")', () => {
+  it('round-trips as new_hiring=true and is absent when off', () => {
+    expect(filtersToParams(emptyFilters()).has('new_hiring')).toBe(false);
+    const p = filtersToParams({ ...emptyFilters(), newHiring: true });
+    expect(p.get('new_hiring')).toBe('true');
+    expect(filtersFromParams(p).newHiring).toBe(true);
+    expect(activeFilterCount({ ...emptyFilters(), newHiring: true })).toBe(1);
+  });
+
+  // The digest matcher does not resolve it, so an alert carrying it would mail the whole
+  // catalogue; alone it does not make a query an alert.
+  it('never reaches a saved search and does not narrow one', () => {
+    const q = savedSearchQuery({ ...emptyFilters(), q: 'go', newHiring: true });
+    expect(new URLSearchParams(q).has('new_hiring')).toBe(false);
+    expect(queryNarrows('new_hiring=true')).toBe(false);
+  });
+
+  it('blocks saving, like Hiring again', () => {
+    expect(unsavableFilter(emptyFilters())).toBeNull();
+    expect(unsavableFilter({ ...emptyFilters(), newHiring: true })).toBe('Just started hiring');
+    expect(unsavableFilter({ ...emptyFilters(), formerEmployers: true, newHiring: true })).toBe('Hiring again');
   });
 });
 

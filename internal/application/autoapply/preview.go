@@ -30,6 +30,17 @@ type ResolvedPreview struct {
 	Pending []PreviewPending `json:"pending,omitempty"`
 }
 
+// AsksCandidate reports whether a pending question needs the candidate's own answer, one
+// the submission will not draft from their CV.
+func (p ResolvedPreview) AsksCandidate() bool {
+	for _, q := range p.Pending {
+		if !q.WillDraftAtSubmission {
+			return true
+		}
+	}
+	return false
+}
+
 // PreviewResult is what a PreviewSidecar returns for one attempt.
 type PreviewResult struct {
 	Preview ResolvedPreview

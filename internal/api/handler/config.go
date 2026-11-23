@@ -116,6 +116,8 @@ type Config struct {
 	// the deployment with no Realtime gateway configured: the mint endpoint answers
 	// 501 and the interview session view offers no voice mode.
 	Realtime *realtime.Client
+	// InterviewAudio enables ElevenLabs in job-bound rehearsal conversations.
+	InterviewAudio *speech.ElevenLabs
 	// Telegram bot for notification linking/delivery confirmations. Optional: an
 	// empty TelegramBotToken disables the feature (linking endpoints report off,
 	// webhook inert). TelegramBotUsername builds the deep link; TelegramWebhookSecret
@@ -125,8 +127,10 @@ type Config struct {
 	TelegramWebhookSecret string
 	// GmailConnector + GmailCipher enable the Connect-Gmail inbox. Both nil = the
 	// feature is off (connect routes unregistered, inbox empty).
-	GmailConnector *gmailsync.Connector
-	GmailCipher    *tokencrypt.Cipher
+	GmailConnector                 *gmailsync.Connector
+	GmailCipher                    *tokencrypt.Cipher
+	InterviewSchedulingEnabled     bool
+	InterviewSchedulingPilotUserID int64
 	// OJCPSigner signs the OJCP manifest. Nil = the manifest is unsigned and no key set is
 	// published.
 	OJCPSigner *ojcp.Signer

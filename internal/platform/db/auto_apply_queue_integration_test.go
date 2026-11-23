@@ -634,3 +634,52 @@ func TestSetAutoApplyResolvedPreview_ReleasesTheLease(t *testing.T) {
 		t.Fatalf("claimed = %+v, want the just-approved entry immediately claimable, not blocked by a stale lease", rows)
 	}
 }
+
+// Only an undecided attempt on a job closed past the grace period is withdrawn, and the
+// withdrawal is recorded as cancelled.
+func TestCancelAutoApplyEntriesForClosedJobs(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateAutoApplyQueue(t, pool)
+
+	user := insertUser(t, pool, "closed-sweep@example.test")
+	closeJob := func(external string, ago time.Duration) int64 {
+		job := insertJob(t, pool, external)
+		if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = $2 WHERE id = $1", job, time.Now().Add(-ago)); err != nil {
+			t.Fatal(err)
+		}
+		return job
+	}
+	stale := closeJob("gh-closed-stale", 96*time.Hour)
+	insertTailoredAutoApplyQueueEntry(t, pool, user, stale)
+	recent := closeJob("gh-closed-recent", time.Hour)
+	insertTailoredAutoApplyQueueEntry(t, pool, user, recent)
+	approved := closeJob("gh-closed-approved", 96*time.Hour)
+	insertAutoApplyQueueEntry(t, pool, user, approved)
+	open := insertJob(t, pool, "gh-open")
+	insertTailoredAutoApplyQueueEntry(t, pool, user, open)
+
+	n, err := q.CancelAutoApplyEntriesForClosedJobs(ctx, int64((72 * time.Hour).Seconds()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("withdrew %d, want 1", n)
+	}
+	var left int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM auto_apply_queue WHERE job_id = $1", stale).Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if left != 0 {
+		t.Error("the stale closed job's entry is still queued")
+	}
+	var reason string
+	if err := pool.QueryRow(ctx,
+		"SELECT detail->>'reason' FROM auto_apply_events WHERE job_id = $1 AND kind = 'cancelled'", stale).Scan(&reason); err != nil {
+		t.Fatalf("cancelled event: %v", err)
+	}
+	if reason != "job_closed" {
+		t.Errorf("reason = %q, want job_closed", reason)
+	}
+}

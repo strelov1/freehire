@@ -129,7 +129,7 @@ func pacedPasses(client *http.Client) []pacedPass {
 		torrePass(client, torrePostPage),
 		arbeitnowPass(client),
 		jobtechPass(client, jobtechAdAPI),
-		linkedInPass(client),
+		linkedInPass(linkedInClient(client)),
 		dicePass(client),
 		workdayPass(client),
 	}, catalogStatusPasses(client)...)
@@ -256,8 +256,28 @@ func run() int {
 	// unsignalledSources come back as orphans and are split off below: only those
 	// unsignalledPass can judge are probed (see unsignalledSources).
 	cutoff := time.Now().Add(-staleCutoff)
-	selected, staleCandidates, err := selectProbeCandidates(ctx, queries,
-		probeScope{source: *sourceFilter, jobIDs: jobIDs}, atsProviders, probeDespiteRegistered, cutoff)
+	// The candidate scan walks every open job, so it reads the analytics replica; probes and
+	// every write below go to the primary, whose queries re-check the job is still open. A
+	// -job-ids run is a handful of primary-key reads (of jobs_read, which the replica role
+	// cannot read), so it stays on the primary.
+	var cq candidateQueries = queries
+	if len(jobIDs) == 0 {
+		analytics, err := worker.AnalyticsPool(ctx, pool)
+		if err != nil {
+			log.Printf("analytics database: %v", err)
+			return 1
+		}
+		defer analytics.Close()
+		cq = db.New(analytics)
+	}
+	var selected []db.SelectOrphanLivenessCandidatesRow
+	var staleCandidates []db.SelectStaleRegisteredCandidatesRow
+	_, err = worker.RetryStandbyConflict(ctx, "select candidates", func() (struct{}, error) {
+		var err error
+		selected, staleCandidates, err = selectProbeCandidates(ctx, cq,
+			probeScope{source: *sourceFilter, jobIDs: jobIDs}, atsProviders, probeDespiteRegistered, cutoff)
+		return struct{}{}, err
+	})
 	if err != nil {
 		log.Printf("select candidates: %v", err)
 		return 1

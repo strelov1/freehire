@@ -25,6 +25,14 @@ type PostAssistantExtendRes interface {
 	postAssistantExtendRes()
 }
 
+type PostAssistantInterviewReportRes interface {
+	postAssistantInterviewReportRes()
+}
+
+type PostAssistantInterviewSpeechRes interface {
+	postAssistantInterviewSpeechRes()
+}
+
 type PostJobAutoApplyRes interface {
 	postJobAutoApplyRes()
 }

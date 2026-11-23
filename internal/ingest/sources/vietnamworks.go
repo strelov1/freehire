@@ -73,8 +73,9 @@ const (
 
 // vietnamworksFields is the retrieveFields the listing asks for. The API answers every field it
 // is not asked for with an empty value, so a missing name here reads as a missing fact.
+// The API also needs alias in the projection to populate jobUrl.
 var vietnamworksFields = []string{
-	"jobId", "jobTitle", "jobUrl", "companyName", "isAnonymous",
+	"jobId", "jobTitle", "jobUrl", "alias", "companyName", "isAnonymous",
 	"approvedOn", "expiredOn", "workingLocations", "typeWorkingId",
 	"groupJobFunctionsV3", "isSalaryVisible", "salaryMin", "salaryMax",
 	"salaryCurrency", "salaryPeriodId",

@@ -4,6 +4,7 @@
   import { extractAttachment, type Attachment } from '#lib/assistant/client.js';
   import VoiceInput from '#lib/assistant/VoiceInput.svelte';
   import { DICTATION_ENABLED } from '#lib/assistant/audioAvailability.js';
+  import type { transcribe } from './speech';
   import { appendTranscript } from '#lib/assistant/dictation.js';
   import { messages } from './Composer.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -19,6 +20,7 @@
     attachments = $bindable([]),
     attachable = true,
     dictatable = true,
+    voiceTranscriber,
     queue,
     turnActive,
     disabled,
@@ -35,6 +37,7 @@
     /** Whether to offer the microphone. Off for a host whose callers may not have the
      *  paid dictation feature, so the control never answers with an upgrade wall. */
     dictatable?: boolean;
+    voiceTranscriber?: typeof transcribe;
     queue: { id: string; text: string; attachments: Attachment[] }[];
     turnActive: boolean;
     disabled: boolean;
@@ -54,6 +57,12 @@
   // placeholder hint, so a denied permission is legible without a toast system.
   let dictationOff = $state(false);
   let voiceError = $state<string | null>(null);
+
+  $effect(() => {
+    void voiceTranscriber;
+    dictationOff = false;
+    voiceError = null;
+  });
 
   function acceptTranscript(text: string) {
     voiceError = null;
@@ -229,13 +238,16 @@
         }}
         class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1.5 text-base leading-6 text-foreground placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
       ></textarea>
-      {#if dictatable && DICTATION_ENABLED && !dictationOff}
-        <VoiceInput
-          {disabled}
-          onTranscript={acceptTranscript}
-          onError={(message) => (voiceError = message)}
-          onUnavailable={() => (dictationOff = true)}
-        />
+      {#if dictatable && (DICTATION_ENABLED || voiceTranscriber) && !dictationOff}
+        {#key voiceTranscriber}
+          <VoiceInput
+            transcribeAudio={voiceTranscriber}
+            {disabled}
+            onTranscript={acceptTranscript}
+            onError={(message) => (voiceError = message)}
+            onUnavailable={() => (dictationOff = true)}
+          />
+        {/key}
       {/if}
       {#if turnActive && onCancel && !hasContent}
         <button

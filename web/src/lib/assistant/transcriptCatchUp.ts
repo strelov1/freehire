@@ -1,4 +1,4 @@
-import { getSession } from '#lib/assistant/api.js';
+import { getSession, type InterviewReport } from '#lib/assistant/api.js';
 import { chatFromTranscript, type ChatState } from '#lib/assistant/chat.js';
 
 /**
@@ -6,23 +6,33 @@ import { chatFromTranscript, type ChatState } from '#lib/assistant/chat.js';
  * whose stream the client lost, so this is how a returning client catches up.
  */
 export class TranscriptCatchUp {
+  private generation = 0;
+  private reportGeneration = 0;
+
+  invalidateReport() {
+    this.reportGeneration++;
+  }
+
   constructor(
     private readonly o: {
       isSupport: boolean;
       activeId: () => string | null;
       /** A turn is streaming: that stream is already the newer truth. */
       streaming: () => boolean;
-      show: (chat: ChatState) => void;
+      show: (chat: ChatState, report: InterviewReport | undefined, reportIsCurrent: boolean) => void;
     },
   ) {}
 
   /** Re-read session `id`'s transcript into the view, if it is still the one shown. */
   reload = async (id: string) => {
     if (this.o.isSupport || id !== this.o.activeId()) return;
+    const generation = ++this.generation;
+    const reportGeneration = this.reportGeneration;
     try {
-      const { messages } = await getSession(id);
+      const { messages, interview_report } = await getSession(id);
       const next = chatFromTranscript(messages);
-      if (id === this.o.activeId()) this.o.show(next);
+      if (generation === this.generation && id === this.o.activeId())
+        this.o.show(next, interview_report, reportGeneration === this.reportGeneration);
     } catch {
       /* the transcript stays as it is; the next visit will catch up */
     }

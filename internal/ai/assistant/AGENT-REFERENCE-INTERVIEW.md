@@ -107,6 +107,15 @@ presets sharing a tool set is new here, and it is the prompt â€” not the tools â
 allowed to differ; a tool added to one and forgotten in the other would be a debrief that
 cannot read the interview it is reviewing.
 
-The endpoint accepts a debrief at any stage. Somebody who sat an interview and never moved
-their application's stage is exactly who it is for. (The tracker's stage-gated entry point,
-`offersDebrief`, went with the tracker layout rework, so the SPA no longer offers it anywhere.)
+The endpoint accepts a debrief at any stage. The tracking drawer offers it at `interview`,
+`offer`, `accepted` and `rejected`, and offers rehearsal at `screening` and `interview`.
+
+A rehearsal can be finished after the candidate answers. The feedback uses the last five
+answered exchanges and focuses on the last answer. Its quote and repeated question are
+copied from the stored conversation. The saved report is served with session detail and
+repeating the question creates a separate rehearsal for the same application. Feedback
+uses the assistant allowance and the caller's gateway credential.
+
+ElevenLabs push-to-talk uses the ordinary rehearsal transcript. Set the voice ID and
+`ELEVENLABS_VIA_BIFROST=true` to route recording and playback through the existing
+inference gateway. A direct ElevenLabs credential also supports local runs.

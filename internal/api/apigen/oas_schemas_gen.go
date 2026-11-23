@@ -1185,6 +1185,69 @@ func (s *AssistantExtension) SetAllowance(val jx.Raw) {
 	s.Allowance = val
 }
 
+// Ref: #/components/schemas/AssistantInterviewRepeat
+type AssistantInterviewRepeat struct {
+	SessionID string `json:"session_id"`
+}
+
+// GetSessionID returns the value of SessionID.
+func (s *AssistantInterviewRepeat) GetSessionID() string {
+	return s.SessionID
+}
+
+// SetSessionID sets the value of SessionID.
+func (s *AssistantInterviewRepeat) SetSessionID(val string) {
+	s.SessionID = val
+}
+
+// Ref: #/components/schemas/AssistantInterviewReport
+type AssistantInterviewReport struct {
+	Strength    string `json:"strength"`
+	Improvement string `json:"improvement"`
+	Quote       string `json:"quote"`
+	Question    string `json:"question"`
+}
+
+// GetStrength returns the value of Strength.
+func (s *AssistantInterviewReport) GetStrength() string {
+	return s.Strength
+}
+
+// GetImprovement returns the value of Improvement.
+func (s *AssistantInterviewReport) GetImprovement() string {
+	return s.Improvement
+}
+
+// GetQuote returns the value of Quote.
+func (s *AssistantInterviewReport) GetQuote() string {
+	return s.Quote
+}
+
+// GetQuestion returns the value of Question.
+func (s *AssistantInterviewReport) GetQuestion() string {
+	return s.Question
+}
+
+// SetStrength sets the value of Strength.
+func (s *AssistantInterviewReport) SetStrength(val string) {
+	s.Strength = val
+}
+
+// SetImprovement sets the value of Improvement.
+func (s *AssistantInterviewReport) SetImprovement(val string) {
+	s.Improvement = val
+}
+
+// SetQuote sets the value of Quote.
+func (s *AssistantInterviewReport) SetQuote(val string) {
+	s.Quote = val
+}
+
+// SetQuestion sets the value of Question.
+func (s *AssistantInterviewReport) SetQuestion(val string) {
+	s.Question = val
+}
+
 // The 402 a spent or missing allowance answers with.
 // Ref: #/components/schemas/AssistantPlanRefusal
 type AssistantPlanRefusal struct {
@@ -1224,8 +1287,10 @@ func (s *AssistantPlanRefusal) SetUpgradeURL(val OptString) {
 	s.UpgradeURL = val
 }
 
-func (*AssistantPlanRefusal) postAssistantExtendRes() {}
-func (*AssistantPlanRefusal) postJobAutoApplyRes()    {}
+func (*AssistantPlanRefusal) postAssistantExtendRes()          {}
+func (*AssistantPlanRefusal) postAssistantInterviewReportRes() {}
+func (*AssistantPlanRefusal) postAssistantInterviewSpeechRes() {}
+func (*AssistantPlanRefusal) postJobAutoApplyRes()             {}
 
 // One conversation.
 // Ref: #/components/schemas/AssistantSession
@@ -1303,6 +1368,9 @@ func (s *AssistantSession) SetJobID(val OptInt64) {
 type AssistantSessionDetail struct {
 	Session  AssistantSession `json:"session"`
 	Messages jx.Raw           `json:"messages"`
+	// Optional ElevenLabs recording and playback on an interview rehearsal.
+	ElevenlabsVoice OptBool                     `json:"elevenlabs_voice"`
+	InterviewReport OptAssistantInterviewReport `json:"interview_report"`
 }
 
 // GetSession returns the value of Session.
@@ -1315,6 +1383,16 @@ func (s *AssistantSessionDetail) GetMessages() jx.Raw {
 	return s.Messages
 }
 
+// GetElevenlabsVoice returns the value of ElevenlabsVoice.
+func (s *AssistantSessionDetail) GetElevenlabsVoice() OptBool {
+	return s.ElevenlabsVoice
+}
+
+// GetInterviewReport returns the value of InterviewReport.
+func (s *AssistantSessionDetail) GetInterviewReport() OptAssistantInterviewReport {
+	return s.InterviewReport
+}
+
 // SetSession sets the value of Session.
 func (s *AssistantSessionDetail) SetSession(val AssistantSession) {
 	s.Session = val
@@ -1323,6 +1401,16 @@ func (s *AssistantSessionDetail) SetSession(val AssistantSession) {
 // SetMessages sets the value of Messages.
 func (s *AssistantSessionDetail) SetMessages(val jx.Raw) {
 	s.Messages = val
+}
+
+// SetElevenlabsVoice sets the value of ElevenlabsVoice.
+func (s *AssistantSessionDetail) SetElevenlabsVoice(val OptBool) {
+	s.ElevenlabsVoice = val
+}
+
+// SetInterviewReport sets the value of InterviewReport.
+func (s *AssistantSessionDetail) SetInterviewReport(val OptAssistantInterviewReport) {
+	s.InterviewReport = val
 }
 
 // Ref: #/components/schemas/AssistantSessionList
@@ -2273,6 +2361,39 @@ func (s *AutoApplyReviewStatus) UnmarshalText(data []byte) error {
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
+}
+
+// Ref: #/components/schemas/AutoApplySettings
+type AutoApplySettings struct {
+	// Wait for the account's approval on every auto-apply attempt, even one whose form asks nothing only
+	// the candidate can answer.
+	ConfirmEach bool `json:"confirm_each"`
+}
+
+// GetConfirmEach returns the value of ConfirmEach.
+func (s *AutoApplySettings) GetConfirmEach() bool {
+	return s.ConfirmEach
+}
+
+// SetConfirmEach sets the value of ConfirmEach.
+func (s *AutoApplySettings) SetConfirmEach(val bool) {
+	s.ConfirmEach = val
+}
+
+// Ref: #/components/schemas/AutoApplySettingsUpdate
+type AutoApplySettingsUpdate struct {
+	// Absent reads as false.
+	ConfirmEach OptBool `json:"confirm_each"`
+}
+
+// GetConfirmEach returns the value of ConfirmEach.
+func (s *AutoApplySettingsUpdate) GetConfirmEach() OptBool {
+	return s.ConfirmEach
+}
+
+// SetConfirmEach sets the value of ConfirmEach.
+func (s *AutoApplySettingsUpdate) SetConfirmEach(val OptBool) {
+	s.ConfirmEach = val
 }
 
 // A question the attempt could not answer. The attempt's internal error text is never here.
@@ -6119,6 +6240,8 @@ type CompanyInsight struct {
 	OpenNow     int64  `json:"open_now"`
 	OpenPrev30d int64  `json:"open_prev_30d"`
 	Growth30d   int64  `json:"growth_30d"`
+	// When a company that had not been hiring started again; set only for those (sort=new).
+	HiringStartedAt OptDateTime `json:"hiring_started_at"`
 }
 
 // GetCompanySlug returns the value of CompanySlug.
@@ -6146,6 +6269,11 @@ func (s *CompanyInsight) GetGrowth30d() int64 {
 	return s.Growth30d
 }
 
+// GetHiringStartedAt returns the value of HiringStartedAt.
+func (s *CompanyInsight) GetHiringStartedAt() OptDateTime {
+	return s.HiringStartedAt
+}
+
 // SetCompanySlug sets the value of CompanySlug.
 func (s *CompanyInsight) SetCompanySlug(val string) {
 	s.CompanySlug = val
@@ -6169,6 +6297,11 @@ func (s *CompanyInsight) SetOpenPrev30d(val int64) {
 // SetGrowth30d sets the value of Growth30d.
 func (s *CompanyInsight) SetGrowth30d(val int64) {
 	s.Growth30d = val
+}
+
+// SetHiringStartedAt sets the value of HiringStartedAt.
+func (s *CompanyInsight) SetHiringStartedAt(val OptDateTime) {
+	s.HiringStartedAt = val
 }
 
 // A row of the catalogue: the company, its open-job count and a few company-info facts for the card.
@@ -9776,7 +9909,9 @@ type EmployerAccount struct {
 	EmailConfirmed bool `json:"email_confirmed"`
 	// True when the caller acts for the company as a member of its team rather than as its claimant;
 	// `work_email` is then the caller's own.
-	Member    bool      `json:"member"`
+	Member bool `json:"member"`
+	// The exact values are owner for the claimant, manager for an existing manager, and recruiter.
+	Role      OptString `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -9818,6 +9953,11 @@ func (s *EmployerAccount) GetEmailConfirmed() bool {
 // GetMember returns the value of Member.
 func (s *EmployerAccount) GetMember() bool {
 	return s.Member
+}
+
+// GetRole returns the value of Role.
+func (s *EmployerAccount) GetRole() OptString {
+	return s.Role
 }
 
 // GetCreatedAt returns the value of CreatedAt.
@@ -9863,6 +10003,11 @@ func (s *EmployerAccount) SetEmailConfirmed(val bool) {
 // SetMember sets the value of Member.
 func (s *EmployerAccount) SetMember(val bool) {
 	s.Member = val
+}
+
+// SetRole sets the value of Role.
+func (s *EmployerAccount) SetRole(val OptString) {
+	s.Role = val
 }
 
 // SetCreatedAt sets the value of CreatedAt.
@@ -9919,6 +10064,98 @@ func (s *EmployerAccountStatus) UnmarshalText(data []byte) error {
 	}
 }
 
+// Ref: #/components/schemas/EmployerActivity
+type EmployerActivity struct {
+	ID            int64     `json:"id"`
+	Action        string    `json:"action"`
+	ActorEmail    OptString `json:"actor_email"`
+	ApplicationID OptInt64  `json:"application_id"`
+	PreviousStage OptString `json:"previous_stage"`
+	Stage         OptString `json:"stage"`
+	SubjectEmail  OptString `json:"subject_email"`
+	OccurredAt    time.Time `json:"occurred_at"`
+}
+
+// GetID returns the value of ID.
+func (s *EmployerActivity) GetID() int64 {
+	return s.ID
+}
+
+// GetAction returns the value of Action.
+func (s *EmployerActivity) GetAction() string {
+	return s.Action
+}
+
+// GetActorEmail returns the value of ActorEmail.
+func (s *EmployerActivity) GetActorEmail() OptString {
+	return s.ActorEmail
+}
+
+// GetApplicationID returns the value of ApplicationID.
+func (s *EmployerActivity) GetApplicationID() OptInt64 {
+	return s.ApplicationID
+}
+
+// GetPreviousStage returns the value of PreviousStage.
+func (s *EmployerActivity) GetPreviousStage() OptString {
+	return s.PreviousStage
+}
+
+// GetStage returns the value of Stage.
+func (s *EmployerActivity) GetStage() OptString {
+	return s.Stage
+}
+
+// GetSubjectEmail returns the value of SubjectEmail.
+func (s *EmployerActivity) GetSubjectEmail() OptString {
+	return s.SubjectEmail
+}
+
+// GetOccurredAt returns the value of OccurredAt.
+func (s *EmployerActivity) GetOccurredAt() time.Time {
+	return s.OccurredAt
+}
+
+// SetID sets the value of ID.
+func (s *EmployerActivity) SetID(val int64) {
+	s.ID = val
+}
+
+// SetAction sets the value of Action.
+func (s *EmployerActivity) SetAction(val string) {
+	s.Action = val
+}
+
+// SetActorEmail sets the value of ActorEmail.
+func (s *EmployerActivity) SetActorEmail(val OptString) {
+	s.ActorEmail = val
+}
+
+// SetApplicationID sets the value of ApplicationID.
+func (s *EmployerActivity) SetApplicationID(val OptInt64) {
+	s.ApplicationID = val
+}
+
+// SetPreviousStage sets the value of PreviousStage.
+func (s *EmployerActivity) SetPreviousStage(val OptString) {
+	s.PreviousStage = val
+}
+
+// SetStage sets the value of Stage.
+func (s *EmployerActivity) SetStage(val OptString) {
+	s.Stage = val
+}
+
+// SetSubjectEmail sets the value of SubjectEmail.
+func (s *EmployerActivity) SetSubjectEmail(val OptString) {
+	s.SubjectEmail = val
+}
+
+// SetOccurredAt sets the value of OccurredAt.
+func (s *EmployerActivity) SetOccurredAt(val time.Time) {
+	s.OccurredAt = val
+}
+
 // One application sent on freehire to one of the caller's vacancies.
 // Ref: #/components/schemas/EmployerApplication
 type EmployerApplication struct {
@@ -9938,6 +10175,10 @@ type EmployerApplication struct {
 	Stage   EmployerApplicationStage    `json:"stage"`
 	// When you last moved it; absent while it has never been moved.
 	StageChangedAt OptDateTime `json:"stage_changed_at"`
+	// First review by a teammate, independent of the hiring stage.
+	ViewedAt OptDateTime `json:"viewed_at"`
+	// Private notes shared within the employer team.
+	EmployerNotes OptString `json:"employer_notes"`
 	// When the application reached you.
 	SentAt time.Time `json:"sent_at"`
 }
@@ -9990,6 +10231,16 @@ func (s *EmployerApplication) GetStage() EmployerApplicationStage {
 // GetStageChangedAt returns the value of StageChangedAt.
 func (s *EmployerApplication) GetStageChangedAt() OptDateTime {
 	return s.StageChangedAt
+}
+
+// GetViewedAt returns the value of ViewedAt.
+func (s *EmployerApplication) GetViewedAt() OptDateTime {
+	return s.ViewedAt
+}
+
+// GetEmployerNotes returns the value of EmployerNotes.
+func (s *EmployerApplication) GetEmployerNotes() OptString {
+	return s.EmployerNotes
 }
 
 // GetSentAt returns the value of SentAt.
@@ -10045,6 +10296,16 @@ func (s *EmployerApplication) SetStage(val EmployerApplicationStage) {
 // SetStageChangedAt sets the value of StageChangedAt.
 func (s *EmployerApplication) SetStageChangedAt(val OptDateTime) {
 	s.StageChangedAt = val
+}
+
+// SetViewedAt sets the value of ViewedAt.
+func (s *EmployerApplication) SetViewedAt(val OptDateTime) {
+	s.ViewedAt = val
+}
+
+// SetEmployerNotes sets the value of EmployerNotes.
+func (s *EmployerApplication) SetEmployerNotes(val OptString) {
+	s.EmployerNotes = val
 }
 
 // SetSentAt sets the value of SentAt.
@@ -10162,6 +10423,22 @@ func (s *EmployerApplicationMoved) SetCandidateNotified(val bool) {
 	s.CandidateNotified = val
 }
 
+// Ref: #/components/schemas/EmployerApplicationSearch
+type EmployerApplicationSearch struct {
+	// A literal search in candidate email, message and answers.
+	Query string `json:"query"`
+}
+
+// GetQuery returns the value of Query.
+func (s *EmployerApplicationSearch) GetQuery() string {
+	return s.Query
+}
+
+// SetQuery sets the value of Query.
+func (s *EmployerApplicationSearch) SetQuery(val string) {
+	s.Query = val
+}
+
 // A stage of the employer's hiring pipeline. Every delivered application starts at `new`.
 // Ref: #/components/schemas/EmployerApplicationStage
 type EmployerApplicationStage string
@@ -10231,6 +10508,34 @@ func (s *EmployerApplicationStage) UnmarshalText(data []byte) error {
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
+}
+
+// Ref: #/components/schemas/EmployerApplicationWorkspace
+type EmployerApplicationWorkspace struct {
+	// Record that a teammate reviewed this application.
+	MarkViewed OptBool `json:"mark_viewed"`
+	// Replace the private team notes. The empty string clears them.
+	EmployerNotes OptString `json:"employer_notes"`
+}
+
+// GetMarkViewed returns the value of MarkViewed.
+func (s *EmployerApplicationWorkspace) GetMarkViewed() OptBool {
+	return s.MarkViewed
+}
+
+// GetEmployerNotes returns the value of EmployerNotes.
+func (s *EmployerApplicationWorkspace) GetEmployerNotes() OptString {
+	return s.EmployerNotes
+}
+
+// SetMarkViewed sets the value of MarkViewed.
+func (s *EmployerApplicationWorkspace) SetMarkViewed(val OptBool) {
+	s.MarkViewed = val
+}
+
+// SetEmployerNotes sets the value of EmployerNotes.
+func (s *EmployerApplicationWorkspace) SetEmployerNotes(val OptString) {
+	s.EmployerNotes = val
 }
 
 // Ref: #/components/schemas/EmployerApplicationsMeta
@@ -10445,7 +10750,9 @@ type EmployerCompany struct {
 	EmailConfirmed bool `json:"email_confirmed"`
 	// True when the caller acts for the company as a member of its team rather than as its claimant;
 	// `work_email` is then the caller's own.
-	Member        bool      `json:"member"`
+	Member bool `json:"member"`
+	// The exact values are owner for the claimant, manager for an existing manager, and recruiter.
+	Role          OptString `json:"role"`
 	CreatedAt     time.Time `json:"created_at"`
 	Tagline       OptString `json:"tagline"`
 	Description   OptString `json:"description"`
@@ -10495,6 +10802,11 @@ func (s *EmployerCompany) GetEmailConfirmed() bool {
 // GetMember returns the value of Member.
 func (s *EmployerCompany) GetMember() bool {
 	return s.Member
+}
+
+// GetRole returns the value of Role.
+func (s *EmployerCompany) GetRole() OptString {
+	return s.Role
 }
 
 // GetCreatedAt returns the value of CreatedAt.
@@ -10580,6 +10892,11 @@ func (s *EmployerCompany) SetEmailConfirmed(val bool) {
 // SetMember sets the value of Member.
 func (s *EmployerCompany) SetMember(val bool) {
 	s.Member = val
+}
+
+// SetRole sets the value of Role.
+func (s *EmployerCompany) SetRole(val OptString) {
+	s.Role = val
 }
 
 // SetCreatedAt sets the value of CreatedAt.
@@ -10748,7 +11065,9 @@ type EmployerPendingClaim struct {
 	EmailConfirmed bool `json:"email_confirmed"`
 	// True when the caller acts for the company as a member of its team rather than as its claimant;
 	// `work_email` is then the caller's own.
-	Member    bool      `json:"member"`
+	Member bool `json:"member"`
+	// The exact values are owner for the claimant, manager for an existing manager, and recruiter.
+	Role      OptString `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 	// The catalogue's current website, empty when unknown.
 	Website string `json:"website"`
@@ -10794,6 +11113,11 @@ func (s *EmployerPendingClaim) GetEmailConfirmed() bool {
 // GetMember returns the value of Member.
 func (s *EmployerPendingClaim) GetMember() bool {
 	return s.Member
+}
+
+// GetRole returns the value of Role.
+func (s *EmployerPendingClaim) GetRole() OptString {
+	return s.Role
 }
 
 // GetCreatedAt returns the value of CreatedAt.
@@ -10849,6 +11173,11 @@ func (s *EmployerPendingClaim) SetEmailConfirmed(val bool) {
 // SetMember sets the value of Member.
 func (s *EmployerPendingClaim) SetMember(val bool) {
 	s.Member = val
+}
+
+// SetRole sets the value of Role.
+func (s *EmployerPendingClaim) SetRole(val OptString) {
+	s.Role = val
 }
 
 // SetCreatedAt sets the value of CreatedAt.
@@ -11023,8 +11352,9 @@ func (s *EmployerTeamInvitation) SetExpiresAt(val time.Time) {
 // What an invitation link offers before it is accepted.
 // Ref: #/components/schemas/EmployerTeamInvitationPreview
 type EmployerTeamInvitationPreview struct {
-	CompanyName string `json:"company_name"`
-	Email       string `json:"email"`
+	CompanyName string    `json:"company_name"`
+	Email       string    `json:"email"`
+	Role        OptString `json:"role"`
 }
 
 // GetCompanyName returns the value of CompanyName.
@@ -11037,6 +11367,11 @@ func (s *EmployerTeamInvitationPreview) GetEmail() string {
 	return s.Email
 }
 
+// GetRole returns the value of Role.
+func (s *EmployerTeamInvitationPreview) GetRole() OptString {
+	return s.Role
+}
+
 // SetCompanyName sets the value of CompanyName.
 func (s *EmployerTeamInvitationPreview) SetCompanyName(val string) {
 	s.CompanyName = val
@@ -11045,6 +11380,11 @@ func (s *EmployerTeamInvitationPreview) SetCompanyName(val string) {
 // SetEmail sets the value of Email.
 func (s *EmployerTeamInvitationPreview) SetEmail(val string) {
 	s.Email = val
+}
+
+// SetRole sets the value of Role.
+func (s *EmployerTeamInvitationPreview) SetRole(val OptString) {
+	s.Role = val
 }
 
 // Ref: #/components/schemas/EmployerTeamInvite
@@ -11069,6 +11409,7 @@ type EmployerTeamMember struct {
 	WorkEmail string    `json:"work_email"`
 	JoinedAt  time.Time `json:"joined_at"`
 	Holder    bool      `json:"holder"`
+	Role      OptString `json:"role"`
 }
 
 // GetUserID returns the value of UserID.
@@ -11091,6 +11432,11 @@ func (s *EmployerTeamMember) GetHolder() bool {
 	return s.Holder
 }
 
+// GetRole returns the value of Role.
+func (s *EmployerTeamMember) GetRole() OptString {
+	return s.Role
+}
+
 // SetUserID sets the value of UserID.
 func (s *EmployerTeamMember) SetUserID(val int64) {
 	s.UserID = val
@@ -11111,6 +11457,11 @@ func (s *EmployerTeamMember) SetHolder(val bool) {
 	s.Holder = val
 }
 
+// SetRole sets the value of Role.
+func (s *EmployerTeamMember) SetRole(val OptString) {
+	s.Role = val
+}
+
 // The token from the invitation link.
 // Ref: #/components/schemas/EmployerTeamToken
 type EmployerTeamToken struct {
@@ -11125,6 +11476,47 @@ func (s *EmployerTeamToken) GetToken() OptString {
 // SetToken sets the value of Token.
 func (s *EmployerTeamToken) SetToken(val OptString) {
 	s.Token = val
+}
+
+// Counts for the last 30 completed UTC days. Apply clicks begin at rollout.
+// Ref: #/components/schemas/EmployerVacancyAnalytics
+type EmployerVacancyAnalytics struct {
+	// Daily unique visitors from the page-view rollup, summed across the window.
+	Views int64 `json:"views"`
+	// Apply button clicks on the vacancy page.
+	ApplyClicks int64 `json:"apply_clicks"`
+	// Applications delivered through Freehire.
+	Applications int64 `json:"applications"`
+}
+
+// GetViews returns the value of Views.
+func (s *EmployerVacancyAnalytics) GetViews() int64 {
+	return s.Views
+}
+
+// GetApplyClicks returns the value of ApplyClicks.
+func (s *EmployerVacancyAnalytics) GetApplyClicks() int64 {
+	return s.ApplyClicks
+}
+
+// GetApplications returns the value of Applications.
+func (s *EmployerVacancyAnalytics) GetApplications() int64 {
+	return s.Applications
+}
+
+// SetViews sets the value of Views.
+func (s *EmployerVacancyAnalytics) SetViews(val int64) {
+	s.Views = val
+}
+
+// SetApplyClicks sets the value of ApplyClicks.
+func (s *EmployerVacancyAnalytics) SetApplyClicks(val int64) {
+	s.ApplyClicks = val
+}
+
+// SetApplications sets the value of Applications.
+func (s *EmployerVacancyAnalytics) SetApplications(val int64) {
+	s.Applications = val
 }
 
 // `title` is required, and `url` too unless `apply_mode` is "freehire".
@@ -11544,6 +11936,38 @@ func (s *EngagementStatsOK) GetData() Engagement {
 // SetData sets the value of Data.
 func (s *EngagementStatsOK) SetData(val Engagement) {
 	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ExcludeCompanyOK struct {
+	Data Profile `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ExcludeCompanyOK) GetData() Profile {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ExcludeCompanyOK) SetData(val Profile) {
+	s.Data = val
+}
+
+// The company to hide from the match feeds.
+// Ref: #/components/schemas/ExcludeCompanyRequest
+type ExcludeCompanyRequest struct {
+	// The company's slug. (e.g. `acme`).
+	CompanySlug string `json:"company_slug"`
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *ExcludeCompanyRequest) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *ExcludeCompanyRequest) SetCompanySlug(val string) {
+	s.CompanySlug = val
 }
 
 // One piece of evidence, at the grain of a CV bullet. The three flags below are computed at read time.
@@ -12447,6 +12871,21 @@ func (s *GetAutoApplyListOK) SetData(val AutoApplyList) {
 }
 
 // A single item: `{"data": ...}`.
+type GetAutoApplySettingsOK struct {
+	Data AutoApplySettings `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetAutoApplySettingsOK) GetData() AutoApplySettings {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetAutoApplySettingsOK) SetData(val AutoApplySettings) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetAutofillProfileOK struct {
 	Data jx.Raw `json:"data"`
 }
@@ -12763,6 +13202,36 @@ func (s *GetEmployerTeamOK) SetData(val EmployerTeam) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type GetEmployerVacancyAnalyticsOK struct {
+	Data EmployerVacancyAnalytics `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetEmployerVacancyAnalyticsOK) GetData() EmployerVacancyAnalytics {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetEmployerVacancyAnalyticsOK) SetData(val EmployerVacancyAnalytics) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetInterviewPrepOK struct {
+	Data InterviewPrepSheet `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetInterviewPrepOK) GetData() InterviewPrepSheet {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetInterviewPrepOK) SetData(val InterviewPrepSheet) {
+	s.Data = val
+}
+
 type GetInterviewsOK struct {
 	Data []ScheduledInterview `json:"data"`
 	Meta TimelineMeta         `json:"meta"`
@@ -13049,6 +13518,21 @@ func (s *GetResumeOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *GetResumeOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetResumeReviewPostingOK struct {
+	Data ResumeReviewPosting `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetResumeReviewPostingOK) GetData() ResumeReviewPosting {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetResumeReviewPostingOK) SetData(val ResumeReviewPosting) {
 	s.Data = val
 }
 
@@ -13640,6 +14124,22 @@ func (s *HealthStatus) UnmarshalText(data []byte) error {
 
 // HideCompanyFeedbackNoContent is response for HideCompanyFeedback operation.
 type HideCompanyFeedbackNoContent struct{}
+
+// The meta of a save: the body fields that were read and not applied.
+// Ref: #/components/schemas/IgnoredFieldsMeta
+type IgnoredFieldsMeta struct {
+	IgnoredFields []string `json:"ignored_fields"`
+}
+
+// GetIgnoredFields returns the value of IgnoredFields.
+func (s *IgnoredFieldsMeta) GetIgnoredFields() []string {
+	return s.IgnoredFields
+}
+
+// SetIgnoredFields sets the value of IgnoredFields.
+func (s *IgnoredFieldsMeta) SetIgnoredFields(val []string) {
+	s.IgnoredFields = val
+}
 
 // The meta of a single-item answer, sent only to carry a warning.
 // Ref: #/components/schemas/IgnoredMeta
@@ -14821,6 +15321,129 @@ func (s *InterpretSearchOK) GetData() jx.Raw {
 // SetData sets the value of Data.
 func (s *InterpretSearchOK) SetData(val jx.Raw) {
 	s.Data = val
+}
+
+// Ref: #/components/schemas/InterviewPracticeExample
+type InterviewPracticeExample struct {
+	Claim   string    `json:"claim"`
+	Context OptString `json:"context"`
+	Metrics []string  `json:"metrics"`
+	Place   OptString `json:"place"`
+}
+
+// GetClaim returns the value of Claim.
+func (s *InterviewPracticeExample) GetClaim() string {
+	return s.Claim
+}
+
+// GetContext returns the value of Context.
+func (s *InterviewPracticeExample) GetContext() OptString {
+	return s.Context
+}
+
+// GetMetrics returns the value of Metrics.
+func (s *InterviewPracticeExample) GetMetrics() []string {
+	return s.Metrics
+}
+
+// GetPlace returns the value of Place.
+func (s *InterviewPracticeExample) GetPlace() OptString {
+	return s.Place
+}
+
+// SetClaim sets the value of Claim.
+func (s *InterviewPracticeExample) SetClaim(val string) {
+	s.Claim = val
+}
+
+// SetContext sets the value of Context.
+func (s *InterviewPracticeExample) SetContext(val OptString) {
+	s.Context = val
+}
+
+// SetMetrics sets the value of Metrics.
+func (s *InterviewPracticeExample) SetMetrics(val []string) {
+	s.Metrics = val
+}
+
+// SetPlace sets the value of Place.
+func (s *InterviewPracticeExample) SetPlace(val OptString) {
+	s.Place = val
+}
+
+// Ref: #/components/schemas/InterviewPracticeQuestion
+type InterviewPracticeQuestion struct {
+	Prompt string    `json:"prompt"`
+	Topic  OptString `json:"topic"`
+}
+
+// GetPrompt returns the value of Prompt.
+func (s *InterviewPracticeQuestion) GetPrompt() string {
+	return s.Prompt
+}
+
+// GetTopic returns the value of Topic.
+func (s *InterviewPracticeQuestion) GetTopic() OptString {
+	return s.Topic
+}
+
+// SetPrompt sets the value of Prompt.
+func (s *InterviewPracticeQuestion) SetPrompt(val string) {
+	s.Prompt = val
+}
+
+// SetTopic sets the value of Topic.
+func (s *InterviewPracticeQuestion) SetTopic(val OptString) {
+	s.Topic = val
+}
+
+// Ref: #/components/schemas/InterviewPrepSheet
+type InterviewPrepSheet struct {
+	Job       ToolJob                     `json:"job"`
+	Questions []InterviewPracticeQuestion `json:"questions"`
+	// Confirmed examples from the caller's Experience Bank. Omitted for guests.
+	Examples            []InterviewPracticeExample `json:"examples"`
+	ExamplesUnavailable OptBool                    `json:"examples_unavailable"`
+}
+
+// GetJob returns the value of Job.
+func (s *InterviewPrepSheet) GetJob() ToolJob {
+	return s.Job
+}
+
+// GetQuestions returns the value of Questions.
+func (s *InterviewPrepSheet) GetQuestions() []InterviewPracticeQuestion {
+	return s.Questions
+}
+
+// GetExamples returns the value of Examples.
+func (s *InterviewPrepSheet) GetExamples() []InterviewPracticeExample {
+	return s.Examples
+}
+
+// GetExamplesUnavailable returns the value of ExamplesUnavailable.
+func (s *InterviewPrepSheet) GetExamplesUnavailable() OptBool {
+	return s.ExamplesUnavailable
+}
+
+// SetJob sets the value of Job.
+func (s *InterviewPrepSheet) SetJob(val ToolJob) {
+	s.Job = val
+}
+
+// SetQuestions sets the value of Questions.
+func (s *InterviewPrepSheet) SetQuestions(val []InterviewPracticeQuestion) {
+	s.Questions = val
+}
+
+// SetExamples sets the value of Examples.
+func (s *InterviewPrepSheet) SetExamples(val []InterviewPracticeExample) {
+	s.Examples = val
+}
+
+// SetExamplesUnavailable sets the value of ExamplesUnavailable.
+func (s *InterviewPrepSheet) SetExamplesUnavailable(val OptBool) {
+	s.ExamplesUnavailable = val
 }
 
 // Ref: #/components/schemas/Invite
@@ -16368,6 +16991,21 @@ func (s *ListDismissedSlugsOK) GetData() []string {
 
 // SetData sets the value of Data.
 func (s *ListDismissedSlugsOK) SetData(val []string) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListEmployerActivityOK struct {
+	Data []EmployerActivity `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListEmployerActivityOK) GetData() []EmployerActivity {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListEmployerActivityOK) SetData(val []EmployerActivity) {
 	s.Data = val
 }
 
@@ -20702,6 +21340,52 @@ func (o OptApplyJob) Or(d ApplyJob) ApplyJob {
 	return d
 }
 
+// NewOptAssistantInterviewReport returns new OptAssistantInterviewReport with value set to v.
+func NewOptAssistantInterviewReport(v AssistantInterviewReport) OptAssistantInterviewReport {
+	return OptAssistantInterviewReport{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptAssistantInterviewReport is optional AssistantInterviewReport.
+type OptAssistantInterviewReport struct {
+	Value AssistantInterviewReport
+	Set   bool
+}
+
+// IsSet returns true if OptAssistantInterviewReport was set.
+func (o OptAssistantInterviewReport) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptAssistantInterviewReport) Reset() {
+	var v AssistantInterviewReport
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptAssistantInterviewReport) SetTo(v AssistantInterviewReport) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptAssistantInterviewReport) Get() (v AssistantInterviewReport, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptAssistantInterviewReport) Or(d AssistantInterviewReport) AssistantInterviewReport {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptAssistantSessionRequest returns new OptAssistantSessionRequest with value set to v.
 func NewOptAssistantSessionRequest(v AssistantSessionRequest) OptAssistantSessionRequest {
 	return OptAssistantSessionRequest{
@@ -21110,6 +21794,52 @@ func (o OptDismissJobReportRequest) Get() (v DismissJobReportRequest, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptDismissJobReportRequest) Or(d DismissJobReportRequest) DismissJobReportRequest {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptIgnoredFieldsMeta returns new OptIgnoredFieldsMeta with value set to v.
+func NewOptIgnoredFieldsMeta(v IgnoredFieldsMeta) OptIgnoredFieldsMeta {
+	return OptIgnoredFieldsMeta{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptIgnoredFieldsMeta is optional IgnoredFieldsMeta.
+type OptIgnoredFieldsMeta struct {
+	Value IgnoredFieldsMeta
+	Set   bool
+}
+
+// IsSet returns true if OptIgnoredFieldsMeta was set.
+func (o OptIgnoredFieldsMeta) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptIgnoredFieldsMeta) Reset() {
+	var v IgnoredFieldsMeta
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptIgnoredFieldsMeta) SetTo(v IgnoredFieldsMeta) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptIgnoredFieldsMeta) Get() (v IgnoredFieldsMeta, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptIgnoredFieldsMeta) Or(d IgnoredFieldsMeta) IgnoredFieldsMeta {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -23117,6 +23847,80 @@ func (s *PostAssistantExtendOK) SetData(val AssistantExtension) {
 func (*PostAssistantExtendOK) postAssistantExtendRes() {}
 
 // A single item: `{"data": ...}`.
+type PostAssistantInterviewRepeatOK struct {
+	Data AssistantInterviewRepeat `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PostAssistantInterviewRepeatOK) GetData() AssistantInterviewRepeat {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PostAssistantInterviewRepeatOK) SetData(val AssistantInterviewRepeat) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type PostAssistantInterviewReportOK struct {
+	Data AssistantInterviewReport `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PostAssistantInterviewReportOK) GetData() AssistantInterviewReport {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PostAssistantInterviewReportOK) SetData(val AssistantInterviewReport) {
+	s.Data = val
+}
+
+func (*PostAssistantInterviewReportOK) postAssistantInterviewReportRes() {}
+
+type PostAssistantInterviewSpeechOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s PostAssistantInterviewSpeechOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// PostAssistantInterviewSpeechOKHeaders wraps PostAssistantInterviewSpeechOK with response headers.
+type PostAssistantInterviewSpeechOKHeaders struct {
+	CacheControl string
+	Response     PostAssistantInterviewSpeechOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *PostAssistantInterviewSpeechOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *PostAssistantInterviewSpeechOKHeaders) GetResponse() PostAssistantInterviewSpeechOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *PostAssistantInterviewSpeechOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *PostAssistantInterviewSpeechOKHeaders) SetResponse(val PostAssistantInterviewSpeechOK) {
+	s.Response = val
+}
+
+func (*PostAssistantInterviewSpeechOKHeaders) postAssistantInterviewSpeechRes() {}
+
+// A single item: `{"data": ...}`.
 type PostAssistantVoiceTokenOK struct {
 	Data AssistantVoiceToken `json:"data"`
 }
@@ -23543,7 +24347,10 @@ type ProfileUpdate struct {
 	ExcludedSources OptNilStringArray `json:"excluded_sources"`
 	// Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language.
 	// (e.g. `["en","ru"]`).
-	JobLanguages      OptNilStringArray `json:"job_languages"`
+	JobLanguages OptNilStringArray `json:"job_languages"`
+	// Deprecated and ignored: the list changes only through `/me/profile/excluded-companies`, so a save
+	// from a stale page cannot erase a hidden company. Still accepted, and named in `meta.ignored_fields`
+	// when sent.
 	ExcludedCompanies OptNilStringArray `json:"excluded_companies"`
 	// Shaped like LocationPreferences; null or absent keeps none.
 	LocationPreferences jx.Raw `json:"location_preferences"`
@@ -24001,9 +24808,9 @@ func (s *PushTokenTestResult) SetFailed(val int64) {
 	s.Failed = val
 }
 
-// A single item: `{"data": ...}`.
 type PutProfileOK struct {
-	Data Profile `json:"data"`
+	Data Profile              `json:"data"`
+	Meta OptIgnoredFieldsMeta `json:"meta"`
 }
 
 // GetData returns the value of Data.
@@ -24011,9 +24818,19 @@ func (s *PutProfileOK) GetData() Profile {
 	return s.Data
 }
 
+// GetMeta returns the value of Meta.
+func (s *PutProfileOK) GetMeta() OptIgnoredFieldsMeta {
+	return s.Meta
+}
+
 // SetData sets the value of Data.
 func (s *PutProfileOK) SetData(val Profile) {
 	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *PutProfileOK) SetMeta(val OptIgnoredFieldsMeta) {
+	s.Meta = val
 }
 
 // A single item: `{"data": ...}`.
@@ -24233,6 +25050,9 @@ func (s *RecordDictionaryGapOK) GetData() DictionaryGapRecorded {
 func (s *RecordDictionaryGapOK) SetData(val DictionaryGapRecorded) {
 	s.Data = val
 }
+
+// RecordEmployerVacancyApplyClickNoContent is response for RecordEmployerVacancyApplyClick operation.
+type RecordEmployerVacancyApplyClickNoContent struct{}
 
 // A single item: `{"data": ...}`.
 type RecordViewOK struct {
@@ -25703,6 +26523,20 @@ func (s *ResolvedJobStatus) UnmarshalText(data []byte) error {
 	}
 }
 
+type RestoreCompanyOK struct {
+	Data NilProfile `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RestoreCompanyOK) GetData() NilProfile {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RestoreCompanyOK) SetData(val NilProfile) {
+	s.Data = val
+}
+
 // RestoreEmailNoContent is response for RestoreEmail operation.
 type RestoreEmailNoContent struct{}
 
@@ -25721,6 +26555,103 @@ func (s *ResumeCoverageRequest) GetSkills() OptNilStringArray {
 // SetSkills sets the value of Skills.
 func (s *ResumeCoverageRequest) SetSkills(val OptNilStringArray) {
 	s.Skills = val
+}
+
+// Merged schema.
+// Ref: #/components/schemas/ResumeReviewPosting
+type ResumeReviewPosting struct {
+	PublicSlug   string                    `json:"public_slug"`
+	Title        string                    `json:"title"`
+	Company      string                    `json:"company"`
+	Location     OptString                 `json:"location"`
+	Skills       []string                  `json:"skills"`
+	Requirements []ResumeReviewRequirement `json:"requirements"`
+}
+
+// GetPublicSlug returns the value of PublicSlug.
+func (s *ResumeReviewPosting) GetPublicSlug() string {
+	return s.PublicSlug
+}
+
+// GetTitle returns the value of Title.
+func (s *ResumeReviewPosting) GetTitle() string {
+	return s.Title
+}
+
+// GetCompany returns the value of Company.
+func (s *ResumeReviewPosting) GetCompany() string {
+	return s.Company
+}
+
+// GetLocation returns the value of Location.
+func (s *ResumeReviewPosting) GetLocation() OptString {
+	return s.Location
+}
+
+// GetSkills returns the value of Skills.
+func (s *ResumeReviewPosting) GetSkills() []string {
+	return s.Skills
+}
+
+// GetRequirements returns the value of Requirements.
+func (s *ResumeReviewPosting) GetRequirements() []ResumeReviewRequirement {
+	return s.Requirements
+}
+
+// SetPublicSlug sets the value of PublicSlug.
+func (s *ResumeReviewPosting) SetPublicSlug(val string) {
+	s.PublicSlug = val
+}
+
+// SetTitle sets the value of Title.
+func (s *ResumeReviewPosting) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetCompany sets the value of Company.
+func (s *ResumeReviewPosting) SetCompany(val string) {
+	s.Company = val
+}
+
+// SetLocation sets the value of Location.
+func (s *ResumeReviewPosting) SetLocation(val OptString) {
+	s.Location = val
+}
+
+// SetSkills sets the value of Skills.
+func (s *ResumeReviewPosting) SetSkills(val []string) {
+	s.Skills = val
+}
+
+// SetRequirements sets the value of Requirements.
+func (s *ResumeReviewPosting) SetRequirements(val []ResumeReviewRequirement) {
+	s.Requirements = val
+}
+
+// Ref: #/components/schemas/ResumeReviewRequirement
+type ResumeReviewRequirement struct {
+	Text     string `json:"text"`
+	Priority string `json:"priority"`
+}
+
+// GetText returns the value of Text.
+func (s *ResumeReviewRequirement) GetText() string {
+	return s.Text
+}
+
+// GetPriority returns the value of Priority.
+func (s *ResumeReviewRequirement) GetPriority() string {
+	return s.Priority
+}
+
+// SetText sets the value of Text.
+func (s *ResumeReviewRequirement) SetText(val string) {
+	s.Text = val
+}
+
+// SetPriority sets the value of Priority.
+func (s *ResumeReviewRequirement) SetPriority(val string) {
+	s.Priority = val
 }
 
 // RetractGhostReportNoContent is response for RetractGhostReport operation.
@@ -25868,6 +26799,59 @@ func (s *RoleCountryCell) SetOpenCount(val int64) {
 // SetOpenCountPrev sets the value of OpenCountPrev.
 func (s *RoleCountryCell) SetOpenCountPrev(val int64) {
 	s.OpenCountPrev = val
+}
+
+// Ref: #/components/schemas/RoleDemandAnswer
+type RoleDemandAnswer struct {
+	Data []RoleDemandPoint `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RoleDemandAnswer) GetData() []RoleDemandPoint {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RoleDemandAnswer) SetData(val []RoleDemandPoint) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/RoleDemandPoint
+type RoleDemandPoint struct {
+	Category string `json:"category"`
+	// Monday of the publication week in UTC (YYYY-MM-DD).
+	Week    string `json:"week"`
+	NewJobs int64  `json:"new_jobs"`
+}
+
+// GetCategory returns the value of Category.
+func (s *RoleDemandPoint) GetCategory() string {
+	return s.Category
+}
+
+// GetWeek returns the value of Week.
+func (s *RoleDemandPoint) GetWeek() string {
+	return s.Week
+}
+
+// GetNewJobs returns the value of NewJobs.
+func (s *RoleDemandPoint) GetNewJobs() int64 {
+	return s.NewJobs
+}
+
+// SetCategory sets the value of Category.
+func (s *RoleDemandPoint) SetCategory(val string) {
+	s.Category = val
+}
+
+// SetWeek sets the value of Week.
+func (s *RoleDemandPoint) SetWeek(val string) {
+	s.Week = val
+}
+
+// SetNewJobs sets the value of NewJobs.
+func (s *RoleDemandPoint) SetNewJobs(val int64) {
+	s.NewJobs = val
 }
 
 // Ref: #/components/schemas/RoleInsight
@@ -27171,6 +28155,21 @@ func (s *SetAgentPermissionsOK) GetData() AgentPermissions {
 
 // SetData sets the value of Data.
 func (s *SetAgentPermissionsOK) SetData(val AgentPermissions) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type SetAutoApplySettingsOK struct {
+	Data AutoApplySettings `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SetAutoApplySettingsOK) GetData() AutoApplySettings {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SetAutoApplySettingsOK) SetData(val AutoApplySettings) {
 	s.Data = val
 }
 
@@ -30351,6 +31350,54 @@ func (s *TimelineMeta) SetCount(val int64) {
 	s.Count = val
 }
 
+// Ref: #/components/schemas/ToolJob
+type ToolJob struct {
+	PublicSlug string    `json:"public_slug"`
+	Title      string    `json:"title"`
+	Company    string    `json:"company"`
+	Location   OptString `json:"location"`
+}
+
+// GetPublicSlug returns the value of PublicSlug.
+func (s *ToolJob) GetPublicSlug() string {
+	return s.PublicSlug
+}
+
+// GetTitle returns the value of Title.
+func (s *ToolJob) GetTitle() string {
+	return s.Title
+}
+
+// GetCompany returns the value of Company.
+func (s *ToolJob) GetCompany() string {
+	return s.Company
+}
+
+// GetLocation returns the value of Location.
+func (s *ToolJob) GetLocation() OptString {
+	return s.Location
+}
+
+// SetPublicSlug sets the value of PublicSlug.
+func (s *ToolJob) SetPublicSlug(val string) {
+	s.PublicSlug = val
+}
+
+// SetTitle sets the value of Title.
+func (s *ToolJob) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetCompany sets the value of Company.
+func (s *ToolJob) SetCompany(val string) {
+	s.Company = val
+}
+
+// SetLocation sets the value of Location.
+func (s *ToolJob) SetLocation(val OptString) {
+	s.Location = val
+}
+
 // A single item: `{"data": ...}`.
 type TrackApplicationOK struct {
 	Data Interaction `json:"data"`
@@ -31019,6 +32066,21 @@ func (s *UpdateEmailPrefsOK) GetData() EmailPrefs {
 
 // SetData sets the value of Data.
 func (s *UpdateEmailPrefsOK) SetData(val EmailPrefs) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateEmployerApplicationWorkspaceOK struct {
+	Data EmployerApplication `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateEmployerApplicationWorkspaceOK) GetData() EmployerApplication {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateEmployerApplicationWorkspaceOK) SetData(val EmployerApplication) {
 	s.Data = val
 }
 

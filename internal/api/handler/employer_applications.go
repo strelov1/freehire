@@ -54,6 +54,10 @@ func employerApplicationOut(a directapply.InboxApplication) apigen.EmployerAppli
 	for i, ans := range a.Answers {
 		out.Answers[i] = apigen.EmployerApplicationAnswer{ID: ans.ID, Label: ans.Label, Type: string(ans.Type), Answer: ans.Answer}
 	}
+	out.EmployerNotes = apigen.NewOptString(a.EmployerNotes)
+	if a.ViewedAt != nil {
+		out.ViewedAt = apigen.NewOptDateTime(*a.ViewedAt)
+	}
 	if a.StageChangedAt != nil {
 		out.StageChangedAt = apigen.NewOptDateTime(*a.StageChangedAt)
 	}
@@ -65,6 +69,14 @@ var employerApplicationParams = []string{"job", "stage", "limit", "offset"}
 
 // ListEmployerApplications lists one page of the caller's delivered applications.
 func (h *employerHandlers) ListEmployerApplications(ctx context.Context, params apigen.ListEmployerApplicationsParams) (*apigen.EmployerApplicationsPage, error) {
+	return h.employerApplicationPage(ctx, params.Job.Value, params.Stage.Value, "")
+}
+
+func (h *employerHandlers) SearchEmployerApplications(ctx context.Context, req *apigen.EmployerApplicationSearch, params apigen.SearchEmployerApplicationsParams) (*apigen.EmployerApplicationsPage, error) {
+	return h.employerApplicationPage(ctx, params.Job.Value, params.Stage.Value, req.Query)
+}
+
+func (h *employerHandlers) employerApplicationPage(ctx context.Context, job, stage, query string) (*apigen.EmployerApplicationsPage, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -77,8 +89,9 @@ func (h *employerHandlers) ListEmployerApplications(ctx context.Context, params 
 		return nil, err
 	}
 	page, err := h.inbox.List(ctx, userID, directapply.InboxFilter{
-		JobSlug: params.Job.Value,
-		Stage:   directapply.Stage(params.Stage.Value),
+		JobSlug: job,
+		Stage:   directapply.Stage(stage),
+		Search:  query,
 		Limit:   int32(limit),  //nolint:gosec // bounded by MaxInboxLimit
 		Offset:  int32(offset), //nolint:gosec // bounded by maxPageWindow
 	})
@@ -152,4 +165,27 @@ func (h *employerHandlers) MoveEmployerApplication(ctx context.Context, req *api
 		Application:       employerApplicationOut(res.Application),
 		CandidateNotified: res.Notified,
 	}}, nil
+}
+
+func (h *employerHandlers) UpdateEmployerApplicationWorkspace(ctx context.Context, req *apigen.EmployerApplicationWorkspace, params apigen.UpdateEmployerApplicationWorkspaceParams) (*apigen.UpdateEmployerApplicationWorkspaceOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.requireInbox(); err != nil {
+		return nil, err
+	}
+	id, err := contractPathID(params.ID)
+	if err != nil {
+		return nil, err
+	}
+	var notes *string
+	if req.EmployerNotes.Set {
+		notes = &req.EmployerNotes.Value
+	}
+	app, err := h.inbox.UpdateWorkspace(ctx, userID, id, req.MarkViewed.Value, notes)
+	if err != nil {
+		return nil, inboxError(err)
+	}
+	return &apigen.UpdateEmployerApplicationWorkspaceOK{Data: employerApplicationOut(app)}, nil
 }

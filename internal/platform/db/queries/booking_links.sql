@@ -47,7 +47,72 @@ ORDER BY starts_at;
 
 -- name: InsertBookingLinkBooking :one
 -- The EXCLUDE booking_link_bookings_no_overlap is what refuses a taken slot.
-INSERT INTO booking_link_bookings (link_id, user_id, starts_at, ends_at, recruiter_name, recruiter_email)
-VALUES (sqlc.arg(link_id), sqlc.arg(user_id), sqlc.arg(starts_at), sqlc.arg(ends_at),
-        sqlc.arg(recruiter_name), sqlc.arg(recruiter_email))
+WITH invitation AS (
+    SELECT EXISTS (
+        SELECT 1
+        FROM users u
+        JOIN gmail_connections gc ON gc.user_id = u.id
+        WHERE u.id = sqlc.arg(user_id)
+          AND u.banned_at IS NULL AND u.interview_calendar_invites_enabled
+          AND gc.status = 'connected'
+          AND sqlc.arg(calendar_write_scope)::text = ANY (gc.scopes)
+    ) AS enabled
+)
+INSERT INTO booking_link_bookings (
+    link_id, user_id, starts_at, ends_at, recruiter_name, recruiter_email,
+    calendar_event_key, calendar_invitation_next_at
+)
+SELECT sqlc.arg(link_id), sqlc.arg(user_id), sqlc.arg(starts_at), sqlc.arg(ends_at),
+       sqlc.arg(recruiter_name), sqlc.arg(recruiter_email),
+       CASE WHEN enabled THEN gen_random_uuid() END,
+       CASE WHEN enabled THEN now() END
+FROM invitation
 RETURNING id;
+
+-- name: ClaimBookingCalendarInvitation :one
+-- Claim one at a time so the lease covers the Google call rather than a whole batch.
+-- A claimed row remains due for retry until the invitation is recorded.
+WITH due AS (
+    SELECT b.id, gc.refresh_token_enc
+    FROM booking_link_bookings b
+    JOIN users u ON u.id = b.user_id
+    JOIN gmail_connections gc ON gc.user_id = b.user_id
+    WHERE b.status = 'confirmed'
+      AND b.starts_at > now()
+      AND b.calendar_invitation_next_at <= now()
+      AND u.banned_at IS NULL AND u.interview_calendar_invites_enabled
+      AND gc.status = 'connected'
+      AND sqlc.arg(calendar_write_scope)::text = ANY (gc.scopes)
+      AND (sqlc.arg(pilot_user_id)::bigint = 0 OR b.user_id = sqlc.arg(pilot_user_id)::bigint)
+      AND (sqlc.arg(pilot_recruiter)::text = '' OR lower(b.recruiter_email) = lower(sqlc.arg(pilot_recruiter)::text))
+    ORDER BY b.calendar_invitation_next_at, b.id
+    LIMIT 1
+    FOR UPDATE OF b SKIP LOCKED
+)
+UPDATE booking_link_bookings b
+SET calendar_invitation_next_at = now() + interval '2 minutes'
+FROM due
+WHERE b.id = due.id
+RETURNING b.id, b.calendar_event_key, b.starts_at, b.ends_at, b.recruiter_email,
+          due.refresh_token_enc;
+
+-- name: RecordBookingCalendarInvitation :execrows
+-- Retain the local interview identity and record the Google event and the Meet URL
+-- together. A cancellation can subsequently resolve through provider_event_id.
+WITH interview AS (
+    UPDATE application_interviews i
+    SET provider_event_id = sqlc.arg(provider_event_id),
+        join_url = sqlc.arg(join_url),
+        updated_at = now()
+    FROM booking_link_bookings b
+    WHERE b.id = sqlc.arg(booking_id)
+      AND b.status = 'confirmed'
+      AND b.calendar_invitation_next_at IS NOT NULL
+      AND i.user_id = b.user_id
+      AND i.ical_uid = 'booking:' || b.id::text
+    RETURNING b.id
+)
+UPDATE booking_link_bookings b
+SET calendar_invited_at = now(), calendar_invitation_next_at = NULL
+FROM interview
+WHERE b.id = interview.id;

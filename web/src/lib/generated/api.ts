@@ -132,6 +132,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistant/sessions/{id}/interview-repeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Opens a fresh rehearsal with the question saved in the feedback. */
+        post: operations["postAssistantInterviewRepeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/sessions/{id}/interview-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Saves feedback about the candidate’s answers in one owned rehearsal. */
+        post: operations["postAssistantInterviewReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/sessions/{id}/interview-speech": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Speak the latest interviewer reply.
+         * @description Synthesizes the last completed interviewer reply in an owned interview rehearsal.
+         */
+        post: operations["postAssistantInterviewSpeech"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistant/sessions/{id}/voice-token": {
         parameters: {
             query?: never;
@@ -853,6 +907,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employer/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Up to 30 company audit events, newest first. Recruiters see application activity. */
+        get: operations["listEmployerActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employer/applications": {
         parameters: {
             query?: never;
@@ -869,6 +940,26 @@ export interface paths {
         get: operations["listEmployerApplications"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employer/applications/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search applications sent to your vacancies.
+         * @description Search delivered applications before pagination. An unknown stage returns 400.
+         */
+        post: operations["searchEmployerApplications"];
         delete?: never;
         options?: never;
         head?: never;
@@ -915,6 +1006,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/employer/applications/{id}/workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark an application reviewed or save private notes. */
+        patch: operations["updateEmployerApplicationWorkspace"];
         trace?: never;
     };
     "/employer/claim": {
@@ -1087,6 +1195,26 @@ export interface paths {
         patch: operations["updateEmployerVacancy"];
         trace?: never;
     };
+    "/employer/jobs/{slug}/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a vacancy's last 30 completed days of engagement.
+         * @description Analytics for an active company team's own vacancy, including closed vacancies.
+         */
+        get: operations["getEmployerVacancyAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employer/jobs/{slug}/close": {
         parameters: {
             query?: never;
@@ -1126,7 +1254,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Everyone who acts for the caller's company, and the invitations still open. */
+        /** @description The company team and open invitations. A recruiter sees their own membership. */
         get: operations["getEmployerTeam"];
         put?: never;
         post?: never;
@@ -1162,7 +1290,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations. */
+        /** @description Mails a colleague a single-use recruiter invitation, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations. */
         post: operations["inviteEmployerTeamMember"];
         delete?: never;
         options?: never;
@@ -1196,7 +1324,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Joins the team an invitation link invites to. 409 when the caller already acts for a company. */
+        /** @description Joins the team. A recruiter must sign in with the matching verified email. 409 when the caller already acts for a company. */
         post: operations["joinEmployerTeam"];
         delete?: never;
         options?: never;
@@ -1267,6 +1395,28 @@ export interface paths {
             cookie?: never;
         };
         get: operations["insightsRoleCountries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/insights/role-demand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * New public vacancies by specialty for the last 12 completed UTC weeks.
+         * @description Counts unique public vacancies, including closed vacancies, by publication date.
+         *     If the source supplied no date, the count uses the vacancy's first catalogue appearance.
+         *     The data array is empty until the first snapshot is published.
+         */
+        get: operations["insightsRoleDemand"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1592,6 +1742,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/{slug}/apply-click": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a vacancy Apply click.
+         * @description Records an Apply button click on an open, public employer vacancy.
+         */
+        post: operations["recordEmployerVacancyApplyClick"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{slug}/apply-form": {
         parameters: {
             query?: never;
@@ -1771,6 +1941,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/{slug}/interview-prep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a posting-based interview preparation sheet.
+         * @description Practice questions from a public posting. A signed-in caller can also see examples from their own Experience Bank.
+         *     For a closed posting, a session cookie and an application in the interview stage are required. Otherwise the endpoint returns 404.
+         */
+        get: operations["getInterviewPrep"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{slug}/match": {
         parameters: {
             query?: never;
@@ -1905,6 +2096,26 @@ export interface paths {
          *     empty list when location or specialization is unknown or no visible matches remain.
          */
         get: operations["similarJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{slug}/skill-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an open posting for CV review.
+         * @description Open posting skills and requirements for a CV review performed in the browser.
+         */
+        get: operations["getResumeReviewPosting"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2227,6 +2438,24 @@ export interface paths {
          */
         get: operations["getAutoApplyList"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/auto-apply-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Readable with a session or an API key. */
+        get: operations["getAutoApplySettings"];
+        /** @description Session cookie only: whether attempts are sent without a review is the person's call. */
+        put: operations["setAutoApplySettings"];
         post?: never;
         delete?: never;
         options?: never;
@@ -4452,6 +4681,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/profile/excluded-companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hide a company from your matches.
+         * @description Adds the company to `excluded_companies`, creating a minimal profile when there is none.
+         *     Repeating it is safe and changes nothing. `400` for a blank or over-long slug, `409` when
+         *     the list already holds 200 other companies. Cookie-only.
+         */
+        post: operations["excludeCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/profile/excluded-companies/{company_slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Restore a hidden company.
+         * @description Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller
+         *     has no profile. Cookie-only.
+         */
+        delete: operations["restoreCompany"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/profile/verdict": {
         parameters: {
             query?: never;
@@ -6470,6 +6742,15 @@ export interface components {
             unlimited: boolean;
             allowance: unknown;
         };
+        AssistantInterviewRepeat: {
+            session_id: string;
+        };
+        AssistantInterviewReport: {
+            strength: string;
+            improvement: string;
+            quote: string;
+            question: string;
+        };
         /** @description The 402 a spent or missing allowance answers with. */
         AssistantPlanRefusal: {
             error: string;
@@ -6491,6 +6772,9 @@ export interface components {
         AssistantSessionDetail: {
             session: components["schemas"]["AssistantSession"];
             messages: unknown;
+            /** @description Optional ElevenLabs recording and playback on an interview rehearsal. */
+            elevenlabs_voice?: boolean;
+            interview_report?: components["schemas"]["AssistantInterviewReport"];
         };
         AssistantSessionList: {
             data: components["schemas"]["AssistantSession"][];
@@ -6640,6 +6924,14 @@ export interface components {
          * @enum {string}
          */
         AutoApplyReviewStatus: "tailoring" | "pending_review" | "approved" | "blocked" | "declined" | "failed" | "tailor_failed";
+        AutoApplySettings: {
+            /** @description Wait for the account's approval on every auto-apply attempt, even one whose form asks nothing only the candidate can answer. */
+            confirm_each: boolean;
+        };
+        AutoApplySettingsUpdate: {
+            /** @description Absent reads as false. */
+            confirm_each?: boolean;
+        };
         /** @description A question the attempt could not answer. The attempt's internal error text is never here. */
         AutoApplyUnmappedField: {
             id: string;
@@ -7250,6 +7542,11 @@ export interface components {
             open_prev_30d: number;
             /** Format: int64 */
             growth_30d: number;
+            /**
+             * Format: date-time
+             * @description When a company that had not been hiring started again; set only for those (sort=new).
+             */
+            hiring_started_at?: string;
         };
         /** @description A row of the catalogue: the company, its open-job count and a few company-info facts for the card. */
         CompanyListItem: {
@@ -7750,11 +8047,26 @@ export interface components {
             email_confirmed: boolean;
             /** @description True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
             member: boolean;
+            /** @description The exact values are owner for the claimant, manager for an existing manager, and recruiter. */
+            role?: string;
             /** Format: date-time */
             created_at: string;
         };
         /** @enum {string} */
         EmployerAccountStatus: "pending" | "active" | "revoked";
+        EmployerActivity: {
+            /** Format: int64 */
+            id: number;
+            action: string;
+            actor_email?: string;
+            /** Format: int64 */
+            application_id?: number;
+            previous_stage?: string;
+            stage?: string;
+            subject_email?: string;
+            /** Format: date-time */
+            occurred_at: string;
+        };
         /** @description One application sent on freehire to one of the caller's vacancies. */
         EmployerApplication: {
             /** Format: int64 */
@@ -7777,6 +8089,13 @@ export interface components {
              * @description When you last moved it; absent while it has never been moved.
              */
             stage_changed_at?: string;
+            /**
+             * Format: date-time
+             * @description First review by a teammate, independent of the hiring stage.
+             */
+            viewed_at?: string;
+            /** @description Private notes shared within the employer team. */
+            employer_notes?: string;
             /**
              * Format: date-time
              * @description When the application reached you.
@@ -7805,11 +8124,21 @@ export interface components {
             /** @description Whether the candidate was emailed about this move. False when the stage sends no letter, nothing changed, or the letter failed. */
             candidate_notified: boolean;
         };
+        EmployerApplicationSearch: {
+            /** @description A literal search in candidate email, message and answers. */
+            query: string;
+        };
         /**
          * @description A stage of the employer's hiring pipeline. Every delivered application starts at `new`.
          * @enum {string}
          */
         EmployerApplicationStage: "new" | "reviewing" | "interview" | "offer" | "hired" | "rejected";
+        EmployerApplicationWorkspace: {
+            /** @description Record that a teammate reviewed this application. */
+            mark_viewed?: boolean;
+            /** @description Replace the private team notes. The empty string clears them. */
+            employer_notes?: string;
+        };
         EmployerApplicationsMeta: {
             /** Format: int64 */
             total: number;
@@ -7851,6 +8180,8 @@ export interface components {
             email_confirmed: boolean;
             /** @description True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
             member: boolean;
+            /** @description The exact values are owner for the claimant, manager for an existing manager, and recruiter. */
+            role?: string;
             /** Format: date-time */
             created_at: string;
             tagline?: string;
@@ -7892,6 +8223,8 @@ export interface components {
             email_confirmed: boolean;
             /** @description True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
             member: boolean;
+            /** @description The exact values are owner for the claimant, manager for an existing manager, and recruiter. */
+            role?: string;
             /** Format: date-time */
             created_at: string;
             /** @description The catalogue's current website, empty when unknown. */
@@ -7930,6 +8263,7 @@ export interface components {
         EmployerTeamInvitationPreview: {
             company_name: string;
             email: string;
+            role?: string;
         };
         EmployerTeamInvite: {
             email?: string;
@@ -7942,10 +8276,29 @@ export interface components {
             /** Format: date-time */
             joined_at: string;
             holder: boolean;
+            role?: string;
         };
         /** @description The token from the invitation link. */
         EmployerTeamToken: {
             token?: string;
+        };
+        /** @description Counts for the last 30 completed UTC days. Apply clicks begin at rollout. */
+        EmployerVacancyAnalytics: {
+            /**
+             * Format: int64
+             * @description Daily unique visitors from the page-view rollup, summed across the window.
+             */
+            views: number;
+            /**
+             * Format: int64
+             * @description Apply button clicks on the vacancy page.
+             */
+            apply_clicks: number;
+            /**
+             * Format: int64
+             * @description Applications delivered through Freehire.
+             */
+            applications: number;
         };
         /** @description `title` is required, and `url` too unless `apply_mode` is "freehire". */
         EmployerVacancyCreate: {
@@ -7997,6 +8350,11 @@ export interface components {
             inboxes_connected: number;
             /** Format: int64 */
             saved_searches: number;
+        };
+        /** @description The company to hide from the match feeds. */
+        ExcludeCompanyRequest: {
+            /** @description The company's slug. (e.g. `acme`) */
+            company_slug: string;
         };
         /** @description One piece of evidence, at the grain of a CV bullet. The three flags below are computed at read time. */
         ExperienceAtom: {
@@ -8181,6 +8539,10 @@ export interface components {
          * @enum {string}
          */
         HealthStatus: "operational" | "degraded" | "down";
+        /** @description The meta of a save: the body fields that were read and not applied. */
+        IgnoredFieldsMeta: {
+            ignored_fields?: string[];
+        };
         /** @description The meta of a single-item answer, sent only to carry a warning. */
         IgnoredMeta: {
             ignored_params?: components["schemas"]["IgnoredParam"][];
@@ -8367,6 +8729,23 @@ export interface components {
             dismissed_at: string | null;
             stage: string | null;
             notes: string | null;
+        };
+        InterviewPracticeExample: {
+            claim: string;
+            context?: string;
+            metrics?: string[];
+            place?: string;
+        };
+        InterviewPracticeQuestion: {
+            prompt: string;
+            topic?: string;
+        };
+        InterviewPrepSheet: {
+            job: components["schemas"]["ToolJob"];
+            questions: components["schemas"]["InterviewPracticeQuestion"][];
+            /** @description Confirmed examples from the caller's Experience Bank. Omitted for guests. */
+            examples?: components["schemas"]["InterviewPracticeExample"][];
+            examples_unavailable?: boolean;
         };
         Invite: {
             link: string;
@@ -9450,6 +9829,11 @@ export interface components {
              *     language. (e.g. `["en","ru"]`)
              */
             job_languages?: string[] | null;
+            /**
+             * @description Deprecated and ignored: the list changes only through `/me/profile/excluded-companies`,
+             *     so a save from a stale page cannot erase a hidden company. Still accepted, and named in
+             *     `meta.ignored_fields` when sent.
+             */
             excluded_companies?: string[] | null;
             /** @description Shaped like LocationPreferences; null or absent keeps none. */
             location_preferences?: unknown;
@@ -9712,6 +10096,14 @@ export interface components {
             /** @description Required and at most 100 once blanks are dropped; anything else is a 400. */
             skills?: string[] | null;
         };
+        ResumeReviewPosting: {
+            skills: string[];
+            requirements?: components["schemas"]["ResumeReviewRequirement"][];
+        } & components["schemas"]["ToolJob"];
+        ResumeReviewRequirement: {
+            text: string;
+            priority: string;
+        };
         RoleCountriesAnswer: {
             data: components["schemas"]["RoleCountryCell"][];
             meta: components["schemas"]["RoleCountriesMeta"];
@@ -9727,6 +10119,16 @@ export interface components {
             open_count: number;
             /** Format: int64 */
             open_count_prev: number;
+        };
+        RoleDemandAnswer: {
+            data: components["schemas"]["RoleDemandPoint"][];
+        };
+        RoleDemandPoint: {
+            category: string;
+            /** @description Monday of the publication week in UTC (YYYY-MM-DD). */
+            week: string;
+            /** Format: int64 */
+            new_jobs: number;
         };
         RoleInsight: {
             category: string;
@@ -10392,6 +10794,12 @@ export interface components {
             /** Format: int64 */
             count: number;
         };
+        ToolJob: {
+            public_slug: string;
+            title: string;
+            company: string;
+            location?: string;
+        };
         /** @description A company and how many of the matching postings it holds. */
         TopCompany: {
             slug: string;
@@ -10943,6 +11351,123 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Client error */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantPlanRefusal"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postAssistantInterviewRepeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AssistantInterviewRepeat"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postAssistantInterviewReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AssistantInterviewReport"];
+                    };
+                };
+            };
+            /** @description Client error */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantPlanRefusal"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postAssistantInterviewSpeech: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The session id. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/mpeg": unknown;
+                };
             };
             /** @description Client error */
             402: {
@@ -12648,6 +13173,40 @@ export interface operations {
             };
         };
     };
+    listEmployerActivity: {
+        parameters: {
+            query?: {
+                /** @description Fetch older events by passing the last event id from the previous page. */
+                before?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerActivity"][];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listEmployerApplications: {
         parameters: {
             query?: {
@@ -12706,6 +13265,53 @@ export interface operations {
                      *       }
                      *     }
                      */
+                    "application/json": components["schemas"]["EmployerApplicationsPage"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    searchEmployerApplications: {
+        parameters: {
+            query?: {
+                /** @description Only applications for this vacancy slug. */
+                job?: string;
+                /** @description Only applications at this stage. */
+                stage?: string;
+                /** @description Maximum applications to return. */
+                limit?: string;
+                /** @description Number of matching applications to skip. */
+                offset?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "query": "candidate@example.com"
+                 *     }
+                 */
+                "application/json": components["schemas"]["EmployerApplicationSearch"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["EmployerApplicationsPage"];
                 };
             };
@@ -12804,6 +13410,48 @@ export interface operations {
                      */
                     "application/json": {
                         data: components["schemas"]["EmployerApplicationMoved"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateEmployerApplicationWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "mark_viewed": true
+                 *     }
+                 */
+                "application/json": components["schemas"]["EmployerApplicationWorkspace"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerApplication"];
                     };
                 };
             };
@@ -13218,6 +13866,49 @@ export interface operations {
             };
         };
     };
+    getEmployerVacancyAnalytics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The employer-authored vacancy's public slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "views": 40,
+                     *         "apply_clicks": 10,
+                     *         "applications": 3
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["EmployerVacancyAnalytics"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     closeEmployerVacancy: {
         parameters: {
             query?: never;
@@ -13535,7 +14226,7 @@ export interface operations {
     insightsCompanies: {
         parameters: {
             query?: {
-                /** @description Rank by openings or by growth. */
+                /** @description Rank by openings (open), growth (growth, -growth) or list companies that just started hiring (new). */
                 sort?: string;
                 /** @description Ignore companies below this many open roles. */
                 min_open?: string;
@@ -13604,6 +14295,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleCountriesAnswer"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    insightsRoleDemand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "category": "backend",
+                     *           "week": "2026-11-16",
+                     *           "new_jobs": 42
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RoleDemandAnswer"];
                 };
             };
             /** @description An unexpected error response. */
@@ -14569,6 +15300,36 @@ export interface operations {
             };
         };
     };
+    recordEmployerVacancyApplyClick: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The employer-authored vacancy's public slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description There is no content to send for this request, but the headers may be useful. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     jobApplyForm: {
         parameters: {
             query?: never;
@@ -15147,6 +15908,57 @@ export interface operations {
             };
         };
     };
+    getInterviewPrep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The public posting slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job": {
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme",
+                     *           "location": "Remote"
+                     *         },
+                     *         "questions": [
+                     *           {
+                     *             "prompt": "Which project best prepares you for this role?"
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["InterviewPrepSheet"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getJobMatch: {
         parameters: {
             query?: never;
@@ -15568,6 +16380,53 @@ export interface operations {
                      */
                     "application/json": {
                         data: unknown[];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getResumeReviewPosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The public posting slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "public_slug": "senior-go-engineer-acme-1a2b",
+                     *         "title": "Senior Go Engineer",
+                     *         "company": "Acme",
+                     *         "location": "Remote",
+                     *         "skills": [
+                     *           "go"
+                     *         ]
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["ResumeReviewPosting"];
                     };
                 };
             };
@@ -16510,6 +17369,72 @@ export interface operations {
                      */
                     "application/json": {
                         data: components["schemas"]["AutoApplyList"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAutoApplySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AutoApplySettings"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setAutoApplySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoApplySettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AutoApplySettings"];
                     };
                 };
             };
@@ -22115,6 +23040,7 @@ export interface operations {
                      */
                     "application/json": {
                         data: components["schemas"]["Profile"];
+                        meta?: components["schemas"]["IgnoredFieldsMeta"];
                     };
                 };
             };
@@ -22248,6 +23174,79 @@ export interface operations {
                      */
                     "application/json": {
                         data: unknown;
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    excludeCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "company_slug": "acme"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ExcludeCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Profile"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    restoreCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Profile"] | null;
                     };
                 };
             };

@@ -8,6 +8,11 @@ describe('autostartTurn', () => {
     expect(autostartTurn({ ...base, empty: false, kickoff: 'hi', autoRun: true })).toBeNull();
   });
 
+  it('opens a new debrief and leaves an existing debrief transcript alone', () => {
+    expect(autostartTurn({ ...base, preset: 'debrief' })).toEqual({ kind: 'opening' });
+    expect(autostartTurn({ ...base, preset: 'debrief', empty: false })).toBeNull();
+  });
+
   it('sends the kickoff first, then a rehearsal opening, then an unattended run', () => {
     expect(autostartTurn({ ...base, kickoff: 'hi', preset: 'interview', autoRun: true })).toEqual({
       kind: 'message',

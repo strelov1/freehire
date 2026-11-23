@@ -235,6 +235,28 @@ func (q *Queries) DeleteAssistantSession(ctx context.Context, arg DeleteAssistan
 	return result.RowsAffected(), nil
 }
 
+const getAssistantInterviewReport = `-- name: GetAssistantInterviewReport :one
+SELECT r.report
+FROM assistant_interview_reports r JOIN assistant_sessions s ON s.id = r.session_id
+WHERE s.id = $1 AND s.user_id = $2
+AND NOT EXISTS (
+    SELECT 1 FROM assistant_messages m
+    WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > r.through_seq
+)
+`
+
+type GetAssistantInterviewReportParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
+}
+
+func (q *Queries) GetAssistantInterviewReport(ctx context.Context, arg GetAssistantInterviewReportParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getAssistantInterviewReport, arg.ID, arg.UserID)
+	var report []byte
+	err := row.Scan(&report)
+	return report, err
+}
+
 const getAssistantNarratedEvent = `-- name: GetAssistantNarratedEvent :one
 SELECT narrated_event_id
 FROM assistant_sessions
@@ -604,6 +626,72 @@ type ReleaseSupportEscalationParams struct {
 func (q *Queries) ReleaseSupportEscalation(ctx context.Context, arg ReleaseSupportEscalationParams) error {
 	_, err := q.db.Exec(ctx, releaseSupportEscalation, arg.ID, arg.UserID)
 	return err
+}
+
+const repeatAssistantInterviewQuestion = `-- name: RepeatAssistantInterviewQuestion :one
+WITH rehearsal AS (
+    SELECT s.user_id, s.preset, s.job_id, s.label, r.report->>'question' AS question
+    FROM assistant_sessions s JOIN assistant_interview_reports r ON r.session_id = s.id
+    JOIN user_jobs u ON u.user_id = s.user_id AND u.job_id = s.job_id
+    WHERE s.id = $1 AND s.user_id = $2 AND s.preset = 'interview'
+    AND NOT EXISTS (
+        SELECT 1 FROM assistant_messages m
+        WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > r.through_seq
+    )
+), new_session AS (
+    INSERT INTO assistant_sessions (user_id, preset, job_id, label)
+    SELECT user_id, preset, job_id, label FROM rehearsal
+    RETURNING id
+)
+INSERT INTO assistant_messages (session_id, seq, role, content)
+SELECT new_session.id, 1, 'assistant', jsonb_build_object('text', rehearsal.question)
+FROM new_session CROSS JOIN rehearsal
+RETURNING session_id
+`
+
+type RepeatAssistantInterviewQuestionParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
+}
+
+func (q *Queries) RepeatAssistantInterviewQuestion(ctx context.Context, arg RepeatAssistantInterviewQuestionParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, repeatAssistantInterviewQuestion, arg.ID, arg.UserID)
+	var session_id uuid.UUID
+	err := row.Scan(&session_id)
+	return session_id, err
+}
+
+const saveAssistantInterviewReport = `-- name: SaveAssistantInterviewReport :execrows
+INSERT INTO assistant_interview_reports (session_id, through_seq, report)
+SELECT id, $1::bigint, $2::jsonb FROM assistant_sessions s
+WHERE id = $3 AND user_id = $4 AND preset = 'interview'
+AND NOT EXISTS (
+    SELECT 1 FROM assistant_messages m
+    WHERE m.session_id = s.id AND m.role = 'user' AND m.seq > $1::bigint
+)
+ON CONFLICT ON CONSTRAINT assistant_interview_reports_pkey DO UPDATE
+SET through_seq = EXCLUDED.through_seq, report = EXCLUDED.report
+WHERE assistant_interview_reports.through_seq < EXCLUDED.through_seq
+`
+
+type SaveAssistantInterviewReportParams struct {
+	ThroughSeq int64     `json:"through_seq"`
+	Report     []byte    `json:"report"`
+	SessionID  uuid.UUID `json:"session_id"`
+	UserID     int64     `json:"user_id"`
+}
+
+func (q *Queries) SaveAssistantInterviewReport(ctx context.Context, arg SaveAssistantInterviewReportParams) (int64, error) {
+	result, err := q.db.Exec(ctx, saveAssistantInterviewReport,
+		arg.ThroughSeq,
+		arg.Report,
+		arg.SessionID,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setAssistantSessionLabel = `-- name: SetAssistantSessionLabel :exec

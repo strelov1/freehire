@@ -34,6 +34,23 @@ func TestReportWorkAccumulates(t *testing.T) {
 	}
 }
 
+func TestReportPartialPublishesBothStates(t *testing.T) {
+	t.Cleanup(resetWork)
+	for _, tc := range []struct {
+		partial bool
+		want    string
+	}{
+		{true, `freehire_worker_last_run_partial{job="x"} 1`},
+		{false, `freehire_worker_last_run_partial{job="x"} 0`},
+	} {
+		resetWork()
+		ReportPartial(tc.partial)
+		if got := workMetrics(`job="x"`); !strings.Contains(got, tc.want) {
+			t.Errorf("ReportPartial(%t): missing %q in:\n%s", tc.partial, tc.want, got)
+		}
+	}
+}
+
 func TestStageAccumulatesAndSortsAndSkipsUnfinished(t *testing.T) {
 	resetWork()
 	t.Cleanup(resetWork)

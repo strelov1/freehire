@@ -46,7 +46,7 @@ func TestTelegramLinkedInPostingClosesOnTheClosedMarker(t *testing.T) {
 	client := &http.Client{Transport: linkedInTransport(func(r *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(closed)), Header: make(http.Header), Request: r}, nil
 	})}
-	pass := linkedInPass(client)
+	pass := linkedInPass(client, false)
 	pass.interval = time.Millisecond
 	var st stats
 	for range closeThreshold { // two consecutive runs

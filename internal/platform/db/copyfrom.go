@@ -32,6 +32,7 @@ func (r iteratorForCopyInsightsCompanyGrowth) Values() ([]interface{}, error) {
 		r.rows[0].CompanySlug,
 		r.rows[0].OpenCount,
 		r.rows[0].OpenCountPrev,
+		r.rows[0].HiringStartedAt,
 	}, nil
 }
 
@@ -40,7 +41,7 @@ func (r iteratorForCopyInsightsCompanyGrowth) Err() error {
 }
 
 func (q *Queries) CopyInsightsCompanyGrowth(ctx context.Context, arg []CopyInsightsCompanyGrowthParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"insights_company_growth"}, []string{"company_slug", "open_count", "open_count_prev"}, &iteratorForCopyInsightsCompanyGrowth{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"insights_company_growth"}, []string{"company_slug", "open_count", "open_count_prev", "hiring_started_at"}, &iteratorForCopyInsightsCompanyGrowth{rows: arg})
 }
 
 // iteratorForCopyInsightsCompanyLifetime implements pgx.CopyFromSource.
@@ -179,6 +180,40 @@ func (r iteratorForCopyInsightsRoleCountryStats) Err() error {
 
 func (q *Queries) CopyInsightsRoleCountryStats(ctx context.Context, arg []CopyInsightsRoleCountryStatsParams) (int64, error) {
 	return q.db.CopyFrom(ctx, []string{"insights_role_country_stats"}, []string{"category", "country", "open_count", "open_count_prev"}, &iteratorForCopyInsightsRoleCountryStats{rows: arg})
+}
+
+// iteratorForCopyInsightsRoleDemand implements pgx.CopyFromSource.
+type iteratorForCopyInsightsRoleDemand struct {
+	rows                 []CopyInsightsRoleDemandParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForCopyInsightsRoleDemand) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForCopyInsightsRoleDemand) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].Category,
+		r.rows[0].Week,
+		r.rows[0].NewJobs,
+	}, nil
+}
+
+func (r iteratorForCopyInsightsRoleDemand) Err() error {
+	return nil
+}
+
+func (q *Queries) CopyInsightsRoleDemand(ctx context.Context, arg []CopyInsightsRoleDemandParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"insights_role_demand_weekly"}, []string{"category", "week", "new_jobs"}, &iteratorForCopyInsightsRoleDemand{rows: arg})
 }
 
 // iteratorForCopyInsightsRolePulse implements pgx.CopyFromSource.

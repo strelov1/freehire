@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/platform/observability"
@@ -60,6 +61,9 @@ func RenderError(c *fiber.Ctx, err error) error {
 		return c.Status(ce.status).JSON(fiber.Map{"error": ce.message, "code": ce.code})
 	}
 	status, msg, report := classify(err)
+	if errors.Is(err, search.ErrBusy) {
+		c.Set(fiber.HeaderRetryAfter, strconv.Itoa(int(search.BusyRetryAfter.Seconds())))
+	}
 
 	// A recovered panic was already captured with its stack by ReportPanic.
 	if report && c.Locals(LocalPanicReported) == nil {
@@ -149,6 +153,10 @@ func classify(err error) (status int, msg string, report bool) {
 	// filter value: a bad request, not a fault.
 	case errors.Is(err, search.ErrBadQuery):
 		return fiber.StatusBadRequest, "invalid search query", false
+	// Meilisearch's search queue was full: overload or a brief stall, not a code fault. The
+	// caller is told when to retry (RenderError sets Retry-After).
+	case errors.Is(err, search.ErrBusy):
+		return fiber.StatusServiceUnavailable, "search is busy, try again shortly", false
 	default:
 		return fiber.StatusInternalServerError, "internal server error", true
 	}

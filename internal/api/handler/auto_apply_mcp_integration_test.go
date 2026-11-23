@@ -119,13 +119,18 @@ func TestAutoApplyOverMCP_FullFlow(t *testing.T) {
 	if _, err := queries.SetAutoApplyTailoredCV(ctx, db.SetAutoApplyTailoredCVParams{ID: entry.ID, TailoredCvID: &cv}); err != nil {
 		t.Fatal(err)
 	}
-	preview := []byte(`{"fields":[{"label":"Email","value":"a@b.c"}],"pending":[{"label":"Why us?","will_draft_at_submission":false}]}`)
+	preview := []byte(`{"fields":[{"label":"Email","value":"a@b.c"}],"pending":[{"label":"Why us?","will_draft_at_submission":false},{"label":"Cover letter","will_draft_at_submission":true}]}`)
 	if _, err := queries.SetAutoApplyResolvedPreview(ctx, db.SetAutoApplyResolvedPreviewParams{ID: entry.ID, ResolvedPreview: preview}); err != nil {
 		t.Fatal(err)
 	}
 	view := mcpc.ok("auto_apply_get", slug)
 	if view["status"] != "pending_review" || !strings.Contains(jsonText(t, view["pending_answers"]), "Why us?") {
 		t.Fatalf("view = %v, want pending_review listing the pending question", view)
+	}
+	// A question the submission drafts from the CV is not put to the person.
+	if strings.Contains(jsonText(t, view["pending_answers"]), "Cover letter") ||
+		!strings.Contains(jsonText(t, view["drafted_at_submission"]), "Cover letter") {
+		t.Fatalf("view = %v, want the drafted question listed apart from pending_answers", view)
 	}
 
 	// The agent relays the person's answer; it is theirs, so it is sendable.
@@ -220,7 +225,7 @@ func TestAgentPermissions_OnlyTheBrowserMayTurnItOn(t *testing.T) {
 			strings.NewReader(`{"agents_may_apply":true}`))
 		req.Header.Set("Content-Type", "application/json")
 		if withCookie {
-			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		}
 		if bearer != "" {
 			req.Header.Set("Authorization", "Bearer "+bearer)
@@ -260,7 +265,7 @@ func TestJobAutoApplyRetryAndCancelRoutes(t *testing.T) {
 	api.Delete("/jobs/:slug/auto-apply", mw.cookie, newContract(contractHandlers{assistantHandlers: h}))
 	do := func(method, path string) int {
 		req := httptest.NewRequestWithContext(context.Background(), method, path, nil)
-		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		resp, err := app.Test(req)
 		if err != nil {
 			t.Fatal(err)
@@ -287,3 +292,62 @@ func TestJobAutoApplyRetryAndCancelRoutes(t *testing.T) {
 }
 
 func jsonText(t *testing.T, v any) string { return string(mustJSON(t, v)) }
+
+// Whether attempts go out without a review is the person's call: an API key may read the
+// switch but not set it.
+func TestAutoApplySettings_OnlyTheBrowserMaySetIt(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyEnqueueTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	_, _, mw := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "")
+	queries := db.New(pool)
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "confirm-each@example.test")
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	settings := &autoApplySettingsHandlers{queries: queries}
+	settings.register(app.Group("/api/v1"), mw, newContract(contractHandlers{autoApplySettingsHandlers: settings}))
+
+	put := func(withCookie bool, bearer string) int {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/me/auto-apply-settings",
+			strings.NewReader(`{"confirm_each":true}`))
+		req.Header.Set("Content-Type", "application/json")
+		if withCookie {
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		}
+		if bearer != "" {
+			req.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if got := put(false, "fhk_whatever"); got != fiber.StatusUnauthorized {
+		t.Fatalf("PUT with an API key = %d, want 401", got)
+	}
+	if got := put(true, ""); got != fiber.StatusOK {
+		t.Fatalf("PUT with the cookie = %d, want 200", got)
+	}
+	if confirmEach, err := queries.GetAutoApplyConfirmEach(context.Background(), userID); err != nil || !confirmEach {
+		t.Fatalf("auto_apply_confirm_each = %v err=%v, want true", confirmEach, err)
+	}
+
+	get := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/auto-apply-settings", nil)
+	get.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	resp, err := app.Test(get)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Data struct {
+			ConfirmEach bool `json:"confirm_each"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil || resp.StatusCode != fiber.StatusOK || !body.Data.ConfirmEach {
+		t.Fatalf("GET = %d %+v err=%v, want 200 with confirm_each true", resp.StatusCode, body, err)
+	}
+}

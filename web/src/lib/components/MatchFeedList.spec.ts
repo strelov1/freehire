@@ -1,13 +1,20 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api-core.js';
 
 const meFeed = vi.fn();
 const markFeedSeen = vi.fn();
+const listSavedSearches = vi.fn();
+const setFeedSource = vi.fn();
+const avoidCompany = vi.fn();
+vi.mock('#lib/profile.svelte.js', () => ({ profileStore: { avoidCompany } }));
 vi.mock('#lib/api.js', () => ({
   api: {
     meFeed: (...a: unknown[]) => meFeed(...a),
     markFeedSeen: (...a: unknown[]) => markFeedSeen(...a),
+    listSavedSearches: (...a: unknown[]) => listSavedSearches(...a),
+    setFeedSource: (...a: unknown[]) => setFeedSource(...a),
     plans: vi.fn(),
   },
 }));
@@ -33,12 +40,14 @@ vi.stubGlobal(
 );
 
 const { default: MatchFeedList } = await import('./MatchFeedList.svelte');
+const { feedSource } = await import('#lib/feedSource.svelte.js');
 
 const card = (slug: string, is_new = false) => ({
   is_new,
   public_slug: slug,
   title: slug,
   company: 'Acme',
+  company_slug: 'acme',
   skills: [] as string[],
   match: { why: [], may_not_fit: [], unknown: [] },
 });
@@ -86,10 +95,23 @@ describe('MatchFeedList', () => {
     expect(screen.queryByText('Show more matches')).toBeNull();
   });
 
+  it('drops cards from a saved search whose filters changed during paging', async () => {
+    const search = { source: 'saved_search', saved_search_id: 5 };
+    meFeed
+      .mockResolvedValueOnce(page(['old'], { ...search, next_cursor: 'c1' }))
+      .mockResolvedValueOnce(page([], { ...search, reason: 'source_changed' }))
+      .mockResolvedValueOnce(page(['current'], search));
+    render(MatchFeedList);
+    expect(await screen.findByText('old')).toBeTruthy();
+    await fireEvent.click(await screen.findByText('Show more matches'));
+    expect(await screen.findByText('current')).toBeTruthy();
+    expect(screen.queryByText('old')).toBeNull();
+  });
+
   it.each([
-    ['source_changed', () => meFeed.mockResolvedValueOnce(page([], { reason: 'source_changed' }))],
-    ['a rejected cursor (400)', () => meFeed.mockRejectedValueOnce(new ApiError(400, 'invalid cursor'))],
-  ])('restarts from page 1 silently on %s', async (_, next) => {
+    { on: 'source_changed', next: () => meFeed.mockResolvedValueOnce(page([], { reason: 'source_changed' })) },
+    { on: 'a rejected cursor (400)', next: () => meFeed.mockRejectedValueOnce(new ApiError(400, 'invalid cursor')) },
+  ])('restarts from page 1 silently on $on', async ({ next }) => {
     meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
     next();
     meFeed.mockResolvedValueOnce(page(['a', 'c'], { next_cursor: 'c2' }));
@@ -119,6 +141,16 @@ describe('MatchFeedList', () => {
     expect(await screen.findByText('r1')).toBeTruthy();
     expect(screen.queryByText("That's everything new")).toBeNull();
     expect(markFeedSeen).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not post seen from a list that is not on screen, even for an already-queued observer callback', async () => {
+    meFeed.mockResolvedValueOnce(page(['n1', 'r1'], { seen_cursor: 's1', next_cursor: 'c1' }, ['n1']));
+    const { rerender } = render(MatchFeedList, { active: true });
+    await screen.findByText("That's everything new");
+    const queued = reveal;
+    await rerender({ active: false });
+    queued();
+    expect(markFeedSeen).not.toHaveBeenCalled();
   });
 
   it('posts seen when Show the rest is pressed before the scroll registers', async () => {
@@ -169,5 +201,191 @@ describe('MatchFeedList', () => {
     expect(markFeedSeen).not.toHaveBeenCalled();
     reveal();
     expect(markFeedSeen).toHaveBeenCalledWith('s1');
+  });
+
+  it('ignores a response that lands after the source was switched', async () => {
+    const pending = Promise.withResolvers<ReturnType<typeof page>>();
+    meFeed.mockReturnValueOnce(pending.promise);
+    feedSource.current = { kind: 'saved_search', id: 5 };
+    render(MatchFeedList);
+    feedSource.version++; // a pick restarted the feed while this request was in flight
+    pending.resolve(page(['old'], { source: 'profile' }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(feedSource.current).toEqual({ kind: 'saved_search', id: 5 });
+  });
+
+  describe('saved-search source', () => {
+    beforeEach(() => {
+      listSavedSearches.mockResolvedValue([]);
+      setFeedSource.mockResolvedValue(undefined);
+    });
+
+    it('shows the deleted screen and goes back to the profile', async () => {
+      meFeed.mockResolvedValueOnce({
+        data: [],
+        meta: { source: 'saved_search', saved_search_id: 2, total: 0, reason: 'search_deleted' },
+      });
+      render(MatchFeedList);
+      expect(await screen.findByText('This search was deleted')).toBeTruthy();
+      await fireEvent.click(screen.getByText('Back to matching by profile'));
+      expect(setFeedSource).toHaveBeenCalledWith({ source: 'profile' });
+    });
+
+    it('shows no-matches for an empty first page, never "all caught up"', async () => {
+      meFeed.mockResolvedValueOnce({ data: [], meta: { source: 'saved_search', saved_search_id: 2, total: 0 } });
+      render(MatchFeedList);
+      expect(await screen.findByText('No matches for this search')).toBeTruthy();
+      expect(screen.getByText("We don't widen your search to fill the feed.")).toBeTruthy();
+      expect(screen.getByText('Edit search').getAttribute('href')).toBe('/my/notifications/searches');
+      expect(screen.queryByText("You're all caught up")).toBeNull();
+    });
+
+    it('keeps focus on the swipe controls when the background list loads its empty state', async () => {
+      const swipeControl = document.createElement('button');
+      document.body.append(swipeControl);
+      swipeControl.focus();
+      try {
+        meFeed.mockResolvedValueOnce(page([], { source: 'saved_search', saved_search_id: 2 }));
+        render(MatchFeedList, { props: { active: false } });
+        await screen.findByRole('heading', { name: 'No matches for this search' });
+        expect(document.activeElement).toBe(swipeControl);
+      } finally {
+        swipeControl.remove();
+      }
+    });
+
+    it('says an unusable search cannot be applied, not that it has no matches', async () => {
+      meFeed.mockResolvedValueOnce({
+        data: [],
+        meta: {
+          source: 'saved_search',
+          saved_search_id: 2,
+          total: 0,
+          reason: 'ignored_filters',
+          ignored: [{ param: 'min_skill_match' }],
+        },
+      });
+      render(MatchFeedList);
+      expect(await screen.findByText("This search can't be used here")).toBeTruthy();
+      expect(screen.queryByText('No matches for this search')).toBeNull();
+      expect(screen.getByText('Edit search')).toBeTruthy();
+    });
+
+    it('shows the failure and lets the user retry when going back to the profile fails', async () => {
+      meFeed.mockResolvedValueOnce({
+        data: [],
+        meta: { source: 'saved_search', saved_search_id: 2, total: 0, reason: 'search_deleted' },
+      });
+      setFeedSource.mockClear();
+      setFeedSource.mockRejectedValueOnce(new Error('500'));
+      render(MatchFeedList);
+      await fireEvent.click(await screen.findByText('Back to matching by profile'));
+      expect(await screen.findByText("Didn't switch — try again.")).toBeTruthy();
+      await fireEvent.click(screen.getByText('Back to matching by profile'));
+      expect(setFeedSource).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the profile empty-state for a profile reason', async () => {
+      meFeed.mockResolvedValueOnce({ data: [], meta: { source: 'profile', total: 0, reason: 'no_profile' } });
+      render(MatchFeedList);
+      expect(await screen.findByText('Tell us what you are looking for')).toBeTruthy();
+    });
+  });
+
+  it('drops the old cards when another tab switched the source', async () => {
+    meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
+    meFeed.mockRejectedValueOnce(new ApiError(400, 'invalid cursor'));
+    meFeed.mockResolvedValueOnce(page(['s'], { source: 'saved_search', saved_search_id: 2 }));
+    render(MatchFeedList);
+    await fireEvent.click(await screen.findByText('Show more matches'));
+    expect(await screen.findByText('s')).toBeTruthy();
+    expect(screen.queryByText('a')).toBeNull();
+  });
+
+  describe('hide company', () => {
+    const openConfirmation = async () => {
+      const trigger = await screen.findByRole('button', { name: 'More actions for Acme' });
+      await fireEvent.click(trigger);
+      await fireEvent.click(screen.getByRole('menuitem', { name: 'Hide company' }));
+      await screen.findByText('Hide Acme from Matches?');
+      return trigger;
+    };
+    const open = () => {
+      meFeed.mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }));
+      render(MatchFeedList);
+      return openConfirmation();
+    };
+    beforeEach(() => {
+      avoidCompany.mockReset();
+    });
+
+    it('cancel keeps the cards, writes nothing and returns focus to the trigger', async () => {
+      const trigger = await open();
+      await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await vi.waitFor(() => expect(screen.queryByText('Hide Acme from Matches?')).toBeNull());
+      expect(avoidCompany).not.toHaveBeenCalled();
+      expect(meFeed).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('a')).toBeTruthy();
+      await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+    });
+
+    it('explains a full list (409) in the dialog and keeps the card', async () => {
+      avoidCompany.mockRejectedValue(new ApiError(409, 'full'));
+      await open();
+      await fireEvent.click(screen.getByRole('button', { name: 'Hide company' }));
+      expect((await screen.findByRole('alert')).textContent).toContain('list is full');
+      expect(screen.getByText('a')).toBeTruthy();
+      expect(meFeed).toHaveBeenCalledTimes(1);
+    });
+
+    it('reloads page 1 on the same source after a successful hide, dropping stale cards and cursor', async () => {
+      avoidCompany.mockResolvedValue({});
+      await open();
+      meFeed.mockResolvedValueOnce(page(['b']));
+      await fireEvent.click(screen.getByRole('button', { name: 'Hide company' }));
+      expect(await screen.findByText('b')).toBeTruthy();
+      expect(avoidCompany).toHaveBeenCalledWith('acme');
+      expect(meFeed).toHaveBeenLastCalledWith(20, undefined);
+      expect(screen.queryByText('a')).toBeNull();
+      expect(screen.queryByText('Show more matches')).toBeNull();
+    });
+
+    it('lets the replacement feed paginate while the previous request is still pending', async () => {
+      const oldPage = Promise.withResolvers<ReturnType<typeof page>>();
+      const nextPage = Promise.withResolvers<ReturnType<typeof page>>();
+      meFeed
+        .mockResolvedValueOnce(page(['a'], { next_cursor: 'c1' }))
+        .mockReturnValueOnce(oldPage.promise)
+        .mockResolvedValueOnce(page(['b'], { next_cursor: 'c2' }))
+        .mockReturnValueOnce(nextPage.promise);
+      avoidCompany.mockResolvedValue({});
+      render(MatchFeedList);
+      await fireEvent.click(await screen.findByRole('button', { name: 'Show more matches' }));
+      expect(meFeed).toHaveBeenLastCalledWith(20, 'c1');
+      await openConfirmation();
+      await fireEvent.click(screen.getByRole('button', { name: 'Hide company' }));
+
+      await fireEvent.click(await screen.findByRole('button', { name: 'Show more matches' }));
+      expect(meFeed).toHaveBeenLastCalledWith(20, 'c2');
+      oldPage.resolve(page(['obsolete']));
+      await oldPage.promise;
+      await tick();
+      expect(screen.queryByText('obsolete')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Loading…' }).hasAttribute('disabled')).toBe(true);
+
+      nextPage.resolve(page(['fresh']));
+      expect(await screen.findByText('fresh')).toBeTruthy();
+    });
+
+    it('has no action for a card without a company slug', async () => {
+      meFeed.mockResolvedValueOnce({
+        data: [{ ...card('x'), company_slug: '' }],
+        meta: { source: 'profile', total: 1 },
+      });
+      render(MatchFeedList);
+      await screen.findByText('x');
+      expect(screen.queryByRole('button', { name: /More actions for/ })).toBeNull();
+    });
   });
 });

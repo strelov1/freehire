@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -80,6 +82,14 @@ func (d *nativeDiscovery) Resolve(ctx context.Context, entry sources.CompanyEntr
 	}
 	native, err := d.importer.ResolveNative(ctx, origin, raw, discovered.CompanyWebsite)
 	if err != nil {
+		if errors.Is(err, linkimport.ErrNativeATSUnrecognized) && ctx.Err() == nil {
+			var host string
+			if u, parseErr := url.Parse(raw); parseErr == nil && (u.Scheme == "https" || u.Scheme == "http") && u.User == nil {
+				host = strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+			}
+			log.Printf("ingest: linkedin_ats_unresolved posting_id=%q company=%q apply_method=%q reason=apply_destination_unresolved apply_host=%q",
+				discovered.ExternalID, discovered.Company, discovered.ApplyMethod, host)
+		}
 		return err
 	}
 	// A native posting already in the catalogue remains canonical. Keep any old

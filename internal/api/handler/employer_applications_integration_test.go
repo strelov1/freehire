@@ -90,7 +90,7 @@ func TestEmployerApplicationsEndToEnd(t *testing.T) {
 	accountsSvc := accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{})
 	employerRepo := employer.NewQueriesRepository(queries, pool)
 	moderationSvc := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
-	employerSvc := employer.New(employerRepo, accountsSvc, nil, employerRepo, moderationSvc)
+	employerSvc := employer.New(employerRepo, accountsSvc, nil, employerRepo, moderationSvc).WithTeam(employerRepo, nil, "")
 	notifier := &recordingStatusMailer{}
 	h := newEmployerHandlers(queries, employerSvc)
 	h.inbox = directapply.NewInbox(repo, employerSvc, notifier, directapply.NewApplicationMoves(queries, pool))
@@ -248,11 +248,108 @@ func TestEmployerApplicationsEndToEnd(t *testing.T) {
 		}
 	})
 
+	t.Run("private notes and a viewed timestamp persist independently of stage", func(t *testing.T) {
+		for _, cookie := range []string{otherCookie, candidateCookie} {
+			if resp, _ := do(t, fiber.MethodPatch, idPath+"/workspace", cookie, `{"mark_viewed":true}`); resp.StatusCode != fiber.StatusNotFound {
+				t.Fatalf("foreign workspace update = %d", resp.StatusCode)
+			}
+		}
+		resp, body := do(t, fiber.MethodPatch, idPath+"/workspace", employerCookie, `{"employer_notes":"Internal decision only","mark_viewed":true}`)
+		if resp.StatusCode != fiber.StatusOK || !strings.Contains(string(body), `"viewed_at":`) ||
+			!strings.Contains(string(body), `"stage":"interview"`) || !strings.Contains(string(body), "Internal decision only") {
+			t.Fatalf("workspace = %d %s", resp.StatusCode, body)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, jobID); err != nil {
+			t.Fatal(err)
+		}
+		resp, again := do(t, fiber.MethodPatch, idPath+"/workspace", employerCookie, `{"employer_notes":"Internal decision only","mark_viewed":true}`)
+		if resp.StatusCode != fiber.StatusOK || string(again) != string(body) || len(notifier.sent) != 1 {
+			t.Fatalf("idempotent save = %d %s, notifications = %d", resp.StatusCode, again, len(notifier.sent))
+		}
+		_, history := do(t, fiber.MethodGet, "/api/v1/employer/activity", employerCookie, "")
+		_, foreignHistory := do(t, fiber.MethodGet, "/api/v1/employer/activity", otherCookie, "")
+		if strings.Count(string(history), "notes_changed") != 1 || !strings.Contains(string(history), `"previous_stage":"new"`) ||
+			!strings.Contains(string(history), `"stage":"interview"`) || strings.Contains(string(history), "Internal decision only") ||
+			strings.Contains(string(history), "c@example.test") || !strings.Contains(string(foreignHistory), `"data":[]`) {
+			t.Fatalf("history = %s, other company = %s", history, foreignHistory)
+		}
+	})
+
+	t.Run("search filters the result before pagination, including records with no archived CV", func(t *testing.T) {
+		old := seed("old@example.test")
+		var oldID int64
+		if err := pool.QueryRow(ctx, `INSERT INTO direct_applications (job_id, user_id, cv_kind, note, answers, sent_at)
+			VALUES ($1, $2, 'resume', 'Available Monday', '[{"id":"q1","label":"Stack","type":"text","answer":"Elixir"}]', now() - interval '1 year')
+			RETURNING id`, jobID, old).Scan(&oldID); err != nil {
+			t.Fatal(err)
+		}
+		base := "/api/v1/employer/applications"
+		_, first := do(t, fiber.MethodGet, base+"?limit=1", employerCookie, "")
+		if strings.Contains(string(first), "old@example.test") {
+			t.Fatalf("old result on first page: %s", first)
+		}
+		for _, term := range []string{"OLD@example", "monday", "ELIXIR"} {
+			resp, body := do(t, fiber.MethodPost, base+"/search?limit=1&stage=new&job=acme-platform", employerCookie, `{"query":"`+term+`"}`)
+			var page struct {
+				Meta struct {
+					Total       int64            `json:"total"`
+					StageCounts map[string]int64 `json:"stage_counts"`
+				} `json:"meta"`
+			}
+			if err := json.Unmarshal(body, &page); err != nil {
+				t.Fatalf("decode search %q: %v", term, err)
+			}
+			if resp.StatusCode != fiber.StatusOK || !strings.Contains(string(body), "old@example.test") ||
+				!strings.Contains(string(body), `"has_cv":false`) || page.Meta.Total != 1 ||
+				page.Meta.StageCounts["interview"] != 1 || page.Meta.StageCounts["new"] != 1 {
+				t.Fatalf("search %q = %d %s", term, resp.StatusCode, body)
+			}
+		}
+		if resp, _ := do(t, fiber.MethodGet, base+"/"+strconv.FormatInt(oldID, 10)+"/cv", employerCookie, ""); resp.StatusCode != fiber.StatusNotFound {
+			t.Fatalf("historical CV = %d", resp.StatusCode)
+		}
+		if resp, body := do(t, fiber.MethodPost, base+"/search", employerCookie, `{"query":"Internal decision only"}`); resp.StatusCode != fiber.StatusOK || !strings.Contains(string(body), `"total":0`) {
+			t.Fatalf("private text searchable = %d %s", resp.StatusCode, body)
+		}
+	})
+
+	t.Run("candidate deletion removes private data and application audit", func(t *testing.T) {
+		if _, err := pool.Exec(ctx, "DELETE FROM users WHERE id = $1", candidateID); err != nil {
+			t.Fatal(err)
+		}
+		_, history := do(t, fiber.MethodGet, "/api/v1/employer/activity", employerCookie, "")
+		if strings.Contains(string(history), "stage_changed") || strings.Contains(string(history), "notes_changed") {
+			t.Fatalf("candidate audit survived deletion: %s", history)
+		}
+		if resp, _ := do(t, fiber.MethodGet, idPath+"/cv", employerCookie, ""); resp.StatusCode != fiber.StatusNotFound {
+			t.Fatalf("deleted candidate CV status = %d", resp.StatusCode)
+		}
+	})
+
 	t.Run("an unparseable id is a bad request", func(t *testing.T) {
 		if resp, _ := do(t, fiber.MethodPost, "/api/v1/employer/applications/abc/stage", employerCookie, `{"stage":"new"}`); resp.StatusCode != fiber.StatusBadRequest {
 			t.Errorf("status = %d, want 400", resp.StatusCode)
 		}
 	})
+
+	t.Run("a revoked employer loses every inbox capability", func(t *testing.T) {
+		if _, err := pool.Exec(ctx, "UPDATE company_accounts SET status = 'revoked' WHERE user_id = $1", employerID); err != nil {
+			t.Fatal(err)
+		}
+		for _, request := range []struct{ method, path, body string }{
+			{fiber.MethodGet, "/api/v1/employer/applications", ""},
+			{fiber.MethodPost, "/api/v1/employer/applications/search", `{"query":"example"}`},
+			{fiber.MethodGet, "/api/v1/employer/activity", ""},
+			{fiber.MethodGet, idPath + "/cv", ""},
+			{fiber.MethodPatch, idPath + "/workspace", `{"mark_viewed":true}`},
+			{fiber.MethodPost, idPath + "/stage", `{"stage":"offer"}`},
+		} {
+			if resp, body := do(t, request.method, request.path, employerCookie, request.body); resp.StatusCode != fiber.StatusForbidden {
+				t.Errorf("%s %s after revocation = %d %s", request.method, request.path, resp.StatusCode, body)
+			}
+		}
+	})
+
 }
 
 func TestEmployerApplicationsWithoutMail(t *testing.T) {

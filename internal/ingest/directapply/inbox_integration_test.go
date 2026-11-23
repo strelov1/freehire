@@ -125,7 +125,7 @@ func TestInboxRepository_HidesAnUndeliveredApplication(t *testing.T) {
 	if err != nil || len(apps) != 0 {
 		t.Fatalf("List = %+v, %v; want an unsent application hidden", apps, err)
 	}
-	counts, err := f.repo.Counts(ctx, f.employer, "")
+	counts, _, err := f.repo.Counts(ctx, f.employer, directapply.InboxFilter{})
 	if err != nil || len(counts) != 0 {
 		t.Errorf("Counts = %v, %v; want nothing counted", counts, err)
 	}
@@ -175,11 +175,11 @@ func TestInboxRepository_MovesAndCountsStages(t *testing.T) {
 		t.Errorf("Get = %+v, %v; want interview with a change time", a, err)
 	}
 
-	counts, err := f.repo.Counts(ctx, f.employer, "acme-platform")
+	counts, _, err := f.repo.Counts(ctx, f.employer, directapply.InboxFilter{JobSlug: "acme-platform"})
 	if err != nil || counts[directapply.StageInterview] != 1 || len(counts) != 1 {
 		t.Errorf("Counts = %v, %v", counts, err)
 	}
-	if counts, err := f.repo.Counts(ctx, f.employer, "another-vacancy"); err != nil || len(counts) != 0 {
+	if counts, _, err := f.repo.Counts(ctx, f.employer, directapply.InboxFilter{JobSlug: "another-vacancy"}); err != nil || len(counts) != 0 {
 		t.Errorf("Counts for another vacancy = %v, %v; want none", counts, err)
 	}
 	if apps, err := f.repo.List(ctx, f.employer, directapply.InboxFilter{Stage: directapply.StageNew, Limit: 50}); err != nil || len(apps) != 0 {
@@ -323,5 +323,25 @@ func TestApplicationMoves_RunTheMoveOnItsOwnTransaction(t *testing.T) {
 	}
 	if a, err := f.repo.Get(ctx, f.employer, id); err != nil || a.Stage != directapply.StageInterview {
 		t.Fatalf("stage after a successful run = %+v, %v; want interview", a.Stage, err)
+	}
+}
+
+func TestInboxRepository_PreservesStageWhenUpdatingWorkspace(t *testing.T) {
+	f := newInboxFixture(t)
+	ctx := context.Background()
+	id := f.apply(t, f.vacancy, f.candidate, "cv", true)
+	if _, err := f.repo.SetStage(ctx, f.employer, id, directapply.StageInterview); err != nil {
+		t.Fatalf("SetStage: %v", err)
+	}
+	notes := "Discuss scheduling"
+	if err := f.repo.UpdateWorkspace(ctx, f.other, id, true, &notes); !errors.Is(err, directapply.ErrNotFound) {
+		t.Fatalf("other employer updated workspace: %v", err)
+	}
+	if err := f.repo.UpdateWorkspace(ctx, f.employer, id, true, &notes); err != nil {
+		t.Fatalf("UpdateWorkspace: %v", err)
+	}
+	app, err := f.repo.Get(ctx, f.employer, id)
+	if err != nil || app.ViewedAt == nil || app.EmployerNotes != notes || app.Stage != directapply.StageInterview {
+		t.Fatalf("workspace = %+v, %v; want viewed and notes saved with the original stage", app, err)
 	}
 }

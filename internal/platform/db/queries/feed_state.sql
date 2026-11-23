@@ -22,3 +22,13 @@ UPDATE feed_state SET seen_at = GREATEST(seen_at, sqlc.arg(at)::timestamptz)
 SELECT min(j.created_at)::timestamptz AS high_water FROM jobs j
  WHERE j.closed_at IS NULL AND NOT j.is_private AND j.created_at > now() - interval '24 hours'
    AND EXISTS (SELECT 1 FROM search_outbox o WHERE o.job_id = j.id AND o.failed_at IS NULL);
+
+-- name: GetFeedSource :one
+-- The user's chosen feed source: a saved search id, or NULL for the profile. No row = profile.
+SELECT saved_search_id FROM feed_source WHERE user_id = $1;
+
+-- name: SetFeedSource :exec
+-- Store the chosen source; a NULL saved_search_id means the profile.
+INSERT INTO feed_source (user_id, saved_search_id)
+VALUES (sqlc.arg(user_id), sqlc.narg(saved_search_id))
+ON CONFLICT (user_id) DO UPDATE SET saved_search_id = EXCLUDED.saved_search_id;

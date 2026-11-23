@@ -62,6 +62,9 @@ func (f *vietnamworksFake) PostJSONWithHeaders(_ context.Context, _ string, head
 			return errors.New("request body lacks " + want)
 		}
 	}
+	if !strings.Contains(string(raw), `"alias"`) {
+		return errors.New("request must select alias for jobUrl")
+	}
 	if f.searchErr != nil {
 		return f.searchErr
 	}

@@ -69,6 +69,15 @@ func (m *Mailer) Render(c Candidate, s Snapshot) (emailnotify.Message, error) {
 		label := strings.ReplaceAll(item.Signal, "_", " ")
 		data.Sections[group].Entries = append(data.Sections[group].Entries, entry{Item: item, URL: data.InboxURL + "?message=" + strconv.FormatInt(item.ID, 10), Label: label, Date: date})
 	}
+	if len(s.Activity) > 0 {
+		scheduling := section{Title: "Interview scheduling"}
+		for _, item := range s.Activity {
+			label := map[string]string{"reply": "Reply sent", "booking": "Interview booked", "review": "Needs your reply"}[item.Kind]
+			scheduling.Entries = append(scheduling.Entries, entry{Item: Item{Subject: item.Subject}, Label: label,
+				URL: data.InboxURL + "?message=" + strconv.FormatInt(item.ID, 10)})
+		}
+		data.Sections = append([]section{scheduling}, data.Sections...)
+	}
 	var html bytes.Buffer
 	if err := bodyTemplate.Execute(&html, data); err != nil {
 		return emailnotify.Message{}, err
@@ -81,7 +90,11 @@ func (m *Mailer) Render(c Candidate, s Snapshot) (emailnotify.Message, error) {
 		}
 		text.WriteString(section.Title + "\n")
 		for _, e := range section.Entries {
-			fmt.Fprintf(&text, "%s — %s (%s)\n", e.Subject, e.Sender, e.Label)
+			if e.Sender != "" {
+				fmt.Fprintf(&text, "%s — %s (%s)\n", e.Subject, e.Sender, e.Label)
+			} else {
+				fmt.Fprintf(&text, "%s — %s\n", e.Subject, e.Label)
+			}
 			if e.Date != "" {
 				text.WriteString(e.Date + "\n")
 			}
@@ -109,7 +122,7 @@ var bodyTemplate = template.Must(template.New("inbox-digest").Parse(`
 <p>New messages from your job-search inbox, grouped by conversation.</p>
 {{range .Sections}}{{if .Entries}}<h2>{{.Title}}</h2>{{range .Entries}}
 <div style="margin-bottom:24px"><h3><a href="{{.URL}}">{{.Subject}}</a></h3>
-<p>{{.Sender}} · {{.Label}}{{if .Date}} · {{.Date}}{{end}}</p>{{if .Snippet}}<p>{{.Snippet}}</p>{{end}}
+<p>{{if .Sender}}{{.Sender}} · {{end}}{{.Label}}{{if .Date}} · {{.Date}}{{end}}</p>{{if .Snippet}}<p>{{.Snippet}}</p>{{end}}
 {{if .Replied}}<p>A later reply from you is visible in this conversation.</p>{{end}}</div>
 {{end}}{{end}}{{end}}
 {{if .Overflow}}<p><a href="{{.InboxURL}}">{{.Overflow}} more conversation{{if ne .Overflow 1}}s{{end}} in your inbox</a></p>{{end}}

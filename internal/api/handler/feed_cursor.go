@@ -24,7 +24,7 @@ func profileVersion(p userprofile.Profile) int64 {
 // source's watermark, fixes the snapshot below the drain high-water, and begins in the new
 // phase when anything can be new. A bad, expired or foreign cursor is a 400 and the client
 // restarts from page 1.
-func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64) (feed.Cursor, error) {
+func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64, source string) (feed.Cursor, error) {
 	raw := c.Query("cursor")
 	if raw == "" {
 		now := time.Now()
@@ -43,7 +43,7 @@ func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64) (feed.Cursor, erro
 		if ok && hw.Unix()-1 < snap {
 			snap = hw.Unix() - 1
 		}
-		seen, err := h.state.GetOrInitFeedSeen(c.Context(), userID, feedSourceProfile, time.Unix(snap, 0))
+		seen, err := h.state.GetOrInitFeedSeen(c.Context(), userID, source, time.Unix(snap, 0))
 		if err != nil {
 			return feed.Cursor{}, err
 		}
@@ -52,18 +52,20 @@ func (h *feedHandlers) pageCursor(c *fiber.Ctx, userID int64) (feed.Cursor, erro
 		if seenAt < snap {
 			phase = feed.PhaseNew
 		}
-		return feed.Cursor{UserID: userID, Source: feedSourceProfile, SnapshotAt: snap, SeenAt: seenAt, ActedBefore: acted, Phase: phase, ExpiresAt: now.Add(feed.CursorTTL).Unix()}, nil
+		return feed.Cursor{UserID: userID, Source: source, SnapshotAt: snap, SeenAt: seenAt, ActedBefore: acted, Phase: phase, ExpiresAt: now.Add(feed.CursorTTL).Unix()}, nil
 	}
-	cur, err := h.verifyCursor(raw, userID)
+	cur, err := h.verifyCursor(raw, userID, source)
 	if err != nil || (cur.Phase != feed.PhaseNew && cur.Phase != feed.PhaseRest) {
 		return feed.Cursor{}, fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 	}
 	return cur, nil
 }
 
-func (h *feedHandlers) verifyCursor(raw string, userID int64) (feed.Cursor, error) {
+// verifyCursor checks a cursor's signature, owner and source. An empty source accepts any:
+// POST /me/feed/seen advances whichever source its cursor was signed for.
+func (h *feedHandlers) verifyCursor(raw string, userID int64, source string) (feed.Cursor, error) {
 	cur, err := h.cursors.Verify(raw, time.Now())
-	if err != nil || cur.UserID != userID || cur.Source != feedSourceProfile {
+	if err != nil || cur.UserID != userID || (source != "" && cur.Source != source) {
 		return feed.Cursor{}, fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 	}
 	return cur, nil

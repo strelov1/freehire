@@ -17,6 +17,9 @@ export interface AnswerOffer {
   key: string;
   question: string;
   answer: string;
+  /** The value was already on the page when the panel first read it (LinkedIn's own prefill),
+   *  not typed by the candidate. */
+  prefilled?: boolean;
 }
 
 /** The bank's own limit (internal/candidate/answerbank.MaxAnswerLen), in characters. */
@@ -31,7 +34,11 @@ const MAX_ANSWER_LEN = 2000;
  * (`matchFieldKey`) is left out too — name, email, notice period live in typed records,
  * and a free-text copy in the bank would drift from them.
  */
-export function answersToOffer(fields: FramedField[], autofilled: ReadonlySet<string>): AnswerOffer[] {
+export function answersToOffer(
+  fields: FramedField[],
+  autofilled: ReadonlySet<string>,
+  prefilled: ReadonlySet<string> = new Set(),
+): AnswerOffer[] {
   return fields
     .filter((f) => {
       const answer = f.value.trim();
@@ -39,5 +46,10 @@ export function answersToOffer(fields: FramedField[], autofilled: ReadonlySet<st
       if (!f.label.trim() || matchFieldKey(f.label)) return false;
       return !autofilled.has(normalizeLabel(f.label));
     })
-    .map((f) => ({ key: `${f.frame}:${f.index}`, question: f.label.trim(), answer: f.value.trim() }));
+    .map((f) => ({
+      key: `${f.frame}:${f.index}`,
+      question: f.label.trim(),
+      answer: f.value.trim(),
+      prefilled: prefilled.has(normalizeLabel(f.label)) || undefined,
+    }));
 }

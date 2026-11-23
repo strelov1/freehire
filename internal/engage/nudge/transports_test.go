@@ -119,6 +119,7 @@ func TestEmailNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 		{KindAutoApplySubmitted, "Submitted"},
 		{KindAutoApplyBlocked, "Needs your attention"},
 		{KindAutoApplyFailed, "Couldn't submit"},
+		{KindAutoApplyReviewReady, "Ready to send"},
 	}
 	for _, c := range cases {
 		t.Run(c.kind+"/single", func(t *testing.T) {
@@ -152,7 +153,7 @@ func TestEmailNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
 }
 
 func TestTelegramNotifier_AutoApplyOutcomeKinds_SingleAndBatch(t *testing.T) {
-	for _, kind := range []string{KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed} {
+	for _, kind := range []string{KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed, KindAutoApplyReviewReady} {
 		t.Run(kind+"/single", func(t *testing.T) {
 			n := NewTelegramNotifier(nil, "https://freehire.me")
 			got := n.render(kind, []Message{{Kind: kind, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}})

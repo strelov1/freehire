@@ -109,6 +109,20 @@ func TestInsightsCompaniesEndpoint(t *testing.T) {
 		t.Errorf("freezing top = %+v, want freeze growth -4", rows[0])
 	}
 
+	// sort=new → only companies the rollup marked as just started hiring (freeze is not),
+	// most recent start first, each with its date.
+	mustExec(`UPDATE insights_company_growth SET hiring_started_at = now() - interval '3 days' WHERE company_slug = 'small'`)
+	mustExec(`UPDATE insights_company_growth SET hiring_started_at = now() - interval '1 day' WHERE company_slug = 'ramp'`)
+	out, code = get("/api/v1/insights/companies?sort=new&min_open=1")
+	if code != fiber.StatusOK {
+		t.Fatalf("new: code %d", code)
+	}
+	rows = rowsOf(out)
+	if len(rows) != 2 || rows[0]["company_slug"] != "ramp" || rows[1]["company_slug"] != "small" ||
+		rows[0]["hiring_started_at"] == nil || rows[1]["hiring_started_at"] == nil {
+		t.Errorf("new rows = %+v, want ramp then small, both with hiring_started_at", rows)
+	}
+
 	// invalid sort → 400.
 	if _, code := get("/api/v1/insights/companies?sort=bogus"); code != fiber.StatusBadRequest {
 		t.Errorf("bogus sort code = %d, want 400", code)

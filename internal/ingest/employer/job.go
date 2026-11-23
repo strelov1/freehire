@@ -194,7 +194,7 @@ func (s *Service) CreateVacancy(ctx context.Context, userID int64, in VacancyInp
 	if err := requireDescription(in.Description); err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
-	acc, err := s.ActiveAccount(ctx, userID)
+	acc, err := s.managementAccount(ctx, userID)
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
@@ -290,7 +290,7 @@ func (s *Service) UpdateVacancy(ctx context.Context, userID int64, slug string, 
 	if err := patch.validate(); err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
-	if _, err := s.ActiveAccount(ctx, userID); err != nil {
+	if _, err := s.managementAccount(ctx, userID); err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
 
@@ -365,7 +365,7 @@ func (p VacancyPatch) formEdit(cur ApplyMode) (form applyform.Form, replace bool
 // already-closed vacancy closes again with no error, matching every other closer in the
 // catalogue (see job-lifecycle).
 func (s *Service) CloseVacancy(ctx context.Context, userID int64, slug string) error {
-	if _, err := s.ActiveAccount(ctx, userID); err != nil {
+	if _, err := s.managementAccount(ctx, userID); err != nil {
 		return err
 	}
 	if _, _, err := s.jobs.BySlug(ctx, userID, slug); err != nil {
@@ -380,7 +380,7 @@ func (s *Service) CloseVacancy(ctx context.Context, userID int64, slug string) e
 // vacancy taking applications on freehire has no URL, so CreateVacancy's re-create-reopens
 // path cannot reach it.
 func (s *Service) ReopenVacancy(ctx context.Context, userID int64, slug string) error {
-	if _, err := s.ActiveAccount(ctx, userID); err != nil {
+	if _, err := s.managementAccount(ctx, userID); err != nil {
 		return err
 	}
 	if _, _, err := s.jobs.BySlug(ctx, userID, slug); err != nil {

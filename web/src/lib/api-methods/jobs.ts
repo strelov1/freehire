@@ -11,6 +11,7 @@ import type {
   FacetCounts,
   FeedCard,
   FeedMeta,
+  FeedSourceChoice,
   IngestStatus,
   Interpretation,
   Job,
@@ -23,6 +24,10 @@ import type { Display } from '#lib/generated/contracts.js';
 import type { JobCopy, Page, RecruiterContact, Slice } from '../api-types';
 import type { components } from '#lib/generated/api.js';
 import { ApiError, jsonBody, query, toSlice } from '../api-core';
+
+export type ToolJob = components['schemas']['ToolJob'];
+export type ResumeReviewPosting = components['schemas']['ResumeReviewPosting'];
+export type InterviewPrepSheet = components['schemas']['InterviewPrepSheet'];
 
 export function jobsApi({ call, request, requestData, baseUrl }: Http) {
   async function listJobs(limit: number, offset: number): Promise<Slice<Job>> {
@@ -213,7 +218,13 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
   /** Moves the feed's "seen" watermark to the snapshot of a page's `meta.seen_cursor`. Call
    *  once the candidate has passed the last new card; the server never moves it back. */
   async function markFeedSeen(cursor: string): Promise<void> {
-    await request<unknown>('/api/v1/me/feed/seen', jsonBody('POST', { cursor }));
+    await call('/api/v1/me/feed/seen', jsonBody('POST', { cursor }));
+  }
+
+  /** Chooses what the match feed matches on: the profile or one of the user's saved searches.
+   *  A search that is gone, foreign or profile-derived is a 404; the stored source is kept. */
+  async function setFeedSource(body: FeedSourceChoice): Promise<void> {
+    await call('/api/v1/me/feed/source', jsonBody('PUT', body));
   }
 
   /** Facet-distribution counts for the analytics page. `params` carries the same
@@ -326,8 +337,18 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     return requestData<SourceEntry[]>(`/api/v1/sources`);
   }
 
+  async function getInterviewPrep(slug: string, signal: AbortSignal): Promise<InterviewPrepSheet> {
+    return requestData<InterviewPrepSheet>(`/api/v1/jobs/${encodeURIComponent(slug)}/interview-prep`, { signal });
+  }
+
+  async function getResumeReviewPosting(slug: string, signal: AbortSignal): Promise<ResumeReviewPosting> {
+    return requestData<ResumeReviewPosting>(`/api/v1/jobs/${encodeURIComponent(slug)}/skill-fit`, { signal });
+  }
+
   return {
     listJobs,
+    getInterviewPrep,
+    getResumeReviewPosting,
     getJob,
     getSimilarJobs,
     findRecruiterContacts,
@@ -347,6 +368,7 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     swipeDeck,
     meFeed,
     markFeedSeen,
+    setFeedSource,
     facetCounts,
     jobsActivity,
     userGrowth,

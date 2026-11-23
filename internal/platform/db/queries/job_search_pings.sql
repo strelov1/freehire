@@ -112,7 +112,7 @@ WHERE engine = sqlc.arg(engine)
 --
 -- job_count > 0 is the whole eligibility, and it is not a fresh judgement: it is the
 -- same gate that puts a company in the sitemap, derived by cmd/recount-companies from
--- the postings the SEARCH INDEX will hold (see the long argument on RefreshCompanyFacets in
+-- the postings the SEARCH INDEX will hold (see the long argument on the facet recount in
 -- company_facets.sql). So a page announced here is exactly a page the site already claims,
 -- and a company whose last posting drops out of search stops being offered without this
 -- query knowing why.

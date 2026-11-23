@@ -108,6 +108,39 @@ func TestInvalidatedClaimCannotOverwritePromotedJobEnrichment(t *testing.T) {
 	}
 }
 
+// TestReapDeletesIneligibleEntriesUpToItsBound drives the chunk loop through the real query: it
+// stops at maxRows, and a later run takes the rest.
+func TestReapDeletesIneligibleEntriesUpToItsBound(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	for i, slug := range []string{"reap-a", "reap-b", "reap-c", "reap-live"} {
+		j, err := q.UpsertJob(ctx, db.UpsertJobParams{Source: "test", ExternalID: slug, URL: "https://example.com/" + slug, Title: "Go Engineer", Company: "Acme", PublicSlug: slug, CompanySlug: "acme", Description: "Build Go services.", IsTech: pgtype.Bool{Bool: true, Valid: true}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := q.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{JobID: j.ID, TargetVersion: int32(enrich.Version)}); err != nil {
+			t.Fatal(err)
+		}
+		if i < 3 {
+			if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id = $1", j.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	store := newDBStore(pool, false)
+	if n, err := store.Reap(ctx, 2); err != nil || n != 2 {
+		t.Fatalf("first reap = %d, %v; want 2", n, err)
+	}
+	if n, err := store.Reap(ctx, 10); err != nil || n != 1 {
+		t.Fatalf("second reap = %d, %v; want the remaining 1", n, err)
+	}
+	var left int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM enrichment_outbox").Scan(&left); err != nil || left != 1 {
+		t.Fatalf("entries left = %d, %v; want the live job's 1", left, err)
+	}
+}
+
 // A live claim survives the reap: the reap runs beside the drain, so it can reach a row the
 // drain has just claimed for a job that became eligible again. Unclaimed and long-stale
 // claims of an ineligible job are still reaped.
@@ -118,7 +151,8 @@ func TestReapSkipsLiveClaims(t *testing.T) {
 	var ids []int64
 	// claim is the claim's age in seconds; -1 means unclaimed.
 	for i, claim := range []int{-1, 0, 7200} {
-		j, err := q.UpsertJob(ctx, db.UpsertJobParams{Source: "greenhouse", ExternalID: string(rune('a' + i)), URL: "https://x.test/" + string(rune('a'+i)), Title: "Go Engineer", Company: "Acme", PublicSlug: "reap-" + string(rune('a'+i)), CompanySlug: "acme", Description: "Build.", IsTech: pgtype.Bool{Bool: true, Valid: true}})
+		slug := "claim-" + string(rune('a'+i))
+		j, err := q.UpsertJob(ctx, db.UpsertJobParams{Source: "test", ExternalID: slug, URL: "https://example.com/" + slug, Title: "Go Engineer", Company: "Acme", PublicSlug: slug, CompanySlug: "acme", Description: "Build.", IsTech: pgtype.Bool{Bool: true, Valid: true}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,8 +167,7 @@ func TestReapSkipsLiveClaims(t *testing.T) {
 		}
 		ids = append(ids, j.ID)
 	}
-	n, err := q.DeleteIneligibleEnrichmentOutbox(ctx, 100)
-	if err != nil || n != 2 {
+	if n, err := newDBStore(pool, false).Reap(ctx, 100); err != nil || n != 2 {
 		t.Fatalf("reaped %d, %v; want 2", n, err)
 	}
 	var left int

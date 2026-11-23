@@ -298,7 +298,20 @@ func (h *assistantHandlers) GetAssistantSession(ctx context.Context, params apig
 	if err != nil {
 		return nil, err
 	}
-	return &apigen.GetAssistantSessionOK{Data: apigen.AssistantSessionDetail{Session: view, Messages: raw}}, nil
+	detail := apigen.AssistantSessionDetail{Session: view, Messages: raw}
+	if sess.Preset == assistant.PresetInterview && sess.JobID != nil {
+		if h.interviewAudio != nil {
+			detail.ElevenlabsVoice = apigen.NewOptBool(true)
+		}
+		report, found, err := h.interviewReport(ctx, sess)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			detail.InterviewReport.SetTo(report)
+		}
+	}
+	return &apigen.GetAssistantSessionOK{Data: detail}, nil
 }
 
 // DeleteAssistantSession removes an owned conversation and its transcript.

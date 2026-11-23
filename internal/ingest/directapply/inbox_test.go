@@ -40,15 +40,23 @@ func (f *fakeInbox) List(_ context.Context, id int64, flt InboxFilter) ([]InboxA
 	return out, nil
 }
 
-func (f *fakeInbox) Counts(_ context.Context, id int64, _ string) (map[Stage]int64, error) {
+func (f *fakeInbox) Counts(_ context.Context, id int64, flt InboxFilter) (map[Stage]int64, int64, error) {
 	out := map[Stage]int64{}
 	if id != employerID {
-		return out, nil
+		return out, 0, nil
 	}
+	var total int64
 	for _, a := range f.apps {
 		out[a.Stage]++
+		if flt.Stage == "" || flt.Stage == a.Stage {
+			total++
+		}
 	}
-	return out, nil
+	return out, total, nil
+}
+
+func (f *fakeInbox) UpdateWorkspace(_ context.Context, _, _ int64, _ bool, _ *string) error {
+	panic("unexpected workspace update")
 }
 
 func (f *fakeInbox) Get(_ context.Context, id, appID int64) (InboxApplication, error) {
@@ -345,5 +353,17 @@ func TestInboxMove_TheLetterFollowsTheCommit(t *testing.T) {
 	}
 	if len(n.committed) != 1 || !n.committed[0] || !res.Notified {
 		t.Errorf("letter sent with committed=%v, notified=%v; want one letter after the commit", n.committed, res.Notified)
+	}
+}
+
+func TestInbox_RejectsInvalidWorkspaceText(t *testing.T) {
+	inbox := newInboxHarness().inbox()
+	ctx := context.Background()
+	if _, err := inbox.List(ctx, employerID, InboxFilter{Search: "Go\x00SQL"}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("search with NUL: got %v, want ErrInvalid", err)
+	}
+	notes := strings.Repeat("é", 4001)
+	if _, err := inbox.UpdateWorkspace(ctx, employerID, 1, false, &notes); !errors.Is(err, ErrInvalid) {
+		t.Errorf("oversized notes: got %v, want ErrInvalid", err)
 	}
 }

@@ -152,6 +152,8 @@ func inboxApplication(row db.ListEmployerApplicationsRow) (InboxApplication, err
 		Stage:          Stage(row.Stage),
 		StageChangedAt: pgconv.TimePtr(row.StageChangedAt),
 		SentAt:         row.SentAt.Time,
+		ViewedAt:       pgconv.TimePtr(row.ViewedAt),
+		EmployerNotes:  row.EmployerNotes,
 	}, nil
 }
 
@@ -161,6 +163,7 @@ func (r *QueriesRepository) List(ctx context.Context, employerID int64, f InboxF
 		EmployerID: employerID,
 		JobSlug:    pgconv.Text(f.JobSlug),
 		Stage:      pgconv.Text(string(f.Stage)),
+		Search:     pgconv.Text(f.Search),
 		RowLimit:   f.Limit,
 		RowOffset:  f.Offset,
 	})
@@ -181,19 +184,36 @@ func (r *QueriesRepository) list(ctx context.Context, p db.ListEmployerApplicati
 }
 
 // Counts reads how many delivered applications sit at each stage.
-func (r *QueriesRepository) Counts(ctx context.Context, employerID int64, jobSlug string) (map[Stage]int64, error) {
+func (r *QueriesRepository) Counts(ctx context.Context, employerID int64, f InboxFilter) (map[Stage]int64, int64, error) {
 	rows, err := r.q.CountEmployerApplicationsByStage(ctx, db.CountEmployerApplicationsByStageParams{
 		EmployerID: employerID,
-		JobSlug:    pgconv.Text(jobSlug),
+		JobSlug:    pgconv.Text(f.JobSlug),
+		Search:     pgconv.Text(f.Search),
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	out := make(map[Stage]int64, len(rows))
+	var total int64
 	for _, row := range rows {
-		out[Stage(row.Stage)] = row.Applications
+		stage := Stage(row.Stage)
+		out[stage] = row.Applications
+		if f.Stage == "" || f.Stage == stage {
+			total += row.Matches
+		}
 	}
-	return out, nil
+	return out, total, nil
+}
+
+func (r *QueriesRepository) UpdateWorkspace(ctx context.Context, employerID, id int64, markViewed bool, notes *string) error {
+	text := pgconv.TextFromPtr(notes)
+	_, err := r.q.UpdateEmployerApplicationWorkspace(ctx, db.UpdateEmployerApplicationWorkspaceParams{
+		ID: id, EmployerID: employerID, MarkViewed: markViewed, EmployerNotes: text,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
 }
 
 // Get reads one delivered application of the employer's.

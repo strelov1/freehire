@@ -36,6 +36,7 @@ export type AutoApplyReviewInfo = components['schemas']['AutoApplyReviewInfo'];
 
 /** What a connected MCP agent may do beyond reading and tracking. */
 export type AgentPermissions = components['schemas']['AgentPermissions'];
+export type AutoApplySettings = components['schemas']['AutoApplySettings'];
 
 /** One answer the candidate has banked for a screening question. */
 export type BankedAnswer = components['schemas']['BankedAnswer'];

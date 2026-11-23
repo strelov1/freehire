@@ -4,6 +4,7 @@ import type {
   InsightRole,
   InsightRoleCountries,
   InsightRoleCountryCell,
+  InsightRoleDemandPoint,
   InsightRolePulse,
   InsightSalaryBand,
   InsightSalaryMonth,
@@ -44,6 +45,10 @@ export function insightsApi({ request, requestData }: Http) {
       '/api/v1/insights/role-countries',
     );
     return { cells: res.data, countries: res.meta.countries };
+  }
+
+  async function insightsRoleDemand(): Promise<InsightRoleDemandPoint[]> {
+    return requestData<InsightRoleDemandPoint[]>('/api/v1/insights/role-demand');
   }
 
   /** One category's market pulse and its all-seniority open count. */
@@ -159,6 +164,7 @@ export function insightsApi({ request, requestData }: Http) {
     insightsRoles,
     insightsRole,
     insightsRoleCountries,
+    insightsRoleDemand,
     insightsRolePulse,
     insightsSkills,
     insightsSalaryHistory,

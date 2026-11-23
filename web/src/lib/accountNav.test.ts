@@ -10,8 +10,8 @@ import {
 } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twenty-five account sections', () => {
-    expect(accountNav).toHaveLength(25);
+  it('lists the twenty-six account sections', () => {
+    expect(accountNav).toHaveLength(26);
   });
 
   // Submissions and the invite link are tabs of Contributions and Plan now; their old
@@ -230,6 +230,7 @@ describe('workspaceNav', () => {
           '/my/activity',
           '/my/tracking',
           '/my/inbox',
+          '/my/interviews',
           '/my/watchlist',
           '/my/market-pulse',
           '/my/assistant',

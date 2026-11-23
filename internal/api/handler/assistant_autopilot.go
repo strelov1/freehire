@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/candidate/cv"
+	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -145,17 +146,25 @@ func (h *assistantHandlers) layDownRunPlan(ctx context.Context, sess assistant.S
 	if err != nil || analysis == nil {
 		return
 	}
-	plan := make([]cv.AutopilotEntry, 0, len(analysis.RequirementMatch))
-	for _, r := range analysis.RequirementMatch {
-		if strings.TrimSpace(r.Text) == "" {
-			continue
-		}
-		plan = append(plan, cv.AutopilotEntry{Requirement: r.Text, Status: cv.AutopilotNotReached})
-	}
+	plan := runPlan(analysis)
 	if len(plan) == 0 {
 		return
 	}
 	if err := h.cv.cvStore.SetAutopilotReport(ctx, *sess.CVID, sess.UserID, plan); err != nil {
 		log.Printf("assistant: could not lay down the run plan cv=%s: %v", sess.CVID, err)
 	}
+}
+
+// runPlan lists the requirements the run works through: the same missing_have and missing_gap lists
+// cv_context hands the agent, so the plan's size is the bar's total and the agent's report lines up with
+// it (the met requirements need no work and are not in the report). Capped at what a report may hold.
+func runPlan(a *matchanalysis.Analysis) []cv.AutopilotEntry {
+	var plan []cv.AutopilotEntry
+	for _, r := range a.RequirementMatch {
+		if (r.Status != matchanalysis.StatusMissingHave && r.Status != matchanalysis.StatusMissingGap) || strings.TrimSpace(r.Text) == "" {
+			continue
+		}
+		plan = append(plan, cv.AutopilotEntry{Requirement: r.Text, Status: cv.AutopilotNotReached})
+	}
+	return plan[:min(len(plan), cv.MaxAutopilotEntries)]
 }

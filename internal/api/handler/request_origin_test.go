@@ -434,3 +434,43 @@ func TestAuthHandlerIncludesConfiguredServedOrigins(t *testing.T) {
 		t.Fatal("unconfigured subdomain accepted")
 	}
 }
+
+// The app-wide gate: a sibling origin under the cookie domain is same-site, so the
+// browser attaches the Lax session cookie to its POSTs; only the Origin allowlist stops it.
+func TestCookieWrites_SiblingOriginRefused(t *testing.T) {
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Use(refuseCrossOriginCookieWrites(auth.BrowserOrigins(testFrontendOrigin, nil)))
+	app.All("/api/v1/me/thing", func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) })
+
+	cases := []struct {
+		name, method, origin string
+		cookie               bool
+		want                 int
+	}{
+		{"cookie POST from sibling", http.MethodPost, "https://keep.freehire.me", true, fiber.StatusForbidden},
+		{"cookie DELETE from sibling", http.MethodDelete, "https://keep.freehire.me", true, fiber.StatusForbidden},
+		{"cookie POST from the site", http.MethodPost, testFrontendOrigin, true, fiber.StatusNoContent},
+		{"cookie POST without browser headers", http.MethodPost, "", true, fiber.StatusNoContent},
+		{"cookie GET from sibling", http.MethodGet, "https://keep.freehire.me", true, fiber.StatusNoContent},
+		{"cookieless POST from anywhere", http.MethodPost, "https://example.com", false, fiber.StatusNoContent},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(context.Background(), tc.method, "/api/v1/me/thing", nil)
+			if tc.origin != "" {
+				req.Header.Set(fiber.HeaderOrigin, tc.origin)
+			}
+			if tc.cookie {
+				req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: "session", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+			}
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.want {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.want)
+			}
+		})
+	}
+}

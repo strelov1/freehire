@@ -17,10 +17,12 @@ import {
 // SDK side effect worth asserting: getting it wrong fails silently (see below).
 
 describe('isPrivateRoute', () => {
-  it('treats /my and its subtree as private', () => {
+  it('treats personal pages and tools as private', () => {
     expect(isPrivateRoute('/my')).toBe(true);
     expect(isPrivateRoute('/my/inbox')).toBe(true);
     expect(isPrivateRoute('/my/tracking')).toBe(true);
+    expect(isPrivateRoute('/tools/interview-prep')).toBe(true);
+    expect(isPrivateRoute('/tools/job-fit')).toBe(true);
   });
 
   it('treats the buddies space as private: it holds private conversations', () => {

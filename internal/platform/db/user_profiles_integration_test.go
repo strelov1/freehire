@@ -20,13 +20,12 @@ func insertUserProfileForExcludedSkillsTest(t *testing.T, q *Queries, email stri
 		t.Fatalf("insert user %s: %v", email, err)
 	}
 	if _, err := q.UpsertUserProfile(context.Background(), UpsertUserProfileParams{
-		UserID:            userID,
-		Specializations:   []string{"backend"},
-		Skills:            []string{"go"},
-		Seniorities:       []string{},
-		ExcludedSkills:    excludedSkills,
-		ExcludedSources:   []string{},
-		ExcludedCompanies: []string{},
+		UserID:          userID,
+		Specializations: []string{"backend"},
+		Skills:          []string{"go"},
+		Seniorities:     []string{},
+		ExcludedSkills:  excludedSkills,
+		ExcludedSources: []string{},
 	}); err != nil {
 		t.Fatalf("seed profile for %s: %v", email, err)
 	}

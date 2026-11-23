@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	// maxAutopilotEntries bounds one report; far past a dozen or two requirements is a model
+	// MaxAutopilotEntries bounds one report; far past a dozen or two requirements is a model
 	// looping, and the report is replayed into its context on every later turn.
-	maxAutopilotEntries = 40
+	MaxAutopilotEntries = 40
 	// maxAutopilotRequirement and maxAutopilotNote bound the display text of one entry.
 	maxAutopilotRequirement = 200
 	maxAutopilotNote        = 300
@@ -34,9 +34,9 @@ func SanitizeAutopilotReport(entries []AutopilotEntry) ([]AutopilotEntry, error)
 		return nil, errors.New("a run report needs at least one requirement — report every requirement " +
 			"you considered, including the ones you could not close")
 	}
-	if len(entries) > maxAutopilotEntries {
+	if len(entries) > MaxAutopilotEntries {
 		return nil, fmt.Errorf("a run report holds at most %d requirements, got %d — report the vacancy's "+
-			"requirements, not every sentence of the posting", maxAutopilotEntries, len(entries))
+			"requirements, not every sentence of the posting", MaxAutopilotEntries, len(entries))
 	}
 
 	out := make([]AutopilotEntry, 0, len(entries))

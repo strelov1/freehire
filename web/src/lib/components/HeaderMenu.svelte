@@ -82,6 +82,7 @@
     NAV.collections,
     NAV.talent,
     NAV.howItWorks,
+    NAV.tools,
     NAV.cvTailoring,
     NAV.jobNotifications,
     NAV.analytics,

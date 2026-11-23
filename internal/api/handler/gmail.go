@@ -47,6 +47,7 @@ type inboxHandlers struct {
 	timeline *apptimeline.Service
 	// bookingLinks reads the application's booking link URL for the panel; nil leaves it out.
 	bookingLinks *bookingLinkHandlers
+	scheduling   schedulingAccess
 	// recall is the pull direction (from an application, find its mail). Nil without a
 	// model: the endpoint reports the feature off.
 	recall *mailrecall.Service
@@ -114,6 +115,9 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware, contract fiber
 	// tailoring bootstrap mints stays refused. The OAuth connect flow stays browser-bound: it
 	// redirects to Google's consent screen, meaningless to a keyed client.
 	api.Get("/me/gmail", mw.key, contract)
+	api.Get("/me/interview-scheduling", mw.cookie, h.interviewSchedulingStatus)
+	api.Get("/me/interview-scheduling/connect", mw.cookie, h.interviewSchedulingConnect)
+	api.Delete("/me/interview-scheduling", mw.cookie, h.interviewSchedulingDisable)
 	api.Delete("/me/gmail", mw.key, contract)
 	api.Get("/me/inbox", mw.key, contract)
 	api.Post("/me/inbox/read-all", mw.key, contract)
@@ -244,7 +248,7 @@ func (h *inboxHandlers) runOAuthCallback(c *fiber.Ctx, flow oauthCallbackFlow) e
 		return redirect(flow.errorParam+"=exchange", err)
 	}
 	if err := flow.persist(c.Context(), userID, enc, scopes); err != nil {
-		if errors.Is(err, errPartialCalendarGrant) {
+		if errors.Is(err, errPartialCalendarGrant) || errors.Is(err, errPartialSchedulingGrant) {
 			return redirect(flow.errorParam+"=partial", err)
 		}
 		return redirect(flow.errorParam+"=exchange", err)
@@ -260,6 +264,9 @@ func (h *inboxHandlers) runOAuthCallback(c *fiber.Ctx, flow oauthCallbackFlow) e
 // Its exchange yields the address, which rides a closure rather than widening
 // oauthCallbackFlow for one caller.
 func (h *inboxHandlers) GmailCallback(c *fiber.Ctx) error {
+	if state := c.Cookies(interviewSchedulingStateCookie); state != "" && state == c.Query("state") {
+		return h.interviewSchedulingCallback(c)
+	}
 	var email string
 	return h.runOAuthCallback(c, oauthCallbackFlow{
 		name: "gmail connect", stateCookie: gmailStateCookieName,

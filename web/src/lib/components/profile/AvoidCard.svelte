@@ -51,6 +51,8 @@
     list: () => string[],
     avoid: (v: string) => Promise<unknown>,
     unavoid: (v: string) => Promise<unknown>,
+    // The company writes keep the profile alert in step themselves (profileStore).
+    notify = true,
   ) {
     return async (value: string) => {
       if (pending) return;
@@ -58,7 +60,7 @@
       await status.run(
         async () => {
           await (removing ? unavoid(value) : avoid(value));
-          onProfileChanged?.();
+          if (notify) onProfileChanged?.();
         },
         { failed: format(s.updateFailed, { value }) },
       );
@@ -82,6 +84,7 @@
     () => excludedCompanies,
     (v) => profileStore.avoidCompany(v),
     (v) => profileStore.unavoidCompany(v),
+    false,
   );
 
   let skillDist = $state.raw<FacetOption[]>([]);

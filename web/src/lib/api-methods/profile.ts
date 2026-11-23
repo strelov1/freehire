@@ -82,17 +82,16 @@ export function profileApi({ call, request, requestData }: Http) {
 
   /** Create-or-replace the user's profile from a non-empty set of specializations (job
    *  categories), a non-empty set of skills, an optional set of seniorities (desired
-   *  levels; may be empty), an optional set of excluded skills/sources/companies (may be
-   *  empty), and an optional location-preferences block (null clears it). A bad
-   *  specialization, empty skills, an unknown seniority, or an out-of-vocabulary location
-   *  value is a 400. */
+   *  levels; may be empty), an optional set of excluded skills/sources (may be empty), and an
+   *  optional location-preferences block (null clears it). A bad specialization, empty
+   *  skills, an unknown seniority, or an out-of-vocabulary location value is a 400. The
+   *  companies-to-avoid list is not part of this write: see excludeCompany/restoreCompany. */
   async function saveProfile(
     specializations: string[],
     skills: string[],
     seniorities: string[],
     excludedSkills: string[],
     excludedSources: string[],
-    excludedCompanies: string[],
     location: LocationPreferences | null,
     jobLanguages: string[] = [],
   ): Promise<UserProfile> {
@@ -104,11 +103,27 @@ export function profileApi({ call, request, requestData }: Http) {
         seniorities,
         excluded_skills: excludedSkills,
         excluded_sources: excludedSources,
-        excluded_companies: excludedCompanies,
         location_preferences: location,
         job_languages: jobLanguages,
-      }),
+      } satisfies components['schemas']['ProfileUpdate']),
     );
+  }
+
+  /** Hide one company from Matches: the only write that adds to the profile's companies to
+   *  avoid, safe to repeat. Creates a minimal profile when there is none. 409 when the list
+   *  already holds 200 other companies, 400 for a blank slug. */
+  async function excludeCompany(slug: string): Promise<UserProfile> {
+    return requestData<UserProfile>(
+      '/api/v1/me/profile/excluded-companies',
+      jsonBody('POST', { company_slug: slug } satisfies components['schemas']['ExcludeCompanyRequest']),
+    );
+  }
+
+  /** Take a company back off the list; null when the user has no profile. Safe to repeat. */
+  async function restoreCompany(slug: string): Promise<UserProfile | null> {
+    return requestData<UserProfile | null>(`/api/v1/me/profile/excluded-companies/${encodeURIComponent(slug)}`, {
+      method: 'DELETE',
+    });
   }
 
   // The candidate's own screening answers — the handful of questions that repeat across
@@ -317,6 +332,8 @@ export function profileApi({ call, request, requestData }: Http) {
     updateExperienceEmployment,
     getProfile,
     saveProfile,
+    excludeCompany,
+    restoreCompany,
     getScreeningAnswers,
     updateScreeningAnswers,
     getSurvey,

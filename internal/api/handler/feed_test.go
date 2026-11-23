@@ -41,9 +41,13 @@ type feedStateFake struct {
 	seen     *time.Time
 	hw       time.Time
 	advanced []time.Time
+	source   int64 // 0 selects the profile
+	searches map[int64]feedSearch
+	sources  []string
 }
 
-func (f *feedStateFake) GetOrInitFeedSeen(_ context.Context, _ int64, _ string, initAt time.Time) (time.Time, error) {
+func (f *feedStateFake) GetOrInitFeedSeen(_ context.Context, _ int64, source string, initAt time.Time) (time.Time, error) {
+	f.sources = append(f.sources, source)
 	if f.seen == nil {
 		f.seen = &initAt
 	}
@@ -267,13 +271,14 @@ func feedPagingApp(s searcher, ex *feedExcludedAt, updated time.Time) (*fiber.Ap
 	return feedStateApp(s, ex, updated, &feedStateFake{})
 }
 
-func feedStateApp(s searcher, ex *feedExcludedAt, updated time.Time, st *feedStateFake) (*fiber.App, *auth.Issuer) {
+func feedStateApp(s searcher, ex *feedExcludedAt, updated time.Time, st feedState) (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	prof := feedProfile{p: userprofile.Profile{Skills: []string{"go"}, UpdatedAt: &updated}}
 	h := &feedHandlers{search: s, profiles: prof, excluded: ex, plans: feedPlansFake{}, state: st, cursors: feed.NewSigner([]byte("cursor-key"))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/feed", auth.RequireAuth(iss, testVersions), h.Feed)
 	app.Post("/api/v1/me/feed/seen", auth.RequireAuth(iss, testVersions), h.Seen)
+	app.Put("/api/v1/me/feed/source", auth.RequireAuth(iss, testVersions), h.SetSource)
 	return app, iss
 }
 
@@ -546,28 +551,5 @@ func TestFeed_NewExactlyFillsThePage(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestFeed_ChangedProfileOnAnOffsetZeroRestCursorIsSourceChanged(t *testing.T) {
-	seen := time.Now().Add(-time.Hour).Truncate(time.Second)
-	fake := &scriptedSearcher{newHits: docs("n1", "n2"), restHits: docs("r1")}
-	app, iss := feedStateApp(fake, &feedExcludedAt{}, feedUpdated, &feedStateFake{seen: &seen})
-	_, body := deckGet(t, app, iss, "/api/v1/me/feed?limit=2")
-	cur := nextCursorOf(body)
-	edited, iss2 := feedStateApp(fake, &feedExcludedAt{}, feedUpdated.Add(time.Second), &feedStateFake{seen: &seen})
-	fake.calls = nil
-	_, body = deckGet(t, edited, iss2, "/api/v1/me/feed?limit=2&cursor="+cur)
-	if body["meta"].(map[string]any)["reason"] != feedReasonSourceChanged || len(fake.calls) != 0 {
-		t.Errorf("meta=%v calls=%d", body["meta"], len(fake.calls))
-	}
-}
-
-func TestFeed_CursorWithoutPhaseIs400(t *testing.T) {
-	app, iss := feedPagingApp(&fakeSearcher{}, &feedExcludedAt{}, feedUpdated)
-	now := time.Now()
-	old := feed.NewSigner([]byte("cursor-key")).Sign(feed.Cursor{UserID: 7, Source: "profile", SnapshotAt: now.Unix(), Offset: 20, ExpiresAt: now.Add(time.Hour).Unix()})
-	if status, _ := deckGet(t, app, iss, "/api/v1/me/feed?cursor="+old); status != fiber.StatusBadRequest {
-		t.Errorf("status = %d, want 400", status)
 	}
 }

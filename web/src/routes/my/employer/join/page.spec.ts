@@ -44,4 +44,28 @@ describe('team invitation page', () => {
     expect(await screen.findByText(/invalid or has expired/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
+  it('explains how to accept when the signed-in email does not match', async () => {
+    previewEmployerTeamInvitation.mockResolvedValue({
+      company_name: 'Acme',
+      email: 'dev@acme.test',
+      role: 'recruiter',
+    });
+    joinEmployerTeam.mockRejectedValue(new ApiError(403, 'confirm and use the invited email to join'));
+    render(Page);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Join the team' }));
+    expect(
+      await screen.findByText('Sign in with the invited work email and confirm that address to accept.'),
+    ).toBeTruthy();
+  });
+  it('shows that a company became inactive after a recruiter preview', async () => {
+    previewEmployerTeamInvitation.mockResolvedValue({
+      company_name: 'Acme',
+      email: 'dev@acme.test',
+      role: 'recruiter',
+    });
+    joinEmployerTeam.mockRejectedValue(new ApiError(403, 'employer account is not active'));
+    render(Page);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Join the team' }));
+    expect(await screen.findByText('employer account is not active')).toBeTruthy();
+  });
 });

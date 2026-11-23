@@ -1,6 +1,14 @@
 # Knowledge update history
 
+## 2026-11-23
+
+Documented unresolved LinkedIn ATS journal events and the provenance of their
+destination and career hostnames. Evidence is the ingest worker and resolver tests.
+
 ## 2026-11-22
+
+Recorded Jobs.ac.uk and CharityJob source identity, listing coverage and detail hydration.
+The provider notes cite crawler observations and captured-response regression tests.
 
 Documented LinkedIn "firehose" searches: Board `*` omits the `keywords` parameter so one search
 per location lists the whole market, and `tenants.jobage_hours` (1..720, overrides `jobage`)
@@ -143,3 +151,12 @@ In the first firehose hour detail reads were 83% of LinkedIn requests. A keyword
 already lists the whole market newest first, so the related-jobs companion (one full page plus
 up to 20 recommendation detail reads per search) only added older postings. Firehose searches
 skip it; keyword searches keep it.
+
+## Employer vacancy analytics — 2026-11-23
+
+Recorded the [report sources and company scope](architecture.md#employer-vacancy-analytics).
+The report uses the existing page-view rollup and stores only aggregate Apply clicks.
+
+## Weekly hiring-demand comparison — 2026-11-23
+
+Recorded the [publication-date rollup and comparison window](../agents/public-figures.md#weekly-hiring-demand).

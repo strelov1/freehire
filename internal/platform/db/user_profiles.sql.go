@@ -13,8 +13,8 @@ import (
 )
 
 const createUserProfileIfAbsent = `-- name: CreateUserProfileIfAbsent :one
-INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies, location_preferences, job_languages)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'::text[]))
+INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, location_preferences, job_languages)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::text[], '{}'::text[]))
 ON CONFLICT (user_id) DO NOTHING
 RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies, job_languages
 `
@@ -26,7 +26,6 @@ type CreateUserProfileIfAbsentParams struct {
 	Seniorities         []string        `json:"seniorities"`
 	ExcludedSkills      []string        `json:"excluded_skills"`
 	ExcludedSources     []string        `json:"excluded_sources"`
-	ExcludedCompanies   []string        `json:"excluded_companies"`
 	LocationPreferences json.RawMessage `json:"location_preferences"`
 	JobLanguages        []string        `json:"job_languages"`
 }
@@ -41,7 +40,6 @@ func (q *Queries) CreateUserProfileIfAbsent(ctx context.Context, arg CreateUserP
 		arg.Seniorities,
 		arg.ExcludedSkills,
 		arg.ExcludedSources,
-		arg.ExcludedCompanies,
 		arg.LocationPreferences,
 		arg.JobLanguages,
 	)
@@ -75,6 +73,47 @@ func (q *Queries) DeleteUserProfile(ctx context.Context, userID int64) (int64, e
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const excludeCompany = `-- name: ExcludeCompany :one
+INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies)
+VALUES ($1, '{}', '{}', '{}', '{}', '{}', ARRAY[$2::text])
+ON CONFLICT (user_id) DO UPDATE
+SET excluded_companies = array_append(user_profiles.excluded_companies, $2::text),
+    updated_at         = now()
+WHERE NOT ($2::text = ANY(user_profiles.excluded_companies))
+  AND cardinality(user_profiles.excluded_companies) < $3::int
+RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies, job_languages
+`
+
+type ExcludeCompanyParams struct {
+	UserID      int64  `json:"user_id"`
+	CompanySlug string `json:"company_slug"`
+	MaxCount    int32  `json:"max_count"`
+}
+
+// Hide one company: append its slug to excluded_companies, creating a minimal profile when
+// the caller has none. ON CONFLICT DO UPDATE takes the row lock, so it serializes with the
+// autosave upserts and with concurrent additions, and the bound is checked under that lock.
+// No returned row means the slug is already listed or the list is full; the caller reads the
+// profile to tell which. An actual change advances updated_at (the feed's filter version).
+func (q *Queries) ExcludeCompany(ctx context.Context, arg ExcludeCompanyParams) (UserProfile, error) {
+	row := q.db.QueryRow(ctx, excludeCompany, arg.UserID, arg.CompanySlug, arg.MaxCount)
+	var i UserProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Skills,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Specializations,
+		&i.LocationPreferences,
+		&i.ExcludedSkills,
+		&i.Seniorities,
+		&i.ExcludedSources,
+		&i.ExcludedCompanies,
+		&i.JobLanguages,
+	)
+	return i, err
 }
 
 const getUserProfile = `-- name: GetUserProfile :one
@@ -137,16 +176,49 @@ func (q *Queries) ListUserProfileSkillSets(ctx context.Context, userIds []int64)
 	return items, nil
 }
 
+const unexcludeCompany = `-- name: UnexcludeCompany :one
+UPDATE user_profiles
+SET excluded_companies = array_remove(excluded_companies, $1::text),
+    updated_at         = now()
+WHERE user_id = $2 AND $1::text = ANY(excluded_companies)
+RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies, job_languages
+`
+
+type UnexcludeCompanyParams struct {
+	CompanySlug string `json:"company_slug"`
+	UserID      int64  `json:"user_id"`
+}
+
+// Restore one company. No returned row means there is no profile or the slug was not listed:
+// the handler treats both as success without touching updated_at.
+func (q *Queries) UnexcludeCompany(ctx context.Context, arg UnexcludeCompanyParams) (UserProfile, error) {
+	row := q.db.QueryRow(ctx, unexcludeCompany, arg.CompanySlug, arg.UserID)
+	var i UserProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Skills,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Specializations,
+		&i.LocationPreferences,
+		&i.ExcludedSkills,
+		&i.Seniorities,
+		&i.ExcludedSources,
+		&i.ExcludedCompanies,
+		&i.JobLanguages,
+	)
+	return i, err
+}
+
 const upsertUserProfile = `-- name: UpsertUserProfile :one
-INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies, location_preferences, job_languages)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'::text[]))
+INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, location_preferences, job_languages)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::text[], '{}'::text[]))
 ON CONFLICT (user_id) DO UPDATE
 SET specializations      = EXCLUDED.specializations,
     skills               = EXCLUDED.skills,
     seniorities          = EXCLUDED.seniorities,
     excluded_skills      = EXCLUDED.excluded_skills,
     excluded_sources     = EXCLUDED.excluded_sources,
-    excluded_companies   = EXCLUDED.excluded_companies,
     location_preferences = EXCLUDED.location_preferences,
     job_languages        = EXCLUDED.job_languages,
     updated_at           = now()
@@ -160,17 +232,17 @@ type UpsertUserProfileParams struct {
 	Seniorities         []string        `json:"seniorities"`
 	ExcludedSkills      []string        `json:"excluded_skills"`
 	ExcludedSources     []string        `json:"excluded_sources"`
-	ExcludedCompanies   []string        `json:"excluded_companies"`
 	LocationPreferences json.RawMessage `json:"location_preferences"`
 	JobLanguages        []string        `json:"job_languages"`
 }
 
 // Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
 // idempotent upsert: first save inserts, later saves overwrite specializations/skills/
-// seniorities/excluded_skills/excluded_sources/excluded_companies/location_preferences and
-// bump updated_at. All fields are already normalized by the service; seniorities,
-// excluded_skills, excluded_sources and excluded_companies may be empty;
-// location_preferences is a validated JSONB block or NULL (no preferences).
+// seniorities/excluded_skills/excluded_sources/location_preferences and bump updated_at.
+// All fields are already normalized by the service; seniorities, excluded_skills and
+// excluded_sources may be empty; location_preferences is a validated JSONB block or NULL.
+// excluded_companies is never assigned here: ExcludeCompany/UnexcludeCompany own it, so a
+// stale autosave cannot erase a hidden company.
 func (q *Queries) UpsertUserProfile(ctx context.Context, arg UpsertUserProfileParams) (UserProfile, error) {
 	row := q.db.QueryRow(ctx, upsertUserProfile,
 		arg.UserID,
@@ -179,7 +251,6 @@ func (q *Queries) UpsertUserProfile(ctx context.Context, arg UpsertUserProfilePa
 		arg.Seniorities,
 		arg.ExcludedSkills,
 		arg.ExcludedSources,
-		arg.ExcludedCompanies,
 		arg.LocationPreferences,
 		arg.JobLanguages,
 	)
@@ -207,11 +278,10 @@ SET specializations      = $2,
     seniorities          = $4,
     excluded_skills      = $5,
     excluded_sources     = $6,
-    excluded_companies   = $7,
-    location_preferences = $8,
-    job_languages        = $10,
+    location_preferences = $7,
+    job_languages        = $9,
     updated_at           = now()
-WHERE user_id = $1 AND updated_at = $9
+WHERE user_id = $1 AND updated_at = $8
 RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies, job_languages
 `
 
@@ -222,7 +292,6 @@ type UpsertUserProfileIfUnchangedParams struct {
 	Seniorities         []string           `json:"seniorities"`
 	ExcludedSkills      []string           `json:"excluded_skills"`
 	ExcludedSources     []string           `json:"excluded_sources"`
-	ExcludedCompanies   []string           `json:"excluded_companies"`
 	LocationPreferences json.RawMessage    `json:"location_preferences"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	JobLanguages        []string           `json:"job_languages"`
@@ -242,7 +311,6 @@ func (q *Queries) UpsertUserProfileIfUnchanged(ctx context.Context, arg UpsertUs
 		arg.Seniorities,
 		arg.ExcludedSkills,
 		arg.ExcludedSources,
-		arg.ExcludedCompanies,
 		arg.LocationPreferences,
 		arg.UpdatedAt,
 		arg.JobLanguages,

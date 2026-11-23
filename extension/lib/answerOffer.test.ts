@@ -53,3 +53,11 @@ describe('answersToOffer', () => {
     expect(offers.map((o) => o.key)).toEqual(['0:1', '0:2']);
   });
 });
+
+describe('answersToOffer prefill', () => {
+  it('marks answers that were on the page before the candidate typed', () => {
+    const offers = answersToOffer([field('Years of Python', '6')], new Set(), new Set(['years of python']));
+    expect(offers[0]?.prefilled).toBe(true);
+    expect(answersToOffer([field('Years of Python', '6')], new Set())[0]?.prefilled).toBeUndefined();
+  });
+});

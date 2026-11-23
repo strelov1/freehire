@@ -351,6 +351,20 @@ type SearchResult struct {
 // to 400 without reporting it (see handler.classify). Match with errors.Is.
 var ErrBadQuery = errors.New("bad query")
 
+// ErrBusy marks a query Meilisearch turned away because its search queue was full (503,
+// "Too many search requests running at the same time"): the engine is overloaded or briefly
+// stalled, e.g. while an index compaction finishes. Handlers answer 503 with Retry-After and
+// do not report it as a fault (see handler.classify). Match with errors.Is.
+var ErrBusy = errors.New("search engine busy")
+
+// BusyRetryAfter is how long Meilisearch asks a turned-away caller to wait.
+const BusyRetryAfter = 10 * time.Second
+
+func isBusy(err error) bool {
+	var me *meilisearch.Error
+	return errors.As(err, &me) && me.StatusCode == http.StatusServiceUnavailable
+}
+
 // isBadRequest reports whether err is a Meilisearch API rejection with a 400
 // status — the engine refusing a malformed query or filter — as opposed to a
 // transport/engine failure. Such rejections are caused by the request itself.
@@ -362,7 +376,8 @@ func isBadRequest(err error) bool {
 // queryErr reports a query failure under the caller's op prefix. A cancelled or expired
 // context arrives wrapped in a Meilisearch communication error that does not chain to
 // context.Canceled (the SDK's *Error has no Unwrap), so the context error is re-raised
-// directly; otherwise a client disconnect reads as a fault. A 400 is tagged ErrBadQuery.
+// directly; otherwise a client disconnect reads as a fault. A 400 is tagged ErrBadQuery,
+// a 503 ErrBusy.
 // A free function because disjunctiveFacetCounts is one and has no client in scope.
 func queryErr(ctx context.Context, op string, err error) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
@@ -370,6 +385,9 @@ func queryErr(ctx context.Context, op string, err error) error {
 	}
 	if isBadRequest(err) {
 		return fmt.Errorf("%s: %w: %v", op, ErrBadQuery, err)
+	}
+	if isBusy(err) {
+		return fmt.Errorf("%s: %w: %w", op, ErrBusy, err)
 	}
 	return fmt.Errorf("%s: %w", op, err)
 }

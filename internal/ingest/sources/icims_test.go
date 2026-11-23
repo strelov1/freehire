@@ -270,22 +270,25 @@ func TestICIMSDropsUnavailableLocationParts(t *testing.T) {
 }
 
 func TestICIMSCompanyFallsBackToEntry(t *testing.T) {
-	detail := `<html><body><script type="application/ld+json">
+	// An empty name and the "UNAVAILABLE" placeholder both mean the posting names no company.
+	for _, name := range []string{"", "UNAVAILABLE"} {
+		detail := `<html><body><script type="application/ld+json">
 {"@type":"JobPosting","title":"Role","datePosted":"2026-01-01T00:00:00.000Z",
-"hiringOrganization":{"name":""},
+"hiringOrganization":{"name":"` + name + `"},
 "jobLocation":[{"address":{"addressLocality":"Austin","addressCountry":"US"}}]}
 </script></body></html>`
-	loc := "https://careers-acme.icims.com/jobs/9/role/job"
-	fake := (&routedHTTP{}).
-		route("/sitemap.xml", icimsSitemapXML(loc)).
-		route("/jobs/9/role/job?in_iframe=1", detail)
+		loc := "https://careers-acme.icims.com/jobs/9/role/job"
+		fake := (&routedHTTP{}).
+			route("/sitemap.xml", icimsSitemapXML(loc)).
+			route("/jobs/9/role/job?in_iframe=1", detail)
 
-	jobs, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme Corp", Board: "acme"})
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if len(jobs) != 1 || jobs[0].Company != "Acme Corp" {
-		t.Fatalf("Company = %q, want fallback %q", jobs[0].Company, "Acme Corp")
+		jobs, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme Corp", Board: "acme"})
+		if err != nil {
+			t.Fatalf("name %q: Fetch: %v", name, err)
+		}
+		if len(jobs) != 1 || jobs[0].Company != "Acme Corp" {
+			t.Fatalf("name %q: Company = %q, want fallback %q", name, jobs[0].Company, "Acme Corp")
+		}
 	}
 }
 

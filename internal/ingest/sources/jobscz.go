@@ -203,7 +203,9 @@ func jobsczQuery(region, field string, page int) string {
 	q := url.Values{}
 	if region != "" {
 		u += region + "/"
-		// A city page widens to 50 km by default; a radius of 0 keeps the page to its own region.
+	}
+	if region != "" && region != "zahranici" {
+		// Keep domestic results in their region. The foreign slice rejects a radius.
 		q.Set("locality[radius]", "0")
 	}
 	if field != "" {

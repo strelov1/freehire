@@ -20,6 +20,7 @@
   // they live in one clear Cities section (busiest first, the rest via search).
   // Selecting at any level stages the existing regions/countries/cities params.
   let { store, counts = null }: { store: FacetStore; counts?: FacetCounts | null } = $props();
+  const locationHelpId = $props.id();
 
   let query = $state('');
   const expandedRegions = new SvelteSet<string>();
@@ -141,9 +142,8 @@
     store.clearFacet('cities');
   }
 
-  // "Eligible for me": composes existing `countries`/`regions` include values (see
-  // eligibleForMe.ts and openspec/changes/eligible-for-me-location-filter) rather than
-  // introducing a new filter. The country/region source follows a fixed precedence —
+  // "Use my location" composes existing `countries`/`regions` include values (see
+  // eligibleForMe.ts). The country/region source follows a fixed precedence —
   // the signed-in profile's stated country first, then the macro-region the existing
   // geo-default-scope endpoint derives from the visitor's edge country header — and
   // resolves to nothing for a visitor neither source can place, in which case the pill
@@ -155,6 +155,9 @@
   const geoSource = $derived(resolveGeoSource(profileCountry, edgeRegion));
   const eligibleValues = $derived(eligibleForMeValues(geoSource));
   const eligibleOn = $derived(isEligibleForMeOn(geoSource, countryF.include, regionF.include));
+  const locationName = $derived(
+    geoSource?.kind === 'country' ? countryLabel(geoSource.code) : geoSource ? regionLabel(geoSource.code) : null,
+  );
 
   // Only asks the edge for a region when the profile can't already answer with a
   // country: a signed-in candidate with a stated base country never needs it, so this
@@ -243,21 +246,30 @@
 {/if}
 
 {#if geoSource || visibleFlatRegions.length}
-  <div class="mb-1 flex flex-wrap gap-2 border-b border-border pb-3">
+  <div class="mb-3">
     <button
       type="button"
       onclick={toggleEligibleForMe}
       disabled={!geoSource}
       aria-pressed={eligibleOn}
-      title={geoSource ? pillTitle(eligibleOn, false, false) : "We couldn't determine your location"}
+      aria-describedby={locationHelpId}
       class={[
         pillClass(eligibleOn, false, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm'),
         !geoSource && 'cursor-not-allowed opacity-50',
       ]}
     >
       <MapPin class="size-4 shrink-0" aria-hidden="true" />
-      Eligible for me
+      Use my location
     </button>
+    <p id={locationHelpId} class="mt-1 text-xs text-muted-foreground">
+      {#if locationName}
+        Includes jobs tagged {locationName}, worldwide jobs, and jobs with an unknown location.
+      {:else}
+        We couldn't determine your location. Choose a country or region below.
+      {/if}
+    </p>
+  </div>
+  <div class="mb-1 flex flex-wrap gap-2 border-b border-border pb-3">
     {#each visibleFlatRegions as code (code)}
       {@const rExc = regionF.exclude.includes(code)}
       {@const rInc = regionF.include.includes(code)}

@@ -1,4 +1,4 @@
--- name: RefreshCompanyFacets :execrows
+-- name: ComputeCompanyJobFacets :many
 -- Recompute every company's denormalized state in one set-based pass: the open-job
 -- count plus the facet arrays derived from those open jobs — regions/countries from
 -- the jobs geography columns, remote_regions from those same regions but scoped to
@@ -9,7 +9,13 @@
 -- jobs) is zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips
 -- rows already current, so re-running rewrites nothing and the affected-rows count
 -- reports real churn. This is cmd/recount-companies' whole job; run periodically
--- (eventual consistency). The facet aggregates are each their own non-correlated
+-- (eventual consistency).
+--
+-- It is two statements so the jobs scan can run on the analytics replica: this one reads
+-- jobs/job_activity only and returns one row per company with open jobs (counts, the
+-- jobs-derived facet arrays and the gov-source marker); ApplyCompanyFacets below takes
+-- those rows as JSON on the primary and does everything that reads `companies`. Before
+-- the split the single UPDATE wrote ~1.5 GB of temp files per run on the primary. The facet aggregates are each their own non-correlated
 -- GROUP BY so the row-multiplying unnest of one array never distorts another's count.
 -- oj is referenced by all eight aggregates, so it is pinned MATERIALIZED: without the
 -- keyword the planner is free to inline it and re-scan the open-jobs set per aggregate.
@@ -113,7 +119,53 @@ gov AS (
     SELECT company_slug, bool_or(source IN ('usajobs', 'neogov')) AS is_gov
     FROM oj
     GROUP BY company_slug
+)
+-- Every company in oj has a counts row, so counts drives; the arrays are never NULL.
+SELECT counts.company_slug,
+       counts.cnt::bigint                  AS job_count,
+       gov.is_gov::boolean                 AS is_gov,
+       COALESCE(reg.arr, '{}')::text[]        AS regions,
+       COALESCE(remote_reg.arr, '{}')::text[] AS remote_regions,
+       COALESCE(cty.arr, '{}')::text[]        AS countries,
+       COALESCE(dom.arr, '{}')::text[]        AS domains,
+       COALESCE(ctype.arr, '{}')::text[]      AS company_types,
+       COALESCE(csize.arr, '{}')::text[]      AS company_sizes
+FROM counts
+JOIN gov             ON gov.company_slug        = counts.company_slug
+LEFT JOIN reg        ON reg.company_slug        = counts.company_slug
+LEFT JOIN remote_reg ON remote_reg.company_slug = counts.company_slug
+LEFT JOIN cty        ON cty.company_slug        = counts.company_slug
+LEFT JOIN dom        ON dom.company_slug        = counts.company_slug
+LEFT JOIN ctype      ON ctype.company_slug      = counts.company_slug
+LEFT JOIN csize      ON csize.company_slug      = counts.company_slug;
+
+-- name: ApplyCompanyFacets :execrows
+-- The write half of the recount (see ComputeCompanyJobFacets above for the contract).
+-- `facets` is ComputeCompanyJobFacets' rows as a JSON array of objects keyed by its
+-- column names; a company absent from it has no open jobs and is zeroed/emptied. The
+-- rest reads only `companies`, so it stays cheap on the primary.
+-- Each array is re-sorted by value, the order ComputeCompanyJobFacets aggregated it in, so
+-- the IS DISTINCT FROM guard compares like with like and an unchanged row is not rewritten.
+WITH f AS (
+    SELECT e->>'company_slug' AS company_slug,
+           (e->>'job_count')::bigint AS cnt,
+           (e->>'is_gov')::boolean AS is_gov,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'regions') AS v ORDER BY v) AS regions,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'remote_regions') AS v ORDER BY v) AS remote_regions,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'countries') AS v ORDER BY v) AS countries,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'domains') AS v ORDER BY v) AS domains,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'company_types') AS v ORDER BY v) AS company_types,
+           ARRAY(SELECT v FROM jsonb_array_elements_text(e->'company_sizes') AS v ORDER BY v) AS company_sizes
+    FROM jsonb_array_elements(sqlc.arg('facets')::jsonb) AS e
 ),
+counts AS (SELECT company_slug, cnt FROM f),
+reg AS (SELECT company_slug, regions AS arr FROM f WHERE cardinality(regions) > 0),
+remote_reg AS (SELECT company_slug, remote_regions AS arr FROM f WHERE cardinality(remote_regions) > 0),
+cty AS (SELECT company_slug, countries AS arr FROM f WHERE cardinality(countries) > 0),
+dom AS (SELECT company_slug, domains AS arr FROM f WHERE cardinality(domains) > 0),
+ctype AS (SELECT company_slug, company_types AS arr FROM f WHERE cardinality(company_types) > 0),
+csize AS (SELECT company_slug, company_sizes AS arr FROM f WHERE cardinality(company_sizes) > 0),
+gov AS (SELECT company_slug, is_gov FROM f),
 -- mat is the deterministic single-valued maturity, computed per company from its own
 -- signals plus the gov-source marker, in precedence order (government beats size).
 -- NULL = unknown (an honest abstain when no signal fits). Computed once here so both

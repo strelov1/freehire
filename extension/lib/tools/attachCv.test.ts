@@ -6,6 +6,7 @@ import {
   resolveDownloadedPath,
   pickAttachableUpload,
   classifyAttachError,
+  cvFileName,
   TOP_FRAME,
   type DownloadsAPI,
 } from './attachCv';
@@ -212,5 +213,16 @@ describe('classifyAttachError', () => {
 
   it('passes through an error it does not recognize', () => {
     expect(classifyAttachError('some other chrome.debugger failure')).toBe('some other chrome.debugger failure');
+  });
+});
+
+describe('cvFileName', () => {
+  it('names the file after the candidate', () => {
+    expect(cvFileName({ first_name: 'Jane', last_name: 'Doe' })).toBe('Jane-Doe-CV.pdf');
+    expect(cvFileName({ first_name: 'Mary Ann', last_name: ' O/Brien ' })).toBe('Mary-Ann-OBrien-CV.pdf');
+  });
+
+  it('is null when the profile has no name', () => {
+    expect(cvFileName({ first_name: ' ', last_name: '' })).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ package boardresolve
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 )
 
@@ -31,6 +32,21 @@ func TestCompanyDiscoveryFollowsObservedCareersLinksToNativeATS(t *testing.T) {
 	source, board, _, ok := r.ResolveCompany(context.Background(), "https://www.gistworld.com/")
 	if !ok || source != "hrsmart" || board != "gistworld.mua.hrdepartment.com" {
 		t.Fatalf("native board = %s/%s/%v", source, board, ok)
+	}
+}
+
+func TestUnresolvedCompanyDiscoveryKeepsExternalCareerHosts(t *testing.T) {
+	r := &Resolver{http: companyPages{
+		"https://employer.example/": `<a href="/careers">Careers</a>
+			<a href="https://news.example/">News</a>`,
+		"https://employer.example/careers": `<a href="https://APPLY.vendor.example/123?token=private-fixture-value">Apply</a>
+			<a href="https://apply.vendor.example/456">Apply</a>
+			<a href="https://board.example/our-jobs">New jobs</a>
+			<a href="/other-jobs">More jobs</a>`,
+	}}
+	_, _, _, hosts, found := r.ResolveCompanyWithCareerHosts(context.Background(), "https://employer.example/")
+	if found || !slices.Equal(hosts, []string{"apply.vendor.example", "board.example"}) {
+		t.Fatalf("career hosts = %v, resolved = %t", hosts, found)
 	}
 }
 

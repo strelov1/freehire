@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "freehire API",
-    "description": "## Base URL\n\nAll endpoints are served under `https://freehire.me/api/v1`. The API is read-first and open: the job, search, facet, and company endpoints need no authentication and may be called cross-origin.\n\nAuthenticated endpoints accept either the browser session cookie (set by sign-in, same-origin) or a personal API key sent as a Bearer token — see the authentication model below. Keys are created in your account, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys), not through this API.\n\n## Response envelope\n\nSingle items are wrapped as `{ \"data\": ... }`. Collections add pagination metadata: `{ \"data\": [...], \"meta\": { \"total\", \"limit\", \"offset\" } }`. Errors are `{ \"error\": \"message\" }` with a matching HTTP status.\n\n```json\n{ \"data\": { \"...\": \"single item\" } }\n\n{ \"data\": [ ... ], \"meta\": { \"total\": 4213, \"limit\": 20, \"offset\": 0 } }\n\n{ \"error\": \"job not found\" }\n```\n\n## Pagination\n\nList and search endpoints page with `limit` (default 20, max 100) and `offset` (default 0). `meta.total` reports the total matching the current filters, so you can compute the number of pages.\n\nPagination is bounded on **every** list endpoint: `offset + limit` may not exceed 10000 (`pagination too deep` → 400). This is deep-paging protection, not a cap on the reported total — use filters to narrow rather than paging that far.\n\nThe bound is a refusal rather than a clamp, deliberately: a clamped page would answer 200 carrying rows you did not ask for, and a client walking pages would loop over the same page forever without being able to tell. A 400 means \"there is no such page\", which is the truth.\n\n## Errors\n\nErrors use standard HTTP status codes: 400 (bad request / invalid value), 401 (missing or invalid credentials), 403 (authenticated but not allowed, e.g. a non-moderator), 404 (no such job, company, or owned resource), 429 (request limit exceeded), and 503 (service temporarily unavailable). Application errors use `{ \"error\": ... }`. nginx rate-limit rejections can return a non-JSON body; see API plans below.\n\n## API plans\n\nThe public read endpoints answer without a key for personal and non-commercial use. Showing the postings in a product you offer to others needs an [API plan](https://freehire.me/jobs-api), under the [data licence](https://freehire.me/terms#data-licence).\n\nSend a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.\n\nThe API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000. Neither paid API plan has a daily request cap. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.\n\nThe limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.\n\nPagination returns 20 listings by default and up to 100 with `limit=100`. Requests carrying `offset` or `company_slug` also pass through separate per-IP nginx limits of 2 requests per second each, including paid requests. The `offset` limit allows a burst of 50 excess requests; the `company_slug` limit allows 30. A request carrying both parameters draws on both limits. For sustained pagination or company-filtered reads, keep the combined traffic from one IP within the applicable 2-request-per-second limit.\n\nThe gateway returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). A window starts with its first request. Exceeding a request limit returns HTTP 429. Gateway rejections include `Retry-After` in seconds; nginx rejections can omit these headers and return a non-JSON body. Pause for `Retry-After` when present; otherwise back off before retrying.\n\n## Data freshness and closed jobs\n\nA posting is **open** until something closes it, and a closed posting carries `closed_at` and a `closed_reason`. Nothing is deleted. These are the closers, with the `closed_reason` each writes:\n\n- The crawl no longer lists the posting: `unseen`. A crawl that ran incompletely, or whose board failed, closes nothing.\n- A source that streams removals reports the posting taken down: `feed_removed`.\n- Two consecutive liveness reads find the page expired, or the source answers that it is gone: `probe_expired`.\n- A source with no close signal at all is closed by age (`expired`), and so is a posting whose application deadline has passed. The age rule is a guess, which is why the reason says so.\n- A board whose crawl has failed for a long time (`board_unreachable`, `board_gone`) or has listed nothing for a long time (`feed_empty`), or a board that was retired (`board_retired`).\n- An aggregator's copy of a posting whose employer's own board freehire already crawls closes in favour of that copy (`ats_covered`).\n- A moderator (`moderated`), or the employer on a posting they published themselves (`employer_closed`).\n\nPostings closed before the reason was recorded carry an empty `closed_reason`. A closed posting can **reopen**: when its source lists it again, or a moderator reopens it, `closed_at` is cleared.\n\nHow often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.\n\nClosed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.\n\n### Finding companies by domain\n\nIf you hold a list of company web domains, `GET /companies/by-domain?domain=stripe.com&domain=https://www.acme.io/careers` (repeatable or comma-joined, up to 100) returns `{\"data\": [{\"domain\", \"slug\", \"name\", \"job_count\", \"website\"}], \"meta\": {\"unmatched\": [...]}}`. Domains are compared by host (lowercase, no `www.`, port or trailing dot) against each company's site; every match is returned, including companies with `job_count` 0, and domains with no match are listed in `meta.unmatched`. Then read a company's postings with `GET /jobs/search?company_slug=<slug>` (repeatable), or subscribe a change webhook with `company_slugs` to have only their changes pushed.\n\n### Keeping a mirror in sync\n\n`GET /jobs/changes` is the feed of every opening, closing and reopening of a public, canonical posting. To keep a copy of the catalogue current:\n\n1. Load the postings you want through the list and search endpoints, and note the time you started.\n2. Call `GET /jobs/changes?since=<that time>` and follow `meta.next_cursor` as `cursor` until `meta.has_more` is false. Store the last `next_cursor`.\n3. From then on, call `GET /jobs/changes?cursor=<stored cursor>` on your own schedule. A `closed` change means delist the posting; `opened` and `reopened` mean fetch it with `GET /jobs/{slug}` and list it.\n\nThe cursor is a position, not a time, so a walk never skips or repeats a change while new ones arrive. Each change carries a `seq`: for a given `public_slug`, apply a change only when its `seq` is greater than the last one you applied, and skip it otherwise. The feed can serve one posting's changes slightly out of order, and the first call with `since` can repeat a few changes from just before it; this rule makes both harmless. `since` can reach back 30 days at most, and the feed begins when it was introduced (`meta.available_since`). A change shows up in the feed shortly after it happens, not at the same instant: the feed trails the oldest transaction still open in the database, so a long-running one delays new entries until it ends. Nothing is lost, only late.\n\nThe feed keeps the full history and nothing is deleted from it, so a `cursor` you hold never expires. Only `since` is capped, at 30 days back, so a first call stays cheap: a mirror older than that rebuilds from search and then starts the feed with `since`.\n\nA posting counts as listed while it is open, canonical (not a duplicate of another posting) and public. A posting that stops being listed is a `closed` change whose `closed_reason` is the close reason, or `duplicate` when it became a duplicate of another posting, or `private`; one that is listed again is `reopened`.\n\n### Change webhooks\n\nInstead of polling the feed you can have it pushed. `POST /me/change-webhooks` subscribes a URL (with an `api` or `api_data` plan); the answer carries the signing `secret`, **once**. A subscription can ask for only some companies (`company_slugs`) and some kinds of change (`kinds`), and receives changes made from about the time it was created (a change from the moment just before can arrive once; `seq` dedupes it). It reads the same feed as `GET /jobs/changes`, in the same order, and the same postings.\n\nA delivery is a `POST` with a JSON body and these headers:\n\n| Header | Value |\n|---|---|\n| `X-Freehire-Timestamp` | Unix seconds when it was signed. |\n| `X-Freehire-Signature` | `v1=` plus the hex HMAC-SHA256, keyed by your secret, of the timestamp, a `.`, and the raw body. |\n| `X-Freehire-Delivery` | An id, the same for a retry of the same batch. |\n| `X-Freehire-Event` | `job.changes`, or `webhook.test` for a test. |\n\n```json\n{\"id\": \"7-4821-90210\", \"type\": \"job.changes\", \"changes\": [\n  {\"public_slug\": \"senior-go-engineer-acme-1a2b\", \"company_slug\": \"acme\", \"seq\": 98765, \"kind\": \"closed\", \"at\": \"2026-06-20T04:10:00Z\", \"closed_reason\": \"unseen\"}\n]}\n```\n\n`changes` is a batch of up to 100, oldest first, each shaped like a feed change plus `company_slug`. Apply a change only when its `seq` is greater than the last one you applied for that `public_slug` (this also drops a repeat). `opened` and `reopened` mean fetch the posting with `GET /jobs/{slug}`; `closed` means delist it.\n\nVerify before you trust a body: recompute the HMAC over the timestamp header, `.` and the **raw** body bytes (not re-serialised JSON), compare in constant time, and refuse a timestamp more than 5 minutes from your clock. In Go:\n\n```go\nfunc verify(secret, ts, sig string, body []byte) bool {\n\tn, err := strconv.ParseInt(ts, 10, 64)\n\tif err != nil || math.Abs(time.Since(time.Unix(n, 0)).Seconds()) > 300 {\n\t\treturn false\n\t}\n\tmac := hmac.New(sha256.New, []byte(secret))\n\tfmt.Fprintf(mac, \"%s.\", ts)\n\tmac.Write(body)\n\treturn hmac.Equal([]byte(\"v1=\"+hex.EncodeToString(mac.Sum(nil))), []byte(sig))\n}\n```\n\nAnswer any `2xx` to accept a batch. Anything else, a timeout (10 seconds) or a redirect counts as a failure: the same batch is sent again after 30 seconds, doubling up to an hour. Delivery is at least once, so expect repeats and dedupe on `seq`. After 25 failures in a row, or at once on a `410 Gone`, the subscription is disabled (`disabled_at` and `disabled_reason` in the list); delete it and create it again to resume, from the changes made then. Plan for the feed instead if you need what happened meanwhile. While your plan has lapsed, deliveries pause and pick up where they stopped once it is renewed.\n\n## Authentication model\n\nBrowser clients authenticate with an `HttpOnly` session cookie set on sign-in (same-origin; the SPA cannot read it). Non-browser clients use a personal API key as `Authorization: Bearer <token>`.\n\nEndpoints marked “Session or API key” accept either; endpoints marked “Session only” (saved searches, subscriptions) accept only the cookie, so a leaked key cannot manage credentials. “Moderator” endpoints additionally require the moderator role.\n\n## What is not here\n\nThis reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.\n\nManaging API keys (`POST`, `GET` and `DELETE` on `/me/api-keys`) is not documented here, because no API client can call it. Those endpoints accept only the browser session cookie, and additionally require a freshly proven identity — a password re-entry or a sign-in-provider check — that a script has no way to supply. Create and revoke keys in your account instead, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys); the plaintext token is shown exactly once, at creation, so store it then.\n\nThe `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.\n\nMost of this API is also a CLI. If you are writing an agent rather than an integration, `freehire` covers the same surface with less ceremony — search, tracking, the inbox and CV tailoring — over one API key.",
+    "description": "## Base URL\n\nAll endpoints are served under `https://freehire.me/api/v1`. The API is read-first and open: the job, search, facet, and company endpoints need no authentication and may be called cross-origin.\n\nAuthenticated endpoints accept either the browser session cookie (set by sign-in, same-origin) or a personal API key sent as a Bearer token — see the authentication model below. Keys are created in your account, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys), not through this API.\n\n## Response envelope\n\nSingle items are wrapped as `{ \"data\": ... }`. Collections add pagination metadata: `{ \"data\": [...], \"meta\": { \"total\", \"limit\", \"offset\" } }`. Errors are `{ \"error\": \"message\" }` with a matching HTTP status.\n\n```json\n{ \"data\": { \"...\": \"single item\" } }\n\n{ \"data\": [ ... ], \"meta\": { \"total\": 4213, \"limit\": 20, \"offset\": 0 } }\n\n{ \"error\": \"job not found\" }\n```\n\n## Pagination\n\nList and search endpoints page with `limit` (default 20, max 100) and `offset` (default 0). `meta.total` reports the total matching the current filters, so you can compute the number of pages.\n\nPagination is bounded on **every** list endpoint: `offset + limit` may not exceed 10000 (`pagination too deep` → 400). This is deep-paging protection, not a cap on the reported total — use filters to narrow rather than paging that far.\n\nThe bound is a refusal rather than a clamp, deliberately: a clamped page would answer 200 carrying rows you did not ask for, and a client walking pages would loop over the same page forever without being able to tell. A 400 means \"there is no such page\", which is the truth.\n\n## Errors\n\nErrors use standard HTTP status codes: 400 (bad request / invalid value), 401 (missing or invalid credentials), 403 (authenticated but not allowed, e.g. a non-moderator), 404 (no such job, company, or owned resource), 429 (request limit exceeded), and 503 (service temporarily unavailable). Application errors use `{ \"error\": ... }`. nginx rate-limit rejections can return a non-JSON body; see API plans below.\n\n## API plans\n\nThe public read endpoints answer without a key for personal and non-commercial use. Showing the postings in a product you offer to others needs an [API plan](https://freehire.me/jobs-api), under the [data licence](https://freehire.me/terms#data-licence).\n\nSend a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.\n\nThe API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000. Neither paid API plan has a daily request cap. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.\n\nThe limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.\n\nPagination returns 20 listings by default and up to 100 with `limit=100`. Requests carrying `offset` or `company_slug` also pass through separate per-IP nginx limits of 2 requests per second each, including paid requests. The `offset` limit allows a burst of 50 excess requests; the `company_slug` limit allows 30. A request carrying both parameters draws on both limits. For sustained pagination or company-filtered reads, keep the combined traffic from one IP within the applicable 2-request-per-second limit.\n\nThe gateway returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). A window starts with its first request. Exceeding a request limit returns HTTP 429. Gateway rejections include `Retry-After` in seconds; nginx rejections can omit these headers and return a non-JSON body. Pause for `Retry-After` when present; otherwise back off before retrying.\n\n## Data freshness and closed jobs\n\nA posting is **open** until something closes it, and a closed posting carries `closed_at` and a `closed_reason`. Nothing is deleted. These are the closers, with the `closed_reason` each writes:\n\n- The crawl no longer lists the posting: `unseen`. A crawl that ran incompletely, or whose board failed, closes nothing.\n- A source that streams removals reports the posting taken down: `feed_removed`.\n- Two consecutive liveness reads find the page expired, or the source answers that it is gone: `probe_expired`.\n- A source with no close signal at all is closed by age (`expired`), and so is a posting whose application deadline has passed. The age rule is a guess, which is why the reason says so.\n- A board whose crawl has failed for a long time (`board_unreachable`, `board_gone`) or has listed nothing for a long time (`feed_empty`), or a board that was retired (`board_retired`).\n- An aggregator's copy of a posting whose employer's own board freehire already crawls closes in favour of that copy (`ats_covered`).\n- A moderator (`moderated`), or the employer on a posting they published themselves (`employer_closed`).\n\nPostings closed before the reason was recorded carry an empty `closed_reason`. A closed posting can **reopen**: when its source lists it again, or a moderator reopens it, `closed_at` is cleared.\n\nHow often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.\n\nClosed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`. Interview prep also serves a closed public posting when the caller has a signed-in session and an application at the interview stage.\n\n### Finding companies by domain\n\nIf you hold a list of company web domains, `GET /companies/by-domain?domain=stripe.com&domain=https://www.acme.io/careers` (repeatable or comma-joined, up to 100) returns `{\"data\": [{\"domain\", \"slug\", \"name\", \"job_count\", \"website\"}], \"meta\": {\"unmatched\": [...]}}`. Domains are compared by host (lowercase, no `www.`, port or trailing dot) against each company's site; every match is returned, including companies with `job_count` 0, and domains with no match are listed in `meta.unmatched`. Then read a company's postings with `GET /jobs/search?company_slug=<slug>` (repeatable), or subscribe a change webhook with `company_slugs` to have only their changes pushed.\n\n### Keeping a mirror in sync\n\n`GET /jobs/changes` is the feed of every opening, closing and reopening of a public, canonical posting. To keep a copy of the catalogue current:\n\n1. Load the postings you want through the list and search endpoints, and note the time you started.\n2. Call `GET /jobs/changes?since=<that time>` and follow `meta.next_cursor` as `cursor` until `meta.has_more` is false. Store the last `next_cursor`.\n3. From then on, call `GET /jobs/changes?cursor=<stored cursor>` on your own schedule. A `closed` change means delist the posting; `opened` and `reopened` mean fetch it with `GET /jobs/{slug}` and list it.\n\nThe cursor is a position, not a time, so a walk never skips or repeats a change while new ones arrive. Each change carries a `seq`: for a given `public_slug`, apply a change only when its `seq` is greater than the last one you applied, and skip it otherwise. The feed can serve one posting's changes slightly out of order, and the first call with `since` can repeat a few changes from just before it; this rule makes both harmless. `since` can reach back 30 days at most, and the feed begins when it was introduced (`meta.available_since`). A change shows up in the feed shortly after it happens, not at the same instant: the feed trails the oldest transaction still open in the database, so a long-running one delays new entries until it ends. Nothing is lost, only late.\n\nThe feed keeps the full history and nothing is deleted from it, so a `cursor` you hold never expires. Only `since` is capped, at 30 days back, so a first call stays cheap: a mirror older than that rebuilds from search and then starts the feed with `since`.\n\nA posting counts as listed while it is open, canonical (not a duplicate of another posting) and public. A posting that stops being listed is a `closed` change whose `closed_reason` is the close reason, or `duplicate` when it became a duplicate of another posting, or `private`; one that is listed again is `reopened`.\n\n### Change webhooks\n\nInstead of polling the feed you can have it pushed. `POST /me/change-webhooks` subscribes a URL (with an `api` or `api_data` plan); the answer carries the signing `secret`, **once**. A subscription can ask for only some companies (`company_slugs`) and some kinds of change (`kinds`), and receives changes made from about the time it was created (a change from the moment just before can arrive once; `seq` dedupes it). It reads the same feed as `GET /jobs/changes`, in the same order, and the same postings.\n\nA delivery is a `POST` with a JSON body and these headers:\n\n| Header | Value |\n|---|---|\n| `X-Freehire-Timestamp` | Unix seconds when it was signed. |\n| `X-Freehire-Signature` | `v1=` plus the hex HMAC-SHA256, keyed by your secret, of the timestamp, a `.`, and the raw body. |\n| `X-Freehire-Delivery` | An id, the same for a retry of the same batch. |\n| `X-Freehire-Event` | `job.changes`, or `webhook.test` for a test. |\n\n```json\n{\"id\": \"7-4821-90210\", \"type\": \"job.changes\", \"changes\": [\n  {\"public_slug\": \"senior-go-engineer-acme-1a2b\", \"company_slug\": \"acme\", \"seq\": 98765, \"kind\": \"closed\", \"at\": \"2026-06-20T04:10:00Z\", \"closed_reason\": \"unseen\"}\n]}\n```\n\n`changes` is a batch of up to 100, oldest first, each shaped like a feed change plus `company_slug`. Apply a change only when its `seq` is greater than the last one you applied for that `public_slug` (this also drops a repeat). `opened` and `reopened` mean fetch the posting with `GET /jobs/{slug}`; `closed` means delist it.\n\nVerify before you trust a body: recompute the HMAC over the timestamp header, `.` and the **raw** body bytes (not re-serialised JSON), compare in constant time, and refuse a timestamp more than 5 minutes from your clock. In Go:\n\n```go\nfunc verify(secret, ts, sig string, body []byte) bool {\n\tn, err := strconv.ParseInt(ts, 10, 64)\n\tif err != nil || math.Abs(time.Since(time.Unix(n, 0)).Seconds()) > 300 {\n\t\treturn false\n\t}\n\tmac := hmac.New(sha256.New, []byte(secret))\n\tfmt.Fprintf(mac, \"%s.\", ts)\n\tmac.Write(body)\n\treturn hmac.Equal([]byte(\"v1=\"+hex.EncodeToString(mac.Sum(nil))), []byte(sig))\n}\n```\n\nAnswer any `2xx` to accept a batch. Anything else, a timeout (10 seconds) or a redirect counts as a failure: the same batch is sent again after 30 seconds, doubling up to an hour. Delivery is at least once, so expect repeats and dedupe on `seq`. After 25 failures in a row, or at once on a `410 Gone`, the subscription is disabled (`disabled_at` and `disabled_reason` in the list); delete it and create it again to resume, from the changes made then. Plan for the feed instead if you need what happened meanwhile. While your plan has lapsed, deliveries pause and pick up where they stopped once it is renewed.\n\n## Authentication model\n\nBrowser clients authenticate with an `HttpOnly` session cookie set on sign-in (same-origin; the SPA cannot read it). Non-browser clients use a personal API key as `Authorization: Bearer <token>`.\n\nEndpoints marked “Session or API key” accept either; endpoints marked “Session only” (saved searches, subscriptions) accept only the cookie, so a leaked key cannot manage credentials. “Moderator” endpoints additionally require the moderator role.\n\n## What is not here\n\nThis reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.\n\nManaging API keys (`POST`, `GET` and `DELETE` on `/me/api-keys`) is not documented here, because no API client can call it. Those endpoints accept only the browser session cookie, and additionally require a freshly proven identity — a password re-entry or a sign-in-provider check — that a script has no way to supply. Create and revoke keys in your account instead, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys); the plaintext token is shown exactly once, at creation, so store it then.\n\nThe `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.\n\nMost of this API is also a CLI. If you are writing an agent rather than an integration, `freehire` covers the same surface with less ceremony — search, tracking, the inbox and CV tailoring — over one API key.",
     "version": "0.0.0"
   },
   "tags": [
@@ -14,7 +14,7 @@
     },
     {
       "name": "Jobs",
-      "description": "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint."
+      "description": "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from open lists and search. The detail endpoint keeps serving them. Interview prep can serve a closed posting to the account tracking it at the interview stage."
     },
     {
       "name": "Fit",
@@ -731,6 +731,177 @@
           {
             "PersonalApiKey": []
           }
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/interview-repeat": {
+      "post": {
+        "operationId": "postAssistantInterviewRepeat",
+        "description": "Opens a fresh rehearsal with the question saved in the feedback.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AssistantInterviewRepeat"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/interview-report": {
+      "post": {
+        "operationId": "postAssistantInterviewReport",
+        "description": "Saves feedback about the candidate’s answers in one owned rehearsal.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AssistantInterviewReport"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantPlanRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/interview-speech": {
+      "post": {
+        "operationId": "postAssistantInterviewSpeech",
+        "summary": "Speak the latest interviewer reply.",
+        "description": "Synthesizes the last completed interviewer reply in an owned interview rehearsal.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "audio/mpeg": {
+                "schema": {
+                  "contentMediaType": "audio/mpeg"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantPlanRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
         ]
       }
     },
@@ -3118,6 +3289,61 @@
         ]
       }
     },
+    "/employer/activity": {
+      "get": {
+        "operationId": "listEmployerActivity",
+        "description": "Up to 30 company audit events, newest first. Recruiters see application activity.",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Fetch older events by passing the last event id from the previous page.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/EmployerActivity"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      }
+    },
     "/employer/applications": {
       "get": {
         "operationId": "listEmployerApplications",
@@ -3222,6 +3448,93 @@
         "tags": [
           "Employer"
         ]
+      }
+    },
+    "/employer/applications/search": {
+      "post": {
+        "operationId": "searchEmployerApplications",
+        "summary": "Search applications sent to your vacancies.",
+        "description": "Search delivered applications before pagination. An unknown stage returns 400.",
+        "parameters": [
+          {
+            "name": "job",
+            "in": "query",
+            "required": false,
+            "description": "Only applications for this vacancy slug.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "stage",
+            "in": "query",
+            "required": false,
+            "description": "Only applications at this stage.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum applications to return.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Number of matching applications to skip.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployerApplicationsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployerApplicationSearch"
+              },
+              "example": {
+                "query": "candidate@example.com"
+              }
+            }
+          }
+        }
       }
     },
     "/employer/applications/{id}/cv": {
@@ -3359,6 +3672,69 @@
               "example": {
                 "stage": "interview",
                 "message": "Are you free on Tuesday?"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employer/applications/{id}/workspace": {
+      "patch": {
+        "operationId": "updateEmployerApplicationWorkspace",
+        "summary": "Mark an application reviewed or save private notes.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerApplication"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployerApplicationWorkspace"
+              },
+              "example": {
+                "mark_viewed": true
               }
             }
           }
@@ -3940,6 +4316,65 @@
         }
       }
     },
+    "/employer/jobs/{slug}/analytics": {
+      "get": {
+        "operationId": "getEmployerVacancyAnalytics",
+        "summary": "Read a vacancy's last 30 completed days of engagement.",
+        "description": "Analytics for an active company team's own vacancy, including closed vacancies.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The employer-authored vacancy's public slug.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerVacancyAnalytics"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "views": 40,
+                    "apply_clicks": 10,
+                    "applications": 3
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      }
+    },
     "/employer/jobs/{slug}/close": {
       "post": {
         "operationId": "closeEmployerVacancy",
@@ -4041,7 +4476,7 @@
     "/employer/team": {
       "get": {
         "operationId": "getEmployerTeam",
-        "description": "Everyone who acts for the caller's company, and the invitations still open.",
+        "description": "The company team and open invitations. A recruiter sees their own membership.",
         "parameters": [],
         "responses": {
           "200": {
@@ -4133,7 +4568,7 @@
     "/employer/team/invitations": {
       "post": {
         "operationId": "inviteEmployerTeamMember",
-        "description": "Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations.",
+        "description": "Mails a colleague a single-use recruiter invitation, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations.",
         "parameters": [],
         "responses": {
           "201": {
@@ -4234,7 +4669,7 @@
     "/employer/team/join": {
       "post": {
         "operationId": "joinEmployerTeam",
-        "description": "Joins the team an invitation link invites to. 409 when the caller already acts for a company.",
+        "description": "Joins the team. A recruiter must sign in with the matching verified email. 409 when the caller already acts for a company.",
         "parameters": [],
         "responses": {
           "200": {
@@ -4418,7 +4853,7 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "Rank by openings or by growth.",
+            "description": "Rank by openings (open), growth (growth, -growth) or list companies that just started hiring (new).",
             "schema": {
               "type": "string"
             },
@@ -4512,6 +4947,51 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RoleCountriesAnswer"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Insights"
+        ],
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/insights/role-demand": {
+      "get": {
+        "operationId": "insightsRoleDemand",
+        "summary": "New public vacancies by specialty for the last 12 completed UTC weeks.",
+        "description": "Counts unique public vacancies, including closed vacancies, by publication date.\nIf the source supplied no date, the count uses the vacancy's first catalogue appearance.\nThe data array is empty until the first snapshot is published.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleDemandAnswer"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "category": "backend",
+                      "week": "2026-11-16",
+                      "new_jobs": 42
+                    }
+                  ]
                 }
               }
             }
@@ -5982,6 +6462,46 @@
         ]
       }
     },
+    "/jobs/{slug}/apply-click": {
+      "post": {
+        "operationId": "recordEmployerVacancyApplyClick",
+        "summary": "Record a vacancy Apply click.",
+        "description": "Records an Apply button click on an open, public employer vacancy.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The employer-authored vacancy's public slug.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "security": [
+          {}
+        ],
+        "x-audience": "hidden"
+      }
+    },
     "/jobs/{slug}/apply-form": {
       "get": {
         "operationId": "jobApplyForm",
@@ -6813,6 +7333,76 @@
         ]
       }
     },
+    "/jobs/{slug}/interview-prep": {
+      "get": {
+        "operationId": "getInterviewPrep",
+        "summary": "Get a posting-based interview preparation sheet.",
+        "description": "Practice questions from a public posting. A signed-in caller can also see examples from their own Experience Bank.\nFor a closed posting, a session cookie and an application in the interview stage are required. Otherwise the endpoint returns 404.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The public posting slug.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InterviewPrepSheet"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "job": {
+                      "public_slug": "senior-go-engineer-acme-1a2b",
+                      "title": "Senior Go Engineer",
+                      "company": "Acme",
+                      "location": "Remote"
+                    },
+                    "questions": [
+                      {
+                        "prompt": "Which project best prepares you for this role?"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {}
+        ]
+      }
+    },
     "/jobs/{slug}/match": {
       "get": {
         "operationId": "getJobMatch",
@@ -7427,6 +8017,72 @@
         },
         "tags": [
           "Search"
+        ],
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/jobs/{slug}/skill-fit": {
+      "get": {
+        "operationId": "getResumeReviewPosting",
+        "summary": "Get an open posting for CV review.",
+        "description": "Open posting skills and requirements for a CV review performed in the browser.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The public posting slug.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ResumeReviewPosting"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "public_slug": "senior-go-engineer-acme-1a2b",
+                    "title": "Senior Go Engineer",
+                    "company": "Acme",
+                    "location": "Remote",
+                    "skills": [
+                      "go"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
         ],
         "security": [
           {}
@@ -8831,6 +9487,104 @@
             "PersonalApiKey": []
           }
         ]
+      }
+    },
+    "/me/auto-apply-settings": {
+      "get": {
+        "operationId": "getAutoApplySettings",
+        "description": "Readable with a session or an API key.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutoApplySettings"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setAutoApplySettings",
+        "description": "Session cookie only: whether attempts are sent without a review is the person's call.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutoApplySettings"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoApplySettingsUpdate"
+              }
+            }
+          }
+        }
       }
     },
     "/me/auto-apply/{queueId}/review": {
@@ -16783,15 +17537,17 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "data"
-                  ],
                   "properties": {
                     "data": {
                       "$ref": "#/components/schemas/Profile"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/IgnoredFieldsMeta"
                     }
                   },
-                  "description": "A single item: `{\"data\": ...}`."
+                  "required": [
+                    "data"
+                  ]
                 },
                 "example": {
                   "data": {
@@ -16982,6 +17738,118 @@
         },
         "tags": [
           "Résumé"
+        ]
+      }
+    },
+    "/me/profile/excluded-companies": {
+      "post": {
+        "operationId": "excludeCompany",
+        "summary": "Hide a company from your matches.",
+        "description": "Adds the company to `excluded_companies`, creating a minimal profile when there is none.\nRepeating it is safe and changes nothing. `400` for a blank or over-long slug, `409` when\nthe list already holds 200 other companies. Cookie-only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Profile"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExcludeCompanyRequest"
+              },
+              "example": {
+                "company_slug": "acme"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/profile/excluded-companies/{company_slug}": {
+      "delete": {
+        "operationId": "restoreCompany",
+        "summary": "Restore a hidden company.",
+        "description": "Removes the company from `excluded_companies`. Idempotent; `data` is null when the caller\nhas no profile. Cookie-only.",
+        "parameters": [
+          {
+            "name": "company_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/Profile"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
         ]
       }
     },
@@ -24362,6 +25230,40 @@
           "allowance": {}
         }
       },
+      "AssistantInterviewRepeat": {
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        }
+      },
+      "AssistantInterviewReport": {
+        "type": "object",
+        "required": [
+          "strength",
+          "improvement",
+          "quote",
+          "question"
+        ],
+        "properties": {
+          "strength": {
+            "type": "string"
+          },
+          "improvement": {
+            "type": "string"
+          },
+          "quote": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          }
+        }
+      },
       "AssistantPlanRefusal": {
         "type": "object",
         "required": [
@@ -24418,7 +25320,14 @@
           "session": {
             "$ref": "#/components/schemas/AssistantSession"
           },
-          "messages": {}
+          "messages": {},
+          "elevenlabs_voice": {
+            "type": "boolean",
+            "description": "Optional ElevenLabs recording and playback on an interview rehearsal."
+          },
+          "interview_report": {
+            "$ref": "#/components/schemas/AssistantInterviewReport"
+          }
         },
         "description": "A conversation with its full transcript; `messages` is the stored transcript as is."
       },
@@ -24875,6 +25784,27 @@
           "tailor_failed"
         ],
         "description": "The candidate-facing status of a live auto-apply attempt (autoapply.Status)."
+      },
+      "AutoApplySettings": {
+        "type": "object",
+        "required": [
+          "confirm_each"
+        ],
+        "properties": {
+          "confirm_each": {
+            "type": "boolean",
+            "description": "Wait for the account's approval on every auto-apply attempt, even one whose form asks nothing only the candidate can answer."
+          }
+        }
+      },
+      "AutoApplySettingsUpdate": {
+        "type": "object",
+        "properties": {
+          "confirm_each": {
+            "type": "boolean",
+            "description": "Absent reads as false."
+          }
+        }
       },
       "AutoApplyUnmappedField": {
         "type": "object",
@@ -26908,6 +27838,12 @@
           "growth_30d": {
             "type": "integer",
             "format": "int64"
+          },
+          "hiring_started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When a company that had not been hiring started again; set only for those (sort=new).",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
       },
@@ -28457,6 +29393,10 @@
             "type": "boolean",
             "description": "True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own."
           },
+          "role": {
+            "type": "string",
+            "description": "The exact values are owner for the claimant, manager for an existing manager, and recruiter."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -28472,6 +29412,44 @@
           "active",
           "revoked"
         ]
+      },
+      "EmployerActivity": {
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "occurred_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "action": {
+            "type": "string"
+          },
+          "actor_email": {
+            "type": "string"
+          },
+          "application_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "previous_stage": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "subject_email": {
+            "type": "string"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        }
       },
       "EmployerApplication": {
         "type": "object",
@@ -28529,6 +29507,16 @@
             "format": "date-time",
             "description": "When you last moved it; absent while it has never been moved.",
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "viewed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "First review by a teammate, independent of the hiring stage.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "employer_notes": {
+            "type": "string",
+            "description": "Private notes shared within the employer team."
           },
           "sent_at": {
             "type": "string",
@@ -28596,6 +29584,19 @@
           }
         }
       },
+      "EmployerApplicationSearch": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "A literal search in candidate email, message and answers."
+          }
+        }
+      },
       "EmployerApplicationStage": {
         "type": "string",
         "enum": [
@@ -28607,6 +29608,20 @@
           "rejected"
         ],
         "description": "A stage of the employer's hiring pipeline. Every delivered application starts at `new`."
+      },
+      "EmployerApplicationWorkspace": {
+        "type": "object",
+        "properties": {
+          "mark_viewed": {
+            "type": "boolean",
+            "description": "Record that a teammate reviewed this application."
+          },
+          "employer_notes": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Replace the private team notes. The empty string clears them."
+          }
+        }
       },
       "EmployerApplicationsMeta": {
         "type": "object",
@@ -28736,6 +29751,10 @@
           "member": {
             "type": "boolean",
             "description": "True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own."
+          },
+          "role": {
+            "type": "string",
+            "description": "The exact values are owner for the claimant, manager for an existing manager, and recruiter."
           },
           "created_at": {
             "type": "string",
@@ -28917,6 +29936,10 @@
             "type": "boolean",
             "description": "True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own."
           },
+          "role": {
+            "type": "string",
+            "description": "The exact values are owner for the claimant, manager for an existing manager, and recruiter."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -29038,6 +30061,9 @@
           },
           "email": {
             "type": "string"
+          },
+          "role": {
+            "type": "string"
           }
         },
         "description": "What an invitation link offers before it is accepted."
@@ -29073,6 +30099,9 @@
           },
           "holder": {
             "type": "boolean"
+          },
+          "role": {
+            "type": "string"
           }
         },
         "description": "Someone who acts for the company. `holder` is the claimant, who cannot be removed."
@@ -29085,6 +30114,32 @@
           }
         },
         "description": "The token from the invitation link."
+      },
+      "EmployerVacancyAnalytics": {
+        "type": "object",
+        "required": [
+          "views",
+          "apply_clicks",
+          "applications"
+        ],
+        "properties": {
+          "views": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Daily unique visitors from the page-view rollup, summed across the window."
+          },
+          "apply_clicks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Apply button clicks on the vacancy page."
+          },
+          "applications": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Applications delivered through Freehire."
+          }
+        },
+        "description": "Counts for the last 30 completed UTC days. Apply clicks begin at rollout."
       },
       "EmployerVacancyCreate": {
         "type": "object",
@@ -29322,6 +30377,19 @@
             "format": "int64"
           }
         }
+      },
+      "ExcludeCompanyRequest": {
+        "type": "object",
+        "required": [
+          "company_slug"
+        ],
+        "properties": {
+          "company_slug": {
+            "type": "string",
+            "description": "The company's slug. (e.g. `acme`)"
+          }
+        },
+        "description": "The company to hide from the match feeds."
       },
       "ExperienceAtom": {
         "type": "object",
@@ -29839,6 +30907,18 @@
           "down"
         ],
         "description": "The derived health verdict for a provider, the fleet or the site."
+      },
+      "IgnoredFieldsMeta": {
+        "type": "object",
+        "properties": {
+          "ignored_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "The meta of a save: the body fields that were read and not applied."
       },
       "IgnoredMeta": {
         "type": "object",
@@ -30483,6 +31563,71 @@
           }
         },
         "description": "The caller's interaction with one job. Every timestamp, the stage and the notes are null\nuntil the job is viewed, saved, applied to, dismissed or tracked."
+      },
+      "InterviewPracticeExample": {
+        "type": "object",
+        "required": [
+          "claim"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "place": {
+            "type": "string"
+          }
+        }
+      },
+      "InterviewPracticeQuestion": {
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          }
+        }
+      },
+      "InterviewPrepSheet": {
+        "type": "object",
+        "required": [
+          "job",
+          "questions"
+        ],
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/ToolJob"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterviewPracticeQuestion"
+            }
+          },
+          "examples": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterviewPracticeExample"
+            },
+            "description": "Confirmed examples from the caller's Experience Bank. Omitted for guests."
+          },
+          "examples_unavailable": {
+            "type": "boolean"
+          }
+        }
       },
       "Invite": {
         "type": "object",
@@ -33784,7 +34929,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Deprecated and ignored: the list changes only through `/me/profile/excluded-companies`,\nso a save from a stale page cannot erase a hidden company. Still accepted, and named in\n`meta.ignored_fields` when sent."
           },
           "location_preferences": {
             "description": "Shaped like LocationPreferences; null or absent keeps none."
@@ -34655,6 +35801,46 @@
         },
         "description": "The skill list a coverage reading scores against the market."
       },
+      "ResumeReviewPosting": {
+        "type": "object",
+        "required": [
+          "skills"
+        ],
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResumeReviewRequirement"
+            }
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ToolJob"
+          }
+        ]
+      },
+      "ResumeReviewRequirement": {
+        "type": "object",
+        "required": [
+          "text",
+          "priority"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          }
+        }
+      },
       "RoleCountriesAnswer": {
         "type": "object",
         "required": [
@@ -34708,6 +35894,41 @@
             "format": "int64"
           },
           "open_count_prev": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "RoleDemandAnswer": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleDemandPoint"
+            }
+          }
+        }
+      },
+      "RoleDemandPoint": {
+        "type": "object",
+        "required": [
+          "category",
+          "week",
+          "new_jobs"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "week": {
+            "type": "string",
+            "description": "Monday of the publication week in UTC (YYYY-MM-DD)."
+          },
+          "new_jobs": {
             "type": "integer",
             "format": "int64"
           }
@@ -36984,6 +38205,28 @@
           "count": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "ToolJob": {
+        "type": "object",
+        "required": [
+          "public_slug",
+          "title",
+          "company"
+        ],
+        "properties": {
+          "public_slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
           }
         }
       },

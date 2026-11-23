@@ -94,6 +94,8 @@ func (n *TelegramNotifier) batchHeadline(kind string, count int) string {
 		return fmt.Sprintf("⚠️ Auto-apply couldn't finish <b>%d</b> applications — a required question needs your own answer.", count)
 	case KindAutoApplyFailed:
 		return fmt.Sprintf("Auto-apply couldn't submit <b>%d</b> applications, and won't try again.", count)
+	case KindAutoApplyReviewReady:
+		return fmt.Sprintf("📝 <b>%d</b> tailored applications are waiting for your OK before auto-apply sends them.", count)
 	default:
 		return fmt.Sprintf("<b>%d</b> updates on jobs you are tracking.", count)
 	}
@@ -165,6 +167,10 @@ func (n *TelegramNotifier) renderOne(m Message) string {
 	case KindAutoApplyFailed:
 		return fmt.Sprintf(
 			"Auto-apply couldn't submit <b>%s</b> at <b>%s</b>, and won't try again.\n<a href=\"%s\">Open your application →</a>",
+			title, company, applicationURL)
+	case KindAutoApplyReviewReady:
+		return fmt.Sprintf(
+			"📝 Your application to <b>%s</b> at <b>%s</b> is tailored and waiting for your OK.\n<a href=\"%s\">Review and send →</a>",
 			title, company, applicationURL)
 	default:
 		return fmt.Sprintf("<b>%s</b> at <b>%s</b>: <a href=\"%s\">Open your tracking board →</a>", title, company, trackingURL)
@@ -313,6 +319,11 @@ func (n *EmailNotifier) batchCopy(kind string, count int) (subject, head, pre, l
 			fmt.Sprintf("%d applications couldn't be submitted", count),
 			fmt.Sprintf("Auto-apply couldn't submit %d applications", count),
 			"Auto-apply couldn't submit these applications, and won't try again."
+	case KindAutoApplyReviewReady:
+		return fmt.Sprintf("Ready to send: %d applications", count),
+			fmt.Sprintf("%d applications are waiting for your OK", count),
+			fmt.Sprintf("%d tailored applications are waiting for your OK", count),
+			"Auto-apply tailored your CV for these jobs. Nothing is sent until you approve each one."
 	default:
 		return fmt.Sprintf("%d updates on jobs you are tracking", count),
 			"An update on your applications",
@@ -379,6 +390,11 @@ var bodies = template.Must(mailtpl.Partials().New("nudge").Parse(`
 <div style="height:18px;"></div>
 {{template "p" "Auto-apply couldn't submit this application, and won't try again."}}
 {{template "button" (mailLink .URL .CTA)}}{{end}}
+
+{{define "auto_apply_review_ready"}}{{template "job-row" .Job}}
+<div style="height:18px;"></div>
+{{template "p" "Auto-apply tailored your CV for this job. Nothing is sent until you approve it."}}
+{{template "button" (mailLink .URL .CTA)}}{{end}}
 `))
 
 func (n *EmailNotifier) render(m Message, unsubscribe string) (subject, htmlBody, textBody string) {
@@ -429,6 +445,12 @@ func (n *EmailNotifier) render(m Message, unsubscribe string) (subject, htmlBody
 		subject = fmt.Sprintf("Couldn't submit: %s at %s", m.JobTitle, m.Company)
 		data.URL, data.CTA = applicationURL, "Open your application"
 		textBody = fmt.Sprintf("Auto-apply couldn't submit %s at %s, and won't try again.\n\nOpen your application: %s\n",
+			m.JobTitle, m.Company, data.URL)
+	case KindAutoApplyReviewReady:
+		block, head, pre = "auto_apply_review_ready", "Ready to send", "Your application is waiting for your OK"
+		subject = fmt.Sprintf("Ready to send: %s at %s", m.JobTitle, m.Company)
+		data.URL, data.CTA = applicationURL, "Review and send"
+		textBody = fmt.Sprintf("Auto-apply tailored your CV for %s at %s. Nothing is sent until you approve it.\n\nReview and send: %s\n",
 			m.JobTitle, m.Company, data.URL)
 	default:
 		block, head, pre = "plain", fmt.Sprintf("%s at %s", m.JobTitle, m.Company), "An update on a job you are tracking"

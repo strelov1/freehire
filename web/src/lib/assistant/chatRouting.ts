@@ -42,7 +42,7 @@ export function autostartTurn(o: {
 }): TurnStart | null {
   if (!o.empty) return null;
   if (o.kickoff) return { kind: 'message', text: o.kickoff };
-  if (o.preset === 'interview') return { kind: 'opening' };
+  if (o.preset === 'interview' || o.preset === 'debrief') return { kind: 'opening' };
   if (o.autoRun) return { kind: 'autopilot' };
   return null;
 }

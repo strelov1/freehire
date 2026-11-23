@@ -34,6 +34,10 @@ import (
 // looks, so growth = open_count - open_count_prev. Matches cmd/rollup-stats.
 const growthWindowDays = 30
 
+// quietWindowDays is how long before the growth window a company must have had nothing open
+// for insights_company_growth.hiring_started_at to call its current postings a fresh start.
+const quietWindowDays = 90
+
 func main() {
 	worker.Main(run)
 }

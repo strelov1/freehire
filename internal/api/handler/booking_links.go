@@ -99,6 +99,8 @@ func bookingLinkError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	case errors.Is(err, bookinglink.ErrSlotUnavailable):
 		return &codedError{status: fiber.StatusConflict, code: "slot_unavailable", message: "this time is no longer available"}
+	case errors.Is(err, bookinglink.ErrCalendarUnavailable):
+		return fiber.NewError(fiber.StatusServiceUnavailable, "Booking availability is temporarily unavailable")
 	case errors.Is(err, bookinglink.ErrInvalidBooking):
 		return fiber.NewError(fiber.StatusBadRequest, "a name and a valid email are required")
 	case errors.Is(err, bookinglink.ErrInvalidZone):
