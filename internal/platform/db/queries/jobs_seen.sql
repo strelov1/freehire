@@ -55,12 +55,13 @@ WHERE j.source = sqlc.arg(source)
 -- provider-wide read is unaffordable where the provider is large: on workday it returns 1.27M ids
 -- in ~168s, against ~1.8s for a board's own 25k.
 --
--- Matched as a LIKE prefix so it rides jobs_source_extid_pattern_idx (source, external_id
--- text_pattern_ops), whose operator class compares byte-wise. A range predicate over the plain
--- index (external_id >= 'board:' AND < 'board;') looks equivalent and is NOT: under the database's
--- collation punctuation carries only a secondary weight, so that range returns nothing at all.
--- The caller passes an escaped pattern (externalid.BoardPattern) — a board name may contain LIKE
--- syntax, and an unescaped underscore would match a sibling board.
+-- Matched as the byte-wise range ['<board>:', '<board>;') — exactly the ids starting with
+-- '<board>:', as ';' follows ':' — written with text_pattern_ops' own operators so it rides
+-- jobs_source_extid_pattern_idx (source, external_id text_pattern_ops). Not LIKE: pgx prepares the
+-- statement, and once Postgres switches it to a generic plan a parameter LIKE yields no index
+-- bounds, so a board's lookup filtered the provider's every row (minutes on workday). Not the
+-- plain < and >= either: under the database's collation punctuation carries only a secondary
+-- weight, so that range returns nothing at all.
 --
 -- hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried,
 -- and the body_refresh_* arm withholds one whose stored body has gone stale so an employer's
@@ -71,7 +72,8 @@ WHERE j.source = sqlc.arg(source)
 SELECT j.external_id, j.is_tech FROM jobs j
 LEFT JOIN job_activity a ON a.job_id = j.id
 WHERE j.source = sqlc.arg(source)
-  AND j.external_id LIKE sqlc.arg(pattern)
+  AND j.external_id ~>=~ (sqlc.arg(board)::text || ':')
+  AND j.external_id ~<~ (sqlc.arg(board)::text || ';')
   AND (j.description <> '' OR j.created_at < sqlc.arg(hydration_cutoff))
   AND (a.hydrated_at >= sqlc.arg(body_refresh_cutoff)
        OR abs(hashtext(j.external_id)::bigint) % sqlc.arg(body_refresh_slices)::bigint

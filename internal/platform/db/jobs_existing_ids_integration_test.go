@@ -113,7 +113,7 @@ func TestExistingExternalIDsScopedToBoard(t *testing.T) {
 		offCutoff, offSlices, offSlot := bodyRefreshOff()
 		rows, err := q.ExistingExternalIDsByBoard(ctx, ExistingExternalIDsByBoardParams{
 			Source:            "workday",
-			Pattern:           externalid.BoardPattern(tc.board),
+			Board:             tc.board,
 			HydrationCutoff:   farFuture(),
 			BodyRefreshCutoff: offCutoff,
 			BodyRefreshSlices: offSlices,
@@ -211,7 +211,7 @@ func TestExistingExternalIDsByBoardWithholdsUnhydratedRows(t *testing.T) {
 	offCutoff, offSlices, offSlot := bodyRefreshOff()
 	rows, err := q.ExistingExternalIDsByBoard(ctx, ExistingExternalIDsByBoardParams{
 		Source:            "workday",
-		Pattern:           externalid.BoardPattern("acme"),
+		Board:             "acme",
 		HydrationCutoff:   pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
 		BodyRefreshCutoff: offCutoff,
 		BodyRefreshSlices: offSlices,
@@ -432,7 +432,7 @@ func TestExistingExternalIDsWithholdsRecentlyExpiredDeadlines(t *testing.T) {
 
 	boardRows, err := q.ExistingExternalIDsByBoard(ctx, ExistingExternalIDsByBoardParams{
 		Source:              "greenhouse",
-		Pattern:             externalid.BoardPattern("acme"),
+		Board:               "acme",
 		HydrationCutoff:     farFuture(),
 		BodyRefreshCutoff:   offCutoff,
 		BodyRefreshSlices:   offSlices,

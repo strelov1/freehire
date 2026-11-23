@@ -550,7 +550,7 @@ func TestSeenSetReadsActivityHydratedAt(t *testing.T) {
 		t.Fatalf("ExistingExternalIDs = %+v, want only acme:fresh-body (stale body is withheld so the crawl re-reads it)", all)
 	}
 	byBoard, err := q.ExistingExternalIDsByBoard(ctx, ExistingExternalIDsByBoardParams{
-		Source: "greenhouse", Pattern: externalid.BoardPattern("acme"), HydrationCutoff: old, BodyRefreshCutoff: cutoff,
+		Source: "greenhouse", Board: "acme", HydrationCutoff: old, BodyRefreshCutoff: cutoff,
 		BodyRefreshSlices: 1, BodyRefreshSlot: 0, DeadlineRecheckFrom: deadlineFrom,
 	})
 	if err != nil {
