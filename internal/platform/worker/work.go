@@ -18,7 +18,10 @@ var work struct {
 	sync.Mutex
 	reported           bool
 	processed, changed int64
-	stages             map[string]float64
+	// partial is nil until ReportPartial is called, so a worker that never reports it
+	// publishes no freehire_worker_last_run_partial series at all.
+	partial *bool
+	stages  map[string]float64
 }
 
 // ReportWork adds to what this run did: processed is how many items it looked at,
@@ -30,6 +33,16 @@ func ReportWork(processed, changed int64) {
 	work.reported = true
 	work.processed += processed
 	work.changed += changed
+}
+
+// ReportPartial records whether this run stopped on its own time budget before covering all
+// of its work. Such a run exits 0, because it is the normal shape of a crawl bigger than its
+// window and a red unit for it trains the operator to ignore red units, but it is not a full
+// run either: freehire_worker_last_run_partial keeps it visible beside last_run_success.
+func ReportPartial(partial bool) {
+	work.Lock()
+	defer work.Unlock()
+	work.partial = &partial
 }
 
 // Stage starts timing a named part of this run and returns the call that ends it, which
@@ -54,10 +67,10 @@ func Stage(name string) (done func()) {
 func resetWork() {
 	work.Lock()
 	defer work.Unlock()
-	work.reported, work.processed, work.changed, work.stages = false, 0, 0, nil
+	work.reported, work.processed, work.changed, work.stages, work.partial = false, 0, 0, nil, nil
 }
 
-// workMetrics renders what ReportWork and Stage collected; empty when neither was used.
+// workMetrics renders what ReportWork, ReportPartial and Stage collected; empty when none was used.
 func workMetrics(labels string) string {
 	work.Lock()
 	defer work.Unlock()
@@ -70,6 +83,16 @@ freehire_worker_last_run_items_processed{%[1]s} %[2]d
 # TYPE freehire_worker_last_run_items_changed gauge
 freehire_worker_last_run_items_changed{%[1]s} %[3]d
 `, labels, work.processed, work.changed)
+	}
+	if work.partial != nil {
+		partial := 0
+		if *work.partial {
+			partial = 1
+		}
+		fmt.Fprintf(&b, `# HELP freehire_worker_last_run_partial Whether the worker's last run stopped on its time budget before finishing its work (1) or covered all of it (0).
+# TYPE freehire_worker_last_run_partial gauge
+freehire_worker_last_run_partial{%s} %d
+`, labels, partial)
 	}
 	if len(work.stages) > 0 {
 		names := make([]string, 0, len(work.stages))

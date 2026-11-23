@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -191,22 +193,27 @@ func TestParseArgs_ReconcileCombinationsExitTwo(t *testing.T) {
 	}
 }
 
-// Rules (b) and (c): an unfinished reconciliation batch and a deadline-cut crawl are failures.
+// An unfinished reconciliation batch is a failure; a crawl its own budget cut short is not,
+// unless it wrote nothing or something other than the deadline stopped it.
 func TestExitCodes(t *testing.T) {
 	clean := pipeline.Stats{Ingested: 10}
+	deadline := fmt.Errorf("the fetch window closed before every board was read: %w", context.DeadlineExceeded)
 	for _, tc := range []struct {
 		name        string
 		total       pipeline.Stats
-		truncated   bool
+		crawlErr    error
 		sweepFailed int
 		want        int
 	}{
-		{"clean", clean, false, 0, 0},
-		{"truncated but every board clean", clean, true, 0, 1},
-		{"sweep failure", clean, false, 1, 1},
-		{"reached nothing", pipeline.Stats{Failed: 3}, false, 0, 1},
+		{"clean", clean, nil, 0, 0},
+		{"cut by its budget after writing", clean, deadline, 0, 0},
+		{"cut by its budget after only refreshing", pipeline.Stats{Refreshed: 4}, deadline, 0, 0},
+		{"cut by its budget before writing anything", pipeline.Stats{Interrupted: 2}, deadline, 0, 1},
+		{"cut by a signal", clean, context.Canceled, 0, 1},
+		{"sweep failure", clean, nil, 1, 1},
+		{"reached nothing", pipeline.Stats{Failed: 3}, nil, 0, 1},
 	} {
-		if got := runExitCode(tc.total, tc.truncated, tc.sweepFailed); got != tc.want {
+		if got := runExitCode(tc.total, tc.crawlErr, tc.sweepFailed); got != tc.want {
 			t.Errorf("%s: runExitCode = %d, want %d", tc.name, got, tc.want)
 		}
 	}

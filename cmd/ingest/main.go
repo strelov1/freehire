@@ -244,5 +244,6 @@ func run() int {
 	logChronicBoards(sweepCtx, queries)
 
 	// The exit code says whether the RUN is broken, not whether a board is: see crawlReachedNothing.
-	return runExitCode(total, truncated, sweepFailed)
+	worker.ReportPartial(truncated)
+	return runExitCode(total, crawlErr, sweepFailed)
 }

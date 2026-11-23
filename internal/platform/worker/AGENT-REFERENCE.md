@@ -234,7 +234,7 @@ func run() int {
 
 ## Saying what a run did
 
-A worker's duration and exit status say that it ran, not whether it was worth running or where the time went. `worker.ReportWork(processed, changed)` and `worker.Stage(name)` publish that into the same per-run metrics file (`freehire_worker_last_run_items_{processed,changed}`, `freehire_worker_stage_seconds`). Both are optional: a worker that calls neither publishes none of these series. The freehire-ops **Freehire Scheduled Jobs** dashboard reads them, beside what each run cost the host. Use them in any long or heavy worker.
+A worker's duration and exit status say that it ran, not whether it was worth running or where the time went. `worker.ReportWork(processed, changed)` and `worker.Stage(name)` publish that into the same per-run metrics file (`freehire_worker_last_run_items_{processed,changed}`, `freehire_worker_stage_seconds`). Both are optional: a worker that calls neither publishes none of these series. The freehire-ops **Freehire Scheduled Jobs** dashboard reads them, beside what each run cost the host. Use them in any long or heavy worker. `worker.ReportPartial(bool)` publishes `freehire_worker_last_run_partial` (0/1): a run its own time budget cut short exits 0 so its unit stays green, and this gauge is what still shows it was incomplete (cmd/ingest uses it for deadline-truncated crawls).
 
 ## Analytics reader
 
