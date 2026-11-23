@@ -11,6 +11,7 @@ import type {
   FacetCounts,
   FeedCard,
   FeedMeta,
+  FeedSourceChoice,
   IngestStatus,
   Interpretation,
   Job,
@@ -216,11 +217,9 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     await call('/api/v1/me/feed/seen', jsonBody('POST', { cursor }));
   }
 
-  /** Chooses what the feed matches on: the profile or one of the caller's saved searches.
-   *  An unknown, foreign or profile-derived search is a 404. */
-  async function setFeedSource(
-    body: { source: 'profile' } | { source: 'saved_search'; saved_search_id: number },
-  ): Promise<void> {
+  /** Chooses what the match feed matches on: the profile or one of the user's saved searches.
+   *  A search that is gone, foreign or profile-derived is a 404; the stored source is kept. */
+  async function setFeedSource(body: FeedSourceChoice): Promise<void> {
     await call('/api/v1/me/feed/source', jsonBody('PUT', body));
   }
 

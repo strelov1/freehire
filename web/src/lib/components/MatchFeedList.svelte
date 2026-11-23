@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { ApiError, isPlanRefusal } from '#lib/api-core.js';
   import type { FeedCard, FeedMeta } from '#lib/types.js';
   import { ensureDismissedLoaded, isDismissed } from '#lib/dismissedJobs.svelte.js';
-  import { Badge } from '#lib/ui/index.js';
   import { feedSource } from '#lib/feedSource.svelte.js';
-  import FeedNewEnd from './FeedNewEnd.svelte';
+  import { Badge } from '#lib/ui/index.js';
   import FeedSourceEmpty from './FeedSourceEmpty.svelte';
+  import FeedNewEnd from './FeedNewEnd.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
   import JobRow from './JobRow.svelte';
   import MatchBlock from './MatchBlock.svelte';
@@ -17,23 +17,30 @@
   import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
 
+  let { active = true }: { active?: boolean } = $props();
+
   // The match feed as a list: every card with its explanation, save and hide in the corner.
   // "Show more" rather than scroll-to-load, like /jobs: an auto-growing page puts the
   // footer out of reach.
   const PAGE = 20;
 
+  // The source revision this instance was mounted for. A response that lands after a pick
+  // belongs to the old source: it must not touch the shared source state, retry, or paint.
+  const rev = feedSource.version;
+  const stale = () => rev !== feedSource.version;
+  let list = $state<HTMLUListElement | null>(null);
   let cards = $state<FeedCard[]>([]);
   let meta = $state<FeedMeta | null>(null);
   let loading = $state(true);
   let loadingMore = $state(false);
   let failed = $state(false);
+  // The first page of this session came back with no card: a saved search that matches nothing.
+  // Not the same as running out of cards later ("You're all caught up").
+  let firstEmpty = $state(false);
   // The plan lapsed since the page loaded: the API refuses with 402.
   let paywalled = $state(false);
   // The signed cursor for the next page; absent on the last one.
   let cursor = $state<string | undefined>();
-  // The first page of this session had no card: a saved search with no matches.
-  let firstEmpty = $state(false);
-  const onSearch = $derived(meta?.source === 'saved_search');
   const hidden = new HiddenJobUndo();
   const visible = $derived(cards.filter((c) => !isDismissed(c.public_slug)));
 
@@ -63,7 +70,6 @@
   }
 
   async function fetchPage(next?: string): Promise<void> {
-    const version = feedSource.version; // a reply that outlives a source pick must not undo it
     if (!next) {
       // A restart is a new session: nothing of the old one carries over.
       restShown = false;
@@ -74,18 +80,22 @@
     try {
       res = await api.meFeed(PAGE, next);
     } catch (e) {
-      // An expired or rejected cursor: start over from page 1 rather than fail.
+      if (stale()) return;
+      // An expired or rejected cursor (or a source switched in another tab): start over.
       if (next && e instanceof ApiError && e.status === 400) return fetchPage();
       throw e;
     }
-    // The profile changed under the cursor: start over too. Never put this reason in `meta`,
-    // which would show the empty-profile screen.
-    if (next && res.meta.reason === 'source_changed') return fetchPage();
-    // Another tab switched the source: the old cards belong to its filters, not this one's.
+    if (stale()) return;
+    if (next && res.meta.reason === 'source_changed') {
+      // An edited saved search may no longer match the cards already shown.
+      if (meta?.source === 'saved_search') cards = [];
+      return fetchPage();
+    }
+    // A restart that lands on another source (switched in another tab): the old cards are not its cards.
     if (meta && (meta.source !== res.meta.source || meta.saved_search_id !== res.meta.saved_search_id)) cards = [];
     meta = res.meta;
-    if (version === feedSource.version) feedSource.sync(res.meta);
-    if (!next) firstEmpty = res.data.length === 0 && cards.length === 0; // a restart under shown cards is not "no matches"
+    feedSource.fromMeta(res.meta);
+    if (!next) firstEmpty = cards.length === 0 && res.data.length === 0 && !res.meta.next_cursor;
     if (res.meta.seen_cursor) {
       seenCursor = res.meta.seen_cursor;
       newEnded = true;
@@ -120,6 +130,14 @@
       else failed = true;
     } finally {
       loading = false;
+      if (!stale() && feedSource.takeCardFocus(rev, 'list')) {
+        await tick();
+        const heading = active && list?.querySelector('h3');
+        if (heading) {
+          heading.tabIndex = -1;
+          heading.focus();
+        }
+      }
     }
   });
 </script>
@@ -138,9 +156,11 @@
 {:else if failed && cards.length === 0}
   <States state="error" message="Failed to load your matches." />
 {:else if meta?.reason === 'search_deleted'}
-  <FeedSourceEmpty kind="deleted" focus={false} />
-{:else if onSearch && (meta?.reason === 'no_usable_fields' || (firstEmpty && !cursor))}
-  <FeedSourceEmpty kind="no_matches" focus={false} />
+  <FeedSourceEmpty kind="deleted" focus={active} />
+{:else if meta?.source === 'saved_search' && meta.reason}
+  <FeedSourceEmpty kind="unusable" focus={active} />
+{:else if meta?.source === 'saved_search' && firstEmpty}
+  <FeedSourceEmpty kind="no_matches" focus={active} />
 {:else if meta?.reason}
   <div class="flex flex-col items-center gap-3 py-16 text-center">
     <p class="text-lg font-semibold">Tell us what you are looking for</p>
@@ -158,7 +178,7 @@
     <p class="text-sm text-muted-foreground">No more jobs match your profile right now.</p>
   </div>
 {:else}
-  <ul class="flex flex-col gap-3">
+  <ul class="flex flex-col gap-3" bind:this={list}>
     {#each paused ? newCards : visible as card (card.public_slug)}
       <li>
         <JobRow job={card} onHide={hidden.onHide}>

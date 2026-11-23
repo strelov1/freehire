@@ -1,53 +1,91 @@
-// What the match feed matches on: the profile or one of the user's saved searches. The server
-// stores the choice (PUT /me/feed/source) and echoes it in every feed page's meta, so the
-// current source is set from meta, never guessed. Picking one bumps `version`; the feed is
-// keyed on it, so it remounts and reloads from its first card.
-
+import { untrack } from 'svelte';
 import { api } from '#lib/api.js';
-import type { FeedMeta, SavedSearch } from '#lib/types.js';
+import type { FeedMeta, FeedSourceChoice, SavedSearch } from '#lib/types.js';
+import { UserResource } from '#lib/userResource.svelte.js';
 
-export type FeedSourceChoice = { source: 'profile' } | { source: 'saved_search'; saved_search_id: number };
+type FeedMode = 'list' | 'swipe';
 
-class FeedSource {
-  source = $state<string>('profile');
-  savedSearchId = $state<number | undefined>();
+/**
+ * What the match feed matches on, shared by the pill, the menu and both feed modes. The
+ * server stores the choice; this mirrors it from the feed's `meta` so a reload shows the
+ * stored source. `version` bumps on every pick so the feed remounts from its first card.
+ */
+class FeedSource extends UserResource<SavedSearch[]> {
+  /** The server's current source, from the last feed response; null before the first. */
+  current = $state<{ kind: string; id?: number } | null>(null);
+  /** Bumped by choose(): key the feed on it. */
   version = $state(0);
-  searches = $state<SavedSearch[]>([]);
-  status = $state<'idle' | 'loading' | 'ready' | 'failed'>('idle');
-  // Set by a pick so a remounted pill (swipe mode) takes focus back.
-  refocus = false;
+  /** The user's own saved searches, never the profile-derived one. */
+  searches = $state.raw<SavedSearch[]>([]);
+  /** A PUT is in flight: picks wait, so the UI order is the persisted order. */
+  busy = $state(false);
+  status = $state<'idle' | 'loading' | 'failed' | 'ready'>('idle');
+  #cardFocus: { version: number; mode: FeedMode } | undefined;
 
-  /** The label of the current source. A search that is gone from the list reads generically. */
-  get label(): string {
-    if (this.source !== 'saved_search') return 'By my profile';
-    return this.searches.find((s) => s.id === this.savedSearchId)?.name ?? 'Saved search';
+  fromMeta(meta: FeedMeta) {
+    this.current = { kind: meta.source, id: meta.saved_search_id };
   }
 
-  sync(meta: FeedMeta | null | undefined) {
-    if (!meta) return;
-    this.source = meta.source;
-    this.savedSearchId = meta.saved_search_id;
+  protected load(): Promise<SavedSearch[]> {
+    return api.listSavedSearches();
   }
 
-  /** The user's own searches: the profile-derived alert search is never a source. */
+  protected apply(searches: SavedSearch[]): void {
+    this.searches = searches.filter((search) => !search.derived_from_profile);
+  }
+
+  protected clearState(): void {
+    this.current = null;
+    this.searches = [];
+    this.busy = false;
+    this.status = 'idle';
+    this.#cardFocus = undefined;
+    untrack(() => this.version++);
+  }
+
   async loadSearches() {
+    if (this.status === 'loading') return;
+    const generation = this.generation;
     this.status = 'loading';
     try {
-      this.searches = (await api.listSavedSearches()).filter((s) => !s.derived_from_profile);
-      this.status = 'ready';
+      if (await this.reload()) this.status = 'ready';
     } catch {
-      this.status = 'failed';
+      if (generation === this.generation) this.status = 'failed';
     }
   }
 
-  /** Stores the choice, then remounts the feed. Throws when the server refuses. */
-  async choose(choice: FeedSourceChoice) {
-    await api.setFeedSource(choice);
-    this.source = choice.source;
-    this.savedSearchId = choice.source === 'saved_search' ? choice.saved_search_id : undefined;
-    this.refocus = true;
+  /** Stores the choice, then restarts the feed. False when the server refused it, or a
+   *  previous pick is still being stored (one PUT at a time). */
+  async choose(choice: FeedSourceChoice, focusCardIn?: FeedMode): Promise<boolean> {
+    if (this.busy) return false;
+    const generation = this.generation;
+    this.busy = true;
+    try {
+      await api.setFeedSource(choice);
+    } catch {
+      return false;
+    } finally {
+      if (generation === this.generation) this.busy = false;
+    }
+    if (generation !== this.generation) return false;
+    this.current =
+      choice.source === 'profile' ? { kind: 'profile' } : { kind: 'saved_search', id: choice.saved_search_id };
+    this.#cardFocus = focusCardIn ? { version: this.version + 1, mode: focusCardIn } : undefined;
     this.version++;
-    setTimeout(() => (this.refocus = false)); // the remount runs in the microtask flush before this
+    return true;
+  }
+
+  takeCardFocus(version: number, mode: FeedMode): boolean {
+    if (this.#cardFocus?.version !== version || this.#cardFocus.mode !== mode) return false;
+    this.#cardFocus = undefined;
+    return true;
+  }
+
+  /** The pill's source name. */
+  get label(): string {
+    if (!this.current) return 'Loading…'; // unknown until the first feed response
+    if (this.current.kind !== 'saved_search') return 'By my profile';
+    return this.searches.find((s) => s.id === this.current?.id)?.name ?? 'Saved search';
   }
 }
 

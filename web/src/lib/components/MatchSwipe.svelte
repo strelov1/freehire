@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { ExternalLink, Heart, MoreHorizontal, RotateCcw, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
@@ -27,13 +27,19 @@
   let { onClose }: { onClose: () => void } = $props();
 
   const PAGE = 20;
+  // The source revision this instance was mounted for: a response that lands after a pick
+  // belongs to the old source and must not touch the shared source state.
+  const rev = feedSource.version;
+  const stale = () => rev !== feedSource.version;
+  let sourceRevision = 0;
+  const sourceChanged = (revision: number) => stale() || revision !== sourceRevision;
+  let overlay = $state<HTMLDivElement | null>(null);
   let cards = $state<FeedCard[]>([]);
   let loading = $state(true);
-  // The latest page's meta, and whether this session ever showed a card: a saved search that
-  // never did has no matches.
-  let meta = $state<FeedMeta | null>(null);
-  let shownAny = $state(false);
   let failed = $state(false);
+  let meta = $state<FeedMeta | null>(null);
+  // The session's first page had no card: a saved search that matches nothing, not a spent feed.
+  let firstEmpty = $state(false);
   // The plan lapsed while swipe was open: the API refuses with 402.
   let paywalled = $state(false);
   type Outcome = 'ok' | 'gone' | 'failed';
@@ -52,6 +58,7 @@
   // New cards come first; between the last one and the first rest card there is a pause screen.
   // The server's seen_cursor is posted once, when the candidate gets past the last new card.
   let hadNew = $state(false);
+  let hadLoaded = false;
   let restShown = $state(false);
   let seenCursor = $state<string | undefined>();
   const paused = $derived(!!current && !current.is_new && hadNew && !restShown);
@@ -71,23 +78,47 @@
   async function load() {
     loading = true;
     failed = false;
-    const version = feedSource.version; // a reply that outlives a source pick must not undo it
     try {
       const res = await api.meFeed(PAGE);
+      if (stale()) return;
       const data = res.data;
-      meta = res.meta;
-      if (version === feedSource.version) feedSource.sync(res.meta);
-      if (data.length > 0) shownAny = true;
+      if (res.meta) {
+        if (meta && (meta.source !== res.meta.source || meta.saved_search_id !== res.meta.saved_search_id)) {
+          sourceRevision++;
+          cards = [];
+          last = null;
+          toast = null;
+          hadLoaded = false;
+          hadNew = false;
+          restShown = false;
+          seenCursor = undefined;
+        }
+        meta = res.meta;
+        feedSource.fromMeta(res.meta);
+        if (!hadLoaded) firstEmpty = data.length === 0 && !res.meta.next_cursor;
+      }
+      hadLoaded = true;
       if (data.some((c) => c.is_new)) hadNew = true;
       seenCursor = res.meta?.seen_cursor ?? seenCursor;
       // Append, not replace: an Undo during the request may have put a card back.
       const have = new Set(cards.map((c) => c.public_slug));
       cards = [...cards, ...data.filter((c) => !have.has(c.public_slug))];
     } catch (e) {
+      if (stale()) return;
       if (isPlanRefusal(e)) paywalled = true;
       else failed = true;
     } finally {
-      loading = false;
+      if (!stale()) {
+        loading = false;
+        if (feedSource.takeCardFocus(rev, 'swipe')) {
+          await tick();
+          const heading = current && overlay?.querySelector('h2');
+          if (heading) {
+            heading.tabIndex = -1;
+            heading.focus();
+          }
+        }
+      }
     }
   }
 
@@ -117,6 +148,7 @@
   async function judge(action: Action, opts: { openedTab?: boolean } = {}) {
     const card = current;
     if (!card || busy()) return;
+    const revision = sourceRevision;
     dropToastAction();
     const ref: Last['ref'] = {};
     let write: Promise<unknown>;
@@ -140,6 +172,7 @@
     if (action === 'apply') applying = false;
     else gesture.settle();
     const outcome = await written;
+    if (sourceChanged(revision)) return;
     if (outcome === 'failed') {
       // Restore unless undo already put it back, or the card would be queued twice.
       if (!cards.includes(card)) cards = [card, ...cards];
@@ -189,6 +222,7 @@
   async function undo() {
     // An apply card is still in `cards` for its FLY_MS; restoring it now would duplicate it.
     if (!last || gesture.exiting || applying) return;
+    const revision = sourceRevision;
     const { card, action, written, ref } = last;
     dropToastAction();
     last = null;
@@ -198,6 +232,7 @@
       // judge() handles a failed or gone write first (it awaited earlier): the card stays back
       // with its toast, or leaves for good.
       const outcome = await written;
+      if (sourceChanged(revision)) return;
       if (outcome === 'gone') {
         cards = cards.filter((c) => c !== card);
         if (cards.length === 0) await load();
@@ -213,6 +248,7 @@
         await api.untrackApplication(ref.id);
       } else await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
     } catch {
+      if (sourceChanged(revision)) return;
       cards = cards.filter((c) => c !== card);
       last = { card, action, written, ref };
       fail(toastCopy.undo);
@@ -220,7 +256,7 @@
     } finally {
       undoing = false;
     }
-    announce(`Undone. ${card.title} is back.`);
+    if (!sourceChanged(revision)) announce(`Undone. ${card.title} is back.`);
   }
 
   // ← skip, → save, U undo, Esc back to the feed. Bound to the overlay root, so it only
@@ -230,6 +266,7 @@
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.defaultPrevented || menuOpen) return;
     const t = e.target as HTMLElement | null;
     if (t?.closest('input,textarea,select,[contenteditable],[role=menu],[role^=menuitem]')) return;
+    if (e.key !== 'Escape' && t?.closest('[aria-haspopup=menu]')) return;
     const dialog = t?.closest('[role=dialog]');
     if (dialog && dialog !== e.currentTarget) return;
     if (paused && e.key !== 'Escape') return; // the first rest card is hidden behind the pause screen
@@ -255,6 +292,7 @@
   aria-modal="true"
   aria-labelledby="match-swipe-title"
   tabindex="-1"
+  bind:this={overlay}
   onkeydown={onKey}
   {@attach focusTrap()}
 >
@@ -404,9 +442,11 @@
       <States state="error" message="Failed to load your matches." />
     </div>
   {:else if meta?.reason === 'search_deleted'}
-    <FeedSourceEmpty kind="deleted" />
-  {:else if meta?.source === 'saved_search' && (meta.reason === 'no_usable_fields' || !shownAny)}
-    <FeedSourceEmpty kind="no_matches" />
+    <FeedSourceEmpty kind="deleted" mode="swipe" />
+  {:else if meta?.source === 'saved_search' && meta.reason}
+    <FeedSourceEmpty kind="unusable" mode="swipe" />
+  {:else if meta?.source === 'saved_search' && firstEmpty}
+    <FeedSourceEmpty kind="no_matches" mode="swipe" />
   {:else}
     <div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
       <p class="text-lg font-semibold">You're all caught up</p>

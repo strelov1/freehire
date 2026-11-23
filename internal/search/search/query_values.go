@@ -163,6 +163,30 @@ func IgnoredValues(v url.Values) map[string][]string {
 	return out
 }
 
+// IgnoredNumericBounds reports numeric bounds that FilterFromValues would drop.
+// Callers that require a strict match can reject them before searching.
+func IgnoredNumericBounds(v url.Values) []UnknownParam {
+	var ignored []UnknownParam
+	for _, param := range []string{
+		"salary_min", "salary_max", "experience_years_min", "experience_years_max", "posted_within_days", "open_within_days",
+	} {
+		if !v.Has(param) {
+			continue
+		}
+		n, valid := atoiOK(v.Get(param))
+		switch param {
+		case "experience_years_max":
+			valid = valid && n >= 0
+		case "posted_within_days", "open_within_days":
+			valid = valid && withinDays(n)
+		}
+		if !valid {
+			ignored = append(ignored, UnknownParam{Param: param})
+		}
+	}
+	return ignored
+}
+
 // oneOf checks a value against a list, trimmed and case-insensitively.
 func oneOf(allowed []string) func(string) bool {
 	return func(value string) bool {

@@ -4,6 +4,8 @@ import { ApiError } from '#lib/api-core.js';
 
 const meFeed = vi.fn();
 const markFeedSeen = vi.fn();
+const listSavedSearches = vi.fn();
+const setFeedSource = vi.fn();
 const saveJob = vi.fn();
 const dismissJob = vi.fn();
 const unsaveJob = vi.fn();
@@ -14,6 +16,8 @@ vi.mock('#lib/api.js', () => ({
   api: {
     meFeed: (...a: unknown[]) => meFeed(...a),
     markFeedSeen: (...a: unknown[]) => markFeedSeen(...a),
+    listSavedSearches: (...a: unknown[]) => listSavedSearches(...a),
+    setFeedSource: (...a: unknown[]) => setFeedSource(...a),
     saveJob: (...a: unknown[]) => saveJob(...a),
     dismissJob: (...a: unknown[]) => dismissJob(...a),
     unsaveJob: (...a: unknown[]) => unsaveJob(...a),
@@ -43,22 +47,6 @@ describe('MatchSwipe', () => {
     render(MatchSwipe, { onClose: () => {} });
     expect(await screen.findByText('Part of Pro and Ultra')).toBeTruthy();
     expect(screen.queryByText('Failed to load your matches.')).toBeNull();
-  });
-
-  it('shows the deleted-search screen when the stored search is gone', async () => {
-    meFeed.mockResolvedValue({
-      data: [],
-      meta: { source: 'saved_search', saved_search_id: 2, total: 0, reason: 'search_deleted' },
-    });
-    render(MatchSwipe, { onClose: () => {} });
-    expect(await screen.findByText('This search was deleted')).toBeTruthy();
-    expect(screen.getByText('Back to matching by profile')).toBeTruthy();
-  });
-
-  it('shows no matches for a saved search that never had a card', async () => {
-    meFeed.mockResolvedValue({ data: [], meta: { source: 'saved_search', saved_search_id: 2, total: 0 } });
-    render(MatchSwipe, { onClose: () => {} });
-    expect(await screen.findByText('No matches for this search')).toBeTruthy();
   });
 
   it('puts the match block on the card in place of JobMatch, and Save still saves', async () => {
@@ -133,6 +121,59 @@ describe('MatchSwipe', () => {
       expect(saveJob).toHaveBeenCalledWith('a-job');
       await shown('B Job');
       expect(announce).toHaveBeenCalledWith('Saved. Next: B Job at Acme');
+    });
+
+    it('does not judge the card when the source button has focus', async () => {
+      await open();
+      const source = screen.getByRole('button', { name: /match source/i });
+      source.focus();
+      await fireEvent.keyDown(source, { key: 'ArrowLeft' });
+      await fireEvent.keyDown(source, { key: 'ArrowRight' });
+      expect(dismissJob).not.toHaveBeenCalled();
+      expect(saveJob).not.toHaveBeenCalled();
+    });
+
+    it('shows no matches and clears Undo when a refill lands on a different source', async () => {
+      meFeed
+        .mockResolvedValueOnce({ data: [mk('a-job', 'A Job')], meta: { source: 'profile', total: 1 } })
+        .mockResolvedValueOnce({ data: [], meta: { source: 'saved_search', saved_search_id: 2, total: 0 } });
+      saveJob.mockResolvedValue(undefined);
+      render(MatchSwipe, { onClose: () => {} });
+      await screen.findByLabelText('Job: A Job at Acme');
+      await fireEvent.click(screen.getByLabelText('Save'));
+      expect(await screen.findByText('No matches for this search')).toBeTruthy();
+      await fireEvent.keyDown(screen.getByRole('dialog'), { key: 'u' });
+      expect(unsaveJob).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+      expect(screen.queryByLabelText('Job: A Job at Acme')).toBeNull();
+    });
+
+    it('does not revive a previous source card when its pending Undo fails', async () => {
+      const refill = Promise.withResolvers<{
+        data: [];
+        meta: { source: string; saved_search_id: number; total: number };
+      }>();
+      const undoWrite = Promise.withResolvers<undefined>();
+      meFeed
+        .mockReset()
+        .mockResolvedValueOnce({ data: [mk('a-job', 'A Job')], meta: { source: 'profile', total: 1 } })
+        .mockReturnValueOnce(refill.promise);
+      saveJob.mockResolvedValue(undefined);
+      unsaveJob.mockReturnValue(undoWrite.promise);
+      render(MatchSwipe, { onClose: () => {} });
+      await screen.findByLabelText('Job: A Job at Acme');
+      await fireEvent.click(screen.getByLabelText('Save'));
+      await vi.waitFor(() => expect(meFeed).toHaveBeenCalledTimes(2));
+      const dialog = screen.getByRole('dialog');
+      await fireEvent.keyDown(dialog, { key: 'u' });
+      expect(unsaveJob).toHaveBeenCalledTimes(1);
+      refill.resolve({ data: [], meta: { source: 'saved_search', saved_search_id: 2, total: 0 } });
+      await screen.findByText('No matches for this search');
+      undoWrite.reject(new ApiError(500, 'boom'));
+      await Promise.resolve();
+      await fireEvent.keyDown(dialog, { key: 'u' });
+      expect(unsaveJob).toHaveBeenCalledTimes(1);
+      expect(screen.queryByLabelText('Job: A Job at Acme')).toBeNull();
     });
 
     it('a failed skip puts the card back with a toast and an assertive announce', async () => {
@@ -429,5 +470,16 @@ describe('MatchSwipe', () => {
       expect(screen.queryByText("That's everything new")).toBeNull();
       expect(markFeedSeen).not.toHaveBeenCalled();
     });
+  });
+
+  it('shows the deleted-search screen and the source pill', async () => {
+    listSavedSearches.mockResolvedValue([]);
+    meFeed.mockResolvedValue({
+      data: [],
+      meta: { source: 'saved_search', saved_search_id: 2, total: 0, reason: 'search_deleted' },
+    });
+    render(MatchSwipe, { onClose: () => {} });
+    expect(await screen.findByText('This search was deleted')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Match source:/ })).toBeTruthy();
   });
 });
