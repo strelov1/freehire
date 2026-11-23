@@ -50,6 +50,8 @@ export class FormPlan {
   sent = $state(false);
   /** The page is a LinkedIn job that no longer takes applications. */
   closed = $state(false);
+  /** This page's form has been read: until then `closed` is the last page's, and unknown here. */
+  read = $state(false);
 
   // Reads of the form are serialised rather than raced. A request id (the
   // `matchRequestId` pattern) was the first attempt and it deadlocked on a real
@@ -95,6 +97,7 @@ export class FormPlan {
   /** Turns one form read into the plan, or into the reason there is none. */
   #applyRead(reply: RuntimeMessage | undefined) {
     this.planError = '';
+    this.read = true;
     if (reply?.kind !== 'FRAMED_FORM') {
       this.questionsSeen = 0;
       this.plan = null;
@@ -135,6 +138,7 @@ export class FormPlan {
 
   /** Forgets what was learned about the previous page's questions. */
   resetPage() {
+    this.read = false;
     this.formFilled = false;
     this.autofilled.clear();
     this.prefilled.clear();

@@ -12,6 +12,7 @@
     match,
     hasUploadField,
     closed,
+    closedUnknown,
     error,
     onRetry,
     canAddJob,
@@ -23,6 +24,7 @@
     match: JobMatch | null;
     hasUploadField: boolean;
     closed: boolean;
+    closedUnknown: boolean;
     error: string;
     onRetry: () => void;
     canAddJob: boolean;
@@ -32,7 +34,7 @@
 </script>
 
 {#if status === 'ready' && job && match}
-  <MatchCard {job} {match} {hasUploadField} {closed} />
+  <MatchCard {job} {match} {hasUploadField} {closed} {closedUnknown} />
 {:else if status === 'loading'}
   <div class="match-skeleton">
     <Skeleton class="h-9 w-9 rounded-lg" />

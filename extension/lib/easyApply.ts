@@ -66,10 +66,13 @@ export function easyApplyAction(dialog: Element): { button: HTMLButtonElement; k
  * Tailoring a CV for a closed job spends a daily session for nothing, hence the check.
  */
 export function linkedInPostingClosed(doc: Document): boolean {
-  const apply = doc.querySelector('#jobs-apply-button-id, .jobs-apply-button');
-  if (apply && (apply.matches(':disabled') || apply.getAttribute('aria-disabled') === 'true')) return true;
   if (doc.querySelector('.jobs-details-top-card__apply-error')) return true;
-  return /no longer accepting applications/i.test((doc.querySelector('main') ?? doc.body)?.textContent ?? '');
+  const apply = doc.querySelector('#jobs-apply-button-id, .jobs-apply-button');
+  if (apply) return apply.matches(':disabled') || apply.getAttribute('aria-disabled') === 'true';
+  // Read in the top card only: a description may say "no longer accepting applications by email".
+  return Array.from(doc.querySelectorAll('[class*="top-card"]')).some((card) =>
+    /no longer accepting applications/i.test(card.textContent ?? ''),
+  );
 }
 
 /**

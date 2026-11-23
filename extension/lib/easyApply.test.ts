@@ -161,6 +161,17 @@ describe('linkedInPostingClosed', () => {
     expect(linkedInPostingClosed(document)).toBe(true);
   });
 
+  it('ignores the phrase in a description when the apply button is live', () => {
+    topCard(
+      '<button id="jobs-apply-button-id" class="jobs-apply-button" aria-label="Easy Apply to this job">Easy Apply</button>',
+    );
+    must(document.querySelector('main')).insertAdjacentHTML(
+      'beforeend',
+      '<article>We are no longer accepting applications by email; use Easy Apply.</article>',
+    );
+    expect(linkedInPostingClosed(document)).toBe(false);
+  });
+
   it('leaves an open posting open', () => {
     topCard(
       '<button id="jobs-apply-button-id" class="jobs-apply-button" aria-label="Easy Apply to this job">Easy Apply</button>',

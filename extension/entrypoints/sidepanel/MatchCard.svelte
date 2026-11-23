@@ -23,13 +23,20 @@
   import TailorConfirm from './TailorConfirm.svelte';
   import { ensureSavedLoaded, isSaved, markSaved, markUnsaved } from '../../lib/savedJobs';
 
-  // `closed`: a LinkedIn job no longer taking applications.
+  // `closed`: a LinkedIn job no longer taking applications; `closedUnknown`: this page not read yet.
   let {
     job,
     match,
     hasUploadField,
     closed = false,
-  }: { job: FreehireJob; match: JobMatch; hasUploadField: boolean; closed?: boolean } = $props();
+    closedUnknown = false,
+  }: {
+    job: FreehireJob;
+    match: JobMatch;
+    hasUploadField: boolean;
+    closed?: boolean;
+    closedUnknown?: boolean;
+  } = $props();
 
   function scoreTone(score: number): 'good' | 'warn' | 'bad' {
     if (score >= 70) return 'good';
@@ -172,7 +179,11 @@
     !import.meta.env.FIREFOX && isCatalogJob && hasUploadField && tailoredCV !== null && !run.running && !closed,
   );
   // While a run goes, or once its CV exists, the card links to it rather than start another.
-  let canTailor = $derived(!closed && !run.running && !tailoredCV);
+  let canTailor = $derived(!closed && !closedUnknown && !run.running && !tailoredCV);
+  // A posting that closes (or a run that starts) while the confirmation is open takes it away.
+  $effect(() => {
+    if (!canTailor) confirmOpen = false;
+  });
 
   // A tailoring run started from here runs in the freehire tab it opens (the server starts
   // one only for a signed-in browser, where it can be watched and undone); the panel follows
@@ -184,6 +195,7 @@
   let watchUrl = $derived(runCv ? `${tailorUrl}?cv=${encodeURIComponent(runCv.id)}` : tailorUrl);
 
   function startTailoring() {
+    if (!canTailor) return;
     void browser.tabs.create({ url: tailorUrl, active: false });
     run.start();
   }

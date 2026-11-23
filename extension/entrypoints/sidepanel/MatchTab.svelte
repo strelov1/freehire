@@ -68,6 +68,7 @@
         match={pageMatch.match}
         hasUploadField={form.resumeStep || form.uploads.some((u) => u.frame === TOP_FRAME)}
         closed={form.closed}
+        closedUnknown={!form.read}
         error={pageMatch.error}
         onRetry={pageMatch.load}
         canAddJob={pageMatch.canAddJob}

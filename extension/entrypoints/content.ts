@@ -45,6 +45,7 @@ export default defineContentScript({
   allFrames: true,
   main() {
     startErrorTelemetry('content');
+    const onLinkedIn = /(^|\.)linkedin\.com$/.test(location.hostname);
     browser.runtime.onMessage.addListener((message: RuntimeMessage) => {
       switch (message.kind) {
         case 'GET_PAGE_SNAPSHOT':
@@ -75,7 +76,7 @@ export default defineContentScript({
             sent: easyApplySent(document),
             // Rides the form read: it already runs on every page change, and the panel
             // must know before it offers to tailor a CV for this job.
-            closed: location.hostname.endsWith('linkedin.com') && linkedInPostingClosed(document),
+            closed: onLinkedIn && linkedInPostingClosed(document),
           });
         case 'FILL_BY_LABEL':
           // A revealed fill scrolls to each question and outlines it as the value
@@ -125,13 +126,28 @@ export default defineContentScript({
       controlCount = count;
       notifyPanel();
     }, FORM_CHANGE_QUIET_MS);
+    // LinkedIn closing the posting (its apply button disabled, a notice added) adds no control,
+    // yet the panel must stop offering to tailor; so that state is announced on its own.
+    let postingClosed = onLinkedIn && linkedInPostingClosed(document);
+    const announceIfClosedChanged = debounce(() => {
+      const closed = linkedInPostingClosed(document);
+      if (closed === postingClosed) return;
+      postingClosed = closed;
+      notifyPanel();
+    }, FORM_CHANGE_QUIET_MS);
     new MutationObserver((records) => {
+      if (onLinkedIn) announceIfClosedChanged();
       for (const record of records) {
         if ([...record.addedNodes, ...record.removedNodes].some(holdsControl)) {
           announceIfCountChanged();
           return;
         }
       }
-    }).observe(document.documentElement, { childList: true, subtree: true });
+    }).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: onLinkedIn,
+      attributeFilter: onLinkedIn ? ['disabled', 'aria-disabled'] : undefined,
+    });
   },
 });
