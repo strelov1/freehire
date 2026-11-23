@@ -163,6 +163,29 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     return requestData<EmployerApplication>(`/api/v1/employer/applications/${id}/workspace`, jsonBody('PATCH', patch));
   }
 
+  async function getEmployerApplicationConversation(id: number, before?: number) {
+    return requestData<components['schemas']['EmployerApplicationConversation']>(
+      `/api/v1/employer/applications/${id}/messages${before ? `?before=${before}` : ''}`,
+    );
+  }
+
+  async function sendEmployerApplicationMessage(id: number, body: string, requestKey: string) {
+    return requestData<components['schemas']['EmployerApplicationMessage']>(
+      `/api/v1/employer/applications/${id}/messages`,
+      jsonBody('POST', {
+        body,
+        request_key: requestKey,
+      } satisfies components['schemas']['EmployerApplicationMessageSend']),
+    );
+  }
+
+  async function markEmployerApplicationRepliesRead(id: number, throughId: number) {
+    return requestData<components['schemas']['EmployerApplicationReplyReadState']>(
+      `/api/v1/employer/applications/${id}/messages/read`,
+      jsonBody('POST', { through_id: throughId } satisfies components['schemas']['EmployerApplicationRepliesRead']),
+    );
+  }
+
   async function listEmployerActivity(before?: number): Promise<components['schemas']['EmployerActivity'][]> {
     const suffix = before ? `?before=${before}` : '';
     return requestData<components['schemas']['EmployerActivity'][]>(`/api/v1/employer/activity${suffix}`);
@@ -244,6 +267,9 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     employerApplicationCVUrl,
     moveEmployerApplication,
     updateEmployerApplicationWorkspace,
+    getEmployerApplicationConversation,
+    sendEmployerApplicationMessage,
+    markEmployerApplicationRepliesRead,
     listEmployerActivity,
     getEmployerTeam,
     inviteEmployerTeamMember,
