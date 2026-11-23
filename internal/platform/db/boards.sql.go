@@ -73,6 +73,35 @@ func (q *Queries) GetBoardForResolve(ctx context.Context, arg GetBoardForResolve
 	return i, err
 }
 
+const getLiveBoardCompany = `-- name: GetLiveBoardCompany :one
+SELECT board, company FROM boards
+WHERE provider = $1 AND lower(board) = lower($2)
+  AND region = $3 AND status IN ('pending', 'active')
+ORDER BY id DESC
+LIMIT 1
+FOR UPDATE
+`
+
+type GetLiveBoardCompanyParams struct {
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+	Region   string `json:"region"`
+}
+
+type GetLiveBoardCompanyRow struct {
+	Board   string `json:"board"`
+	Company string `json:"company"`
+}
+
+// The stored spelling and company of the live board UpdateBoardCompany would rename, so
+// cmd/add-board --rename can move that board's jobs off the old name too.
+func (q *Queries) GetLiveBoardCompany(ctx context.Context, arg GetLiveBoardCompanyParams) (GetLiveBoardCompanyRow, error) {
+	row := q.db.QueryRow(ctx, getLiveBoardCompany, arg.Provider, arg.Board, arg.Region)
+	var i GetLiveBoardCompanyRow
+	err := row.Scan(&i.Board, &i.Company)
+	return i, err
+}
+
 const getRetiredBoardName = `-- name: GetRetiredBoardName :one
 SELECT board FROM boards
 WHERE provider = $1 AND lower(board) = lower($2) AND region = $3 AND status = 'retired'

@@ -20,7 +20,9 @@ import (
 	"errors"
 	"flag"
 	"log"
+	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
@@ -133,7 +135,7 @@ func runRetire(provider, board, region string, apply bool) int {
 // runRename mirrors runAdd/runRetire's split: it reports, then under apply delegates to
 // renameBoard over a real database connection.
 func runRename(provider, board, region, company string, apply bool) int {
-	log.Printf("add-board: would rename provider=%s board=%s region=%q to company=%q", provider, board, region, company)
+	log.Printf("add-board: would rename provider=%s board=%s region=%q to company=%q and move its stored jobs (open and closed) off the board's current company name", provider, board, region, company)
 	if !apply {
 		log.Print("add-board: dry run, nothing written. Re-run with --apply to rename.")
 		return 0
@@ -143,19 +145,53 @@ func runRename(provider, board, region, company string, apply bool) int {
 	})
 }
 
+// renameBoard renames the live board AND moves its stored jobs (open and closed) off the old
+// company in one transaction, as cmd/backfill-company-names does for a placeholder: a crawl
+// only rewrites a posting that changed, so the board row alone would leave them on the old
+// name. The companies catalogue is reconciled for the touched slugs afterwards.
 func renameBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, region, company string) int {
-	repo := boardcatalog.NewQueriesRepository(db.New(pool))
-	found, err := repo.Rename(ctx, provider, board, region, company)
-	if err != nil {
-		log.Printf("add-board: rename: %v", err)
-		return 1
-	}
-	if !found {
+	queries := db.New(pool)
+	var (
+		slug     string
+		oldSlugs []string
+		oldName  string
+	)
+	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		q := queries.WithTx(tx)
+		row, err := q.GetLiveBoardCompany(ctx, db.GetLiveBoardCompanyParams{Provider: provider, Board: board, Region: region})
+		if err != nil {
+			return err
+		}
+		oldName = row.Company
+		slug, oldSlugs, err = boardcatalog.RenameBoardJobs(ctx, q,
+			boardcatalog.BoardRename{Provider: provider, Board: row.Board, OldName: row.Company, Name: company,
+				AliasOldSlug: isPlaceholderName(row.Board, row.Company)},
+			func(ctx context.Context) (int64, error) {
+				return q.UpdateBoardCompany(ctx, db.UpdateBoardCompanyParams{Provider: provider, Board: board, Region: region, Company: company})
+			})
+		return err
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("add-board: no live (pending/active) board matches provider=%s board=%s region=%q — nothing renamed",
 			provider, board, region)
 		return 1
 	}
-	log.Printf("add-board: renamed provider=%s board=%s region=%q to company=%q", provider, board, region, company)
+	if err != nil {
+		log.Printf("add-board: rename: %v", err)
+		return 1
+	}
+	if len(oldSlugs) > 0 {
+		if _, err := queries.SyncCompaniesForSlugs(ctx, []string{slug}); err != nil {
+			log.Printf("add-board: sync companies: %v", err)
+			return 1
+		}
+		if _, err := queries.DeleteOrphanCompaniesForSlugs(ctx, oldSlugs); err != nil {
+			log.Printf("add-board: delete orphan companies: %v", err)
+			return 1
+		}
+	}
+	log.Printf("add-board: renamed provider=%s board=%s region=%q from company=%q to %q, moved jobs off %d old slug(s)",
+		provider, board, region, oldName, company, len(oldSlugs))
 	return 0
 }
 
@@ -179,4 +215,11 @@ func retireBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, regio
 		return 1
 	}
 	return 0
+}
+
+// isPlaceholderName reports whether a board's company is still the name a harvest or crowdsourced
+// add seeded it with (the board id, or boardcatalog.PlaceholderCompany of it) rather than a real
+// employer a curator is now correcting.
+func isPlaceholderName(board, company string) bool {
+	return strings.EqualFold(company, board) || company == boardcatalog.PlaceholderCompany(board)
 }

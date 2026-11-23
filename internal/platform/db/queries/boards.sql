@@ -65,6 +65,16 @@ SET company = sqlc.arg(company)
 WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board))
   AND region = sqlc.arg(region) AND status IN ('pending', 'active');
 
+-- name: GetLiveBoardCompany :one
+-- The stored spelling and company of the live board UpdateBoardCompany would rename, so
+-- cmd/add-board --rename can move that board's jobs off the old name too.
+SELECT board, company FROM boards
+WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board))
+  AND region = sqlc.arg(region) AND status IN ('pending', 'active')
+ORDER BY id DESC
+LIMIT 1
+FOR UPDATE;
+
 -- name: RenameSlugBoardCompany :execrows
 -- Carry a display name cmd/backfill-company-names resolved back to the board it came
 -- from. An adapter copies boards.company onto every posting and the job upsert writes

@@ -120,6 +120,49 @@ func TestRenameBoardCorrectsThePlaceholder(t *testing.T) {
 	}
 }
 
+// The board's stored jobs, open and closed, move to the new name with it (a crawl would not
+// rewrite an unchanged posting) and another board is left alone. The old name is a real employer
+// being corrected, not a placeholder, so its slug must NOT be aliased onto the new one.
+func TestRenameBoardMovesStoredJobs(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Pool(t)
+	in := boardcatalog.InsertInput{Provider: "greenhouse", Board: "acme-corp", Company: "Texas Instruments"}
+	if code := addBoard(ctx, pool, in, sources.Taxonomy()); code != 0 {
+		t.Fatalf("seed addBoard: exit = %d", code)
+	}
+	job := func(ext, company, slug string, closed bool) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug, company_slug_folded, closed_at)
+VALUES ('greenhouse', $1, 'http://x.test', 'Job', 'job-' || $1, $2, $3, replace($3, '-', ''), CASE WHEN $4::bool THEN now() END)`,
+			ext, company, slug, closed); err != nil {
+			t.Fatalf("seed job %s: %v", ext, err)
+		}
+	}
+	job("acme-corp:1", "Texas Instruments", "texas-instruments", false)
+	job("acme-corp:2", "Texas Instruments", "texas-instruments", true)
+	job("other:1", "Texas Instruments", "texas-instruments", false)
+
+	if code := renameBoard(ctx, pool, "greenhouse", "acme-corp", "", "Pella"); code != 0 {
+		t.Fatalf("renameBoard exit = %d, want 0", code)
+	}
+
+	var moved, left int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE company = 'Pella' AND company_slug = 'pella' AND company_slug_folded = 'pella'),
+count(*) FILTER (WHERE company = 'Texas Instruments') FROM jobs`).Scan(&moved, &left); err != nil {
+		t.Fatal(err)
+	}
+	if moved != 2 || left != 1 {
+		t.Fatalf("moved=%d left=%d, want 2 moved (open+closed) and the other board's job untouched", moved, left)
+	}
+	var aliases int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM company_slug_aliases WHERE alias_slug = 'texas-instruments'`).Scan(&aliases); err != nil {
+		t.Fatal(err)
+	}
+	if aliases != 0 {
+		t.Fatalf("texas-instruments aliased %d time(s); a corrected real employer must keep its own slug", aliases)
+	}
+}
+
 func TestRenameBoardReportsNotFound(t *testing.T) {
 	pool := testdb.Pool(t)
 
