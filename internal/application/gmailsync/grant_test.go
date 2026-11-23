@@ -27,6 +27,7 @@ func TestRevokedGrant(t *testing.T) {
 		{"api refuses the access token", &APIError{Op: "gmail: list", StatusCode: 401, Status: "401 Unauthorized"}, true},
 		{"api forbids the scope", &APIError{Op: "gmail: list", StatusCode: 403, Status: "403 Forbidden"}, true},
 		{"api is rate limiting", &APIError{Op: "gmail: list", StatusCode: 429, Status: "429 Too Many Requests"}, false},
+		{"calendar API disabled on the project", &APIError{StatusCode: 403, Reason: "accessNotConfigured"}, false},
 		{"api rate limits with 403", &APIError{Op: "gmail: thread", StatusCode: 403, Status: "403 Forbidden", Reason: "rateLimitExceeded"}, false},
 		{"api user rate limits with 403", &APIError{Op: "gmail: thread", StatusCode: 403, Status: "403 Forbidden", Reason: "userRateLimitExceeded"}, false},
 		{"api quota with 403", &APIError{Op: "gmail: thread", StatusCode: 403, Status: "403 Forbidden", Reason: "quotaExceeded"}, false},

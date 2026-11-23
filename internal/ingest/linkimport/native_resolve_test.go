@@ -69,3 +69,17 @@ func TestResolveNativeChecksTheEmployerWebsiteForANewBoard(t *testing.T) {
 		t.Fatal("same title on an unrelated board passed the employer website proof")
 	}
 }
+
+func TestResolveNativeUsesStoredUSLeverBoard(t *testing.T) {
+	const raw = "https://jobs.lever.co/acme/22222222-2222-4222-8222-222222222222"
+	row := db.Job{Title: "Engineer", Company: "Acme US"}
+	catalog := linkedInRegionCatalog{
+		"us": {Provider: "lever", Board: "acme", Region: "us", Company: row.Company},
+		"eu": {Provider: "lever", Board: "acme", Region: "eu", Company: "Acme EU"},
+	}
+	im := &Importer{ingest: map[string]sources.Source{"lever": linkedInLeverSource{}}, catalog: catalog}
+	got, err := im.ResolveNative(context.Background(), row, raw, "")
+	if err != nil || got.Entry.Region != "us" || got.Job.Company != row.Company {
+		t.Fatalf("native resolution = %+v, %v", got, err)
+	}
+}

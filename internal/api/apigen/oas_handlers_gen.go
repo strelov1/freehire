@@ -12570,6 +12570,105 @@ func (s *Server) handleGetEmployerApplicationCVRequest(args [1]string, argsEscap
 	}
 }
 
+// handleGetEmployerApplicationConversationRequest handles getEmployerApplicationConversation operation.
+//
+// Read the private email conversation for a delivered application in your company.
+//
+// GET /employer/applications/{id}/messages
+func (s *Server) handleGetEmployerApplicationConversationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetEmployerApplicationConversationOperation,
+			ID:   "getEmployerApplicationConversation",
+		}
+	)
+	params, err := decodeGetEmployerApplicationConversationParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetEmployerApplicationConversationOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetEmployerApplicationConversationOperation,
+			OperationSummary: "Read an application conversation",
+			OperationID:      "getEmployerApplicationConversation",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+				{
+					Name: "before",
+					In:   "query",
+				}: params.Before,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetEmployerApplicationConversationParams
+			Response = *GetEmployerApplicationConversationOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetEmployerApplicationConversationParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetEmployerApplicationConversation(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetEmployerApplicationConversation(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetEmployerApplicationConversationResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetEmployerCompanyRequest handles getEmployerCompany operation.
 //
 // The caller's own account in any status, with the company profile.
@@ -23817,6 +23916,116 @@ func (s *Server) handleMarkConversationReadRequest(args [1]string, argsEscaped b
 	}
 }
 
+// handleMarkEmployerApplicationRepliesReadRequest handles markEmployerApplicationRepliesRead operation.
+//
+// Acknowledge the candidate replies the company team has seen up through this message.
+//
+// POST /employer/applications/{id}/messages/read
+func (s *Server) handleMarkEmployerApplicationRepliesReadRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: MarkEmployerApplicationRepliesReadOperation,
+			ID:   "markEmployerApplicationRepliesRead",
+		}
+	)
+	params, err := decodeMarkEmployerApplicationRepliesReadParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeMarkEmployerApplicationRepliesReadRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *MarkEmployerApplicationRepliesReadOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    MarkEmployerApplicationRepliesReadOperation,
+			OperationSummary: "Mark candidate replies as read",
+			OperationID:      "markEmployerApplicationRepliesRead",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *EmployerApplicationRepliesRead
+			Params   = MarkEmployerApplicationRepliesReadParams
+			Response = *MarkEmployerApplicationRepliesReadOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackMarkEmployerApplicationRepliesReadParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.MarkEmployerApplicationRepliesRead(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.MarkEmployerApplicationRepliesRead(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeMarkEmployerApplicationRepliesReadResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleMarkNotificationReadRequest handles markNotificationRead operation.
 //
 // Returns `204 No Content`.
@@ -31598,6 +31807,116 @@ func (s *Server) handleSendDirectApplyRequest(args [1]string, argsEscaped bool, 
 	}
 
 	if err := encodeSendDirectApplyResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleSendEmployerApplicationMessageRequest handles sendEmployerApplicationMessage operation.
+//
+// Send a plain-text email to the candidate without changing their application stage.
+//
+// POST /employer/applications/{id}/messages
+func (s *Server) handleSendEmployerApplicationMessageRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: SendEmployerApplicationMessageOperation,
+			ID:   "sendEmployerApplicationMessage",
+		}
+	)
+	params, err := decodeSendEmployerApplicationMessageParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeSendEmployerApplicationMessageRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *SendEmployerApplicationMessageOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    SendEmployerApplicationMessageOperation,
+			OperationSummary: "Email a candidate",
+			OperationID:      "sendEmployerApplicationMessage",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *EmployerApplicationMessageSend
+			Params   = SendEmployerApplicationMessageParams
+			Response = *SendEmployerApplicationMessageOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackSendEmployerApplicationMessageParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.SendEmployerApplicationMessage(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.SendEmployerApplicationMessage(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeSendEmployerApplicationMessageResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

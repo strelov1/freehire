@@ -145,6 +145,12 @@ var atsBoardsB = []struct{ host, source, mode string }{
 	// posting link: its client is 1aeeba55-…). A bare /<Org> is a marketing shell served for ANY
 	// slug and stays declined (see pathPatternBoards).
 	{"jobs.dover.com", "dover", modePathPattern},
+	{"jobs.compleo.app", "compleo", modePathPattern},
+	{"vouch.careers", "vouch", modePathPattern},
+	{"app.mokahr.com", "mokahr", modePathPattern},
+	{"hire-r1.mokahr.com", "mokahr", modePathPattern},
+	{"brassring.com", "brassring", modeBrassring},
+	{"bullhornstaffing.com", "bullhorn", modeBullhorn},
 	{"jobboard.catch-talents.de", "catchtalents", modePathPattern},
 	{"talentglade.com", "talentglade", modeSubdomain},
 	{"employmenthero.com", "employmenthero", modePathPattern},
@@ -155,10 +161,10 @@ var atsBoardsB = []struct{ host, source, mode string }{
 	{"app.higherme.com", "higherme", modeAllowedFirstSegment},
 
 	// --- tenanthost: board = the whole host, one label under a shared domain ---
-	// Feishu Hire's customer careers sites (internal/ingest/sources/feishujobs.go accepts exactly
-	// <tenant>.jobs.feishu.cn). ByteDance's own jobs.bytedance.com is a single host, not a tenant
-	// space, and is left out.
+	// Feishu Hire's customer careers sites. ByteDance's separately configured
+	// employer board is recognized by its exact host and posting path.
 	{"jobs.feishu.cn", "feishujobs", modeTenantHost},
+	{"jobs.bytedance.com", "feishujobs", modeByteDance},
 	// SuccessFactors career sites SAP hosts on its own domain; the adapter reads
 	// https://<board>/job_sitemap.xml. Sites on an employer's own domain stay underivable, and so
 	// does the legacy careerNN.sapsf.* "career?company=<id>" section, which serves no sitemap.

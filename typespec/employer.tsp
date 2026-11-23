@@ -291,6 +291,9 @@ model EmployerApplication {
   /** Private notes shared within the employer team. */
   employer_notes?: string;
 
+  /** A candidate reply in this conversation has not yet been read by the team. */
+  has_unread_reply?: boolean;
+
   /** When the application reached you. */
   sent_at: utcDateTime;
 }
@@ -602,3 +605,99 @@ op recordEmployerVacancyApplyClick(
   /** The employer-authored vacancy's public slug. */
   @path slug: string,
 ): NoContentResponse | Problem;
+
+enum EmployerApplicationMessageStatus {
+  sending,
+  sent,
+  failed,
+  received,
+}
+
+/** One email in a delivered application's conversation. */
+model EmployerApplicationMessage {
+  id: int64;
+  body: string;
+  status: EmployerApplicationMessageStatus;
+
+  /** When this message first entered the conversation. */
+  created_at: utcDateTime;
+
+  /** Outgoing only. Use the same key and body to retry the same send. */
+  request_key?: string;
+}
+
+model EmployerApplicationConversation {
+  /** Most recent first. */
+  messages: EmployerApplicationMessage[];
+
+  /** Fetch older messages with the ID of the last message as before. */
+  has_more: boolean;
+
+  /** The candidate has a confirmed address and the mail transport is configured. */
+  can_send: boolean;
+}
+
+model EmployerApplicationMessageSend {
+  /** The plain-text email to the candidate. */
+  @minLength(1)
+  @maxLength(2000)
+  body: string;
+
+  /** A UUID generated once per outgoing message. Reuse it on retry. */
+  @minLength(36)
+  @maxLength(36)
+  request_key: string;
+}
+
+model EmployerApplicationRepliesRead {
+  /** The newest message ID the team has seen in this application. */
+  through_id: int64;
+}
+
+model EmployerApplicationReplyReadState {
+  /** True when a newer reply arrived after the messages the team has seen. */
+  has_unread_reply: boolean;
+}
+
+/** Read the private email conversation for a delivered application in your company. */
+@summary("Read an application conversation")
+@tag("Employer")
+@opExample(#{ parameters: #{ id: "42" } })
+@route("/employer/applications/{id}/messages")
+@get
+op getEmployerApplicationConversation(
+  /** The application's ID. */
+  @path id: string,
+  /** Fetch messages older than this message ID. */
+  @query before?: int64,
+): Data<EmployerApplicationConversation> | Problem;
+
+/** Send a plain-text email to the candidate without changing their application stage. */
+@summary("Email a candidate")
+@tag("Employer")
+@opExample(#{ parameters: #{
+  id: "42",
+  body: #{
+    body: "Are you available next Tuesday?",
+    request_key: "00000000-0000-4000-8000-000000000001",
+  },
+} })
+@route("/employer/applications/{id}/messages")
+@post
+op sendEmployerApplicationMessage(
+  /** The application's ID. */
+  @path id: string,
+  @body body: EmployerApplicationMessageSend,
+): Data<EmployerApplicationMessage> | Problem;
+
+/** Acknowledge the candidate replies the company team has seen up through this message. */
+@summary("Mark candidate replies as read")
+@tag("Employer")
+@opExample(#{ parameters: #{ id: "42", body: #{ through_id: 17 } } })
+@route("/employer/applications/{id}/messages/read")
+@post
+op markEmployerApplicationRepliesRead(
+  /** The application's ID. */
+  @path id: string,
+  @body body: EmployerApplicationRepliesRead,
+): Data<EmployerApplicationReplyReadState> | Problem;

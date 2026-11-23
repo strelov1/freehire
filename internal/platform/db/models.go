@@ -798,6 +798,20 @@ type DirectApplicationCv struct {
 	Content       []byte `json:"content"`
 }
 
+type DirectApplicationMessage struct {
+	ID             int64              `json:"id"`
+	ApplicationID  int64              `json:"application_id"`
+	Body           string             `json:"body"`
+	Status         string             `json:"status"`
+	RequestKey     pgtype.UUID        `json:"request_key"`
+	ReplyToken     pgtype.UUID        `json:"reply_token"`
+	RecipientEmail pgtype.Text        `json:"recipient_email"`
+	ExternalID     pgtype.Text        `json:"external_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ReadAt         pgtype.Timestamptz `json:"read_at"`
+}
+
 type Email struct {
 	ID                  int64              `json:"id"`
 	UserID              int64              `json:"user_id"`

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 // fakeSource yields one batch then empties, recording acks.
@@ -28,6 +30,7 @@ type fakeStore struct {
 	byAddr    map[string]int64
 	stored    []HostedMessage
 	insertErr error
+	replies   []string
 }
 
 func (s *fakeStore) MailboxByAddress(_ context.Context, address string) (int64, bool, error) {
@@ -40,6 +43,14 @@ func (s *fakeStore) InsertMessage(_ context.Context, m HostedMessage) error {
 		return s.insertErr
 	}
 	s.stored = append(s.stored, m)
+	return nil
+}
+
+func (s *fakeStore) InsertApplicationReply(_ context.Context, _ uuid.UUID, _ string, _ string, body string) error {
+	if s.insertErr != nil {
+		return s.insertErr
+	}
+	s.replies = append(s.replies, body)
 	return nil
 }
 
@@ -140,5 +151,24 @@ func TestOwnInboxDigestIsAcknowledgedWithoutReingestion(t *testing.T) {
 	}
 	if len(store.stored) != 0 || len(source.acked) != 1 {
 		t.Fatalf("digest stored=%d acked=%d", len(store.stored), len(source.acked))
+	}
+}
+
+func TestRunOnce_ApplicationConversationDropsAutomaticReplies(t *testing.T) {
+	const alias = "ats-reply-0fd7aab6-5f1d-488e-a84a-7da1592e4628@inbox.freehire.me"
+	const headers = "From: candidate@example.test\r\nContent-Type: text/plain\r\n"
+	human := inbound("human", alias, headers+"\r\nTuesday works.\r\n")
+	auto := inbound("auto", alias, headers+"Auto-Submitted: auto-replied\r\n\r\nOut of office.\r\n")
+	human.AuthenticatedReply, auto.AuthenticatedReply = true, true
+	source := &fakeSource{batch: []Inbound{human, auto}}
+	store := &fakeStore{}
+	if err := NewWorker(source, store, "inbox.freehire.me").RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.replies) != 1 || store.replies[0] != "Tuesday works." || len(store.stored) != 0 {
+		t.Fatalf("conversation replies = %q, hosted mail = %v", store.replies, store.stored)
+	}
+	if len(source.acked) != 2 {
+		t.Fatalf("acked = %v, want both messages", source.acked)
 	}
 }
