@@ -9207,6 +9207,51 @@ export interface components {
              */
             auto_apply_status?: "queued" | "failed" | "declined";
         };
+        /**
+         * @description The listing card of a posting: what a list row draws, without the description. Served
+         *     only inside `TrackedJob` (`/me/tracking`), from internal/job/jobview's `Card` — a
+         *     narrower projection than `Job`, not a subset of its shape: `seniority` and
+         *     `employment_type` sit at the top level here, not under `enrichment`. TestJobSchemaCoversWireShape
+         *     (internal/job/jobview) fails when `jobview.Card` serves a key this model lacks.
+         */
+        JobCard: {
+            public_slug: string;
+            title: string;
+            company: string;
+            /**
+             * Format: date
+             * @description Source-stated last application day (`YYYY-MM-DD`), inclusive.
+             */
+            application_deadline?: string;
+            /** @description Always present: when the posting closed, `null` while it is open. */
+            closed_at: string | null;
+            /** @description The posting's own location line, verbatim. */
+            location?: string;
+            /** @description The stated facets of the tag row; each absent when the posting does not state it. */
+            work_mode?: string;
+            seniority?: string;
+            employment_type?: string;
+            countries?: string[];
+            regions?: string[];
+            /**
+             * @description The row's skills and collections, and the line under the title: the enrichment's
+             *     summary, or the opening of the description with tags stripped, cut server-side to
+             *     about 220 characters. These three and `ghost` are dropped by `?compact=1` (the Kanban
+             *     board's read).
+             */
+            skills?: string[];
+            collections?: string[];
+            blurb?: string;
+            /** @description How many people reported that the company screens with an AI interviewer; absent at zero. */
+            ai_interview_reports?: number;
+            /**
+             * Format: date-time
+             * @description The effective posting date: the stated date, or the row's creation when the source gave none.
+             */
+            posted_at?: string;
+            /** @description The ghost signal, computed at read time; absent when there is nothing to say. */
+            ghost?: components["schemas"]["JobGhost"];
+        };
         /** @description One transition of a posting, as the change feed reports it. */
         JobChange: {
             public_slug: string;
@@ -11249,8 +11294,8 @@ export interface components {
             id: string;
             company_slug: string;
             role_title: string;
-            /** @description The job in the shared wire shape; null once the catalogue has removed the posting. */
-            job: components["schemas"]["Job"] | null;
+            /** @description The listing card of the posting (`JobCard`); null once the catalogue has removed the posting. */
+            job: components["schemas"]["JobCard"] | null;
             viewed_at: string | null;
             saved_at: string | null;
             applied_at: string | null;
@@ -25449,7 +25494,10 @@ export interface operations {
                      *           "job": {
                      *             "public_slug": "senior-go-engineer-acme-1a2b",
                      *             "title": "Senior Go Engineer",
-                     *             "company": "Acme"
+                     *             "company": "Acme",
+                     *             "closed_at": null,
+                     *             "seniority": "senior",
+                     *             "blurb": "Own the ingestion pipeline behind a catalogue of 400k postings."
                      *           },
                      *           "viewed_at": "2026-06-19T10:00:00Z",
                      *           "saved_at": null,

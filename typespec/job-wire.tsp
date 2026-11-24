@@ -215,6 +215,55 @@ model Job {
 }
 
 /**
+ * The listing card of a posting: what a list row draws, without the description. Served
+ * only inside `TrackedJob` (`/me/tracking`), from internal/job/jobview's `Card` — a
+ * narrower projection than `Job`, not a subset of its shape: `seniority` and
+ * `employment_type` sit at the top level here, not under `enrichment`. TestJobSchemaCoversWireShape
+ * (internal/job/jobview) fails when `jobview.Card` serves a key this model lacks.
+ */
+@extension("x-raw-json", true)
+model JobCard {
+  public_slug: string;
+  title: string;
+  company: string;
+
+  /** Source-stated last application day (`YYYY-MM-DD`), inclusive. */
+  application_deadline?: plainDate;
+
+  /** Always present: when the posting closed, `null` while it is open. */
+  closed_at: utcDateTime | null;
+
+  /** The posting's own location line, verbatim. */
+  location?: string;
+
+  /** The stated facets of the tag row; each absent when the posting does not state it. */
+  work_mode?: string;
+  seniority?: string;
+  employment_type?: string;
+
+  countries?: string[];
+  regions?: string[];
+
+  /** The row's skills and collections, and the line under the title: the enrichment's
+   * summary, or the opening of the description with tags stripped, cut server-side to
+   * about 220 characters. These three and `ghost` are dropped by `?compact=1` (the Kanban
+   * board's read). */
+  skills?: string[];
+  collections?: string[];
+  blurb?: string;
+
+  /** How many people reported that the company screens with an AI interviewer; absent at zero. */
+  @minValue(0)
+  ai_interview_reports?: integer;
+
+  /** The effective posting date: the stated date, or the row's creation when the source gave none. */
+  posted_at?: utcDateTime;
+
+  /** The ghost signal, computed at read time; absent when there is nothing to say. */
+  ghost?: JobGhost;
+}
+
+/**
  * Model-extracted attributes, every field omitted when the posting did not state it.
  * `work_mode`, `regions`, `countries`, `cities` and `skills` are deliberately NOT here —
  * those are served top-level from the deterministic dictionaries, and the model's own

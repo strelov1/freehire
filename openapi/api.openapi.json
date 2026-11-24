@@ -20202,7 +20202,10 @@
                       "job": {
                         "public_slug": "senior-go-engineer-acme-1a2b",
                         "title": "Senior Go Engineer",
-                        "company": "Acme"
+                        "company": "Acme",
+                        "closed_at": null,
+                        "seniority": "senior",
+                        "blurb": "Own the ingestion pipeline behind a catalogue of 400k postings."
                       },
                       "viewed_at": "2026-06-19T10:00:00Z",
                       "saved_at": null,
@@ -32917,6 +32920,103 @@
         "description": "One posting, as every job endpoint serves it. TestJobSchemaCoversWireShape\n(internal/job/jobview) fails when jobview.Job serves a key this model lacks.",
         "x-raw-json": true
       },
+      "JobCard": {
+        "type": "object",
+        "required": [
+          "public_slug",
+          "title",
+          "company",
+          "closed_at"
+        ],
+        "properties": {
+          "public_slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "application_deadline": {
+            "type": "string",
+            "format": "date",
+            "description": "Source-stated last application day (`YYYY-MM-DD`), inclusive."
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Always present: when the posting closed, `null` while it is open."
+          },
+          "location": {
+            "type": "string",
+            "description": "The posting's own location line, verbatim."
+          },
+          "work_mode": {
+            "type": "string",
+            "description": "The stated facets of the tag row; each absent when the posting does not state it."
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "employment_type": {
+            "type": "string"
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The row's skills and collections, and the line under the title: the enrichment's\nsummary, or the opening of the description with tags stripped, cut server-side to\nabout 220 characters. These three and `ghost` are dropped by `?compact=1` (the Kanban\nboard's read)."
+          },
+          "collections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blurb": {
+            "type": "string"
+          },
+          "ai_interview_reports": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many people reported that the company screens with an AI interviewer; absent at zero."
+          },
+          "posted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The effective posting date: the stated date, or the row's creation when the source gave none.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "ghost": {
+            "$ref": "#/components/schemas/JobGhost",
+            "description": "The ghost signal, computed at read time; absent when there is nothing to say."
+          }
+        },
+        "description": "The listing card of a posting: what a list row draws, without the description. Served\nonly inside `TrackedJob` (`/me/tracking`), from internal/job/jobview's `Card` — a\nnarrower projection than `Job`, not a subset of its shape: `seniority` and\n`employment_type` sit at the top level here, not under `enrichment`. TestJobSchemaCoversWireShape\n(internal/job/jobview) fails when `jobview.Card` serves a key this model lacks.",
+        "x-raw-json": true
+      },
       "JobChange": {
         "type": "object",
         "required": [
@@ -39581,13 +39681,13 @@
           "job": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Job"
+                "$ref": "#/components/schemas/JobCard"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The job in the shared wire shape; null once the catalogue has removed the posting."
+            "description": "The listing card of the posting (`JobCard`); null once the catalogue has removed the posting."
           },
           "viewed_at": {
             "anyOf": [

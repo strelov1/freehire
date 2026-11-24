@@ -32641,7 +32641,7 @@ type TrackedJob struct {
 	ID          string `json:"id"`
 	CompanySlug string `json:"company_slug"`
 	RoleTitle   string `json:"role_title"`
-	// The job in the shared wire shape; null once the catalogue has removed the posting.
+	// The listing card of the posting (`JobCard`); null once the catalogue has removed the posting.
 	Job        jx.Raw      `json:"job"`
 	ViewedAt   NilDateTime `json:"viewed_at"`
 	SavedAt    NilDateTime `json:"saved_at"`

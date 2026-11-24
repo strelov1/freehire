@@ -45,6 +45,8 @@ func TestJobSchemaCoversWireShape(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Each served struct against the contract model that names it: a projection typed as
+	// another model's shape (a Card as a Job: no blurb, seniority nested) is the same drift.
 	for _, tc := range []struct {
 		schema string
 		typ    reflect.Type
@@ -53,6 +55,8 @@ func TestJobSchemaCoversWireShape(t *testing.T) {
 		unpublished []string
 	}{
 		{"Job", reflect.TypeOf(Job{}), nil},
+		// The listing card /me/tracking serves: its own projection, not a Job subset.
+		{"JobCard", reflect.TypeOf(Card{}), nil},
 		// The nested objects are served inside Job, so they are part of the same promise.
 		{"JobEnrichment", reflect.TypeOf(enrich.Enrichment{}), []string{"work_mode", "regions", "countries", "cities", "skills"}},
 		{"JobReality", reflect.TypeOf(Reality{}), nil},
@@ -111,12 +115,15 @@ func fieldName(typ reflect.Type, key string) string {
 }
 
 // Guards the guard: a key the schema lacks must fail, and the helper must see an
-// omitempty field a zero value would hide.
+// omitempty field a zero value would hide. blurb is the key a Job-typed card lacked.
 func TestWireKeysIncludeOmittedFields(t *testing.T) {
 	keys := wireKeys(reflect.TypeOf(Job{}))
 	for _, want := range []string{"public_slug", "source_url", "auto_apply_status", "closed_at"} {
 		if !slices.Contains(keys, want) {
 			t.Errorf("wireKeys(Job) lacks %q: %v", want, keys)
 		}
+	}
+	if keys := wireKeys(reflect.TypeOf(Card{})); !slices.Contains(keys, "blurb") {
+		t.Errorf("wireKeys(Card) lacks %q: %v", "blurb", keys)
 	}
 }
