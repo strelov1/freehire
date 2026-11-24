@@ -32595,7 +32595,11 @@
           },
           "url": {
             "type": "string",
-            "description": "The employer's own application URL. This is where an applicant goes. Empty when\n`direct_apply` is true: that vacancy has no page elsewhere."
+            "description": "The employer's own application URL, as published. Match pages and deduplicate on this;\ndo not send people to it. Empty when `direct_apply` is true: that vacancy has no page\nelsewhere."
+          },
+          "apply_url": {
+            "type": "string",
+            "description": "Where to send an applicant: a freehire redirect (`https://freehire.me/api/v1/go/{public_slug}?src=...`)\nthat counts the click and forwards to `url`. Set `src` to the surface handing the link out:\n`web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent when `url` is."
           },
           "direct_apply": {
             "type": "boolean",

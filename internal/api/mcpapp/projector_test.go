@@ -19,7 +19,7 @@ const testOrigin = "https://freehire.me"
 
 // aJob builds a fixture the way a read path does, through jobview.FromRow.
 //
-// NEVER as a jobview.Job literal. The literal skips outboundurl.Tag and the facet
+// NEVER as a jobview.Job literal. The literal skips the facet
 // normalisation, so it carries values no production read can produce — which is exactly how
 // a utm-tagged official_job_url passed green on the OJCP surface until a review caught it
 // (internal/api/ojcp/AGENTS.md records the two defects that got through that way).

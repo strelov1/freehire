@@ -188,9 +188,9 @@ shows. Neither is a trade worth making.
   per-provider predicate, and each call rebuilt all 223 adapters (35µs, 394 allocations),
   which a ten-result page paid ten times over. An
   aggregator's stored URL points at the aggregator, and this channel renders it as a link a
-  person clicks expecting the employer. The tag is stripped too (`outboundurl.Untag`):
-  `jobview` stamps `utm_source` on everything it serves, and this field is what a consumer
-  deduplicates and domain-verifies against. Our own `url` keeps the tag.
+  person clicks expecting the employer. This field is the employer's own URL and is
+  not click-counted yet: the MCP projector will hand out `outboundurl.ApplyURL(slug,
+  outboundurl.SrcMCP)` once the agent surfaces move to the redirect.
 - **Narrow on a value the catalogue cannot filter on.** Measured against production on
   2026-09-18: `/jobs/search?category=ai` answers 0 results and reports nothing ignored. Over
   REST that is a client's problem; here the client summarises the zero as "freehire has no
@@ -308,7 +308,7 @@ Moved to [AGENT-REFERENCE-WIDGET.md](AGENT-REFERENCE-WIDGET.md#annotations-are-l
 
 Build fixtures with `jobview.FromRow(db.Job{...})`, never as a `jobview.Job` literal — the
 same rule `internal/api/ojcp/AGENTS.md` records, and for the same reason: the literal skips
-`outboundurl.Tag` and the facet normalisation. Three assertions in this package were green
+the facet normalisation. Three assertions in this package were green
 against a literal and failed the moment the fixture went through a real read path.
 
 **The dictionary columns win.** `seniority`, `category`, `employment_type`, `english_level`

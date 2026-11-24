@@ -53,8 +53,8 @@ parses as nothing silently counts nothing.
 ## Conventions
 
 - **Dict/heuristic only, no external calls.** Pure functions over strings + files.
-- **Bot list is deliberately small** (`bot.go`): missed bots only inflate a
-  transparency number; over-aggressive matching would drop real people.
+- **The bot list is `tracerlink.IsBotUserAgent`**, shared with the click counters: missed
+  bots only inflate a transparency number; over-aggressive matching would drop real people.
 - **Semantics live here, not in SQL.** The worker's queries are additive plumbing;
   what counts as a view and how it dedups is defined in this package.
 - **The worker commits a file in chunks, never whole.** Every applied row bumps

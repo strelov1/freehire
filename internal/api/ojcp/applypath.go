@@ -120,7 +120,7 @@ func applyEntryPoint(j jobview.Job) string {
 		return j.URL
 	}
 
-	// The tag jobview appends is a query parameter, so the suffix belongs before it.
+	// The suffix belongs on the path, before any query.
 	base, query, hasQuery := strings.Cut(j.URL, "?")
 	base = strings.TrimSuffix(base, "/")
 	if strings.HasSuffix(base, suffix) {
