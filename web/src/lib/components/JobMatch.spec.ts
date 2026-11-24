@@ -112,6 +112,19 @@ describe('JobMatch', () => {
     expect(avoidSkill).not.toHaveBeenCalled();
   });
 
+  it('returns focus to the selected chip when Escape closes its actions', async () => {
+    render(JobMatch, { props: { job, matchAnalysis: null } });
+    const chip = await screen.findByRole('button', { name: /^rust$/i });
+    await fireEvent.click(chip);
+    const about = screen.getByRole('link', { name: 'About Rust' });
+    about.focus();
+
+    await fireEvent.keyDown(about, { key: 'Escape' });
+
+    expect(chip.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(chip);
+  });
+
   it('calls syncProfileAlert after claiming a missing skill', async () => {
     render(JobMatch, { props: { job, matchAnalysis: null } });
     await openClaimRow();

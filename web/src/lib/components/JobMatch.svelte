@@ -63,6 +63,7 @@
 
   let claiming = $state<string | null>(null);
   let claimTrigger: HTMLButtonElement | null = null;
+  let claimRowElement = $state<HTMLDivElement>();
   let overlay = $state.raw<JobMatchResult | null>(null);
   let done = $state.raw<Done | null>(null);
   let failed = $state<string | null>(null);
@@ -230,9 +231,9 @@
     claimTrigger = open ? trigger : null;
   }
 
-  function closeClaimRow() {
+  function closeClaimRow(restoreFocus: boolean) {
     claiming = null;
-    claimTrigger?.focus();
+    if (restoreFocus) claimTrigger?.focus();
     claimTrigger = null;
   }
 </script>
@@ -242,7 +243,7 @@
        too narrow for an anchored popover, and naming the skill in the row's own text keeps
        it tied to the chip that opened it. -->
   {@const label = skillLabel(skill)}
-  <div class="flex flex-wrap items-center gap-1.5">
+  <div bind:this={claimRowElement} class="flex flex-wrap items-center gap-1.5">
     <div class="flex w-full items-center justify-between gap-1.5">
       <span class="flex items-center gap-1 text-xs font-medium text-foreground">
         <SkillIcon slug={skill} />{label}
@@ -252,7 +253,7 @@
         size="icon"
         class="size-6 shrink-0 text-muted-foreground"
         aria-label="Close skill actions"
-        onclick={closeClaimRow}
+        onclick={() => closeClaimRow(true)}
       >
         <X class="size-3.5" aria-hidden="true" />
       </Button>
@@ -297,7 +298,9 @@
 
 <svelte:window
   onkeydown={(e) => {
-    if (e.key === 'Escape' && claiming) claiming = null;
+    if (e.key === 'Escape' && claiming) {
+      closeClaimRow(claimRowElement?.contains(document.activeElement) ?? false);
+    }
   }}
 />
 
