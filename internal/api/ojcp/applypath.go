@@ -1,6 +1,7 @@
 package ojcp
 
 import (
+	"cmp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
@@ -86,7 +87,8 @@ func (p Projector) applyPaths(j jobview.Job, form *applyform.Form, pageURL strin
 	if form == nil {
 		return []ApplyPath{{
 			Type: pathExternalRedirect,
-			URL:  j.ApplyURLFor(outboundurl.SrcOJCP),
+			// The direct link where there is no redirect (a private job, an index document older than apply_url).
+			URL: cmp.Or(j.ApplyURLFor(outboundurl.SrcOJCP), j.URL),
 			// Never true here: with no captured form there is nothing for an agent to fill,
 			// whatever this deployment can otherwise drive.
 			SupportsAgentSubmission: false,
