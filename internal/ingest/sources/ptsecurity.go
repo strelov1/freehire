@@ -174,24 +174,15 @@ type ptsecurityPosting struct {
 type ptsecurityAddresses []schemaAddress
 
 func (a *ptsecurityAddresses) UnmarshalJSON(b []byte) error {
-	trimmed := bytes.TrimSpace(b)
-	if bytes.Equal(trimmed, []byte("null")) {
+	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
 		*a = nil
 		return nil
 	}
-	if len(trimmed) > 0 && trimmed[0] == '[' {
-		var arr []schemaAddress
-		if err := json.Unmarshal(trimmed, &arr); err != nil {
-			return err
-		}
-		*a = arr
-		return nil
-	}
-	var one schemaAddress
-	if err := json.Unmarshal(trimmed, &one); err != nil {
+	addresses, err := oneOrMany[schemaAddress](b)
+	if err != nil {
 		return err
 	}
-	*a = []schemaAddress{one}
+	*a = addresses
 	return nil
 }
 

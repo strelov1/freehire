@@ -19,6 +19,27 @@ func IsTelecommute(jobLocationType string) bool {
 	return strings.EqualFold(strings.TrimSpace(jobLocationType), "TELECOMMUTE")
 }
 
+// oneOrMany decodes a schema.org field the site writes as either one value or an array of
+// them — employmentType ("FULL_TIME" or ["FULL_TIME","TEMPORARY"]), jobLocation,
+// applicantLocationRequirements. It dispatches on the leading byte and reports a body that is
+// neither, rather than trying one shape and falling back with the error dropped: that reads
+// ["US"] as one empty Place. null is "nothing stated" and decodes to one zero value.
+func oneOrMany[T any](raw json.RawMessage) ([]T, error) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) > 0 && raw[0] == '[' {
+		var many []T
+		if err := json.Unmarshal(raw, &many); err != nil {
+			return nil, err
+		}
+		return many, nil
+	}
+	var one T
+	if err := json.Unmarshal(raw, &one); err != nil {
+		return nil, err
+	}
+	return []T{one}, nil
+}
+
 // schemaEmploymentType maps a schema.org JobPosting employmentType enum onto the freehire
 // vocabulary, returning "" for an unknown/absent value (e.g. "OTHER") so the description parser
 // decides. Shared by the ld+json adapters (northstone, briefhq, djinni, talentlyft,
@@ -40,15 +61,11 @@ func schemaEmploymentType(t string) string {
 
 // schemaFirstEmploymentType reads a single enum or the first enum of a list for callers that store one type.
 func schemaFirstEmploymentType(raw json.RawMessage) string {
-	var one string
-	if json.Unmarshal(raw, &one) == nil {
-		return one
+	types, err := oneOrMany[string](raw)
+	if err != nil || len(types) == 0 {
+		return ""
 	}
-	var many []string
-	if json.Unmarshal(raw, &many) == nil && len(many) > 0 {
-		return many[0]
-	}
-	return ""
+	return types[0]
 }
 
 // schemaFixedTermEmploymentType reads employmentType, a string or a list, for boards whose
@@ -56,13 +73,9 @@ func schemaFirstEmploymentType(raw json.RawMessage) string {
 // contract work, so it states nothing on its own; the first value that does decide wins.
 // Shared by taleez, dualoo and refline.
 func schemaFixedTermEmploymentType(raw json.RawMessage) string {
-	var types []string
-	if err := json.Unmarshal(raw, &types); err != nil {
-		var one string
-		if json.Unmarshal(raw, &one) != nil {
-			return ""
-		}
-		types = []string{one}
+	types, err := oneOrMany[string](raw)
+	if err != nil {
+		return ""
 	}
 	for _, t := range types {
 		if strings.EqualFold(strings.TrimSpace(t), "TEMPORARY") {
@@ -145,20 +158,11 @@ type schemaPlace struct {
 type schemaPlaces []schemaPlace
 
 func (p *schemaPlaces) UnmarshalJSON(b []byte) error {
-	trimmed := bytes.TrimSpace(b)
-	if len(trimmed) > 0 && trimmed[0] == '[' {
-		var arr []schemaPlace
-		if err := json.Unmarshal(trimmed, &arr); err != nil {
-			return err
-		}
-		*p = arr
-		return nil
-	}
-	var one schemaPlace
-	if err := json.Unmarshal(trimmed, &one); err != nil {
+	places, err := oneOrMany[schemaPlace](b)
+	if err != nil {
 		return err
 	}
-	*p = []schemaPlace{one}
+	*p = places
 	return nil
 }
 
@@ -196,20 +200,11 @@ type schemaNamedArea struct {
 type schemaNamedAreas []schemaNamedArea
 
 func (a *schemaNamedAreas) UnmarshalJSON(b []byte) error {
-	trimmed := bytes.TrimSpace(b)
-	if len(trimmed) > 0 && trimmed[0] == '[' {
-		var arr []schemaNamedArea
-		if err := json.Unmarshal(trimmed, &arr); err != nil {
-			return err
-		}
-		*a = arr
-		return nil
-	}
-	var one schemaNamedArea
-	if err := json.Unmarshal(trimmed, &one); err != nil {
+	areas, err := oneOrMany[schemaNamedArea](b)
+	if err != nil {
 		return err
 	}
-	*a = []schemaNamedArea{one}
+	*a = areas
 	return nil
 }
 

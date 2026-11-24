@@ -1,7 +1,6 @@
 package sources
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -266,20 +265,11 @@ type work180Place struct {
 type work180Places []work180Place
 
 func (p *work180Places) UnmarshalJSON(b []byte) error {
-	b = bytes.TrimSpace(b)
-	if len(b) > 0 && b[0] == '[' {
-		var arr []work180Place
-		if err := json.Unmarshal(b, &arr); err != nil {
-			return err
-		}
-		*p = arr
-		return nil
-	}
-	var one work180Place
-	if err := json.Unmarshal(b, &one); err != nil {
+	places, err := oneOrMany[work180Place](b)
+	if err != nil {
 		return err
 	}
-	*p = work180Places{one}
+	*p = places
 	return nil
 }
 
@@ -355,13 +345,9 @@ func parseWORK180Posting(root *html.Node, l work180Listing) (Job, bool) {
 // work180EmploymentType maps the JobPosting's employmentType (a list, or a bare string) onto the
 // vocabulary: the first value that maps, "" when none does.
 func work180EmploymentType(raw json.RawMessage) string {
-	var many []string
-	if err := json.Unmarshal(raw, &many); err != nil {
-		var one string
-		if json.Unmarshal(raw, &one) != nil {
-			return ""
-		}
-		many = []string{one}
+	many, err := oneOrMany[string](raw)
+	if err != nil {
+		return ""
 	}
 	for _, t := range many {
 		if v := schemaEmploymentType(t); v != "" {
