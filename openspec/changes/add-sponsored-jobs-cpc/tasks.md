@@ -87,5 +87,5 @@
 
 - [x] 8.1 Integration test end to end: create, top-up webhook, approve, search shows it,
       redirect charges, exhaust, search hides it
-- [ ] 8.2 Simplify pass, code review, fix findings
+- [x] 8.2 Simplify pass, code review, fix findings
 - [ ] 8.3 Stripe test-mode run on staging, or locally with the Stripe CLI webhook forward
