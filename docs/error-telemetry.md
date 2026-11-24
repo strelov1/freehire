@@ -136,6 +136,25 @@ Optional agent access is available through the official
 Point it at the private query endpoint through the same tunnel and keep access
 read-only. MCP is optional; terminal investigation requires no agent plugin.
 
+### Sign-in exceptions and session recovery
+
+A client exception reported from `/signin` while the app has resolved a guest
+session can carry a random `signin_incident_id`. This ID expires after 30 minutes
+and stays in the current tab's session storage so it survives a same-tab OAuth
+redirect. If the app subsequently resolves a signed-in session in that tab, it
+emits one `signin.session_observed` event with the same ID. The outcome contains no
+account ID, credential, provider, or destination. It is a client observation,
+stored at INFO in `log_source:otel_signin`, outside exception counts and alerts.
+
+```sh
+./scripts/errors.sh query '_time:24h signin_incident_id:* | stats by (signin_incident_id) count() if (event_name:exception) as exceptions, count() if (event_name:signin.session_observed) as sessions | filter exceptions:>0'
+```
+
+A missing outcome is unknown: the visitor may leave, switch tabs, block storage,
+or lose a telemetry export. Older exceptions without an incident ID cannot be
+joined. Apply the updated browser OTLP transform from `freehire-ops` on the
+production receiver before relying on the correlation.
+
 ## Acceptance and rollout
 
 When changing the pipeline, verify each instrumented build end to end. Record the

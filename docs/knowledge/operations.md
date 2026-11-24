@@ -4,10 +4,11 @@ title: Operations ownership
 description: Find authoritative deployment configuration and distinguish it from application code.
 generated:
   by: codex
-  at: 2026-11-22T18:52:19+00:00
+  at: 2026-11-23T23:58:00+00:00
 sources:
   - resource: ../../cmd/liveness/catalog_status.go
   - resource: ../agents/workers/ingest.md
+  - resource: ../error-telemetry.md
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/AGENTS.md
 ---
 
@@ -32,5 +33,9 @@ documentation. A successful SSH connection alone does not verify topology.
 - [Source-specific status probes](../../cmd/liveness/catalog_status.go) define the evidence and pacing for catalogue backstops.
 - [CI checks](../agents/ci-checks.md): validation requirements for a change.
 - [Architecture](architecture.md): which application block owns the behavior.
+
+The [sign-in telemetry guide](../error-telemetry.md#sign-in-exceptions-and-session-recovery)
+describes the browser incident correlation and the Vector normalization it needs
+on the production receiver.
 
 A host change must also update its record in `freehire-ops`.

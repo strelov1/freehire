@@ -1,5 +1,5 @@
-import { PUBLIC_OTEL_LOGS_ENDPOINT, PUBLIC_OTEL_ENVIRONMENT, PUBLIC_OTEL_SERVICE_VERSION } from '$app/env/public';
-import { createErrorTelemetry, installErrorListeners } from '#lib/errorTelemetry.js';
+import { installErrorListeners } from '#lib/errorTelemetry.js';
+import { webErrorTelemetry as telemetry } from '#lib/webErrorTelemetry.js';
 import { startTrackersIfAllowed } from '#lib/trackers.js';
 import { claimModuleReload } from '#lib/moduleReload.js';
 import { isModuleLoadFailure } from '#lib/transientNoise.js';
@@ -13,17 +13,11 @@ import type { HandleClientError } from '@sveltejs/kit/hooks';
 startTrackersIfAllowed();
 
 // Reports uncaught client-side errors to the OTLP endpoint; inert without one.
-const telemetry = createErrorTelemetry({
-  endpoint: PUBLIC_OTEL_LOGS_ENDPOINT,
-  service: 'freehire-web',
-  environment: PUBLIC_OTEL_ENVIRONMENT,
-  version: PUBLIC_OTEL_SERVICE_VERSION,
-});
 if (telemetry) {
   installErrorListeners(window, telemetry);
   // The SDK flushes on document hide too; pagehide covers navigation/bfcache.
   window.addEventListener('pagehide', () => {
-    void telemetry.flush();
+    void telemetry?.flush();
   });
 }
 /** Reports a client error. Every call here ends on the error page, so the visitor gets a

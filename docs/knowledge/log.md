@@ -165,3 +165,9 @@ and the hosted mail reply path.
 ## Weekly hiring-demand comparison — 2026-11-23
 
 Recorded the [publication-date rollup and comparison window](../agents/public-figures.md#weekly-hiring-demand).
+
+## Sign-in exception correlation — 2026-11-23
+
+Linked the [sign-in telemetry flow](../error-telemetry.md#sign-in-exceptions-and-session-recovery)
+from operations ownership. The browser emits the incident and session outcome,
+and the production Vector receiver normalizes both.
