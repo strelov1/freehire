@@ -1,4 +1,4 @@
-// The outbound click redirect: GET /go/<slug>?src=<surface>. Every link that sends a visitor from
+// The outbound click redirect: GET /api/v1/go/<slug>?src=<surface>. Every link that sends a visitor from
 // freehire to an employer's site points here, so the click is counted per job and per surface.
 package handler
 
@@ -31,6 +31,17 @@ type goHandlers struct {
 
 func newGoHandlers(queries *db.Queries, salt string) *goHandlers {
 	return &goHandlers{store: queries, salt: salt}
+}
+
+func (h *goHandlers) register(api fiber.Router) { api.Get("/go/:slug", h.Redirect) }
+
+// redirectOut is how every click redirect (this one, the sponsored one) sends a visitor on: never
+// cached, never indexed, and with the referrer the employer's analytics expect.
+func redirectOut(c *fiber.Ctx, to string) error {
+	c.Set("Cache-Control", "no-store")
+	c.Set("X-Robots-Tag", "noindex, nofollow")
+	c.Set("Referrer-Policy", "no-referrer-when-downgrade")
+	return c.Redirect(to, fiber.StatusFound)
 }
 
 // Redirect records the click and sends the visitor to the job's application destination.
@@ -75,7 +86,7 @@ func (h *goHandlers) Redirect(c *fiber.Ctx) error {
 		Country:      country(c.Get("CF-IPCountry")),
 		VisitorHash:  tracerlink.VisitorHash(h.salt, c.IP(), ua),
 	})
-	return c.Redirect(dest, fiber.StatusFound)
+	return redirectOut(c, dest)
 }
 
 // isWebURL keeps a stored value that is not an http(s) address (a crawler or moderator typo, a

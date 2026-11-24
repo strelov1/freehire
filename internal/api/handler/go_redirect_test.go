@@ -41,7 +41,7 @@ func (f *fakeGoStore) RecordJobOutboundClick(_ context.Context, p db.RecordJobOu
 
 func goApp(store *fakeGoStore) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/go/:slug", (&goHandlers{store: store, salt: "pepper"}).Redirect)
+	(&goHandlers{store: store, salt: "pepper"}).register(app.Group("/api/v1"))
 	return app
 }
 
@@ -71,7 +71,7 @@ func goGet(t *testing.T, app *fiber.App, target string, hdr map[string]string) g
 
 func TestGoRedirectsToTheStoredDestinationAndCountsTheClick(t *testing.T) {
 	store := &fakeGoStore{jobs: map[string]db.Job{openJob().PublicSlug: openJob()}}
-	resp := goGet(t, goApp(store), "/go/go-engineer-acme-1a2b3c4d?src=mcp", map[string]string{
+	resp := goGet(t, goApp(store), "/api/v1/go/go-engineer-acme-1a2b3c4d?src=mcp", map[string]string{
 		"CF-IPCountry": "de", "Referer": "https://mail.example.com/inbox/thread/secret?x=1",
 	})
 
@@ -97,7 +97,7 @@ func TestGoUsesTheVerifiedApplicationDestination(t *testing.T) {
 	j := openJob()
 	j.ApplicationUrl = "https://apply.example.com/form?id=9"
 	store := &fakeGoStore{jobs: map[string]db.Job{j.PublicSlug: j}}
-	resp := goGet(t, goApp(store), "/go/"+j.PublicSlug, nil)
+	resp := goGet(t, goApp(store), "/api/v1/go/"+j.PublicSlug, nil)
 	if got, want := resp.Header.Get("Location"), "https://apply.example.com/form?id=9&utm_source=freehire.me"; got != want {
 		t.Errorf("Location = %q, want %q", got, want)
 	}
@@ -106,7 +106,7 @@ func TestGoUsesTheVerifiedApplicationDestination(t *testing.T) {
 // The destination is the job's. No query parameter or header may name another one.
 func TestGoNeverTakesTheDestinationFromTheRequest(t *testing.T) {
 	store := &fakeGoStore{jobs: map[string]db.Job{openJob().PublicSlug: openJob()}}
-	resp := goGet(t, goApp(store), "/go/go-engineer-acme-1a2b3c4d?src=web&url=https://evil.example&to=https://evil.example&redirect=//evil.example",
+	resp := goGet(t, goApp(store), "/api/v1/go/go-engineer-acme-1a2b3c4d?src=web&url=https://evil.example&to=https://evil.example&redirect=//evil.example",
 		map[string]string{"X-Forwarded-Host": "evil.example", "Host": "evil.example"})
 	if loc := resp.Header.Get("Location"); !strings.HasPrefix(loc, "https://boards.greenhouse.io/") {
 		t.Errorf("Location = %q", loc)
@@ -115,7 +115,7 @@ func TestGoNeverTakesTheDestinationFromTheRequest(t *testing.T) {
 
 func TestGoUnknownSrcIsStoredAsOtherNotRejected(t *testing.T) {
 	store := &fakeGoStore{jobs: map[string]db.Job{openJob().PublicSlug: openJob()}}
-	for _, target := range []string{"/go/go-engineer-acme-1a2b3c4d?src=fax", "/go/go-engineer-acme-1a2b3c4d"} {
+	for _, target := range []string{"/api/v1/go/go-engineer-acme-1a2b3c4d?src=fax", "/api/v1/go/go-engineer-acme-1a2b3c4d"} {
 		if resp := goGet(t, goApp(store), target, nil); resp.StatusCode != fiber.StatusFound {
 			t.Errorf("%s: status = %d, want 302", target, resp.StatusCode)
 		}
@@ -129,7 +129,7 @@ func TestGoUnknownSrcIsStoredAsOtherNotRejected(t *testing.T) {
 
 func TestGoFlagsBotsButStillRedirects(t *testing.T) {
 	store := &fakeGoStore{jobs: map[string]db.Job{openJob().PublicSlug: openJob()}}
-	resp := goGet(t, goApp(store), "/go/go-engineer-acme-1a2b3c4d", map[string]string{"User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)"})
+	resp := goGet(t, goApp(store), "/api/v1/go/go-engineer-acme-1a2b3c4d", map[string]string{"User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)"})
 	if resp.StatusCode != fiber.StatusFound || len(store.clicks) != 1 || !store.clicks[0].IsLikelyBot {
 		t.Errorf("status=%d clicks=%+v, want a redirect and one flagged click", resp.StatusCode, store.clicks)
 	}
@@ -137,7 +137,7 @@ func TestGoFlagsBotsButStillRedirects(t *testing.T) {
 
 func TestGoRedirectsEvenWhenTheClickWriteFails(t *testing.T) {
 	store := &fakeGoStore{jobs: map[string]db.Job{openJob().PublicSlug: openJob()}, recordErr: errors.New("pool exhausted")}
-	if resp := goGet(t, goApp(store), "/go/go-engineer-acme-1a2b3c4d", nil); resp.StatusCode != fiber.StatusFound {
+	if resp := goGet(t, goApp(store), "/api/v1/go/go-engineer-acme-1a2b3c4d", nil); resp.StatusCode != fiber.StatusFound {
 		t.Errorf("status = %d, want 302", resp.StatusCode)
 	}
 }
@@ -146,7 +146,7 @@ func TestGoClosedJobStillRedirects(t *testing.T) {
 	j := openJob()
 	j.ClosedAt.Valid = true
 	store := &fakeGoStore{jobs: map[string]db.Job{j.PublicSlug: j}}
-	if resp := goGet(t, goApp(store), "/go/"+j.PublicSlug, nil); resp.StatusCode != fiber.StatusFound {
+	if resp := goGet(t, goApp(store), "/api/v1/go/"+j.PublicSlug, nil); resp.StatusCode != fiber.StatusFound {
 		t.Errorf("status = %d, want 302", resp.StatusCode)
 	}
 }
@@ -160,7 +160,7 @@ func TestGoShowsAPageWhereThereIsNowhereToSend(t *testing.T) {
 	store := &fakeGoStore{jobs: map[string]db.Job{"private-1": private, "direct-1": direct, "bad-1": badScheme}}
 
 	for _, slug := range []string{"never-existed", "private-1", "direct-1", "bad-1"} {
-		resp := goGet(t, goApp(store), "/go/"+slug, nil)
+		resp := goGet(t, goApp(store), "/api/v1/go/"+slug, nil)
 		if resp.StatusCode != fiber.StatusGone || !strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
 			t.Errorf("%s: status=%d type=%q, want a 410 page", slug, resp.StatusCode, resp.Header.Get("Content-Type"))
 		}
@@ -173,7 +173,7 @@ func TestGoShowsAPageWhereThereIsNowhereToSend(t *testing.T) {
 // A storage failure is not "gone": a 410 would tell the reader the posting was removed.
 func TestGoALookupFailureIsNotGone(t *testing.T) {
 	store := &fakeGoStore{lookupErr: errors.New("pool timeout")}
-	resp, err := goApp(store).Test(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/go/x", nil))
+	resp, err := goApp(store).Test(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/go/x", nil))
 	if err != nil {
 		t.Fatal(err)
 	}

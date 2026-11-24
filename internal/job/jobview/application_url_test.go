@@ -35,7 +35,7 @@ func TestApplicationDestinationPreservesSourcePosting(t *testing.T) {
 			if got.URL != want || got.Source != "linkedin" || domain.Fields().URL != source {
 				t.Fatalf("wire URL=%q source=%q stored URL=%q; want %q, linkedin, %q", got.URL, got.Source, domain.Fields().URL, want, source)
 			}
-			if got.ApplyURL != "https://freehire.me/go/senior-java-1?src=web" || jobview.RowDestination(row) != want {
+			if got.ApplyURL != "https://freehire.me/api/v1/go/senior-java-1?src=web" || jobview.RowDestination(row) != want {
 				t.Fatalf("apply_url=%q destination=%q; want the redirect and %q", got.ApplyURL, jobview.RowDestination(row), want)
 			}
 			if destination != "" && got.SourceURL != source+"?utm_source=freehire.me" {

@@ -23,7 +23,7 @@ model Job {
   url?: string;
 
   /**
-   * Where to send an applicant: a freehire redirect (`https://freehire.me/go/{public_slug}?src=...`)
+   * Where to send an applicant: a freehire redirect (`https://freehire.me/api/v1/go/{public_slug}?src=...`)
    * that counts the click and forwards to `url`. Set `src` to the surface handing the link out:
    * `web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent when `url` is.
    */

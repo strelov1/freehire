@@ -87,7 +87,7 @@ func TestParseSrc(t *testing.T) {
 }
 
 func TestApplyURL(t *testing.T) {
-	if got, want := ApplyURL("acme-go-engineer-1a2b3c4d", SrcMCP), "https://freehire.me/go/acme-go-engineer-1a2b3c4d?src=mcp"; got != want {
+	if got, want := ApplyURL("acme-go-engineer-1a2b3c4d", SrcMCP), "https://freehire.me/api/v1/go/acme-go-engineer-1a2b3c4d?src=mcp"; got != want {
 		t.Errorf("ApplyURL = %q, want %q", got, want)
 	}
 }

@@ -91,7 +91,7 @@ describe('robots.txt', () => {
 });
 
 describe('robots.txt outbound redirect', () => {
-  it.each(['*', ...SEARCH_CRAWLERS])('keeps %s off /go/', (agent) => {
-    expect(groups(BODY).get(agent)).toContain('/go/');
+  it.each(['*', ...SEARCH_CRAWLERS])('keeps %s off /api/v1/go/', (agent) => {
+    expect(groups(BODY).get(agent)).toContain('/api/v1/go/');
   });
 });

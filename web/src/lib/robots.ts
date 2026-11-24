@@ -61,7 +61,7 @@ export const DISALLOWED = [
   '/jobs/*/people',
   // The outbound click redirect: it answers 302 to an employer, and a crawler that follows it
   // would record itself as a click on every job.
-  '/go/',
+  '/api/v1/go/',
 ];
 
 // Search crawlers additionally lose /api/, and only they. The invitation in the

@@ -1,6 +1,6 @@
 // Package outboundurl owns the links freehire sends a visitor to an employer's site by.
 //
-// Every such link goes through one redirect, GET /go/<slug>?src=<surface>, which records the
+// Every such link goes through one redirect, GET /api/v1/go/<slug>?src=<surface>, which records the
 // click and sends the visitor on. ApplyURL builds that link; Tag stamps the destination the
 // redirect forwards to, so the employer's ATS can attribute the visit to us. The raw jobs.url
 // stays canonical for dedup, hashing and liveness probing, and the served `url` carries it
@@ -20,6 +20,9 @@ const utmSource = "freehire.me"
 // origin is the public site the redirect lives on. Fixed like utmSource: the brand domain, not a
 // per-deployment setting, because the link is handed to third parties (mail, agents, other sites).
 const origin = "https://freehire.me"
+
+// goPath is the redirect route, mounted on the API (internal/api/handler/go_redirect.go).
+const goPath = "/api/v1/go/"
 
 // Src names the surface that handed out a redirect link. It is stored with every click, so the
 // employer-facing numbers can say where the traffic came from.
@@ -52,7 +55,7 @@ func ParseSrc(raw string) Src {
 // ApplyURL is the redirect link for a job: what every surface hands out instead of the employer
 // URL. The slug is a public_slug, which is URL-safe by construction.
 func ApplyURL(slug string, src Src) string {
-	return origin + "/go/" + slug + "?src=" + string(src)
+	return origin + goPath + slug + "?src=" + string(src)
 }
 
 // Tag returns raw with utm_source=freehire.me appended, after removing any utm_source
