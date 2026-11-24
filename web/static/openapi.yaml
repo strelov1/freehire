@@ -474,22 +474,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "data",
-                    "meta"
-                  ],
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Job"
-                      }
-                    },
-                    "meta": {
-                      "$ref": "#/components/schemas/JobSearchMeta"
-                    }
-                  }
+                  "$ref": "#/components/schemas/JobSearchPage"
                 },
                 "example": {
                   "data": [
@@ -961,22 +946,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "data",
-                    "meta"
-                  ],
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Job"
-                      }
-                    },
-                    "meta": {
-                      "$ref": "#/components/schemas/AgentJobSearchMeta"
-                    }
-                  }
+                  "$ref": "#/components/schemas/AgentJobSearchPage"
                 },
                 "example": {
                   "data": [
@@ -4430,6 +4400,24 @@
           }
         }
       },
+      "AgentJobSearchPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/AgentJobSearchMeta"
+          }
+        }
+      },
       "CityMatch": {
         "type": "object",
         "required": [
@@ -4799,6 +4787,10 @@
             "type": "string",
             "description": "The source's own identifier for the posting."
           },
+          "source_url": {
+            "type": "string",
+            "description": "The original posting when `url` points at a separately verified application\ndestination. Absent when both links are the same."
+          },
           "application_deadline": {
             "type": "string",
             "format": "date",
@@ -4916,6 +4908,11 @@
             },
             "description": "The legal terms the posting states it engages its worker on (see the `engagement`\nfilter for the vocabulary). Empty when it does not say."
           },
+          "ai_interview_reports": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many people reported that the company screens with an AI interviewer. Absent at\nzero, so \"no reports\" is a missing field rather than a zero a badge could render."
+          },
           "auto_apply_available": {
             "type": "boolean",
             "description": "Present and `true` only when the posting's ATS provider is one freehire's auto-apply\nfeature can currently attempt to fill and submit for. Absent otherwise — a best-effort\nprovider-eligibility signal, never a guarantee of successful submission."
@@ -4996,9 +4993,26 @@
           },
           "downvote_count": {
             "type": "integer"
+          },
+          "referral_available": {
+            "type": "boolean",
+            "description": "True when the company has an approved employee referrer. Served by `getJob` only;\nabsent on every list and search row."
+          },
+          "recruiter_contacts_available": {
+            "type": "boolean",
+            "description": "True when a recruiter-contact lookup can run for the posting: the feature is configured\nand the company has a website on record. Served by `getJob` only."
+          },
+          "auto_apply_status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "failed",
+              "declined"
+            ],
+            "description": "The caller's own auto-apply status for the posting: `queued` (live, undecided),\n`failed` (given up: dead-lettered, or parked for missing form data) or `declined`\n(the candidate's permanent decision). Served by `getJob` to a signed-in caller with\nan attempt; absent for everyone else."
           }
         },
-        "description": "One posting, as every job endpoint serves it."
+        "description": "One posting, as every job endpoint serves it. TestJobSchemaCoversWireShape\n(internal/job/jobview) fails when jobview.Job serves a key this model lacks."
       },
       "JobEnrichment": {
         "type": "object",
@@ -5060,6 +5074,13 @@
           },
           "company_size": {
             "type": "string"
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JobRequirement"
+            },
+            "description": "Requirements the posting states (at most 30, each at most 200 characters): the\nmodel's list, or the deterministic extractor's when the model has not reached the\nposting. `priority` is `required` or `preferred`."
           }
         },
         "description": "Model-extracted attributes, every field omitted when the posting did not state it.\n`work_mode`, `regions`, `countries`, `cities` and `skills` are deliberately NOT here —\nthose are served top-level from the deterministic dictionaries, and the model's own\nvalues for them are not published."
@@ -5166,6 +5187,26 @@
         },
         "description": "Signals about whether the posting reflects a real, current opening."
       },
+      "JobRequirement": {
+        "type": "object",
+        "required": [
+          "text",
+          "priority"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "required",
+              "preferred"
+            ]
+          }
+        },
+        "description": "One requirement the posting states."
+      },
       "JobSearchMeta": {
         "type": "object",
         "required": [
@@ -5199,6 +5240,24 @@
           "total_is_lower_bound": {
             "type": "boolean",
             "description": "True when `total` counts only what was read, not the whole match."
+          }
+        }
+      },
+      "JobSearchPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/JobSearchMeta"
           }
         }
       },

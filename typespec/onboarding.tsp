@@ -20,8 +20,8 @@ model OnboardingMatchesRequest {
 
 /** One matching posting with how well its skills match the given ones. */
 model OnboardingMatch {
-  /** The jobview wire shape `/jobs/search` answers with. */
-  job: unknown;
+  /** The matching posting, in the shape `/jobs/search` answers with. */
+  job: Job;
 
   /** The share of the posting's skills the given skills cover, 0-100. */
   match_percent: int32;

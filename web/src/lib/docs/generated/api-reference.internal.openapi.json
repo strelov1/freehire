@@ -2624,7 +2624,9 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "$ref": "#/components/schemas/Job"
+                      }
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
@@ -2662,7 +2664,9 @@
                     "data"
                   ],
                   "properties": {
-                    "data": {}
+                    "data": {
+                      "$ref": "#/components/schemas/Job"
+                    }
                   },
                   "description": "A single item: `{\"data\": ...}`."
                 }
@@ -2719,7 +2723,9 @@
                     "data"
                   ],
                   "properties": {
-                    "data": {}
+                    "data": {
+                      "$ref": "#/components/schemas/Job"
+                    }
                   },
                   "description": "A single item: `{\"data\": ...}`."
                 }
@@ -3220,7 +3226,9 @@
                     "data"
                   ],
                   "properties": {
-                    "data": {}
+                    "data": {
+                      "$ref": "#/components/schemas/Job"
+                    }
                   },
                   "description": "A single item: `{\"data\": ...}`."
                 },
@@ -3228,6 +3236,8 @@
                   "data": {
                     "public_slug": "senior-go-engineer-acme-1a2b",
                     "title": "Senior Go Engineer",
+                    "company": "Acme",
+                    "source": "manual",
                     "manually_added": true
                   }
                 }
@@ -3301,14 +3311,17 @@
                     "data"
                   ],
                   "properties": {
-                    "data": {}
+                    "data": {
+                      "$ref": "#/components/schemas/Job"
+                    }
                   },
                   "description": "A single item: `{\"data\": ...}`."
                 },
                 "example": {
                   "data": {
-                    "public_slug": "...",
-                    "title": "Staff Go Engineer"
+                    "public_slug": "senior-go-engineer-acme-1a2b",
+                    "title": "Staff Go Engineer",
+                    "company": "Acme"
                   }
                 }
               }
@@ -16085,6 +16098,329 @@
           }
         }
       },
+      "Job": {
+        "type": "object",
+        "required": [
+          "public_slug",
+          "title",
+          "company"
+        ],
+        "properties": {
+          "public_slug": {
+            "type": "string",
+            "description": "Stable public identifier. The freehire page is https://freehire.me/jobs/{public_slug}."
+          },
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "company_slug": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "The employer's own application URL. This is where an applicant goes. Empty when\n`direct_apply` is true: that vacancy has no page elsewhere."
+          },
+          "direct_apply": {
+            "type": "boolean",
+            "description": "True for a vacancy its employer published on freehire that takes applications only on\nits freehire page (`https://freehire.me/jobs/{slug}`). Absent for every other posting."
+          },
+          "location": {
+            "type": "string",
+            "description": "The posting's own location string, verbatim and unnormalized. Filter on the geography facets instead."
+          },
+          "source": {
+            "type": "string",
+            "description": "Origin slug — the ATS or board this posting was crawled from."
+          },
+          "external_id": {
+            "type": "string",
+            "description": "The source's own identifier for the posting."
+          },
+          "source_url": {
+            "type": "string",
+            "description": "The original posting when `url` points at a separately verified application\ndestination. Absent when both links are the same."
+          },
+          "application_deadline": {
+            "type": "string",
+            "format": "date",
+            "description": "Source-stated last application day, inclusive. Absent when the source states no deadline."
+          },
+          "team": {
+            "type": "string",
+            "description": "The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever and\nAshby state one). Absent when the source states none; not a taxonomy, so values differ\nbetween employers."
+          },
+          "manually_added": {
+            "type": "boolean",
+            "description": "True for a hand-curated posting rather than an automated crawl."
+          },
+          "description": {
+            "type": "string",
+            "description": "Stored verbatim HTML by default. `searchJobs` serves a truncated preview;\n`agentSearchJobs` and `getJob` serve the full body, and `agentSearchJobs` can convert\nit via `description_format`."
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metros": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "work_mode": {
+            "type": "string",
+            "enum": [
+              "remote",
+              "hybrid",
+              "onsite"
+            ],
+            "description": "Absent when the posting's format could not be resolved."
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "collections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Curated collection slugs of the posting's company."
+          },
+          "is_tech": {
+            "type": "string",
+            "enum": [
+              "tech",
+              "non_tech"
+            ],
+            "description": "Absent when unknown."
+          },
+          "requires_clearance": {
+            "type": "boolean",
+            "description": "Present and `true` only when the posting states a government security-clearance\nrequirement. Absent otherwise — there is no `false`, because \"no requirement was\ndetected\" is not the same claim as \"this posting needs no clearance\"."
+          },
+          "via_recruiter": {
+            "type": "boolean",
+            "description": "Present and `true` only when the posting states that it is published by an\nintermediary on a client's behalf. Absent otherwise — a recruiter who never says so is\nnot detected, so absence does not mean the employer posted it."
+          },
+          "equity": {
+            "type": "string",
+            "enum": [
+              "salary_and_equity",
+              "equity_only"
+            ],
+            "description": "What the posting states about equity compensation: `salary_and_equity` (offered beside\ncash pay) or `equity_only` (equity is the whole pay). Absent when the posting states\nneither — \"not stated\", not \"no equity\"."
+          },
+          "clearance_levels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "confidential",
+                "secret",
+                "top_secret",
+                "ts_sci",
+                "public_trust",
+                "interim",
+                "other"
+              ]
+            },
+            "description": "The security-clearance levels the posting states. Present exactly when\n`requires_clearance` is, absent otherwise. `other` is a non-US scheme or a clearance\nstated with no level."
+          },
+          "perks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Benefits the description states it offers (see the `perks` filter for the\nvocabulary). Empty when it names none of them — not a claim that the job offers none."
+          },
+          "engagement": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The legal terms the posting states it engages its worker on (see the `engagement`\nfilter for the vocabulary). Empty when it does not say."
+          },
+          "ai_interview_reports": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many people reported that the company screens with an AI interviewer. Absent at\nzero, so \"no reports\" is a missing field rather than a zero a badge could render."
+          },
+          "auto_apply_available": {
+            "type": "boolean",
+            "description": "Present and `true` only when the posting's ATS provider is one freehire's auto-apply\nfeature can currently attempt to fill and submit for. Absent otherwise — a best-effort\nprovider-eligibility signal, never a guarantee of successful submission."
+          },
+          "apply_questions": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many questions the posting's application form REQUIRES beyond the standard fields\nevery form asks for (name, contact details, CV, cover letter), counted from the form\nfreehire captured from the employer's ATS. Optional questions, the equal-opportunity\nsurvey and consent boxes are not counted. `0` means no REQUIRED question beyond the\nbasics. Absent when freehire holds no form for the posting — \"not known\", never\n\"long\". Served by search hits and the job detail; a list read straight from the\ndatabase may omit it."
+          },
+          "sponsored": {
+            "type": "boolean",
+            "description": "True only on a search hit placed as a paid slot (never on an organic hit). Render a\nvisible \"Sponsored\" label, and link the card to `sponsored_url`."
+          },
+          "sponsored_url": {
+            "type": "string",
+            "description": "Click-tracking redirect (`/api/v1/sponsored/go/<token>`) for a sponsored hit; it always\nends at the job. `url` stays the organic link."
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When freehire first saw the posting."
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a re-crawl last confirmed the posting was still live."
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Non-null once the posting is no longer open. Only `getJob` ever serves such a row."
+          },
+          "enrichment": {
+            "$ref": "#/components/schemas/JobEnrichment"
+          },
+          "enriched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enrichment_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bumped when the enrichment contract changes — use it to detect re-enriched rows."
+          },
+          "my_vote": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calling user's vote; 0 or null without a signed-in caller."
+          },
+          "reality": {
+            "$ref": "#/components/schemas/JobReality"
+          },
+          "ghost": {
+            "$ref": "#/components/schemas/JobGhost"
+          },
+          "view_count": {
+            "type": "integer"
+          },
+          "applied_count": {
+            "type": "integer"
+          },
+          "upvote_count": {
+            "type": "integer"
+          },
+          "downvote_count": {
+            "type": "integer"
+          },
+          "referral_available": {
+            "type": "boolean",
+            "description": "True when the company has an approved employee referrer. Served by `getJob` only;\nabsent on every list and search row."
+          },
+          "recruiter_contacts_available": {
+            "type": "boolean",
+            "description": "True when a recruiter-contact lookup can run for the posting: the feature is configured\nand the company has a website on record. Served by `getJob` only."
+          },
+          "auto_apply_status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "failed",
+              "declined"
+            ],
+            "description": "The caller's own auto-apply status for the posting: `queued` (live, undecided),\n`failed` (given up: dead-lettered, or parked for missing form data) or `declined`\n(the candidate's permanent decision). Served by `getJob` to a signed-in caller with\nan attempt; absent for everyone else."
+          }
+        },
+        "description": "One posting, as every job endpoint serves it. TestJobSchemaCoversWireShape\n(internal/job/jobview) fails when jobview.Job serves a key this model lacks.",
+        "x-raw-json": true
+      },
       "JobCreate": {
         "type": "object",
         "properties": {
@@ -16213,6 +16549,137 @@
         },
         "description": "Exactly one of `job_slug`, `url` and `text`; anything else is a 400."
       },
+      "JobEnrichment": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string",
+            "description": "The one synthesized field — a 1-2 sentence synopsis, always present on an enriched posting."
+          },
+          "employment_type": {
+            "type": "string"
+          },
+          "relocation": {
+            "type": "string"
+          },
+          "visa_sponsorship": {
+            "type": "boolean"
+          },
+          "timezone_note": {
+            "type": "string"
+          },
+          "salary_min": {
+            "type": "integer"
+          },
+          "salary_max": {
+            "type": "integer"
+          },
+          "salary_currency": {
+            "type": "string"
+          },
+          "salary_period": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "experience_years_min": {
+            "type": "integer"
+          },
+          "english_level": {
+            "type": "string"
+          },
+          "education_level": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "posting_language": {
+            "type": "string"
+          },
+          "company_type": {
+            "type": "string"
+          },
+          "company_size": {
+            "type": "string"
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JobRequirement"
+            },
+            "description": "Requirements the posting states (at most 30, each at most 200 characters): the\nmodel's list, or the deterministic extractor's when the model has not reached the\nposting. `priority` is `required` or `preferred`."
+          }
+        },
+        "description": "Model-extracted attributes, every field omitted when the posting did not state it.\n`work_mode`, `regions`, `countries`, `cities` and `skills` are deliberately NOT here —\nthose are served top-level from the deterministic dictionaries, and the model's own\nvalues for them are not published."
+      },
+      "JobGhost": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "description": "How strongly the evidence reads, e.g. `possible`."
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Which criteria fired, e.g. `evergreen_posting`, `ats_absent`."
+          },
+          "criteria_total": {
+            "type": "integer",
+            "description": "How many criteria exist, so `criteria` reads as N-of-total."
+          },
+          "contributors": {
+            "type": "integer",
+            "description": "Number of independent user reports, once past the disclosure gate."
+          },
+          "ats_checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the posting was last looked for on the employer's own ATS. Present only when the `ats_absent` criterion fired.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        },
+        "description": "Hedged \"is anyone actually hiring for this\" verdict, raised only when evidence fires —\nmost postings carry none, so an absent value means \"no signal\", never \"verified real\".\nAttached by `searchJobs`, `getJob` and the plain jobs list. NOT attached by\n`agentSearchJobs` or `getSimilarJobs`, so its absence on those two is not evidence\neither way."
+      },
+      "JobReality": {
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "stale",
+              "likely-evergreen"
+            ]
+          },
+          "age_days": {
+            "type": "integer"
+          },
+          "repost_count": {
+            "type": "integer",
+            "description": "How many times this role has been reposted."
+          },
+          "mass_posting_count": {
+            "type": "integer",
+            "description": "How many near-identical postings the same role cluster holds."
+          },
+          "fake_freshness": {
+            "type": "boolean",
+            "description": "True when the stated posting date looks refreshed rather than real."
+          }
+        },
+        "description": "Signals about whether the posting reflects a real, current opening."
+      },
       "JobReport": {
         "type": "object",
         "required": [
@@ -16293,6 +16760,26 @@
           "resolved",
           "dismissed"
         ]
+      },
+      "JobRequirement": {
+        "type": "object",
+        "required": [
+          "text",
+          "priority"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "required",
+              "preferred"
+            ]
+          }
+        },
+        "description": "One requirement the posting states."
       },
       "JobUpdate": {
         "type": "object",

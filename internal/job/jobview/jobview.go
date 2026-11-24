@@ -167,10 +167,10 @@ type Job struct {
 	// RecruiterContactsAvailable is true when recruiter contacts can be looked up for the job:
 	// the feature is configured and its company has a website on record. Detail handler only.
 	RecruiterContactsAvailable bool `json:"recruiter_contacts_available,omitempty"`
-	// AutoApplyStatus is the caller's own auto-apply status for this job: "queued" or
-	// "declined" (the candidate's permanent decision), nil for no attempt or an anonymous
-	// caller. Caller-scoped like MyVote: only the detail handler overlays it, keyed by
-	// (caller_id, job_id), so the shared job query stays free of it.
+	// AutoApplyStatus is the caller's own auto-apply status for this job: "queued", "failed"
+	// or "declined" (see autoApplyEntryStatus in internal/api/handler), nil for no attempt or
+	// an anonymous caller. Caller-scoped like MyVote: only the detail handler overlays it,
+	// keyed by (caller_id, job_id), so the shared job query stays free of it.
 	AutoApplyStatus *string `json:"auto_apply_status,omitempty"`
 }
 

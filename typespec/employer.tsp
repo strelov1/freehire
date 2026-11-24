@@ -8,8 +8,8 @@ namespace Freehire;
 
 // The verified-employer surface (session cookie only): claiming a company, editing its
 // curated profile, publishing and closing its own vacancies, and the moderator/admin
-// review of a claim. A vacancy is the shared job view (internal/job/jobview), whose wide
-// shape belongs to search too, so it travels as an opaque value.
+// review of a claim. A vacancy is the `Job` model (job-wire.tsp, the jobview wire shape
+// shared with search).
 
 enum EmployerAccountStatus {
   pending,
@@ -173,7 +173,7 @@ op updateEmployerCompany(@body body: EmployerCompanyPatch): Data<EmployerCompany
 @tag("Employer")
 @route("/employer/jobs")
 @get
-op listEmployerVacancies(): Data<unknown[]> | Problem;
+op listEmployerVacancies(): Data<Job[]> | Problem;
 
 /** Publishes, or idempotently updates the caller's own vacancy at the same URL. */
 @tag("Employer")
@@ -181,13 +181,13 @@ op listEmployerVacancies(): Data<unknown[]> | Problem;
 @post
 op createEmployerVacancy(@body body: EmployerVacancyCreate): {
   @statusCode _: 201;
-  @body body: Data<unknown>;
+  @body body: Data<Job>;
 } | Problem;
 
 @tag("Employer")
 @route("/employer/jobs/{slug}")
 @patch
-op updateEmployerVacancy(@path slug: string, @body body: EmployerVacancyPatch): Data<unknown> | Problem;
+op updateEmployerVacancy(@path slug: string, @body body: EmployerVacancyPatch): Data<Job> | Problem;
 
 @tag("Employer")
 @route("/employer/jobs/{slug}/close")

@@ -122,7 +122,7 @@ model TrackedJob {
   role_title: string;
 
   /** The job in the shared wire shape; null once the catalogue has removed the posting. */
-  job: unknown;
+  job: Job | null;
 
   viewed_at: utcDateTime | null;
   saved_at: utcDateTime | null;
@@ -540,6 +540,7 @@ op clearApplicationStage(/** The tracking row id. (e.g. `42`) */ @path id: strin
           job: #{
             public_slug: "senior-go-engineer-acme-1a2b",
             title: "Senior Go Engineer",
+            company: "Acme",
           },
           viewed_at: utcDateTime.fromISO("2026-06-19T10:00:00Z"),
           saved_at: null,

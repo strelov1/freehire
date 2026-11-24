@@ -21677,7 +21677,6 @@ func (s *OnboardingCompleted) SetOnboardingComplete(val bool) {
 // One matching posting with how well its skills match the given ones.
 // Ref: #/components/schemas/OnboardingMatch
 type OnboardingMatch struct {
-	// The jobview wire shape `/jobs/search` answers with.
 	Job jx.Raw `json:"job"`
 	// The share of the posting's skills the given skills cover, 0-100.
 	MatchPercent int32 `json:"match_percent"`
