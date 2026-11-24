@@ -124,7 +124,11 @@ func run() int {
 		log.Printf("harvest-boards: pacing probes at %.2f req/s with %d workers", probeRate, *workers)
 	}
 
-	raw, expected, err := resolveCandidates(ctx, p, client, seedPath)
+	source := p
+	if seedPath == "" {
+		source = crawlDiscovery(provider, p)
+	}
+	raw, expected, err := resolveCandidates(ctx, source, client, seedPath)
 	if err != nil {
 		log.Printf("harvest-boards: %v", err)
 		return 1
