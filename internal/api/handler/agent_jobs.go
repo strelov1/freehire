@@ -66,7 +66,7 @@ func (h *searchHandlers) markdownJobs(ctx context.Context, hits []search.JobDocu
 	jobs := make([]jobview.Job, len(hits))
 	for i, hit := range hits {
 		hit.Description = formatDescription(hit.Description, "markdown")
-		hit.Job.ApplyURL = hit.Job.ApplyURLFor(outboundurl.SrcAssistant)
+		hit.ApplyURL = hit.ApplyURLFor(outboundurl.SrcAssistant)
 		jobs[i] = hit.Job
 	}
 	return jobs, nil

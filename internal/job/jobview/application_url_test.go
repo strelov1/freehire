@@ -47,11 +47,13 @@ func TestApplicationDestinationPreservesSourcePosting(t *testing.T) {
 }
 
 func TestApplyURLForRetagsTheSurfaceAndStaysEmptyForDirectApply(t *testing.T) {
-	web := jobview.Job{PublicSlug: "x", ApplyURL: "https://freehire.me/api/v1/go/x?src=web"}
-	if got, want := web.ApplyURLFor(outboundurl.SrcAssistant), "https://freehire.me/api/v1/go/x?src=assistant"; got != want {
+	// No ApplyURL: a search document indexed before the field existed still gets its redirect.
+	old := jobview.Job{PublicSlug: "x", URL: "https://boards.greenhouse.io/a/1"}
+	if got, want := old.ApplyURLFor(outboundurl.SrcAssistant), "https://freehire.me/api/v1/go/x?src=assistant"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
-	if got := (jobview.Job{PublicSlug: "x"}).ApplyURLFor(outboundurl.SrcMCP); got != "" {
+	direct := jobview.Job{PublicSlug: "x", URL: "https://freehire.me/jobs/x", DirectApply: true}
+	if got := direct.ApplyURLFor(outboundurl.SrcMCP); got != "" {
 		t.Fatalf("got %q: a freehire-only vacancy has no redirect", got)
 	}
 }
