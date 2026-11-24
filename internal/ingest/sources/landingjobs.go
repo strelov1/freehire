@@ -183,17 +183,20 @@ func landingjobsCompanyFromURL(rawURL string) (company string, ok bool) {
 	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
 		return "", false
 	}
-	company = landingjobsCompany(parts[0])
+	company = HumanizeBoard(parts[0])
 	return company, company != ""
 }
 
-// landingjobsCompany humanizes a company slug into a display name: hyphens and underscores
-// become spaces and each word is capitalized ("acme-corp" → "Acme Corp").
+// HumanizeBoard turns a board or company slug into a display name: hyphens and underscores
+// become spaces and each word is capitalized ("acme-corp" → "Acme Corp"). It is what an
+// adapter shows when the platform's API carries no company name: for the common case its
+// slug equals a curated board-file company name's slug, so the companies table aligns.
 //
-// Only the first rune of a word is touched. Upper-casing the whole word would shout every name,
+// Only the first rune of a word is touched, as a rune: a byte slice would split a non-ASCII
+// letter. Upper-casing the whole word would shout every name,
 // and lower-casing the tail would flatten the ones the slug preserves ("gitHub" → "Github"),
 // so a word already carrying internal capitals keeps them.
-func landingjobsCompany(slug string) string {
+func HumanizeBoard(slug string) string {
 	words := strings.FieldsFunc(slug, func(r rune) bool {
 		return r == '-' || r == '_' || unicode.IsSpace(r)
 	})

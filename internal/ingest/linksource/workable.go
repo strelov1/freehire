@@ -77,7 +77,7 @@ func (w workable) Resolve(ctx context.Context, raw string) (sources.Job, bool, e
 			ExternalID:  externalid.Namespace(account, j.Shortcode),
 			URL:         j.URL,
 			Title:       j.Title,
-			Company:     humanizeBoard(account), // the widget API carries no company name
+			Company:     sources.HumanizeBoard(account), // the widget API carries no company name
 			Location:    joinNonEmpty(j.City, j.State, j.Country),
 			Description: htmltext.Sanitize(j.Description),
 			Remote:      j.Telecommuting,
