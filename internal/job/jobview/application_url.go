@@ -21,11 +21,12 @@ func applyURL(f job.Fields) string {
 }
 
 // ApplyURLFor is the click redirect for a surface other than the web, which ApplyURL already
-// serves: "" for a job with no employer destination. It reads URL and DirectApply, not
-// ApplyURL, because a search document indexed before apply_url existed has no ApplyURL.
-// The public REST API keeps src=web: its anonymous callers look like the SPA's.
+// serves: "" wherever ApplyURL is (no employer destination, a private job), so the rule
+// lives in applyURL alone. A search document indexed before apply_url existed has none
+// until it is reindexed. The public REST API keeps src=web: its anonymous callers look like
+// the SPA's.
 func (j Job) ApplyURLFor(src outboundurl.Src) string {
-	if j.DirectApply || j.URL == "" {
+	if j.ApplyURL == "" {
 		return ""
 	}
 	return outboundurl.ApplyURL(j.PublicSlug, src)
