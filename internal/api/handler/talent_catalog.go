@@ -10,7 +10,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
-	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -188,17 +187,6 @@ func talentCardOut(c talentnetwork.CandidateCard) apigen.TalentCard {
 		out.Education = append(out.Education, apigen.TalentEducation{Level: optString(e.Level), Year: optPeriodDate(e.Year)})
 	}
 	return out
-}
-
-func optPeriodDate(d *perioddate.PeriodDate) apigen.OptPeriodDate {
-	if d == nil {
-		return apigen.OptPeriodDate{}
-	}
-	out := apigen.PeriodDate{Year: int32(d.Year)} //nolint:gosec // a calendar year
-	if d.Month != 0 {
-		out.Month = apigen.NewOptInt32(int32(d.Month)) //nolint:gosec // 1..12
-	}
-	return apigen.NewOptPeriodDate(out)
 }
 
 func talentFacetsOut(c talentnetwork.Counts) apigen.TalentFacets {

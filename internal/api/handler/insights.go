@@ -312,14 +312,6 @@ func (h *statsHandlers) InsightsRolePulse(ctx context.Context, params apigen.Ins
 	return &apigen.RolePulseAnswer{Data: out, Meta: apigen.CategoryMeta{Category: category}}, nil
 }
 
-// nilFloat32 maps a nullable real to a JSON number or null.
-func nilFloat32(v pgtype.Float4) apigen.NilFloat32 {
-	if !v.Valid {
-		return apigen.NilFloat32{Null: true}
-	}
-	return apigen.NewNilFloat32(v.Float32)
-}
-
 // InsightsSkills serves GET /api/v1/insights/skills: skills ranked by open-count or
 // growth, optionally scoped by category or country (not both — the rollup is
 // single-dimensional). Aggregate-only.
