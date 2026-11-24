@@ -60,19 +60,6 @@ func salaryUnit(u string) string {
 	}
 }
 
-// humanizeBoard turns an ATS board slug into a display company name ("ruby-labs" → "Ruby
-// Labs"), used when the platform's API carries no company name. Its slug matches a curated
-// board-file company name's slug for the common case, so the companies table aligns.
-func humanizeBoard(slug string) string {
-	words := strings.FieldsFunc(slug, func(r rune) bool { return r == '-' || r == '_' })
-	for i, w := range words {
-		if w != "" {
-			words[i] = strings.ToUpper(w[:1]) + w[1:]
-		}
-	}
-	return strings.Join(words, " ")
-}
-
 // host returns u's lowercased hostname with a leading "www." stripped.
 func host(u *url.URL) string {
 	return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
