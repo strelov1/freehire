@@ -59,3 +59,18 @@ func TestDirectApplyHasNoApplyURL(t *testing.T) {
 		t.Fatalf("url=%q apply_url=%q: a freehire-only vacancy has nowhere to redirect", got.URL, got.ApplyURL)
 	}
 }
+
+func TestPrivateJobKeepsDirectLink(t *testing.T) {
+	row := db.Job{Source: "greenhouse", ExternalID: "1", URL: "https://acme.test/1", PublicSlug: "p", IsPrivate: true}
+	domain, extras, err := job.FromRow(row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := jobview.FromDomain(domain, extras)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ApplyURL != "" || got.URL != "https://acme.test/1" {
+		t.Fatalf("url=%q apply_url=%q: the redirect refuses private jobs, so the owner keeps the direct link", got.URL, got.ApplyURL)
+	}
+}

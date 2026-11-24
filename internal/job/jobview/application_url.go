@@ -13,7 +13,8 @@ func RowDestination(r db.Job) string {
 }
 
 func applyURL(f job.Fields) string {
-	if applicationDestination(f) == "" {
+	// The click redirect refuses a private job (its owner is not known there), so the owner's own link stays direct.
+	if f.Private || applicationDestination(f) == "" {
 		return ""
 	}
 	return outboundurl.ApplyURL(f.PublicSlug, outboundurl.SrcWeb)
