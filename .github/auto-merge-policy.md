@@ -19,7 +19,14 @@ These win over any rule below.
 
 ## Auto-merge
 
-<!-- TODO(owner): which changes may ship without you? One rule per line, e.g.
-     "- Only `docs/`, `*.md` outside `.github/` and `.agents/`."
-     Decide on: docs, tests-only changes, web copy and styles, a size cap
-     (pr-size already blocks the huge ones), and which packages you trust the agents with. -->
+- Documentation: `docs/` and `*.md` files anywhere, except `.github/`, `.agents/` and `AGENTS.md`
+  (those stay under "Always a person").
+- Tests only: Go `*_test.go` and `testdata/` fixtures; web `*.test.ts`, `*.spec.ts`, `*.test.mjs`
+  and everything under `web/e2e/`. A test-only pull request touches no non-test file: test
+  configs (`vitest.config.ts`, `playwright*.config.ts`, `vitest-stubs/`) are not covered.
+- Web styles: stylesheet files only (`web/src/app.css`). Svelte components and copy or i18n
+  strings are not covered yet, even when the change is only a class name or a string.
+- Size cap on every rule: at most 300 changed lines (additions plus deletions) in total. A bigger
+  pull request waits for the owner even when every file is covered.
+- A pull request mixing covered and uncovered files waits for the owner. Generated files (sqlc
+  output, lockfiles) are not covered by any rule.
