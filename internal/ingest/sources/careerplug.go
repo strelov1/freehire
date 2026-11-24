@@ -12,7 +12,7 @@ import (
 // careerplug adapts CareerPlug career sites (<board>.careerplug.com): a server-rendered ATS
 // whose /jobs listing paginates with ?page=N and links each posting as /jobs/<id>, and whose
 // job pages carry a schema.org JobPosting ld+json. The board is the account subdomain. Like
-// the other ld+json detail adapters it fetches each posting's page for the description; the
+// the other ld+json detail adapters it fetches a new posting's page for the description; the
 // employer comes per-posting from the JSON-LD (CareerPlug accounts are often franchises whose
 // postings name the individual location), falling back to the configured company. It exposes
 // no jobLocationType, so the remote flag falls back to the location text.
@@ -34,6 +34,12 @@ func (careerplug) FullBoardListing() {}
 const careerplugMaxPages = 100
 
 func (s careerplug) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return s.FetchNew(ctx, e, func(string) bool { return false })
+}
+
+// FetchNew uses the complete listing to refresh known posting IDs and reads details for the
+// postings the caller still needs. The detail still owns the franchise name on a full write.
+func (s careerplug) FetchNew(ctx context.Context, e CompanyEntry, seen func(string) bool) ([]Job, error) {
 	host := fmt.Sprintf("%s.careerplug.com", e.Board)
 	// base carries scheme+host so the listing's relative /jobs/<id> hrefs resolve to
 	// fetchable URLs; parsed once rather than per page.
@@ -60,7 +66,14 @@ func (s careerplug) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 
 	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {
-		return s.detail(ctx, e, u)
+		id := careerplugJobID(u)
+		if id == "" {
+			return Job{}, false
+		}
+		if seen(id) {
+			return Job{ExternalID: id, URL: u, Company: e.Company, SeenRefresh: true}, true
+		}
+		return s.detail(ctx, e, u, id)
 	}), nil
 }
 
@@ -68,11 +81,7 @@ func (s careerplug) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // reports gone is dropped (ok=false); a page this crawl merely could not read comes back as an
 // unreadableDetail marker, since the detail request is this adapter's only source for the
 // posting and a dropped one is indistinguishable from a posting taken down.
-func (s careerplug) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job, bool) {
-	id := careerplugJobID(jobURL)
-	if id == "" {
-		return Job{}, false // no native id → would collide on the dedup key; skip it
-	}
+func (s careerplug) detail(ctx context.Context, e CompanyEntry, jobURL, id string) (Job, bool) {
 	root, err := s.http.GetHTML(ctx, jobURL)
 	if err != nil {
 		if detailUnreadable(err) {

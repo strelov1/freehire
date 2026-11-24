@@ -116,6 +116,30 @@ func TestPaylocityFetch(t *testing.T) {
 	}
 }
 
+func TestPaylocityFetchNewRefreshesKnownJobsAndRetriesMissingBodies(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/Recruiting/Jobs/All/", paylocityListingHTML).
+		route("/Recruiting/Jobs/Details/3836522", paylocityDetailHTML)
+	src, ok := NewPaylocity(fake).(HydratingSource)
+	if !ok {
+		t.Fatal("Paylocity should implement HydratingSource")
+	}
+	jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "guid", Company: "Acme"},
+		func(id string) bool { return id == "4026535" })
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("FetchNew = %+v, %v, want two jobs", jobs, err)
+	}
+	if known := jobs[0]; !known.SeenRefresh || known.ExternalID != "4026535" || known.Title != "Technician Aide" {
+		t.Errorf("known posting = %+v, want a refresh with the listing's id and title", known)
+	}
+	if pending := jobs[1]; pending.SeenRefresh || pending.ExternalID != "3836522" || !pending.Remote || !strings.Contains(pending.Description, "Care for animals.") {
+		t.Errorf("posting missing from the seen set = %+v, want hydrated job", pending)
+	}
+	if fake.calls != 2 {
+		t.Errorf("requests = %d, want one listing and one detail", fake.calls)
+	}
+}
+
 // A board with no openings renders an empty Jobs[] array, which must yield zero jobs
 // without an error (not a board-level failure).
 func TestPaylocityFetchEmpty(t *testing.T) {

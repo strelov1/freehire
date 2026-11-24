@@ -135,8 +135,33 @@ func TestCareerPlugFetchPaginatesThenMaps(t *testing.T) {
 	}
 }
 
-// CareerPlug's detail page is its ONLY source for a posting and is re-fetched on every run, so
-// a dropped one leaves a live vacancy missing from a crawl that reported no failure — which the
+func TestCareerPlugFetchNewRefreshesKnownJobsAndHydratesNewJobs(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/jobs/200", careerplugDetailB).
+		route("/jobs?page=2", careerplugList2).
+		route("/jobs", careerplugList1)
+	src, ok := NewCareerPlug(fake).(HydratingSource)
+	if !ok {
+		t.Fatal("CareerPlug should implement HydratingSource")
+	}
+	jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "acme", Company: "Golden Corral"},
+		func(id string) bool { return id == "100" })
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("FetchNew = %+v, %v, want two jobs", jobs, err)
+	}
+	if known := jobs[0]; !known.SeenRefresh || known.ExternalID != "100" || known.URL != "https://acme.careerplug.com/jobs/100" {
+		t.Errorf("known posting = %+v, want a refresh by listing identity", known)
+	}
+	if newJob := jobs[1]; newJob.SeenRefresh || newJob.ExternalID != "200" || newJob.Company != "Golden Corral - Reno" || !strings.Contains(newJob.Description, "Lead a shift.") {
+		t.Errorf("new posting = %+v, want hydrated franchise posting", newJob)
+	}
+	if fake.calls != 4 {
+		t.Errorf("requests = %d, want three listing pages and one detail", fake.calls)
+	}
+}
+
+// CareerPlug's detail page is its only source for a new posting's content, so
+// dropping a failed detail leaves a live vacancy missing from a crawl that reported no failure — which the
 // stale sweep reads as a removal. Both ways of failing to READ the page must therefore yield a
 // marker: the request failing, and the page arriving without the ld+json the mapping needs. The
 // second is not hypothetical — an interstitial, a consent wall or a markup change all serve 200
