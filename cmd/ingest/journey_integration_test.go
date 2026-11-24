@@ -209,7 +209,7 @@ func TestJourneyCrawledBoardToDeliveredAlert(t *testing.T) {
 	if _, err := reminder.NewRunner(q, reminders, reminder.DefaultConfig()).Run(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(mailer.sent) != 1 || !strings.Contains(mailer.sent[0].Text, row.Title) || !strings.Contains(mailer.sent[0].Text, origin+"/jobs/"+row.PublicSlug) {
+	if len(mailer.sent) != 1 || !strings.Contains(mailer.sent[0].Text, row.Title) || !strings.Contains(mailer.sent[0].Text, origin+"/api/v1/go/"+row.PublicSlug) {
 		t.Fatalf("reminder emails = %+v, want one linking the saved posting", mailer.sent)
 	}
 
