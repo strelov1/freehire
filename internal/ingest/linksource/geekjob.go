@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
@@ -81,7 +82,7 @@ func (g geekjob) Resolve(ctx context.Context, raw string) (sources.Job, bool, er
 		Title:       p.Title,
 		Company:     p.HiringOrganization.Name,
 		Description: desc,
-		Remote:      isTelecommute(p.JobLocationType),
+		Remote:      sources.IsTelecommute(p.JobLocationType),
 		PostedAt:    sources.ParseDate(p.DatePosted),
 	}, true, nil
 }

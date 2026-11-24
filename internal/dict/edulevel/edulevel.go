@@ -8,8 +8,9 @@
 package edulevel
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // Requirement-text matchers. Bare single-letter abbreviations are excluded:

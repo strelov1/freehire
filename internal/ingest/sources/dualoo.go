@@ -10,12 +10,12 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/time/rate"
 )
 
@@ -285,7 +285,7 @@ func dualooJob(ld dualooLD, p dualooPosting) (Job, bool) {
 		EmploymentType: schemaFixedTermEmploymentType(ld.EmploymentType),
 	}
 	j.Location, j.Countries = schemaPlacesLocation(ld.JobLocation)
-	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(ld.JobLocationType) {
 		j.WorkMode, j.Remote = "remote", true
 	}
 	return j, true

@@ -47,7 +47,7 @@ func (r *checkoutRouter) handler() http.HandlerFunc {
 			r.checkoutCalled = true
 			_ = req.ParseForm()
 			r.checkoutForm = req.Form.Encode()
-			_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_123"}`))
+			_, _ = w.Write([]byte(`{"id":"cs_test_123","url":"https://checkout.stripe.com/c/pay/cs_test_123","created":1790000000}`))
 		case req.URL.Path == "/coupons":
 			r.couponCalled = true
 			key := req.Header.Get("Idempotency-Key")
@@ -98,7 +98,7 @@ func TestCheckoutBindsCustomerBeforeFailedFirstPurchase(t *testing.T) {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
-			_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/session"}`))
+			_, _ = w.Write([]byte(`{"id":"cs_first_attempt","url":"https://checkout.stripe.com/session","created":1790000000}`))
 		case "/charges":
 			if r.URL.Query().Get("customer") != "cus_first_attempt" {
 				t.Errorf("history customer: %s", r.URL)
@@ -108,17 +108,23 @@ func TestCheckoutBindsCustomerBeforeFailedFirstPurchase(t *testing.T) {
 	})
 	ctx := context.Background()
 	id := insertUser(t, pool, "first-attempt@example.com")
-	if _, _, err := s.CheckoutURL(ctx, id, proPrice, Discount{}); err == nil {
+	if _, _, err := s.CheckoutURL(ctx, id, proPrice, Discount{}, true); err == nil {
 		t.Fatal("expected the first checkout to fail")
 	}
 	if bound := customerOf(t, pool, id); bound == nil || *bound != "cus_first_attempt" {
 		t.Fatalf("customer was not bound before checkout: %v", bound)
 	}
-	if _, _, err := s.CheckoutURL(ctx, id, proPrice, Discount{}); err != nil {
+	if _, _, err := s.CheckoutURL(ctx, id, proPrice, Discount{}, true); err != nil {
 		t.Fatal(err)
 	}
 	if created != 1 {
 		t.Fatalf("created %d customers for one account", created)
+	}
+
+	var sessionID string
+	err := pool.QueryRow(ctx, "SELECT stripe_session_id FROM checkout_feedback_sessions WHERE user_id = $1", id).Scan(&sessionID)
+	if err != nil || sessionID != "cs_first_attempt" {
+		t.Fatalf("recorded checkout session = %q, %v", sessionID, err)
 	}
 	attempts, err := s.PaymentAttempts(ctx, id)
 	if err != nil || len(attempts) != 1 {
@@ -149,7 +155,7 @@ func TestCheckoutURLUpdatesAnExistingSubscriptionInPlace(t *testing.T) {
 	// A discount is offered but must never be applied to an in-place update — design.md's
 	// own stated Non-Goal — and the coupon endpoint must never even be called.
 	offered := Discount{PercentOff: 20, Label: "invite", Key: "k1"}
-	url, applied, err := s.CheckoutURL(ctx, userID, ultraPrice, offered)
+	url, applied, err := s.CheckoutURL(ctx, userID, ultraPrice, offered, true)
 	if err != nil {
 		t.Fatalf("CheckoutURL: %v", err)
 	}
@@ -199,7 +205,7 @@ func TestCheckoutURLOpensACheckoutSessionForAKnownCustomerWithNoSubscription(t *
 	bindCustomer(t, pool, userID, "cus_lapsed")
 
 	offered := Discount{PercentOff: 20, Label: "invite", Key: "k2"}
-	url, applied, err := s.CheckoutURL(ctx, userID, proPrice, offered)
+	url, applied, err := s.CheckoutURL(ctx, userID, proPrice, offered, true)
 	if err != nil {
 		t.Fatalf("CheckoutURL: %v", err)
 	}
@@ -238,7 +244,7 @@ func TestCheckoutURLFailsRatherThanTreatAFailedBindingReadAsUnbound(t *testing.T
 	ctx := context.Background()
 
 	const nonexistentUserID = -1
-	if _, _, err := s.CheckoutURL(ctx, nonexistentUserID, proPrice, Discount{}); err == nil {
+	if _, _, err := s.CheckoutURL(ctx, nonexistentUserID, proPrice, Discount{}, true); err == nil {
 		t.Fatal("want an error when the customer binding cannot be read, got nil")
 	}
 
@@ -266,7 +272,7 @@ func TestCheckoutURLRefusesToGuessOnAnAmbiguousSubscription(t *testing.T) {
 	userID := insertUser(t, pool, "ambiguous@example.com")
 	bindCustomer(t, pool, userID, "cus_ambiguous")
 
-	if _, _, err := s.CheckoutURL(ctx, userID, "price_pro_annual", Discount{}); err == nil {
+	if _, _, err := s.CheckoutURL(ctx, userID, "price_pro_annual", Discount{}, true); err == nil {
 		t.Fatal("want an error refusing to guess which item to change, got nil")
 	}
 
@@ -295,7 +301,7 @@ func TestCheckoutURLAppliesNoDiscountToTheAPIProduct(t *testing.T) {
 	userID := insertUser(t, pool, "api-with-promo@example.com")
 	bindCustomer(t, pool, userID, "cus_api_promo")
 
-	url, applied, err := s.CheckoutURL(ctx, userID, apiPrice, Discount{PercentOff: 90, Label: "promo", Key: "k9"})
+	url, applied, err := s.CheckoutURL(ctx, userID, apiPrice, Discount{PercentOff: 90, Label: "promo", Key: "k9"}, true)
 	if err != nil {
 		t.Fatalf("CheckoutURL: %v", err)
 	}
@@ -304,6 +310,11 @@ func TestCheckoutURLAppliesNoDiscountToTheAPIProduct(t *testing.T) {
 	}
 	if router.couponCalled {
 		t.Fatal("a coupon was minted for an API purchase — the account's discount reached the API product")
+	}
+	var tracked bool
+	err = pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM checkout_feedback_sessions WHERE user_id = $1)", userID).Scan(&tracked)
+	if err != nil || tracked {
+		t.Fatalf("API checkout recorded for consumer feedback = %t, %v", tracked, err)
 	}
 	if applied != (Discount{}) {
 		t.Fatalf("applied discount = %+v, want none", applied)
@@ -319,7 +330,7 @@ func TestCheckoutURLReplacesACouponADeclinedAttemptSpent(t *testing.T) {
 	userID := insertUser(t, pool, "declined-once@example.com")
 
 	offer := Discount{PercentOff: 90, Label: "promo", Key: "promo_k"}
-	_, applied, err := s.CheckoutURL(context.Background(), userID, "", offer)
+	_, applied, err := s.CheckoutURL(context.Background(), userID, "", offer, true)
 	if err != nil {
 		t.Fatalf("CheckoutURL: %v", err)
 	}
@@ -344,7 +355,7 @@ func TestCheckoutURLSharesOneReplacementAcrossCheckouts(t *testing.T) {
 
 	var forms []string
 	for range 2 {
-		if _, _, err := s.CheckoutURL(context.Background(), userID, "", offer); err != nil {
+		if _, _, err := s.CheckoutURL(context.Background(), userID, "", offer, true); err != nil {
 			t.Fatalf("CheckoutURL: %v", err)
 		}
 		forms = append(forms, router.checkoutForm)
@@ -366,7 +377,7 @@ func TestCheckoutURLWalksPastASpentReplacement(t *testing.T) {
 	s, pool := newTieredService(t, router.handler())
 	userID := insertUser(t, pool, "declined-twice@example.com")
 
-	if _, _, err := s.CheckoutURL(context.Background(), userID, "", Discount{PercentOff: 90, Label: "promo", Key: "promo_w"}); err != nil {
+	if _, _, err := s.CheckoutURL(context.Background(), userID, "", Discount{PercentOff: 90, Label: "promo", Key: "promo_w"}, true); err != nil {
 		t.Fatalf("CheckoutURL: %v", err)
 	}
 	if !strings.Contains(router.checkoutForm, "co_test3") {

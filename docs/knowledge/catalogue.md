@@ -32,6 +32,7 @@ sources:
   - resource: ../../internal/job/job/upsert.go
   - resource: ../../internal/ingest/sources/linkedin_related.go
   - resource: ../../internal/ingest/sources/scraplingtier.go
+  - resource: ../../internal/platform/scraplingfetch/AGENTS.md
   - resource: ../../cmd/ingest/native_discovery_company.go
   - resource: ../../cmd/ingest/native_discovery.go
   - resource: ../../internal/ingest/boardresolve/company.go

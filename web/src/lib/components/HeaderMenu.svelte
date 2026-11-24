@@ -284,13 +284,12 @@
 
       <!-- Middle: scrollable, sectioned links. -->
       <div class="max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:px-2 max-sm:pb-3">
-        <!-- Matches rides the bar from 360px; below that there is no room, so it leads the menu. -->
         {#if matchesOn}
           <a
             href={resolve(MATCHES_LINK.href)}
             role="menuitem"
             onclick={() => (open = false)}
-            class={cn(linkClass(MATCHES_LINK.href), 'min-[360px]:hidden')}
+            class={linkClass(MATCHES_LINK.href)}
             aria-current={isActive(MATCHES_LINK.href) ? 'page' : undefined}
           >
             <MATCHES_LINK.icon class="size-4 shrink-0" />

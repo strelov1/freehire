@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // teclaHTTP is a page-aware test JSONGetter: tecla's getPublicJobs is paged by a page

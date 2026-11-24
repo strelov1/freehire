@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/ingest/sources/ats"
@@ -67,7 +68,7 @@ func (a ashby) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 		if job.URL == "" {
 			job.URL = "https://jobs.ashbyhq.com/" + board + "/" + id
 		}
-		job.Company = humanizeBoard(board)
+		job.Company = sources.HumanizeBoard(board)
 		return job, true, nil
 	}
 	return sources.Job{}, false, nil // not on the board anymore (delisted) — skip

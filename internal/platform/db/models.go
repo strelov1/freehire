@@ -440,6 +440,12 @@ type ChangeWebhook struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 }
 
+type CheckoutFeedbackSession struct {
+	UserID          int64              `json:"user_id"`
+	StripeSessionID string             `json:"stripe_session_id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type CommunityPersona struct {
 	UserID    int64              `json:"user_id"`
 	Handle    string             `json:"handle"`
@@ -706,7 +712,7 @@ type CvLifecycleEnrollment struct {
 	ExitedAt pgtype.Timestamptz `json:"exited_at"`
 }
 
-// CV lifecycle letters step ledger. PK (user_id, step) = one claim per pair, ever; error is the transport failure that burned the step. Steps 1-3 are the CV letters, step 4 the paywall letter.
+// Lifecycle mail ledger. One claim per (user_id, step), ever. Steps 1-3 are CV letters, step 4 is paywall and step 5 is checkout feedback.
 type CvLifecycleSend struct {
 	UserID int64              `json:"user_id"`
 	Step   int16              `json:"step"`
@@ -1970,6 +1976,53 @@ type SourceStat struct {
 	MissingCompanyJobs  pgtype.Int8        `json:"missing_company_jobs"`
 	Unseen7dJobs        pgtype.Int8        `json:"unseen_7d_jobs"`
 	PostedOver60dJobs   pgtype.Int8        `json:"posted_over_60d_jobs"`
+}
+
+type SponsoredCampaign struct {
+	ID            int64              `json:"id"`
+	JobID         int64              `json:"job_id"`
+	OwnerUserID   pgtype.Int8        `json:"owner_user_id"`
+	Status        string             `json:"status"`
+	CpcCents      int64              `json:"cpc_cents"`
+	DailyCapCents pgtype.Int8        `json:"daily_cap_cents"`
+	BudgetCents   int64              `json:"budget_cents"`
+	SpentCents    int64              `json:"spent_cents"`
+	ReviewedBy    pgtype.Int8        `json:"reviewed_by"`
+	ReviewedAt    pgtype.Timestamptz `json:"reviewed_at"`
+	RejectReason  pgtype.Text        `json:"reject_reason"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SponsoredClick struct {
+	ID          int64              `json:"id"`
+	CampaignID  int64              `json:"campaign_id"`
+	Ts          pgtype.Timestamptz `json:"ts"`
+	Placement   string             `json:"placement"`
+	VisitorHash string             `json:"visitor_hash"`
+	Valid       bool               `json:"valid"`
+	Reason      string             `json:"reason"`
+	CostCents   int64              `json:"cost_cents"`
+}
+
+type SponsoredDaily struct {
+	CampaignID    int64       `json:"campaign_id"`
+	Day           pgtype.Date `json:"day"`
+	Impressions   int64       `json:"impressions"`
+	ValidClicks   int64       `json:"valid_clicks"`
+	InvalidClicks int64       `json:"invalid_clicks"`
+	SpentCents    int64       `json:"spent_cents"`
+}
+
+type SponsoredTopup struct {
+	ID              int64              `json:"id"`
+	CampaignID      int64              `json:"campaign_id"`
+	StripeSessionID string             `json:"stripe_session_id"`
+	PaymentIntentID pgtype.Text        `json:"payment_intent_id"`
+	AmountCents     int64              `json:"amount_cents"`
+	RefundedAt      pgtype.Timestamptz `json:"refunded_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	Credited        bool               `json:"credited"`
 }
 
 // Hosts refused at the public submission form. Checked only in submission.Service.Submit; never applied to a moderator-authored vacancy create.

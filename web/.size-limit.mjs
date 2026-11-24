@@ -33,7 +33,7 @@ const ROUTE_LIMITS = {
   '/onboarding': 199_000,
   '/my/tracking': 315_700,
   '/agents': 312_200,
-  '/docs/api': 176_300,
+  '/docs/api': 177_000,
 };
 
 function fail(message) {

@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // edjoin adapts EDJOIN (edjoin.org), the hiring board California's K-12 school districts,

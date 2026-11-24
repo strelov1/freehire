@@ -69,8 +69,8 @@ func TestICIMSHost(t *testing.T) {
 		"careers.docusign.com": "careers.docusign.com",      // vanity domain passes through
 	}
 	for board, want := range cases {
-		if got := icimsHost(board); got != want {
-			t.Errorf("icimsHost(%q) = %q, want %q", board, got, want)
+		if got := IcimsHost(board); got != want {
+			t.Errorf("IcimsHost(%q) = %q, want %q", board, got, want)
 		}
 	}
 }
@@ -312,29 +312,35 @@ func TestICIMSCompanyFallsBackToEntry(t *testing.T) {
 	}
 }
 
+// jobLocationType is icims' only structured remote signal. Some boards write the enum in
+// lower case, so the comparison is case-insensitive: a lower-case flag is still remote.
 func TestICIMSRemoteFromJobLocationType(t *testing.T) {
-	detail := `<html><body><script type="application/ld+json">
+	for _, locType := range []string{"TELECOMMUTE", "telecommute"} {
+		t.Run(locType, func(t *testing.T) {
+			detail := `<html><body><script type="application/ld+json">
 {"@type":"JobPosting","title":"Remote Role","datePosted":"2026-01-01T00:00:00.000Z",
-"jobLocationType":"TELECOMMUTE",
+"jobLocationType":"` + locType + `",
 "jobLocation":[{"address":{"addressCountry":"US"}}]}
 </script></body></html>`
-	loc := "https://careers-acme.icims.com/jobs/9/remote-role/job"
-	fake := (&routedHTTP{}).
-		route("/sitemap.xml", icimsSitemapXML(loc)).
-		route("/jobs/9/remote-role/job?in_iframe=1", detail)
+			loc := "https://careers-acme.icims.com/jobs/9/remote-role/job"
+			fake := (&routedHTTP{}).
+				route("/sitemap.xml", icimsSitemapXML(loc)).
+				route("/jobs/9/remote-role/job?in_iframe=1", detail)
 
-	jobs, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if len(jobs) != 1 {
-		t.Fatalf("got %d jobs, want 1", len(jobs))
-	}
-	if !jobs[0].Remote {
-		t.Errorf("Remote = false, want true (TELECOMMUTE)")
-	}
-	if jobs[0].WorkMode != "remote" {
-		t.Errorf("WorkMode = %q, want remote", jobs[0].WorkMode)
+			jobs, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+			if err != nil {
+				t.Fatalf("Fetch: %v", err)
+			}
+			if len(jobs) != 1 {
+				t.Fatalf("got %d jobs, want 1", len(jobs))
+			}
+			if !jobs[0].Remote {
+				t.Errorf("Remote = false, want true (TELECOMMUTE)")
+			}
+			if jobs[0].WorkMode != "remote" {
+				t.Errorf("WorkMode = %q, want remote", jobs[0].WorkMode)
+			}
+		})
 	}
 }
 

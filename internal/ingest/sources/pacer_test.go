@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
+	"golang.org/x/time/rate"
 )
 
 // recordingWaiter is a fake rate-limit gate: it counts Wait calls and can force an error.
@@ -70,7 +71,7 @@ func TestRateLimitedHTMLGetter_WaitErrorShortCircuits(t *testing.T) {
 func TestConcurrencyLimitedHTMLGetter_AcquiresThenDelegates(t *testing.T) {
 	node := &html.Node{}
 	inner := &recordingHTMLGetter{node: node}
-	g := concurrencyLimitedHTMLGetter{inner: inner, sem: make(chan struct{}, 2)}
+	g := concurrencyLimitedHTMLGetter{inner: inner, sem: make(inFlight, 2)}
 
 	got, err := g.GetHTML(context.Background(), "https://wellfound.com/role/r/software-engineer?page=1")
 	if err != nil {
@@ -90,7 +91,7 @@ func TestConcurrencyLimitedHTMLGetter_AcquiresThenDelegates(t *testing.T) {
 
 func TestConcurrencyLimitedHTMLGetter_CancelledContextShortCircuits(t *testing.T) {
 	inner := &recordingHTMLGetter{node: &html.Node{}}
-	sem := make(chan struct{}, 1)
+	sem := make(inFlight, 1)
 	sem <- struct{}{} // fill the only slot so the next acquire must wait
 	g := concurrencyLimitedHTMLGetter{inner: inner, sem: sem}
 
@@ -138,9 +139,55 @@ func (g *recordingJSONGetter) GetJSON(_ context.Context, url string, _ any) erro
 	return nil
 }
 
+func TestRateLimitedJSONGetter_GatesThenDelegates(t *testing.T) {
+	limiter := &recordingWaiter{}
+	inner := &recordingJSONGetter{}
+	getter := rateLimitedJSONGetter{inner: inner, limiter: limiter}
+	const url = "https://example.com/jobs"
+
+	if err := getter.GetJSON(t.Context(), url, nil); err != nil {
+		t.Fatal(err)
+	}
+	if limiter.calls != 1 || len(inner.urls) != 1 || inner.urls[0] != url {
+		t.Errorf("Wait calls = %d, GetJSON URLs = %v, want one wait and one request to %s", limiter.calls, inner.urls, url)
+	}
+}
+
+func TestRateLimitedJSONGetter_WaitErrorShortCircuits(t *testing.T) {
+	waitErr := errors.New("rate wait cancelled")
+	inner := &recordingJSONGetter{}
+	getter := rateLimitedJSONGetter{inner: inner, limiter: &recordingWaiter{err: waitErr}}
+
+	if err := getter.GetJSON(t.Context(), "https://example.com/jobs", nil); !errors.Is(err, waitErr) {
+		t.Errorf("GetJSON error = %v, want %v", err, waitErr)
+	}
+	if len(inner.urls) != 0 {
+		t.Errorf("GetJSON reached the inner getter despite a wait error: %v", inner.urls)
+	}
+}
+
+func TestADPMyJobsRegistryUsesMeasuredPace(t *testing.T) {
+	source := All(NewClient())["adpmyjobs"]
+	adapter, ok := source.(adpMyJobs)
+	if !ok {
+		t.Fatalf("adpmyjobs registered as %T, want adpMyJobs", source)
+	}
+	getter, ok := adapter.http.(rateLimitedHeaderJSONGetter)
+	if !ok {
+		t.Fatalf("adpmyjobs HTTP client = %T, want rateLimitedHeaderJSONGetter", adapter.http)
+	}
+	limiter, ok := getter.limiter.(*rate.Limiter)
+	if !ok || limiter == nil {
+		t.Fatalf("adpmyjobs limiter = %T, want a rate limiter", getter.limiter)
+	}
+	if got, want := limiter.Limit(), rate.Every(adpRequestInterval); got != want {
+		t.Errorf("adpmyjobs rate = %v, want %v", got, want)
+	}
+}
+
 func TestConcurrencyLimitedJSONGetter_AcquiresThenDelegates(t *testing.T) {
 	inner := &recordingJSONGetter{}
-	g := concurrencyLimitedJSONGetter{inner: inner, sem: make(chan struct{}, 2)}
+	g := concurrencyLimitedJSONGetter{inner: inner, sem: make(inFlight, 2)}
 
 	if err := g.GetJSON(context.Background(), "https://opendata.trudvsem.ru/api/v1/vacancies/region/x", nil); err != nil {
 		t.Fatalf("GetJSON returned error: %v", err)
@@ -219,7 +266,7 @@ func TestPacedDoverGetter_SharesOneBucket(t *testing.T) {
 
 func TestConcurrencyLimitedJSONGetter_CancelledContextShortCircuits(t *testing.T) {
 	inner := &recordingJSONGetter{}
-	sem := make(chan struct{}, 1)
+	sem := make(inFlight, 1)
 	sem <- struct{}{} // fill the only slot so the next acquire must wait
 	g := concurrencyLimitedJSONGetter{inner: inner, sem: sem}
 

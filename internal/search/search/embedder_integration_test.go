@@ -31,7 +31,7 @@ func TestIntegration_EnsureIndexLeavesTheSkillEmbedderInPlace(t *testing.T) {
 		t.Fatalf("EnsureIndex: %v", err)
 	}
 
-	got, err := c.facet.GetEmbeddersWithContext(ctx)
+	got, err := c.facet.GetEmbedders(ctx)
 	if err != nil {
 		t.Fatalf("GetEmbedders: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestIntegration_RebuildPreparesTheSkillEmbedder(t *testing.T) {
 		t.Fatalf("Prepare: %v", err)
 	}
 
-	got, err := r.rebuild.GetEmbeddersWithContext(ctx)
+	got, err := r.rebuild.GetEmbedders(ctx)
 	if err != nil {
 		t.Fatalf("GetEmbedders: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestIntegration_LosingSkillsClearsTheStoredVector(t *testing.T) {
 			Embeddings [][]float32 `json:"embeddings"`
 		} `json:"_vectors"`
 	}
-	if err := c.facet.GetDocumentWithContext(ctx, "1", &meilisearch.DocumentQuery{RetrieveVectors: true}, &stored); err != nil {
+	if err := c.facet.GetDocument(ctx, "1", &meilisearch.DocumentQuery{RetrieveVectors: true}, &stored); err != nil {
 		t.Fatalf("GetDocument: %v", err)
 	}
 	if n := len(stored.Vectors[SkillEmbedder].Embeddings); n != 0 {
@@ -178,7 +178,7 @@ func TestIntegration_EnsureDropsAnUndeclaredEmbedder(t *testing.T) {
 	if err := c.EnsureIndex(ctx); err != nil {
 		t.Fatalf("EnsureIndex: %v", err)
 	}
-	task, err := c.facet.UpdateEmbeddersWithContext(ctx, map[string]meilisearch.Embedder{
+	task, err := c.facet.UpdateEmbedders(ctx, map[string]meilisearch.Embedder{
 		"desc": {Source: meilisearch.UserProvidedEmbedderSource, Dimensions: 768},
 	})
 	if err != nil {
@@ -187,7 +187,7 @@ func TestIntegration_EnsureDropsAnUndeclaredEmbedder(t *testing.T) {
 	if err := c.awaitTask(ctx, c.facet, task.TaskUID); err != nil {
 		t.Fatalf("UpdateEmbedders task: %v", err)
 	}
-	if got, err := c.facet.GetEmbeddersWithContext(ctx); err != nil {
+	if got, err := c.facet.GetEmbedders(ctx); err != nil {
 		t.Fatalf("GetEmbedders: %v", err)
 	} else if _, ok := got["desc"]; !ok {
 		t.Fatalf("setup: the live index carries no desc embedder; it has %v", got)
@@ -201,7 +201,7 @@ func TestIntegration_EnsureDropsAnUndeclaredEmbedder(t *testing.T) {
 		t.Fatalf("Prepare: %v", err)
 	}
 	for name, idx := range map[string]meilisearch.IndexManager{"live": c.facet, "rebuild": r.rebuild} {
-		got, err := idx.GetEmbeddersWithContext(ctx)
+		got, err := idx.GetEmbedders(ctx)
 		if err != nil {
 			t.Fatalf("GetEmbedders (%s): %v", name, err)
 		}
@@ -226,7 +226,7 @@ func TestIntegration_EnsureTurnsFacetSearchOff(t *testing.T) {
 		t.Fatalf("Prepare: %v", err)
 	}
 	for name, idx := range map[string]meilisearch.IndexManager{"live": c.facet, "rebuild": r.rebuild} {
-		on, err := idx.GetFacetSearchWithContext(ctx)
+		on, err := idx.GetFacetSearch(ctx)
 		if err != nil {
 			t.Fatalf("GetFacetSearch(%s): %v", name, err)
 		}

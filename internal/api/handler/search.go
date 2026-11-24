@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/engage/companywatch"
+	"github.com/strelov1/freehire/internal/engage/sponsored"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/job/formeremployer"
@@ -73,6 +74,14 @@ type searchHandlers struct {
 	// removals reads which of a page's jobs are already closed but still indexed. Nil
 	// skips the check, which is how a search without a database behind it runs.
 	removals pendingRemovals
+	// sponsoredKey signs the click tokens of paid placements; empty switches them off.
+	sponsoredKey []byte
+	// clicks serves the paid-click redirect; nil when paid placements are off.
+	clicks *sponsoredClicks
+	// serving resolves a sponsored hit to its campaign (and the index to what serves today).
+	serving search.ServingReader
+	// impressions counts the paid slots served; nil counts nothing.
+	impressions *sponsored.Impressions
 }
 
 // profileReader loads a caller's profile. *userprofile.Service satisfies it; tests
@@ -178,7 +187,7 @@ func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsPara
 	private := match != nil ||
 		(userID != 0 && !seenIgnored && wantsParam(vals, hideSeenParam)) ||
 		(userID != 0 && !appliedIgnored && wantsParam(vals, hideAppliedCompaniesParam))
-	out, err := h.runJobSearch(ctx, vals, userID, seen, appliedFrag, match)
+	out, err := h.runJobSearch(ctx, vals, userID, seen, appliedFrag, match, true)
 	if errors.Is(err, context.DeadlineExceeded) {
 		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search temporarily unavailable")
 	}
@@ -201,6 +210,7 @@ func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsPara
 		views[i] = hit.Job
 	}
 	h.attachGhost(ctx, res.Hits, views)
+	h.markSponsored(res.Hits, views, out.ads)
 	data, err := marshalRaws(views)
 	if err != nil {
 		return nil, err
@@ -254,6 +264,8 @@ type jobSearchOutcome struct {
 	// private is set by runJobSearch when either of those was applied: the answer is
 	// one person's own.
 	private bool
+	// ads names the paid hits placed in res.Hits; the zero value places none.
+	ads sponsoredAds
 }
 
 // own is the endpoint's own params for this request: base, plus former_employers and
@@ -284,7 +296,7 @@ func (o jobSearchOutcome) own(base []string) []string {
 // personal is the applied-company exclusion fragment; empty leaves the result unchanged.
 // match, when set, keeps only postings at or above the caller's minimum skill match (see
 // skillMatchFilter).
-func (h *searchHandlers) runJobSearch(ctx context.Context, vals url.Values, userID int64, exclude []int64, personal string, match *skillMatchFilter) (jobSearchOutcome, error) {
+func (h *searchHandlers) runJobSearch(ctx context.Context, vals url.Values, userID int64, exclude []int64, personal string, match *skillMatchFilter, withSponsored bool) (jobSearchOutcome, error) {
 	if h.search == nil {
 		return jobSearchOutcome{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
@@ -309,7 +321,7 @@ func (h *searchHandlers) runJobSearch(ctx context.Context, vals url.Values, user
 	if err != nil {
 		return jobSearchOutcome{}, err
 	}
-	out, err := h.executeJobSearch(ctx, vals, jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, watch: watch, hasWatch: watchApplied, vector: h.matchVectorFor(ctx, userID, vals), exclude: exclude, personal: personal, match: match})
+	out, err := h.executeJobSearch(ctx, vals, jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, watch: watch, hasWatch: watchApplied, vector: h.matchVectorFor(ctx, userID, vals), exclude: exclude, personal: personal, match: match, sponsored: withSponsored})
 	// Both are one person's own sets; no shared cache may keep the answer.
 	out.private = formerApplied || watchApplied
 	return out, err
@@ -326,6 +338,8 @@ type jobSearchInput struct {
 	personal      string
 	strict        bool
 	match         *skillMatchFilter
+	// sponsored asks for the paid slots (see sponsoredPlacement); only the public job search does.
+	sponsored bool
 }
 
 func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, in jobSearchInput) (jobSearchOutcome, error) {
@@ -369,7 +383,17 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		return jobSearchOutcome{}, fmt.Errorf("search fields cannot be enforced")
 	}
 	dropped := qFieldsIgnored
+	// The paid twin runs alongside under its own short deadline. Never for a personal ranking
+	// (match sort or minimum skill match) nor for a page too small for the slots (company OG image).
+	var adCh <-chan []sponsored.Pick
+	adPlacement := ""
+	if in.sponsored && in.match == nil && vector == nil && limit >= sponsoredSlots && h.sponsoredEnabled() {
+		if adPlacement = sponsoredPlacement(vals, offset); adPlacement != "" {
+			adCh = h.startSponsored(ctx, params)
+		}
+	}
 	var res search.SearchResult
+	degraded := false
 	if in.match != nil {
 		res, err = in.match.scan(ctx, h.search, params)
 	} else {
@@ -399,12 +423,30 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		// Which single param Meilisearch minded is not knowable from its own
 		// error, so every active filter param is reported rather than a guess.
 		dropped = append(dropped, search.ActiveFilterParams(vals)...)
+		degraded = true
 	}
 
 	res = h.dropPendingRemovals(ctx, res)
 	h.recordQuery(vals.Get("q"))
+	var ads sponsoredAds
+	if adCh != nil {
+		// A filter the retry above dropped made the paid search fail the same way: no ads then.
+		picks := <-adCh
+		if len(picks) > 0 && !degraded {
+			slots := sponsoredSearchSlots
+			if adPlacement == sponsored.PlacementCompany {
+				slots = sponsoredCompanySlots
+			}
+			res.Hits = placeSponsored(res.Hits, picks, slots)
+			ads = sponsoredAds{campaigns: make(map[int64]int64, len(picks)), placement: adPlacement}
+			for _, p := range picks {
+				ads.campaigns[p.Doc.ID] = p.CampaignID
+				h.impressions.Add(p.CampaignID, time.Now())
+			}
+		}
+	}
 	return jobSearchOutcome{
-		res: res, limit: limit, offset: offset, dropped: dropped,
+		res: res, limit: limit, offset: offset, dropped: dropped, ads: ads,
 		formerEmployers: in.hasFormer,
 		watchlist:       in.hasWatch,
 		newHiring:       hasNewHiring,

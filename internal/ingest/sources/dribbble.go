@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -179,7 +179,7 @@ func (s dribbble) detail(ctx context.Context, p dribbblePosting) (Job, bool, err
 		ApplicationDeadline: deadline,
 	}
 	j.Location = designBoardLocation(ld.JobLocation)
-	if strings.EqualFold(ld.JobLocationType, "TELECOMMUTE") {
+	if IsTelecommute(ld.JobLocationType) {
 		j.Remote = true
 		j.WorkMode = "remote"
 		if j.Location == "" {

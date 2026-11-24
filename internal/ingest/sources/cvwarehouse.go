@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -47,8 +47,9 @@ func (cvwarehouse) FullBoardListing() {}
 // 0.3-0.6 MB, so the whole fleet's run is a few hundred requests and needs no more than this.
 const cvwarehouseRequestInterval = 500 * time.Millisecond
 
-// cvwarehouseBoard is a companyGuid.
-var cvwarehouseBoard = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+// CVWarehouseBoard is a companyGuid. Exported for cmd/harvest-boards, whose prober
+// validates a board against the same shape the adapter addresses.
+var CVWarehouseBoard = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // cvwarehouseMaxSections bounds the section fan-out of one site; the largest seen links 20.
 const cvwarehouseMaxSections = 100
@@ -84,7 +85,7 @@ func cvwarehouseURL(board string, extra url.Values) string {
 // Fetch reads the site's pages and maps every listed vacancy.
 func (s cvwarehouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	board := strings.ToLower(strings.TrimSpace(e.Board))
-	if !cvwarehouseBoard.MatchString(board) {
+	if !CVWarehouseBoard.MatchString(board) {
 		return nil, fmt.Errorf("cvwarehouse: board %q is not a companyGuid", e.Board)
 	}
 	home, err := s.page(ctx, cvwarehouseURL(board, nil))
@@ -138,7 +139,7 @@ func cvwarehouseSections(root *html.Node, board string) []string {
 		}
 		q := u.Query()
 		sec := strings.ToLower(q.Get("section"))
-		if strings.ToLower(q.Get("companyGuid")) != board || !cvwarehouseBoard.MatchString(sec) || seen[sec] {
+		if strings.ToLower(q.Get("companyGuid")) != board || !CVWarehouseBoard.MatchString(sec) || seen[sec] {
 			return true
 		}
 		seen[sec] = true

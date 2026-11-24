@@ -15,7 +15,7 @@ import (
 // reading the start page the adapter reads, asked of www (its own tenants; it redirects the
 // sparkasse. ones), then of vr. (tenants www does not know). The menu links every open position
 // and the <title> names the employer ("<name> Onlinebewerbung"); a tenant neither host knows is
-// a 404. It mirrors internal/ingest/sources/meincheckin.go, which is unexported.
+// a 404.
 type meincheckinProber struct{}
 
 var (
@@ -30,7 +30,7 @@ func (meincheckinProber) probe(ctx context.Context, c httpClient, board string) 
 	}
 	var body string
 	var err error
-	for _, host := range []string{"https://www.mein-check-in.de/", "https://vr.mein-check-in.de/"} {
+	for _, host := range sources.MeincheckinStartHosts {
 		body, err = c.GetText(ctx, host+board)
 		var se *sources.StatusError
 		if !errors.As(err, &se) || se.Code != http.StatusNotFound {
@@ -47,7 +47,7 @@ func (meincheckinProber) probe(ctx context.Context, c httpClient, board string) 
 	ids := map[string]bool{}
 	for _, m := range meincheckinMenuLink.FindAllStringSubmatch(body, -1) {
 		// The open application is not a vacancy; the adapter skips it too.
-		if !strings.Contains(strings.ToLower(m[2]), "initiativbewerbung") {
+		if !sources.MeincheckinOpenApplication.MatchString(m[2]) {
 			ids[m[1]] = true
 		}
 	}

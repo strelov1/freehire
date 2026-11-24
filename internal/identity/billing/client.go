@@ -85,7 +85,7 @@ func (c *client) do(ctx context.Context, method, path string, form url.Values, i
 
 	if resp.StatusCode != http.StatusOK {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit))
-		return fmt.Errorf("billing: %s %s: provider returned %d: %s", method, path, resp.StatusCode, snippet)
+		return &providerError{Method: method, Path: path, Status: resp.StatusCode, Body: snippet}
 	}
 	if out == nil {
 		return nil
@@ -94,6 +94,28 @@ func (c *client) do(ctx context.Context, method, path string, form url.Values, i
 		return fmt.Errorf("billing: decoding %s %s: %w", method, path, err)
 	}
 	return nil
+}
+
+// providerError is a non-200 answer. Code is the provider's machine-readable error code, for the
+// few callers that must tell one refusal from another.
+type providerError struct {
+	Method, Path string
+	Status       int
+	Body         []byte
+}
+
+func (e *providerError) Error() string {
+	return fmt.Sprintf("billing: %s %s: provider returned %d: %s", e.Method, e.Path, e.Status, e.Body)
+}
+
+func (e *providerError) Code() string {
+	var env struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(e.Body, &env)
+	return env.Error.Code
 }
 
 // stripeSubscriptionList is the provider's reply shape for a subscription listing.
@@ -166,12 +188,18 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 	return out, nil
 }
 
-// createCheckoutSession opens a hosted payment page for one account and returns where to
-// send the browser.
+type checkoutSession struct {
+	ID      string `json:"id"`
+	URL     string `json:"url"`
+	Created int64  `json:"created"`
+}
+
+// createCheckoutSession opens a hosted payment page for one account and returns its ID, creation time
+// and the URL to send the browser to.
 //
 // The account id travels in two places: client_reference_id attributes the first purchase
 // (no customer binding yet), and the customer metadata attributes later renewals.
-func (c *client) createCheckoutSession(ctx context.Context, userID int64, email, priceID, successURL, cancelURL, existingCustomer, couponID string) (string, error) {
+func (c *client) createCheckoutSession(ctx context.Context, userID int64, email, priceID, successURL, cancelURL, existingCustomer, couponID string) (checkoutSession, error) {
 	id := strconv.FormatInt(userID, 10)
 
 	form := url.Values{}
@@ -201,16 +229,14 @@ func (c *client) createCheckoutSession(ctx context.Context, userID int64, email,
 		form.Set("discounts[0][coupon]", couponID)
 	}
 
-	var out struct {
-		URL string `json:"url"`
-	}
+	var out checkoutSession
 	if err := c.do(ctx, http.MethodPost, "/checkout/sessions", form, "", &out); err != nil {
-		return "", err
+		return checkoutSession{}, err
 	}
 	if out.URL == "" {
-		return "", fmt.Errorf("billing: provider returned a checkout session with no URL")
+		return checkoutSession{}, fmt.Errorf("billing: provider returned a checkout session with no URL")
 	}
-	return out.URL, nil
+	return out, nil
 }
 
 // updateSubscriptionPrice swaps an existing subscription's item to another price with

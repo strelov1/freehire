@@ -3,8 +3,8 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -63,7 +63,7 @@ func (s radancy) detail(ctx context.Context, e CompanyEntry, loc string) (Job, b
 
 	// jobLocationType is the authoritative remote signal when present; isRemote is only a
 	// fallback. WorkMode carries the structured signal alone, set only from TELECOMMUTE.
-	remote := p.JobLocationType == "TELECOMMUTE"
+	remote := IsTelecommute(p.JobLocationType)
 
 	return Job{
 		ExternalID:  radancyJobID(loc),

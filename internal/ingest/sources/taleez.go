@@ -8,12 +8,12 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/time/rate"
 )
 
@@ -242,7 +242,7 @@ func taleezJob(ld taleezLD, p taleezPosting) (Job, bool) {
 		}
 	}
 	j.Location = strings.Join(places, "; ")
-	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(ld.JobLocationType) {
 		j.WorkMode, j.Remote = "remote", true
 	}
 	return j, true

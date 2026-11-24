@@ -3,9 +3,10 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // techtree adapts jobs.techtree.dev, a boardless, multi-company job board (it stays in the source

@@ -2,18 +2,19 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/platform/flexjson"
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
@@ -229,7 +230,7 @@ func (s jobkorea) sitemap(ctx context.Context, loc string) (sitemapDoc, error) {
 		if len(body) > jobkoreaMaxSitemapBytes {
 			return fmt.Errorf("sitemap exceeds %d bytes", jobkoreaMaxSitemapBytes)
 		}
-		doc, err = decodeSitemapBody(body)
+		doc, err = decodeSitemapBody(body, sitemapMaxUncompressed)
 		return err
 	})
 	return doc, err
@@ -238,11 +239,11 @@ func (s jobkorea) sitemap(ctx context.Context, loc string) (sitemapDoc, error) {
 // jobkoreaLD is the part of the posting page's schema.org JobPosting the adapter reads.
 // validThrough is "2026-12-10T23:59" (no offset) or a bare date.
 type jobkoreaLD struct {
-	Title              string `json:"title"`
-	Description        string `json:"description"`
-	DatePosted         string `json:"datePosted"`
-	ValidThrough       string `json:"validThrough"`
-	EmploymentType     string `json:"employmentType"`
+	Title              string          `json:"title"`
+	Description        string          `json:"description"`
+	DatePosted         string          `json:"datePosted"`
+	ValidThrough       string          `json:"validThrough"`
+	EmploymentType     json.RawMessage `json:"employmentType"`
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
@@ -367,16 +368,7 @@ func jobkoreaJob(ld jobkoreaLD, p jobkoreaPosting, now time.Time) (Job, bool) {
 		PostedAt:          parseRFC3339OrDate(strings.TrimSpace(ld.DatePosted)),
 	}
 	j.ApplicationDeadline = deadline
-	switch strings.ToUpper(strings.TrimSpace(ld.EmploymentType)) {
-	case "FULL_TIME":
-		j.EmploymentType = "full_time"
-	case "PART_TIME":
-		j.EmploymentType = "part_time"
-	case "CONTRACTOR", "TEMPORARY":
-		j.EmploymentType = "contract"
-	case "INTERN":
-		j.EmploymentType = "internship"
-	}
+	j.EmploymentType = schemaEmploymentType(schemaFirstEmploymentType(ld.EmploymentType))
 	sal := ld.BaseSalary
 	period := map[string]string{"YEAR": "year", "MONTH": "month", "DAY": "day", "HOUR": "hour"}[strings.ToUpper(sal.Value.UnitText)]
 	if cur := strings.TrimSpace(sal.Currency); cur != "" && period != "" &&

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -333,7 +333,7 @@ func sapoempregoJob(ld sapoempregoLD, sum sapoempregoSummary, p sapoempregoPosti
 // summary's "Modelo de trabalho" (Presencial / Híbrido / Teletrabalho), which every posting
 // states.
 func sapoempregoWorkMode(locationType, workhome string) string {
-	if strings.EqualFold(strings.TrimSpace(locationType), "TELECOMMUTE") {
+	if IsTelecommute(locationType) {
 		return "remote"
 	}
 	switch strings.ToLower(strings.TrimSpace(workhome)) {

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -60,7 +60,7 @@ func (s enlizt) detail(ctx context.Context, e CompanyEntry, loc string) (Job, bo
 
 	location := p.JobLocation.Address.Location()
 	mode := ""
-	if strings.EqualFold(p.JobLocationType, "TELECOMMUTE") {
+	if IsTelecommute(p.JobLocationType) {
 		mode = "remote" // schema.org's structured remote signal
 	}
 

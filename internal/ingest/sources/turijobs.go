@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -19,6 +18,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -360,7 +360,7 @@ func turijobsJob(ld turijobsLD, p turijobsPosting) (Job, bool) {
 	}
 	j.Location = strings.Join(places, "; ")
 	j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
-	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(ld.JobLocationType) {
 		j.WorkMode, j.Remote = "remote", true
 	}
 	for _, t := range turijobsOneOrMany[string](ld.EmploymentType) {

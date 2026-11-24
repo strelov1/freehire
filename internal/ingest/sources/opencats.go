@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -18,8 +18,9 @@ type opencats struct {
 	http HTMLGetter
 }
 
-// opencatsListingQuery is the portal's "show all" route, appended to the board root.
-const opencatsListingQuery = "index.php?m=careers&p=showAll"
+// OpencatsListingQuery is the portal's "show all" route, appended to the board root. Exported
+// for cmd/harvest-boards, whose prober validates a board with this same request.
+const OpencatsListingQuery = "index.php?m=careers&p=showAll"
 
 // NewOpencats builds the OpenCATS adapter over the given HTML client.
 func NewOpencats(c HTMLGetter) Source { return opencats{http: c} }
@@ -31,7 +32,7 @@ func (s opencats) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opencats: board %q: %w", e.Board, err)
 	}
-	root, err := s.http.GetHTML(ctx, base.String()+opencatsListingQuery)
+	root, err := s.http.GetHTML(ctx, base.String()+OpencatsListingQuery)
 	if err != nil {
 		return nil, fmt.Errorf("opencats: listing %s: %w", e.Board, err)
 	}

@@ -4,23 +4,19 @@ import (
 	"context"
 	"encoding/xml"
 	"errors"
-	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // covetoProber validates a coveto tenant (the k<number> label of k60360.coveto.de) by counting
-// the items of the RSS feed the adapter lists from. It mirrors internal/ingest/sources/coveto.go,
-// which is unexported. The channel title names the employer. A switched-off tenant serves an
-// HTML notice instead of the feed, and an unresolvable host is a customer number nobody holds;
-// both are a skip.
+// the items of the RSS feed the adapter lists from. The channel title names the employer. A
+// switched-off tenant serves an HTML notice instead of the feed, and an unresolvable host is a
+// customer number nobody holds; both are a skip.
 type covetoProber struct{}
 
-var covetoBoardPattern = regexp.MustCompile(`^k[0-9]{3,7}$`)
-
 func (covetoProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !covetoBoardPattern.MatchString(board) {
+	if !sources.CovetoBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	var feed struct {

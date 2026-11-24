@@ -118,6 +118,18 @@ type Digest struct {
 	// channel's "and N more" tail sends the reader. Zero when the recording failed;
 	// the renderer then falls back to a generic destination.
 	NotificationID int64
+	// Sponsored is the one paid job an email digest shows above its list, nil for any other
+	// channel or when none applies. Only the email notifier renders it.
+	Sponsored *SponsoredSlot
+}
+
+// SponsoredSlot is a paid job in a digest: the job as the digest shows jobs, and the
+// site-relative click redirect (sponsored.ClickPath + token) its link must use.
+type SponsoredSlot struct {
+	Job  DigestJob
+	Path string
+	// CampaignID is the campaign to count the impression against once the mail is sent.
+	CampaignID int64
 }
 
 // Listed returns the jobs a channel message should itemize: the first ListLimit,
@@ -344,6 +356,7 @@ type Runner struct {
 	notifier Notifier
 	cfg      Config
 	now      func() time.Time
+	ads      adConfig
 }
 
 // New builds a Runner.

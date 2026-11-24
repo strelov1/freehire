@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -67,7 +67,7 @@ func (e epam) detail(ctx context.Context, ce CompanyEntry, jobURL string) (Job, 
 	location := p.location()
 	// jobLocationType is EPAM's only structured work-arrangement signal: TELECOMMUTE means
 	// remote. Absent → leave WorkMode empty and fall back to the location text for remote.
-	remote := p.JobLocationType == "TELECOMMUTE"
+	remote := IsTelecommute(p.JobLocationType)
 	workMode := ""
 	if remote {
 		workMode = "remote"

@@ -10,8 +10,8 @@ import {
 } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twenty-six account sections', () => {
-    expect(accountNav).toHaveLength(26);
+  it('lists the twenty-seven account sections', () => {
+    expect(accountNav).toHaveLength(27);
   });
 
   // Submissions and the invite link are tabs of Contributions and Plan now; their old
@@ -258,7 +258,7 @@ describe('workspaceNav', () => {
 
   it('shows the Employer company pages and the shared settings', () => {
     expect(groups('employer')).toEqual([
-      ['main', ['/my/employer', '/my/employer/vacancies']],
+      ['main', ['/my/employer', '/my/employer/vacancies', '/my/sponsored']],
       ['settings', SETTINGS],
     ]);
   });

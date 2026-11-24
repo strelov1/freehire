@@ -7,10 +7,10 @@ import (
 	"log"
 	"net/url"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -228,7 +228,7 @@ func (s charityjob) detail(ctx context.Context, card charityjobCard) (Job, bool,
 		return Job{}, false, errors.New("page carries no usable JobPosting for the listed ID")
 	}
 	location, countries := schemaPlacesLocation(ld.JobLocation)
-	remote := ld.JobLocationType == "TELECOMMUTE"
+	remote := IsTelecommute(ld.JobLocationType)
 	mode := workModeFromRemote(remote)
 	if remote {
 		location = "Remote"

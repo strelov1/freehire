@@ -2,12 +2,12 @@ package boardresolve
 
 import (
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 
 	"golang.org/x/net/html"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/ingest/atsboard"
 )
 

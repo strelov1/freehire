@@ -9,13 +9,13 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/time/rate"
@@ -415,7 +415,7 @@ func netempregosJob(ld netempregosLD, p netempregosPosting) (Job, bool) {
 	}
 	j.Location, j.FallbackCountries = netempregosPlace(zone)
 	j.PostedAt = NotFuture(p.posted)
-	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(ld.JobLocationType) {
 		j.WorkMode = "remote"
 		j.Remote = true
 	}

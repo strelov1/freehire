@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"golang.org/x/net/html"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 

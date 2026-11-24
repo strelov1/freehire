@@ -2,9 +2,10 @@ package sources
 
 import (
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // inrSalary reads an Indian salary LABEL — the display string an Indian platform puts in

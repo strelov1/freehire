@@ -9,13 +9,13 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/platform/flexjson"
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
@@ -242,7 +242,7 @@ func (s foundit) sitemap(ctx context.Context, loc string) (sitemapDoc, error) {
 		if len(body) > founditMaxSitemapBytes {
 			return fmt.Errorf("sitemap exceeds %d bytes", founditMaxSitemapBytes)
 		}
-		doc, err = decodeSitemapBody(body)
+		doc, err = decodeSitemapBody(body, sitemapMaxUncompressed)
 		return err
 	})
 	return doc, err
@@ -336,7 +336,7 @@ func founditJob(ld founditLD, p founditPosting) (Job, bool) {
 		FallbackCountries: []string{"in"},
 		PostedAt:          founditPostedAt(ld.DatePosted),
 	}
-	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(ld.JobLocationType) {
 		j.WorkMode, j.Remote = "remote", true
 	}
 	switch strings.ToLower(strings.TrimSpace(ld.EmploymentType)) {

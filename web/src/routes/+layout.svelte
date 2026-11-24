@@ -5,6 +5,7 @@
   import { api } from '#lib/api.js';
   import { initTheme } from '#lib/theme.svelte.js';
   import { adoptBrowserTimezone, currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import { reportSigninSession } from '#lib/webErrorTelemetry.js';
   import { confirmTailorDialog, settleConfirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
   import { onboardingGate, routeAccount } from '#lib/onboardingGate.svelte.js';
   import { isAccountArea, isFullBleedRoute } from '#lib/shellLayout.js';
@@ -159,7 +160,9 @@
   let wasAuthenticated = false;
   $effect(() => {
     const authenticated = isAuthenticated();
-    if (!authenticated) {
+    if (authenticated) {
+      reportSigninSession();
+    } else {
       resetUserStores();
       if (wasAuthenticated) onboardingGate.reset();
     }

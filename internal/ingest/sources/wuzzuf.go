@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )

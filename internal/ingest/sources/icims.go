@@ -3,9 +3,9 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -36,7 +36,7 @@ func (icims) Provider() string { return "icims" }
 func (icims) FullBoardListing() {}
 
 func (s icims) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	host := icimsHost(e.Board)
+	host := IcimsHost(e.Board)
 	locs, err := s.jobLocs(ctx, host, e.Board)
 	if err != nil {
 		return nil, err
@@ -54,9 +54,11 @@ func (s icims) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // only the host; which product the site runs is read from its sitemap locs (see detail).
 func icimsVanity(board string) bool { return strings.Contains(board, ".") }
 
-// icimsHost resolves the board to the host the endpoints use: a vanity board is itself the
-// host; a bare slug forms the classic "careers-<slug>.icims.com".
-func icimsHost(board string) string {
+// IcimsHost resolves the board to the host the endpoints use: a vanity board is itself the
+// host; a bare slug forms the classic "careers-<slug>.icims.com". Exported for
+// cmd/harvest-boards, whose prober must address the same host the adapter crawls: rebuilding a
+// vanity board as "careers-<board>" would resolve nowhere and report a live board dead.
+func IcimsHost(board string) string {
 	if icimsVanity(board) {
 		return board
 	}
@@ -130,7 +132,7 @@ func (s icims) detail(ctx context.Context, e CompanyEntry, host, loc string) (Jo
 	// jobLocationType is the authoritative remote signal; isRemote(location) is only a
 	// fallback. WorkMode carries the structured signal alone, so it is set only from
 	// TELECOMMUTE, never the location heuristic.
-	remote := p.JobLocationType == "TELECOMMUTE"
+	remote := IsTelecommute(p.JobLocationType)
 
 	return Job{
 		ExternalID:  id,

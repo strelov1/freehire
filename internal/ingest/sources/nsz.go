@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html"
 	"log"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -14,6 +13,7 @@ import (
 	xhtml "golang.org/x/net/html"
 	"golang.org/x/time/rate"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 )
 

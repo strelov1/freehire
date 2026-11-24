@@ -196,7 +196,7 @@ var blocks = map[string][]string{
 		// slots is the pure availability engine (rules, expansion, slicing) shared by mentorship
 		// and buddy mock interviews; standard library only.
 		"slots",
-		"socialdigest", "subscription",
+		"socialdigest", "sponsored", "subscription",
 		"telegramnotify", "vote", "webhooknotify",
 	},
 	// atsapply and candidateprofile sit here because both reach ingest (applyform,

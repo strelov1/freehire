@@ -5,16 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"regexp"
-
-	"golang.org/x/net/html"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // hireclickProber validates a HireClick board "<slug>" by counting the postings its job list
-// names. It mirrors the first half of the adapter's crawl (internal/ingest/sources/hireclick.go):
-// the job board page "<slug>.hireclick.com/jobboard/jobboard.aspx" carries the tenant's
+// names. It runs the first half of the adapter's crawl (internal/ingest/sources/hireclick.go)
+// itself: the job board page "<slug>.hireclick.com/jobboard/jobboard.aspx" carries the tenant's
 // organisation GUID in #hdnOrgGuid, and "/api/Controllers/JobBoard/GetSettingsAndJobs?orgGUID="
 // answers the whole list as a JSON string holding the JSON document.
 // Two requests are still cheaper than the adapter fallback: a whole crawl, with every posting
@@ -33,9 +30,6 @@ type hireclickProber struct {
 	}
 }
 
-// hireclickJobLink matches a posting URL in the list, mirroring the adapter's own id rule.
-var hireclickJobLink = regexp.MustCompile(`/jb/[^/]+/view/(\d+)`)
-
 func (p hireclickProber) probe(ctx context.Context, _ httpClient, slug string) (string, int, error) {
 	c := p.client
 	origin := fmt.Sprintf("https://%s.hireclick.com", slug)
@@ -43,7 +37,7 @@ func (p hireclickProber) probe(ctx context.Context, _ httpClient, slug string) (
 	if err != nil {
 		return "", 0, nil
 	}
-	guid := hireclickOrgGUID(root)
+	guid := sources.HireclickOrgGUID(root)
 	if guid == "" {
 		return "", 0, nil
 	}
@@ -61,33 +55,9 @@ func (p hireclickProber) probe(ctx context.Context, _ httpClient, slug string) (
 	}
 	ids := map[string]bool{}
 	for _, j := range doc.JobList {
-		if m := hireclickJobLink.FindStringSubmatch(j.JobURL); m != nil {
+		if m := sources.HireclickJobIDPattern.FindStringSubmatch(j.JobURL); m != nil {
 			ids[m[1]] = true
 		}
 	}
 	return "", len(ids), nil
-}
-
-// hireclickOrgGUID returns the value of the page's #hdnOrgGuid hidden input, or "".
-func hireclickOrgGUID(n *html.Node) string {
-	if n.Type == html.ElementNode && n.Data == "input" {
-		var id, value string
-		for _, a := range n.Attr {
-			switch a.Key {
-			case "id":
-				id = a.Val
-			case "value":
-				value = a.Val
-			}
-		}
-		if id == "hdnOrgGuid" {
-			return value
-		}
-	}
-	for ch := n.FirstChild; ch != nil; ch = ch.NextSibling {
-		if guid := hireclickOrgGUID(ch); guid != "" {
-			return guid
-		}
-	}
-	return ""
 }

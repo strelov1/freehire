@@ -9,8 +9,9 @@ import (
 	"log"
 	"math/rand/v2"
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 const (
@@ -123,7 +124,7 @@ func (s sitemapldjson) list(ctx context.Context, board, pattern string) ([]sitem
 		if err != nil {
 			return fmt.Errorf("sitemap %s: %w", pageURL, err)
 		}
-		doc, err := decodeSitemapBody([]byte(body))
+		doc, err := decodeSitemapBody([]byte(body), sitemapMaxUncompressed)
 		if err != nil {
 			return fmt.Errorf("sitemap %s: %w", pageURL, err)
 		}
@@ -179,7 +180,7 @@ func (s sitemapldjson) detail(ctx context.Context, e CompanyEntry, hit sitemapld
 	if title == "" || company == "" {
 		return Job{}, false
 	}
-	remote := strings.EqualFold(strings.TrimSpace(p.JobLocationType), "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 	loc := p.location()
 	return Job{
 		ExternalID:     hit.id,
@@ -275,27 +276,16 @@ func (p sitemapldjsonPosting) countries() []string {
 }
 
 func schemaEmploymentRaw(raw json.RawMessage) string {
-	raw = bytes.TrimSpace(raw)
-	if len(raw) == 0 || string(raw) == "null" {
+	values, err := oneOrMany[string](raw)
+	if err != nil {
 		return ""
 	}
-	if raw[0] == '[' {
-		var values []string
-		if json.Unmarshal(raw, &values) != nil {
-			return ""
+	for _, value := range values {
+		if mapped := schemaEmploymentType(value); mapped != "" {
+			return mapped
 		}
-		for _, value := range values {
-			if mapped := schemaEmploymentType(value); mapped != "" {
-				return mapped
-			}
-		}
-		return ""
 	}
-	var one string
-	if json.Unmarshal(raw, &one) != nil {
-		return ""
-	}
-	return schemaEmploymentType(one)
+	return ""
 }
 
 func sitemapLDJSONBoardURL(board string) (string, error) {

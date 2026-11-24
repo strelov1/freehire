@@ -176,9 +176,8 @@ type fakeIndexer struct {
 	// stopRun cancels the run's own context from inside a push, standing in for the
 	// SIGTERM freehire-reindexw sends this service before every rebuild.
 	stopRun context.CancelFunc
-	// opaqueErr is returned INSTEAD of the context's own error once the context is
-	// done, standing in for *meilisearch.Error — which implements no Unwrap, so nothing
-	// downstream can recover a context sentinel from it.
+	// opaqueErr models an engine failure that arrives as the context ends
+	// and does not itself report cancellation.
 	opaqueErr error
 	// waveErr fails every call outright, batch and per-item alike.
 	waveErr error

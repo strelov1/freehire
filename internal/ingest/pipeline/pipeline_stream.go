@@ -126,8 +126,12 @@ func jobIdentity(e sources.CompanyEntry, j sources.Job) (source, externalID stri
 // companies on one platform cannot collide), and job.New derives the slugs and the
 // dictionary facets internally — so ingest, the moderator write path, and Telegram
 // extraction all produce identical facets from the one door. It returns
-// job.ErrInvalidDraft for a posting with no title/identity, which the caller skips.
+// job.ErrInvalidDraft for a posting with no title/identity, and errPlaceholderPosting for a
+// test posting, both of which the caller skips.
 func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical, bodyFromCatalogue bool) (job.Job, error) {
+	if placeholderTitle(j.Title) {
+		return job.Job{}, errPlaceholderPosting
+	}
 	source, externalID := jobIdentity(e, j)
 	slug := canonicalCompanySlug(canon, j.Company)
 	if j.CompanyKey != "" {

@@ -8,11 +8,11 @@ import (
 	"log"
 	"net/http"
 	neturl "net/url"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/yuin/goldmark"
 	gmhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/net/html"

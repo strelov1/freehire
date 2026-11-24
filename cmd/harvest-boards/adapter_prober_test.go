@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -183,5 +184,25 @@ func TestAdapterProbeOfAHydratingAdapterSpendsNoDetail(t *testing.T) {
 	}
 	if src.details != 0 {
 		t.Errorf("probe spent %d detail requests, want none: it counts the listing", src.details)
+	}
+}
+
+// goneSource answers ErrBoardGone the way ~30 adapters report the platform's own "no such
+// board".
+type goneSource struct{}
+
+func (goneSource) Provider() string { return "gone" }
+
+func (goneSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job, error) {
+	return nil, fmt.Errorf("kenjo: board %q: %w", "nosuch", sources.ErrBoardGone)
+}
+
+func TestAdapterProbeReadsErrBoardGoneAsASkip(t *testing.T) {
+	p := adapterProber{provider: "gone", newSource: func() sources.Source { return goneSource{} }}
+
+	name, n, err := p.probe(context.Background(), nil, "nosuch")
+
+	if name != "" || n != 0 || err != nil {
+		t.Fatalf("probe = (%q, %d, %v), want (\"\", 0, nil): the platform's own \"not a board\" is a skip, not a failure", name, n, err)
 	}
 }

@@ -1,35 +1,30 @@
-// /recruiters FAQ — the single source for both the visible section
-// (RecruitersView.svelte) and the FAQPage JSON-LD. Google requires the schema's
-// answers to match the on-page text, so they share this. Answers restate the
-// submission flow the page already shows (sign in → submit URL → moderator review →
-// live) and deliberately promise no review turnaround, which is not guaranteed.
+// The visible FAQ and its FAQPage JSON-LD share these answers.
 
 import type { FaqItem } from './seo';
 
 export const RECRUITERS_FAQ: FaqItem[] = [
   {
     question: 'What does it cost to post a job?',
-    answer:
-      'Nothing. freehire is an open-source, non-commercial aggregator — no fees, no paywall, no upsell, and no paid placement. A submitted role sits in the same catalogue, ranked the same way, as one crawled from a company board.',
+    answer: 'Posting a tech vacancy on freehire is free. You can also submit an existing job link for free.',
   },
   {
-    question: 'Do I need an account to submit?',
+    question: 'Do I need a company account?',
     answer:
-      'Yes. Submitting is tied to an account so the posting has an owner and you can follow it afterwards — signing in takes a moment, and it is the only thing standing between you and the form.',
+      'To publish and manage your own vacancies, sign in and verify your company using a work email. To submit an existing job link for review, you only need a freehire account.',
   },
   {
-    question: 'How does a submission go live?',
+    question: 'Can we keep using our current ATS?',
     answer:
-      'A moderator reads every submission before it is published, so the catalogue stays free of spam and your posting sits among real roles. Once approved, the role joins the public catalogue and search, enriched and deduplicated like every other source.',
+      'Yes. When you publish a vacancy, you can direct candidates to your existing ATS or careers page. Choose on-site applications if you want to review applications and email candidates in freehire.',
   },
   {
-    question: 'Can I check the status of a submission?',
+    question: 'What happens when I submit an existing job link?',
     answer:
-      'Yes. Every posting you send in appears under "My submissions" in your account with its current state, so you can see whether it is still awaiting review or already live.',
+      'A moderator checks the submission before it appears in the public catalogue. You can follow the review under “My submissions” in your account.',
   },
   {
-    question: 'Our company already has an ATS board — should I still submit one by one?',
+    question: 'Can freehire list our whole careers board?',
     answer:
-      'No, list the whole board instead. If you hire through Greenhouse, Lever, Ashby, Workable or another supported ATS, freehire can crawl every role you publish and close them when you take them down, which is less work than submitting each vacancy by hand.',
+      'If your jobs are on a supported ATS such as Greenhouse, Lever, Ashby, or Workable, freehire can crawl your board and close roles when you take them down.',
   },
 ];

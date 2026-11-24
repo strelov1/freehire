@@ -213,7 +213,7 @@ func TestAppOneRetryRespectsCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	a := appone{http: f, retryDelay: time.Hour}
-	if err := a.getJSON(ctx, apponePortalURL+"CRWA", &struct{}{}); !errors.Is(err, context.Canceled) {
+	if err := a.getJSON(ctx, ApponePortalURL+"CRWA", &struct{}{}); !errors.Is(err, context.Canceled) {
 		t.Errorf("err = %v, want context.Canceled instead of waiting out the retry delay", err)
 	}
 }

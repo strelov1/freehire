@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sync"
 
@@ -64,14 +65,20 @@ func (a adapterProber) probeSeeded(ctx context.Context, _ httpClient, board, com
 	src := a.newSource()
 	// A hydrating adapter is asked for its listing alone: every posting reads as already held,
 	// so the probe skips detail requests whose bodies it would throw away.
+	var (
+		jobs []sources.Job
+		err  error
+	)
 	if hs, ok := src.(sources.HydratingSource); ok {
-		jobs, err := hs.FetchNew(ctx, e, func(string) bool { return true })
-		if err != nil {
-			return "", 0, err
-		}
-		return "", len(jobs), nil
+		jobs, err = hs.FetchNew(ctx, e, func(string) bool { return true })
+	} else {
+		jobs, err = src.Fetch(ctx, e)
 	}
-	jobs, err := src.Fetch(ctx, e)
+	// ErrBoardGone is the platform's own "no such board", the answer every bespoke prober
+	// reads as absent; it is a skip, where any other adapter error is a probe failure.
+	if errors.Is(err, sources.ErrBoardGone) {
+		return "", 0, nil
+	}
 	if err != nil {
 		return "", 0, err
 	}

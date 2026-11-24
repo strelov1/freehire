@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	xhtml "golang.org/x/net/html"
 )
 
@@ -43,9 +43,10 @@ func (meincheckin) Provider() string { return "meincheckin" }
 // meincheckinBoard is the shape of a tenant slug: lower-case words, or a bank's routing number.
 var meincheckinBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
-// meincheckinOpenApplication matches the open-application entry most tenants list among their
-// positions. It is not a vacancy.
-var meincheckinOpenApplication = regexp.MustCompile(`(?i)initiativbewerbung`)
+// MeincheckinOpenApplication matches the open-application entry most tenants list among their
+// positions. It is not a vacancy. Exported for cmd/harvest-boards, whose prober leaves it out of
+// a board's count the same way.
+var MeincheckinOpenApplication = regexp.MustCompile(`(?i)initiativbewerbung`)
 
 type meincheckinPosition struct {
 	id    string
@@ -79,8 +80,9 @@ func (s meincheckin) FetchNew(ctx context.Context, e CompanyEntry, seen func(ext
 	}), nil
 }
 
-// meincheckinStartHosts are the hosts a tenant's start page is asked of, in order; see the type.
-var meincheckinStartHosts = []string{"https://www.mein-check-in.de/", "https://vr.mein-check-in.de/"}
+// MeincheckinStartHosts are the hosts a tenant's start page is asked of, in order; see the type.
+// Exported for cmd/harvest-boards, whose prober asks the same hosts in the same order.
+var MeincheckinStartHosts = []string{"https://www.mein-check-in.de/", "https://vr.mein-check-in.de/"}
 
 // list reads the tenant's start page. A tenant unknown to every start host is gone; a start page
 // that landed anywhere but the tenant is not its menu.
@@ -92,7 +94,7 @@ func (s meincheckin) list(ctx context.Context, rawBoard string) (string, []meinc
 	var root *xhtml.Node
 	var final string
 	var err error
-	for _, host := range meincheckinStartHosts {
+	for _, host := range MeincheckinStartHosts {
 		root, final, err = s.http.GetHTMLResolved(ctx, host+board)
 		var se *StatusError
 		if !errors.As(err, &se) || se.Code != http.StatusNotFound {
@@ -120,7 +122,7 @@ func (s meincheckin) list(ctx context.Context, rawBoard string) (string, []meinc
 		}
 		id := firstSubmatch(link, Attr(n, "href"))
 		title := strings.Join(strings.Fields(textContent(n)), " ")
-		if id == "" || seenIDs[id] || title == "" || meincheckinOpenApplication.MatchString(title) {
+		if id == "" || seenIDs[id] || title == "" || MeincheckinOpenApplication.MatchString(title) {
 			return false
 		}
 		seenIDs[id] = true

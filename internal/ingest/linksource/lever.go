@@ -5,8 +5,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/externalid"
@@ -95,7 +96,7 @@ func (l lever) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 		ExternalID:  externalid.Namespace(company, p.ID),
 		URL:         p.HostedURL,
 		Title:       p.Text,
-		Company:     humanizeBoard(company), // the per-posting API carries no company name
+		Company:     sources.HumanizeBoard(company), // the per-posting API carries no company name
 		Location:    p.Categories.Location,
 		Team:        strings.TrimSpace(cmp.Or(strings.TrimSpace(p.Categories.Team), p.Categories.Department)),
 		Description: htmltext.Sanitize(body.String()),

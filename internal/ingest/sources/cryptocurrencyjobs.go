@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	xhtml "golang.org/x/net/html"
 )
 

@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
@@ -90,7 +91,7 @@ func (b bairesdev) Resolve(ctx context.Context, raw string) (sources.Job, bool, 
 		Title:       p.Title,
 		Company:     company,
 		Description: htmltext.Sanitize(desc),
-		Remote:      isTelecommute(p.JobLocationType),
+		Remote:      sources.IsTelecommute(p.JobLocationType),
 		PostedAt:    posted,
 	}, true, nil
 }

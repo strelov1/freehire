@@ -1,8 +1,6 @@
 package classify
 
-import (
-	"regexp"
-)
+import "github.com/MoeForge/moego/regexp"
 
 // polishSeniorityTable lists the Polish grade aliases, stems on the folded title as in
 // polishCategoryTable, in precedence order.

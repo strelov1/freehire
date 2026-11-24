@@ -10,9 +10,10 @@
 package industrytag
 
 import (
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)

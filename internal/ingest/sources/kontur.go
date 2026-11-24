@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -160,7 +160,7 @@ func (k kontur) detail(ctx context.Context, e CompanyEntry, c konturCard) (Job, 
 	}
 
 	labels := konturLabels(root)
-	remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 	location := konturLocation(p.JobLocation)
 	return Job{
 		ExternalID:         c.ID,

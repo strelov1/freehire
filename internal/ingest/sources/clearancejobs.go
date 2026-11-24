@@ -10,13 +10,13 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/platform/flexjson"
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
@@ -268,7 +268,7 @@ func (s clearancejobs) sitemap(ctx context.Context, loc string) (sitemapDoc, err
 		if len(body) > clearancejobsMaxSitemapBytes {
 			return fmt.Errorf("sitemap exceeds %d bytes", clearancejobsMaxSitemapBytes)
 		}
-		doc, err = decodeSitemapBody(body)
+		doc, err = decodeSitemapBody(body, sitemapMaxUncompressed)
 		return err
 	})
 	return doc, err

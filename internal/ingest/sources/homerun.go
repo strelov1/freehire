@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"slices"
 	"strings"
 
 	"golang.org/x/net/html"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -52,8 +52,9 @@ func (homerun) Provider() string { return "homerun" }
 // fullBoardListing: the feed is one unpaginated document carrying every open vacancy.
 func (homerun) FullBoardListing() {}
 
-// homerunBoard is the shape of a tenant label.
-var homerunBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+// HomerunBoard is the shape of a tenant label. Exported for cmd/harvest-boards, whose prober
+// validates a board against the same shape the adapter addresses.
+var HomerunBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // homerunFeed is the Atom document. XMLName is checked so an answer that is not the feed is told
 // apart from a tenant with no openings, which Homerun serves as a feed with no entry.
@@ -117,7 +118,7 @@ func (s homerun) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 // visitor would open.
 func (s homerun) list(ctx context.Context, rawBoard string) ([]homerunEntry, error) {
 	board := strings.ToLower(strings.TrimSpace(rawBoard))
-	if !homerunBoard.MatchString(board) {
+	if !HomerunBoard.MatchString(board) {
 		return nil, fmt.Errorf("homerun: board %q is not a tenant label", rawBoard)
 	}
 	var feed homerunFeed
@@ -205,7 +206,7 @@ func homerunAddPage(j *Job, root *html.Node) {
 			j.Location += "; " + town
 		}
 	}
-	if strings.EqualFold(strings.TrimSpace(jp.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(jp.JobLocationType) {
 		j.Remote, j.WorkMode = true, workModeFromRemote(true)
 	}
 }

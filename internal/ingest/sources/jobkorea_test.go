@@ -171,6 +171,9 @@ func TestJobKoreaKeepsTheSummaryWhenTheBodyIsOneImage(t *testing.T) {
 	if j.ExternalID != "50398006" {
 		t.Fatalf("unexpected order: %s", j.ExternalID)
 	}
+	if j.EmploymentType != "full_time" {
+		t.Errorf("EmploymentType = %q, want the first listed type", j.EmploymentType)
+	}
 	if !strings.Contains(j.Description, "정규직 경력 채용을 진행합니다") {
 		t.Errorf("an image-only body must leave the JobPosting summary, got %q", j.Description)
 	}

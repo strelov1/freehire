@@ -3,8 +3,9 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // hurma adapts Hurma career sites. Hurma hosts each employer on its own subdomain

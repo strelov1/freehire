@@ -8,10 +8,11 @@ import (
 	"maps"
 	"net"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // NewPlaceholderRegistry wires the resolvers for a board whose company is still its own board

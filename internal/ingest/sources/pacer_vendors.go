@@ -55,17 +55,11 @@ type rateLimitedTeamtailorGetter struct {
 }
 
 func (g rateLimitedTeamtailorGetter) GetHTML(ctx context.Context, url string) (*html.Node, error) {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
-	return g.inner.GetHTML(ctx, url)
+	return gated(ctx, gate{limiter: g.limiter}, func() (*html.Node, error) { return g.inner.GetHTML(ctx, url) })
 }
 
 func (g rateLimitedTeamtailorGetter) GetXML(ctx context.Context, url string, v any) error {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return err
-	}
-	return g.inner.GetXML(ctx, url, v)
+	return gate{limiter: g.limiter}.call(ctx, func() error { return g.inner.GetXML(ctx, url, v) })
 }
 
 // pacedTeamtailorGetter wraps c with a fresh limiter at teamtailor's rate.
@@ -92,17 +86,11 @@ type rateLimitedIdealTraitsGetter struct {
 }
 
 func (g rateLimitedIdealTraitsGetter) GetJSONWithHeaders(ctx context.Context, url string, headers map[string]string, v any) error {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return err
-	}
-	return g.inner.GetJSONWithHeaders(ctx, url, headers, v)
+	return gate{limiter: g.limiter}.call(ctx, func() error { return g.inner.GetJSONWithHeaders(ctx, url, headers, v) })
 }
 
 func (g rateLimitedIdealTraitsGetter) GetHTML(ctx context.Context, url string) (*html.Node, error) {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
-	return g.inner.GetHTML(ctx, url)
+	return gated(ctx, gate{limiter: g.limiter}, func() (*html.Node, error) { return g.inner.GetHTML(ctx, url) })
 }
 
 // pacedIdealTraitsGetter wraps c with a fresh limiter at IdealTraits' rate, shared across one
@@ -136,17 +124,11 @@ type pacedHomerun struct {
 }
 
 func (g pacedHomerun) GetXML(ctx context.Context, url string, v any) error {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return err
-	}
-	return g.homerunGetter.GetXML(ctx, url, v)
+	return gate{limiter: g.limiter}.call(ctx, func() error { return g.homerunGetter.GetXML(ctx, url, v) })
 }
 
 func (g pacedHomerun) GetHTML(ctx context.Context, url string) (*html.Node, error) {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
-	return g.homerunGetter.GetHTML(ctx, url)
+	return gated(ctx, gate{limiter: g.limiter}, func() (*html.Node, error) { return g.homerunGetter.GetHTML(ctx, url) })
 }
 
 // pacedHomerunGetter wraps a getter with a fresh limiter shared across one registry build.
@@ -214,17 +196,11 @@ type rateLimitedUKGHTTP struct {
 }
 
 func (g rateLimitedUKGHTTP) PostJSON(ctx context.Context, url string, body, v any) error {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return err
-	}
-	return g.inner.PostJSON(ctx, url, body, v)
+	return gate{limiter: g.limiter}.call(ctx, func() error { return g.inner.PostJSON(ctx, url, body, v) })
 }
 
 func (g rateLimitedUKGHTTP) GetHTML(ctx context.Context, url string) (*html.Node, error) {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
-	return g.inner.GetHTML(ctx, url)
+	return gated(ctx, gate{limiter: g.limiter}, func() (*html.Node, error) { return g.inner.GetHTML(ctx, url) })
 }
 
 // pacedUKGHTTP wraps c with a fresh limiter at ukg's rate, shared across one registry build.

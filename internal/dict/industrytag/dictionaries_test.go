@@ -1,8 +1,9 @@
 package industrytag
 
 import (
-	"regexp"
 	"testing"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // slugForm is the shape a canonical value must have to survive a filter URL.

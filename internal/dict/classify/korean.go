@@ -1,9 +1,10 @@
 package classify
 
 import (
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
 )

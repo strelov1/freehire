@@ -7,14 +7,15 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/platform/flexjson"
+	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 	"golang.org/x/time/rate"
 )
 
@@ -214,9 +215,9 @@ func (s naukrigulf) list(ctx context.Context) ([]naukrigulfRow, error) {
 	return out, nil
 }
 
-// get reads one API answer through the pacer, asking again while the request is refused.
+// get reads one API answer through the pacer and retries bounded failures.
 func (s naukrigulf) get(ctx context.Context, u string, v any) error {
-	return retryWhile(ctx, naukrigulfRetries, s.retryBackoff, naukrigulfRefused, func() error {
+	return retryWhile(ctx, naukrigulfRetries, s.retryBackoff, naukrigulfRetryable, func() error {
 		if err := s.limiter.Wait(ctx); err != nil {
 			return err
 		}
@@ -224,9 +225,12 @@ func (s naukrigulf) get(ctx context.Context, u string, v any) error {
 	})
 }
 
-// naukrigulfRefused reports an answer worth asking again: Akamai's 403, a rate limit or a server
-// failure, none of which the Scrapling client retries itself.
-func naukrigulfRefused(err error) bool {
+// naukrigulfRetryable includes gateway errors produced when Scrapling could not complete the fetch.
+func naukrigulfRetryable(err error) bool {
+	var serviceErr *scraplingfetch.ServiceError
+	if errors.As(err, &serviceErr) {
+		return serviceErr.StatusCode == http.StatusBadGateway
+	}
 	var se *StatusError
 	return errors.As(err, &se) && (se.Code == http.StatusForbidden || se.Code == http.StatusTooManyRequests || se.Code >= 500)
 }

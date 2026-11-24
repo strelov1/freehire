@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -137,13 +138,13 @@ func TestClientCheckoutSession(t *testing.T) {
 		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_123"}`))
 	})
 
-	url, err := c.createCheckoutSession(context.Background(), 601, "buyer@example.com",
+	session, err := c.createCheckoutSession(context.Background(), 601, "buyer@example.com",
 		"price_pro_monthly", "https://freehire.me/my/plan", "https://freehire.me/my/plan", "", "")
 	if err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
-	if url != "https://checkout.stripe.com/c/pay/cs_test_123" {
-		t.Fatalf("url: got %q", url)
+	if session.URL != "https://checkout.stripe.com/c/pay/cs_test_123" {
+		t.Fatalf("url: got %q", session.URL)
 	}
 	for _, want := range []string{"client_reference_id=601", "freehire_user_id", "mode=subscription", "price_pro_monthly"} {
 		if !strings.Contains(gotForm, want) {
@@ -310,5 +311,123 @@ func TestClientReadsThePeriodEndFromEitherPlace(t *testing.T) {
 				t.Fatalf("want 2026-10-01T00:00:00Z, got %s", got)
 			}
 		})
+	}
+}
+
+func TestClientCreatePaymentCheckoutSession(t *testing.T) {
+	var form url.Values
+	var path, idem string
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		path, idem = r.URL.Path, r.Header.Get("Idempotency-Key")
+		_ = r.ParseForm()
+		form = r.PostForm
+		_, _ = w.Write([]byte(`{"url":"https://checkout.example/pay"}`))
+	})
+
+	got, err := c.createPaymentCheckoutSession(context.Background(), paymentCheckout{
+		UserID: 7, CampaignID: 42, Cents: 2900, Customer: "cus_1",
+		SuccessURL: "https://site/my/sponsored?topup=success", CancelURL: "https://site/my/sponsored?topup=cancel",
+	}, "key-1")
+	if err != nil || got != "https://checkout.example/pay" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+	if path != "/checkout/sessions" || idem != "key-1" {
+		t.Errorf("path %q, idempotency key %q", path, idem)
+	}
+	want := map[string]string{
+		"mode":                                          "payment",
+		"line_items[0][quantity]":                       "1",
+		"line_items[0][price_data][currency]":           "usd",
+		"line_items[0][price_data][unit_amount]":        "2900",
+		"line_items[0][price_data][product_data][name]": "Sponsored job budget",
+		"client_reference_id":                           "7",
+		"customer":                                      "cus_1",
+		"metadata[kind]":                                "sponsored_topup",
+		"metadata[campaign_id]":                         "42",
+		"metadata[user_id]":                             "7",
+		"payment_intent_data[metadata][kind]":           "sponsored_topup",
+		"payment_intent_data[metadata][campaign_id]":    "42",
+		"payment_intent_data[metadata][user_id]":        "7",
+		"success_url":                                   "https://site/my/sponsored?topup=success",
+		"cancel_url":                                    "https://site/my/sponsored?topup=cancel",
+	}
+	for k, v := range want {
+		if form.Get(k) != v {
+			t.Errorf("%s: want %q, got %q", k, v, form.Get(k))
+		}
+	}
+}
+
+func TestClientCreatePaymentCheckoutSessionWithoutCustomer(t *testing.T) {
+	var form url.Values
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		form = r.PostForm
+		_, _ = w.Write([]byte(`{"url":"https://checkout.example/pay"}`))
+	})
+	if _, err := c.createPaymentCheckoutSession(context.Background(), paymentCheckout{UserID: 7, CampaignID: 1, Cents: 3000}, "k"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := form["customer"]; ok {
+		t.Error("an unknown customer must not be sent")
+	}
+}
+
+func TestClientReadsPaidCheckoutSession(t *testing.T) {
+	var method, path string
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.Path
+		_, _ = w.Write([]byte(`{"id":"cs_1","mode":"payment","payment_status":"paid","currency":"usd","amount_total":2900,
+			"payment_intent":"pi_1","metadata":{"kind":"sponsored_topup","campaign_id":"42","user_id":"7"}}`))
+	})
+	s, err := c.checkoutSession(context.Background(), "cs_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodGet || path != "/checkout/sessions/cs_1" {
+		t.Errorf("%s %s", method, path)
+	}
+	if s.Mode != "payment" || s.PaymentStatus != "paid" || s.Currency != "usd" || s.AmountTotal != 2900 ||
+		s.PaymentIntent != "pi_1" || s.Metadata["campaign_id"] != "42" {
+		t.Errorf("decoded %+v", s)
+	}
+}
+
+func TestClientRefundPaymentIntent(t *testing.T) {
+	var method, path, idem string
+	var form url.Values
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		method, path, idem = r.Method, r.URL.Path, r.Header.Get("Idempotency-Key")
+		_ = r.ParseForm()
+		form = r.PostForm
+		_, _ = w.Write([]byte(`{"id":"re_1","status":"succeeded"}`))
+	})
+	if err := c.refundPaymentIntent(context.Background(), "pi_9", "sponsored-refund-3"); err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodPost || path != "/refunds" || idem != "sponsored-refund-3" || form.Get("payment_intent") != "pi_9" {
+		t.Errorf("%s %s key=%q form=%v", method, path, idem, form)
+	}
+}
+
+// A payment already refunded by hand in the dashboard is the outcome we wanted, not a failure:
+// treating it as one would retry it every reconciler pass forever.
+func TestClientRefundPaymentIntentAlreadyRefunded(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":"charge_already_refunded","message":"Charge ch_1 has already been refunded.","type":"invalid_request_error"}}`))
+	})
+	if err := c.refundPaymentIntent(context.Background(), "pi_9", "sponsored-refund-3"); err != nil {
+		t.Fatalf("already refunded must succeed, got %v", err)
+	}
+}
+
+func TestClientRefundPaymentIntentOtherErrorFails(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":"resource_missing","type":"invalid_request_error"}}`))
+	})
+	if err := c.refundPaymentIntent(context.Background(), "pi_9", "k"); err == nil {
+		t.Fatal("a refund the provider refused must be an error")
 	}
 }

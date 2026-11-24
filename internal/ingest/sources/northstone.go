@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -72,7 +72,7 @@ func (s northstone) detail(ctx context.Context, e CompanyEntry, loc string) (Job
 	location := p.location()
 	// jobLocationType is the only structured work-arrangement signal: TELECOMMUTE means remote.
 	// Absent → leave WorkMode empty and fall back to the location text for the remote flag.
-	remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 	workMode := ""
 	if remote {
 		workMode = "remote"

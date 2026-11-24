@@ -445,3 +445,22 @@ it.each([JobView, JobRow])('shows the source brand on the posting and its feed c
   render(component, { job: { ...job, source: 'whatjobs-uk' } });
   expect(screen.getByText('WhatJobs')).toBeTruthy();
 });
+
+describe('sponsored cards', () => {
+  const sponsored = { ...job, sponsored: true, sponsored_url: '/api/v1/sponsored/go/tok' } as Job;
+
+  it('labels a paid slot in text and routes the card link through the click redirect', () => {
+    render(JobRow, { job: sponsored });
+    expect(screen.getByText('Sponsored')).toBeTruthy();
+    const link = screen.getByRole('link', { name: /Engineer at Acme/ });
+    expect(link.getAttribute('href')).toBe('/api/v1/sponsored/go/tok');
+    expect(link.getAttribute('rel')).toContain('sponsored');
+    expect(link.getAttribute('rel')).toContain('nofollow');
+  });
+
+  it('keeps the organic link and no label on an ordinary hit', () => {
+    render(JobRow, { job });
+    expect(screen.queryByText('Sponsored')).toBeNull();
+    expect(screen.getByRole('link', { name: /Engineer at Acme/ }).getAttribute('href')).toBe('/jobs/[slug]');
+  });
+});

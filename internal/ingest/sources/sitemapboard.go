@@ -136,7 +136,7 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool, error)
 	if title == "" || company == "" {
 		return Job{}, false, errors.New("posting lacks a title or employer")
 	}
-	remote := !b.ignoreTelecommute && strings.EqualFold(strings.TrimSpace(p.JobLocationType), "TELECOMMUTE")
+	remote := !b.ignoreTelecommute && IsTelecommute(p.JobLocationType)
 	job := Job{
 		ExternalID:     b.id(loc),
 		URL:            loc,

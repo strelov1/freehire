@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -43,13 +43,15 @@ const rexxPageSize = 100
 // crawl (crawlAllPagedLinks).
 const rexxMaxPages = 100
 
-// rexxBoard is the shape of a portal base: a lowercase host, optionally followed by path
-// segments, with no scheme, query or trailing slash.
-var rexxBoard = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(/[A-Za-z0-9._-]+)*$`)
+// RexxBoard is the shape of a portal base: a lowercase host, optionally followed by path
+// segments, with no scheme, query or trailing slash. Exported for cmd/harvest-boards, whose
+// prober validates a board against the same shape the adapter addresses.
+var RexxBoard = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(/[A-Za-z0-9._-]+)*$`)
 
-// rexxPermalink captures the posting id from a permalink's last path segment
+// RexxPermalink captures the posting id from a permalink's last path segment
 // ("Altenpflegehelfer-mwd-de-j3040.html"). The language code is the portal's (de, eng, fr, it).
-var rexxPermalink = regexp.MustCompile(`-[a-z]{2,3}-j(\d+)\.html$`)
+// Exported for cmd/harvest-boards, whose prober counts postings by the same id rule.
+var RexxPermalink = regexp.MustCompile(`-[a-z]{2,3}-j(\d+)\.html$`)
 
 // Fetch is the list-only fallback HydratingSource specifies; it hydrates every posting.
 func (s rexx) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -63,7 +65,7 @@ func (s rexx) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 	if host, rest, _ := strings.Cut(board, "/"); host != "" {
 		board = strings.ToLower(host) + strings.TrimSuffix("/"+rest, "/")
 	}
-	if !rexxBoard.MatchString(board) {
+	if !RexxBoard.MatchString(board) {
 		return nil, fmt.Errorf("rexx: board %q is not a portal base", e.Board)
 	}
 	base, err := url.Parse("https://" + board + "/")
@@ -163,7 +165,7 @@ func rexxID(u string) string {
 	if parsed, err := url.Parse(u); err == nil {
 		p = parsed.Path
 	}
-	return firstSubmatch(rexxPermalink, p)
+	return firstSubmatch(RexxPermalink, p)
 }
 
 // rexxPosting is the posting page's schema.org JobPosting, the fields the adapter maps.
@@ -209,7 +211,7 @@ func (s rexx) detail(ctx context.Context, e CompanyEntry, l rexxLink) (Job, bool
 		EmploymentType: schemaEmploymentType(p.EmploymentType),
 		PostedAt:       parseRFC3339OrDate(p.DatePosted),
 	}
-	if strings.EqualFold(strings.TrimSpace(p.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(p.JobLocationType) {
 		j.Remote, j.WorkMode = true, "remote"
 	}
 	var places []string

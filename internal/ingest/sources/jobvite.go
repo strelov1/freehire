@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // jobvite adapts Jobvite career sites (jobs.jobvite.com/<company>). The board is the company's
@@ -85,15 +86,16 @@ func (j jobvite) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job
 	}, true
 }
 
-// jobviteJobIDPattern captures the alphanumeric posting code from a /<board>/job/<code> path,
+// JobviteJobIDPattern captures the alphanumeric posting code from a /<board>/job/<code> path,
 // terminated by a slash, query, fragment, or end of string. The /<board>/jobs listing and the
-// /<board>/jobAlerts nav link carry no /job/<code> segment and yield no match.
-var jobviteJobIDPattern = regexp.MustCompile(`/job/([A-Za-z0-9]+)(?:[/?#]|$)`)
+// /<board>/jobAlerts nav link carry no /job/<code> segment and yield no match. Exported for
+// cmd/harvest-boards, whose prober counts postings by the same rule.
+var JobviteJobIDPattern = regexp.MustCompile(`/job/([A-Za-z0-9]+)(?:[/?#]|$)`)
 
 // jobviteJobID extracts the native posting code from a job page URL, or "" when the URL is not a
 // job posting.
 func jobviteJobID(loc string) string {
-	return firstSubmatch(jobviteJobIDPattern, loc)
+	return firstSubmatch(JobviteJobIDPattern, loc)
 }
 
 // jobvitePosting is the schema.org JobPosting decoded from a Jobvite job page's ld+json. It

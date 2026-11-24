@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"regexp"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -37,9 +37,10 @@ func (paycor) Provider() string { return "paycor" }
 
 const (
 	paycorCareerBase = "https://recruitingbypaycor.com/career"
-	// paycorJobAction is the last path segment of a posting page. Enumeration matches on it
-	// rather than on the markup around the link, which varies by listing template.
-	paycorJobAction = "JobIntroduction.action"
+	// PaycorJobAction is the last path segment of a posting page. Enumeration matches on it
+	// rather than on the markup around the link, which varies by listing template. Exported for
+	// cmd/harvest-boards, whose prober counts postings by the same rule.
+	PaycorJobAction = "JobIntroduction.action"
 )
 
 func (s paycor) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -104,7 +105,7 @@ func paycorListingURL(board string) string {
 // taken from the href: the stored URL is then the same string on every crawl, whatever the
 // listing appended to it.
 func paycorJobURL(board, id string) string {
-	return fmt.Sprintf("%s/%s?clientId=%s&id=%s", paycorCareerBase, paycorJobAction, board, id)
+	return fmt.Sprintf("%s/%s?clientId=%s&id=%s", paycorCareerBase, PaycorJobAction, board, id)
 }
 
 // paycorPostingIDs returns the ids of the postings a listing links, de-duplicated in
@@ -136,7 +137,7 @@ func paycorPostingIDs(root *html.Node, board string) []string {
 // whatever else that site links to.
 func paycorPostingID(href, board string) string {
 	u, err := url.Parse(href)
-	if err != nil || path.Base(u.Path) != paycorJobAction {
+	if err != nil || path.Base(u.Path) != PaycorJobAction {
 		return ""
 	}
 	q := u.Query()

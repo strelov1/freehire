@@ -8,10 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"regexp"
 	"slices"
 	"strconv"
 	"testing"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // jobnetCatalogue is a test HeaderJSONGetter that behaves like the live BFF search: it filters

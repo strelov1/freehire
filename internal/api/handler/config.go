@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/realtime"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
+	"github.com/strelov1/freehire/internal/engage/sponsored"
 	"github.com/strelov1/freehire/internal/identity/apiusage"
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
@@ -75,6 +76,11 @@ type Config struct {
 	// per-role bullet ceiling. Default false (refuse on). Ops kill switch.
 	CVEditAllowBulletTruncation bool
 
+	// SponsoredClickKey signs sponsored click tokens; empty turns paid placements off.
+	SponsoredClickKey []byte
+	// SponsoredImpressions buffers served-slot counts (the caller runs and flushes it); nil
+	// counts nothing.
+	SponsoredImpressions *sponsored.Impressions
 	// TracerLinkSalt keys the visitor hash of a traced click; empty means the CV tracing
 	// toggle cannot be enabled at all.
 	TracerLinkSalt string

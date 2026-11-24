@@ -1,8 +1,9 @@
 package jobfacts
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // English-level detection. Precision-first like the matchers above: it resolves an

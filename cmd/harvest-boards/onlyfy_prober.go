@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -16,19 +15,12 @@ import (
 // onlyfyProber validates an onlyfy site (the <board> of <board>.onlyfy.jobs) by asking its
 // listing fragment for one row: the pager states the posting count. The listing names no
 // employer, so the first posting's schema.org JobPosting (hiringOrganization) supplies it,
-// else the catalogue row would be named after the site slug. It mirrors
-// internal/ingest/sources/onlyfy.go, which is unexported.
+// else the catalogue row would be named after the site slug.
 type onlyfyProber struct{}
-
-var (
-	onlyfyProbeBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-	onlyfyProbeTotal = regexp.MustCompile(`#pageInfoTotalCount'\)\.text\((\d+)\)`)
-	onlyfyProbeJob   = regexp.MustCompile(`^/job/([a-z0-9]+)$`)
-)
 
 func (onlyfyProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
 	board = strings.ToLower(strings.TrimSpace(board))
-	if !onlyfyProbeBoard.MatchString(board) {
+	if !sources.OnlyfyBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	site := "https://" + board + ".onlyfy.jobs"
@@ -50,12 +42,12 @@ func (onlyfyProber) probe(ctx context.Context, c httpClient, board string) (stri
 	var visit func(*html.Node)
 	visit = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == "script" && n.FirstChild != nil {
-			if m := onlyfyProbeTotal.FindStringSubmatch(n.FirstChild.Data); m != nil {
+			if m := sources.OnlyfyTotal.FindStringSubmatch(n.FirstChild.Data); m != nil {
 				total, _ = strconv.Atoi(m[1])
 			}
 		}
 		if n.Type == html.ElementNode && n.Data == "a" && first == "" {
-			if m := onlyfyProbeJob.FindStringSubmatch(sources.Attr(n, "href")); m != nil {
+			if m := sources.OnlyfyJobPath.FindStringSubmatch(sources.Attr(n, "href")); m != nil {
 				first = m[1]
 			}
 		}

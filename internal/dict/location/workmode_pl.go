@@ -1,8 +1,9 @@
 package location
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // polishWorkModePhrases is the Polish counterpart of frenchWorkModePhrases, built from the

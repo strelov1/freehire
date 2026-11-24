@@ -7,12 +7,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/atsboard"
-)
-
-// The AppOne endpoints mirror internal/ingest/sources/appone.go's, which are unexported.
-const (
-	apponePortalAPI  = "https://jobs.appone.com/api/portal/v1/companyjobposts/"
-	apponePostingAPI = "https://apply.appone.com/api/apply/v2/jobposting/"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // apponeProber validates an AppOne portal slug with the same one request the adapter lists it
@@ -37,7 +32,7 @@ func (apponeProber) probe(ctx context.Context, c httpClient, slug string) (strin
 			ID string `json:"jobPostId"`
 		} `json:"jobPosts"`
 	}
-	if err := c.GetJSON(ctx, apponePortalAPI+url.PathEscape(slug), &resp); err != nil {
+	if err := c.GetJSON(ctx, sources.ApponePortalURL+url.PathEscape(slug), &resp); err != nil {
 		// An unknown portal is a 404 and simply not a board. Anything else (the platform's edge
 		// answers a stray 403 to some requests, see sources/appone.go) is surfaced, so a refused
 		// probe is counted rather than mistaken for a dead board.
@@ -68,7 +63,7 @@ func (apponeProber) resolveSeed(ctx context.Context, c httpClient, token string)
 		var rec struct {
 			JobPortalURL string `json:"jobPortalUrl"`
 		}
-		if err := c.GetJSON(ctx, apponePostingAPI+m[1], &rec); err != nil {
+		if err := c.GetJSON(ctx, sources.ApponePostingURL+m[1], &rec); err != nil {
 			if boardGone(err) {
 				return "", nil
 			}

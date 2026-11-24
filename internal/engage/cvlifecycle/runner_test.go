@@ -119,6 +119,16 @@ func (s *fakeStore) ClaimCVLifecycleSend(_ context.Context, arg db.ClaimCVLifecy
 	return arg.UserID, nil
 }
 
+func (s *fakeStore) ListCheckoutFeedbackDue(context.Context, db.ListCheckoutFeedbackDueParams) ([]db.ListCheckoutFeedbackDueRow, error) {
+	return nil, nil
+}
+
+func (s *fakeStore) ClaimCheckoutFeedbackSend(context.Context, db.ClaimCheckoutFeedbackSendParams) (int64, error) {
+	return 0, pgx.ErrNoRows
+}
+
+func (s *fakeStore) PruneCheckoutFeedbackSessions(context.Context) error { return nil }
+
 func (s *fakeStore) ListPaywallLetterDue(_ context.Context, arg db.ListPaywallLetterDueParams) ([]db.ListPaywallLetterDueRow, error) {
 	var ids []int64
 	for id := range s.paywall {
@@ -205,7 +215,7 @@ func newRig(t *testing.T, maxPerRun int32, users ...int64) *rig {
 	r := &rig{store: store, composer: &fakeComposer{err: map[int64]error{}}, sender: &fakeSender{store: store, err: map[int64]error{}}}
 	cfg := DefaultConfig()
 	cfg.MaxPerRun = maxPerRun
-	runner, err := New(store, r.composer, r.sender, cfg)
+	runner, err := New(store, r.composer, r.sender, nil, cfg)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -443,13 +453,13 @@ func TestNew_RefusesAScheduleThatCouldSendOutOfOrder(t *testing.T) {
 	for _, after := range [][3]int32{{6, 6, 13}, {1, 13, 6}, {-1, 6, 13}} {
 		cfg := DefaultConfig()
 		cfg.AfterDays = after
-		if _, err := New(newFakeStore(), &fakeComposer{}, &fakeSender{}, cfg); err == nil {
+		if _, err := New(newFakeStore(), &fakeComposer{}, &fakeSender{}, nil, cfg); err == nil {
 			t.Errorf("New accepted AfterDays %v", after)
 		}
 	}
 	cfg := DefaultConfig()
 	cfg.MaxPerRun = 0
-	if _, err := New(newFakeStore(), &fakeComposer{}, &fakeSender{}, cfg); err == nil {
+	if _, err := New(newFakeStore(), &fakeComposer{}, &fakeSender{}, nil, cfg); err == nil {
 		t.Error("New accepted MaxPerRun 0")
 	}
 }
@@ -553,7 +563,7 @@ func TestNew_RefusesAPaywallWindowThatNeverOpens(t *testing.T) {
 	for _, c := range []struct{ after, within int32 }{{-1, 24}, {60, 0}, {1440, 24}, {2000, 24}} {
 		cfg := DefaultConfig()
 		cfg.PaywallAfterMinutes, cfg.PaywallWithinHours = c.after, c.within
-		if _, err := New(newFakeStore(), &fakeComposer{}, &fakeSender{}, cfg); err == nil {
+		if _, err := New(newFakeStore(), &fakeComposer{}, &fakeSender{}, nil, cfg); err == nil {
 			t.Errorf("New accepted a paywall window of %d min / %d h", c.after, c.within)
 		}
 	}

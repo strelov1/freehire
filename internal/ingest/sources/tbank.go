@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // tbank adapts T-Bank's careers site, a single-company source with no per-tenant board id

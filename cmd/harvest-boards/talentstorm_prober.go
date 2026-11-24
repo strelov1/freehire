@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -19,14 +18,8 @@ import (
 // honouring Origin would read as every candidate being absent.
 type talentstormProber struct{}
 
-var talentstormBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
-// talentstormOpenApplicationType is the offer type of an open application, which the adapter
-// never yields and so is not counted.
-const talentstormOpenApplicationType = 6
-
 func (talentstormProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !talentstormBoardPattern.MatchString(board) {
+	if !sources.TalentstormBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	var offers *[]struct {
@@ -52,7 +45,7 @@ func (talentstormProber) probe(ctx context.Context, c httpClient, board string) 
 	}
 	n, name := 0, ""
 	for _, o := range *offers {
-		if !o.IsPublished || o.IDJobtype == talentstormOpenApplicationType {
+		if !o.IsPublished || o.IDJobtype == sources.TalentstormOpenApplication {
 			continue
 		}
 		n++

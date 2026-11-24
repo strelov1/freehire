@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // tenml adapts 10ML's own careers page (10ml.com/careers), a single-company source with no
@@ -86,7 +87,7 @@ func (t tenml) detail(ctx context.Context, e CompanyEntry, loc string) (Job, boo
 	// TELECOMMUTE is the page's structured remote signal; such a role also keeps its Dortmund
 	// address (remote within the EU, or the office), so the countries it is open in are the
 	// applicant-location list rather than the office's one country.
-	remote := strings.EqualFold(strings.TrimSpace(p.JobLocationType), "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 	countries := countryFromCode(p.JobLocation.Address.AddressCountry)
 	if remote {
 		if c := countriesFromCodes(p.ApplicantLocationRequirements.Names()); len(c) > 0 {

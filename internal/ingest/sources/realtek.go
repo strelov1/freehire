@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // realtek adapts Realtek Semiconductor's own recruitment site (recruit.realtek.com). Single-

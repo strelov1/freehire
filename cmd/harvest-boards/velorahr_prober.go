@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -25,32 +24,21 @@ import (
 type velorahrProber struct{}
 
 const (
-	velorahrProbeAPI = "https://api.velorahr.com/api/public/career-site/"
 	// velorahrDiscoveryGap is how many consecutive ids without a site end the walk. Site ids are
 	// sparse; the widest gap between two live sites was under 60.
 	velorahrDiscoveryGap = 100
 )
 
-var (
-	velorahrProbeBoard = regexp.MustCompile(`^[1-9][0-9]{0,8}$`)
-	// velorahrProbeListing mirrors the adapter's listing request.
-	velorahrProbeListing = url.Values{
-		"filter": {"{}"},
-		"range":  {"[0,999]"},
-		"sort":   {`["id","DESC"]`},
-	}.Encode()
-)
-
-func velorahrSiteURL(id string) string { return velorahrProbeAPI + id }
+func velorahrSiteURL(id string) string { return sources.VelorahrAPIBase + id }
 func velorahrOffersURL(id string) string {
-	return velorahrProbeAPI + id + "/offers?" + velorahrProbeListing
+	return sources.VelorahrAPIBase + id + "/offers?" + sources.VelorahrListingQuery
 }
 
 // maxRequestsPerSecond keeps a harvest polite toward the one API host every customer shares.
 func (velorahrProber) maxRequestsPerSecond() float64 { return 2 }
 
 func (velorahrProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !velorahrProbeBoard.MatchString(board) {
+	if !sources.VelorahrBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	company, found, demo, err := velorahrSite(ctx, c, board)

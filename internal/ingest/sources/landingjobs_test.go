@@ -257,7 +257,7 @@ func TestLandingJobsListFailureIsABoardError(t *testing.T) {
 	}
 }
 
-func TestLandingJobsCompanyHumanizesSlugs(t *testing.T) {
+func TestHumanizeBoard(t *testing.T) {
 	cases := map[string]string{
 		"acme-corp":     "Acme Corp",
 		"acme":          "Acme",
@@ -265,10 +265,12 @@ func TestLandingJobsCompanyHumanizesSlugs(t *testing.T) {
 		"multi-word-co": "Multi Word Co",
 		// Internal capitals the slug preserves are not flattened.
 		"gitHub": "GitHub",
+		// The first letter is a rune, not a byte.
+		"éclair-labs": "Éclair Labs",
 	}
 	for slug, want := range cases {
-		if got := landingjobsCompany(slug); got != want {
-			t.Errorf("landingjobsCompany(%q) = %q, want %q", slug, got, want)
+		if got := HumanizeBoard(slug); got != want {
+			t.Errorf("HumanizeBoard(%q) = %q, want %q", slug, got, want)
 		}
 	}
 }

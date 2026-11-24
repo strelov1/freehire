@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 
 	"golang.org/x/net/html"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -222,7 +222,7 @@ func (g gohire) detail(ctx context.Context, e CompanyEntry, c gohireCard) (Job, 
 		return unreadableDetail(c.ID, c.URL, e.Company), true
 	}
 
-	remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 	loc := c.Location
 	if loc == "" && len(p.JobLocation) > 0 {
 		loc = p.JobLocation[0].Address.Location()

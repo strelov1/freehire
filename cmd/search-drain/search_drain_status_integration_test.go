@@ -53,7 +53,7 @@ func TestIntegration_DuplicateStatusRetainsContentAndRestoresCanonicalJob(t *tes
 	read := func(id int64) map[string]any {
 		t.Helper()
 		var doc map[string]any
-		if err := engine.GetDocumentWithContext(ctx, strconv.FormatInt(id, 10), &meilisearch.DocumentQuery{RetrieveVectors: true}, &doc); err != nil {
+		if err := engine.GetDocument(ctx, strconv.FormatInt(id, 10), &meilisearch.DocumentQuery{RetrieveVectors: true}, &doc); err != nil {
 			t.Fatal(err)
 		}
 		return doc
@@ -81,7 +81,7 @@ func TestIntegration_DuplicateStatusRetainsContentAndRestoresCanonicalJob(t *tes
 	if err := deleter.DeleteBatch(ctx, []int64{dup, absent}); err != nil {
 		t.Fatal(err)
 	}
-	engineStats, err := engine.GetStatsWithContext(ctx, nil)
+	engineStats, err := engine.GetStats(ctx, nil)
 	if err != nil || engineStats.NumberOfDocuments != 2 {
 		t.Fatalf("documents=%+v err=%v; absent duplicate must not create a skeleton", engineStats, err)
 	}

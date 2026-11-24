@@ -94,7 +94,7 @@ func (g generic) Resolve(ctx context.Context, raw string) (sources.Job, bool, er
 		// the sanitizer then strips — the same order the teamtailor/breezy board
 		// adapters use, so it is both correct and safe.
 		Description: htmltext.Sanitize(html.UnescapeString(p.Description)),
-		Remote:      isTelecommute(p.JobLocationType),
+		Remote:      sources.IsTelecommute(p.JobLocationType),
 		PostedAt:    sources.ParseDate(p.DatePosted),
 	}, true, nil
 }

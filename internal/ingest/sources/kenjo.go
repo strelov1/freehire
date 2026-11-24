@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )
@@ -36,8 +37,9 @@ func (kenjo) Provider() string { return "kenjo" }
 // fullBoardListing: the listing is one unpaginated answer carrying every open position.
 func (kenjo) FullBoardListing() {}
 
-// kenjoBoard is the shape of a career-site label.
-var kenjoBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+// KenjoBoard is the shape of a career-site label. Exported for cmd/harvest-boards, whose prober
+// validates a board against the same shape the adapter addresses.
+var KenjoBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // kenjoSite is the listing answer. ActivePositions is a pointer so a reshaped answer is told
 // apart from a site with no openings.
@@ -100,7 +102,7 @@ func (s kenjo) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 // customUrl that addresses its detail.
 func (s kenjo) list(ctx context.Context, rawBoard string) (string, []kenjoPosition, error) {
 	board := strings.ToLower(strings.TrimSpace(rawBoard))
-	if !kenjoBoard.MatchString(board) {
+	if !KenjoBoard.MatchString(board) {
 		return "", nil, fmt.Errorf("kenjo: board %q is not a career-site label", rawBoard)
 	}
 	var site kenjoSite

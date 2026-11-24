@@ -1,10 +1,11 @@
 package normalize
 
 import (
-	"regexp"
 	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // CloseSpacedForms closes up the Polish "o.o." written with a space inside it, "Sp. z o. o.". Split there, it is two words of the letter

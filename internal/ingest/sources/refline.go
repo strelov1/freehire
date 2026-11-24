@@ -10,13 +10,13 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/time/rate"
 )
 
@@ -306,7 +306,7 @@ func reflineJob(ld reflineLD, p reflinePosting) (Job, bool) {
 		EmploymentType: schemaFixedTermEmploymentType(ld.EmploymentType),
 	}
 	j.Location, j.Countries = schemaPlacesLocation(ld.JobLocation)
-	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(ld.JobLocationType) {
 		j.WorkMode, j.Remote = "remote", true
 	}
 	return j, true

@@ -52,6 +52,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	h.jobsHandlers.register(api, mw, contract)
 	h.companiesHandlers.register(api, mw, contract)
 	h.companyRelationHandlers.register(api, mw, contract)
+	h.sponsoredHandlers.register(api, mw, contract)
 	h.GeoHandlers.Register(api, contract)
 
 	// Saved searches + the public shared-board read (see savedSearchHandlers).
@@ -137,6 +138,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// Mounted whatever billing is doing: sharing an invite link is not a purchase.
 	h.promoHandlers.register(api, mw, contract)
 	h.plansHandlers.register(api, contract)
+	h.registerSponsoredClick(api)
 	h.usageHandlers.register(api, mw, contract)
 
 	// API-key management and the auth surface (see authHandlers).

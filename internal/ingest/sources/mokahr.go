@@ -10,11 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // mokahr adapts MokaHR (Moka), a Chinese multi-tenant ATS. A board is one tenant careers SITE,

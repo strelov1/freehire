@@ -1,19 +1,17 @@
 package sources
 
 import (
-	"compress/gzip"
 	"context"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
 )
@@ -185,28 +183,24 @@ func (s xing) list(ctx context.Context) ([]xingPosting, error) {
 	return out, nil
 }
 
-// sitemap fetches and decodes one gzip sitemap file.
+// sitemap fetches and decodes one gzip sitemap file through the shared decoder, which
+// inflates it to EOF: gzip verifies its checksum only there, and a decoder that stopped after
+// the root element would accept a truncated file as a short list.
 func (s xing) sitemap(ctx context.Context, url string) (sitemapDoc, error) {
 	if err := s.limiter.Wait(ctx); err != nil {
 		return sitemapDoc{}, err
 	}
 	var doc sitemapDoc
 	err := s.http.GetStream(ctx, url, "application/gzip", func(r io.Reader) error {
-		zr, err := gzip.NewReader(r)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = zr.Close() }()
-		// Read to EOF before decoding: gzip verifies its checksum only there, and a decoder
-		// that stops after the root element would accept a truncated file as a short list.
-		body, err := io.ReadAll(io.LimitReader(zr, xingMaxSitemapBytes+1))
+		body, err := io.ReadAll(io.LimitReader(r, xingMaxSitemapBytes+1))
 		if err != nil {
 			return err
 		}
 		if len(body) > xingMaxSitemapBytes {
 			return fmt.Errorf("sitemap exceeds %d bytes", xingMaxSitemapBytes)
 		}
-		return xml.Unmarshal(body, &doc)
+		doc, err = decodeSitemapBody(body, xingMaxSitemapBytes)
+		return err
 	})
 	return doc, err
 }

@@ -6,9 +6,10 @@ import (
 	"fmt"
 	neturl "net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // workatastartup adapts Work at a Startup (workatastartup.com), Y Combinator's job board.

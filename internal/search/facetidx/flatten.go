@@ -26,7 +26,7 @@ var indexedAttrs = []string{
 	"enrichment.salary_min", "enrichment.salary_max", "enrichment.experience_years_min",
 	"enrichment.relocation", "enrichment.english_level", "enrichment.posting_language",
 	"posted_ts", "created_ts",
-	"reality.class",
+	"reality.class", "sponsored",
 }
 
 // rangeOnly are the numeric attributes our code only ever range-filters (Gte on unix

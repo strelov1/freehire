@@ -37,11 +37,6 @@ func salaryParagraph(s monetaryAmount) string {
 	}
 }
 
-// isTelecommute reports whether a schema.org jobLocationType marks a fully-remote role.
-func isTelecommute(jobLocationType string) bool {
-	return strings.EqualFold(jobLocationType, "TELECOMMUTE")
-}
-
 // salaryUnit maps a schema.org UnitText to a "/period" suffix, or "" when absent/unknown.
 func salaryUnit(u string) string {
 	switch strings.ToUpper(u) {
@@ -58,19 +53,6 @@ func salaryUnit(u string) string {
 	default:
 		return ""
 	}
-}
-
-// humanizeBoard turns an ATS board slug into a display company name ("ruby-labs" → "Ruby
-// Labs"), used when the platform's API carries no company name. Its slug matches a curated
-// board-file company name's slug for the common case, so the companies table aligns.
-func humanizeBoard(slug string) string {
-	words := strings.FieldsFunc(slug, func(r rune) bool { return r == '-' || r == '_' })
-	for i, w := range words {
-		if w != "" {
-			words[i] = strings.ToUpper(w[:1]) + w[1:]
-		}
-	}
-	return strings.Join(words, " ")
 }
 
 // host returns u's lowercased hostname with a leading "www." stripped.

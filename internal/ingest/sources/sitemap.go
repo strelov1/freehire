@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 )
 
@@ -14,14 +15,19 @@ import (
 // sitemap.xml decode into these types and funnel through these helpers rather than each
 // redeclaring the same leaf struct and <loc>-scan loop.
 
-// sitemapLoc is one <url> or <sitemap> entry: the URL and its optional last-modified date.
+// SitemapLoc is one <url> or <sitemap> entry: the URL and its optional last-modified date.
+type SitemapLoc = sitemapLoc
+
 type sitemapLoc struct {
 	Loc     string `xml:"loc"`
 	LastMod string `xml:"lastmod"`
 }
 
-// sitemapDoc decodes either sitemap shape — a flat <urlset> (child <url>) or a <sitemapindex>
-// (child <sitemap>). Both nest a <loc>, so one type serves both.
+// SitemapDoc decodes either sitemap shape — a flat <urlset> (child <url>) or a <sitemapindex>
+// (child <sitemap>). Both nest a <loc>, so one type serves both. The exported names are for
+// the host tools (cmd/liveness); adapters use the short ones.
+type SitemapDoc = sitemapDoc
+
 type sitemapDoc struct {
 	URLs     []sitemapLoc `xml:"url"`
 	Sitemaps []sitemapLoc `xml:"sitemap"`
@@ -68,10 +74,40 @@ func resolveSubSitemap(ctx context.Context, c XMLGetter, indexURL, needle string
 	return "", nil
 }
 
+// FetchSitemap GETs a sitemap document, plain or gzip, over the caller's client and decodes
+// it, inflating at most maxBytes. For the host tools that have no sources.HTTPClient; the
+// adapters go through their own client's GetXML or GetStream.
+func FetchSitemap(ctx context.Context, client *http.Client, url, userAgent string, maxBytes int64) (SitemapDoc, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return sitemapDoc{}, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := client.Do(req)
+	if err != nil {
+		return sitemapDoc{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return sitemapDoc{}, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return sitemapDoc{}, err
+	}
+	if int64(len(body)) > maxBytes {
+		return sitemapDoc{}, fmt.Errorf("sitemap exceeds %d bytes", maxBytes)
+	}
+	return decodeSitemapBody(body, maxBytes)
+}
+
+// sitemapMaxUncompressed caps a gzip sitemap once inflated, for the adapters whose own cap
+// bounds only the bytes read off the wire. XING's 50,000-URL files pass it, so it asks for more.
 const sitemapMaxUncompressed = 32 << 20
 
-func decodeSitemapBody(body []byte) (sitemapDoc, error) {
-	raw, err := sitemapBytes(body)
+// decodeSitemapBody decodes a sitemap document, plain or gzip, inflating at most maxBytes.
+func decodeSitemapBody(body []byte, maxBytes int64) (sitemapDoc, error) {
+	raw, err := sitemapBytes(body, maxBytes)
 	if err != nil {
 		return sitemapDoc{}, err
 	}
@@ -91,19 +127,19 @@ func decodeSitemapBody(body []byte) (sitemapDoc, error) {
 	return sitemapDoc{URLs: doc.URLs, Sitemaps: doc.Sitemaps}, nil
 }
 
-func sitemapBytes(body []byte) ([]byte, error) {
+func sitemapBytes(body []byte, maxBytes int64) ([]byte, error) {
 	if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
 		zr, err := gzip.NewReader(bytes.NewReader(body))
 		if err != nil {
 			return nil, fmt.Errorf("gzip: %w", err)
 		}
 		defer func() { _ = zr.Close() }()
-		raw, err := io.ReadAll(io.LimitReader(zr, sitemapMaxUncompressed+1))
+		raw, err := io.ReadAll(io.LimitReader(zr, maxBytes+1))
 		if err != nil {
 			return nil, fmt.Errorf("gzip: %w", err)
 		}
-		if len(raw) > sitemapMaxUncompressed {
-			return nil, fmt.Errorf("gzip sitemap exceeds %d bytes", sitemapMaxUncompressed)
+		if int64(len(raw)) > maxBytes {
+			return nil, fmt.Errorf("gzip sitemap exceeds %d bytes", maxBytes)
 		}
 		body = raw
 	}

@@ -7,10 +7,11 @@ import (
 	"html"
 	"log"
 	"math"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"unicode"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )
@@ -208,7 +209,7 @@ func (p torrePosting) place(job *Job) {
 		parts = append(parts, distinctJoin([]string{city, a.AddressRegion, country}, ", ", strings.TrimSpace))
 	}
 	where := distinctJoin(parts, "; ", strings.TrimSpace)
-	if p.JobLocationTyp == "TELECOMMUTE" {
+	if IsTelecommute(p.JobLocationTyp) {
 		job.Remote, job.WorkMode = true, "remote"
 		if where == "" {
 			where = "Worldwide"

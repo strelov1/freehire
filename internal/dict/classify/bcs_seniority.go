@@ -1,8 +1,6 @@
 package classify
 
-import (
-	"regexp"
-)
+import "github.com/MoeForge/moego/regexp"
 
 // matchBCSSeniority resolves the grade of a lowercased title the other tables left
 // unresolved: the main table once more on the transliterated, gender-cut title, then

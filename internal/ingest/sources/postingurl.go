@@ -2,8 +2,9 @@ package sources
 
 import (
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/platform/externalid"
 )

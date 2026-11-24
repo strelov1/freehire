@@ -422,3 +422,37 @@ it('preserves opaque errors and primitive rejection reporting without provenance
   target.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason: 'app rejection' }));
   expect(capture).toHaveBeenCalledWith('app rejection');
 });
+
+it('associates a guest sign-in exception with a separate informational outcome', async () => {
+  const location = { origin: 'https://freehire.me', pathname: '/jobs' };
+  vi.stubGlobal('window', { location, navigator: { userAgent: 'test' } });
+  const exporter = new InMemoryLogRecordExporter();
+  const id = '01696d08-2241-4e14-8db9-431653840816';
+  const telemetry = createErrorTelemetry({
+    endpoint: 'http://localhost/v1/logs',
+    service: 'freehire-web',
+    exporter,
+    signinIncident: () => id,
+  });
+  try {
+    const rejection = { email: 'private@example.com', token: 'private' };
+    telemetry?.capture(rejection);
+    location.pathname = '/signin';
+    telemetry?.capture(rejection);
+    telemetry?.reportSigninSession(id);
+    await telemetry?.flush();
+    const [unrelated, exception, session] = exporter.getFinishedLogRecords();
+    expect(unrelated?.attributes).not.toHaveProperty(['signin.incident_id']);
+    expect(exception?.attributes).toMatchObject({
+      'event.name': 'exception',
+      'exception.message': 'Non-Error exception',
+      'signin.incident_id': id,
+    });
+    expect(JSON.stringify(exception?.attributes)).not.toContain('private');
+    expect(session?.severityText).toBe('INFO');
+    expect(session?.attributes).toEqual({ 'event.name': 'signin.session_observed', 'signin.incident_id': id });
+  } finally {
+    vi.unstubAllGlobals();
+    await telemetry?.shutdown();
+  }
+});

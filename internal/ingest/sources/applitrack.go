@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/charset"
@@ -76,7 +76,9 @@ func NewAppliTrack(c applitrackHTTP) Source { return applitrack{http: c} }
 
 func (applitrack) Provider() string { return "applitrack" }
 
-const applitrackBaseURL = "https://www.applitrack.com"
+// ApplitrackBaseURL is the host every board is served under. Exported for cmd/harvest-boards,
+// whose prober reads the same listing the adapter crawls.
+const ApplitrackBaseURL = "https://www.applitrack.com"
 
 // applitrackPosting is one row of the listing: the identity of a posting and the title the row
 // states. Nothing else is read here — the row's own date and location columns are exactly what
@@ -188,7 +190,7 @@ func (p applitrackPosting) job(e CompanyEntry, state applitrackState) Job {
 
 // applitrackDir is a board's job-postings directory, which every URL below hangs off.
 func applitrackDir(board string) string {
-	return fmt.Sprintf("%s/%s/onlineapp/jobpostings/", applitrackBaseURL, url.PathEscape(board))
+	return fmt.Sprintf("%s/%s/onlineapp/jobpostings/", ApplitrackBaseURL, url.PathEscape(board))
 }
 
 // applitrackAllURL is the board's "All Vacancies" listing — every posting the district carries.
@@ -269,7 +271,7 @@ func applitrackWritten(body string) (markup string, complete bool) {
 	}
 }
 
-// applitrackJobIDPattern captures a posting id from the "view" control's href. The listing links
+// ApplitrackJobIDPattern captures a posting id from the "view" control's href. The listing links
 // a posting through a javascript: call whose argument is percent-encoded, so the parameter
 // separator arrives there as "%3D" and in an ordinary permalink as "="; accepting both lets one
 // pattern read either.
@@ -278,11 +280,12 @@ func applitrackWritten(body string) (markup string, complete bool) {
 // from OUTSIDE the platform as "AppliTrackJobId=6536_37241", where the suffix selects a member
 // district's page, and the endpoint ignores it: both spellings answer the identical posting.
 // Keying on the whole token would store one requisition once per district that links it.
-var applitrackJobIDPattern = regexp.MustCompile(`(?i)AppliTrackJobId(?:=|%3D)(\d+)`)
+// Exported for cmd/harvest-boards, whose prober counts postings by the same id rule.
+var ApplitrackJobIDPattern = regexp.MustCompile(`(?i)AppliTrackJobId(?:=|%3D)(\d+)`)
 
 // applitrackJobID extracts the native posting id from a posting link, or "" when it carries none.
 func applitrackJobID(href string) string {
-	return firstSubmatch(applitrackJobIDPattern, href)
+	return firstSubmatch(ApplitrackJobIDPattern, href)
 }
 
 // applitrackListing reads the listing's posting rows in first-seen order. A row renders its title

@@ -32,14 +32,12 @@ func (erecruiterProber) maxRequestsPerSecond() float64 { return 1 }
 
 // recruitifyProber validates a Recruitify portal (the <board> of linkgroup.recruitify.ai) against
 // the API the adapter reads: the portal's config names the company, and the first listing page
-// proves it has openings. It mirrors internal/ingest/sources/recruitify.go, which is unexported.
+// proves it has openings.
 // The API tells portals apart by Origin alone, and answers an unknown one 404.
 type recruitifyProber struct{}
 
-var recruitifyBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
 func (recruitifyProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !recruitifyBoardPattern.MatchString(board) {
+	if !sources.RecruitifyBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	origin := "https://" + board + ".recruitify.ai"

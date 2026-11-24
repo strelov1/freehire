@@ -10,13 +10,13 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/time/rate"
 )
 
@@ -193,7 +193,7 @@ func (s cvonline) list(ctx context.Context, site cvonlineSite) ([]cvonlinePostin
 		if len(body) > cvonlineMaxSitemapBytes {
 			return fmt.Errorf("sitemap exceeds %d bytes", cvonlineMaxSitemapBytes)
 		}
-		doc, err = decodeSitemapBody(body)
+		doc, err = decodeSitemapBody(body, sitemapMaxUncompressed)
 		return err
 	})
 	if err != nil {

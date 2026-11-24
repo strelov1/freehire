@@ -7,13 +7,12 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // A Gupy board is a career-page subdomain (<page>.gupy.io), the key sources.gupy lists by.
 const (
-	// gupyListURL lists one career page's published postings (mirrors sources.gupyJobsURL,
-	// which is unexported; this tool lives outside the sources package).
-	gupyListURL = "https://private-api.gupy.io/job-publication/public/jobs"
 	// gupyCareerPageURL describes one career page, including the name it publishes under.
 	gupyCareerPageURL = "https://private-api.gupy.io/v2/public-career-page/"
 	// gupyFeedURL is the multi-employer job search behind portal.gupy.io — the only public
@@ -42,7 +41,7 @@ func (gupyProber) probe(ctx context.Context, c httpClient, page string) (string,
 			ID int64 `json:"id"`
 		} `json:"data"`
 	}
-	if err := c.GetJSON(ctx, gupyListURL+"?subdomain="+url.QueryEscape(page), &list); err != nil {
+	if err := c.GetJSON(ctx, sources.GupyJobsURL+"?subdomain="+url.QueryEscape(page), &list); err != nil {
 		return "", 0, nil
 	}
 	if len(list.Data) == 0 {

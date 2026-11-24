@@ -14,7 +14,7 @@ import (
 // cvwarehouseProber validates a CVWarehouse career site (the <board> of
 // jobpage.cvwarehouse.com/?companyGuid=<board>) by counting the vacancies its pages list: the
 // home page's and, for a sectioned site, every linked section's. The employer is the page's
-// <meta name="author">. It mirrors internal/ingest/sources/cvwarehouse.go, which is unexported.
+// <meta name="author">.
 // An unknown companyGuid answers 200 with a "not available" page whose <body> is not class
 // "home"; that is the skip.
 type cvwarehouseProber struct{}
@@ -22,16 +22,15 @@ type cvwarehouseProber struct{}
 const cvwarehouseHome = "https://jobpage.cvwarehouse.com/?companyGuid="
 
 var (
-	cvwarehouseBoardPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-	cvwarehouseCareerPage   = regexp.MustCompile(`<body[^>]*\bclass="home\b`)
-	cvwarehouseListedJob    = regexp.MustCompile(`class="jobLink"[^>]*\bdata-jobid="([0-9]+)"`)
-	cvwarehouseSectionLink  = regexp.MustCompile(`href="/\?companyGuid=([0-9a-fA-F-]{36})[^"]*?section=([0-9a-f-]{36})"`)
-	cvwarehouseAuthor       = regexp.MustCompile(`<meta name="author" content="([^"]*)"`)
+	cvwarehouseCareerPage  = regexp.MustCompile(`<body[^>]*\bclass="home\b`)
+	cvwarehouseListedJob   = regexp.MustCompile(`class="jobLink"[^>]*\bdata-jobid="([0-9]+)"`)
+	cvwarehouseSectionLink = regexp.MustCompile(`href="/\?companyGuid=([0-9a-fA-F-]{36})[^"]*?section=([0-9a-f-]{36})"`)
+	cvwarehouseAuthor      = regexp.MustCompile(`<meta name="author" content="([^"]*)"`)
 )
 
 func (cvwarehouseProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
 	board = strings.ToLower(board)
-	if !cvwarehouseBoardPattern.MatchString(board) {
+	if !sources.CVWarehouseBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	body, err := c.GetText(ctx, cvwarehouseHome+board)

@@ -82,7 +82,9 @@ func (harri) Provider() string { return "harri" }
 func (harri) FullBoardListing() {}
 
 const (
-	harriAPIBase   = "https://gateway.harri.com"
+	// HarriAPIBase is the gateway every career site's own pages call. Exported for
+	// cmd/harvest-boards, whose prober validates a board with the same requests.
+	HarriAPIBase   = "https://gateway.harri.com"
 	harriSiteBase  = "https://harri.com"
 	harriPageSize  = 100
 	harriMaxPages  = 100
@@ -214,7 +216,7 @@ func (s harri) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 		}
 		wanted.Add(1)
 		var d harriDetailResponse
-		if err := s.http.GetJSON(ctx, harriAPIBase+"/core-reader/api/v1/profile/job/"+base.ExternalID, &d); err != nil {
+		if err := s.http.GetJSON(ctx, HarriAPIBase+"/core-reader/api/v1/profile/job/"+base.ExternalID, &d); err != nil {
 			if detailUnreadable(err) {
 				log.Printf("harri: posting %s: %v; deferring", base.ExternalID, err)
 			}
@@ -247,7 +249,7 @@ func (s harri) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 // brand resolves a career-page slug to the brand id the search is keyed by.
 func (s harri) brand(ctx context.Context, slug string) (int64, error) {
 	var resp harriSlugResponse
-	if err := s.http.GetJSON(ctx, harriAPIBase+"/core/api/v1/profile/slug/"+url.PathEscape(slug), &resp); err != nil {
+	if err := s.http.GetJSON(ctx, HarriAPIBase+"/core/api/v1/profile/slug/"+url.PathEscape(slug), &resp); err != nil {
 		var se *StatusError
 		if errors.As(err, &se) && (se.Code == http.StatusBadRequest || se.Code == http.StatusNotFound) {
 			return 0, fmt.Errorf("slug lookup answered %d: %w", se.Code, ErrBoardGone)
@@ -283,7 +285,7 @@ func (s harri) list(ctx context.Context, brandID int64) ([]harriListedJob, error
 			Sort: []string{"publish_date"}, SortType: "desc", Flow: "CAREER_PORTAL",
 		}
 		var resp harriSearchResponse
-		if err := s.http.PostJSON(ctx, harriAPIBase+"/core/api/v1/harri_search/search_jobs", req, &resp); err != nil {
+		if err := s.http.PostJSON(ctx, HarriAPIBase+"/core/api/v1/harri_search/search_jobs", req, &resp); err != nil {
 			return nil, fmt.Errorf("search at start %d: %w", start, err)
 		}
 		if resp.Data == nil {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 
 	"golang.org/x/net/html"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -421,7 +421,7 @@ func infoempleoWorkMode(locationType, cardRemote string) string {
 	switch {
 	case strings.Contains(r, "parcial"):
 		return "hybrid"
-	case strings.EqualFold(strings.TrimSpace(locationType), "TELECOMMUTE"),
+	case IsTelecommute(locationType),
 		strings.Contains(r, "total"), strings.Contains(r, "100"):
 		return "remote"
 	}

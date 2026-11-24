@@ -188,8 +188,9 @@ func (freshteamProber) probe(ctx context.Context, c httpClient, slug string) (st
 }
 
 // countMatchingLinks counts <a href> values matching pat. A duplicate link inflating the count is
-// harmless, since it is only used for liveness.
-func countMatchingLinks(root *html.Node, pat *regexp.Regexp) int {
+// harmless, since it is only used for liveness. pat is the method rather than *regexp.Regexp,
+// so a sources adapter's pattern (moego) is accepted beside this package's own.
+func countMatchingLinks(root *html.Node, pat interface{ MatchString(string) bool }) int {
 	n := 0
 	var walk func(*html.Node)
 	walk = func(node *html.Node) {

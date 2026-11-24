@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // jibe adapts Jibe career sites (the career-site product fronting iCIMS, e.g.

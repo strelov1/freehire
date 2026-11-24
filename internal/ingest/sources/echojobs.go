@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/html"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )
 
@@ -338,7 +338,7 @@ func (s echojobs) detail(ctx context.Context, slug string) (Job, error) {
 
 	// jobLocationType is the only structured work-arrangement signal: TELECOMMUTE means
 	// remote. Absent → leave WorkMode empty rather than guess hybrid/onsite.
-	remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 
 	return Job{
 		ExternalID:  slug,

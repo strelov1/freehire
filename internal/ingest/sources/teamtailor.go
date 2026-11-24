@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 
@@ -212,7 +212,7 @@ func (t teamtailor) detail(ctx context.Context, e CompanyEntry, jobURL, remoteSt
 	// when the feed is unavailable. Teamtailor emits no jobLocationType for hybrid or
 	// on-site, so without the feed those stay to the dictionaries.
 	workMode := ttRemoteStatusMode(remoteStatus)
-	if workMode == "" && p.JobLocationType == "TELECOMMUTE" {
+	if workMode == "" && IsTelecommute(p.JobLocationType) {
 		workMode = "remote"
 	}
 

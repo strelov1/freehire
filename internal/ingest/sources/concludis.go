@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
 	"golang.org/x/net/html"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -51,14 +51,16 @@ func (concludis) Provider() string { return "concludis" }
 // states, and its page cap is a ceiling that fails the crawl rather than ending it.
 func (concludis) FullBoardListing() {}
 
-// concludisListPath is the complete-list address every tenant serves.
-const concludisListPath = "/prj/lst/a181a603769c1f98ad927e7367c7aa51/GesamtlisteOffenePositionen.htm"
+// ConcludisListPath is the complete-list address every tenant serves. Exported for
+// cmd/harvest-boards, whose prober reads page one of the same list.
+const ConcludisListPath = "/prj/lst/a181a603769c1f98ad927e7367c7aa51/GesamtlisteOffenePositionen.htm"
 
 // concludisMaxPages is a safety ceiling on the ?page=N walk; reaching it fails the crawl.
 const concludisMaxPages = 200
 
-// concludisBoard is the shape of a tenant label.
-var concludisBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+// ConcludisBoard is the shape of a tenant label. Exported for cmd/harvest-boards, whose prober
+// validates a board against the same shape the adapter addresses.
+var ConcludisBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 var (
 	// concludisCount reads the list's stated extent ("46 Stellen gefunden").
@@ -109,7 +111,7 @@ func (s concludis) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 // short walk is a truncation the unseen sweep must never read as closures.
 func (s concludis) list(ctx context.Context, board string) ([]concludisLine, error) {
 	board = strings.ToLower(strings.TrimSpace(board))
-	if !concludisBoard.MatchString(board) {
+	if !ConcludisBoard.MatchString(board) {
 		return nil, fmt.Errorf("concludis: board %q is not a tenant label", board)
 	}
 	host := board + ".concludis.de"
@@ -117,7 +119,7 @@ func (s concludis) list(ctx context.Context, board string) ([]concludisLine, err
 	seen := map[string]bool{}
 	want := -1
 	for page := 1; page <= concludisMaxPages; page++ {
-		root, final, err := s.http.GetHTMLResolved(ctx, fmt.Sprintf("https://%s%s?page=%d", host, concludisListPath, page))
+		root, final, err := s.http.GetHTMLResolved(ctx, fmt.Sprintf("https://%s%s?page=%d", host, ConcludisListPath, page))
 		if err != nil {
 			return nil, fmt.Errorf("concludis: board %s page %d: %w", board, page, err)
 		}
@@ -239,7 +241,7 @@ func (s concludis) detail(ctx context.Context, e CompanyEntry, l concludisLine) 
 	}
 	// jobLocationType is not stated in practice; TELECOMMUTE is still read as the remote statement
 	// schema.org defines it to be, and its absence says nothing — the description parser decides.
-	remote := strings.EqualFold(strings.TrimSpace(jp.JobLocationType), "TELECOMMUTE")
+	remote := IsTelecommute(jp.JobLocationType)
 	loc, countries := concludisPlaces(jp.JobLocation)
 	return Job{
 		ExternalID:     l.ID,

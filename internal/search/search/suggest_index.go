@@ -73,7 +73,7 @@ func (c *Client) NewSuggestRebuild() *Rebuild {
 // mines it, which this package must not import.
 func (r *Rebuild) PushAny(ctx context.Context, docs any) error {
 	pk := r.c.primaryKeyFor(r.rebuildUID)
-	task, err := r.rebuild.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	task, err := r.rebuild.UpdateDocuments(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 	if err != nil {
 		return fmt.Errorf("search: rebuild push: %w", err)
 	}
@@ -112,7 +112,7 @@ func SearchSuggestions[T any](ctx context.Context, c *Client, query, filter stri
 	if filter != "" {
 		req.Filter = filter
 	}
-	resp, err := c.manager.Index(suggestIndexUID).SearchWithContext(ctx, query, req)
+	resp, err := c.manager.Index(suggestIndexUID).Search(ctx, query, req)
 	if err != nil {
 		// An unbuilt dictionary (before the first cmd/build-suggestions run) means no
 		// suggestions, not a fault. Checked under a live context only, so a cancelled

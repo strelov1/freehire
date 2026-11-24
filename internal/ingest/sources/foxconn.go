@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"regexp"
 	"strings"
 	"sync/atomic"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // foxconn adapts Hon Hai (Foxconn)'s own Taiwan recruitment portal (recruit.foxconn.com, the

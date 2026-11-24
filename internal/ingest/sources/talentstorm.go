@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )
@@ -36,12 +37,14 @@ func (talentstorm) Provider() string { return "talentstorm" }
 // fullBoardListing: pagination=false answers every published offer at once.
 func (talentstorm) FullBoardListing() {}
 
-// talentstormBoard is the shape of a career-site label.
-var talentstormBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+// TalentstormBoard is the shape of a career-site label. Exported for cmd/harvest-boards, whose
+// prober validates a board against the same shape the adapter addresses.
+var TalentstormBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// talentstormOpenApplication is the offer type of an open application ("Initiativbewerbung"):
-// an invitation to apply, not a position, so it is never yielded.
-const talentstormOpenApplication = 6
+// TalentstormOpenApplication is the offer type of an open application ("Initiativbewerbung"):
+// an invitation to apply, not a position, so it is never yielded. Exported for cmd/harvest-boards,
+// whose prober leaves it out of a board's count the same way.
+const TalentstormOpenApplication = 6
 
 // talentstormOffer is one offer as the API carries it.
 type talentstormOffer struct {
@@ -75,7 +78,7 @@ type talentstormOffer struct {
 // Fetch reads the career site's complete offer list.
 func (s talentstorm) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	board := strings.ToLower(strings.TrimSpace(e.Board))
-	if !talentstormBoard.MatchString(board) {
+	if !TalentstormBoard.MatchString(board) {
 		return nil, fmt.Errorf("talentstorm: board %q is not a career-site label", e.Board)
 	}
 	// A pointer, so a reshaped answer (an object, null) is told apart from a site with no offer.
@@ -99,7 +102,7 @@ func (s talentstorm) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // talentstormJob maps one offer to a Job, dropping an unpublished offer, an open application,
 // and one without the id and slug that identify and address it.
 func talentstormJob(board, company string, o talentstormOffer) (Job, bool) {
-	if !o.IsPublished || o.IDJobtype == talentstormOpenApplication || o.ID == 0 || strings.TrimSpace(o.Slug) == "" {
+	if !o.IsPublished || o.IDJobtype == TalentstormOpenApplication || o.ID == 0 || strings.TrimSpace(o.Slug) == "" {
 		return Job{}, false
 	}
 	var places, countries []string
