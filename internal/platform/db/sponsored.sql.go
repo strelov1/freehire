@@ -178,6 +178,17 @@ func (q *Queries) GetSponsoredCampaignForUpdate(ctx context.Context, id int64) (
 	return i, err
 }
 
+const getSponsoredCampaignJobID = `-- name: GetSponsoredCampaignJobID :one
+SELECT job_id FROM sponsored_campaigns WHERE id = $1
+`
+
+func (q *Queries) GetSponsoredCampaignJobID(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getSponsoredCampaignJobID, id)
+	var job_id int64
+	err := row.Scan(&job_id)
+	return job_id, err
+}
+
 const getSponsoredDailySpent = `-- name: GetSponsoredDailySpent :one
 SELECT COALESCE((SELECT spent_cents FROM sponsored_daily WHERE campaign_id = $1 AND day = $2), 0)::bigint
 `

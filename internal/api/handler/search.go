@@ -76,6 +76,8 @@ type searchHandlers struct {
 	removals pendingRemovals
 	// sponsoredKey signs the click tokens of paid placements; empty switches them off.
 	sponsoredKey []byte
+	// clicks serves the paid-click redirect; nil when paid placements are off.
+	clicks *sponsoredClicks
 	// serving resolves a sponsored hit to its campaign (and the index to what serves today).
 	serving search.ServingReader
 	// impressions counts the paid slots served; nil counts nothing.

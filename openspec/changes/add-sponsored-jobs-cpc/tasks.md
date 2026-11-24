@@ -59,7 +59,7 @@
 ## 5. Redirect endpoint
 
 - [x] 5.1 HMAC token issue and verify, with expiry per placement (key from config)
-- [ ] 5.2 `GET /api/v1/sponsored/go/{token}`:
+- [x] 5.2 `GET /api/v1/sponsored/go/{token}`:
       - always 302 to the job URL
       - bot list from viewlog, visitor hash with a daily salt, per-IP rate limit
       - `Charge` in one transaction

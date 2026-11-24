@@ -7,6 +7,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/strelov1/freehire/internal/engage/sponsored"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -106,5 +108,15 @@ func (h *searchHandlers) enableSponsored(cfg Config, queries *db.Queries) {
 	h.sponsoredKey, h.impressions = cfg.SponsoredClickKey, cfg.SponsoredImpressions
 	if queries != nil {
 		h.serving = queries
+		if cfg.Pool != nil && len(cfg.SponsoredClickKey) > 0 {
+			h.clicks = newSponsoredClicks(cfg.SponsoredClickKey, sponsored.New(cfg.Pool), queries, cfg.FrontendOrigin)
+		}
+	}
+}
+
+// registerSponsoredClick mounts the paid-click redirect; without a click key nothing is mounted.
+func (h *searchHandlers) registerSponsoredClick(api fiber.Router) {
+	if h.clicks != nil {
+		h.clicks.register(api)
 	}
 }

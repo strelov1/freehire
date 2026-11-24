@@ -137,6 +137,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// Mounted whatever billing is doing: sharing an invite link is not a purchase.
 	h.promoHandlers.register(api, mw, contract)
 	h.plansHandlers.register(api, contract)
+	h.registerSponsoredClick(api)
 	h.usageHandlers.register(api, mw, contract)
 
 	// API-key management and the auth surface (see authHandlers).

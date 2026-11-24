@@ -128,3 +128,6 @@ JOIN jobs j ON j.id = c.job_id AND j.closed_at IS NULL AND NOT j.is_private
 WHERE c.status = 'active' AND c.daily_cap_cents IS NOT NULL
 ON CONFLICT (job_id) DO UPDATE
     SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;
+
+-- name: GetSponsoredCampaignJobID :one
+SELECT job_id FROM sponsored_campaigns WHERE id = $1;
