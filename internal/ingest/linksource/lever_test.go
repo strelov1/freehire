@@ -90,3 +90,37 @@ func TestLeverSourceKeyMatchesIngestProvider(t *testing.T) {
 		t.Errorf("Source() = %q, want lever", got)
 	}
 }
+
+// The link path shares the board adapter's mapper (ats.MapLeverPosting), so a posting the
+// per-posting API serves with a workplace type, a commitment, a country and a salary range
+// yields the same facets the board crawl would store under the same dedup key.
+func TestLeverResolvesTheFacetsTheBoardAdapterYields(t *testing.T) {
+	const link = "https://jobs.lever.co/acme/52c01c91-582c-42fc-8722-82c3eeb9ed24"
+	const posting = `{
+ "id": "52c01c91-582c-42fc-8722-82c3eeb9ed24",
+ "text": "Platform Engineer",
+ "hostedUrl": "https://jobs.lever.co/acme/52c01c91-582c-42fc-8722-82c3eeb9ed24",
+ "createdAt": 1700000000000,
+ "description": "<p>Build it.</p>",
+ "workplaceType": "hybrid",
+ "country": "gb",
+ "categories": {"location": "London", "commitment": "Full-Time"},
+ "salaryRange": {"min": 90000, "max": 120000, "currency": "GBP", "interval": "per-year-salary"}
+}`
+	c := (&fakeClient{}).route("api.lever.co/v0/postings/acme/52c01c91-582c-42fc-8722-82c3eeb9ed24", posting, "")
+
+	job, ok, err := NewLever(c).Resolve(context.Background(), link)
+	if err != nil || !ok {
+		t.Fatalf("Resolve: ok=%v err=%v", ok, err)
+	}
+	if job.WorkMode != "hybrid" || job.EmploymentType != "full_time" {
+		t.Errorf("WorkMode/EmploymentType = %q/%q, want hybrid/full_time", job.WorkMode, job.EmploymentType)
+	}
+	if len(job.Countries) != 1 || job.Countries[0] != "gb" {
+		t.Errorf("Countries = %v, want [gb]", job.Countries)
+	}
+	if job.SalaryMin == nil || *job.SalaryMin != 90000 || job.SalaryMax == nil || *job.SalaryMax != 120000 ||
+		job.SalaryCurrency != "GBP" || job.SalaryPeriod != "year" {
+		t.Errorf("salary = %v–%v %q/%q, want 90000–120000 GBP/year", job.SalaryMin, job.SalaryMax, job.SalaryCurrency, job.SalaryPeriod)
+	}
+}
