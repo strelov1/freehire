@@ -211,7 +211,7 @@
     saved,
     onSaveClick,
     onReportClick,
-    applyUrl: cta.autoApply?.leads ? (job.apply_url || job.url) : null,
+    applyUrl: cta.autoApply?.leads ? job.apply_url || job.url : null,
     applyLabel: cta.external.label,
     onApplyClick,
   });
@@ -276,7 +276,11 @@
 
 {#snippet signInFeedback()}
   {#if showSignInPrompt}
-    <JobSignInGate directApply={!!job.direct_apply} url={job.apply_url || job.url} onclose={() => (showSignInPrompt = false)} />
+    <JobSignInGate
+      directApply={!!job.direct_apply}
+      url={job.apply_url || job.url}
+      onclose={() => (showSignInPrompt = false)}
+    />
   {/if}
 {/snippet}
 

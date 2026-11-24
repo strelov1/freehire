@@ -99,15 +99,11 @@
   // How recently it was posted is a key signal, so it leads the header.
   const posted = $derived(timeAgo(job.posted_at, locale()));
   const views = $derived(rowViews(job));
-  // The direct-apply shortcut in the action row below. Only `jobview.Job` carries the
-  // outbound `url` (and the `source` the apply-intent event reports) — `jobview.Card`
-  // (saved / lists / tracking board) does not, so those surfaces render no button
-  // rather than guessing a destination. See freehire#2755: widening Card is a separate,
-  // deliberately deferred change (it touches CardInput, both call sites, and the SPA
-  // contracts), so this narrows to the shape that already carries the field.
-  // An empty url is a posting with nowhere outside to send the candidate: a vacancy taking
-  // applications on freehire, whose Apply opens its own job page, where the form is. Only
-  // `jobview.Job` carries that flag, like `url`.
+  // The Apply shortcut in the action row below. Only `jobview.Job` carries the outbound `url`
+  // (and the `source` the apply-intent event reports), not `jobview.Card` (saved / lists /
+  // tracking board), so those surfaces render no button (freehire#2755). Clicks go through
+  // `apply_url`; `url` only gates and is the fallback. An empty url means a vacancy taking
+  // applications on freehire: its Apply opens its own job page, where the form is.
   // A closed posting takes no applications, so it offers no Apply at all.
   const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);
   // A paid slot: its links go through the click redirect that counts and charges the click.
