@@ -885,6 +885,13 @@ type Handler interface {
 	//
 	// GET /employer/jobs/{slug}/analytics
 	GetEmployerVacancyAnalytics(ctx context.Context, params GetEmployerVacancyAnalyticsParams) (*GetEmployerVacancyAnalyticsOK, error)
+	// GetEmployerVacancyOutboundClicks implements getEmployerVacancyOutboundClicks operation.
+	//
+	// Human clicks that freehire sent to the employer's site for the team's own vacancy; bots are
+	// excluded.
+	//
+	// GET /employer/jobs/{slug}/outbound-clicks
+	GetEmployerVacancyOutboundClicks(ctx context.Context, params GetEmployerVacancyOutboundClicksParams) (*GetEmployerVacancyOutboundClicksOK, error)
 	// GetInbox implements getInbox operation.
 	//
 	// `?body=1` returns each message's readable text inline and marks nothing read — that is the agent
