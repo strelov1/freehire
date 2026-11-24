@@ -34,21 +34,22 @@ var _ billing.TopupCrediter = (*Service)(nil)
 // CreditTopup applies one verified payment (billing re-read it from the provider). It is
 // idempotent by session id: a replay finds the row and changes nothing.
 //
-// A payment for a campaign that is already rejected or ended is recorded but NOT added to the
-// budget (it can never serve) and is refunded. The refund is best effort here: the credit has
+// A payment for a campaign that is already rejected or ended, or whose owner is deleted, is
+// recorded but NOT added to the budget (it can never serve) and is refunded. The refund is best effort here: the credit has
 // succeeded, so the event may be stamped processed, and RefundPending (cmd/billing-sync) retries.
 func (s *Service) CreditTopup(ctx context.Context, t billing.Topup) error {
 	var dead bool
 	err := s.inTx(ctx, func(q *db.Queries) error {
 		c, err := q.GetSponsoredCampaignForUpdate(ctx, t.CampaignID)
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && c.OwnerUserID != pgconv.Int8(&t.UserID)) {
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && c.OwnerUserID.Valid && c.OwnerUserID.Int64 != t.UserID) {
 			return fmt.Errorf("%w: campaign %d, user %d", billing.ErrTopupInvalid, t.CampaignID, t.UserID)
 		}
 		if err != nil {
 			return err
 		}
 		from := Status(c.Status)
-		dead = from == StatusRejected || from == StatusEnded
+		// An owner deleted mid-checkout leaves the payment with nowhere to go: record it, refund it.
+		dead = from == StatusRejected || from == StatusEnded || !c.OwnerUserID.Valid
 
 		if _, err := q.InsertSponsoredTopup(ctx, db.InsertSponsoredTopupParams{
 			CampaignID: t.CampaignID, StripeSessionID: t.SessionID,

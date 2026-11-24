@@ -64,6 +64,9 @@ func (s *Service) Charge(ctx context.Context, campaignID int64, click Click, now
 			return err
 		}
 		st := State{Status: Status(c.Status), CPCCents: c.CpcCents, BudgetCents: c.BudgetCents, SpentCents: c.SpentCents}
+		if !c.OwnerUserID.Valid {
+			st.Status = StatusEnded // owner deleted: the sweep ends it within the hour, until then charge nothing
+		}
 		if c.DailyCapCents.Valid {
 			st.DailyCapCents = &c.DailyCapCents.Int64
 		}

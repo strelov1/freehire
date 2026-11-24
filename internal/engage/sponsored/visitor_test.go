@@ -1,6 +1,7 @@
 package sponsored
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -52,5 +53,19 @@ func TestIPLimiterBoundsMemory(t *testing.T) {
 	l.Allow("fresh", now.Add(2*time.Minute))
 	if len(l.hits) > 1 {
 		t.Errorf("idle IPs kept: %d", len(l.hits))
+	}
+}
+
+func TestIPLimiterRefusesNewIPsWhenFullOfLiveWindows(t *testing.T) {
+	l := NewIPLimiter(5, time.Minute)
+	now := time.Now()
+	for i := range maxTrackedIPs {
+		l.Allow(fmt.Sprint(i), now)
+	}
+	if l.Allow("new", now.Add(time.Second)) || len(l.hits) > maxTrackedIPs {
+		t.Errorf("an untracked IP passed a full limiter: %d tracked", len(l.hits))
+	}
+	if !l.Allow("0", now.Add(time.Second)) {
+		t.Error("a tracked IP within its limit was refused")
 	}
 }

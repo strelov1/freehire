@@ -51,6 +51,13 @@ func emailStore(query string) *fakeStore {
 	}
 }
 
+// skilled gives subscriber 42 held and avoided profile skills.
+func skilled(s *fakeStore, held, excluded []string) *fakeStore {
+	s.heldSkills = map[int64][]string{42: held}
+	s.excludedSkills = map[int64][]string{42: excluded}
+	return s
+}
+
 func adHit(id int64) search.JobDocument {
 	return search.JobDocument{ID: id, Job: jobview.Job{Title: "Sponsored role", Company: "Acme", PublicSlug: fmt.Sprintf("s-%d", id)}}
 }
@@ -94,6 +101,11 @@ func TestEmailDigestCarriesOneSponsoredJob(t *testing.T) {
 
 func TestEmailDigestWithoutSponsored(t *testing.T) {
 	hit := &fakeSearcher{results: []search.SearchResult{{Hits: []search.JobDocument{adHit(50)}}}}
+	h := adHit(50)
+	h.Skills = []string{"php", "java"}
+	skillHit := func() *fakeSearcher {
+		return &fakeSearcher{results: []search.SearchResult{{Hits: []search.JobDocument{h}}}}
+	}
 	cases := []struct {
 		name  string
 		store *fakeStore
@@ -104,6 +116,8 @@ func TestEmailDigestWithoutSponsored(t *testing.T) {
 		{"search fails", emailStore("q=go"), &fakeSearcher{err: errors.New("down")}, adKey},
 		{"nothing matches", emailStore("q=go"), &fakeSearcher{}, adKey},
 		{"unfiltered alert", emailStore(""), hit, adKey},
+		{"avoided skill", skilled(emailStore("q=go"), nil, []string{"php"}), skillHit(), adKey},
+		{"below the skill match", skilled(emailStore("q=go&min_skill_match=80"), []string{"go"}, nil), skillHit(), adKey},
 		{"hit no longer serving", emailStore("q=go"), &fakeSearcher{results: []search.SearchResult{{Hits: []search.JobDocument{adHit(99)}}}}, adKey},
 	}
 	for _, c := range cases {

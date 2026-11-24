@@ -27,6 +27,7 @@ type IPLimiter struct {
 	limit  int
 	window time.Duration
 	hits   map[string]ipWindow
+	swept  time.Time
 }
 
 type ipWindow struct {
@@ -34,7 +35,8 @@ type ipWindow struct {
 	n     int
 }
 
-// maxTrackedIPs bounds memory: past it, windows that have ended are dropped.
+// maxTrackedIPs bounds memory: past it, windows that have ended are dropped, and while none
+// has, a new IP is refused.
 const maxTrackedIPs = 10000
 
 func NewIPLimiter(limit int, window time.Duration) *IPLimiter {
@@ -47,11 +49,18 @@ func (l *IPLimiter) Allow(ip string, now time.Time) bool {
 	defer l.mu.Unlock()
 	w, ok := l.hits[ip]
 	if !ok || now.Sub(w.start) >= l.window {
-		if len(l.hits) >= maxTrackedIPs {
-			for k, v := range l.hits {
-				if now.Sub(v.start) >= l.window {
-					delete(l.hits, k)
+		if !ok && len(l.hits) >= maxTrackedIPs {
+			// At most one full scan per window, so a flood of new IPs cannot each pay for one.
+			if now.Sub(l.swept) >= l.window {
+				l.swept = now
+				for k, v := range l.hits {
+					if now.Sub(v.start) >= l.window {
+						delete(l.hits, k)
+					}
 				}
+			}
+			if len(l.hits) >= maxTrackedIPs {
+				return false // still full: an untracked IP counts as rate-limited (its click goes uncharged)
 			}
 		}
 		w = ipWindow{start: now}

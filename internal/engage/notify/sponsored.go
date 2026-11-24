@@ -31,8 +31,9 @@ func (r *Runner) WithSponsored(serving search.ServingReader, key []byte, imp *sp
 
 // sponsoredSlot returns the paid job for an email digest, or nil: another channel, ads off, an
 // alert that is not narrowed (the unfiltered feed gets no paid slot) or a watchlist alert (it
-// needs its owner's companies), nothing matching, or any failure. It never fails a delivery.
-func (r *Runner) sponsoredSlot(ctx context.Context, channel string, d Digest) *SponsoredSlot {
+// needs its owner's companies), nothing matching, a pick the subscriber's skill filters would
+// drop from the digest itself, or any failure. It never fails a delivery.
+func (r *Runner) sponsoredSlot(ctx context.Context, channel string, userID int64, d Digest) *SponsoredSlot {
 	if channel != ChannelEmail || len(r.ads.key) == 0 || r.ads.serving == nil {
 		return nil
 	}
@@ -54,6 +55,16 @@ func (r *Runner) sponsoredSlot(ctx context.Context, channel string, d Digest) *S
 		return nil
 	}
 	p := picks[0]
+	skills, err := r.store.ListUserProfileSkillSets(ctx, []int64{userID})
+	if err != nil {
+		log.Printf("notify: sponsored skill filters for user %d: %v", userID, err)
+		return nil
+	}
+	for _, sk := range skills {
+		if hasAvoidedSkill(p.Doc.Skills, sk.ExcludedSkills) || !meetsSkillMatch(p.Doc.Skills, sk.Skills, minSkillMatch(vals)) {
+			return nil
+		}
+	}
 	token := sponsored.SignToken(r.ads.key, sponsored.Claims{CampaignID: p.CampaignID, JobID: p.Doc.ID, Placement: sponsored.PlacementEmail}, now)
 	return &SponsoredSlot{
 		Job:        DigestJob{Title: p.Doc.Title, Company: p.Doc.Company, Slug: p.Doc.PublicSlug, URL: p.Doc.URL},

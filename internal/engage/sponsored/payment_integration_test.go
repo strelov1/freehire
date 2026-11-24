@@ -362,8 +362,18 @@ func TestDeletedOwnerCampaignStopsAndIsRefunded(t *testing.T) {
 	if got, err := search.ServingCampaigns(ctx, db.New(pool), []int64{jobID}, time.Now()); err != nil || len(got) != 0 {
 		t.Fatalf("an owner-less campaign serves: %v %v", got, err)
 	}
-	if err := svc.CreditTopup(ctx, tu); !errors.Is(err, billing.ErrTopupInvalid) {
-		t.Fatalf("top-up for a deleted owner: %v", err)
+	// An already-issued click link must not spend a deleted owner's budget.
+	if d, err := svc.Charge(ctx, id, Click{Placement: PlacementSearch, VisitorHash: "v"}, time.Now()); err != nil || d.Valid || d.Reason != ReasonInactive {
+		t.Fatalf("click after account deletion = %+v, %v", d, err)
+	}
+	// A payment that lands after the deletion is recorded and refunded, never dropped.
+	late := tu
+	late.SessionID, late.PaymentIntentID = "cs_late", "pi_cs_late"
+	if err := svc.CreditTopup(ctx, late); err != nil {
+		t.Fatalf("late top-up for a deleted owner: %v", err)
+	}
+	if c := readCampaign(t, pool, id); c.Budget != 4000 {
+		t.Fatalf("late top-up credited: budget %d", c.Budget)
 	}
 	if n, err := svc.EndClosedJobs(ctx); err != nil || n != 1 {
 		t.Fatalf("sweep ended %d, %v; want 1", n, err)
@@ -371,7 +381,7 @@ func TestDeletedOwnerCampaignStopsAndIsRefunded(t *testing.T) {
 	if !outboxHas(t, pool, jobID) {
 		t.Error("the job was not requeued to leave the sponsored index")
 	}
-	if n, err := svc.RefundPending(ctx, 10); err != nil || n != 1 || rf.pis[0] != "pi_cs_o" {
+	if n, err := svc.RefundPending(ctx, 10); err != nil || n != 1 || len(rf.pis) != 2 || rf.pis[0] != "pi_cs_late" || rf.pis[1] != "pi_cs_o" {
 		t.Fatalf("refund n=%d err=%v calls=%v", n, err, rf.pis)
 	}
 }
