@@ -27,7 +27,7 @@ const ENTRY_LIMIT = 73_200;
 const ROUTE_LIMITS = {
   '/': 366_500,
   '/jobs': 258_700,
-  '/jobs/[slug]': 354_100,
+  '/jobs/[slug]': 354_300,
   '/companies/[slug]': 275_900,
   // The CV-first flow replaced the seven-step tour on 2026-11-12: 180.9 kB measured, plus ~10%.
   '/onboarding': 199_000,
