@@ -30,7 +30,7 @@ func TestJobCopies_ExactShape(t *testing.T) {
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	body := string(raw)
-	want := `{"data":[{"public_slug":"staff-engineer-acme-1","location":"Remote","apply_url":"https://ex.test/acme:1?utm_source=freehire.me","posted_at":null}],"meta":{"total":1}}`
+	want := `{"data":[{"public_slug":"staff-engineer-acme-1","location":"Remote","apply_url":"https://freehire.me/go/staff-engineer-acme-1?src=web","posted_at":null}],"meta":{"total":1}}`
 	if resp.StatusCode != fiber.StatusOK || body != want {
 		t.Fatalf("status %d, body %s\nwant %s", resp.StatusCode, body, want)
 	}
