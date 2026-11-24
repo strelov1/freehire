@@ -12,6 +12,9 @@
 //     collected, then place the earned ones on their referrers' balances. Stripe only: a
 //     store subscription produces no invoice we can read.
 //
+// A fourth, sponsored housekeeping pass (sponsoredSweeps) ends campaigns of closed jobs and,
+// just after UTC midnight, requeues capped campaigns' jobs for the search index.
+//
 // The second pass reaches its candidates through what each provider can address them by (the
 // stored customer binding for Stripe, the store entitlement column for RevenueCat), so it walks
 // accounts that have transacted rather than every account.
@@ -114,7 +117,48 @@ func run() int {
 		}
 		log.Printf("billing-sync: sponsored refunds=%d", refunded)
 	}
+	failures += sponsoredSweeps(ctx, sponsoredSvc, time.Now())
 	return worker.ExitCode(failures, 0)
+}
+
+// sponsoredSweeper is the housekeeping a sponsored campaign needs that no request triggers.
+type sponsoredSweeper interface {
+	EndClosedJobs(ctx context.Context) (int64, error)
+	RequeueDailyCapJobs(ctx context.Context) (int64, error)
+}
+
+// capResetWindowHours is how many hours after UTC midnight the daily-cap requeue runs. The
+// timer is hourly, so three tries survive a skipped firing, and the rest of the day does no
+// needless reindexing.
+const capResetWindowHours = 3
+
+// sponsoredSweeps is the sponsored housekeeping pass:
+//
+//  1. end the campaigns of jobs that have closed (closed_at is set by many statements, so a
+//     sweep stands in for a hook);
+//  2. in the first hours of a UTC day, requeue the jobs of active campaigns with a daily cap,
+//     since a cap resets at midnight and nothing writes those jobs then, so one whose document
+//     went sponsored=false when yesterday's cap was hit would stay hidden.
+//
+// It needs no provider credential, but the binary only runs where a billing provider is
+// configured, which is the only place campaigns can be paid for. A failure is counted and
+// never stops the other half.
+func sponsoredSweeps(ctx context.Context, svc sponsoredSweeper, now time.Time) int {
+	var failures int
+	ended, err := svc.EndClosedJobs(ctx)
+	if err != nil {
+		log.Printf("billing-sync: sponsored: end campaigns of closed jobs: %v", err)
+		failures++
+	}
+	var requeued int64
+	if now.UTC().Hour() < capResetWindowHours {
+		if requeued, err = svc.RequeueDailyCapJobs(ctx); err != nil {
+			log.Printf("billing-sync: sponsored: requeue daily-cap jobs: %v", err)
+			failures++
+		}
+	}
+	log.Printf("billing-sync: sponsored ended_closed=%d requeued_capped=%d", ended, requeued)
+	return failures
 }
 
 // settleRewardsLocked runs the referral pass under an advisory lock, or skips it.

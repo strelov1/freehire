@@ -133,6 +133,25 @@ func (q *Queries) EndSponsoredCampaignsForJob(ctx context.Context, jobID int64) 
 	return items, nil
 }
 
+const endSponsoredCampaignsOfClosedJobs = `-- name: EndSponsoredCampaignsOfClosedJobs :execrows
+UPDATE sponsored_campaigns c
+SET status = 'ended', updated_at = now()
+FROM jobs j
+WHERE j.id = c.job_id AND j.closed_at IS NOT NULL
+  AND c.status NOT IN ('rejected', 'ended')
+`
+
+// The sweep behind "closing a job ends its campaigns" (closed_at is set by many statements, so
+// no hook): ends every live campaign whose job is closed. Unused budget stays recorded. The
+// job needs no reindex: a closed job is filtered out of search whatever its document says.
+func (q *Queries) EndSponsoredCampaignsOfClosedJobs(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, endSponsoredCampaignsOfClosedJobs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getSponsoredCampaignForUpdate = `-- name: GetSponsoredCampaignForUpdate :one
 SELECT id, job_id, owner_user_id, status, cpc_cents, daily_cap_cents, budget_cents, spent_cents, reviewed_by, reviewed_at, reject_reason, created_at, updated_at FROM sponsored_campaigns WHERE id = $1 FOR UPDATE
 `
@@ -251,6 +270,53 @@ func (q *Queries) InsertSponsoredTopup(ctx context.Context, arg InsertSponsoredT
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listServingSponsoredCampaigns = `-- name: ListServingSponsoredCampaigns :many
+SELECT DISTINCT ON (c.job_id) c.job_id, c.id AS campaign_id, c.cpc_cents
+FROM sponsored_campaigns c
+JOIN jobs j ON j.id = c.job_id AND j.closed_at IS NULL AND NOT j.is_private
+LEFT JOIN sponsored_daily d ON d.campaign_id = c.id AND d.day = $1::date
+WHERE c.job_id = ANY($2::bigint[])
+  AND c.status = 'active'
+  AND c.spent_cents < c.budget_cents
+  AND (c.daily_cap_cents IS NULL OR COALESCE(d.spent_cents, 0) < c.daily_cap_cents)
+ORDER BY c.job_id, c.cpc_cents DESC, c.id
+`
+
+type ListServingSponsoredCampaignsParams struct {
+	Today  pgtype.Date `json:"today"`
+	JobIds []int64     `json:"job_ids"`
+}
+
+type ListServingSponsoredCampaignsRow struct {
+	JobID      int64 `json:"job_id"`
+	CampaignID int64 `json:"campaign_id"`
+	CpcCents   int64 `json:"cpc_cents"`
+}
+
+// The campaign that serves each given job today: active, budget left, today's cap not reached,
+// on a job still open. Per job the highest cpc wins (ties: the older campaign). One definition
+// of "serving" for the index document (sponsored, sponsored_cpc) and for resolving a sponsored
+// hit to the campaign a click token names. today is the UTC day: caps reset at UTC midnight.
+func (q *Queries) ListServingSponsoredCampaigns(ctx context.Context, arg ListServingSponsoredCampaignsParams) ([]ListServingSponsoredCampaignsRow, error) {
+	rows, err := q.db.Query(ctx, listServingSponsoredCampaigns, arg.Today, arg.JobIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListServingSponsoredCampaignsRow{}
+	for rows.Next() {
+		var i ListServingSponsoredCampaignsRow
+		if err := rows.Scan(&i.JobID, &i.CampaignID, &i.CpcCents); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listSponsoredCampaignsByOwner = `-- name: ListSponsoredCampaignsByOwner :many
@@ -381,6 +447,27 @@ UPDATE sponsored_topups SET refunded_at = now() WHERE id = $1 AND refunded_at IS
 func (q *Queries) MarkSponsoredTopupRefunded(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, markSponsoredTopupRefunded, id)
 	return err
+}
+
+const requeueSponsoredDailyCapJobs = `-- name: RequeueSponsoredDailyCapJobs :execrows
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT DISTINCT j.id, COALESCE(j.posted_at, j.created_at)
+FROM sponsored_campaigns c
+JOIN jobs j ON j.id = c.job_id AND j.closed_at IS NULL AND NOT j.is_private
+WHERE c.status = 'active' AND c.daily_cap_cents IS NOT NULL
+ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
+`
+
+// A daily cap resets at UTC midnight, but nothing writes the job then, so a job whose document
+// went sponsored=false when yesterday's cap was reached would stay hidden. Requeues the open
+// jobs of every active campaign that has a daily cap, as RequeueSearchOutbox does.
+func (q *Queries) RequeueSponsoredDailyCapJobs(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, requeueSponsoredDailyCapJobs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const reviewSponsoredCampaign = `-- name: ReviewSponsoredCampaign :exec

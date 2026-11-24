@@ -55,6 +55,13 @@ type JobDocument struct {
 	// Written only when true, so the negative is asked as NOT of the positive (see
 	// aiInterviewFragment), which also reaches documents that omit it.
 	AIInterview bool `json:"ai_interview,omitempty"`
+	// Sponsored is true while a paid campaign on the job is serving (active, budget left,
+	// today's daily cap not reached) and SponsoredCPC is the highest cost per click among such
+	// campaigns, in cents. Written only when true; they back the sponsored search slot and are
+	// never served: the doc's own fields shadow jobview.Job.Sponsored, the served flag, which the
+	// handler sets only on a hit it places as an ad.
+	Sponsored    bool  `json:"sponsored,omitempty"`
+	SponsoredCPC int64 `json:"sponsored_cpc,omitempty"`
 	// Vectors carries the skill vector under Meilisearch's reserved `_vectors` key, the
 	// userProvided embedder behind the match sort (see internal/dict/skillvec). Not served.
 	//

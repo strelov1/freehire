@@ -25,7 +25,8 @@
 - [x] 2.2 `Charge(campaign, visitor, now)`:
       - validity reasons, `min(cpc, budget_left, daily_left)`
       - a concurrency test proving no overspend
-- [ ] 2.3 Close hook: closing a job ends its campaigns
+- [x] 2.3 Close hook: closing a job ends its campaigns (periodic sweep in `cmd/billing-sync`,
+      since `closed_at` is set by many statements)
 - [x] 2.4 Enqueue `search_outbox` on every state change and on budget or cap exhaustion
 
 ## 3. Billing
@@ -39,21 +40,25 @@
 
 ## 4. Search index and placements
 
-- [ ] 4.1 `JobDocument` gains `sponsored` and `sponsored_cpc`; index settings make them
+- [x] 4.1 `JobDocument` gains `sponsored` and `sponsored_cpc`; index settings make them
       filterable and sortable; the outbox builder fills them from active campaigns
-- [ ] 4.2 `SearchJobs`:
+- [x] 4.2 `SearchJobs`:
       - a parallel sponsored lookup on offset 0
       - insert at positions 1 and 6, dedupe, add `sponsored` and `sponsored_url` to the view
       - degrade on error
       - tests
-- [ ] 4.3 Impression counting (batched upsert into `sponsored_daily`)
-- [ ] 4.4 Alert email: one sponsored job per subscription query, with label and redirect link;
+- [x] 4.3 Impression counting (batched upsert into `sponsored_daily`)
+- [x] 4.4 Alert email: one sponsored job per subscription query, with label and redirect link;
       template test
 - [ ] 4.5 Company page: pinned sponsored jobs
+      - backend done: the company page's own `searchJobs` call (`company_slug=<slug>`, offset 0)
+        gets its eligible sponsored jobs pinned first (`placement=company`); each carries
+        `sponsored: true` and `sponsored_url`
+      - open (phase F, web): render the "Sponsored" label and link `sponsored_url`
 
 ## 5. Redirect endpoint
 
-- [ ] 5.1 HMAC token issue and verify, with expiry per placement (key from config)
+- [x] 5.1 HMAC token issue and verify, with expiry per placement (key from config)
 - [ ] 5.2 `GET /api/v1/sponsored/go/{token}`:
       - always 302 to the job URL
       - bot list from viewlog, visitor hash with a daily salt, per-IP rate limit

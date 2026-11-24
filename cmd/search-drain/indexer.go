@@ -132,9 +132,16 @@ func (b docBuilder) build(ctx context.Context, jobs []db.Job) ([]search.JobDocum
 		return nil, nil, fmt.Errorf("%w: apply-form question counts for wave: %v", searchdrain.ErrSkipWave, err)
 	}
 
+	// Which jobs a paid campaign serves right now. Same skip as above: a document built
+	// without it would drop a live ad until something queued the job again.
+	now := time.Now()
+	serving, err := search.ServingCampaigns(ctx, ix.q, geoIDs, now)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: sponsored campaigns for wave: %w", searchdrain.ErrSkipWave, err)
+	}
+
 	docs := make([]search.JobDocument, 0, len(jobs))
 	var withheld []int64
-	now := time.Now()
 	for _, job := range jobs {
 		// A job search withholds (no resolved category, no posting body, or a source that
 		// stopped showing it; search.Withheld) never enters the index; cmd/reindex's
@@ -148,6 +155,7 @@ func (b docBuilder) build(ctx context.Context, jobs []db.Job) ([]search.JobDocum
 			return nil, nil, fmt.Errorf("build document (job %d): %w", job.ID, err)
 		}
 		doc.AttachApplyQuestions(questions)
+		doc.AttachSponsored(serving)
 		repost, mass := int64(1), int64(1)
 		if job.RoleFingerprint.Valid && job.RoleFingerprint.String != "" {
 			if c, ok := counts[clusterKey{job.CompanySlug, job.RoleFingerprint.String}]; ok {
