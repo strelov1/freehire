@@ -21,8 +21,8 @@
 </script>
 
 <Seo
-  title="Post a job — freehire for recruiters"
-  description="Submit a tech job to freehire, the free, open-source tech job aggregator. Moderator-reviewed postings join one clean, searchable feed of developer roles."
+  title="Post tech jobs for free — freehire for recruiters"
+  description="Publish tech vacancies for free. Review applications, track hiring stages, invite recruiters, email candidates, and see vacancy analytics in freehire."
   {canonical}
 />
 
