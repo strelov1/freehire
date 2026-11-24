@@ -14,11 +14,9 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
-	"github.com/strelov1/freehire/internal/engage/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 )
@@ -29,19 +27,14 @@ import (
 // send that cannot land.
 type Telegram[T any] struct {
 	client *telegramnotify.Client
-	origin string
 	render func(ms []T) string
 }
 
-// NewTelegram builds a Telegram notifier sending through client, with links
-// rooted at origin (the frontend origin). render produces the HTML body for the
-// whole batch.
-func NewTelegram[T any](client *telegramnotify.Client, origin string, render func(ms []T) string) *Telegram[T] {
-	return &Telegram[T]{client: client, origin: strings.TrimRight(origin, "/"), render: render}
+// NewTelegram builds a Telegram notifier sending through client. render produces
+// the HTML body for the whole batch; it closes over the frontend origin itself.
+func NewTelegram[T any](client *telegramnotify.Client, render func(ms []T) string) *Telegram[T] {
+	return &Telegram[T]{client: client, render: render}
 }
-
-// Origin is the frontend origin without a trailing slash, for the engine's renderer.
-func (n *Telegram[T]) Origin() string { return n.origin }
 
 // Send posts the rendered batch to the chat encoded in dest. The channel argument
 // is ignored.
@@ -56,8 +49,6 @@ func (n *Telegram[T]) Send(ctx context.Context, _ string, dest string, ms []T) e
 type Email[T any] struct {
 	sender emailnotify.Sender
 	from   string
-	origin string
-	layout *mailtpl.Layout
 	links  *emailprefs.Links
 	render func(ms []T, unsubscribe string) (subject, htmlBody, textBody string)
 	userID func(ms []T) int64
@@ -67,31 +58,22 @@ type Email[T any] struct {
 // senderName is the display name on these mails: the product, not a person.
 const senderName = "freehire"
 
-// NewEmail builds an Email notifier sending from `from` through sender, with links
-// rooted at origin and unsubscribe links signed by links. render produces the
-// subject, HTML and text of the mail for the whole batch. userID reads whose mail
-// it is off the batch: every message is the same account's, since the engines
-// group by account. engine prefixes the error line, as every worker's does.
-func NewEmail[T any](sender emailnotify.Sender, from, origin string, links *emailprefs.Links, engine string,
+// NewEmail builds an Email notifier sending from `from` through sender, with
+// unsubscribe links signed by links. render produces the subject, HTML and text
+// of the mail for the whole batch, layout included. userID reads whose mail it is
+// off the batch: every message is the same account's, since the engines group by
+// account. engine prefixes the error line, as every worker's does.
+func NewEmail[T any](sender emailnotify.Sender, from string, links *emailprefs.Links, engine string,
 	userID func(ms []T) int64, render func(ms []T, unsubscribe string) (subject, htmlBody, textBody string)) *Email[T] {
-	base := strings.TrimRight(origin, "/")
 	return &Email[T]{
 		sender: sender,
 		from:   emailnotify.From(senderName, from),
-		origin: base,
-		layout: mailtpl.New(base),
 		links:  links,
 		render: render,
 		userID: userID,
 		engine: engine,
 	}
 }
-
-// Layout is the shared mail shell the engine's renderer needs.
-func (n *Email[T]) Layout() *mailtpl.Layout { return n.layout }
-
-// Origin is the frontend origin without a trailing slash.
-func (n *Email[T]) Origin() string { return n.origin }
 
 // Send signs the unsubscribe link, renders the mail and delivers it to the
 // address in dest. A paused SES account soft-skips as

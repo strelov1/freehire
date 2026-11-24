@@ -26,7 +26,7 @@ type TelegramNotifier = batchnotify.Telegram[Message]
 // (telegramnotify.SendToChat) so the runner unlinks the chat instead of retrying a
 // send that cannot land.
 func NewTelegramNotifier(client *telegramnotify.Client, origin string) *TelegramNotifier {
-	return batchnotify.NewTelegram(client, origin, newTelegramCopy(origin).render)
+	return batchnotify.NewTelegram(client, newTelegramCopy(origin).render)
 }
 
 // telegramCopy is the nudge copy for the Telegram channel.
@@ -176,7 +176,7 @@ type EmailNotifier = batchnotify.Email[Message]
 // NewEmailNotifier builds an EmailNotifier sending from `from` through sender, with
 // links rooted at origin and unsubscribe links signed by links.
 func NewEmailNotifier(sender emailnotify.Sender, from, origin string, links *emailprefs.Links) *EmailNotifier {
-	return batchnotify.NewEmail(sender, from, origin, links, "nudge", func(ms []Message) int64 { return ms[0].UserID },
+	return batchnotify.NewEmail(sender, from, links, "nudge", func(ms []Message) int64 { return ms[0].UserID },
 		newEmailCopy(origin).render)
 }
 

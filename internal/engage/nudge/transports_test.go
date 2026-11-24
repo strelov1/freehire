@@ -2,7 +2,10 @@ package nudge
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -281,6 +284,25 @@ func TestTelegramNotifier_BatchStaysUnderTheMessageLimit(t *testing.T) {
 
 	if got := telegramnotify.UTF16Len(n.render(ms)); got > telegramnotify.MaxMessageLen {
 		t.Errorf("rendered %d UTF-16 units, want at most %d", got, telegramnotify.MaxMessageLen)
+	}
+}
+
+// The constructor wires the shared batchnotify.Telegram to the nudge copy: one post
+// per batch, carrying the kind's heading and links rooted at the origin.
+func TestTelegramNotifier_SendsTheNudgeCopyToTheChat(t *testing.T) {
+	var got struct{ Text string }
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer api.Close()
+
+	n := NewTelegramNotifier(telegramnotify.NewClientWithBase("t", api.URL), "https://freehire.me")
+	if err := n.Send(context.Background(), notify.ChannelTelegram, "42", batchOf(KindFollowUp, 2)); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if !strings.Contains(got.Text, "<b>2</b> of your applications have gone quiet") || !strings.Contains(got.Text, `href="https://freehire.me/`) {
+		t.Errorf("posted text lacks the follow-up heading or an on-platform link: %q", got.Text)
 	}
 }
 

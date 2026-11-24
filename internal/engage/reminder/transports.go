@@ -25,7 +25,7 @@ type TelegramNotifier = batchnotify.Telegram[ReminderMessage]
 // NewTelegramNotifier builds a TelegramNotifier sending through client, with the
 // job link rooted at jobBaseURL (the frontend origin).
 func NewTelegramNotifier(client *telegramnotify.Client, jobBaseURL string) *TelegramNotifier {
-	return batchnotify.NewTelegram(client, jobBaseURL, newTelegramCopy(jobBaseURL).render)
+	return batchnotify.NewTelegram(client, newTelegramCopy(jobBaseURL).render)
 }
 
 // telegramCopy is the reminder copy for the Telegram channel.
@@ -115,7 +115,7 @@ type EmailNotifier = batchnotify.Email[ReminderMessage]
 // NewEmailNotifier builds an EmailNotifier sending from `from` through sender, with
 // the job link rooted at jobBaseURL and unsubscribe links signed by links.
 func NewEmailNotifier(sender emailnotify.Sender, from, jobBaseURL string, links *emailprefs.Links) *EmailNotifier {
-	return batchnotify.NewEmail(sender, from, jobBaseURL, links, "reminder",
+	return batchnotify.NewEmail(sender, from, links, "reminder",
 		func(ms []ReminderMessage) int64 { return ms[0].UserID }, newEmailCopy(jobBaseURL).send)
 }
 
