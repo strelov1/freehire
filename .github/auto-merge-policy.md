@@ -1,32 +1,41 @@
 # Auto-merge policy
 
 The SuperPlane canvas "PR auto-merge policy" reads this file from `main` after the ready check
-labels a pull request `ready-to-merge`. It turns on auto-merge only when a rule under
-"Auto-merge" covers every changed file and no rule under "Always a person" matches. Anything
-else, or any doubt, waits for the owner. A pull request from a fork never auto-merges.
+labels a pull request `ready-to-merge`. The principle: a pull request that passed the ready check
+and every required check merges on its own, unless it touches a zone listed under "Always a
+person". A pull request from a fork never auto-merges. While the canvas runs in observe mode it
+only posts its decision, and the owner still merges by hand.
 
 ## Always a person
 
-These win over any rule below.
+These win over everything below.
 
 - This file, `.github/`, `AGENTS.md` and any `.agents/` file: they steer the agents and CI.
-- `migrations/`: production schema; rollback does not undo a migration.
+- `migrations/` and `deploy/`: production schema and rollback scripts; rollback does not undo a
+  migration.
+- Build and deploy configuration: `Dockerfile` files, `docker-compose.yml`, `Makefile`,
+  `lefthook.yml`, `sqlc.yaml`, `ogen.yml`.
 - `internal/identity/` (auth, accounts, billing, promo, account deletion), `internal/ai/llmkey/`,
   `internal/platform/aigateway/`: sessions, money, the paid-AI gate, API keys.
 - CV and personal data handling (`internal/candidate/`, anything that reads CV text).
 - A new dependency in `go.mod` or `package.json` (Dependabot bumps have their own workflow).
+- A change that rewrites many existing production rows when it ships: a backfill, a recount or
+  a data fix whose new logic changes stored values (for example a recount that moves thousands of
+  companies to a different bucket). The ready check's comment usually names the effect.
 - A pull request the ready check marked with an open question for the owner.
 
 ## Auto-merge
 
-- Documentation: `docs/` and `*.md` files anywhere, except `.github/`, `.agents/` and `AGENTS.md`
-  (those stay under "Always a person").
-- Tests only: Go `*_test.go` and `testdata/` fixtures; web `*.test.ts`, `*.spec.ts`, `*.test.mjs`
-  and everything under `web/e2e/`. A test-only pull request touches no non-test file: test
-  configs (`vitest.config.ts`, `playwright*.config.ts`, `vitest-stubs/`) are not covered.
-- Web styles: stylesheet files only (`web/src/app.css`). Svelte components and copy or i18n
-  strings are not covered yet, even when the change is only a class name or a string.
-- Size cap on every rule: at most 300 changed lines (additions plus deletions) in total. A bigger
-  pull request waits for the owner even when every file is covered.
-- A pull request mixing covered and uncovered files waits for the owner. Generated files (sqlc
-  output, lockfiles) are not covered by any rule.
+Every file not matched by "Always a person" is covered: Go and web code, Svelte components, copy
+and i18n strings, SQL queries outside `migrations/`, tests, fixtures and documentation. A pull
+request auto-merges when all of these hold:
+
+- The latest `## Ready check` comment's verdict is **Ready** for the head commit being judged.
+- Every required check is green on that commit.
+- Every CodeRabbit finding is resolved, or the latest ready check comment names it and says why
+  it was skipped. Any other open finding waits for the owner.
+- Size cap: at most 600 changed lines (additions plus deletions), not counting tests
+  (`*_test.go`, `*.test.ts`, `*.spec.ts`, `web/e2e/`), `testdata/` fixtures and generated files.
+- Generated files (sqlc output `*.sql.go`, `pnpm-lock.yaml`, `go.sum`) are covered only together
+  with their source in the same pull request: the query file for sqlc output, a `package.json` or
+  `go.mod` change for a lockfile. A generated file changed alone waits for the owner.
