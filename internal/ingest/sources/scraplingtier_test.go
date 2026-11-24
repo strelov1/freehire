@@ -57,8 +57,12 @@ func TestApplyScraplingEgressIsANoOpWithoutAURL(t *testing.T) {
 func TestApplyScraplingEgressRefusesAURLWithoutAToken(t *testing.T) {
 	t.Setenv("SCRAPLING_FETCH_URL", "http://127.0.0.1:8098")
 	t.Setenv("SCRAPLING_FETCH_TOKEN", "")
-	if err := ApplyScraplingEgress(map[string]Source{"bayt": NewBayt(nil)}); err == nil {
-		t.Fatal("ApplyScraplingEgress: want an error for a URL without a token")
+	for name, source := range map[string]Source{"bayt": NewBayt(nil), "greenhouse": ats.NewGreenhouse(nil)} {
+		t.Run(name, func(t *testing.T) {
+			if err := ApplyScraplingEgress(map[string]Source{name: source}); err == nil {
+				t.Fatal("ApplyScraplingEgress: want an error for a URL without a token")
+			}
+		})
 	}
 }
 
@@ -225,6 +229,55 @@ func TestScraplingClientDoesNotRetryOrDoubleTime(t *testing.T) {
 		if c.httpClient.Timeout != 0 {
 			t.Errorf("%+v: outer timeout = %s, want none (the transport's own client bounds the fetch)", r, c.httpClient.Timeout)
 		}
+	}
+}
+
+func TestScraplingClientStreamsThroughFetchService(t *testing.T) {
+	const sitemapPath = "/sitemap.xml"
+	const sitemap = "<urlset></urlset>"
+	for _, route := range []scraplingRoute{{scraplingfetch.ModeBrowser, false}, {scraplingfetch.ModeHTTP, true}} {
+		t.Run(string(route.mode), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/fetch" {
+					http.Error(w, "expected POST /fetch", http.StatusBadRequest)
+					return
+				}
+				var request struct {
+					URL, Method string
+					Mode        scraplingfetch.Mode
+					Proxy       bool
+				}
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				if request.URL != "http://"+r.Host+sitemapPath || request.Method != http.MethodGet || request.Mode != route.mode || request.Proxy != route.proxy {
+					t.Errorf("unexpected fetch request: %+v", request)
+					http.Error(w, "unexpected fetch request", http.StatusBadRequest)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"status": http.StatusOK,
+					"body":   base64.StdEncoding.EncodeToString([]byte(sitemap)),
+				})
+			}))
+			defer server.Close()
+
+			client, err := newScraplingClient(scraplingfetch.Config{URL: server.URL, Token: "test"}, route)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = client.GetStream(t.Context(), server.URL+sitemapPath, "application/xml", func(r io.Reader) error {
+				body, err := io.ReadAll(r)
+				if err == nil && string(body) != sitemap {
+					t.Errorf("GetStream body = %q, want %q", body, sitemap)
+				}
+				return err
+			})
+			if err != nil {
+				t.Fatalf("GetStream: %v", err)
+			}
+		})
 	}
 }
 
