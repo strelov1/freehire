@@ -6,7 +6,8 @@ import "context"
 // its own. Each matched URL is turned into a board id by atsboard's recogniser, so a hit names a
 // board the same way the catalogue does. See commonCrawlCandidates for the pattern shapes.
 var crawlPatterns = map[string][]string{
-	"lever":           {"jobs.lever.co/*", "jobs.eu.lever.co/*"},
+	// No jobs.eu.lever.co: leverProber only asks api.lever.co, so an EU board would probe as empty.
+	"lever":           {"jobs.lever.co/*"},
 	"smartrecruiters": {"jobs.smartrecruiters.com/*", "careers.smartrecruiters.com/*"},
 	"workable":        {"apply.workable.com/*"},
 	"recruitee":       {"*.recruitee.com"},
