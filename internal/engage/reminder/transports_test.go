@@ -27,7 +27,7 @@ func (s *captureSender) Send(_ context.Context, m emailnotify.Message) error {
 func TestEmailNotifier_RendersSubjectAndOnPlatformLink(t *testing.T) {
 	sender := &captureSender{}
 	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me/", testLinks())
-	msg := ReminderMessage{UserID: testUserID, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme", URL: "https://ats/x"}
+	msg := ReminderMessage{UserID: testUserID, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}
 
 	if err := n.Send(context.Background(), "email", "u@x.com", []ReminderMessage{msg}); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -54,7 +54,7 @@ func TestEmailNotifier_RendersSubjectAndOnPlatformLink(t *testing.T) {
 func TestEmailNotifier_EscapesUserData(t *testing.T) {
 	sender := &captureSender{}
 	n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
-	msg := ReminderMessage{UserID: testUserID, JobTitle: "<script>x</script>", Company: "Acme", Slug: "s", URL: "u"}
+	msg := ReminderMessage{UserID: testUserID, JobTitle: "<script>x</script>", Company: "Acme", Slug: "s"}
 
 	if err := n.Send(context.Background(), "email", "u@x.com", []ReminderMessage{msg}); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -181,7 +181,7 @@ func (pausedSender) Send(context.Context, emailnotify.Message) error {
 // A paused SES account must soft-skip, not count an attempt toward dead-lettering.
 func TestEmailNotifier_PausedTransportSoftSkips(t *testing.T) {
 	n := NewEmailNotifier(pausedSender{}, "jobs@freehire.me", "https://freehire.me", testLinks())
-	msg := ReminderMessage{UserID: testUserID, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme", URL: "u"}
+	msg := ReminderMessage{UserID: testUserID, JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}
 
 	err := n.Send(context.Background(), "email", "u@x.com", []ReminderMessage{msg})
 	if !errors.Is(err, ErrChannelNotConfigured) {

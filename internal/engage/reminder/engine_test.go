@@ -89,7 +89,7 @@ func (n *fakeNotifier) Send(_ context.Context, channel, dest string, ms []Remind
 func actionableRow(id int64, channels []string, chatID *int64, email string) db.GetReminderForDeliveryRow {
 	row := db.GetReminderForDeliveryRow{
 		ID: id, UserID: 42, JobID: id, Channels: channels,
-		Title: "Go Dev", Company: "Acme", PublicSlug: "go-dev-acme", URL: "https://ats/x",
+		Title: "Go Dev", Company: "Acme", PublicSlug: "go-dev-acme",
 		JobOpen: true, StillActionable: true, NotificationsEnabled: true, AccountEmail: email,
 	}
 	if chatID != nil {
@@ -549,7 +549,7 @@ func TestRun_RecordsNotificationOnDelivery(t *testing.T) {
 	if !rec.PublicSlug.Valid || rec.PublicSlug.String != row.PublicSlug {
 		t.Errorf("PublicSlug = %+v, want a valid slug %q", rec.PublicSlug, row.PublicSlug)
 	}
-	wantTitle, wantBody := renderReminder(ReminderMessage{JobTitle: row.Title, Company: row.Company, Slug: row.PublicSlug, URL: row.URL})
+	wantTitle, wantBody := renderReminder(ReminderMessage{JobTitle: row.Title, Company: row.Company, Slug: row.PublicSlug})
 	if rec.Title != wantTitle {
 		t.Errorf("Title = %q, want %q", rec.Title, wantTitle)
 	}
@@ -595,5 +595,31 @@ func TestRelease_SurvivesCancelledRunContext(t *testing.T) {
 	r.release(ctx, 7)
 	if !store.liveWithDeadline || len(store.released) != 1 {
 		t.Fatalf("release ran on a dead or unbounded context (live+deadline=%v, released=%v)", store.liveWithDeadline, store.released)
+	}
+}
+
+// A job with no employer destination reaches the transports flagged, so they keep its freehire
+// page; an ordinary job is not, so it links through the click redirect.
+func TestRun_FlagsJobsWithoutEmployerDestination(t *testing.T) {
+	chat := int64(555)
+	direct := ownedBy(1, 42, []string{"telegram"}, "a@b.c")
+	direct.TelegramChatID = pgtype.Int8{Int64: chat, Valid: true}
+	direct.Source, direct.ExternalID = "employer", "freehire:3f2c"
+	private := ownedBy(2, 42, []string{"telegram"}, "a@b.c")
+	private.TelegramChatID, private.IsPrivate = direct.TelegramChatID, true
+	plain := ownedBy(3, 42, []string{"telegram"}, "a@b.c")
+	plain.TelegramChatID = direct.TelegramChatID
+	store := &fakeStore{due: []int64{1, 2, 3}, rows: map[int64]db.GetReminderForDeliveryRow{1: direct, 2: private, 3: plain}}
+	notifier := &fakeNotifier{}
+	run(t, store, notifier)
+
+	want := map[string]bool{"job-1": true, "job-2": true, "job-3": false}
+	if len(notifier.groups) != 1 {
+		t.Fatalf("groups = %d, want one batch", len(notifier.groups))
+	}
+	for _, m := range notifier.groups[0] {
+		if m.StaysOnSite != want[m.Slug] {
+			t.Errorf("%s StaysOnSite = %v, want %v", m.Slug, m.StaysOnSite, want[m.Slug])
+		}
 	}
 }
