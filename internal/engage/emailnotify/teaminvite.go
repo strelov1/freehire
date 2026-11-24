@@ -6,8 +6,8 @@ import (
 	"html/template"
 	"time"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // TeamInviteMailer sends the invitation to join a company's team on freehire

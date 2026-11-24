@@ -7,9 +7,9 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // senderName is what the recipient's message list shows; "freehire" would invite a

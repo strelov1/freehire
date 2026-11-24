@@ -113,7 +113,7 @@ SELECT id FROM claimed ORDER BY fire_at, id;
 -- the user's live destinations (account email; linked Telegram chat, NULL when
 -- unlinked -> that channel soft-skips; whether a push device is registered), the
 -- fire-time re-check flags, and the live quiet-hours window (account timezone +
--- notification_settings' quiet_hours_start/end) that internal/application/deliverywindow
+-- notification_settings' quiet_hours_start/end) that internal/engage/deliverywindow
 -- checks before delivery. job_open and still_actionable let the worker
 -- cancel-and-skip a reminder whose job has since closed or is no longer
 -- saved-but-unapplied, closing the race between a cancel and the fire.

@@ -15,9 +15,9 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // Step names one mail in the sequence. The values are the ledger's `step` column

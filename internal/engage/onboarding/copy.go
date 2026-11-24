@@ -3,7 +3,7 @@ package onboarding
 import (
 	"html/template"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // spec is one mail's copy: what the inbox shows, what the card says, and the

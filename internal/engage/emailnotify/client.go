@@ -26,7 +26,7 @@ var _ Sender = (*Client)(nil)
 // off with. It is refused rather than sent.
 //
 // This is the choke point: every mail, whether rendered through
-// internal/application/mailtpl or hand-built (internal/engage/mentorship), passes
+// internal/engage/mailtpl or hand-built (internal/engage/mentorship), passes
 // one Send, so a mail with no way out cannot ship from any path.
 var ErrNoWayOut = errors.New("emailnotify: a silenceable mail with no unsubscribe URL")
 

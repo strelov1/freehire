@@ -8,9 +8,9 @@ import (
 	"html"
 	"html/template"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // requestHTML is the mail body; its dot is the cabinet URL. The notice stays
