@@ -127,6 +127,19 @@ export interface Card {
 }
 
 //////////
+// source: detail_facts.go
+
+/**
+ * Salary is a posting's pay range: either bound may be absent, never both.
+ */
+export interface Salary {
+  min?: number /* int */;
+  max?: number /* int */;
+  currency?: string;
+  period?: string;
+}
+
+//////////
 // source: ghost.go
 
 /**
@@ -386,15 +399,6 @@ export interface Job {
    */
   company_website?: string;
   company_logo?: string;
-}
-/**
- * Salary is a posting's pay range: either bound may be absent, never both.
- */
-export interface Salary {
-  min?: number /* int */;
-  max?: number /* int */;
-  currency?: string;
-  period?: string;
 }
 
 //////////
