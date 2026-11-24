@@ -12,6 +12,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
@@ -143,5 +145,39 @@ func TestTransitionAndEndForJob(t *testing.T) {
 	}
 	if n, _ := svc.EndForJob(ctx, jobID); n != 0 {
 		t.Errorf("second EndForJob ended %d, want 0", n)
+	}
+}
+
+// Spec "Dashboard reflects charged clicks": 3 valid and 2 duplicate clicks today show up as 3
+// valid, 2 invalid (duplicate) and spend equal to the sum charged.
+func TestDashboardReflectsChargedClicks(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	id, _ := seedCampaign(t, pool, 50, 1000, StatusActive)
+	svc := New(pool)
+	now := time.Now()
+	var charged int64
+	for _, v := range []string{"a", "b", "c", "a", "b"} {
+		d, err := svc.Charge(ctx, id, Click{Placement: PlacementSearch, VisitorHash: v}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		charged += d.CostCents
+	}
+
+	q := db.New(pool)
+	days, err := q.ListSponsoredDailySince(ctx, db.ListSponsoredDailySinceParams{CampaignID: id, Since: day(now.AddDate(0, 0, -30))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(days) != 1 || days[0].ValidClicks != 3 || days[0].InvalidClicks != 2 || days[0].SpentCents != charged || charged != 150 {
+		t.Fatalf("days = %+v, charged = %d", days, charged)
+	}
+	reasons, err := q.ListSponsoredInvalidReasonsSince(ctx, db.ListSponsoredInvalidReasonsSinceParams{CampaignID: id, Since: pgconv.Instant(now.AddDate(0, 0, -30))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reasons) != 1 || reasons[0].Reason != string(ReasonDuplicate) || reasons[0].Clicks != 2 {
+		t.Fatalf("reasons = %+v", reasons)
 	}
 }
