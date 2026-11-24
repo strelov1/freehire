@@ -125,6 +125,25 @@ func (s cancellingSender) Send(context.Context, emailnotify.Message) error {
 	return nil
 }
 
+// fullStore always has a further batch of due accounts: one run must still take only BatchSize.
+type fullStore struct {
+	memoryStore
+	selections int
+}
+
+func (s *fullStore) Candidates(context.Context, time.Time, int32) ([]Candidate, error) {
+	s.selections++
+	return []Candidate{{UserID: 7, Email: "member@example.test"}}, nil
+}
+
+func TestDailyDigestTakesOneBatchPerRun(t *testing.T) {
+	store := &fullStore{memoryStore: memoryStore{snapshot: Snapshot{Items: []Item{{ID: 11, Subject: "Hello", Signal: "screening"}}}}}
+	stats, err := New(store, NewMailer("freehire@example.test", "https://freehire.test", strings.Repeat("x", 32)), &capturingSender{}).Run(context.Background(), time.Now())
+	if err != nil || stats.Sent != 1 || store.selections != 1 {
+		t.Fatalf("stats=%+v selections=%d err=%v", stats, store.selections, err)
+	}
+}
+
 func TestDailyDigestRecordsSendDespiteShutdown(t *testing.T) {
 	store := &memoryStore{candidates: []Candidate{{UserID: 7, Email: "member@example.test"}}, snapshot: Snapshot{IDs: []int64{11}, Total: 1, Items: []Item{{ID: 11, Subject: "Hello", Signal: "screening"}}}}
 	ctx, cancel := context.WithCancel(context.Background())
