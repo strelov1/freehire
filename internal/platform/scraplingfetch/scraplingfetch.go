@@ -156,6 +156,16 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}, nil
 }
 
+// ServiceError reports a non-200 response from the fetch service itself.
+type ServiceError struct {
+	StatusCode int
+	message    string
+}
+
+func (e *ServiceError) Error() string {
+	return fmt.Sprintf("service answered %d: %s", e.StatusCode, e.message)
+}
+
 func (t *Transport) post(ctx context.Context, payload []byte) (wireResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.endpoint, bytes.NewReader(payload))
 	if err != nil {
@@ -179,7 +189,7 @@ func (t *Transport) post(ctx context.Context, payload []byte) (wireResponse, err
 		if decodeErr != nil || msg == "" {
 			msg = strings.TrimSpace(string(raw))
 		}
-		return wireResponse{}, fmt.Errorf("service answered %d: %s", resp.StatusCode, msg)
+		return wireResponse{}, &ServiceError{StatusCode: resp.StatusCode, message: msg}
 	}
 	if decodeErr != nil {
 		return wireResponse{}, fmt.Errorf("decode answer: %w", decodeErr)

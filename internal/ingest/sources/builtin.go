@@ -376,22 +376,9 @@ func parseBuiltInPosting(root *xhtml.Node, base Job) (Job, bool) {
 	job.Remote = job.WorkMode == "remote"
 	job.Location, job.Countries = builtinPlaces(p.JobLocation)
 	job.PostedAt = NotFuture(parseDate(strings.TrimSpace(p.DatePosted)))
-	job.EmploymentType = schemaEmploymentType(builtinEmploymentType(p.EmploymentType))
+	job.EmploymentType = schemaEmploymentType(schemaFirstEmploymentType(p.EmploymentType))
 	builtinSalary(&job, p)
 	return job, true
-}
-
-// builtinEmploymentType reads employmentType, which schema.org allows as one enum or a list.
-func builtinEmploymentType(raw json.RawMessage) string {
-	var one string
-	if json.Unmarshal(raw, &one) == nil {
-		return one
-	}
-	var many []string
-	if json.Unmarshal(raw, &many) == nil && len(many) > 0 {
-		return many[0]
-	}
-	return ""
 }
 
 // builtinPlaces renders each place as "City, Region, Country" (several joined by "; ") and

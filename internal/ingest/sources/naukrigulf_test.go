@@ -6,11 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 	"golang.org/x/time/rate"
 )
 
@@ -219,6 +223,29 @@ func TestNaukrigulfRetriesARefusedRequest(t *testing.T) {
 	})
 	if err := s.get(context.Background(), "u", nil); err != nil || calls != 3 {
 		t.Errorf("err = %v after %d calls, want success on the third", err, calls)
+	}
+}
+
+func TestNaukrigulfRetriesScraplingGatewayFailure(t *testing.T) {
+	var calls atomic.Int32
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = fmt.Fprint(w, `{"error":"HTTP/2 stream reset"}`)
+			return
+		}
+		_, _ = fmt.Fprint(w, `{"status":200,"body":"e30="}`)
+	}))
+	defer service.Close()
+	client, err := newScraplingClient(scraplingfetch.Config{URL: service.URL, Token: "test-token"}, scraplingRoute{mode: scraplingfetch.ModeHTTP})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newTestNaukrigulf(&naukrigulfFake{})
+	s.http = client
+	var result naukrigulfListing
+	if err := s.get(context.Background(), naukrigulfBase+"/spapi/jobapi/search", &result); err != nil || calls.Load() != 2 {
+		t.Fatalf("err = %v after %d calls, want success on the second", err, calls.Load())
 	}
 }
 

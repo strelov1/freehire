@@ -116,7 +116,8 @@ func TestServiceFailureIsATransportError(t *testing.T) {
 	tr := newTransport(t, &fakeService{status: http.StatusBadGateway}, ModeHTTP, false)
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://ex.com", nil)
 	err := roundTripErr(tr, req)
-	if err == nil || !strings.Contains(err.Error(), "browser crashed") {
+	var failure *ServiceError
+	if !errors.As(err, &failure) || failure.StatusCode != http.StatusBadGateway || !strings.Contains(err.Error(), "browser crashed") {
 		t.Fatalf("RoundTrip error = %v, want the service's own error surfaced", err)
 	}
 }

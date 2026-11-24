@@ -31,6 +31,19 @@ func schemaEmploymentType(t string) string {
 	}
 }
 
+// schemaFirstEmploymentType reads a single enum or the first enum of a list for callers that store one type.
+func schemaFirstEmploymentType(raw json.RawMessage) string {
+	var one string
+	if json.Unmarshal(raw, &one) == nil {
+		return one
+	}
+	var many []string
+	if json.Unmarshal(raw, &many) == nil && len(many) > 0 {
+		return many[0]
+	}
+	return ""
+}
+
 // schemaFixedTermEmploymentType reads employmentType, a string or a list, for boards whose
 // TEMPORARY is a fixed-term EMPLOYMENT (a French CDD, a Swiss "befristet" post) rather than
 // contract work, so it states nothing on its own; the first value that does decide wins.
