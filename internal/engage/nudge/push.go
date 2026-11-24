@@ -1,40 +1,27 @@
 package nudge
 
 import (
-	"context"
 	"fmt"
 
+	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 )
 
-var _ Notifier = (*PushNotifier)(nil)
-
-// PushTokenLister lists a user's registered push devices.
-type PushTokenLister = pushnotify.TokenLister
-
 // PushNotifier delivers a nudge as a mobile push to every device registered for the
-// account.
-type PushNotifier struct{ push *pushnotify.UserSender }
+// account. The send is the shared notify.Push; this package owns only the copy.
+type PushNotifier = notify.Push[[]Message]
 
 // NewPushNotifier builds a PushNotifier resolving devices through tokens and
 // sending through transport.
-func NewPushNotifier(tokens PushTokenLister, transport pushnotify.Notifier) *PushNotifier {
-	return &PushNotifier{push: pushnotify.NewUserSender(tokens, transport)}
-}
-
-// Send resolves dest as a user id and fans ONE notification for the whole batch out
-// to all their devices. The channel argument is ignored.
-func (n *PushNotifier) Send(ctx context.Context, _ string, dest, kind string, ms []Message) error {
-	if len(ms) == 0 {
-		return nil
-	}
-	title, body := renderNudgeBatch(kind, ms)
-	// The deep link needs one destination: only a single-job batch carries it.
-	var data map[string]string
-	if len(ms) == 1 {
-		data = map[string]string{"slug": ms[0].Slug}
-	}
-	return n.push.Send(ctx, dest, title, body, data)
+func NewPushNotifier(tokens notify.PushTokenLister, transport pushnotify.Notifier) *PushNotifier {
+	return notify.NewPush(tokens, transport, func(ms []Message) (title, body, slug string) {
+		title, body = renderNudgeBatch(ms[0].Kind, ms)
+		// The deep link needs one destination: only a single-job batch carries it.
+		if len(ms) == 1 {
+			slug = ms[0].Slug
+		}
+		return title, body, slug
+	})
 }
 
 // renderNudgeBatch is the shared title/body copy for one (account, kind) batch, used

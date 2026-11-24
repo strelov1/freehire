@@ -2,15 +2,14 @@ package reminder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/strelov1/freehire/internal/engage/batchnotify"
 	"github.com/strelov1/freehire/internal/engage/deliverywindow"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -33,18 +32,24 @@ type ReminderMessage struct {
 
 // Notifier delivers one account's due reminders over a channel to a destination,
 // as a single message. The engine depends only on this, so a new channel is a new
-// implementation, not a change here.
+// implementation, not a change here. The Router, the sentinels and the channel
+// wrappers are the ones internal/engage/notify shares with the nudge engine.
 //
 // The slice, rather than a second per-reminder method, is deliberate: a per-reminder send
 // path left alive is one some channel keeps using, which is what caused the flood.
-type Notifier interface {
-	Send(ctx context.Context, channel, dest string, ms []ReminderMessage) error
-}
+type Notifier = notify.Notifier[[]ReminderMessage]
+
+// Router dispatches a reminder to the notifier registered for its channel, so the
+// engine stays channel-agnostic.
+type Router = notify.Router[[]ReminderMessage]
+
+// Compile-time guarantee that Router is a Notifier.
+var _ Notifier = (Router)(nil)
 
 // ErrChannelNotConfigured is returned by Router.Send for a channel with no
 // registered notifier (e.g. email while SES is unconfigured). The engine treats it
 // as a soft-skip, not a delivery failure.
-var ErrChannelNotConfigured = errors.New("reminder: channel not configured")
+var ErrChannelNotConfigured = notify.ErrChannelNotConfigured
 
 // ErrRecipientGone is returned by a Notifier whose channel learned from the send
 // that this recipient is permanently closed to us — the Telegram bot was blocked
@@ -52,22 +57,6 @@ var ErrChannelNotConfigured = errors.New("reminder: channel not configured")
 // runner forgets the link, so no later reminder, digest or nudge tries that chat
 // again. The same sentinel as notify.ErrRecipientGone, so one errors.Is covers every engine.
 var ErrRecipientGone = notify.ErrRecipientGone
-
-// Router dispatches a reminder to the notifier registered for its channel, so the
-// engine stays channel-agnostic.
-type Router map[string]Notifier
-
-// Compile-time guarantee that Router is a Notifier.
-var _ Notifier = (Router)(nil)
-
-// Send routes to the registered notifier, or ErrChannelNotConfigured when none is.
-func (r Router) Send(ctx context.Context, channel, dest string, ms []ReminderMessage) error {
-	n, ok := r[channel]
-	if !ok {
-		return fmt.Errorf("%w: %q", ErrChannelNotConfigured, channel)
-	}
-	return n.Send(ctx, channel, dest, ms)
-}
 
 // Compile-time proof that the generated *db.Queries satisfies the engine's Store.
 var _ Store = (*db.Queries)(nil)
@@ -310,7 +299,7 @@ func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
 // or notifier is a soft-skip. One successful channel makes the batch delivered.
 func (r *Runner) deliverChannels(ctx context.Context, info db.GetReminderForDeliveryRow, msgs []ReminderMessage) (sent int, failedErr error) {
 	for _, ch := range info.Channels {
-		dest, ok := recipient(ch, info)
+		dest, ok := notify.Recipient(ch, recipientInfo(info))
 		if !ok {
 			continue
 		}
@@ -322,7 +311,7 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetReminderForDeli
 		// without recording a failure: retrying cannot reach it, and a reminder
 		// whose OTHER channel worked is still delivered.
 		if errors.Is(err, ErrRecipientGone) {
-			r.unlinkTelegram(ctx, info.UserID, err)
+			batchnotify.UnlinkTelegram(ctx, r.store, "reminder", info.UserID, err)
 			continue
 		}
 		if err != nil {
@@ -334,43 +323,14 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetReminderForDeli
 	return sent, failedErr
 }
 
-// unlinkTelegram forgets a user's Telegram chat after a send reported it
-// permanently closed, logging it because this changes the user's settings without
-// them asking. A failure here is logged and no more: the send is skipped either
-// way, and the next reminder meets the same 403 and tries again.
-func (r *Runner) unlinkTelegram(ctx context.Context, userID int64, cause error) {
-	rows, err := r.store.DeleteTelegramLink(ctx, userID)
-	if err != nil {
-		log.Printf("reminder: unlink telegram for user %d: %v", userID, err)
-		return
+// recipientInfo is the account-and-channel state the shared Recipient decides on.
+func recipientInfo(info db.GetReminderForDeliveryRow) notify.RecipientInfo {
+	return notify.RecipientInfo{
+		UserID:         info.UserID,
+		TelegramChatID: info.TelegramChatID,
+		AccountEmail:   info.AccountEmail,
+		HasPushDevice:  info.HasPushDevice,
 	}
-	if rows > 0 {
-		log.Printf("reminder: unlinked telegram for user %d: %v", userID, cause)
-	}
-}
-
-// recipient resolves the destination for a channel, and whether the reminder is
-// deliverable over it right now: telegram needs a linked chat, email the account
-// email; anything else is undeliverable.
-func recipient(channel string, info db.GetReminderForDeliveryRow) (string, bool) {
-	switch channel {
-	case notify.ChannelTelegram:
-		if !info.TelegramChatID.Valid {
-			return "", false
-		}
-		return strconv.FormatInt(info.TelegramChatID.Int64, 10), true
-	case notify.ChannelEmail:
-		if info.AccountEmail == "" {
-			return "", false
-		}
-		return info.AccountEmail, true
-	case notify.ChannelPush:
-		if !info.HasPushDevice {
-			return "", false
-		}
-		return strconv.FormatInt(info.UserID, 10), true
-	}
-	return "", false
 }
 
 // recordNotification writes the one in-app notification-center record for a delivered
@@ -389,28 +349,16 @@ func (r *Runner) recordNotification(ctx context.Context, b *batch) {
 	if len(b.msgs) == 1 {
 		arg.PublicSlug = pgconv.TextValid(b.msgs[0].Slug)
 	} else {
-		arg.Jobs = jobsSnapshot(b.msgs)
+		arg.Jobs = notify.JobsSnapshotOf(b.msgs, func(m ReminderMessage) notify.SnapshotJob {
+			return notify.SnapshotJob{Title: m.JobTitle, Company: m.Company, Slug: m.Slug}
+		})
 	}
 	if _, err := r.store.RecordNotification(ctx, arg); err != nil {
 		log.Printf("reminder: record notification for user %d: %v", b.info.UserID, err)
 	}
 }
 
-// jobsSnapshot is the job list a multi-job batch records for its notification's own
-// page, in the shape notify owns because one page renders every engine's rows.
-func jobsSnapshot(ms []ReminderMessage) json.RawMessage {
-	jobs := make([]notify.SnapshotJob, len(ms))
-	for i, m := range ms {
-		jobs[i] = notify.SnapshotJob{Title: m.JobTitle, Company: m.Company, Slug: m.Slug}
-	}
-	return notify.JobsSnapshot(jobs)
-}
-
 // release drops the lease on a reminder so it is retried promptly on a later pass.
 func (r *Runner) release(ctx context.Context, id int64) {
-	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	if err := r.store.ReleaseReminderClaim(releaseCtx, id); err != nil {
-		log.Printf("reminder: release claim %d: %v", id, err)
-	}
+	notify.Release(ctx, "reminder", id, r.store.ReleaseReminderClaim)
 }
