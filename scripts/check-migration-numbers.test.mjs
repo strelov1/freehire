@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   ALLOWED_DUPLICATE_COUNTS,
   addedMigrations,
@@ -107,4 +108,48 @@ test('addedMigrations names what a change added on the failing numbers, nothing 
   } finally {
     process.chdir(cwd);
   }
+});
+
+// The whole script, as the CI step runs it. A file with no numeric prefix has no prefix to
+// match: undefined must not be treated as one, or the file would match itself and be
+// reported as a number collision, with advice to raise an allowlist count for a number
+// that does not exist. Run as a child process because the logic sits in main().
+test('a file without a numeric prefix is not reported as a number collision', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'migration-numbers-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+  const git = (...args) =>
+    execFileSync('git', args, {
+      cwd: dir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env,
+    });
+  mkdirSync(join(dir, 'migrations'));
+  git('init', '-q');
+  git('config', 'user.email', 't@t');
+  git('config', 'user.name', 't');
+  git('config', 'core.hooksPath', '/dev/null');
+  writeFileSync(join(dir, 'migrations', '0001_init.sql'), 'select 1;');
+  git('add', '-A');
+  git('commit', '-qm', 'init');
+  const base = git('rev-parse', 'HEAD').trim();
+  writeFileSync(join(dir, 'migrations', 'missing_prefix.sql'), 'select 1;');
+
+  const script = fileURLToPath(new URL('./check-migration-numbers.mjs', import.meta.url));
+  let stderr = '';
+  // The script exits 1 on purpose; capture what it printed instead of throwing.
+  try {
+    execFileSync(process.execPath, [script, '--base', base], {
+      cwd: dir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env,
+    });
+  } catch (err) {
+    stderr = err.stderr;
+  }
+  assert.match(stderr, /missing_prefix\.sql has no numeric prefix/);
+  assert.doesNotMatch(stderr, /This change added/);
+  assert.doesNotMatch(stderr, /ALLOWED_DUPLICATE_COUNTS, saying why/);
 });

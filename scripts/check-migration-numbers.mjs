@@ -202,7 +202,11 @@ function main() {
   if (!ok) {
     console.error(`check-migration-numbers: ${errors.length} problem(s):`);
     for (const error of errors) console.error(`  ${error}`);
-    const failing = new Set([...errors].map((e) => /^(\d+) is used/.exec(e)?.[1]));
+    // Only "NNNN is used …" errors carry a prefix. One about a file with no numeric prefix
+    // yields undefined, and `undefined === undefined` would then match that same file below.
+    const failing = new Set(
+      [...errors].map((e) => /^(\d+) is used/.exec(e)?.[1]).filter((p) => p !== undefined),
+    );
     const added = addedMigrations(base, failing);
     if (added.length > 0) {
       console.error(
