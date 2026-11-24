@@ -105,8 +105,8 @@ Docker); run the full tagged suite when you change behaviour rather than a signa
 **Hooks:** [lefthook](https://github.com/evilmartians/lefthook) (installed by `mise install`,
 or `lefthook install` once per clone) runs gofmt/vet/golangci-lint on staged Go and eslint on
 staged files in web/, extension/, design-system/ — ratcheted like CI, so only new issues
-fail. `gitleaks` (`brew install gitleaks`) scans every commit and fails hard if missing; a
-real finding means **revoke the credential**.
+fail. Betterleaks (installed by `mise install`) scans staged changes and fails hard
+if missing. A real finding means **revoke the credential**.
 
 **CI gates** — each is explained, with its escape hatch, in
 [docs/agents/ci-checks.md](docs/agents/ci-checks.md): migration edits and squawk
@@ -115,7 +115,7 @@ real finding means **revoke the credential**.
 (`pnpm check:dead`), Go `deadcode`, actionlint + zizmor (SHA-pinned actions), agnix (32 KiB
 cap per AGENTS.md), rumdl, ast-grep, Markdown links (`pnpm check:links`), oasdiff on
 `web/static/openapi.yaml` (`API-Break:` trailer), Schemathesis over the TypeSpec contract, the official MCP conformance suite over OJCP's MCP, changed-line coverage (diff-cover, Go
-≥ 60%), shellcheck/hadolint, shared JS deps (`pnpm check:deps`), Ruff on Python, gitleaks.
+≥ 60%), shellcheck/hadolint, shared JS deps (`pnpm check:deps`), Ruff on Python, Betterleaks.
 
 **Before you run, change or add a `cmd/<name>` worker, read its entry in [docs/agents/workers.md](docs/agents/workers.md) when it has one**: what it needs, when it runs, and the trap behind it. Not every worker has an entry yet (`ls cmd/` is the full list); without one, read the worker's own `main.go`. A new worker gets its entry there.
 

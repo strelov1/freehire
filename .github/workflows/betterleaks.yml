@@ -1,0 +1,110 @@
+name: betterleaks
+
+# Secret scanning over the HISTORY, not the working tree: a credential removed in a
+# later commit is still leaked, and the tree looks clean. Suppressions and the rule
+# for adding one live in .betterleaks.toml.
+#
+# NO `paths:` FILTER, DELIBERATELY. The verdict comes from the history rather than
+# from the diff, so filtering on changed paths would be meaningless — and it is the
+# secret nobody expected, in the file nobody listed, that this exists for.
+#
+# The pre-commit hook in lefthook.yml is the half of this that PREVENTS rather than
+# reports; `--no-verify` walks past it, and whoever never ran `lefthook install`
+# never had it. Which is why both exist.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: betterleaks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  betterleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A shallow clone hides exactly the commit someone would want hidden.
+          # This is also what makes the assertion below meaningful.
+          fetch-depth: 0
+          # This job reads the history and writes nothing. Leaving the token in
+          # .git/config would hand it to anything the steps below run — and the steps
+          # below deliberately execute a downloaded binary over the repository.
+          persist-credentials: false
+
+      # Tool archives come from a cache, so a GitHub Releases outage (504s for minutes on
+      # 2026-11-08) fails only a run that bumps a version. A digest check (all but typst's)
+      # covers a cached file like a downloaded one, and a job that fails it saves no cache.
+      # shortcut: old versions' archives stay in the cache until GitHub evicts it (7 days unused).
+      - name: Cache tool archives
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ci-tools
+          key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/betterleaks.yml') }}
+          restore-keys: ci-tools-${{ github.job }}-
+
+      # The archive is executed, so its integrity is checked before it is unpacked
+      # rather than trusted because the URL looked right. The digest is the one in the
+      # release's own checksums file and moves with BETTERLEAKS_VERSION; a bump that
+      # forgets it fails loudly here instead of silently running something else.
+      - name: Install betterleaks
+        env:
+          # Pinned so a finding here reproduces on a laptop with the same version
+          # instead of being argued about. Bumped deliberately, like any other tool.
+          BETTERLEAKS_VERSION: 2.0.0-rc.12
+          BETTERLEAKS_SHA256: 46474cab9181cd69672e18770c3d2cf3b62d2727640de56646b7c5df8826371d
+        run: |
+          f=~/.cache/ci-tools/betterleaks-${BETTERLEAKS_VERSION}.tar.gz
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs "https://github.com/betterleaks/betterleaks/releases/download/v${BETTERLEAKS_VERSION}/betterleaks_${BETTERLEAKS_VERSION}_linux_x64.tar.gz" -o "$f"
+          echo "${BETTERLEAKS_SHA256}  $f" | sha256sum --check --strict -
+          tar -xzf "$f" -C /tmp betterleaks
+          sudo install -m 0755 /tmp/betterleaks /usr/local/bin/betterleaks
+          betterleaks --version
+
+      # Check for the expected finding as well as the exit code. A malformed config
+      # or a scanner error must fail the canary rather than satisfy it.
+      - name: Assert the scanner still detects a planted secret
+        run: |
+          scratch=$(mktemp -d)
+          trap 'rm -rf "$scratch"' EXIT
+          mkdir "$scratch/input"
+          printf 'const t = "ghp_%s"\n' 'K3nQ7bZ2mR9xTvL4nWc8YpJ1dHsA6eG0uFiO' > "$scratch/input/planted.txt"
+          result=0
+          betterleaks fs "$scratch/input" --config .betterleaks.toml \
+            --validate=false --analyze=false --silent --redact \
+            --output "$scratch/report.json" || result=$?
+          test "$result" -eq 1
+          jq -e '.scan.state == "complete" and any(.findings[]; .rule_id == "github-pat")' \
+            "$scratch/report.json" >/dev/null
+          echo 'Canary detected.'
+
+      # Betterleaks v2 does not report the number of commits. Pass an explicit
+      # manifest and verify the scan completed and inspected content. Include HEAD
+      # for a detached PR merge checkout. Merge commits are walked to both parents.
+      - name: Scan history
+        run: |
+          scratch=$(mktemp -d)
+          trap 'rm -rf "$scratch"' EXIT
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git rev-list --no-merges --all HEAD > "$scratch/commits"
+          count=$(wc -l < "$scratch/commits")
+          test "$count" -gt 0
+          result=0
+          betterleaks git . --commit-list-file="$scratch/commits" --config .betterleaks.toml \
+            --validate=false --analyze=false --silent --redact \
+            --output "$scratch/report.json" || result=$?
+          jq -e '.scan.state == "complete" and .scan.bytes_scanned > 0' "$scratch/report.json" >/dev/null
+          echo "Scanned history from $count selected commits."
+          jq -c '.findings[] | {rule: .rule_id, location, commit: .attributes["git.sha"]}' "$scratch/report.json"
+          test "$result" -eq 0

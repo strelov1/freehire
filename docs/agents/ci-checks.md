@@ -225,16 +225,19 @@ See [design-system/AGENTS.md](../../design-system/AGENTS.md) — `scripts/check-
 (the `shared-deps` CI job) holds `web/`, `extension/` and `design-system/` to the same
 declared version for every package the design system imports as a type.
 
-## Secrets: gitleaks
+## Secrets: Betterleaks
 
-The one thing the hooks *prevent* rather than report: `gitleaks` (`brew install gitleaks`)
-scans the staged index on every commit and fails hard if the binary is missing, because a
-scanner that quietly skips makes a commit look examined. The `gitleaks` workflow scans the
-whole history on top, since `--no-verify` walks past the hook and a credential removed in a
-later commit is still leaked. A finding that survives `.gitleaks.toml` means **revoke the
-credential** — rewriting history does not un-leak anything. Suppressions in that file
-allowlist a *line shape*, never a path: gitleaks ORs `paths` with `regexes` and prunes the
-file before reading it, so a path entry switches the scanner off for that file entirely.
+Install the pinned Betterleaks version with `mise install`. Lefthook scans the staged
+patch and fails if the binary is missing or the scanner reports a finding. CI scans
+the full set of fetched Git refs and the checked-out revision, including changes later
+removed from the tree. Both explicitly load `.betterleaks.toml` and disable provider
+validation and analysis.
+
+CI verifies that the configured scanner detects a planted GitHub token. It selects
+the non-merge commits explicitly and verifies that the scan completed and inspected
+content. Exceptions match specific findings, using a narrow text pattern or an
+exact value fingerprint scoped to its rule. Historical third-party captures also
+require the originating commit. Revoke any real credential that reached Git.
 
 ## Formatting: oxfmt
 
