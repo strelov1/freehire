@@ -70,7 +70,6 @@
   "web/src/lib/components/PipelineFunnel.svelte": 1,
   "web/src/lib/components/ProfileAlertToggle.svelte": 1,
   "web/src/lib/components/RateDonut.svelte": 2,
-  "web/src/lib/components/RecruitersView.svelte": 1,
   "web/src/lib/components/ReferralsLandingView.svelte": 7,
   "web/src/lib/components/SkillDeltaBadge.svelte": 3,
   "web/src/lib/components/SwipeDeck.svelte": 1,

@@ -23,11 +23,9 @@
 </script>
 
 <div class="flex flex-col gap-16 pb-8 sm:gap-24">
-  <section
-    class="grid items-center gap-8 border-b border-border pb-12 pt-8 lg:grid-cols-[0.95fr_1.05fr] lg:gap-12 lg:pb-20 lg:pt-16"
-  >
+  <section class="grid items-center gap-8 border-b border-border pb-12 pt-8 lg:grid-cols-2 lg:gap-12 lg:pb-20 lg:pt-16">
     <div class="flex flex-col items-start gap-5">
-      <h1 class="max-w-[13ch] text-balance text-4xl font-semibold leading-[1.05] tracking-[-0.04em] sm:text-6xl">
+      <h1 class="text-balance text-4xl font-semibold leading-none tracking-tight sm:text-6xl">
         Post tech jobs. Manage applicants.
       </h1>
       <p class="max-w-md text-lg leading-relaxed text-muted-foreground">
@@ -90,8 +88,8 @@
     </dl>
   </section>
 
-  <section class="grid items-center gap-6 lg:grid-cols-[0.7fr_1fr] lg:gap-12" aria-labelledby="analytics-heading">
-    <div>
+  <section class="grid items-center gap-6 lg:grid-cols-5 lg:gap-12" aria-labelledby="analytics-heading">
+    <div class="lg:col-span-2">
       <h2 id="analytics-heading" class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
         See how each vacancy performs
       </h2>
@@ -100,7 +98,7 @@
         days. The report also shows clicks per view.
       </p>
     </div>
-    <figure class="min-w-0 rounded-xl bg-muted p-3 sm:p-5">
+    <figure class="min-w-0 rounded-xl bg-muted p-3 sm:p-5 lg:col-span-3">
       <img
         src="/recruiters/analytics.webp"
         alt="The vacancy report showing daily unique views, Apply clicks, applications via freehire, and clicks per view."
