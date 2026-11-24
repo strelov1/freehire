@@ -75,16 +75,9 @@ type Store interface {
 	// Fail records a failed attempt under the given policy and reports whether the entry
 	// dead-lettered (reached its bound, will not be retried). The worker's exit code is
 	// built from it; without it a queue could dead-letter everything and still exit 0.
-	Fail(ctx context.Context, outboxID int64, cause string, policy FailurePolicy) (deadLettered bool, err error)
-}
-
-// FailurePolicy is how one failure should be bounded. MessageAtFault picks the bound:
-// MaxAttempts counts tries at a possibly impossible task, UpstreamGraceDays waits out
-// a dependency expected back. See messageAtFault and FailEmailClassification.
-type FailurePolicy struct {
-	MessageAtFault    bool
-	MaxAttempts       int
-	UpstreamGraceDays int
+	// AtFault is messageAtFault's verdict: the message's own fault spends the attempt budget,
+	// anything else is bounded by queue age (FailEmailClassification).
+	Fail(ctx context.Context, outboxID int64, cause string, policy outbox.FailurePolicy) (deadLettered bool, err error)
 }
 
 // Classifier is the LLM port.
@@ -180,8 +173,8 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 		}
 		// Everything but the message's own fault is bounded by entry age, so an outage
 		// of any length costs nothing permanently.
-		deadLettered, ferr := r.store.Fail(ctx, c.OutboxID, err.Error(), FailurePolicy{
-			MessageAtFault:    messageAtFault(err),
+		deadLettered, ferr := r.store.Fail(ctx, c.OutboxID, err.Error(), outbox.FailurePolicy{
+			AtFault:           messageAtFault(err),
 			MaxAttempts:       r.maxAttempts,
 			UpstreamGraceDays: r.upstreamGraceDays,
 		})
