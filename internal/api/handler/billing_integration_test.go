@@ -314,7 +314,7 @@ func TestBillingCheckout(t *testing.T) {
 		}
 		_ = r.ParseForm()
 		gotForm = r.Form.Encode()
-		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_int"}`))
+		_, _ = w.Write([]byte(`{"id":"cs_test_int","url":"https://checkout.stripe.com/c/pay/cs_test_int","created":1790000000}`))
 	}))
 	defer stub.Close()
 
@@ -333,10 +333,33 @@ func TestBillingCheckout(t *testing.T) {
 		}
 	})
 
+	t.Run("a cross-site navigation never enrolls the caller in feedback", func(t *testing.T) {
+		token, _ := iss.Issue(userID, testTokenVersion)
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/billing/checkout", nil)
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		req.Header.Set("Sec-Fetch-Site", "cross-site")
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		resp, err := app.Test(req, 15000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("checkout link status = %v", resp.StatusCode)
+		}
+		var enrolled bool
+		err = pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM checkout_feedback_sessions WHERE user_id = $1)", userID).Scan(&enrolled)
+		if err != nil || enrolled {
+			t.Fatalf("cross-site checkout enrolled for feedback: %t, %v", enrolled, err)
+		}
+	})
+
 	t.Run("the link carries the caller's own id", func(t *testing.T) {
 		token, _ := iss.Issue(userID, testTokenVersion)
 		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/billing/checkout", nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req.Header.Set("Sec-Fetch-Dest", "empty")
 
 		resp, err := app.Test(req, 15000)
 		if err != nil {
@@ -362,6 +385,11 @@ func TestBillingCheckout(t *testing.T) {
 		// anything the request could have named. It is what decides who becomes Pro.
 		if want := fmt.Sprintf("client_reference_id=%d", userID); !strings.Contains(gotForm, want) {
 			t.Fatalf("form %q does not carry %q", gotForm, want)
+		}
+		var sessionID string
+		err = pool.QueryRow(ctx, "SELECT stripe_session_id FROM checkout_feedback_sessions WHERE user_id = $1", userID).Scan(&sessionID)
+		if err != nil || sessionID != "cs_test_int" {
+			t.Fatalf("recorded checkout session = %q, %v", sessionID, err)
 		}
 	})
 }

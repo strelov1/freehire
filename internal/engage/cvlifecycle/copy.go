@@ -27,7 +27,8 @@ func body(name, markup string) *template.Template {
 const listStyle = `margin:0 0 14px 0;padding-left:20px;font-size:15px;line-height:1.6;`
 
 var specs = map[Step]spec{
-	StepPaywall: paywallSpec,
+	StepPaywall:          paywallSpec,
+	StepCheckoutFeedback: checkoutFeedbackSpec,
 
 	StepATS: {
 		subject:   func(d data) string { return fmt.Sprintf("Your CV scored %d/100 in an ATS check", d.Overall) },
@@ -116,4 +117,15 @@ func writeList(b *strings.Builder, lead string, items []string) {
 		b.WriteString("- " + it + "\n")
 	}
 	b.WriteString("\n")
+}
+
+const checkoutFeedbackQuestion = "Hi! I’m working on making Freehire better. Was there anything that made you pause before subscribing? If you’re up for sharing, just reply to this email. A sentence is plenty. Thanks!"
+
+var checkoutFeedbackSpec = spec{
+	subject:   func(data) string { return "Quick question about Freehire" },
+	preheader: func(data) string { return "I’d love your feedback on Freehire." },
+	heading:   "A quick question",
+	footer:    "You’re getting this because you started checkout on freehire.",
+	body:      body("checkout-feedback", `{{template "p" "`+checkoutFeedbackQuestion+`"}}`),
+	text:      func(data) string { return checkoutFeedbackQuestion + "\n" },
 }

@@ -1,7 +1,7 @@
 # internal/engage/cvlifecycle
 
-Up to three letters to a verified FREE user whose CV parsed, until they pay or opt out, and
-the paywall letter (below). `cmd/cv-lifecycle-mail` is the only caller. The block rules are in
+Up to three letters to a verified FREE user whose CV parsed, until they pay or opt out, plus
+the paywall and checkout feedback letters described below. `cmd/cv-lifecycle-mail` is the only caller. The block rules are in
 [internal/engage/AGENTS.md](../AGENTS.md); the shared one-letter-a-day claim is
 `internal/engage/maildaily`.
 
@@ -44,12 +44,27 @@ and that it is part of Pro. No offer, no model call: the list row carries all of
   It is NOT gated on enrollment or a CV: a user with no CV can hit a paywall. The holdout is
   the same `cv_lifecycle_holdout` hash enrollment stores, so an account is in one group for
   every letter.
-- **It wins the day**: a pass sends the paywall letter before the CV letters (`passOrder`), so
+- **It wins the day**: a pass sends the paywall letter before the CV letters, so
   an account due for both gets the paywall letter and the CV letter waits for the next day.
   Other senders (onboarding, broadcast, limit nudge) run in their own commands and are not
   ordered against it; whoever claims the day first wins, as everywhere.
 - It spends the same `MaxPerRun` budget, burns on a definite send failure like any step, and
   does not move the enrollment or the paying observation.
+
+## Checkout feedback
+
+Step 5 asks a single open question and invites a direct reply to the founder. After a
+same-origin checkout fetch, billing records the ID and creation time of the latest Stripe
+Checkout Session for a Pro or Ultra purchase.
+On an hourly pass between 24 and 72 hours after creation, the worker asks Stripe whether the
+session expired unpaid and checks for a consumer subscription that could have come from a
+different session. The claim rechecks the session ID, recipient, news opt-out, current free
+tier and holdout after the shared daily claim is taken. The step ledger applies. The step is once per account.
+Old session records are pruned after 72 hours. SES tags the letter as `checkout-feedback`.
+
+The scheduled worker can use `-checkout-only`, which needs the existing Stripe, SES and
+reply-to settings, and works without CV storage or search. Use `-checkout-only -dry-run`
+to count eligible sessions without sending or writing.
 
 ## Enrollment and the holdout
 

@@ -34,6 +34,7 @@ func letters() []Letter {
 		{Step: StepPotential, Overall: 61, Potential: 84},
 		{Step: StepOffer, Offer: &Offer{Code: "ZZLETTER", Percent: 23}},
 		{Step: StepPaywall, Paywall: &Paywall{Feature: "tailor", JobTitle: "Go Engineer", Company: "Acme", JobSlug: "go-engineer-acme-1"}},
+		{Step: StepCheckoutFeedback},
 	}
 }
 
@@ -156,5 +157,21 @@ func TestMailer_UnsignedLinksFail(t *testing.T) {
 	m := NewMailer(&captureSender{}, "a@freehire.me", "b@freehire.me", "https://freehire.me", emailprefs.NewLinks("short", "https://freehire.me"))
 	if err := m.Send(context.Background(), letters()[1], letterUserID, "x@example.test"); err == nil {
 		t.Fatal("Send went out without a working unsubscribe link")
+	}
+}
+
+func TestCheckoutFeedbackAsksForAReply(t *testing.T) {
+	sender := &captureSender{}
+	if err := newMailer(sender).Send(context.Background(), Letter{Step: StepCheckoutFeedback}, letterUserID, "reader@example.test"); err != nil {
+		t.Fatal(err)
+	}
+	message := sender.msgs[0]
+	if message.Subject != "Quick question about Freehire" || message.Campaign != "checkout-feedback" || message.ReplyTo != "ilya@freehire.me" {
+		t.Fatalf("unexpected checkout feedback envelope: %q / %q / %q", message.Subject, message.Campaign, message.ReplyTo)
+	}
+	for _, body := range []string{message.HTML, message.Text} {
+		if !strings.Contains(body, "Was there anything that made you pause before subscribing?") || !strings.Contains(body, "just reply to this email") {
+			t.Error("checkout feedback should ask one open question and invite a direct reply")
+		}
 	}
 }
