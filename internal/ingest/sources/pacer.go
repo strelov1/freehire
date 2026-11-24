@@ -14,6 +14,68 @@ type waiter interface {
 	Wait(ctx context.Context) error
 }
 
+// gate is the admission a paced client draws on before it delegates, whichever lever it pulls.
+// A rate limiter spends a token in Wait and holds nothing. An in-flight cap TAKES a slot in Wait
+// and the call hands it back on return (release), which is what bounds requests in flight rather
+// than per second: a slow download keeps its slot and the next request waits on it.
+type gate struct {
+	limiter waiter
+	release func()
+}
+
+// call is the one wait-then-delegate: it admits, runs f, and gives back anything held once f
+// returns. A refused admission (a cancelled context) is returned as is and f never runs, so the
+// gated request is skipped rather than sent. Every wrapper below is one line over this.
+func (g gate) call(ctx context.Context, f func() error) error {
+	if err := g.limiter.Wait(ctx); err != nil {
+		return err
+	}
+	if g.release != nil {
+		defer g.release()
+	}
+	return f()
+}
+
+// gated is call for a verb that returns a value beside its error: a refused admission comes back
+// with the verb's zero value, which is what an unmade request has.
+func gated[T any](ctx context.Context, g gate, call func() (T, error)) (T, error) {
+	var out T
+	err := g.call(ctx, func() (err error) {
+		out, err = call()
+		return err
+	})
+	return out, err
+}
+
+// gatedResolved is gated for the one verb shape with two results, the node and its resolved
+// URL, which a single T cannot carry.
+func gatedResolved(ctx context.Context, g gate, call func() (*html.Node, string, error)) (*html.Node, string, error) {
+	var node *html.Node
+	var resolved string
+	err := g.call(ctx, func() (err error) {
+		node, resolved, err = call()
+		return err
+	})
+	return node, resolved, err
+}
+
+// inFlight is a semaphore that reads as a waiter: Wait takes a slot, or reports the context's
+// error when it is cancelled while none is free.
+type inFlight chan struct{}
+
+func (s inFlight) Wait(ctx context.Context) error {
+	select {
+	case s <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// held is the gate of a concurrency cap: it takes a slot in Wait and gives it back when the
+// call returns, so the slot covers the whole request and not just its start.
+func (s inFlight) held() gate { return gate{limiter: s, release: func() { <-s }} }
+
 // rateLimitedHTMLGetter wraps an HTMLGetter with a shared limiter so its aggregate GetHTML rate
 // stays under the limit, independent of worker concurrency. One instance, one token bucket,
 // shared by every board and by listing and detail paths.
@@ -25,10 +87,7 @@ type rateLimitedHTMLGetter struct {
 // GetHTML blocks on the limiter before delegating, so a cancelled context surfaces as the
 // Wait error and the inner fetch is skipped.
 func (g rateLimitedHTMLGetter) GetHTML(ctx context.Context, url string) (*html.Node, error) {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
-	return g.inner.GetHTML(ctx, url)
+	return gated(ctx, gate{limiter: g.limiter}, func() (*html.Node, error) { return g.inner.GetHTML(ctx, url) })
 }
 
 // pacedHTMLGetter wraps a getter with a fresh limiter (one token per interval) shared across one
@@ -47,10 +106,7 @@ type rateLimitedTextGetter struct {
 }
 
 func (g rateLimitedTextGetter) GetText(ctx context.Context, url string) (string, error) {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return "", err
-	}
-	return g.inner.GetText(ctx, url)
+	return gated(ctx, gate{limiter: g.limiter}, func() (string, error) { return g.inner.GetText(ctx, url) })
 }
 
 // careers-page.com rate-limits by a per-IP request budget per time window, so a full run must hold
@@ -150,10 +206,7 @@ type rateLimitedJSONGetter struct {
 
 // GetJSON blocks on the limiter before delegating; a cancelled context surfaces as the Wait error.
 func (g rateLimitedJSONGetter) GetJSON(ctx context.Context, url string, v any) error {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return err
-	}
-	return g.inner.GetJSON(ctx, url, v)
+	return gate{limiter: g.limiter}.call(ctx, func() error { return g.inner.GetJSON(ctx, url, v) })
 }
 
 // rateLimitedHeaderJSONGetter is rateLimitedJSONGetter for an adapter whose requests carry
@@ -166,10 +219,9 @@ type rateLimitedHeaderJSONGetter struct {
 
 // GetJSONWithHeaders blocks on the limiter before delegating; a cancelled context surfaces as the Wait error.
 func (g rateLimitedHeaderJSONGetter) GetJSONWithHeaders(ctx context.Context, url string, headers map[string]string, v any) error {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return err
-	}
-	return g.inner.GetJSONWithHeaders(ctx, url, headers, v)
+	return gate{limiter: g.limiter}.call(ctx, func() error {
+		return g.inner.GetJSONWithHeaders(ctx, url, headers, v)
+	})
 }
 
 // join.com meters by RATE, not concurrency: an unpaced crawl's refusals looked like a concurrency
@@ -194,10 +246,7 @@ type rateLimitedJSONPoster struct {
 
 // PostJSON blocks on the limiter before delegating; a cancelled context surfaces as the Wait error.
 func (p rateLimitedJSONPoster) PostJSON(ctx context.Context, url string, body, v any) error {
-	if err := p.limiter.Wait(ctx); err != nil {
-		return err
-	}
-	return p.inner.PostJSON(ctx, url, body, v)
+	return gate{limiter: p.limiter}.call(ctx, func() error { return p.inner.PostJSON(ctx, url, body, v) })
 }
 
 // www.seek.com.au/graphql enforces a per-IP request BUDGET rather than degrading under load: an

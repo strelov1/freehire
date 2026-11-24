@@ -70,7 +70,7 @@ func TestRateLimitedHTMLGetter_WaitErrorShortCircuits(t *testing.T) {
 func TestConcurrencyLimitedHTMLGetter_AcquiresThenDelegates(t *testing.T) {
 	node := &html.Node{}
 	inner := &recordingHTMLGetter{node: node}
-	g := concurrencyLimitedHTMLGetter{inner: inner, sem: make(chan struct{}, 2)}
+	g := concurrencyLimitedHTMLGetter{inner: inner, sem: make(inFlight, 2)}
 
 	got, err := g.GetHTML(context.Background(), "https://wellfound.com/role/r/software-engineer?page=1")
 	if err != nil {
@@ -90,7 +90,7 @@ func TestConcurrencyLimitedHTMLGetter_AcquiresThenDelegates(t *testing.T) {
 
 func TestConcurrencyLimitedHTMLGetter_CancelledContextShortCircuits(t *testing.T) {
 	inner := &recordingHTMLGetter{node: &html.Node{}}
-	sem := make(chan struct{}, 1)
+	sem := make(inFlight, 1)
 	sem <- struct{}{} // fill the only slot so the next acquire must wait
 	g := concurrencyLimitedHTMLGetter{inner: inner, sem: sem}
 
@@ -140,7 +140,7 @@ func (g *recordingJSONGetter) GetJSON(_ context.Context, url string, _ any) erro
 
 func TestConcurrencyLimitedJSONGetter_AcquiresThenDelegates(t *testing.T) {
 	inner := &recordingJSONGetter{}
-	g := concurrencyLimitedJSONGetter{inner: inner, sem: make(chan struct{}, 2)}
+	g := concurrencyLimitedJSONGetter{inner: inner, sem: make(inFlight, 2)}
 
 	if err := g.GetJSON(context.Background(), "https://opendata.trudvsem.ru/api/v1/vacancies/region/x", nil); err != nil {
 		t.Fatalf("GetJSON returned error: %v", err)
@@ -219,7 +219,7 @@ func TestPacedDoverGetter_SharesOneBucket(t *testing.T) {
 
 func TestConcurrencyLimitedJSONGetter_CancelledContextShortCircuits(t *testing.T) {
 	inner := &recordingJSONGetter{}
-	sem := make(chan struct{}, 1)
+	sem := make(inFlight, 1)
 	sem <- struct{}{} // fill the only slot so the next acquire must wait
 	g := concurrencyLimitedJSONGetter{inner: inner, sem: sem}
 
