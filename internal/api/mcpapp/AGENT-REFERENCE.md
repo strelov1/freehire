@@ -182,6 +182,10 @@ shows. Neither is a trade worth making.
   `contains`, which shares `ContainsMatcher` with `list_filter_values`). The whole vocabulary
   was ~125 KB. `facets` stays beside `list_filter_values` because the latter does not cover every
   facet: metros, `company_slug`, the boolean facets and the numeric ranges (`stats`) are only here.
+- **Give a person the employer URL instead of `apply_url`.** Do not: `apply_url` (`outboundurl.ApplyURL`, `src=mcp`)
+  is the link to give someone who wants to apply: it counts the click. `official_job_url` stays
+  canonical, for matching and dedup. A posting taking applications on freehire has no `apply_url`.
+  The research `url` falls back to `apply_url`, not the employer URL, when no origin is set.
 - **Publish a link we cannot vouch for.** `official_job_url` is filled only for a provider in
   `sources.EmployerURLProviders()` — an ATS or a company's own careers site. That set is
   resolved ONCE, in `NewProjector`, and the shape of the API is why: the rule used to be a

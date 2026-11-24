@@ -13203,6 +13203,110 @@ func (s *Server) handleGetEmployerVacancyAnalyticsRequest(args [1]string, argsEs
 	}
 }
 
+// handleGetEmployerVacancyOutboundClicksRequest handles getEmployerVacancyOutboundClicks operation.
+//
+// Human clicks that freehire sent to the employer's site for the team's own vacancy; bots are
+// excluded.
+//
+// GET /employer/jobs/{slug}/outbound-clicks
+func (s *Server) handleGetEmployerVacancyOutboundClicksRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetEmployerVacancyOutboundClicksOperation,
+			ID:   "getEmployerVacancyOutboundClicks",
+		}
+	)
+	params, err := decodeGetEmployerVacancyOutboundClicksParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetEmployerVacancyOutboundClicksOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetEmployerVacancyOutboundClicksOperation,
+			OperationSummary: "Read a vacancy's outbound clicks by day, country and source.",
+			OperationID:      "getEmployerVacancyOutboundClicks",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+				{
+					Name: "from",
+					In:   "query",
+				}: params.From,
+				{
+					Name: "to",
+					In:   "query",
+				}: params.To,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetEmployerVacancyOutboundClicksParams
+			Response = *GetEmployerVacancyOutboundClicksOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetEmployerVacancyOutboundClicksParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetEmployerVacancyOutboundClicks(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetEmployerVacancyOutboundClicks(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetEmployerVacancyOutboundClicksResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetInboxRequest handles getInbox operation.
 //
 // `?body=1` returns each message's readable text inline and marks nothing read — that is the agent

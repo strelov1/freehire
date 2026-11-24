@@ -419,6 +419,9 @@ func TestSlugAddressedToolsReadRealRows(t *testing.T) {
 	if strings.Contains(string(payload), "<p>") {
 		t.Errorf("get_job = %s, want markdown rather than raw HTML", payload)
 	}
+	if !strings.Contains(string(payload), "/api/v1/go/go-developer-acme?src=assistant") {
+		t.Errorf("get_job = %s, want apply_url on the assistant redirect", payload)
+	}
 
 	out, err = toolByName(t, tools, "get_company").Run(ctx, 1, json.RawMessage(`{"slug":"acme"}`))
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -45,6 +46,17 @@ func TestApplicationDestinationPreservesSourcePosting(t *testing.T) {
 	}
 }
 
+func TestApplyURLForRetagsTheSurfaceAndStaysEmptyForDirectApply(t *testing.T) {
+	web := jobview.Job{PublicSlug: "x", ApplyURL: "https://freehire.me/api/v1/go/x?src=web"}
+	if got, want := web.ApplyURLFor(outboundurl.SrcAssistant), "https://freehire.me/api/v1/go/x?src=assistant"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	// No ApplyURL (direct apply, private job): no redirect.
+	if got := (jobview.Job{PublicSlug: "x", URL: "https://a.test/1"}).ApplyURLFor(outboundurl.SrcMCP); got != "" {
+		t.Fatalf("got %q: no apply_url means no redirect", got)
+	}
+}
+
 func TestDirectApplyHasNoApplyURL(t *testing.T) {
 	row := db.Job{Source: job.EmployerSource, ExternalID: job.DirectApplyPrefix + "1", URL: "https://freehire.me/jobs/x", PublicSlug: "x"}
 	domain, extras, err := job.FromRow(row)
@@ -57,5 +69,20 @@ func TestDirectApplyHasNoApplyURL(t *testing.T) {
 	}
 	if got.URL != "" || got.ApplyURL != "" || jobview.RowDestination(row) != "" {
 		t.Fatalf("url=%q apply_url=%q: a freehire-only vacancy has nowhere to redirect", got.URL, got.ApplyURL)
+	}
+}
+
+func TestPrivateJobKeepsDirectLink(t *testing.T) {
+	row := db.Job{Source: "greenhouse", ExternalID: "1", URL: "https://acme.test/1", PublicSlug: "p", IsPrivate: true}
+	domain, extras, err := job.FromRow(row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := jobview.FromDomain(domain, extras)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ApplyURL != "" || got.URL != "https://acme.test/1" {
+		t.Fatalf("url=%q apply_url=%q: the redirect refuses private jobs, so the owner keeps the direct link", got.URL, got.ApplyURL)
 	}
 }
