@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"net/http"
 	"strings"
 	"time"
 
@@ -177,8 +176,7 @@ var errSwissdevjobsPlaceholder = errors.New("page carries a placeholder instead 
 func (s swissdevjobs) detail(ctx context.Context, r swissdevjobsJob) (Job, bool, error) {
 	d, err := s.state(ctx, r.url())
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		// Only the canonical address answers for the posting's existence; after a placeholder

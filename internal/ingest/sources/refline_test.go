@@ -140,7 +140,7 @@ func TestReflinePreferPub(t *testing.T) {
 func TestReflineNoPostingIsNoAnswer(t *testing.T) {
 	_, _, err := (refline{pages: emptyPageGetter{}, limiter: noWait{}}).detail(context.Background(),
 		reflinePosting{id: "1/1", url: "https://apply.refline.ch/1/1/pub/1/index.html"})
-	if !errors.Is(err, errReflineNoPosting) {
-		t.Errorf("err = %v, want errReflineNoPosting", err)
+	if !errors.Is(err, errNoPosting) {
+		t.Errorf("err = %v, want errNoPosting", err)
 	}
 }

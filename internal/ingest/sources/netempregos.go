@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -167,7 +166,7 @@ func (s netempregos) FetchNewGated(ctx context.Context, _ CompanyEntry, seen fun
 	}
 	var answered, outOfTime atomic.Int64
 	read := fetchDetails(unseen, netempregosDetailWorkers, func(p netempregosPosting) (Job, bool) {
-		if s.nearDeadline(ctx) {
+		if nearDeadline(ctx, s.deadlineMargin) {
 			outOfTime.Add(1)
 			return Job{}, false
 		}
@@ -191,13 +190,6 @@ func (s netempregos) FetchNewGated(ctx context.Context, _ CompanyEntry, seen fun
 		log.Printf("netempregos: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
 	}
 	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes.
-func (s netempregos) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // netempregosBaseJob is the body-less Job a posting's feed entries spell.
@@ -360,8 +352,7 @@ var errNetempregosWall = errors.New("served the login wall")
 func (s netempregos) detailOnce(ctx context.Context, p netempregosPosting) (Job, bool, error) {
 	page, err := s.get(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

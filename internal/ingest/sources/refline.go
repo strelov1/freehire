@@ -4,11 +4,9 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html"
 	"log"
-	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
@@ -261,10 +259,6 @@ type reflineLD struct {
 	} `json:"hiringOrganization"`
 }
 
-// errReflineNoPosting marks a page that answered without a JobPosting — an unknown job id answers
-// 200 with an empty page — which counts as no answer rather than a removal.
-var errReflineNoPosting = errors.New("page carries no JobPosting")
-
 // detail reads one posting page. ok=false with a nil error is the site's answer that the job is
 // gone (404/410); an error is the absence of an answer.
 func (s refline) detail(ctx context.Context, p reflinePosting) (Job, bool, error) {
@@ -273,15 +267,15 @@ func (s refline) detail(ctx context.Context, p reflinePosting) (Job, bool, error
 	}
 	root, err := s.pages.GetHTML(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
 	}
 	var ld reflineLD
 	if !ldJobPosting(root, &ld) {
-		return Job{}, false, errReflineNoPosting
+		// Not a gone answer: an unknown job id answers 200 with an empty page.
+		return Job{}, false, errNoPosting
 	}
 	job, ok := reflineJob(ld, p)
 	return job, ok, nil

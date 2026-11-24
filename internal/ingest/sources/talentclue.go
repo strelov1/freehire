@@ -160,7 +160,7 @@ func (s talentclue) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 	get := pacedHTMLGetter(s.pages, s.pageDelay, 1)
 	outOfTime := 0
 	for _, p := range fresh {
-		if s.nearDeadline(ctx) {
+		if nearDeadline(ctx, s.deadlineMargin) {
 			outOfTime++
 			continue
 		}
@@ -173,13 +173,6 @@ func (s talentclue) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 			e.Board, outOfTime)
 	}
 	return jobs, nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes.
-func (s talentclue) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // list reads the client's open postings. An unknown client id is the API's 400 and fails the

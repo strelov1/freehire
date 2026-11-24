@@ -3,12 +3,10 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html"
 	"io"
 	"log"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -228,8 +226,7 @@ func (s cvonline) detail(ctx context.Context, site cvonlineSite, p cvonlinePosti
 	}
 	page, err := s.http.GetText(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

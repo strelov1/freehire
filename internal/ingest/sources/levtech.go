@@ -321,15 +321,14 @@ type levtechPosting struct {
 func (s levtech) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	root, err := s.get(ctx, base.URL)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
 	}
 	var p levtechPosting
 	if !ldJobPosting(root, &p) {
-		return Job{}, false, errors.New("page carries no JobPosting")
+		return Job{}, false, errNoPosting
 	}
 	if p.URL != "" && !strings.Contains(p.URL, "/project/detail/"+base.ExternalID+"/") {
 		return Job{}, false, fmt.Errorf("page answered posting %s", p.URL)

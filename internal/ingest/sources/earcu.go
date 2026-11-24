@@ -2,10 +2,8 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"strings"
 	"time"
 
@@ -109,8 +107,7 @@ func (a earcu) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 		job.Description = sanitizeHTML(body)
 		job.PostedAt = earcuPubDate(it.PubDate)
 		if err := a.hydrate(ctx, &job); err != nil {
-			var se *StatusError
-			if !errors.As(err, &se) || (se.Code != http.StatusNotFound && se.Code != http.StatusGone) {
+			if !isGone(err) {
 				deferred++
 			}
 			continue

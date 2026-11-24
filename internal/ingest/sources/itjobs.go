@@ -3,10 +3,8 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"slices"
 	"sort"
 	"strconv"
@@ -288,8 +286,7 @@ type itjobsLD struct {
 func (s itjobs) detail(ctx context.Context, c itjobsCard) (Job, bool, error) {
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
