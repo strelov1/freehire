@@ -448,7 +448,7 @@
       slug={job.public_slug}
       title={job.title}
       {directApply}
-      applyUrl={sponsoredUrl ?? applyJob?.url ?? null}
+      applyUrl={sponsoredUrl ?? (applyJob?.apply_url || applyJob?.url) ?? null}
       sponsored={!!sponsoredUrl}
       {onApplyClick}
       onHide={onHide ? actions.hide : undefined}
@@ -473,7 +473,7 @@
   <JobRowApplyGate
     show={showApplyGate && !!applyJob}
     title={job.title}
-    url={sponsoredUrl ?? applyJob?.url ?? ''}
+    url={sponsoredUrl ?? (applyJob?.apply_url || applyJob?.url) ?? ''}
     onclose={() => (showApplyGate = false)}
   />
 </div>

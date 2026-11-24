@@ -488,7 +488,7 @@
         {:else if current.url}
           <!-- eslint-disable svelte/no-navigation-without-resolve -- the employer's own site, not an internal route -->
           <a
-            href={current.url}
+            href={current.apply_url || current.url}
             target="_blank"
             rel="nofollow noopener noreferrer"
             aria-label={`Apply to ${current.title} on the employer's site (opens in a new tab)`}
