@@ -4,7 +4,7 @@ export const messages = defineMessages(
   {
     headTitle: 'Account · freehire',
     title: 'Account',
-    subtitle: 'Your email, password, language, and the devices signed in to this account.',
+    subtitle: 'Your email, password, sign-in methods, language, and the devices signed in to this account.',
     cancel: 'Cancel',
     emailChanged: 'Email changed. Other devices were signed out.',
     passwordChanged: 'Password changed. Other devices were signed out.',
@@ -52,6 +52,30 @@ export const messages = defineMessages(
       saving: 'Saving…',
       save: 'Save password',
     },
+    signIn: {
+      heading: 'Sign-in methods',
+      subheading: 'Services you can sign in to this account with. Connecting one does not change your email.',
+      connected: 'Connected',
+      connectedSince: 'Connected on',
+      notConnected: 'Not connected',
+      connect: 'Connect',
+      dialogTitle: 'Connect {provider}',
+      dialogNote:
+        'You will sign in to {provider} and come back here. Any {provider} account works, even one with a different email.',
+      confirmPrompt: 'Connecting {provider} adds a new way into this account, so confirm it is you first.',
+      continue: 'Continue to {provider}',
+      leaving: 'Opening…',
+      linked: '{provider} is connected. You can now sign in with it.',
+      identityInUse:
+        'That account already signs in to a different freehire account. Sign in there, or disconnect it from that account first.',
+      providerAlreadyLinked: 'A different account of this service is already connected here.',
+      confirmExpired: 'The confirmation expired before the service answered. Please try again.',
+      sessionChanged: 'You signed in again while connecting. Please try again.',
+      cancelled: 'Connecting was cancelled. Nothing changed.',
+      failed: 'Could not connect. Please try again.',
+      loadError: 'Could not load your sign-in methods.',
+      retry: 'Retry',
+    },
     sessions: {
       heading: 'Sessions',
       subheading:
@@ -70,7 +94,7 @@ export const messages = defineMessages(
       title: 'Аккаунт',
       // "сессии", matching the `sessions.heading` below — the subtitle said
       // "сеансы" for the same thing.
-      subtitle: 'Почта, пароль, язык и устройства, на которых выполнен вход.',
+      subtitle: 'Почта, пароль, способы входа, язык и устройства, на которых выполнен вход.',
       cancel: 'Отмена',
       emailChanged: 'Почта изменена. Другие устройства вышли из аккаунта.',
       passwordChanged: 'Пароль изменён. Другие устройства вышли из аккаунта.',
@@ -118,6 +142,31 @@ export const messages = defineMessages(
         genericError: 'Что-то пошло не так. Попробуйте ещё раз.',
         saving: 'Сохранение…',
         save: 'Сохранить пароль',
+      },
+      signIn: {
+        heading: 'Способы входа',
+        subheading: 'Сервисы, через которые можно войти в этот аккаунт. Подключение не меняет вашу почту.',
+        connected: 'Подключён',
+        connectedSince: 'Подключён',
+        notConnected: 'Не подключён',
+        connect: 'Подключить',
+        dialogTitle: 'Подключение {provider}',
+        dialogNote:
+          'Вы войдёте в {provider} и вернётесь сюда. Подойдёт любой аккаунт {provider}, даже с другой почтой.',
+        confirmPrompt:
+          'Подключение {provider} добавляет новый способ входа в аккаунт, поэтому сначала подтвердите, что это вы.',
+        continue: 'Перейти в {provider}',
+        leaving: 'Открываем…',
+        linked: '{provider} подключён. Теперь через него можно входить.',
+        identityInUse:
+          'Этот аккаунт уже используется для входа в другой аккаунт freehire. Войдите туда или сначала отвяжите его там.',
+        providerAlreadyLinked: 'К аккаунту уже подключён другой аккаунт этого сервиса.',
+        confirmExpired: 'Подтверждение истекло, пока сервис отвечал. Попробуйте ещё раз.',
+        sessionChanged: 'Во время подключения вы вошли заново. Попробуйте ещё раз.',
+        cancelled: 'Подключение отменено. Ничего не изменилось.',
+        failed: 'Не удалось подключить. Попробуйте ещё раз.',
+        loadError: 'Не удалось загрузить способы входа.',
+        retry: 'Повторить',
       },
       sessions: {
         heading: 'Сессии',

@@ -15,6 +15,11 @@ import (
 var (
 	ErrLastMethod = errors.New("mobile auth: last sign-in method")
 	ErrState      = errors.New("mobile auth: identity state conflict")
+	// ErrIdentityInUse: the provider identity already signs in to a different account.
+	// Linking never moves or merges it; the member signs in there instead.
+	ErrIdentityInUse = errors.New("mobile auth: identity linked to another account")
+	// ErrProviderLinked: the account already holds a different identity of this provider.
+	ErrProviderLinked = errors.New("mobile auth: provider already linked")
 )
 
 type Identity struct {
@@ -247,6 +252,80 @@ func (s *Store) releaseAppleGrantsForDeletionOnce(ctx context.Context, userID in
 		if _, err = tx.Exec(ctx, `DELETE FROM apple_grants WHERE user_id=$1 AND provider='apple'`, userID); err != nil {
 			return err
 		}
+	}
+	return tx.Commit(ctx)
+}
+
+// LinkIdentity attaches a provider identity to the signed-in member's own account. It is
+// the explicit counterpart of sign-in's verified-email link: no email is consulted, no
+// account is created, joined or seized, and no session is issued — the member stays in the
+// account they started from.
+//
+// Adding a sign-in method is a foothold that outlives the session that added it, so it
+// takes the same bar as removing one: a recent-auth proof bound to this exact session,
+// spent inside the transaction after the account lock (the lock order UnlinkIdentity
+// uses). An identity this account already holds is a success, so a repeated callback is
+// harmless; one held by another account, or a second identity of a provider the account
+// already has, is refused without changing anything.
+func (s *Store) LinkIdentity(ctx context.Context, userID int64, tokenVersion int32, sessionHash []byte, provider, providerUserID, recentProof string) error {
+	if provider == "" || providerUserID == "" {
+		return ErrIdentity
+	}
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		err = s.linkIdentityOnce(ctx, userID, tokenVersion, sessionHash, provider, providerUserID, recentProof)
+		// A unique violation is a concurrent insert of the same identity: retrying reads
+		// who won, which is either this account (success) or another (in use).
+		if !pgerr.IsSerializationFailure(err) && !pgerr.IsUniqueViolation(err) {
+			return err
+		}
+	}
+	if pgerr.IsUniqueViolation(err) {
+		return ErrIdentityInUse
+	}
+	return err
+}
+
+func (s *Store) linkIdentityOnce(ctx context.Context, userID int64, tokenVersion int32, sessionHash []byte, provider, providerUserID, recentProof string) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var lockedUser int64
+	if err = tx.QueryRow(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, userID).Scan(&lockedUser); err != nil {
+		return err
+	}
+	if err = recentauth.ConsumeTx(ctx, tx, recentProof, userID, tokenVersion, sessionHash); err != nil {
+		if errors.Is(err, recentauth.ErrRequired) {
+			return ErrSession
+		}
+		return err
+	}
+	var owner int64
+	var status string
+	err = tx.QueryRow(ctx, `SELECT user_id,status FROM user_identities WHERE provider=$1 AND provider_user_id=$2 FOR UPDATE`, provider, providerUserID).Scan(&owner, &status)
+	switch {
+	case err == nil && owner != userID:
+		return ErrIdentityInUse
+	case err == nil && status != "active":
+		// Still draining an unlink (Apple revocation); re-activating it here would race the
+		// revocation worker. Linking again after it completes works.
+		return ErrState
+	case err == nil:
+		return tx.Commit(ctx)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return err
+	}
+	var other bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_identities WHERE user_id=$1 AND provider=$2)`, userID, provider).Scan(&other); err != nil {
+		return err
+	}
+	if other {
+		return ErrProviderLinked
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO user_identities(provider,provider_user_id,user_id) VALUES($1,$2,$3)`, provider, providerUserID, userID); err != nil {
+		return err
 	}
 	return tx.Commit(ctx)
 }

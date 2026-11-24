@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  beginProviderLink,
   beginProviderReauthentication,
+  completeProviderLink,
   completeProviderReauthentication,
+  pendingProviderLink,
   consumeReauthDraft,
   forgetRecentAuthExpiry,
   recentAuthExpiry,
@@ -12,10 +15,23 @@ import {
 // deliberately NOT carried, and that it is consumed exactly once — a draft that outlived
 // its trip would reopen a dialog on an unrelated later visit.
 
-const { exchange } = vi.hoisted(() => ({ exchange: vi.fn() }));
+const { exchange, exchangeLink, StubApiError } = vi.hoisted(() => ({
+  exchange: vi.fn(),
+  exchangeLink: vi.fn(),
+  StubApiError: class extends Error {
+    constructor(
+      public status: number,
+      message: string,
+      public body?: Record<string, unknown>,
+    ) {
+      super(message);
+    }
+  },
+}));
 
 vi.mock('#lib/api.js', () => ({
-  api: { exchangeOAuthReauthentication: exchange },
+  api: { exchangeOAuthReauthentication: exchange, exchangeOAuthLink: exchangeLink },
+  ApiError: StubApiError,
 }));
 
 // Mirrors autoApplyPauseStorage.test.ts: the plain-Node vitest env has no browser
@@ -40,6 +56,7 @@ beforeEach(() => {
   storage = new MemoryStorage();
   assign = vi.fn();
   exchange.mockReset();
+  exchangeLink.mockReset();
   exchange.mockResolvedValue('2026-09-15T00:10:00Z');
   // @ts-expect-error - install the stand-ins the module reaches for
   globalThis.sessionStorage = storage;
@@ -324,5 +341,56 @@ describe('recentAuthExpiry', () => {
     await completeProviderReauthentication('code-from-provider');
 
     expect(recentAuthExpiry()).toBeNull();
+  });
+});
+
+describe('provider link', () => {
+  const EXPIRY_KEY = 'freehire.reauth.expires';
+
+  it('marks the trip as a link and asks the server for the link purpose', async () => {
+    await beginProviderLink('github');
+    expect(pendingProviderLink()).toBe(true);
+    const url = new URL(String(assign.mock.calls[0]?.[0]), 'http://x');
+    expect(url.pathname).toBe('/api/v2/auth/oauth/github/start');
+    expect(url.searchParams.get('purpose')).toBe('link');
+  });
+
+  it('a later re-authentication does not inherit an abandoned link marker', async () => {
+    await beginProviderLink('github');
+    await beginProviderReauthentication('google', '/my/account');
+    expect(pendingProviderLink()).toBe(false);
+    expect(new URL(String(assign.mock.calls[1]?.[0]), 'http://x').searchParams.get('purpose')).toBe('reauth');
+  });
+
+  it('exchanges the code, drops the spent proof hint, and clears the trip', async () => {
+    await beginProviderLink('github');
+    storage.setItem(EXPIRY_KEY, String(Date.now() + 60_000));
+    exchangeLink.mockResolvedValue({ provider: 'github' });
+    expect(await completeProviderLink('the-code')).toEqual({ linked: 'github' });
+    expect(exchangeLink).toHaveBeenCalledWith('the-code', expect.any(String));
+    expect(storage.getItem(EXPIRY_KEY)).toBeNull();
+    expect(pendingProviderLink()).toBe(false);
+    expect(storage.getItem(VERIFIER_KEY)).toBeNull();
+  });
+
+  it("returns the server's refusal code", async () => {
+    await beginProviderLink('github');
+    exchangeLink.mockRejectedValue(new StubApiError(409, 'in use', { code: 'identity_in_use' }));
+    expect(await completeProviderLink('c')).toEqual({ error: 'identity_in_use' });
+  });
+
+  it('a 428 drops the proof hint too', async () => {
+    await beginProviderLink('github');
+    storage.setItem(EXPIRY_KEY, String(Date.now() + 60_000));
+    exchangeLink.mockRejectedValue(new StubApiError(428, 'x', { code: 'recent_auth_required' }));
+    expect(await completeProviderLink('c')).toEqual({ error: 'recent_auth_required' });
+    expect(storage.getItem(EXPIRY_KEY)).toBeNull();
+  });
+
+  it('a return without a code is a cancelled link, not an exchange', async () => {
+    await beginProviderLink('github');
+    expect(await completeProviderLink(null)).toEqual({ error: 'cancelled' });
+    expect(exchangeLink).not.toHaveBeenCalled();
+    expect(pendingProviderLink()).toBe(false);
   });
 });

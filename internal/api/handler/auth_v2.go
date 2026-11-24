@@ -133,8 +133,11 @@ func (h *authHandlers) ListProvidersV2(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": fiber.Map{"schema_version": 2, "providers": providers}})
 }
 
+// currentBinding pins a bound purpose to the session that started it: "reauth" proves the
+// member behind it, "link" attaches a provider to the account behind it. Sign-in has no
+// session to pin.
 func (h *authHandlers) currentBinding(c *fiber.Ctx, purpose string) (*mobileauth.Binding, error) {
-	if purpose != "reauth" {
+	if purpose != "reauth" && purpose != "link" {
 		if purpose != "sign_in" {
 			return nil, authError(400, "invalid_purpose", "invalid purpose")
 		}
@@ -235,6 +238,9 @@ func (h *authHandlers) OAuthCallbackV2(c *fiber.Ctx) error {
 	if err != nil {
 		return h.oauthV2Fail(c, attempt.CallbackTarget, err)
 	}
+	if attempt.Purpose == "link" {
+		return h.oauthV2LinkCallback(c, attempt, provider, identity)
+	}
 	var userID int64
 	if attempt.Purpose == "reauth" {
 		userID, err = h.mobileAuth.IdentityOwner(c.Context(), provider, identity.ProviderUserID)
@@ -253,6 +259,22 @@ func (h *authHandlers) OAuthCallbackV2(c *fiber.Ctx) error {
 		}
 	}
 	otc, err := h.mobileAuth.MintCode(c.Context(), attempt, userID)
+	if err != nil {
+		return h.oauthV2Fail(c, attempt.CallbackTarget, err)
+	}
+	target, err := callbackWith(h.mobileCallbacks[attempt.CallbackTarget], "code", otc)
+	if err != nil {
+		return err
+	}
+	return c.Redirect(target, fiber.StatusFound)
+}
+
+// oauthV2LinkCallback hands the verified provider identity of a "link" attempt to the
+// exchange. Nothing is resolved by email here and no account is touched: the code is minted
+// for the user the attempt was bound to, and the exchange — which can see the session and
+// the recent-auth proof — decides whether the identity is attached.
+func (h *authHandlers) oauthV2LinkCallback(c *fiber.Ctx, attempt mobileauth.Attempt, provider string, identity oauth.Identity) error {
+	otc, err := h.mobileAuth.MintLinkCode(c.Context(), attempt, provider, identity.ProviderUserID)
 	if err != nil {
 		return h.oauthV2Fail(c, attempt.CallbackTarget, err)
 	}
@@ -312,7 +334,7 @@ func (h *authHandlers) OAuthExchangeV2(c *fiber.Ctx) error {
 		}
 		return err
 	}
-	if ex.Purpose == "reauth" {
+	if ex.Purpose == "reauth" || ex.Purpose == "link" {
 		current, currentErr := requireUserID(c)
 		if currentErr != nil || current != ex.UserID || !h.sessionMatches(ex.ExpectedSessionHash, c) {
 			return authError(401, "reauth_session_mismatch", "session changed")
@@ -322,6 +344,9 @@ func (h *authHandlers) OAuthExchangeV2(c *fiber.Ctx) error {
 		}
 		if err = h.mobileAuth.VerifyBinding(c.Context(), ex.UserID, *ex.ExpectedTokenVersion); err != nil {
 			return authError(401, "reauth_session_mismatch", "session changed")
+		}
+		if ex.Purpose == "link" {
+			return h.linkIdentity(c, ex)
 		}
 		return h.issueRecent(c, ex.UserID, *ex.ExpectedTokenVersion, ex.ExpectedSessionHash)
 	}
@@ -333,6 +358,28 @@ func (h *authHandlers) OAuthExchangeV2(c *fiber.Ctx) error {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
+}
+
+// linkIdentity attaches the identity a "link" exchange carries, once the caller has
+// confirmed the exchange belongs to this exact session. The recent-auth proof is spent by
+// the link, so its cookie goes on success, as after an unlink.
+func (h *authHandlers) linkIdentity(c *fiber.Ctx, ex mobileauth.Exchange) error {
+	err := h.mobileAuth.LinkIdentity(c.Context(), ex.UserID, *ex.ExpectedTokenVersion, ex.ExpectedSessionHash,
+		ex.LinkProvider, ex.LinkProviderUserID, c.Cookies(recentauth.CookieName))
+	switch {
+	case errors.Is(err, mobileauth.ErrSession):
+		return authError(428, "recent_auth_required", "recent authentication required")
+	case errors.Is(err, mobileauth.ErrIdentityInUse):
+		return authError(409, "identity_in_use", "this account is linked to another freehire account")
+	case errors.Is(err, mobileauth.ErrProviderLinked):
+		return authError(409, "provider_already_linked", "another account of this provider is already linked")
+	case errors.Is(err, mobileauth.ErrState):
+		return authError(409, "identity_state_conflict", "identity state conflict")
+	case err != nil:
+		return err
+	}
+	recentauth.ClearCookie(c, h.cookieSecure, auth.CookieDomainForHost(c.Hostname(), h.cookieDomains))
+	return c.JSON(fiber.Map{"data": fiber.Map{"provider": ex.LinkProvider}})
 }
 
 func (h *authHandlers) AppleAttemptV2(c *fiber.Ctx) error {

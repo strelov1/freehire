@@ -1,9 +1,13 @@
-import { api } from '#lib/api.js';
+import { ApiError, api } from '#lib/api.js';
 
 const verifierKey = 'freehire.reauth.verifier';
 const returnKey = 'freehire.reauth.return';
 const draftKey = 'freehire.reauth.draft';
 const expiryKey = 'freehire.reauth.expires';
+// Which kind of provider trip is out: absent for a re-authentication, 'link' for attaching a
+// provider. Both come back to the one registered web callback (/my/reauth), which reads this
+// to know which exchange the code is for.
+const purposeKey = 'freehire.reauth.purpose';
 
 export type ReauthReturnPath = '/my/integrations/api-keys' | '/my/api/keys' | '/my/account';
 
@@ -48,7 +52,8 @@ export type ReauthDraft =
   | { surface: 'revoke-api-key'; keyId: number }
   | { surface: 'revoke-oauth-grant'; grantId: number }
   | { surface: 'delete-account' }
-  | { surface: 'change-email'; email: string };
+  | { surface: 'change-email'; email: string }
+  | { surface: 'link-provider'; provider: string };
 
 /** When the proof obtained by the last provider round trip stops being valid, as the SERVER
  *  stated it — both issuing routes answer with `recent_auth_expires_at`, so this is a
@@ -93,6 +98,8 @@ function isDraftFor<S extends ReauthDraft['surface']>(
       return typeof d.grantId === 'number';
     case 'change-email':
       return typeof d.email === 'string';
+    case 'link-provider':
+      return typeof d.provider === 'string';
     default:
       // `delete-account` carries nothing but its own name, on purpose: the typed address
       // that arms it is a barrier, not a field to be remembered.
@@ -142,6 +149,22 @@ export async function beginProviderReauthentication(
   returnTo: ReauthReturnPath,
   draft?: ReauthDraft,
 ): Promise<void> {
+  await startProviderTrip(provider, 'reauth', returnTo, draft);
+}
+
+/** Leave for `provider` to attach it to the signed-in account. The server spends a recent-auth
+ *  proof on the link, so the caller makes sure one is held first (`ConfirmIdentity.prove()`).
+ *  The trip ends on /my/reauth, which hands the code to `completeProviderLink`. */
+export async function beginProviderLink(provider: string): Promise<void> {
+  await startProviderTrip(provider, 'link', '/my/account');
+}
+
+async function startProviderTrip(
+  provider: string,
+  purpose: 'reauth' | 'link',
+  returnTo: ReauthReturnPath,
+  draft?: ReauthDraft,
+): Promise<void> {
   if (!/^[a-z][a-z0-9_-]{1,31}$/.test(provider)) throw new Error('invalid provider');
   const verifierBytes = new Uint8Array(32);
   crypto.getRandomValues(verifierBytes);
@@ -159,12 +182,16 @@ export async function beginProviderReauthentication(
   // otherwise ride along with this one and reopen a surface nobody asked for.
   if (draft) sessionStorage.setItem(draftKey, JSON.stringify(draft));
   else forgetSession(draftKey);
+  // Same rule as the draft: a marker left by an abandoned link trip must not turn a later
+  // re-authentication into a link exchange.
+  if (purpose === 'link') sessionStorage.setItem(purposeKey, purpose);
+  else forgetSession(purposeKey);
   const query = new URLSearchParams({
     platform: 'web',
     code_challenge: challenge,
     code_challenge_method: 'S256',
     callback_target: 'web',
-    purpose: 'reauth',
+    purpose,
   });
   window.location.assign(`/api/v2/auth/oauth/${encodeURIComponent(provider)}/start?${query}`);
 }
@@ -202,4 +229,36 @@ export async function completeProviderReauthentication(code: string): Promise<Re
     return '/my/integrations/api-keys';
   }
   return '/my/account';
+}
+
+/** Whether the trip coming back to /my/reauth was started by `beginProviderLink`. */
+export function pendingProviderLink(): boolean {
+  return readSession(purposeKey) === 'link';
+}
+
+/** How a link trip ended: the provider attached, or the server's refusal code
+ *  (`identity_in_use`, `provider_already_linked`, `recent_auth_required`, …) for the account
+ *  page to word. Never throws: every ending goes back to that page. */
+type LinkOutcome = { linked: string } | { error: string };
+
+export async function completeProviderLink(code: string | null): Promise<LinkOutcome> {
+  const verifier = readSession(verifierKey);
+  forgetSession(verifierKey);
+  forgetSession(purposeKey);
+  forgetSession(returnKey);
+  forgetSession(draftKey);
+  // No code: the provider refused or the member declined consent.
+  if (!code) return { error: 'cancelled' };
+  if (!verifier) return { error: 'expired' };
+  try {
+    const { provider } = await api.exchangeOAuthLink(code, verifier);
+    // The link spent the proof server-side; a hint that it is still held would let the next
+    // gated action skip the question and meet a 428.
+    forgetRecentAuthExpiry();
+    return { linked: provider };
+  } catch (e) {
+    if (!(e instanceof ApiError)) return { error: 'failed' };
+    if (e.status === 428) forgetRecentAuthExpiry();
+    return { error: typeof e.body?.code === 'string' ? e.body.code : 'failed' };
+  }
 }

@@ -27,7 +27,7 @@ state, PKCE verifier, or session cookie in Git, CI output, logs, or PR text.
 | Variable | Meaning |
 |---|---|
 | `AUTH_V2_ENABLED` | Registers `/api/v2/auth/*`; default `false`. |
-| `MOBILE_AUTH_CALLBACKS` | Comma-separated `platform=https://verified/path` allowlist. Include `web=https://<host>/my/reauth`; add `ios=https://<host>/auth/mobile-callback` and `android=` likewise once the verified-link target is live. Browser providers stay hidden from `/api/v2/auth/providers` until one of them is set, so the mobile app shows only Apple. |
+| `MOBILE_AUTH_CALLBACKS` | Comma-separated `platform=https://verified/path` allowlist. Include `web=https://<host>/my/reauth` (web re-authentication and connecting a provider from `/my/account` both return there); add `ios=https://<host>/auth/mobile-callback` and `android=` likewise once the verified-link target is live. Browser providers stay hidden from `/api/v2/auth/providers` until one of them is set, so the mobile app shows only Apple. |
 | `RECENT_AUTH_TTL` | Recent-auth proof lifetime; default `10m`, allowed `1m` to `1h`. |
 | `APPLE_NATIVE_CLIENT_ID` | Native iOS bundle/client ID, separate from the web Services ID. |
 | `OAUTH_APPLE_TEAM_ID` | Existing Apple developer Team ID. |
