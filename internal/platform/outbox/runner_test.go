@@ -177,7 +177,7 @@ func TestStopOnCancel_StopsAtTheNextWaveBoundaryOnceCancelled(t *testing.T) {
 		return Succeeded
 	}
 
-	stats, err := RunPool(ctx, &StopOnCancel[int]{Claimer: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, process)
+	stats, err := RunPool(ctx, &StopOnCancel[int]{Inner: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, process)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestStopOnCancel_TheFirstClaimIsNeverGuarded(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	stats, err := RunPool(ctx, &StopOnCancel[int]{Claimer: inner}, RunOptions{BatchSize: 2, LeaseSeconds: 60}, func(context.Context, int) Outcome {
+	stats, err := RunPool(ctx, &StopOnCancel[int]{Inner: inner}, RunOptions{BatchSize: 2, LeaseSeconds: 60}, func(context.Context, int) Outcome {
 		return Succeeded
 	})
 	if err != nil {
@@ -222,7 +222,7 @@ func TestStopOnCancel_RunBatchStopsToo(t *testing.T) {
 		return Stats{Succeeded: len(items)}, nil
 	}
 
-	stats, err := RunBatch(ctx, &StopOnCancel[int]{Claimer: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, processBatch, nil)
+	stats, err := RunBatch(ctx, &StopOnCancel[int]{Inner: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, processBatch, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestStopOnCancel_RunBatchStopsToo(t *testing.T) {
 // An uncancelled run is untouched: every wave is claimed and passed through verbatim.
 func TestStopOnCancel_IsTransparentWhileCtxIsLive(t *testing.T) {
 	inner := &fakeClaimer{waves: [][]int{{1, 2}, {3}}}
-	claimer := &StopOnCancel[int]{Claimer: inner}
+	claimer := &StopOnCancel[int]{Inner: inner}
 
 	stats, err := RunPool(context.Background(), claimer, RunOptions{BatchSize: 2, LeaseSeconds: 60}, func(context.Context, int) Outcome {
 		return Succeeded
@@ -258,7 +258,7 @@ func TestStopOnCancel_PassesAClaimErrorThrough(t *testing.T) {
 	wantErr := errors.New("pool unreachable")
 	inner := &fakeClaimer{waves: [][]int{{1}}, errOnCall: 2, errAfter: wantErr}
 
-	_, err := RunPool(context.Background(), &StopOnCancel[int]{Claimer: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, func(context.Context, int) Outcome {
+	_, err := RunPool(context.Background(), &StopOnCancel[int]{Inner: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, func(context.Context, int) Outcome {
 		return Succeeded
 	})
 	if !errors.Is(err, wantErr) {

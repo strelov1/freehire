@@ -163,7 +163,7 @@ func (s RunStats) Degraded() bool {
 // wave comes back empty.
 func Run(ctx context.Context, s Store, answers AnswerSource, sidecar SidecarClient, opts RunOptions) (RunStats, error) {
 	rn := &run{store: s, answers: answers, sidecar: sidecar, opts: opts}
-	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Claimer: s}, outbox.RunOptions{
+	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Inner: s}, outbox.RunOptions{
 		BatchSize:    opts.BatchSize,
 		LeaseSeconds: opts.LeaseSeconds,
 		Concurrency:  opts.Concurrency,

@@ -51,7 +51,7 @@ func (s PreviewStats) Degraded() bool {
 // only that worker has.
 func RunPreviews(ctx context.Context, s PreviewStore, answers AnswerSource, sidecar PreviewSidecar, opts RunOptions) (PreviewStats, error) {
 	rn := &previewRun{store: s, answers: answers, sidecar: sidecar, opts: opts}
-	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Claimer: outbox.ClaimFunc[Claimed](s.ClaimForPreview)}, outbox.RunOptions{
+	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Inner: outbox.ClaimFunc[Claimed](s.ClaimForPreview)}, outbox.RunOptions{
 		BatchSize:    opts.BatchSize,
 		LeaseSeconds: opts.LeaseSeconds,
 		Concurrency:  opts.Concurrency,

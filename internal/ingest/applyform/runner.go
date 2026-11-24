@@ -121,7 +121,7 @@ func (s RunStats) Degraded() bool {
 // nothing else.
 func Run(ctx context.Context, s Store, fetchers map[string]Fetcher, opts RunOptions) (RunStats, error) {
 	rn := &run{store: s, fetchers: fetchers, opts: opts, throttled: &throttle{}}
-	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Claimer: outbox.ClaimFunc[Claimed](
+	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Inner: outbox.ClaimFunc[Claimed](
 		func(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
 			return s.Claim(ctx, batch, leaseSeconds, rn.throttled.list())
 		})}, outbox.RunOptions{

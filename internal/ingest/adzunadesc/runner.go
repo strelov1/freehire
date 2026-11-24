@@ -88,7 +88,7 @@ func (s RunStats) Degraded() bool {
 // recorded against it.
 func Run(ctx context.Context, s Store, fetch FetchFunc, opts RunOptions) (RunStats, error) {
 	rn := &run{store: s, fetch: fetch, opts: opts}
-	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Claimer: s}, outbox.RunOptions{
+	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Inner: s}, outbox.RunOptions{
 		BatchSize:    opts.BatchSize,
 		LeaseSeconds: opts.LeaseSeconds,
 		Concurrency:  opts.Concurrency,

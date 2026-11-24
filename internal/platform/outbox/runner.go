@@ -61,7 +61,7 @@ func (f ClaimFunc[C]) Claim(ctx context.Context, batch, leaseSeconds int) ([]C, 
 // store respects the cancellation; guarding it would turn a visible failure into a
 // clean-looking empty run, indistinguishable from a drained queue.
 type StopOnCancel[C any] struct {
-	Claimer[C]
+	Inner Claimer[C] // named, not embedded: an embedded Claimer would let a StopOnCancel value skip the guard
 	calls int
 }
 
@@ -71,7 +71,7 @@ func (s *StopOnCancel[C]) Claim(ctx context.Context, batch, leaseSeconds int) ([
 		return nil, nil //nolint:nilerr // cancellation is the clean stop, not a failed claim
 	}
 	s.calls++
-	return s.Claimer.Claim(ctx, batch, leaseSeconds)
+	return s.Inner.Claim(ctx, batch, leaseSeconds)
 }
 
 // RunOptions are the per-run knobs. MaxAttempts and per-call timeouts stay inside each
