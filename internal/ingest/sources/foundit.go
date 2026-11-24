@@ -242,7 +242,7 @@ func (s foundit) sitemap(ctx context.Context, loc string) (sitemapDoc, error) {
 		if len(body) > founditMaxSitemapBytes {
 			return fmt.Errorf("sitemap exceeds %d bytes", founditMaxSitemapBytes)
 		}
-		doc, err = decodeSitemapBody(body)
+		doc, err = decodeSitemapBody(body, sitemapMaxUncompressed)
 		return err
 	})
 	return doc, err

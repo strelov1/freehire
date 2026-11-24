@@ -123,7 +123,7 @@ func (s sitemapldjson) list(ctx context.Context, board, pattern string) ([]sitem
 		if err != nil {
 			return fmt.Errorf("sitemap %s: %w", pageURL, err)
 		}
-		doc, err := decodeSitemapBody([]byte(body))
+		doc, err := decodeSitemapBody([]byte(body), sitemapMaxUncompressed)
 		if err != nil {
 			return fmt.Errorf("sitemap %s: %w", pageURL, err)
 		}

@@ -317,7 +317,7 @@ func (s jobsch) sitemap(ctx context.Context, url string) (sitemapDoc, error) {
 		if len(body) > jobschMaxSitemapBytes {
 			return fmt.Errorf("sitemap exceeds %d bytes", jobschMaxSitemapBytes)
 		}
-		doc, err = decodeSitemapBody(body)
+		doc, err = decodeSitemapBody(body, sitemapMaxUncompressed)
 		return err
 	})
 	return doc, err
