@@ -44,7 +44,7 @@ describe('JobRow direct-apply button', () => {
     // open one: a closed posting takes no applications, on any surface that lists it.
     expect(ROW).toContain("const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);");
     expect(ROW).toContain('job.direct_apply === true && !job.closed_at');
-    expect(ROW).toContain('applyUrl={sponsoredUrl ?? applyJob?.url ?? null}');
+    expect(ROW).toContain('applyUrl={sponsoredUrl ?? (applyJob?.apply_url || applyJob?.url) ?? null}');
     expect(applyBlock).not.toBe('');
   });
 

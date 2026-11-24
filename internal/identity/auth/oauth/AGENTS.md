@@ -38,6 +38,9 @@ completes.
 3. **New passwordless user** (`password_hash` NULL) — last two in one transaction
 4. **Never link or create by unverified email** (account-takeover vector)
 
+A signed-in member connects a provider explicitly through the v2 `link` purpose, which
+never consults email — see [auth reference](../AGENT-REFERENCE.md#how-it-works).
+
 ## Provider Implementations
 
 - Google/LinkedIn: OIDC-userinfo implementation (shared)
@@ -62,4 +65,4 @@ completes.
 
 ## Limitations
 
-- Identity unlinking/management UI, magic-link sign-in
+- Identity unlinking UI, magic-link sign-in
