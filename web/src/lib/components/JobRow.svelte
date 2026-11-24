@@ -24,6 +24,7 @@
   import JobRowApplyGate from './JobRowApplyGate.svelte';
   import { JobCardActions } from './jobCardActions.svelte';
   import JobRowCornerActions from './JobRowCornerActions.svelte';
+  import JobShareButton from './JobShareButton.svelte';
   import JobRowBadges from './JobRowBadges.svelte';
   import JobRowGeo from './JobRowGeo.svelte';
   import JobRowRailFacts from './JobRowRailFacts.svelte';
@@ -258,16 +259,14 @@
        The name truncates to a single line, so a long company (e.g. "Veterinary
        Emergency Group (VEG)") keeps the logo centred and the card rhythm even
        instead of wrapping into a ragged multi-line header. -->
-    <!-- Reserves the top-right corner for the Save overlay, so the
-       timestamp never slides under it. Only a compact card keeps Save up here; a normal
-       card has moved it into the action row at its foot, leaving the corner free. -->
+    <!-- Reserve space for the corner actions so they clear the timestamp. -->
     <!-- Not drawn on the employer's own page (`hideCompany`): with no company the rail would
        hold only small facts floating above the title, so they lead the meta line instead. -->
     <div
       class={[
         'flex items-center gap-2',
-        !compact && onHide ? 'pr-20' : 'pr-11',
-        touchActions && 'pointer-coarse:pr-30',
+        !compact && onHide ? 'pr-29' : 'pr-20',
+        touchActions && 'pointer-coarse:pr-39',
         hideCompany && 'hidden',
       ]}
     >
@@ -315,8 +314,8 @@
         compact ? 'mt-2 text-base' : 'text-base sm:text-lg',
         !compact && !hideCompany && 'mt-1.5',
         // With the rail hidden the title is the top line, so it reserves the corner controls' room the rail would have.
-        hideCompany && (!compact && onHide ? 'pr-20' : 'pr-11'),
-        hideCompany && touchActions && 'pointer-coarse:pr-30',
+        hideCompany && (!compact && onHide ? 'pr-29' : 'pr-20'),
+        hideCompany && touchActions && 'pointer-coarse:pr-39',
       ]}
     >
       <a
@@ -422,20 +421,23 @@
      states it is in rather than which action it performs, because the state is what a
      card in a long feed has to answer at a glance. -->
   {#if compact}
-    <button
-      type="button"
-      onclick={actions.toggleSave}
-      disabled={actions.saving}
-      aria-pressed={saved}
-      aria-label={saved ? 'Remove from your board' : 'Save to your board'}
-      title={saved ? 'On your board' : 'Save to board'}
-      class={[
-        'absolute right-2.5 top-4 z-10 grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
-        saved ? 'text-brand' : 'text-muted-foreground',
-      ]}
-    >
-      <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
-    </button>
+    <div class="absolute right-2.5 top-4 z-10 flex items-center gap-1 has-aria-expanded:z-20">
+      <button
+        type="button"
+        onclick={actions.toggleSave}
+        disabled={actions.saving}
+        aria-pressed={saved}
+        aria-label={saved ? 'Remove from your board' : 'Save to your board'}
+        title={saved ? 'On your board' : 'Save to board'}
+        class={[
+          'grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
+          saved ? 'text-brand' : 'text-muted-foreground',
+        ]}
+      >
+        <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
+      </button>
+      <JobShareButton slug={job.public_slug} title={job.title} compact />
+    </div>
   {:else}
     <JobRowCornerActions
       slug={job.public_slug}
