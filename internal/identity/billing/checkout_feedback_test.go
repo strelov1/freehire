@@ -28,7 +28,7 @@ func TestCheckoutAbandoned(t *testing.T) {
 						http.Error(w, "unavailable", http.StatusServiceUnavailable)
 						return
 					}
-					fmt.Fprintf(w, `{"status":%q,"payment_status":%q,"client_reference_id":%q,"customer":"cus_1"}`, tt.status, tt.payment, tt.reference)
+					_, _ = fmt.Fprintf(w, `{"status":%q,"payment_status":%q,"client_reference_id":%q,"customer":"cus_1"}`, tt.status, tt.payment, tt.reference)
 				case "/subscriptions":
 					if r.URL.Query().Get("customer") != "cus_1" {
 						t.Error("reading the wrong Stripe customer")
@@ -37,7 +37,7 @@ func TestCheckoutAbandoned(t *testing.T) {
 					if body == "" {
 						body = `{"data":[]}`
 					}
-					fmt.Fprint(w, body)
+					_, _ = fmt.Fprint(w, body)
 				default:
 					t.Errorf("unexpected request %s", r.URL.Path)
 					http.NotFound(w, r)

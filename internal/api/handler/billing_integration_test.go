@@ -336,7 +336,7 @@ func TestBillingCheckout(t *testing.T) {
 	t.Run("a cross-site navigation never enrolls the caller in feedback", func(t *testing.T) {
 		token, _ := iss.Issue(userID, testTokenVersion)
 		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/billing/checkout", nil)
-		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		req.Header.Set("Cookie", auth.CookieName+"="+token)
 		req.Header.Set("Sec-Fetch-Site", "cross-site")
 		req.Header.Set("Sec-Fetch-Dest", "document")
 		resp, err := app.Test(req, 15000)
@@ -357,7 +357,7 @@ func TestBillingCheckout(t *testing.T) {
 	t.Run("the link carries the caller's own id", func(t *testing.T) {
 		token, _ := iss.Issue(userID, testTokenVersion)
 		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/billing/checkout", nil)
-		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		req.Header.Set("Cookie", auth.CookieName+"="+token)
 		req.Header.Set("Sec-Fetch-Site", "same-origin")
 		req.Header.Set("Sec-Fetch-Dest", "empty")
 
