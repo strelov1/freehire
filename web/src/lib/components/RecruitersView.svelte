@@ -135,6 +135,21 @@
     </div>
   </section>
 
+  <section
+    class="flex flex-col items-start gap-4 border-y border-border py-6 sm:flex-row sm:items-center sm:justify-between"
+    aria-labelledby="promotion-pilot-heading"
+  >
+    <div>
+      <h2 id="promotion-pilot-heading" class="text-xl font-semibold tracking-tight">Job promotion pilot</h2>
+      <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Have an open role that needs more visibility? Tell us about it.
+      </p>
+    </div>
+    <Button href={resolve('/recruiters/job-promotion')} variant="outline">
+      Explore the pilot <ArrowRight class="size-4" aria-hidden="true" />
+    </Button>
+  </section>
+
   <section class="flex flex-col gap-5" aria-labelledby="recruiter-questions-heading">
     <h2 id="recruiter-questions-heading" class="text-3xl font-semibold tracking-tight">Questions</h2>
     <dl class="grid gap-x-10 sm:grid-cols-2">
