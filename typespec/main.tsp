@@ -33,6 +33,7 @@ import "./experience.tsp";
 import "./employer.tsp";
 import "./referrals.tsp";
 import "./billing.tsp";
+import "./sponsored.tsp";
 import "./plan.tsp";
 import "./direct-apply.tsp";
 import "./jobs.tsp";

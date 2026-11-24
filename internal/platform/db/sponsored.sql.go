@@ -152,6 +152,49 @@ func (q *Queries) EndSponsoredCampaignsOfClosedJobs(ctx context.Context) (int64,
 	return result.RowsAffected(), nil
 }
 
+const getSponsoredCampaignForOwner = `-- name: GetSponsoredCampaignForOwner :one
+SELECT c.id, c.job_id, c.owner_user_id, c.status, c.cpc_cents, c.daily_cap_cents, c.budget_cents, c.spent_cents, c.reviewed_by, c.reviewed_at, c.reject_reason, c.created_at, c.updated_at, j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug
+FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
+WHERE c.id = $1 AND c.owner_user_id = $2
+`
+
+type GetSponsoredCampaignForOwnerParams struct {
+	ID          int64 `json:"id"`
+	OwnerUserID int64 `json:"owner_user_id"`
+}
+
+type GetSponsoredCampaignForOwnerRow struct {
+	SponsoredCampaign SponsoredCampaign `json:"sponsored_campaign"`
+	JobTitle          string            `json:"job_title"`
+	JobCompany        string            `json:"job_company"`
+	JobSlug           string            `json:"job_slug"`
+}
+
+// Owner-scoped: another user's id finds nothing, so it cannot be told from a missing one.
+func (q *Queries) GetSponsoredCampaignForOwner(ctx context.Context, arg GetSponsoredCampaignForOwnerParams) (GetSponsoredCampaignForOwnerRow, error) {
+	row := q.db.QueryRow(ctx, getSponsoredCampaignForOwner, arg.ID, arg.OwnerUserID)
+	var i GetSponsoredCampaignForOwnerRow
+	err := row.Scan(
+		&i.SponsoredCampaign.ID,
+		&i.SponsoredCampaign.JobID,
+		&i.SponsoredCampaign.OwnerUserID,
+		&i.SponsoredCampaign.Status,
+		&i.SponsoredCampaign.CpcCents,
+		&i.SponsoredCampaign.DailyCapCents,
+		&i.SponsoredCampaign.BudgetCents,
+		&i.SponsoredCampaign.SpentCents,
+		&i.SponsoredCampaign.ReviewedBy,
+		&i.SponsoredCampaign.ReviewedAt,
+		&i.SponsoredCampaign.RejectReason,
+		&i.SponsoredCampaign.CreatedAt,
+		&i.SponsoredCampaign.UpdatedAt,
+		&i.JobTitle,
+		&i.JobCompany,
+		&i.JobSlug,
+	)
+	return i, err
+}
+
 const getSponsoredCampaignForUpdate = `-- name: GetSponsoredCampaignForUpdate :one
 SELECT id, job_id, owner_user_id, status, cpc_cents, daily_cap_cents, budget_cents, spent_cents, reviewed_by, reviewed_at, reject_reason, created_at, updated_at FROM sponsored_campaigns WHERE id = $1 FOR UPDATE
 `
@@ -331,32 +374,44 @@ func (q *Queries) ListServingSponsoredCampaigns(ctx context.Context, arg ListSer
 }
 
 const listSponsoredCampaignsByOwner = `-- name: ListSponsoredCampaignsByOwner :many
-SELECT id, job_id, owner_user_id, status, cpc_cents, daily_cap_cents, budget_cents, spent_cents, reviewed_by, reviewed_at, reject_reason, created_at, updated_at FROM sponsored_campaigns WHERE owner_user_id = $1 ORDER BY id DESC
+SELECT c.id, c.job_id, c.owner_user_id, c.status, c.cpc_cents, c.daily_cap_cents, c.budget_cents, c.spent_cents, c.reviewed_by, c.reviewed_at, c.reject_reason, c.created_at, c.updated_at, j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug
+FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
+WHERE c.owner_user_id = $1 ORDER BY c.id DESC
 `
 
-func (q *Queries) ListSponsoredCampaignsByOwner(ctx context.Context, ownerUserID int64) ([]SponsoredCampaign, error) {
+type ListSponsoredCampaignsByOwnerRow struct {
+	SponsoredCampaign SponsoredCampaign `json:"sponsored_campaign"`
+	JobTitle          string            `json:"job_title"`
+	JobCompany        string            `json:"job_company"`
+	JobSlug           string            `json:"job_slug"`
+}
+
+func (q *Queries) ListSponsoredCampaignsByOwner(ctx context.Context, ownerUserID int64) ([]ListSponsoredCampaignsByOwnerRow, error) {
 	rows, err := q.db.Query(ctx, listSponsoredCampaignsByOwner, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []SponsoredCampaign{}
+	items := []ListSponsoredCampaignsByOwnerRow{}
 	for rows.Next() {
-		var i SponsoredCampaign
+		var i ListSponsoredCampaignsByOwnerRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.JobID,
-			&i.OwnerUserID,
-			&i.Status,
-			&i.CpcCents,
-			&i.DailyCapCents,
-			&i.BudgetCents,
-			&i.SpentCents,
-			&i.ReviewedBy,
-			&i.ReviewedAt,
-			&i.RejectReason,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.SponsoredCampaign.ID,
+			&i.SponsoredCampaign.JobID,
+			&i.SponsoredCampaign.OwnerUserID,
+			&i.SponsoredCampaign.Status,
+			&i.SponsoredCampaign.CpcCents,
+			&i.SponsoredCampaign.DailyCapCents,
+			&i.SponsoredCampaign.BudgetCents,
+			&i.SponsoredCampaign.SpentCents,
+			&i.SponsoredCampaign.ReviewedBy,
+			&i.SponsoredCampaign.ReviewedAt,
+			&i.SponsoredCampaign.RejectReason,
+			&i.SponsoredCampaign.CreatedAt,
+			&i.SponsoredCampaign.UpdatedAt,
+			&i.JobTitle,
+			&i.JobCompany,
+			&i.JobSlug,
 		); err != nil {
 			return nil, err
 		}
@@ -368,33 +423,128 @@ func (q *Queries) ListSponsoredCampaignsByOwner(ctx context.Context, ownerUserID
 	return items, nil
 }
 
-const listSponsoredReviewQueue = `-- name: ListSponsoredReviewQueue :many
-SELECT id, job_id, owner_user_id, status, cpc_cents, daily_cap_cents, budget_cents, spent_cents, reviewed_by, reviewed_at, reject_reason, created_at, updated_at FROM sponsored_campaigns WHERE status = 'pending_review' ORDER BY updated_at, id
+const listSponsoredDailySince = `-- name: ListSponsoredDailySince :many
+SELECT day, impressions, valid_clicks, invalid_clicks, spent_cents
+FROM sponsored_daily WHERE campaign_id = $1 AND day >= $2::date ORDER BY day
 `
 
-func (q *Queries) ListSponsoredReviewQueue(ctx context.Context) ([]SponsoredCampaign, error) {
+type ListSponsoredDailySinceParams struct {
+	CampaignID int64       `json:"campaign_id"`
+	Since      pgtype.Date `json:"since"`
+}
+
+type ListSponsoredDailySinceRow struct {
+	Day           pgtype.Date `json:"day"`
+	Impressions   int64       `json:"impressions"`
+	ValidClicks   int64       `json:"valid_clicks"`
+	InvalidClicks int64       `json:"invalid_clicks"`
+	SpentCents    int64       `json:"spent_cents"`
+}
+
+func (q *Queries) ListSponsoredDailySince(ctx context.Context, arg ListSponsoredDailySinceParams) ([]ListSponsoredDailySinceRow, error) {
+	rows, err := q.db.Query(ctx, listSponsoredDailySince, arg.CampaignID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSponsoredDailySinceRow{}
+	for rows.Next() {
+		var i ListSponsoredDailySinceRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Impressions,
+			&i.ValidClicks,
+			&i.InvalidClicks,
+			&i.SpentCents,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSponsoredInvalidReasonsSince = `-- name: ListSponsoredInvalidReasonsSince :many
+SELECT reason, count(*)::bigint AS clicks
+FROM sponsored_clicks
+WHERE campaign_id = $1 AND NOT valid AND ts >= $2::timestamptz
+GROUP BY reason ORDER BY clicks DESC, reason
+`
+
+type ListSponsoredInvalidReasonsSinceParams struct {
+	CampaignID int64              `json:"campaign_id"`
+	Since      pgtype.Timestamptz `json:"since"`
+}
+
+type ListSponsoredInvalidReasonsSinceRow struct {
+	Reason string `json:"reason"`
+	Clicks int64  `json:"clicks"`
+}
+
+func (q *Queries) ListSponsoredInvalidReasonsSince(ctx context.Context, arg ListSponsoredInvalidReasonsSinceParams) ([]ListSponsoredInvalidReasonsSinceRow, error) {
+	rows, err := q.db.Query(ctx, listSponsoredInvalidReasonsSince, arg.CampaignID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSponsoredInvalidReasonsSinceRow{}
+	for rows.Next() {
+		var i ListSponsoredInvalidReasonsSinceRow
+		if err := rows.Scan(&i.Reason, &i.Clicks); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSponsoredReviewQueue = `-- name: ListSponsoredReviewQueue :many
+SELECT c.id, c.job_id, c.owner_user_id, c.status, c.cpc_cents, c.daily_cap_cents, c.budget_cents, c.spent_cents, c.reviewed_by, c.reviewed_at, c.reject_reason, c.created_at, c.updated_at, j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug, j.url AS job_url
+FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
+WHERE c.status = 'pending_review' ORDER BY c.updated_at, c.id
+`
+
+type ListSponsoredReviewQueueRow struct {
+	SponsoredCampaign SponsoredCampaign `json:"sponsored_campaign"`
+	JobTitle          string            `json:"job_title"`
+	JobCompany        string            `json:"job_company"`
+	JobSlug           string            `json:"job_slug"`
+	JobUrl            string            `json:"job_url"`
+}
+
+func (q *Queries) ListSponsoredReviewQueue(ctx context.Context) ([]ListSponsoredReviewQueueRow, error) {
 	rows, err := q.db.Query(ctx, listSponsoredReviewQueue)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []SponsoredCampaign{}
+	items := []ListSponsoredReviewQueueRow{}
 	for rows.Next() {
-		var i SponsoredCampaign
+		var i ListSponsoredReviewQueueRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.JobID,
-			&i.OwnerUserID,
-			&i.Status,
-			&i.CpcCents,
-			&i.DailyCapCents,
-			&i.BudgetCents,
-			&i.SpentCents,
-			&i.ReviewedBy,
-			&i.ReviewedAt,
-			&i.RejectReason,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.SponsoredCampaign.ID,
+			&i.SponsoredCampaign.JobID,
+			&i.SponsoredCampaign.OwnerUserID,
+			&i.SponsoredCampaign.Status,
+			&i.SponsoredCampaign.CpcCents,
+			&i.SponsoredCampaign.DailyCapCents,
+			&i.SponsoredCampaign.BudgetCents,
+			&i.SponsoredCampaign.SpentCents,
+			&i.SponsoredCampaign.ReviewedBy,
+			&i.SponsoredCampaign.ReviewedAt,
+			&i.SponsoredCampaign.RejectReason,
+			&i.SponsoredCampaign.CreatedAt,
+			&i.SponsoredCampaign.UpdatedAt,
+			&i.JobTitle,
+			&i.JobCompany,
+			&i.JobSlug,
+			&i.JobUrl,
 		); err != nil {
 			return nil, err
 		}

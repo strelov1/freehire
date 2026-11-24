@@ -19,6 +19,7 @@ var ErrBadTransition = errors.New("sponsored: transition not allowed")
 type Service struct {
 	pool     *pgxpool.Pool
 	refunder Refunder
+	minCPC   int64
 }
 
 func New(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }

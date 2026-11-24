@@ -10,6 +10,9 @@
       "name": "Onboarding"
     },
     {
+      "name": "Sponsored"
+    },
+    {
       "name": "Booking links"
     },
     {
@@ -22658,6 +22661,606 @@
         ]
       }
     },
+    "/sponsored/campaigns": {
+      "post": {
+        "operationId": "createSponsoredCampaign",
+        "summary": "Create a sponsored campaign.",
+        "description": "Opens a draft campaign for an open, public job. 422 for a cost per click under the\nminimum (`SPONSORED_MIN_CPC_CENTS`, 10 by default), a daily cap under the click cost, or a\njob that is closed, private or unknown.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SponsoredCampaign"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Sponsored"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SponsoredCampaignRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listSponsoredCampaigns",
+        "summary": "List your sponsored campaigns.",
+        "description": "The caller's campaigns, newest first.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SponsoredCampaign"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Sponsored"
+        ]
+      }
+    },
+    "/sponsored/campaigns/{id}": {
+      "get": {
+        "operationId": "getSponsoredCampaign",
+        "summary": "Read a sponsored campaign and its stats.",
+        "description": "One of the caller's campaigns with its delivery and spend. Another user's id answers 404.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SponsoredCampaignDetail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Sponsored"
+        ]
+      }
+    },
+    "/sponsored/campaigns/{id}/end": {
+      "post": {
+        "operationId": "endSponsoredCampaign",
+        "summary": "End a sponsored campaign.",
+        "description": "Ends the campaign for good; unused budget stays recorded. 409 when it is already over.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SponsoredCampaign"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Sponsored"
+        ]
+      }
+    },
+    "/sponsored/campaigns/{id}/pause": {
+      "post": {
+        "operationId": "pauseSponsoredCampaign",
+        "summary": "Pause a sponsored campaign.",
+        "description": "`active` to `paused`. 409 when the campaign is in another state.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SponsoredCampaign"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Sponsored"
+        ]
+      }
+    },
+    "/sponsored/campaigns/{id}/resume": {
+      "post": {
+        "operationId": "resumeSponsoredCampaign",
+        "summary": "Resume a sponsored campaign.",
+        "description": "`paused` to `active`. 409 when the campaign is in another state.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SponsoredCampaign"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Sponsored"
+        ]
+      }
+    },
+    "/sponsored/campaigns/{id}/topup": {
+      "post": {
+        "operationId": "topupSponsoredCampaign",
+        "summary": "Start a sponsored campaign top-up.",
+        "description": "Returns a Stripe Checkout URL that pays `amount_cents` into the campaign. 422 under the\nminimum top-up, 409 for a rejected or ended campaign, 404 when payments are not configured.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BillingUrl"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Sponsored"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SponsoredTopupRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sponsored/review": {
+      "get": {
+        "operationId": "listSponsoredReview",
+        "summary": "List sponsored campaigns waiting for review.",
+        "description": "Moderators only, oldest first.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SponsoredReviewItem"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Sponsored"
+        ],
+        "x-audience": "moderator"
+      }
+    },
+    "/sponsored/review/{id}/approve": {
+      "post": {
+        "operationId": "approveSponsoredCampaign",
+        "summary": "Approve a sponsored campaign.",
+        "description": "Moderators only. 409 when the campaign is not in review.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SponsoredApproval"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Sponsored"
+        ],
+        "x-audience": "moderator"
+      }
+    },
+    "/sponsored/review/{id}/reject": {
+      "post": {
+        "operationId": "rejectSponsoredCampaign",
+        "summary": "Reject a sponsored campaign.",
+        "description": "Moderators only. Refunds what was paid; answers 200 with `refund_pending` when the refund is still to retry.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SponsoredRejection"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Sponsored"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SponsoredRejectRequest"
+              }
+            }
+          }
+        },
+        "x-audience": "moderator"
+      }
+    },
     "/stats/catalog": {
       "get": {
         "operationId": "catalogScale",
@@ -37335,6 +37938,264 @@
           },
           "measured_at": {
             "type": "string"
+          }
+        }
+      },
+      "SponsoredApproval": {
+        "type": "object",
+        "required": [
+          "approved"
+        ],
+        "properties": {
+          "approved": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SponsoredCampaign": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "job_slug",
+          "job_title",
+          "job_company",
+          "cpc_cents",
+          "budget_cents",
+          "spent_cents",
+          "remaining_cents",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          },
+          "job_slug": {
+            "type": "string"
+          },
+          "job_title": {
+            "type": "string"
+          },
+          "job_company": {
+            "type": "string"
+          },
+          "cpc_cents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "daily_cap_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Absent when there is no daily cap."
+          },
+          "budget_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Paid in so far."
+          },
+          "spent_cents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "remaining_cents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reject_reason": {
+            "type": "string",
+            "description": "Set only on a rejected campaign."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        },
+        "description": "`draft`, `pending_payment`, `pending_review`, `active`, `paused`, `exhausted`, `rejected` or `ended`."
+      },
+      "SponsoredCampaignDetail": {
+        "type": "object",
+        "required": [
+          "campaign",
+          "days",
+          "invalid_clicks_by_reason"
+        ],
+        "properties": {
+          "campaign": {
+            "$ref": "#/components/schemas/SponsoredCampaign"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SponsoredDayStat"
+            },
+            "description": "The last 30 days that have any activity, oldest first."
+          },
+          "invalid_clicks_by_reason": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SponsoredInvalidReason"
+            },
+            "description": "Clicks that were not charged in the last 30 days, grouped by why."
+          }
+        }
+      },
+      "SponsoredCampaignRequest": {
+        "type": "object",
+        "properties": {
+          "job_slug": {
+            "type": "string",
+            "description": "The job's public slug (the one in its page URL)."
+          },
+          "cpc_cents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "daily_cap_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Optional; at least `cpc_cents` when set."
+          }
+        }
+      },
+      "SponsoredDayStat": {
+        "type": "object",
+        "required": [
+          "day",
+          "impressions",
+          "valid_clicks",
+          "invalid_clicks",
+          "spent_cents"
+        ],
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date"
+          },
+          "impressions": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "valid_clicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invalid_clicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "spent_cents": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SponsoredInvalidReason": {
+        "type": "object",
+        "required": [
+          "reason",
+          "clicks"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "`bot`, `duplicate`, `rate`, `inactive` or `budget`."
+          },
+          "clicks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SponsoredRejectRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Required and non-empty; shown to the buyer."
+          }
+        }
+      },
+      "SponsoredRejection": {
+        "type": "object",
+        "required": [
+          "rejected",
+          "refund_pending"
+        ],
+        "properties": {
+          "rejected": {
+            "type": "boolean"
+          },
+          "refund_pending": {
+            "type": "boolean",
+            "description": "True when the campaign is rejected but the refund did not finish; it is retried later."
+          }
+        }
+      },
+      "SponsoredReviewItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "job_slug",
+          "job_title",
+          "job_company",
+          "job_url",
+          "cpc_cents",
+          "budget_cents",
+          "owner_user_id",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "job_slug": {
+            "type": "string"
+          },
+          "job_title": {
+            "type": "string"
+          },
+          "job_company": {
+            "type": "string"
+          },
+          "job_url": {
+            "type": "string"
+          },
+          "cpc_cents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "daily_cap_cents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "budget_cents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "owner_user_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The buyer's account id; no email is shown."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        }
+      },
+      "SponsoredTopupRequest": {
+        "type": "object",
+        "properties": {
+          "amount_cents": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

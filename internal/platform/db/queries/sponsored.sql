@@ -51,10 +51,30 @@ SET impressions    = sponsored_daily.impressions    + EXCLUDED.impressions,
     spent_cents    = sponsored_daily.spent_cents    + EXCLUDED.spent_cents;
 
 -- name: ListSponsoredCampaignsByOwner :many
-SELECT * FROM sponsored_campaigns WHERE owner_user_id = $1 ORDER BY id DESC;
+SELECT sqlc.embed(c), j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug
+FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
+WHERE c.owner_user_id = $1 ORDER BY c.id DESC;
+
+-- name: GetSponsoredCampaignForOwner :one
+-- Owner-scoped: another user's id finds nothing, so it cannot be told from a missing one.
+SELECT sqlc.embed(c), j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug
+FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
+WHERE c.id = $1 AND c.owner_user_id = $2;
 
 -- name: ListSponsoredReviewQueue :many
-SELECT * FROM sponsored_campaigns WHERE status = 'pending_review' ORDER BY updated_at, id;
+SELECT sqlc.embed(c), j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug, j.url AS job_url
+FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
+WHERE c.status = 'pending_review' ORDER BY c.updated_at, c.id;
+
+-- name: ListSponsoredDailySince :many
+SELECT day, impressions, valid_clicks, invalid_clicks, spent_cents
+FROM sponsored_daily WHERE campaign_id = $1 AND day >= sqlc.arg(since)::date ORDER BY day;
+
+-- name: ListSponsoredInvalidReasonsSince :many
+SELECT reason, count(*)::bigint AS clicks
+FROM sponsored_clicks
+WHERE campaign_id = $1 AND NOT valid AND ts >= sqlc.arg(since)::timestamptz
+GROUP BY reason ORDER BY clicks DESC, reason;
 
 -- name: InsertSponsoredTopup :one
 -- ON CONFLICT DO NOTHING on the session id is the whole of the webhook idempotency: no row

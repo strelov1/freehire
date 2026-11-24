@@ -714,6 +714,71 @@ func decodeApproveEmployerClaimParams(args [1]string, argsEscaped bool, r *http.
 	return params, nil
 }
 
+// ApproveSponsoredCampaignParams is parameters of approveSponsoredCampaign operation.
+type ApproveSponsoredCampaignParams struct {
+	ID string
+}
+
+func unpackApproveSponsoredCampaignParams(packed middleware.Parameters) (params ApproveSponsoredCampaignParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeApproveSponsoredCampaignParams(args [1]string, argsEscaped bool, r *http.Request) (params ApproveSponsoredCampaignParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // ApproveSubmissionParams is parameters of approveSubmission operation.
 type ApproveSubmissionParams struct {
 	// The submission id. (e.g. `9`).
@@ -5180,6 +5245,71 @@ func decodeEnableBookingLinkParams(args [1]string, argsEscaped bool, r *http.Req
 	return params, nil
 }
 
+// EndSponsoredCampaignParams is parameters of endSponsoredCampaign operation.
+type EndSponsoredCampaignParams struct {
+	ID string
+}
+
+func unpackEndSponsoredCampaignParams(packed middleware.Parameters) (params EndSponsoredCampaignParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeEndSponsoredCampaignParams(args [1]string, argsEscaped bool, r *http.Request) (params EndSponsoredCampaignParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // FileProcessReportParams is parameters of fileProcessReport operation.
 type FileProcessReportParams struct {
 	Slug string
@@ -8071,6 +8201,71 @@ func unpackGetSessionParams(packed middleware.Parameters) (params GetSessionPara
 }
 
 func decodeGetSessionParams(args [1]string, argsEscaped bool, r *http.Request) (params GetSessionParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// GetSponsoredCampaignParams is parameters of getSponsoredCampaign operation.
+type GetSponsoredCampaignParams struct {
+	ID string
+}
+
+func unpackGetSponsoredCampaignParams(packed middleware.Parameters) (params GetSponsoredCampaignParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeGetSponsoredCampaignParams(args [1]string, argsEscaped bool, r *http.Request) (params GetSponsoredCampaignParams, _ error) {
 	// Decode path: id.
 	if err := func() error {
 		param := args[0]
@@ -15432,6 +15627,71 @@ func decodePatchCVParams(args [1]string, argsEscaped bool, r *http.Request) (par
 	return params, nil
 }
 
+// PauseSponsoredCampaignParams is parameters of pauseSponsoredCampaign operation.
+type PauseSponsoredCampaignParams struct {
+	ID string
+}
+
+func unpackPauseSponsoredCampaignParams(packed middleware.Parameters) (params PauseSponsoredCampaignParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodePauseSponsoredCampaignParams(args [1]string, argsEscaped bool, r *http.Request) (params PauseSponsoredCampaignParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // PostAssistantExtendParams is parameters of postAssistantExtend operation.
 type PostAssistantExtendParams struct {
 	// The session id.
@@ -16611,6 +16871,71 @@ func decodeRejectEmployerClaimParams(args [1]string, argsEscaped bool, r *http.R
 	return params, nil
 }
 
+// RejectSponsoredCampaignParams is parameters of rejectSponsoredCampaign operation.
+type RejectSponsoredCampaignParams struct {
+	ID string
+}
+
+func unpackRejectSponsoredCampaignParams(packed middleware.Parameters) (params RejectSponsoredCampaignParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeRejectSponsoredCampaignParams(args [1]string, argsEscaped bool, r *http.Request) (params RejectSponsoredCampaignParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // RejectSubmissionParams is parameters of rejectSubmission operation.
 type RejectSubmissionParams struct {
 	// The submission id. (e.g. `9`).
@@ -17349,6 +17674,71 @@ func unpackRestoreEmailParams(packed middleware.Parameters) (params RestoreEmail
 }
 
 func decodeRestoreEmailParams(args [1]string, argsEscaped bool, r *http.Request) (params RestoreEmailParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// ResumeSponsoredCampaignParams is parameters of resumeSponsoredCampaign operation.
+type ResumeSponsoredCampaignParams struct {
+	ID string
+}
+
+func unpackResumeSponsoredCampaignParams(packed middleware.Parameters) (params ResumeSponsoredCampaignParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeResumeSponsoredCampaignParams(args [1]string, argsEscaped bool, r *http.Request) (params ResumeSponsoredCampaignParams, _ error) {
 	// Decode path: id.
 	if err := func() error {
 		param := args[0]
@@ -19908,6 +20298,71 @@ func unpackTestChangeWebhookParams(packed middleware.Parameters) (params TestCha
 }
 
 func decodeTestChangeWebhookParams(args [1]string, argsEscaped bool, r *http.Request) (params TestChangeWebhookParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// TopupSponsoredCampaignParams is parameters of topupSponsoredCampaign operation.
+type TopupSponsoredCampaignParams struct {
+	ID string
+}
+
+func unpackTopupSponsoredCampaignParams(packed middleware.Parameters) (params TopupSponsoredCampaignParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeTopupSponsoredCampaignParams(args [1]string, argsEscaped bool, r *http.Request) (params TopupSponsoredCampaignParams, _ error) {
 	// Decode path: id.
 	if err := func() error {
 		param := args[0]

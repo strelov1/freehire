@@ -52,6 +52,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	h.jobsHandlers.register(api, mw, contract)
 	h.companiesHandlers.register(api, mw, contract)
 	h.companyRelationHandlers.register(api, mw, contract)
+	h.sponsoredHandlers.register(api, mw, contract)
 	h.GeoHandlers.Register(api, contract)
 
 	// Saved searches + the public shared-board read (see savedSearchHandlers).

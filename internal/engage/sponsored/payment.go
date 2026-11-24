@@ -14,6 +14,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
+// ErrRefundPending is wrapped by Reject when the rejection committed but the refund did not finish.
+var ErrRefundPending = errors.New("sponsored: campaign rejected, refund pending")
+
 // Refunder returns a payment to the payer. *billing.Service is the production one; the key
 // makes a repeated call a no-op at the provider.
 type Refunder interface {
@@ -100,7 +103,7 @@ func (s *Service) Reject(ctx context.Context, campaignID, moderatorID int64, rea
 		return err
 	}
 	if _, err := s.refund(ctx, &campaignID, 100); err != nil {
-		return fmt.Errorf("sponsored: campaign %d rejected, refund pending: %w", campaignID, err)
+		return fmt.Errorf("%w: campaign %d: %w", ErrRefundPending, campaignID, err)
 	}
 	return nil
 }

@@ -67,11 +67,11 @@
 
 ## 6. API and contract
 
-- [ ] 6.1 typespec `sponsored.tsp`:
+- [x] 6.1 typespec `sponsored.tsp`:
       - create, list mine, get, pause/resume/end, start a top-up (returns a checkout URL)
       - moderation list/approve/reject
       - regenerate ogen and the web client
-- [ ] 6.2 Handlers with authorization: owner-only campaign access; moderator-only queue
+- [x] 6.2 Handlers with authorization: owner-only campaign access; moderator-only queue
 
 ## 7. Web
 
