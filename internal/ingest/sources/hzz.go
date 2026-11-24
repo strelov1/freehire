@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/MoeForge/moego/regexp"
@@ -120,56 +119,12 @@ func (s hzz) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(extern
 	if err != nil {
 		return nil, err
 	}
-	var jobs []Job
-	var unseen []hzzPosting
-	deferred := 0
-	for _, p := range postings {
-		base := hzzBaseJob(p)
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, p)
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, hzzDetailWorkers, func(p hzzPosting) (Job, bool) {
-		if s.nearDeadline(ctx) {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, p)
-		if err != nil {
-			log.Printf("hzz: vacancy %d failed; deferring: %v", p.id, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	// A crawl that read no page at all is broken, not quiet. "Answered" counts a vacancy the
-	// site reported expired; vacancies left for want of time are not failures.
-	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
-		return nil, fmt.Errorf("hzz: requested %d vacancy pages and none answered", int64(len(unseen))-outOfTime.Load())
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("hzz: %d new vacancies left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("hzz: %d new vacancies past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes: a hydrating crawl writes nothing until FetchNewGated returns, so one
-// that runs into its deadline stores nothing at all.
-func (s hzz) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
+	return hydrateNew(ctx, hydration{Provider: "hzz", Noun: "vacancy", Plural: "vacancies", Unit: "vacancy pages",
+		MaxNewPerRun: s.maxNewPerRun, Workers: hzzDetailWorkers, Deadline: s.deadlineMargin}, postings, seen, DetailGate{},
+		nil,
+		hzzBaseJob,
+		func(p hzzPosting) any { return p.id },
+		s.detail)
 }
 
 // hzzBaseJob is the body-less Job a vacancy's feed entry supports.
