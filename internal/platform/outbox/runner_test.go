@@ -211,20 +211,26 @@ func TestStopOnCancel_TheFirstClaimIsNeverGuarded(t *testing.T) {
 	}
 }
 
-// RunBatch takes the same wrapper; a cancelled removal or index wave must not be claimed.
+// RunBatch takes the same wrapper: a cancelled run claims no further wave.
 func TestStopOnCancel_RunBatchStopsToo(t *testing.T) {
-	inner := &fakeClaimer{waves: [][]int{{1}}}
+	inner := &fakeClaimer{waves: [][]int{{1}, {2}}}
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
 	calls := 0
 	processBatch := func(_ context.Context, items []int) (Stats, error) {
 		calls++
+		cancel() // SIGTERM lands mid-wave
 		return Stats{Succeeded: len(items)}, nil
 	}
 
 	stats, err := RunBatch(ctx, &StopOnCancel[int]{Claimer: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, processBatch, nil)
-	if err != nil || calls != 1 || stats.Succeeded != 1 || inner.calls != 1 {
-		t.Fatalf("RunBatch = (%+v, %v) with %d batch calls and %d claims, want one unguarded wave then a stop", stats, err, calls, inner.calls)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 1 || stats.Succeeded != 1 {
+		t.Errorf("batch calls = %d, Succeeded = %d, want 1 and 1 (the claimed wave finishes, then the run stops)", calls, stats.Succeeded)
+	}
+	if inner.calls != 1 {
+		t.Errorf("inner Claim calls = %d, want 1 (no claim is made after cancellation)", inner.calls)
 	}
 }
 
@@ -250,13 +256,16 @@ func TestStopOnCancel_IsTransparentWhileCtxIsLive(t *testing.T) {
 // A claim error is the queue being unusable and must still abort the run, not read as a stop.
 func TestStopOnCancel_PassesAClaimErrorThrough(t *testing.T) {
 	wantErr := errors.New("pool unreachable")
-	inner := &fakeClaimer{errOnCall: 1, errAfter: wantErr}
+	inner := &fakeClaimer{waves: [][]int{{1}}, errOnCall: 2, errAfter: wantErr}
 
 	_, err := RunPool(context.Background(), &StopOnCancel[int]{Claimer: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, func(context.Context, int) Outcome {
 		return Succeeded
 	})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("err = %v, want %v", err, wantErr)
+	}
+	if inner.calls != 2 {
+		t.Errorf("inner Claim calls = %d, want 2 (the error came from a guarded call)", inner.calls)
 	}
 }
 
