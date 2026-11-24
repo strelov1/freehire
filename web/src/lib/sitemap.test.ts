@@ -45,6 +45,8 @@ describe('sitemap static paths', () => {
     expect(STATIC_PATHS).toContain('/features/referrals');
     expect(STATIC_PATHS).toContain('/features/tailor');
     expect(STATIC_PATHS).toContain('/features/interview-buddies');
+    expect(STATIC_PATHS).toContain('/features/matches');
+    expect(STATIC_PATHS).not.toContain('/matches');
   });
 
   // /referrals now answers with a 301 to its new home. Listing a redirect in the
