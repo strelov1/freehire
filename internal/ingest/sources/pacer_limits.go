@@ -134,7 +134,10 @@ func (g limitedCoveto) GetHTML(ctx context.Context, url string) (*html.Node, err
 
 // limitedCovetoGetter wraps a getter with a fresh semaphore shared across one registry build.
 func limitedCovetoGetter(c covetoGetter) covetoGetter {
-	return limitedCoveto{covetoGetter: c, pages: concurrencyLimitedHTMLGetter{inner: c, sem: make(inFlight, covetoMaxInFlight)}}
+	return limitedCoveto{
+		covetoGetter: c,
+		pages:        concurrencyLimitedHTMLGetter{inner: c, sem: make(inFlight, covetoMaxInFlight)},
+	}
 }
 
 // helixjobs.com serves every iid's list and posting pages from one origin, so a first crawl is
